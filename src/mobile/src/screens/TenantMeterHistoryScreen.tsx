@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Text } from 'react-native-paper';
 import type { TenantMeterReadingPage } from '../../../../packages/client-core/src/tenantReadings';
 import { formatBillingDecimal } from '../../../../packages/client-core/src/invoices';
@@ -68,13 +68,20 @@ function ReadingEvidence({ id }: { id: string }) {
     </>
   );
 }
+const guidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
+
 export function TenantMeterHistoryScreen() {
   const [page, setPage] = useState(1);
+  const { roomId } = useLocalSearchParams<{ roomId?: string }>();
+  const validRoomId =
+    roomId && guidPattern.test(roomId) && roomId !== '00000000-0000-0000-0000-000000000000'
+      ? roomId
+      : undefined;
   const { go } = useWorkspace(),
     { session } = useSession();
   const query = useWorkspaceQuery<TenantMeterReadingPage>(
     session?.roles.includes('Tenant')
-      ? '/api/v1/tenant/meter-readings?page=' + page + '&pageSize=20'
+      ? `/api/v1/tenant/meter-readings?page=${page}&pageSize=20${validRoomId ? '&roomId=' + encodeURIComponent(validRoomId) : ''}`
       : null,
     { load: loadTenantReadings },
   );

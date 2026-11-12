@@ -181,11 +181,17 @@ async function openList() {
       api={api}
       onOpen={state.open}
       onCreate={state.create}
+      onCreateHolding={() => state.create('Holding')}
       onInspection={state.inspect}
     />,
   );
   await screen.findByText('Hiển thị 1–5 / 14');
 }
+it('opens holding creation from its own staff action', async () => {
+  await openList();
+  fireEvent.click(screen.getByText('Tạo hợp đồng giữ chỗ'));
+  expect(state.create).toHaveBeenCalledWith('Holding');
+});
 it('shows 14 real records as exactly 5 + 5 + 4 across three pages with correct navigation limits', async () => {
   await openList();
   expect(screen.getAllByTestId('staff-contract-card')).toHaveLength(5);

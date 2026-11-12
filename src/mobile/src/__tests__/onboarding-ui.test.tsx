@@ -239,7 +239,14 @@ vi.mock('../features/onboarding/useCaptureScope', () => ({
       location,
       room,
       locations: [{ id: 'location', label: 'Cơ sở mẫu' }],
-      rooms: location ? [{ id: 'room', label: '101' }] : [],
+      rooms: location
+        ? [
+            { id: 'room', label: '101', status: 'Available' },
+            { id: 'occupied', label: '102', status: 'Occupied' },
+            { id: 'held', label: '103', status: 'OnHold' },
+            { id: 'unavailable', label: '104', status: 'Unavailable' },
+          ]
+        : [],
       loading: false,
       error: '',
       selectLocation: (id: string) => {
@@ -252,8 +259,24 @@ vi.mock('../features/onboarding/useCaptureScope', () => ({
   },
 }));
 import { OnboardingScreen } from '../screens/OnboardingScreen';
+import { MobileApiError } from '../lib/api';
 import { ContractProgress, signerState } from '../features/contracts/ContractProgress';
 import type { ContractView, Signature } from '../../../../packages/client-core/src/contracts';
+it('shows empty and occupied rooms together without a reception-type selector', () => {
+  render(<OnboardingScreen />);
+  expect(screen.queryByRole('combobox', { name: 'Nhu cầu tiếp nhận' })).toBeNull();
+  const room = screen.getByRole('combobox', { name: 'Phòng *' });
+  expect(within(room).getByRole('option', { name: '101' })).toBeTruthy();
+  expect(within(room).getByRole('option', { name: '102' })).toBeTruthy();
+  expect(within(room).queryByRole('option', { name: '103' })).toBeNull();
+  expect(within(room).queryByRole('option', { name: '104' })).toBeNull();
+  fireEvent.change(room, { target: { value: 'occupied' } });
+  expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(
+    false,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
+  expect(screen.getByText('Thông tin người ở')).toBeTruthy();
+});
 beforeEach(() => {
   vi.clearAllMocks();
   state.listeners = [];
@@ -329,7 +352,7 @@ it('gates mandatory steps and retains room and multiple people when navigating b
   namePerson('Người mẫu B');
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
   expect(
-    (screen.getByRole('button', { name: 'Kiểm tra và hoàn tất' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   expect((screen.getByLabelText('Tên gọi hồ sơ') as HTMLInputElement).value).toBe('Người mẫu B');
@@ -415,20 +438,31 @@ it('allows manual confirmation after OCR failure and completes only after the se
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
   await screen.findByText('Không thể hoàn thành. Kiểm tra kết nối và địa chỉ HTTPS.');
   expect(
-    (screen.getByRole('button', { name: 'Kiểm tra và hoàn tất' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
   state.failConfirm = false;
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
   await screen.findByText('Đã xác nhận 1/1 người ở');
-  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra và hoàn tất' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Hoàn tất tiếp nhận' }));
-  expect(screen.getByText('Thông tin từng người đã được xác nhận và lưu.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Hoàn tất tiếp nhận' })).toBeNull();
+  expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
   expect(state.go).toHaveBeenCalledWith('prepare-contract', {
     roomId: 'room',
     representativeResidentId: 'resident-1',
     residentIds: '["resident-1"]',
   });
+});
+it('does not blindly create another Resident after a timeout with an unknown save result', async () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  namePerson('Hồ sơ tổng hợp');
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+  state.json.mockRejectedValueOnce(new MobileApiError(0, 'request_timeout'));
+  fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu quét CCCD' }));
+  await screen.findByRole('button', { name: 'Kiểm tra danh sách người ở' });
+  fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu quét CCCD' }));
+  expect(state.json).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('dialog')).toBeNull();
 });
 it('retains unconfirmed identity edits across steps and keeps each person separate', async () => {
   render(<OnboardingScreen />);
@@ -480,7 +514,7 @@ it('keeps OCR suggestions unconfirmed and clears temporary identity data when ba
   );
   expect(state.json).toHaveBeenCalledTimes(1); // Creating the draft does not confirm OCR fields.
   expect(
-    (screen.getByRole('button', { name: 'Kiểm tra và hoàn tất' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
   act(() => {
     state.listeners.forEach((listener) => listener('background'));
@@ -542,7 +576,7 @@ it('scans both existing endpoints and uses the back-side issue date in confirmat
     dateOfBirth: '2000-01-01',
   });
   expect(
-    (screen.getByRole('button', { name: 'Kiểm tra và hoàn tất' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(false);
 });
 it('retries the back side independently and preserves Staff edits and front fields', async () => {
@@ -653,7 +687,7 @@ it('does not mark a person confirmed when the response lacks a verified status',
   await screen.findByText('Không thể hoàn thành. Kiểm tra kết nối và địa chỉ HTTPS.');
   expect(screen.getByText('Đã xác nhận 0/1 người ở')).toBeTruthy();
   expect(
-    (screen.getByRole('button', { name: 'Kiểm tra và hoàn tất' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
 });
 it('tracks confirmations independently for two people and waits for both before review', async () => {
@@ -669,10 +703,10 @@ it('tracks confirmations independently for two people and waits for both before 
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
   await screen.findByText('Đã xác nhận 1/2 người ở');
   expect(
-    (screen.getByRole('button', { name: 'Kiểm tra và hoàn tất' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
   expect(screen.queryByRole('dialog')).toBeNull();
-  await openIdentity(1);
+  await openIdentity();
   manualIdentity();
   fireEvent.change(screen.getByRole('textbox', { name: 'Số CCCD (12 chữ số)' }), {
     target: { value: '000000000002' },
@@ -681,7 +715,7 @@ it('tracks confirmations independently for two people and waits for both before 
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
   await screen.findByText('Đã xác nhận 2/2 người ở');
   expect(
-    (screen.getByRole('button', { name: 'Kiểm tra và hoàn tất' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(false);
 });
 it('handles Android Back without losing the selected step or manual edits', async () => {
@@ -694,7 +728,7 @@ it('handles Android Back without losing the selected step or manual edits', asyn
   manualIdentity();
   fireEvent.click(screen.getByRole('button', { name: 'Android Back' }));
   expect(screen.queryByRole('dialog')).toBeNull();
-  expect(screen.getByRole('button', { name: 'Kiểm tra và hoàn tất' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toBeTruthy();
   await openIdentity();
   expect((screen.getByRole('textbox', { name: 'Họ và tên' }) as HTMLInputElement).value).toBe(
     'NGƯỜI Ở MẪU',
@@ -766,7 +800,7 @@ it('keeps a one-sided contract at signing and never presents it as active or pai
   } as ContractView;
   render(<ContractProgress contract={contract} readiness={null} />);
   expect(screen.getByText('Đang chờ khách thuê ký')).toBeTruthy();
-  expect(screen.getByText('Bước 3/5 · Hai bên ký')).toBeTruthy();
+  expect(screen.getByText('Bước 2/4 · Ký hợp đồng')).toBeTruthy();
   expect(screen.queryByText('Hợp đồng đã được kích hoạt.')).toBeNull();
   expect(screen.queryByText('Tiền cọc đã được đối chiếu đầy đủ.')).toBeNull();
 });
@@ -783,7 +817,7 @@ it('moves the display to payment only after both verified signatures without act
     tenantUserId: 'tenant',
   } as ContractView;
   render(<ContractProgress contract={contract} readiness={null} />);
-  expect(screen.getByText('Bước 4/5 · Tiền cọc')).toBeTruthy();
+  expect(screen.getByText('Bước 3/4 · Tạo mã QR')).toBeTruthy();
   expect(screen.getByText('Chưa có thông tin đối chiếu tiền cọc.')).toBeTruthy();
   expect(screen.queryByText('Hợp đồng đã được kích hoạt.')).toBeNull();
 });

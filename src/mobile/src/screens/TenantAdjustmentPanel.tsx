@@ -27,14 +27,33 @@ import { ChoiceField } from '../components/WorkflowControls';
 import { CameraCapture } from '../components/CameraCapture';
 import { useSession } from '../lib/SessionProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 
-export function TenantAdjustmentPanel({ invoice }: { invoice: Invoice }) {
+const adjustmentTone = (status: string) =>
+  status === 'Approved'
+    ? 'green'
+    : status === 'Rejected'
+      ? 'red'
+      : status === 'Pending'
+        ? 'amber'
+        : 'neutral';
+
+export function TenantAdjustmentPanel({
+  invoice,
+  compact = false,
+  initialOpen = false,
+}: {
+  invoice: Invoice;
+  compact?: boolean;
+  initialOpen?: boolean;
+}) {
   const { api, session } = useSession();
+  const { go } = useWorkspace();
   const client = useMemo(() => (api ? adjustmentClient(api.request.bind(api)) : null), [api]);
   const [page, setPage] = useState(1),
     [effectPage, setEffectPage] = useState(1),
     [selected, setSelected] = useState(''),
-    [open, setOpen] = useState(false);
+    [open, setOpen] = useState(initialOpen);
   const [tab, setTab] = useState<'requests' | 'approved'>('requests');
   const allowed = session?.roles.includes('Tenant') && !!client;
   const list = useWorkspaceQuery<Page<Adjustment>>(
@@ -44,7 +63,7 @@ export function TenantAdjustmentPanel({ invoice }: { invoice: Invoice }) {
     { load: loadAdjustmentPage<Adjustment>, notifyError: false },
   );
   const effects = useWorkspaceQuery<Page<AdjustmentEffect>>(
-    allowed
+    allowed && !compact
       ? `/api/v1/invoices/${encodeURIComponent(invoice.id)}/adjustments?page=${effectPage}&pageSize=20`
       : null,
     { load: loadAdjustmentPage<AdjustmentEffect>, notifyError: false },
@@ -57,6 +76,37 @@ export function TenantAdjustmentPanel({ invoice }: { invoice: Invoice }) {
   );
   const current = tab === 'requests' ? list : effects;
   if (!allowed || !client) return null;
+  if (compact)
+    return (
+      <View style={invoiceUi.card}>
+        <Text style={invoiceUi.heading}>Điều chỉnh hóa đơn</Text>
+        <InvoiceFeedback {...list} />
+        {list.data && !list.error && (
+          <View style={invoiceUi.row}>
+            <Text style={invoiceUi.secondary}>{list.data.totalCount} yêu cầu</Text>
+            {list.data.items[0] && (
+              <Pill tone={adjustmentTone(list.data.items[0].status)}>
+                {adjustmentStatus(list.data.items[0].status)}
+              </Pill>
+            )}
+          </View>
+        )}
+        <View style={invoiceUi.row}>
+          <Button
+            contentStyle={{ minHeight: 44 }}
+            onPress={() => go('adjustment', { invoiceId: invoice.id })}
+          >
+            Xem yêu cầu
+          </Button>
+          <Button
+            contentStyle={{ minHeight: 44 }}
+            onPress={() => go('adjustment', { invoiceId: invoice.id, newRequest: 'true' })}
+          >
+            Gửi yêu cầu điều chỉnh
+          </Button>
+        </View>
+      </View>
+    );
   return (
     <View style={[invoiceUi.section, { borderBottomWidth: 0 }]}>
       <Text style={invoiceUi.heading}>Điều chỉnh hóa đơn</Text>
@@ -107,7 +157,7 @@ export function TenantAdjustmentPanel({ invoice }: { invoice: Invoice }) {
           {list.data?.items.map((r) => (
             <View key={r.id} style={invoiceUi.divider}>
               <View style={invoiceUi.row}>
-                <Pill>{adjustmentStatus(r.status)}</Pill>
+                <Pill tone={adjustmentTone(r.status)}>{adjustmentStatus(r.status)}</Pill>
                 <Text variant="bodySmall" style={ui.muted}>
                   {formatInstant(r.submittedAt)}
                 </Text>
@@ -179,7 +229,9 @@ export function TenantAdjustmentPanel({ invoice }: { invoice: Invoice }) {
           <InvoiceFeedback {...detail} />
           {detail.data && (
             <>
-              <Pill>{adjustmentStatus(detail.data.status)}</Pill>
+              <Pill tone={adjustmentTone(detail.data.status)}>
+                {adjustmentStatus(detail.data.status)}
+              </Pill>
               <Text>Lý do: {detail.data.reason}</Text>
               <InvoiceMoneyRow label="Giá trị khi gửi" value={detail.data.currentAmount} />
               {detail.data.proposedAmount === null ? (

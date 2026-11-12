@@ -1,3 +1,5 @@
+export { formatMeterReading } from './localization';
+
 export interface ConfirmedReading {
   id: string;
   taskId: string;

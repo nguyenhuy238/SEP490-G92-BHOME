@@ -4,7 +4,7 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 
 export function mobileContractActions(...args: Parameters<typeof contractActions>) {
-  if (args[2] === 'Owner') return [];
+  if (args[2] === 'Owner' && args[0].kind !== 'Holding') return [];
   return contractActions(...args).filter(
     (action) => !['move-out/inspection', 'move-out/settlement'].includes(action.operation),
   );

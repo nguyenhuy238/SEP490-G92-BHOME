@@ -1,6 +1,8 @@
 // D011/D012 REST contract. Amounts remain decimal strings throughout the clients.
 import { ApiError, infrastructureError, requestDiagnostic } from './api';
 import { groupVietnameseIntegerDigits } from './localization';
+import type { RoomConfiguration } from './propertySetup';
+import type { Page } from './invoices';
 export const contractStates = [
   'Draft',
   'PendingSigning',
@@ -520,6 +522,44 @@ const root = '/api/v1/contracts';
 const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
   return {
+    createHoldingResident: (roomId: string, displayLabel: string, email: string) =>
+      request<{ id: string }>('/api/v1/capture/residents', {
+        method: 'POST',
+        body: JSON.stringify({
+          roomId,
+          displayLabel: displayLabel.trim(),
+          residentType: 0,
+          email: email.trim(),
+        }),
+      }),
+    holdingRooms: (page = 1, signal?: AbortSignal) =>
+      request<Page<RoomConfiguration>>(
+        `/api/v1/rooms?roomStatus=Available&page=${page}&pageSize=100`,
+        { signal },
+      ),
+    holdingRoomReady: async (id: string, signal?: AbortSignal, effectiveOn?: string) => {
+      const result = await request<{
+        roomId: string;
+        purpose: string;
+        status: string;
+        isReady: boolean;
+        blockers: unknown[];
+        unverifiedConditions: unknown[];
+      }>(
+        `/api/v1/rooms/${encodeURIComponent(id)}/readiness?purpose=Holding${effectiveOn ? '&effectiveOn=' + encodeURIComponent(effectiveOn) : ''}`,
+        { signal },
+      );
+      return (
+        result?.roomId === id &&
+        result.purpose === 'Holding' &&
+        result.status === 'Ready' &&
+        result.isReady === true &&
+        Array.isArray(result.blockers) &&
+        result.blockers.length === 0 &&
+        Array.isArray(result.unverifiedConditions) &&
+        result.unverifiedConditions.length === 0
+      );
+    },
     /** The authenticated transport, so related clients (digital signing) share auth and refresh. */
     transport: request,
     expiryReminders: (signal?: AbortSignal) =>
@@ -1408,7 +1448,11 @@ export function actionPayload(
   }
   return body;
 }
-function draftCore(values: Record<string, string>, residentIds: string[]) {
+function draftCore(
+  values: Record<string, string>,
+  residentIds: string[],
+  tenantUserId: string | null = guid(values.tenantUserId ?? ''),
+) {
   const startDate = dateOnly(values.startDate ?? ''),
     endDate = dateOnly(values.endDate ?? '');
   if (endDate <= startDate) throw new Error('Ngày hết hạn phải sau ngày bắt đầu.');
@@ -1421,7 +1465,7 @@ function draftCore(values: Record<string, string>, residentIds: string[]) {
   return {
     roomId: guid(values.roomId ?? ''),
     ownerSignerId: guid(values.ownerSignerId ?? ''),
-    tenantUserId: guid(values.tenantUserId ?? ''),
+    tenantUserId,
     representativeResidentId: guid(values.representativeResidentId),
     residentIds: residentIds.map(guid),
     startDate,
@@ -1448,7 +1492,7 @@ export function holdingDraftPayload(values: Record<string, string>, residentIds:
   )
     throw new Error('Kiểm tra số người giữ chỗ và thời điểm hết hạn.');
   return {
-    ...draftCore(values, residentIds),
+    ...draftCore(values, residentIds, values.tenantUserId ? guid(values.tenantUserId) : null),
     holdingDeposit: vnd(values.requiredDeposit ?? ''),
     expiresAt: expires.toISOString(),
     reservedCapacity: capacity,

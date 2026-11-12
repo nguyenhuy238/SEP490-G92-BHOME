@@ -1,202 +1,223 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Alert,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  Checkbox,
+  IconButton,
+  InputAdornment,
   MenuItem,
   Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { PageHeader, StatusChip, ConfirmDialog } from '../../components/common/PortalUI';
-import { OwnerFeedback, OwnerPagination, OwnerTable } from '../../components/common/OwnerWorkspace';
+import { Plus, RefreshCw, Search, X, Users, UserCheck } from 'lucide-react';
+import { ConfirmDialog } from '../../components/common/PortalUI';
+import { OwnerFeedback, OwnerPagination } from '../../components/common/OwnerWorkspace';
 import {
   ownerQuery,
   useOwnerAction,
   useOwnerQuery,
   type OwnerPage,
 } from '../../hooks/useOwnerWorkspace';
-import { StaffAssignments } from './StaffAssignments';
-import { todayVietnam, type Employment, type Staff } from './staffContracts';
+import type { Staff } from './staffContracts';
+import { StaffTable, StaffDetailDrawer } from './components/StaffPresentation';
+import { StaffEditor } from './components/StaffEditor';
 
 export function StaffApiPage() {
-  const [search, setSearch] = useState(''),
-    [active, setActive] = useState(''),
-    [page, setPage] = useState(1),
-    [selected, setSelected] = useState('');
+  const [input, setInput] = useState('');
+  const [filter, setFilter] = useState({ search: '', active: '', page: 1 });
+  const [selected, setSelected] = useState('');
   const [editor, setEditor] = useState<Staff | null | undefined>();
   const [invite, setInvite] = useState(false);
   const action = useOwnerAction();
+  useEffect(() => {
+    const timer = setTimeout(
+      () =>
+        setFilter((current) =>
+          current.search === input ? current : { ...current, search: input, page: 1 },
+        ),
+      350,
+    );
+    return () => clearTimeout(timer);
+  }, [input]);
   const list = useOwnerQuery<OwnerPage<Staff>>(
-    ['staff', search, active, page],
-    '/api/v1/staff?' + ownerQuery({ search, isActive: active, page, pageSize: 20 }),
+    ['staff', filter.search, filter.active, filter.page],
+    '/api/v1/staff?' +
+      ownerQuery({
+        search: filter.search,
+        isActive: filter.active,
+        page: filter.page,
+        pageSize: 20,
+      }),
+  );
+  const overview = useOwnerQuery<OwnerPage<Staff>>(
+    ['staff-overview'],
+    '/api/v1/staff?page=1&pageSize=1',
+  );
+  const activeOverview = useOwnerQuery<OwnerPage<Staff>>(
+    ['staff-overview-active'],
+    '/api/v1/staff?isActive=true&page=1&pageSize=1',
   );
   const detail = useOwnerQuery<Staff>(
     ['staff-detail', selected],
     `/api/v1/staff/${selected}`,
     !!selected,
   );
+  const refresh = () => {
+    void list.refetch();
+    void overview.refetch();
+    void activeOverview.refetch();
+  };
   return (
-    <Stack spacing={2}>
-      <PageHeader
-        title="Quản lý nhân viên"
-        subtitle="Tài khoản, hồ sơ công việc và cơ sở phụ trách."
-        actions={
-          <Button variant="contained" onClick={() => setEditor(null)}>
-            Thêm nhân viên
-          </Button>
-        }
-      />
-      <OwnerFeedback
-        busy={list.isFetching || detail.isFetching || action.busy}
-        error={action.error || list.error || detail.error}
-        notice={action.notice}
-      />
-      <Paper variant="outlined" sx={{ p: 2 }}>
+    <Stack
+      spacing={2.5}
+      sx={{
+        '& .MuiPaper-root': { borderRadius: '12px', boxShadow: 'none' },
+        '& .MuiButton-root': { borderRadius: '8px', fontSize: 14, minHeight: 40 },
+        '& .MuiInputBase-root, & .MuiInputLabel-root': { fontSize: 14 },
+        '& .MuiTableCell-root': { fontSize: 14, py: 1.75 },
+        '& .MuiTableHead-root .MuiTableCell-root': { bgcolor: '#f5f8fc', fontSize: 13, height: 44 },
+      }}
+    >
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}
+      >
+        <Box>
+          <Typography component="h1" sx={{ fontSize: 24, fontWeight: 700 }}>
+            Quản lý nhân viên
+          </Typography>
+          <Typography sx={{ fontSize: 14, color: 'text.secondary', mt: 0.5 }}>
+            Quản lý tài khoản, hợp đồng và trạng thái làm việc của nhân viên.
+          </Typography>
+        </Box>
+        <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setEditor(null)}>
+          Thêm nhân viên
+        </Button>
+      </Stack>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        {[
+          { label: 'Tổng nhân viên', query: overview, icon: <Users size={22} /> },
+          {
+            label: 'Tài khoản đang hoạt động',
+            query: activeOverview,
+            icon: <UserCheck size={22} />,
+          },
+        ].map(({ label, query, icon }) => (
+          <Paper
+            key={label}
+            variant="outlined"
+            sx={{ p: 2, flex: 1, minHeight: 88, display: 'flex', gap: 2, alignItems: 'center' }}
+          >
+            <Box
+              sx={{
+                color: 'primary.main',
+                bgcolor: '#edf2ff',
+                p: 1.25,
+                borderRadius: '10px',
+                display: 'flex',
+              }}
+            >
+              {icon}
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: 26, fontWeight: 700 }}>
+                {query.isError ? '—' : (query.data?.totalCount ?? '…')}
+              </Typography>
+              <Typography sx={{ fontSize: 14 }} color="text.secondary">
+                {label}
+              </Typography>
+            </Box>
+          </Paper>
+        ))}
+      </Stack>
+      <OwnerFeedback error={overview.error || activeOverview.error} />
+      <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
         <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          spacing={2}
-          sx={{ alignItems: { md: 'center' } }}
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.5}
+          sx={{ p: 2, alignItems: { sm: 'center' } }}
         >
           <TextField
-            sx={{ minWidth: 260, flex: 1 }}
+            size="small"
             label="Tìm nhân viên"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            sx={{ flex: 1 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search size={18} />
+                  </InputAdornment>
+                ),
+                endAdornment: input ? (
+                  <InputAdornment position="end">
+                    <IconButton size="small" aria-label="Xóa tìm kiếm" onClick={() => setInput('')}>
+                      <X size={16} />
+                    </IconButton>
+                  </InputAdornment>
+                ) : undefined,
+              },
             }}
           />
           <TextField
-            sx={{ minWidth: 230 }}
+            size="small"
             select
             label="Trạng thái tài khoản"
-            value={active}
-            onChange={(e) => {
-              setActive(e.target.value);
-              setPage(1);
-            }}
+            value={filter.active}
+            onChange={(event) =>
+              setFilter((current) => ({ ...current, active: event.target.value, page: 1 }))
+            }
+            sx={{ width: { xs: '100%', sm: 220 } }}
           >
             <MenuItem value="">Tất cả</MenuItem>
             <MenuItem value="true">Đang hoạt động</MenuItem>
             <MenuItem value="false">Đã ngừng hoạt động</MenuItem>
           </TextField>
-          <Button
-            onClick={() => {
-              void list.refetch();
-              if (selected) void detail.refetch();
-            }}
-          >
-            Tải lại
+          <Button startIcon={<RefreshCw size={17} />} disabled={list.isFetching} onClick={refresh}>
+            Làm mới
           </Button>
         </Stack>
-      </Paper>
-      <Paper>
-        <OwnerTable
+        <Box sx={{ minHeight: 4 }}>
+          <OwnerFeedback busy={list.isFetching} />
+        </Box>
+        <StaffTable
           rows={list.data?.items ?? []}
-          id={(x) => x.userId}
-          select={(x) => setSelected(x.userId)}
-          selectLabel="Quản lý"
-          columns={[
-            { label: 'Nhân viên', render: (x) => x.fullName },
-            { label: 'Liên hệ', render: (x) => `${x.email} · ${x.phone ?? ''}` },
-            { label: 'Công việc', render: (x) => x.employment?.employmentType ?? 'Chưa có' },
-            {
-              label: 'Tài khoản',
-              render: (x) => (
-                <StatusChip label={x.isActive ? 'Đang hoạt động' : 'Đã ngừng hoạt động'} />
-              ),
-            },
-          ]}
+          select={(staff) => setSelected(staff.userId)}
+          loading={list.isPending}
+          error={list.error}
+          retry={() => void list.refetch()}
         />
+        {list.data && (
+          <Box sx={{ px: 2, py: 1.5, borderTop: 1, borderColor: 'divider' }}>
+            {list.data.totalCount > 20 ? (
+              <OwnerPagination
+                page={filter.page}
+                total={list.data.totalCount}
+                change={(page) => setFilter((current) => ({ ...current, page }))}
+                busy={list.isFetching}
+              />
+            ) : (
+              <Typography sx={{ fontSize: 13 }} color="text.secondary">
+                {list.data.totalCount} nhân viên
+              </Typography>
+            )}
+          </Box>
+        )}
       </Paper>
-      <OwnerPagination
-        page={page}
-        total={list.data?.totalCount ?? 0}
-        change={setPage}
-        busy={list.isFetching}
+      <StaffDetailDrawer
+        open={!!selected}
+        staff={detail.data}
+        busy={detail.isFetching}
+        error={detail.error || action.error}
+        notice={action.notice}
+        close={() => setSelected('')}
+        edit={setEditor}
+        invite={() => setInvite(true)}
+        retry={() => void detail.refetch()}
+        actionBusy={action.busy}
       />
-      {detail.data && (
-        <Paper sx={{ p: { xs: 2, md: 3 } }}>
-          <Stack spacing={2.5}>
-            <Stack
-              direction={{ xs: 'column', md: 'row' }}
-              sx={{ justifyContent: 'space-between', gap: 1 }}
-            >
-              <Stack spacing={0.5}>
-                <Typography variant="h5">{detail.data.fullName}</Typography>
-                <Typography color="text.secondary">Hồ sơ nhân viên và phạm vi phụ trách</Typography>
-              </Stack>
-              <StatusChip label={detail.data.isActive ? 'Đang hoạt động' : 'Đã ngừng hoạt động'} />
-            </Stack>
-            <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2}>
-              <Paper variant="outlined" sx={{ p: 2, flex: 1 }}>
-                <Stack spacing={1}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    Thông tin tài khoản
-                  </Typography>
-                  <Typography>Email: {detail.data.email}</Typography>
-                  <Typography>Điện thoại: {detail.data.phone || 'Chưa khai báo'}</Typography>
-                </Stack>
-              </Paper>
-              <Paper variant="outlined" sx={{ p: 2, flex: 1 }}>
-                <Stack spacing={1}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    Thông tin công việc
-                  </Typography>
-                  <Typography>
-                    Loại công việc: {detail.data.employment?.employmentType || 'Chưa khai báo'}
-                  </Typography>
-                  <Typography>
-                    Trạng thái: {detail.data.employment?.status || 'Chưa khai báo'}
-                  </Typography>
-                  <Typography>
-                    Hiệu lực: {detail.data.employment?.startDate || 'Chưa có'} –{' '}
-                    {detail.data.employment?.endDate ?? 'Chưa kết thúc'}
-                  </Typography>
-                </Stack>
-              </Paper>
-              <Paper variant="outlined" sx={{ p: 2, flex: 1 }}>
-                <Stack spacing={1}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    Lương thỏa thuận
-                  </Typography>
-                  <Typography>
-                    Mức lương:{' '}
-                    {detail.data.employment?.baseRate?.toLocaleString('vi-VN') ?? 'Chưa khai báo'}{' '}
-                    VND
-                  </Typography>
-                  <Typography>
-                    Hình thức: {detail.data.employment?.salaryType || 'Chưa khai báo'}
-                  </Typography>
-                </Stack>
-              </Paper>
-            </Stack>
-            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
-                <Button variant="contained" onClick={() => setEditor(detail.data)}>
-                  Chỉnh sửa hồ sơ
-                </Button>
-                <Button
-                  variant="outlined"
-                  disabled={action.busy || !detail.data.isActive}
-                  onClick={() => setInvite(true)}
-                >
-                  Gửi thông tin tài khoản
-                </Button>
-                <Button onClick={() => setSelected('')}>Đóng chi tiết</Button>
-              </Stack>
-            </Paper>
-            <StaffAssignments key={selected} staff={detail.data} />
-          </Stack>
-        </Paper>
-      )}
       <ConfirmDialog
         error={action.error}
         open={invite}
@@ -205,10 +226,7 @@ export function StaffApiPage() {
         onClose={() => setInvite(false)}
         onConfirm={() => {
           void action
-            .run(
-              () => action.command(`/api/v1/staff/${selected}/invitation`, 'POST'),
-              'Đã tiếp nhận yêu cầu lời mời. Email đang chờ xử lý; chưa phải xác nhận đã giao thư.',
-            )
+            .run(() => action.command(`/api/v1/staff/${selected}/invitation`, 'POST'))
             .then((ok) => {
               if (ok) setInvite(false);
             });
@@ -226,6 +244,7 @@ function StaffEditor({ staff, close }: { staff: Staff | null; close: () => void 
   const [name, setName] = useState(staff?.fullName ?? ''),
     [email, setEmail] = useState(staff?.email ?? ''),
     [phone, setPhone] = useState(staff?.phone ?? ''),
+    [password, setPassword] = useState(''),
     [reason, setReason] = useState(''),
     [active, setActive] = useState(staff?.isActive ?? true);
   const [employment, setEmployment] = useState<Employment>(
@@ -250,7 +269,9 @@ function StaffEditor({ staff, close }: { staff: Staff | null; close: () => void 
       email: email.trim(),
       phone: phone || null,
       employment: work,
-      ...(staff ? { accountVersion: staff.accountVersion, isActive: active, reason } : {}),
+      ...(staff
+        ? { accountVersion: staff.accountVersion, isActive: active, reason }
+        : { initialPassword: password }),
     };
     if (
       await action.run(() =>
@@ -303,10 +324,15 @@ function StaffEditor({ staff, close }: { staff: Staff | null; close: () => void 
               onChange={(e) => setPhone(e.target.value)}
             />
             {!staff && (
-              <Alert severity="info">
-                Nhân viên tự đặt mật khẩu qua lời mời email. Sau khi tạo, chọn Gửi thông tin tài
-                khoản trong chi tiết nhân viên.
-              </Alert>
+              <TextField
+                required
+                type="password"
+                autoComplete="new-password"
+                label="Mật khẩu khởi tạo"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                slotProps={{ htmlInput: { minLength: 12, maxLength: 256 } }}
+              />
             )}
             <TextField
               label="Số hợp đồng lao động"

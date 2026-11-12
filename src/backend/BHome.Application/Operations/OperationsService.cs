@@ -302,7 +302,8 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     {
         Require(Permissions.OperationalTasks.Manage); Validate(input);
         if (input.LocationId == Guid.Empty || input.NextRunAt == default || string.IsNullOrWhiteSpace(input.Title) ||
-            string.IsNullOrWhiteSpace(input.Requirements)) throw OperationsException.Invalid("invalid_recurring_task_template");
+            string.IsNullOrWhiteSpace(input.Requirements) || !RecurringTaskSchedule.IsValid(input))
+            throw OperationsException.Invalid("invalid_recurring_task_template");
         return await repository.SaveTemplateAsync(Actor, id, input with
         {
             Title = input.Title.Trim(),

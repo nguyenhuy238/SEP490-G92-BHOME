@@ -84,6 +84,22 @@ public sealed class OperationalTaskServiceTests
             Arg.Any<CancellationToken>());
     }
     [Fact]
+    public async Task TaskListNormalizesLocalDayBoundsToUtcWithoutChangingInstants()
+    {
+        var r = new Rig();
+        r.Repo.ListAsync(Arg.Any<TaskQuery>(), Arg.Any<Guid?>(), Arg.Any<DateOnly>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new TaskPage<TaskView>([], 1, 1, 0));
+        var from = DateTimeOffset.Parse("2026-11-12T00:00:00+07:00");
+        var to = DateTimeOffset.Parse("2026-11-12T23:59:59.999+07:00");
+
+        await r.Service.ListAsync(new TaskQuery { PageSize = 1, DueFrom = from, DueTo = to }, default);
+
+        await r.Repo.Received(1).ListAsync(
+            Arg.Is<TaskQuery>(q => q.DueFrom == from && q.DueTo == to &&
+                q.DueFrom.Value.Offset == TimeSpan.Zero && q.DueTo.Value.Offset == TimeSpan.Zero),
+            Arg.Any<Guid?>(), Arg.Any<DateOnly>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+    [Fact]
     public async Task MissingStaffAndInvalidWorkCannotCreateTask()
     {
         var r = new Rig(); r.Responsibility = null;

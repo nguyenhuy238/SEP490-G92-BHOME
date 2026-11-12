@@ -1,3 +1,4 @@
+vi.mock('../components/WorkflowControls', () => ({ ChoiceField: () => null }));
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -124,6 +125,7 @@ vi.mock('../components/ContractDateField', () => ({
 }));
 vi.mock('../components/WorkspaceKit', () => ({
   Box: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
+  Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Heading: ({ title }: { title: string }) => <h2>{title}</h2>,
 }));
@@ -205,11 +207,85 @@ function fill() {
     ['Ngày bắt đầu (dd/MM/yyyy)', '02/11/2026'],
     ['Ngày kết thúc (dd/MM/yyyy)', '02/11/2027'],
     ['Số điện thoại người thuê', '0000000001'],
-    ['Nơi cấp CCCD (chưa có trong hồ sơ)', 'Nơi cấp kiểm thử'],
+    ['Email người thuê *', 'tenant.synthetic@example.invalid'],
     ['Điều khoản bổ sung / ghi chú', 'Ghi chú giữ nguyên'],
   ])
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
+it('validates contact email, trims the supported draft field and omits issuing-place input', async () => {
+  setup();
+  await screen.findByText('CCCD: ********0123');
+  fill();
+  expect(screen.queryByLabelText(/Nơi cấp CCCD/)).toBeNull();
+  fireEvent.change(screen.getByLabelText('Email người thuê *'), {
+    target: { value: 'not an email' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+  expect(screen.getByText('Nhập email người thuê hợp lệ.')).toBeTruthy();
+  expect(state.request.mock.calls.some((call) => call[1]?.method === 'POST')).toBe(false);
+  fireEvent.change(screen.getByLabelText('Email người thuê *'), {
+    target: { value: '  synthetic.contact@example.invalid  ' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+  await screen.findByText('Mã hợp đồng: draft-id');
+  const post = state.request.mock.calls.find((call) => call[1]?.method === 'POST')!;
+  expect(JSON.parse(post[1].body)).toMatchObject({
+    tenantEmail: 'synthetic.contact@example.invalid',
+    tenantPlaceOfIssue: '',
+  });
+  expect(state.request.mock.calls.some((call) => call[0].includes('/invitation'))).toBe(false);
+});
+it('shows one configuration notice and blocks save/preview when the server requires configuration', async () => {
+  const original = state.request.getMockImplementation()!;
+  state.request.mockImplementation((path: string, init?: RequestInit) =>
+    path.includes('/preparation?')
+      ? Promise.resolve({
+          ...preparation,
+          blockers: ['owner_contract_settings_required', 'missing_policy_water'],
+        })
+      : original(path, init),
+  );
+  setup();
+  await screen.findByText('Thiếu cấu hình hợp đồng');
+  expect(screen.getAllByText(/Chủ cơ sở cần bổ sung/)).toHaveLength(1);
+  expect((screen.getByRole('button', { name: 'Lưu nháp' }) as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  expect(
+    (screen.getByRole('button', { name: 'Xem trước hợp đồng' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+});
+it('prefills only the authorized representative contact, keeping email when returning from preview', async () => {
+  const original = state.request.getMockImplementation()!;
+  state.request.mockImplementation((path: string, init?: RequestInit) =>
+    path.includes('/preparation?')
+      ? Promise.resolve({
+          ...preparation,
+          residents: [
+            { ...preparation.residents[0], email: 'representative@example.invalid' },
+            {
+              ...preparation.residents[0],
+              id: 'member',
+              representative: false,
+              email: 'other@example.invalid',
+            },
+          ],
+        })
+      : original(path, init),
+  );
+  setup();
+  const email = await screen.findByLabelText('Email người thuê *');
+  await waitFor(() =>
+    expect((email as HTMLInputElement).value).toBe('representative@example.invalid'),
+  );
+  fill();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
+  await screen.findByText('Bản hợp đồng PDF');
+  fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa thông tin' }));
+  expect((screen.getByLabelText('Email người thuê *') as HTMLInputElement).value).toBe(
+    'tenant.synthetic@example.invalid',
+  );
+});
 it('loads authoritative read-only identity and validates editable fields without posting invalid data', async () => {
   setup();
   await screen.findByText('Cơ sở kiểm thử · Phòng 101');
@@ -235,7 +311,7 @@ it('keeps the form after an API failure and retries with the same idempotency ke
   });
   fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
   await screen.findByText(/Bản nháp đã thay đổi/);
-  expect(getToastSnapshot().toast?.type).toBe('error');
+  expect(getToastSnapshot().toast?.type).not.toBe('error');
   expect((screen.getByLabelText('Điều khoản bổ sung / ghi chú') as HTMLInputElement).value).toBe(
     'Ghi chú giữ nguyên',
   );
@@ -253,7 +329,7 @@ it('preserves edits across preview, reports missing PDF honestly and exposes no 
   fill();
   fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
   await screen.findByText(/Máy chủ chưa cấu hình LibreOffice/);
-  expect(getToastSnapshot().toast?.type).toBe('warning');
+  expect(getToastSnapshot().toast?.type).toBe('success');
   expect(screen.getByRole('button', { name: 'Mở hoặc lưu DOCX' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: /Ký hợp đồng|Kích hoạt|QR/ })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa thông tin' }));
@@ -328,7 +404,7 @@ it('does not report a cancelled idempotent replay as a saved draft', async () =>
   fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
   await screen.findByText(/Bản nháp đã thay đổi/);
   expect(screen.queryByText('Đã tạo hợp đồng nháp')).toBeNull();
-  expect(getToastSnapshot().toast?.type).toBe('error');
+  expect(getToastSnapshot().toast?.type).not.toBe('error');
 });
 
 it('waits for backend confirmation before showing success and prevents repeated save requests', async () => {
@@ -394,7 +470,7 @@ it('downloads PDF and DOCX through the authenticated client and cleans private c
   state.share.mockRejectedValueOnce(new Error('Unavailable'));
   fireEvent.click(screen.getByRole('button', { name: 'Tải hoặc mở PDF' }));
   await waitFor(() => expect(state.deleted).toHaveBeenCalledTimes(3));
-  expect(getToastSnapshot().toast?.type).toBe('error');
+  expect(getToastSnapshot().toast?.type).not.toBe('error');
   const valid = state.request.getMockImplementation()!;
   state.request.mockImplementation((path: string, init?: RequestInit) =>
     path.endsWith('/documents/pdf')
@@ -405,4 +481,34 @@ it('downloads PDF and DOCX through the authenticated client and cleans private c
   await screen.findByText('Tệp tải về không hợp lệ. Hãy tạo lại tài liệu rồi thử lại.');
   expect(state.share).toHaveBeenCalledTimes(3);
   expect(state.deleted).toHaveBeenCalledTimes(3);
+});
+
+it('keeps the same saved draft and entered contact data when returning from signing to edit', async () => {
+  const original = state.request.getMockImplementation()!;
+  state.request.mockImplementation((path: string, init?: RequestInit) => {
+    if (path.endsWith('/documents'))
+      return Promise.resolve({ docx: { id: 'docx' }, pdf: { id: 'pdf' }, previewError: null });
+    if (path.endsWith('/pdf/preview'))
+      return Promise.resolve({ fileId: 'pdf', pages: [{ number: 1, width: 595, height: 842 }] });
+    if (path.includes('/pages/'))
+      return Promise.resolve(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
+    return original(path, init);
+  });
+  setup();
+  await screen.findByText('CCCD: ********0123');
+  fill();
+  const email = (screen.getByLabelText('Email người thuê *') as HTMLInputElement).value;
+  fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
+  await screen.findByText('Bản hợp đồng PDF');
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục ký hợp đồng' }));
+  await screen.findByText('Chờ Chủ cơ sở duyệt để ký');
+  fireEvent.click(screen.getByRole('button', { name: 'Xem hợp đồng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa thông tin' }));
+  expect((screen.getByLabelText('Email người thuê *') as HTMLInputElement).value).toBe(email);
+  expect(screen.getByText('Mã hợp đồng: draft-id')).toBeTruthy();
+  expect(
+    state.request.mock.calls.filter(
+      (call) => call[0] === '/api/v1/contracts/main-drafts' && call[1]?.method === 'POST',
+    ),
+  ).toHaveLength(1);
 });

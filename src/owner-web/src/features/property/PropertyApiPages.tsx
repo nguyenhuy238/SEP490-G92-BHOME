@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import {
   Alert,
+  Box,
+  Chip,
   Button,
   Dialog,
   DialogActions,
@@ -39,6 +41,10 @@ import { usePropertySetupApi } from './usePropertySetupApi';
 import { AssetOperationsPanel } from './AssetOperationsPanel';
 import { ApiConfigurationCopy } from '../configuration/ApiConfigurationCopy';
 import { LocationRoomDefaultsPicker } from '../configuration/LocationRoomDefaultsPicker';
+import { BulkRoomsDialog } from '../locations/components/BulkRoomsDialog';
+import { RoomFloorCards } from '../locations/components/RoomFloorCards';
+import { RoomInspector } from '../locations/components/RoomInspector';
+import { ConflictReload } from '../locations/components/ConflictReload';
 
 type Kind = 'locations' | 'rooms' | 'assets';
 type Row = LocationConfiguration | RoomConfiguration | PhysicalAsset;
@@ -69,6 +75,10 @@ export function PropertyApiPage({
   const location = params.locationId ?? selectedLocation;
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [view, setView] = useState(kind === 'rooms' ? 'cards' : 'table');
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [inspectedRoom, setInspectedRoom] = useState('');
   const [open, setOpen] = useState(createInitially);
   const [confirmInactive, setConfirmInactive] = useState(false);
   const [inspectedAsset, setInspectedAsset] = useState('');
@@ -85,14 +95,20 @@ export function PropertyApiPage({
     queryFn: ({ signal }) => api.roomOptions(location, signal),
     enabled: kind === 'assets' && !!location,
   });
+  const roomTypes = useQuery({
+    queryKey: ['property-setup', 'room-types-options', session?.userId, location],
+    queryFn: ({ signal }) => api.roomTypes(location, 1, '', signal),
+    enabled: kind === 'rooms' && !!location,
+  });
   const query = useQuery({
-    queryKey: ['property-setup', kind, session?.userId, location, page, search],
+    queryKey: ['property-setup', kind, session?.userId, location, page, search, statusFilter],
     queryFn: async ({ signal }): Promise<Page<Row>> =>
       kind === 'locations'
         ? api.locations(page + 1, search, signal)
-        : kind === 'rooms'
-          ? api.rooms(location, page + 1, search, signal)
-          : api.assets(location, page + 1, search, signal),
+        : api.request<Page<Row>>(
+            `/api/v1/${kind}?${new URLSearchParams({ locationId: location, page: String(page + 1), pageSize: '20', ...(search ? { search } : {}), ...(statusFilter ? { [kind === 'rooms' ? 'roomStatus' : 'assetStatus']: statusFilter } : {}) })}`,
+            { signal },
+          ),
     enabled: kind === 'locations' || !!location,
   });
   const save = useMutation({
@@ -175,12 +191,24 @@ export function PropertyApiPage({
   return (
     <Stack spacing={2}>
       <PageHeader
+        group={null}
         title={titles[kind]}
-        subtitle="Cấu hình được đọc và lưu trực tiếp trên máy chủ."
+        subtitle={
+          kind === 'rooms'
+            ? 'Tìm phòng, xem sức chứa và quản lý trạng thái khai thác.'
+            : kind === 'assets'
+              ? 'Theo dõi thiết bị thực tế tại phòng và khu chung, kiểm tra tình trạng và lịch sử.'
+              : 'Quản lý thông tin và cấu hình các cơ sở.'
+        }
         actions={
           canManage ? (
             <Stack direction="row" spacing={1}>
               {kind === 'locations' && <ApiConfigurationCopy />}
+              {kind === 'rooms' && (
+                <Button variant="outlined" disabled={!location} onClick={() => setBulkOpen(true)}>
+                  Tạo phòng hàng loạt
+                </Button>
+              )}
               <Button
                 variant="contained"
                 disabled={kind !== 'locations' && !location}
@@ -212,20 +240,53 @@ export function PropertyApiPage({
         </TextField>
       )}
       {options.error && <ErrorState error={options.error} retry={() => void options.refetch()} />}
-      <TextField
-        label="Tìm kiếm"
-        value={search}
-        onChange={(event) => {
-          setSearch(event.target.value);
-          setPage(0);
-        }}
-      />
-      <Button
-        disabled={query.isFetching || (kind !== 'locations' && !location)}
-        onClick={() => void query.refetch()}
-      >
-        Tải lại danh sách
-      </Button>
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={2}
+          sx={{ alignItems: { md: 'center' } }}
+        >
+          <TextField
+            fullWidth
+            label="Tìm kiếm"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(0);
+            }}
+          />
+          {kind !== 'locations' && (
+            <TextField
+              select
+              label="Trạng thái"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
+              sx={{ minWidth: 220 }}
+            >
+              <MenuItem value="">Tất cả trạng thái</MenuItem>
+              {(kind === 'rooms' ? roomLabels : assetLabels).map((label, index) => (
+                <MenuItem key={label} value={String(index)}>
+                  {label}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+          <Button
+            disabled={query.isFetching || (kind !== 'locations' && !location)}
+            onClick={() => void query.refetch()}
+          >
+            Tải lại danh sách
+          </Button>
+          {kind === 'rooms' && (
+            <Button onClick={() => setView((old) => (old === 'cards' ? 'table' : 'cards'))}>
+              {view === 'cards' ? 'Dạng bảng' : 'Sơ đồ phòng'}
+            </Button>
+          )}
+        </Stack>
+      </Paper>
       {kind !== 'locations' && !location ? (
         <Alert severity="info">Chọn cơ sở để quản lý cấu hình.</Alert>
       ) : query.isPending ? (
@@ -235,61 +296,88 @@ export function PropertyApiPage({
       ) : (
         <Paper>
           {!query.data?.items.length ? (
-            <EmptyState />
+            <Box sx={{ p: 3, textAlign: 'center' }}>
+              <EmptyState />
+              <Typography color="text.secondary">
+                {search || statusFilter
+                  ? 'Thử đổi từ khóa hoặc trạng thái để xem dữ liệu khác.'
+                  : 'Thêm bản ghi đầu tiên để bắt đầu quản lý.'}
+              </Typography>
+              {canManage && (
+                <Button sx={{ mt: 2 }} variant="outlined" onClick={() => edit(null)}>
+                  Thêm mới
+                </Button>
+              )}
+            </Box>
+          ) : kind === 'rooms' && view === 'cards' ? (
+            <RoomFloorCards
+              locationId={location}
+              roomTypes={roomTypes.data?.items ?? []}
+              rooms={query.data.items.filter((row): row is RoomConfiguration => 'capacity' in row)}
+              total={query.data.totalCount}
+              inspect={setInspectedRoom}
+              edit={canManage ? edit : undefined}
+            />
           ) : (
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Tên / mã</TableCell>
-                  <TableCell>Thông tin</TableCell>
-                  <TableCell>Trạng thái</TableCell>
-                  <TableCell>Thao tác</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {query.data.items.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{'roomNumber' in row ? row.roomNumber : row.name}</TableCell>
-                    <TableCell>
-                      {'address' in row
-                        ? row.address
-                        : 'capacity' in row
-                          ? `${row.capacity} người · ${row.floor ?? 'Chưa có tầng'}`
-                          : `${row.code ?? ''} · ${row.category} · ${row.condition}`}
-                    </TableCell>
-                    <TableCell>
-                      {'isActive' in row
-                        ? row.isActive
-                          ? 'Đang hoạt động'
-                          : 'Ngừng hoạt động'
-                        : 'capacity' in row
-                          ? roomLabels[row.status]
-                          : assetLabels[row.status]}
-                    </TableCell>
-                    <TableCell>
-                      <Stack direction="row" spacing={1}>
-                        {'condition' in row && (
-                          <Button onClick={() => setInspectedAsset(row.id)}>
-                            Thông tin & Lịch sử
-                          </Button>
-                        )}
-                        {kind === 'locations' && (
-                          <Button component={Link} to={`/locations/${row.id}/overview`}>
-                            Quản lý cấu hình
-                          </Button>
-                        )}
-                        {kind === 'rooms' && (
-                          <Button component={Link} to={`/rooms/${row.id}`}>
-                            Chi tiết
-                          </Button>
-                        )}
-                        {canManage && <Button onClick={() => edit(row)}>Chỉnh sửa</Button>}
-                      </Stack>
-                    </TableCell>
+            <Stack sx={{ overflowX: 'auto' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Tên / mã</TableCell>
+                    <TableCell>Thông tin</TableCell>
+                    <TableCell>Trạng thái</TableCell>
+                    <TableCell>Thao tác</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {query.data.items.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{'roomNumber' in row ? row.roomNumber : row.name}</TableCell>
+                      <TableCell>
+                        {'address' in row
+                          ? row.address
+                          : 'capacity' in row
+                            ? `${row.capacity} người · ${row.floor ?? 'Chưa có tầng'}`
+                            : `${row.code ?? ''} · ${row.category} · ${row.condition}`}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={
+                            'isActive' in row
+                              ? row.isActive
+                                ? 'Đang hoạt động'
+                                : 'Ngừng hoạt động'
+                              : 'capacity' in row
+                                ? roomLabels[row.status]
+                                : assetLabels[row.status]
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1}>
+                          {'condition' in row && (
+                            <Button onClick={() => setInspectedAsset(row.id)}>
+                              Thông tin & Lịch sử
+                            </Button>
+                          )}
+                          {kind === 'locations' && (
+                            <Button component={Link} to={`/locations/${row.id}/overview`}>
+                              Quản lý cấu hình
+                            </Button>
+                          )}
+                          {kind === 'rooms' && (
+                            <Button onClick={() => setInspectedRoom(row.id)}>Chi tiết</Button>
+                          )}
+                          {canManage && <Button onClick={() => edit(row)}>Chỉnh sửa</Button>}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Stack>
           )}
           <TablePagination
             component="div"
@@ -327,6 +415,19 @@ export function PropertyApiPage({
           <DialogTitle>{editing ? 'Chỉnh sửa cấu hình' : 'Thêm cấu hình'}</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                {kind === 'rooms'
+                  ? 'Thông tin & cấu hình phòng'
+                  : kind === 'assets'
+                    ? 'Nhận diện & vị trí tài sản'
+                    : 'Thông tin cơ sở'}
+              </Typography>
+              {kind === 'rooms' && roomTypes.error && (
+                <ErrorState error={roomTypes.error} retry={() => void roomTypes.refetch()} />
+              )}
+              {kind === 'assets' && rooms.error && (
+                <ErrorState error={rooms.error} retry={() => void rooms.refetch()} />
+              )}
               {kind === 'locations' ? (
                 <>
                   {field('name', 'Tên cơ sở')}
@@ -357,6 +458,10 @@ export function PropertyApiPage({
                   {field('roomNumber', 'Số phòng')}
                   {field('floor', 'Tầng', false)}
                   {field('capacity', 'Sức chứa', true, 'number')}
+                  <Alert severity="info">
+                    Giữ chỗ và có khách thuê được xác nhận qua quy trình hợp đồng. Thay đổi sức chứa
+                    hoặc ngừng khai thác sẽ được kiểm tra theo nghĩa vụ của phòng.
+                  </Alert>
                 </>
               ) : (
                 <>
@@ -403,6 +508,17 @@ export function PropertyApiPage({
               )}
               {field('reason', 'Lý do / ghi chú', !!editing)}
               {save.error && <Alert severity="error">{invoiceError(save.error)}</Alert>}
+              {editing && (
+                <ConflictReload
+                  error={save.error}
+                  reload={async () => {
+                    const latest = await api.request<Row>(
+                      `/api/v1/${kind}/${encodeURIComponent(editing.id)}`,
+                    );
+                    edit(latest);
+                  }}
+                />
+              )}
             </Stack>
           </DialogContent>
           <DialogActions>
@@ -419,6 +535,22 @@ export function PropertyApiPage({
           </DialogActions>
         </form>
       </Dialog>
+      {bulkOpen && <BulkRoomsDialog locationId={location} close={() => setBulkOpen(false)} />}
+      {inspectedRoom && (
+        <RoomInspector
+          key={inspectedRoom}
+          roomId={inspectedRoom}
+          edit={
+            canManage
+              ? (room) => {
+                  setInspectedRoom('');
+                  edit(room);
+                }
+              : undefined
+          }
+          close={() => setInspectedRoom('')}
+        />
+      )}
       {query.data?.items
         .filter((row): row is PhysicalAsset => 'condition' in row && row.id === inspectedAsset)
         .map((asset) => (

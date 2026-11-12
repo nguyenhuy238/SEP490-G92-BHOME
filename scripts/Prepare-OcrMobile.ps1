@@ -1,10 +1,10 @@
-param([string]$LanIp, [switch]$SkipDatabase)
+param([string]$LanIp, [switch]$SkipDatabase, [string]$EnvironmentFile = '.env')
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Use-LocalTools.ps1')
 . (Join-Path $PSScriptRoot 'MobileNetwork.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
-$configurationPath = Join-Path $repo '.env'
-if (-not (Test-Path -LiteralPath $configurationPath)) { throw 'Run scripts/Initialize-Local.ps1 first.' }
+$configurationPath = if ([IO.Path]::IsPathRooted($EnvironmentFile)) { $EnvironmentFile } else { Join-Path $repo $EnvironmentFile }
+if (-not (Test-Path -LiteralPath $configurationPath)) { throw 'Selected environment file is missing. For the default .env, run scripts/Initialize-Local.ps1 first.' }
 if (-not $LanIp) { $LanIp = Get-MobileLanIp }
 if (-not (Test-MobilePrivateIpv4 $LanIp)) { throw 'Supply -LanIp with the private IPv4 address on the same LAN as the iPhone.' }
 if ($LanIp -notin @(Get-NetIPAddress -AddressFamily IPv4 | Select-Object -ExpandProperty IPAddress)) { throw 'Selected LAN IP is not assigned to this computer.' }
@@ -113,7 +113,7 @@ Write-Output 'Visual Studio Development configuration synchronized. Restart debu
 if (-not $SkipDatabase) {
     # The active persistence is Compact24. Legacy EF migrations would add the
     # retired schema to this database and cannot upgrade its property shape.
-    & (Join-Path $PSScriptRoot 'Update-LocalDatabase.ps1')
+    & (Join-Path $PSScriptRoot 'Update-LocalDatabase.ps1') -EnvironmentFile $EnvironmentFile
 }
 Write-Output "API: https://${LanIp}:7240"
 Write-Output "Public CA download (development only): http://${LanIp}:5240/development/mobile-ca.cer"

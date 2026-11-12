@@ -15,6 +15,9 @@ vi.mock('../components/WorkspaceKit', () => ({
   ui: {},
 }));
 vi.mock('../features/contracts/ContractEvidence', () => ({ ContractEvidence: () => null }));
+vi.mock('../features/contracts/HoldingDepositAllocation', () => ({
+  HoldingDepositAllocation: () => null,
+}));
 vi.mock('../features/workspace/useWorkspaceQuery', () => ({
   useWorkspaceQuery: (path: string | null) => ({
     data: path?.endsWith('/holding-deposit')
@@ -42,13 +45,14 @@ it('shows backend refund status as monitoring without treating a reservation as 
   render(
     <ContractWorkflowPanel
       api={api}
-      contract={{ id: 'synthetic-contract', kind: 'Holding' } as ContractView}
+      contract={
+        { id: 'synthetic-contract', kind: 'Holding', requiredDeposit: '100000' } as ContractView
+      }
       role="Owner"
       section="history"
     />,
   );
   await screen.findByText('Đang chờ thực chi');
-  expect(screen.getByText('Thực hiện hủy hoặc hoàn cọc tại Owner Web.')).toBeTruthy();
   expect(screen.queryByText('Đã xác minh thực chi hoàn cọc')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Lập yêu cầu hoàn tiền' })).toBeNull();
 });

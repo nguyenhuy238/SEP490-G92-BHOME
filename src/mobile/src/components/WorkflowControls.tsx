@@ -17,14 +17,24 @@ export function ChoiceField({
   options,
   onChange,
   disabled = false,
+  searchable = false,
+  placeholder = 'Chọn…',
 }: {
   label: string;
   value: string;
   options: Choice[];
   onChange: (id: string) => void;
   disabled?: boolean;
+  searchable?: boolean;
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const visibleOptions = options.filter(
+    (item) =>
+      !searchable ||
+      item.label.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi')),
+  );
   return (
     <View style={{ gap: 4 }}>
       <Text variant="labelMedium">{label}</Text>
@@ -33,7 +43,10 @@ export function ChoiceField({
         icon="chevron-down"
         accessibilityLabel={label}
         disabled={disabled}
-        onPress={() => setOpen(true)}
+        onPress={() => {
+          setSearch('');
+          setOpen(true);
+        }}
         contentStyle={{
           flexDirection: 'row-reverse',
           justifyContent: 'space-between',
@@ -41,14 +54,23 @@ export function ChoiceField({
         }}
         style={{ borderRadius: 10, borderColor: c.border }}
       >
-        {options.find((item) => item.id === value)?.label ?? 'Chọn…'}
+        {options.find((item) => item.id === value)?.label ?? placeholder}
       </Button>
       <Portal>
         <Dialog visible={open} onDismiss={() => setOpen(false)} style={{ maxHeight: '80%' }}>
           <Dialog.Title>{label}</Dialog.Title>
+          {searchable && (
+            <TextInput
+              label="Tìm kiếm"
+              value={search}
+              onChangeText={setSearch}
+              mode="outlined"
+              style={{ marginHorizontal: 24, marginBottom: 12 }}
+            />
+          )}
           <Dialog.ScrollArea>
             <ScrollView>
-              {options.map((item) => (
+              {visibleOptions.map((item) => (
                 <RadioButton.Item
                   key={item.id}
                   label={item.label}
@@ -62,6 +84,9 @@ export function ChoiceField({
               ))}
               {!options.length && (
                 <Text style={{ padding: 20 }}>Không có lựa chọn trong phạm vi được phép.</Text>
+              )}
+              {!!options.length && !visibleOptions.length && (
+                <Text style={{ padding: 20 }}>Không tìm thấy lựa chọn phù hợp.</Text>
               )}
             </ScrollView>
           </Dialog.ScrollArea>
@@ -80,6 +105,7 @@ export function Input({
   numeric = false,
   multiline = false,
   disabled = false,
+  email = false,
 }: {
   label: string;
   value: string;
@@ -87,6 +113,7 @@ export function Input({
   numeric?: boolean;
   multiline?: boolean;
   disabled?: boolean;
+  email?: boolean;
 }) {
   return (
     <TextInput
@@ -95,10 +122,10 @@ export function Input({
       accessibilityLabel={label}
       value={value}
       onChangeText={onChange}
-      keyboardType={numeric ? 'decimal-pad' : 'default'}
+      keyboardType={email ? 'email-address' : numeric ? 'decimal-pad' : 'default'}
       multiline={multiline}
       disabled={disabled}
-      autoCapitalize={numeric ? 'none' : 'sentences'}
+      autoCapitalize={numeric || email ? 'none' : 'sentences'}
       style={{ backgroundColor: c.white }}
     />
   );

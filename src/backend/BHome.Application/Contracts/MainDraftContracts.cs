@@ -9,7 +9,10 @@ namespace BHome.Application.Contracts;
 public sealed record MainDraftInput(Guid RoomId, Guid RepresentativeResidentId,
     Guid[] ResidentIds, DateOnly StartDate, DateOnly EndDate,
     [StringLength(4000)] string Notes, [StringLength(30)] string? TenantPhone,
-    [Required, StringLength(200)] string TenantPlaceOfIssue, int ExpectedVersion = 0)
+    [StringLength(200)] string TenantPlaceOfIssue, int ExpectedVersion = 0,
+    [EmailAddress, StringLength(256)]
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? TenantEmail = null)
 { public override string ToString() => "Main tenancy draft input (personal supplements omitted)"; }
 public sealed record LessorProfile(string FullName, DateOnly DateOfBirth, string CitizenNumber,
     DateOnly DateOfIssue, string PlaceOfIssue, string Address, string Phone)
@@ -18,7 +21,7 @@ public sealed record MainContractSettingsInput(Guid OwnerSignerId, DateOnly Effe
     [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString | System.Text.Json.Serialization.JsonNumberHandling.WriteAsString)] decimal SecurityDeposit, string PaymentTerms, string AdditionalTerms, LessorProfile Owner, int ExpectedVersion);
 public sealed record MainContractSettings(Guid OwnerSignerId, DateOnly EffectiveFrom, DateOnly? EffectiveTo,
     [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString | System.Text.Json.Serialization.JsonNumberHandling.WriteAsString)] decimal SecurityDeposit, string PaymentTerms, string AdditionalTerms, LessorProfile Owner, int Version);
-public sealed record DraftTenantSummary(Guid Id, string FullName, string MaskedCitizenNumber, DateOnly? DateOfIssue, bool Representative, string? Phone = null);
+public sealed record DraftTenantSummary(Guid Id, string FullName, string MaskedCitizenNumber, DateOnly? DateOfIssue, bool Representative, string? Phone = null, string? Email = null);
 public sealed record MainDraftPreparation(Guid RoomId, Guid LocationId, string LocationName, string RoomNumber,
     string Address, DateOnly EffectiveOn, IReadOnlyList<DraftTenantSummary> Residents,
     IReadOnlyList<PolicyDto> Charges, [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.WriteAsString | System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString)] decimal? SecurityDeposit, string? PaymentTerms,
@@ -38,6 +41,7 @@ public interface IMainDraftData
     Task SetSettingsAsync(Guid locationId, MainContractSettingsInput input, Guid actor, CancellationToken t);
     Task<IdentityConfirmation> IdentityAsync(Guid roomId, Guid residentId, CancellationToken t);
     Task<string?> PhoneAsync(Guid roomId, Guid residentId, CancellationToken t);
+    Task<string?> EmailAsync(Guid roomId, Guid residentId, CancellationToken t) => Task.FromResult<string?>(null);
     Task<bool> DuplicateAsync(Guid roomId, Guid except, Guid[] people, DateOnly from, DateOnly to, CancellationToken t);
     string Protect(Contract contract, MainDraftState value);
     MainDraftState Unprotect(Contract contract);
