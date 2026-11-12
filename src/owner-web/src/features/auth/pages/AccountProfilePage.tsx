@@ -369,7 +369,7 @@ export default function AccountProfilePage() {
         onClose={() => setPasswordChanged(false)}
       >
         <Alert severity="success" onClose={() => setPasswordChanged(false)}>
-          Đã đổi mật khẩu và xác thực lại phiên hiện tại.
+          Đã đổi mật khẩu. Vui lòng đăng nhập lại.
         </Alert>
       </Snackbar>
       <Snackbar open={logoutError} autoHideDuration={8000} onClose={() => setLogoutError(false)}>

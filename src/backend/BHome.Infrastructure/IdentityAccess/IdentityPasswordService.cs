@@ -16,7 +16,8 @@ internal sealed class IdentityPasswordService(IIdentityPersistence db, IdentityS
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!ValidPasswordInput(currentPassword) || !ValidPasswordInput(newPassword)) return false;
+        if (!ValidPasswordInput(currentPassword) || !ValidPasswordInput(newPassword) ||
+            string.Equals(currentPassword, newPassword, StringComparison.Ordinal)) return false;
         await using var transaction = await db.BeginTransactionAsync(cancellationToken);
         var user = await security.LockUserAsync(userId, cancellationToken);
         if (user is null || !security.IsEligible(user)) return false;

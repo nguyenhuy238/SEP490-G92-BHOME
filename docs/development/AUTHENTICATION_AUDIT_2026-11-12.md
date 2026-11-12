@@ -131,3 +131,11 @@ Kiểm chứng mới: 62 backend integration tests passed (Compact24Notification
 
 Commands: disposable wrapper filter Compact24NotificationMvpTests|Compact24AuthTests|Compact24LoginValidationTests|Compact24SessionLifecycleTests; browser filter AuthenticationBrowserTests với BHOME_RUN_BROWSER_E2E=true/BHOME_GMAIL_SMOKE=0; npm workspace owner-web profile test và mobile profile-screens/account-profile/tenant-profile-gate, typecheck/lint.
 Browser rerun: 1/1 passed, lưu Full Name giữ nguyên refresh cookie; F5 nested và new tab restore passed trên API/PostgreSQL thực. Tổng Phase 4: 63 backend/E2E, 3 Web và 49 Mobile passed, 0 failed/skip trong các lần xác minh cuối.
+
+## Phase 5 — Password, recovery và verification
+
+UC-01/03, ITC-AUTH-021..026: phát hiện Web tự login bằng mật khẩu mới sau change và backend cho phép new=current. Đã chặn same-password ở server và hai client; Web xóa session rồi chuyển Login, Mobile giữ logout flow hiện có và thêm policy validation trước request. Password hash, reset grant, token lifetime 15 phút, email prerequisite, protected outbox, SMTP retry và security dedup tiếp tục dùng implementation hiện có. Không thay cookie/security/refresh policy và không tạo endpoint.
+
+Thực thi mới: 52 backend Compact24Auth/NotificationMvp passed trên disposable PostgreSQL, bao gồm wrong current/weak/empty/same không đổi hash hoặc hai session, success revoke cả hai; reset concurrent/generic/encrypted/one-use/revoke, verification unconfirmed/expired/reused/email-changed, SMTP retry/suppression, security event dedup. 36 Web auth tests (8 files), 13 Mobile security/recovery tests (2 files) passed. Typecheck/lint hai client passed, git diff --check passed. Logs/TRX `.tmp/auth-completion-phase5*` ignored. Live SMTP và physical native links NOT RUN.
+
+Commands: disposable wrapper filter Compact24NotificationMvpTests|Compact24AuthTests với BHOME_GMAIL_SMOKE=0; npm workspace owner-web auth tests, mobile account-security/password-recovery, typecheck và lint. Đã sửa test Web auto-login theo chính sách mới explicit yêu cầu reauthentication; không hạ yêu cầu security hoặc xóa negative test.

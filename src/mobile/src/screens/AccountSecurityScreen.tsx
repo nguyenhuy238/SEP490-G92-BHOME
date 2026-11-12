@@ -32,6 +32,16 @@ export function AccountSecurityScreen() {
       setError('Nhập mật khẩu hiện tại và xác nhận mật khẩu mới khớp nhau.');
       return;
     }
+    if (current === password) {
+      setError('Mật khẩu mới phải khác mật khẩu hiện tại.');
+      return;
+    }
+    if (!/^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}]).{12,1024}$/u.test(password)) {
+      setError(
+        'Mật khẩu mới phải có ít nhất 12 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.',
+      );
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError('');

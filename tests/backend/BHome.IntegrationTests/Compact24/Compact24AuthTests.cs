@@ -40,6 +40,30 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
     private const string NewPassword = "Synthetic!Password-927";
 
     [CompactPostgresFact]
+    public async Task InvalidPasswordChangesLeaveBothSessionsAndPasswordHashUnchanged()
+    {
+        var user = await Seed(); using var a = fixture.Factory!.CreateClient(); using var b = fixture.Factory.CreateClient();
+        var first = await Login(a, user.Email!); var second = await Login(b, user.Email!);
+        Bearer(a, first); Bearer(b, second);
+        foreach (var input in new[] {
+            new { currentPassword = Password, newPassword = Password },
+            new { currentPassword = "Wrong!Password-493", newPassword = NewPassword },
+            new { currentPassword = Password, newPassword = "short" },
+            new { currentPassword = "", newPassword = NewPassword } })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, (await a.PostAsJsonAsync("/api/v1/auth/change-password", input)).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await a.GetAsync("/api/v1/auth/me")).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await b.GetAsync("/api/v1/auth/me")).StatusCode);
+        }
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        Assert.Equal(user.PasswordHash, (await db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id)).PasswordHash);
+        Assert.Equal(HttpStatusCode.NoContent, (await a.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = Password, newPassword = NewPassword })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await a.GetAsync("/api/v1/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await b.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    [CompactPostgresFact]
     public async Task SameApiAndIdentityHashWorkWithoutAnyLegacyContextOrTable()
     {
         var user = await Seed();
