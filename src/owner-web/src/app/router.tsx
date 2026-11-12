@@ -67,6 +67,7 @@ const PolicyTemplatesPage = lazy(() =>
   })),
 );
 const ResetPasswordPage = lazy(() => import('../features/auth/pages/ResetPasswordPage'));
+const ConfirmEmailPage = lazy(() => import('../features/auth/pages/ConfirmEmailPage'));
 const AcceptInvitationPage = lazy(() => import('../features/auth/pages/AcceptInvitationPage'));
 const AnonymousSigningPage = lazy(() => import('../features/contracts/pages/AnonymousSigningPage'));
 const AccountProfilePage = lazy(() => import('../features/auth/pages/AccountProfilePage'));
@@ -77,6 +78,7 @@ export function AppRouter() {
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/confirm-email" element={<ConfirmEmailPage />} />
           <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
           <Route path="/contract-signing" element={<AnonymousSigningPage />} />
           <Route element={<ProtectedRoute />}>

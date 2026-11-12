@@ -117,6 +117,11 @@ export default function PasswordRecoveryScreen({ reset = false }: { reset?: bool
       <Button disabled={busy} onPress={() => router.replace('/')}>
         Quay lại đăng nhập
       </Button>
+      {!reset && (
+        <Button disabled={busy} onPress={() => router.push('/confirm-email')}>
+          Chưa xác nhận email? Gửi liên kết xác nhận
+        </Button>
+      )}
     </ScrollView>
   );
 }

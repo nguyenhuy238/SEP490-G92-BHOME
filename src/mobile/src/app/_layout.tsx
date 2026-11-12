@@ -53,6 +53,7 @@ function WorkspaceNavigation() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="accept-invitation" options={{ title: 'Thiết lập tài khoản' }} />
       <Stack.Screen name="forgot-password" options={{ title: 'Quên mật khẩu' }} />
+      <Stack.Screen name="confirm-email" options={{ title: 'Xác nhận email' }} />
       <Stack.Screen name="reset-password" options={{ title: 'Đặt lại mật khẩu' }} />
       <Stack.Screen name="contract-signing" options={{ title: 'Chấp thuận hợp đồng' }} />
       <Stack.Protected guard={!!role}>

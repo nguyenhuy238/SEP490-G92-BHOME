@@ -21,9 +21,12 @@ AuthenticationEmail__WebResetUrl=https://owner.example.invalid/reset-password
 AuthenticationEmail__WebInvitationUrl=https://owner.example.invalid/accept-invitation
 AuthenticationEmail__MobileResetUrl=bhome://reset-password
 AuthenticationEmail__MobileInvitationUrl=bhome://accept-invitation
+AuthenticationEmail__WebVerificationUrl=https://owner.example.invalid/confirm-email
+AuthenticationEmail__MobileVerificationUrl=bhome://confirm-email
 AuthenticationEmail__TrustedOrigins__0=https://owner.example.invalid
 AuthenticationEmail__TrustedOrigins__1=bhome://reset-password
 AuthenticationEmail__TrustedOrigins__2=bhome://accept-invitation
+AuthenticationEmail__TrustedOrigins__3=bhome://confirm-email
 AuthenticationEmail__ResendCooldownSeconds=60
 ```
 
@@ -44,6 +47,8 @@ phải true. Nếu Jobs.Enabled=true, scheduler/queue hiện có xử lý JOB-04
 | API | Hành vi |
 | --- | --- |
 | POST `/api/v1/auth/forgot-password` | Anonymous `{userName}`; email đăng ký hoặc username legacy; generic 202 khi adapter sẵn sàng |
+| POST `/api/v1/auth/request-email-verification` | Anonymous `{userName}`; generic 202; gửi link tới email đã lưu của tài khoản đủ điều kiện |
+| POST `/api/v1/auth/confirm-email` | `{userName,token}`; Identity + verification grant hợp lệ → 204; lỗi chung 400 |
 | POST `/api/v1/auth/reset-password` | `{userName,token,newPassword}`; Identity + grant hợp lệ → 204; lỗi chung 400 |
 | POST `/api/v1/auth/change-password` | Phiên xác thực; body cũ; giữ 204/400 và revoke sessions |
 | POST `/api/v1/staff/{id}/invitation` | Owner; dùng email Staff đã lưu |
@@ -73,7 +78,15 @@ SMTP failure không xóa account/Resident link. Resend sau cooldown thay grant; 
 Tài khoản có invitation chưa dùng phải hoàn tất setup trước login; cấp invitation rotate stamp và
 revoke sessions để chặn login race. Không áp đặt confirmed-email bắt buộc cho mọi account hiện có.
 Accept giữ Identity validation, đánh dấu EmailConfirmed, consume grant và revoke sessions.
-Không có API email-verification độc lập hoặc suspicious-login detection mới trong thay đổi này.
+Theo quyết định bổ sung ngày 12/11/2026, có luồng email-verification độc lập; không thêm suspicious-login detection.
+
+## Xác nhận email để dùng quên mật khẩu
+
+Nếu tài khoản đang hoạt động nhưng `EmailConfirmed=false`, yêu cầu quên mật khẩu vẫn trả 202 chung và không tạo email khôi phục. Trên Web/Mobile, chọn **Chưa xác nhận email? Gửi liên kết xác nhận**, nhập email đã đăng ký, mở thư và bấm **Xác nhận email**. Sau khi thành công, quay lại quên mật khẩu để nhận thư đặt lại mật khẩu.
+
+Không tự đánh dấu email đã xác nhận. Link dùng Identity email-confirmation token, chỉ dùng một lần, có thời hạn Sessions.PasswordResetMinutes và cooldown AuthenticationEmail.ResendCooldownSeconds. Chỉ link mới nhất còn hiệu lực; email, security stamp, trạng thái tài khoản hoặc invitation thay đổi sẽ chặn link cũ. Verification có grant riêng trong outbox và không thay reset/invitation grant, mật khẩu, session, role hay IsActive.
+
+Tài khoản đang có invitation chưa dùng hoặc có provisioning invitation job phải hoàn tất luồng lời mời của Owner; verification không bỏ qua setup. Không bắt mọi tài khoản cũ xác nhận email trước login. Hai verification URL cần được cấu hình riêng; thiếu chúng chỉ làm request verification trả 503 chung, không ảnh hưởng reset/invitation đã cấu hình.
 
 ## Templates và security events
 
@@ -122,8 +135,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Compact24Isolat
 Remove-Item Env:BHOME_GMAIL_SMOKE
 ```
 
-Opt-in gửi một recovery email về chính mailbox sender được cấu hình, dùng DB disposable.
-IMAP read-only tìm đúng Message-Id và chỉ đọc thư test để lấy link, reset Owner tổng hợp,
+Opt-in gửi một verification và một recovery email về chính mailbox sender được cấu hình, dùng DB disposable.
+IMAP read-only tìm đúng Message-Id và chỉ đọc thư test để xác nhận email rồi reset Owner tổng hợp,
 thử reuse và login mới. Không gửi Tenant thật/tiếp security email thật, không log link/token.
 Không chạy trong CI; domain .invalid trong smoke chỉ là fixture.
 Kết quả/giới hạn tại [báo cáo triển khai](../development/AUTHENTICATION_EMAIL_IMPLEMENTATION.md).

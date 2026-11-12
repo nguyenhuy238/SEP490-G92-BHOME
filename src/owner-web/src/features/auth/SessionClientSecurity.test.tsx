@@ -17,6 +17,24 @@ const json = (body: unknown, status = 200) =>
 
 afterEach(() => vi.unstubAllGlobals());
 
+it.each(['request', 'confirm'])(
+  'keeps %s email verification anonymous even with an existing session',
+  async (action) => {
+    const fetch = vi.fn().mockResolvedValue(json({}, 401));
+    vi.stubGlobal('fetch', fetch);
+    const client = new SessionClient('https://api.example.invalid', 'web');
+    client.accept(session);
+    const request =
+      action === 'request'
+        ? client.requestEmailVerification('synthetic@example.invalid')
+        : client.confirmEmail('synthetic@example.invalid', 'synthetic-token');
+    await expect(request).rejects.toMatchObject({ status: 401 });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(new Headers(fetch.mock.calls[0][1].headers).has('Authorization')).toBe(false);
+    expect(client.session).toEqual(session);
+  },
+);
+
 it('derives the client session from a minimal token response', async () => {
   const payload = btoa(
     JSON.stringify({ sub: 'synthetic-owner', role: ['Owner'], sid: 'synthetic-session' }),
