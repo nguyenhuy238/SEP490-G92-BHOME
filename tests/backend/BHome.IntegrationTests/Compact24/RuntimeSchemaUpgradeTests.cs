@@ -11,6 +11,28 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed class RuntimeSchemaUpgradeTests
 {
     [CompactPostgresFact]
+    public async Task ReadinessStillRejectsModifiedGuardBodyAfterCatalogBatching()
+    {
+        var fixture = new Compact24Fixture(); await fixture.InitializeAsync();
+        try
+        {
+            await using var db = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(fixture.Connection).Options);
+            Assert.True(await db.IsSchemaReadyAsync());
+            await using (var tx = await db.Database.BeginTransactionAsync())
+            {
+                await db.Database.ExecuteSqlRawAsync("""
+                    CREATE OR REPLACE FUNCTION bhome24_sepay_receipt_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+                    BEGIN RETURN NEW; END $fn$;
+                    """);
+                Assert.False(await db.IsSchemaReadyAsync());
+                await tx.RollbackAsync();
+            }
+            Assert.True(await db.IsSchemaReadyAsync());
+        }
+        finally { await fixture.DisposeAsync(); }
+    }
+
+    [CompactPostgresFact]
     public async Task BaselineUpgradeRepairsMissingRuntimeColumnsAndPreservesExistingRecords()
     {
         var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN"));

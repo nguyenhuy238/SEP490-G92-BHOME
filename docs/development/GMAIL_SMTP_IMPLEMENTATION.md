@@ -114,6 +114,10 @@ App Password và sender vẫn được cấu hình ngoài Git; không lưu mật
 
 ### Readiness của database hiện tại
 
+Cập nhật sau nghiệm thu Gmail: migration SePay còn thiếu đã được xử lý; development hiện có
+9 applied / 0 pending và readiness 200. Xem [Mobile readiness fix](MOBILE_SEPAY_READINESS_FIX_2026-11-12.md).
+Phần chẩn đoán bên dưới ghi lại trạng thái trước lần sửa đó.
+
 `scripts/Test-Database.ps1` kiểm tra metadata trong transaction **read-only**: kết nối Neon có
 VerifyFull/ChannelBinding.Require, 24 bảng public, Compact24 EF history 8 migration đã áp dụng,
 1 migration có sẵn chưa áp dụng: `20261112000100_SePayIntegration`.

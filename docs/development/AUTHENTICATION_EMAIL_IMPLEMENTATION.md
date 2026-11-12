@@ -132,6 +132,10 @@ Lượt Owner Web full dưới Node 24 đã được dừng khi chưa có kết 
 
 ### Giới hạn và bước còn lại
 
+Cập nhật sau lượt này: migration SePay development đã được áp dụng và readiness 200;
+xem [Mobile readiness fix](MOBILE_SEPAY_READINESS_FIX_2026-11-12.md). Các ghi nhận pending dưới đây
+là trạng thái tại thời điểm nghiệm thu email, không còn là bước vận hành còn thiếu trên development này.
+
 - Database Neon cấu hình ở lượt Gmail trước còn pending migration có sẵn
   `20261112000100_SePayIntegration`, readiness 503. Tác vụ auth không migrate/schema-edit Neon;
   không thêm migration mới. Review/backup và áp dụng migration hiện có theo quy trình database
