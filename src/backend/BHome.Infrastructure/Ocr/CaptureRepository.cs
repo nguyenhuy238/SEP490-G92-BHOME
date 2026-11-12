@@ -42,17 +42,17 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         { throw new CaptureConflictException("duplicate_or_conflicting_record"); }
     }
     public async Task<IReadOnlyList<NamedResource>> LocationsAsync(CancellationToken t) => await scope.VisibleLocations.AsNoTracking()
-        .OrderBy(l => l.Name).Take(100).Select(l => new NamedResource(l.Id, l.Name, null)).ToListAsync(t);
+        .OrderBy(l => l.Name).Take(100).Select(l => new NamedResource(l.Id, l.Name, null, null, null)).ToListAsync(t);
     public async Task<IReadOnlyList<NamedResource>> RoomsAsync(Guid id, CancellationToken t)
     {
         if (!await scope.VisibleLocations.AnyAsync(l => l.Id == id, t)) throw new OcrAccessException();
         return await scope.VisibleRooms.AsNoTracking().Where(r => r.LocationId == id).OrderBy(r => r.RoomNumber).Take(100)
-            .Select(r => new NamedResource(r.Id, r.RoomNumber, r.LocationId)).ToListAsync(t);
+            .Select(r => new NamedResource(r.Id, r.RoomNumber, r.LocationId, r.Status.ToString(), r.Capacity)).ToListAsync(t);
     }
     public async Task<IReadOnlyList<NamedResource>> StaffAsync(CancellationToken t) => await db.Users.AsNoTracking()
         .Where(u => u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id &&
             db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))).OrderBy(u => u.UserName).Take(100)
-        .Select(u => new NamedResource(u.Id, u.UserName!, null)).ToListAsync(t);
+        .Select(u => new NamedResource(u.Id, u.UserName!, null, null, null)).ToListAsync(t);
     public async Task<IdResult> CreateStaffAsync(StaffInput x, CancellationToken t)
     {
         Validate(x);
@@ -164,7 +164,7 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
     {
         if (!await scope.VisibleLocations.AnyAsync(l => l.Id == id, t)) throw new OcrAccessException();
         return await db.Set<Meter>().AsNoTracking().Where(m => m.Room.LocationId == id && scope.VisibleRooms.Any(r => r.Id == m.RoomId))
-            .OrderBy(m => m.Room.RoomNumber).Take(100).Select(m => new NamedResource(m.Id, m.Room.RoomNumber + " · " + m.Code, m.RoomId)).ToListAsync(t);
+            .OrderBy(m => m.Room.RoomNumber).Take(100).Select(m => new NamedResource(m.Id, m.Room.RoomNumber + " · " + m.Code, m.RoomId, null, null)).ToListAsync(t);
     }
     public async Task<IdResult> CreateTaskAsync(MeterTaskInput x, CancellationToken t)
     {

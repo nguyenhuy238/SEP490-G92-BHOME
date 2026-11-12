@@ -13,6 +13,7 @@ export interface MainDraftInput {
   notes: string;
   tenantPhone: string;
   tenantPlaceOfIssue: string;
+  tenantEmail?: string | null;
   expectedVersion: number;
 }
 export interface MainDraftPreparation {
@@ -29,6 +30,7 @@ export interface MainDraftPreparation {
     dateOfIssue: string | null;
     representative: boolean;
     phone?: string | null;
+    email?: string | null;
   }[];
   charges: { id: string; name: string; chargeCode: string; rate: string; version: number }[];
   securityDeposit: string | null;

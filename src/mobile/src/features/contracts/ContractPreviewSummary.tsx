@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   card: {
     padding: 16,
     gap: 10,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: c.border,
     backgroundColor: c.white,

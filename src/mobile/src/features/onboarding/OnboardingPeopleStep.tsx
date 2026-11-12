@@ -62,9 +62,6 @@ export function OnboardingPeopleStep(props: Props) {
             return (
               <View key={item.key} style={[styles.person, selected && styles.selected]}>
                 <View style={styles.personHeader}>
-                  <View style={styles.avatar}>
-                    <Icon source="account-outline" size={22} color={s.navy} />
-                  </View>
                   <View style={styles.identity}>
                     <Text style={styles.personName}>{name}</Text>
                     <Text style={styles.role}>
@@ -97,26 +94,11 @@ export function OnboardingPeopleStep(props: Props) {
                     />
                   </View>
                 </View>
-                <View style={styles.metadata}>
-                  {representative && (
-                    <View style={styles.representativeBadge}>
-                      <Text style={styles.representativeText}>Người đại diện</Text>
-                    </View>
-                  )}
-                  <View style={styles.status}>
-                    <Icon
-                      source={item.status === 'confirmed' ? 'check-circle-outline' : 'circle-small'}
-                      size={16}
-                      color={item.status === 'confirmed' ? s.green : c.muted}
-                    />
-                    <Text
-                      style={[styles.statusText, item.status === 'confirmed' && styles.confirmed]}
-                    >
-                      {identityStatusLabels[item.status]}
-                    </Text>
-                  </View>
-                </View>
-                {selected && <Text style={styles.editing}>Đang chỉnh sửa hồ sơ bên dưới</Text>}
+                {item.residentId && (
+                  <Text style={item.status === 'confirmed' ? styles.confirmed : styles.statusText}>
+                    {identityStatusLabels[item.status]}
+                  </Text>
+                )}
                 {!props.created && !representative && (
                   <Button
                     compact
@@ -234,7 +216,7 @@ export function OnboardingPeopleStep(props: Props) {
 
 const styles = StyleSheet.create({
   content: { gap: 24 },
-  section: { gap: 12 },
+  section: { gap: 10 },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -246,8 +228,8 @@ const styles = StyleSheet.create({
   count: { color: '#475569', fontSize: 13, lineHeight: 20 },
   list: { gap: 12 },
   person: {
-    padding: 12,
-    gap: 12,
+    padding: 10,
+    gap: 4,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: c.border,
@@ -255,32 +237,13 @@ const styles = StyleSheet.create({
   },
   selected: { backgroundColor: '#F8FAFC' },
   personHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#EEF2F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
   identity: { flex: 1, minWidth: 0, gap: 4, paddingTop: 2 },
   personName: { color: s.navy, fontSize: 15, lineHeight: 22, fontWeight: '600' },
   role: { color: '#475569', fontSize: 12, lineHeight: 18 },
   iconActions: { flexDirection: 'row' },
   iconButton: { width: 44, height: 44, margin: 0, borderRadius: 12 },
-  metadata: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-  representativeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: s.blueSoft,
-  },
-  representativeText: { color: '#1D4ED8', fontSize: 12, lineHeight: 18, fontWeight: '600' },
-  status: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   statusText: { color: '#475569', fontSize: 12, lineHeight: 18 },
   confirmed: { color: s.green },
-  editing: { color: '#475569', fontSize: 12, lineHeight: 18 },
   representativeAction: { alignSelf: 'flex-start', marginLeft: -8 },
   secondaryTouch: { minHeight: 44 },
   addButton: { borderRadius: 12, borderColor: '#CBD5E1', backgroundColor: c.white },

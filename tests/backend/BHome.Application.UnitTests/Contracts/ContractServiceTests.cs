@@ -115,6 +115,17 @@ public sealed class ContractServiceTests
         }
     }
 
+    [Fact]
+    public async Task HoldingDraftRejectsMultipleResidents()
+    {
+        var r = new Rig();
+        var input = r.HoldingDraft with { ResidentIds = [r.Resident.Id, Guid.NewGuid()] };
+        var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.CreateHoldingAsync(input, Guid.NewGuid(), default));
+        Assert.Equal(400, error.Status);
+        Assert.Empty(r.Contracts);
+        Assert.Equal(RoomStatus.Available, r.Room.Status);
+    }
+
     [Theory]
     [InlineData("3000000")]
     [InlineData("3000000.000000")]

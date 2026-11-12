@@ -1,4 +1,4 @@
-param([switch]$Clear, [ValidateRange(1024, 65535)][int]$Port = 8081, [switch]$LanApi, [switch]$HostnameApi)
+param([switch]$Clear, [ValidateRange(1024, 65535)][int]$Port = 8081, [switch]$LanApi, [switch]$HostnameApi, [string]$EnvironmentFile = '.env')
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Use-LocalTools.ps1')
 . (Join-Path $PSScriptRoot 'MobileNetwork.ps1')
@@ -14,7 +14,13 @@ if (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyCon
 }
 $expoCli = Join-Path $repo 'node_modules/expo/bin/cli'
 if (-not (Test-Path -LiteralPath $expoCli)) { throw 'Run npm ci at the repository root first.' }
-if (-not (Test-Path -LiteralPath (Join-Path $repo '.env'))) { & (Join-Path $PSScriptRoot 'Initialize-Local.ps1') }
+$configurationPath = if ([IO.Path]::IsPathRooted($EnvironmentFile)) { $EnvironmentFile } else { Join-Path $repo $EnvironmentFile }
+if (-not (Test-Path -LiteralPath $configurationPath)) {
+    if ($EnvironmentFile -eq '.env') { & (Join-Path $PSScriptRoot 'Initialize-Local.ps1') }
+    else { throw 'Selected environment file is missing.' }
+}
+$EnvironmentFile = [IO.Path]::GetFullPath($configurationPath)
+Write-Output "Backend environment file: $EnvironmentFile"
 
 function Assert-LocalApiProcess {
     foreach ($listener in @(Get-NetTCPConnection -State Listen -LocalPort 7240,5240 -ErrorAction SilentlyContinue)) {
@@ -45,9 +51,10 @@ function Stop-OwnedProcess($Process) {
 }
 
 function Wait-MobileApi([string]$Address) {
-    $deadline = (Get-Date).AddSeconds(60)
+    $deadline = (Get-Date).AddSeconds(120)
+    Write-Output 'Waiting for API HTTPS readiness (up to 120 seconds; 15 seconds per request).'
     do {
-        & node (Join-Path $repo 'scripts/Test-MobileApi.cjs') $Address (Join-Path $repo '.tools/mobile-tls/root-ca.cer')
+        & node (Join-Path $repo 'scripts/Test-MobileApi.cjs') $Address (Join-Path $repo '.tools/mobile-tls/root-ca.cer') $Address 15000
         if ($LASTEXITCODE -eq 0) { return }
         if ($script:ownedApi -and $script:ownedApi.HasExited) { break }
         Start-Sleep -Seconds 2
@@ -56,7 +63,10 @@ function Wait-MobileApi([string]$Address) {
     # can be stale when this launcher reuses a Visual Studio API.
     & node (Join-Path $repo 'scripts/Diagnose-MobileApi.cjs') "https://${Address}:7240" (Join-Path $repo '.tools/mobile-tls/root-ca.cer')
     $logHint = if ($script:ownedApi) { 'Check .tools/mobile-dev-api.stdout.log and .tools/mobile-dev-api.stderr.log.' } else { 'Check the running API/Visual Studio output; .tools/mobile-dev-api logs belong to earlier standalone runs.' }
-    throw "API HTTPS readiness failed. $logHint ECONNREFUSED means no API listener; check startup exceptions or a paused debugger first. Run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Update-LocalDatabase.ps1 -Check. For PROPERTY_UPGRADE_REQUIRED, back up the database, stop the API, then use -UpgradePropertySchema and restart. If the upgrade refuses populated retired catalog fields, preserve the data and resolve their migration explicitly; do not recreate the database to bypass it. Use no switch only for MISSING/EMPTY initialization, and -RecreateDatabase only for an explicitly approved legacy archive. Also check local database/storage and Development settings. No TLS checks were bypassed."
+    $connectionHint = if (Get-NetTCPConnection -State Listen -LocalPort 7240 -ErrorAction SilentlyContinue) {
+        'API port 7240 is listening. Check the HTTP status, TLS diagnosis and readiness timeout above.'
+    } else { 'No API HTTPS listener on port 7240 (ECONNREFUSED). Check startup exceptions or a paused debugger.' }
+    throw "API HTTPS readiness failed. $connectionHint $logHint Read-only database check for the selected profile: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Database.ps1 -EnvironmentFile `"$EnvironmentFile`". No TLS checks were bypassed."
 }
 
 function Wait-MobileMetro([string]$Address) {
@@ -77,6 +87,9 @@ $previousServerId = $env:EXPO_PUBLIC_DEV_SERVER_ID
 $previousDevelopmentUrl = $env:EXPO_PUBLIC_DEV_API_BASE_URL
 try {
     Assert-LocalApiProcess
+    if ((Get-CheckoutApiProcess) -or (Get-NetTCPConnection -State Listen -LocalPort 7240 -ErrorAction SilentlyContinue)) {
+        Write-Warning 'Reusing an existing API. Its environment file cannot be changed while running. To switch databases, stop that API and restart this command.'
+    }
     $lanIp = Get-MobileLanIp
     $missingModels = @('detection.onnx', 'recognition.onnx', 'charset.txt') | Where-Object {
         -not (Test-Path -LiteralPath (Join-Path $repo ".tools/ocr-models/$_"))
@@ -85,14 +98,14 @@ try {
         Write-Output 'Preparing missing OCR models for this workstation (verified download, first run only).'
         & (Join-Path $PSScriptRoot 'Get-OcrModels.ps1')
     }
-    & (Join-Path $PSScriptRoot 'Prepare-OcrMobile.ps1') -LanIp $lanIp -SkipDatabase
+    & (Join-Path $PSScriptRoot 'Prepare-OcrMobile.ps1') -LanIp $lanIp -SkipDatabase -EnvironmentFile $EnvironmentFile
     if (-not (Get-NetTCPConnection -State Listen -LocalPort 7240 -ErrorAction SilentlyContinue)) {
         if (Get-CheckoutApiProcess) {
             Write-Output 'An API process from this checkout is starting or paused before opening HTTPS. Continue/check Visual Studio startup output; waiting without starting a second API.'
         } else {
             $apiLauncher = Join-Path $PSScriptRoot 'Start-OcrMobile.ps1'
             $ownedApi = Start-Process powershell.exe -WindowStyle Hidden -WorkingDirectory $repo -PassThru -ArgumentList @(
-                '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $apiLauncher + '"'), '-SkipDatabase'
+                '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $apiLauncher + '"'), '-SkipDatabase', '-EnvironmentFile', ('"' + $EnvironmentFile + '"')
             ) -RedirectStandardOutput (Join-Path $repo '.tools/mobile-dev-api.stdout.log') -RedirectStandardError (Join-Path $repo '.tools/mobile-dev-api.stderr.log')
         }
     }
@@ -141,7 +154,7 @@ try {
             if ($currentIp -eq $lanIp) { continue }
             Write-Output "LAN changed: $lanIp -> $currentIp. Updating HTTPS and Expo automatically."
             Stop-OwnedProcess $metro
-            & (Join-Path $PSScriptRoot 'Prepare-OcrMobile.ps1') -LanIp $currentIp -SkipDatabase
+            & (Join-Path $PSScriptRoot 'Prepare-OcrMobile.ps1') -LanIp $currentIp -SkipDatabase -EnvironmentFile $EnvironmentFile
             Wait-MobileApi $currentIp
             $lanIp = $currentIp
             $networkChanged = $true

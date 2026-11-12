@@ -102,7 +102,14 @@ export function ContractActionForm({
     try {
       body = remoteSigning
         ? signingPayload(values.certificateId ?? '', choice.placement, choice.usePicture)
-        : actionPayload(action, values, contract, evidenceIds);
+        : actionPayload(
+            action,
+            action.operation === 'holding-cancellation'
+              ? { ...values, humanConfirmed: String(checked) }
+              : values,
+            contract,
+            evidenceIds,
+          );
     } catch (e) {
       setError((e as Error).message);
       return;
@@ -133,6 +140,21 @@ export function ContractActionForm({
     <Box>
       <Heading title={action.label} />
       <Text>{action.warning}</Text>
+      {action.operation === 'holding-cancellation' && (
+        <ChoiceField
+          label="Nguyên nhân hủy giữ chỗ"
+          value={values.cause ?? ''}
+          options={[
+            { id: '0', label: 'Người thuê tự nguyện hủy' },
+            { id: '1', label: 'Owner không cung cấp được phòng' },
+          ]}
+          disabled={busy}
+          onChange={(cause) => {
+            setValues((before) => ({ ...before, cause }));
+            setChecked(false);
+          }}
+        />
+      )}
       {action.fields.map((f) =>
         f.type === 'certificate' ? (
           <ChoiceField
