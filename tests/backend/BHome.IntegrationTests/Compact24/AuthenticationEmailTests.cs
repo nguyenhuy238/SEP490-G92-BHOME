@@ -198,6 +198,9 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(invited.UserId, await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == w.Residents[0]).Select(r => r.TenantUserId).SingleAsync());
         Assert.False((await db.Users.AsNoTracking().SingleAsync(u => u.Id == invited.UserId)).EmailConfirmed);
         Assert.Equal("Pending", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());
+        var accountStatus = await owner.GetFromJsonAsync<BHome.Application.Operations.ResidentAdministrationView>($"/api/v1/residents/{w.Residents[0]}");
+        Assert.Equal("Pending", accountStatus!.Account!.DeliveryState);
+        Assert.Equal(3, await db.Database.SqlQuery<int>($"SELECT status::int AS \"Value\" FROM contracts WHERE id={w.Contracts[0]}").SingleAsync());
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={invited.UserId}");
         using var anonymous = host.CreateClient();
         var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));

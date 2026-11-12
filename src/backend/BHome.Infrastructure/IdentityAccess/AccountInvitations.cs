@@ -81,6 +81,8 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         if (userId is { } linked)
         {
             user = await security.LockUserAsync(linked, t) ?? throw new NotificationException(404, "account_not_found");
+            if (!user.IsActive || !(await security.RolesAsync(user.Id, t)).Contains(Roles.Tenant))
+                throw new NotificationException(409, "linked_account_not_eligible");
             if (!string.Equals(user.Email, request.Email, StringComparison.OrdinalIgnoreCase)) throw new NotificationException(409, "linked_account_email_mismatch");
             if (user.EmailConfirmed) throw new NotificationException(409, "account_already_activated");
         }

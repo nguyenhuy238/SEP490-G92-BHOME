@@ -14,15 +14,15 @@ namespace BHome.Infrastructure.IdentityAccess;
 
 internal sealed record ApprovedTenantInvitation(Guid OwnerId, Guid ResidentId, Guid ContractId);
 internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext db, UserManager<ApplicationUser> users,
-    IBackgroundJobQueue jobs) : IPostActivationTenantProvisioning
+    IBackgroundJobQueue jobs, IdentitySecurityStore security) : IPostActivationTenantProvisioning
 {
     public async Task ProvisionAsync(Contract contract, Guid ownerId, CancellationToken t)
     {
-        if (db is not Compact24DbContext) return; // Offline legacy regression schema has no lifecycle extension.
+        if (db is not Compact24DbContext compact) return; // Offline legacy regression schema has no lifecycle extension.
         if (contract.Status != ContractStatus.Active || contract.Kind == ContractKind.Holding || contract.OwnerSignerId != ownerId ||
             db.Database.CurrentTransaction is null) throw ContractException.Conflict("active_main_contract_required_for_accounts");
         var ids = contract.Residents.Select(r => r.ResidentId).ToArray();
-        var residents = await db.Set<Resident>().Where(r => ids.Contains(r.Id) && r.RoomId == contract.RoomId).ToArrayAsync(t);
+        var residents = await db.Set<Resident>().Where(r => ids.Contains(r.Id) && r.RoomId == contract.RoomId && r.OwnerUserId == ownerId).ToArrayAsync(t);
         if (residents.Length != ids.Length) throw ContractException.Conflict("contract_residents_changed");
         foreach (var resident in residents)
         {
@@ -57,6 +57,7 @@ internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext d
                 };
                 account.PasswordHash = users.PasswordHasher.HashPassword(account, Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)) + "!aA1");
                 db.Users.Add(account); db.Entry(account).Property("roles").CurrentValue = new[] { Roles.Tenant };
+                AccountInvitations.MarkPendingSetup(compact, account, DateTimeOffset.UtcNow);
                 // Compact24 writes domain projections before native Identity rows. Persist this User
                 // before assigning its foreign keys; the enclosing activation transaction is still uncommitted.
                 await db.SaveChangesAsync(t);
@@ -64,8 +65,22 @@ internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext d
             }
             if (resident.Id == contract.RepresentativeResidentId) contract.TenantUserId = account.Id;
             if (!account.EmailConfirmed)
+            {
+                // Existing Owner-approved links also wait for setup before the asynchronous dispatch.
+                if (db.Entry(account).Property<string>("reset_token_hash").CurrentValue is null ||
+                    db.Entry(account).Property<DateTimeOffset?>("reset_consumed_at").CurrentValue is not null)
+                {
+                    AccountInvitations.MarkPendingSetup(compact, account, DateTimeOffset.UtcNow);
+                    if (existingLink is not null)
+                    {
+                        if (!(await users.UpdateSecurityStampAsync(account)).Succeeded)
+                            throw ContractException.Conflict("resident_account_changed");
+                        await security.RevokeAllAsync(account.Id, "InvitationPending", t);
+                    }
+                }
                 await jobs.EnqueueAsync(new(AccountInvitationJob.JobName, $"contract:{contract.Id:N}:resident:{resident.Id:N}",
                     JsonSerializer.Serialize(new ApprovedTenantInvitation(ownerId, resident.Id, contract.Id))), t);
+            }
         }
         // One transaction persists occupancy, accounts, resident links and dispatch intents.
         await db.SaveChangesAsync(t);
