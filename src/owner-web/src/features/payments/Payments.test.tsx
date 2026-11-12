@@ -76,6 +76,25 @@ const state = {
   history: [],
 };
 
+it('identifies provider verification without claiming an Owner manually verified the statement', async () => {
+  mocks.api.payment.mockResolvedValue({
+    ...state,
+    history: [
+      {
+        id: 'payment',
+        amount: '100000',
+        paidAt: '2026-11-12T05:00:00Z',
+        paidBy: 'Chưa xác định',
+        verificationSource: 'SePayTest',
+        verifiedAt: '2026-11-12T05:00:00Z',
+      },
+    ],
+  });
+  mount(<OwnerInvoicePaymentPanel invoiceId={id} />);
+  expect(await screen.findByText(/SePay thử nghiệm xác minh/)).toBeTruthy();
+  expect(screen.queryByText(/Owner xác minh sao kê/)).toBeNull();
+});
+
 it('shows backend allocation and surplus separately without offering another allocation', async () => {
   const excess = {
     ...transfer,

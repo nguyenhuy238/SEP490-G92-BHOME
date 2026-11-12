@@ -4,7 +4,8 @@ import { Alert, Button, LinearProgress, Paper, Stack, Typography } from '@mui/ma
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
-import { paymentError } from '../../../../../packages/client-core/src/payments';
+import { formatContractMoney } from '../../../../../packages/client-core/src/contracts';
+import { paymentError, paymentText } from '../../../../../packages/client-core/src/payments';
 import { OwnerPagination } from '../../components/common/OwnerWorkspace';
 import { usePaymentApi } from './usePaymentApi';
 
@@ -36,7 +37,7 @@ const reasons: Record<string, string> = {
   holding_deposit_requires_manual_review: 'Cần đối chiếu phê duyệt hoặc hạn giữ chỗ.',
 };
 
-export function SePayEventsPanel() {
+export function SePayEventsPanel({ invoiceId }: { invoiceId?: string } = {}) {
   const api = usePaymentApi();
   const { session } = useAuth();
   const [page, setPage] = useState(1);
@@ -44,14 +45,21 @@ export function SePayEventsPanel() {
     queryKey: ['sepay-events', session?.userId, page],
     queryFn: ({ signal }) => api.sepayEvents(page, signal),
     enabled: !!session?.userId,
+    refetchOnWindowFocus: 'always',
   });
   return (
     <Paper sx={{ p: 2 }}>
       <Stack spacing={2}>
         <Typography variant="body2">
-          Trạng thái dưới đây ghi nhận kết quả xử lý webhook. Mở giao dịch liên kết để xem kết quả
-          đối soát thủ công hiện tại.
+          Trạng thái dưới đây ghi nhận kết quả nhận giao dịch qua webhook hoặc polling. Mở giao dịch
+          liên kết để xem kết quả đối soát thủ công hiện tại.
         </Typography>
+        {invoiceId && (
+          <Typography variant="body2">
+            Danh sách sự kiện toàn hệ thống. Mở chi tiết để kiểm tra giao dịch có thuộc hóa đơn đang
+            kiểm thử.
+          </Typography>
+        )}
         <Button disabled={events.isFetching} onClick={() => void events.refetch()}>
           Làm mới webhook
         </Button>
@@ -81,6 +89,9 @@ export function SePayEventsPanel() {
               </Typography>
             )}
             {event.transferId && (
+              <EventReceipt transferId={event.transferId} invoiceId={invoiceId} />
+            )}
+            {event.transferId && (
               <Button
                 component={Link}
                 to={`/payments?transferId=${encodeURIComponent(event.transferId)}`}
@@ -98,5 +109,63 @@ export function SePayEventsPanel() {
         />
       </Stack>
     </Paper>
+  );
+}
+
+function EventReceipt({ transferId, invoiceId }: { transferId: string; invoiceId?: string }) {
+  const api = usePaymentApi();
+  const { session } = useAuth();
+  const [open, setOpen] = useState(false);
+  const receipt = useQuery({
+    queryKey: ['payment-transfer', session?.userId, transferId],
+    queryFn: ({ signal }) => api.transfer(transferId, signal),
+    enabled: open,
+    refetchOnWindowFocus: 'always',
+  });
+  const data = receipt.data;
+  return (
+    <Stack spacing={1}>
+      <Button onClick={() => setOpen(!open)} aria-expanded={open}>
+        Chi tiết giao dịch SePay
+      </Button>
+      {open && (
+        <>
+          {receipt.isPending && <LinearProgress />}
+          {receipt.error && (
+            <Alert
+              severity="error"
+              action={<Button onClick={() => void receipt.refetch()}>Thử lại giao dịch</Button>}
+            >
+              {paymentError(receipt.error)}
+            </Alert>
+          )}
+          {data && (
+            <>
+              <Typography>
+                {data.bankReference} · {data.providerIdentity} · {formatInstant(data.occurredAt)}
+              </Typography>
+              <Typography>
+                Thực nhận: {formatContractMoney(data.amount)} · {paymentText(data.status)}
+              </Typography>
+              <Typography>Nội dung: {data.transferDescription}</Typography>
+              <Typography>{reasons[data.reason] ?? paymentText(data.reason)}</Typography>
+              {data.allocatedAmount !== undefined && (
+                <Typography>
+                  Đã phân bổ: {formatContractMoney(data.allocatedAmount)} · Chưa phân bổ:{' '}
+                  {formatContractMoney(data.unallocatedAmount ?? '0')}
+                </Typography>
+              )}
+              {invoiceId && (
+                <Typography>
+                  {data.allocatedInvoiceId === invoiceId
+                    ? 'Đã khớp và phân bổ cho hóa đơn đang kiểm thử.'
+                    : 'Chưa xác nhận phân bổ cho hóa đơn đang kiểm thử.'}
+                </Typography>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </Stack>
   );
 }
