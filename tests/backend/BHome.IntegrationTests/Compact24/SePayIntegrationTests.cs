@@ -256,7 +256,7 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
             await db.Database.ExecuteSqlRawAsync("DROP TRIGGER synthetic_sepay_failure ON payment_allocations; DROP FUNCTION synthetic_sepay_failure()");
             var inbox = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM operational_tasks WHERE task_data->>'recordType'='SePayEventV1' AND status='Pending'").SingleAsync();
             var worker = scenario.Host.Services.GetRequiredService<BHome.Infrastructure.Jobs.PostgresJobWorker>();
-            for (var attempt = 0; attempt < 30 && await worker.ProcessOneAsync(default, ["sepay-reconcile-test"]); attempt++) { }
+            for (var attempt = 0; attempt < 30 && await worker.ProcessAllowedAsync(default, ["sepay-reconcile-test"]); attempt++) { }
             Assert.Equal("Completed", (await scope.ServiceProvider.GetRequiredService<ISePayRepository>().EventAsync(inbox, default)).Status);
             Assert.Single(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).ToArrayAsync());
         }

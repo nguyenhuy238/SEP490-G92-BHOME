@@ -33,7 +33,9 @@ internal sealed class PostgresJobWorker(IServiceScopeFactory scopeFactory, IOpti
         }
     }
 
-    internal async Task<bool> ProcessOneAsync(CancellationToken stoppingToken, string[]? allowedHandlers = null)
+    internal Task<bool> ProcessOneAsync(CancellationToken stoppingToken) => ProcessAllowedAsync(stoppingToken, null);
+
+    internal async Task<bool> ProcessAllowedAsync(CancellationToken stoppingToken, string[]? allowedHandlers)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var persistence = scope.ServiceProvider.GetRequiredService<IJobPersistence>();
