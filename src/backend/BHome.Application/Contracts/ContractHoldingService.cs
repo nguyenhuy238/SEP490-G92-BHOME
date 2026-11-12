@@ -17,7 +17,7 @@ public sealed partial class ContractService
             s.SnapshotHash == c.SnapshotHash && !string.IsNullOrWhiteSpace(s.SignedObjectKey) &&
             !string.IsNullOrWhiteSpace(s.SignedHash) && !string.IsNullOrWhiteSpace(s.ProviderReference)));
 
-    private async Task LockHoldingPriceAsync(Contract c, string trigger, DateTimeOffset at, CancellationToken token, decimal incomingAmount = 0)
+    private async Task LockHoldingPriceAsync(Contract c, string trigger, DateTimeOffset at, CancellationToken token, decimal incomingAmount = 0, bool providerVerified = false)
     {
         if (c.Kind != ContractKind.Holding || c.PriceLockedAt.HasValue) return;
         if (c.ApprovedAt is null) throw ContractException.Conflict("holding_owner_approval_required");
@@ -39,7 +39,8 @@ public sealed partial class ContractService
         c.AgreedPriceSnapshot = JsonSerializer.Serialize(snapshot);
         c.PriceLockTrigger = trigger;
         c.PriceLockedAt = instant;
-        Audit("HoldingPriceLocked", c.Id);
+        if (providerVerified) repository.AuditAnonymous("ProviderHoldingPriceLocked", c.Id, clock.GetUtcNow());
+        else Audit("HoldingPriceLocked", c.Id);
     }
 
     public async Task<ContractId> CreateHoldingAsync(HoldingDraftInput input, Guid key, CancellationToken token)
@@ -169,6 +170,17 @@ public sealed partial class ContractService
     {
         var c = await Load(id, [Roles.Owner], t);
         return !await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, t);
+    }
+
+    // Trusted provider pathway. The caller holds the payment, Location and Room locks.
+    internal async Task<bool> ConfirmProviderHoldingDepositAsync(Guid id, decimal amount, DateTimeOffset verifiedAt, CancellationToken token)
+    {
+        Money(amount, false);
+        var contract = await repository.FindAsync(id, token) ?? throw ContractException.Missing();
+        if (contract.Kind != ContractKind.Holding || contract.ApprovedAt is null || contract.HoldingExpiryAt <= verifiedAt ||
+            await repository.HoldingConflictAsync(contract.RoomId, id, contract.StartDate, contract.EndDate, token)) return false;
+        await LockHoldingPriceAsync(contract, "VerifiedDeposit", verifiedAt, token, amount, providerVerified: true);
+        return true;
     }
 
     private async Task<ActivationReadiness> HoldingReadiness(Contract c, CancellationToken token)

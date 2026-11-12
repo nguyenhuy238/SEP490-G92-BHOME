@@ -12,7 +12,7 @@ using BHome.Application.PropertyManagement;
 namespace BHome.Application.PaymentsDebt;
 
 public sealed partial class PaymentService(IPaymentRepository repository, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null,
-    BHome.Application.Contracts.ContractService? contracts = null)
+    BHome.Application.Contracts.ContractService? contracts = null, SePay.IPaymentCodeRegistry? codes = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new PaymentException(401, "authentication_required");
     private DateTimeOffset Now => PaymentRules.Timestamp(clock.GetUtcNow());
@@ -61,6 +61,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             x.ProposedInvoiceId.HasValue && x.ProposedDepositContractId.HasValue || x.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
             throw new PaymentException(400, "invalid_verified_bank_transfer");
         x = x with { Amount = decimal.Truncate(x.Amount) };
+        if (x.ProviderIdentity is "SEPAY:TEST" or "SEPAY:LIVE") throw new PaymentException(400, "provider_identity_reserved");
         var normalized = PaymentRules.NormalizeReference(x.BankReference);
         var identity = new
         {
@@ -156,8 +157,10 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 throw new PaymentException(400, "payer_not_invoice_viewer");
             var financial = await repository.FinancialsAsync(invoice.Id, t);
             var outstanding = financial.OutstandingAmount;
+            var expected = codes is not null && await codes.MatchesAsync("Invoice", invoice.Id, transfer.TransferDescription, t)
+                ? transfer.TransferDescription.Trim() : PaymentRules.InvoiceReference(invoice.Id);
             var reason = PaymentRules.ReviewReason(transfer.Amount, outstanding, transfer.TransferDescription,
-                PaymentRules.InvoiceReference(invoice.Id), await repository.ReferenceClaimedAsync(transfer.NormalizedReference, t), repository.AmountMismatchSupported);
+                expected, await repository.ReferenceClaimedAsync(transfer.NormalizedReference, t), repository.AmountMismatchSupported);
             var review = new PaymentReconciliation
             {
                 TransferId = transfer.Id,
@@ -256,7 +259,7 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
         var payers = scope.Owner ? await repository.PayersAsync(id, t) : [];
         return new(id, invoice.Status != InvoiceStatus.Final ? "NotIssued" : outstanding <= 0 ? "Paid" : "Unpaid",
             financial.EffectivePayableAmount, paid, outstanding, invoice.DueDate, invoice.Status == InvoiceStatus.Final ? PaymentRules.OverdueDays(invoice.DueDate, Today, outstanding) : 0,
-            PaymentRules.InvoiceReference(invoice.Id), financial.PotentialExcessAmount > 0 || await repository.PendingReviewAsync(id, t),
+            (codes is null ? null : await codes.GetAsync("Invoice", invoice.Id, t)) ?? PaymentRules.InvoiceReference(invoice.Id), financial.PotentialExcessAmount > 0 || await repository.PendingReviewAsync(id, t),
             history.Select(entry => new PaymentHistoryView(entry.Allocation.Id, entry.Allocation.Amount, entry.Transfer.OccurredAt,
                 entry.ExternalPayerVerified ? "Người trả bên ngoài (đã xác minh)" : entry.Allocation.PaidByUserId == Actor ? "Bạn" : entry.Allocation.PaidByUserId is not null ?
                     scope.Owner ? payers.FirstOrDefault(p => p.UserId == entry.Allocation.PaidByUserId)?.DisplayLabel ?? "Khách thuê đã liên kết" : "Khách thuê khác trong hóa đơn" : "Chưa xác định người trả",

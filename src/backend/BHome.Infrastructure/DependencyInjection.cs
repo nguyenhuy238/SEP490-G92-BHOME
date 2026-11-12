@@ -190,6 +190,9 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddSingleton(p => p.GetRequiredService<IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value);
         services.AddSingleton<BHome.Application.PaymentsDebt.SePay.SePayWebhookSecurity>();
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayRepository, BHome.Infrastructure.PaymentsDebt.SePayRepository>();
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.IPaymentCodeRegistry, BHome.Infrastructure.PaymentsDebt.PaymentCodeRegistry>();
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.SePayService>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();

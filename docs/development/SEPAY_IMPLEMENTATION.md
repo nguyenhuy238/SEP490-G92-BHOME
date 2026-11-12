@@ -9,3 +9,13 @@ Implementation stages have separate commits with English subjects and descriptio
 Provider contract sources are the official SePay webhook authentication, Test Mode webhook and API v2 transaction documentation. HMAC signs timestamp plus a dot plus the original bytes. Transaction timestamps without an offset are interpreted in Asia/Ho_Chi_Minh.
 
 The registry will reuse operational_tasks technical records. Cross-obligation uniqueness requires database indexes and immutable registry guards because a JSONB array inside each Invoice cannot enforce uniqueness across Invoice and Contract records. No financial identity GUID changes are required.
+
+## Ledger and migration decisions
+
+Migration 20261112000100_SePayIntegration adds unique indexes and immutable technical-record guards while retaining 24 tables. Payment codes are permanent COMMAND records with one code per mode, kind and obligation. Global source-key uniqueness prevents reuse across modes and obligation types. Existing legacy reference functions remain available for manual reconciliation. Automatic matching accepts only registered BH codes and rejects ambiguous content.
+
+Provider receipts use the existing payments table with AUTO verification, durable SePay inbox evidence and a null human verifier. The allocation creator column becomes nullable with a trigger permitting null only for a verified SePay source. Existing DTO GUID fields represent this absent human actor as Guid.Empty. Source labels identify SePayTest or SePayLive. Payer remains unassigned until separately verified. Contract deposit allocation preserves budget, expiry, Room conflict and Holding price-lock rules without activating a Contract.
+
+SePay webhook numeric IDs and API v2 UUIDs can differ. Inbox identity is scoped by mode, gateway, receiving account and provider ID. Canonical receipt identity additionally uses a digest of mode, gateway, account and bank reference, so webhook and API backfill cannot credit the same bank reference twice. Conflicting amounts/timestamps/content are rejected.
+
+The webhook durably commits inbox plus a queued reconciliation command before processing money. A processing failure rolls money back while retaining the inbox for JOB-03. Terminal unmatched and ignored events have explicit reasons. Owner can inspect safe event summaries through GET /api/v1/integrations/sepay/events and receipt evidence through existing payment APIs.
