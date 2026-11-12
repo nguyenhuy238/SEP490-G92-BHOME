@@ -17,6 +17,15 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
     UserManager<ApplicationUser> users, IPasswordResetDelivery delivery, ICurrentUser actor, CompactNotificationWriter sql,
     IOptions<SessionOptions> options, IOptions<AuthenticationEmailOptions> emailOptions) : IAccountInvitations
 {
+    // Existing grant state represents pending setup before an invitation is requested.
+    // An expired random hash is unusable and does not start the invitation cooldown.
+    internal static void MarkPendingSetup(Compact24DbContext context, ApplicationUser user, DateTimeOffset now)
+    {
+        context.Entry(user).Property("reset_token_hash").CurrentValue = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        context.Entry(user).Property("reset_expires_at").CurrentValue = now.AddSeconds(-1);
+        context.Entry(user).Property("reset_consumed_at").CurrentValue = null;
+    }
+
     public async Task<TenantInvitationResult> InviteStaffAsync(Guid userId, CancellationToken t)
     {
         if (actor.UserId is null || !actor.IsInRole(Roles.Owner)) throw new NotificationException(403, "invitation_owner_required");

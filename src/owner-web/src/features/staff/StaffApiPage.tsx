@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   Button,
   Dialog,
   DialogActions,
@@ -204,13 +205,17 @@ export function StaffApiPage() {
         onClose={() => setInvite(false)}
         onConfirm={() => {
           void action
-            .run(() => action.command(`/api/v1/staff/${selected}/invitation`, 'POST'))
+            .run(
+              () => action.command(`/api/v1/staff/${selected}/invitation`, 'POST'),
+              'Đã tiếp nhận yêu cầu lời mời. Email đang chờ xử lý; chưa phải xác nhận đã giao thư.',
+            )
             .then((ok) => {
               if (ok) setInvite(false);
             });
         }}
       >
-        Gửi thông tin tài khoản đến địa chỉ email hiện tại của nhân viên.
+        Gửi liên kết dùng một lần để nhân viên tự đặt mật khẩu đến email hiện tại. Không gửi mật
+        khẩu rõ.
       </ConfirmDialog>
       {editor !== undefined && <StaffEditor staff={editor} close={() => setEditor(undefined)} />}
     </Stack>
@@ -221,7 +226,6 @@ function StaffEditor({ staff, close }: { staff: Staff | null; close: () => void 
   const [name, setName] = useState(staff?.fullName ?? ''),
     [email, setEmail] = useState(staff?.email ?? ''),
     [phone, setPhone] = useState(staff?.phone ?? ''),
-    [password, setPassword] = useState(''),
     [reason, setReason] = useState(''),
     [active, setActive] = useState(staff?.isActive ?? true);
   const [employment, setEmployment] = useState<Employment>(
@@ -246,9 +250,7 @@ function StaffEditor({ staff, close }: { staff: Staff | null; close: () => void 
       email: email.trim(),
       phone: phone || null,
       employment: work,
-      ...(staff
-        ? { accountVersion: staff.accountVersion, isActive: active, reason }
-        : { initialPassword: password }),
+      ...(staff ? { accountVersion: staff.accountVersion, isActive: active, reason } : {}),
     };
     if (
       await action.run(() =>
@@ -301,15 +303,10 @@ function StaffEditor({ staff, close }: { staff: Staff | null; close: () => void 
               onChange={(e) => setPhone(e.target.value)}
             />
             {!staff && (
-              <TextField
-                required
-                type="password"
-                autoComplete="new-password"
-                label="Mật khẩu khởi tạo"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                slotProps={{ htmlInput: { minLength: 12, maxLength: 256 } }}
-              />
+              <Alert severity="info">
+                Nhân viên tự đặt mật khẩu qua lời mời email. Sau khi tạo, chọn Gửi thông tin tài
+                khoản trong chi tiết nhân viên.
+              </Alert>
             )}
             <TextField
               label="Số hợp đồng lao động"

@@ -47,7 +47,7 @@ public sealed record StaffCreate(
     [Required, EmailAddress, StringLength(256)] string Email,
     [Required, StringLength(150, MinimumLength = 2)] string FullName,
     [StringLength(30)] string? Phone,
-    [Required, StringLength(256, MinimumLength = 12)] string InitialPassword,
+    [StringLength(256)] string? InitialPassword,
     EmploymentWrite Employment);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

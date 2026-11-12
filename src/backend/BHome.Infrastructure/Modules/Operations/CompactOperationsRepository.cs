@@ -1,6 +1,8 @@
 using System.Data;
 using System.Globalization;
 using System.Text.Json;
+using System.Security.Cryptography;
+using BHome.Infrastructure.IdentityAccess;
 using BHome.Application.Operations;
 using BHome.Application.IdentityAccess;
 using BHome.Domain.IdentityAccess;
@@ -128,7 +130,9 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             ConcurrencyStamp = Guid.NewGuid().ToString("N")
         };
         db.PrepareUserRole(user, Roles.Staff);
-        var created = await users.CreateAsync(user, input.InitialPassword);
+        AccountInvitations.MarkPendingSetup(db, user, now);
+        // Legacy InitialPassword is accepted for request compatibility but never used or delivered.
+        var created = await users.CreateAsync(user, Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)) + "!aA1");
         if (!created.Succeeded) throw OperationsException.Invalid("invalid_staff_account");
         if (!await users.IsInRoleAsync(user, Roles.Staff))
         {
