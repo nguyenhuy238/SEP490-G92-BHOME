@@ -133,9 +133,9 @@ Không dùng seed để làm mới dữ liệu sau quyết định tài chính t
 
 ## Ngân hàng, thông báo và chính sách còn chờ
 
-- **Bank Provider Blocked:** IBankTransactionProvider vẫn Unconfigured; chưa có specification,
-  credentials và xác thực event được duyệt. Không có endpoint production giả thành công.
-  OwnerBankStatement là xác minh thủ công theo sao kê, không phải kết quả callback ngân hàng.
+- **SePay opt-in — 12/11/2026:** webhook HMAC, provider adapter và JOB-03 đã được triển khai.
+  Mặc định tắt, giữ OwnerBankStatement xác minh thủ công theo sao kê. Credential, tài khoản
+  Test Mode và public HTTPS cần cấu hình riêng theo [hướng dẫn SePay](../api/SEPAY.md).
 - **Notification Integration Pending:** PaymentConfirmedEvents ghi bền vững cùng allocation,
   `payment.confirmed.v1`, key allocationId, contract `{allocationId, invoiceId, occurredAt}`.
   Module notification lấy Owner và InvoiceRecipients từ server, cần consumer/inbox delivery

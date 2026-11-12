@@ -138,6 +138,14 @@ export interface PayerChoice {
   userId: string;
   displayLabel: string;
 }
+export interface SePayEvent {
+  id: string;
+  mode: string;
+  status: string;
+  reason: string | null;
+  transferId: string | null;
+  receivedAt: string;
+}
 export interface ReceiptExcessTarget {
   depositContractId?: string | null;
   invoiceId?: string | null;
@@ -230,6 +238,10 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
     });
   const root = '/api/v1/payment-transactions';
   return {
+    sepayEvents: (page: number, signal?: AbortSignal) =>
+      request<Page<SePayEvent>>(`/api/v1/integrations/sepay/events?page=${page}&pageSize=20`, {
+        signal,
+      }),
     externalPayer: (id: string, signal?: AbortSignal) =>
       request<ExternalPaymentPayerContext>(`${root}/${encodeURIComponent(id)}/external-payer`, {
         signal,
