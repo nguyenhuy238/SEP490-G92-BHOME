@@ -40,3 +40,18 @@ NotificationChannels.Enabled vẫn là công tắc kênh bắt buộc. Không th
 Kiểm chứng giai đoạn 1: API build 0 warning/error; 13 test backend đầu tiên passed;
 Web 13 test recovery/login và Mobile 3 test recovery passed; typecheck/lint hai client passed;
 Owner Web production build passed (cảnh báo chunk >500 kB đã tồn tại, không lỗi build).
+
+## Giai đoạn 2
+
+Staff/Tenant invitation giữ endpoint/actor mapping hiện có: Owner gửi qua thao tác quản trị hiện có;
+Tenant chỉ được provision khi tenancy active/approved theo AccountInvitations và job đã có.
+Không mở quyền mới cho Staff và không tạo login chỉ vì một Resident tồn tại.
+Email lời mời có tên/tài khoản, hướng dẫn thiết lập, link một lần và thời hạn; Staff/Tenant dùng
+template riêng. Grant + protected outbox commit cùng nhau; SMTP lỗi chỉ đổi delivery status.
+Resend trong cooldown giữ invitation cũ; sau cooldown tạo grant mới và tự suppress link cũ.
+Đã được mời nhưng chưa thiết lập thì không đăng nhập; cấp invitation thu hồi session cũ và
+rotate security stamp trước khi sinh token để chặn login race. Không bắt buộc email confirmation
+cho mọi tài khoản đang tồn tại. Accept vẫn dùng Identity token purpose AccountInvitation,
+password validator, EmailConfirmed và revoke sessions như trước.
+Web/Mobile accept tự đọc link; thao tác gửi invitation trên Owner Web giữ nguyên API có sẵn.
+Không tự gửi một email thứ hai từ frontend khi account đã được provision bởi job.

@@ -116,4 +116,55 @@ public sealed partial class Compact24NotificationMvpTests
         await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         Assert.Equal(3, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM contracts WHERE room_id={w.Room} AND status=3").SingleAsync());
     }
+
+    [CompactPostgresFact]
+    public async Task AuthenticationInvitationsQueueRoleSpecificLinksPreservePendingSetupAndAreOneTime()
+    {
+        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
+        using var owner = await Client(w.Owner, host);
+        var email = Guid.NewGuid().ToString("N") + "@example.invalid";
+        var created = await owner.PostAsJsonAsync("/api/v1/staff", new BHome.Application.Operations.StaffCreate(email, "Synthetic invited staff", null, Password,
+            new(null, "PartTime", Today, null, null, null, "Active")));
+        created.EnsureSuccessStatusCode(); var staff = (await created.Content.ReadFromJsonAsync<BHome.Application.Operations.StaffView>())!;
+        var response = await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null); response.EnsureSuccessStatusCode();
+        Assert.Equal("Queued", (await response.Content.ReadFromJsonAsync<TenantInvitationResult>())!.DeliveryState);
+        var repeated = await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null); repeated.EnsureSuccessStatusCode();
+        Assert.Equal("ExistingInvitationPreserved", (await repeated.Content.ReadFromJsonAsync<TenantInvitationResult>())!.DeliveryState);
+        using var anonymous = host.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password })).StatusCode);
+        var delivery = await AuthenticationDelivery(host, staff.UserId); await SendEmail(host, delivery);
+        var mail = Assert.Single(probe.Messages); Assert.Contains("Staff", mail.Title);
+        Assert.DoesNotContain(Password, mail.Body); Assert.StartsWith("bhome://accept-invitation?", mail.ActionUrl);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Query);
+        var accept = new AcceptInvitationRequest(query["userName"].ToString(), query["token"].ToString(), "Synthetic!Invited-725");
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept with { Token = "invalid" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password = accept.NewPassword })).StatusCode);
+    }
+
+    [CompactPostgresFact]
+    public async Task AuthenticationTenantProvisionIsOwnerScopedAndSmtpFailureKeepsAccountAndEncryptedGrant()
+    {
+        var w = await Seed(); var probe = new SmtpProbe { Failure = new("email_smtp_450", retryable: true) }; using var host = AuthenticationHost(probe);
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET user_id=NULL,contact_email={"invited-" + Guid.NewGuid().ToString("N") + "@example.invalid"} WHERE id={w.Residents[0]}");
+        var email = await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == w.Residents[0]).Select(r => r.ContactEmail).SingleAsync();
+        using var staff = await Client(w.Staff, host);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync($"/api/v1/residents/{w.Residents[0]}/invitation", new TenantInvitationRequest(email!))).StatusCode);
+        using var owner = await Client(w.Owner, host);
+        var response = await owner.PostAsJsonAsync($"/api/v1/residents/{w.Residents[0]}/invitation", new TenantInvitationRequest(email!)); response.EnsureSuccessStatusCode();
+        var invited = (await response.Content.ReadFromJsonAsync<TenantInvitationResult>())!; Assert.Equal("Queued", invited.DeliveryState);
+        var delivery = await AuthenticationDelivery(host, invited.UserId); await SendEmail(host, delivery);
+        var mail = Assert.Single(probe.Messages); Assert.Contains("Chào mừng", mail.Title);
+        Assert.Equal(invited.UserId, await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == w.Residents[0]).Select(r => r.TenantUserId).SingleAsync());
+        Assert.False((await db.Users.AsNoTracking().SingleAsync(u => u.Id == invited.UserId)).EmailConfirmed);
+        Assert.Equal("Pending", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={invited.UserId}");
+        using var anonymous = host.CreateClient();
+        var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Query);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", new AcceptInvitationRequest(q["userName"].ToString(), q["token"].ToString(), "Synthetic!Invited-725"))).StatusCode);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notifications SET next_delivery_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={delivery}");
+        await SendEmail(host, delivery); Assert.Single(probe.Messages);
+    }
 }

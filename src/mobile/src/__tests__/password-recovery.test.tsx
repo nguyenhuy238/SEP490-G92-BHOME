@@ -3,6 +3,7 @@ import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PasswordRecoveryScreen from '../screens/PasswordRecoveryScreen';
+import AcceptInvitationScreen from '../screens/AcceptInvitationScreen';
 
 const state = vi.hoisted(() => ({ params: {} as Record<string, string>, replace: vi.fn() }));
 vi.mock('expo-router', () => ({
@@ -58,6 +59,23 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+it('opens a native invitation and submits its token only after password setup confirmation', async () => {
+  state.params = { userName: 'staff@example.invalid', token: 'synthetic-invitation-link' };
+  const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetch);
+  render(<AcceptInvitationScreen />);
+  expect(fetch).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText('Mật khẩu mới'), {
+    target: { value: 'Synthetic!Invited-725' },
+  });
+  fireEvent.change(screen.getByLabelText('Xác nhận mật khẩu'), {
+    target: { value: 'Synthetic!Invited-725' },
+  });
+  fireEvent.click(screen.getByText('Thiết lập mật khẩu'));
+  await screen.findByText(/Đã thiết lập mật khẩu/);
+  expect(JSON.parse(fetch.mock.calls[0][1].body).token).toBe('synthetic-invitation-link');
 });
 
 it('requests recovery through the existing API and displays a generic response', async () => {
