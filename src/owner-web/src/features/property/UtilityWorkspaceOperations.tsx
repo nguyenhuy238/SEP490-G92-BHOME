@@ -4,7 +4,6 @@ import {
   Button,
   Checkbox,
   Dialog,
-  DialogActions,
   DialogContent,
   DialogTitle,
   FormControlLabel,
@@ -66,24 +65,47 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
   return (
     <Stack spacing={2}>
       <Typography variant="h6">Công tơ tổng và khu chung</Typography>
-      {!meters.data.length && <Typography>Chưa có công tơ nguồn.</Typography>}
+      {!meters.data.length && (
+        <Alert severity="info">
+          Chưa có công tơ nguồn. Thêm công tơ tổng trước khi liên kết đồng hồ phòng hoặc ghi chỉ số.
+        </Alert>
+      )}
       {meters.data.map((meter) => (
-        <Typography key={meter.id}>
-          {meter.data.code} · {meter.data.utilityType === 0 ? 'Điện' : 'Nước'} ·{' '}
-          {meter.data.scope === 'Source' ? 'Công tơ tổng' : 'Khu chung'}
-        </Typography>
+        <Paper key={meter.id} variant="outlined" sx={{ p: 2 }}>
+          <Typography sx={{ fontWeight: 700 }}>{meter.data.code}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {meter.data.utilityType === 0 ? 'Điện' : 'Nước'} ·{' '}
+            {meter.data.scope === 'Source' ? 'Công tơ tổng' : 'Khu chung'}
+          </Typography>
+        </Paper>
       ))}
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
         <Button variant="contained" onClick={() => setOperation('meter')}>
           Thêm công tơ nguồn
         </Button>
-        <Button variant="outlined" onClick={() => setOperation('link')}>
+        <Button
+          variant="outlined"
+          disabled={
+            !meters.data.some((meter) => meter.data.scope === 'Source') ||
+            nativeMeters.isPending ||
+            !!nativeMeters.error ||
+            !nativeMeters.data?.length
+          }
+          onClick={() => setOperation('link')}
+        >
           Liên kết đồng hồ phòng
         </Button>
-        <Button variant="outlined" onClick={() => setOperation('reading')}>
+        <Button
+          variant="outlined"
+          disabled={!meters.data.length}
+          onClick={() => setOperation('reading')}
+        >
           Ghi chỉ số nguồn
         </Button>
       </Stack>
+      {nativeMeters.error && (
+        <ErrorState error={nativeMeters.error} retry={() => void nativeMeters.refetch()} />
+      )}
       <Dialog open={!!operation} fullWidth maxWidth="md">
         <DialogTitle>
           {operation === 'meter'
@@ -94,22 +116,41 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
         </DialogTitle>
         <DialogContent>
           {operation === 'meter' && (
-            <SourceMeterEditor locationId={locationId} meters={meters.data} />
+            <SourceMeterEditor
+              locationId={locationId}
+              meters={meters.data}
+              onClose={() => setOperation('')}
+            />
           )}
-          {nativeMeters.error ? (
-            <ErrorState error={nativeMeters.error} retry={() => void nativeMeters.refetch()} />
+          {operation === 'link' && nativeMeters.error ? (
+            <Stack spacing={2}>
+              <ErrorState error={nativeMeters.error} retry={() => void nativeMeters.refetch()} />
+              <Button onClick={() => setOperation('')}>Đóng</Button>
+            </Stack>
           ) : operation === 'link' ? (
-            <MeterLinkEditor meters={meters.data} nativeMeters={nativeMeters.data ?? []} />
+            <MeterLinkEditor
+              meters={meters.data}
+              nativeMeters={nativeMeters.data ?? []}
+              onClose={() => setOperation('')}
+            />
           ) : null}
           {operation === 'reading' && (
-            <SourceReadingEditor locationId={locationId} meters={meters.data} />
+            <SourceReadingEditor
+              locationId={locationId}
+              meters={meters.data}
+              onClose={() => setOperation('')}
+            />
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOperation('')}>Đóng</Button>
-        </DialogActions>
       </Dialog>
+      <Typography variant="h6">Liên kết đồng hồ phòng</Typography>
+      {links.isPending && <LoadingState />}
       {links.error && <ErrorState error={links.error} retry={() => void links.refetch()} />}
+      {links.data?.length === 0 && (
+        <Typography variant="body2" color="text.secondary">
+          Chưa có đồng hồ phòng được liên kết.
+        </Typography>
+      )}
       {links.data?.map((link) => (
         <Typography key={link.id}>
           Liên kết{' '}
@@ -122,8 +163,14 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
         </Typography>
       ))}
       <Typography variant="h6">Chỉ số nguồn đã xác nhận</Typography>
+      {readings.isPending && <LoadingState />}
       {readings.error && (
         <ErrorState error={readings.error} retry={() => void readings.refetch()} />
+      )}
+      {readings.data?.length === 0 && (
+        <Typography variant="body2" color="text.secondary">
+          Chưa có chỉ số nguồn được xác nhận.
+        </Typography>
       )}
       {readings.data?.map((reading) => (
         <Typography key={reading.id}>
@@ -139,9 +186,11 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
 function SourceMeterEditor({
   locationId,
   meters,
+  onClose,
 }: {
   locationId: string;
   meters: SetupDocument<UtilityMeter>[];
+  onClose: () => void;
 }) {
   const api = usePropertySetupApi();
   const action = useSetupAction();
@@ -200,9 +249,14 @@ function SourceMeterEditor({
           <UtilityField key={field.name} field={field} values={values} setValues={setValues} />
         ))}
         <SetupActionFeedback {...action} />
-        <Button type="submit" disabled={action.busy}>
-          Lưu công tơ nguồn
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button variant="contained" type="submit" disabled={action.busy}>
+            Lưu công tơ nguồn
+          </Button>
+          <Button disabled={action.busy} onClick={onClose}>
+            Đóng
+          </Button>
+        </Stack>
       </Stack>
     </Paper>
   );
@@ -211,9 +265,11 @@ function SourceMeterEditor({
 function MeterLinkEditor({
   meters,
   nativeMeters,
+  onClose,
 }: {
   meters: SetupDocument<UtilityMeter>[];
   nativeMeters: { id: string; label: string }[];
+  onClose: () => void;
 }) {
   const api = usePropertySetupApi();
   const action = useSetupAction();
@@ -267,9 +323,14 @@ function MeterLinkEditor({
           <UtilityField key={field.name} field={field} values={values} setValues={setValues} />
         ))}
         <SetupActionFeedback {...action} />
-        <Button type="submit" disabled={action.busy}>
-          Lưu liên kết đồng hồ
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button variant="contained" type="submit" disabled={action.busy}>
+            Lưu liên kết đồng hồ
+          </Button>
+          <Button disabled={action.busy} onClick={onClose}>
+            Đóng
+          </Button>
+        </Stack>
       </Stack>
     </Paper>
   );
@@ -278,9 +339,11 @@ function MeterLinkEditor({
 function SourceReadingEditor({
   locationId,
   meters,
+  onClose,
 }: {
   locationId: string;
   meters: SetupDocument<UtilityMeter>[];
+  onClose: () => void;
 }) {
   const api = usePropertySetupApi();
   const action = useSetupAction();
@@ -333,12 +396,18 @@ function SourceReadingEditor({
         ))}
         <SetupEvidenceField value={evidence.file} onChange={evidence.setFile} />
         <SetupActionFeedback {...action} />
-        <Button
-          type="submit"
-          disabled={action.busy || !evidence.file || values.confirmed !== 'true'}
-        >
-          Xác nhận chỉ số nguồn
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="contained"
+            type="submit"
+            disabled={action.busy || !evidence.file || values.confirmed !== 'true'}
+          >
+            Xác nhận chỉ số nguồn
+          </Button>
+          <Button disabled={action.busy} onClick={onClose}>
+            Đóng
+          </Button>
+        </Stack>
       </Stack>
     </Paper>
   );
@@ -365,7 +434,18 @@ export function UtilityBillsPanel({ locationId }: { locationId: string }) {
   const reconciliation = reconciliations.data?.find((row) => row.data.sourceBillId === selected);
   return (
     <Stack spacing={2}>
-      <Button onClick={() => setCreate(true)}>Thêm hóa đơn nhà cung cấp</Button>
+      <Button
+        variant="contained"
+        sx={{ alignSelf: 'flex-start' }}
+        disabled={
+          meters.isPending ||
+          !!meters.error ||
+          !meters.data?.some((meter) => meter.data.scope === 'Source')
+        }
+        onClick={() => setCreate(true)}
+      >
+        Thêm hóa đơn nhà cung cấp
+      </Button>
       {meters.error && <ErrorState error={meters.error} retry={() => void meters.refetch()} />}
       {bills.isPending ? (
         <LoadingState />
@@ -375,10 +455,14 @@ export function UtilityBillsPanel({ locationId }: { locationId: string }) {
         <>
           {!bills.data.length && <Typography>Chưa có hóa đơn nguồn.</Typography>}
           {bills.data.map((row) => (
-            <Paper key={row.id} sx={{ p: 2 }}>
-              <Typography>
-                {row.data.reference} · {row.data.period} · {setupDecimal(row.data.consumption)} đơn
-                vị · {setupDecimal(row.data.amount)} VND
+            <Paper key={row.id} variant="outlined" sx={{ p: 2 }}>
+              <Typography sx={{ fontWeight: 700 }}>
+                {row.data.reference} · {setupDecimal(row.data.amount)} ₫
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {row.data.utilityType === 0 ? 'Điện' : 'Nước'} · Kỳ{' '}
+                {row.data.period.slice(0, 7).split('-').reverse().join('/')} ·{' '}
+                {setupDecimal(row.data.consumption)} {row.data.utilityType === 0 ? 'kWh' : 'm³'}
               </Typography>
               <Button onClick={() => setSelected(row.id)}>Đối soát hóa đơn nguồn</Button>
             </Paper>
@@ -400,6 +484,7 @@ export function UtilityBillsPanel({ locationId }: { locationId: string }) {
       {reconciliations.error && (
         <ErrorState error={reconciliations.error} retry={() => void reconciliations.refetch()} />
       )}
+      {bill && reconciliations.isPending && <LoadingState />}
       {bill && !reconciliations.isPending && !reconciliations.error && (
         <ReconciliationEditor
           key={`${bill.id}:${reconciliation?.version ?? 0}`}
@@ -531,6 +616,7 @@ function ReconciliationEditor({
                 name === 'tolerance'
                   ? 'Sai lệch cho phép do Owner chọn'
                   : 'Lý do đối soát / quyết định',
+              disabled: action.busy,
             }}
             values={values}
             setValues={(next) => {
@@ -552,6 +638,9 @@ function ReconciliationEditor({
         </Button>
         {result && (
           <Stack spacing={1}>
+            <Typography variant="subtitle2">
+              {preview ? 'Kết quả xem trước từ máy chủ · Chưa lưu' : 'Kết quả đối soát đã lưu'}
+            </Typography>
             <Alert
               severity={
                 status === 'Reconciled' || status === 'VarianceReviewed' ? 'success' : 'warning'
@@ -568,7 +657,8 @@ function ReconciliationEditor({
             <Typography>
               Nguồn: {setupDecimal(result.sourceConsumption)} · Phòng:{' '}
               {setupDecimal(result.roomConsumption)} · Khu chung:{' '}
-              {setupDecimal(result.commonConsumption)} · Chênh lệch: {setupDecimal(result.variance)}
+              {setupDecimal(result.commonConsumption)} · Chênh lệch: {setupDecimal(result.variance)}{' '}
+              {bill.data.utilityType === 0 ? 'kWh' : 'm³'}
             </Typography>
           </Stack>
         )}
@@ -655,21 +745,39 @@ export function UtilityBreakdownsPanel({ locationId }: { locationId: string }) {
         Khi đổi biểu giá giữa tháng, nhập các đoạn liên tiếp bao phủ cả tháng, sản lượng đã kiểm tra
         và ảnh bằng chứng. Máy chủ kiểm tra tổng sản lượng và tính giá chính thức.
       </Alert>
-      <Button onClick={() => setEditing(null)}>Xác nhận phân đoạn kỳ</Button>
+      <Button
+        variant="contained"
+        sx={{ alignSelf: 'flex-start' }}
+        disabled={rooms.isPending || !!rooms.error || tariffs.isPending || !!tariffs.error}
+        onClick={() => setEditing(null)}
+      >
+        Xác nhận phân đoạn kỳ
+      </Button>
       {rows.isPending ? (
         <LoadingState />
       ) : rows.error ? (
         <ErrorState error={rows.error} retry={() => void rows.refetch()} />
-      ) : (
+      ) : rows.data.length ? (
         rows.data.map((row) => (
-          <Paper key={row.id} sx={{ p: 2 }}>
-            <Typography>
+          <Paper key={row.id} variant="outlined" sx={{ p: 2 }}>
+            <Typography sx={{ fontWeight: 700 }}>
               {rooms.data?.find((room) => room.id === row.data.roomId)?.label ?? 'Phòng'} ·{' '}
-              {row.data.period} · {row.status}
+              {row.data.utilityType === 0 ? 'Điện' : 'Nước'} ·{' '}
+              {row.data.period.slice(0, 7).split('-').reverse().join('/')}
             </Typography>
-            <Button onClick={() => setEditing(row)}>Xem / sửa phân đoạn</Button>
+            <Typography variant="body2" color="text.secondary">
+              Phiên bản {row.version} · {row.status === 'Verified' ? 'Đã xác minh' : row.status}
+            </Typography>
+            <Button
+              disabled={rooms.isPending || !!rooms.error || tariffs.isPending || !!tariffs.error}
+              onClick={() => setEditing(row)}
+            >
+              Xem / sửa phân đoạn
+            </Button>
           </Paper>
         ))
+      ) : (
+        <Typography color="text.secondary">Chưa có phân đoạn kỳ.</Typography>
       )}
       {rooms.error && <ErrorState error={rooms.error} retry={() => void rooms.refetch()} />}
       {tariffs.error && <ErrorState error={tariffs.error} retry={() => void tariffs.refetch()} />}

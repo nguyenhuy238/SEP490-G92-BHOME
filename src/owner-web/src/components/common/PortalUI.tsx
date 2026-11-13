@@ -64,11 +64,13 @@ export function PageHeader({
   subtitle,
   group,
   actions,
+  headingLevel = 'h1',
 }: {
   title: string;
   subtitle?: string;
   group?: string | null;
   actions?: ReactNode;
+  headingLevel?: 'h1' | 'h2';
 }) {
   return (
     <Stack
@@ -85,9 +87,13 @@ export function PageHeader({
           </Typography>
         )}
         <Typography
-          component="h1"
-          variant="h1"
-          sx={{ fontSize: { xs: 22, md: 26 }, lineHeight: 1.3, mt: 0.35 }}
+          component={headingLevel}
+          variant={headingLevel}
+          sx={{
+            fontSize: headingLevel === 'h2' ? { xs: 18, md: 22 } : { xs: 22, md: 26 },
+            lineHeight: 1.3,
+            mt: 0.35,
+          }}
         >
           {title}
         </Typography>

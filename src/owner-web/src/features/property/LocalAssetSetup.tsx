@@ -1,14 +1,22 @@
 import { useRef, useState } from 'react';
 import {
   Alert,
+  Box,
   Button,
   Chip,
   Dialog,
   DialogContent,
   DialogTitle,
+  Divider,
   MenuItem,
   Paper,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
@@ -27,7 +35,13 @@ import { usePropertySetupApi } from './usePropertySetupApi';
 import { useSetupAction } from './useSetupAction';
 import { SetupEvidenceField } from './SetupEvidenceField';
 
-export function LocalAssetSetup({ locationId }: { locationId: string }) {
+export function LocalAssetSetup({
+  locationId,
+  mode = 'all',
+}: {
+  locationId: string;
+  mode?: 'all' | 'templates' | 'inventory';
+}) {
   const api = usePropertySetupApi();
   const { session } = useAuth();
   const owner = session?.roles.includes('Owner') ?? false;
@@ -37,6 +51,8 @@ export function LocalAssetSetup({ locationId }: { locationId: string }) {
   const [roomId, setRoomId] = useState('');
   const [run, setRun] = useState<AssetSyncRun | null>(null);
   const action = useSetupAction();
+  const showTemplates = mode !== 'inventory';
+  const showInventory = mode !== 'templates';
   const templates = useQuery({
     queryKey: ['property-setup', 'asset-templates', session?.userId, locationId],
     queryFn: ({ signal }) => api.templates(locationId, signal),
@@ -48,16 +64,36 @@ export function LocalAssetSetup({ locationId }: { locationId: string }) {
   });
   return (
     <Stack spacing={2}>
-      <Typography variant="h5">Bộ mẫu trang bị & Kiểm kê phòng</Typography>
-      <Alert severity="info">
-        Công bố bộ mẫu chỉ tạo định mức mong muốn cho phòng đủ điều kiện. Tài sản thực tế chỉ được
-        ghi nhận sau khi kiểm kê và xác nhận bằng chứng.
-      </Alert>
+      <Box>
+        <Typography variant="h6" component="h2">
+          {mode === 'templates'
+            ? 'Bộ định mức trang bị'
+            : mode === 'inventory'
+              ? 'Kiểm kê theo phòng'
+              : 'Bộ mẫu trang bị & Kiểm kê phòng'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          {mode === 'inventory'
+            ? 'So sánh định mức với tài sản vật lý đã ghi nhận và xác nhận bằng chứng kiểm kê.'
+            : 'Công bố bộ mẫu chỉ tạo định mức mong muốn cho phòng đủ điều kiện. Tài sản thực tế chỉ được ghi nhận sau khi kiểm kê và xác nhận bằng chứng.'}
+        </Typography>
+      </Box>
       {action.error && <Alert severity="error">{action.error}</Alert>}
       {action.notice && <Alert severity="success">{action.notice}</Alert>}
-      {owner && (
+      {showTemplates && !owner && (
+        <Alert severity="info">
+          Owner quản lý bộ định mức trang bị. Chọn mục kiểm kê phòng để xem thông tin được cấp
+          quyền.
+        </Alert>
+      )}
+      {showTemplates && owner && (
         <>
-          <Button disabled={action.busy} onClick={() => setEditing(null)}>
+          <Button
+            variant="contained"
+            sx={{ alignSelf: 'flex-start' }}
+            disabled={action.busy}
+            onClick={() => setEditing(null)}
+          >
             Tạo bộ mẫu trang bị
           </Button>
           {templates.isPending ? (
@@ -66,33 +102,74 @@ export function LocalAssetSetup({ locationId }: { locationId: string }) {
             <ErrorState error={templates.error} retry={() => void templates.refetch()} />
           ) : (
             <>
-              {!templates.data?.length && <Typography>Chưa có bộ mẫu.</Typography>}
+              {!templates.data?.length && (
+                <Alert severity="info">
+                  Chưa có bộ mẫu. Tạo bộ mẫu để quy định các thiết bị cần trang bị cho phòng.
+                </Alert>
+              )}
               {templates.data?.map((template) => (
-                <Paper key={template.id} sx={{ p: 2 }}>
-                  <Stack spacing={1}>
-                    <Typography variant="h6">{template.data.name}</Typography>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Paper key={template.id} variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
+                  <Stack spacing={2}>
+                    <Stack
+                      direction="row"
+                      sx={{
+                        flexWrap: 'wrap',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 1,
+                      }}
+                    >
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                        {template.data.name}
+                      </Typography>
                       <Chip
                         size="small"
                         label={template.status === 'Draft' ? 'Bản nháp' : 'Đã công bố'}
                         color={template.status === 'Draft' ? 'default' : 'success'}
                       />
-                      <Typography variant="body2" color="text.secondary">
-                        Phiên bản {template.version} · {template.data.items.length} loại thiết bị
-                      </Typography>
                     </Stack>
-                    {template.data.items.map((item) => (
-                      <Typography key={item.id}>
-                        {item.name} · {item.category} · {item.quantity} ·{' '}
-                        {item.trackingMode === 'Serialized' ? 'Theo từng mã' : 'Theo số lượng'}
-                      </Typography>
-                    ))}
-                    <Stack direction="row" spacing={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      Phiên bản {template.version} · {template.data.items.length} loại thiết bị
+                    </Typography>
+                    <TableContainer>
+                      <Table size="small" aria-label={`Định mức ${template.data.name}`}>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Thiết bị</TableCell>
+                            <TableCell>Nhóm</TableCell>
+                            <TableCell align="right">Định mức</TableCell>
+                            <TableCell>Cách theo dõi</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {template.data.items.map((item) => (
+                            <TableRow key={item.id}>
+                              <TableCell>{item.name}</TableCell>
+                              <TableCell>{item.category}</TableCell>
+                              <TableCell align="right">{item.quantity}</TableCell>
+                              <TableCell>
+                                {item.trackingMode === 'Serialized'
+                                  ? 'Theo từng mã'
+                                  : 'Theo số lượng'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                       {template.status === 'Draft' ? (
                         <>
-                          <Button onClick={() => setEditing(template)}>Sửa bản nháp</Button>
                           <Button
                             disabled={action.busy}
+                            variant="outlined"
+                            onClick={() => setEditing(template)}
+                          >
+                            Sửa bản nháp
+                          </Button>
+                          <Button
+                            disabled={action.busy}
+                            variant="contained"
                             onClick={() =>
                               action.run(
                                 async () =>
@@ -107,6 +184,7 @@ export function LocalAssetSetup({ locationId }: { locationId: string }) {
                       ) : (
                         <Button
                           disabled={action.busy}
+                          variant="outlined"
                           onClick={() =>
                             action.run(async () => setRun(await api.syncTemplate(template.id)))
                           }
@@ -146,44 +224,71 @@ export function LocalAssetSetup({ locationId }: { locationId: string }) {
           )}
         </DialogContent>
       </Dialog>
-      {run && (
-        <Paper sx={{ p: 2 }}>
-          <Typography variant="h6">Kết quả đồng bộ</Typography>
-          {run.rooms.map((room) => (
-            <Alert key={room.roomId} severity={room.status === 'Applied' ? 'success' : 'warning'}>
-              {rooms.data?.find((r) => r.id === room.roomId)?.label ?? 'Phòng'}:{' '}
-              {room.status === 'Applied'
-                ? 'Đã tạo định mức'
-                : room.status === 'SkippedOtherTemplate'
-                  ? 'Đang dùng mẫu khác'
-                  : room.status === 'SkippedNotEligible'
-                    ? 'Chưa đủ điều kiện đồng bộ'
-                    : 'Đồng bộ thất bại; kiểm tra và thử lại.'}
-            </Alert>
-          ))}
+      {showTemplates && run && (
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Stack spacing={1}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Kết quả đồng bộ · phiên bản {run.templateVersion}
+            </Typography>
+            {run.rooms.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Không có phòng trong kết quả đồng bộ.
+              </Typography>
+            )}
+            {run.rooms.map((room) => (
+              <Alert key={room.roomId} severity={room.status === 'Applied' ? 'success' : 'warning'}>
+                {rooms.data?.find((r) => r.id === room.roomId)?.label ?? 'Phòng'}:{' '}
+                {room.status === 'Applied'
+                  ? 'Đã tạo định mức'
+                  : room.status === 'SkippedOtherTemplate'
+                    ? 'Đang dùng mẫu khác'
+                    : room.status === 'SkippedNotEligible'
+                      ? 'Chưa đủ điều kiện đồng bộ'
+                      : 'Đồng bộ thất bại; kiểm tra và thử lại.'}
+              </Alert>
+            ))}
+          </Stack>
         </Paper>
       )}
-      <TextField
-        select
-        label="Phòng kiểm kê"
-        value={roomId}
-        onChange={(event) => setRoomId(event.target.value)}
-      >
-        <MenuItem value="">Chọn phòng</MenuItem>
-        {rooms.data?.map((room) => (
-          <MenuItem key={room.id} value={room.id}>
-            {room.label}
-          </MenuItem>
-        ))}
-      </TextField>
-      {rooms.error && <ErrorState error={rooms.error} retry={() => void rooms.refetch()} />}
-      {roomId && (
-        <RoomAssetInventory
-          key={roomId}
-          roomId={roomId}
-          locationId={locationId}
-          templates={templates.data ?? []}
-        />
+      {showInventory && (
+        <Stack spacing={2}>
+          {owner && templates.error && (
+            <ErrorState error={templates.error} retry={() => void templates.refetch()} />
+          )}
+          <TextField
+            select
+            label="Phòng kiểm kê"
+            helperText={rooms.isPending ? 'Đang tải danh sách phòng…' : undefined}
+            value={roomId}
+            onChange={(event) => setRoomId(event.target.value)}
+          >
+            <MenuItem value="">Chọn phòng</MenuItem>
+            {rooms.isPending && <MenuItem disabled>Đang tải danh sách phòng…</MenuItem>}
+            {rooms.data?.map((room) => (
+              <MenuItem key={room.id} value={room.id}>
+                {room.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          {rooms.error && <ErrorState error={rooms.error} retry={() => void rooms.refetch()} />}
+          {rooms.isSuccess && !rooms.data.length && (
+            <Alert severity="info">Cơ sở chưa có phòng để kiểm kê.</Alert>
+          )}
+          {roomId && (
+            <RoomAssetInventory
+              key={roomId}
+              roomId={roomId}
+              locationId={locationId}
+              templates={templates.data ?? []}
+              templatesAvailable={templates.isSuccess}
+            />
+          )}
+          {!roomId && rooms.isSuccess && !!rooms.data.length && (
+            <Typography variant="body2" color="text.secondary">
+              Chọn một phòng để xem tài sản đã ghi nhận, định mức và các chênh lệch cần kiểm tra.
+            </Typography>
+          )}
+        </Stack>
       )}
     </Stack>
   );
@@ -205,7 +310,7 @@ function LocalTemplateEditor({
   const change = (id: string, changes: Partial<LocalAssetItem>) =>
     setItems((old) => old.map((item) => (item.id === id ? { ...item, ...changes } : item)));
   return (
-    <Paper sx={{ p: 2 }}>
+    <Box>
       <Stack
         component="form"
         spacing={2}
@@ -229,14 +334,13 @@ function LocalTemplateEditor({
           onChange={(event) => setName(event.target.value)}
         />
         {items.map((item, index) => (
-          <Stack
+          <Box
             key={item.id}
-            spacing={1}
             sx={{
               p: 2,
               border: '1px solid',
               borderColor: 'divider',
-              borderRadius: 2,
+              borderRadius: '12px',
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr 1fr' },
               gap: 2,
@@ -278,7 +382,7 @@ function LocalTemplateEditor({
             <Button onClick={() => setItems((old) => old.filter((row) => row.id !== item.id))}>
               Bỏ tài sản {index + 1}
             </Button>
-          </Stack>
+          </Box>
         ))}
         <Button
           disabled={items.length >= 100}
@@ -298,7 +402,7 @@ function LocalTemplateEditor({
           Thêm tài sản vào mẫu
         </Button>
         {action.error && <Alert severity="error">{action.error}</Alert>}
-        <Stack direction="row">
+        <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
           <Button disabled={action.busy} type="submit" variant="contained">
             Lưu bộ mẫu nháp
           </Button>
@@ -307,7 +411,7 @@ function LocalTemplateEditor({
           </Button>
         </Stack>
       </Stack>
-    </Paper>
+    </Box>
   );
 }
 
@@ -315,10 +419,12 @@ function RoomAssetInventory({
   roomId,
   locationId,
   templates,
+  templatesAvailable,
 }: {
   roomId: string;
   locationId: string;
   templates: SetupDocument<LocalAssetTemplate>[];
+  templatesAvailable: boolean;
 }) {
   const api = usePropertySetupApi();
   const { session } = useAuth();
@@ -336,9 +442,15 @@ function RoomAssetInventory({
     (desired) => desired.id === inventory.data.currentDesiredId,
   );
   return (
-    <Paper sx={{ p: 2 }}>
+    <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
       <Stack spacing={2}>
-        <Button onClick={() => void inventory.refetch()}>Tải lại kiểm kê</Button>
+        <Button
+          sx={{ alignSelf: 'flex-end' }}
+          disabled={inventory.isFetching || action.busy}
+          onClick={() => void inventory.refetch()}
+        >
+          Tải lại kiểm kê
+        </Button>
         {action.error && <Alert severity="error">{action.error}</Alert>}
         {action.notice && <Alert severity="success">{action.notice}</Alert>}
         {owner && (
@@ -346,10 +458,21 @@ function RoomAssetInventory({
             <TextField
               select
               label="Bộ mẫu của phòng"
+              disabled={action.busy || !templatesAvailable}
               value={selected ?? inventory.data.assignedTemplateId ?? ''}
               onChange={(event) => setSelected(event.target.value)}
             >
               <MenuItem value="">Bộ mẫu mặc định của cơ sở</MenuItem>
+              {inventory.data.assignedTemplateId &&
+                !templates.some(
+                  (template) =>
+                    template.id === inventory.data.assignedTemplateId &&
+                    template.status === 'Published',
+                ) && (
+                  <MenuItem value={inventory.data.assignedTemplateId} disabled>
+                    Gói đã gán · chưa có trong danh sách công bố
+                  </MenuItem>
+                )}
               {templates
                 .filter((template) => template.status === 'Published')
                 .map((template) => (
@@ -359,7 +482,9 @@ function RoomAssetInventory({
                 ))}
             </TextField>
             <Button
-              disabled={action.busy}
+              variant="outlined"
+              sx={{ alignSelf: 'flex-start' }}
+              disabled={action.busy || !templatesAvailable}
               onClick={() =>
                 action.run(
                   () =>
@@ -376,13 +501,53 @@ function RoomAssetInventory({
             </Button>
           </>
         )}
-        <Typography variant="h6">Tài sản vật lý đã ghi nhận</Typography>
+        <Divider />
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          Tài sản vật lý đã ghi nhận
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {inventory.data.physical.length} bản ghi thực tế của phòng. Số lượng vật lý chỉ hiển thị
+          khi có dữ liệu theo dõi.
+        </Typography>
         {!inventory.data.physical.length && <Typography>Chưa có tài sản vật lý.</Typography>}
-        {inventory.data.physical.map((asset) => (
-          <Typography key={asset.id}>
-            {asset.code} · {asset.name} · {asset.condition}
-          </Typography>
-        ))}
+        {!!inventory.data.physical.length && (
+          <TableContainer>
+            <Table size="small" aria-label="Tài sản vật lý của phòng">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Tài sản / mã</TableCell>
+                  <TableCell>Tình trạng</TableCell>
+                  <TableCell align="right">Số lượng vật lý</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {inventory.data.physical.map((asset) => (
+                  <TableRow key={asset.id}>
+                    <TableCell>
+                      {asset.name}
+                      <Typography
+                        variant="caption"
+                        sx={{ display: 'block' }}
+                        color="text.secondary"
+                      >
+                        {asset.code || 'Chưa có mã'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      {asset.condition} ·{' '}
+                      {['Đang sử dụng', 'Hư hỏng', 'Đang sửa chữa', 'Đã ngừng sử dụng'][
+                        asset.status
+                      ] ?? 'Chưa xác định'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {inventory.data.metadata?.[asset.id]?.quantity ?? '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
         {inventory.data.discrepancies?.map((item, index) => (
           <Alert key={index} severity="warning">
             {inventory.data.physical.find((asset) => asset.id === item.assetId)?.name ?? 'Tài sản'}:{' '}
@@ -391,15 +556,49 @@ function RoomAssetInventory({
               : 'Chưa được liên kết với định mức.'}
           </Alert>
         ))}
-        <Typography variant="h6">Định mức mong muốn</Typography>
+        <Divider />
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          Định mức mong muốn
+        </Typography>
         {current ? (
           <>
-            <Typography>{current.status}</Typography>
-            {current.data.items.map((item) => (
-              <Typography key={item.id}>
-                {item.name} · Số lượng {item.quantity}
+            <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Chip
+                size="small"
+                label={
+                  current.status === 'PendingVerification'
+                    ? 'Chờ kiểm kê'
+                    : current.status === 'Verified'
+                      ? 'Đã xác nhận'
+                      : current.status === 'PartiallyVerified'
+                        ? 'Đã kiểm kê một phần'
+                        : current.status
+                }
+              />
+              <Typography variant="body2" color="text.secondary">
+                Phiên bản bộ mẫu {current.data.templateVersion} · Định mức {current.version}
               </Typography>
-            ))}
+            </Stack>
+            <TableContainer>
+              <Table size="small" aria-label="Định mức mong muốn của phòng">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Thiết bị</TableCell>
+                    <TableCell>Nhóm</TableCell>
+                    <TableCell align="right">Số lượng yêu cầu</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {current.data.items.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{item.category}</TableCell>
+                      <TableCell align="right">{item.quantity}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
             <AssetVerificationForm
               key={`${current.id}:${current.version}`}
               roomId={roomId}
@@ -442,7 +641,7 @@ function AssetVerificationForm({
     <Stack
       component="form"
       spacing={2}
-      sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}
+      sx={{ p: 2, bgcolor: 'background.default', borderRadius: '12px' }}
       onSubmit={(event) => {
         event.preventDefault();
         if (!file) return;
@@ -465,6 +664,13 @@ function AssetVerificationForm({
         }, 'Máy chủ đã xác nhận kiểm kê tài sản.');
       }}
     >
+      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+        Xác nhận kiểm kê
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        Chọn thiết bị theo định mức, liên kết tài sản đã ghi nhận hoặc nhập tài sản mới, rồi cung
+        cấp ảnh bằng chứng.
+      </Typography>
       <TextField
         select
         label="Tài sản theo định mức"
@@ -489,6 +695,10 @@ function AssetVerificationForm({
             setCode(asset.code ?? '');
             setCondition(asset.condition);
             setQuantity(String(inventory.metadata?.[id]?.quantity ?? 1));
+          } else {
+            setCode('');
+            setCondition('');
+            setQuantity('1');
           }
         }}
       >

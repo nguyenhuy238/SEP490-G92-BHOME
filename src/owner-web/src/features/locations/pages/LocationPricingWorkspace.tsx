@@ -36,6 +36,24 @@ import { todayVietnam } from '../../staff/staffContracts';
 import { EndPolicyDialog } from '../components/EndPolicyDialog';
 import { UtilityWorkspace } from '../../property/UtilityWorkspace';
 
+type ScopedPolicy = Policy & { firstUsedAt?: string | null; roomTypeId?: string | null };
+
+function policyUnit(policy: Policy) {
+  if (policy.method === 2) return 'người/tháng';
+  if (policy.method === 1) return policy.category === 2 ? 'm³' : 'kWh';
+  return 'phòng/tháng';
+}
+
+function policyStatus(policy: Policy, today: string) {
+  if (policy.effectiveTo && policy.effectiveTo < today) return 'Đã kết thúc';
+  if (policy.effectiveFrom > today) return 'Sắp áp dụng';
+  return 'Đang hiệu lực';
+}
+
+function dateLabel(date: string | null | undefined) {
+  return date?.split('-').reverse().join('/') ?? 'Không thời hạn';
+}
+
 export function LocationPricingWorkspace({
   locationId,
   initialTab = 0,
@@ -47,21 +65,35 @@ export function LocationPricingWorkspace({
   const { session } = useAuth();
   const owner = session?.roles.includes('Owner') ?? false;
   const [tab, setTab] = useState(initialTab);
+  const [utilityMode, setUtilityMode] = useState('workspace');
+  const [effectiveOnly, setEffectiveOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
-  const [editing, setEditing] = useState<Policy | null | undefined>();
+  const [editing, setEditing] = useState<ScopedPolicy | null | undefined>();
   const [editMode, setEditMode] = useState<'replace' | 'update'>('replace');
-  const [detail, setDetail] = useState<Policy | null>(null);
+  const [detail, setDetail] = useState<ScopedPolicy | null>(null);
   const [ending, setEnding] = useState<Policy | null>(null);
   const [notice, setNotice] = useState('');
+  const today = todayVietnam();
+  const showPolicies = tab === 0 || tab === 1 || (tab === 3 && utilityMode !== 'workspace');
+  const category = tab === 0 ? 0 : tab === 1 ? 3 : utilityMode === 'water' ? 2 : 1;
   const policies = useQuery({
-    queryKey: ['billing-policies', session?.userId, locationId, page, search, tab],
+    queryKey: [
+      'billing-policies',
+      session?.userId,
+      locationId,
+      page,
+      search,
+      category,
+      effectiveOnly,
+      today,
+    ],
     queryFn: ({ signal }) =>
-      api.request<Page<Policy>>(
-        `/api/v1/billing-policies?${new URLSearchParams({ locationId, page: String(page + 1), pageSize: '20', ...(search ? { search } : {}), ...(tab === 0 ? { chargeCategory: '0' } : {}) })}`,
+      api.request<Page<ScopedPolicy>>(
+        `/api/v1/billing-policies?${new URLSearchParams({ locationId, page: String(page + 1), pageSize: '20', chargeCategory: String(category), ...(search.trim() ? { search: search.trim() } : {}), ...(effectiveOnly ? { effectiveOn: today } : {}) })}`,
         { signal },
       ),
-    enabled: tab === 0 || tab === 1,
+    enabled: showPolicies,
   });
   const schedule = useQuery({
     queryKey: ['billing-schedule', session?.userId, locationId],
@@ -75,13 +107,20 @@ export function LocationPricingWorkspace({
         `/api/v1/capture/locations/${encodeURIComponent(locationId)}/rooms`,
         { signal },
       ),
+    enabled: showPolicies,
   });
+  function scopeLabel(policy: ScopedPolicy) {
+    if (policy.roomId)
+      return rooms.data?.find((room) => room.id === policy.roomId)?.label ?? 'Phòng riêng';
+    if (policy.roomTypeId) return 'Loại phòng (cấu hình cũ)';
+    return 'Toàn cơ sở';
+  }
   return (
     <LocationSection
       title="Giá thuê & biểu phí"
-      description="Quản lý từng khoản thu theo phạm vi và ngày hiệu lực. Giá riêng của phòng được ưu tiên theo quy tắc backend; hợp đồng và hóa đơn đã chốt giữ nguyên lịch sử."
+      description="Quản lý giá thuê tham khảo, phí dịch vụ, điện nước và lịch hóa đơn theo từng cơ sở. Hợp đồng và hóa đơn đã chốt giữ nguyên lịch sử."
       actions={
-        owner && (tab === 0 || tab === 1) ? (
+        owner && showPolicies ? (
           <Button
             variant="contained"
             onClick={() => {
@@ -102,21 +141,46 @@ export function LocationPricingWorkspace({
       )}
       <Paper variant="outlined">
         <Tabs
+          aria-label="Nhóm cấu hình giá phí"
           value={tab}
           variant="scrollable"
           scrollButtons="auto"
           onChange={(_, value: number) => {
             setTab(value);
             setPage(0);
+            setSearch('');
+            setEffectiveOnly(false);
           }}
         >
           <Tab label="Giá thuê" />
-          <Tab label="Tất cả khoản thu" />
+          <Tab label="Phí dịch vụ" />
           <Tab label="Lịch & quy tắc hóa đơn" />
           <Tab label="Điện & nước" />
         </Tabs>
       </Paper>
-      {tab === 3 ? (
+      {tab === 3 && (
+        <Stack spacing={1}>
+          <Typography variant="body2" color="text.secondary">
+            Thiết lập biểu giá, công tơ và đối soát hoặc tra cứu đơn giá điện nước trực tiếp đã lưu.
+          </Typography>
+          <Tabs
+            aria-label="Nhóm điện nước"
+            value={utilityMode}
+            variant="scrollable"
+            onChange={(_, value: string) => {
+              setUtilityMode(value);
+              setPage(0);
+              setSearch('');
+              setEffectiveOnly(false);
+            }}
+          >
+            <Tab value="workspace" label="Thiết lập & vận hành" />
+            <Tab value="electricity" label="Đơn giá điện trực tiếp" />
+            <Tab value="water" label="Đơn giá nước trực tiếp" />
+          </Tabs>
+        </Stack>
+      )}
+      {tab === 3 && utilityMode === 'workspace' ? (
         <UtilityWorkspace locationId={locationId} />
       ) : tab === 2 ? (
         !owner ? (
@@ -135,8 +199,15 @@ export function LocationPricingWorkspace({
         )
       ) : (
         <>
+          <Typography variant="body2" color="text.secondary">
+            {tab === 0
+              ? 'Giá thuê dùng để tham khảo khi thiết lập phòng và thỏa thuận mới; phòng đang có hợp đồng giữ giá đã thỏa thuận.'
+              : tab === 1
+                ? 'Các khoản phí định kỳ theo phòng hoặc theo người, áp dụng theo ngày hiệu lực và phạm vi cấu hình.'
+                : 'Đơn giá theo chỉ số tiêu thụ. Với biểu giá nhiều bậc, hãy dùng nhóm Thiết lập & vận hành.'}
+          </Typography>
           <Paper variant="outlined" sx={{ p: 2 }}>
-            <Stack direction="row" spacing={2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
                 fullWidth
                 label="Tìm khoản thu"
@@ -146,11 +217,37 @@ export function LocationPricingWorkspace({
                   setPage(0);
                 }}
               />
-              <Button disabled={policies.isFetching} onClick={() => void policies.refetch()}>
+              <TextField
+                select
+                label="Hiệu lực"
+                value={effectiveOnly ? 'current' : 'all'}
+                onChange={(e) => {
+                  setEffectiveOnly(e.target.value === 'current');
+                  setPage(0);
+                }}
+                sx={{ minWidth: 180 }}
+                slotProps={{ select: { native: true } }}
+              >
+                <option value="all">Tất cả phiên bản</option>
+                <option value="current">Đang hiệu lực</option>
+              </TextField>
+              <Button
+                sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                disabled={policies.isFetching}
+                onClick={() => void policies.refetch()}
+              >
                 Làm mới
               </Button>
             </Stack>
           </Paper>
+          {rooms.error && (
+            <Alert
+              severity="warning"
+              action={<Button onClick={() => void rooms.refetch()}>Thử lại</Button>}
+            >
+              Chưa tải được tên phòng. Đơn giá vẫn được hiển thị theo phạm vi đã lưu.
+            </Alert>
+          )}
           {policies.isPending ? (
             <LoadingState />
           ) : policies.error ? (
@@ -160,12 +257,11 @@ export function LocationPricingWorkspace({
               {!policies.data.items.length ? (
                 <LocationEmpty
                   title="Chưa có khoản thu phù hợp"
-                  description="Thêm giá thuê hoặc các khoản phí có ngày hiệu lực rõ ràng."
-                  action={owner ? 'Thêm khoản thu' : undefined}
-                  onAction={() => {
-                    setEditMode('replace');
-                    setEditing(null);
-                  }}
+                  description={
+                    search || effectiveOnly
+                      ? 'Thử thay đổi bộ lọc hoặc xem tất cả phiên bản.'
+                      : 'Thêm khoản thu có ngày hiệu lực rõ ràng.'
+                  }
                 />
               ) : (
                 <TableContainer>
@@ -189,56 +285,62 @@ export function LocationPricingWorkspace({
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            <Chip
-                              size="small"
-                              variant="outlined"
-                              label={
-                                policy.roomId
-                                  ? (rooms.data?.find((room) => room.id === policy.roomId)?.label ??
-                                    'Phòng riêng')
-                                  : 'Toàn cơ sở'
-                              }
-                            />
+                            <Chip size="small" variant="outlined" label={scopeLabel(policy)} />
+                          </TableCell>
+                          <TableCell
+                            sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
+                          >
+                            <Typography sx={{ fontWeight: 700 }}>
+                              {formatBillingDecimal(policy.rate)} đ
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              /{policyUnit(policy)}
+                            </Typography>
                           </TableCell>
                           <TableCell>
-                            {formatBillingDecimal(policy.rate)} đ/
-                            {policy.method === 2
-                              ? 'người/tháng'
-                              : policy.method === 1
-                                ? policy.category === 2
-                                  ? 'm³'
-                                  : 'kWh'
-                                : 'phòng/tháng'}
+                            <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                color={
+                                  policyStatus(policy, today) === 'Đang hiệu lực'
+                                    ? 'success'
+                                    : 'default'
+                                }
+                                label={policyStatus(policy, today)}
+                              />
+                              <Typography variant="caption" color="text.secondary">
+                                {dateLabel(policy.effectiveFrom)} → {dateLabel(policy.effectiveTo)}
+                              </Typography>
+                            </Stack>
                           </TableCell>
                           <TableCell>
-                            {policy.effectiveFrom.split('-').reverse().join('/')} →{' '}
-                            {policy.effectiveTo?.split('-').reverse().join('/') ?? 'Không thời hạn'}
-                          </TableCell>
-                          <TableCell>
-                            <Stack direction="row">
+                            <Stack direction="row" sx={{ flexWrap: 'wrap' }}>
                               <Button onClick={() => setDetail(policy)}>Chi tiết</Button>
-                              {owner && (
-                                <>
-                                  <Button
-                                    onClick={() => {
-                                      setEditMode('replace');
-                                      setEditing(policy);
-                                    }}
-                                  >
-                                    Tạo giá kế tiếp
-                                  </Button>
-                                  {policy.effectiveFrom > todayVietnam() && (
+                              {owner &&
+                                !policy.roomTypeId &&
+                                policyStatus(policy, today) !== 'Đã kết thúc' && (
+                                  <>
                                     <Button
                                       onClick={() => {
-                                        setEditMode('update');
+                                        setEditMode('replace');
                                         setEditing(policy);
                                       }}
                                     >
-                                      Sửa giá tương lai
+                                      Tạo giá kế tiếp
                                     </Button>
-                                  )}
-                                </>
-                              )}
+                                    {policy.effectiveFrom > today && !policy.firstUsedAt && (
+                                      <Button
+                                        onClick={() => {
+                                          setEditMode('update');
+                                          setEditing(policy);
+                                        }}
+                                      >
+                                        Sửa giá tương lai
+                                      </Button>
+                                    )}
+                                  </>
+                                )}
                             </Stack>
                           </TableCell>
                         </TableRow>
@@ -281,7 +383,7 @@ export function LocationPricingWorkspace({
               location={locationId}
               previous={editing}
               mode={editMode}
-              defaultCategory={tab === 0 ? 0 : 1}
+              defaultCategory={category}
               onSaved={() => {
                 setEditing(undefined);
                 setNotice('Đã lưu khoản thu.');
@@ -297,28 +399,47 @@ export function LocationPricingWorkspace({
         <DialogContent>
           <Stack spacing={2}>
             <Typography>Mã khoản thu: {detail?.chargeCode}</Typography>
-            <Typography>Đơn giá: {detail && formatBillingDecimal(detail.rate)} đ</Typography>
+            <Typography>Phạm vi: {detail && scopeLabel(detail)}</Typography>
+            <Typography>
+              Đơn giá: {detail && formatBillingDecimal(detail.rate)} đ/
+              {detail && policyUnit(detail)}
+            </Typography>
             <Typography>Phiên bản: {detail?.version}</Typography>
             <Typography>
-              Ngày hiệu lực: {detail?.effectiveFrom} – {detail?.effectiveTo ?? 'Không thời hạn'}
+              Ngày hiệu lực: {dateLabel(detail?.effectiveFrom)} – {dateLabel(detail?.effectiveTo)}
             </Typography>
+            {detail && <Typography>Trạng thái: {policyStatus(detail, today)}</Typography>}
+            {detail?.firstUsedAt && (
+              <Typography variant="body2" color="text.secondary">
+                Đã được sử dụng; không thể sửa trực tiếp phiên bản này.
+              </Typography>
+            )}
+            {detail?.roomTypeId && (
+              <Alert severity="info">
+                Đây là giá thuộc loại phòng cũ. Không thể sửa hoặc tạo giá kế tiếp bằng biểu mẫu chỉ
+                hỗ trợ phạm vi cơ sở/phòng.
+              </Alert>
+            )}
             <Alert severity="info">
               Khi thay đổi giá, tạo phiên bản kế tiếp để bảo toàn lịch sử áp dụng.
             </Alert>
           </Stack>
         </DialogContent>
         <DialogActions>
-          {owner && detail && (
-            <Button
-              color="warning"
-              onClick={() => {
-                setEnding(detail);
-                setDetail(null);
-              }}
-            >
-              Kết thúc áp dụng
-            </Button>
-          )}
+          {owner &&
+            detail &&
+            !detail.roomTypeId &&
+            policyStatus(detail, today) !== 'Đã kết thúc' && (
+              <Button
+                color="warning"
+                onClick={() => {
+                  setEnding(detail);
+                  setDetail(null);
+                }}
+              >
+                Kết thúc áp dụng
+              </Button>
+            )}
           <Button onClick={() => setDetail(null)}>Đóng</Button>
         </DialogActions>
       </Dialog>

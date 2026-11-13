@@ -97,6 +97,40 @@ it('opens the utility section directly for legacy utility navigation', async () 
   expect(await screen.findByRole('tab', { name: 'Biểu giá' })).toBeInTheDocument();
   expect(screen.getByRole('tab', { name: 'Điện & nước' })).toHaveAttribute('aria-selected', 'true');
 });
+it('filters rent, service fees and legacy utility rates at the server before paging', async () => {
+  mount(<LocationPricingWorkspace locationId="location" />);
+  await waitFor(() =>
+    expect(state.request.mock.calls.some(([path]) => path.includes('chargeCategory=0'))).toBe(true),
+  );
+  fireEvent.click(screen.getByRole('tab', { name: 'Phí dịch vụ' }));
+  await waitFor(() =>
+    expect(
+      state.request.mock.calls.some(
+        ([path]) =>
+          path.includes('chargeCategory=3') &&
+          path.includes('page=1') &&
+          path.includes('locationId=location'),
+      ),
+    ).toBe(true),
+  );
+  fireEvent.change(screen.getByLabelText('Hiệu lực'), { target: { value: 'current' } });
+  await waitFor(() =>
+    expect(
+      state.request.mock.calls.some(
+        ([path]) => path.includes('chargeCategory=3') && path.includes('effectiveOn='),
+      ),
+    ).toBe(true),
+  );
+  fireEvent.click(screen.getByRole('tab', { name: 'Điện & nước' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Đơn giá điện trực tiếp' }));
+  await waitFor(() =>
+    expect(state.request.mock.calls.some(([path]) => path.includes('chargeCategory=1'))).toBe(true),
+  );
+  fireEvent.click(screen.getByRole('tab', { name: 'Đơn giá nước trực tiếp' }));
+  await waitFor(() =>
+    expect(state.request.mock.calls.some(([path]) => path.includes('chargeCategory=2'))).toBe(true),
+  );
+});
 function mount(child: React.ReactNode) {
   return render(
     <QueryClientProvider
@@ -298,6 +332,7 @@ it('uses the confirmed Location version for a subsequent settings save', async (
       }}
     />,
   );
+  fireEvent.change(screen.getByLabelText(/Tên cơ sở/), { target: { value: 'Cơ sở mới' } });
   fireEvent.change(screen.getByLabelText(/Lý do thay đổi/), { target: { value: 'Lần đầu' } });
   fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
   await screen.findByText('Đã lưu thông tin cơ sở.');
@@ -305,6 +340,7 @@ it('uses the confirmed Location version for a subsequent settings save', async (
     JSON.parse(state.request.mock.calls.find(([, init]) => init?.method === 'PUT')![1].body)
       .version,
   ).toBe(4);
+  fireEvent.change(screen.getByLabelText(/Tên cơ sở/), { target: { value: 'Cơ sở cập nhật' } });
   fireEvent.change(screen.getByLabelText(/Lý do thay đổi/), { target: { value: 'Lần tiếp theo' } });
   fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
   await waitFor(() =>
@@ -316,7 +352,7 @@ it('uses the confirmed Location version for a subsequent settings save', async (
   ).toBe(5);
 });
 
-it('checks open Location obligations and asks for confirmation before a closure write', async () => {
+it('blocks closure when the server reports open Location obligations, then asks for confirmation after recheck', async () => {
   state.request.mockResolvedValue({
     canClose: false,
     blockers: [{ code: 'OPEN_CONTRACTS', count: 2 }],
@@ -338,6 +374,13 @@ it('checks open Location obligations and asks for confirmation before a closure 
   fireEvent.change(screen.getByLabelText(/Lý do thay đổi/), {
     target: { value: 'Kiểm tra nghĩa vụ' },
   });
+  expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled();
+  expect(state.request.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
+  state.request.mockResolvedValue({ canClose: true, blockers: [] });
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra lại' }));
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).not.toBeDisabled(),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
   await screen.findByText('Ngừng hoạt động cơ sở?');
   expect(state.request.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);

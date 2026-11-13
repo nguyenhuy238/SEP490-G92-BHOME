@@ -13,14 +13,18 @@ export function LocationSection({
   children: ReactNode;
 }) {
   return (
-    <Stack spacing={2.5}>
+    <Stack spacing={2.5} sx={{ minWidth: 0 }}>
       <Stack
         direction={{ xs: 'column', md: 'row' }}
         spacing={2}
         sx={{ justifyContent: 'space-between', alignItems: { md: 'center' } }}
       >
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            component="h2"
+            variant="h2"
+            sx={{ fontSize: '1.25rem', overflowWrap: 'anywhere' }}
+          >
             {title}
           </Typography>
           <Typography
@@ -32,7 +36,7 @@ export function LocationSection({
           </Typography>
         </Box>
         {actions && (
-          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexShrink: 0, flexWrap: 'wrap' }}>
             {actions}
           </Stack>
         )}
@@ -54,12 +58,15 @@ export function LocationEmpty({
   onAction?: () => void;
 }) {
   return (
-    <Paper
-      variant="outlined"
-      sx={{ p: { xs: 3, md: 5 }, textAlign: 'center', borderStyle: 'dashed' }}
-    >
-      <Typography sx={{ fontWeight: 750, mb: 1 }}>{title}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: action ? 2 : 0 }}>
+    <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 }, textAlign: 'center' }}>
+      <Typography component="h3" sx={{ fontWeight: 700, mb: 1 }}>
+        {title}
+      </Typography>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ mb: action ? 2 : 0, maxWidth: '65ch', mx: 'auto' }}
+      >
         {description}
       </Typography>
       {action && (

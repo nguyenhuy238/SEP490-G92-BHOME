@@ -114,6 +114,28 @@ it('never represents failed occupancy/incident reads as zero people or no incide
   expect(screen.queryByText('Không có báo cáo sự cố đang mở')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
 });
+it('reports floor-filtered page counts without treating unknown room status as unavailable', async () => {
+  mount(
+    <RoomFloorCards
+      locationId="location"
+      rooms={[room, { ...room, id: 'other', roomNumber: 'P201', floor: '2', status: 99 }]}
+      total={42}
+      inspect={vi.fn()}
+    />,
+  );
+  expect(
+    screen.getByText('2 phòng đang hiển thị · 2 trên trang này / 42 phòng phù hợp'),
+  ).toBeInTheDocument();
+  expect(screen.getAllByText('Chưa xác định').length).toBeGreaterThan(0);
+  fireEvent.mouseDown(screen.getByLabelText('Tầng trên trang hiện tại'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Tầng 2' }));
+  expect(
+    screen.getByText('1 phòng đang hiển thị · 2 trên trang này / 42 phòng phù hợp'),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Xem phòng P101' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Xem phòng P201' })).toBeInTheDocument();
+  expect(state.request.mock.calls.some(([path]) => path.includes('/prices?'))).toBe(false);
+});
 it('follows server pagination for operation data and marks bounded results incomplete', async () => {
   const request = vi.fn().mockResolvedValue({
     items: Array.from({ length: 100 }, (_, id) => ({ id })),

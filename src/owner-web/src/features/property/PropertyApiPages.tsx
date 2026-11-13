@@ -19,6 +19,8 @@ import {
   TablePagination,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -46,6 +48,7 @@ import { todayVietnam } from '../staff/staffContracts';
 import { BulkRoomsDialog } from '../locations/components/BulkRoomsDialog';
 import { RoomFloorCards } from '../locations/components/RoomFloorCards';
 import { RoomInspector } from '../locations/components/RoomInspector';
+import { useRoomOperations } from '../locations/components/useRoomOperations';
 import { ConflictReload } from '../locations/components/ConflictReload';
 
 type Kind = 'locations' | 'rooms' | 'assets';
@@ -100,6 +103,12 @@ export function PropertyApiPage({
     queryFn: ({ signal }) => setup.roomProvenance(location, signal),
     enabled: kind === 'rooms' && canManage && !!location,
   });
+  const chosenDefaults = defaults.data?.find((item) => item.id === values.roomDefaultsId);
+  const staleDefaults =
+    !!values.roomDefaultsId &&
+    (!chosenDefaults ||
+      chosenDefaults.status === 'Archived' ||
+      String(chosenDefaults.version) !== values.roomDefaultsVersion);
   const options = useQuery({
     queryKey: ['property-setup', 'locations-options', session?.userId],
     queryFn: ({ signal }) => api.locationOptions(signal),
@@ -120,6 +129,10 @@ export function PropertyApiPage({
           ),
     enabled: kind === 'locations' || !!location,
   });
+  const tableOperations = useRoomOperations(
+    kind === 'rooms' && view === 'table' ? location : '',
+    kind === 'rooms' && view === 'table' ? (query.data?.items ?? []).map((row) => row.id) : [],
+  );
   const save = useMutation({
     mutationFn: async () => {
       if (!canManage) throw new Error('Owner authorization is required.');
@@ -138,18 +151,22 @@ export function PropertyApiPage({
         if (
           !type ||
           type.status === 'Archived' ||
+          String(type.version) !== values.roomDefaultsVersion ||
           !values.rent?.trim() ||
           !Number.isFinite(Number(values.rent)) ||
-          Number(values.rent) < 0
+          Number(values.rent) < 0 ||
+          (values.effectiveFrom || todayVietnam()) < todayVietnam()
         )
-          throw new Error('Chọn cấu hình và xác nhận giá thuê hợp lệ.');
+          throw new Error(
+            'Gợi ý đã thay đổi hoặc giá thuê chưa hợp lệ. Chọn lại gợi ý trước khi lưu.',
+          );
         const input = {
           rooms: [
             {
               roomNumber: values.roomNumber?.trim() ?? '',
               floor: values.floor?.trim() || null,
               roomDefaultsId: type.id,
-              expectedVersion: type.version,
+              expectedVersion: Number(values.roomDefaultsVersion),
               rent: values.rent,
             },
           ],
@@ -229,6 +246,7 @@ export function PropertyApiPage({
     <Stack spacing={2}>
       <PageHeader
         group={null}
+        headingLevel={params.locationId ? 'h2' : 'h1'}
         title={titles[kind]}
         subtitle={
           kind === 'rooms'
@@ -239,7 +257,7 @@ export function PropertyApiPage({
         }
         actions={
           canManage ? (
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
               {kind === 'locations' && <ApiConfigurationCopy />}
               {kind === 'rooms' && (
                 <>
@@ -312,7 +330,7 @@ export function PropertyApiPage({
                 setStatusFilter(e.target.value);
                 setPage(0);
               }}
-              sx={{ minWidth: 220 }}
+              sx={{ minWidth: { xs: 0, md: 200 }, width: { xs: '100%', md: 'auto' } }}
             >
               <MenuItem value="">Tất cả trạng thái</MenuItem>
               {(kind === 'rooms' ? roomLabels : assetLabels).map((label, index) => (
@@ -322,17 +340,39 @@ export function PropertyApiPage({
               ))}
             </TextField>
           )}
-          <Button
-            disabled={query.isFetching || (kind !== 'locations' && !location)}
-            onClick={() => void query.refetch()}
-          >
-            Tải lại danh sách
-          </Button>
-          {kind === 'rooms' && (
-            <Button onClick={() => setView((old) => (old === 'cards' ? 'table' : 'cards'))}>
-              {view === 'cards' ? 'Dạng bảng' : 'Sơ đồ phòng'}
+          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, flexShrink: 0 }}>
+            <Button
+              disabled={query.isFetching || (kind !== 'locations' && !location)}
+              onClick={() => void query.refetch()}
+            >
+              Tải lại
             </Button>
-          )}
+            {(search || statusFilter) && (
+              <Button
+                onClick={() => {
+                  setSearch('');
+                  setStatusFilter('');
+                  setPage(0);
+                }}
+              >
+                Xóa bộ lọc
+              </Button>
+            )}
+            {kind === 'rooms' && (
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={view}
+                onChange={(_, value: string | null) => {
+                  if (value) setView(value);
+                }}
+                aria-label="Cách hiển thị phòng"
+              >
+                <ToggleButton value="cards">Theo tầng</ToggleButton>
+                <ToggleButton value="table">Dạng bảng</ToggleButton>
+              </ToggleButtonGroup>
+            )}
+          </Stack>
         </Stack>
       </Paper>
       {kind !== 'locations' && !location ? (
@@ -342,16 +382,21 @@ export function PropertyApiPage({
       ) : query.error ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
       ) : (
-        <Paper>
+        <Paper variant="outlined" sx={{ minWidth: 0 }}>
           {!query.data?.items.length ? (
             <Box sx={{ p: 3, textAlign: 'center' }}>
-              <EmptyState />
-              <Typography color="text.secondary">
-                {search || statusFilter
-                  ? 'Thử đổi từ khóa hoặc trạng thái để xem dữ liệu khác.'
-                  : 'Thêm bản ghi đầu tiên để bắt đầu quản lý.'}
-              </Typography>
-              {canManage && (
+              <EmptyState
+                message={
+                  search || statusFilter
+                    ? 'Không có dữ liệu phù hợp. Thử đổi từ khóa hoặc trạng thái.'
+                    : kind === 'assets'
+                      ? 'Chưa có tài sản thực tế. Thêm tài sản đầu tiên để bắt đầu quản lý.'
+                      : kind === 'rooms'
+                        ? 'Chưa có phòng. Thêm phòng đầu tiên để bắt đầu quản lý.'
+                        : 'Chưa có bản ghi. Thêm bản ghi đầu tiên để bắt đầu quản lý.'
+                }
+              />
+              {canManage && !search && !statusFilter && (
                 <Button sx={{ mt: 2 }} variant="outlined" onClick={() => edit(null)}>
                   Thêm mới
                 </Button>
@@ -368,11 +413,50 @@ export function PropertyApiPage({
             />
           ) : (
             <Stack sx={{ overflowX: 'auto' }}>
-              <Table>
+              {kind === 'rooms' && tableOperations.occupancy.error && (
+                <Alert
+                  severity="warning"
+                  action={
+                    <Button onClick={() => void tableOperations.occupancy.refetch()}>
+                      Thử lại
+                    </Button>
+                  }
+                >
+                  Chưa tải được số người ở theo hợp đồng.
+                </Alert>
+              )}
+              {kind === 'rooms' && tableOperations.incidents.error && (
+                <Alert
+                  severity="warning"
+                  action={
+                    <Button onClick={() => void tableOperations.incidents.refetch()}>
+                      Thử lại
+                    </Button>
+                  }
+                >
+                  Chưa tải được báo cáo sự cố.
+                </Alert>
+              )}
+              <Table size="small" aria-label={titles[kind]}>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Tên / mã</TableCell>
-                    <TableCell>Thông tin</TableCell>
+                    <TableCell>{kind === 'rooms' ? 'Số phòng' : 'Tên / mã'}</TableCell>
+                    {kind === 'rooms' ? (
+                      <>
+                        <TableCell>Gợi ý đã áp dụng</TableCell>
+                        <TableCell>Tầng</TableCell>
+                        <TableCell align="right">Sức chứa</TableCell>
+                        <TableCell align="right">Người ở</TableCell>
+                        <TableCell>Sự cố mở</TableCell>
+                      </>
+                    ) : kind === 'assets' ? (
+                      <>
+                        <TableCell>Vị trí thực tế</TableCell>
+                        <TableCell>Nhóm / tình trạng</TableCell>
+                      </>
+                    ) : (
+                      <TableCell>Địa chỉ</TableCell>
+                    )}
                     <TableCell>Trạng thái</TableCell>
                     <TableCell>Thao tác</TableCell>
                   </TableRow>
@@ -380,31 +464,112 @@ export function PropertyApiPage({
                 <TableBody>
                   {query.data.items.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell>{'roomNumber' in row ? row.roomNumber : row.name}</TableCell>
                       <TableCell>
-                        {'address' in row
-                          ? row.address
-                          : 'capacity' in row
-                            ? `${row.capacity} người · ${row.floor ?? 'Chưa có tầng'}`
-                            : `${row.code ?? ''} · ${row.category} · ${row.condition}`}
+                        <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                          {'roomNumber' in row ? row.roomNumber : row.name}
+                        </Typography>
+                        {'code' in row && (
+                          <Typography variant="caption" color="text.secondary">
+                            {row.code || 'Chưa có mã'}
+                          </Typography>
+                        )}
                       </TableCell>
+                      {'address' in row ? (
+                        <TableCell>{row.address}</TableCell>
+                      ) : 'capacity' in row ? (
+                        <>
+                          <TableCell>
+                            {(() => {
+                              const source = provenance.data?.find(
+                                (item) => item.data.roomId === row.id,
+                              )?.data;
+                              return source
+                                ? `${source.name} · v${source.roomDefaultsVersion}`
+                                : !canManage
+                                  ? '—'
+                                  : provenance.isPending
+                                    ? 'Đang tải…'
+                                    : provenance.error
+                                      ? 'Chưa tải được'
+                                      : 'Chưa ghi nhận';
+                            })()}
+                          </TableCell>
+                          <TableCell>{row.floor ?? 'Chưa phân tầng'}</TableCell>
+                          <TableCell align="right">{row.capacity} người</TableCell>
+                          <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {tableOperations.occupancy.data?.items.find(
+                              (item) => item.roomId === row.id,
+                            )?.occupants.length ?? '—'}
+                          </TableCell>
+                          <TableCell>
+                            {(() => {
+                              const reports =
+                                tableOperations.incidents.data?.items.filter(
+                                  (item) =>
+                                    item.roomId === row.id &&
+                                    ['Submitted', 'InProgress'].includes(item.status),
+                                ) ?? [];
+                              return reports.length ? (
+                                <Typography
+                                  variant="body2"
+                                  color={
+                                    reports.some((item) => item.severity === 'Emergency')
+                                      ? 'error.main'
+                                      : 'warning.dark'
+                                  }
+                                >
+                                  {reports.length}
+                                  {tableOperations.incidents.data?.complete ? '' : '+'}
+                                </Typography>
+                              ) : tableOperations.incidents.data?.complete ? (
+                                '0'
+                              ) : (
+                                '—'
+                              );
+                            })()}
+                          </TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell>
+                            {row.roomId
+                              ? (rooms.data?.find((item) => item.id === row.roomId)?.label ??
+                                'Phòng (chưa tải được tên)')
+                              : row.commonArea || 'Chưa ghi nhận khu vực'}
+                          </TableCell>
+                          <TableCell>
+                            {row.category} · {row.condition}
+                          </TableCell>
+                        </>
+                      )}
                       <TableCell>
                         <Chip
                           size="small"
                           variant="outlined"
+                          color={
+                            'capacity' in row
+                              ? row.status === 0
+                                ? 'success'
+                                : row.status === 1
+                                  ? 'warning'
+                                  : row.status === 2
+                                    ? 'info'
+                                    : 'default'
+                              : 'default'
+                          }
                           label={
                             'isActive' in row
                               ? row.isActive
                                 ? 'Đang hoạt động'
                                 : 'Ngừng hoạt động'
                               : 'capacity' in row
-                                ? roomLabels[row.status]
-                                : assetLabels[row.status]
+                                ? (roomLabels[row.status] ?? 'Chưa xác định')
+                                : (assetLabels[row.status] ?? 'Chưa xác định')
                           }
                         />
                       </TableCell>
                       <TableCell>
-                        <Stack direction="row" spacing={1}>
+                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                           {'condition' in row && (
                             <Button onClick={() => setInspectedAsset(row.id)}>
                               Thông tin & Lịch sử
@@ -435,6 +600,8 @@ export function PropertyApiPage({
             rowsPerPage={20}
             rowsPerPageOptions={[20]}
             labelRowsPerPage="Số dòng"
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} / ${count} bản ghi`}
+            sx={{ '& .MuiTablePagination-toolbar': { flexWrap: 'wrap', gap: 1 } }}
           />
         </Paper>
       )}
@@ -495,13 +662,14 @@ export function PropertyApiPage({
                     <>
                       <TextField
                         select
-                        label="Cấu hình loại phòng"
+                        label="Gợi ý tạo phòng"
                         value={values.roomDefaultsId ?? ''}
                         onChange={(e) => {
                           const type = defaults.data?.find((item) => item.id === e.target.value);
                           setValues((old) => ({
                             ...old,
                             roomDefaultsId: e.target.value,
+                            roomDefaultsVersion: type ? String(type.version) : '',
                             ...(type
                               ? {
                                   capacity: String(type.data.defaults.capacity),
@@ -513,19 +681,59 @@ export function PropertyApiPage({
                         }}
                       >
                         <MenuItem value="">Nhập trực tiếp</MenuItem>
+                        {values.roomDefaultsId &&
+                          (!chosenDefaults || chosenDefaults.status === 'Archived') && (
+                            <MenuItem value={values.roomDefaultsId} disabled>
+                              Gợi ý đã ngừng sử dụng hoặc chưa tải được
+                            </MenuItem>
+                          )}
                         {defaults.data
                           ?.filter((item) => item.status !== 'Archived')
                           .map((item) => (
                             <MenuItem key={item.id} value={item.id}>
-                              {item.data.name}
+                              {item.data.name} · v{item.version}
                             </MenuItem>
                           ))}
                       </TextField>
+                      {defaults.error && (
+                        <Alert
+                          severity="warning"
+                          action={<Button onClick={() => void defaults.refetch()}>Thử lại</Button>}
+                        >
+                          Chưa tải được gợi ý. Bạn có thể nhập trực tiếp hoặc tải lại.
+                        </Alert>
+                      )}
+                      {staleDefaults && (
+                        <Alert
+                          severity="warning"
+                          action={
+                            chosenDefaults &&
+                            chosenDefaults.status !== 'Archived' && (
+                              <Button
+                                onClick={() =>
+                                  setValues((old) => ({
+                                    ...old,
+                                    roomDefaultsVersion: String(chosenDefaults.version),
+                                    capacity: String(chosenDefaults.data.defaults.capacity),
+                                    rent: String(chosenDefaults.data.defaults.referenceRent ?? ''),
+                                  }))
+                                }
+                              >
+                                Nạp phiên bản mới
+                              </Button>
+                            )
+                          }
+                        >
+                          Gợi ý đã thay đổi hoặc ngừng sử dụng. Chọn gợi ý khác hoặc nạp phiên bản
+                          mới để xác nhận lại giá.
+                        </Alert>
+                      )}
                       {values.roomDefaultsId && (
                         <>
                           <Alert severity="info">
-                            Sức chứa và định mức lấy từ cấu hình đã lưu. Xác nhận giá thuê trước khi
-                            tạo.
+                            Sức chứa và định mức lấy từ phiên bản {values.roomDefaultsVersion}.
+                            Phòng đã tạo giữ bản cấu hình riêng. Xác nhận giá thuê và ngày hiệu lực
+                            trước khi tạo.
                           </Alert>
                           <MoneyField
                             allowDecimal
@@ -541,7 +749,10 @@ export function PropertyApiPage({
                             onChange={(e) =>
                               setValues((old) => ({ ...old, effectiveFrom: e.target.value }))
                             }
-                            slotProps={{ inputLabel: { shrink: true } }}
+                            slotProps={{
+                              inputLabel: { shrink: true },
+                              htmlInput: { min: todayVietnam() },
+                            }}
                           />
                         </>
                       )}
@@ -549,7 +760,16 @@ export function PropertyApiPage({
                   )}
                   {field('roomNumber', 'Số phòng')}
                   {field('floor', 'Tầng', false)}
-                  {field('capacity', 'Sức chứa', true, 'number')}
+                  {!editing && values.roomDefaultsId ? (
+                    <TextField
+                      label="Sức chứa"
+                      value={values.capacity ?? ''}
+                      disabled
+                      helperText="Lấy từ gợi ý đã chọn"
+                    />
+                  ) : (
+                    field('capacity', 'Sức chứa', true, 'number')
+                  )}
                   <Alert severity="info">
                     Giữ chỗ và có khách thuê được xác nhận qua quy trình hợp đồng. Thay đổi sức chứa
                     hoặc ngừng khai thác sẽ được kiểm tra theo nghĩa vụ của phòng.
@@ -580,7 +800,7 @@ export function PropertyApiPage({
                   {!values.roomId && field('commonArea', 'Tên khu vực chung')}
                 </>
               )}
-              {kind !== 'locations' && (
+              {kind !== 'locations' && !(kind === 'rooms' && !editing && values.roomDefaultsId) && (
                 <TextField
                   select
                   label="Trạng thái"
@@ -599,7 +819,23 @@ export function PropertyApiPage({
                 </TextField>
               )}
               {field('reason', 'Lý do / ghi chú', !!editing)}
-              {save.error && <Alert severity="error">{invoiceError(save.error)}</Alert>}
+              {save.error && (
+                <Alert
+                  severity="error"
+                  action={
+                    kind === 'rooms' && !editing && values.roomDefaultsId ? (
+                      <Button
+                        disabled={defaults.isFetching}
+                        onClick={() => void defaults.refetch()}
+                      >
+                        Tải lại gợi ý
+                      </Button>
+                    ) : undefined
+                  }
+                >
+                  {invoiceError(save.error)}
+                </Alert>
+              )}
               {editing && (
                 <ConflictReload
                   error={save.error}
@@ -620,7 +856,12 @@ export function PropertyApiPage({
             <Button
               type="submit"
               variant="contained"
-              disabled={save.isPending || !canManage || (kind !== 'locations' && !location)}
+              disabled={
+                save.isPending ||
+                !canManage ||
+                (kind !== 'locations' && !location) ||
+                (kind === 'rooms' && !editing && staleDefaults)
+              }
             >
               Lưu cấu hình
             </Button>

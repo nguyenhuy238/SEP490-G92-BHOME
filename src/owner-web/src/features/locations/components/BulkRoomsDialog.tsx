@@ -99,10 +99,12 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
     Number.isInteger(Number(count)) &&
     Number(count) >= 1 &&
     Number(count) <= 200 &&
+    !!start.trim() &&
     Number.isInteger(Number(start)) &&
     Number(start) >= 0 &&
     Number(start) <= 999999 &&
-    floor.trim().length <= 30;
+    floor.trim().length <= 30 &&
+    (prefix + String(Number(start) + Number(count) - 1)).trim().length <= 50;
   return (
     <Dialog open fullWidth maxWidth="md" onClose={() => !save.isPending && close()}>
       <DialogTitle>Tạo phòng hàng loạt</DialogTitle>
@@ -133,6 +135,9 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
               Cơ sở chưa có gợi ý tạo phòng đang sử dụng.
             </Alert>
           )}
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            Quy tắc đặt số phòng
+          </Typography>
           <Box
             component="form"
             onSubmit={(e) => {
@@ -206,6 +211,13 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
                 {selected.data.defaults.amenities.join(', ') || 'Chưa khai báo tiện nghi'}
               </Typography>
             )}
+            {validGenerator && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Sẽ tạo {count} phòng, từ {prefix}
+                {Number(start)} đến {prefix}
+                {Number(start) + Number(count) - 1}.
+              </Typography>
+            )}
             <Button
               type="submit"
               variant="outlined"
@@ -221,7 +233,12 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
                 Xem trước {rows.length} phòng · Chưa lưu
               </Typography>
               <TableContainer sx={{ maxHeight: 350 }}>
-                <Table stickyHeader size="small">
+                <Table
+                  stickyHeader
+                  size="small"
+                  aria-label="Danh sách phòng xem trước"
+                  sx={{ minWidth: 720 }}
+                >
                   <TableHead>
                     <TableRow>
                       <TableCell>Số phòng</TableCell>
@@ -238,6 +255,7 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
                         <TableCell>
                           <TextField
                             size="small"
+                            sx={{ minWidth: 110 }}
                             value={row.roomNumber}
                             disabled={save.isPending}
                             onChange={(e) =>
@@ -260,6 +278,7 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
                         <TableCell>
                           <MoneyField
                             allowDecimal
+                            sx={{ minWidth: 150 }}
                             size="small"
                             value={row.rent}
                             disabled={save.isPending}

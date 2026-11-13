@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -206,6 +206,83 @@ it('creates a native Room while loading local defaults and provenance', async ()
   expect(state.request.mock.calls.some(([path]) => path.includes('/api/v1/room-types'))).toBe(
     false,
   );
+});
+it('keeps the selected room defaults revision until the Owner explicitly reloads and confirms it', async () => {
+  let version = 3;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/capture/locations')
+      return [{ id: 'location', label: 'Synthetic Location' }];
+    if (path.endsWith('/room-defaults'))
+      return [
+        {
+          id: 'defaults',
+          locationId: 'location',
+          kind: 'RoomDefaults',
+          status: 'Recorded',
+          version,
+          data: {
+            name: 'Studio',
+            defaults: {
+              capacity: version === 3 ? 2 : 4,
+              area: 25,
+              amenities: [],
+              referenceRent: version === 3 ? '3500000' : '4200000',
+            },
+          },
+        },
+      ];
+    if (path.endsWith('/room-provenance')) return [];
+    if (path.endsWith('/configured-rooms') && init?.method === 'POST') {
+      if (version === 3) {
+        version = 4;
+        throw new ApiError(409);
+      }
+      return {
+        rooms: [
+          {
+            id: 'new-room',
+            locationId: 'location',
+            roomNumber: 'A101',
+            floor: null,
+            capacity: 4,
+            status: 0,
+            version: 1,
+          },
+        ],
+      };
+    }
+    return { items: [], totalCount: 0 };
+  });
+  mount('rooms');
+  await chooseLocation();
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm phòng' }));
+  fireEvent.mouseDown(screen.getByLabelText('Gợi ý tạo phòng'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Studio · v3' }));
+  const dialog = within(screen.getByRole('dialog'));
+  expect(dialog.getByLabelText('Sức chứa')).toBeDisabled();
+  expect(dialog.queryByLabelText('Trạng thái')).toBeNull();
+  fireEvent.change(dialog.getByLabelText(/Số phòng/), { target: { value: 'A101' } });
+  const rent = dialog.getByLabelText(/Giá thuê xác nhận/);
+  expect(rent).toHaveValue('3.500.000');
+  fireEvent.change(rent, { target: { value: '3600000' } });
+  fireEvent.click(dialog.getByRole('button', { name: 'Lưu cấu hình' }));
+  fireEvent.click(await dialog.findByRole('button', { name: 'Tải lại gợi ý' }));
+  const reload = await dialog.findByRole('button', { name: 'Nạp phiên bản mới' });
+  expect(dialog.getByRole('button', { name: 'Lưu cấu hình' })).toBeDisabled();
+  expect(rent).toHaveValue('3.600.000');
+  expect(dialog.getByLabelText(/Số phòng/)).toHaveValue('A101');
+  fireEvent.click(reload);
+  expect(dialog.getByLabelText('Sức chứa')).toHaveValue('4');
+  expect(rent).toHaveValue('4.200.000');
+  fireEvent.click(dialog.getByRole('button', { name: 'Lưu cấu hình' }));
+  await screen.findByText('Máy chủ đã lưu cấu hình.');
+  const writes = state.request.mock.calls.filter(
+    ([path, init]) => path.endsWith('/configured-rooms') && init?.method === 'POST',
+  );
+  expect(writes.map(([, init]) => JSON.parse(init.body).rooms[0])).toEqual([
+    expect.objectContaining({ expectedVersion: 3, rent: '3600000', roomNumber: 'A101' }),
+    expect.objectContaining({ expectedVersion: 4, rent: '4200000', roomNumber: 'A101' }),
+  ]);
 });
 it('reads physical Asset fields through the scoped native list and pagination', async () => {
   state.request.mockImplementation(async (path: string) => {

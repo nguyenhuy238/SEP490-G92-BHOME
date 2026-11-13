@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 const mock = vi.hoisted(() => ({
   locations: vi.fn(),
   expenses: vi.fn(),
+  report: vi.fn(),
   expense: vi.fn(),
   createExpense: vi.fn(),
   updateExpense: vi.fn(),
@@ -33,6 +34,9 @@ beforeEach(() => {
   vi.resetAllMocks();
   mock.locations.mockResolvedValue([{ id: 'location', label: 'Cơ sở tổng hợp' }]);
   mock.expenses.mockResolvedValue({ items: [expense], total: 1, page: 1, pageSize: 25 });
+  mock.report.mockResolvedValue({
+    total: { initialInvestment: '15000000', operatingExpenses: '1200000' },
+  });
   mock.expense.mockResolvedValue(expense);
   mock.expenseEvidence.mockResolvedValue([]);
   mock.expenseReferences.mockResolvedValue({
@@ -63,7 +67,14 @@ it('keeps the Location Workspace scope when loading and creating expenses', asyn
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  await screen.findByText('Bảo trì — 500.000 ₫');
+  await screen.findByText('Bảo trì');
+  expect(screen.getByText('500.000 ₫')).toBeInTheDocument();
+  expect(await screen.findByText('15.000.000 ₫')).toBeInTheDocument();
+  expect(screen.getByText('1.200.000 ₫')).toBeInTheDocument();
+  expect(mock.report).toHaveBeenCalledWith(
+    expect.objectContaining({ locationId: 'location' }),
+    expect.any(AbortSignal),
+  );
   expect(mock.expenses).toHaveBeenCalledWith(
     expect.objectContaining({ locationId: 'location' }),
     expect.any(AbortSignal),
@@ -72,7 +83,7 @@ it('keeps the Location Workspace scope when loading and creating expenses', asyn
 });
 it('filters Initial Investment on the server and uses that type for new records', async () => {
   mount();
-  await screen.findByText('Bảo trì — 500.000 ₫');
+  await screen.findByText('Bảo trì');
   fireEvent.click(screen.getByRole('tab', { name: 'Đầu tư ban đầu' }));
   await waitFor(() =>
     expect(mock.expenses).toHaveBeenLastCalledWith(
@@ -83,6 +94,34 @@ it('filters Initial Investment on the server and uses that type for new records'
   fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
   expect(screen.getByRole('combobox', { name: 'Phân loại' })).toHaveTextContent('Đầu tư ban đầu');
 });
+it('does not request an invalid date range and can clear the filters', async () => {
+  mount();
+  await screen.findByText('Bảo trì');
+  fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-12-01' } });
+  fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '2026-11-01' } });
+  expect(screen.getByText('Chọn lại khoảng ngày để xem khoản chi.')).toBeInTheDocument();
+  expect(
+    mock.expenses.mock.calls.some(
+      ([filter]) => filter.from && filter.to && filter.from > filter.to,
+    ),
+  ).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }));
+  await screen.findByText('Bảo trì');
+  expect(screen.getByLabelText('Từ ngày')).toHaveValue('');
+  expect(screen.getByLabelText('Đến ngày')).toHaveValue('');
+});
+it('keeps source-managed expenses read-only even when the editor form is submitted', async () => {
+  const sourceManaged = { ...expense, canEdit: false };
+  mock.expenses.mockResolvedValue({ items: [sourceManaged], total: 1, page: 1, pageSize: 25 });
+  mock.expense.mockResolvedValue(sourceManaged);
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
+  await screen.findByText(/Khoản chi này do nghiệp vụ nguồn quản lý/);
+  expect(screen.getByLabelText(/Số tiền/)).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Lưu khoản chi' })).toBeDisabled();
+  fireEvent.submit(document.getElementById('expense-editor')!);
+  expect(mock.updateExpense).not.toHaveBeenCalled();
+});
 it('loads real API rows, submits one mutation while busy and reloads the list', async () => {
   let finish!: (v: typeof expense) => void;
   mock.createExpense.mockImplementation(
@@ -92,7 +131,7 @@ it('loads real API rows, submits one mutation while busy and reloads the list', 
       }),
   );
   mount();
-  await screen.findByText('Bảo trì — 500.000 ₫');
+  await screen.findByText('Bảo trì');
   fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
   fireEvent.change(screen.getByLabelText(/Danh mục khoản chi/), { target: { value: 'Vệ sinh' } });
   fireEvent.change(screen.getByLabelText(/Số tiền/), { target: { value: '200000' } });
@@ -186,7 +225,7 @@ it('shows API failure without demo rows or false success and preserves the retry
   mock.expenses.mockRejectedValue({ status: 503 });
   mount();
   await screen.findByText('Không thể tải hoặc lưu dữ liệu tài chính. Vui lòng thử lại.');
-  expect(screen.queryByText('Bảo trì — 500.000 ₫')).not.toBeInTheDocument();
+  expect(screen.queryByText('Bảo trì')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
   mock.createExpense.mockRejectedValue({ status: 503 });
   fireEvent.submit(document.getElementById('expense-editor')!);

@@ -139,7 +139,9 @@ it('replaces a tariff through the immutable-source replacement route', async () 
 it('sends all required utility profile flags and current Location/Room scope', async () => {
   mount();
   fireEvent.click(screen.getByRole('tab', { name: 'Cấu hình phòng' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Gán biểu giá cho phòng' }));
+  const assign = await screen.findByRole('button', { name: 'Gán biểu giá cho phòng' });
+  await waitFor(() => expect(assign).not.toBeDisabled());
+  fireEvent.click(assign);
   await select('Phòng áp dụng biểu giá', 'A101');
   await select('Biểu giá áp dụng', /Synthetic supplier/);
   fill('Cấu hình phòng hiệu lực từ', '2026-12-01');
@@ -174,7 +176,9 @@ it('retains exact bill amounts, evidence and idempotency key after an uncertain 
   });
   mount();
   fireEvent.click(screen.getByRole('tab', { name: 'Hóa đơn nguồn & Đối soát' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Thêm hóa đơn nhà cung cấp' }));
+  const addBill = await screen.findByRole('button', { name: 'Thêm hóa đơn nhà cung cấp' });
+  await waitFor(() => expect(addBill).not.toBeDisabled());
+  fireEvent.click(addBill);
   await select('Công tơ tổng của hóa đơn', 'TOTAL-01');
   fill('Tháng hóa đơn nguồn', '2026-12');
   fill('Sản lượng trên hóa đơn nguồn', '123.0001');

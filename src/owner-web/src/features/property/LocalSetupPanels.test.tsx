@@ -195,6 +195,8 @@ it('publishes OperatingPolicy without overwriting a Contract and requests policy
   );
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Công bố nội quy' }));
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/publish'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
   await screen.findByText('Máy chủ đã công bố nội quy. Hợp đồng đã ký được giữ nguyên.');
   expect(state.request).toHaveBeenCalledWith('/api/v1/operating-policies/policy/publish', {
     method: 'POST',

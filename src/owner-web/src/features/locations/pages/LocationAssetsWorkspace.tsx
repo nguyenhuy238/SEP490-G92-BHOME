@@ -9,15 +9,29 @@ export function LocationAssetsWorkspace({ locationId }: { locationId: string }) 
   return (
     <LocationSection
       title="Tài sản & trang thiết bị"
-      description="Theo dõi tài sản thực tế hoặc chuẩn bị bộ mẫu trang bị và kiểm kê cho từng phòng. Công bố mẫu không tự xác nhận tài sản đã được lắp đặt."
+      description="Quản lý tài sản đã ghi nhận, bộ định mức trang bị và xác nhận kiểm kê theo từng phòng."
     >
       <Paper variant="outlined">
-        <Tabs value={tab} onChange={(_, value: number) => setTab(value)} variant="scrollable">
+        <Tabs
+          value={tab}
+          onChange={(_, value: number) => setTab(value)}
+          variant="scrollable"
+          aria-label="Quản lý tài sản tại cơ sở"
+        >
           <Tab label="Tài sản thực tế" />
-          <Tab label="Bộ mẫu & kiểm kê phòng" />
+          <Tab label="Bộ định mức trang bị" />
+          <Tab label="Kiểm kê phòng" />
         </Tabs>
       </Paper>
-      {tab === 0 ? <PropertyApiPage kind="assets" /> : <LocalAssetSetup locationId={locationId} />}
+      {tab === 0 ? (
+        <PropertyApiPage kind="assets" />
+      ) : (
+        <LocalAssetSetup
+          key={locationId}
+          locationId={locationId}
+          mode={tab === 1 ? 'templates' : 'inventory'}
+        />
+      )}
     </LocationSection>
   );
 }

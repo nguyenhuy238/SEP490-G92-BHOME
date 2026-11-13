@@ -45,7 +45,7 @@ export function IncidentWorkspace({ maintenance = false }: { maintenance?: boole
       return next;
     });
   }
-  const [location, setLocation] = useState(''),
+  const [location, setLocation] = useState(params.get('locationId') ?? ''),
     [room, setRoom] = useState(''),
     [status, setStatus] = useState(''),
     [severity, setSeverity] = useState(''),
