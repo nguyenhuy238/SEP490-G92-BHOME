@@ -46,7 +46,8 @@ internal sealed class EsmsSmsSender(HttpClient client, IOptions<SmsOptions> opti
             if (used > 16384) throw new ChannelDeliveryException("sms_response_invalid", outcomeUnknown: true);
             using var json = JsonDocument.Parse(bytes.AsMemory(0, used));
             var code = json.RootElement.TryGetProperty("CodeResult", out var result) ? result.ToString() : "";
-            if (code != "100") throw new ChannelDeliveryException(code == "124" ? "sms_duplicate_request" : "sms_provider_rejected",
+            if (code != "100") throw new ChannelDeliveryException(code switch
+            { "101" => "sms_authentication_failed", "104" => "sms_brandname_unapproved", "146" => "sms_template_unapproved", "124" => "sms_duplicate_request", _ => "sms_provider_rejected" },
                 outcomeUnknown: code == "124");
             var id = json.RootElement.TryGetProperty("SMSID", out var reference) ? reference.GetString() : null;
             if (string.IsNullOrWhiteSpace(id) || id.Length > 150 || id.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-'))
@@ -57,5 +58,7 @@ internal sealed class EsmsSmsSender(HttpClient client, IOptions<SmsOptions> opti
         { throw new ChannelDeliveryException("sms_timeout", outcomeUnknown: true); }
         catch (HttpRequestException) { throw new ChannelDeliveryException("sms_transport_unknown", outcomeUnknown: true); }
         catch (JsonException) { throw new ChannelDeliveryException("sms_response_invalid", outcomeUnknown: true); }
+        catch (IOException) { throw new ChannelDeliveryException("sms_response_unknown", outcomeUnknown: true); }
+        catch (InvalidOperationException) { throw new ChannelDeliveryException("sms_response_invalid", outcomeUnknown: true); }
     }
 }

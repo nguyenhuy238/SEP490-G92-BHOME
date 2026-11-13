@@ -6,9 +6,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Modules.Notifications;
 
-public sealed record DemoSmsView(Guid Id, Guid RecipientId, string MaskedPhone, string TemplateId, string Content,
-    DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt, string Mode = "Mock", string Status = "Simulated");
-
 // Deliberately ephemeral, bounded, and isolated from the durable notification/audit store.
 // Deduplication metadata survives content expiry, without retaining OTPs or phone numbers.
 internal sealed class DemoSmsInbox(IOptions<SmsOptions> options, IHostEnvironment environment, TimeProvider clock)
@@ -46,6 +43,7 @@ internal sealed class DemoSmsInbox(IOptions<SmsOptions> options, IHostEnvironmen
             (template is null || m.TemplateId == template)).OrderByDescending(m => m.CreatedAt).ToArray();
         }
     }
+    internal void Expire() { lock (gate) Prune(); }
     private void Prune()
     {
         var now = clock.GetUtcNow(); messages.RemoveAll(m => m.ExpiresAt <= now);
@@ -57,6 +55,8 @@ internal sealed class MockSmsSender(DemoSmsInbox inbox, Compact24DbContext db)
 {
     internal async Task<SmsReceipt> SendAsync(SmsMessage message, string content, CancellationToken token)
     {
+        if (await db.Users.AnyAsync(u => u.Email == null || !u.Email.EndsWith(".invalid"), token))
+            throw new ChannelDeliveryException("sms_demo_database_not_isolated");
         var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == message.RecipientId && u.IsActive, token);
         if (user?.Email?.EndsWith("@sms-demo.example.invalid", StringComparison.OrdinalIgnoreCase) != true ||
             user.UserName?.EndsWith(".sms-demo", StringComparison.Ordinal) != true ||

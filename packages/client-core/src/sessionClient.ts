@@ -109,6 +109,35 @@ export class SessionClient {
   resetPassword(userName: string, token: string, newPassword: string) {
     return this.send('reset-password', { userName, token, newPassword });
   }
+  requestSmsRecovery(identifier: string) {
+    return this.send<{ challengeId: string; retryAfterSeconds: number; expiresInSeconds: number }>(
+      'sms-recovery/request',
+      { identifier },
+    );
+  }
+  verifySmsRecovery(identifier: string, challengeId: string, otp: string) {
+    return this.send<{ authorization: string; expiresInSeconds: number }>('sms-recovery/verify', {
+      identifier,
+      challengeId,
+      otp,
+    });
+  }
+  async resetSmsPassword(
+    identifier: string,
+    challengeId: string,
+    authorization: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) {
+    await this.send('sms-recovery/reset', {
+      identifier,
+      challengeId,
+      authorization,
+      newPassword,
+      confirmPassword,
+    });
+    this.clear();
+  }
 
   private async send<T>(action: string, body: unknown, retry = true): Promise<T> {
     // Web Locks also serializes cookie mutations across tabs on supporting browsers.
@@ -122,6 +151,7 @@ export class SessionClient {
         error instanceof ApiError &&
         error.status === 401 &&
         this.current &&
+        !action.startsWith('sms-recovery/') &&
         ![
           'login',
           'refresh',
@@ -143,6 +173,7 @@ export class SessionClient {
     if (this.transport === 'web') headers.set('X-BHome-Client', 'web');
     if (
       this.current?.accessToken &&
+      !action.startsWith('sms-recovery/') &&
       ![
         'login',
         'refresh',

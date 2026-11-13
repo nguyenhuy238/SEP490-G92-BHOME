@@ -1,0 +1,11 @@
+version: 1
+name: esms
+slug: esms
+protocol: http
+port: 4510
+origin: rest.esms.vn
+interceptRequests: true
+scenarios:
+  - name: default
+    path: ./default.cjs
+    default: true

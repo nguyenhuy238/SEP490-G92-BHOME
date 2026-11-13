@@ -30,7 +30,9 @@ export function LoginPage() {
     (location.state as { passwordReset?: boolean } | null)?.passwordReset,
   );
   const loggedOutAll = Boolean((location.state as { loggedOutAll?: boolean } | null)?.loggedOutAll);
-  const [resetOpen, setResetOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(
+    Boolean((location.state as { emailRecovery?: boolean } | null)?.emailRecovery),
+  );
   const [resetUserName, setResetUserName] = useState('');
   const [resetValidation, setResetValidation] = useState('');
   const supportPhone = import.meta.env.VITE_SUPPORT_PHONE as string | undefined;
@@ -137,6 +139,9 @@ export function LoginPage() {
                   setResetOpen(true);
                 }}
               />
+              <Button component={RouterLink} to="/forgot-password">
+                Quên mật khẩu qua SMS
+              </Button>
             </Stack>
           )}
 

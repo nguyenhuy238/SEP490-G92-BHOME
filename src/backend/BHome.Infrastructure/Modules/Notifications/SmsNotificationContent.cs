@@ -33,7 +33,7 @@ internal sealed class SmsNotificationContent(Compact24DbContext db, TimeProvider
             var invoice = await db.Set<Invoice>().AsNoTracking().SingleOrDefaultAsync(i => i.Id == notice.RelatedObjectId && i.Status == InvoiceStatus.Final, t);
             if (invoice is null || !await db.Set<InvoiceRecipient>().AnyAsync(r => r.InvoiceId == invoice.Id && r.TenantUserId == recipient, t)) return null;
             if (notice.EventType == "INVOICE_OVERDUE" && (invoice.DueDate >= today || (await db.FinancialsAsync(invoice.Id, t)).OutstandingAmount <= 0)) return null;
-            return new Dictionary<string, string> { ["ROOM"] = invoice.RoomNumber, ["PERIOD"] = invoice.BillingPeriod.ToString("MM/yyyy") };
+            return new Dictionary<string, string> { ["ROOM"] = invoice.RoomNumber, ["PERIOD"] = invoice.BillingPeriod.ToString("MM/yyyy", System.Globalization.CultureInfo.InvariantCulture) };
         }
         if (notice.EventType is "CONTRACT_SIGNING_INVITATION" or "CONTRACT_EXPIRY_REMINDER")
         {
@@ -49,13 +49,13 @@ internal sealed class SmsNotificationContent(Compact24DbContext db, TimeProvider
                 if (contract.Status != ContractStatus.PendingSigning) return null;
                 var external = (recipient == contract.OwnerSignerId || recipient == contract.TenantUserId) &&
                     await db.Set<ContractSignature>().AnyAsync(s => s.ContractId == contract.Id && s.SignerUserId == recipient &&
-                        s.Status == SignatureStatus.Pending && s.ProviderReference != null, t);
+                        s.Status == SignatureStatus.Pending && s.ProviderReference != null && s.SnapshotHash == contract.SnapshotHash, t);
                 var email = await db.Users.Where(u => u.Id == recipient && u.EmailConfirmed).Select(u => u.Email).SingleOrDefaultAsync(t);
                 var invitation = email is not null && await db.Set<ContractSigningInvitation>().AnyAsync(i => i.ContractId == contract.Id &&
-                    i.RecipientEmail == email && i.RevokedAt == null && i.AcceptedAt == null && i.ExpiresAt > clock.GetUtcNow(), t);
+                    i.RecipientEmail == email && i.SnapshotHash == contract.SnapshotHash && i.RevokedAt == null && i.AcceptedAt == null && i.ExpiresAt > clock.GetUtcNow(), t);
                 if (!external && !invitation) return null;
             }
-            return new Dictionary<string, string> { ["CONTRACT_CODE"] = contract.Id.ToString("N")[..8].ToUpperInvariant(), ["EXPIRY_DATE"] = contract.EndDate.ToString("dd/MM/yyyy") };
+            return new Dictionary<string, string> { ["CONTRACT_CODE"] = contract.Id.ToString("N")[..8].ToUpperInvariant(), ["EXPIRY_DATE"] = contract.EndDate.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture) };
         }
         if (notice.EventType == "INCIDENT_EMERGENCY_SUBMITTED")
         {

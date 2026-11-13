@@ -35,6 +35,7 @@ public sealed partial class Compact24NotificationMvpTests
             var phone = phonePrefix + index;
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET username={name},normalized_username={name.ToUpperInvariant()},email={name + "@sms-demo.example.invalid"},normalized_email={(name + "@sms-demo.example.invalid").ToUpperInvariant()},phone={phone},phone_confirmed=true WHERE id={account.Id}");
             config[$"Sms:DemoAccounts:{account.Id}"] = phone;
+            account.Email = name + "@sms-demo.example.invalid"; account.UserName = name; account.PhoneNumber = phone;
         }
         for (var index = 0; index < 6; index++) config[$"Sms:EnabledTemplates:{index}"] = $"SMS-0{index + 1}";
         return fixture.Factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(config)));
@@ -93,6 +94,11 @@ public sealed partial class Compact24NotificationMvpTests
         var sms = Assert.Single(messages, m => m.TemplateId == "SMS-03");
         Assert.Contains(invoice.RoomNumber, sms.Content); Assert.Contains(invoice.BillingPeriod.ToString("MM/yyyy"), sms.Content);
         Assert.Equal("Simulated", sms.Status);
+        // Changing a confirmed destination must not replay an already published invoice event.
+        foreach (var user in w.Tenants.Take(2))
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET phone={"0912345678"} WHERE id={user.Id}");
+        await DispatchSms(host);
+        Assert.Single(host.Services.GetRequiredService<DemoSmsInbox>().List(), m => m.TemplateId == "SMS-03");
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM notifications d JOIN notifications n ON n.id=(d.event_data->>'notificationId')::uuid WHERE d.event_data->>'channel'='SMS' AND d.delivery_status='Simulated' AND n.related_entity_id={invoice.Id}").SingleAsync());
     }
 

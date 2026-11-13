@@ -136,10 +136,17 @@ internal sealed class SmsPasswordRecovery(CompactNotificationWriter sql, IIdenti
                 await sql.Execute("UPDATE notifications SET delivery_status=@status,delivery_history=delivery_history||jsonb_build_array(@history::jsonb) WHERE id=@id AND delivery_status='Processing'", t,
                     ("status", receipt.Status), ("history", history), ("id", id));
             }
-            catch (Exception e) when (e is ChannelDeliveryException or HttpRequestException or OperationCanceledException)
+            catch (ChannelDeliveryException e)
             {
-                // Delivery cannot disclose account existence. No automatic retry of an OTP with unknown submission.
-                await sql.Execute("UPDATE notifications SET delivery_status='Failed' WHERE id=@id AND delivery_status='Processing'", CancellationToken.None, ("id", id));
+                var state = e.OutcomeUnknown ? "PendingReview" : e.Retryable ? "Pending" : "Failed";
+                await sql.Execute("UPDATE notifications SET delivery_status=@state WHERE id=@id AND delivery_status='Processing'", CancellationToken.None, ("state", state), ("id", id));
+                // Only a definite transient rejection may retry, with the same encrypted OTP and RequestId.
+                if (e.Retryable && !e.OutcomeUnknown) throw;
+            }
+            catch (Exception e) when (e is HttpRequestException or OperationCanceledException)
+            {
+                // An owner who actually received the OTP may still prove possession; never double-submit an unknown outcome.
+                await sql.Execute("UPDATE notifications SET delivery_status='PendingReview' WHERE id=@id AND delivery_status='Processing'", CancellationToken.None, ("id", id));
                 if (t.IsCancellationRequested) throw;
             }
         }

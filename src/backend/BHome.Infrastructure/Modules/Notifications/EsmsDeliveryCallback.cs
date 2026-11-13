@@ -11,7 +11,12 @@ public sealed class EsmsDeliveryCallback
     private readonly CompactNotificationWriter sql;
     private readonly SmsOptions options;
     internal EsmsDeliveryCallback(CompactNotificationWriter sql, IOptions<SmsOptions> options) { this.sql = sql; this.options = options.Value; }
-    public static bool TrustedSource(IPAddress? address) => address?.MapToIPv4().ToString() is "103.29.26.39" or "103.29.26.80" or "103.29.27.39";
+    public static bool TrustedSource(IPAddress? address)
+    {
+        if (address?.IsIPv4MappedToIPv6 == true) address = address.MapToIPv4();
+        return address?.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
+            address.ToString() is "103.29.26.39" or "103.29.26.80" or "103.29.27.39";
+    }
     public async Task<bool> ApplyAsync(EsmsDeliveryReport report, IPAddress? source, CancellationToken t)
     {
         if (!options.Enabled || options.Mode != "Production" || !options.ProductionEnabled || !TrustedSource(source) ||

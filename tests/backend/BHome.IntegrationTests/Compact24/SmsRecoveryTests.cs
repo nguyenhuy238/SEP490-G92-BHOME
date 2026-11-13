@@ -16,6 +16,44 @@ namespace BHome.IntegrationTests.Compact24;
 
 public sealed partial class Compact24NotificationMvpTests
 {
+    private sealed class SmsFaultState(bool unknown) { internal int Calls; internal bool Unknown = unknown; }
+    private sealed class FaultOnceSms(SmsGateway inner, SmsFaultState state) : ISmsSender
+    {
+        public bool IsConfigured => inner.IsConfigured;
+        public async Task<SmsReceipt> SendAsync(SmsMessage message, CancellationToken token)
+        {
+            if (Interlocked.Increment(ref state.Calls) == 1)
+            {
+                if (state.Unknown) { await inner.SendAsync(message, token); throw new ChannelDeliveryException("synthetic_unknown", outcomeUnknown: true); }
+                throw new ChannelDeliveryException("synthetic_transient", retryable: true);
+            }
+            return await inner.SendAsync(message, token);
+        }
+    }
+    [CompactPostgresTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SmsOtpRetriesDefiniteTransientRejectionButNeverResubmitsUnknownAcceptance(bool unknown)
+    {
+        var w = await Seed(); using var sms = await SmsHost(w); using var recovery = RecoveryHost(sms, new ResidenceClock(DateTimeOffset.UtcNow));
+        var fault = new SmsFaultState(unknown);
+        using var host = recovery.WithWebHostBuilder(b => b.ConfigureServices(s =>
+        {
+            s.AddScoped<SmsGateway>(); s.AddScoped<ISmsSender>(p => new FaultOnceSms(p.GetRequiredService<SmsGateway>(), fault));
+        }));
+        using var client = host.CreateClient(); var identifier = w.Tenants[0].UserName!; var request = await RecoveryRequest(client, identifier);
+        Assert.True(await host.Services.GetRequiredService<PostgresJobWorker>().ProcessAllowedAsync(default, ["sms-recovery-delivery"]));
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        Assert.Equal(unknown ? "PendingReview" : "Pending", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={request.ChallengeId}").SingleAsync());
+        if (!unknown)
+        {
+            Assert.Empty(host.Services.GetRequiredService<DemoSmsInbox>().List(w.Tenants[0].Id));
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE operational_tasks SET next_run_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE task_type='SYSTEM_JOB' AND task_data->>'idempotencyKey'={"sms-recovery:" + request.ChallengeId}");
+        }
+        var otp = await RecoveryOtp(host, w.Tenants[0].Id);
+        Assert.Equal(unknown ? 1 : 2, fault.Calls);
+        Assert.Equal(HttpStatusCode.OK, (await VerifyRecovery(client, identifier, request, otp)).StatusCode);
+    }
     private static WebApplicationFactory<Program> RecoveryHost(WebApplicationFactory<Program> sms, ResidenceClock clock, int maxIp = 200) => sms.WithWebHostBuilder(b =>
     {
         b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>

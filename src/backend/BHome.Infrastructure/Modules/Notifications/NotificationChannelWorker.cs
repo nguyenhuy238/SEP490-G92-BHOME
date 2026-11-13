@@ -44,12 +44,15 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                 INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
                 SELECT gen_random_uuid(),'OUTBOX','sms:'||md5(n.event_key||':'||p.phone),'CHANNEL_DELIVERY',
                   jsonb_build_object('schemaVersion',1,'recordType','ChannelDelivery','notificationId',n.id,'recipient',n.recipient_user_id,
+                    'notificationIds',jsonb_agg(n.id::text) OVER(PARTITION BY n.event_key,p.phone),
                     'role',n.event_data->>'audienceRole','channel','SMS','eventType',n.event_data->'state'->>'eventType'),@now,'Pending',@now
                 FROM notifications n JOIN users u ON u.id=n.recipient_user_id
                 CROSS JOIN LATERAL (SELECT regexp_replace(u.phone,'[ .()+-]','','g') AS digits) d
                 CROSS JOIN LATERAL (SELECT CASE WHEN d.digits LIKE '0%' THEN '84'||substring(d.digits FROM 2) ELSE d.digits END AS phone) p
                 WHERE n.record_kind='INBOX' AND n.event_data->'state'->'channels' ? 'SMS'
                   AND u.is_active AND u.phone_confirmed AND p.phone ~ '^84[35789][0-9]{8}$'
+                  AND NOT EXISTS(SELECT 1 FROM notifications d WHERE d.record_kind='OUTBOX' AND d.event_data->>'channel'='SMS'
+                    AND (d.event_data->>'notificationId'=n.id::text OR d.event_data->'notificationIds' ? n.id::text))
                 ORDER BY n.event_at,n.id
                 ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
                 """, t, ("now", sql.Now));
@@ -111,7 +114,9 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                     var template = SmsNotificationPolicy.Template(notice.EventType, claim.Role);
                     var variables = await smsContent.BuildAsync(notice, claim.Recipient, t);
                     var phone = VietnameseSmsPhone.Normalize(await sql.Scalar<string>("SELECT phone FROM users WHERE id=@id AND is_active AND phone_confirmed", t, ("id", claim.Recipient)));
-                    if (template is null || !smsOptions.Value.EnabledTemplates.Contains(template) || variables is null || phone is null) state = "Suppressed";
+                    if (template is null || !smsOptions.Value.EnabledTemplates.Contains(template) || variables is null || phone is null ||
+                        !await sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM notifications d JOIN notifications n ON n.id=@notice WHERE d.id=@id AND d.event_key='sms:'||md5(n.event_key||':'||@phone))", t,
+                            ("id", claim.Id), ("notice", claim.Notice), ("phone", phone))) state = "Suppressed";
                     else
                     {
                         // RequestId is stable across retries and independent of provider acceptance.

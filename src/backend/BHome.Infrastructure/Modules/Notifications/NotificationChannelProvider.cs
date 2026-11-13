@@ -18,6 +18,7 @@ internal sealed class NotificationChannelProvider(IOptions<NotificationChannelOp
     {
         t.ThrowIfCancellationRequested();
         if (!IsConfigured(message.Channel)) throw new IntegrationUnavailableException("Notification channel is not configured.");
+        if (message.Channel == "SMS") throw new ChannelDeliveryException("sms_typed_message_required");
         if (message.Channel == "EMAIL" && email.IsConfigured) return await email.SendAsync(message, t);
         if (Sandbox) return "sandbox:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(message.IdempotencyKey)))[..32];
         throw new IntegrationUnavailableException("Notification channel is not configured.");
