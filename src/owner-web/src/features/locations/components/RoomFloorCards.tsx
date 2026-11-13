@@ -17,14 +17,15 @@ import type { RoomConfiguration } from '../../../../../../packages/client-core/s
 import type { SetupDocument } from '../../../../../../packages/client-core/src/propertySetup';
 import type { RoomProvenanceData } from '../../../../../../packages/client-core/src/locationSetup';
 import { useRoomOperations } from './useRoomOperations';
+import { roomStatusColors } from '../../../theme/theme';
 
 const states = [
-  { label: 'Trống khai thác', color: '#176b43', background: '#eaf7ef' },
-  { label: 'Đang giữ chỗ', color: '#875509', background: '#fff6e5' },
-  { label: 'Đang có khách thuê', color: '#1e4ebc', background: '#eaf1ff' },
-  { label: 'Ngừng khai thác', color: '#475569', background: '#f0f2f5' },
+  { label: 'Trống khai thác', ...roomStatusColors.available },
+  { label: 'Đang giữ chỗ', ...roomStatusColors.onHold },
+  { label: 'Đang có khách thuê', ...roomStatusColors.occupied },
+  { label: 'Ngừng khai thác', ...roomStatusColors.unavailable },
 ];
-const unknownState = { label: 'Chưa xác định', color: '#475569', background: '#f1f5f9' };
+const unknownState = { label: 'Chưa xác định', ...roomStatusColors.unavailable };
 
 export function RoomFloorCards({
   rooms,
@@ -56,20 +57,20 @@ export function RoomFloorCards({
   );
   const unknownCount = visibleRooms.filter((room) => !states[room.status]).length;
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ minWidth: 0 }}>
       <Stack
         direction={{ xs: 'column', md: 'row' }}
         spacing={2}
-        sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, mb: 2.5 }}
+        sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, mb: 2 }}
       >
         <Box>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Layers3 size={22} color="#255dde" />
-            <Typography component="h2" sx={{ fontSize: 19, fontWeight: 800 }}>
+            <Typography component="h2" variant="h2">
               Sơ đồ phòng theo tầng
             </Typography>
           </Stack>
-          <Typography sx={{ mt: 0.75, color: 'text.secondary', fontSize: 13 }}>
+          <Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 14 }}>
             {visibleRooms.length} phòng đang hiển thị · {rooms.length} trên trang này / {total}{' '}
             phòng phù hợp
           </Typography>
@@ -93,25 +94,20 @@ export function RoomFloorCards({
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
         Trạng thái các phòng đang hiển thị
       </Typography>
-      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, mb: 3 }}>
-        {[...states, ...(unknownCount ? [unknownState] : [])].map(({ label, color }, index) => (
+      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1.5, mb: 2.5 }}>
+        {[...states, ...(unknownCount ? [unknownState] : [])].map(({ label, fill }, index) => (
           <Box
             key={label}
             sx={{
               display: 'flex',
               gap: 1,
               alignItems: 'center',
-              px: 1.5,
-              py: 1,
-              bgcolor: 'background.paper',
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: '6px',
+              py: 0.5,
             }}
           >
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color }} />
-            <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{label}</Typography>
-            <Typography sx={{ fontSize: 13, fontWeight: 750, fontVariantNumeric: 'tabular-nums' }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: fill }} />
+            <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>{label}</Typography>
+            <Typography sx={{ fontSize: 14, fontWeight: 750, fontVariantNumeric: 'tabular-nums' }}>
               {index === states.length
                 ? unknownCount
                 : visibleRooms.filter((room) => room.status === index).length}
@@ -146,18 +142,18 @@ export function RoomFloorCards({
         </Alert>
       )}
       {visibleFloors.map((value) => (
-        <Box key={value} sx={{ mb: 3.5 }}>
+        <Box key={value} sx={{ mb: 3 }}>
           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1.75 }}>
             <Typography
               sx={{
-                fontSize: 14,
-                color: 'text.secondary',
+                fontSize: 16,
+                color: 'text.primary',
                 fontWeight: 800,
               }}
             >
               {value === 'Chưa phân tầng' ? value : `Tầng ${value}`}
             </Typography>
-            <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+            <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
               {rooms.filter((room) => (room.floor ?? 'Chưa phân tầng') === value).length} phòng
             </Typography>
             <Box sx={{ flex: 1, borderBottom: '1px solid', borderColor: 'divider' }} />
@@ -165,12 +161,8 @@ export function RoomFloorCards({
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'repeat(2, minmax(0, 1fr))',
-                xl: 'repeat(3, minmax(0, 1fr))',
-              },
-              gap: 2,
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
+              gap: 1.5,
             }}
           >
             {rooms
@@ -192,6 +184,8 @@ export function RoomFloorCards({
                     variant="outlined"
                     sx={{
                       overflow: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column',
                       borderRadius: '12px',
                       borderColor: 'divider',
                       transition: 'border-color .15s',
@@ -202,14 +196,22 @@ export function RoomFloorCards({
                       onClick={() => inspect(room.id)}
                       aria-label={`Xem phòng ${room.roomNumber}`}
                       sx={{
-                        display: 'block',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'stretch',
+                        justifyContent: 'flex-start',
+                        flex: 1,
                         width: '100%',
                         textAlign: 'left',
-                        p: 2,
-                        '&.Mui-focusVisible': { outline: '3px solid #93c5fd', outlineOffset: -3 },
+                        p: 1.75,
+                        '&.Mui-focusVisible': {
+                          outline: '2px solid',
+                          outlineColor: 'primary.main',
+                          outlineOffset: -2,
+                        },
                       }}
                     >
-                      <Stack spacing={1.5}>
+                      <Stack spacing={1.25}>
                         <Stack
                           direction="row"
                           sx={{
@@ -220,9 +222,14 @@ export function RoomFloorCards({
                           }}
                         >
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                            <DoorOpen size={20} color={state.color} />
+                            <DoorOpen size={20} color={state.foreground} />
                             <Typography
-                              sx={{ fontSize: 20, fontWeight: 750, overflowWrap: 'anywhere' }}
+                              sx={{
+                                fontSize: 23,
+                                fontWeight: 800,
+                                lineHeight: 1.2,
+                                overflowWrap: 'anywhere',
+                              }}
                             >
                               {room.roomNumber}
                             </Typography>
@@ -231,24 +238,22 @@ export function RoomFloorCards({
                             size="small"
                             label={state.label}
                             sx={{
-                              bgcolor: state.background,
-                              color: state.color,
+                              bgcolor: state.surface,
+                              color: state.foreground,
                               fontWeight: 650,
-                              borderRadius: '6px',
+                              borderRadius: '10px',
                               fontSize: 12,
                             }}
                           />
                         </Stack>
-                        <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+                        <Typography
+                          sx={{ fontSize: 14, color: 'text.secondary', overflowWrap: 'anywhere' }}
+                        >
                           {source
-                            ? `${source.name} · v${source.roomDefaultsVersion}`
+                            ? source.name
                             : provenance
                               ? 'Chưa ghi nhận gợi ý'
                               : 'Chưa có thông tin gợi ý'}
-                        </Typography>
-                        <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-                          {room.floor ? `Tầng ${room.floor}` : 'Chưa phân tầng'} · Sức chứa{' '}
-                          {room.capacity} người
                         </Typography>
                         <Stack
                           direction="row"
@@ -261,7 +266,7 @@ export function RoomFloorCards({
                             borderColor: 'divider',
                           }}
                         >
-                          <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+                          <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>
                             Người ở / Sức chứa
                           </Typography>
                           <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
@@ -269,7 +274,7 @@ export function RoomFloorCards({
                             <Typography
                               sx={{
                                 fontWeight: 750,
-                                fontSize: 16,
+                                fontSize: 18,
                                 fontVariantNumeric: 'tabular-nums',
                               }}
                             >
@@ -293,7 +298,13 @@ export function RoomFloorCards({
                           }}
                         >
                           {reports.length > 0 && <TriangleAlert size={16} />}
-                          <Typography sx={{ fontSize: 13, fontWeight: reports.length ? 700 : 400 }}>
+                          <Typography
+                            sx={{
+                              fontSize: 13,
+                              fontWeight: reports.length ? 700 : 400,
+                              overflowWrap: 'anywhere',
+                            }}
+                          >
                             {reports.length
                               ? `${emergency ? 'Có sự cố khẩn cấp' : 'Có báo cáo sự cố'} · ${reports.length} đang mở`
                               : incidents.data?.complete
@@ -302,8 +313,8 @@ export function RoomFloorCards({
                           </Typography>
                         </Stack>
                         {!occupied && (
-                          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-                            Chưa có dữ liệu số người ở theo hợp đồng.
+                          <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+                            Chưa có số liệu người ở.
                           </Typography>
                         )}
                       </Stack>
@@ -311,21 +322,38 @@ export function RoomFloorCards({
                     <Stack
                       direction="row"
                       sx={{
-                        px: 2,
-                        py: 1,
+                        px: 1,
+                        py: 0.5,
                         bgcolor: 'background.default',
                         borderTop: '1px solid',
                         borderColor: 'divider',
                         justifyContent: 'space-between',
                         flexWrap: 'wrap',
                         gap: 0.5,
+                        mt: 'auto',
                       }}
                     >
-                      <Button endIcon={<ArrowUpRight size={15} />} onClick={() => inspect(room.id)}>
+                      <Button
+                        size="small"
+                        endIcon={<ArrowUpRight size={15} />}
+                        onClick={() => inspect(room.id)}
+                        sx={{
+                          minHeight: { xs: 44, sm: 36 },
+                          '@media (pointer:coarse)': { minHeight: 44 },
+                        }}
+                      >
                         Xem chi tiết
                       </Button>
                       {edit && (
-                        <Button startIcon={<Pencil size={14} />} onClick={() => edit(room)}>
+                        <Button
+                          size="small"
+                          startIcon={<Pencil size={14} />}
+                          onClick={() => edit(room)}
+                          sx={{
+                            minHeight: { xs: 44, sm: 36 },
+                            '@media (pointer:coarse)': { minHeight: 44 },
+                          }}
+                        >
                           Chỉnh sửa
                         </Button>
                       )}

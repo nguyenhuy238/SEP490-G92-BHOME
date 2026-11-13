@@ -160,7 +160,15 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
     save.reset();
   }
   return (
-    <Stack spacing={2} sx={{ maxWidth: 920 }}>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))',
+        gap: 2.5,
+        alignItems: 'start',
+        minWidth: 0,
+      }}
+    >
       <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>
         <form
           onSubmit={(event) => {
@@ -172,11 +180,8 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
         >
           <Stack spacing={3}>
             <div>
-              <Typography variant="h6" sx={{ fontWeight: 750 }}>
+              <Typography component="h2" variant="h6" sx={{ fontWeight: 800 }}>
                 Thông tin cơ sở
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Cập nhật thông tin nhận diện và trạng thái khai thác của cơ sở.
               </Typography>
             </div>
             <TextField
@@ -204,7 +209,7 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
               slotProps={{ htmlInput: { maxLength: 1000 } }}
             />
             <Divider />
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800 }}>
               Trạng thái khai thác
             </Typography>
             <TextField
@@ -278,8 +283,12 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
               spacing={1}
               sx={{ alignItems: { sm: 'center' }, justifyContent: 'flex-end' }}
             >
-              <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto' }}>
-                {dirty ? 'Có thay đổi chưa lưu' : `Phiên bản đã lưu: ${version}`}
+              <Typography
+                variant="body2"
+                color={dirty ? 'primary.main' : 'text.secondary'}
+                sx={{ mr: 'auto', fontWeight: dirty ? 650 : 400 }}
+              >
+                {dirty ? 'Có thay đổi chưa lưu' : 'Đã lưu'}
               </Typography>
               <Button
                 disabled={!canManage || save.isPending || (!dirty && !reason)}
@@ -310,11 +319,8 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
       {canManage && (
         <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>
           <Stack spacing={2}>
-            <Typography variant="h6" sx={{ fontWeight: 750 }}>
-              Thông tin cấu hình ban đầu
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Thông tin nhận diện, liên hệ và mô tả cơ sở. Lưu riêng với trạng thái khai thác.
+            <Typography component="h2" variant="h6" sx={{ fontWeight: 800 }}>
+              Thông tin bổ sung
             </Typography>
             {metadata.isError ? (
               <Alert
@@ -401,10 +407,16 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
                   spacing={1}
                   sx={{ alignItems: { sm: 'center' }, justifyContent: 'flex-end' }}
                 >
-                  <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto' }}>
+                  <Typography
+                    variant="body2"
+                    color={metadataDraft ? 'primary.main' : 'text.secondary'}
+                    sx={{ mr: 'auto', fontWeight: metadataDraft ? 650 : 400 }}
+                  >
                     {metadataDraft
                       ? 'Có cấu hình chưa lưu'
-                      : `Phiên bản đã lưu: ${metadata.data?.version ?? '—'}`}
+                      : metadata.data
+                        ? 'Đã lưu'
+                        : 'Chưa thiết lập'}
                   </Typography>
                   <Button
                     disabled={!metadataDraft || saveMetadata.isPending}
@@ -428,6 +440,6 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
           </Stack>
         </Paper>
       )}
-    </Stack>
+    </Box>
   );
 }

@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { Fragment, useId, useState } from 'react';
 import {
   Alert,
+  Box,
   Button,
+  Chip,
   Checkbox,
   Dialog,
   DialogActions,
@@ -27,6 +29,19 @@ import { UtilityField } from '../../property/UtilityFormTools';
 import type { UtilityFieldDefinition } from '../../property/UtilityFormTools';
 import { useSharedConfigurationApi } from '../useSharedConfigurationApi';
 import { MoneyField } from '../../../components/common/MoneyField';
+import {
+  configurationDialogContentSx,
+  configurationDialogPaperSx,
+  configurationFormGridSx,
+} from '../SharedConfigurationLayout';
+
+const resourceNames: Record<SharedResource, string> = {
+  'room-type-templates': 'mẫu loại phòng',
+  'asset-catalog': 'loại tài sản',
+  'asset-templates': 'mẫu tài sản',
+  'fee-templates': 'mẫu giá & biểu phí',
+  'policy-templates': 'mẫu chính sách',
+};
 
 const feeDefaults: Record<string, { chargeCode: string; method: string; unit: string }> = {
   Rent: { chargeCode: 'RENT', method: 'FixedPerRoomPerMonth', unit: 'VND/month' },
@@ -57,6 +72,7 @@ export function SharedTemplateEditor({
 }) {
   const api = useSharedConfigurationApi();
   const { session } = useAuth();
+  const titleId = useId();
   const [name, setName] = useState(document?.name ?? '');
   const [description, setDescription] = useState(document?.description ?? '');
   const [values, setValues] = useState<Record<string, string>>(() => {
@@ -141,6 +157,14 @@ export function SharedTemplateEditor({
                 ],
               },
               {
+                name: 'scope',
+                label: 'Phạm vi',
+                options: [
+                  { id: 'Location', label: 'Cơ sở' },
+                  { id: 'Room', label: 'Phòng' },
+                ],
+              },
+              {
                 name: 'chargeCode',
                 label: 'Mã khoản thu',
                 disabled: values.category !== 'ServiceFee',
@@ -159,16 +183,8 @@ export function SharedTemplateEditor({
                       ],
                 disabled: values.category !== 'ServiceFee',
               },
-              { name: 'referenceRate', label: 'Đơn giá tham khảo' },
               { name: 'unit', label: 'Đơn vị', disabled: true },
-              {
-                name: 'scope',
-                label: 'Phạm vi',
-                options: [
-                  { id: 'Location', label: 'Cơ sở' },
-                  { id: 'Room', label: 'Phòng' },
-                ],
-              },
+              { name: 'referenceRate', label: 'Đơn giá tham khảo' },
               { name: 'effectiveFrom', label: 'Hiệu lực từ', type: 'date' },
               { name: 'effectiveTo', label: 'Hiệu lực đến', type: 'date', optional: true },
             ]
@@ -176,6 +192,7 @@ export function SharedTemplateEditor({
             ? [{ name: 'effectiveFrom', label: 'Hiệu lực từ', type: 'date' }]
             : [];
   function submit() {
+    if (busy) return;
     if (resource === 'fee-templates') {
       const defaults = feeDefaults[values.category];
       const code = (values.chargeCode ?? '').trim().toUpperCase();
@@ -233,20 +250,53 @@ export function SharedTemplateEditor({
     save({ name, description, data, expectedVersion: document?.version ?? 0 });
   }
   return (
-    <Dialog open fullWidth maxWidth="md" onClose={busy ? undefined : close}>
-      <DialogTitle>{document ? 'Sửa bản nháp' : 'Tạo mẫu dùng chung'}</DialogTitle>
-      <form
+    <Dialog
+      open
+      fullWidth
+      maxWidth="md"
+      aria-labelledby={titleId}
+      slotProps={{ paper: { sx: configurationDialogPaperSx } }}
+      onClose={busy ? undefined : close}
+    >
+      <DialogTitle id={`${titleId}-container`} sx={{ px: { xs: 1.5, sm: 2 }, py: 1.5 }}>
+        <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+          <Typography id={titleId} component="span" variant="h2">
+            {document ? `Sửa ${resourceNames[resource]}` : `Tạo ${resourceNames[resource]}`}
+          </Typography>
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+          >
+            <Chip size="small" label="Bản nháp" variant="outlined" />
+            {document && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ overflowWrap: 'anywhere' }}
+              >
+                {document.name} · Phiên bản {document.edition} · Lần cập nhật {document.version}
+              </Typography>
+            )}
+          </Stack>
+        </Stack>
+      </DialogTitle>
+      <Box
+        component="form"
+        sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: '1 1 auto' }}
         onSubmit={(event) => {
           event.preventDefault();
           submit();
         }}
       >
-        <DialogContent>
-          <Stack spacing={2}>
+        <DialogContent dividers sx={configurationDialogContentSx}>
+          <Stack spacing={1.5}>
             {error && <Alert severity="error">{error}</Alert>}
             {validationError && <Alert severity="error">{validationError}</Alert>}
             <TextField
               required
+              disabled={busy}
               label="Tên mẫu"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -254,71 +304,108 @@ export function SharedTemplateEditor({
             />
             <TextField
               multiline
+              disabled={busy}
               label="Mô tả"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
-            {fields.map((field) => (
-              <Stack key={field.name} spacing={1}>
-                {resource === 'fee-templates' &&
-                  field.name === 'chargeCode' &&
-                  values.category === 'ServiceFee' && (
-                    <TextField
-                      select
-                      label="Loại dịch vụ gợi ý"
-                      value={
-                        ['INTERNET', 'CLEANING', 'PARKING', 'MANAGEMENT'].includes(
-                          values.chargeCode,
-                        )
-                          ? values.chargeCode
-                          : ''
-                      }
-                      onChange={(e) =>
-                        updateFields((old) => ({ ...old, chargeCode: e.target.value }))
-                      }
+            {fields.length > 0 && (
+              <Box
+                sx={{
+                  ...configurationFormGridSx,
+                  pt: 1.5,
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                }}
+              >
+                <Typography variant="h2" component="h3" sx={{ gridColumn: '1 / -1' }}>
+                  Cấu hình mẫu
+                </Typography>
+                {fields.map((field) => (
+                  <Fragment key={field.name}>
+                    {resource === 'fee-templates' &&
+                      field.name === 'chargeCode' &&
+                      values.category === 'ServiceFee' && (
+                        <TextField
+                          select
+                          disabled={busy}
+                          label="Loại dịch vụ gợi ý"
+                          value={
+                            ['INTERNET', 'CLEANING', 'PARKING', 'MANAGEMENT'].includes(
+                              values.chargeCode,
+                            )
+                              ? values.chargeCode
+                              : ''
+                          }
+                          onChange={(e) =>
+                            updateFields((old) => ({ ...old, chargeCode: e.target.value }))
+                          }
+                        >
+                          <MenuItem value="">Dịch vụ khác / nhập mã riêng</MenuItem>
+                          <MenuItem value="INTERNET">Internet</MenuItem>
+                          <MenuItem value="CLEANING">Vệ sinh</MenuItem>
+                          <MenuItem value="PARKING">Gửi xe</MenuItem>
+                          <MenuItem value="MANAGEMENT">Quản lý tòa nhà</MenuItem>
+                        </TextField>
+                      )}
+                    <Box
+                      sx={{
+                        minWidth: 0,
+                        gridColumn:
+                          ['referenceRent', 'referencePrice', 'referenceRate'].includes(
+                            field.name,
+                          ) ||
+                          (field.name === 'chargeCode' && values.category !== 'ServiceFee')
+                            ? '1 / -1'
+                            : undefined,
+                      }}
                     >
-                      <MenuItem value="">Dịch vụ khác / nhập mã riêng</MenuItem>
-                      <MenuItem value="INTERNET">Internet</MenuItem>
-                      <MenuItem value="CLEANING">Vệ sinh</MenuItem>
-                      <MenuItem value="PARKING">Gửi xe</MenuItem>
-                      <MenuItem value="MANAGEMENT">Quản lý tòa nhà</MenuItem>
-                    </TextField>
-                  )}
-                {['referenceRent', 'referencePrice', 'referenceRate'].includes(field.name) ? (
-                  <MoneyField
-                    label={field.label}
-                    required={!field.optional}
-                    value={values[field.name] ?? ''}
-                    allowDecimal
-                    onValueChange={(raw) => updateFields((old) => ({ ...old, [field.name]: raw }))}
-                  />
-                ) : (
-                  <UtilityField field={field} values={values} setValues={updateFields} />
-                )}
-              </Stack>
-            ))}
+                      {['referenceRent', 'referencePrice', 'referenceRate'].includes(field.name) ? (
+                        <MoneyField
+                          label={field.label}
+                          disabled={busy}
+                          required={!field.optional}
+                          value={values[field.name] ?? ''}
+                          allowDecimal
+                          onValueChange={(raw) =>
+                            updateFields((old) => ({ ...old, [field.name]: raw }))
+                          }
+                        />
+                      ) : (
+                        <UtilityField
+                          field={{ ...field, disabled: busy || field.disabled }}
+                          values={values}
+                          setValues={updateFields}
+                        />
+                      )}
+                    </Box>
+                  </Fragment>
+                ))}
+              </Box>
+            )}
             {resource === 'fee-templates' && values.category === 'ServiceFee' && (
-              <Alert severity="info">
-                Nhập mã riêng cho từng dịch vụ, ví dụ INTERNET, CLEANING hoặc PARKING. Chọn phí theo
-                phòng/tháng hoặc người/tháng. Đơn giá được khóa theo hợp đồng.
-              </Alert>
+              <Typography variant="caption" color="text.secondary">
+                Mỗi dịch vụ cần mã riêng. Đơn giá đã ký được giữ nguyên trong hợp đồng.
+              </Typography>
             )}
             {resource === 'room-type-templates' && (
               <>
                 <TextField
                   multiline
+                  disabled={busy}
                   label="Tiện ích (mỗi dòng một mục)"
                   value={values.amenities ?? ''}
                   onChange={(e) => setValues((old) => ({ ...old, amenities: e.target.value }))}
                 />
-                <Alert severity="info">
-                  Mẫu lưu các giá trị gợi ý. Tạo phòng và xác nhận giá áp dụng là các bước riêng.
-                </Alert>
+                <Typography variant="caption" color="text.secondary">
+                  Giá trị gợi ý không tự thay đổi phòng hoặc giá hợp đồng hiện có.
+                </Typography>
               </>
             )}
             {resource === 'policy-templates' && (
               <TextField
                 required
+                disabled={busy}
                 multiline
                 minRows={6}
                 label="Nội dung nội quy"
@@ -328,115 +415,163 @@ export function SharedTemplateEditor({
             )}
             {resource === 'asset-templates' && (
               <>
+                <Typography
+                  variant="h2"
+                  component="h3"
+                  sx={{ pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}
+                >
+                  Tài sản trong mẫu · {items.length} loại
+                </Typography>
                 {catalog.isPending && <LoadingState />}
                 {catalog.isError && (
                   <ErrorState error={catalog.error} retry={() => void catalog.refetch()} />
                 )}
-                <TextField
-                  select
-                  label="Tài sản trong danh mục"
-                  value={catalogId}
-                  onChange={(e) => setCatalogId(e.target.value)}
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  sx={{ alignItems: { sm: 'center' } }}
                 >
-                  <MenuItem value="">Chọn</MenuItem>
-                  {catalog.data?.map((item) => (
-                    <MenuItem key={item.id} value={item.id}>
-                      {item.name} · phiên bản {item.edition}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <Button
-                  disabled={!catalogId || busy}
-                  onClick={() => {
-                    const selected = catalog.data?.find((d) => d.id === catalogId);
-                    if (!selected) return;
-                    setItems((old) => [
-                      ...old,
-                      {
-                        catalogId: selected.id,
-                        catalogVersion: selected.version,
-                        quantity: 1,
-                        required: true,
-                        trackingMode: 'Serialized',
-                        catalog: {
-                          ...(selected.data as AssetCatalogData),
-                          familyId: selected.familyId,
-                          edition: selected.edition,
-                          name: selected.name,
+                  <TextField
+                    select
+                    disabled={busy || catalog.isPending || catalog.isError}
+                    label="Tài sản trong danh mục"
+                    value={catalogId}
+                    onChange={(e) => setCatalogId(e.target.value)}
+                  >
+                    <MenuItem value="">Chọn</MenuItem>
+                    {catalog.data?.map((item) => (
+                      <MenuItem key={item.id} value={item.id}>
+                        {item.name} · phiên bản {item.edition}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <Button
+                    variant="outlined"
+                    sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                    disabled={!catalogId || busy}
+                    onClick={() => {
+                      const selected = catalog.data?.find((d) => d.id === catalogId);
+                      if (!selected) return;
+                      setItems((old) => [
+                        ...old,
+                        {
+                          catalogId: selected.id,
+                          catalogVersion: selected.version,
+                          quantity: 1,
+                          required: true,
+                          trackingMode: 'Serialized',
+                          catalog: {
+                            ...(selected.data as AssetCatalogData),
+                            familyId: selected.familyId,
+                            edition: selected.edition,
+                            name: selected.name,
+                          },
                         },
-                      },
-                    ]);
-                    setCatalogId('');
-                  }}
-                >
-                  Thêm vào gói
-                </Button>
+                      ]);
+                      setCatalogId('');
+                    }}
+                  >
+                    Thêm vào gói
+                  </Button>
+                </Stack>
+                {!items.length && (
+                  <Typography variant="body2" color="text.secondary">
+                    Chọn tài sản đã công bố để thêm vào mẫu.
+                  </Typography>
+                )}
                 {items.map((item, index) => (
-                  <Stack key={`${item.catalogId}-${index}`} spacing={1}>
-                    <Typography>
+                  <Stack
+                    key={`${item.catalogId}-${index}`}
+                    spacing={1}
+                    sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>
                       {item.catalog?.name ??
                         catalog.data?.find((d) => d.id === item.catalogId)?.name ??
                         'Mục danh mục đã chọn'}
                     </Typography>
-                    <TextField
-                      required
-                      type="number"
-                      label={`Số lượng mục ${index + 1}`}
-                      value={item.quantity}
-                      slotProps={{ htmlInput: { min: 1, max: 10000, step: 1 } }}
-                      onChange={(e) =>
-                        setItems((old) =>
-                          old.map((v, i) =>
-                            i === index ? { ...v, quantity: Number(e.target.value) } : v,
-                          ),
-                        )
-                      }
-                    />
-                    <TextField
-                      select
-                      label={`Theo dõi mục ${index + 1}`}
-                      value={item.trackingMode}
-                      onChange={(e) =>
-                        setItems((old) =>
-                          old.map((v, i) =>
-                            i === index
-                              ? {
-                                  ...v,
-                                  trackingMode: e.target.value as SharedAssetItem['trackingMode'],
-                                }
-                              : v,
-                          ),
-                        )
-                      }
+                    {item.catalog && (
+                      <Typography variant="caption" color="text.secondary">
+                        Phiên bản {item.catalog.edition} · Lần cập nhật {item.catalogVersion}
+                      </Typography>
+                    )}
+                    <Box sx={configurationFormGridSx}>
+                      <TextField
+                        required
+                        disabled={busy}
+                        type="number"
+                        label={`Số lượng mục ${index + 1}`}
+                        value={item.quantity}
+                        slotProps={{ htmlInput: { min: 1, max: 10000, step: 1 } }}
+                        onChange={(e) =>
+                          setItems((old) =>
+                            old.map((v, i) =>
+                              i === index ? { ...v, quantity: Number(e.target.value) } : v,
+                            ),
+                          )
+                        }
+                      />
+                      <TextField
+                        select
+                        disabled={busy}
+                        label={`Theo dõi mục ${index + 1}`}
+                        value={item.trackingMode}
+                        onChange={(e) =>
+                          setItems((old) =>
+                            old.map((v, i) =>
+                              i === index
+                                ? {
+                                    ...v,
+                                    trackingMode: e.target.value as SharedAssetItem['trackingMode'],
+                                  }
+                                : v,
+                            ),
+                          )
+                        }
+                      >
+                        <MenuItem value="Serialized">Từng tài sản</MenuItem>
+                        <MenuItem value="BulkQuantity">Theo số lượng</MenuItem>
+                      </TextField>
+                    </Box>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                      }}
                     >
-                      <MenuItem value="Serialized">Từng tài sản</MenuItem>
-                      <MenuItem value="BulkQuantity">Theo số lượng</MenuItem>
-                    </TextField>
-                    <FormControlLabel
-                      label="Bắt buộc"
-                      control={
-                        <Checkbox
-                          checked={item.required}
-                          onChange={(e) =>
-                            setItems((old) =>
-                              old.map((v, i) =>
-                                i === index ? { ...v, required: e.target.checked } : v,
-                              ),
-                            )
-                          }
-                        />
-                      }
-                    />
-                    <Button onClick={() => setItems((old) => old.filter((_, i) => i !== index))}>
-                      Xóa mục {index + 1}
-                    </Button>
+                      <FormControlLabel
+                        label="Bắt buộc"
+                        control={
+                          <Checkbox
+                            disabled={busy}
+                            checked={item.required}
+                            onChange={(e) =>
+                              setItems((old) =>
+                                old.map((v, i) =>
+                                  i === index ? { ...v, required: e.target.checked } : v,
+                                ),
+                              )
+                            }
+                          />
+                        }
+                      />
+                      <Button
+                        disabled={busy}
+                        onClick={() => setItems((old) => old.filter((_, i) => i !== index))}
+                      >
+                        Xóa mục {index + 1}
+                      </Button>
+                    </Stack>
                   </Stack>
                 ))}
               </>
             )}
           </Stack>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ flexWrap: 'wrap' }}>
           <Button disabled={busy} onClick={close}>
             Hủy
           </Button>
@@ -450,7 +585,7 @@ export function SharedTemplateEditor({
             Lưu bản nháp
           </Button>
         </DialogActions>
-      </form>
+      </Box>
     </Dialog>
   );
 }

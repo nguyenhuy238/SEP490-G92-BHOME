@@ -3,7 +3,6 @@ import { Link, useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
-  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -18,6 +17,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   TextField,
@@ -35,7 +35,8 @@ import {
   type InvoiceListFilter,
 } from '../../../../../../packages/client-core/src/invoices';
 import { formatContractMoney } from '../../../../../../packages/client-core/src/contracts';
-import { PageHeader, FilterToolbar } from '../../../components/common/PortalUI';
+import { PageHeader, FilterToolbar, StatusChip } from '../../../components/common/PortalUI';
+import { OwnerTable, OwnerPagination } from '../../../components/common/OwnerWorkspace';
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { isMockMode } from '../../../services/config';
 import { useInvoiceApi } from '../useInvoiceApi';
@@ -141,7 +142,7 @@ export function LiveInvoicesPage() {
     <>
       <PageHeader
         title="Hóa đơn phòng"
-        subtitle="Nháp → Kiểm tra chi phí → Phát hành. Số tiền do hệ thống tính từ chỉ số đã xác nhận và cấu hình Owner."
+        subtitle="Kiểm tra chi phí theo hợp đồng và chỉ số đã xác nhận trước khi phát hành."
         actions={
           <Button
             variant="contained"
@@ -235,15 +236,21 @@ export function LiveInvoicesPage() {
             {invoiceError(locations.error || filterRooms.error)}
           </Alert>
         )}
-        {list.data && !list.error && (
-          <Typography variant="body2">
-            {list.data.totalCount} hóa đơn trong bộ lọc · Nháp và đã phát hành được phân biệt theo
-            trạng thái.
-          </Typography>
-        )}
-        <Button component={Link} to="/payments">
-          Theo dõi thanh toán và số dư
-        </Button>
+        <Stack
+          direction="row"
+          useFlexGap
+          spacing={1}
+          sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
+        >
+          {list.data && !list.error && (
+            <Typography variant="body2" color="text.secondary">
+              {list.data.totalCount} hóa đơn trong bộ lọc
+            </Typography>
+          )}
+          <Button component={Link} to="/payments">
+            Theo dõi thanh toán và số dư
+          </Button>
+        </Stack>
         <Dialog
           open={creating}
           onClose={busy ? undefined : () => setCreating(false)}
@@ -353,7 +360,7 @@ export function LiveInvoicesPage() {
               </Button>
             </Stack>
           </DialogContent>
-          <DialogActions>
+          <DialogActions sx={{ flexWrap: 'wrap' }}>
             <Button disabled={busy} onClick={() => setCreating(false)}>
               Hủy lập nháp
             </Button>
@@ -386,30 +393,67 @@ export function LiveInvoicesPage() {
         {!list.error && !list.isPending && list.data?.items.length === 0 && (
           <Alert severity="info">Chưa có hóa đơn.</Alert>
         )}
-        {list.data?.items.map((item) => (
-          <Paper sx={{ p: 2 }} key={item.id}>
-            <Stack direction="row" sx={{ alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-              <Typography>
-                {item.locationName} · Phòng {item.roomNumber} · {item.billingPeriod.slice(0, 7)}
-              </Typography>
-              <Chip label={item.status === 'Final' ? 'Đã phát hành' : 'Nháp'} />
-              <Typography>{formatContractMoney(item.total)}</Typography>
-              <Button onClick={() => setSelected(item.id)}>Xem chi tiết</Button>
-            </Stack>
+        {!!list.data?.items.length && !list.error && (
+          <Paper variant="outlined" sx={{ minWidth: 0 }}>
+            <OwnerTable
+              label="Danh sách hóa đơn"
+              rows={list.data.items}
+              id={(item) => item.id}
+              select={(item) => setSelected(item.id)}
+              loading={list.isFetching}
+              columns={[
+                {
+                  label: 'Phòng / Cơ sở',
+                  render: (item) => (
+                    <>
+                      <Typography sx={{ fontWeight: 650 }}>Phòng {item.roomNumber}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.locationName}
+                      </Typography>
+                    </>
+                  ),
+                },
+                { label: 'Kỳ hóa đơn', render: (item) => item.billingPeriod.slice(0, 7) },
+                {
+                  label: 'Trạng thái',
+                  render: (item) => (
+                    <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+                      <StatusChip label={item.status === 'Final' ? 'Đã phát hành' : 'Bản nháp'} />
+                      {item.status === 'Draft' && item.missingInputs?.length > 0 && (
+                        <Typography variant="caption" color="warning.dark">
+                          Thiếu dữ liệu
+                        </Typography>
+                      )}
+                    </Stack>
+                  ),
+                },
+                {
+                  label: 'Tổng tiền',
+                  render: (item) => (
+                    <>
+                      <Typography sx={{ fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>
+                        {formatContractMoney(item.total)}
+                      </Typography>
+                      {item.status === 'Draft' && (
+                        <Typography variant="caption" color="text.secondary">
+                          Tạm tính
+                        </Typography>
+                      )}
+                    </>
+                  ),
+                },
+              ]}
+            />
           </Paper>
-        ))}
-        <Stack direction="row" spacing={2}>
-          <Button disabled={page === 1 || list.isFetching} onClick={() => setPage(page - 1)}>
-            Trang trước
-          </Button>
-          <Typography>Trang {page}</Typography>
-          <Button
-            disabled={list.isFetching || !list.data || page * 20 >= list.data.totalCount}
-            onClick={() => setPage(page + 1)}
-          >
-            Trang sau
-          </Button>
-        </Stack>
+        )}
+        {list.data && !list.error && (
+          <OwnerPagination
+            page={page}
+            total={list.data.totalCount}
+            change={setPage}
+            busy={list.isFetching}
+          />
+        )}
         {selected && detail.isPending && <LinearProgress />}
         {detail.error && (
           <Alert
@@ -419,15 +463,30 @@ export function LiveInvoicesPage() {
             {invoiceError(detail.error)}
           </Alert>
         )}
-        {invoice && (
-          <Paper sx={{ p: 3, overflowX: 'auto' }}>
-            <Stack spacing={2}>
-              <Typography variant="h6">
-                Chi tiết hóa đơn · Phòng {invoice.roomNumber} · {invoice.billingPeriod.slice(0, 7)}
-              </Typography>
-              <Button component={Link} to={`/invoice-adjustments?invoiceId=${invoice.id}`}>
-                Yêu cầu điều chỉnh của hóa đơn
-              </Button>
+        {invoice && !detail.error && (
+          <Paper
+            variant="outlined"
+            sx={{ p: { xs: 1.5, sm: 2 }, minWidth: 0, overflowWrap: 'anywhere' }}
+          >
+            <Stack spacing={1.5}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                useFlexGap
+                spacing={1}
+                sx={{
+                  alignItems: { sm: 'center' },
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <Typography variant="h2" component="h2">
+                  Chi tiết hóa đơn · Phòng {invoice.roomNumber} ·{' '}
+                  {invoice.billingPeriod.slice(0, 7)}
+                </Typography>
+                <Button component={Link} to={`/invoice-adjustments?invoiceId=${invoice.id}`}>
+                  Yêu cầu điều chỉnh của hóa đơn
+                </Button>
+              </Stack>
               <Typography>
                 {invoice.status === 'Final'
                   ? 'Đã phát hành — chi phí được giữ nguyên'
@@ -444,64 +503,77 @@ export function LiveInvoicesPage() {
                   tại chưa phải số tiền chính thức.
                 </Alert>
               )}
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    {['Khoản thu', 'Chỉ số trước → sau', 'Số lượng', 'Đơn giá', 'Số tiền'].map(
-                      (t) => (
-                        <TableCell key={t}>{t}</TableCell>
-                      ),
-                    )}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {invoice.lines.map((line) => (
-                    <TableRow key={line.id}>
-                      <TableCell>
-                        {line.name}
-                        <Typography variant="caption" sx={{ display: 'block' }}>
-                          Giá ngày {line.rateDate} · {line.occupiedDays}/{line.periodDays} ngày
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {hasSettlementFixedCoverage(line)
-                          ? 'Đã loại phần ghi nhận trong khoản phải thu trả phòng'
-                          : hasSettlementUsageCoverage(line)
-                            ? 'Đã ghi nhận trong khoản phải thu chuyển ra'
-                            : line.meterReadingId
-                              ? `${formatBillingDecimal(line.previousReading ?? '')} → ${formatBillingDecimal(line.confirmedReading ?? '')}`
-                              : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {formatBillingDecimal(line.quantity)}{' '}
-                        {line.category === 'Electricity'
-                          ? 'kWh'
-                          : line.category === 'Water'
-                            ? 'm³'
-                            : invoicePersonMonths(line)
-                              ? 'người'
-                              : ''}
-                        {invoicePersonMonths(line)?.prorated && (
-                          <Typography variant="caption" sx={{ display: 'block' }}>
-                            {invoicePersonMonths(line)?.personDays} người-ngày
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {formatBillingDecimal(line.rate)} đ
-                        {invoicePersonMonths(line) ? '/người/tháng' : ''}
-                      </TableCell>
-                      <TableCell>{formatContractMoney(line.amount)}</TableCell>
+              <TableContainer>
+                <Table size="small" aria-label="Các khoản thu hóa đơn" sx={{ minWidth: 600 }}>
+                  <TableHead>
+                    <TableRow>
+                      {['Khoản thu', 'Chỉ số trước → sau', 'Số lượng', 'Đơn giá', 'Số tiền'].map(
+                        (t) => (
+                          <TableCell key={t}>{t}</TableCell>
+                        ),
+                      )}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <Typography variant="h6">Tổng: {formatContractMoney(invoice.total)}</Typography>
+                  </TableHead>
+                  <TableBody>
+                    {invoice.lines.map((line) => (
+                      <TableRow key={line.id}>
+                        <TableCell>
+                          {line.name}
+                          <Typography variant="caption" sx={{ display: 'block' }}>
+                            Giá ngày {line.rateDate} · {line.occupiedDays}/{line.periodDays} ngày
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {hasSettlementFixedCoverage(line)
+                            ? 'Đã loại phần ghi nhận trong khoản phải thu trả phòng'
+                            : hasSettlementUsageCoverage(line)
+                              ? 'Đã ghi nhận trong khoản phải thu chuyển ra'
+                              : line.meterReadingId
+                                ? `${formatBillingDecimal(line.previousReading ?? '')} → ${formatBillingDecimal(line.confirmedReading ?? '')}`
+                                : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {formatBillingDecimal(line.quantity)}{' '}
+                          {line.category === 'Electricity'
+                            ? 'kWh'
+                            : line.category === 'Water'
+                              ? 'm³'
+                              : invoicePersonMonths(line)
+                                ? 'người'
+                                : ''}
+                          {invoicePersonMonths(line)?.prorated && (
+                            <Typography variant="caption" sx={{ display: 'block' }}>
+                              {invoicePersonMonths(line)?.personDays} người-ngày
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatBillingDecimal(line.rate)} đ
+                          {invoicePersonMonths(line) ? '/người/tháng' : ''}
+                        </TableCell>
+                        <TableCell>{formatContractMoney(line.amount)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <Typography
+                variant="h2"
+                component="div"
+                sx={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+              >
+                {invoice.status === 'Final' ? 'Tổng đã phát hành' : 'Tổng tạm tính'}:{' '}
+                {formatContractMoney(invoice.total)}
+              </Typography>
               {invoice.status === 'Final' && (
                 <OwnerInvoicePaymentPanel key={invoice.id} invoiceId={invoice.id} />
               )}
               {invoice.status === 'Draft' && (
-                <Stack direction="row" spacing={2}>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  sx={{ justifyContent: 'flex-end' }}
+                >
                   <Button
                     disabled={busy}
                     onClick={() => void mutate(() => api.refresh(invoice.id, invoice.version))}
@@ -520,9 +592,20 @@ export function LiveInvoicesPage() {
             </Stack>
           </Paper>
         )}
-        <Dialog open={confirm} onClose={() => !busy && setConfirm(false)}>
-          <DialogTitle>Phát hành hóa đơn?</DialogTitle>
+        <Dialog
+          open={confirm}
+          onClose={() => !busy && setConfirm(false)}
+          fullWidth
+          maxWidth="xs"
+          aria-labelledby="invoice-finalize-title"
+        >
+          <DialogTitle id="invoice-finalize-title">Phát hành hóa đơn?</DialogTitle>
           <DialogContent>
+            {error && (
+              <Alert severity="error" sx={{ mb: 1 }}>
+                {error}
+              </Alert>
+            )}
             Phòng {invoice?.roomNumber}, kỳ {invoice?.billingPeriod.slice(0, 7)}, tổng{' '}
             {invoice && formatContractMoney(invoice.total)}. Các khoản thu sẽ được giữ nguyên sau
             phát hành.
@@ -532,7 +615,14 @@ export function LiveInvoicesPage() {
               Quay lại
             </Button>
             <Button
-              disabled={busy || !invoice}
+              variant="contained"
+              disabled={
+                busy ||
+                !invoice ||
+                invoice.status !== 'Draft' ||
+                invoice.missingInputs.length > 0 ||
+                !!detail.error
+              }
               onClick={() =>
                 invoice && void mutate(() => api.finalize(invoice.id, invoice.version))
               }

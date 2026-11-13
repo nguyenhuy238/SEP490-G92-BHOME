@@ -10,6 +10,17 @@ public sealed class FixedChargeCalculationTests
     private static readonly DateOnly Period = new(2026, 11, 1);
     private static readonly PolicyDto Rent = new(Guid.NewGuid(), Guid.NewGuid(), null, ChargeCategory.Rent, "RENT", "Synthetic rent",
         ChargingMethod.FixedPerRoomPerMonth, 3000000, Period, null, 1);
+    [Fact]
+    public void SignedRentCoverageIgnoresTheInvoiceDecimalScaleButNotTheAgreedAmountOrHash()
+    {
+        var signed = Rent with { Id = Guid.Empty, Version = 0 };
+        var schedule = new BillingSchedule { PartialMonth = PartialMonthRule.FullMonth };
+        var invoice = FixedChargeCalculation.Calculate(Period, signed with { Rate = 3000000.0000m }, schedule, "signed-hash", 30, []);
+        var covered = FixedChargeCalculation.Calculate(Period, signed, schedule, "signed-hash", 30, [new(Guid.NewGuid(), invoice.Source)]);
+        Assert.Empty(covered.MissingInputs); Assert.Equal(0, covered.Amount);
+        Assert.Contains("fixed_charge_policy_changed", FixedChargeCalculation.Calculate(Period, signed with { Rate = 3000001m }, schedule, "signed-hash", 30, [new(Guid.NewGuid(), invoice.Source)]).MissingInputs);
+        Assert.Contains("fixed_charge_policy_changed", FixedChargeCalculation.Calculate(Period, signed, schedule, "different-hash", 30, [new(Guid.NewGuid(), invoice.Source)]).MissingInputs);
+    }
     [Theory]
     [InlineData(PartialMonthRule.FullMonth, 3000000)]
     [InlineData(PartialMonthRule.OccupiedCalendarDays, 1500000)]

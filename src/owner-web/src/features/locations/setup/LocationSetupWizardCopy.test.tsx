@@ -99,8 +99,21 @@ const fill = (label: string | RegExp, value: string) =>
 beforeEach(() => {
   sessionStorage.clear();
   vi.resetAllMocks();
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 it('copies only selected configuration, requires asset assignment and new-room fee mapping, and submits exact source provenance', async () => {
   const complete = vi.fn();
@@ -164,7 +177,9 @@ it('copies only selected configuration, requires asset assignment and new-room f
   next();
   expect(screen.getByText(/Hãy gán từng gói tài sản/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Gán cho Synthetic destination type' }));
-  expect(screen.getByLabelText('Tên tài sản')).toHaveValue('Synthetic desk');
+  expect(
+    within(screen.getByRole('list', { name: 'Tài sản đã chọn' })).getByText('Synthetic desk'),
+  ).toBeVisible();
   next();
   next();
   expect(
@@ -178,7 +193,7 @@ it('copies only selected configuration, requires asset assignment and new-room f
   fireEvent.click(screen.getByRole('option', { name: 'P.101' }));
   next();
   next();
-  expect(screen.getByText(/7. Xem lại và hoàn tất/)).toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: /Tôi xác nhận giá thuê/ })).toBeInTheDocument();
   expect(screen.queryByText('Unselected rule')).not.toBeInTheDocument();
   expect(state.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
   fireEvent.click(screen.getByRole('checkbox', { name: /Tôi xác nhận giá thuê/ }));

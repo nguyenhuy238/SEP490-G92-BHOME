@@ -20,7 +20,7 @@ import {
   type Policy,
   type PolicyInput,
 } from '../../../../../packages/client-core/src/invoices';
-import { PageHeader } from '../../components/common/PortalUI';
+import { PageHeader, FilterToolbar } from '../../components/common/PortalUI';
 import { useInvoiceApi } from './useInvoiceApi';
 import { ConflictReload } from '../locations/components/ConflictReload';
 
@@ -39,10 +39,7 @@ export function BillingConfigurationPage({
   });
   return (
     <>
-      <PageHeader
-        title="Giá thuê & Chính sách phí"
-        subtitle="Cấu hình giá theo ngày hiệu lực và các quy tắc lập hóa đơn của cơ sở."
-      />
+      <PageHeader title="Giá thuê & Chính sách phí" />
       <Stack spacing={2}>
         {locations.isPending && <LinearProgress />}
         {locations.error && (
@@ -54,20 +51,22 @@ export function BillingConfigurationPage({
           </Alert>
         )}
         {locations.data?.length === 0 && <Alert severity="info">Chưa có cơ sở.</Alert>}
-        <TextField
-          select
-          label="Cơ sở cấu hình"
-          value={location}
-          disabled={!!initialLocationId}
-          onChange={(e) => setLocation(e.target.value)}
-        >
-          <MenuItem value="">Chọn cơ sở</MenuItem>
-          {locations.data?.map((l) => (
-            <MenuItem value={l.id} key={l.id}>
-              {l.label}
-            </MenuItem>
-          ))}
-        </TextField>
+        <FilterToolbar>
+          <TextField
+            select
+            label="Cơ sở cấu hình"
+            value={location}
+            disabled={!!initialLocationId}
+            onChange={(e) => setLocation(e.target.value)}
+          >
+            <MenuItem value="">Chọn cơ sở</MenuItem>
+            {locations.data?.map((l) => (
+              <MenuItem value={l.id} key={l.id}>
+                {l.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        </FilterToolbar>
         {location && <LocationBilling key={location + actor} location={location} />}
       </Stack>
     </>
@@ -106,7 +105,7 @@ function LocationBilling({ location }: { location: string }) {
           onSaved={() => void schedule.refetch()}
         />
       )}
-      <Paper sx={{ p: 2 }}>
+      <Paper variant="outlined" sx={{ p: 1.5 }}>
         <Stack spacing={2}>
           <Typography variant="h6">Biểu giá đã lưu</Typography>
           {policies.isPending && <LinearProgress />}
@@ -123,19 +122,41 @@ function LocationBilling({ location }: { location: string }) {
               Chưa có biểu giá. Thêm giá thuê, điện và nước để lập hóa đơn.
             </Alert>
           )}
-          {policies.data?.items.map((p) => (
-            <Stack
-              key={p.id}
-              direction="row"
-              sx={{ gap: 2, flexWrap: 'wrap', alignItems: 'center' }}
-            >
-              <Typography>
-                {p.name} · {formatBillingDecimal(p.rate)} đ · {p.effectiveFrom} →{' '}
-                {p.effectiveTo ?? 'Không hạn'} · {p.roomId ? 'Phòng' : 'Cơ sở'}
-              </Typography>
-              <Button onClick={() => setReplacing(p)}>Tạo giá kế tiếp</Button>
-            </Stack>
-          ))}
+          {!policies.error &&
+            policies.data?.items.map((p) => (
+              <Stack
+                key={p.id}
+                direction={{ xs: 'column', sm: 'row' }}
+                sx={{
+                  gap: 1,
+                  alignItems: { sm: 'center' },
+                  justifyContent: 'space-between',
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                  pt: 1,
+                }}
+              >
+                <Stack spacing={0.25} sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                  <Typography sx={{ fontWeight: 650 }}>{p.name}</Typography>
+                  <Typography sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {formatBillingDecimal(p.rate)} đ/
+                    {p.category === 1
+                      ? 'kWh'
+                      : p.category === 2
+                        ? 'm³'
+                        : p.method === 2
+                          ? 'người/tháng'
+                          : 'phòng/tháng'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {p.effectiveFrom.split('-').reverse().join('/')} –{' '}
+                    {p.effectiveTo?.split('-').reverse().join('/') ?? 'Không hạn'} ·{' '}
+                    {p.roomId ? 'Phòng' : 'Cơ sở'}
+                  </Typography>
+                </Stack>
+                <Button onClick={() => setReplacing(p)}>Tạo giá kế tiếp</Button>
+              </Stack>
+            ))}
           <Stack direction="row">
             <Button disabled={page === 1} onClick={() => setPage(page - 1)}>
               Trang trước

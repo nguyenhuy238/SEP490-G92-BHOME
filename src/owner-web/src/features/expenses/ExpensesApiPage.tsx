@@ -136,7 +136,11 @@ export function ExpensesApiPage() {
         group={null}
         headingLevel={routeLocation ? 'h2' : 'h1'}
         title="Đầu tư ban đầu & Chi phí"
-        subtitle="Khoản chi thực tế theo cơ sở; lịch sử chỉnh sửa được lưu trên máy chủ."
+        subtitle={
+          routeLocation
+            ? undefined
+            : 'Khoản chi thực tế theo cơ sở; lịch sử chỉnh sửa được lưu trên máy chủ.'
+        }
         actions={
           <Button
             variant="contained"
@@ -167,8 +171,8 @@ export function ExpensesApiPage() {
         }
       />
       {routeLocation && (
-        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-          <Typography variant="h2" component="h3">
+        <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, mb: 2 }}>
+          <Typography variant="h2" component="h3" sx={{ fontSize: '1.15rem', fontWeight: 800 }}>
             Tổng hợp vốn & chi phí
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
@@ -192,19 +196,35 @@ export function ExpensesApiPage() {
                 gap: 2,
               }}
             >
-              <Box sx={{ minWidth: 0 }}>
+              <Box sx={{ minWidth: 0, p: 2, bgcolor: 'background.default', borderRadius: '10px' }}>
                 <Typography variant="body2" color="text.secondary">
                   Vốn đầu tư ban đầu lũy kế
                 </Typography>
-                <Typography sx={{ fontSize: '1.35rem', fontWeight: 750, overflowWrap: 'anywhere' }}>
+                <Typography
+                  sx={{
+                    fontSize: '1.5rem',
+                    fontWeight: 800,
+                    overflowWrap: 'anywhere',
+                    fontVariantNumeric: 'tabular-nums',
+                    mt: 0.5,
+                  }}
+                >
                   {formatFinanceMoney(report.data.total.initialInvestment)}
                 </Typography>
               </Box>
-              <Box sx={{ minWidth: 0 }}>
+              <Box sx={{ minWidth: 0, p: 2, bgcolor: 'background.default', borderRadius: '10px' }}>
                 <Typography variant="body2" color="text.secondary">
                   Chi phí vận hành từ đầu tháng
                 </Typography>
-                <Typography sx={{ fontSize: '1.35rem', fontWeight: 750, overflowWrap: 'anywhere' }}>
+                <Typography
+                  sx={{
+                    fontSize: '1.5rem',
+                    fontWeight: 800,
+                    overflowWrap: 'anywhere',
+                    fontVariantNumeric: 'tabular-nums',
+                    mt: 0.5,
+                  }}
+                >
                   {formatFinanceMoney(report.data.total.operatingExpenses)}
                 </Typography>
               </Box>
@@ -238,7 +258,12 @@ export function ExpensesApiPage() {
         onChange={(_, v: string) => changeFilter('expenseType', v)}
         variant="scrollable"
         allowScrollButtonsMobile
-        sx={{ mb: 2 }}
+        sx={{
+          mb: 2,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          '& .MuiTab-root': { minHeight: 44 },
+        }}
       >
         <Tab value="" label="Tất cả khoản chi" />
         {types.map((t) => (
@@ -246,15 +271,17 @@ export function ExpensesApiPage() {
         ))}
       </Tabs>
       <FilterToolbar>
-        <OptionPicker
-          label="Cơ sở"
-          value={routeLocation || filter.locationId || ''}
-          disabled={!!routeLocation}
-          options={locations.data ?? []}
-          loading={locations.isPending}
-          error={!!locations.error}
-          change={(id) => changeFilter('locationId', id)}
-        />
+        {!routeLocation && (
+          <OptionPicker
+            label="Cơ sở"
+            value={routeLocation || filter.locationId || ''}
+            disabled={!!routeLocation}
+            options={locations.data ?? []}
+            loading={locations.isPending}
+            error={!!locations.error}
+            change={(id) => changeFilter('locationId', id)}
+          />
+        )}
         <TextField
           label="Danh mục"
           value={filter.category || ''}
@@ -291,7 +318,7 @@ export function ExpensesApiPage() {
       )}
       {!invalidRange && !rows.error && !!rows.data?.items.length && (
         <TableContainer component={Paper} variant="outlined">
-          <Table sx={{ minWidth: 700 }} aria-label="Khoản chi thực tế">
+          <Table size="small" sx={{ minWidth: 700 }} aria-label="Khoản chi thực tế">
             <TableHead>
               <TableRow>
                 <TableCell>Khoản chi</TableCell>
@@ -305,7 +332,9 @@ export function ExpensesApiPage() {
               {rows.data.items.map((e) => (
                 <TableRow key={e.id} hover>
                   <TableCell sx={{ maxWidth: 320 }}>
-                    <Typography sx={{ fontWeight: 700 }}>{e.category}</Typography>
+                    <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
+                      {e.category}
+                    </Typography>
                     <Typography variant="caption" color="text.secondary">
                       {types.find((t) => t.id === e.expenseType)?.name ?? e.expenseType}
                     </Typography>
@@ -378,7 +407,12 @@ export function ExpensesApiPage() {
         </TableContainer>
       )}
       {!invalidRange && rows.data && (
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+        <Stack
+          direction="row"
+          useFlexGap
+          spacing={1.5}
+          sx={{ alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', mt: 1.5 }}
+        >
           <Button
             disabled={(filter.page || 1) <= 1 || rows.isFetching}
             onClick={() => setFilter((f) => ({ ...f, page: (f.page || 1) - 1 }))}

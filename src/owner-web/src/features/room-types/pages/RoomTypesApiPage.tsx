@@ -47,10 +47,18 @@ export function RoomTypesApiPage() {
   const { locationId: routeLocation = '' } = useParams();
   const portal = usePortal();
   const locationId = routeLocation || (portal.locationId === 'all' ? '' : portal.locationId);
-  return <RoomDefaultsWorkspace key={locationId} locationId={locationId} />;
+  return (
+    <RoomDefaultsWorkspace key={locationId} locationId={locationId} embedded={!!routeLocation} />
+  );
 }
 
-function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
+function RoomDefaultsWorkspace({
+  locationId,
+  embedded,
+}: {
+  locationId: string;
+  embedded: boolean;
+}) {
   const api = usePropertySetupApi();
   const setup = locationSetupClient(api.request);
   const lock = useRef(false);
@@ -172,8 +180,9 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
     <Stack spacing={2}>
       <PageHeader
         group={null}
+        headingLevel={embedded ? 'h2' : 'h1'}
         title="Gợi ý tạo phòng"
-        subtitle="Sức chứa, diện tích, giá thuê tham khảo và định mức dùng khi tạo phòng mới. Mỗi gợi ý được lưu riêng tại cơ sở."
+        subtitle="Thông số tham khảo cho phòng tạo mới, không thay đổi phòng đang sử dụng."
         actions={
           canManage ? (
             <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
@@ -197,6 +206,8 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
         >
           <TextField
             fullWidth
+            size="small"
+            sx={{ maxWidth: { md: 360 }, flex: { md: '0 1 360px' } }}
             label="Tìm gợi ý tạo phòng"
             value={search}
             onChange={(e) => {
@@ -206,6 +217,7 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
           />
           <TextField
             select
+            size="small"
             label="Trạng thái"
             value={status}
             onChange={(e) => {

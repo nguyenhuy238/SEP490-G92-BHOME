@@ -31,6 +31,8 @@ import {
   History,
   Settings,
   Wallet,
+  Plus,
+  ArrowLeft,
 } from 'lucide-react';
 import { ApiConfigurationCopy } from '../../configuration/ApiConfigurationCopy';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
@@ -39,7 +41,6 @@ import { LocationPricingWorkspace } from './LocationPricingWorkspace';
 import { OperatingPoliciesPanel } from '../../property/OperatingPoliciesPanel';
 import { usePortal } from '../../../app/PortalProvider';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
-import { locationSetupClient } from '../../../../../../packages/client-core/src/locationSetup';
 import { LocationSection, LocationEmpty } from '../components/LocationSection';
 import type { OccupancySummary } from '../../property-api/propertyApi';
 import { financeClient, financeError } from '../../../../../../packages/client-core/src/finance';
@@ -53,8 +54,8 @@ const tabs = [
   ['pricing', 'Giá & Phí'],
   ['rules', 'Nội quy'],
   ['history', 'Lịch sử phòng'],
-  ['settings', 'Thiết lập'],
   ['investment', 'Vốn & Chi phí'],
+  ['settings', 'Thiết lập'],
 ];
 const tabIcons: Record<string, typeof Building2> = {
   overview: Building2,
@@ -83,11 +84,6 @@ export function LocationApiWorkspace() {
     queryKey: ['property-setup', 'location', session?.userId, locationId],
     queryFn: ({ signal }) => api.location(locationId, signal),
   });
-  const metadata = useQuery({
-    queryKey: ['property-setup', 'setup-metadata', session?.userId, locationId],
-    queryFn: ({ signal }) => locationSetupClient(api.request).metadata(locationId, signal),
-    enabled: owner && !!locationId,
-  });
   const occupancy = useQuery({
     queryKey: ['property-setup', 'location-occupancy', session?.userId, locationId],
     queryFn: ({ signal }) =>
@@ -99,39 +95,19 @@ export function LocationApiWorkspace() {
   });
   const roomCounts = locationRoomCounts(occupancy.data);
   const summary = useQuery({
-    queryKey: ['property-setup', 'location-summary', session?.userId, locationId],
+    queryKey: ['property-setup', 'location-open-incidents', session?.userId, locationId],
     queryFn: async ({ signal }) => {
-      const [assets, policies, rules, templates, incidents] = await Promise.allSettled([
-        api.assets(locationId, 1, '', signal),
-        api.request<{ totalCount: number }>(
-          `/api/v1/billing-policies?locationId=${encodeURIComponent(locationId)}&page=1&pageSize=1`,
-          { signal },
-        ),
-        owner ? api.policies(locationId, signal) : Promise.resolve(undefined),
-        owner ? api.templates(locationId, signal) : Promise.resolve(undefined),
-        Promise.all(
-          [0, 1].map((status) =>
-            api.request<{ totalCount: number }>(
-              `/api/v1/incidents?locationId=${encodeURIComponent(locationId)}&status=${status}&page=1&pageSize=1`,
-              { signal },
-            ),
+      const rows = await Promise.all(
+        [0, 1].map((status) =>
+          api.request<{ totalCount: number }>(
+            `/api/v1/incidents?locationId=${encodeURIComponent(locationId)}&status=${status}&page=1&pageSize=1`,
+            { signal },
           ),
-        ).then((rows) => {
-          if (!rows.every((row) => Number.isSafeInteger(row.totalCount) && row.totalCount >= 0))
-            throw new Error('Không đọc được số liệu sự cố');
-          return rows.reduce((total, row) => total + row.totalCount, 0);
-        }),
-      ]);
-      return {
-        assets: assets.status === 'fulfilled' ? assets.value.totalCount : undefined,
-        pricesAndFees: policies.status === 'fulfilled' ? policies.value.totalCount : undefined,
-        rules: rules.status === 'fulfilled' ? rules.value?.length : undefined,
-        assetTemplates: templates.status === 'fulfilled' ? templates.value?.length : undefined,
-        openIncidents: incidents.status === 'fulfilled' ? incidents.value : undefined,
-        incomplete: [assets, policies, rules, templates, incidents].some(
-          (item) => item.status === 'rejected',
         ),
-      };
+      );
+      if (!rows.every((row) => Number.isSafeInteger(row.totalCount) && row.totalCount >= 0))
+        throw new Error('Không đọc được số liệu sự cố');
+      return { openIncidents: rows.reduce((total, row) => total + row.totalCount, 0) };
     },
     enabled: active === 'overview' && !!locationId,
   });
@@ -147,17 +123,10 @@ export function LocationApiWorkspace() {
     return <ErrorState error={location.error} retry={() => void location.refetch()} />;
   return (
     <Stack
-      spacing={2.5}
+      spacing={2}
       sx={{
         minWidth: 0,
         '& .MuiPaper-outlined': { borderRadius: '12px', boxShadow: 'none' },
-        '& .MuiButton-root': {
-          textTransform: 'none',
-          borderRadius: '8px',
-          fontSize: 14,
-          minHeight: { xs: 44, sm: 40 },
-        },
-        '& .MuiTab-root': { fontSize: 14, minHeight: 44 },
         '& .MuiTableCell-head': { bgcolor: 'background.default' },
         '& .MuiTableRow-root.MuiTableRow-hover:hover': { bgcolor: 'action.hover' },
         '& .MuiTablePagination-toolbar': { flexWrap: 'wrap' },
@@ -168,17 +137,30 @@ export function LocationApiWorkspace() {
         },
       }}
     >
-      <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, minWidth: 0 }}>
-        <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          spacing={2}
-          sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}
+      <Box sx={{ minWidth: 0 }}>
+        <Button
+          component={Link}
+          to="/locations"
+          startIcon={<ArrowLeft size={16} />}
+          color="inherit"
+          sx={{ px: 0, color: 'text.secondary', mb: 0.25, minHeight: { xs: 44, sm: 28 } }}
         >
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
+          Danh sách cơ sở
+        </Button>
+        <Stack
+          direction={{ xs: 'column', lg: 'row' }}
+          spacing={1.5}
+          sx={{ alignItems: { lg: 'center' }, justifyContent: 'space-between' }}
+        >
+          <Stack
+            direction="row"
+            spacing={1.25}
+            sx={{ alignItems: 'flex-start', minWidth: 0, flex: 1 }}
+          >
             <Box
               sx={{
-                width: 52,
-                height: 52,
+                width: 36,
+                height: 36,
                 flexShrink: 0,
                 display: 'grid',
                 placeItems: 'center',
@@ -187,84 +169,64 @@ export function LocationApiWorkspace() {
                 color: 'primary.main',
               }}
             >
-              <Building2 size={28} />
+              <Building2 size={21} />
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography component="h1" variant="h1" sx={{ overflowWrap: 'anywhere' }}>
-                {location.data.name}
-              </Typography>
-              <Typography
-                sx={{ fontSize: 14, color: 'text.secondary', mt: 0.5, overflowWrap: 'anywhere' }}
+              <Stack
+                direction="row"
+                useFlexGap
+                spacing={1}
+                sx={{ alignItems: 'center', flexWrap: 'wrap' }}
               >
-                {location.data.address}
-              </Typography>
-              {owner && metadata.data?.data && (
-                <Typography variant="body2" color="text.secondary">
-                  Mã {metadata.data.data.code} · {metadata.data.data.floors} tầng
-                  {metadata.data.data.contactPhone ? ' · ' + metadata.data.data.contactPhone : ''}
+                <Typography component="h1" variant="h1" sx={{ overflowWrap: 'anywhere' }}>
+                  {location.data.name}
                 </Typography>
-              )}
+                <Chip
+                  size="small"
+                  label={location.data.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}
+                  sx={
+                    location.data.isActive
+                      ? { bgcolor: '#eaf7ef', color: 'success.dark', fontWeight: 700 }
+                      : undefined
+                  }
+                />
+              </Stack>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.25, overflowWrap: 'anywhere' }}
+              >
+                {location.data.address} ·{' '}
+                {roomCounts.rooms != null
+                  ? `${roomCounts.rooms} phòng`
+                  : occupancy.isPending
+                    ? 'Đang tải số liệu phòng'
+                    : 'Chưa có số liệu phòng'}
+              </Typography>
             </Box>
           </Stack>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexShrink: 0, flexWrap: 'wrap' }}>
-            {owner && <ApiConfigurationCopy sourceLocationId={locationId} />}
-            <Button component={Link} to="/locations" variant="outlined">
-              Danh sách cơ sở
-            </Button>
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{ flexShrink: 0, flexWrap: 'wrap', alignItems: 'center', maxWidth: '100%' }}
+          >
+            {owner && active === 'overview' && (
+              <ApiConfigurationCopy key={locationId} sourceLocationId={locationId} compactTrigger />
+            )}
+            {owner && active === 'overview' && location.data.isActive && (
+              <Button
+                component={Link}
+                to={`/locations/${locationId}/rooms?action=create`}
+                variant="contained"
+                startIcon={<Plus size={18} />}
+              >
+                Thêm phòng
+              </Button>
+            )}
           </Stack>
         </Stack>
-        <Stack
-          direction="row"
-          spacing={1}
-          useFlexGap
-          sx={{ mt: 1.5, ml: { md: '64px' }, flexWrap: 'wrap', alignItems: 'center' }}
-        >
-          <Chip
-            size="small"
-            label={location.data.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}
-            sx={
-              location.data.isActive
-                ? { bgcolor: '#eaf7ef', color: '#176b43', fontWeight: 700 }
-                : undefined
-            }
-          />
-          {owner && metadata.data?.data && (
-            <Chip
-              size="small"
-              variant="outlined"
-              label={
-                metadata.data.data.setupStatus === 'Completed'
-                  ? 'Đã lưu thiết lập ban đầu'
-                  : 'Đã ghi nhận thông tin'
-              }
-            />
-          )}
-          <Chip
-            size="small"
-            variant="outlined"
-            label={
-              roomCounts.rooms != null
-                ? `${roomCounts.rooms} phòng`
-                : occupancy.isPending
-                  ? 'Đang tải số liệu phòng'
-                  : 'Chưa có số liệu phòng'
-            }
-          />
-          {owner && (
-            <Button component={Link} to={`/locations/${locationId}/settings`} size="small">
-              Chỉnh sửa cơ sở
-            </Button>
-          )}
-        </Stack>
-      </Paper>
-      {owner && metadata.error && (
-        <Alert
-          severity="warning"
-          action={<Button onClick={() => void metadata.refetch()}>Thử lại</Button>}
-        >
-          Chưa tải được thông tin thiết lập cơ sở.
-        </Alert>
-      )}
+      </Box>
       {!location.data.isActive && (
         <Alert severity="info">
           Cơ sở đang ngừng hoạt động. Việc mở lại cơ sở không tự động chuyển các phòng ngừng khai
@@ -275,7 +237,7 @@ export function LocationApiWorkspace() {
         component="nav"
         aria-label="Các phân hệ cơ sở"
         variant="outlined"
-        sx={{ minWidth: 0, p: 0.5, position: 'sticky', top: { xs: 64, md: 75 }, zIndex: 5 }}
+        sx={{ minWidth: 0, p: 0, position: 'sticky', top: 64, zIndex: 5, overflow: 'hidden' }}
       >
         <Tabs
           value={tabs.some(([key]) => key === activeTab) ? activeTab : 'overview'}
@@ -284,14 +246,16 @@ export function LocationApiWorkspace() {
           allowScrollButtonsMobile
           aria-label="Quản lý cơ sở"
           sx={{
-            '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
+            minHeight: 42,
+            '& .MuiTabs-indicator': { height: 2, borderRadius: '2px 2px 0 0' },
             '& .MuiTab-root': {
-              minHeight: 44,
-              py: 1,
+              minHeight: { xs: 44, md: 42 },
+              '@media (pointer:coarse)': { minHeight: 44 },
+              py: 0.75,
               px: 1.5,
-              borderRadius: '6px 6px 0 0',
+              borderRadius: 0,
               textTransform: 'none',
-              fontWeight: 600,
+              fontWeight: 650,
               color: 'text.secondary',
             },
             '& .Mui-selected': { bgcolor: 'primary.light', color: 'primary.main' },
@@ -304,7 +268,7 @@ export function LocationApiWorkspace() {
               label={label}
               icon={(() => {
                 const Icon = tabIcons[key];
-                return <Icon size={16} />;
+                return <Icon size={16} strokeWidth={1.8} />;
               })()}
               iconPosition="start"
               component={Link}
@@ -316,7 +280,12 @@ export function LocationApiWorkspace() {
       {active === 'overview' ? (
         <>
           {summary.error && (
-            <ErrorState error={summary.error} retry={() => void summary.refetch()} />
+            <Alert
+              severity="warning"
+              action={<Button onClick={() => void summary.refetch()}>Thử lại</Button>}
+            >
+              Chưa tải được số liệu sự cố.
+            </Alert>
           )}
           {occupancy.isError && (
             <Alert
@@ -326,21 +295,12 @@ export function LocationApiWorkspace() {
               Chưa tải được trạng thái khai thác phòng.
             </Alert>
           )}
-          {summary.data?.incomplete && (
-            <Alert
-              severity="warning"
-              action={<Button onClick={() => void summary.refetch()}>Tải lại</Button>}
-            >
-              Một số số liệu chưa tải được. Các mục đã tải thành công vẫn có thể xem và quản lý.
-            </Alert>
-          )}
           <LocationWorkspaceOverview
             id={locationId}
             summary={{ ...summary.data, ...roomCounts }}
             active={location.data.isActive}
-            loading={summary.isPending || occupancy.isPending}
+            loading={occupancy.isPending}
             owner={owner}
-            metadata={metadata.data?.data}
             finance={{
               data: finance.data,
               loading: finance.isPending,
@@ -372,31 +332,9 @@ export function LocationApiWorkspace() {
           ) : (
             <Paper sx={{ p: 3 }}>
               <Stack spacing={2}>
-                <Typography>Địa chỉ: {location.data.address}</Typography>
-                <Typography>
-                  {location.data.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}
-                </Typography>
-                <Typography>
-                  Cấu hình phòng, tài sản, giá và nội quy được quản lý riêng cho cơ sở này. Thay đổi
-                  trạng thái do máy chủ kiểm tra theo nghĩa vụ đang mở.
-                </Typography>
-                {summary.data && (
-                  <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 2 }}>
-                    <Chip
-                      label={
-                        roomCounts.rooms == null
-                          ? 'Chưa có số liệu phòng'
-                          : `${roomCounts.rooms} phòng`
-                      }
-                    />
-                    <Chip label={`${summary.data.assets} tài sản thực tế`} />
-                    <Chip label={`${summary.data.assetTemplates} bộ mẫu tài sản`} />
-                    <Chip label={`${summary.data.pricesAndFees} chính sách giá & phí`} />
-                    <Chip label={`${summary.data.rules} nội quy`} />
-                  </Stack>
-                )}
-                <Button component={Link} to="/locations">
-                  Chỉnh sửa thông tin cơ sở
+                <Typography>Không tìm thấy phân hệ này.</Typography>
+                <Button component={Link} to={`/locations/${locationId}/overview`}>
+                  Về Tổng quan
                 </Button>
               </Stack>
             </Paper>
@@ -493,12 +431,14 @@ export function LocationRoomHistory({ locationId }: { locationId: string }) {
     enabled: validDates && !!roomId && !!rooms.data?.some((room) => room.id === roomId),
   });
   return (
-    <LocationSection
-      title="Lịch sử vận hành phòng"
-      description="Tra cứu các sự kiện đã được hệ thống ghi nhận theo từng phòng."
-    >
+    <LocationSection title="Lịch sử vận hành phòng">
       <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack spacing={2}>
+        <Stack
+          direction="row"
+          useFlexGap
+          spacing={1.5}
+          sx={{ flexWrap: 'wrap', alignItems: 'flex-start' }}
+        >
           <Autocomplete
             options={rooms.data ?? []}
             value={rooms.data?.find((room) => room.id === roomId) ?? null}
@@ -511,48 +451,43 @@ export function LocationRoomHistory({ locationId }: { locationId: string }) {
             renderInput={(props) => (
               <TextField {...props} label="Phòng xem lịch sử" placeholder="Tìm theo số phòng" />
             )}
-            sx={{ maxWidth: 420 }}
+            sx={{ width: { xs: '100%', sm: 260 }, maxWidth: '100%' }}
           />
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
-              gap: 1.5,
-            }}
+          <TextField
+            type="date"
+            label="Từ ngày"
+            value={from}
+            onChange={(e) => changeFilter('from', e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ width: { xs: '100%', sm: 170 } }}
+          />
+          <TextField
+            type="date"
+            label="Đến ngày"
+            value={to}
+            onChange={(e) => changeFilter('to', e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            error={!validDates}
+            helperText={!validDates ? 'Khoảng ngày không hợp lệ' : undefined}
+            sx={{ width: { xs: '100%', sm: 170 } }}
+          />
+          <TextField
+            select
+            label="Loại sự kiện"
+            value={eventType}
+            onChange={(e) => changeFilter('eventType', e.target.value)}
+            sx={{ width: { xs: '100%', sm: 220 }, minWidth: 0 }}
           >
-            <TextField
-              type="date"
-              label="Từ ngày"
-              value={from}
-              onChange={(e) => changeFilter('from', e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-            />
-            <TextField
-              type="date"
-              label="Đến ngày"
-              value={to}
-              onChange={(e) => changeFilter('to', e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              error={!validDates}
-              helperText={!validDates ? 'Khoảng ngày không hợp lệ' : undefined}
-            />
-            <TextField
-              select
-              label="Loại sự kiện"
-              value={eventType}
-              onChange={(e) => changeFilter('eventType', e.target.value)}
-            >
-              <MenuItem value="">Tất cả sự kiện</MenuItem>
-              {Object.entries(historyEventLabels).map(([key, label]) => (
-                <MenuItem key={key} value={key}>
-                  {label}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
+            <MenuItem value="">Tất cả sự kiện</MenuItem>
+            {Object.entries(historyEventLabels).map(([key, label]) => (
+              <MenuItem key={key} value={key}>
+                {label}
+              </MenuItem>
+            ))}
+          </TextField>
           {(from || to || eventType) && (
             <Button
-              sx={{ alignSelf: 'flex-start' }}
+              sx={{ alignSelf: 'flex-start', flexShrink: 0 }}
               onClick={() => {
                 setParams(roomId ? { roomId } : {}, { replace: true });
                 setPage(1);

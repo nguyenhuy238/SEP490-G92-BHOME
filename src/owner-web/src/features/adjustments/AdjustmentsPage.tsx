@@ -30,7 +30,8 @@ import {
 } from '../../../../../packages/client-core/src/adjustments';
 import { formatContractMoney, vnd } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
-import { PageHeader, FilterToolbar } from '../../components/common/PortalUI';
+import { PageHeader, FilterToolbar, StatusChip } from '../../components/common/PortalUI';
+import { OwnerTable, OwnerPagination } from '../../components/common/OwnerWorkspace';
 import { useAdjustmentApi } from './useAdjustmentApi';
 import { isMockMode } from '../../services/config';
 
@@ -38,10 +39,7 @@ export default function AdjustmentsPage() {
   const [params] = useSearchParams();
   return (
     <>
-      <PageHeader
-        title="Điều chỉnh hóa đơn"
-        subtitle="Owner xem xét yêu cầu và kết quả tài chính."
-      />
+      <PageHeader title="Điều chỉnh hóa đơn" />
       {isMockMode ? (
         <Alert severity="info">Bật chế độ API để sử dụng luồng điều chỉnh hóa đơn.</Alert>
       ) : (
@@ -111,6 +109,7 @@ export function OwnerAdjustmentList({
           select
           label="Phòng điều chỉnh"
           value={room}
+          disabled={!location}
           onChange={(e) => {
             setRoom(e.target.value);
             setPage(1);
@@ -159,7 +158,7 @@ export function OwnerAdjustmentList({
               onClick={() => {
                 void list.refetch();
                 void locations.refetch();
-                void rooms.refetch();
+                if (location) void rooms.refetch();
               }}
             >
               Thử lại
@@ -172,33 +171,54 @@ export function OwnerAdjustmentList({
       {!list.error && !list.isPending && list.data?.items.length === 0 && (
         <Alert severity="info">Không có yêu cầu phù hợp.</Alert>
       )}
-      {list.data?.items.map((x) => (
-        <Paper key={x.id} sx={{ p: 2 }}>
-          <Stack spacing={1}>
-            <Typography>
-              {x.locationName} · Phòng {x.roomNumber} · {x.billingPeriod.slice(0, 7)} ·{' '}
-              {x.invoiceStatus === 'Draft' ? 'Nháp' : 'Đã phát hành'}
-            </Typography>
-            <Typography>
-              {adjustmentStatus(x.status)} · {x.chargeCode ?? 'Toàn hóa đơn'} · Giá trị khi gửi:{' '}
-              {formatContractMoney(x.currentAmount)}
-            </Typography>
-            <Button onClick={() => setSelected(x.id)}>Xem yêu cầu điều chỉnh</Button>
-          </Stack>
+      {!!list.data?.items.length && !list.error && (
+        <Paper variant="outlined" sx={{ minWidth: 0 }}>
+          <OwnerTable
+            label="Danh sách yêu cầu điều chỉnh"
+            rows={list.data.items}
+            id={(x) => x.id}
+            select={(x) => setSelected(x.id)}
+            selectLabel="Xem yêu cầu điều chỉnh"
+            loading={list.isFetching}
+            columns={[
+              {
+                label: 'Phòng / Cơ sở',
+                render: (x) => (
+                  <>
+                    <Typography sx={{ fontWeight: 650 }}>Phòng {x.roomNumber}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {x.locationName}
+                    </Typography>
+                  </>
+                ),
+              },
+              {
+                label: 'Hóa đơn / Kỳ',
+                render: (x) => (
+                  <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+                    <Typography>{x.billingPeriod.slice(0, 7)}</Typography>
+                    <StatusChip label={x.invoiceStatus === 'Draft' ? 'Bản nháp' : 'Đã phát hành'} />
+                  </Stack>
+                ),
+              },
+              { label: 'Khoản thu', render: (x) => x.chargeCode ?? 'Toàn hóa đơn' },
+              { label: 'Giá trị khi gửi', render: (x) => formatContractMoney(x.currentAmount) },
+              {
+                label: 'Trạng thái yêu cầu',
+                render: (x) => <StatusChip label={adjustmentStatus(x.status)} />,
+              },
+            ]}
+          />
         </Paper>
-      ))}
-      <Stack direction="row" spacing={2}>
-        <Button disabled={page === 1} onClick={() => setPage(page - 1)}>
-          Yêu cầu trước
-        </Button>
-        <Typography>Trang {page}</Typography>
-        <Button
-          disabled={!list.data || page * 20 >= list.data.totalCount}
-          onClick={() => setPage(page + 1)}
-        >
-          Yêu cầu sau
-        </Button>
-      </Stack>
+      )}
+      {list.data && !list.error && (
+        <OwnerPagination
+          page={page}
+          total={list.data.totalCount}
+          change={setPage}
+          busy={list.isFetching}
+        />
+      )}
       {selected && <OwnerAdjustmentDetail key={selected} id={selected} />}
     </Stack>
   );
@@ -231,9 +251,11 @@ export function OwnerAdjustmentDetail({ id }: { id: string }) {
     queryFn: ({ signal }) => api.get(id, signal),
   });
   return (
-    <Paper sx={{ p: 3 }}>
+    <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, minWidth: 0, overflowWrap: 'anywhere' }}>
       <Stack spacing={2}>
-        <Typography variant="h6">Chi tiết yêu cầu điều chỉnh</Typography>
+        <Typography variant="h2" component="h2">
+          Chi tiết yêu cầu điều chỉnh
+        </Typography>
         {detail.isPending && <LinearProgress />}
         {detail.error && (
           <Alert
@@ -423,7 +445,7 @@ function DecisionForm({ value, saved }: { value: Adjustment; saved: () => Promis
         label="Tôi đã kiểm tra hóa đơn, số dư và bằng chứng"
       />
       {error && <Alert severity="error">{error}</Alert>}
-      <Stack direction="row" spacing={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
         <Button
           disabled={
             busy ||

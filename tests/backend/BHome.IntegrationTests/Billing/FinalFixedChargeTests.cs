@@ -88,7 +88,7 @@ public sealed partial class InvoiceApiTests
             var person = Assert.Single(draft.Lines, l => l.ChargeCode == "CLEANING");
             Assert.Equal(2m, person.Quantity); Assert.Equal(expectedPerson, person.Amount);
             using var snapshot = JsonDocument.Parse(person.UtilityCalculationSnapshot!);
-            Assert.Equal(30, snapshot.RootElement.GetProperty("source").GetProperty("PersonDays").GetInt32());
+            Assert.Equal("30", snapshot.RootElement.GetProperty("source").GetProperty("PersonDays").GetString());
         }
         if (invoiceFirst) draft = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize", new InvoiceFinalizeInput(draft.Version)));
         var original = await w.Owner.Client.GetStringAsync($"/api/v1/invoices/{draft.Id}");

@@ -1,5 +1,5 @@
 import { MoneyField } from '../../components/common/MoneyField';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -24,7 +24,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { invoiceError, type Page } from '../../../../../packages/client-core/src/invoices';
 import type {
@@ -64,9 +64,11 @@ const assetLabels = ['Đang sử dụng', 'Hư hỏng', 'Đang sửa chữa', '�
 export function PropertyApiPage({
   kind,
   createInitially = false,
+  embedded = false,
 }: {
   kind: Kind;
   createInitially?: boolean;
+  embedded?: boolean;
 }) {
   const api = usePropertySetupApi();
   const setup = locationSetupClient(api.request);
@@ -74,14 +76,45 @@ export function PropertyApiPage({
   const { session } = useAuth();
   const portal = usePortal();
   const params = useParams();
+  const { key: routeKey } = useLocation();
+  const [urlParams, setUrlParams] = useSearchParams();
   const canManage = session?.roles.includes('Owner') ?? false;
   const [selectedLocation, setSelectedLocation] = useState(
     portal.locationId === 'all' ? '' : portal.locationId,
   );
   const location = params.locationId ?? selectedLocation;
-  const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [localStatusFilter, setLocalStatusFilter] = useState('');
+  const scopedRooms = kind === 'rooms' && !!params.locationId;
+  const urlStatus = urlParams.get('roomStatus') ?? '';
+  const statusFilter = scopedRooms
+    ? /^[0-3]$/.test(urlStatus)
+      ? urlStatus
+      : ''
+    : localStatusFilter;
+  // Reset pagination before the next query runs, including URL-driven navigation.
+  const pageScope = JSON.stringify([kind, location, statusFilter, search]);
+  const [pagination, setPagination] = useState({ scope: pageScope, page: 0 });
+  if (pagination.scope !== pageScope) {
+    setPagination({ scope: pageScope, page: 0 });
+  }
+  const page = pagination.scope === pageScope ? pagination.page : 0;
+  const setPage = (value: number) => setPagination({ scope: pageScope, page: value });
+  function setStatusFilter(value: string) {
+    if (!scopedRooms) {
+      setLocalStatusFilter(value);
+      return;
+    }
+    setUrlParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (value) next.set('roomStatus', value);
+        else next.delete('roomStatus');
+        return next;
+      },
+      { replace: true },
+    );
+  }
   const [view, setView] = useState(kind === 'rooms' ? 'cards' : 'table');
   const [bulkOpen, setBulkOpen] = useState(false);
   const [inspectedRoom, setInspectedRoom] = useState('');
@@ -91,7 +124,21 @@ export function PropertyApiPage({
   const [editing, setEditing] = useState<Row | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState('');
+  const createIntent = scopedRooms && urlParams.get('action') === 'create' ? routeKey : null;
+  const [handledIntent, setHandledIntent] = useState<string | null>(null);
+  // A new navigation intent initializes the same editor state as the manual action.
+  // Adjust during render so the next committed editor is never a stale edit form.
+  if (createIntent !== handledIntent) {
+    setHandledIntent(createIntent);
+    if (createIntent && canManage && location) {
+      setEditing(null);
+      setNotice('');
+      setValues({});
+      setOpen(true);
+    }
+  }
   const lock = useRef(false);
+  const consumedIntent = useRef<string | null>(null);
   const configuredKey = useRef({ payload: '', key: '' });
   const defaults = useQuery({
     queryKey: ['property-setup', 'room-defaults', session?.userId, location],
@@ -221,6 +268,26 @@ export function PropertyApiPage({
     );
     setOpen(true);
   };
+  // Overview's add-room shortcut opens the same editor as the list action.
+  // Consume the intent once; neither the URL nor opening the form writes data.
+  const resetSave = save.reset;
+  useEffect(() => {
+    if (!createIntent) {
+      consumedIntent.current = null;
+      return;
+    }
+    if (consumedIntent.current === createIntent) return;
+    consumedIntent.current = createIntent;
+    if (canManage && location) resetSave();
+    setUrlParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete('action');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [createIntent, canManage, location, resetSave, setUrlParams]);
   const submit = () => {
     if (lock.current) return;
     lock.current = true;
@@ -242,50 +309,56 @@ export function PropertyApiPage({
       slotProps={type === 'number' ? { htmlInput: { min: 1, max: 32767, step: 1 } } : undefined}
     />
   );
+  const subtitle =
+    kind === 'rooms'
+      ? 'Tìm phòng, xem sức chứa và quản lý trạng thái khai thác.'
+      : kind === 'assets'
+        ? 'Theo dõi thiết bị thực tế tại phòng và khu chung, kiểm tra tình trạng và lịch sử.'
+        : 'Quản lý thông tin và cấu hình các cơ sở.';
+  const actions = canManage ? (
+    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+      {kind === 'locations' && <ApiConfigurationCopy />}
+      {kind === 'rooms' && (
+        <>
+          {location && (
+            <Button component={Link} to={`/locations/${location}/room-types`} variant="outlined">
+              Cấu hình mẫu phòng
+            </Button>
+          )}
+          <Button variant="outlined" disabled={!location} onClick={() => setBulkOpen(true)}>
+            Tạo phòng hàng loạt
+          </Button>
+        </>
+      )}
+      <Button
+        variant="contained"
+        disabled={kind !== 'locations' && !location}
+        onClick={() => edit(null)}
+      >
+        Thêm {kind === 'locations' ? 'cơ sở' : kind === 'rooms' ? 'phòng' : 'tài sản'}
+      </Button>
+    </Stack>
+  ) : undefined;
   return (
-    <Stack spacing={2}>
-      <PageHeader
-        group={null}
-        headingLevel={params.locationId ? 'h2' : 'h1'}
-        title={titles[kind]}
-        subtitle={
-          kind === 'rooms'
-            ? 'Tìm phòng, xem sức chứa và quản lý trạng thái khai thác.'
-            : kind === 'assets'
-              ? 'Theo dõi thiết bị thực tế tại phòng và khu chung, kiểm tra tình trạng và lịch sử.'
-              : 'Quản lý thông tin và cấu hình các cơ sở.'
-        }
-        actions={
-          canManage ? (
-            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-              {kind === 'locations' && <ApiConfigurationCopy />}
-              {kind === 'rooms' && (
-                <>
-                  {location && (
-                    <Button
-                      component={Link}
-                      to={`/locations/${location}/room-types`}
-                      variant="outlined"
-                    >
-                      Cấu hình mẫu phòng
-                    </Button>
-                  )}
-                  <Button variant="outlined" disabled={!location} onClick={() => setBulkOpen(true)}>
-                    Tạo phòng hàng loạt
-                  </Button>
-                </>
-              )}
-              <Button
-                variant="contained"
-                disabled={kind !== 'locations' && !location}
-                onClick={() => edit(null)}
-              >
-                Thêm {kind === 'locations' ? 'cơ sở' : kind === 'rooms' ? 'phòng' : 'tài sản'}
-              </Button>
-            </Stack>
-          ) : undefined
-        }
-      />
+    <Stack spacing={2} sx={{ minWidth: 0 }}>
+      {embedded ? (
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          useFlexGap
+          spacing={1.5}
+          sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', flexWrap: 'wrap' }}
+        >
+          <Box sx={{ ml: { sm: 'auto' } }}>{actions}</Box>
+        </Stack>
+      ) : (
+        <PageHeader
+          group={null}
+          headingLevel={params.locationId ? 'h2' : 'h1'}
+          title={titles[kind]}
+          subtitle={params.locationId ? undefined : subtitle}
+          actions={actions}
+        />
+      )}
       {notice && <Alert severity="success">{notice}</Alert>}
       {kind !== 'locations' && !params.locationId && (
         <TextField
@@ -306,15 +379,18 @@ export function PropertyApiPage({
         </TextField>
       )}
       {options.error && <ErrorState error={options.error} retry={() => void options.refetch()} />}
-      <Paper variant="outlined" sx={{ p: 2 }}>
+      <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 } }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
-          spacing={2}
-          sx={{ alignItems: { md: 'center' } }}
+          spacing={1.5}
+          useFlexGap
+          sx={{ alignItems: { md: 'center' }, flexWrap: 'wrap' }}
         >
           <TextField
             fullWidth
+            size="small"
             label="Tìm kiếm"
+            sx={{ flex: { md: '1 1 220px' }, minWidth: 0 }}
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -324,6 +400,7 @@ export function PropertyApiPage({
           {kind !== 'locations' && (
             <TextField
               select
+              size="small"
               label="Trạng thái"
               value={statusFilter}
               onChange={(e) => {
@@ -382,7 +459,15 @@ export function PropertyApiPage({
       ) : query.error ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
       ) : (
-        <Paper variant="outlined" sx={{ minWidth: 0 }}>
+        <Paper
+          variant={kind === 'rooms' && view === 'cards' ? 'elevation' : 'outlined'}
+          elevation={0}
+          sx={{
+            minWidth: 0,
+            ...(kind === 'rooms' &&
+              view === 'cards' && { bgcolor: 'transparent', boxShadow: 'none' }),
+          }}
+        >
           {!query.data?.items.length ? (
             <Box sx={{ p: 3, textAlign: 'center' }}>
               <EmptyState
@@ -412,7 +497,7 @@ export function PropertyApiPage({
               edit={canManage ? edit : undefined}
             />
           ) : (
-            <Stack sx={{ overflowX: 'auto' }}>
+            <Stack sx={{ overflowX: 'auto', minWidth: 0 }}>
               {kind === 'rooms' && tableOperations.occupancy.error && (
                 <Alert
                   severity="warning"
@@ -437,7 +522,11 @@ export function PropertyApiPage({
                   Chưa tải được báo cáo sự cố.
                 </Alert>
               )}
-              <Table size="small" aria-label={titles[kind]}>
+              <Table
+                size="small"
+                aria-label={titles[kind]}
+                sx={{ minWidth: kind === 'rooms' ? 820 : 650 }}
+              >
                 <TableHead>
                   <TableRow>
                     <TableCell>{kind === 'rooms' ? 'Số phòng' : 'Tên / mã'}</TableCell>
@@ -463,9 +552,12 @@ export function PropertyApiPage({
                 </TableHead>
                 <TableBody>
                   {query.data.items.map((row) => (
-                    <TableRow key={row.id}>
+                    <TableRow key={row.id} hover>
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}
+                        >
                           {'roomNumber' in row ? row.roomNumber : row.name}
                         </Typography>
                         {'code' in row && (
@@ -601,7 +693,11 @@ export function PropertyApiPage({
             rowsPerPageOptions={[20]}
             labelRowsPerPage="Số dòng"
             labelDisplayedRows={({ from, to, count }) => `${from}–${to} / ${count} bản ghi`}
-            sx={{ '& .MuiTablePagination-toolbar': { flexWrap: 'wrap', gap: 1 } }}
+            sx={{
+              borderTop: '1px solid',
+              borderColor: 'divider',
+              '& .MuiTablePagination-toolbar': { flexWrap: 'wrap', gap: 1 },
+            }}
           />
         </Paper>
       )}

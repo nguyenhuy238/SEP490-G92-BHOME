@@ -87,13 +87,39 @@ export function ContractDraftDialog({
     setAccount('');
   };
   return (
-    <Dialog open fullWidth maxWidth="md" onClose={() => !busy && onClose()}>
-      <DialogTitle>
+    <Dialog
+      open
+      fullWidth
+      maxWidth="md"
+      aria-labelledby="contract-draft-title"
+      onClose={() => !busy && onClose()}
+      slotProps={{
+        paper: {
+          sx: {
+            '@media (max-width:599px)': {
+              m: 0,
+              width: '100%',
+              maxWidth: '100%',
+              height: '100%',
+              maxHeight: '100%',
+              borderRadius: 0,
+            },
+          },
+        },
+      }}
+    >
+      <DialogTitle id="contract-draft-title">
         {kind === 'Holding' ? 'Tạo hợp đồng giữ chỗ' : 'Tạo nháp hợp đồng thuê'}
       </DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ pt: 1 }}>
-          <Stepper activeStep={step}>
+      <DialogContent dividers sx={{ p: { xs: 1.5, sm: 2 }, overflowWrap: 'anywhere' }}>
+        <Stack spacing={1.5}>
+          <Stepper
+            activeStep={step}
+            sx={{
+              '& .MuiStep-root': { px: { xs: 0.25, sm: 1 } },
+              '& .MuiStepLabel-label': { overflowWrap: 'anywhere' },
+            }}
+          >
             {['Cấu hình', 'Phòng & Người ở', 'Điều khoản'].map((label) => (
               <Step key={label}>
                 <StepLabel>{label}</StepLabel>
@@ -337,7 +363,7 @@ export function ContractDraftDialog({
           {!!error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ flexWrap: 'wrap' }}>
         <Button disabled={busy} onClick={onClose}>
           Đóng
         </Button>

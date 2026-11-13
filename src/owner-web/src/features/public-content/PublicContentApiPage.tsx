@@ -44,7 +44,7 @@ export function PublicContentApiPage() {
     <Stack spacing={2}>
       <PageHeader
         title="Nội dung website công khai"
-        subtitle="Chỉ xuất bản thông tin và ảnh Owner đã duyệt. Khách xem thông tin; liên hệ qua số điện thoại/email tĩnh."
+        subtitle="Quản lý thông tin và hình ảnh được phép hiển thị cho khách."
       />
       <FilterToolbar>
         <OwnerLocationPicker
@@ -150,7 +150,7 @@ function ContentEditor({ data, path, room }: { data: PublicContent; path: string
     if (ok) setConfirm('');
   }
   return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
+    <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 } }}>
       <Stack spacing={2}>
         <OwnerFeedback busy={action.busy} error={action.error} notice={action.notice} />
         <Typography variant="h6">{room ? `Phòng ${data.roomNumber}` : data.name}</Typography>
@@ -227,7 +227,7 @@ function ContentEditor({ data, path, room }: { data: PublicContent; path: string
           </Alert>
         )}
         {preview && (
-          <Paper variant="outlined" sx={{ p: 2 }}>
+          <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 } }}>
             <Typography variant="h6">{room ? `Phòng ${data.roomNumber}` : data.name}</Typography>
             <Typography>{description}</Typography>
             <Typography>{amenities.split('\n').filter(Boolean).join(' · ')}</Typography>

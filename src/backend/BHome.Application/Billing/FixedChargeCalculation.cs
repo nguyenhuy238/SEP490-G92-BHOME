@@ -31,7 +31,11 @@ public static class FixedChargeCalculation
             policy.Category,
             policy.ChargeCode,
             policy.Method,
-            policy.Rate,
+            // Signed rent is stored as whole VND on the contract but as numeric(18,4)
+            // on invoice items. Keep its original whole-VND fingerprint when reading
+            // legacy finalized invoices; decimal scale is not a price change.
+            Rate = policy.Id == Guid.Empty && policy.Category == ChargeCategory.Rent && decimal.Truncate(policy.Rate) == policy.Rate
+                ? decimal.Truncate(policy.Rate) : policy.Rate,
             schedule.PartialMonth,
             schedule.Rounding,
             SignedContract = policy.Id == Guid.Empty ? signedContractHash : ""

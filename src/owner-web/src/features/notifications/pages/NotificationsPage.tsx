@@ -74,10 +74,7 @@ export function LiveNotificationsPage() {
   }
   return (
     <>
-      <PageHeader
-        title={composing ? 'Soạn và quản lý thông báo' : 'Thông báo của tôi'}
-        subtitle="Thông báo lưu trong tài khoản của bạn; quyền mở hồ sơ được kiểm tra lại khi truy cập."
-      />
+      <PageHeader title={composing ? 'Soạn và quản lý thông báo' : 'Thông báo của tôi'} />
       {import.meta.env.DEV && import.meta.env.VITE_SMS_DEMO_ENABLED === 'true' && (
         <Button onClick={() => navigate('/demo/sms')}>Hộp thư SMS Demo</Button>
       )}
@@ -166,9 +163,14 @@ export function LiveNotificationsPage() {
           )}
           {!list.error &&
             list.data?.items.map((n) => (
-              <Paper key={n.id} sx={{ p: 2 }}>
+              <Paper key={n.id} variant="outlined" sx={{ p: 1.5 }}>
                 <Stack spacing={1}>
-                  <Stack direction="row" spacing={1}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    useFlexGap
+                    sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+                  >
                     <Chip
                       label={
                         notificationCategories[n.category as keyof typeof notificationCategories] ??
@@ -180,10 +182,14 @@ export function LiveNotificationsPage() {
                       color={n.readAt ? 'default' : 'primary'}
                     />
                   </Stack>
-                  <Typography variant="h6">{n.title}</Typography>
-                  <Typography>{n.summary}</Typography>
+                  <Typography variant="h3" sx={{ overflowWrap: 'anywhere' }}>
+                    {n.title}
+                  </Typography>
+                  <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                    {n.summary}
+                  </Typography>
                   <Typography variant="body2">{formatInstant(n.createdAt)}</Typography>
-                  <Stack direction="row">
+                  <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                     {[
                       'Invoice',
                       'Adjustment',
@@ -219,7 +225,11 @@ export function LiveNotificationsPage() {
                 </Stack>
               </Paper>
             ))}
-          <Stack direction="row">
+          <Stack
+            direction="row"
+            useFlexGap
+            sx={{ flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 1 }}
+          >
             <Button disabled={page === 1 || list.isFetching} onClick={() => setPage(page - 1)}>
               Trang trước
             </Button>

@@ -133,10 +133,8 @@ export function ContractDetailPanel({
     { label: 'Xác minh cọc', done: depositDone },
     { label: 'Kích hoạt', done: activated },
   ];
-  const activeStep = Math.max(
-    0,
-    steps.findIndex((s) => !s.done),
-  );
+  const nextStep = steps.findIndex((s) => !s.done);
+  const activeStep = nextStep < 0 ? steps.length : nextStep;
   const representative =
     c.occupants?.find((o) => o.representative)?.label || c.representativeResidentId;
   const facts: [string, ReactNode][] = [
@@ -203,7 +201,15 @@ export function ContractDetailPanel({
           Mã hợp đồng {c.id}
         </Typography>
         <ContractNavigation id={c.id} />
-        <Stepper activeStep={activeStep} alternativeLabel sx={{ my: 2 }}>
+        <Stepper
+          activeStep={activeStep}
+          alternativeLabel
+          sx={{
+            my: 1.5,
+            '& .MuiStep-root': { px: { xs: 0.25, sm: 1 } },
+            '& .MuiStepLabel-label': { overflowWrap: 'anywhere' },
+          }}
+        >
           {steps.map((s) => (
             <Step key={s.label} completed={s.done}>
               <StepLabel>{s.label}</StepLabel>
@@ -237,52 +243,6 @@ export function ContractDetailPanel({
           </Button>
         )}
       </Paper>
-
-      {c.agreedCharges?.length ||
-      c.priceLockedAt ||
-      ['Active', 'PendingSigning', 'PendingActivation', 'Terminated', 'Superseded'].includes(
-        c.status,
-      ) ? (
-        <ChartCard title="Giá & phí theo hợp đồng">
-          <Stack spacing={1.5}>
-            {c.agreedCharges?.length ? (
-              <>
-                <Alert severity="info">
-                  {c.priceLockedAt || c.approvedAt || c.status !== 'Draft'
-                    ? 'Biểu phí đã chốt được giữ nguyên trong suốt hợp đồng. Hóa đơn sử dụng đơn giá này, không sử dụng biểu giá mới của phòng.'
-                    : 'Biểu phí dự kiến của bản nháp; sẽ được khóa khi hợp đồng có ràng buộc.'}
-                </Alert>
-                {c.agreedCharges.map((charge) => (
-                  <Stack
-                    key={charge.chargeCode}
-                    direction="row"
-                    sx={{ justifyContent: 'space-between', gap: 2 }}
-                  >
-                    <Typography variant="body2">
-                      {charge.name || charge.chargeCode} · {charge.chargeCode}
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {formatBillingDecimal(charge.rate)} đ/
-                      {charge.category === 1
-                        ? 'kWh'
-                        : charge.category === 2
-                          ? 'm³'
-                          : charge.method === 2
-                            ? 'người/tháng'
-                            : 'tháng'}
-                    </Typography>
-                  </Stack>
-                ))}
-              </>
-            ) : (
-              <Alert severity="warning">
-                Hợp đồng chưa có biểu phí đã chốt để đối chiếu. Không sử dụng giá cấu hình hiện tại
-                thay thế.
-              </Alert>
-            )}
-          </Stack>
-        </ChartCard>
-      ) : null}
 
       {!!error && <Alert severity="error">{error}</Alert>}
       {!!notice && <Alert severity="success">{notice}</Alert>}
@@ -341,6 +301,59 @@ export function ContractDetailPanel({
           )}
         </Stack>
       </ChartCard>
+
+      {c.agreedCharges?.length ||
+      c.priceLockedAt ||
+      ['Active', 'PendingSigning', 'PendingActivation', 'Terminated', 'Superseded'].includes(
+        c.status,
+      ) ? (
+        <ChartCard title="Giá & phí theo hợp đồng">
+          <Stack spacing={1.5}>
+            {c.agreedCharges?.length ? (
+              <>
+                <Alert severity="info">
+                  {c.priceLockedAt || c.approvedAt || c.status !== 'Draft'
+                    ? 'Biểu phí đã chốt được giữ nguyên trong suốt hợp đồng. Hóa đơn sử dụng đơn giá này, không sử dụng biểu giá mới của phòng.'
+                    : 'Biểu phí dự kiến của bản nháp; sẽ được khóa khi hợp đồng có ràng buộc.'}
+                </Alert>
+                {c.agreedCharges.map((charge) => (
+                  <Stack
+                    key={charge.chargeCode}
+                    direction={{ xs: 'column', sm: 'row' }}
+                    sx={{
+                      justifyContent: 'space-between',
+                      gap: { xs: 0.5, sm: 2 },
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    <Typography variant="body2">
+                      {charge.name || charge.chargeCode} · {charge.chargeCode}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {formatBillingDecimal(charge.rate)} đ/
+                      {charge.category === 1
+                        ? 'kWh'
+                        : charge.category === 2
+                          ? 'm³'
+                          : charge.method === 2
+                            ? 'người/tháng'
+                            : 'tháng'}
+                    </Typography>
+                  </Stack>
+                ))}
+              </>
+            ) : (
+              <Alert severity="warning">
+                Hợp đồng chưa có biểu phí đã chốt để đối chiếu. Không sử dụng giá cấu hình hiện tại
+                thay thế.
+              </Alert>
+            )}
+          </Stack>
+        </ChartCard>
+      ) : null}
 
       {/* 3. Signatures: one line per party, then the signed PDF */}
       <ChartCard

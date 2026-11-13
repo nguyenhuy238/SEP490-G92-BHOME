@@ -114,6 +114,21 @@ it('never represents failed occupancy/incident reads as zero people or no incide
   expect(screen.queryByText('Không có báo cáo sự cố đang mở')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
 });
+it('shows the room template name without exposing its version in routine floor cards', async () => {
+  const provenance = await state.request('/room-provenance');
+  mount(
+    <RoomFloorCards
+      locationId="location"
+      rooms={[room]}
+      total={1}
+      inspect={vi.fn()}
+      provenance={provenance}
+    />,
+  );
+  expect(screen.getByText('Studio lưu tại phòng')).toBeInTheDocument();
+  expect(screen.queryByText(/Studio lưu tại phòng.*v2/)).not.toBeInTheDocument();
+  expect(await screen.findByText('2/3')).toBeInTheDocument();
+});
 it('reports floor-filtered page counts without treating unknown room status as unavailable', async () => {
   mount(
     <RoomFloorCards

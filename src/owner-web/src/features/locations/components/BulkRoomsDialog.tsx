@@ -108,8 +108,8 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
   return (
     <Dialog open fullWidth maxWidth="md" onClose={() => !save.isPending && close()}>
       <DialogTitle>Tạo phòng hàng loạt</DialogTitle>
-      <DialogContent>
-        <Stack spacing={3} sx={{ pt: 1 }}>
+      <DialogContent dividers>
+        <Stack spacing={2.5} sx={{ pt: 0.5 }}>
           <Alert severity="info">
             Chọn gợi ý của cơ sở, tạo danh sách xem trước và kiểm tra từng phòng. Hệ thống lưu cấu
             hình và phiên bản nguồn cho các phòng mới, không thay đổi gợi ý hoặc tạo tài sản thực
@@ -135,7 +135,7 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
               Cơ sở chưa có gợi ý tạo phòng đang sử dụng.
             </Alert>
           )}
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800 }}>
             Quy tắc đặt số phòng
           </Typography>
           <Box
@@ -161,7 +161,12 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
             }}
           >
             <Box
-              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                gap: 2,
+                '& > *': { minWidth: 0 },
+              }}
             >
               <TextField
                 label="Tầng"
@@ -229,10 +234,17 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
           </Box>
           {rows.length > 0 && (
             <>
-              <Typography sx={{ fontWeight: 750 }}>
+              <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800 }}>
                 Xem trước {rows.length} phòng · Chưa lưu
               </Typography>
-              <TableContainer sx={{ maxHeight: 350 }}>
+              <TableContainer
+                sx={{
+                  maxHeight: 350,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: '8px',
+                }}
+              >
                 <Table
                   stickyHeader
                   size="small"
@@ -345,7 +357,7 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
           )}
         </Stack>
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5, flexWrap: 'wrap', gap: 1 }}>
         <Button disabled={save.isPending} onClick={close}>
           Hủy
         </Button>

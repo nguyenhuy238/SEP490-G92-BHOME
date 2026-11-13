@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { propertySetupClient } from '../../../../../packages/client-core/src/propertySetup';
 import { sharedConfigurationClient } from '../../../../../packages/client-core/src/sharedConfiguration';
@@ -342,4 +342,150 @@ it('sends room status filtering to the backend instead of filtering a paginated 
       expect.anything(),
     ),
   );
+});
+
+function ScopedRoomRoute() {
+  const { search } = useLocation();
+  const navigate = useNavigate();
+  return (
+    <>
+      <output data-testid="route-query">{search}</output>
+      <button onClick={() => navigate('/locations/location/rooms?roomStatus=2')}>
+        Điều hướng trạng thái
+      </button>
+      <button onClick={() => navigate('/locations/other/rooms?roomStatus=2')}>
+        Điều hướng cơ sở
+      </button>
+      <button onClick={() => navigate('/locations/location/rooms?action=create&roomStatus=0')}>
+        Điều hướng tạo phòng
+      </button>
+      <button onClick={() => navigate(-1)}>Quay lại lịch sử</button>
+      <PropertyApiPage kind="rooms" />
+    </>
+  );
+}
+
+function mountScopedRoom(search: string, totalCount = 0, fromOverview = false) {
+  state.request.mockImplementation(async (path: string) =>
+    path === '/api/v1/capture/locations'
+      ? [{ id: 'location', label: 'Synthetic Location' }]
+      : path.endsWith('/room-defaults') || path.endsWith('/room-provenance')
+        ? []
+        : { items: [], totalCount },
+  );
+  return render(
+    <ThemeProvider theme={theme}>
+      <PortalProvider>
+        <MemoryRouter
+          initialEntries={[
+            ...(fromOverview ? ['/locations/location/overview'] : []),
+            `/locations/location/rooms${search}`,
+          ]}
+        >
+          <Routes>
+            <Route path="/locations/:locationId/rooms" element={<ScopedRoomRoute />} />
+            <Route path="/locations/:locationId/overview" element={<div>Tổng quan cơ sở</div>} />
+          </Routes>
+        </MemoryRouter>
+      </PortalProvider>
+    </ThemeProvider>,
+  );
+}
+
+it('opens a filtered room list from the overview and clears the URL filter with the control', async () => {
+  mountScopedRoom('?roomStatus=0');
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      '/api/v1/rooms?locationId=location&page=1&pageSize=20&roomStatus=0',
+      expect.anything(),
+    ),
+  );
+  expect(screen.getByLabelText('Trạng thái')).toHaveTextContent('Trống khai thác');
+  fireEvent.mouseDown(screen.getByLabelText('Trạng thái'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Tất cả trạng thái' }));
+  await waitFor(() => expect(screen.getByTestId('route-query')).toHaveTextContent(/^$/));
+  expect(state.request).toHaveBeenCalledWith(
+    '/api/v1/rooms?locationId=location&page=1&pageSize=20',
+    expect.anything(),
+  );
+});
+
+it('opens the room creation form once from the overview without writing data', async () => {
+  mountScopedRoom('?action=create');
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByLabelText(/Số phòng/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByTestId('route-query')).toHaveTextContent(/^$/));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Hủy' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(state.request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+});
+
+it('does not allow a Staff deep link to open the Owner creation form', async () => {
+  state.roles = ['Staff'];
+  mountScopedRoom('?action=create&roomStatus=99');
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      '/api/v1/rooms?locationId=location&page=1&pageSize=20',
+      expect.anything(),
+    ),
+  );
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Thêm phòng' })).not.toBeInTheDocument();
+  await waitFor(() =>
+    expect(screen.getByTestId('route-query')).toHaveTextContent('?roomStatus=99'),
+  );
+});
+
+it('resets pagination on URL status and location changes, including back navigation', async () => {
+  mountScopedRoom('?roomStatus=0', 42);
+  async function nextPage() {
+    fireEvent.click(await screen.findByRole('button', { name: 'Tới trang tiếp theo' }));
+    await screen.findByText('21–40 / 42 bản ghi');
+  }
+  await nextPage();
+  state.request.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: 'Điều hướng trạng thái' }));
+  await screen.findByText('1–20 / 42 bản ghi');
+  expect(state.request).toHaveBeenCalledWith(
+    '/api/v1/rooms?locationId=location&page=1&pageSize=20&roomStatus=2',
+    expect.anything(),
+  );
+  expect(state.request.mock.calls.some(([path]) => path.includes('page=2'))).toBe(false);
+  await nextPage();
+  state.request.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: 'Điều hướng cơ sở' }));
+  await screen.findByText('1–20 / 42 bản ghi');
+  expect(state.request).toHaveBeenCalledWith(
+    '/api/v1/rooms?locationId=other&page=1&pageSize=20&roomStatus=2',
+    expect.anything(),
+  );
+  expect(state.request.mock.calls.some(([path]) => path.includes('page=2'))).toBe(false);
+  await nextPage();
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại lịch sử' }));
+  await screen.findByText('1–20 / 42 bản ghi');
+  expect(screen.getByLabelText('Trạng thái')).toHaveTextContent('Đang có khách thuê');
+});
+
+it('consumes a fresh create intent while mounted, preserves filters and replaces the history entry', async () => {
+  mountScopedRoom('?roomStatus=0', 0, true);
+  fireEvent.click(screen.getByRole('button', { name: 'Điều hướng tạo phòng' }));
+  let dialog = await screen.findByRole('dialog');
+  await waitFor(() => expect(screen.getByTestId('route-query')).toHaveTextContent('?roomStatus=0'));
+  fireEvent.change(within(dialog).getByLabelText(/Số phòng/), { target: { value: 'A101' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Hủy' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Điều hướng tạo phòng' }));
+  dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByLabelText(/Số phòng/)).toHaveValue('');
+  await waitFor(() => expect(screen.getByTestId('route-query')).toHaveTextContent('?roomStatus=0'));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Hủy' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại lịch sử' }));
+  expect(screen.getByTestId('route-query')).toHaveTextContent('?roomStatus=0');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại lịch sử' }));
+  expect(screen.getByTestId('route-query')).toHaveTextContent('?roomStatus=0');
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại lịch sử' }));
+  expect(await screen.findByText('Tổng quan cơ sở')).toBeInTheDocument();
+  expect(state.request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 });

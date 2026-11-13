@@ -64,20 +64,13 @@ export function LocalAssetSetup({
   });
   return (
     <Stack spacing={2}>
-      <Box>
-        <Typography variant="h6" component="h2">
-          {mode === 'templates'
-            ? 'Bộ định mức trang bị'
-            : mode === 'inventory'
-              ? 'Kiểm kê theo phòng'
-              : 'Bộ mẫu trang bị & Kiểm kê phòng'}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          {mode === 'inventory'
-            ? 'So sánh định mức với tài sản vật lý đã ghi nhận và xác nhận bằng chứng kiểm kê.'
-            : 'Công bố bộ mẫu chỉ tạo định mức mong muốn cho phòng đủ điều kiện. Tài sản thực tế chỉ được ghi nhận sau khi kiểm kê và xác nhận bằng chứng.'}
-        </Typography>
-      </Box>
+      {mode === 'all' && (
+        <Box>
+          <Typography variant="h6" component="h2">
+            Bộ mẫu trang bị & Kiểm kê phòng
+          </Typography>
+        </Box>
+      )}
       {action.error && <Alert severity="error">{action.error}</Alert>}
       {action.notice && <Alert severity="success">{action.notice}</Alert>}
       {showTemplates && !owner && (
@@ -129,7 +122,7 @@ export function LocalAssetSetup({
                       />
                     </Stack>
                     <Typography variant="body2" color="text.secondary">
-                      Phiên bản {template.version} · {template.data.items.length} loại thiết bị
+                      {template.data.items.length} loại thiết bị
                     </Typography>
                     <TableContainer>
                       <Table size="small" aria-label={`Định mức ${template.data.name}`}>
@@ -157,6 +150,11 @@ export function LocalAssetSetup({
                         </TableBody>
                       </Table>
                     </TableContainer>
+                    {template.status === 'Draft' && (
+                      <Typography variant="caption" color="text.secondary">
+                        Công bố chỉ cập nhật định mức; tài sản thực tế được ghi nhận qua kiểm kê.
+                      </Typography>
+                    )}
                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
                       {template.status === 'Draft' ? (
                         <>

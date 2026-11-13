@@ -49,7 +49,10 @@ beforeEach(() => {
     return { items: [], totalCount: 0 };
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 it('always saves the agreed contract rent source even for a legacy room-price schedule', async () => {
   const onSaved = vi.fn();
   mount(
@@ -119,6 +122,21 @@ it('filters rent, service fees and legacy utility rates at the server before pag
       state.request.mock.calls.some(
         ([path]) => path.includes('chargeCategory=3') && path.includes('effectiveOn='),
       ),
+    ).toBe(true),
+  );
+  expect(screen.getByRole('option', { name: 'Tất cả' })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Tìm khoản thu'), { target: { value: 'Giặt' } });
+  await waitFor(() =>
+    expect(
+      state.request.mock.calls.some(([path]) => {
+        const query = new URLSearchParams(path.split('?')[1]);
+        return (
+          query.get('search') === 'Giặt' &&
+          query.get('chargeCategory') === '3' &&
+          query.has('effectiveOn') &&
+          query.get('page') === '1'
+        );
+      }),
     ).toBe(true),
   );
   fireEvent.click(screen.getByRole('tab', { name: 'Điện & nước' }));
@@ -229,6 +247,138 @@ it('does not offer pricing mutations to Staff', async () => {
   mount(<LocationPricingWorkspace locationId="location" />);
   await screen.findByText('Chưa có khoản thu phù hợp');
   expect(screen.queryByRole('button', { name: 'Thêm khoản thu' })).toBeNull();
+});
+
+it('repairs only the known malformed RENT display across the list, detail, editor and end dialog without writing on open', async () => {
+  const broken = {
+    id: 'broken-rent',
+    locationId: 'location',
+    roomId: null,
+    category: 0,
+    chargeCode: 'RENT',
+    name: 'Gi? thu? ph?ng',
+    method: 0,
+    rate: '3500000.1251',
+    effectiveFrom: '2099-01-01',
+    effectiveTo: null,
+    version: 7,
+  };
+  const custom = { ...broken, id: 'custom-rent', name: 'Tiền thuê căn hộ sân vườn' };
+  state.request.mockImplementation(async (path: string) =>
+    path.endsWith('/rooms') ? [] : { items: [broken, custom], totalCount: 2 },
+  );
+  mount(<LocationPricingWorkspace locationId="location" />);
+  const row = await screen.findByRole('row', { name: /Giá thuê phòng/ });
+  expect(within(row).getByText('3.500.000,1251 đ')).toBeInTheDocument();
+  expect(within(row).getByText('/phòng/tháng')).toBeInTheDocument();
+  expect(within(row).getByText('Toàn cơ sở')).toBeInTheDocument();
+  expect(within(row).getByText('01/01/2099 → Không thời hạn')).toBeInTheDocument();
+  expect(screen.getByText(custom.name)).toBeInTheDocument();
+  expect(screen.queryByText(broken.name)).not.toBeInTheDocument();
+
+  fireEvent.click(within(row).getByRole('button', { name: 'Chi tiết' }));
+  let dialog = within(await screen.findByRole('dialog'));
+  expect(dialog.getByRole('heading', { name: 'Giá thuê phòng' })).toBeInTheDocument();
+  fireEvent.click(dialog.getByRole('button', { name: 'Kết thúc áp dụng' }));
+  await screen.findByRole('heading', { name: 'Kết thúc áp dụng: Giá thuê phòng' });
+  fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(within(row).getByRole('button', { name: 'Sửa giá tương lai' }));
+  dialog = within(await screen.findByRole('dialog'));
+  expect(dialog.getByLabelText(/Tên khoản thu/)).toHaveValue('Giá thuê phòng');
+  expect(dialog.getByLabelText(/Đơn giá VND/)).toHaveValue('3.500.000,1251');
+  fireEvent.click(dialog.getByRole('button', { name: 'Đóng biểu giá' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+  const customRow = screen.getByRole('row', { name: /Tiền thuê căn hộ sân vườn/ });
+  fireEvent.click(within(customRow).getByRole('button', { name: 'Tạo giá kế tiếp' }));
+  dialog = within(await screen.findByRole('dialog'));
+  expect(dialog.getByLabelText(/Tên khoản thu/)).toHaveValue(custom.name);
+  expect(broken.name).toBe('Gi? thu? ph?ng');
+  expect(state.request.mock.calls.some(([, init]) => init?.method)).toBe(false);
+});
+
+it('keeps a service fee name untouched and shows the exact per-person monthly unit', async () => {
+  state.request.mockImplementation(async (path: string) =>
+    path.endsWith('/rooms')
+      ? []
+      : {
+          items: [
+            {
+              id: 'service',
+              locationId: 'location',
+              roomId: null,
+              category: 3,
+              chargeCode: 'PERSON_FEE',
+              name: 'Gi? thu? ph?ng',
+              method: 2,
+              rate: '120000.1251',
+              effectiveFrom: '2099-01-01',
+              effectiveTo: null,
+              version: 1,
+            },
+          ],
+          totalCount: 1,
+        },
+  );
+  mount(<LocationPricingWorkspace locationId="location" initialTab={1} />);
+  const row = await screen.findByRole('row', { name: /PERSON_FEE/ });
+  expect(within(row).getByText('Gi? thu? ph?ng')).toBeInTheDocument();
+  expect(within(row).getByText('120.000,1251 đ')).toBeInTheDocument();
+  expect(within(row).getByText('/người/tháng')).toBeInTheDocument();
+  fireEvent.click(within(row).getByRole('button', { name: 'Tạo giá kế tiếp' }));
+  const dialog = within(await screen.findByRole('dialog'));
+  expect(dialog.getByLabelText(/Tên khoản thu/)).toHaveValue('Gi? thu? ph?ng');
+  expect(dialog.getByLabelText('Cách tính phí dịch vụ')).toHaveTextContent('Cố định/người/tháng');
+  expect(state.request.mock.calls.some(([, init]) => init?.method)).toBe(false);
+});
+
+it('keeps exact price, effect and permitted actions visible in a mobile record', async () => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('max-width:599px'),
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+    onchange: null,
+  }));
+  state.request.mockImplementation(async (path: string) =>
+    path.endsWith('/rooms')
+      ? []
+      : {
+          items: [
+            {
+              id: 'mobile-fee',
+              locationId: 'location',
+              roomId: null,
+              category: 3,
+              chargeCode: 'PERSON_FEE',
+              name: 'Phí dịch vụ',
+              method: 2,
+              rate: '120000.1251',
+              effectiveFrom: '2099-01-01',
+              effectiveTo: null,
+              version: 1,
+            },
+          ],
+          totalCount: 1,
+        },
+  );
+  mount(<LocationPricingWorkspace locationId="location" initialTab={1} />);
+  const table = await screen.findByRole('table', { name: 'Biểu phí theo cơ sở' });
+  expect(within(table).getAllByRole('columnheader')).toHaveLength(1);
+  const record = within(table).getByRole('rowheader');
+  expect(within(record).getByText('120.000,1251 đ')).toBeVisible();
+  expect(within(record).getByText('/người/tháng')).toBeVisible();
+  expect(within(record).getByText('Toàn cơ sở')).toBeVisible();
+  expect(within(record).getByText('Sắp áp dụng')).toBeVisible();
+  expect(within(record).getByText('01/01/2099 → Không thời hạn')).toBeVisible();
+  expect(within(record).getByRole('button', { name: 'Tạo giá kế tiếp' })).toBeVisible();
+  fireEvent.click(within(record).getByRole('button', { name: 'Chi tiết' }));
+  expect(await screen.findByRole('dialog')).toBeVisible();
+  expect(state.request.mock.calls.some(([, init]) => init?.method)).toBe(false);
 });
 
 function mountRoomTypes() {

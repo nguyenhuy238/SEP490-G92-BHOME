@@ -64,7 +64,6 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
   return (
     <LocationSection
       title="Nội quy cơ sở"
-      description="Soạn bản nháp, xem trước nội dung, công bố và tra cứu lịch sử. Chỉ nội quy đã công bố mới được dùng cho các thỏa thuận mới."
       actions={
         owner ? (
           <Button
@@ -79,24 +78,29 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
         ) : undefined
       }
     >
-      <Alert severity="info">
-        Công bố nội quy mới không thay thế nội quy đã ký. Hợp đồng cũ chỉ thay đổi qua phụ lục được
-        ký và Owner áp dụng.
-      </Alert>
       {action.error && <Alert severity="error">{action.error}</Alert>}
       {action.notice && <Alert severity="success">{action.notice}</Alert>}
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+      <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 } }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.5}
+          useFlexGap
+          sx={{ flexWrap: 'wrap', alignItems: { sm: 'center' } }}
+        >
           <TextField
             fullWidth
+            size="small"
             label="Tìm nội quy"
+            sx={{ flex: { sm: '1 1 220px' }, minWidth: 0, maxWidth: { sm: 360 } }}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <TextField
             select
+            size="small"
             label="Trạng thái"
-            sx={{ minWidth: 180 }}
+            fullWidth={false}
+            sx={{ width: { xs: '100%', sm: 180 }, flexShrink: 0 }}
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           >
@@ -118,22 +122,34 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
         />
       )}
       {filtered.map((policy) => (
-        <Paper key={policy.id} variant="outlined" sx={{ p: 2 }}>
-          <Stack spacing={1}>
-            <Typography variant="h6">{policy.data.title}</Typography>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Paper key={policy.id} variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
+          <Stack spacing={1.5}>
+            <Typography
+              component="h3"
+              variant="h6"
+              sx={{ fontWeight: 800, overflowWrap: 'anywhere' }}
+            >
+              {policy.data.title}
+            </Typography>
+            <Stack
+              direction="row"
+              useFlexGap
+              spacing={1}
+              sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+            >
               <Chip
                 size="small"
                 color={policy.status === 'Published' ? 'success' : 'default'}
                 label={policyStatusLabel(policy.status)}
               />
               <Typography variant="body2" color="text.secondary">
-                Phiên bản {policy.version} · Hiệu lực {policyDateLabel(policy.data.effectiveFrom)}
+                Hiệu lực {policyDateLabel(policy.data.effectiveFrom)}
               </Typography>
             </Stack>
             <Typography
               sx={{
                 whiteSpace: 'pre-wrap',
+                overflowWrap: 'anywhere',
                 display: '-webkit-box',
                 WebkitLineClamp: 3,
                 WebkitBoxOrient: 'vertical',
@@ -142,7 +158,16 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
             >
               {policy.data.content}
             </Typography>
-            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+            <Stack
+              direction="row"
+              sx={{
+                flexWrap: 'wrap',
+                gap: 1,
+                pt: 1.5,
+                borderTop: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
               <Button variant="outlined" onClick={() => setPreview(policy)}>
                 Xem nội dung
               </Button>
@@ -232,8 +257,8 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
               {policyDateLabel(publishing.data.effectiveFrom)}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Nội quy đã công bố được dùng cho các thỏa thuận mới. Hợp đồng đã ký giữ nguyên nội
-              dung.
+              Nội quy mới dùng cho các thỏa thuận mới. Hợp đồng đã ký giữ nguyên nội dung; thay đổi
+              chỉ qua phụ lục đã ký và được Owner áp dụng.
             </Typography>
             {action.error && <Alert severity="error">{action.error}</Alert>}
           </Stack>
@@ -244,9 +269,6 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
         <DialogContent>
           {historyId && (
             <Stack spacing={2}>
-              <Typography variant="body2" color="text.secondary">
-                Các bản ghi phiên bản đã lưu trên máy chủ.
-              </Typography>
               {history.isPending ? (
                 <LoadingState />
               ) : history.error ? (

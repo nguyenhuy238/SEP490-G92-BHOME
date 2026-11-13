@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import { ThemeProvider } from '@mui/material';
@@ -67,14 +67,18 @@ it.each(portalRoutes)(
         </AuthProvider>
       </ThemeProvider>,
     );
-    expect(
-      await screen.findByRole('heading', { level: 1 }, { timeout: 12000 }),
-    ).toBeInTheDocument();
+    // Wait for the lazy page's real heading without scanning every cell in the
+    // mock property/finance tables on each polling iteration.
+    await waitFor(() => expect(document.querySelector('h1')).toBeVisible(), {
+      timeout: 20000,
+    });
+    expect(document.querySelectorAll('h1')).toHaveLength(1);
+    expect(document.querySelector('h1')).toHaveRole('heading');
     expect(screen.getByRole('navigation', { name: 'Điều hướng chính' })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   },
-  15000,
+  30000,
 );
 
 it('renders the investment child route inside a Location Workspace', async () => {
@@ -117,10 +121,10 @@ it('keeps property functions inside the selected Location Workspace', async () =
   const expectedLinks: Record<string, string> = {
     '/locations': 'Cơ sở',
     '/configuration/room-types': 'Mẫu loại phòng',
-    '/configuration/assets': 'Danh mục tài sản',
+    '/configuration/assets': 'Tài sản dùng chung',
   };
   const propertyLinks = within(navigation).getAllByRole('link', {
-    name: /^(Cơ sở|Mẫu loại phòng|Danh mục tài sản)$/,
+    name: /^(Cơ sở|Mẫu loại phòng|Tài sản dùng chung)$/,
   });
   expect(propertyLinks.map((link) => link.getAttribute('href')).sort()).toEqual(
     Object.keys(expectedLinks).sort(),

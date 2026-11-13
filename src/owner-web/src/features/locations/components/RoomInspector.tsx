@@ -86,11 +86,11 @@ export function RoomInspector({
       slotProps={{
         paper: {
           'aria-labelledby': 'room-inspector-title',
-          sx: { width: { xs: '100%', sm: 560 }, p: { xs: 2, sm: 3 } },
+          sx: { width: { xs: '100%', sm: 560 }, p: { xs: 2, sm: 3 }, bgcolor: 'background.paper' },
         },
       }}
     >
-      <Stack spacing={2.5}>
+      <Stack spacing={2}>
         <Stack
           direction="row"
           sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}
@@ -98,17 +98,20 @@ export function RoomInspector({
           <Typography
             id="room-inspector-title"
             variant="h5"
-            sx={{ fontWeight: 750, overflowWrap: 'anywhere' }}
+            sx={{ fontWeight: 800, fontSize: '1.5rem', overflowWrap: 'anywhere' }}
           >
             Phòng {room.data?.roomNumber ?? ''}
           </Typography>
-          <Button onClick={close}>Đóng</Button>
+          <Button onClick={close} sx={{ minHeight: 44, flexShrink: 0 }}>
+            Đóng
+          </Button>
         </Stack>
         <Tabs
           value={tab}
           onChange={(_, value: number) => setTab(value)}
           aria-label="Chi tiết phòng"
           variant="fullWidth"
+          sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
         >
           <Tab label="Thông tin phòng" />
           <Tab label="Lịch sử" />
@@ -153,26 +156,35 @@ export function RoomInspector({
                 )}
               </Stack>
               <Box
-                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 2,
+                  p: 2,
+                  bgcolor: 'background.default',
+                  borderRadius: '10px',
+                }}
               >
                 <Box>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="body2" color="text.secondary">
                     Tầng
                   </Typography>
-                  <Typography sx={{ fontWeight: 650 }}>
+                  <Typography sx={{ fontWeight: 750, fontSize: 18, overflowWrap: 'anywhere' }}>
                     {room.data.floor ?? 'Chưa phân tầng'}
                   </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="body2" color="text.secondary">
                     Sức chứa
                   </Typography>
-                  <Typography sx={{ fontWeight: 650 }}>{room.data.capacity} người</Typography>
+                  <Typography sx={{ fontWeight: 750, fontSize: 18 }}>
+                    {room.data.capacity} người
+                  </Typography>
                 </Box>
               </Box>
               <Divider />
               <Stack spacing={1}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800 }}>
                   Cấu hình khi tạo phòng
                 </Typography>
                 {session?.roles.includes('Owner') &&
@@ -210,7 +222,7 @@ export function RoomInspector({
               </Stack>
               <Divider />
               <Stack spacing={1}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800 }}>
                   Giá thuê
                 </Typography>
                 {prices.error ? (
@@ -221,14 +233,25 @@ export function RoomInspector({
                     Chưa tải được giá thuê hiệu lực.
                   </Alert>
                 ) : (
-                  <Typography>
-                    Giá thuê cấu hình (cho hợp đồng tương lai):{' '}
-                    {rent
-                      ? `${formatBillingDecimal(rent.rate)} đ / tháng`
-                      : prices.isPending
-                        ? 'Đang tải…'
-                        : 'Chưa có giá thuê hiệu lực'}
-                  </Typography>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Giá thuê cấu hình (cho hợp đồng tương lai)
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontWeight: 750,
+                        fontSize: rent ? 22 : 15,
+                        fontVariantNumeric: 'tabular-nums',
+                        overflowWrap: 'anywhere',
+                      }}
+                    >
+                      {rent
+                        ? `${formatBillingDecimal(rent.rate)} đ / tháng`
+                        : prices.isPending
+                          ? 'Đang tải…'
+                          : 'Chưa có giá thuê hiệu lực'}
+                    </Typography>
+                  </Box>
                 )}
                 <Typography variant="caption" color="text.secondary">
                   Giá cấu hình theo ngày {effectiveOn.split('-').reverse().join('/')}.
@@ -242,15 +265,33 @@ export function RoomInspector({
               </Stack>
               <Divider />
               <Stack spacing={1}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800 }}>
                   Người ở theo hợp đồng
                 </Typography>
-                <Typography>
-                  Người ở theo hợp đồng hiện tại:{' '}
-                  {occupancy
-                    ? `${occupancy.occupants.length}/${room.data.capacity}`
-                    : 'Chưa tải được số liệu'}
-                </Typography>
+                <Stack
+                  direction="row"
+                  sx={{
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Người ở theo hợp đồng hiện tại
+                  </Typography>
+                  <Typography
+                    sx={{
+                      fontWeight: 750,
+                      fontSize: occupancy ? 20 : 14,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {occupancy
+                      ? `${occupancy.occupants.length}/${room.data.capacity}`
+                      : 'Chưa tải được số liệu'}
+                  </Typography>
+                </Stack>
                 {operations.occupancy.error && (
                   <Alert
                     severity="warning"
@@ -274,7 +315,7 @@ export function RoomInspector({
               </Stack>
               <Divider />
               <Stack spacing={1}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800 }}>
                   Báo cáo sự cố đang mở
                 </Typography>
                 {operations.incidents.data && !operations.incidents.data.complete && (

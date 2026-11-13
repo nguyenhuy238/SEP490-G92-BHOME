@@ -79,7 +79,25 @@ it('keeps the Location Workspace scope when loading and creating expenses', asyn
     expect.objectContaining({ locationId: 'location' }),
     expect.any(AbortSignal),
   );
-  expect(screen.getByRole('combobox', { name: 'Cơ sở' })).toBeDisabled();
+  expect(screen.queryByRole('combobox', { name: 'Cơ sở' })).not.toBeInTheDocument();
+  mock.createExpense.mockResolvedValue(expense);
+  fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
+  expect(screen.getByRole('combobox', { name: /Cơ sở ghi nhận/ })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  fireEvent.change(screen.getByLabelText(/Danh mục khoản chi/), { target: { value: 'Vệ sinh' } });
+  fireEvent.change(screen.getByLabelText(/Số tiền/), { target: { value: '200000' } });
+  fireEvent.change(screen.getByLabelText(/Ngày phát sinh/), { target: { value: '2026-11-02' } });
+  fireEvent.change(screen.getByLabelText(/Nội dung/), {
+    target: { value: 'Chi phí tại cơ sở hiện tại' },
+  });
+  fireEvent.submit(document.getElementById('expense-editor')!);
+  await screen.findByText('Đã lưu khoản chi.');
+  expect(mock.createExpense).toHaveBeenCalledWith(
+    expect.objectContaining({ locationId: 'location', amount: '200000', category: 'Vệ sinh' }),
+    expect.any(String),
+  );
 });
 it('filters Initial Investment on the server and uses that type for new records', async () => {
   mount();

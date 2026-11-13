@@ -119,8 +119,8 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
         title={debtOnly ? 'Công nợ phòng' : 'Thanh toán & Đối soát'}
         subtitle={
           debtOnly
-            ? 'Theo dõi dư nợ, hạn trả và lịch sử thu tiền của từng phòng; tổng hợp từ toàn bộ kết quả trên máy chủ.'
-            : 'Đối chiếu sao kê, xác minh và theo dõi phân bổ vào hóa đơn phòng.'
+            ? 'Dư nợ và lịch sử thu tiền theo phòng; tổng hợp toàn bộ kết quả từ máy chủ.'
+            : 'Đối soát sao kê và theo dõi tiền đã phân bổ vào hóa đơn.'
         }
       />
       <Stack spacing={2}>
@@ -158,33 +158,45 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
             <Tab label="Webhook SePay" />
           </Tabs>
         )}
-        <Button
-          disabled={invoices.isFetching || history.isFetching}
-          onClick={() =>
-            void cache.invalidateQueries({
-              predicate: (q) =>
-                [
-                  'payment-invoices',
-                  'payment-history',
-                  'payment-transfers',
-                  'debt-summary',
-                  'invoice-payment',
-                ].includes(String(q.queryKey[0])),
-            })
-          }
+        <Stack
+          direction="row"
+          useFlexGap
+          spacing={1}
+          sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}
         >
-          Làm mới đối soát và công nợ
-        </Button>
+          <Button
+            disabled={
+              invoices.isFetching ||
+              history.isFetching ||
+              transfers.isFetching ||
+              summary.isFetching
+            }
+            onClick={() =>
+              void cache.invalidateQueries({
+                predicate: (q) =>
+                  [
+                    'payment-invoices',
+                    'payment-history',
+                    'payment-transfers',
+                    'debt-summary',
+                    'invoice-payment',
+                  ].includes(String(q.queryKey[0])),
+              })
+            }
+          >
+            Làm mới đối soát và công nợ
+          </Button>
+          {!debtOnly && section === 1 && (
+            <Button variant="contained" onClick={() => setRecordUnmatched(true)}>
+              Ghi nhận giao dịch chưa xác định hóa đơn
+            </Button>
+          )}
+        </Stack>
         {!debtOnly && section === 4 && (
           <>
             <SePayTestingPanel />
             <SePayEventsPanel />
           </>
-        )}
-        {!debtOnly && section === 1 && (
-          <Button onClick={() => setRecordUnmatched(true)}>
-            Ghi nhận giao dịch chưa xác định hóa đơn
-          </Button>
         )}
         {recordUnmatched && (
           <Dialog open maxWidth="sm" fullWidth aria-labelledby="unmatched-transfer-title">
@@ -196,87 +208,96 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
             </DialogContent>
           </Dialog>
         )}
-        <FilterToolbar>
-          <TextField
-            select
-            label="Cơ sở thanh toán"
-            value={location}
-            onChange={(e) => {
-              setLocation(e.target.value);
-              setRoom('');
-              setPage(1);
-              setTransferPage(1);
-              setHistoryPage(1);
-            }}
-          >
-            <MenuItem value="">Tất cả cơ sở</MenuItem>
-            {locations.data?.map((l) => (
-              <MenuItem key={l.id} value={l.id}>
-                {l.label}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
-            label="Phòng cần theo dõi"
-            value={room}
-            onChange={(e) => {
-              setRoom(e.target.value);
-              setPage(1);
-              setHistoryPage(1);
-            }}
-          >
-            <MenuItem value="">Tất cả phòng</MenuItem>
-            {rooms.data?.map((r) => (
-              <MenuItem key={r.id} value={r.id}>
-                {r.label}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            type="month"
-            label="Kỳ hóa đơn cần lọc"
-            value={period}
-            onChange={(e) => {
-              setPeriod(e.target.value);
-              setPage(1);
-              setHistoryPage(1);
-            }}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-          {!debtOnly && section === 0 && (
+        {(debtOnly || section !== 4) && (
+          <FilterToolbar>
             <TextField
               select
-              label="Trạng thái thanh toán"
-              value={status}
+              label="Cơ sở thanh toán"
+              value={location}
               onChange={(e) => {
-                setStatus(e.target.value);
+                setLocation(e.target.value);
+                setRoom('');
                 setPage(1);
+                setTransferPage(1);
                 setHistoryPage(1);
               }}
             >
-              <MenuItem value="">Tất cả</MenuItem>
-              <MenuItem value="Unpaid">Chưa thanh toán</MenuItem>
-              <MenuItem value="Paid">Đã thanh toán</MenuItem>
+              <MenuItem value="">Tất cả cơ sở</MenuItem>
+              {locations.data?.map((l) => (
+                <MenuItem key={l.id} value={l.id}>
+                  {l.label}
+                </MenuItem>
+              ))}
             </TextField>
-          )}
-          {(debtOnly || section === 0) && (
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={overdue}
+            {(debtOnly || section !== 3) && (
+              <>
+                <TextField
+                  select
+                  label="Phòng cần theo dõi"
+                  value={room}
+                  disabled={!location}
                   onChange={(e) => {
-                    setOverdue(e.target.checked);
+                    setRoom(e.target.value);
                     setPage(1);
+                    setTransferPage(1);
                     setHistoryPage(1);
                   }}
+                >
+                  <MenuItem value="">Tất cả phòng</MenuItem>
+                  {rooms.data?.map((r) => (
+                    <MenuItem key={r.id} value={r.id}>
+                      {r.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  type="month"
+                  label="Kỳ hóa đơn cần lọc"
+                  value={period}
+                  onChange={(e) => {
+                    setPeriod(e.target.value);
+                    setPage(1);
+                    setTransferPage(1);
+                    setHistoryPage(1);
+                  }}
+                  slotProps={{ inputLabel: { shrink: true } }}
                 />
-              }
-              label="Chỉ hóa đơn quá hạn"
-            />
-          )}
-        </FilterToolbar>
-        {(locations.error || rooms.error) && (
+              </>
+            )}
+            {!debtOnly && section === 0 && (
+              <TextField
+                select
+                label="Trạng thái thanh toán"
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value);
+                  setPage(1);
+                  setHistoryPage(1);
+                }}
+              >
+                <MenuItem value="">Tất cả</MenuItem>
+                <MenuItem value="Unpaid">Chưa thanh toán</MenuItem>
+                <MenuItem value="Paid">Đã thanh toán</MenuItem>
+              </TextField>
+            )}
+            {(debtOnly || section === 0) && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={overdue}
+                    onChange={(e) => {
+                      setOverdue(e.target.checked);
+                      setPage(1);
+                      setHistoryPage(1);
+                    }}
+                  />
+                }
+                label="Chỉ hóa đơn quá hạn"
+              />
+            )}
+          </FilterToolbar>
+        )}
+        {(debtOnly || section !== 4) && (locations.error || rooms.error) && (
           <Alert severity="error">{paymentError(locations.error || rooms.error)}</Alert>
         )}
         {debtOnly && summary.isFetching && <LinearProgress aria-label="Đang tổng hợp công nợ" />}
@@ -323,7 +344,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
               <Typography>{invoices.data.totalCount} hóa đơn trong bộ lọc</Typography>
             )}
             {!!invoices.data?.items.length && !invoices.error && (
-              <Paper>
+              <Paper variant="outlined" sx={{ minWidth: 0 }}>
                 <OwnerTable
                   rows={invoices.data.items}
                   id={(i) => i.invoiceId}
@@ -359,12 +380,14 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
                 />
               </Paper>
             )}
-            <OwnerPagination
-              page={page}
-              total={invoices.data?.totalCount ?? 0}
-              change={setPage}
-              busy={invoices.isFetching}
-            />
+            {invoices.data && !invoices.error && (
+              <OwnerPagination
+                page={page}
+                total={invoices.data.totalCount}
+                change={setPage}
+                busy={invoices.isFetching}
+              />
+            )}
             {selected && <OwnerInvoicePaymentPanel key={selected} invoiceId={selected} />}
           </>
         )}
@@ -376,13 +399,14 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
             <Alert severity="info">Chọn cơ sở để cấu hình tài khoản nhận tiền.</Alert>
           ))}
         {!debtOnly && section === 1 && (
-          <Paper sx={{ p: 2 }}>
+          <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0 }}>
             <Stack spacing={2}>
               <Typography variant="h6">Giao dịch ngân hàng đã ghi nhận</Typography>
               <TextField
                 select
                 label="Trạng thái đối soát"
                 value={transferStatus}
+                sx={{ maxWidth: { sm: 320 } }}
                 onChange={(e) => {
                   setTransferStatus(e.target.value);
                   setTransferPage(1);
@@ -405,10 +429,11 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
                 </Alert>
               )}
               {transfers.data?.items.length === 0 && <Typography>Chưa có giao dịch.</Typography>}
-              {transfers.data?.items.map((transfer) => (
-                <ReconcileTransfer key={transfer.id} transfer={transfer} />
-              ))}
-              <Stack direction="row">
+              {!transfers.error &&
+                transfers.data?.items.map((transfer) => (
+                  <ReconcileTransfer key={transfer.id} transfer={transfer} />
+                ))}
+              <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
                 <Button
                   disabled={transferPage === 1}
                   onClick={() => setTransferPage(transferPage - 1)}
@@ -426,7 +451,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
           </Paper>
         )}
         {(debtOnly || section === 2) && (
-          <Paper sx={{ p: 2 }}>
+          <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0 }}>
             <Stack spacing={2}>
               <Typography variant="h6">Lịch sử thanh toán đã xác minh</Typography>
               {history.isPending && <LinearProgress />}
@@ -441,34 +466,51 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
               {history.data?.items.length === 0 && (
                 <Typography>Chưa có thanh toán đã phân bổ.</Typography>
               )}
-              {history.data?.items.map((item) => (
-                <Typography key={item.id}>
-                  {item.locationName} · {item.roomNumber} · {item.billingPeriod.slice(0, 7)} ·{' '}
-                  {formatInstant(item.paidAt)} · {formatContractMoney(item.amount)} · Tham chiếu{' '}
-                  {item.bankReference}
-                </Typography>
-              ))}
-              <Stack direction="row" spacing={1}>
-                <Button
-                  disabled={historyPage === 1 || history.isFetching}
-                  onClick={() => setHistoryPage(historyPage - 1)}
+              {!!history.data?.items.length && !history.error && (
+                <OwnerTable
+                  label="Lịch sử thanh toán đã xác minh"
+                  rows={history.data.items}
+                  id={(item) => item.id}
+                  columns={[
+                    {
+                      label: 'Cơ sở / Phòng',
+                      render: (item) => `${item.locationName} · ${item.roomNumber}`,
+                    },
+                    { label: 'Kỳ hóa đơn', render: (item) => item.billingPeriod.slice(0, 7) },
+                    { label: 'Thời gian thu', render: (item) => formatInstant(item.paidAt) },
+                    { label: 'Đã phân bổ', render: (item) => formatContractMoney(item.amount) },
+                    { label: 'Tham chiếu ngân hàng', render: (item) => item.bankReference },
+                  ]}
+                />
+              )}
+              {history.data && !history.error && (
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  useFlexGap
+                  sx={{ alignItems: 'center', flexWrap: 'wrap' }}
                 >
-                  Lịch sử trước
-                </Button>
-                <Typography>
-                  Trang lịch sử {historyPage} · {history.data?.totalCount ?? 0} thanh toán
-                </Typography>
-                <Button
-                  disabled={
-                    history.isFetching ||
-                    !history.data ||
-                    historyPage * 20 >= history.data.totalCount
-                  }
-                  onClick={() => setHistoryPage(historyPage + 1)}
-                >
-                  Lịch sử sau
-                </Button>
-              </Stack>
+                  <Button
+                    disabled={historyPage === 1 || history.isFetching}
+                    onClick={() => setHistoryPage(historyPage - 1)}
+                  >
+                    Lịch sử trước
+                  </Button>
+                  <Typography>
+                    Trang lịch sử {historyPage} · {history.data.totalCount} thanh toán
+                  </Typography>
+                  <Button
+                    disabled={
+                      history.isFetching ||
+                      !history.data ||
+                      historyPage * 20 >= history.data.totalCount
+                    }
+                    onClick={() => setHistoryPage(historyPage + 1)}
+                  >
+                    Lịch sử sau
+                  </Button>
+                </Stack>
+              )}
             </Stack>
           </Paper>
         )}

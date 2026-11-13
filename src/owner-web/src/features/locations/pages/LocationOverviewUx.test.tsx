@@ -39,10 +39,6 @@ describe('Location overview UX', () => {
             occupied: 18,
             onHold: 1,
             unavailable: 1,
-            assets: 0,
-            assetTemplates: 2,
-            pricesAndFees: 6,
-            rules: 0,
           }}
         />
       </MemoryRouter>,
@@ -51,7 +47,12 @@ describe('Location overview UX', () => {
     expect(
       screen.getByRole('img', { name: /Đang cho thuê: 18.*Phòng trống: 4/ }),
     ).toBeInTheDocument();
-    expect(screen.getByText('2 bộ định mức · tài sản thực tế')).toBeInTheDocument();
+    const donut = screen.getByRole('img', { name: /Đang cho thuê: 18.*Phòng trống: 4/ });
+    expect(donut.querySelectorAll('circle[pathLength="100"]')).toHaveLength(4);
+    expect(donut.querySelector('circle[stroke-dasharray="75 25"]')).toBeInTheDocument();
+    expect(screen.queryByText('Cấu hình cơ sở')).not.toBeInTheDocument();
+    expect(screen.queryByText('Phòng đang cho thuê')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Kiểm kê tài sản' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Xem sự cố' })).toHaveAttribute(
       'href',
       '/incidents?locationId=location',
@@ -103,5 +104,51 @@ describe('Location overview UX', () => {
     expect(screen.getByText('Chuẩn bị vận hành')).toBeInTheDocument();
     expect(screen.queryByText('75% đang cho thuê')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Xem sự cố' })).not.toBeInTheDocument();
+  });
+
+  it('groups known zero follow-ups without treating missing incident data as healthy', () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <LocationWorkspaceOverview
+          id="location"
+          active
+          owner
+          loading={false}
+          summary={{
+            rooms: 3,
+            occupied: 1,
+            available: 1,
+            onHold: 1,
+            unavailable: 0,
+            openIncidents: 0,
+          }}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: /Không có sự cố đang mở/ })).toHaveAttribute(
+      'href',
+      '/incidents?locationId=location',
+    );
+    expect(screen.getByRole('link', { name: /Không có phòng ngừng khai thác/ })).toHaveAttribute(
+      'href',
+      '/locations/location/rooms?roomStatus=3',
+    );
+    expect(screen.getByRole('link', { name: 'Xem giữ chỗ' })).toHaveAttribute(
+      'href',
+      '/locations/location/rooms?roomStatus=1',
+    );
+    rerender(
+      <MemoryRouter>
+        <LocationWorkspaceOverview
+          id="location"
+          active
+          owner
+          loading={false}
+          summary={{ rooms: 3, occupied: 1, available: 1, onHold: 1, unavailable: 0 }}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText('Không có sự cố đang mở')).not.toBeInTheDocument();
+    expect(screen.getByText('Chưa có số liệu')).toBeInTheDocument();
   });
 });

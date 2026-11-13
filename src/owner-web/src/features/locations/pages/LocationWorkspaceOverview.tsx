@@ -9,36 +9,44 @@ import {
   Typography,
 } from '@mui/material';
 import { Link } from 'react-router';
-import { ArrowRight, DoorOpen, Package, Coins, ScrollText, CircleAlert } from 'lucide-react';
-import type { LocationMetadata } from '../../../../../../packages/client-core/src/locationSetup';
+import {
+  ArrowRight,
+  CircleAlert,
+  CircleCheck,
+  DoorOpen,
+  CalendarClock,
+  Wallet,
+  Receipt,
+} from 'lucide-react';
 import {
   formatFinanceMoney,
   type FinancialReport,
 } from '../../../../../../packages/client-core/src/finance';
 
+import { RoomOccupancyDistribution } from '../../../components/common/RoomOccupancyDistribution';
+
 export type LocationOverviewSummary = {
   rooms?: number;
-  assets?: number;
-  pricesAndFees?: number;
-  rules?: number;
-  assetTemplates?: number;
   available?: number;
   occupied?: number;
   onHold?: number;
   unavailable?: number;
   openIncidents?: number;
   asOf?: string;
-  incomplete?: boolean;
 };
 
-const states = [
-  { key: 'occupied', title: 'Đang cho thuê', color: '#255dde' },
-  { key: 'available', title: 'Phòng trống', color: '#18764a' },
-  { key: 'onHold', title: 'Đang giữ chỗ', color: '#a6650c' },
-  { key: 'unavailable', title: 'Không khai thác', color: '#64748b' },
-] as const;
-
 const number = (value?: number) => (value == null ? '—' : value.toLocaleString('vi-VN'));
+const dateLabel = (date: string) => date.split('-').reverse().join('/');
+const money = (value?: string) => (typeof value === 'string' ? formatFinanceMoney(value) : '—');
+
+type Finance = {
+  data?: FinancialReport;
+  loading: boolean;
+  error?: string;
+  retry: () => void;
+  from: string;
+  to: string;
+};
 
 export function LocationWorkspaceOverview({
   id,
@@ -46,7 +54,6 @@ export function LocationWorkspaceOverview({
   active,
   loading,
   owner,
-  metadata,
   finance,
 }: {
   id: string;
@@ -54,420 +61,297 @@ export function LocationWorkspaceOverview({
   active: boolean;
   loading: boolean;
   owner: boolean;
-  metadata?: LocationMetadata;
-  finance?: {
-    data?: FinancialReport;
-    loading: boolean;
-    error?: string;
-    retry: () => void;
-    from: string;
-    to: string;
-  };
+  finance?: Finance;
 }) {
-  const statusTotal = states.every(({ key }) => summary?.[key] != null)
-    ? states.reduce((sum, { key }) => sum + (summary?.[key] ?? 0), 0)
-    : undefined;
-  const consistent = summary?.rooms != null && statusTotal === summary.rooms;
-  const occupancy =
-    consistent && summary.rooms! > 0
-      ? Math.round((summary.occupied! / summary.rooms!) * 1000) / 10
-      : undefined;
-  const sections = [
+  const roomPath = `/locations/${id}/rooms`;
+  const metrics = [
     {
-      path: 'rooms',
-      title: 'Phòng cho thuê',
-      count: summary?.rooms,
-      icon: DoorOpen,
-      description: 'Phòng thực tế và cấu hình loại phòng.',
+      label: 'Đã thu (đã xác minh)',
+      value: money(finance?.data?.total.verifiedCollections),
+      icon: Wallet,
     },
     {
-      path: 'assets',
-      title: 'Tài sản & trang thiết bị',
-      count: summary?.assets,
-      icon: Package,
-      description:
-        summary?.assetTemplates == null
-          ? 'Tài sản thực tế; định mức và kiểm kê.'
-          : `${number(summary.assetTemplates)} bộ định mức · tài sản thực tế`,
+      label: 'Công nợ hiện tại',
+      value: money(finance?.data?.total.outstandingNow),
+      detail: 'Hóa đơn thuộc kỳ báo cáo',
+      icon: Receipt,
     },
     {
-      path: 'pricing',
-      title: 'Giá thuê & biểu phí',
-      count: summary?.pricesAndFees,
-      icon: Coins,
-      description: 'Số bản ghi giá/phí, bao gồm lịch sử hiệu lực.',
+      label: 'Chi phí vận hành trong kỳ',
+      value: money(finance?.data?.total.operatingExpenses),
+      icon: Wallet,
     },
-    ...(owner
-      ? [
-          {
-            path: 'rules',
-            title: 'Nội quy',
-            count: summary?.rules,
-            icon: ScrollText,
-            description: 'Tài liệu và phiên bản nội quy.',
-          },
-        ]
-      : []),
   ];
-  const missing = sections.filter((section) => section.count === 0);
+  const followups = [
+    {
+      title: 'Phòng đang giữ chỗ',
+      count: summary?.onHold,
+      quietLabel: 'Không có phòng giữ chỗ',
+      icon: CalendarClock,
+      to: `${roomPath}?roomStatus=1`,
+      action: 'Xem giữ chỗ',
+    },
+    {
+      title: 'Sự cố đang mở',
+      count: summary?.openIncidents,
+      quietLabel: 'Không có sự cố đang mở',
+      icon: CircleAlert,
+      to: owner ? `/incidents?locationId=${encodeURIComponent(id)}` : undefined,
+      action: 'Xem sự cố',
+    },
+    {
+      title: 'Phòng không khai thác',
+      count: summary?.unavailable,
+      quietLabel: 'Không có phòng ngừng khai thác',
+      icon: DoorOpen,
+      to: `${roomPath}?roomStatus=3`,
+      action: 'Xem phòng',
+    },
+  ];
+  // Keep known zero states quiet, and never present missing data as a healthy state.
+  const sortedFollowups = followups
+    .filter((item) => item.count !== 0)
+    .sort((a, b) => Number((b.count ?? 0) > 0) - Number((a.count ?? 0) > 0));
+  const quietFollowups = followups.filter((item) => item.count === 0);
   return (
-    <Stack spacing={3} aria-busy={loading}>
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={1}
-        sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
-      >
-        <Box>
-          <Typography component="h2" variant="h2">
-            Tình hình khai thác
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Trạng thái phòng tại cơ sở hiện tại
-            {summary?.asOf ? ` · ${summary.asOf.split('-').reverse().join('/')}` : ''}.
-          </Typography>
-        </Box>
-        <Button
-          component={Link}
-          to={`/locations/${id}/rooms`}
-          variant="contained"
-          endIcon={<ArrowRight size={17} />}
-        >
-          Quản lý phòng
-        </Button>
-      </Stack>
-      <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
-        {loading && <LinearProgress aria-label="Đang tải số liệu cơ sở" />}
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(5, minmax(0, 1fr))' },
-          }}
-        >
-          {[
-            { title: 'Tổng số phòng', value: summary?.rooms },
-            ...states.map(({ key, title }) => ({ title, value: summary?.[key] })),
-          ].map(({ title, value }, i) => (
-            <Box
-              key={title}
-              sx={{
-                px: { xs: 2, md: 2.5 },
-                py: 2.5,
-                borderStyle: 'solid',
-                borderWidth: 0,
-                gridColumn: { xs: i === 0 ? '1 / -1' : 'auto', md: 'auto' },
-                borderRightWidth: { xs: i === 1 || i === 3 ? 1 : 0, md: i < 4 ? 1 : 0 },
-                borderBottomWidth: { xs: i < 3 ? 1 : 0, md: 0 },
-                borderColor: 'divider',
-                minWidth: 0,
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                {title}
-              </Typography>
-              <Typography
-                sx={{
-                  fontSize: '1.85rem',
-                  fontWeight: 750,
-                  fontVariantNumeric: 'tabular-nums',
-                  lineHeight: 1.4,
-                  mt: 0.5,
-                }}
-              >
-                {number(value)}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-        <Divider />
-        <Box sx={{ p: { xs: 2, md: 2.5 } }}>
+    <Stack spacing={2} aria-busy={loading}>
+      {owner && finance && (
+        <Stack spacing={1.5}>
           <Stack
             direction="row"
-            spacing={2}
-            sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}
+            spacing={1}
+            sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
           >
-            <Typography sx={{ fontWeight: 700 }}>Phân bố trạng thái phòng</Typography>
-            <Typography variant="body2" color="text.secondary">
-              {occupancy == null
-                ? summary?.rooms === 0
-                  ? 'Chưa có phòng'
-                  : 'Chưa đủ số liệu'
-                : `${occupancy.toLocaleString('vi-VN')}% đang cho thuê`}
-            </Typography>
+            <Stack
+              direction={{ xs: 'column', lg: 'row' }}
+              spacing={{ xs: 0.25, lg: 1.5 }}
+              sx={{ alignItems: { lg: 'baseline' }, minWidth: 0 }}
+            >
+              <Typography component="h2" variant="h2">
+                Tình hình kinh doanh
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Kỳ báo cáo: {dateLabel(finance.from)} – {dateLabel(finance.to)}
+              </Typography>
+            </Stack>
+            <Button
+              component={Link}
+              to={`/locations/${id}/investment`}
+              endIcon={<ArrowRight size={17} />}
+            >
+              Vốn & chi phí
+            </Button>
           </Stack>
-          {consistent && summary.rooms! > 0 && (
+          <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+            {finance.loading && <LinearProgress aria-label="Đang tải số liệu tài chính" />}
+            {finance.error && (
+              <Alert severity="warning" action={<Button onClick={finance.retry}>Thử lại</Button>}>
+                {finance.error}
+              </Alert>
+            )}
             <Box
-              role="img"
-              aria-label={states.map((s) => `${s.title}: ${number(summary[s.key])}`).join(', ')}
               sx={{
-                display: 'flex',
-                gap: '3px',
-                height: 12,
-                borderRadius: 1,
-                overflow: 'hidden',
-                my: 2,
+                display: 'grid',
+                gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(3,minmax(0,1fr))' },
               }}
             >
-              {states
-                .filter((s) => summary[s.key]! > 0)
-                .map((s) => (
-                  <Box key={s.key} sx={{ flex: summary[s.key], bgcolor: s.color }} />
-                ))}
+              {metrics.map(({ label, value, detail, icon: Icon }, i) => (
+                <Box
+                  key={label}
+                  sx={{
+                    p: 1.5,
+                    minWidth: 0,
+                    borderColor: 'divider',
+                    borderBottom: { xs: i < metrics.length - 1 ? 1 : 0, sm: 0 },
+                    borderRight: { xs: 0, sm: i < metrics.length - 1 ? 1 : 0 },
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                  >
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                      {label}
+                    </Typography>
+                    <Box sx={{ color: 'text.secondary', flexShrink: 0, display: 'flex' }}>
+                      <Icon size={16} strokeWidth={1.7} aria-hidden="true" />
+                    </Box>
+                  </Stack>
+                  <Typography
+                    sx={{
+                      fontSize: { xs: '1.35rem', md: '1.625rem' },
+                      lineHeight: 1.25,
+                      fontWeight: 750,
+                      letterSpacing: '-0.025em',
+                      fontVariantNumeric: 'tabular-nums',
+                      overflowWrap: 'anywhere',
+                      mt: 0.5,
+                    }}
+                  >
+                    {value}
+                  </Typography>
+                  {detail && (
+                    <Typography variant="caption" color="text.secondary">
+                      {detail}
+                    </Typography>
+                  )}
+                </Box>
+              ))}
             </Box>
-          )}
-          {!consistent && !loading && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Chưa thể tính tỷ lệ từ số liệu hiện có. Hãy tải lại nếu các trạng thái vừa thay đổi.
-            </Typography>
-          )}
-          <Stack direction="row" useFlexGap spacing={2} sx={{ mt: 1.5, flexWrap: 'wrap' }}>
-            {states.map(({ key, title, color }) => (
-              <Stack key={key} direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-                <Box sx={{ width: 9, height: 9, borderRadius: '2px', bgcolor: color }} />
-                <Typography variant="caption" color="text.secondary">
-                  {title}: {number(summary?.[key])}
-                </Typography>
-              </Stack>
-            ))}
-          </Stack>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
-            Tỷ lệ đang cho thuê tính trên tổng số phòng, không phải số người đang có mặt.
-          </Typography>
-        </Box>
-      </Paper>
+          </Paper>
+        </Stack>
+      )}
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1.3fr) minmax(0, 1fr)' },
-          gap: 2.5,
-          alignItems: 'start',
+          gridTemplateColumns: { xs: 'minmax(0,1fr)', md: 'minmax(0,1fr) minmax(0,1fr)' },
+          gap: 2,
+          alignItems: 'stretch',
         }}
       >
-        <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
-          <Typography component="h2" variant="h2">
-            {active ? 'Cần theo dõi' : 'Chuẩn bị vận hành'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-            {active
-              ? 'Các trạng thái cần xem xét, không phải kết luận phòng chưa đủ điều kiện.'
-              : 'Kiểm tra cấu hình và điều kiện khai thác trước khi mở lại cơ sở.'}
-          </Typography>
-          <Stack divider={<Divider />} spacing={1.5}>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-              <CircleAlert size={20} aria-hidden="true" />
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 650 }}>Sự cố đang mở</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {summary?.openIncidents == null
-                    ? 'Chưa tải được số liệu'
-                    : `${number(summary.openIncidents)} sự cố chờ hoặc đang xử lý`}
-                </Typography>
-              </Box>
-              {owner && (
-                <Button component={Link} to={`/incidents?locationId=${encodeURIComponent(id)}`}>
-                  Xem sự cố
-                </Button>
-              )}
-            </Stack>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-              <CircleAlert size={20} aria-hidden="true" />
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 650 }}>Phòng không khai thác</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {summary?.unavailable == null
-                    ? 'Chưa có số liệu'
-                    : `${number(summary.unavailable)} phòng · xem trạng thái chi tiết tại phòng`}
-                </Typography>
-              </Box>
-              <Button component={Link} to={`/locations/${id}/rooms`}>
-                Xem phòng
-              </Button>
-            </Stack>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-              <Package size={20} aria-hidden="true" />
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 650 }}>Định mức và kiểm kê</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  So sánh trang bị yêu cầu với tài sản đã xác nhận.
-                </Typography>
-              </Box>
-              <Button component={Link} to={`/locations/${id}/assets`}>
-                Kiểm tra
-              </Button>
-            </Stack>
-            {owner && (
-              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                <Coins size={20} aria-hidden="true" />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={{ fontWeight: 650 }}>Giá và lịch hóa đơn</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Kiểm tra ngày hiệu lực và quy tắc thu tiền.
-                  </Typography>
-                </Box>
-                <Button component={Link} to={`/locations/${id}/pricing`}>
-                  Xem giá
-                </Button>
-              </Stack>
-            )}
-          </Stack>
-        </Paper>
-        <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
-          <Typography component="h2" variant="h2">
-            Dữ liệu cấu hình
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-            Số bản ghi để tra cứu, không phải chỉ số sẵn sàng.
-          </Typography>
-          <Stack divider={<Divider />} spacing={1.5}>
-            {sections.map(({ path, title, count, description, icon: Icon }) => (
-              <Stack key={path} direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                <Box sx={{ color: 'text.secondary', display: 'flex' }}>
-                  <Icon size={19} />
-                </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={{ fontWeight: 650 }}>{title}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {description}
-                  </Typography>
-                </Box>
-                <Typography sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
-                  {number(count)}
-                </Typography>
-                <Button
-                  component={Link}
-                  to={`/locations/${id}/${path}`}
-                  size="small"
-                  aria-label={`Xem ${title.toLowerCase()}`}
-                >
-                  Xem
-                </Button>
-              </Stack>
-            ))}
-          </Stack>
-          {!active && missing.length > 0 && (
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-              Một số mục chưa có bản ghi. Không phải mọi mục đều bắt buộc.
-            </Typography>
-          )}
-        </Paper>
-      </Box>
-      {owner && finance && (
-        <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, minWidth: 0 }}>
           <Stack
-            direction={{ xs: 'column', sm: 'row' }}
+            direction="row"
             spacing={1}
-            sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mb: 2 }}
+            sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}
           >
             <Box>
               <Typography component="h2" variant="h2">
-                Tài chính trong kỳ
+                Tình trạng phòng
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Từ {finance.from.split('-').reverse().join('/')} đến{' '}
-                {finance.to.split('-').reverse().join('/')}
+              <Typography variant="caption" color="text.secondary">
+                {summary?.asOf ? `Ngày ${dateLabel(summary.asOf)}` : 'Trạng thái hiện tại'}
               </Typography>
             </Box>
             <Button
               component={Link}
-              to={`/locations/${id}/investment`}
+              to={roomPath}
               endIcon={<ArrowRight size={16} />}
+              sx={{ flexShrink: 0 }}
             >
-              Xem vốn & chi phí
+              Xem tất cả
             </Button>
           </Stack>
-          {finance.loading && <LinearProgress aria-label="Đang tải tài chính cơ sở" />}
-          {finance.error && (
-            <Alert severity="warning" action={<Button onClick={finance.retry}>Thử lại</Button>}>
-              {finance.error}
-            </Alert>
+          <RoomOccupancyDistribution counts={summary} roomPath={roomPath} loading={loading} />
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, minWidth: 0 }}>
+          <Typography component="h2" variant="h2">
+            {active ? 'Công việc cần theo dõi' : 'Chuẩn bị vận hành'}
+          </Typography>
+          {!active && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Kiểm tra điều kiện trước khi mở lại cơ sở.
+            </Typography>
           )}
-          {finance.data && (
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
-                gap: 2,
-              }}
-            >
-              {[
-                {
-                  label: 'Đã thu (đã xác minh)',
-                  value: finance.data.total.verifiedCollections,
-                  detail: 'Khoản thu đã xác minh, được ghi nhận trong kỳ.',
-                },
-                {
-                  label: 'Công nợ hiện tại',
-                  value: finance.data.total.outstandingNow,
-                  detail: 'Số dư hiện tại của hóa đơn thuộc kỳ.',
-                },
-                {
-                  label: 'Chi phí vận hành',
-                  value: finance.data.total.operatingExpenses,
-                  detail: 'Khoản chi vận hành đã ghi nhận trong kỳ.',
-                },
-              ].map((metric) => (
-                <Box
-                  key={metric.label}
-                  sx={{ minWidth: 0, borderTop: 1, borderColor: 'divider', pt: 1.5 }}
+          <Stack spacing={1} sx={{ mt: 1.5 }}>
+            {sortedFollowups.map(({ title, count, icon: Icon, to, action }) => {
+              const hasItems = count != null && count > 0;
+              return (
+                <Stack
+                  key={title}
+                  direction="row"
+                  spacing={1.5}
+                  sx={{
+                    alignItems: 'center',
+                    minWidth: 0,
+                    p: 1,
+                    borderRadius: 1.5,
+                    bgcolor: hasItems ? 'background.default' : 'transparent',
+                  }}
                 >
-                  <Typography variant="body2" color="text.secondary">
-                    {metric.label}
-                  </Typography>
-                  <Typography
+                  <Box
                     sx={{
-                      fontSize: '1.25rem',
-                      fontWeight: 750,
-                      fontVariantNumeric: 'tabular-nums',
-                      overflowWrap: 'anywhere',
-                      my: 0.5,
+                      display: 'grid',
+                      placeItems: 'center',
+                      width: 28,
+                      height: 28,
+                      flexShrink: 0,
+                      borderRadius: '10px',
+                      bgcolor: hasItems ? '#fff4df' : 'background.default',
+                      color: hasItems ? 'warning.dark' : 'text.secondary',
                     }}
                   >
-                    {typeof metric.value === 'string' ? formatFinanceMoney(metric.value) : '—'}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {metric.detail}
-                  </Typography>
-                </Box>
+                    <Icon size={16} />
+                  </Box>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography sx={{ fontWeight: 650 }}>{title}</Typography>
+                    {count == null && (
+                      <Typography variant="body2" color="text.secondary">
+                        Chưa có số liệu
+                      </Typography>
+                    )}
+                  </Box>
+                  {count != null && (
+                    <Typography
+                      sx={{
+                        fontWeight: 750,
+                        fontSize: 20,
+                        fontVariantNumeric: 'tabular-nums',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {number(count)}
+                    </Typography>
+                  )}
+                  {to && (
+                    <Button
+                      component={Link}
+                      to={to}
+                      size="small"
+                      aria-label={action}
+                      sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                    >
+                      {action}
+                    </Button>
+                  )}
+                </Stack>
+              );
+            })}
+          </Stack>
+          {quietFollowups.length > 0 && (
+            <Stack divider={<Divider />} spacing={0} sx={{ mt: sortedFollowups.length ? 1 : 0 }}>
+              {quietFollowups.map(({ quietLabel, to, action }) => (
+                <Stack
+                  key={quietLabel}
+                  direction="row"
+                  spacing={1}
+                  sx={{ alignItems: 'center', minWidth: 0, py: 0.25 }}
+                >
+                  <Box sx={{ color: 'success.dark', display: 'flex', flexShrink: 0 }}>
+                    <CircleCheck size={16} aria-hidden="true" />
+                  </Box>
+                  {to ? (
+                    <Typography
+                      component={Link}
+                      to={to}
+                      variant="body2"
+                      aria-label={`${quietLabel} · ${action}`}
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        minHeight: { xs: 44, sm: 28 },
+                        color: 'text.secondary',
+                        textDecoration: 'none',
+                        textUnderlineOffset: 3,
+                        '&:hover': { color: 'primary.main', textDecoration: 'underline' },
+                        '@media (pointer:coarse)': { minHeight: 44 },
+                      }}
+                    >
+                      {quietLabel}
+                    </Typography>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      {quietLabel}
+                    </Typography>
+                  )}
+                </Stack>
               ))}
-            </Box>
+            </Stack>
           )}
         </Paper>
-      )}
-      {owner && metadata && (
-        <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={1}
-            sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}
-          >
-            <Box sx={{ minWidth: 0 }}>
-              <Typography component="h2" variant="h2">
-                Thông tin thiết lập đã lưu
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ overflowWrap: 'anywhere', mt: 0.5 }}
-              >
-                Email quản lý: {metadata.contactEmail || 'Chưa cập nhật'}
-              </Typography>
-              {metadata.description && (
-                <Typography
-                  variant="body2"
-                  sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mt: 1 }}
-                >
-                  {metadata.description}
-                </Typography>
-              )}
-              <Typography variant="caption" color="text.secondary">
-                Thiết lập đã lưu không đồng nghĩa với mọi phòng đã đủ điều kiện nhận khách.
-              </Typography>
-            </Box>
-            <Button component={Link} to={`/locations/${id}/settings`}>
-              Xem thiết lập
-            </Button>
-          </Stack>
-        </Paper>
-      )}
+      </Box>
     </Stack>
   );
 }
