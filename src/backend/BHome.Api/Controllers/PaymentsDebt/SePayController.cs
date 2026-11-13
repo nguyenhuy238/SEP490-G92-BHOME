@@ -8,8 +8,13 @@ namespace BHome.Api.Controllers.PaymentsDebt;
 
 [ApiController, Route("api/v1/integrations/sepay")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class SePayController(SePayWebhookSecurity security, SePayService service, ISePayRepository repository) : ControllerBase
+public sealed class SePayController(SePayWebhookSecurity security, SePayService service, ISePayRepository repository,
+    SePayOptions options, IHostEnvironment environment) : ControllerBase
 {
+    [HttpGet("testing-context"), Authorize(Roles = Roles.Owner)]
+    public IActionResult TestingContext() => options.TestingAvailable(environment.EnvironmentName)
+        ? Ok(new { mode = "Test" }) : NotFound();
+
     [HttpPost("webhook"), AllowAnonymous, Consumes("application/json"), RequestSizeLimit(32768)]
     public async Task<IActionResult> Webhook(CancellationToken token)
     {

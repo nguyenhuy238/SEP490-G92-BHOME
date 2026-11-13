@@ -1,5 +1,46 @@
 # Tích hợp SePay và hướng dẫn Test Mode
 
+Thành viên mới bắt đầu từ [SePay Team Setup](../development/SEPAY_TEAM_SETUP.md).
+Các biên bản runtime cũ mô tả máy/tunnel tại thời điểm kiểm tra; không dùng chúng làm cấu hình
+mặc định cho team. Source, template và script trong Git không chứa token hoặc credential dùng chung.
+
+## Workspace kiểm thử Sandbox (13/11/2026)
+
+`GET /api/v1/integrations/sepay/testing-context` yêu cầu Owner JWT. Trả HTTP 200
+`{"mode":"Test"}` chỉ khi `SePay:Enabled=true`, `Mode=Test` và host là Development/Testing;
+trường hợp integration tắt, Live hoặc môi trường khác trả 404. Anonymous 401, Tenant/Staff 403.
+Response không chứa token, webhook secret hoặc cấu hình tài khoản.
+
+Owner mở **Thanh toán → Webhook SePay → Kiểm thử SePay**. Workspace tái sử dụng
+PaymentInvoicePicker để lọc Location/Room và chọn hóa đơn Final còn dư nợ. Các số tiền,
+mã BH, nội dung, tài khoản và QR đọc từ API payment/transfer-instructions hiện có.
+Chỉ hướng dẫn demo khớp số dư/mã BH hiện tại mới có liên kết tới
+[trình mô phỏng chính thức](https://my.sepay.vn/testmode/transaction/simulate).
+Mở liên kết không tạo giao dịch và không xác nhận đã trả tiền.
+Khi quay lại tab, React Query làm mới payment, instructions và event list; có nút làm mới riêng.
+Danh sách sự kiện ghi cả webhook/polling, cho mở receipt để xem số đã/chưa phân bổ,
+bank reference, provider, memo và kết quả khớp hóa đơn đang kiểm thử. Review/history
+tiếp tục dùng đường dẫn receipt và API thủ công hiện có.
+
+Mobile dùng cache trong bộ nhớ theo API/session để gộp request đồng thời. Khi màn hình
+được focus hoặc app về foreground, đọc lại payment. Poll mỗi 30 giây trong tối đa 5 phút,
+dừng khi Paid/NotIssued, background hoặc blur. Thông báo nhẹ chỉ xuất hiện khi dữ liệu
+thanh toán backend thay đổi. Instructions được vô hiệu hóa theo thay đổi payment, không
+có timer instructions chạy riêng. Hết cửa sổ theo dõi vẫn có thể làm mới thủ công hoặc
+quay lại màn hình. Khoảng thời gian này chỉ là UI polling, không đổi JOB-03 hoặc hạn thanh toán.
+
+Kiểm tra token và binding mà không xuất credential/payload:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Test-SePayConnection.ps1 `
+  -EnvironmentFile .env.sepay.local
+```
+
+Script chỉ GET tới host Sandbox chính thức, chặn redirect, timeout 20 giây, in HTTP/status/count
+và kết quả binding; không ghi ledger. Cấu hình private phải được Backend nạp qua
+`Start-Api.ps1 -EnvironmentFile .env.sepay.local` rồi restart sau khi đổi.
+Kết quả đã chạy và checklist acceptance: [biên bản 13/11](../development/SEPAY_SANDBOX_COMPLETION_2026-11-13.md).
+
 BHOME nhận webhook SePay qua `POST /api/v1/integrations/sepay/webhook`. Endpoint dùng HMAC-SHA256 và raw body. Backend lưu inbox bền vững trước khi xử lý receipt, allocation và payment event trong ledger Compact24. Phạm vi truy vết gồm BF-06, UC-22/23/25, GBR-10/18, DBR-08, JOB-03 và API-01.
 
 ## Contract và phân quyền
@@ -126,6 +167,56 @@ ngrok http https://localhost:7240
 ```
 
 Lấy hostname HTTPS thực tế từ output ngrok. Thêm hostname vào `AllowedHosts` của profile test và khởi động lại API. Kiểm tra `{PUBLIC_HTTPS_BASE_URL}/health/live`, rồi probe POST không chữ ký như trên qua public hostname. Public Webhook URL bằng hostname thực tế cộng `/api/v1/integrations/sepay/webhook`.
+
+### Tránh lỗi 400 Invalid Hostname
+
+`appsettings.json` chỉ cho phép `localhost;127.0.0.1`. Nếu profile có cấu hình LAN,
+phải giữ các hostname/IP đó khi thêm hostname tunnel. Trong `.env.sepay.local`, dùng
+**một dòng không có dấu nháy**, không ghi scheme, port hoặc path:
+
+```dotenv
+AllowedHosts=localhost;127.0.0.1;<LAN_IP>;<DEVELOPMENT_HOST>;<NGROK_HOST>
+```
+
+Thay placeholder bằng giá trị thực, bỏ các mục LAN nếu không dùng. Ví dụ hostname
+tunnel là `your-tunnel.ngrok-free.dev`, không phải `https://your-tunnel.ngrok-free.dev`.
+Không dùng `*` hoặc `*.ngrok-free.dev`. Sau khi đổi hostname, khởi động lại
+`scripts/Start-Api.ps1 -EnvironmentFile .env.sepay.local`; không chỉ restart ngrok.
+
+`Start-Api.ps1` resolve đường dẫn profile từ repository root, đặt `BHOME_ENV_FILE`
+và xuất các khóa được hỗ trợ (gồm `AllowedHosts`, `SePay__*`) vào process environment
+**trước** `dotnet run`. Với đường chạy này, giá trị file trở thành environment override.
+Development chạy trực tiếp/F5 dùng `DevelopmentEnvironmentFile` như fallback sau
+appsettings, dưới user-secrets, process environment và command line. File không tự
+chọn `.env.sepay.local`: phải truyền `-EnvironmentFile` hoặc đặt `BHOME_ENV_FILE`.
+Các khóa `ASPNETCORE_URLS`/`ASPNETCORE_ENVIRONMENT` không được loader nhập từ dotenv;
+profile `https` hiện có khai báo Development và các cổng 7240/5240.
+
+Giữ lệnh `ngrok http https://localhost:7240` khi đã cho phép hostname cụ thể.
+Không cần `--host-header=rewrite`. Cấu hình hiện tại dùng HTTPS cho cả public endpoint
+và upstream nên không cần thêm `UseForwardedHeaders`. Không bật tin cậy forwarded
+headers toàn cục hoặc xóa `KnownProxies`/`KnownNetworks` để chữa lỗi host.
+Nếu đổi sang upstream HTTP, phải đánh giá lại trusted proxy và redirect riêng.
+
+Kiểm tra bằng chứng chỉ local đã trust, không dùng `-k`:
+
+```powershell
+$publicBase = 'https://<NGROK_HOST>'
+curl.exe -i https://localhost:7240/health/live
+curl.exe -i https://localhost:7240/health/ready
+curl.exe -i "$publicBase/health/live"
+curl.exe -i -X POST "$publicBase/api/v1/integrations/sepay/webhook" `
+  -H 'Content-Type: application/json' --data '{}'
+curl.exe -i https://localhost:7240/health/live -H 'Host: unexpected.example.invalid'
+```
+
+Kết quả cần có: health `200`, webhook thiếu HMAC `401` khi SePay bật, host lạ `400`.
+`503 sepay_disabled` nghĩa là đã tới handler nhưng chưa bật tích hợp. Ngrok trả
+`404 ERR_NGROK_3200` nghĩa là tunnel offline, khác lỗi Host Filtering của Kestrel.
+Không dùng một signed payment webhook để probe kết nối.
+
+Xem [biên bản kiểm tra 13/11/2026](../development/SEPAY_NGROK_HOST_FIX_2026-11-13.md)
+để biết bằng chứng runtime, phạm vi dữ liệu test và các bước Dashboard còn lại.
 
 | Trường Dashboard Test Mode  | Giá trị cần dùng                                                           |
 | --------------------------- | -------------------------------------------------------------------------- |

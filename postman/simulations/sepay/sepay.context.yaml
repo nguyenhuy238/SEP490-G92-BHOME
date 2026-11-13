@@ -16,6 +16,20 @@ assumptions:
     verification: No real provider account or credential was used.
     source: docs/development/SEPAY_IMPLEMENTATION.md
     updated_at: '2026-11-12'
+  - id: sandbox-api-access-20261113
+    status: supported
+    claim: The configured Test Mode token can query Sandbox accounts and transactions, and the real BHOME adapter parses the response.
+    reason: Read-only authenticated calls returned HTTP 200 and success. SePayApiClient parsed two transactions; the isolated backend later ingested two historical transactions as ManualReview and persisted its polling checkpoint.
+    verification: Test-SePayConnection.ps1 reported a matching active receiving-account binding after private configuration. Actual API probes confirmed the synthetic invoice remains Unpaid with zero paid amount. This does not establish signed webhook delivery or matching-invoice settlement.
+    source: docs/development/SEPAY_SANDBOX_COMPLETION_2026-11-13.md
+    updated_at: '2026-11-13'
+  - id: local-adapter-recheck-20261113
+    status: supported
+    claim: The existing local simulation still exercises the real SePayApiClient over HTTP.
+    reason: The explicit simulation URL was set for the adapter smoke test and the simulation request log recorded GET /v2/transactions with ascending pagination and HTTP 200.
+    verification: One adapter smoke test passed through Postman CLI 1.80.0. A preliminary incorrectly quoted environment command only used the loopback fallback and is excluded from this evidence.
+    source: docs/development/SEPAY_SANDBOX_COMPLETION_2026-11-13.md
+    updated_at: '2026-11-13'
 fingerprints:
   - id: initial-contract
     date: '2026-11-12'

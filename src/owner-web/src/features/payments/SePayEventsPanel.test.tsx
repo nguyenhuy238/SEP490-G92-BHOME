@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SePayEventsPanel } from './SePayEventsPanel';
 
-const api = vi.hoisted(() => ({ sepayEvents: vi.fn() }));
+const api = vi.hoisted(() => ({ sepayEvents: vi.fn(), transfer: vi.fn() }));
 vi.mock('./usePaymentApi', () => ({ usePaymentApi: () => api }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner' } }),
@@ -53,4 +53,35 @@ it('shows failed loading and lets the Owner retry', async () => {
   api.sepayEvents.mockResolvedValue({ items: [], totalCount: 0 });
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
   expect(await screen.findByText('Chưa nhận được webhook SePay.')).toBeTruthy();
+});
+it('loads current receipt allocation separately from webhook acknowledgement', async () => {
+  api.sepayEvents.mockResolvedValue({
+    items: [
+      {
+        id: 'event',
+        mode: 'Test',
+        status: 'Completed',
+        reason: 'verified_partial_payment',
+        transferId: 'receipt',
+        receivedAt: '2026-11-12T05:00:00Z',
+      },
+    ],
+    totalCount: 1,
+  });
+  api.transfer.mockResolvedValue({
+    bankReference: 'SYN-1',
+    providerIdentity: 'SePayTest',
+    occurredAt: '2026-11-12T05:00:00Z',
+    amount: '1000000',
+    status: 'Allocated',
+    reason: 'verified_partial_payment',
+    transferDescription: 'BH12345678',
+    allocatedAmount: '1000000',
+    unallocatedAmount: '0',
+  });
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết giao dịch SePay' }));
+  expect(await screen.findByText('Đã phân bổ: 1.000.000 ₫ · Chưa phân bổ: 0 ₫')).toBeTruthy();
+  expect(screen.getByText('Nội dung: BH12345678')).toBeTruthy();
+  expect(api.transfer.mock.calls[0][0]).toBe('receipt');
 });

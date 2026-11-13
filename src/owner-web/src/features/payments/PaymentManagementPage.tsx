@@ -30,6 +30,7 @@ import { PageHeader, FilterToolbar, KPIGrid, StatusChip } from '../../components
 import { OwnerTable, OwnerPagination } from '../../components/common/OwnerWorkspace';
 import { usePaymentApi } from './usePaymentApi';
 import { SePayEventsPanel } from './SePayEventsPanel';
+import { SePayTestingPanel } from './SePayTestingPanel';
 import {
   OwnerInvoicePaymentPanel,
   ReconcileTransfer,
@@ -174,7 +175,12 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
         >
           Làm mới đối soát và công nợ
         </Button>
-        {!debtOnly && section === 4 && <SePayEventsPanel />}
+        {!debtOnly && section === 4 && (
+          <>
+            <SePayTestingPanel />
+            <SePayEventsPanel />
+          </>
+        )}
         {!debtOnly && section === 1 && (
           <Button onClick={() => setRecordUnmatched(true)}>
             Ghi nhận giao dịch chưa xác định hóa đơn

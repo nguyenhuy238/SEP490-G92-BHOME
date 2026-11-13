@@ -23,7 +23,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Could not create the dedicated PostgreSQL test container.' }
     $ready = $false
     for ($attempt = 0; $attempt -lt 40; $attempt++) {
-        & docker exec $container pg_isready -U postgres -d postgres *> $null
+        & docker exec $container pg_isready -h 127.0.0.1 -U postgres -d postgres *> $null
         if ($LASTEXITCODE -eq 0) { $ready = $true; break }
         Start-Sleep -Milliseconds 500
     }
