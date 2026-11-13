@@ -22,7 +22,7 @@ jobs:
         ports:
           - 5432/tcp
         options: >-
-          --health-cmd "pg_isready -U bhome_ci -d postgres"
+          --health-cmd "pg_isready -h 127.0.0.1 -U bhome_ci -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -54,6 +54,9 @@ jobs:
         env:
           BHOME_COMPACT24_TEST_ADMIN: Host=127.0.0.1;Port=${{ job.services.compact_postgres.ports[5432] }};Database=postgres;Username=bhome_ci;Password=synthetic-ci-only
       - run: dotnet format src/backend/BHome.sln --verify-no-changes --no-restore
+      - name: Verify SePay team configuration scripts without private credentials
+        shell: pwsh
+        run: ./scripts/Test-SePaySandboxScripts.ps1
       - name: Test digital signing unit suite
         run: dotnet test src/digital-signing/tests/BHome.DigitalSigning.UnitTests/BHome.DigitalSigning.UnitTests.csproj -c Release --settings tests/backend/ci.runsettings --logger trx
   frontend:
@@ -79,3 +82,4 @@ jobs:
           EXPO_PUBLIC_API_BASE_URL: https://api.example.invalid
       - run: npm run format:check
       - run: docker compose --env-file .env.example config --quiet
+      - run: docker compose --project-name bhome-sepay-ci --env-file .env.sepay.example -f deploy/compose.sepay.yml config --quiet

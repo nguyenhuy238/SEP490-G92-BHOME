@@ -1,0 +1,21 @@
+# Isolated local Sandbox. The fixed loopback port survives Docker restarts.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ${BHOME_SEPAY_CONTAINER_NAME:?Initialize the private SePay profile first}
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure a private local database password}
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-55432}:5432'
+    volumes:
+      - sepay-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d postgres']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+volumes:
+  sepay-data:

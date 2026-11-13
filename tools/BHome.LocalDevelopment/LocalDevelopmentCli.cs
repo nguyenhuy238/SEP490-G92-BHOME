@@ -157,7 +157,7 @@ internal static class LocalDevelopmentCli
             var config = new ConfigurationBuilder().AddEnvironmentVariables().Build();
             var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
             services.AddInfrastructure(config);
-            if ((args.Length == 1 && args[0] is "seed-contract-demo" or "seed-billing-automation-demo" or "demo-billing-retry") ||
+            if ((args.Length == 1 && args[0] is "seed-contract-demo" or "seed-billing-automation-demo" or "demo-billing-retry" or "seed-sepay-sandbox") ||
                 (args.Length is 1 or 2 && args[0] == "seed-e2e-meter-workflow"))
             {
                 services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? ""));
@@ -165,6 +165,12 @@ internal static class LocalDevelopmentCli
                 services.AddSingleton<BHome.Application.IdentityAccess.ICurrentUser>(p => p.GetRequiredService<LifecycleSeedActor>());
             }
             await using var provider = services.BuildServiceProvider();
+            if (args.SequenceEqual(new[] { "seed-sepay-sandbox" }))
+            {
+                var result = await SePaySandboxSeed.RunAsync(provider, Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"), password);
+                Console.WriteLine($"SEPAY_SANDBOX_READY created={result.Created}; invoice={result.InvoiceId}; code={result.PaymentCode}. Synthetic accounts: owner/tenant1/tenant2/staff.sepay.test@example.invalid. Password remains in the private profile; existing payments and passwords are preserved.");
+                return 0;
+            }
             if (args.Length is 1 or 2 && args[0] == "seed-e2e-meter-workflow")
             {
                 var mode = args.Length == 2 ? args[1] : "--seed";

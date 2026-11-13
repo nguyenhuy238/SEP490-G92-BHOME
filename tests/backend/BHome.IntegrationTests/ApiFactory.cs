@@ -9,6 +9,9 @@ namespace BHome.IntegrationTests;
 
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
+    // Composed hosts share one synthetic authority. Separate factories still get
+    // independent keys; rebuilding a child host must not invalidate its fixture's JWTs.
+    private readonly string signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
     internal static System.Collections.Concurrent.ConcurrentQueue<string> Diagnostics { get; } = new();
     public string ConnectionString { get; set; } = "Host=127.0.0.1;Database=bhome_tests;Username=unconfigured;Timeout=1";
     public bool UseCompact24 { get; init; }
@@ -19,7 +22,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ConnectionStrings:Database"] = ConnectionString,
-            ["Jwt:SigningKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)),
+            ["Jwt:SigningKey"] = signingKey,
             ["Api:UseHttpsRedirection"] = "false",
             ["Api:ReadDevelopmentEnvironmentFile"] = "false",
             ["Jobs:Enabled"] = "false",

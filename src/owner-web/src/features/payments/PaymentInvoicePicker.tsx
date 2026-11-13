@@ -21,10 +21,12 @@ export function PaymentInvoicePicker({
   open,
   close,
   choose,
+  unpaidOnly = false,
 }: {
   open: boolean;
   close: () => void;
   choose: (row: DebtInvoice) => void;
+  unpaidOnly?: boolean;
 }) {
   const api = usePaymentApi();
   const { session } = useAuth();
@@ -93,8 +95,8 @@ export function PaymentInvoicePicker({
               }}
             >
               <MenuItem value="Unpaid">Còn phải trả</MenuItem>
-              <MenuItem value="Paid">Đã đủ tiền · đối chiếu hoàn dư</MenuItem>
-              <MenuItem value="">Tất cả hóa đơn</MenuItem>
+              {!unpaidOnly && <MenuItem value="Paid">Đã đủ tiền · đối chiếu hoàn dư</MenuItem>}
+              {!unpaidOnly && <MenuItem value="">Tất cả hóa đơn</MenuItem>}
             </TextField>
             <TextField
               select
