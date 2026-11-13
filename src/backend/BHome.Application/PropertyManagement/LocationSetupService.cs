@@ -106,8 +106,12 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
         if (await shared.LocationCodeExistsAsync(input.Code, location, t)) throw new PropertyException(409, "duplicate_location_code");
         return await local.SaveAsync(LocationSetupKeys.Metadata(location), location, "LocationMetadata", "Recorded", new
         {
-            code = input.Code.Trim(), input.Floors, contactPhone = input.ContactPhone?.Trim() ?? "", contactEmail = input.ContactEmail?.Trim() ?? "",
-            description = input.Description?.Trim() ?? "", setupStatus
+            code = input.Code.Trim(),
+            input.Floors,
+            contactPhone = input.ContactPhone?.Trim() ?? "",
+            contactEmail = input.ContactEmail?.Trim() ?? "",
+            description = input.Description?.Trim() ?? "",
+            setupStatus
         }, input.ExpectedVersion, actor, t);
     }
     public async Task<SetupDocument?> MetadataAsync(Guid location, CancellationToken t)
@@ -348,12 +352,12 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 if (input.Fees.Count(fee => fee.RoomKey.HasValue && Same(fee.ChargeCode, group.Key)) < group.Count())
                     throw new PropertyException(400, "source_fee_room_mapping_required");
             for (var i = 0; i < input.Fees.Length; i++)
-            for (var j = i + 1; j < input.Fees.Length; j++)
-            {
-                var a = input.Fees[i]; var b = input.Fees[j];
-                if (a.RoomKey == b.RoomKey && Same(a.ChargeCode, b.ChargeCode) && a.EffectiveFrom <= (b.EffectiveTo ?? DateOnly.MaxValue) && b.EffectiveFrom <= (a.EffectiveTo ?? DateOnly.MaxValue))
-                    throw new PropertyException(409, "overlapping_setup_fees");
-            }
+                for (var j = i + 1; j < input.Fees.Length; j++)
+                {
+                    var a = input.Fees[i]; var b = input.Fees[j];
+                    if (a.RoomKey == b.RoomKey && Same(a.ChargeCode, b.ChargeCode) && a.EffectiveFrom <= (b.EffectiveTo ?? DateOnly.MaxValue) && b.EffectiveFrom <= (a.EffectiveTo ?? DateOnly.MaxValue))
+                        throw new PropertyException(409, "overlapping_setup_fees");
+                }
             if (input.Policy is { } policyInput)
             {
                 _ = Text(policyInput.Title, 150); _ = Text(policyInput.Content, 12000);
@@ -376,7 +380,9 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 }
                 var data = new JsonObject
                 {
-                    ["name"] = type.Name.Trim(), ["description"] = type.Description?.Trim() ?? "", ["defaults"] = JsonSerializer.SerializeToNode(normalized[type.Key], Json),
+                    ["name"] = type.Name.Trim(),
+                    ["description"] = type.Description?.Trim() ?? "",
+                    ["defaults"] = JsonSerializer.SerializeToNode(normalized[type.Key], Json),
                     ["assetTemplateId"] = assetTemplateId.HasValue ? JsonValue.Create(assetTemplateId.Value) : null
                 };
                 if (type.SourceId.HasValue)

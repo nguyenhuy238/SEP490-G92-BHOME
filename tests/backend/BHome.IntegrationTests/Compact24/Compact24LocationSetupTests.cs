@@ -127,11 +127,15 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.DoesNotContain(source.Fees, p => p.Category == ChargeCategory.Rent && p.RoomId.HasValue);
         var type = source.RoomTypes.Single(d => d.Data.GetProperty("name").GetString() == "Synthetic suite");
         var draft = SetupDraft();
-        draft = draft with { SourceLocationId = location, SourceState = source.SourceState,
+        draft = draft with
+        {
+            SourceLocationId = location,
+            SourceState = source.SourceState,
             RoomTypes = [draft.RoomTypes[0] with { SourceId = type.Id, SourceVersion = type.Version, SourceKind = "RoomDefaults" }, draft.RoomTypes[1]],
             SourceReferences = [new(type.Id, type.Version, "RoomDefaults"), new(sourceFee.Id, sourceFee.Version, "BillingPolicy")],
-            Fees = [..draft.Fees, new(draft.Rooms[1].Key, sourceFee.Category, sourceFee.ChargeCode, sourceFee.Name, sourceFee.Method, sourceFee.Rate, Today, null)] };
-        Assert.Equal(HttpStatusCode.BadRequest, (await Keyed(owner, SetupRoute, draft with { Fees = [..draft.Fees.Select(fee => fee with { RoomKey = null })] }, Guid.NewGuid())).StatusCode);
+            Fees = [.. draft.Fees, new(draft.Rooms[1].Key, sourceFee.Category, sourceFee.ChargeCode, sourceFee.Name, sourceFee.Method, sourceFee.Rate, Today, null)]
+        };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Keyed(owner, SetupRoute, draft with { Fees = [.. draft.Fees.Select(fee => fee with { RoomKey = null })] }, Guid.NewGuid())).StatusCode);
         var copyKey = Guid.NewGuid();
         var copy = await Read<LocationSetupResult>(await Keyed(owner, SetupRoute, draft, copyKey));
         var edit = new LocalRoomDefaultsWrite("Changed source", "Independent source edit", new(4, 30m, ["Changed"], 3000000m), null, type.Version, "Source update");
@@ -245,8 +249,11 @@ public sealed partial class Compact24OwnerSetupTests
         var catalog = await Published(owner, "asset-catalog"); var fee = await Published(owner, "fee-templates"); var policy = await Published(owner, "policy-templates");
         var docs = new[] { room, asset, catalog, fee, policy };
         var draft = SetupDraft();
-        draft = draft with { RoomTypes = [draft.RoomTypes[0] with { SourceId = room.Id, SourceVersion = room.Version, SourceKind = "SharedTemplate" }, draft.RoomTypes[1]],
-            SourceReferences = docs.Select(doc => new ConfigurationSourceReference(doc.Id, doc.Version, doc.Resource)).ToArray() };
+        draft = draft with
+        {
+            RoomTypes = [draft.RoomTypes[0] with { SourceId = room.Id, SourceVersion = room.Version, SourceKind = "SharedTemplate" }, draft.RoomTypes[1]],
+            SourceReferences = docs.Select(doc => new ConfigurationSourceReference(doc.Id, doc.Version, doc.Resource)).ToArray()
+        };
         foreach (var doc in docs)
         {
             var stale = draft with { SourceReferences = draft.SourceReferences.Select(reference => reference.Id == doc.Id ? reference with { Version = reference.Version + 1 } : reference).ToArray() };
