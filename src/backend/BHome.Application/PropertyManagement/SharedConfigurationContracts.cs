@@ -24,9 +24,11 @@ public interface ISharedConfigurationStore
     Task<bool> NameExistsAsync(string resource, string name, Guid family, CancellationToken t);
     Task SaveAsync(SharedDocument document, int expected, CancellationToken t);
     Task<IReadOnlyList<PolicyDto>> PoliciesAsync(Guid location, CancellationToken t);
+    Task<IReadOnlyList<PolicyDto>> SetupCopyPoliciesAsync(Guid location, CancellationToken t);
     Task<SharedOperation?> OperationAsync(Guid actor, string kind, Guid key, CancellationToken t);
     Task<SharedUsage> ApplicationsAsync(Guid family, int page, int pageSize, CancellationToken t);
     Task<bool> HasApplicationAsync(Guid family, Guid location, CancellationToken t);
+    Task<bool> LocationCodeExistsAsync(string code, Guid? exceptLocation, CancellationToken t);
     Task SaveOperationAsync(SharedOperation operation, CancellationToken t);
 }
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
