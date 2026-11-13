@@ -1,5 +1,6 @@
 using BHome.Application.Notifications;
 using BHome.Infrastructure.Jobs;
+using BHome.Infrastructure.IdentityAccess;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,10 @@ internal sealed class NotificationAutomationWorker(IServiceScopeFactory scopes, 
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
+                // Reuse the durable job lease/retry implementation, allowing account invitations only.
+                // Jobs.Enabled remains false: invoice/contract/payment automation cannot run here.
+                await scope.ServiceProvider.GetRequiredService<PostgresJobWorker>()
+                    .ProcessAllowedAsync(stoppingToken, [AccountInvitationJob.JobName]);
                 if (!authenticationOnly) await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(stoppingToken);
                 else await scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>().PublishAuthenticationAsync(stoppingToken);
                 await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().ProcessPendingAsync(stoppingToken, authenticationOnly);

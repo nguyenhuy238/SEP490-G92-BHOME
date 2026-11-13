@@ -96,7 +96,14 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
             {state.data.history.map((item) => (
               <Typography key={item.id}>
                 {formatInstant(item.paidAt)} · {formatContractMoney(item.amount)} · Người trả:{' '}
-                {item.paidBy} · Owner xác minh sao kê
+                {item.paidBy} ·{' '}
+                {item.verificationSource === 'SePayTest'
+                  ? 'SePay thử nghiệm xác minh'
+                  : item.verificationSource === 'SePayLive'
+                    ? 'SePay xác minh'
+                    : item.verificationSource === 'OwnerBankStatement'
+                      ? 'Owner xác minh sao kê'
+                      : 'Nguồn xác minh khác'}
               </Typography>
             ))}
             {state.data.paymentStatus !== 'NotIssued' && (

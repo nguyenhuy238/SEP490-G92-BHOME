@@ -89,7 +89,8 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         });
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Sign-in failed.", body);
+        using var problem = System.Text.Json.JsonDocument.Parse(body);
+        Assert.Equal(LoginService.InvalidCredentialsMessage, problem.RootElement.GetProperty("title").GetString());
         Assert.DoesNotContain("accessToken", body);
         Assert.DoesNotContain(user.UserName!, body);
         Assert.DoesNotContain(TestPassword, body);

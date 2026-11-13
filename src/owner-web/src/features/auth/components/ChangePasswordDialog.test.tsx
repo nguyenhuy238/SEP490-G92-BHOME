@@ -55,34 +55,31 @@ it('validates password confirmation without calling the backend', () => {
   expect(mocks.changePassword).not.toHaveBeenCalled();
 });
 
-it('changes the password then restores the current Owner session with the new password', async () => {
+it('changes the password then clears the current session and requires interactive login', async () => {
   let finish!: () => void;
   mocks.changePassword.mockReturnValue(
     new Promise<void>((resolve) => {
       finish = resolve;
     }),
   );
-  const changed = setup();
+  const reauthenticate = vi.fn();
+  const changed = setup(vi.fn(), reauthenticate);
   fill('Current!Password-493', 'Next!Password-493');
   fireEvent.click(screen.getByRole('button', { name: 'Đổi mật khẩu' }));
   expect(screen.getByRole('button', { name: 'Đang đổi...' })).toBeDisabled();
   expect(mocks.changePassword).toHaveBeenCalledWith('Current!Password-493', 'Next!Password-493');
   finish();
-  await waitFor(() =>
-    expect(mocks.login).toHaveBeenCalledWith('owner@example.invalid', 'Next!Password-493'),
-  );
   await waitFor(() => expect(changed).toHaveBeenCalledOnce());
+  expect(mocks.clear).toHaveBeenCalledOnce();
+  expect(mocks.login).not.toHaveBeenCalled();
+  expect(reauthenticate).toHaveBeenCalledOnce();
 });
 
-it('falls back to the login route callback if password changed but session restoration fails', async () => {
-  mocks.changePassword.mockResolvedValue(undefined);
-  mocks.login.mockRejectedValue(new Error('network'));
-  const reauthenticationRequired = vi.fn();
-  setup(vi.fn(), reauthenticationRequired);
-  fill('Current!Password-493', 'Next!Password-493');
+it('rejects an unchanged password without modifying the account or clearing its session', async () => {
+  setup();
+  fill('Current!Password-493', 'Current!Password-493');
   fireEvent.click(screen.getByRole('button', { name: 'Đổi mật khẩu' }));
-  await waitFor(() => expect(reauthenticationRequired).toHaveBeenCalledOnce());
-  expect(
-    screen.queryByRole('button', { name: 'Đăng xuất tất cả thiết bị' }),
-  ).not.toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent('phải khác');
+  expect(mocks.changePassword).not.toHaveBeenCalled();
+  expect(mocks.clear).not.toHaveBeenCalled();
 });

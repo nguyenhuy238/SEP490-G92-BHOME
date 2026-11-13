@@ -41,7 +41,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            var user = new ApplicationUser { Id = id, UserName = name, Email = name, LockoutEnabled = true };
+            // These actors model established accounts that already completed setup.
+            // Pending/unconfirmed onboarding is exercised separately by authentication tests.
+            var user = new ApplicationUser { Id = id, UserName = name, Email = name, EmailConfirmed = true, LockoutEnabled = true };
             user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, password);
             id = user.Id; name = user.Email!;
         }

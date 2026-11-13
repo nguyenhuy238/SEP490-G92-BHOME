@@ -36,7 +36,9 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            var user = new ApplicationUser { Id = id, UserName = email, Email = email, IsActive = true };
+            // These signing actors represent established accounts; pending invitation
+            // setup is covered by the dedicated onboarding/authentication regressions.
+            var user = new ApplicationUser { Id = id, UserName = email, Email = email, EmailConfirmed = true, IsActive = true };
             user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, password);
             id = user.Id; email = user.Email!;
         }

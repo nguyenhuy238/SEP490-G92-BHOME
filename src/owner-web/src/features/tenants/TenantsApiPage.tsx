@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { IdentityRetentionPanel } from './IdentityRetentionPanel';
+import { TenantAccountStatus, type ResidentAccount } from './TenantAccountStatus';
 import {
   Button,
   Dialog,
@@ -41,6 +42,7 @@ interface Resident {
   tenantUserId: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  account?: ResidentAccount | null;
   version: string;
   tenancies: {
     contractId: string;
@@ -213,7 +215,14 @@ function ResidentDetail({ id, close }: { id: string; close: () => void }) {
         : op === 'invite'
           ? { email }
           : { tenantUserId: account };
-    if (await action.run(() => action.command(path, op === 'label' ? 'PUT' : 'POST', body))) {
+    if (
+      await action.run(
+        () => action.command(path, op === 'label' ? 'PUT' : 'POST', body),
+        op === 'invite'
+          ? 'Đã tiếp nhận yêu cầu lời mời. Theo dõi kết quả gửi email trong trạng thái tài khoản.'
+          : undefined,
+      )
+    ) {
       setOp('');
       setLabel(null);
       setReason('');
@@ -235,6 +244,10 @@ function ResidentDetail({ id, close }: { id: string; close: () => void }) {
             <Typography>
               Tài khoản: {r.tenantUserId ?? 'Chưa liên kết'} · {r.contactEmail} · {r.contactPhone}
             </Typography>
+            <TenantAccountStatus account={r.account} />
+            <Button disabled={q.isFetching} onClick={() => void q.refetch()}>
+              Tải lại trạng thái tài khoản
+            </Button>
             <Typography>
               Xác minh: {r.verificationStatus} {r.confirmedAt && formatInstant(r.confirmedAt)}
             </Typography>
@@ -298,8 +311,8 @@ function ResidentDetail({ id, close }: { id: string; close: () => void }) {
               Gửi lời mời Tenant
             </Button>
             <Typography variant="caption">
-              Lời mời yêu cầu hợp đồng đang hoạt động và kênh email đã cấu hình. Thông tin liên hệ
-              lấy từ tài khoản đã liên kết.
+              Tài khoản được cấp cho người ở có email Owner đã duyệt khi kích hoạt Main Contract.
+              Lời mời yêu cầu Main Contract đang hoạt động và kênh email đã cấu hình.
             </Typography>
             <Typography variant="subtitle1">Người ở cùng phòng</Typography>
             {house.data?.items.map((p) => (

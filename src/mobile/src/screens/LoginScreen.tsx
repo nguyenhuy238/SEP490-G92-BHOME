@@ -12,6 +12,10 @@ import { checkApiConnection, errorMessage } from '../lib/api';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { roleLabel, type MobileRole } from '../features/workspace/navigation';
 import { colors as c } from '../theme/theme';
+import {
+  loginIdentifierError,
+  loginPasswordError,
+} from '../../../../packages/client-core/src/loginValidation';
 export function LoginScreen() {
   const { baseUrl, login, restoreError } = useSession();
   const { startPreview, unavailable } = useWorkspace();
@@ -23,14 +27,17 @@ export function LoginScreen() {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useFeedbackState();
+  const [validation, setValidation] = useState({ identifier: '', password: '' });
   const [connection, setConnection] = useState('');
   const [checking, setChecking] = useState(false);
   const submit = async () => {
     if (busy) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || !password) {
-      setError('Nhập email hợp lệ và mật khẩu để đăng nhập.');
-      return;
-    }
+    const errors = {
+      identifier: loginIdentifierError(email),
+      password: loginPasswordError(password),
+    };
+    setValidation(errors);
+    if (errors.identifier || errors.password) return;
     setBusy(true);
     setError('');
     try {
@@ -68,29 +75,46 @@ export function LoginScreen() {
             </Text>
           </View>
           <Box style={{ padding: 20, gap: 18 }}>
-            <Text variant="titleMedium">Email</Text>
+            <Text variant="titleMedium">Email hoặc số điện thoại</Text>
             <TextInput
-              accessibilityLabel="Email đăng nhập"
+              accessibilityLabel="Email hoặc số điện thoại đăng nhập"
               mode="flat"
-              placeholder="Nhập email của bạn"
+              placeholder="Nhập email hoặc số điện thoại"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(value) => {
+                setEmail(value);
+                if (validation.identifier)
+                  setValidation((v) => ({ ...v, identifier: loginIdentifierError(value) }));
+              }}
+              error={!!validation.identifier}
+              maxLength={256}
               autoCapitalize="none"
               autoCorrect={false}
-              keyboardType="email-address"
-              autoComplete="email"
+              keyboardType="default"
+              autoComplete="username"
               disabled={busy}
               left={<TextInput.Icon icon="at" />}
               style={styles.field}
               underlineColor="transparent"
             />
+            {!!validation.identifier && (
+              <Text accessibilityRole="alert" style={ui.red}>
+                {validation.identifier}
+              </Text>
+            )}
             <Text variant="titleMedium">Mật khẩu</Text>
             <TextInput
               accessibilityLabel="Mật khẩu đăng nhập"
               mode="flat"
               placeholder="Nhập mật khẩu"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(value) => {
+                setPassword(value);
+                if (validation.password)
+                  setValidation((v) => ({ ...v, password: loginPasswordError(value) }));
+              }}
+              error={!!validation.password}
+              maxLength={1024}
               autoCapitalize="none"
               autoComplete="current-password"
               secureTextEntry={!visible}
@@ -106,6 +130,11 @@ export function LoginScreen() {
               underlineColor="transparent"
               onSubmitEditing={() => void submit()}
             />
+            {!!validation.password && (
+              <Text accessibilityRole="alert" style={ui.red}>
+                {validation.password}
+              </Text>
+            )}
             <Row spread>
               <Text variant="labelSmall" style={[ui.muted, ui.grow]}>
                 {Platform.OS === 'web'

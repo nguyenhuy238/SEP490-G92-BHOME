@@ -11,7 +11,7 @@ afterEach(() => {
 });
 function setup(entry = '/confirm-email') {
   render(
-    <AuthProvider transport="web">
+    <AuthProvider transport="web" restoreOnMount={false}>
       <MemoryRouter initialEntries={[entry]}>
         <ConfirmEmailPage />
       </MemoryRouter>

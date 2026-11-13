@@ -26,6 +26,7 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.neon.example
+!.env.sepay.example
 !**/.env.example
 **/appsettings.Local.json
 **/secrets.json

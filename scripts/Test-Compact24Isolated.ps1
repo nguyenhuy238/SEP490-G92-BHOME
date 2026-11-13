@@ -1,7 +1,8 @@
 param(
     [string]$Filter = 'FullyQualifiedName~Compact24OwnerSetupTests',
     [string]$ResultsDirectory = (Join-Path $env:TEMP 'bhome-configuration-tests'),
-    [string]$TestProject = ''
+    [string]$TestProject = '',
+    [ValidateSet('Debug', 'Release')][string]$Configuration = 'Debug'
 )
 $ErrorActionPreference = 'Stop'
 $repository = Split-Path $PSScriptRoot -Parent
@@ -22,7 +23,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Could not create the dedicated PostgreSQL test container.' }
     $ready = $false
     for ($attempt = 0; $attempt -lt 40; $attempt++) {
-        & docker exec $container pg_isready -U postgres -d postgres *> $null
+        & docker exec $container pg_isready -h 127.0.0.1 -U postgres -d postgres *> $null
         if ($LASTEXITCODE -eq 0) { $ready = $true; break }
         Start-Sleep -Milliseconds 500
     }
@@ -31,7 +32,7 @@ try {
     if ($binding -notmatch '^127\.0\.0\.1:(\d+)$') { throw 'Expected a dedicated loopback port binding.' }
     $env:BHOME_COMPACT24_TEST_ADMIN = 'Host=127.0.0.1;Port=' + $Matches[1] + ';Database=postgres;Username=postgres;Password=' + $env:POSTGRES_PASSWORD
     Write-Host 'Running against disposable PostgreSQL; no working database configuration is used.'
-    & dotnet test $TestProject --no-restore --filter $Filter --logger 'trx' --results-directory $ResultsDirectory --verbosity minimal
+    & dotnet test $TestProject --configuration $Configuration --no-restore --filter $Filter --logger 'trx' --results-directory $ResultsDirectory --verbosity minimal
     $exitCode = $LASTEXITCODE
 } finally {
     $env:BHOME_COMPACT24_TEST_ADMIN = $previousAdmin

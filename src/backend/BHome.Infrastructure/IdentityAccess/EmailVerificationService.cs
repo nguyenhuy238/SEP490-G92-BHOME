@@ -63,7 +63,8 @@ internal sealed class EmailVerificationService(IIdentityPersistence identity, Id
           AND NOT (u.reset_token_hash IS NOT NULL AND u.reset_consumed_at IS NULL)
           AND NOT EXISTS(SELECT 1 FROM operational_tasks j JOIN residents r
             ON r.id::text=j.task_data->'payload'->>'ResidentId'
-            WHERE r.user_id=u.id AND j.task_type='SYSTEM_JOB' AND j.task_data->>'name'=@invitation))
+            WHERE r.user_id=u.id AND u.reset_consumed_at IS NULL
+              AND j.task_type='SYSTEM_JOB' AND j.task_data->>'name'=@invitation))
         """, t, ("user", user), ("invitation", AccountInvitationJob.JobName));
 
     internal static async Task<bool> CurrentAsync(CompactNotificationWriter sql, Guid user, string email, string token, CancellationToken t)

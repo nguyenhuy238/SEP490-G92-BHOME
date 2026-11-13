@@ -43,6 +43,30 @@ function mount() {
     </QueryClientProvider>,
   );
 }
+it('creates Staff without asking for or transmitting an initial password', async () => {
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm nhân viên' }));
+  expect(screen.queryByLabelText(/Mật khẩu khởi tạo/)).toBeNull();
+  expect(screen.getByText(/Nhân viên tự đặt mật khẩu qua lời mời email/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/Họ tên/), { target: { value: 'Synthetic new Staff' } });
+  fireEvent.change(screen.getByLabelText(/^Email/), {
+    target: { value: 'new-staff@example.invalid' },
+  });
+  fireEvent.change(screen.getByLabelText(/Loại công việc/), { target: { value: 'PartTime' } });
+  fireEvent.submit(document.getElementById('staff-editor')!);
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
+  await waitFor(() =>
+    expect(
+      mocks.request.mock.calls.some(
+        ([path, init]) => path === '/api/v1/staff' && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  );
+  const call = mocks.request.mock.calls.find(
+    ([path, init]) => path === '/api/v1/staff' && init?.method === 'POST',
+  )!;
+  expect(JSON.parse(call[1].body)).not.toHaveProperty('initialPassword');
+});
 it('loads server staff and forwards search and account status filters', async () => {
   mount();
   expect(await screen.findByText('Staff synthetic')).toBeInTheDocument();
@@ -175,9 +199,6 @@ it('creates with the existing DTO, retains input on validation errors, and close
   fireEvent.click(screen.getByRole('button', { name: 'Thêm nhân viên' }));
   fireEvent.change(screen.getByLabelText(/Họ tên/), { target: { value: 'New synthetic' } });
   fireEvent.change(screen.getByLabelText(/Email/), { target: { value: 'new@example.invalid' } });
-  fireEvent.change(screen.getByLabelText(/Mật khẩu khởi tạo/), {
-    target: { value: 'Synthetic-test-123!' },
-  });
   fireEvent.change(screen.getByLabelText(/Loại công việc/), { target: { value: 'Task' } });
   mocks.request.mockImplementation(async (_path: string, init?: RequestInit) => {
     if (init?.method === 'POST')
@@ -201,8 +222,8 @@ it('creates with the existing DTO, retains input on validation errors, and close
   expect(JSON.parse(init.body)).toMatchObject({
     fullName: 'New synthetic',
     employment: { employmentType: 'Task' },
-    initialPassword: 'Synthetic-test-123!',
   });
+  expect(JSON.parse(init.body)).not.toHaveProperty('initialPassword');
   expect(JSON.parse(init.body)).not.toHaveProperty('accountVersion');
 });
 

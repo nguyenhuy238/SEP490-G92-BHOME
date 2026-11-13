@@ -85,6 +85,11 @@ public sealed partial class Compact24NotificationMvpTests
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notifications SET next_delivery_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={delivery}");
         probe.Failure = null; await SendEmail(host, delivery);
         Assert.Equal(first.ActionUrl, probe.Messages[1].ActionUrl); Assert.Equal(first.IdempotencyKey, probe.Messages[1].IdempotencyKey);
+        var expiredQuery = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(first.ActionUrl!).Fragment.TrimStart('#'));
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={w.Tenants[1].Id}");
+        var originalHash = (await db.Users.AsNoTracking().SingleAsync(u => u.Id == w.Tenants[1].Id)).PasswordHash;
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/auth/reset-password", new { userName = expiredQuery["userName"].ToString(), token = expiredQuery["token"].ToString(), newPassword = "Synthetic!Expired-Rejected-725" })).StatusCode);
+        Assert.Equal(originalHash, (await db.Users.AsNoTracking().SingleAsync(u => u.Id == w.Tenants[1].Id)).PasswordHash);
         (await client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { userName = w.Tenants[2].Email })).EnsureSuccessStatusCode();
         var expired = await AuthenticationDelivery(host, w.Tenants[2].Id);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={w.Tenants[2].Id}");
@@ -139,6 +144,13 @@ public sealed partial class Compact24NotificationMvpTests
         var created = await owner.PostAsJsonAsync("/api/v1/staff", new BHome.Application.Operations.StaffCreate(email, "Synthetic invited staff", null, Password,
             new(null, "PartTime", Today, null, null, null, "Active")));
         created.EnsureSuccessStatusCode(); var staff = (await created.Content.ReadFromJsonAsync<BHome.Application.Operations.StaffView>())!;
+        using var beforeInvitation = host.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await beforeInvitation.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await beforeInvitation.PostAsJsonAsync("/api/v1/auth/request-email-verification", new { userName = email })).StatusCode);
+        await using var pendingScope = host.Services.CreateAsyncScope();
+        var pendingDb = pendingScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        Assert.False(await pendingDb.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE event_data->>'recipient'={staff.UserId.ToString()} AND event_data->>'authenticationKind'='EmailConfirmation') AS \"Value\"").SingleAsync());
+        Assert.Equal(1, await pendingDb.Users.CountAsync(u => u.NormalizedEmail == email.ToUpperInvariant()));
         var response = await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null); response.EnsureSuccessStatusCode();
         Assert.Equal("Queued", (await response.Content.ReadFromJsonAsync<TenantInvitationResult>())!.DeliveryState);
         var repeated = await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null); repeated.EnsureSuccessStatusCode();
@@ -152,9 +164,26 @@ public sealed partial class Compact24NotificationMvpTests
         var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));
         var accept = new AcceptInvitationRequest(query["userName"].ToString(), query["token"].ToString(), "Synthetic!Invited-725");
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept with { Token = "invalid" })).StatusCode);
+        await pendingDb.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={staff.UserId}");
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
+        (await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null)).EnsureSuccessStatusCode();
+        await SendEmail(host, await AuthenticationDelivery(host, staff.UserId));
+        Assert.Equal(2, probe.Messages.Count); Assert.All(probe.Messages, m => Assert.Equal(email, m.Destination));
+        var fresh = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(probe.Messages[1].ActionUrl!).Fragment.TrimStart('#'));
+        var oldAccept = accept;
+        accept = accept with { Token = fresh["token"].ToString() };
+        Assert.NotEqual(oldAccept.Token, accept.Token);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", oldAccept)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password = accept.NewPassword })).StatusCode);
+        var login = await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password = accept.NewPassword });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var session = await TestAuthResponse.ReadAsync(login.Content);
+        anonymous.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
+        Assert.Equal("[]", await anonymous.GetStringAsync("/api/v1/capture/locations"));
+        Assert.Equal(HttpStatusCode.Forbidden, (await anonymous.GetAsync("/api/v1/staff")).StatusCode);
+        await pendingDb.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET is_active=false WHERE id={staff.UserId}");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
     [CompactPostgresFact]
@@ -174,6 +203,9 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(invited.UserId, await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == w.Residents[0]).Select(r => r.TenantUserId).SingleAsync());
         Assert.False((await db.Users.AsNoTracking().SingleAsync(u => u.Id == invited.UserId)).EmailConfirmed);
         Assert.Equal("Pending", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());
+        var accountStatus = await owner.GetFromJsonAsync<BHome.Application.Operations.ResidentAdministrationView>($"/api/v1/residents/{w.Residents[0]}");
+        Assert.Equal("Pending", accountStatus!.Account!.DeliveryState);
+        Assert.Equal(3, await db.Database.SqlQuery<int>($"SELECT status::int AS \"Value\" FROM contracts WHERE id={w.Contracts[0]}").SingleAsync());
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={invited.UserId}");
         using var anonymous = host.CreateClient();
         var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));

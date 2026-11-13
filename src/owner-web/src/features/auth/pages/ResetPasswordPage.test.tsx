@@ -15,7 +15,7 @@ afterEach(() => {
 function setup(entry = '/reset-password') {
   return render(
     <ThemeProvider theme={theme}>
-      <AuthProvider transport="web">
+      <AuthProvider transport="web" restoreOnMount={false}>
         <MemoryRouter initialEntries={[entry]}>
           <Routes>
             <Route path="/reset-password" element={<ResetPasswordPage />} />

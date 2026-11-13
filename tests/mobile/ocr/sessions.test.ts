@@ -20,6 +20,39 @@ const session = (n: string) => ({
   accessToken: 'access-' + n,
   refreshToken: 'refresh-' + n,
 });
+
+it.each([403, 429])(
+  'does not revoke the current native session when refresh returns a known %s rejection',
+  async (status) => {
+    const storage = store();
+    const transport = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(session('login'))))
+      .mockResolvedValueOnce(new Response('Healthy'))
+      .mockResolvedValueOnce(new Response('', { status }));
+    const manager = new MobileSessions(storage, 'https://api.test', transport);
+    await manager.login('https://api.test', 'staff@example.invalid', 'synthetic');
+    await expect(manager.refresh()).rejects.toMatchObject({ status });
+    expect(manager.snapshot.session?.accessToken).toBe('access-login');
+    expect(await storage.read()).toContain('refresh-login');
+  },
+);
+
+it('keeps an existing valid access session on an ambiguous network result but removes the consumed-risk refresh credential', async () => {
+  const storage = store();
+  const transport = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response(JSON.stringify(session('login'))))
+    .mockResolvedValueOnce(new Response('Healthy'))
+    .mockRejectedValueOnce(new TypeError('connection lost after submission'));
+  const manager = new MobileSessions(storage, 'https://api.test', transport);
+  await manager.login('https://api.test', 'staff@example.invalid', 'synthetic');
+  await expect(manager.refresh()).rejects.toMatchObject({ status: 0 });
+  expect(manager.snapshot.session?.accessToken).toBe('access-login');
+  expect(await storage.read()).toBeNull();
+  await manager.refresh();
+  expect(transport).toHaveBeenCalledTimes(3);
+});
 it('clears private query data on logout and never reuses a previous account cache', async () => {
   const transport = vi
     .fn<typeof fetch>()
@@ -114,7 +147,7 @@ it.each([400, 401, 0])('does not save a session or retry a failed login (%s)', a
   expect(manager.snapshot.session).toBeNull();
   expect(errorMessage(failure)).not.toContain('PRIVATE_NETWORK_DETAIL');
   if (status === 401) {
-    expect(errorMessage(failure)).toContain('Email hoặc mật khẩu');
+    expect(errorMessage(failure)).toContain('Email, số điện thoại hoặc mật khẩu không chính xác');
     expect(errorMessage(failure)).not.toContain('hết hạn');
   }
 });

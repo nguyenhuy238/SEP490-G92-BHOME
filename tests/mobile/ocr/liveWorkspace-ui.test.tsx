@@ -682,7 +682,7 @@ it('shows real transfer instructions, copies exact amount and removes QR when th
   );
   setApi(fetcher);
   const { rerender } = render(<TenantPaymentPanel invoiceId={id} />);
-  await screen.findByText('Tài khoản demo. Không chuyển tiền thật.');
+  await screen.findByText('QR thử nghiệm – Không chuyển tiền thật.');
   fireEvent.click(screen.getByLabelText('Sao chép số tiền'));
   await screen.findByText('Đã sao chép.');
   expect(mocks.copy).toHaveBeenCalledWith('100000', { android: { isSensitive: true } });

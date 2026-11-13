@@ -16,6 +16,7 @@ export interface AccountProfileUpdate {
   phone: string | null;
   email: string;
   version: string;
+  currentPassword?: string;
 }
 
 export function useAccountProfileApi() {

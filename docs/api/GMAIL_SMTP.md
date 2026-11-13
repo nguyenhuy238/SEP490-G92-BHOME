@@ -60,14 +60,14 @@ task giữ lựa chọn đó để không chạy gửi backlog tới Tenant khi 
 
 ## Sự kiện và nội dung
 
-| Sự kiện | Người nhận/kênh |
-| --- | --- |
-| INVOICE_FINALIZED | InvoiceRecipient và Owner hiện có, mỗi recipient một EMAIL |
-| INVOICE_DUE_SOON / INVOICE_OVERDUE | Theo policy Location hiện có; không tự bật lịch nhắc |
+| Sự kiện                                          | Người nhận/kênh                                                         |
+| ------------------------------------------------ | ----------------------------------------------------------------------- |
+| INVOICE_FINALIZED                                | InvoiceRecipient và Owner hiện có, mỗi recipient một EMAIL              |
+| INVOICE_DUE_SOON / INVOICE_OVERDUE               | Theo policy Location hiện có; không tự bật lịch nhắc                    |
 | PAYMENT_PARTIALLY_CONFIRMED / INVOICE_FULLY_PAID | Chỉ từ event allocation đã commit và verified; không từ pending payment |
-| CONTRACT_EXPIRY_REMINDER | Các bên/Staff theo luồng hết hạn hiện có |
-| INCIDENT_EMERGENCY_SUBMITTED | Owner và Staff được phân công; không mở rộng sang Tenant |
-| ANNOUNCEMENT_SENT | Người nhận được phép theo API announcements, khi chọn EMAIL |
+| CONTRACT_EXPIRY_REMINDER                         | Các bên/Staff theo luồng hết hạn hiện có                                |
+| INCIDENT_EMERGENCY_SUBMITTED                     | Owner và Staff được phân công; không mở rộng sang Tenant                |
+| ANNOUNCEMENT_SENT                                | Người nhận được phép theo API announcements, khi chọn EMAIL             |
 
 Hóa đơn/thanh toán có Location, Room, kỳ và hạn thanh toán từ backend; hợp đồng có hạn hết;
 emergency có Location/Room và hướng dẫn xử lý. Nội dung hướng người dùng mở BHOME để xem
@@ -84,14 +84,14 @@ Inbox/outbox/history/lease dùng bảng notifications Compact24 có sẵn; khôn
 Một outbox cho mỗi inbox/channel bằng unique event key; kiểm tra lại active role, email confirmed,
 quyền target, Staff assignment và độ phù hợp nghiệp vụ trước gọi SMTP. Mỗi email chỉ có một To.
 
-| Channel status | Ý nghĩa |
-| --- | --- |
-| Pending | Chờ lần đầu hoặc retry; NextRetryAt có thời gian chạy lại |
-| Processing | Đã claim có lease |
-| Sent | SMTP chấp nhận; chưa xác nhận thư vào INBOX |
-| PermanentlyFailed | Lỗi vĩnh viễn hoặc hết giới hạn |
-| PendingReview | Kết quả không chắc chắn sau submit/lease timeout; không tự gửi lại |
-| Suppressed | Người nhận mất quyền hoặc sự kiện không còn cần gửi |
+| Channel status    | Ý nghĩa                                                            |
+| ----------------- | ------------------------------------------------------------------ |
+| Pending           | Chờ lần đầu hoặc retry; NextRetryAt có thời gian chạy lại          |
+| Processing        | Đã claim có lease                                                  |
+| Sent              | SMTP chấp nhận; chưa xác nhận thư vào INBOX                        |
+| PermanentlyFailed | Lỗi vĩnh viễn hoặc hết giới hạn                                    |
+| PendingReview     | Kết quả không chắc chắn sau submit/lease timeout; không tự gửi lại |
+| Suppressed        | Người nhận mất quyền hoặc sự kiện không còn cần gửi                |
 
 Lịch mặc định tối đa 4 lần: ngay → sau 1 phút → sau 5 phút → sau 15 phút tính từ lần lỗi trước.
 SMTP 4xx và connection failure trước submit retry được; 5xx/auth/TLS/địa chỉ không hợp lệ dừng.

@@ -62,9 +62,18 @@ public sealed partial class Compact24NotificationMvpTests
         var period = new DateOnly(Today.Year, Today.Month, 1);
         var invoice = new Invoice
         {
-            RoomId = w.Room, LocationId = w.Location, RoomNumber = "NOT-101", LocationName = "Synthetic notification location",
-            BillingPeriod = period, RepresentativeContractId = w.Contracts[0], RepresentativeTenantUserId = w.Tenants[0].Id,
-            CreatedByUserId = w.Owner.Id, Total = 100000, ScheduledFinalDate = period, DueDate = Today.AddDays(-1), ScheduleSnapshot = "{}",
+            RoomId = w.Room,
+            LocationId = w.Location,
+            RoomNumber = "NOT-101",
+            LocationName = "Synthetic notification location",
+            BillingPeriod = period,
+            RepresentativeContractId = w.Contracts[0],
+            RepresentativeTenantUserId = w.Tenants[0].Id,
+            CreatedByUserId = w.Owner.Id,
+            Total = 100000,
+            ScheduledFinalDate = period,
+            DueDate = Today.AddDays(-1),
+            ScheduleSnapshot = "{}",
             Lines = [new InvoiceLine { Category = BHome.Domain.PropertyManagement.ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = 100000, Quantity = 1, Amount = 100000, OccupiedDays = 30, PeriodDays = 30, RateDate = period }],
             Recipients = w.Tenants.Select(u => new InvoiceRecipient { TenantUserId = u.Id }).ToList()
         };
@@ -150,10 +159,14 @@ public sealed partial class Compact24NotificationMvpTests
         b.UseEnvironment(environment);
         b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["NotificationChannels:Enabled"] = "true", ["NotificationChannels:AutomationEnabled"] = "false",
-            ["Email:Enabled"] = "true", ["Email:TestEnabled"] = testEnabled.ToString(),
-            ["Email:Username"] = "sender@example.invalid", ["Email:FromEmail"] = "sender@example.invalid",
-            ["Email:AppPassword"] = "SYNTHETIC_TEST_SECRET", ["Email:TestRecipient"] = "configured@example.invalid"
+            ["NotificationChannels:Enabled"] = "true",
+            ["NotificationChannels:AutomationEnabled"] = "false",
+            ["Email:Enabled"] = "true",
+            ["Email:TestEnabled"] = testEnabled.ToString(),
+            ["Email:Username"] = "sender@example.invalid",
+            ["Email:FromEmail"] = "sender@example.invalid",
+            ["Email:AppPassword"] = "SYNTHETIC_TEST_SECRET",
+            ["Email:TestRecipient"] = "configured@example.invalid"
         }));
         b.ConfigureServices(s => s.AddSingleton<INotificationChannelProvider>(provider));
     });

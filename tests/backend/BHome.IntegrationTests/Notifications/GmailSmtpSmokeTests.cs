@@ -35,12 +35,19 @@ public sealed class GmailSmtpSmokeTests(Compact24Fixture fixture, ITestOutputHel
         var secrets = new ConfigurationBuilder().AddUserSecrets("bhome-api-development").Build();
         var settings = new Dictionary<string, string?>
         {
-            ["Email:Enabled"] = "true", ["Email:Host"] = "smtp.gmail.com", ["Email:Port"] = "587",
-            ["Email:Username"] = secrets["Email:Username"], ["Email:FromEmail"] = secrets["Email:FromEmail"],
-            ["Email:AppPassword"] = secrets["Email:AppPassword"], ["Email:TestEnabled"] = "true",
-            ["Email:TestRecipient"] = secrets["Email:TestRecipient"], ["Email:UseStartTls"] = "true",
-            ["NotificationChannels:Mode"] = "Unconfigured", ["NotificationChannels:Enabled"] = "false",
-            ["NotificationChannels:AutomationEnabled"] = "false", ["Jobs:Enabled"] = "false"
+            ["Email:Enabled"] = "true",
+            ["Email:Host"] = "smtp.gmail.com",
+            ["Email:Port"] = "587",
+            ["Email:Username"] = secrets["Email:Username"],
+            ["Email:FromEmail"] = secrets["Email:FromEmail"],
+            ["Email:AppPassword"] = secrets["Email:AppPassword"],
+            ["Email:TestEnabled"] = "true",
+            ["Email:TestRecipient"] = secrets["Email:TestRecipient"],
+            ["Email:UseStartTls"] = "true",
+            ["NotificationChannels:Mode"] = "Unconfigured",
+            ["NotificationChannels:Enabled"] = "false",
+            ["NotificationChannels:AutomationEnabled"] = "false",
+            ["Jobs:Enabled"] = "false"
         };
         // Never send the smoke message to a Tenant or another mailbox.
         Assert.True(EmailOptions.ValidAddress(settings["Email:TestRecipient"]));
