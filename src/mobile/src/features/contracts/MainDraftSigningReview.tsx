@@ -82,7 +82,7 @@ export function MainDraftSigningReview({
     try {
       if (release) {
         const input = {
-          tenantUserId: tenant,
+          tenantUserId: tenant === '__internal__' ? null : tenant,
           expectedVersion: draft.version,
           reviewedFileId: file!.id,
           humanReviewed: true,
@@ -123,9 +123,12 @@ export function MainDraftSigningReview({
       <Box>
         <Heading title="Duyệt hợp đồng đưa đi ký" />
         <ChoiceField
-          label="Tài khoản Tenant đại diện"
+          label="Người đại diện ký hợp đồng"
           value={tenant}
-          options={accounts}
+          options={[
+            { id: '__internal__', label: 'Khách mới · chấp thuận nội bộ qua email' },
+            ...accounts,
+          ]}
           disabled={busy || loading}
           onChange={(value) => {
             setTenant(value);
@@ -134,8 +137,8 @@ export function MainDraftSigningReview({
         />
         {!loading && !accounts.length && (
           <Text>
-            Chưa có tài khoản Tenant đang hoạt động. Chủ cơ sở cần hoàn tất tài khoản trước khi
-            chuyển sang ký.
+            Khách mới chấp thuận nội bộ qua email trước khi có tài khoản. Máy chủ chỉ cấp tài khoản
+            sau khi hợp đồng thuê chính được kích hoạt.
           </Text>
         )}
         {!!feedback && (
@@ -168,7 +171,7 @@ export function MainDraftSigningReview({
       )}
       <Box>
         <Checkbox.Item
-          label="Tôi đã xem PDF và xác nhận tài khoản Tenant đại diện"
+          label="Tôi đã xem PDF và xác nhận người đại diện, cách ký"
           status={reviewed ? 'checked' : 'unchecked'}
           disabled={!file || !tenant || busy}
           onPress={() => setReviewed((v) => !v)}

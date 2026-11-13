@@ -43,11 +43,11 @@ Endpoint lời mời thực tế: `POST /api/v1/contracts/{id}/signing-invitatio
 
 ## Thực thi và kết quả
 
-Giai đoạn 1: `a0ef9bf` — dashboard cache theo session, 8 nhóm hồ sơ chờ duyệt có deep link từng ID. Lint, typecheck, format:check PASS; Mobile 93 files / 1.031 tests PASS. Fixture connectivity được cập nhật để kiểm tra cache dùng chung khi remount và abort khi đóng session.
+Giai đoạn 1: `a0ef9bf` — dashboard cache theo session, 8 nhóm hồ sơ chờ duyệt có deep link từng ID. Lint, typecheck, format:check PASS; 98 files / 1.062 tests
 
 Giai đoạn 2: thêm OwnerHoldingSigning bằng internalSigning client hiện có; chọn hạn lời mời theo giờ Việt Nam và giới hạn 24 giờ đúng backend; trạng thái email/OTP/thu hồi; Owner confirm chỉ sau tenantAcceptedAt + documentHash. Không lưu/hiển thị token, không đánh dấu signed khi gửi invitation. Bốn component tests kiểm tra role/method/approval, payload giờ Việt Nam, chống gửi lặp, refresh và provider failure.
 
-Giới hạn API hiện tại: InternalSigningStatus không trả recipient email; chỉ hiển thị người đại diện theo contract và trạng thái máy chủ. Không bịa email, không truy vấn thêm identity sâu để lấy email. Gửi lại là tạo lời mời thay thế đúng endpoint hiện có; API không có retry SMTP riêng. Recipient signing và việc thư thực sự đến hộp thư chưa được kiểm tra E2E.
+InternalSigningStatus không trả recipient email. Giai đoạn 6 bổ sung email và trạng thái xác minh hiện tại qua metadata có quyền Owner `/residents/{id}` (không có raw OCR identity). Chỉ mở gửi lời mời khi hồ sơ đại diện đã Verified và có email; backend vẫn kiểm tra toàn bộ người ở. Email lịch sử theo từng invitation không có trong DTO, không suy từ email hiện tại. Gửi lại là tạo lời mời thay thế đúng endpoint hiện có; API không có retry SMTP riêng. Recipient signing và việc thư thực sự đến hộp thư chưa được kiểm tra E2E.
 
 Giai đoạn 2: `99fad07`; lint, typecheck, format PASS; Mobile 94 files / 1.035 tests PASS; AnonymousSigningSecurityTests 11/11 PASS (unit, không phải SMTP/MySign E2E).
 
@@ -60,3 +60,78 @@ Giai đoạn 4: Owner điều chỉnh approve/reject bằng version hiện hành
 Giai đoạn 4: `8f4c019`; lint/typecheck/format PASS; Mobile 96 files / 1.047 tests PASS. Sáu test form mới kiểm tra versions, approve/reject, invalid VND, conflict, double submit, payer, Paid/lookup failure/role guard; ba test màn hình kiểm tra ghép chi tiết và form/handoff.
 
 Giai đoạn 5: thêm OwnerResidenceScreen, danh sách phân trang theo trạng thái và xem minh chứng riêng tư; xác nhận chỉ khi Completed, có minh chứng đọc được, lý do và human review. Tái sử dụng residenceClient/useResidenceRecord; không upload hoặc nộp VNeID cho Tenant. Notification Residence dùng Resident ID; resolve qua metadata `/residents/{id}` có quyền Owner rồi mở compound Contract/Resident, yêu cầu chọn kỳ nếu nhiều hợp đồng. Không tự chọn hồ sơ đầu trang. Deep links hợp đồng, task, incident, work order, bank transfer có regression tests. Owner task list thêm isOverdue filter đúng TaskQuery và cache tasks; StaffTaskList/Detail không thay đổi. IncidentActions đã có plan-decision/verify/rework/direct-resolution; không tạo lại.
+
+Giai đoạn 5: `e92d425`; lint/typecheck/format PASS; Mobile 97 files / 1.057 tests PASS.
+
+Giai đoạn 6: nút nhanh gọn hơn, dashboard ưu tiên số liệu/cảnh báo khẩn cấp và công nợ; hàng chờ dạng tóm tắt trên dashboard và phân trang tại approval center. Pull-to-refresh Owner làm mới các nguồn qua cache hiện có; ký nội bộ revalidate khi focus/foreground, không thêm polling. Bổ sung email/xác minh đại diện qua Owner metadata. MainDraftSigningReview cho Owner chọn nhánh khách mới với `tenantUserId: null` đúng MainDraftReleaseInput/ReleaseAsync, bên cạnh Tenant đã có tài khoản; bắt buộc PDF review và human confirmation ở cả hai nhánh. Không sửa nhánh hiển thị Staff.
+
+## Trạng thái cuối theo chức năng Owner
+
+COMPLETE dưới đây là phần Mobile/API trong phạm vi được giao; không phải chứng nhận chạy provider thật hoặc toàn bộ sản phẩm.
+
+| Chức năng                   | Trước           | Sau      | Thay đổi chính                                                                                  |
+| --------------------------- | --------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| Dashboard                   | PARTIAL         | COMPLETE | API thật, cache scoped, số phòng, khẩn cấp, nợ, pull-to-refresh                                 |
+| Approval center             | PARTIAL         | COMPLETE | 8 nhóm, hồ sơ cụ thể, phân trang, trạng thái lỗi/rỗng                                           |
+| Holding/signing             | PARTIAL/MISSING | COMPLETE | Email, verify status, thu hồi/thay lời mời, Owner consent, cọc/readiness hiện có                |
+| Main/renewal/move-out       | PARTIAL         | COMPLETE | Mở hồ sơ có sẵn, MySign tách biệt, activate, renewal, inspection review và settlement reference |
+| Payment/adjustment          | PARTIAL         | COMPLETE | Allocate/reject, approve/reject, payer, versions, idempotency, refresh                          |
+| Finance                     | COMPLETE        | COMPLETE | Nợ quá hạn, lợi nhuận âm hiển thị đúng từ server                                                |
+| Emergency/maintenance/tasks | COMPLETE        | COMPLETE | Tái sử dụng actions; deep link, overdue filter, cache khi trở về                                |
+| Residence                   | MISSING         | COMPLETE | Danh sách, resolve notification, private evidence, Owner confirmation                           |
+| Provider và đa ứng dụng     | NOT RUN         | PARTIAL  | API fixtures + UI synthetic transport; chưa chạy 6 journey thật trên thiết bị                   |
+
+## Bằng chứng validation
+
+Chạy bằng Node 22.23.5 qua PATH tạm; không sửa package/lockfile hoặc dependencies. Lệnh đúng package scripts và `.github/workflows/ci.yml`.
+
+| Kiểm tra                                     | Kết quả thực chạy                                                                                                                                                    |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run lint`                               | PASS, toàn repository                                                                                                                                                |
+| `npm run typecheck --workspace ./src/mobile` | PASS                                                                                                                                                                 |
+| `npm test --workspace ./src/mobile`          | PASS; số cuối ghi trong báo cáo bàn giao                                                                                                                             |
+| `npm run format:check`                       | PASS                                                                                                                                                                 |
+| Owner Web suite                              | 78 files / 442 tests PASS (chạy lại đủ suite với 4 workers)                                                                                                          |
+| Owner Web contract regression                | 15 files / 56 tests PASS                                                                                                                                             |
+| Backend unit                                 | 44 PASS: AnonymousSigningSecurity 11, SePaySecurity 19, PaymentRules/AdjustmentBalance 14                                                                            |
+| Backend integration PostgreSQL               | 56 PASS: AnonymousSigning/Residence 4, SePay/HoldingCancellation/DigitalSigning 18, IncidentApi 19, selected ledger/adjustment/closure/tasks 14, MainDraft release 1 |
+| `npm run build`                              | PASS: client-core, Owner Web, Public Web; có warning chunk size của Web, không sửa cấu hình để che warning                                                           |
+| Expo web export                              | PASS, API origin tổng hợp, EXPO_NO_DOTENV=1; output ignored `src/mobile/dist`                                                                                        |
+| Docker compose config                        | PASS cả `.env.example` và SePay compose example                                                                                                                      |
+| Browser UI smoke                             | PASS trên Chrome headless 320×740 và 390×844; không tràn ngang, không page errors/unexpected API requests; approve điều chỉnh chỉ POST một lần và trạng thái tải lại |
+| Android/iOS native và remote CI              | NOT RUN                                                                                                                                                              |
+
+Lần đầu chạy integration không có `BHOME_COMPACT24_TEST_ADMIN` nên 4 test SKIP. Sau đó dựng PostgreSQL 16 container dùng credentials tổng hợp, chỉ bind loopback, để fixture tạo/xóa DB ngẫu nhiên; chạy lại đủ 4 PASS. Không dùng DB phát triển/production. Các suite ledger dùng PostgreSQL/MinIO Testcontainers riêng và tự dọn. Provider boundary trong test là synthetic, không phải Gmail/SePay/MySign thật.
+
+Một lần root `npm test -- --maxWorkers=2` có 1/442 Owner Web test SMS countdown thất bại (`SmsRecoveryPage.test.tsx`, tìm nút “Gửi lại sau”). Test này không nằm trong diff. Chạy riêng 2/2 PASS và chạy lại toàn Owner Web 442/442 PASS. Ghi nhận dấu hiệu flakiness, không sửa Owner Web hoặc nới assertion. Các lỗi fixture Mobile khi thêm cache/native wrapper đã sửa; không còn lỗi Mobile trong lần chạy cuối.
+
+Ảnh và script UI smoke nằm ở `.tools/owner-mobile-validation/` (ignored). Đây là kiểm tra layout/navigation/form với transport tổng hợp, không phải E2E business/provider. Đã xem ảnh dashboard và adjustment 320px. Không có dữ liệu cá nhân thật trong ảnh.
+
+## Sáu demo journey
+
+| Workflow                    | Owner Mobile                                    | Backend integration                             | E2E đa ứng dụng/provider                                    |
+| --------------------------- | ----------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------- |
+| E2E-01 Holding              | PASS component/API client                       | PASS anonymous Holding → deposit → Main tests   | PARTIAL; recipient email/OTP trên hộp thư thật NOT RUN      |
+| E2E-02 Main                 | PASS component/API client                       | PASS signing/account activation fixtures        | PARTIAL; MySign thật và Tenant app NOT RUN                  |
+| E2E-03 Billing/payment      | PASS payment form/guard                         | PASS SePay callbacks + ledger tests             | PARTIAL; Staff meter → Tenant QR → SePay bên ngoài NOT RUN  |
+| E2E-04 Incident/maintenance | PASS regression hiện có                         | PASS 19 IncidentApi tests, gồm rework/emergency | PARTIAL; hai ứng dụng/thiết bị thật NOT RUN                 |
+| E2E-05 Termination          | PASS version/reference/blocked-state tests      | PASS ledger/closure fixtures                    | PARTIAL; inspection và settlement qua các app thật NOT RUN  |
+| E2E-06 Adjustment           | PASS browser UI synthetic transport + component | PASS final adjustment/rejection/concurrency     | PARTIAL; Tenant app nhận kết quả từ môi trường demo NOT RUN |
+
+Không ghi PASS cho email chỉ vì provider tiếp nhận, ký chỉ vì gửi invitation hoặc payment chỉ vì đã POST allocate. Không có chỉnh DB trực tiếp để giả chuyển trạng thái demo.
+
+## Phần còn cần xác minh
+
+- Chạy sáu journey trên môi trường demo đã xác nhận với tài khoản tổng hợp Owner/Staff/Tenant; kiểm tra email đến hộp thư, OTP, callback/provider và trạng thái sau reload trên thiết bị. Không suy rằng credentials thiếu; phiên này chưa kiểm tra nhà cung cấp bên ngoài.
+- InternalSigningStatus không trả email snapshot từng lời mời hoặc API retry SMTP riêng. Mobile hiển thị email hồ sơ hiện tại và trạng thái gửi do backend trả; thay lời mời/thu hồi dùng API được hỗ trợ. Nếu cần xem email lịch sử hoặc retry cùng lời mời, cần backend mở rộng được phê duyệt.
+- Thực chi hoàn tiền, người trả bên ngoài, cấu hình và quản trị tài chính phức tạp tiếp tục Owner Web theo phạm vi. Không bypass blocker hoặc tạo ledger khác.
+- Theo dõi test countdown SMS Owner Web không ổn định; không thuộc phạm vi sửa UI Owner Web của nhiệm vụ này.
+
+## Tệp thay đổi
+
+- Owner screens: `OwnerOverviewScreen.tsx`, `OwnerDecisionScreens.tsx`, `OwnerResidenceScreen.tsx`.
+- Owner feature modules mới: `OwnerApprovalQueue.tsx`, `OwnerAttentionSummary.tsx`, `OwnerHoldingSigning.tsx`, `OwnerMoveOutDecisions.tsx`, `OwnerFinancialActions.tsx`, `ownerQueryPolicy.ts` trong `src/mobile/src/features/owner/`.
+- Nhánh Owner trong thành phần chung: `ContractScreen.tsx`, `ContractLifecyclePanel.tsx`, `contractSections.ts`, `MainDraftSigningReview.tsx`, `OperationalTaskScreens.tsx`, `WorkspaceShell.tsx`, `WorkspaceScreenView.tsx`, `navigation.ts`, `notificationInbox.ts`.
+- Tests Owner mới: `owner-approval-queue`, `owner-attention-summary`, `owner-holding-signing`, `owner-moveout-decisions`, `owner-financial-actions`, `owner-residence` trong `src/mobile/src/__tests__/`.
+- Regression được cập nhật: `contract-sections`, `moveout-settlement`, `owner-mobile-decisions`, `owner-finance-monitoring`, `rental-contract-flow` và `tests/mobile/ocr/connectivity-ui.test.tsx`.
+- Tài liệu này. Không sửa backend, migration, client-core, Owner Web hoặc các màn hình Staff/Tenant.

@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   reload: vi.fn(),
   changed: vi.fn(),
   role: 'Owner',
+  verified: true,
   status: null as InternalSigningStatus | null,
 }));
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -16,8 +17,13 @@ vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ session: { userId: id, roles: [state.role] } }),
 }));
 vi.mock('../features/workspace/useWorkspaceQuery', () => ({
-  useWorkspaceQuery: () => ({
-    data: state.status,
+  useWorkspaceQuery: (path: string) => ({
+    data: path?.includes('/residents/')
+      ? {
+          contactEmail: 'representative@example.invalid',
+          verificationStatus: state.verified ? 'Verified' : 'Pending',
+        }
+      : state.status,
     error: '',
     loading: !state.status,
     reload: state.reload,
@@ -95,6 +101,7 @@ const contract = {
   approvedAt: '2026-11-13T00:00:00Z',
   signingMode: 'INTERNAL_OTP_DRAWN',
   snapshotHash: 'saved-snapshot',
+  representativeResidentId: id,
   occupants: [],
 } as unknown as ContractView;
 const api = contractClient(state.request);
@@ -102,6 +109,7 @@ const mount = (c = contract) =>
   render(<OwnerHoldingSigning api={api} contract={c} onChanged={state.changed} />);
 beforeEach(() => {
   state.role = 'Owner';
+  state.verified = true;
   state.status = {
     mode: 'INTERNAL_OTP_DRAWN',
     state: 'AwaitingAcceptance',
@@ -184,6 +192,15 @@ it('does not permit invitations before Holding approval or for another role/meth
   state.role = 'Owner';
   mount({ ...contract, signingMode: 'MYSIGN_SANDBOX' });
   expect(document.body.textContent).toBe('');
+  expect(state.request).not.toHaveBeenCalled();
+});
+it('shows the scoped recipient email and blocks an unverified representative', () => {
+  state.verified = false;
+  mount();
+  expect(
+    screen.getByText('Email trong hồ sơ hiện tại: representative@example.invalid'),
+  ).toBeTruthy();
+  expect(screen.queryByText('Gửi lời mời ký qua email')).toBeNull();
   expect(state.request).not.toHaveBeenCalled();
 });
 it('retains a pending state on provider failure and reloads evidence', async () => {

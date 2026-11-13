@@ -87,6 +87,9 @@ vi.mock('../../../src/mobile/src/services/ownerOverview', () => ({
   loadOwnerOverview: mocks.load,
 }));
 import { OwnerOverviewScreen } from '../../../src/mobile/src/screens/OwnerOverviewScreen';
+vi.mock('../../../src/mobile/src/features/owner/OwnerAttentionSummary', () => ({
+  OwnerAttentionSummary: () => null,
+}));
 vi.mock('../../../src/mobile/src/features/owner/OwnerApprovalQueue', async (original) => ({
   ...(await original<object>()),
   OwnerApprovalQueue: () => null,

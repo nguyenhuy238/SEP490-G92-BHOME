@@ -103,7 +103,11 @@ export function WorkspaceShell({
   const tenantResidence = role === 'Tenant' && screen === 'residence' && !preview;
   const tenantLedger = role === 'Tenant' && screen === 'billing-history' && !preview;
   const tenantIncidentForm = role === 'Tenant' && screen === 'incidents';
-  const dashboard = !preview && (screen === 'tenant-home' || screen === 'staff-home');
+  const dashboard =
+    !preview &&
+    (screen === 'tenant-home' ||
+      screen === 'staff-home' ||
+      (role === 'Owner' && screen === 'owner-home'));
   const profile = !preview && screen === 'profile';
   const profileEdit = screen === 'profile-edit';
   const notificationInbox = screen === 'notifications' && !preview;

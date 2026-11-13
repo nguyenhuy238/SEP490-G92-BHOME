@@ -19,6 +19,7 @@ import {
 } from '../../../../../packages/client-core/src/internalSigning';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { ContractEvidence } from '../contracts/ContractEvidence';
+const ownerSigningPolicy = { ...ownerQueuePolicy, staleTime: 0 };
 
 function invitationExpiry(date: string, time: string) {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error();
@@ -64,7 +65,13 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
   const service = useMemo(() => internalSigningClient(api.transport), [api]);
   const query = useWorkspaceQuery<InternalSigningStatus>(
     allowed ? `/api/v1/contracts/${contract.id}/internal-signing` : null,
-    { cache: ownerQueuePolicy },
+    { cache: ownerSigningPolicy },
+  );
+  const recipient = useWorkspaceQuery<{ contactEmail: string | null; verificationStatus: string }>(
+    contract.representativeResidentId
+      ? `/api/v1/residents/${contract.representativeResidentId}`
+      : null,
+    { cache: ownerSigningPolicy },
   );
   const [reviewed, setReviewed] = useState(false);
   const [date, setDate] = useState(''),
@@ -83,6 +90,9 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
     !!contract.snapshotHash &&
     !!status &&
     !query.error &&
+    !recipient.error &&
+    recipient.data?.verificationStatus === 'Verified' &&
+    !!recipient.data.contactEmail &&
     !status.tenantAcceptedAt;
   const canConfirm =
     allowed &&
@@ -132,7 +142,18 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
         {contract.occupants?.find((person) => person.representative)?.label ??
           'Người đại diện theo hồ sơ đã xác minh'}
       </Text>
-      <Text>Email được máy chủ lấy từ hồ sơ đã xác minh của người đại diện.</Text>
+      <Text>Email trong hồ sơ hiện tại: {recipient.data?.contactEmail ?? 'Chưa tải được'}</Text>
+      <Text>
+        Hồ sơ đại diện:{' '}
+        {recipient.data?.verificationStatus === 'Verified'
+          ? 'Đã xác minh'
+          : 'Chưa xác nhận được trạng thái xác minh'}
+      </Text>
+      {!!recipient.error && (
+        <Text accessibilityRole="alert" style={ui.red}>
+          {recipient.error}
+        </Text>
+      )}
       {query.loading && <Text>Đang tải trạng thái ký…</Text>}
       {!!(error || query.error) && (
         <Text accessibilityRole="alert" style={ui.red}>

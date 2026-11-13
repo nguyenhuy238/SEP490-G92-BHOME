@@ -291,7 +291,7 @@ it('allows Owner release only with an actual reviewed file, selected Tenant and 
   }) as HTMLButtonElement;
   expect(submit.disabled).toBe(true);
   await screen.findByText('Tenant tổng hợp');
-  fireEvent.change(screen.getByLabelText('Tài khoản Tenant đại diện'), {
+  fireEvent.change(screen.getByLabelText('Người đại diện ký hợp đồng'), {
     target: { value: 'tenant' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Tạo PDF đưa đi ký' }));
@@ -312,6 +312,39 @@ it('allows Owner release only with an actual reviewed file, selected Tenant and 
   expect(released).not.toHaveBeenCalled();
   resolve({ id: 'draft' });
   await waitFor(() => expect(released).toHaveBeenCalledWith('draft'));
+});
+it('releases an Owner-reviewed new Tenant draft through the supported anonymous signing branch', async () => {
+  state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/accounts')) return [];
+    if (path.endsWith('/signing-review')) return { id: 'review', developmentOnly: true };
+    if (path.endsWith('/release')) return { id: 'draft' };
+    throw new Error('Unexpected test request');
+  });
+  const released = vi.fn();
+  render(
+    <MainDraftSigningReview
+      client={mainDraftClient(state.request)}
+      draft={{ id: 'draft', version: 4 } as MainDraftView}
+      onReleased={released}
+      onOpenPdf={vi.fn()}
+    />,
+  );
+  await screen.findByText('Khách mới · chấp thuận nội bộ qua email');
+  fireEvent.change(screen.getByLabelText('Người đại diện ký hợp đồng'), {
+    target: { value: '__internal__' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo PDF đưa đi ký' }));
+  await screen.findByText('Private PDF review');
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chuyển sang ký' }));
+  await waitFor(() => expect(released).toHaveBeenCalledWith('draft'));
+  const release = state.request.mock.calls.find(([path]) => path.endsWith('/release'))!;
+  expect(JSON.parse(release[1].body)).toEqual({
+    tenantUserId: null,
+    expectedVersion: 4,
+    reviewedFileId: 'review',
+    humanReviewed: true,
+  });
 });
 it('shows Staff handoff without requesting accounts, signing-review or release', () => {
   state.roles = ['Staff'];

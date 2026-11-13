@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
@@ -9,6 +10,7 @@ export { ownerQueuePolicy } from './ownerQueryPolicy';
 import { ownerQueuePolicy } from './ownerQueryPolicy';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { formatContractMoney } from '../../../../../packages/client-core/src/contracts';
+import { Pagination } from '../../components/WorkspaceQueryState';
 
 type QueueRecord = {
   id: string;
@@ -87,11 +89,33 @@ function Queue({ queue, compact }: { queue: (typeof ownerQueues)[number]; compac
   const { api, session } = useSession();
   const { go } = useWorkspace();
   const allowed = !!api && !!session?.roles.includes('Owner');
+  const [page, setPage] = useState(1);
   const query = useWorkspaceQuery<{ items: QueueRecord[]; totalCount: number }>(
-    allowed ? `/api/v1${queue.path}&page=1&pageSize=3` : null,
+    allowed ? `/api/v1${queue.path}&page=${page}&pageSize=3` : null,
     { cache: ownerQueuePolicy },
   );
   if (!allowed) return null;
+  if (compact)
+    return (
+      <Box style={ui.half}>
+        <Text variant="labelMedium">{queue.title}</Text>
+        <Pill>
+          {query.data
+            ? `${query.data.totalCount} hồ sơ`
+            : query.loading
+              ? 'Đang tải…'
+              : 'Chưa tải được'}
+        </Pill>
+        {!!query.error && <Text style={ui.red}>{query.error}</Text>}
+        <Action
+          secondary
+          disabled={query.fetching}
+          onPress={query.error ? query.reload : () => go('approvals')}
+        >
+          {query.error ? 'Thử lại' : 'Xem hàng chờ'}
+        </Action>
+      </Box>
+    );
   return (
     <Box>
       <Heading title={queue.title} />
@@ -108,7 +132,7 @@ function Queue({ queue, compact }: { queue: (typeof ownerQueues)[number]; compac
         </Text>
       )}
       {query.data?.totalCount === 0 && <Text>Không có hồ sơ chờ xử lý.</Text>}
-      {(compact ? query.data?.items.slice(0, 1) : query.data?.items)?.map((item) => {
+      {query.data?.items.map((item) => {
         const date = item.submittedAt ?? item.occurredAt ?? item.dueAt ?? item.targetCompletionAt;
         return (
           <React.Fragment key={item.id}>
@@ -134,16 +158,25 @@ function Queue({ queue, compact }: { queue: (typeof ownerQueues)[number]; compac
       <Action secondary disabled={query.fetching} onPress={query.reload}>
         Cập nhật
       </Action>
+      {query.data && query.data.totalCount > 3 && (
+        <Pagination
+          page={page}
+          pageSize={3}
+          total={query.data.totalCount}
+          loading={query.fetching}
+          onChange={setPage}
+        />
+      )}
     </Box>
   );
 }
 
 export function OwnerApprovalQueue({ compact = false }: { compact?: boolean }) {
   return (
-    <>
+    <View style={compact ? ui.wrap : { gap: 12 }}>
       {ownerQueues.map((queue) => (
         <Queue key={queue.path} queue={queue} compact={compact} />
       ))}
-    </>
+    </View>
   );
 }

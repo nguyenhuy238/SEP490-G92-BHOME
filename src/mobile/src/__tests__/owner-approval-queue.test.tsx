@@ -19,8 +19,12 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
+vi.mock('react-native', () => ({
+  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
 vi.mock('../components/WorkspaceKit', () => ({
   ui: {},
+  Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Box: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
   Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Heading: ({ title }: { title: string }) => <h2>{title}</h2>,
@@ -87,6 +91,8 @@ it('shows server totals rather than page length and opens the specific contract 
   });
   fireEvent.click(screen.getAllByRole('button', { name: 'Cập nhật' })[0]!);
   expect(state.reload).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getAllByRole('button', { name: 'Sau' })[0]!);
+  expect(state.paths).toContain('/api/v1/contracts?status=Draft&page=2&pageSize=3');
 });
 it('does not query Owner records for Staff or Tenant', () => {
   for (const role of ['Staff', 'Tenant']) {

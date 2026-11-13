@@ -18,6 +18,9 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
+vi.mock('react-native', () => ({
+  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
 vi.mock('../components/WorkspaceKit', () => ({
   ui: {},
   Box: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
