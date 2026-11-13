@@ -90,14 +90,21 @@ public static class Compact24Schema
         }
         if (!foreignKeys.Order(StringComparer.Ordinal).SequenceEqual(ExpectedForeignKeys(reference).Order(StringComparer.Ordinal))) return false;
         // Verify the original append-only/invoice/payment/refresh protections, including their bodies.
-        foreach (Match function in Regex.Matches(reference, @"CREATE(?: OR REPLACE)? FUNCTION ([a-z0-9_]+)\([^$]+?AS \$fn\$([\s\S]*?)\$fn\$;"))
+        var functions = Regex.Matches(reference, @"CREATE(?: OR REPLACE)? FUNCTION ([a-z0-9_]+)\([^$]+?AS \$fn\$([\s\S]*?)\$fn\$;")
+            .Cast<Match>().Where(f => !propertyRefresh || f.Groups[1].Value != "bhome24_work_order_guard").ToArray();
+        var actualFunctions = new Dictionary<string, string>(StringComparer.Ordinal);
+        // Fetch required bodies together: serial remote catalog calls make every readiness probe
+        // pay one network round trip per function. Keep the same strict body comparisons.
+        await using (var query = new NpgsqlCommand("SELECT p.proname,p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname=ANY(@names)", connection, transaction))
         {
-            if (propertyRefresh && function.Groups[1].Value == "bhome24_work_order_guard") continue;
-            await using var query = new NpgsqlCommand("SELECT p.prosrc FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname=@name", connection, transaction);
-            query.Parameters.AddWithValue("name", function.Groups[1].Value);
-            var actual = (string?)await query.ExecuteScalarAsync(token);
-            if (actual?.Replace("\r\n", "\n", StringComparison.Ordinal).Trim() != function.Groups[2].Value.Replace("\r\n", "\n", StringComparison.Ordinal).Trim()) return false;
+            query.Parameters.AddWithValue("names", functions.Select(f => f.Groups[1].Value).Distinct().ToArray());
+            await using var reader = await query.ExecuteReaderAsync(token);
+            while (await reader.ReadAsync(token))
+                if (!actualFunctions.TryAdd(reader.GetString(0), reader.GetString(1))) return false;
         }
+        foreach (var function in functions)
+            if (!actualFunctions.TryGetValue(function.Groups[1].Value, out var actual) ||
+                actual.Replace("\r\n", "\n", StringComparison.Ordinal).Trim() != function.Groups[2].Value.Replace("\r\n", "\n", StringComparison.Ordinal).Trim()) return false;
         var requiredTriggers = Regex.Matches(reference, @"(?m)^CREATE TRIGGER ([a-z0-9_]+)").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
         if (propertyRefresh) requiredTriggers.Remove("work_order_consistent");
         await using (var query = new NpgsqlCommand("SELECT t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND NOT t.tgisinternal AND t.tgenabled='O'", connection, transaction))

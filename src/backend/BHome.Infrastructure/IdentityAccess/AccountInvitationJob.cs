@@ -15,11 +15,12 @@ internal sealed class AccountInvitationJob(Compact24DbContext db, AccountInvitat
             SELECT COALESCE(task_data->>'invitationDispatchState','') AS "Value"
             FROM operational_tasks WHERE id={job.Id} AND task_type='SYSTEM_JOB'
             """).SingleAsync(t);
-        if (accepted is "AcceptedByProvider" or "SupersededByExistingInvitation") return;
+        if (accepted is "AcceptedByProvider" or "SupersededByExistingInvitation" or "Queued") return;
         var input = JsonSerializer.Deserialize<ApprovedTenantInvitation>(job.PayloadJson) ?? throw new InvalidOperationException("Invalid invitation intent.");
         var email = await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == input.ResidentId &&
             db.Set<BHome.Domain.TenantContracts.Contract>().Any(c => c.Id == input.ContractId &&
                 c.OwnerSignerId == input.OwnerId && c.Status == BHome.Domain.TenantContracts.ContractStatus.Active &&
+                c.Kind != BHome.Domain.TenantContracts.ContractKind.Holding &&
                 c.Residents.Any(cr => cr.ResidentId == r.Id))).Select(r => r.ContactEmail).SingleOrDefaultAsync(t);
         if (email is null) throw new InvalidOperationException("Active tenancy invitation requires Owner review.");
         if (await db.Set<BHome.Domain.TenantContracts.Resident>().AnyAsync(r => r.Id == input.ResidentId &&

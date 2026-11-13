@@ -1,5 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import {
+  loginIdentifierError,
+  loginPasswordError,
+} from '../../../../../../packages/client-core/src/loginValidation';
+import {
   Alert,
   Box,
   Button,
@@ -32,20 +36,17 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
-  const [validationError, setValidationError] = useState('');
+  const [validation, setValidation] = useState({ identifier: '', password: '' });
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-    if (!email.trim() || !password) {
-      setValidationError('Vui lòng nhập đầy đủ Email và Mật khẩu.');
-      return;
-    }
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setValidationError('Email không đúng định dạng.');
-      return;
-    }
-    setValidationError('');
+    const errors = {
+      identifier: loginIdentifierError(email),
+      password: loginPasswordError(password),
+    };
+    setValidation(errors);
+    if (errors.identifier || errors.password) return;
     try {
       await onLogin(email, password);
     } finally {
@@ -55,9 +56,9 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
   }
 
   return (
-    <Box component="form" onSubmit={(event) => void submit(event)} aria-busy={busy}>
+    <Box component="form" noValidate onSubmit={(event) => void submit(event)} aria-busy={busy}>
       <Stack spacing={2.5}>
-        {(validationError || error) && <Alert severity="error">{validationError || error}</Alert>}
+        {error && <Alert severity="error">{error}</Alert>}
         <Box>
           <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 0.75 }}>
             <Typography
@@ -66,7 +67,7 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
               variant="body2"
               sx={{ fontWeight: 500 }}
             >
-              Email
+              Email hoặc số điện thoại
             </Typography>
             <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
               Bắt buộc
@@ -78,14 +79,21 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
             required
             disabled={busy}
             value={email}
-            type="email"
+            type="text"
             autoComplete="username"
             placeholder="owner@bhome.vn"
             onChange={(event) => {
               setEmail(event.target.value);
-              if (validationError) setValidationError('');
+              if (validation.identifier)
+                setValidation((v) => ({
+                  ...v,
+                  identifier: loginIdentifierError(event.target.value),
+                }));
             }}
-            helperText="Nhập email đã được cấp cho tài khoản Owner."
+            error={!!validation.identifier}
+            helperText={
+              validation.identifier || 'Nhập email hoặc số điện thoại đã đăng ký của Owner.'
+            }
             slotProps={{
               htmlInput: { maxLength: 256 },
               input: {
@@ -123,8 +131,11 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
             placeholder="Nhập mật khẩu truy cập"
             onChange={(event) => {
               setPassword(event.target.value);
-              if (validationError) setValidationError('');
+              if (validation.password)
+                setValidation((v) => ({ ...v, password: loginPasswordError(event.target.value) }));
             }}
+            error={!!validation.password}
+            helperText={validation.password || undefined}
             slotProps={{
               htmlInput: { maxLength: 1024 },
               input: {

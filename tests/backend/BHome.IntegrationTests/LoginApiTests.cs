@@ -129,7 +129,8 @@ public sealed class LoginApiTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
         var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Sign-in failed.", body);
+        using var problem = JsonDocument.Parse(body);
+        Assert.Equal(LoginService.InvalidCredentialsMessage, problem.RootElement.GetProperty("title").GetString());
         Assert.Contains(response.Headers.GetValues("X-Correlation-ID").Single(), body);
         Assert.DoesNotContain("private@example.invalid", body);
         Assert.DoesNotContain("private-password", body);

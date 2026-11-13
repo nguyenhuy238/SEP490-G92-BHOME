@@ -69,6 +69,10 @@ internal static class LegacyPersistenceRegistration
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<NotificationDeliveryService>());
         services.RemoveAll<IAccountInvitations>();
         services.RemoveAll<AccountInvitations>();
+        services.RemoveAll<AuthenticationEmailDelivery>();
+        services.RemoveAll<IEmailVerification>();
+        services.RemoveAll<NotificationEmailContent>();
+        services.Replace(ServiceDescriptor.Scoped<IPasswordResetDelivery, UnconfiguredPasswordResetDelivery>());
         services.RemoveAll<IIdentityRetentionRepository>();
         services.RemoveAll<IdentityRetentionService>();
         services.RemoveAll<CompactNotificationWriter>();

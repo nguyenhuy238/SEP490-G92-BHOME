@@ -83,7 +83,7 @@ it('shows a backend failure instead of silently supplying demo records', async (
     path.startsWith('/api/v1/staff?') ? Promise.reject(new ApiError(503)) : request(path, init),
   );
   mount(StaffPage);
-  expect(await screen.findByRole('alert')).toBeInTheDocument();
+  expect((await screen.findAllByRole('alert')).length).toBeGreaterThan(0);
   expect(screen.queryByText('DEMO_MARKER')).not.toBeInTheDocument();
 });
 it('discloses the unsupported shift workflow without rendering demo schedules', () => {

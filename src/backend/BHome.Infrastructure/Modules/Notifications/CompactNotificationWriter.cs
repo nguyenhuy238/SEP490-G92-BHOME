@@ -46,7 +46,7 @@ internal sealed class CompactNotificationWriter(Compact24DbContext db, TimeProvi
             RelatedObjectId = target,
             Priority = priority,
             Source = source,
-            Channels = channels ?? ["IN_APP", "PUSH"],
+            Channels = NotificationEmailPolicy.Channels(eventType, role, channels ?? ["IN_APP", "PUSH"]),
             CreatedAt = now,
             SourceTaskNotificationId = taskSource
         };

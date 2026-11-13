@@ -9,6 +9,7 @@ import { SessionProvider, useSession } from '../lib/SessionProvider';
 import { WorkspaceProvider, useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { theme } from '../theme/theme';
 import { ToastProvider } from '../components/ToastHost';
+import { TenantProfileGate } from '../features/profile/TenantProfileGate';
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     'Inter-Regular': require('../../assets/fonts/Inter-Regular.ttf'),
@@ -34,7 +35,9 @@ export default function RootLayout() {
         <ToastProvider>
           <SessionProvider>
             <WorkspaceProvider>
-              <WorkspaceNavigation />
+              <TenantProfileGate>
+                <WorkspaceNavigation />
+              </TenantProfileGate>
             </WorkspaceProvider>
           </SessionProvider>
         </ToastProvider>
@@ -52,6 +55,9 @@ function WorkspaceNavigation() {
     <Stack key={identity} screenOptions={{ headerTitle: 'BHOME', headerBackTitle: 'Quay lại' }}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="accept-invitation" options={{ title: 'Thiết lập tài khoản' }} />
+      <Stack.Screen name="forgot-password" options={{ title: 'Quên mật khẩu' }} />
+      <Stack.Screen name="confirm-email" options={{ title: 'Xác nhận email' }} />
+      <Stack.Screen name="reset-password" options={{ title: 'Đặt lại mật khẩu' }} />
       <Stack.Screen name="contract-signing" options={{ title: 'Chấp thuận hợp đồng' }} />
       <Stack.Protected guard={!!role}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

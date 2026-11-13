@@ -3,6 +3,10 @@ import {
   Alert,
   Button,
   Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   MenuItem,
   Paper,
@@ -34,6 +38,7 @@ import {
 } from './utilityFormValues';
 
 export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
+  const [operation, setOperation] = useState('');
   const api = usePropertySetupApi();
   const { session } = useAuth();
   const meters = useQuery({
@@ -68,12 +73,42 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
           {meter.data.scope === 'Source' ? 'Công tơ tổng' : 'Khu chung'}
         </Typography>
       ))}
-      <SourceMeterEditor locationId={locationId} meters={meters.data} />
-      {nativeMeters.error ? (
-        <ErrorState error={nativeMeters.error} retry={() => void nativeMeters.refetch()} />
-      ) : (
-        <MeterLinkEditor meters={meters.data} nativeMeters={nativeMeters.data ?? []} />
-      )}
+      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+        <Button variant="contained" onClick={() => setOperation('meter')}>
+          Thêm công tơ nguồn
+        </Button>
+        <Button variant="outlined" onClick={() => setOperation('link')}>
+          Liên kết đồng hồ phòng
+        </Button>
+        <Button variant="outlined" onClick={() => setOperation('reading')}>
+          Ghi chỉ số nguồn
+        </Button>
+      </Stack>
+      <Dialog open={!!operation} fullWidth maxWidth="md">
+        <DialogTitle>
+          {operation === 'meter'
+            ? 'Công tơ nguồn / khu chung'
+            : operation === 'link'
+              ? 'Liên kết đồng hồ phòng'
+              : 'Chỉ số nguồn'}
+        </DialogTitle>
+        <DialogContent>
+          {operation === 'meter' && (
+            <SourceMeterEditor locationId={locationId} meters={meters.data} />
+          )}
+          {nativeMeters.error ? (
+            <ErrorState error={nativeMeters.error} retry={() => void nativeMeters.refetch()} />
+          ) : operation === 'link' ? (
+            <MeterLinkEditor meters={meters.data} nativeMeters={nativeMeters.data ?? []} />
+          ) : null}
+          {operation === 'reading' && (
+            <SourceReadingEditor locationId={locationId} meters={meters.data} />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOperation('')}>Đóng</Button>
+        </DialogActions>
+      </Dialog>
       {links.error && <ErrorState error={links.error} retry={() => void links.refetch()} />}
       {links.data?.map((link) => (
         <Typography key={link.id}>
@@ -86,7 +121,6 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
           · {link.data.effectiveFrom} → {link.data.effectiveTo ?? 'Không hạn'}
         </Typography>
       ))}
-      <SourceReadingEditor locationId={locationId} meters={meters.data} />
       <Typography variant="h6">Chỉ số nguồn đã xác nhận</Typography>
       {readings.error && (
         <ErrorState error={readings.error} retry={() => void readings.refetch()} />
@@ -351,13 +385,18 @@ export function UtilityBillsPanel({ locationId }: { locationId: string }) {
           ))}
         </>
       )}
-      {create && (
-        <SourceBillEditor
-          locationId={locationId}
-          meters={meters.data ?? []}
-          onClose={() => setCreate(false)}
-        />
-      )}
+      <Dialog open={create} fullWidth maxWidth="md">
+        <DialogTitle>Hóa đơn nhà cung cấp</DialogTitle>
+        <DialogContent>
+          {create && (
+            <SourceBillEditor
+              locationId={locationId}
+              meters={meters.data ?? []}
+              onClose={() => setCreate(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
       {reconciliations.error && (
         <ErrorState error={reconciliations.error} retry={() => void reconciliations.refetch()} />
       )}
@@ -634,16 +673,21 @@ export function UtilityBreakdownsPanel({ locationId }: { locationId: string }) {
       )}
       {rooms.error && <ErrorState error={rooms.error} retry={() => void rooms.refetch()} />}
       {tariffs.error && <ErrorState error={tariffs.error} retry={() => void tariffs.refetch()} />}
-      {editing !== undefined && (
-        <BreakdownEditor
-          key={editing?.id ?? 'new'}
-          locationId={locationId}
-          source={editing}
-          rooms={rooms.data ?? []}
-          tariffs={tariffs.data ?? []}
-          onClose={() => setEditing(undefined)}
-        />
-      )}
+      <Dialog open={editing !== undefined} fullWidth maxWidth="md">
+        <DialogTitle>Phân đoạn sản lượng theo kỳ</DialogTitle>
+        <DialogContent>
+          {editing !== undefined && (
+            <BreakdownEditor
+              key={editing?.id ?? 'new'}
+              locationId={locationId}
+              source={editing}
+              rooms={rooms.data ?? []}
+              tariffs={tariffs.data ?? []}
+              onClose={() => setEditing(undefined)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Stack>
   );
 }

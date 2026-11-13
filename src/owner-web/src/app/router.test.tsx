@@ -38,7 +38,7 @@ it('protects deep links and returns to the requested screen after demo login', a
     </ThemeProvider>,
   );
   expect(await screen.findByRole('heading', { name: 'Đăng nhập tài khoản' })).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('Email'), {
+  fireEvent.change(screen.getByLabelText('Email hoặc số điện thoại'), {
     target: { value: DEMO_USER },
   });
   fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: DEMO_PASSWORD } });
@@ -139,22 +139,33 @@ it('keeps property functions inside the selected Location Workspace', async () =
   });
   expect(locationLinks[0]).toHaveAttribute('href', '/locations/loc-1/overview');
   fireEvent.click(locationLinks[0]);
-  expect(
-    await screen.findByRole(
-      'heading',
-      { level: 1, name: 'BHOME Central 1 - Bạch Đằng' },
-      { timeout: 12000 },
-    ),
-  ).toBeInTheDocument();
-  expect(screen.getByRole('tab', { name: 'Phòng & Sơ đồ tầng' })).toHaveAttribute(
-    'href',
-    '/locations/loc-1/rooms',
+  // Locate exact visible text before asserting semantics, avoiding repeated whole-page
+  // accessibility scans over the room grid on a two-core CI runner.
+  const heading = await screen.findByText(
+    'BHOME Central 1 - Bạch Đằng',
+    { selector: 'h1', exact: true },
+    { timeout: 12000 },
   );
-  expect(screen.getByRole('tab', { name: 'Vốn & Chi phí' })).toHaveAttribute(
-    'href',
-    '/locations/loc-1/investment',
-  );
-  expect(screen.getByRole('heading', { name: 'Không gian phòng theo tầng' })).toBeInTheDocument();
+  expect(heading).toHaveRole('heading');
+  expect(heading).toHaveAccessibleName('BHOME Central 1 - Bạch Đằng');
+  expect(heading).toBeVisible();
+  for (const [name, href] of [
+    ['Phòng & Sơ đồ tầng', '/locations/loc-1/rooms'],
+    ['Vốn & Chi phí', '/locations/loc-1/investment'],
+  ]) {
+    const tab = screen.getByText(name, { selector: 'a[role="tab"]', exact: true });
+    expect(tab).toHaveRole('tab');
+    expect(tab).toHaveAccessibleName(name);
+    expect(tab).toBeVisible();
+    expect(tab).toHaveAttribute('href', href);
+  }
+  const roomsHeading = screen.getByText('Không gian phòng theo tầng', {
+    selector: 'h2',
+    exact: true,
+  });
+  expect(roomsHeading).toHaveRole('heading');
+  expect(roomsHeading).toHaveAccessibleName('Không gian phòng theo tầng');
+  expect(roomsHeading).toBeVisible();
   expect(document.querySelector('a[href="/rooms/room-0"]')).toBeInTheDocument();
   expect(document.querySelector('a[href="/rooms/room-25"]')).not.toBeInTheDocument();
 }, 15000);

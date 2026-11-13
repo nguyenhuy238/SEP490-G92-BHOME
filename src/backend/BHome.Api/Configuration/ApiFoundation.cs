@@ -35,6 +35,10 @@ public static class ApiFoundation
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("EmailTest", context => context.User.IsInRole("Owner")
+                ? RateLimitPartition.GetFixedWindowLimiter("development-email-test", _ => new FixedWindowRateLimiterOptions
+                { PermitLimit = 1, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 })
+                : RateLimitPartition.GetNoLimiter("email-test-unauthorized"));
             options.AddPolicy("Auth", context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions

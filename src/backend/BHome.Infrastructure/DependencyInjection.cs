@@ -110,7 +110,11 @@ public static class DependencyInjection
         services.AddScoped<IAuthenticationSessions, IdentitySessionService>();
         services.AddScoped<IPasswordService, IdentityPasswordService>();
         services.AddScoped<ISecurityAudit, IdentitySecurityAudit>();
-        services.AddScoped<IPasswordResetDelivery, BHome.Infrastructure.Modules.Notifications.PasswordEmailDelivery>();
+        services.AddOptions<AuthenticationEmailOptions>().BindConfiguration("AuthenticationEmail")
+            .Validate(o => o.ResendCooldownSeconds is >= 30 and <= 3600, "Authentication email cooldown must be 30-3600 seconds.").ValidateOnStart();
+        services.AddScoped<AuthenticationEmailDelivery>();
+        services.AddScoped<IEmailVerification, EmailVerificationService>();
+        services.AddScoped<IPasswordResetDelivery>(p => p.GetRequiredService<AuthenticationEmailDelivery>());
         services.AddScoped<IAccountInvitations, AccountInvitations>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter>();
         services.AddScoped<BHome.Application.Notifications.INotificationWorkspace, BHome.Infrastructure.Modules.Notifications.CompactNotificationWorkspace>();
@@ -118,6 +122,22 @@ public static class DependencyInjection
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationEvents>();
         services.AddOptions<BHome.Application.Notifications.NotificationChannelOptions>().BindConfiguration("NotificationChannels")
             .Validate(o => o.Mode is "Unconfigured" or "Sandbox" or "Smtp" && o.MaxAttempts is >= 1 and <= 10 && o.RetrySeconds is >= 1 and <= 3600 && o.TimeoutSeconds is >= 1 and <= 45, "Invalid notification channel options.").ValidateOnStart();
+        services.AddOptions<BHome.Application.Notifications.EmailOptions>().BindConfiguration("Email")
+            .PostConfigure(o =>
+            {
+                // Compatibility for deployments using the previous SMTP configuration keys.
+                if (!o.Enabled && configuration["NotificationChannels:Mode"] == "Smtp")
+                {
+                    var legacy = configuration.GetSection("NotificationChannels").Get<BHome.Application.Notifications.NotificationChannelOptions>()!;
+                    o.Enabled = true; o.Host = legacy.SmtpHost ?? ""; o.Port = legacy.SmtpPort;
+                    o.Username = legacy.SmtpUser ?? ""; o.AppPassword = legacy.SmtpPassword ?? "";
+                    o.FromEmail = legacy.FromAddress ?? ""; o.UseStartTls = legacy.SmtpUseTls;
+                }
+            })
+            .Validate(o => o.Valid(), "Email configuration invalid: check Email host, port, username, sender, STARTTLS, timeout and Email:AppPassword in secrets.").ValidateOnStart();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
+        services.AddScoped<BHome.Application.Notifications.IDevelopmentEmailTest, BHome.Infrastructure.Modules.Notifications.DevelopmentEmailTest>();
         services.AddScoped<BHome.Application.Notifications.INotificationChannelProvider, BHome.Infrastructure.Modules.Notifications.NotificationChannelProvider>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>();
         services.AddHostedService<BHome.Infrastructure.Modules.Notifications.NotificationAutomationWorker>();
