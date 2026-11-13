@@ -254,6 +254,8 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         using var owner = host.CreateClient(); owner.DefaultRequestHeaders.Authorization = w.Owner.DefaultRequestHeaders.Authorization;
         var response = await owner.PostAsync($"{Root}/{draft.Id}/documents", null); await Success(response);
         var original = (await response.Content.ReadFromJsonAsync<MainDraftFiles>())!;
+        var reviewResponse = await owner.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(reviewResponse);
+        var originalReview = (await reviewResponse.Content.ReadFromJsonAsync<ContractDocumentView>())!;
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
@@ -278,12 +280,18 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         await Success(await owner.GetAsync($"{Root}/{draft.Id}/documents/{fresh.Pdf.Id}/preview"));
         var bytesNow = await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{fresh.Pdf.Id}");
         Assert.Equal("%PDF-", System.Text.Encoding.ASCII.GetString(bytesNow, 0, 5));
+        var refreshedReview = await owner.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(refreshedReview);
+        var currentReview = (await refreshedReview.Content.ReadFromJsonAsync<ContractDocumentView>())!;
+        Assert.NotEqual(originalReview.Id, currentReview.Id);
+        await Success(await owner.GetAsync($"{Root}/{draft.Id}/documents/{currentReview.Id}/preview"));
+        var repeatReview = await owner.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(repeatReview);
+        Assert.Equal(currentReview.Id, (await repeatReview.Content.ReadFromJsonAsync<ContractDocumentView>())!.Id);
         var unchanged = (await owner.GetFromJsonAsync<MainDraftView>($"{Root}/{draft.Id}"))!;
         Assert.Equal(draft.Version, unchanged.Version);
         Assert.Equal(JsonSerializer.Serialize(draft.Input), JsonSerializer.Serialize(unchanged.Input));
         await using var verify = host.Services.CreateAsyncScope();
         var context = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        Assert.Equal(4, await context.Set<ContractDocumentFile>().CountAsync(f => f.ContractId == draft.Id));
+        Assert.Equal(6, await context.Set<ContractDocumentFile>().CountAsync(f => f.ContractId == draft.Id));
         Assert.Equal(ContractStatus.Draft, (await context.Set<Contract>().SingleAsync(c => c.Id == draft.Id)).Status);
         Assert.Empty(await context.Set<ContractSignature>().Where(s => s.ContractId == draft.Id).ToArrayAsync());
     }

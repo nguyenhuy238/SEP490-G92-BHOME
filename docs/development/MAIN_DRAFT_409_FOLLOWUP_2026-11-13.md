@@ -54,6 +54,8 @@ Build Debug ban đầu bị DLL lock do Visual Studio/API của người dùng �
 - Owner Web contracts: **16 files / 63 tests PASS**; không sửa Owner Web.
 - Workspace build, Expo Web export và `dotnet format whitespace --verify-no-changes` cho các tệp C# sửa: PASS.
 - Chrome với API transport tổng hợp: cả `draft_document_outdated`, `contract_document_integrity_failed`, `draft_document_missing` → recovery → inline PDF → fullscreen/zoom 150% → Blob PDF → download → review → một release → PendingSigning. Mỗi case hai generation theo thao tác đọc/recovery, **không PUT**, không request ngoài dự kiến/page error. Kiểm tra 360/400/768/1280px không tràn ngang; ảnh/PDF/request paths tổng hợp ở `.tools/owner-pdf-validation/followup-*` (ignored).
+- Footer Owner giới hạn chiều rộng nút trên desktop, vẫn đủ nhãn ở 360px; xuất lại Expo bundle và chạy lại cả ba browser case sau thay đổi: PASS. Footer nằm trong layout flex, không đè nội dung scroll.
+- Bổ sung xác minh signing-review bị thiếu/hỏng: sinh review ID mới, preview được, request tạo review lặp lại dùng cùng ID hợp lệ, review cũ vẫn được giữ. Chạy lại bốn case (legacy + Compact24, missing + corruption): PASS; đây là chạy lại trong 27 case, không cộng thành 31 test riêng biệt.
 - Browser test trên là UI regression với transport tổng hợp; PDF/PNG thật, MinIO thật và API được kiểm tra riêng trong backend suite. Không gộp thành MySign hoặc bank E2E thật.
 
 ### Tệp sửa và giới hạn
@@ -62,4 +64,6 @@ Backend: `MainDraftService.cs`, `MinioObjectStorage.cs`; tests: `MainDraftApiTes
 
 Mobile/shared: `MainDraftScreen.tsx`, `MainDraftSigningReview.tsx`, `ContractPdfPreview.tsx`, `pdfPreview.ts`, `packages/client-core/src/mainDrafts.ts`; tests: `main-draft-screen`, `rental-contract-flow`, `contract-pdf-preview`, `pdf-preview`. Không sửa Owner Web, Staff/Tenant screens hoặc thêm migrations.
 
-Phiên localhost thực tế đã được đọc qua UI và xác nhận đúng route; không thực hiện ký/thanh toán. API đang chạy trong debugger dùng DLL cũ; đã yêu cầu người dùng restart sau commit backend `a91e6e29` để nạp sửa. Chưa tuyên bố preview của đúng contract đã PASS cho đến khi kiểm chứng sau restart. Android/iOS thiết bị, MySign/SMTP/bank thật: NOT RUN. Production vẫn cần template được duyệt, Main deposit QR vẫn phụ thuộc API hiện có.
+Phiên localhost thực tế đã được đọc qua UI và xác nhận đúng route; không thực hiện ký/thanh toán. Sau yêu cầu restart, cổng 7240 đã đổi từ PID 10916 sang 35564. UI vẫn ở form Draft; công cụ thao tác cửa sổ báo người dùng đang tương tác, nên không giành điều khiển hoặc bấm ký/release. Metadata read-only cuối phiên vẫn chỉ có cặp tệp cũ: chưa thực hiện generate sau restart trên contract này. Preview của đúng contract: **PARTIAL**, cần bấm `Xem trước hợp đồng` (hoặc `Tạo lại PDF`) để gọi recovery mới; không tiếp tục thử fileId cũ đang thiếu object. Android/iOS thiết bị, MySign/SMTP/bank thật: NOT RUN. Production vẫn cần template được duyệt, Main deposit QR vẫn phụ thuộc API hiện có. Remote CI chưa được trigger; chỉ báo các checks local đã chạy.
+
+Commits: `a91e6e29` — validate stored draft files and recover missing PDFs; `49f997d` — distinguish integrity errors and restore PDF recovery; `6a6cc6b` — align contract footer actions on desktop. Commit cuối bổ sung test signing-review và báo cáo kiểm chứng.
