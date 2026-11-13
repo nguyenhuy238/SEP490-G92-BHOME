@@ -23,11 +23,11 @@ nhưng không có `casually-rendition-bagful.ngrok-free.dev`.
 
 Đã chạy API bằng `Start-Api.ps1 -EnvironmentFile .env` và chỉ đổi Host header:
 
-| Request tới cùng binding HTTPS | Kết quả thực tế |
-| --- | --- |
-| `GET https://localhost:7240/health/live` | 200, Healthy |
+| Request tới cùng binding HTTPS                             | Kết quả thực tế                                  |
+| ---------------------------------------------------------- | ------------------------------------------------ |
+| `GET https://localhost:7240/health/live`                   | 200, Healthy                                     |
 | Cùng URL, `Host: casually-rendition-bagful.ngrok-free.dev` | 400, trang HTML `Bad Request - Invalid Hostname` |
-| `GET https://localhost:7240/health/ready` | 200 |
+| `GET https://localhost:7240/health/ready`                  | 200                                              |
 
 Đây là lỗi Host Filtering, không phải Kestrel không lắng nghe HTTPS hay lỗi controller
 SePay. Trang lỗi giống lỗi người dùng cung cấp được tái hiện bằng hostname thiếu trong
@@ -141,35 +141,35 @@ Không cần thêm CORS origin cho webhook server-to-server.
 
 Các probe TLS dùng `curl.exe`, không có `-k`, không dùng JWT hoặc chữ ký HMAC hợp lệ.
 
-| Kiểm tra thực tế | HTTP/kết quả |
-| --- | --- |
-| Local `/health/live` | 200 |
-| Local `/health/ready` | 200 |
-| Local live với Host ngrok đã cấu hình | 200 |
-| Host `unexpected.example.invalid` | 400 |
-| Host `other.ngrok-free.dev` | 400 |
-| Local unsigned webhook `{}` | 401 |
-| Public `/health/live` | 200 |
-| Public `/health/ready` | 200 |
-| Public unsigned webhook `{}` | 401, `sepay_authentication_failed` |
-| Public Owner `/api/v1/integrations/sepay/events`, không JWT | 401 |
-| Public Tenant `/api/v1/payment-history`, không JWT | 401 |
-| Local HTTP live, follow redirect | 307 → HTTPS local → 200 |
-| Public HTTP live, follow redirect | 307 → HTTPS public → 200 |
+| Kiểm tra thực tế                                            | HTTP/kết quả                       |
+| ----------------------------------------------------------- | ---------------------------------- |
+| Local `/health/live`                                        | 200                                |
+| Local `/health/ready`                                       | 200                                |
+| Local live với Host ngrok đã cấu hình                       | 200                                |
+| Host `unexpected.example.invalid`                           | 400                                |
+| Host `other.ngrok-free.dev`                                 | 400                                |
+| Local unsigned webhook `{}`                                 | 401                                |
+| Public `/health/live`                                       | 200                                |
+| Public `/health/ready`                                      | 200                                |
+| Public unsigned webhook `{}`                                | 401, `sepay_authentication_failed` |
+| Public Owner `/api/v1/integrations/sepay/events`, không JWT | 401                                |
+| Public Tenant `/api/v1/payment-history`, không JWT          | 401                                |
+| Local HTTP live, follow redirect                            | 307 → HTTPS local → 200            |
+| Public HTTP live, follow redirect                           | 307 → HTTPS public → 200           |
 
 Sau khi tạo secret ngẫu nhiên và restart API, đã probe lại local live/ready, public
 live, unsigned public webhook và invalid Host, cùng kết quả trên. Truy vấn chỉ đếm
 database test trước/sau unsigned public POST: `payments=0`, `payment_allocations=0`,
 inbox `SePayEventV1=0` cả hai lần.
 
-| Lệnh/check đã chạy | Kết quả |
-| --- | --- |
-| `.tools/dotnet/dotnet.exe build src/backend/BHome.sln -c Release --no-restore` | PASS, 0 warning, 0 error |
-| Unit tests, filter `FullyQualifiedName~SePaySecurityTests`, Release | PASS 12, fail 0, skip 0 |
-| `Test-Compact24Isolated.ps1 -Configuration Release`, filter dưới đây | PASS 93, fail 0, skip 0 |
-| `git diff --check` | PASS |
-| `git check-ignore .env.sepay.local` | Ignored |
-| `git diff --cached --name-only` | Trống; không có file/secret được stage |
+| Lệnh/check đã chạy                                                             | Kết quả                                |
+| ------------------------------------------------------------------------------ | -------------------------------------- |
+| `.tools/dotnet/dotnet.exe build src/backend/BHome.sln -c Release --no-restore` | PASS, 0 warning, 0 error               |
+| Unit tests, filter `FullyQualifiedName~SePaySecurityTests`, Release            | PASS 12, fail 0, skip 0                |
+| `Test-Compact24Isolated.ps1 -Configuration Release`, filter dưới đây           | PASS 93, fail 0, skip 0                |
+| `git diff --check`                                                             | PASS                                   |
+| `git check-ignore .env.sepay.local`                                            | Ignored                                |
+| `git diff --cached --name-only`                                                | Trống; không có file/secret được stage |
 
 Filter tích hợp đã thực thi:
 
