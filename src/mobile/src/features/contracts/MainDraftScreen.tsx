@@ -106,6 +106,10 @@ export function MainDraftScreen({
     alive = useRef(true),
     dirty = useRef(false);
   const operation = useRef<AbortController | null>(null);
+  const formScroll = useRef<React.ComponentRef<typeof KeyboardFormScrollView>>(null);
+  useEffect(() => {
+    if (owner) formScroll.current?.scrollTo({ y: 0, animated: false });
+  }, [mode, owner]);
   const currentOperation = (controller: AbortController) =>
     alive.current && operation.current === controller && !controller.signal.aborted;
   const calendarClose = useRef<(() => void) | null>(null);
@@ -551,6 +555,7 @@ export function MainDraftScreen({
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
               <KeyboardFormScrollView
+                ref={formScroll}
                 style={styles.grow}
                 contentContainerStyle={styles.content}
                 keyboardShouldPersistTaps="handled"
@@ -654,6 +659,7 @@ export function MainDraftScreen({
                       </>
                     ) : (
                       <ContractPreviewSummary
+                        showSigner={!(owner && mode === 'signing')}
                         preparation={preparation}
                         status={saved?.status ?? 'Draft'}
                         start={start}
@@ -852,7 +858,7 @@ export function MainDraftScreen({
                       >
                         {owner ? 'Tiếp tục duyệt hợp đồng' : 'Tiếp tục ký hợp đồng'}
                       </Button>
-                    ) : (
+                    ) : !owner ? (
                       <Button
                         contentStyle={{ minHeight: 48 }}
                         mode="contained"
@@ -861,7 +867,7 @@ export function MainDraftScreen({
                       >
                         Về danh sách hợp đồng
                       </Button>
-                    )}
+                    ) : null}
                   </>
                 )}
               </View>

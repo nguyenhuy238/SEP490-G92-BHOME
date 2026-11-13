@@ -199,11 +199,10 @@ export function MainDraftSigningReview({
   return (
     <>
       <Box>
-        <Heading title="Duyệt hợp đồng đưa đi ký" />
         <Heading title="Thông tin bên thuê" />
         <Text>{representative?.fullName ?? 'Chưa tải được hồ sơ bên thuê'}</Text>
         <Text>{representative?.maskedCitizenNumber}</Text>
-        {signer && <Pill tone="green">Đã xác minh · Người ký theo hợp đồng</Pill>}
+        {signer && <Pill tone="green">Đã xác minh</Pill>}
         {draft.preparation?.residents
           .filter((person) => !person.representative)
           .map((person) => (
@@ -225,9 +224,11 @@ export function MainDraftSigningReview({
         <Action secondary disabled={busy || loading || !signer} onPress={() => void run(false)}>
           {busy ? 'Đang xử lý…' : 'Tạo bản PDF để duyệt'}
         </Action>
-        <Action secondary disabled={busy || loading} onPress={() => setRevision((v) => v + 1)}>
-          Tải lại hồ sơ bên thuê
-        </Action>
+        {!loading && !signer && (
+          <Action secondary disabled={busy} onPress={() => setRevision((v) => v + 1)}>
+            Tải lại hồ sơ bên thuê
+          </Action>
+        )}
         {file?.developmentOnly && (
           <Pill tone="amber">Tài liệu Development · Chưa duyệt cho production</Pill>
         )}
@@ -254,7 +255,7 @@ export function MainDraftSigningReview({
       )}
       <Box>
         <Checkbox.Item
-          label="Tôi đã xem PDF và xác nhận người đại diện, cách ký"
+          label="Tôi đã kiểm tra đúng thông tin và nội dung hợp đồng"
           status={reviewed ? 'checked' : 'unchecked'}
           disabled={!file || readyFile !== file.id || !signer || busy}
           onPress={() => setReviewed((v) => !v)}
