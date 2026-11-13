@@ -30,6 +30,10 @@ import {
   staffContractSorts,
   staffContractTabs,
   staffContractTone,
+  staffContractAmount,
+  staffContractKindLabel,
+  staffContractTabSelected,
+  staffContractTabView,
   defaultStaffContractListView,
   type StaffContractListView,
 } from './staffContractList';
@@ -46,7 +50,6 @@ type Snapshot = {
 
 export function StaffContractsList({
   api,
-  onCreate,
   onCreateHolding,
   onOpen,
   onInspection,
@@ -54,7 +57,6 @@ export function StaffContractsList({
   onViewStateChange,
 }: {
   api: ContractClient;
-  onCreate: () => void;
   onCreateHolding?: () => void;
   onOpen: (contract: ContractSummary) => void;
   onInspection: (id: string) => void;
@@ -66,7 +68,7 @@ export function StaffContractsList({
   const [revision, setRevision] = useState(0);
   const [localView, setLocalView] = useState({ ...defaultStaffContractListView });
   const view = viewState ?? localView;
-  const { status, search, sort, page } = view;
+  const { status, kind, search, sort, page } = view;
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const pending = useRef<AbortController | null>(null);
@@ -104,8 +106,8 @@ export function StaffContractsList({
   const schedules = !loading ? snapshot.schedules : [];
   const scheduleError = !loading ? snapshot.scheduleError : '';
   const result = useMemo(
-    () => staffContractPage(contracts, status, search, sort, page),
-    [contracts, status, search, sort, page],
+    () => staffContractPage(contracts, status, search, sort, page, kind),
+    [contracts, status, kind, search, sort, page],
   );
   const headerRefreshAvailable = useWorkspaceHeaderRefresh(refresh, loading);
   function changeView(patch: Partial<StaffContractListView>) {
@@ -126,19 +128,9 @@ export function StaffContractsList({
             {loading || error ? '—' : contracts.length} hợp đồng
           </Text>
           <Text variant="bodySmall" style={ui.muted}>
-            Quản lý hợp đồng thuê phòng
+            Hợp đồng giữ chỗ và thuê chính thức
           </Text>
         </View>
-        <Button
-          mode="contained"
-          icon="plus"
-          accessibilityLabel="Tạo mới hợp đồng"
-          contentStyle={{ minHeight: 44 }}
-          style={styles.create}
-          onPress={onCreate}
-        >
-          Tạo mới
-        </Button>
         {!headerRefreshAvailable && (
           <IconButton
             icon="refresh"
@@ -220,22 +212,32 @@ export function StaffContractsList({
         {staffContractTabs.map((tab) => (
           <Button
             key={tab.id}
-            mode={status === tab.id ? 'contained' : 'outlined'}
+            mode={staffContractTabSelected(tab, view) ? 'contained' : 'outlined'}
             accessibilityRole="tab"
-            accessibilityState={{ selected: status === tab.id }}
+            accessibilityState={{ selected: staffContractTabSelected(tab, view) }}
             disabled={loading || !!error}
             style={[
               styles.statusTab,
-              status !== tab.id && { backgroundColor: c.white, borderColor: c.border },
+              !staffContractTabSelected(tab, view) && {
+                backgroundColor: c.white,
+                borderColor: c.border,
+              },
             ]}
             contentStyle={{ minHeight: 44 }}
             labelStyle={{ fontSize: 12 }}
             onPress={() => {
-              changeView({ status: tab.id, page: 1 });
+              changeView(staffContractTabView(tab, view, true));
             }}
           >
             {tab.label} (
-            {loading || error ? '—' : staffContractPage(contracts, tab.id, search, sort, 1).total})
+            {loading || error
+              ? '—'
+              : (() => {
+                  const target = staffContractTabView(tab, view);
+                  return staffContractPage(contracts, target.status, search, sort, 1, target.kind)
+                    .total;
+                })()}
+            )
           </Button>
         ))}
       </ScrollView>
@@ -312,7 +314,7 @@ export function StaffContractsList({
                 key={contract.id}
                 testID="staff-contract-card"
                 accessibilityRole="button"
-                accessibilityLabel={`Mở hợp đồng phòng ${contract.roomNumber}, ${text(contract.status)}`}
+                accessibilityLabel={`Mở hợp đồng ${staffContractKindLabel(contract.kind)} phòng ${contract.roomNumber}, ${text(contract.status)}`}
                 onPress={() => onOpen(contract)}
                 style={styles.card}
               >
@@ -324,12 +326,22 @@ export function StaffContractsList({
                     <Text variant="labelSmall" numberOfLines={1} style={ui.muted}>
                       {contract.locationName}
                     </Text>
+                    <View style={{ alignSelf: 'flex-start' }}>
+                      <Pill tone={contract.kind === 'Holding' ? 'blue' : 'neutral'}>
+                        {staffContractKindLabel(contract.kind)}
+                      </Pill>
+                    </View>
                     <Text variant="labelSmall" style={ui.muted}>
-                      {displayContractDate(contract.startDate)} –{' '}
-                      {displayContractDate(contract.endDate)}
+                      {contract.kind === 'Holding'
+                        ? `Hạn giữ chỗ: ${contract.holdingExpiresAt ? formatInstant(contract.holdingExpiresAt) : 'Chưa có thông tin'}`
+                        : `${displayContractDate(contract.startDate)} – ${displayContractDate(contract.endDate)}`}
                     </Text>
                     <Text variant="titleMedium" style={[ui.money, styles.rent]}>
-                      {formatContractMoney(contract.monthlyRent)}/tháng
+                      {contract.kind === 'Holding' ? 'Giữ chỗ: ' : ''}
+                      {staffContractAmount(contract) !== undefined
+                        ? formatContractMoney(staffContractAmount(contract)!)
+                        : '—'}
+                      {contract.kind === 'Holding' ? '' : '/tháng'}
                     </Text>
                   </View>
                   <View style={styles.cardTrailing}>
@@ -348,10 +360,10 @@ export function StaffContractsList({
               </Text>
               <Text style={ui.muted}>
                 {contracts.length
-                  ? 'Thử đổi từ khóa hoặc trạng thái.'
+                  ? 'Thử đổi từ khóa, loại hợp đồng hoặc trạng thái.'
                   : 'Các hợp đồng trong phạm vi phụ trách sẽ xuất hiện tại đây.'}
               </Text>
-              {!!(search || status) && <Button onPress={clearFilters}>Xóa bộ lọc</Button>}
+              {!!(search || status || kind) && <Button onPress={clearFilters}>Xóa bộ lọc</Button>}
             </View>
           )}
           <View style={styles.pagination}>
@@ -392,7 +404,6 @@ const styles = StyleSheet.create({
   screen: { gap: 12 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { color: c.primary, fontWeight: '700' },
-  create: { borderRadius: 10, backgroundColor: c.primary },
   schedule: {
     backgroundColor: c.white,
     borderWidth: 1,

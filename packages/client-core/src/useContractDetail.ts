@@ -32,7 +32,7 @@ export function useContractDetail(client: ContractClient, id: string, role: stri
       setState({ id, data: null, error: '', loading: true });
       try {
         const contract = await client.get(id, signal);
-        if (contract.onboardingDraft) {
+        if (contract.kind === 'Main' && contract.onboardingDraft) {
           if (!signal.aborted)
             setState({
               id,
@@ -42,10 +42,13 @@ export function useContractDetail(client: ContractClient, id: string, role: stri
             });
           return;
         }
-        const moveOut = await client.moveOut(id, signal).catch((e: unknown) => {
-          if ((e as { status?: number })?.status === 404) return null;
-          throw e;
-        });
+        const moveOut =
+          contract.kind === 'Holding'
+            ? null
+            : await client.moveOut(id, signal).catch((e: unknown) => {
+                if ((e as { status?: number })?.status === 404) return null;
+                throw e;
+              });
         const financial = role === 'Owner' || role === 'Tenant';
         const [readiness, history] = await Promise.all([
           financial && ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status)

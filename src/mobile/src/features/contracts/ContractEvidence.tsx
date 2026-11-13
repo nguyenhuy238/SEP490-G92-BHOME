@@ -20,6 +20,7 @@ export function ContractEvidence({
   readingId,
   pdf = false,
   number,
+  label,
 }: {
   api: ContractClient;
   contractId: string;
@@ -29,6 +30,7 @@ export function ContractEvidence({
   readingId?: string;
   pdf?: boolean;
   number?: number;
+  label?: string;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useFeedbackState();
@@ -101,13 +103,14 @@ export function ContractEvidence({
   return (
     <>
       <Button disabled={busy} loading={busy} onPress={() => void download()}>
-        {readingId
-          ? 'Mở hoặc lưu ảnh chỉ số bàn giao'
-          : previewId
-            ? 'Mở hoặc lưu PDF xem trước'
-            : pdf
-              ? 'Mở hoặc lưu tài liệu ký'
-              : `Mở hoặc lưu ảnh hiện trạng ${number ?? ''}`}
+        {label ??
+          (readingId
+            ? 'Mở hoặc lưu ảnh chỉ số bàn giao'
+            : previewId
+              ? 'Mở hoặc lưu PDF xem trước'
+              : pdf
+                ? 'Mở hoặc lưu tài liệu ký'
+                : `Mở hoặc lưu ảnh hiện trạng ${number ?? ''}`)}
       </Button>
       {!!error && <Text style={ui.red}>{error}</Text>}
     </>

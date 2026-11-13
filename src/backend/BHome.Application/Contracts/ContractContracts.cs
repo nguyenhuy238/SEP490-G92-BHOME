@@ -15,7 +15,7 @@ public sealed record HoldingDraftInput(Guid RoomId, Guid OwnerSignerId, Guid? Te
     Guid RepresentativeResidentId, [Required, MinLength(1), MaxLength(50)] Guid[] ResidentIds,
     DateOnly StartDate, DateOnly EndDate, DateTimeOffset ExpiresAt,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal HoldingDeposit,
-    [Required, StringLength(12000, MinimumLength = 1)] string Terms, short? ReservedCapacity = null);
+    [Required, StringLength(12000, MinimumLength = 1)] string Terms, short? ReservedCapacity = null, int? SettingsVersion = null);
 public sealed record HoldingDecisionInput([Required, StringLength(2000, MinimumLength = 1)] string Reason);
 public sealed record HoldingConversionInput(
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredSecurityDeposit);
@@ -39,7 +39,9 @@ public sealed record ContractVersionView(Guid Id, Guid? PreviousContractId, stri
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? MonthlyRent, string Terms);
 public sealed record ContractSummary(Guid Id, Guid RoomId, Guid LocationId, string LocationName, string RoomNumber,
     string Kind, string Status, DateOnly StartDate, DateOnly EndDate,
-    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal MonthlyRent, bool OnboardingDraft = false);
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal MonthlyRent, bool OnboardingDraft = false,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal RequiredDeposit = 0,
+    DateTimeOffset? HoldingExpiresAt = null);
 public sealed record ContractPage(IReadOnlyList<ContractSummary> Items, int Page, int PageSize, int TotalCount);
 public sealed record ContractListScope(Guid ActorId, bool Owner, bool Staff, bool Tenant, DateOnly Today);
 // Placement null puts the signature in the signer's own box of the contract's signature block. UsePicture null/true

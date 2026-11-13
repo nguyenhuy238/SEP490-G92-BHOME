@@ -238,6 +238,9 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            Assert.Equal(ContractStatus.Active, (await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).Status);
+            Assert.Equal(BHome.Domain.PropertyManagement.RoomStatus.OnHold,
+                (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == Compact24SampleSeed.Id(40))).Status);
             Assert.Equal(usersBefore, await db.Users.CountAsync());
             Assert.Null((await db.Set<Resident>().SingleAsync(r => r.Id == residentId)).TenantUserId);
         }

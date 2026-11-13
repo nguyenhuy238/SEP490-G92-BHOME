@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => {
     throw new Error(
       'Development API proxy requires HTTPS or an isolated loopback HTTP test server.',
     );
+  // Trust the workstation CA and standalone localhost certificate when present.
   const certificateDirectory = new URL('../../.tools/mobile-tls/', import.meta.url);
   const certificates = ['localhost.cer', 'root-ca.cer']
     .map((name) => fileURLToPath(new URL(name, certificateDirectory)))

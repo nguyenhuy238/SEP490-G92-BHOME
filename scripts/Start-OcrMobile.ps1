@@ -17,7 +17,7 @@ Get-ChildItem Env: | Where-Object { $_.Name -match '^(Kestrel__|MobileDevelopmen
 $configurationPath = if ([IO.Path]::IsPathRooted($EnvironmentFile)) { $EnvironmentFile } else { Join-Path $repo $EnvironmentFile }
 $env:BHOME_ENV_FILE = [IO.Path]::GetFullPath($configurationPath)
 foreach ($line in Get-Content -LiteralPath $configurationPath) {
-    if ($line -match '^((ConnectionStrings|Jwt|Sessions|AuthRateLimit|AuthWeb|ObjectStorage|Jobs|Cors|BankIntegration|NotificationIntegration|NotificationChannels|OwnerSetup|ElectronicContractIntegration|Ocr|IdentityProtection|Capture|Api|MainDraft|DevelopmentDatabase|DigitalSigning)__[^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[3], 'Process') }
+    if ($line -match '^((ConnectionStrings|Jwt|Sessions|AuthRateLimit|AuthWeb|AuthenticationEmail|Email|ObjectStorage|Jobs|Cors|BankIntegration|SePay|NotificationIntegration|NotificationChannels|OwnerSetup|ElectronicContractIntegration|Ocr|IdentityProtection|Capture|Api|MainDraft|DevelopmentDatabase|DigitalSigning|AnonymousSigning)__[^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[3], 'Process') }
 }
 Push-Location $repo
 try { dotnet run --project src/backend/BHome.Api --no-launch-profile; exit $LASTEXITCODE }

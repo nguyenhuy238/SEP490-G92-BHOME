@@ -370,6 +370,101 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
     }
 
     [CompactPostgresFact]
+    public async Task HoldingQrPreviewRequiresOwnerAndSandboxAndNeverSignsOrActivates()
+    {
+        await using var scenario = await Create();
+        await using var scope = scenario.Host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var room = new Room { LocationId = scenario.Location, RoomNumber = "QR-TEST", Capacity = 1, Status = RoomStatus.Available };
+        var resident = new Resident { RoomId = room.Id, OwnerUserId = scenario.Owner, DisplayLabel = "Synthetic QR payer", VerificationStatus = IdentityVerificationStatus.Verified };
+        var holding = new Contract { Kind = ContractKind.Holding, RoomId = room.Id, OwnerSignerId = scenario.Owner,
+            RepresentativeResidentId = resident.Id, StartDate = today, EndDate = today.AddMonths(1),
+            HoldingExpiryAt = DateTimeOffset.UtcNow.AddDays(2), RequiredDeposit = 100000, MonthlyRent = 100000,
+            Status = ContractStatus.Draft, IsDevelopmentDemo = true, Terms = "Synthetic QR preview only",
+            Residents = [new ContractResident { ResidentId = resident.Id, Role = ResidentType.Representative, ResidenceFrom = today }] };
+        db.AddRange(room, resident, holding); await db.SaveChangesAsync();
+        var path = $"/api/v1/integrations/sepay/testing/holdings/{holding.Id}/transfer-instructions";
+        using var anonymous = scenario.Anonymous(); using var tenant = await scenario.Client(scenario.Tenants[0]);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync(path)).StatusCode);
+        using var owner = await scenario.Client(scenario.Owner);
+        var result = await owner.GetFromJsonAsync<BHome.Api.Controllers.PaymentsDebt.HoldingTestTransferInstructions>(path);
+        Assert.Equal("Test", result!.Mode); Assert.Equal("Draft", result.ContractStatus);
+        Assert.True(result.SignatureRequiredForActivation); Assert.Equal("100000", result.OutstandingAmount);
+        Assert.Matches("^BH[0-9]{8}$", result.TransferReference);
+        Assert.StartsWith("data:image/png;base64,", result.QrImageDataUri);
+        Assert.Contains(result.TransferReference, result.QrPayload);
+        Assert.Equal(Account, result.AccountNumber);
+        var again = await owner.GetFromJsonAsync<BHome.Api.Controllers.PaymentsDebt.HoldingTestTransferInstructions>(path);
+        Assert.Equal(result.TransferReference, again!.TransferReference);
+        db.ChangeTracker.Clear();
+        var unchanged = await db.Set<Contract>().Include(c => c.Signatures).SingleAsync(c => c.Id == holding.Id);
+        Assert.Equal(ContractStatus.Draft, unchanged.Status); Assert.Null(unchanged.ApprovedAt);
+        Assert.Null(unchanged.ActivatedAt); Assert.Empty(unchanged.Signatures);
+        Assert.Equal(RoomStatus.Available, (await db.Set<Room>().SingleAsync(r => r.Id == room.Id)).Status);
+        Assert.Empty(await db.Set<PaymentAllocation>().Where(x => x.TargetDepositContractId == holding.Id).ToArrayAsync());
+        unchanged.HoldingExpiryAt = DateTimeOffset.UtcNow.AddMinutes(-1); await db.SaveChangesAsync();
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.GetAsync(path)).StatusCode);
+        unchanged.HoldingExpiryAt = DateTimeOffset.UtcNow.AddDays(1); unchanged.IsDevelopmentDemo = false; await db.SaveChangesAsync();
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(path)).StatusCode);
+    }
+
+    [CompactPostgresFact]
+    public async Task AssignedStaffCanSimulateBothPartiesThenQrButOnlyVerifiedDepositAllowsSandboxOnHold()
+    {
+        await using var scenario = await Create();
+        await using var scope = scenario.Host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        async Task<Guid> Staff()
+        {
+            var email = Guid.NewGuid() + "@example.invalid";
+            return (await WorkflowTestUsers.CreateAsync(scope.ServiceProvider, new ApplicationUser { UserName = email, Email = email }, Roles.Staff, WorkflowTestUsers.Password)).Id;
+        }
+        var staffId = await Staff(); var unrelatedId = await Staff();
+        db.StaffLocationAssignments.Add(new StaffLocationAssignment(scenario.Location, staffId, scenario.Owner, today.AddDays(-1), today.AddDays(7)));
+        var room = new Room { LocationId = scenario.Location, RoomNumber = "SIM-QR-TEST", Capacity = 1, Status = RoomStatus.Available };
+        var resident = new Resident { RoomId = room.Id, OwnerUserId = scenario.Owner, DisplayLabel = "Synthetic signing simulation", VerificationStatus = IdentityVerificationStatus.Verified };
+        var c = new Contract { Kind = ContractKind.Holding, RoomId = room.Id, OwnerSignerId = scenario.Owner, RepresentativeResidentId = resident.Id,
+            StartDate = today, EndDate = today.AddMonths(1), HoldingExpiryAt = DateTimeOffset.UtcNow.AddDays(2), RequiredDeposit = 100000, MonthlyRent = 100000,
+            ApprovedAt = DateTimeOffset.UtcNow.AddMinutes(-1), ApprovedByUserId = scenario.Owner, ApprovalReason = "Synthetic reviewed fixture",
+            SigningMode = "INTERNAL_OTP_DRAWN", Status = ContractStatus.Draft, IsDevelopmentDemo = true, Terms = "Synthetic only",
+            Residents = [new ContractResident { ResidentId = resident.Id, Role = ResidentType.Representative, ResidenceFrom = today }] };
+        db.AddRange(room, resident, c); await db.SaveChangesAsync();
+        using var staff = await scenario.Client(staffId); using var unrelated = await scenario.Client(unrelatedId);
+        var root = $"/api/v1/integrations/sepay/testing/holdings/{c.Id}";
+        Assert.Equal(HttpStatusCode.NotFound, (await unrelated.GetAsync(root + "/simulation")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await staff.GetAsync(root + "/transfer-instructions")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await staff.PostAsync(root + "/simulation/activate", null)).StatusCode);
+        async Task<BHome.Api.Controllers.PaymentsDebt.HoldingSandboxState> Sim(string party)
+        {
+            var response = await staff.PostAsJsonAsync(root + "/simulation/signatures", new { participant = party, simulationOnly = true });
+            response.EnsureSuccessStatusCode(); return (await response.Content.ReadFromJsonAsync<BHome.Api.Controllers.PaymentsDebt.HoldingSandboxState>())!;
+        }
+        Assert.False((await Sim("Owner")).CanShowQr);
+        Assert.False((await Sim("Owner")).CanShowQr); // explicit retry is idempotent
+        Assert.True((await Sim("Tenant")).CanShowQr);
+        var reopened = await staff.GetFromJsonAsync<BHome.Api.Controllers.PaymentsDebt.HoldingSandboxState>(root + "/simulation");
+        Assert.True(reopened!.OwnerSimulated && reopened.TenantSimulated); Assert.Equal("Draft", reopened.ContractStatus);
+        var qr = await staff.GetFromJsonAsync<BHome.Api.Controllers.PaymentsDebt.HoldingTestTransferInstructions>(root + "/transfer-instructions");
+        Assert.StartsWith("data:image/png;base64,", qr!.QrImageDataUri);
+        Assert.Equal(HttpStatusCode.Conflict, (await staff.PostAsync(root + "/simulation/activate", null)).StatusCode);
+        (await scenario.Send(100000, code: qr.TransferReference)).EnsureSuccessStatusCode();
+        var verified = await staff.GetFromJsonAsync<BHome.Api.Controllers.PaymentsDebt.HoldingSandboxState>(root + "/simulation");
+        Assert.True(verified!.DepositVerified); Assert.False(verified.OnHold);
+        var activated = await staff.PostAsync(root + "/simulation/activate", null); activated.EnsureSuccessStatusCode();
+        Assert.True((await activated.Content.ReadFromJsonAsync<BHome.Api.Controllers.PaymentsDebt.HoldingSandboxState>())!.OnHold);
+        (await staff.PostAsync(root + "/simulation/activate", null)).EnsureSuccessStatusCode();
+        db.ChangeTracker.Clear();
+        var stored = await db.Set<Contract>().Include(x => x.Signatures).SingleAsync(x => x.Id == c.Id);
+        Assert.Equal(ContractStatus.Active, stored.Status); Assert.Empty(stored.Signatures); Assert.Equal("{}", stored.InternalAcceptance);
+        Assert.Equal(staffId, stored.ActivatedByUserId);
+        Assert.Equal(RoomStatus.OnHold, (await db.Set<Room>().SingleAsync(x => x.Id == room.Id)).Status);
+        Assert.Equal(100000, await db.Set<PaymentAllocation>().Where(x => x.TargetDepositContractId == c.Id).SumAsync(x => x.Amount));
+    }
+
+    [CompactPostgresFact]
     public async Task HoldingDepositPreservesApprovalExpiryAndOwnerActivationRules()
     {
         await using var scenario = await Create();

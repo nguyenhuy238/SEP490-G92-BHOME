@@ -70,6 +70,12 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
   };
 }
 export function signingMessage(error: unknown) {
+  const value = error as { code?: string; problem?: { code?: string } };
+  const code = value?.code ?? value?.problem?.code;
+  if (code === 'signing_otp_key_not_configured')
+    return 'Chưa cấu hình khóa xác minh OTP. Vui lòng liên hệ quản trị viên trước khi tạo lời mời ký.';
+  if (code === 'signing_email_not_configured')
+    return 'Chưa cấu hình dịch vụ gửi email ký hợp đồng. Vui lòng liên hệ quản trị viên.';
   const status = (error as { status?: number }).status;
   if (status === 503) return 'Chưa cấu hình dịch vụ gửi mã hoặc tài liệu. Vui lòng liên hệ Owner.';
   if (status === 429) return 'Bạn đã thử quá nhiều lần. Vui lòng chờ rồi thử lại.';

@@ -3,6 +3,7 @@ import { ApiError, infrastructureError, requestDiagnostic } from './api';
 import { groupVietnameseIntegerDigits } from './localization';
 import type { RoomConfiguration } from './propertySetup';
 import type { Page } from './invoices';
+import type { HoldingPreparation } from './holdingSettings';
 export const contractStates = [
   'Draft',
   'PendingSigning',
@@ -27,6 +28,8 @@ export interface ContractSummary {
   startDate: string;
   endDate: string;
   monthlyRent: string;
+  requiredDeposit?: string;
+  holdingExpiresAt?: string | null;
 }
 export interface ContractPage {
   items: ContractSummary[];
@@ -731,6 +734,7 @@ export function contractClient(request: ContractRequest) {
             typeof item.id !== 'string' ||
             typeof item.roomNumber !== 'string' ||
             typeof item.locationName !== 'string' ||
+            typeof item.kind !== 'string' ||
             typeof item.status !== 'string' ||
             typeof item.startDate !== 'string' ||
             typeof item.endDate !== 'string' ||
@@ -742,6 +746,11 @@ export function contractClient(request: ContractRequest) {
     },
     configuration: (signal?: AbortSignal) =>
       request<ContractConfiguration>(root + '/configuration', { signal }),
+    holdingPreparation: (roomId: string, signal?: AbortSignal) =>
+      request<HoldingPreparation>(
+        `${root}/holdings/preparation?roomId=${encodeURIComponent(roomId)}`,
+        { signal },
+      ),
     handover: (id: string, signal?: AbortSignal) =>
       request<HandoverView>(root + '/' + id + '/handover', { signal }),
     handoverHistory: (id: string, signal?: AbortSignal) =>
@@ -830,7 +839,7 @@ export function contractClient(request: ContractRequest) {
     meterTasks: (signal?: AbortSignal) =>
       request<FinalMeterTask[]>('/api/v1/capture/meter-tasks', { signal }),
     mutate: <T>(id: string | null, operation: string, body: unknown, key: string) =>
-      request<T>(root + (id ? `/${id}/${operation}` : ''), {
+      request<T>(root + (id ? `/${id}/${operation}` : operation === 'holdings' ? '/holdings' : ''), {
         method: 'POST',
         headers: { 'Idempotency-Key': key },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -880,6 +889,12 @@ export function certificateStatus(certificate: Certificate, now = Date.now()) {
 export const canUseCertificate = (certificate: Certificate) =>
   certificateStatus(certificate) === 'Có thể dùng';
 export const labels: Record<string, string> = {
+  holding_settings_required:
+    'Cơ sở chưa có cấu hình giữ chỗ. Owner cần lưu cấu hình trên Owner Web.',
+  holding_settings_changed_reload: 'Cấu hình giữ chỗ đã thay đổi. Hãy tải lại trước khi lưu.',
+  holding_configuration_changed_reload:
+    'Giá phòng hoặc cấu hình giữ chỗ đã thay đổi. Hãy tải lại trước khi tạo hợp đồng.',
+  invalid_holding_configuration: 'Kiểm tra số tháng giữ chỗ, hệ số tiền cọc và điều khoản.',
   Main: 'Hợp đồng thuê',
   Renewal: 'Gia hạn',
   Draft: 'Bản nháp',
@@ -1185,7 +1200,7 @@ export function contractActions(
   role: string,
   actorId: string,
 ): ContractAction[] {
-  if (c.onboardingDraft) return [];
+  if (c.kind === 'Main' && c.onboardingDraft) return [];
   const owner = role === 'Owner',
     staff = role === 'Staff',
     tenant = role === 'Tenant' && c.tenantUserId === actorId;

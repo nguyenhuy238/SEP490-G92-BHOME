@@ -5,6 +5,7 @@ export const portalRoutes = [
   '/configuration/assets',
   '/configuration/pricing-fees',
   '/configuration/policies',
+  '/configuration/holding-contracts',
   '/locations/loc-1/overview',
   '/rooms',
   '/room-types',

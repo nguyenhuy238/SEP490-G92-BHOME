@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { createApiClient } from '../../../../../packages/client-core/src/api';
-import { getApiBaseUrl } from '../../../../../packages/client-core/src/config';
+import { apiBaseUrl } from '../../services/config';
 import {
   contractClient,
   type ContractClient,
@@ -15,7 +15,7 @@ export function useContractsApi() {
     () =>
       contractClient(
         createApiClient(
-          getApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.DEV),
+          apiBaseUrl,
           () => client.session?.accessToken,
           client.clear,
           client.refresh,
@@ -36,7 +36,7 @@ export function useMainDraftApi() {
     () =>
       mainDraftClient(
         createApiClient(
-          getApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.DEV),
+          apiBaseUrl,
           () => client.session?.accessToken,
           client.clear,
           client.refresh,

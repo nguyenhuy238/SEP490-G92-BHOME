@@ -68,6 +68,7 @@ const PolicyTemplatesPage = lazy(() =>
   })),
 );
 const ResetPasswordPage = lazy(() => import('../features/auth/pages/ResetPasswordPage'));
+const HoldingSettingsPage = lazy(() => import('../features/contracts/pages/HoldingSettingsPage'));
 const ConfirmEmailPage = lazy(() => import('../features/auth/pages/ConfirmEmailPage'));
 const AcceptInvitationPage = lazy(() => import('../features/auth/pages/AcceptInvitationPage'));
 const AnonymousSigningPage = lazy(() => import('../features/contracts/pages/AnonymousSigningPage'));
@@ -92,6 +93,7 @@ export function AppRouter() {
               <Route path="/configuration/assets" element={<AssetCatalogPage />} />
               <Route path="/configuration/pricing-fees" element={<PricingFeeTemplatesPage />} />
               <Route path="/configuration/policies" element={<PolicyTemplatesPage />} />
+              <Route path="/configuration/holding-contracts" element={<HoldingSettingsPage />} />
               <Route path="/locations/:locationId" element={<LocationWorkspace />}>
                 <Route index element={<Navigate to="overview" replace />} />
                 <Route path="overview" element={<></>} />

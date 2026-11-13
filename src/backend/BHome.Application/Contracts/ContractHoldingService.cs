@@ -76,6 +76,14 @@ public sealed partial class ContractService
             var rent = prices.Charges.SingleOrDefault(x => x.ChargeCode == "RENT")
                 ?? throw ContractException.Conflict("rent_policy_required");
             Money(rent.Rate, false);
+            if (input.SettingsVersion is { } version)
+            {
+                var configured = await HoldingPreparationAsync(input.RoomId, token);
+                if (configured.SettingsVersion != version || configured.HoldingDeposit != input.HoldingDeposit ||
+                    configured.StartDate != input.StartDate || configured.EndDate != input.EndDate ||
+                    configured.ExpiresAt != input.ExpiresAt || configured.Terms != input.Terms.Trim())
+                    throw ContractException.Conflict("holding_configuration_changed_reload");
+            }
             var c = new Contract
             {
                 RoomId = input.RoomId,

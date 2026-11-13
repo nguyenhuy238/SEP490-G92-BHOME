@@ -143,7 +143,11 @@ export function RentalContractFlow({
                 <Heading
                   title="Ký hợp đồng"
                   detail={
-                    contract.isDevelopmentDemo ? 'Mô phỏng Development' : 'Chữ ký số qua MySign'
+                    contract.isDevelopmentDemo
+                      ? 'Mô phỏng Development'
+                      : contract.signingMode === 'INTERNAL_OTP_DRAWN'
+                        ? 'OTP và chữ ký xác nhận'
+                        : 'Ký số qua nhà cung cấp đã cấu hình'
                   }
                 />
                 {[
@@ -177,7 +181,7 @@ export function RentalContractFlow({
                       ? 'Hai bên đã ký. Tiếp tục kiểm tra tiền cọc.'
                       : state.owner === 'signed' || state.tenant === 'signed'
                         ? 'Chờ bên còn lại ký hợp đồng.'
-                        : 'Gửi yêu cầu và xác nhận trên ứng dụng MySign.'}
+                        : 'Thực hiện ký theo phương thức được cấu hình cho hợp đồng.'}
                 </Text>
                 {role === 'Staff' && (
                   <Text style={ui.muted}>

@@ -3,7 +3,7 @@ import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/ma
 import { Link, useLocation, useNavigate } from 'react-router';
 import { readAuthenticationFragment } from '../../../../../../packages/client-core/src/authLinks';
 import { createApiClient } from '../../../../../../packages/client-core/src/api';
-import { getApiBaseUrl } from '../../../../../../packages/client-core/src/config';
+import { apiBaseUrl } from '../../../services/config';
 import {
   internalSigningClient,
   signingMessage,
@@ -16,13 +16,7 @@ export default function AcceptInvitationPage() {
   useEffect(() => {
     if (location.hash) void navigate(location.pathname, { replace: true });
   }, [location.hash, location.pathname, navigate]);
-  const api = useMemo(
-    () =>
-      internalSigningClient(
-        createApiClient(getApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.DEV)),
-      ),
-    [],
-  );
+  const api = useMemo(() => internalSigningClient(createApiClient(apiBaseUrl)), []);
   const [email, setEmail] = useState(link.userName),
     [token, setToken] = useState(link.token),
     [password, setPassword] = useState(''),
