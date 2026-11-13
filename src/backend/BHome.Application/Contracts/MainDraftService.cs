@@ -186,6 +186,17 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             var existing = await data.FilesAsync(id, c.SnapshotHash, t);
             var docx = existing.FirstOrDefault(f => f.Kind == ContractFileKind.DraftDocx);
             var pdf = existing.FirstOrDefault(f => f.Kind == ContractFileKind.DraftPdf);
+            // Existing database metadata is not proof that storage accepted a prior upload.
+            // Only this explicit Draft-generation operation may replace an unavailable file;
+            // retain every old record and never change an approved/signed document in place.
+            var storedDocx = docx is null ? null : await ReusableDraftFile(docx, t);
+            if (storedDocx is null) docx = null;
+            if (pdf is not null)
+            {
+                var storedPdf = await ReusableDraftFile(pdf, t);
+                if (storedPdf is null) pdf = null;
+                else CryptographicOperations.ZeroMemory(storedPdf);
+            }
             byte[] bytes;
             if (docx is null)
             {
@@ -194,8 +205,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             }
             else
             {
-                using var buffer = new MemoryStream(); await storage.CopyToAsync(docx.ObjectKey, buffer, t); bytes = buffer.ToArray();
-                if (bytes.Length != docx.Length || Convert.ToHexString(SHA256.HashData(bytes)) != docx.FileHash) throw ContractException.Conflict("contract_document_integrity_failed");
+                bytes = storedDocx!;
             }
             string? error = null;
             if (pdf is null)
@@ -206,6 +216,20 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             repository.Audit(Actor, "MainDraftDocumentsGenerated", id, clock.GetUtcNow());
             return new MainDraftFiles(FileView(docx), pdf is null ? null : FileView(pdf), error);
         }, t);
+    }
+    private async Task<byte[]?> ReusableDraftFile(ContractDocumentFile file, CancellationToken t)
+    {
+        using var buffer = new MemoryStream();
+        try
+        {
+            await storage.CopyToAsync(file.ObjectKey, buffer, t);
+            var bytes = buffer.ToArray();
+            if (bytes.Length == file.Length && FileHash(bytes) == file.FileHash) return bytes;
+            CryptographicOperations.ZeroMemory(bytes);
+            return null;
+        }
+        catch (FileNotFoundException) { return null; }
+        finally { CryptographicOperations.ZeroMemory(buffer.GetBuffer().AsSpan(0, (int)buffer.Length)); }
     }
     private async Task<ContractDocumentFile> Store(Contract c, byte[] bytes, string contentType, ContractFileKind kind, string extension, CancellationToken t)
     {
@@ -230,7 +254,9 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         var c = await Load(id, t);
         var f = await data.FileAsync(id, fileId, t) ?? throw ContractException.Missing();
         if (f.Kind is not (ContractFileKind.DraftDocx or ContractFileKind.DraftPdf or ContractFileKind.SigningReview) || f.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("draft_document_outdated");
-        using var buffer = new MemoryStream(); await storage.CopyToAsync(f.ObjectKey, buffer, t);
+        using var buffer = new MemoryStream();
+        try { await storage.CopyToAsync(f.ObjectKey, buffer, t); }
+        catch (FileNotFoundException) { throw new ContractException(404, "draft_document_missing"); }
         if (buffer.Length != f.Length || Convert.ToHexString(SHA256.HashData(buffer.ToArray())) != f.FileHash) throw ContractException.Conflict("contract_document_integrity_failed");
         buffer.Position = 0; await buffer.CopyToAsync(output, t); return f.ContentType;
     }
@@ -286,7 +312,11 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         {
             var c = await Load(id, t); var (state, settings, prep) = await ReviewInputs(c, t);
             var existing = (await data.FilesAsync(id, c.SnapshotHash, t)).FirstOrDefault(f => f.Kind == ContractFileKind.SigningReview);
-            if (existing is not null) return FileView(existing);
+            if (existing is not null)
+            {
+                var stored = await ReusableDraftFile(existing, t);
+                if (stored is not null) { CryptographicOperations.ZeroMemory(stored); return FileView(existing); }
+            }
             var docx = await renderer.DocxAsync(new(c, state, settings, await data.IdentityAsync(c.RoomId, c.RepresentativeResidentId, t),
                 c.Room.Location.Name, c.Room.RoomNumber, c.Room.Location.Address, prep.Residents.Where(r => !r.Representative).Select(r => r.FullName).ToArray(), SigningReview: true), t);
             var file = await Store(c, await renderer.PdfAsync(docx, t), "application/pdf", ContractFileKind.SigningReview, "pdf", t);
@@ -321,7 +351,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                 throw ContractException.Conflict("room_contract_conflict");
             var review = await data.FileAsync(id, input.ReviewedFileId, t) ?? throw ContractException.Missing();
             if (review.Kind != ContractFileKind.SigningReview || review.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("draft_document_outdated");
-            using var bytes = new MemoryStream(); await storage.CopyToAsync(review.ObjectKey, bytes, t);
+            using var bytes = new MemoryStream(); await CopyFileAsync(id, review.Id, bytes, t);
             if (bytes.Length != review.Length || FileHash(bytes.ToArray()) != review.FileHash) throw ContractException.Conflict("contract_document_integrity_failed");
             representative.TenantUserId = input.TenantUserId; c.TenantUserId = input.TenantUserId;
             c.SigningMode = input.TenantUserId is null ? ContractSigningModes.Internal : "";
