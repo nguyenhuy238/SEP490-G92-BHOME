@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Checkbox, Text } from 'react-native-paper';
 import {
   contractClient,
@@ -18,7 +18,6 @@ import { useSession } from '../../lib/SessionProvider';
 import { randomUUID } from '../../lib/randomUUID';
 import { ContractPdfPreview } from './ContractPdfPreview';
 import { previewErrorCode, requiresNewDocument } from './pdfPreview';
-import { useCallback } from 'react';
 
 export function MainDraftSigningReview({
   client,
@@ -27,6 +26,7 @@ export function MainDraftSigningReview({
   onOpenPdf,
   onBusyChange,
   onDownloadPdf,
+  onDraftChanged,
 }: {
   client: ReturnType<typeof mainDraftClient>;
   draft: MainDraftView;
@@ -34,6 +34,7 @@ export function MainDraftSigningReview({
   onOpenPdf: (document: PreviewDocument) => void;
   onBusyChange?: (busy: boolean) => void;
   onDownloadPdf?: (document: PreviewDocument) => void;
+  onDraftChanged?: (draft: MainDraftView) => void;
 }) {
   const { api, session } = useSession();
   const owner = !!session?.roles.includes('Owner');
@@ -46,6 +47,7 @@ export function MainDraftSigningReview({
   const [tenant, setTenant] = useState('');
   const [file, setFile] = useState<PreviewDocument | null>(null);
   const [reviewed, setReviewed] = useState(false);
+  const [readyFile, setReadyFile] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
@@ -57,9 +59,12 @@ export function MainDraftSigningReview({
   const lock = useRef(false),
     alive = useRef(true);
   const invalidateDocument = useCallback((failure: unknown) => {
+    setReviewed(false);
+    setReadyFile('');
     if (requiresNewDocument(failure)) {
       setFile(null);
       setReviewed(false);
+      setReadyFile('');
       setError(mainDraftMessages[previewErrorCode(failure)] ?? contractError(failure));
     }
   }, []);
@@ -85,12 +90,32 @@ export function MainDraftSigningReview({
     return () => controller.abort();
   }, [owner, api, revision]);
   async function run(release: boolean) {
-    if (lock.current || !owner || (release && (!file || !reviewed || !tenant))) return;
+    if (
+      lock.current ||
+      !owner ||
+      (release && (!file || readyFile !== file.id || !reviewed || !tenant))
+    )
+      return;
     lock.current = true;
     setBusy(true);
     onBusyChange?.(true);
     setError('');
     try {
+      const latest = await client.get(draft.id);
+      if (!alive.current) return;
+      if (latest.status !== 'Draft') {
+        setFile(null);
+        setReviewed(false);
+        onReleased(latest.id);
+        return;
+      }
+      if (latest.version !== draft.version) {
+        setFile(null);
+        setReadyFile('');
+        setReviewed(false);
+        onDraftChanged?.(latest);
+        throw { code: 'draft_version_or_status_changed' };
+      }
       if (release) {
         const input = {
           tenantUserId: tenant === '__internal__' ? null : tenant,
@@ -103,11 +128,17 @@ export function MainDraftSigningReview({
         if (alive.current) onReleased(result.id);
       } else {
         setReviewed(false);
+        setReadyFile('');
         setFile(null);
         const result = await client.signingReview(draft.id);
         if (alive.current) setFile(result);
       }
     } catch (e) {
+      setReviewed(false);
+      if (requiresNewDocument(e)) {
+        setFile(null);
+        setReadyFile('');
+      }
       const code = (e as { code?: string }).code;
       if (alive.current) setError((code && mainDraftMessages[code]) || contractError(e));
     } finally {
@@ -158,7 +189,7 @@ export function MainDraftSigningReview({
           </Text>
         )}
         <Action secondary disabled={busy || loading} onPress={() => void run(false)}>
-          {busy ? 'Đang xử lý…' : 'Tạo PDF đưa đi ký'}
+          {busy ? 'Đang xử lý…' : 'Tạo bản PDF để duyệt'}
         </Action>
         <Action secondary disabled={busy || loading} onPress={() => setRevision((v) => v + 1)}>
           Tải lại tài khoản
@@ -180,20 +211,21 @@ export function MainDraftSigningReview({
           onDownloadPdf={onDownloadPdf ? () => onDownloadPdf(file) : undefined}
           onOpenDocx={() => {}}
           onDocumentError={invalidateDocument}
+          onReady={setReadyFile}
         />
       )}
       <Box>
         <Checkbox.Item
           label="Tôi đã xem PDF và xác nhận người đại diện, cách ký"
           status={reviewed ? 'checked' : 'unchecked'}
-          disabled={!file || !tenant || busy}
+          disabled={!file || readyFile !== file.id || !tenant || busy}
           onPress={() => setReviewed((v) => !v)}
         />
         <Action
-          disabled={!file || !tenant || !reviewed || busy || loading}
+          disabled={!file || readyFile !== file.id || !tenant || !reviewed || busy || loading}
           onPress={() => void run(true)}
         >
-          Xác nhận chuyển sang ký
+          Duyệt và chuyển sang chờ ký
         </Action>
       </Box>
     </>

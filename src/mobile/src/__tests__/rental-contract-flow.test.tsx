@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React from 'react';
+import React, { useEffect } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ContractView, Readiness } from '../../../../packages/client-core/src/contracts';
@@ -119,9 +119,18 @@ vi.mock('../features/contracts/ContractWorkflowPanel', () => ({
   ContractWorkflowPanel: () => <span>Private documents</span>,
 }));
 vi.mock('../features/contracts/ContractPdfPreview', () => ({
-  ContractPdfPreview: ({ document }: { document: { id: string } }) => (
-    <span>Private PDF {document.id}</span>
-  ),
+  ContractPdfPreview: ({
+    document,
+    onReady,
+  }: {
+    document: { id: string };
+    onReady?: (id: string) => void;
+  }) => {
+    useEffect(() => {
+      onReady?.(document.id);
+    }, [document.id, onReady]);
+    return <span>Private PDF {document.id}</span>;
+  },
 }));
 import { RentalContractFlow } from '../features/contracts/RentalContractFlow';
 import { MainDraftSigningReview } from '../features/contracts/MainDraftSigningReview';
@@ -269,6 +278,7 @@ it('does not offer Owner signing or financial controls to Staff', () => {
 it('allows Owner release only with an actual reviewed file, selected Tenant and explicit confirmation, preventing double submission', async () => {
   let resolve!: (value: unknown) => void;
   state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/draft')) return { id: 'draft', status: 'Draft', version: 4 };
     if (path.endsWith('/accounts')) return [{ id: 'tenant', label: 'Tenant tổng hợp' }];
     if (path.endsWith('/signing-review')) return { id: 'review', developmentOnly: true };
     if (path.endsWith('/release'))
@@ -287,14 +297,14 @@ it('allows Owner release only with an actual reviewed file, selected Tenant and 
     />,
   );
   const submit = screen.getByRole('button', {
-    name: 'Xác nhận chuyển sang ký',
+    name: 'Duyệt và chuyển sang chờ ký',
   }) as HTMLButtonElement;
   expect(submit.disabled).toBe(true);
   await screen.findByText('Tenant tổng hợp');
   fireEvent.change(screen.getByLabelText('Người đại diện ký hợp đồng'), {
     target: { value: 'tenant' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo PDF đưa đi ký' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo bản PDF để duyệt' }));
   await screen.findByText('Private PDF review');
   expect(submit.disabled).toBe(true);
   fireEvent.click(screen.getByRole('checkbox'));
@@ -315,6 +325,7 @@ it('allows Owner release only with an actual reviewed file, selected Tenant and 
 });
 it('releases an Owner-reviewed new Tenant draft through the supported anonymous signing branch', async () => {
   state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/draft')) return { id: 'draft', status: 'Draft', version: 4 };
     if (path.endsWith('/accounts')) return [];
     if (path.endsWith('/signing-review')) return { id: 'review', developmentOnly: true };
     if (path.endsWith('/release')) return { id: 'draft' };
@@ -333,10 +344,10 @@ it('releases an Owner-reviewed new Tenant draft through the supported anonymous 
   fireEvent.change(screen.getByLabelText('Người đại diện ký hợp đồng'), {
     target: { value: '__internal__' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo PDF đưa đi ký' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo bản PDF để duyệt' }));
   await screen.findByText('Private PDF review');
   fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chuyển sang ký' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Duyệt và chuyển sang chờ ký' }));
   await waitFor(() => expect(released).toHaveBeenCalledWith('draft'));
   const release = state.request.mock.calls.find(([path]) => path.endsWith('/release'))!;
   expect(JSON.parse(release[1].body)).toEqual({

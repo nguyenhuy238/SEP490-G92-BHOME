@@ -85,6 +85,9 @@ vi.mock('../components/WorkspaceKit', () => ({
   ui: {},
 }));
 vi.mock('../components/WorkflowControls', () => ({ ChoiceField: () => null }));
+vi.mock('../features/workspace/useWorkspaceQuery', () => ({
+  useWorkspaceQuery: () => ({ data: null, error: '', loading: false, reload: vi.fn() }),
+}));
 vi.mock('../components/CameraCapture', () => ({ CameraCapture: () => <span>Upload camera</span> }));
 vi.mock('../features/contracts/ContractProgress', () => ({
   ContractProgress: () => <span>Contract progress</span>,
@@ -287,6 +290,8 @@ it.each([true, false])('gates Owner Main activation on backend readiness=%s', (r
   };
   render(<ContractScreen />);
   fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Xem tiền cọc' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra kích hoạt' }));
   expect(
     (screen.getByRole('button', { name: 'Kích hoạt hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(!ready);

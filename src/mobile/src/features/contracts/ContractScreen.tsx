@@ -45,6 +45,7 @@ import { defaultStaffContractListView } from './staffContractList';
 import { mobileContractActions } from './contractSections';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { OwnerHoldingSigning } from '../owner/OwnerHoldingSigning';
+import { OwnerMainContractFlow } from '../owner/OwnerMainContractFlow';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -232,7 +233,8 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
           role={role}
           actorId={session.userId}
           initialSection={
-            role === 'Tenant' && contractSections.some((item) => item.id === params.section)
+            ['Tenant', 'Owner'].includes(role) &&
+            contractSections.some((item) => item.id === params.section)
               ? (params.section as ContractSection)
               : 'overview'
           }
@@ -410,6 +412,12 @@ function LiveContractDetail({
   const signer =
     (role === 'Tenant' && c.tenantUserId === actorId) ||
     (c.kind === 'Holding' && role === 'Owner' && c.ownerSignerId === actorId);
+  const ownerMain =
+    role === 'Owner' &&
+    c.kind === 'Main' &&
+    !c.onboardingDraft &&
+    ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status) &&
+    ['overview', 'signing'].includes(section);
   return (
     <>
       {!rental && (
@@ -457,7 +465,18 @@ function LiveContractDetail({
           onList={onList}
         />
       )}
-      {section === 'overview' && !rental && <ContractProgress contract={c} readiness={r} />}
+      {ownerMain && (
+        <OwnerMainContractFlow
+          api={api}
+          contract={c}
+          readiness={r}
+          actorId={actorId}
+          onChanged={detail.reload}
+        />
+      )}
+      {section === 'overview' && !rental && !ownerMain && (
+        <ContractProgress contract={c} readiness={r} />
+      )}
       <Button
         disabled={uploading}
         onPress={() => {
@@ -512,7 +531,7 @@ function LiveContractDetail({
           </Box>
         </>
       )}
-      {section === 'signing' && !rental && (
+      {section === 'signing' && !rental && !ownerMain && (
         <Box>
           <Heading title="Chữ ký và bằng chứng" />
           {[
@@ -548,10 +567,10 @@ function LiveContractDetail({
             )}
         </Box>
       )}
-      {section === 'signing' && role === 'Owner' && (
+      {section === 'signing' && role === 'Owner' && !ownerMain && (
         <OwnerHoldingSigning api={api} contract={c} onChanged={detail.reload} />
       )}
-      {((section === 'signing' && !rental) || section === 'history') && (
+      {((section === 'signing' && !rental && !ownerMain) || section === 'history') && (
         <ContractWorkflowPanel
           api={api}
           contract={c}
@@ -576,7 +595,7 @@ function LiveContractDetail({
           hoạt.
         </Text>
       )}
-      {section === 'signing' && !rental && r && (
+      {section === 'signing' && !rental && !ownerMain && r && (
         <Box>
           <Heading title="Điều kiện kích hoạt" />
           <Text>Cọc đã xác minh: {formatContractMoney(r.verifiedDeposit)}</Text>
@@ -706,7 +725,8 @@ function LiveContractDetail({
           }}
         />
       )}
-      {!(rental && section === 'signing') &&
+      {!ownerMain &&
+        !(rental && section === 'signing') &&
         actions.some((a) => contractActionSection(a.operation) === section) && (
           <Box>
             <Heading title="Thao tác theo trạng thái" />

@@ -38,6 +38,7 @@ import { ToastHost } from '../../components/ToastHost';
 import { showSuccess } from '../../lib/toast';
 import { previewErrorCode, requiresNewDocument } from './pdfPreview';
 import { deliverWebDocument, openPdfWindow } from './webContractDocument';
+import { ownerContractSteps } from '../owner/ownerContractSteps';
 
 const iso = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -73,7 +74,8 @@ export function MainDraftScreen({
   persistRoute?: boolean;
   onReleased?: (id: string) => void;
 }) {
-  const { api } = useSession();
+  const { api, session } = useSession();
+  const owner = !!session?.roles.includes('Owner');
   const client = useMemo(
     () => (api ? mainDraftClient((path, init, type) => api.request(path, init, type)) : null),
     [api],
@@ -92,6 +94,8 @@ export function MainDraftScreen({
   const [signingVisited, setSigningVisited] = useState(false);
   const [documents, setDocuments] = useState<MainDraftFiles | null>(null);
   const [reviewRevision, setReviewRevision] = useState(0);
+  const [readyFile, setReadyFile] = useState(''),
+    [documentBlocker, setDocumentBlocker] = useState('');
   const [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true),
     [error, setError] = useFeedbackState('error', false);
@@ -105,11 +109,18 @@ export function MainDraftScreen({
   const calendarClose = useRef<(() => void) | null>(null);
   const routePromotion = useRef<{ id: string; client: typeof client } | null>(null);
   const refs = useRef({ roomId, representativeResidentId, residentIds });
+  const releasedHandler = useRef(onReleased);
+  useEffect(() => {
+    releasedHandler.current = onReleased;
+  }, [onReleased]);
   const invalidateDocument = useCallback(
     (error: unknown) => {
+      setReadyFile('');
       if (!requiresNewDocument(error)) return;
       setDocuments(null);
       setReviewRevision((value) => value + 1);
+      setReadyFile('');
+      setDocumentBlocker(previewErrorCode(error));
       setError(message(error));
     },
     [setError],
@@ -140,6 +151,10 @@ export function MainDraftScreen({
         if (initialId) {
           const draft = await client!.get(initialId, controller.signal);
           if (controller.signal.aborted) return;
+          if (owner && draft.status !== 'Draft') {
+            releasedHandler.current?.(draft.id);
+            return;
+          }
           setId(draft.id);
           setSaved(draft);
           setPreparation(draft.preparation);
@@ -175,7 +190,7 @@ export function MainDraftScreen({
     }
     void load();
     return () => controller.abort();
-  }, [client, initialId, revision, setError]);
+  }, [client, initialId, revision, setError, owner]);
   function input(): MainDraftInput | null {
     const errors: Record<string, string> = {};
     let from = '',
@@ -233,6 +248,8 @@ export function MainDraftScreen({
       keys.confirmed('main-draft', body);
       if (!alive.current) return;
       setId(result.id);
+      setReadyFile('');
+      setDocumentBlocker('');
       setDocuments(null);
       setReviewRevision((value) => value + 1);
       setSaved(result);
@@ -339,6 +356,11 @@ export function MainDraftScreen({
   }
   async function reviewSaved(confirm: boolean) {
     if (!client || !saved || lock.current) return;
+    if (confirm && owner && (!documents?.pdf || readyFile !== documents.pdf.id)) return;
+    if (!confirm && documentBlocker.includes('save_again')) {
+      setMode('edit');
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError('');
@@ -444,6 +466,7 @@ export function MainDraftScreen({
   const edit = (setter: (v: string) => void) => (value: string) => {
     setter(value);
     dirty.current = true;
+    setReadyFile('');
     setDocuments(null);
   };
   const representative = preparation?.residents.find((r) => r.representative);
@@ -479,7 +502,10 @@ export function MainDraftScreen({
                 contentContainerStyle={styles.content}
                 keyboardShouldPersistTaps="handled"
               >
-                <RentalContractStepper current={mode === 'signing' ? 1 : 0} />
+                <RentalContractStepper
+                  current={mode === 'signing' ? 1 : 0}
+                  steps={owner ? ownerContractSteps : undefined}
+                />
                 {loading && <ActivityIndicator accessibilityLabel="Đang tải dữ liệu hợp đồng" />}
                 {!!error && (
                   <Text accessibilityRole="alert" style={styles.error}>
@@ -596,6 +622,22 @@ export function MainDraftScreen({
                           onReleased={(next) => (onReleased ? onReleased(next) : onList())}
                           onOpenPdf={(file) => void openFile(true, file, true)}
                           onDownloadPdf={(file) => void openFile(true, file)}
+                          onDraftChanged={(latest) => {
+                            setDocuments(null);
+                            setReadyFile('');
+                            setSigningVisited(false);
+                            setSaved(latest);
+                            setPreparation(latest.preparation);
+                            refs.current = latest.input;
+                            setStart(displayContractDate(latest.input.startDate));
+                            setEnd(displayContractDate(latest.input.endDate));
+                            setPhone(latest.input.tenantPhone);
+                            setEmail(latest.input.tenantEmail ?? '');
+                            setPlace(latest.input.tenantPlaceOfIssue);
+                            setNotes(latest.input.notes);
+                            dirty.current = false;
+                            setMode('preview');
+                          }}
                         />
                       </View>
                     )}
@@ -684,6 +726,7 @@ export function MainDraftScreen({
                         onOpenPdf={() => void openFile(true, undefined, true)}
                         onDownloadPdf={() => void openFile(true)}
                         onDocumentError={invalidateDocument}
+                        onReady={setReadyFile}
                         onOpenDocx={() => void openFile(false)}
                       />
                     ) : null}
@@ -735,10 +778,15 @@ export function MainDraftScreen({
                         labelStyle={{ fontSize: 12 }}
                         contentStyle={{ minHeight: 48 }}
                         mode="contained"
-                        disabled={busy || readOnly || !documents?.pdf}
+                        disabled={
+                          busy ||
+                          readOnly ||
+                          !documents?.pdf ||
+                          (owner && readyFile !== documents.pdf.id)
+                        }
                         onPress={() => void reviewSaved(true)}
                       >
-                        Tiếp tục ký hợp đồng
+                        {owner ? 'Tiếp tục duyệt hợp đồng' : 'Tiếp tục ký hợp đồng'}
                       </Button>
                     ) : (
                       <Button

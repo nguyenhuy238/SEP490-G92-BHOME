@@ -23,4 +23,8 @@ Yêu cầu trực tiếp ngày 13/11/2026; BF-03/04, UC-15/16, GBR-04, BR-07/09 
 
 ## Kết quả
 
-Cập nhật theo lệnh thực chạy và commit từng giai đoạn; chưa tuyên bố provider/MySign/bank E2E.
+Giai đoạn 1: `a5d46ae` — bounded preview metadata/page, phân biệt conflict, hủy request cũ, bỏ stale documents khi save, khôi phục theo latest draft, tách Xem/Tải PDF qua authenticated bytes; kiểm MIME và signature, cleanup Blob/cache. Lint, typecheck và format PASS; full Mobile 99 files / 1.071 tests PASS; recovery test mới chạy riêng 14/14 PASS sau đó. Không thay backend source.
+
+Giai đoạn 2: Owner Main có bốn bước riêng; bước duyệt nháp yêu cầu PDF hiện tại đọc được, xóa checkbox khi lỗi hoặc file/version đổi, re-read draft trước generation/release. Không coi release là ký. OwnerMainContractFlow dùng trạng thái MySign/chấp thuận nội bộ theo signingMode, số cọc/readiness backend và actions hiện có. Owner route nhận draft không còn Draft chuyển về contract thật, không giữ mainDraftId cũ. Staff/Tenant giữ flow và nhãn bước đang có.
+
+API deposit-payment hiện chỉ trả position/reference; chưa có endpoint QR cọc. Không tạo QR giả hoặc dùng QR invoice thay cọc. Theo dõi tiền cọc và xác minh dùng endpoint hiện có; activation vẫn phụ thuộc readiness backend.
