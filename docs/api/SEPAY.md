@@ -1,5 +1,9 @@
 # Tích hợp SePay và hướng dẫn Test Mode
 
+Thành viên mới bắt đầu từ [SePay Team Setup](../development/SEPAY_TEAM_SETUP.md).
+Các biên bản runtime cũ mô tả máy/tunnel tại thời điểm kiểm tra; không dùng chúng làm cấu hình
+mặc định cho team. Source, template và script trong Git không chứa token hoặc credential dùng chung.
+
 ## Workspace kiểm thử Sandbox (13/11/2026)
 
 `GET /api/v1/integrations/sepay/testing-context` yêu cầu Owner JWT. Trả HTTP 200

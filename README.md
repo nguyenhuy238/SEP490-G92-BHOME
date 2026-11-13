@@ -60,6 +60,10 @@ npm.cmd --version
 docker compose version
 ```
 
+Phát triển thanh toán SePay: xem [hướng dẫn Sandbox cho team](docs/development/SEPAY_TEAM_SETUP.md)
+để tạo profile/database riêng, seed Invoice tổng hợp, chạy webhook/polling và kiểm tra trước khi tạo PR.
+Không sao chép token, webhook secret, database hoặc `.tmp` của thành viên khác.
+
 Thư mục `.tools/` trên máy khởi tạo không được lưu trong Git. Thành viên mới cần tự cài công cụ.
 Nếu đã có bộ công cụ portable trong `.tools/`, nạp PATH cho phiên PowerShell hiện tại bằng
 `. ./scripts/Use-LocalTools.ps1`.
