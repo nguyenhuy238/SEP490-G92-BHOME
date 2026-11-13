@@ -41,6 +41,27 @@ Các mutation, state, idempotency và giới hạn provider/ledger giữ theo
 ## Metadata tương thích ngược
 
 - `GET /api/v1/contracts/{id}` bổ sung `locationId` từ Room được server truy vấn.
+
+### Giá và phí thỏa thuận theo hợp đồng (13/11/2026)
+
+BF-01 / BF-03 / BF-05, UC-07/15/19/21, GBR-08/09: API detail bổ sung `agreedCharges` nullable,
+gồm `policyId`, `chargeCode`, `name?`, `category`, `method`, `rate` (decimal string),
+`effectiveFrom`, `effectiveTo`, `version`. Đây là giá thỏa thuận của hợp đồng, không phải biểu phí hiện tại của cơ sở.
+`priceLockedAt` ghi thời điểm bắt đầu ký Main/Renewal hoặc kế thừa thời điểm khóa Holding khi chuyển đổi.
+Holding vẫn chỉ đạt lock nghiệp vụ khi đủ chữ ký và cọc xác minh; Owner approval đã giữ nguyên toàn bộ phí.
+
+Direct Main, Renewal và Holding draft lưu danh sách giá trong snapshot Compact24 hiện hữu; Main Draft release
+dùng dữ liệu đã xem xét và bảo vệ, không tự lấy giá mới. Holding approval từ chối nếu danh sách/phiên bản giá đã đổi
+kể từ lúc tạo draft. Conversion giữ nguyên tất cả khoản thu của Holding, kể cả điện/nước/dịch vụ và giá thuê.
+Snapshot v1 đưa danh sách phí vào hash điều khoản ký, giữ hash tương thích với Holding lịch sử v0.
+Hợp đồng cùng phòng có thời gian chồng lấn phải có cùng mã phí, loại, cách tính và đơn giá khi bắt đầu ký/duyệt;
+renewal tiếp nối sau ngày kết thúc có snapshot mới, không cập nhật hợp đồng cũ.
+
+Thiếu giá điện/nước, đơn vị không hỗ trợ hoặc snapshot bị thiếu/sai: backend trả blocker/409, không suy diễn 0
+hoặc lấy biểu phí sống để bù. Cấu hình UtilityProfile có công thức nhiều bậc/định mức đang có hiệu lực trong kỳ
+hợp đồng mới trả `contract_utility_profile_requires_review` cho đến khi có cơ chế snapshot tariff được duyệt.
+Hợp đồng đã ràng buộc giá phẳng tiếp tục dùng snapshot. Legacy Main đã ký không có snapshot không được tự backfill
+từ cấu hình hiện tại; cần đối chiếu dữ liệu thỏa thuận gốc trước khi phát hành hóa đơn/quyết toán.
 - `GET /api/v1/capture/meter-tasks` bổ sung `contractId` và `confirmedReadingId` nullable,
   giữ nguyên scope Owner/Staff và giới hạn 100 tác vụ hiện có. UI Staff dùng để chọn reading
   Final (`purpose=2`) đúng hợp đồng, loại đồng hồ và ngày kiểm tra; backend kiểm tra lại tất cả.

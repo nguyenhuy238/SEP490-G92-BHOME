@@ -11,6 +11,7 @@ import { RoomTypesApiPage } from '../../room-types/pages/RoomTypesApiPage';
 import { PortalProvider } from '../../../app/PortalProvider';
 import { LocationWorkspaceSettings } from './LocationWorkspaceSettings';
 import { EndPolicyDialog } from '../components/EndPolicyDialog';
+import { ScheduleForm } from '../../invoices/BillingConfigurationPage';
 
 const state = vi.hoisted(() => ({ request: vi.fn(), roles: ['Owner'] }));
 vi.mock('../../property/usePropertySetupApi', () => ({
@@ -42,12 +43,39 @@ beforeEach(() => {
   state.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (init?.method) return {};
     if (path.endsWith('/room-defaults') || path.endsWith('/history')) return [roomType];
+    if (path.includes('/utility-tariffs')) return [];
     if (path.includes('/asset-templates?')) return [];
     if (path.endsWith('/rooms')) return [{ id: 'room', label: 'P.101' }];
     return { items: [], totalCount: 0 };
   });
 });
 afterEach(cleanup);
+it('always saves the agreed contract rent source even for a legacy room-price schedule', async () => {
+  const onSaved = vi.fn();
+  mount(<ScheduleForm location="location" current={{ locationId: 'location', rateDate: 1,
+    rentSource: 0, partialMonth: 0, rounding: 0, draftDay: 1, draftMonthOffset: 0,
+    finalDay: 2, finalMonthOffset: 0, dueDay: 5, dueMonthOffset: 0, version: 2 }} onSaved={onSaved} />);
+  expect(screen.getByLabelText('Nguồn tiền thuê cả phòng')).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu quy tắc hóa đơn' }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalled());
+  const write = state.request.mock.calls.find(([path, init]) => path === '/api/v1/billing-schedules' && init?.method === 'PUT');
+  expect(JSON.parse(write![1].body)).toMatchObject({ rentSource: 1, expectedVersion: 2 });
+});
+it('opens utility configuration within pricing and keeps billing policy creation separate', async () => {
+  mount(<LocationPricingWorkspace locationId="location" />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Điện & nước' }));
+  expect(await screen.findByRole('tab', { name: 'Công tơ & Chỉ số' })).toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: 'Thêm biểu giá điện nước' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Thêm khoản thu' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Giá thuê' }));
+  expect(screen.getByRole('button', { name: 'Thêm khoản thu' })).toBeInTheDocument();
+});
+
+it('opens the utility section directly for legacy utility navigation', async () => {
+  mount(<LocationPricingWorkspace locationId="location" initialTab={3} />);
+  expect(await screen.findByRole('tab', { name: 'Biểu giá' })).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: 'Điện & nước' })).toHaveAttribute('aria-selected', 'true');
+});
 function mount(child: React.ReactNode) {
   return render(
     <QueryClientProvider

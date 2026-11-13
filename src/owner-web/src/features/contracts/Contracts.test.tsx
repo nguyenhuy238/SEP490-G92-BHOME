@@ -224,6 +224,18 @@ function setup(c = draft, ready = false, m: MoveOut | null = null) {
     ),
   };
 }
+it('shows frozen contract charges instead of fetching mutable room rates', async () => {
+  const { api, request } = setup({ ...draft, priceLockedAt: '2026-10-01T00:00:00Z', agreedCharges: [
+    { policyId: id, chargeCode: 'WATER', category: 2, method: 1, rate: '15000', name: 'Nước đã chốt', effectiveFrom: '2026-10-01', effectiveTo: null, version: 1 },
+    { policyId: id, chargeCode: 'INTERNET', category: 3, method: 0, rate: '100000', name: 'Internet đã chốt', effectiveFrom: '2026-10-01', effectiveTo: null, version: 1 },
+  ] });
+  mount(<ContractDetailPanel api={api} id={id} actorId={owner} locationId={id} onChanged={vi.fn()} />);
+  expect(await screen.findByText('Nước đã chốt · WATER')).toBeInTheDocument();
+  expect(screen.getByText('15.000 đ/m³')).toBeInTheDocument();
+  expect(screen.getByText('100.000 đ/tháng')).toBeInTheDocument();
+  expect(request.mock.calls.every(([path]) => !path.includes('/prices?'))).toBe(true);
+});
+
 it('shows backend blockers and exact VND, and keeps activation disabled for insufficient verified deposit', async () => {
   const { api, request } = setup();
   mount(

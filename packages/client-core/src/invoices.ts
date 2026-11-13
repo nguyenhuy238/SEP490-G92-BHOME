@@ -181,6 +181,7 @@ const messages: Record<string, string> = {
   representative_contract_not_eligible:
     'Chọn hợp đồng của phòng có hiệu lực trong kỳ cần lập hóa đơn.',
   invoice_period_already_exists: 'Phòng đã có hóa đơn kỳ này với hợp đồng đại diện khác.',
+  room_pricing_locked_by_contract: 'Phòng đang có hợp đồng ràng buộc giá. Chỉ được đổi biểu giá riêng sau khi hợp đồng hết hiệu lực hoặc bị hủy.',
 };
 export function invoiceError(error: unknown): string {
   const value = error as { status?: number; code?: string; problem?: { code?: string } };
@@ -221,6 +222,10 @@ export function missingBillingInput(code: string): string {
     fixed_charge_coverage_invalid: 'Nguồn khoản thu tiền thuê/phí cần được đối chiếu',
     fixed_charge_occupancy_required: 'Thiếu khoảng ở hợp lệ để tính tiền thuê',
     signed_contract_snapshot_required: 'Thiếu phiên bản điều khoản hợp đồng đã ký',
+    contract_charge_snapshot_required: 'Thiếu biểu phí đã chốt của hợp đồng. Cần đối chiếu điều khoản gốc trước khi tính tiền.',
+    contract_price_snapshot_missing: 'Thiếu biểu phí đã chốt của hợp đồng. Cần đối chiếu điều khoản gốc trước khi tính tiền.',
+    contract_price_snapshot_invalid: 'Biểu phí đã chốt không hợp lệ. Cần đối chiếu điều khoản gốc trước khi tính tiền.',
+    room_contract_price_conflict: 'Các hợp đồng trong phòng có biểu phí đã chốt khác nhau. Cần đối chiếu trước khi lập hóa đơn chung.',
     confirmed_billable_baseline_required: 'Thiếu mốc ban đầu hoặc mốc đã tính tiền có chứng từ',
     settlement_metered_policy_required: 'Cần một chính sách giá theo chỉ số phù hợp',
     utility_pricing_baseline_required: 'Thiếu chính sách giá của phần tiêu thụ đã ghi nhận',

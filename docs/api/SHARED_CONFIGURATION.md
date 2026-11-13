@@ -24,7 +24,14 @@ Asset templates: items with published catalogId/catalogVersion, quantity, requir
 trackingMode Serialized/BulkQuantity. The server resolves and freezes catalog fields;
 duplicate catalog families are rejected. Fee: category, chargeCode, method,
 referenceRate, unit, scope Location/Room, effectiveFrom/To. Native charge compatibility
-and four decimal-place limits apply. Policy: content and effectiveFrom.
+and four decimal-place limits apply. Canonical fee units are `VND/month` for Rent
+and ServiceFee (FixedPerRoomPerMonth), `kWh` for Electricity (Metered), and `m³`
+for Water (Metered). The server normalizes supported legacy display labels (including
+`m3` and `VND / tháng`) and rejects incompatible units. Reserved codes are `RENT`,
+`ELECTRICITY`, and `WATER`; service codes must be distinct from these. Applying a
+fee creates a native policy whose category and method determine the billing unit;
+no new unit or method is introduced into contract or invoice calculations.
+Policy: content and effectiveFrom.
 
 POST `/{id}/apply-preview` accepts locationId, expectedVersion, conflictStrategy Reject,
 optional roomId (required for Room fee scope), includeOptionalItems. It returns planned

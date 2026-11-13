@@ -1,5 +1,7 @@
 using System.Text.Json;
 using BHome.Application.Contracts;
+using BHome.Application.Billing;
+using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Billing;
@@ -42,6 +44,7 @@ internal sealed partial class SettlementReceivablesRepository
         var position = final is null ? new MeterCoveragePosition(null, 0, null, false, []) :
             await MeterBillingCoverage.ReadAsync(db, context.View.RoomId, meterId, period, final, confirmedAt, token);
         missing.AddRange(position.MissingInputs);
+        Guid[] liabilityContracts = [id];
         if (position.Baseline is { } liabilityStart && final is { } liabilityEnd && inspection is not null)
         {
             // Utility liability follows the measured interval. Someone who left
@@ -57,13 +60,14 @@ internal sealed partial class SettlementReceivablesRepository
                                   (tenancy.Status == ContractStatus.Active || tenancy.Id == id || tenancy.Status == ContractStatus.Superseded ||
                                     tenancy.Status == ContractStatus.Terminated && tenancy.ActualEndDate >= liabilityStart.Date) &&
                                   member.ResidenceFrom <= liabilityEnd.Date && (member.ResidenceTo == null || member.ResidenceTo >= liabilityStart.Date)
-                                select new { resident.TenantUserId, Email = account == null ? null : account.Email }).ToArrayAsync(token);
+                                select new { ContractId = tenancy.Id, resident.TenantUserId, Email = account == null ? null : account.Email }).ToArrayAsync(token);
+            liabilityContracts = roster.Select(r => r.ContractId).Append(id).Distinct().ToArray();
             if (roster.Length == 0 || roster.Any(r => r.TenantUserId is null || string.IsNullOrWhiteSpace(r.Email) ||
                 !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(r.Email))) missing.Add("occupant_account_email_required");
             context = context with { RecipientUserIds = roster.Where(r => r.TenantUserId != null).Select(r => r.TenantUserId!.Value).Distinct().Order().ToArray() };
         }
-        var invoiceSchedule = await db.Set<Invoice>().AsNoTracking().Where(i => i.RoomId == context.View.RoomId && i.BillingPeriod == period)
-            .Select(i => i.ScheduleSnapshot).SingleOrDefaultAsync(token);
+        var invoice = await db.Set<Invoice>().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == context.View.RoomId && i.BillingPeriod == period, token);
+        var invoiceSchedule = invoice?.ScheduleSnapshot;
         BillingSchedule? schedule = null;
         if (!string.IsNullOrWhiteSpace(invoiceSchedule))
             try { schedule = JsonSerializer.Deserialize<BillingSchedule>(invoiceSchedule); } catch (JsonException) { missing.Add("billing_schedule_snapshot_invalid"); }
@@ -76,7 +80,20 @@ internal sealed partial class SettlementReceivablesRepository
             !Enum.IsDefined(schedule.RateDate) || !Enum.IsDefined(schedule.RentSource) || !Enum.IsDefined(schedule.PartialMonth) || !Enum.IsDefined(schedule.Rounding)))
         { missing.Add("billing_schedule_snapshot_invalid"); schedule = null; }
         var existing = context.View.Receivables.SingleOrDefault(r => r.Charge.Utility?.MeterId == meterId && r.Charge.Utility.Final.ReadingId == final?.ReadingId)?.Charge.Id;
+        IReadOnlyList<PolicyDto>? charges = null;
+        if (!position.FullyCovered)
+        {
+            var pricingContract = await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).SingleAsync(c => c.Id == (invoice == null ? id : invoice.RepresentativeContractId), token);
+            var locationId = await LocationAsync(id, token);
+            charges = ContractBillingPrices.Read(pricingContract, locationId, missing);
+            var otherIds = liabilityContracts.Where(contractId => contractId != pricingContract.Id).ToArray();
+            foreach (var otherContract in await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).Where(c => otherIds.Contains(c.Id)).ToArrayAsync(token))
+            {
+                var otherCharges = ContractBillingPrices.Read(otherContract, locationId, missing);
+                if (!ContractBillingPrices.Equivalent(charges, otherCharges)) missing.Add("room_contract_price_conflict");
+            }
+        }
         return new(context, meterId, type, period, position.Baseline, final, position.AlreadyBilledQuantity, position.PreviousPricingSnapshot,
-            schedule, existing, missing.Distinct().ToArray(), position.FullyCovered);
+            schedule, existing, missing.Distinct().ToArray(), position.FullyCovered, charges);
     }
 }

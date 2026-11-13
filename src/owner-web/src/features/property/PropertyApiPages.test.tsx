@@ -178,6 +178,9 @@ it('creates a native Room while loading local defaults and provenance', async ()
   });
   mount('rooms');
   await chooseLocation();
+  expect(screen.getByRole('link', { name: 'Cấu hình mẫu phòng' })).toHaveAttribute(
+    'href', '/locations/location/room-types',
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Thêm phòng' }));
   fireEvent.change(screen.getByLabelText(/Số phòng/), { target: { value: 'A101' } });
   fireEvent.change(screen.getByLabelText(/Sức chứa/), { target: { value: '2' } });

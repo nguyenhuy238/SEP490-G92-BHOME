@@ -59,6 +59,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Representative", VerificationStatus = IdentityVerificationStatus.Verified };
         db.AddRange(location, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-30), Today.AddDays(60)));
+        db.AddRange(
+            new BillingPolicy { LocationId = location.Id, Category = ChargeCategory.Electricity, ChargeCode = "ELECTRICITY", Name = "Synthetic electricity", Method = ChargingMethod.Metered, Rate = 3500, EffectiveFrom = Today.AddMonths(-1) },
+            new BillingPolicy { LocationId = location.Id, Category = ChargeCategory.Water, ChargeCode = "WATER", Name = "Synthetic water", Method = ChargingMethod.Metered, Rate = 15000, EffectiveFrom = Today.AddMonths(-1) });
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id, resident.Id);
     }
     private static string Path(Guid id, string operation = "") => $"/api/v1/contracts/{id}" + (operation.Length == 0 ? "" : "/" + operation);

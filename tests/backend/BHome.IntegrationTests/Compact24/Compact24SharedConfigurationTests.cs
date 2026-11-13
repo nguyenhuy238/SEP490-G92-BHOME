@@ -92,7 +92,23 @@ public sealed partial class Compact24OwnerSetupTests
     public async Task SharedFeesAndPoliciesValidateDomainRulesWithoutCreatingOperationalRecords()
     {
         var w = await Seed(); using var owner = await Client(w.Owner);
+        const string route = "/api/v1/shared-configuration/fee-templates";
+        foreach (var (category, code, method, unit, expected) in new[] {
+            ("Rent", "RENT", "FixedPerRoomPerMonth", "VND / th\u00e1ng", "VND/month"),
+            ("Electricity", "electricity", "Metered", "VND / kWh", "kWh"),
+            ("Water", "water", "Metered", "m3", "m\u00b3"),
+            ("ServiceFee", "internet", "FixedPerRoomPerMonth", "VND/month", "VND/month") })
+        {
+            var data = JsonSerializer.SerializeToElement(new { category, chargeCode = code, method, referenceRate = "1000", unit, scope = "Location", effectiveFrom = Today });
+            var saved = await Read<SharedDocument>(await owner.PostAsJsonAsync(route, SharedInput("fee-templates") with { Data = data }));
+            Assert.Equal(expected, saved.Data.GetProperty("unit").GetString());
+            Assert.Equal(code.ToUpperInvariant(), saved.Data.GetProperty("chargeCode").GetString());
+        }
         var badFees = new object[] {
+            new { category = "Water", chargeCode = "WATER", method = "Metered", referenceRate = "1", unit = "kWh", scope = "Location", effectiveFrom = Today },
+            new { category = "Electricity", chargeCode = "ELECTRICITY", method = "Metered", referenceRate = "1", unit = "VND/month", scope = "Location", effectiveFrom = Today },
+            new { category = "ServiceFee", chargeCode = "WATER", method = "FixedPerRoomPerMonth", referenceRate = "1", unit = "VND/month", scope = "Location", effectiveFrom = Today },
+            new { category = "ServiceFee", chargeCode = "INTERNET", method = "FixedPerRoomPerMonth", referenceRate = "1", unit = "m3", scope = "Location", effectiveFrom = Today },
             new { category = "Rent", chargeCode = "RENT", method = "Metered", referenceRate = "1", unit = "VND", scope = "Location", effectiveFrom = Today },
             new { category = "Electricity", chargeCode = "WATER", method = "Metered", referenceRate = "1", unit = "VND", scope = "Location", effectiveFrom = Today },
             new { category = "Water", chargeCode = "WATER", method = "Metered", referenceRate = "-1", unit = "VND", scope = "Location", effectiveFrom = Today }

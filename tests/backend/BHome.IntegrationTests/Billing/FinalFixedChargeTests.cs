@@ -27,7 +27,7 @@ public sealed partial class InvoiceApiTests
             var contracts = await db.Set<Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync();
             foreach (var c in contracts)
             {
-                c.ActualEndDate = finalDate; c.SnapshotHash = new string('A', 64);
+                c.ActualEndDate = finalDate;
                 db.Add(new ContractMoveOut
                 {
                     ContractId = c.Id,

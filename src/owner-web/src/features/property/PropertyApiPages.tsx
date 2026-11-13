@@ -241,9 +241,20 @@ export function PropertyApiPage({
             <Stack direction="row" spacing={1}>
               {kind === 'locations' && <ApiConfigurationCopy />}
               {kind === 'rooms' && (
-                <Button variant="outlined" disabled={!location} onClick={() => setBulkOpen(true)}>
-                  Tạo phòng hàng loạt
-                </Button>
+                <>
+                  {location && (
+                    <Button
+                      component={Link}
+                      to={`/locations/${location}/room-types`}
+                      variant="outlined"
+                    >
+                      Cấu hình mẫu phòng
+                    </Button>
+                  )}
+                  <Button variant="outlined" disabled={!location} onClick={() => setBulkOpen(true)}>
+                    Tạo phòng hàng loạt
+                  </Button>
+                </>
               )}
               <Button
                 variant="contained"

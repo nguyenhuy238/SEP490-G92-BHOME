@@ -49,10 +49,13 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
         var amendment = snapshot.IsOperatingPolicyAmendment;
         var title = amendment ? "PHỤ LỤC NỘI QUY HỢP ĐỒNG" : template.Title;
         var values = Values(snapshot);
+        var charges = snapshot.AgreedCharges?.Where(c => c.ChargeCode != "RENT").Select(c =>
+            $"{c.Name ?? c.ChargeCode}: {c.Rate.ToString("#,0.####", Vietnamese)} VND/{(c.Category == (int)BHome.Domain.PropertyManagement.ChargeCategory.Electricity ? "kWh" :
+                c.Category == (int)BHome.Domain.PropertyManagement.ChargeCategory.Water ? "m³" : "tháng")}").ToArray() ?? [];
         // PdfFont belongs to one PDF document. Only the immutable font bytes are shared between requests.
         var font = PdfFontFactory.CreateFont(FontBytes.Value, PdfEncodings.IDENTITY_H,
             PdfFontFactory.EmbeddingStrategy.FORCE_EMBEDDED);
-        EnsureGlyphs(font, values.Values.Append(template.Title).Append(template.Notice).Concat(template.Fields.Select(f => f.Label)));
+        EnsureGlyphs(font, values.Values.Append(template.Title).Append(template.Notice).Concat(template.Fields.Select(f => f.Label)).Concat(charges));
 
         using var output = new MemoryStream();
         using (var pdf = new PdfDocument(new PdfWriter(output)))
@@ -76,6 +79,11 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
                 table.AddCell(new Cell().Add(new Paragraph(values[field.Key]).SetFontSize(10)));
             }
             layout.Add(table);
+            if (charges.Length > 0 && !amendment)
+            {
+                layout.Add(new Paragraph("Điện, nước và phí dịch vụ đã thỏa thuận"));
+                foreach (var charge in charges) layout.Add(new Paragraph(charge));
+            }
             layout.Add(new Paragraph(template.Fields.Single(f => f.Key == nameof(ContractDocument.Terms)).Label));
             // Plain text, never HTML. Preserve the stored terms; no legal clauses or client PDF are substituted.
             layout.Add(new Paragraph(snapshot.Terms));
@@ -137,8 +145,8 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
     private static ContractDocument Snapshot(ContractDocument document)
     {
         if (document is null || document.ResidentIds is null) throw ContractException.Invalid("invalid_contract_document");
-        // Freeze the only mutable member before validating, hashing and rendering the same values.
-        var snapshot = document with { ResidentIds = document.ResidentIds.ToArray() };
+        // Freeze the mutable collections before validating, hashing and rendering the same values.
+        var snapshot = document with { ResidentIds = document.ResidentIds.ToArray(), AgreedCharges = document.AgreedCharges?.ToArray() };
         static bool Money(decimal value) => value >= 0 && value < 1_000_000_000_000_000_000m && decimal.Truncate(value) == value;
         if (snapshot.ContractId == Guid.Empty || snapshot.RoomId == Guid.Empty || snapshot.OwnerSignerId == Guid.Empty ||
             snapshot.TenantUserId == Guid.Empty && !snapshot.IsInternalResidentAcceptance || snapshot.OwnerSignerId == snapshot.TenantUserId ||

@@ -37,6 +37,7 @@ import {
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
+import { formatBillingDecimal } from '../../../../../packages/client-core/src/invoices';
 import { ChartCard, StatusChip } from '../../components/common/PortalUI';
 import { ContractActionDialog } from './ContractActionDialog';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
@@ -236,6 +237,30 @@ export function ContractDetailPanel({
           </Button>
         )}
       </Paper>
+
+      {(c.agreedCharges?.length || c.priceLockedAt || ['Active', 'PendingSigning', 'PendingActivation', 'Terminated', 'Superseded'].includes(c.status)) ? (
+        <ChartCard title="Giá & phí theo hợp đồng">
+          <Stack spacing={1.5}>
+            {c.agreedCharges?.length ? (
+              <>
+                <Alert severity="info">
+                  {c.priceLockedAt || c.approvedAt || c.status !== 'Draft'
+                    ? 'Biểu phí đã chốt được giữ nguyên trong suốt hợp đồng. Hóa đơn sử dụng đơn giá này, không sử dụng biểu giá mới của phòng.'
+                    : 'Biểu phí dự kiến của bản nháp; sẽ được khóa khi hợp đồng có ràng buộc.'}
+                </Alert>
+                {c.agreedCharges.map((charge) => (
+                  <Stack key={charge.chargeCode} direction="row" sx={{ justifyContent: 'space-between', gap: 2 }}>
+                    <Typography variant="body2">{charge.name || charge.chargeCode} · {charge.chargeCode}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {formatBillingDecimal(charge.rate)} đ/{charge.category === 1 ? 'kWh' : charge.category === 2 ? 'm³' : 'tháng'}
+                    </Typography>
+                  </Stack>
+                ))}
+              </>
+            ) : <Alert severity="warning">Hợp đồng chưa có biểu phí đã chốt để đối chiếu. Không sử dụng giá cấu hình hiện tại thay thế.</Alert>}
+          </Stack>
+        </ChartCard>
+      ) : null}
 
       {!!error && <Alert severity="error">{error}</Alert>}
       {!!notice && <Alert severity="success">{notice}</Alert>}
