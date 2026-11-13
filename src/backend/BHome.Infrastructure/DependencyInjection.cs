@@ -117,6 +117,13 @@ public static class DependencyInjection
         services.AddScoped<IPasswordResetDelivery>(p => p.GetRequiredService<AuthenticationEmailDelivery>());
         services.AddScoped<IAccountInvitations, AccountInvitations>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter>();
+        services.AddOptions<BHome.Application.Notifications.SmsOptions>().BindConfiguration("Sms")
+            .Validate(o => o.Valid(), "Invalid SMS configuration; check mode, provider, endpoint, templates and credentials in secrets.").ValidateOnStart();
+        services.AddSingleton<BHome.Infrastructure.Modules.Notifications.DemoSmsInbox>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.MockSmsSender>();
+        services.AddHttpClient<BHome.Infrastructure.Modules.Notifications.EsmsSmsSender>()
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<BHome.Application.Notifications.ISmsSender, BHome.Infrastructure.Modules.Notifications.SmsGateway>();
         services.AddScoped<BHome.Application.Notifications.INotificationWorkspace, BHome.Infrastructure.Modules.Notifications.CompactNotificationWorkspace>();
         services.AddScoped<BHome.Application.Notifications.NotificationWorkspaceService>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationEvents>();
