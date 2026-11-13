@@ -1,13 +1,17 @@
 import { Button, Chip, Paper, Stack, Typography, Box } from '@mui/material';
 import { Link } from 'react-router';
-import { DoorOpen, Package, Coins, ScrollText, ArrowUpRight, CheckCircle2 } from 'lucide-react';
+import { DoorOpen, Package, Coins, ScrollText, Shapes, ArrowUpRight, CheckCircle2 } from 'lucide-react';
+import type { LocationMetadata } from '../../../../../../packages/client-core/src/locationSetup';
 
 export function LocationWorkspaceOverview({
   id,
   summary,
+  metadata,
 }: {
   id: string;
+  metadata?: LocationMetadata;
   summary?: {
+    roomDefaults?: number;
     rooms?: number;
     assets?: number;
     pricesAndFees?: number;
@@ -16,6 +20,15 @@ export function LocationWorkspaceOverview({
   };
 }) {
   const sections = [
+    {
+      key: 'room-types',
+      title: 'Gợi ý tạo phòng',
+      count: summary?.roomDefaults,
+      icon: Shapes,
+      color: '#7650b5',
+      description: 'Lưu cấu hình phòng riêng cho cơ sở để tạo phòng nhanh, có thể chỉnh sửa độc lập.',
+      action: 'Quản lý gợi ý',
+    },
     {
       key: 'rooms',
       title: 'Phòng cho thuê',
@@ -55,6 +68,13 @@ export function LocationWorkspaceOverview({
   ];
   return (
     <Stack spacing={3}>
+      {metadata && <Paper variant="outlined" sx={{ p: 2.5 }}><Stack spacing={0.5}>
+        <Typography variant="h6">Thông tin thiết lập đã lưu</Typography>
+        <Typography variant="body2">Mã cơ sở: {metadata.code} · {metadata.floors} tầng</Typography>
+        <Typography variant="body2">Điện thoại: {metadata.contactPhone || 'Chưa cập nhật'} · Email: {metadata.contactEmail || 'Chưa cập nhật'}</Typography>
+        {metadata.description && <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{metadata.description}</Typography>}
+        <Typography variant="caption" color="text.secondary">Trạng thái thiết lập không đồng nghĩa với việc mọi phòng đã đủ điều kiện nhận khách; kiểm tra điều kiện vận hành tại từng phòng.</Typography>
+      </Stack></Paper>}
       <Box
         sx={{
           display: 'grid',

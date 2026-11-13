@@ -22,7 +22,6 @@ const room = {
   capacity: 3,
   status: 2,
   version: 7,
-  roomTypeId: 'type',
 };
 const occupants = [
   { residentId: 'resident1', displayLabel: 'Người tổng hợp 1', role: 'Representative' },
@@ -31,6 +30,10 @@ const occupants = [
 beforeEach(() => {
   state.request.mockReset();
   state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/room-provenance')) return [{
+      id: 'provenance', locationId: 'location', kind: 'RoomProvenance', status: 'Recorded', version: 1,
+      data: { roomId: 'room', roomDefaultsId: 'defaults', roomDefaultsVersion: 2, name: 'Studio lưu tại phòng', area: 25, amenities: ['Ban công'], defaultCapacity: 2, referenceRent: 3200000 },
+    }];
     if (path.includes('/occupancy?'))
       return {
         items: [{ roomId: room.id, locationId: room.locationId, occupants }],
@@ -121,4 +124,6 @@ it('opens current room data with an edit callback using the detail version, plus
     ),
   );
   expect(screen.getByText(/3.500.000 đ/)).toBeInTheDocument();
+  expect(screen.getByText(/Studio lưu tại phòng.*phiên bản 2/)).toBeInTheDocument();
+  expect(screen.getByText(/Tiện nghi: Ban công/)).toBeInTheDocument();
 });
