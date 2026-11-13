@@ -209,6 +209,11 @@ it('keeps independent representatives separate, includes only explicitly selecte
   fireEvent.change(screen.getByLabelText('Bên thuê / đại diện đã xác minh'), {
     target: { value: 'b' },
   });
+  await waitFor(() =>
+    expect((screen.getByText('Tiếp tục tạo hợp đồng nháp') as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
   fireEvent.click(screen.getByText('Tiếp tục tạo hợp đồng nháp'));
   expect(state.opened).toHaveBeenLastCalledWith(
     expect.objectContaining({ representativeResidentId: 'b', residentIds: ['b'] }),

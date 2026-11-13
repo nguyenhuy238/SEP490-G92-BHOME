@@ -30,4 +30,51 @@ Giai đoạn 3: Owner dùng ID trên route, không fallback sang selected/local 
 
 Giai đoạn 4: thông tin bên thuê chỉ xuất hiện một lần ở bước duyệt; summary vẫn giữ phòng/kỳ thuê, bỏ tiêu đề và reload lặp khi hồ sơ hợp lệ. Checkbox kiểm tra đúng thông tin/nội dung; Owner không còn nút primary “Về danh sách” cạnh tranh với release. Scroll trở về đầu khi đổi bước Owner; Staff giữ mặc định summary/footer cũ. 44 test component mục tiêu PASS; browser transport tổng hợp đi qua PDF recovery → read-only signer → exact signing review → một release null-account → PendingSigning, không global accounts query/PUT/page error; responsive 360/400/768/1280px và fullscreen/zoom/download PASS. Đã xem ảnh tổng hợp để kiểm tra bố cục. Không gộp kết quả UI mock với provider thật.
 
-Giai đoạn 5 đang hoàn tất kiểm chứng. Live email/MySign chỉ được ghi PASS khi có bằng chứng provider thật.
+## Kiểm chứng cuối (14/11/2026)
+
+| Phần                   | Kết quả và phạm vi bằng chứng                                                                                                                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mobile                 | **101 files / 1.106 tests PASS**, lint/typecheck PASS; full Vitest sau regression reload cuối                                                                                                                                     |
+| Backend                | **32 PASS, 0 skipped**: MainDraft API/release, preview, Compact24 identity/family/certificate/capacity guards, AnonymousSigning và Compact24DigitalSigning                                                                        |
+| OTP/Owner confirmation | PASS qua API trên DB dùng một lần: đúng recipient, OTP dùng một lần/giới hạn, exact PDF, consent/drawn evidence, Owner confirmation và verified deposit mới activate; email được thu bởi test delivery sink, không phải SMTP thật |
+| Owner Web contracts    | **16 files / 63 PASS**; không sửa Owner Web                                                                                                                                                                                       |
+| Build/export           | Workspace build và Expo Web export PASS; build giữ warning chunk size đã có                                                                                                                                                       |
+| Format                 | Prettier và dotnet whitespace cho C# sửa PASS; git diff check PASS                                                                                                                                                                |
+| Browser internal       | PASS với transport tổng hợp: reload Draft mới → preview/recovery → signer chỉ đọc → PDF signing review → một release `tenantUserId=null` → PendingSigning; không global accounts request, không PUT, không page error             |
+| Browser linked MySign  | PASS với transport tổng hợp: dùng đúng account liên kết, không selector; khi certificate API trả 503 hiện blocker và không gửi POST ký, không fallback sang internal                                                              |
+| Responsive             | PASS 360/400/768/1280px, fullscreen/zoom, Blob view/download; đã kiểm tra ảnh tổng hợp                                                                                                                                            |
+| Live providers/devices | SMTP/MySign/bank thật, Android/iOS trên thiết bị và remote CI: **NOT RUN**                                                                                                                                                        |
+
+Test backend dùng PostgreSQL/MinIO Testcontainers và converter thật ở những case tương ứng; Compact24 identity fixture dùng storage adapter tổng hợp. Anonymous signing test dùng delivery sink và private test storage. Không cộng test chạy lại vào số lượng 32. Bộ kết hợp ban đầu phát hiện fixture MainDraft dùng password khác fixture ContractLifecycle cho cùng Owner duy nhất của Compact24; sửa fixture để cùng dùng `WorkflowTestUsers.Password`, không thay auth production, không reset password thật và không giảm assertion.
+
+Browser fixtures lưu trong `.tools/owner-pdf-validation/signer-*` (ignored); response tổng hợp chỉ dùng cho kiểm tra giao diện, không đưa vào code chạy thật. Dùng dữ liệu/email tổng hợp `example.invalid`; không lưu token hoặc CCCD thật vào artifacts/repo.
+
+Regression reload cuối: Owner Draft mở bằng `contractId` giữ route này khi Save, không tự chuyển sang nhánh `mainDraftId` làm remount/abort preview. Có component test riêng; không đổi nhánh Staff.
+
+## Đối chiếu nghiệm thu
+
+- TC-01..03: MainDraft API + Compact24 family/independent cases; preparation Owner chọn một Representative và CoOccupant rõ ràng. Capacity/competing activation guards giữ nguyên.
+- TC-04..08: pure signer validator, component review và backend release kiểm linked/unlinked/unrelated/mismatched role/location/account; không global dropdown/query.
+- TC-09..11: Owner invitation tests + AnonymousSigning API tests; recipient/evidence/Owner confirmation được kiểm tra trên backend; không claim delivery thật.
+- TC-12: certificate directory isolation và actual adapter từ chối chứng thư khác actor; browser kiểm 503 blocker, không gọi ký khi chưa đủ điều kiện.
+- TC-13..14: PDF version/review regression, aborted/late response và empty/malformed/conflicting/reloaded routes.
+- TC-15..17: activation thiếu signatures/deposit/wrong actor bị chặn; full Mobile có Staff/Tenant regressions.
+
+## Tệp sửa chính
+
+- Owner review/identity: `MainDraftSigningReview.tsx`, `features/owner/mainDraftSigner.ts`, `packages/client-core/src/mainDrafts.ts`, backend `MainDraftService.cs` (release chỉ dùng account đã liên kết).
+- Owner signing: `OwnerMainContractFlow.tsx`, `OwnerHoldingSigning.tsx` (Main-only recipient validation; nhánh Holding giữ hành vi hiện hữu).
+- Navigation/preparation/UI: `ContractScreen.tsx`, `MainDraftStart.tsx`, `MainDraftScreen.tsx`, `ContractPreviewSummary.tsx`.
+- Tests: `main-draft-signer`, `rental-contract-flow`, `owner-main-contract-flow`, `owner-holding-signing`, `main-draft-start`, `contract-sections`; backend `MainDraftReleaseTests.cs`, `MainDraftApiTests.cs`, `Compact24/MainSignerIdentityTests.cs`.
+
+Không thêm dependency, endpoint, response field, bảng/cột/migration; không sửa Staff/Tenant screens, Owner Web hoặc payment/occupancy policy. Backend release validation cũng áp dụng với caller khác Mobile: caller không được dùng release để tự gán một tài khoản chưa liên kết.
+
+## Commits và giới hạn
+
+- `a6428d0e` — enforce contract signer identity.
+- `85804ddd` — integrate verified tenant signing.
+- `5e9cbcb8` — stabilize contract review navigation.
+- `ad0e0109` — simplify contract signing interface.
+- Commit cuối: individual/family signing regression và kiểm chứng reload.
+
+**PARTIAL** đối với E2E có nhà cung cấp thật: chưa gửi email/OTP, ký MySign hoặc chuyển tiền thật. Owner phải xác nhận PDF và hạn lời mời theo API hiện có; release không tự chọn deadline hoặc tự gửi email. Không gắn nhãn OTP/drawn consent là chữ ký số CA. **BLOCKED** cho production signing-review khi chưa có template được duyệt; không thay guard Development/Testing. QR cọc Main chưa được API hiện có cấp, UI không dựng QR giả hoặc suy payment success. Không push/merge; không sửa records thật để demo đạt.

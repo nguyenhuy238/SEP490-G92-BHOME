@@ -429,6 +429,7 @@ function LiveContractDetail({
   if (c.onboardingDraft && ['Staff', 'Owner'].includes(role))
     return (
       <MainDraftScreen
+        persistRoute={role !== 'Owner'}
         initialId={c.id}
         onReleased={(next) => {
           router.setParams({ mainDraftId: '', roomId: '', contractId: next });

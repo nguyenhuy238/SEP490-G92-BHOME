@@ -32,7 +32,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
     private sealed record Workspace(HttpClient Owner, HttpClient Staff, HttpClient Outside, Guid OwnerId, Guid Room, Guid Location, Guid Resident);
     private async Task<(HttpClient Client, Guid Id)> User(string role)
     {
-        var id = Guid.NewGuid(); var email = $"{id:N}@example.invalid"; const string password = "Synthetic-Draft!874";
+        var id = Guid.NewGuid(); var email = $"{id:N}@example.invalid"; const string password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();

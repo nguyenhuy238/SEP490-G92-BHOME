@@ -104,7 +104,13 @@ vi.mock('../features/contracts/ContractDraftForm', () => ({
   ),
 }));
 vi.mock('../features/contracts/MainDraftScreen', () => ({
-  MainDraftScreen: ({ initialId }: { initialId?: string }) => <span>Draft {initialId}</span>,
+  MainDraftScreen: ({
+    initialId,
+    persistRoute = true,
+  }: {
+    initialId?: string;
+    persistRoute?: boolean;
+  }) => <span data-persist-route={String(persistRoute)}>Draft {initialId}</span>,
 }));
 vi.mock('../features/contracts/MainDraftStart', () => ({
   MainDraftStart: () => <span>Main preparation</span>,
@@ -351,6 +357,14 @@ it('opens approved Owner Main preparation without mutations before an explicit s
   expect(state.request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
     true,
   );
+});
+it('keeps a persisted Owner Draft opened by contractId on that route when saving after reload', () => {
+  state.role = 'Owner';
+  state.params = { contractId: id };
+  state.contract = { ...state.contract, onboardingDraft: true, status: 'Draft' };
+  render(<ContractScreen />);
+  expect(screen.getByText(`Draft ${id}`).getAttribute('data-persist-route')).toBe('false');
+  expect(router.setParams).not.toHaveBeenCalled();
 });
 it('defaults to overview and switches sections without displaying all forms at once', () => {
   render(<ContractScreen />);
