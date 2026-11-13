@@ -272,6 +272,7 @@ export function MainDraftScreen({
         }
       } else setMode('edit');
     } catch (e) {
+      invalidateDocument(e);
       workflowFailure('main-draft', e);
       if (alive.current && !controller.signal.aborted) setError(message(e));
     } finally {
@@ -404,6 +405,7 @@ export function MainDraftScreen({
         }
       }
     } catch (e) {
+      invalidateDocument(e);
       workflowFailure('main-draft', e);
       if (alive.current && !controller.signal.aborted) setError(message(e));
     } finally {
@@ -740,14 +742,14 @@ export function MainDraftScreen({
                   </>
                 )}
               </KeyboardFormScrollView>
-              <View style={styles.footer}>
+              <View style={[styles.footer, owner && styles.ownerFooter]}>
                 {busy && <ActivityIndicator />}
                 {mode === 'edit' ? (
                   <>
                     <Button
                       contentStyle={{ minHeight: 48 }}
                       mode="text"
-                      style={styles.secondaryAction}
+                      style={owner ? styles.ownerAction : styles.secondaryAction}
                       disabled={
                         busy || readOnly || loading || !preparation || !!preparation.blockers.length
                       }
@@ -759,7 +761,7 @@ export function MainDraftScreen({
                       contentStyle={{ minHeight: 48 }}
                       mode="contained"
                       buttonColor={s.blue}
-                      style={styles.primaryAction}
+                      style={owner ? styles.ownerAction : styles.primaryAction}
                       disabled={
                         busy || readOnly || loading || !preparation || !!preparation.blockers.length
                       }
@@ -771,7 +773,7 @@ export function MainDraftScreen({
                 ) : (
                   <>
                     <Button
-                      style={styles.primaryAction}
+                      style={owner ? styles.ownerAction : styles.primaryAction}
                       labelStyle={{ fontSize: 12 }}
                       contentStyle={{ minHeight: 48 }}
                       disabled={busy || readOnly}
@@ -781,7 +783,7 @@ export function MainDraftScreen({
                     </Button>
                     {mode === 'preview' ? (
                       <Button
-                        style={styles.primaryAction}
+                        style={owner ? styles.ownerAction : styles.primaryAction}
                         labelStyle={{ fontSize: 12 }}
                         contentStyle={{ minHeight: 48 }}
                         mode="contained"
@@ -833,6 +835,8 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
   },
   primaryAction: { flex: 1, minWidth: 0 },
+  ownerFooter: { flexDirection: 'column', alignItems: 'stretch' },
+  ownerAction: { minWidth: 0, width: '100%' },
   secondaryAction: { flexShrink: 0 },
   personName: { flex: 1, color: s.navy, fontWeight: '600', fontSize: 16 },
   roomName: { color: s.navy, fontWeight: '600', fontSize: 16 },

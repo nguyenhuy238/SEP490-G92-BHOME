@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { getToastSnapshot } from '../lib/toast';
 const state = vi.hoisted(() => ({
   request: vi.fn(),
+  roles: ['Staff'],
   params: vi.fn(),
   share: vi.fn(),
   available: vi.fn(),
@@ -37,14 +38,16 @@ vi.mock('expo-file-system', () => ({
 }));
 vi.mock('../lib/SessionProvider', () => {
   const api = { request: state.request };
-  return { useSession: () => ({ api }) };
+  return { useSession: () => ({ api, session: { roles: state.roles } }) };
 });
 vi.mock('react-native', () => ({
   Platform: { OS: 'android' },
   useWindowDimensions: () => ({ width: 360, height: 780 }),
   AppState: { addEventListener: () => ({ remove: vi.fn() }) },
   Keyboard: { dismiss: vi.fn() },
-  Image: () => null,
+  Image: ({ onLoad }: { onLoad?: () => void }) => (
+    <button onClick={onLoad}>Hiển thị trang kiểm thử</button>
+  ),
   FlatList: () => null,
   Alert: { alert: vi.fn() },
   StyleSheet: { create: (s: unknown) => s },
@@ -162,6 +165,7 @@ const view = (input: unknown) => ({
   preparation,
 });
 beforeEach(() => {
+  state.roles = ['Staff'];
   vi.clearAllMocks();
   state.writes = [];
   state.available.mockResolvedValue(true);
@@ -245,6 +249,51 @@ it('recovers an outdated file using the latest draft version and a new document 
   expect(
     state.request.mock.calls.filter(([path, init]) => path.endsWith('/draft-id') && !init?.method),
   ).toHaveLength(1);
+});
+it('requires an explicit save after a configuration conflict instead of regenerating repeatedly', async () => {
+  const original = state.request.getMockImplementation()!;
+  state.request.mockImplementation((path: string, init?: RequestInit) =>
+    path.endsWith('/documents')
+      ? Promise.reject({ status: 409, code: 'draft_configuration_changed_save_again' })
+      : original(path, init),
+  );
+  setup();
+  await screen.findByText('CCCD: ********0123');
+  fill();
+  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  await screen.findAllByText(
+    'Cấu hình đã thay đổi. Tải lại giá và lưu nháp trước khi tạo tài liệu.',
+  );
+  fireEvent.click(screen.getByText('Lưu lại bản nháp'));
+  expect(screen.getByLabelText('Email người thuê *')).toBeTruthy();
+  expect(state.request.mock.calls.filter(([path]) => path.endsWith('/documents'))).toHaveLength(1);
+  expect((screen.getByLabelText('Email người thuê *') as HTMLInputElement).value).toBe(
+    'tenant.synthetic@example.invalid',
+  );
+});
+it('returns an already released Owner draft to its actual contract detail without regenerating it', async () => {
+  state.roles = ['Owner'];
+  const original = state.request.getMockImplementation()!;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    const result = await original(path, init);
+    return path.endsWith('/draft-id') && !init?.method
+      ? { ...result, status: 'PendingSigning' }
+      : result;
+  });
+  const released = vi.fn();
+  render(
+    <MainDraftScreen
+      initialId="draft-id"
+      roomId="room"
+      representativeResidentId="resident"
+      residentIds={['resident']}
+      onCancel={vi.fn()}
+      onList={vi.fn()}
+      onReleased={released}
+    />,
+  );
+  await waitFor(() => expect(released).toHaveBeenCalledWith('draft-id'));
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/documents'))).toBe(false);
 });
 it('validates contact email, trims the supported draft field and omits issuing-place input', async () => {
   setup();

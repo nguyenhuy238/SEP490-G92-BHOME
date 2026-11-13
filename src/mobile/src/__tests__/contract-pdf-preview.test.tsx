@@ -271,3 +271,20 @@ it('bounds a stuck metadata request even if its transport ignores abort', async 
   expect(screen.queryByText('Đang tải bản xem trước…')).toBeNull();
   expect(request.mock.calls[0]![1].signal.aborted).toBe(true);
 });
+it('bounds a slow page renderer and offers retry instead of leaving its spinner visible', async () => {
+  vi.useFakeTimers();
+  request.mockImplementation(async (path: string) =>
+    path.endsWith('/preview') ? info() : new Promise(() => {}),
+  );
+  render(<ContractPdfPreview {...props()} />);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(screen.getByText('Đang tải trang 1…')).toBeTruthy();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(50_000);
+  });
+  expect(screen.queryByText('Đang tải trang 1…')).toBeNull();
+  expect(screen.getByText('Hiển thị tài liệu mất nhiều thời gian. Hãy thử lại.')).toBeTruthy();
+  expect(screen.getByText('Tải lại trang 1')).toBeTruthy();
+});

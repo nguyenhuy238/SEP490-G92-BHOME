@@ -81,3 +81,24 @@ it.each(['text/html', 'application/json'])(
     expect(transport).toHaveBeenCalledOnce();
   },
 );
+it.each([
+  ['application/pdf', [80, 75, 3, 4]],
+  ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', [37, 80, 68, 70, 45]],
+] as const)(
+  'rejects a document whose signature disagrees with MIME %s',
+  async (mime, signature) => {
+    const transport = vi.fn(
+      async () => new Response(new Uint8Array(signature), { headers: { 'Content-Type': mime } }),
+    );
+    const api = new MobileApi(
+      'https://api.example.invalid',
+      () => 'synthetic',
+      async () => undefined,
+      () => {},
+      transport,
+    );
+    await expect(
+      api.request(`/api/v1/contracts/main-drafts/${id}/documents/${id}`, {}, 'bytes'),
+    ).rejects.toMatchObject({ code: 'draft_download_invalid' });
+  },
+);

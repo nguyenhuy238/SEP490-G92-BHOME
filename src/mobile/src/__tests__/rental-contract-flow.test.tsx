@@ -370,3 +370,38 @@ it('shows Staff handoff without requesting accounts, signing-review or release',
   expect(screen.getByText('Chờ Chủ cơ sở duyệt để ký')).toBeTruthy();
   expect(state.request).not.toHaveBeenCalled();
 });
+it('clears the reviewed document when the server Draft version changes before release', async () => {
+  let currentVersion = 4;
+  state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/draft')) return { id: 'draft', status: 'Draft', version: currentVersion };
+    if (path.endsWith('/accounts')) return [];
+    if (path.endsWith('/signing-review')) return { id: 'review', developmentOnly: true };
+    throw new Error('Unexpected mutation');
+  });
+  const changed = vi.fn();
+  render(
+    <MainDraftSigningReview
+      client={mainDraftClient(state.request)}
+      draft={{ id: 'draft', version: 4 } as MainDraftView}
+      onReleased={vi.fn()}
+      onOpenPdf={vi.fn()}
+      onDraftChanged={changed}
+    />,
+  );
+  await screen.findByText('Khách mới · chấp thuận nội bộ qua email');
+  fireEvent.change(screen.getByLabelText('Người đại diện ký hợp đồng'), {
+    target: { value: '__internal__' },
+  });
+  fireEvent.click(screen.getByText('Tạo bản PDF để duyệt'));
+  await screen.findByText('Private PDF review');
+  fireEvent.click(screen.getByRole('checkbox'));
+  currentVersion = 5;
+  fireEvent.click(screen.getByText('Duyệt và chuyển sang chờ ký'));
+  await screen.findByText('Bản nháp đã thay đổi hoặc không còn ở trạng thái Draft. Hãy tải lại.');
+  expect(changed).toHaveBeenCalledWith(expect.objectContaining({ version: 5 }));
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/release'))).toBe(false);
+  expect(screen.queryByText('Private PDF review')).toBeNull();
+  expect((screen.getByText('Duyệt và chuyển sang chờ ký') as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+});

@@ -145,3 +145,16 @@ it('enables activation only from server readiness and does not synthesize a QR',
   expect(screen.getByText(/API hiện tại chưa cấp QR nộp cọc hợp đồng/)).toBeTruthy();
   expect(screen.queryByRole('img')).toBeNull();
 });
+it('keeps activation blocked even when local signature/deposit indicators are complete but backend says no', () => {
+  const contract = {
+    ...c,
+    status: 'PendingActivation',
+    signatures: [
+      { signerUserId: 'owner', status: 'Signed' },
+      { signerUserId: 'tenant', status: 'Signed' },
+    ],
+  } as ContractView;
+  const r = { ...readiness(true), ready: false, blockers: ['room_contract_conflict'] };
+  mount(contract, r);
+  expect((screen.getByText('Kích hoạt hợp đồng') as HTMLButtonElement).disabled).toBe(true);
+});
