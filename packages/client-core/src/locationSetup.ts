@@ -1,4 +1,9 @@
-import type { LocationConfiguration, LocalAssetTemplate, RoomConfiguration, SetupDocument } from './propertySetup';
+import type {
+  LocationConfiguration,
+  LocalAssetTemplate,
+  RoomConfiguration,
+  SetupDocument,
+} from './propertySetup';
 import type { RoomTemplateData, SharedResource } from './sharedConfiguration';
 
 export interface LocationSetupInformation {
@@ -133,29 +138,55 @@ export interface ConfiguredRoomsInput {
   rooms: ConfiguredRoomInput[];
   effectiveFrom: string;
 }
-export type LocationMetadata = Omit<LocationSetupInformation, 'name' | 'address'> & { setupStatus: string };
+export type LocationMetadata = Omit<LocationSetupInformation, 'name' | 'address'> & {
+  setupStatus: string;
+};
 
 export function locationSetupClient(request: <T>(path: string, init?: RequestInit) => Promise<T>) {
-  const route = (location: string, suffix: string) => `/api/v1/locations/${encodeURIComponent(location)}/${suffix}`;
-  const write = <T>(path: string, input: unknown, method = 'POST', key?: string) => request<T>(path, { method, headers: { 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) }, body: JSON.stringify(input) });
+  const route = (location: string, suffix: string) =>
+    `/api/v1/locations/${encodeURIComponent(location)}/${suffix}`;
+  const write = <T>(path: string, input: unknown, method = 'POST', key?: string) =>
+    request<T>(path, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) },
+      body: JSON.stringify(input),
+    });
   return {
     source: (id: string, signal?: AbortSignal) =>
-      request<LocationSetupSource>(`/api/v1/location-setup/source/${encodeURIComponent(id)}`, { signal }),
+      request<LocationSetupSource>(`/api/v1/location-setup/source/${encodeURIComponent(id)}`, {
+        signal,
+      }),
     complete: (input: LocationSetupInput, key: string) =>
       write<LocationSetupResult>('/api/v1/location-setup', input, 'POST', key),
     localRoomDefaults: (location: string, signal?: AbortSignal) =>
       request<SetupDocument<LocalRoomDefaultsData>[]>(route(location, 'room-defaults'), { signal }),
     saveLocalRoomDefaults: (location: string, id: string | null, input: LocalRoomDefaultsWrite) =>
-      write<SetupDocument<LocalRoomDefaultsData>>(route(location, `room-defaults${id ? '/' + encodeURIComponent(id) : ''}`), input, id ? 'PUT' : 'POST'),
+      write<SetupDocument<LocalRoomDefaultsData>>(
+        route(location, `room-defaults${id ? '/' + encodeURIComponent(id) : ''}`),
+        input,
+        id ? 'PUT' : 'POST',
+      ),
     localRoomDefaultsHistory: (location: string, id: string, signal?: AbortSignal) =>
-      request<SetupDocument<LocalRoomDefaultsData>[]>(route(location, `room-defaults/${encodeURIComponent(id)}/history`), { signal }),
+      request<SetupDocument<LocalRoomDefaultsData>[]>(
+        route(location, `room-defaults/${encodeURIComponent(id)}/history`),
+        { signal },
+      ),
     roomProvenance: (location: string, signal?: AbortSignal) =>
       request<SetupDocument<RoomProvenanceData>[]>(route(location, 'room-provenance'), { signal }),
     createConfiguredRooms: (location: string, input: ConfiguredRoomsInput, key: string) =>
-      write<{ rooms: RoomConfiguration[] }>(route(location, 'configured-rooms'), input, 'POST', key),
+      write<{ rooms: RoomConfiguration[] }>(
+        route(location, 'configured-rooms'),
+        input,
+        'POST',
+        key,
+      ),
     metadata: (location: string, signal?: AbortSignal) =>
-      request<SetupDocument<LocationMetadata> | null>(route(location, 'setup-metadata'), { signal }),
-    saveMetadata: (location: string, input: Omit<LocationMetadata, 'setupStatus'> & { expectedVersion: number }) =>
-      write<SetupDocument<LocationMetadata>>(route(location, 'setup-metadata'), input, 'PUT'),
+      request<SetupDocument<LocationMetadata> | null>(route(location, 'setup-metadata'), {
+        signal,
+      }),
+    saveMetadata: (
+      location: string,
+      input: Omit<LocationMetadata, 'setupStatus'> & { expectedVersion: number },
+    ) => write<SetupDocument<LocationMetadata>>(route(location, 'setup-metadata'), input, 'PUT'),
   };
 }

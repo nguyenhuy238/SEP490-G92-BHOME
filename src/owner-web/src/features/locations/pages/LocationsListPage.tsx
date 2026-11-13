@@ -253,7 +253,10 @@ function MockLocationsListPage() {
             <Button
               variant="contained"
               startIcon={<Plus size={16} />}
-              onClick={() => { setSelectedSourceForCopy(''); setIsSetupWizardOpen(true); }}
+              onClick={() => {
+                setSelectedSourceForCopy('');
+                setIsSetupWizardOpen(true);
+              }}
             >
               Thêm cơ sở
             </Button>
@@ -640,17 +643,26 @@ function MockLocationsListPage() {
       </Grid>
 
       {/* Initial Location Setup Wizard Modal */}
-      {isMockMode ? <InitialLocationSetupWizard
-        open={isSetupWizardOpen}
-        onClose={() => setIsSetupWizardOpen(false)}
-        db={db}
-        onComplete={handleSetupComplete}
-      /> : isSetupWizardOpen && <LocationSetupWizard
-        locations={locations}
-        initialSource={selectedSourceForCopy || undefined}
-        onClose={() => { setIsSetupWizardOpen(false); setSelectedSourceForCopy(''); }}
-        onComplete={handleNativeSetupComplete}
-      />}
+      {isMockMode ? (
+        <InitialLocationSetupWizard
+          open={isSetupWizardOpen}
+          onClose={() => setIsSetupWizardOpen(false)}
+          db={db}
+          onComplete={handleSetupComplete}
+        />
+      ) : (
+        isSetupWizardOpen && (
+          <LocationSetupWizard
+            locations={locations}
+            initialSource={selectedSourceForCopy || undefined}
+            onClose={() => {
+              setIsSetupWizardOpen(false);
+              setSelectedSourceForCopy('');
+            }}
+            onComplete={handleNativeSetupComplete}
+          />
+        )
+      )}
 
       {/* Copy Configuration Wizard Modal */}
       <CopyConfigurationWizard

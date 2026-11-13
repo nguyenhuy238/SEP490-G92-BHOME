@@ -199,7 +199,9 @@ it('creates a native Room while loading local defaults and provenance', async ()
   );
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/room-defaults'))).toBe(true);
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/room-provenance'))).toBe(true);
-  expect(state.request.mock.calls.some(([path]) => path.includes('/api/v1/room-types'))).toBe(false);
+  expect(state.request.mock.calls.some(([path]) => path.includes('/api/v1/room-types'))).toBe(
+    false,
+  );
 });
 it('reads physical Asset fields through the scoped native list and pagination', async () => {
   state.request.mockImplementation(async (path: string) => {

@@ -14,16 +14,16 @@ Phạm vi: BF01, UC04–UC07, FE01 và kiểm tra hồi quy các luồng tiêu t
 
 ## 2. API chính
 
-| Method | Route | Nội dung |
-|---|---|---|
-| GET | `/api/v1/location-setup/source/{locationId}` | Snapshot cấu hình và sourceState |
-| POST | `/api/v1/location-setup` | Atomic setup; header Idempotency-Key GUID |
-| GET/POST | `/api/v1/locations/{id}/room-defaults` | List/create local defaults |
-| PUT | `/api/v1/locations/{id}/room-defaults/{typeId}` | Update/archive theo expectedVersion |
-| GET | `/api/v1/locations/{id}/room-defaults/{typeId}/history` | Lịch sử |
-| GET | `/api/v1/locations/{id}/room-provenance` | Snapshot theo phòng |
-| POST | `/api/v1/locations/{id}/configured-rooms` | Sinh phòng thật từ local defaults, Idempotency-Key |
-| GET/PUT | `/api/v1/locations/{id}/setup-metadata` | Metadata cơ sở, update theo version |
+| Method   | Route                                                   | Nội dung                                           |
+| -------- | ------------------------------------------------------- | -------------------------------------------------- |
+| GET      | `/api/v1/location-setup/source/{locationId}`            | Snapshot cấu hình và sourceState                   |
+| POST     | `/api/v1/location-setup`                                | Atomic setup; header Idempotency-Key GUID          |
+| GET/POST | `/api/v1/locations/{id}/room-defaults`                  | List/create local defaults                         |
+| PUT      | `/api/v1/locations/{id}/room-defaults/{typeId}`         | Update/archive theo expectedVersion                |
+| GET      | `/api/v1/locations/{id}/room-defaults/{typeId}/history` | Lịch sử                                            |
+| GET      | `/api/v1/locations/{id}/room-provenance`                | Snapshot theo phòng                                |
+| POST     | `/api/v1/locations/{id}/configured-rooms`               | Sinh phòng thật từ local defaults, Idempotency-Key |
+| GET/PUT  | `/api/v1/locations/{id}/setup-metadata`                 | Metadata cơ sở, update theo version                |
 
 DTO setup chứa `location`, `roomTypes`, `rooms`, `fees`, `policy`, `activate`, `rentEffectiveFrom`, optional `sourceLocationId`, `sourceState`, `sourceReferences`. Phòng trong request dùng key bản nháp; backend tạo ID thực. Retry cùng key/payload trả các ID đã tạo; retry payload khác trả 409. Nếu target đã được cập nhật sau commit, DTO location replay là trạng thái hiện tại, không phải snapshot response ban đầu.
 
@@ -31,14 +31,14 @@ DTO setup chứa `location`, `roomTypes`, `rooms`, `fees`, `policy`, `activate`,
 
 Thực thi Release với PostgreSQL 16 disposable loopback; fixture Compact24 tạo DB riêng, không dùng DB development để rollback/race test.
 
-| Suite | Kết quả |
-|---|---:|
-| LocationSetup tests mới | 8/8 PASS |
-| Compact24OwnerSetupTests (bao gồm 8 test trên) | 46/46 PASS |
-| Application unit | 463/463 PASS |
-| Domain unit | 106/106 PASS |
-| Compact24 downstream regressions (selected 10 distinct cases) | 10/10 PASS |
-| Native setup FE riêng | 4/4 PASS |
+| Suite                                                         |      Kết quả |
+| ------------------------------------------------------------- | -----------: |
+| LocationSetup tests mới                                       |     8/8 PASS |
+| Compact24OwnerSetupTests (bao gồm 8 test trên)                |   46/46 PASS |
+| Application unit                                              | 463/463 PASS |
+| Domain unit                                                   | 106/106 PASS |
+| Compact24 downstream regressions (selected 10 distinct cases) |   10/10 PASS |
+| Native setup FE riêng                                         |     4/4 PASS |
 
 Owner Web final typecheck, build and lint PASS (0 lint errors/warnings, 291 files). Full Vitest run with `--maxWorkers=2`: 75/75 files, 436/436 tests PASS. Added focused `LocationSetupWizardCopy.test.tsx` after that run began: 1/1 PASS separately, for 437 distinct FE tests across 76 files. The copy regression covers source without RoomDefaults, effective reference rent, explicit package assignment, mapped room fee, partial catalog failure, unselected policy omission, inactive target and source version references. An earlier full run had four timeouts under default concurrency; all passed with reduced workers. Existing Vite chunk-size and unrelated passing-test MUI/signing stderr warnings remain.
 
@@ -60,15 +60,15 @@ Run `26111301`, Owner Web 5188, API 7241. Login, create/publish 6 library docume
 
 Run `26111302-local-d02489`, Owner Web 5189, API loopback 5242, PostgreSQL 16 container mới; synthetic account từ sample seed. **51/51 assertions PASS, 315 API responses ghi nhận đều HTTP 200, exit code 0**. DB và processes của run được dọn trong finally, không tác động tới 5173/7240.
 
-| Dữ liệu | Nguồn | Đích |
-|---|---|---|
+| Dữ liệu                      | Nguồn                                  | Đích                                   |
+| ---------------------------- | -------------------------------------- | -------------------------------------- |
 | Location ID (DB test đã dọn) | `8cd16589-5179-4461-bd9e-99425cea4bcc` | `673448c9-a6ea-42db-b97b-b1ab035206db` |
-| Phòng | 5 | 2 mới, ID riêng |
-| Loại phòng | Standard 2 người; Premium 3 người | Standard 3 người, Premium không chọn |
-| Giá thuê | Standard 3.000.000; Premium 4.500.000 | Standard 3.000.000 |
-| Phí riêng CLEANING 30.000 | P.101 | ánh xạ P.102 |
-| Định mức | 2 gói | 1 gói đã chọn |
-| Nội quy | Published | Published độc lập |
+| Phòng                        | 5                                      | 2 mới, ID riêng                        |
+| Loại phòng                   | Standard 2 người; Premium 3 người      | Standard 3 người, Premium không chọn   |
+| Giá thuê                     | Standard 3.000.000; Premium 4.500.000  | Standard 3.000.000                     |
+| Phí riêng CLEANING 30.000    | P.101                                  | ánh xạ P.102                           |
+| Định mức                     | 2 gói                                  | 1 gói đã chọn                          |
+| Nội quy                      | Published                              | Published độc lập                      |
 
 Source state trước/sau bằng nhau. Reload source, metadata, provenance, room inspector 2/3 người; target no actual assets/contracts/invoices/expenses/residents; target tabs RoomDefaults, assets, pricing, rules, settings truy cập và chụp ảnh. Không suy diễn rằng đã chạy toàn bộ tất cả chức năng CRUD của từng tab hoặc tất cả BF03–BF05 UI.
 

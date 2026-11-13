@@ -221,7 +221,9 @@ export function RoomFloorCards({
                           />
                         </Stack>
                         <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-                          {provenance?.find(item => item.data.roomId === room.id)?.data.name ? `${provenance.find(item => item.data.roomId === room.id)!.data.name} · ` : ''}
+                          {provenance?.find((item) => item.data.roomId === room.id)?.data.name
+                            ? `${provenance.find((item) => item.data.roomId === room.id)!.data.name} · `
+                            : ''}
                           Tầng {room.floor ?? 'chưa phân tầng'} · Sức chứa {room.capacity} người
                         </Typography>
                         <Stack

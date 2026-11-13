@@ -89,8 +89,16 @@ export function PropertyApiPage({
   const [notice, setNotice] = useState('');
   const lock = useRef(false);
   const configuredKey = useRef({ payload: '', key: '' });
-  const defaults = useQuery({ queryKey: ['property-setup', 'room-defaults', session?.userId, location], queryFn: ({ signal }) => setup.localRoomDefaults(location, signal), enabled: kind === 'rooms' && canManage && !!location });
-  const provenance = useQuery({ queryKey: ['property-setup', 'room-provenance', session?.userId, location], queryFn: ({ signal }) => setup.roomProvenance(location, signal), enabled: kind === 'rooms' && canManage && !!location });
+  const defaults = useQuery({
+    queryKey: ['property-setup', 'room-defaults', session?.userId, location],
+    queryFn: ({ signal }) => setup.localRoomDefaults(location, signal),
+    enabled: kind === 'rooms' && canManage && !!location,
+  });
+  const provenance = useQuery({
+    queryKey: ['property-setup', 'room-provenance', session?.userId, location],
+    queryFn: ({ signal }) => setup.roomProvenance(location, signal),
+    enabled: kind === 'rooms' && canManage && !!location,
+  });
   const options = useQuery({
     queryKey: ['property-setup', 'locations-options', session?.userId],
     queryFn: ({ signal }) => api.locationOptions(signal),
@@ -125,12 +133,32 @@ export function PropertyApiPage({
           reason,
         });
       if (kind === 'rooms' && !editing && values.roomDefaultsId) {
-        const type = defaults.data?.find(item => item.id === values.roomDefaultsId);
-        if (!type || type.status === 'Archived' || !values.rent?.trim() || !Number.isFinite(Number(values.rent)) || Number(values.rent) < 0) throw new Error('Chọn cấu hình và xác nhận giá thuê hợp lệ.');
-        const input = { rooms: [{ roomNumber: values.roomNumber?.trim() ?? '', floor: values.floor?.trim() || null, roomDefaultsId: type.id, expectedVersion: type.version, rent: Number(values.rent) }], effectiveFrom: values.effectiveFrom || todayVietnam() };
+        const type = defaults.data?.find((item) => item.id === values.roomDefaultsId);
+        if (
+          !type ||
+          type.status === 'Archived' ||
+          !values.rent?.trim() ||
+          !Number.isFinite(Number(values.rent)) ||
+          Number(values.rent) < 0
+        )
+          throw new Error('Chọn cấu hình và xác nhận giá thuê hợp lệ.');
+        const input = {
+          rooms: [
+            {
+              roomNumber: values.roomNumber?.trim() ?? '',
+              floor: values.floor?.trim() || null,
+              roomDefaultsId: type.id,
+              expectedVersion: type.version,
+              rent: Number(values.rent),
+            },
+          ],
+          effectiveFrom: values.effectiveFrom || todayVietnam(),
+        };
         const payload = JSON.stringify(input);
-        if (configuredKey.current.payload !== payload) configuredKey.current = { payload, key: crypto.randomUUID() };
-        return (await setup.createConfiguredRooms(location, input, configuredKey.current.key)).rooms[0];
+        if (configuredKey.current.payload !== payload)
+          configuredKey.current = { payload, key: crypto.randomUUID() };
+        return (await setup.createConfiguredRooms(location, input, configuredKey.current.key))
+          .rooms[0];
       }
       if (kind === 'rooms')
         return api.saveRoom(editing?.id ?? null, {
@@ -322,7 +350,7 @@ export function PropertyApiPage({
               locationId={location}
               rooms={query.data.items.filter((row): row is RoomConfiguration => 'capacity' in row)}
               total={query.data.totalCount}
-                provenance={provenance.data}
+              provenance={provenance.data}
               inspect={setInspectedRoom}
               edit={canManage ? edit : undefined}
             />
@@ -451,13 +479,62 @@ export function PropertyApiPage({
                 </>
               ) : kind === 'rooms' ? (
                 <>
-                    {!editing && <>
-                      <TextField select label="Cấu hình loại phòng" value={values.roomDefaultsId ?? ''} onChange={e => { const type = defaults.data?.find(item => item.id === e.target.value); setValues(old => ({ ...old, roomDefaultsId: e.target.value, ...(type ? { capacity: String(type.data.defaults.capacity), rent: String(type.data.defaults.referenceRent ?? ''), status: '0' } : {}) })); }}>
+                  {!editing && (
+                    <>
+                      <TextField
+                        select
+                        label="Cấu hình loại phòng"
+                        value={values.roomDefaultsId ?? ''}
+                        onChange={(e) => {
+                          const type = defaults.data?.find((item) => item.id === e.target.value);
+                          setValues((old) => ({
+                            ...old,
+                            roomDefaultsId: e.target.value,
+                            ...(type
+                              ? {
+                                  capacity: String(type.data.defaults.capacity),
+                                  rent: String(type.data.defaults.referenceRent ?? ''),
+                                  status: '0',
+                                }
+                              : {}),
+                          }));
+                        }}
+                      >
                         <MenuItem value="">Nhập trực tiếp</MenuItem>
-                        {defaults.data?.filter(item => item.status !== 'Archived').map(item => <MenuItem key={item.id} value={item.id}>{item.data.name}</MenuItem>)}
+                        {defaults.data
+                          ?.filter((item) => item.status !== 'Archived')
+                          .map((item) => (
+                            <MenuItem key={item.id} value={item.id}>
+                              {item.data.name}
+                            </MenuItem>
+                          ))}
                       </TextField>
-                      {values.roomDefaultsId && <><Alert severity="info">Sức chứa và định mức lấy từ cấu hình đã lưu. Xác nhận giá thuê trước khi tạo.</Alert><TextField required type="number" label="Giá thuê xác nhận (VND)" value={values.rent ?? ''} onChange={e => setValues(old => ({ ...old, rent: e.target.value }))} /><TextField type="date" label="Ngày hiệu lực" value={values.effectiveFrom || todayVietnam()} onChange={e => setValues(old => ({ ...old, effectiveFrom: e.target.value }))} slotProps={{ inputLabel: { shrink: true } }} /></>}
-                    </>}
+                      {values.roomDefaultsId && (
+                        <>
+                          <Alert severity="info">
+                            Sức chứa và định mức lấy từ cấu hình đã lưu. Xác nhận giá thuê trước khi
+                            tạo.
+                          </Alert>
+                          <TextField
+                            required
+                            type="number"
+                            label="Giá thuê xác nhận (VND)"
+                            value={values.rent ?? ''}
+                            onChange={(e) => setValues((old) => ({ ...old, rent: e.target.value }))}
+                          />
+                          <TextField
+                            type="date"
+                            label="Ngày hiệu lực"
+                            value={values.effectiveFrom || todayVietnam()}
+                            onChange={(e) =>
+                              setValues((old) => ({ ...old, effectiveFrom: e.target.value }))
+                            }
+                            slotProps={{ inputLabel: { shrink: true } }}
+                          />
+                        </>
+                      )}
+                    </>
+                  )}
                   {field('roomNumber', 'Số phòng')}
                   {field('floor', 'Tầng', false)}
                   {field('capacity', 'Sức chứa', true, 'number')}

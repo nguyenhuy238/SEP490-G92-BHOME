@@ -78,7 +78,13 @@ it('previews bulk rooms without writing, then persists the reviewed room numbers
   expect(body).toMatchObject({
     effectiveFrom: expect.any(String),
     rooms: [
-      { roomNumber: 'P.201', floor: '1', roomDefaultsId: 'studio', expectedVersion: 3, rent: 3500000 },
+      {
+        roomNumber: 'P.201',
+        floor: '1',
+        roomDefaultsId: 'studio',
+        expectedVersion: 3,
+        rent: 3500000,
+      },
       ...Array.from({ length: 4 }, (_, i) => ({
         roomNumber: `P.${102 + i}`,
         floor: '1',
@@ -156,12 +162,16 @@ function mountRoomTypes() {
 }
 it('updates the visible configuration panel when another RoomType is selected', async () => {
   state.request.mockResolvedValue([
-      roomType,
-      {
-        ...roomType,
-        id: 'large',
-        data: { ...roomType.data, name: 'Phòng gia đình', defaults: { ...roomType.data.defaults, capacity: 5, amenities: ['Bếp riêng'] } },
+    roomType,
+    {
+      ...roomType,
+      id: 'large',
+      data: {
+        ...roomType.data,
+        name: 'Phòng gia đình',
+        defaults: { ...roomType.data.defaults, capacity: 5, amenities: ['Bếp riêng'] },
       },
+    },
   ]);
   mountRoomTypes();
   await screen.findByRole('heading', { name: 'Studio tổng hợp' });
@@ -196,13 +206,21 @@ it('loads RoomType details, edits with its current version and retains values on
 });
 
 it('filters the scoped native RoomDefaults collection without calling retired RoomType APIs', async () => {
-  state.request.mockResolvedValue([roomType, { ...roomType, id: 'large', data: { ...roomType.data, name: 'Phòng gia đình' } }]);
+  state.request.mockResolvedValue([
+    roomType,
+    { ...roomType, id: 'large', data: { ...roomType.data, name: 'Phòng gia đình' } },
+  ]);
   mountRoomTypes();
   await screen.findByRole('button', { name: 'Studio tổng hợp' });
   fireEvent.change(screen.getByLabelText('Tìm gợi ý tạo phòng'), { target: { value: 'Studio' } });
   expect(screen.queryByRole('button', { name: 'Phòng gia đình' })).not.toBeInTheDocument();
-  expect(state.request).toHaveBeenCalledWith('/api/v1/locations/location/room-defaults', expect.anything());
-  expect(state.request.mock.calls.some(([path]) => path.includes('/api/v1/room-types'))).toBe(false);
+  expect(state.request).toHaveBeenCalledWith(
+    '/api/v1/locations/location/room-defaults',
+    expect.anything(),
+  );
+  expect(state.request.mock.calls.some(([path]) => path.includes('/api/v1/room-types'))).toBe(
+    false,
+  );
 });
 
 it('uses the confirmed Location version for a subsequent settings save', async () => {

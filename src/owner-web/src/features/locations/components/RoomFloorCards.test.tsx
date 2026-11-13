@@ -30,10 +30,26 @@ const occupants = [
 beforeEach(() => {
   state.request.mockReset();
   state.request.mockImplementation(async (path: string) => {
-    if (path.endsWith('/room-provenance')) return [{
-      id: 'provenance', locationId: 'location', kind: 'RoomProvenance', status: 'Recorded', version: 1,
-      data: { roomId: 'room', roomDefaultsId: 'defaults', roomDefaultsVersion: 2, name: 'Studio lưu tại phòng', area: 25, amenities: ['Ban công'], defaultCapacity: 2, referenceRent: 3200000 },
-    }];
+    if (path.endsWith('/room-provenance'))
+      return [
+        {
+          id: 'provenance',
+          locationId: 'location',
+          kind: 'RoomProvenance',
+          status: 'Recorded',
+          version: 1,
+          data: {
+            roomId: 'room',
+            roomDefaultsId: 'defaults',
+            roomDefaultsVersion: 2,
+            name: 'Studio lưu tại phòng',
+            area: 25,
+            amenities: ['Ban công'],
+            defaultCapacity: 2,
+            referenceRent: 3200000,
+          },
+        },
+      ];
     if (path.includes('/occupancy?'))
       return {
         items: [{ roomId: room.id, locationId: room.locationId, occupants }],

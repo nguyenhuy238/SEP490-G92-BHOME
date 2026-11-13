@@ -182,7 +182,17 @@ export function LocationApiWorkspace() {
             color={location.data.isActive ? 'success' : 'default'}
             label={location.data.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}
           />
-          {owner && metadata.data?.data && <Chip size="small" variant="outlined" label={metadata.data.data.setupStatus === 'Completed' ? 'Đã lưu thiết lập ban đầu' : 'Đã ghi nhận thông tin'} />}
+          {owner && metadata.data?.data && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={
+                metadata.data.data.setupStatus === 'Completed'
+                  ? 'Đã lưu thiết lập ban đầu'
+                  : 'Đã ghi nhận thông tin'
+              }
+            />
+          )}
           <Chip
             size="small"
             variant="outlined"
@@ -190,13 +200,27 @@ export function LocationApiWorkspace() {
               summary.data?.rooms != null ? `${summary.data.rooms} phòng` : 'Chưa có số liệu phòng'
             }
           />
-          {owner && <Button component={Link} to={`/locations/${locationId}/settings`} size="small">
-            Chỉnh sửa cơ sở
-          </Button>}
+          {owner && (
+            <Button component={Link} to={`/locations/${locationId}/settings`} size="small">
+              Chỉnh sửa cơ sở
+            </Button>
+          )}
         </Stack>
       </Paper>
-      {owner && metadata.error && <Alert severity="warning" action={<Button onClick={() => void metadata.refetch()}>Thử lại</Button>}>Chưa tải được thông tin thiết lập cơ sở.</Alert>}
-      {!location.data.isActive && <Alert severity="info">Cơ sở đang ngừng hoạt động. Việc mở lại cơ sở không tự động chuyển các phòng ngừng khai thác thành phòng trống.</Alert>}
+      {owner && metadata.error && (
+        <Alert
+          severity="warning"
+          action={<Button onClick={() => void metadata.refetch()}>Thử lại</Button>}
+        >
+          Chưa tải được thông tin thiết lập cơ sở.
+        </Alert>
+      )}
+      {!location.data.isActive && (
+        <Alert severity="info">
+          Cơ sở đang ngừng hoạt động. Việc mở lại cơ sở không tự động chuyển các phòng ngừng khai
+          thác thành phòng trống.
+        </Alert>
+      )}
       <Paper variant="outlined" sx={{ p: 0.75, position: 'sticky', top: 75, zIndex: 5 }}>
         <Tabs
           value={tabs.some(([key]) => key === active) ? active : 'overview'}
@@ -244,7 +268,11 @@ export function LocationApiWorkspace() {
               Một số số liệu chưa tải được. Các mục đã tải thành công vẫn có thể xem và quản lý.
             </Alert>
           )}
-          <LocationWorkspaceOverview id={locationId} summary={summary.data} metadata={metadata.data?.data} />
+          <LocationWorkspaceOverview
+            id={locationId}
+            summary={summary.data}
+            metadata={metadata.data?.data}
+          />
         </>
       ) : active === 'settings' ? (
         <LocationWorkspaceSettings key={locationId} location={location.data} />
