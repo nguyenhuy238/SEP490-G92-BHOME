@@ -30,6 +30,9 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (cb: () => void) => useEffect(cb, [cb]),
   useLocalSearchParams: () => s.params,
 }));
+vi.mock('../components/ContextPortal', () => ({
+  ContextPortal: ({ children }: { children: React.ReactNode }) => children,
+}));
 vi.mock('../lib/toast', () => ({
   conciseMessage: (v: string) => v,
   showError: vi.fn(),
