@@ -30,7 +30,8 @@ it('reads invitation credentials from the fragment without sending them on page 
     </MemoryRouter>,
   );
   expect(screen.getByLabelText(/Email nhận/)).toHaveValue('staff@example.invalid');
-  expect(screen.getByLabelText(/Mã lời mời/)).toHaveValue('synthetic-link');
+  expect(screen.queryByLabelText(/Mã lời mời/)).not.toBeInTheDocument();
+  expect(screen.getByLabelText(/Email nhận/)).toHaveAttribute('readonly');
   expect(fetch).not.toHaveBeenCalled();
 });
 it('accepts invitation anonymously once and waits for server confirmation', async () => {
@@ -93,4 +94,31 @@ it('keeps expired invitation error visible and allows correction', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Thiết lập mật khẩu' }));
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('chưa hợp lệ'));
   expect(screen.queryByText(/Đã thiết lập mật khẩu/)).not.toBeInTheDocument();
+});
+
+it('extracts a pasted invitation URL and submits only its token', async () => {
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetch);
+  render(
+    <MemoryRouter>
+      <AcceptInvitationPage />
+    </MemoryRouter>,
+  );
+  fill();
+  fireEvent.change(screen.getByLabelText(/Mã lời mời/), {
+    target: {
+      value:
+        'http://localhost:5173/accept-invitation#userName=staff%40example.invalid&token=synthetic-link',
+    },
+  });
+  expect(screen.queryByLabelText(/Mã lời mời/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Thiết lập mật khẩu' }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  expect(JSON.parse(fetch.mock.calls[0]![1]!.body as string)).toEqual({
+    userName: 'staff@example.invalid',
+    token: 'synthetic-link',
+    newPassword: 'Synthetic!NewPassword493',
+  });
 });
