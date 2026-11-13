@@ -246,7 +246,19 @@ export class MobileApi {
         this.transport,
         async (response) => {
           if (response.status === 204) return undefined as T;
-          if (responseType === 'bytes') return new Uint8Array(await response.arrayBuffer()) as T;
+          if (responseType === 'bytes') {
+            if (
+              /^\/api\/v1\/contracts\/main-drafts\/[^/]+\/documents\/[^/]+$/.test(path) &&
+              ![
+                'application/pdf',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              ].includes(
+                (response.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase(),
+              )
+            )
+              throw new MobileApiError(502, 'draft_download_invalid', path);
+            return new Uint8Array(await response.arrayBuffer()) as T;
+          }
           return responseType === 'blob'
             ? (response.blob() as Promise<T>)
             : (response.json() as Promise<T>);

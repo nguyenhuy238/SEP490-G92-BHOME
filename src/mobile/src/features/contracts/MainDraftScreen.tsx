@@ -5,7 +5,7 @@ import { ContractPdfPreview } from './ContractPdfPreview';
 import { ContractPreviewSummary } from './ContractPreviewSummary';
 import { KeyboardFormScrollView } from '../../components/KeyboardFormScrollView';
 import { useFeedbackState } from '../../lib/useFeedbackState';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, IconButton, Portal, Text, TextInput } from 'react-native-paper';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -36,11 +36,16 @@ import { staffColors as s, colors as c } from '../../theme/theme';
 import { ContractDateField } from '../../components/ContractDateField';
 import { ToastHost } from '../../components/ToastHost';
 import { showSuccess } from '../../lib/toast';
+import { previewErrorCode, requiresNewDocument } from './pdfPreview';
+import { deliverWebDocument, openPdfWindow } from './webContractDocument';
 
 const iso = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 function message(error: unknown) {
-  const code = (error as { code?: string }).code;
+  const code = previewErrorCode(error);
+  if (code === 'pdf_popup_blocked')
+    return 'Trình duyệt chặn cửa sổ PDF. Cho phép cửa sổ bật lên hoặc chọn Tải PDF.';
+  if (code === 'pdf_window_closed') return 'Cửa sổ PDF đã đóng. Chọn Xem PDF để mở lại.';
   if ((error as { status?: number })?.status === 503 && !mainDraftMessages[code ?? ''])
     return 'Máy chủ chưa xử lý được hợp đồng. Hãy thử lại sau.';
   if (error instanceof Error && error.message === 'Thiết bị chưa có trình mở tài liệu.')
@@ -86,6 +91,7 @@ export function MainDraftScreen({
   const [mode, setMode] = useState<'edit' | 'preview' | 'signing'>('edit');
   const [signingVisited, setSigningVisited] = useState(false);
   const [documents, setDocuments] = useState<MainDraftFiles | null>(null);
+  const [reviewRevision, setReviewRevision] = useState(0);
   const [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true),
     [error, setError] = useFeedbackState('error', false);
@@ -99,6 +105,15 @@ export function MainDraftScreen({
   const calendarClose = useRef<(() => void) | null>(null);
   const routePromotion = useRef<{ id: string; client: typeof client } | null>(null);
   const refs = useRef({ roomId, representativeResidentId, residentIds });
+  const invalidateDocument = useCallback(
+    (error: unknown) => {
+      if (!requiresNewDocument(error)) return;
+      setDocuments(null);
+      setReviewRevision((value) => value + 1);
+      setError(message(error));
+    },
+    [setError],
+  );
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -218,6 +233,8 @@ export function MainDraftScreen({
       keys.confirmed('main-draft', body);
       if (!alive.current) return;
       setId(result.id);
+      setDocuments(null);
+      setReviewRevision((value) => value + 1);
       setSaved(result);
       setPhone(result.input.tenantPhone);
       setEmail(result.input.tenantEmail ?? email.trim());
@@ -245,7 +262,7 @@ export function MainDraftScreen({
       if (alive.current) setBusy(false);
     }
   }
-  async function openFile(pdf: boolean, override?: PreviewDocument) {
+  async function openFile(pdf: boolean, override?: PreviewDocument, view = false) {
     const document = override ?? (pdf ? documents?.pdf : documents?.docx);
     if (!client || !document || lock.current) return;
     lock.current = true;
@@ -254,7 +271,9 @@ export function MainDraftScreen({
     let file: File | null = null;
     const controller = new AbortController();
     operation.current = controller;
+    let tab: Window | null = null;
     try {
+      if (pdf && view && Platform.OS === 'web') tab = openPdfWindow();
       const bytes = await client.file(id, document.id, controller.signal);
       try {
         const signature = pdf ? [37, 80, 68, 70, 45] : [80, 75, 3, 4];
@@ -267,12 +286,12 @@ export function MainDraftScreen({
           ? 'application/pdf'
           : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         if (Platform.OS === 'web') {
-          const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-          const a = window.document.createElement('a');
-          a.href = url;
-          a.download = `hop-dong-nhap.${pdf ? 'pdf' : 'docx'}`;
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          deliverWebDocument(
+            bytes,
+            pdf,
+            `hop-dong-phong-${preparation?.roomNumber ?? 'thue'}-${document.id.slice(0, 8)}.${pdf ? 'pdf' : 'docx'}`,
+            tab,
+          );
         } else {
           if (!(await Sharing.isAvailableAsync()))
             throw new Error('Thiết bị chưa có trình mở tài liệu.');
@@ -290,6 +309,8 @@ export function MainDraftScreen({
         bytes.fill(0);
       }
     } catch (e) {
+      tab?.close();
+      invalidateDocument(e);
       workflowFailure('main-draft', e);
       if (alive.current) setError(message(e));
     } finally {
@@ -325,14 +346,34 @@ export function MainDraftScreen({
     operation.current = controller;
     try {
       const current = await client.get(id, controller.signal);
-      if (current.version !== saved.version || current.status !== 'Draft')
+      if (current.status !== 'Draft') {
+        setDocuments(null);
+        setReviewRevision((value) => value + 1);
         throw { code: 'draft_version_or_status_changed' };
+      }
+      if (current.version !== saved.version) {
+        setSaved(current);
+        setDocuments(null);
+        setReviewRevision((value) => value + 1);
+        setPreparation(current.preparation);
+        refs.current = current.input;
+        setStart(displayContractDate(current.input.startDate));
+        setEnd(displayContractDate(current.input.endDate));
+        setPhone(current.input.tenantPhone);
+        setPlace(current.input.tenantPlaceOfIssue);
+        setEmail(current.input.tenantEmail ?? '');
+        setNotes(current.input.notes);
+        dirty.current = false;
+        if (confirm) throw { code: 'draft_version_or_status_changed' };
+      }
       if (confirm) {
         if (alive.current) {
           setSigningVisited(true);
           setMode('signing');
         }
       } else {
+        setDocuments(null);
+        setReviewRevision((value) => value + 1);
         const result = await client.generate(id, controller.signal);
         if (alive.current) {
           setDocuments(result);
@@ -548,12 +589,13 @@ export function MainDraftScreen({
                     {signingVisited && client && saved && (
                       <View style={mode === 'signing' ? undefined : { display: 'none' }}>
                         <MainDraftSigningReview
-                          key={`${id}:${saved.version}`}
+                          key={`${id}:${saved.version}:${reviewRevision}`}
                           client={client}
                           draft={saved}
                           onBusyChange={setBusy}
                           onReleased={(next) => (onReleased ? onReleased(next) : onList())}
-                          onOpenPdf={(file) => void openFile(true, file)}
+                          onOpenPdf={(file) => void openFile(true, file, true)}
+                          onDownloadPdf={(file) => void openFile(true, file)}
                         />
                       </View>
                     )}
@@ -639,7 +681,9 @@ export function MainDraftScreen({
                         previewErrorCode={documents?.previewError ?? null}
                         hasDocx={!!documents?.docx}
                         onRegenerate={() => void reviewSaved(false)}
-                        onOpenPdf={() => void openFile(true)}
+                        onOpenPdf={() => void openFile(true, undefined, true)}
+                        onDownloadPdf={() => void openFile(true)}
+                        onDocumentError={invalidateDocument}
                         onOpenDocx={() => void openFile(false)}
                       />
                     ) : null}

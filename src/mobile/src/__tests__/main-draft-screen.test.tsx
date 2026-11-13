@@ -212,6 +212,40 @@ function fill() {
   ])
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
+it('recovers an outdated file using the latest draft version and a new document reference', async () => {
+  const original = state.request.getMockImplementation()!;
+  let generation = 0;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/documents'))
+      return {
+        docx: { id: 'docx' },
+        pdf: { id: ++generation === 1 ? 'old-pdf' : 'new-pdf' },
+        previewError: null,
+      };
+    if (path.endsWith('/old-pdf/preview')) throw { status: 409, code: 'draft_document_outdated' };
+    if (path.endsWith('/new-pdf/preview'))
+      return { fileId: 'new-pdf', pages: [{ number: 1, width: 595, height: 842 }] };
+    if (path.includes('/pages/')) return new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const result = await original(path, init);
+    return path.endsWith('/draft-id') && !init?.method ? { ...result, version: 2 } : result;
+  });
+  setup();
+  await screen.findByText('CCCD: ********0123');
+  fill();
+  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  await screen.findByText('Tài liệu thuộc phiên bản cũ. Hãy tạo lại bản xem trước.');
+  fireEvent.click(screen.getByText('Thử lại bản xem trước'));
+  await waitFor(() =>
+    expect(state.request.mock.calls.some(([path]) => path.endsWith('/new-pdf/preview'))).toBe(true),
+  );
+  expect(generation).toBe(2);
+  expect(
+    state.request.mock.calls.filter(([path]) => path.endsWith('/old-pdf/preview')),
+  ).toHaveLength(1);
+  expect(
+    state.request.mock.calls.filter(([path, init]) => path.endsWith('/draft-id') && !init?.method),
+  ).toHaveLength(1);
+});
 it('validates contact email, trims the supported draft field and omits issuing-place input', async () => {
   setup();
   await screen.findByText('CCCD: ********0123');
@@ -451,7 +485,7 @@ it('downloads PDF and DOCX through the authenticated client and cleans private c
   fill();
   fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
   await screen.findByText('Bản hợp đồng PDF');
-  fireEvent.click(screen.getByRole('button', { name: 'Tải hoặc mở PDF' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Xem PDF' }));
   await waitFor(() => expect(state.deleted).toHaveBeenCalledTimes(1));
   expect(state.share).toHaveBeenCalledWith(
     expect.stringMatching(/\.pdf$/),
@@ -468,7 +502,7 @@ it('downloads PDF and DOCX through the authenticated client and cleans private c
   );
   expect(state.writes[1]).toEqual([80, 75, 3, 4]);
   state.share.mockRejectedValueOnce(new Error('Unavailable'));
-  fireEvent.click(screen.getByRole('button', { name: 'Tải hoặc mở PDF' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Xem PDF' }));
   await waitFor(() => expect(state.deleted).toHaveBeenCalledTimes(3));
   expect(getToastSnapshot().toast?.type).not.toBe('error');
   const valid = state.request.getMockImplementation()!;
@@ -477,7 +511,7 @@ it('downloads PDF and DOCX through the authenticated client and cleans private c
       ? Promise.resolve(new Uint8Array([1, 2, 3]))
       : valid(path, init),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Tải hoặc mở PDF' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Xem PDF' }));
   await screen.findByText('Tệp tải về không hợp lệ. Hãy tạo lại tài liệu rồi thử lại.');
   expect(state.share).toHaveBeenCalledTimes(3);
   expect(state.deleted).toHaveBeenCalledTimes(3);

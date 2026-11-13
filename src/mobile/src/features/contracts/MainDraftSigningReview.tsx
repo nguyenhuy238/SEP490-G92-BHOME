@@ -17,6 +17,8 @@ import { ChoiceField } from '../../components/WorkflowControls';
 import { useSession } from '../../lib/SessionProvider';
 import { randomUUID } from '../../lib/randomUUID';
 import { ContractPdfPreview } from './ContractPdfPreview';
+import { previewErrorCode, requiresNewDocument } from './pdfPreview';
+import { useCallback } from 'react';
 
 export function MainDraftSigningReview({
   client,
@@ -24,12 +26,14 @@ export function MainDraftSigningReview({
   onReleased,
   onOpenPdf,
   onBusyChange,
+  onDownloadPdf,
 }: {
   client: ReturnType<typeof mainDraftClient>;
   draft: MainDraftView;
   onReleased: (id: string) => void;
   onOpenPdf: (document: PreviewDocument) => void;
   onBusyChange?: (busy: boolean) => void;
+  onDownloadPdf?: (document: PreviewDocument) => void;
 }) {
   const { api, session } = useSession();
   const owner = !!session?.roles.includes('Owner');
@@ -52,6 +56,13 @@ export function MainDraftSigningReview({
   const [keys] = useState(() => mutationKeys(randomUUID));
   const lock = useRef(false),
     alive = useRef(true);
+  const invalidateDocument = useCallback((failure: unknown) => {
+    if (requiresNewDocument(failure)) {
+      setFile(null);
+      setReviewed(false);
+      setError(mainDraftMessages[previewErrorCode(failure)] ?? contractError(failure));
+    }
+  }, []);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -166,7 +177,9 @@ export function MainDraftSigningReview({
           previewErrorCode={null}
           onRegenerate={() => void run(false)}
           onOpenPdf={() => onOpenPdf(file)}
+          onDownloadPdf={onDownloadPdf ? () => onDownloadPdf(file) : undefined}
           onOpenDocx={() => {}}
+          onDocumentError={invalidateDocument}
         />
       )}
       <Box>

@@ -23,7 +23,13 @@ import {
 import { ToastHost } from '../../components/ToastHost';
 import { workflowFailure } from '../../lib/workflowFailure';
 import { colors as c } from '../../theme/theme';
-import { previewError, previewPngUri, validPreviewInfo } from './pdfPreview';
+import {
+  boundedPreview,
+  previewError,
+  previewPngUri,
+  validPreviewInfo,
+  requiresNewDocument,
+} from './pdfPreview';
 
 type Client = ReturnType<typeof mainDraftClient>;
 
@@ -34,6 +40,8 @@ function PdfPage({
   page,
   width,
   active,
+  onDocumentError,
+  onReady,
 }: {
   client: Client;
   contractId: string;
@@ -41,6 +49,8 @@ function PdfPage({
   page: DraftPreviewPage;
   width: number;
   active: boolean;
+  onDocumentError?: (error: unknown) => void;
+  onReady?: (id: string) => void;
 }) {
   const [revision, setRevision] = useState(0);
   const key = `${contractId}/${fileId}/${page.number}/${revision}`;
@@ -54,7 +64,10 @@ function PdfPage({
   useEffect(() => {
     if (!active) return;
     const controller = new AbortController();
-    void client.previewPage(contractId, fileId, page.number, controller.signal).then(
+    void boundedPreview(
+      (signal) => client.previewPage(contractId, fileId, page.number, signal),
+      controller.signal,
+    ).then(
       (bytes) => {
         try {
           if (!controller.signal.aborted)
@@ -74,11 +87,12 @@ function PdfPage({
           const message = previewError(error);
           setResult({ client, key, uri: '', error: message });
           workflowFailure('main-draft', error);
+          onDocumentError?.(error);
         }
       },
     );
     return () => controller.abort();
-  }, [client, contractId, fileId, page.number, key, active]);
+  }, [client, contractId, fileId, page.number, key, active, onDocumentError]);
   const height = (width * page.height) / page.width;
   return (
     <View style={{ width, minHeight: current?.error ? undefined : Math.min(height, 240), gap: 8 }}>
@@ -101,6 +115,7 @@ function PdfPage({
           source={{ uri: current.uri }}
           accessibilityLabel={`Trang ${page.number} của hợp đồng PDF`}
           resizeMode="contain"
+          onLoad={() => onReady?.(fileId)}
           style={{ width, height, backgroundColor: c.white }}
           onError={() =>
             setResult({
@@ -126,6 +141,9 @@ export function ContractPdfPreview({
   onOpenPdf,
   onOpenDocx,
   hasDocx,
+  onDownloadPdf,
+  onDocumentError,
+  onReady,
 }: {
   client: Client;
   contractId: string;
@@ -136,6 +154,9 @@ export function ContractPdfPreview({
   onOpenPdf: () => void;
   onOpenDocx: () => void;
   hasDocx: boolean;
+  onDownloadPdf?: () => void;
+  onDocumentError?: (error: unknown) => void;
+  onReady?: (id: string) => void;
 }) {
   const window = useWindowDimensions();
   const [width, setWidth] = useState(Math.max(240, Math.min(window.width - 56, 664)));
@@ -150,6 +171,7 @@ export function ContractPdfPreview({
     key: string;
     info: DraftPreviewInfo | null;
     error: string;
+    conflict?: boolean;
   } | null>(null);
   const current = active && result?.client === client && result.key === key ? result : null;
   useEffect(() => {
@@ -166,7 +188,11 @@ export function ContractPdfPreview({
   useEffect(() => {
     if (!fileId || !active) return;
     const controller = new AbortController();
-    void client.previewInfo(contractId, fileId, controller.signal).then(
+    void boundedPreview(
+      (signal) => client.previewInfo(contractId, fileId, signal),
+      controller.signal,
+      15_000,
+    ).then(
       (info) => {
         if (controller.signal.aborted) return;
         if (!validPreviewInfo(info, fileId)) {
@@ -183,13 +209,20 @@ export function ContractPdfPreview({
       (error) => {
         if (!controller.signal.aborted) {
           const message = previewError(error);
-          setResult({ client, key, info: null, error: message });
+          setResult({
+            client,
+            key,
+            info: null,
+            error: message,
+            conflict: requiresNewDocument(error),
+          });
           workflowFailure('main-draft', error);
+          onDocumentError?.(error);
         }
       },
     );
     return () => controller.abort();
-  }, [client, contractId, fileId, key, active]);
+  }, [client, contractId, fileId, key, active, onDocumentError]);
   const info = current?.info;
   const viewport = Math.max(240, window.width - 24);
   const pageWidth = Math.min(viewport, 760) * zoom;
@@ -255,7 +288,9 @@ export function ContractPdfPreview({
               mode="outlined"
               icon="reload"
               disabled={busy}
-              onPress={() => (fileId ? setRevision((value) => value + 1) : onRegenerate())}
+              onPress={() =>
+                fileId && !current?.conflict ? setRevision((value) => value + 1) : onRegenerate()
+              }
             >
               Thử lại bản xem trước
             </Button>
@@ -271,6 +306,8 @@ export function ContractPdfPreview({
               page={info.pages[0]!}
               width={width}
               active={active}
+              onDocumentError={onDocumentError}
+              onReady={onReady}
             />
             <Text style={styles.pageNumber}>Trang 1 / {info.pages.length}</Text>
           </>
@@ -280,12 +317,23 @@ export function ContractPdfPreview({
         <Button
           compact
           contentStyle={{ minHeight: 44 }}
-          icon="download"
+          icon="open-in-new"
           disabled={!fileId || busy}
           onPress={onOpenPdf}
         >
-          Tải hoặc mở PDF
+          Xem PDF
         </Button>
+        {onDownloadPdf && (
+          <Button
+            compact
+            contentStyle={{ minHeight: 44 }}
+            icon="download"
+            disabled={!fileId || busy}
+            onPress={onDownloadPdf}
+          >
+            Tải PDF
+          </Button>
+        )}
         <Button
           compact
           contentStyle={{ minHeight: 44 }}
@@ -356,6 +404,8 @@ export function ContractPdfPreview({
                         page={item}
                         width={pageWidth}
                         active={active}
+                        onDocumentError={onDocumentError}
+                        onReady={onReady}
                       />
                     </ScrollView>
                   </View>

@@ -6,7 +6,7 @@ import {
 } from '../../../../../packages/client-core/src/mainDrafts';
 
 export function previewError(error: unknown): string {
-  const code = (error as { code?: string })?.code ?? (error instanceof Error ? error.message : '');
+  const code = previewErrorCode(error);
   if (mainDraftMessages[code]) return mainDraftMessages[code];
   const status = (error as { status?: number })?.status;
   if (status === 503) return 'Kho tài liệu hoặc bộ hiển thị chưa sẵn sàng. Hãy thử lại sau.';
@@ -14,6 +14,64 @@ export function previewError(error: unknown): string {
     return 'Không tìm thấy tài liệu hoặc bạn không có quyền xem. Hãy tải lại hợp đồng.';
   if (status === 409) return 'Tài liệu đã thay đổi. Hãy tạo lại bản xem trước.';
   return conciseMessage(contractError(error));
+}
+export function previewErrorCode(error: unknown): string {
+  return (
+    (error as { code?: string; problem?: { code?: string } })?.code ??
+    (error as { problem?: { code?: string } })?.problem?.code ??
+    (error instanceof Error ? error.message : '')
+  );
+}
+export function requiresNewDocument(error: unknown) {
+  return [
+    'draft_document_outdated',
+    'draft_version_or_status_changed',
+    'draft_configuration_changed_save_again',
+    'draft_template_changed_save_again',
+  ].includes(previewErrorCode(error));
+}
+
+// Also bound custom transports: an aborted native bridge must not leave the viewer spinning.
+export function boundedPreview<T>(
+  load: (signal: AbortSignal) => Promise<T>,
+  signal: AbortSignal,
+  milliseconds = 50_000,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const request = new AbortController();
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', cancel);
+    };
+    const cancel = () => {
+      cleanup();
+      request.abort();
+      reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      request.abort();
+      reject({ code: 'draft_preview_timeout' });
+    }, milliseconds);
+    if (signal.aborted) cancel();
+    else signal.addEventListener('abort', cancel, { once: true });
+    Promise.resolve()
+      .then(() => {
+        if (request.signal.aborted)
+          throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
+        return load(request.signal);
+      })
+      .then(
+        (value) => {
+          cleanup();
+          resolve(value);
+        },
+        (error) => {
+          cleanup();
+          reject(error);
+        },
+      );
+  });
 }
 export function validPreviewInfo(value: DraftPreviewInfo, fileId: string): boolean {
   return (
