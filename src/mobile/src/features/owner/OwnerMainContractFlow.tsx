@@ -51,8 +51,11 @@ export function OwnerMainContractFlow({
     ...server.completed.filter((key) => key !== 'sign'),
     ...(ownerSigned && tenantSigned ? ['sign'] : []),
   ];
-  const [step, setStep] = useState(server.active ? 3 : server.current),
+  const [selectedStep, setSelectedStep] = useState<number | null>(null),
     [selected, setSelected] = useState('');
+  const currentStep =
+    ownerSigned && tenantSigned ? (server.depositVerified ? 3 : 2) : server.current;
+  const step = server.active ? 3 : (selectedStep ?? currentStep);
   const [keys] = useState(() => mutationKeys(randomUUID));
   if (!session?.roles.includes('Owner')) return null;
   const operations =
@@ -130,6 +133,7 @@ export function OwnerMainContractFlow({
               contract={contract}
               onChanged={() => {
                 consent.reload();
+                setSelectedStep(null);
                 onChanged();
               }}
             />
@@ -200,6 +204,7 @@ export function OwnerMainContractFlow({
           onCancel={() => setSelected('')}
           onSuccess={() => {
             setSelected('');
+            setSelectedStep(null);
             onChanged();
           }}
         />
@@ -207,12 +212,12 @@ export function OwnerMainContractFlow({
       {!action && (
         <>
           {step > 0 && (
-            <Action secondary onPress={() => setStep((value) => value - 1)}>
+            <Action secondary onPress={() => setSelectedStep(step - 1)}>
               Bước trước
             </Action>
           )}
           {step < 3 && (
-            <Action onPress={() => setStep((value) => value + 1)}>
+            <Action onPress={() => setSelectedStep(step + 1)}>
               {step === 0
                 ? 'Xem trạng thái ký'
                 : step === 1

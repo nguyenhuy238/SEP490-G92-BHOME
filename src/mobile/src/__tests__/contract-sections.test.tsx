@@ -12,12 +12,14 @@ const state = vi.hoisted(() => ({
   request: vi.fn(),
   contract: {} as Record<string, unknown>,
   readiness: null as Readiness | null,
+  params: null as Record<string, string | undefined> | null,
 }));
 const id = 'bc050000-0000-4000-8000-000000004003';
 const transport = { request: state.request };
 vi.mock('../theme/theme', () => ({ colors: {}, staffColors: {} }));
 vi.mock('expo-router', () => ({
-  useLocalSearchParams: () => (state.deep ? { contractId: id, section: state.section } : {}),
+  useLocalSearchParams: () =>
+    state.params ?? (state.deep ? { contractId: id, section: state.section } : {}),
   router: { setParams: vi.fn() },
 }));
 vi.mock('../lib/SessionProvider', () => ({
@@ -101,8 +103,12 @@ vi.mock('../features/contracts/ContractDraftForm', () => ({
     <button onClick={onCancel}>Cấu hình giữ chỗ</button>
   ),
 }));
-vi.mock('../features/contracts/MainDraftScreen', () => ({ MainDraftScreen: () => null }));
-vi.mock('../features/contracts/MainDraftStart', () => ({ MainDraftStart: () => null }));
+vi.mock('../features/contracts/MainDraftScreen', () => ({
+  MainDraftScreen: ({ initialId }: { initialId?: string }) => <span>Draft {initialId}</span>,
+}));
+vi.mock('../features/contracts/MainDraftStart', () => ({
+  MainDraftStart: () => <span>Main preparation</span>,
+}));
 vi.mock('../features/contracts/ContractEvidence', () => ({
   ContractEvidence: () => <span>Signed PDF</span>,
 }));
@@ -117,6 +123,7 @@ vi.mock('../features/contracts/ContractLifecyclePanel', () => ({
 }));
 vi.mock('../features/contracts/ContractExpiryPanel', () => ({ ContractExpiryPanel: () => null }));
 import { ContractScreen } from '../features/contracts/ContractScreen';
+import { router } from 'expo-router';
 
 function summary(status: string, kind = 'Main', name = status): ContractSummary {
   return {
@@ -136,6 +143,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.role = 'Staff';
   state.deep = true;
+  state.params = null;
   state.section = undefined;
   state.readiness = null;
   state.contract = {
@@ -171,6 +179,43 @@ beforeEach(() => {
   );
 });
 afterEach(cleanup);
+it('uses the Owner route after list navigation and clears a persisted draft when route IDs are emptied', async () => {
+  state.role = 'Owner';
+  state.params = {};
+  state.request.mockResolvedValue({
+    items: [{ ...summary('Draft', 'Main', id), onboardingDraft: true }],
+    totalCount: 1,
+    page: 1,
+    pageSize: 20,
+  });
+  const view = render(<ContractScreen />);
+  fireEvent.click(await screen.findByText('Xem hợp đồng'));
+  expect(router.setParams).toHaveBeenCalledWith({ contractId: id, mainDraftId: id, roomId: '' });
+  state.params = { contractId: id, mainDraftId: id };
+  view.rerender(<ContractScreen />);
+  expect(screen.getByText(`Draft ${id}`)).toBeTruthy();
+  state.params = { contractId: '', mainDraftId: '', roomId: '' };
+  view.rerender(<ContractScreen />);
+  await screen.findByText('Hợp đồng & Vòng đời');
+  expect(screen.queryByText(`Draft ${id}`)).toBeNull();
+});
+it.each([
+  { contractId: 'malformed' },
+  { contractId: id, mainDraftId: 'bc050000-0000-4000-8000-000000004004' },
+])('rejects malformed or conflicting Owner resource references %j', (params) => {
+  state.role = 'Owner';
+  state.params = params;
+  render(<ContractScreen />);
+  expect(screen.getByText(/Tham chiếu hợp đồng không hợp lệ/)).toBeTruthy();
+  expect(screen.queryByText('Action form')).toBeNull();
+});
+it('opens Owner Main preparation explicitly without requiring an existing account or a Web detour', () => {
+  state.role = 'Owner';
+  state.params = {};
+  render(<ContractScreen />);
+  fireEvent.click(screen.getByText('Tạo hợp đồng thuê'));
+  expect(screen.getByText('Main preparation')).toBeTruthy();
+});
 it('allows Owner to approve a Holding draft while Staff cannot approve, verify deposits or activate', () => {
   state.contract.kind = 'Holding';
   state.contract.status = 'Draft';
@@ -296,10 +341,12 @@ it.each([true, false])('gates Owner Main activation on backend readiness=%s', (r
     (screen.getByRole('button', { name: 'Kích hoạt hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(!ready);
 });
-it('routes an old Owner prepare entry to Owner Web without opening a draft form', () => {
+it('opens approved Owner Main preparation without mutations before an explicit save', () => {
   state.role = 'Owner';
+  state.params = {};
   render(<ContractScreen prepare />);
-  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+  expect(screen.getByText('Main preparation')).toBeTruthy();
+  expect(screen.queryByText('Thực hiện trên Owner Web')).toBeNull();
   expect(screen.queryByText('Action form')).toBeNull();
   expect(state.request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
     true,
