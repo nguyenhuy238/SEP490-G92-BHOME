@@ -15,6 +15,22 @@ Current DTOs: [PropertyContracts.cs](../../src/backend/BHome.Application/Propert
 LocationWrite, RoomWrite and PolicyWrite reject unmapped fields, including obsolete
 RoomType fields even when null. `roomId:null` selects Location fee scope. Rates use
 decimal strings. Permissions and billing/payment state remain server-authoritative.
+Service fees accept `FixedPerRoomPerMonth` (0) or `FixedPerPersonPerMonth` (2);
+rent remains per room/month (0), electricity and water remain metered (1).
+The new method uses the existing Compact24 column and contract snapshot. It does
+not reinterpret existing rates, contracts, or invoice lines.
+
+Deployment: existing Compact24 runtimes can store the new value without a data
+backfill. The reviewed [SQL guard](../../src/backend/BHome.Infrastructure/Persistence/Compact24/Migrations/PersonMonthlyServiceFees.sql)
+adds a check for future writes. EF-managed Compact24 databases use migration
+`20261113000100_PersonMonthlyServiceFees`; databases initialized from standalone
+Compact24 SQL without EF history need an explicitly reviewed application of the
+same guard to the intended database, rather than running the EF initial baseline.
+The guard is NOT VALID on upgrade to preserve historical unsupported rows; any
+such rows require business review before validating the constraint. New databases
+initialized from the current canonical SQL receive the check immediately.
+Older binaries must not run against newly created per-person policies, since
+their projection treated unknown methods as per-room fees.
 Invalid scope/input, authorization and stale-state errors use the applicable service
 400/401/403/404/409 policy.
 

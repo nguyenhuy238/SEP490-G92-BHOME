@@ -16,6 +16,7 @@ import { formatContractMoney, vnd } from '../../../../packages/client-core/src/c
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import type { Invoice, Page } from '../../../../packages/client-core/src/invoices';
 import { Action, Pill, ui } from '../components/WorkspaceKit';
+import { MoneyTextInput } from '../components/MoneyTextInput';
 import {
   InvoiceFeedback,
   InvoiceMoneyRow,
@@ -379,11 +380,10 @@ function RequestForm({
           changed();
         }}
       />
-      <TextInput
+      <MoneyTextInput
         label="Giá trị đề xuất (VND, tùy chọn)"
         accessibilityLabel="Giá trị đề xuất (VND, tùy chọn)"
         value={amount}
-        keyboardType="number-pad"
         disabled={busy}
         onChangeText={(v) => {
           setAmount(v);

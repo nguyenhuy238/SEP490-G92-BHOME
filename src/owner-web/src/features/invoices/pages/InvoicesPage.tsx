@@ -30,6 +30,7 @@ import {
   formatBillingDecimal,
   hasSettlementUsageCoverage,
   hasSettlementFixedCoverage,
+  invoicePersonMonths,
   missingBillingInput,
   type InvoiceListFilter,
 } from '../../../../../../packages/client-core/src/invoices';
@@ -477,9 +478,19 @@ export function LiveInvoicesPage() {
                           ? 'kWh'
                           : line.category === 'Water'
                             ? 'm³'
-                            : ''}
+                            : invoicePersonMonths(line)
+                              ? 'người'
+                              : ''}
+                        {invoicePersonMonths(line)?.prorated && (
+                          <Typography variant="caption" sx={{ display: 'block' }}>
+                            {invoicePersonMonths(line)?.personDays} người-ngày
+                          </Typography>
+                        )}
                       </TableCell>
-                      <TableCell>{formatBillingDecimal(line.rate)} đ</TableCell>
+                      <TableCell>
+                        {formatBillingDecimal(line.rate)} đ
+                        {invoicePersonMonths(line) ? '/người/tháng' : ''}
+                      </TableCell>
                       <TableCell>{formatContractMoney(line.amount)}</TableCell>
                     </TableRow>
                   ))}

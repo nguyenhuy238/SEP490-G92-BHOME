@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using BHome.Application.Billing;
+using BHome.Application.Contracts;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Ocr;
 using BHome.Domain.Billing;
@@ -45,7 +47,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()} {string.Join(Environment.NewLine, BHome.IntegrationTests.Compact24.Compact24WorkflowFixture.Diagnostics.TakeLast(2))}");
         return (await response.Content.ReadFromJsonAsync<T>())!;
     }
-    private async Task<Workspace> Setup(DateTimeOffset? activatedAt = null)
+    private async Task<Workspace> Setup(DateTimeOffset? activatedAt = null, bool includeService = false, DateOnly? primaryStart = null, decimal primaryDeposit = 0, bool personFee = false)
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff);
         var tenant = await User(Roles.Tenant); var other = await User(Roles.Tenant);
@@ -55,38 +57,61 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC-BILL", Capacity = 2, Status = RoomStatus.Occupied };
         var resident = new Resident { RoomId = room.Id, TenantUserId = tenant.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Tenant", VerificationStatus = IdentityVerificationStatus.Verified };
         var second = new Resident { RoomId = room.Id, TenantUserId = other.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Other", VerificationStatus = IdentityVerificationStatus.Verified };
-        Contract ContractFor(Resident person) => new()
+        Contract ContractFor(Resident person, bool primary = false) => new()
         {
             RoomId = room.Id,
             OwnerSignerId = owner.Id,
             TenantUserId = person.TenantUserId!.Value,
             RepresentativeResidentId = person.Id,
             Status = ContractStatus.Active,
-            StartDate = period.AddMonths(-1),
+            StartDate = primary ? primaryStart ?? period.AddMonths(-1) : period.AddMonths(-1),
             EndDate = period.AddMonths(4),
             MonthlyRent = 3000000,
-            RequiredDeposit = 0,
+            RequiredDeposit = primary ? primaryDeposit : 0,
             Terms = "SYNTHETIC TEST",
             ActivatedAt = activatedAt ?? DateTimeOffset.UtcNow,
             ActivatedByUserId = owner.Id,
-            Residents = [new ContractResident { ResidentId = person.Id, ResidenceFrom = period.AddMonths(-1), Role = ResidentType.Representative }]
+            Residents = [new ContractResident { ResidentId = person.Id, ResidenceFrom = primary ? primaryStart ?? period.AddMonths(-1) : period.AddMonths(-1), Role = ResidentType.Representative }]
         };
-        var contract = ContractFor(resident); var secondContract = ContractFor(second);
+        var contract = ContractFor(resident, true); var secondContract = ContractFor(second);
         db.AddRange(location, room, resident, second, contract, secondContract,
             new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddYears(-1), Today.AddYears(1)));
-        foreach (var (category, code, rate) in new[] { (ChargeCategory.Rent, "RENT", 3000000m), (ChargeCategory.Electricity, "ELECTRICITY", 3500m), (ChargeCategory.Water, "WATER", 15000m) })
-            db.Add(new BillingPolicy
+        var fees = new List<(ChargeCategory Category, string Code, decimal Rate)> { (ChargeCategory.Rent, "RENT", 3000000m), (ChargeCategory.Electricity, "ELECTRICITY", 3500m), (ChargeCategory.Water, "WATER", 15000m) };
+        if (includeService) fees.Add((ChargeCategory.ServiceFee, "INTERNET", 100000m));
+        if (personFee) fees.Add((ChargeCategory.ServiceFee, "CLEANING", 100001m));
+        var policies = new List<BillingPolicy>();
+        foreach (var (category, code, rate) in fees)
+        {
+            var policy = new BillingPolicy
             {
                 LocationId = location.Id,
                 Category = category,
                 ChargeCode = code,
                 Name = "Synthetic " + code,
-                Method = category == ChargeCategory.Rent ? ChargingMethod.FixedPerRoomPerMonth : ChargingMethod.Metered,
+                Method = category is ChargeCategory.Electricity or ChargeCategory.Water ? ChargingMethod.Metered :
+                    code == "CLEANING" ? ChargingMethod.FixedPerPersonPerMonth : ChargingMethod.FixedPerRoomPerMonth,
                 Rate = rate,
                 EffectiveFrom = period.AddYears(-1)
-            });
+            };
+            policies.Add(policy); db.Add(policy);
+        }
+        foreach (var tenancy in new[] { contract, secondContract })
+        {
+            tenancy.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(tenancy.MonthlyRent, tenancy.RequiredDeposit,
+                tenancy.StartDate, tenancy.EndDate, default, "SyntheticSigned", DateTimeOffset.UtcNow,
+                policies.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category, (int)p.Method,
+                    p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version) { Name = p.Name }).ToArray()) { SnapshotVersion = 1 });
+            SealFixture(tenancy);
+        }
         await db.SaveChangesAsync();
         return new(owner, staff, tenant, other, location.Id, room.Id, contract.Id, period);
+    }
+    private static void SealFixture(Contract c)
+    {
+        var document = new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, c.TenantUserId!.Value, c.RepresentativeResidentId,
+            c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit,
+            c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash) { AgreedCharges = ContractChargeSnapshot.Read(c).Charges };
+        c.SnapshotHash = ContractDocumentSnapshot.Hash(document);
     }
     private static BillingScheduleWrite Schedule(Workspace w) => new(w.Location, BillingRateDate.PeriodStart, BillingRentSource.RoomPolicy,
         PartialMonthRule.FullMonth, VndRounding.AwayFromZero, 1, 0, 1, 1, 10, 1, 0);
@@ -180,7 +205,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Set<Invoice>().CountAsync(i => i.RoomId == w.Room));
         Assert.Equal(2, await db.Set<InvoiceRecipient>().CountAsync(i => i.InvoiceId == invoice.Id));
-        Assert.NotNull((await db.Set<BillingPolicy>().SingleAsync(p => p.LocationId == w.Location && p.Category == ChargeCategory.Rent)).FirstUsedAt);
+        Assert.NotNull((await db.Set<BillingPolicy>().SingleAsync(p => p.LocationId == w.Location && p.Category == ChargeCategory.Electricity)).FirstUsedAt);
         Assert.Equal(2, await db.Set<Contract>().CountAsync(c => c.RoomId == w.Room && c.Status == ContractStatus.Active));
     }
 

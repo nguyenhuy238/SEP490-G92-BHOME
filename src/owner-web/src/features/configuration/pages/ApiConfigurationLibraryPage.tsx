@@ -42,6 +42,7 @@ import { useSharedConfigurationApi } from '../useSharedConfigurationApi';
 import type { LibraryKind } from './ConfigurationLibraryPage';
 import { SharedTemplateDetails } from './SharedTemplateDetails';
 import { SharedTemplateEditor } from './SharedTemplateEditor';
+import { formatBillingDecimal } from '../../../../../../packages/client-core/src/invoices';
 
 const libraryMeta: Record<
   SharedResource,
@@ -87,11 +88,11 @@ const statusLabel = (status: SharedDocument['status']) =>
 function documentSummary(document: SharedDocument) {
   if (document.resource === 'room-type-templates') {
     const data = document.data as { area: string; capacity: number; referenceRent: string | null };
-    return `${data.area} m² · ${data.capacity} người ở${data.referenceRent ? ` · ${data.referenceRent} VND/tháng` : ''}`;
+    return `${data.area} m² · ${data.capacity} người ở${data.referenceRent ? ` · ${formatBillingDecimal(data.referenceRent)} đ/tháng` : ''}`;
   }
   if (document.resource === 'asset-catalog') {
     const data = document.data as { category: string; unit: string; referencePrice: string };
-    return `${data.category} · ${data.referencePrice} VND/${data.unit}`;
+    return `${data.category} · ${formatBillingDecimal(data.referencePrice)} đ/${data.unit}`;
   }
   if (document.resource === 'asset-templates') {
     const data = document.data as { items: unknown[] };
@@ -99,7 +100,13 @@ function documentSummary(document: SharedDocument) {
   }
   if (document.resource === 'fee-templates') {
     const data = document.data as { category: string; referenceRate: string; unit: string };
-    return `${data.category} · ${data.referenceRate} VND/${data.unit}`;
+    const unit =
+      data.unit === 'VND/month'
+        ? 'tháng'
+        : data.unit === 'VND/person/month'
+          ? 'người/tháng'
+          : data.unit;
+    return `${data.category} · ${formatBillingDecimal(data.referenceRate)} đ/${unit}`;
   }
   return `Hiệu lực từ ${(document.data as { effectiveFrom: string }).effectiveFrom}`;
 }

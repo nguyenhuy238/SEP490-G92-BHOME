@@ -85,11 +85,21 @@ export function FinalFixedChargesPanel({
             {row.calculation && (
               <>
                 <Typography>
-                  Đơn giá tháng: {formatBillingDecimal(row.calculation.rate)} ₫ ·{' '}
+                  Đơn giá tháng: {formatBillingDecimal(row.calculation.rate)} ₫
+                  {row.calculation.residentCount != null ? '/người' : '/phòng'} ·{' '}
                   {row.calculation.partialMonth === 0
                     ? 'Tính đủ tháng theo chính sách'
                     : `Theo ${row.calculation.occupiedDays}/${row.calculation.periodDays} ngày phòng có người ở`}
                 </Typography>
+                {row.calculation.residentCount != null && (
+                  <Typography>
+                    Người thuê: {row.calculation.residentCount} · {row.calculation.personDays}{' '}
+                    người-ngày trong kỳ.{' '}
+                    {row.calculation.partialMonth === 1
+                      ? 'Tính theo người-ngày thực tế.'
+                      : 'Tính đủ tháng cho từng người.'}
+                  </Typography>
+                )}
                 <Typography>
                   Giá trị lũy kế: {formatContractMoney(row.calculation.cumulativePricedAmount)} · Đã
                   ghi nhận: {formatContractMoney(row.calculation.alreadyPricedAmount)}

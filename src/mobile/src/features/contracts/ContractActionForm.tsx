@@ -200,7 +200,7 @@ export function ContractActionForm({
                   : '')
             }
             value={values[f.name] ?? ''}
-            numeric={f.type === 'money'}
+            money={f.type === 'money'}
             multiline={f.type === 'multiline'}
             disabled={busy}
             onChange={(v) => {

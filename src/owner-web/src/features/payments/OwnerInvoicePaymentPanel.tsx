@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -268,12 +269,12 @@ export function RecordTransferForm({
           changed();
         }}
       />
-      <TextField
+      <MoneyField
         required
         label="Số tiền thực nhận VND"
         value={amount}
-        onChange={(e) => {
-          setAmount(e.target.value);
+        onValueChange={(raw) => {
+          setAmount(raw);
           changed();
         }}
       />

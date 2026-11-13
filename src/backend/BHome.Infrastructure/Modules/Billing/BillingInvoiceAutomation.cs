@@ -26,8 +26,8 @@ internal sealed partial class BillingAutomationEngine
     private sealed class AuthorizedOwner(Guid id) : ICurrentUser { public Guid? UserId => id; public bool IsInRole(string role) => role == Roles.Owner; }
     private InvoiceService Invoices(BillingAutomationPlan plan)
     {
-        var actor = new AuthorizedOwner(plan.AuthorizedByUserId); var permissions = new PermissionAccess(actor, new ResourceAccess(actor, staffAccess));
-        return new(invoiceRepository, new PropertyService(propertyRepository, actor, permissions, clock), actor, clock, schedules);
+        var actor = new AuthorizedOwner(plan.AuthorizedByUserId);
+        return new(invoiceRepository, actor, clock, schedules, fixedCoverage);
     }
     private async Task<int> GenerateDraft(BillingAutomationPlan p, DateOnly period, Guid room, List<object> errors, CancellationToken t)
     {

@@ -54,6 +54,10 @@ public sealed class PropertyRulesTests
     [InlineData(ChargeCategory.Electricity, ChargingMethod.Metered, "ELECTRICITY", true)]
     [InlineData(ChargeCategory.Water, ChargingMethod.FixedPerRoomPerMonth, "WATER", false)]
     [InlineData(ChargeCategory.ServiceFee, ChargingMethod.FixedPerRoomPerMonth, "INTERNET", true)]
+    [InlineData(ChargeCategory.ServiceFee, ChargingMethod.FixedPerPersonPerMonth, "CLEANING", true)]
+    [InlineData(ChargeCategory.ServiceFee, ChargingMethod.FixedPerPersonPerMonth, "WATER", false)]
+    [InlineData(ChargeCategory.Rent, ChargingMethod.FixedPerPersonPerMonth, "RENT", false)]
+    [InlineData(ChargeCategory.Electricity, ChargingMethod.FixedPerPersonPerMonth, "ELECTRICITY", false)]
     [InlineData(ChargeCategory.ServiceFee, ChargingMethod.FixedPerRoomPerMonth, "RENT", false)]
     [InlineData(ChargeCategory.ServiceFee, ChargingMethod.Metered, "INTERNET", false)]
     public void OnlyApprovedChargeMethodsAndReservedCodesAreAccepted(ChargeCategory category,

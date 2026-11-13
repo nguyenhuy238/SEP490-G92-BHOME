@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useState } from 'react';
 import {
   Alert,
@@ -268,14 +269,13 @@ function TariffEditor({
                 )
               }
             />
-            <TextField
+            <MoneyField
+              allowDecimal
               required
               label={`Đơn giá bậc ${index + 1}`}
               value={tier.rate}
-              onChange={(event) =>
-                setTiers((old) =>
-                  old.map((row, i) => (i === index ? { ...row, rate: event.target.value } : row)),
-                )
+              onValueChange={(raw) =>
+                setTiers((old) => old.map((row, i) => (i === index ? { ...row, rate: raw } : row)))
               }
             />
             <Button

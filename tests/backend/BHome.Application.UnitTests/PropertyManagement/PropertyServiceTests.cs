@@ -143,6 +143,40 @@ public sealed class PropertyServiceTests
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RoomSpecificFeeWritesRespectBindingContractButLocationOfferRemainsEditable(bool locked)
+    {
+        var (service, repository) = Create(Roles.Owner, BeforeVietnamMidnight);
+        var location = new Location("Synthetic") { Address = "Synthetic Address", IsActive = true };
+        var room = new Room { LocationId = location.Id };
+        repository.FindAsync<Location>(location.Id, default).Returns(location);
+        repository.AnyAsync<Room>(Arg.Any<System.Linq.Expressions.Expression<Func<Room, bool>>>(), default).Returns(true);
+        repository.HasBindingPriceContractAsync(room.Id, default).Returns(locked);
+        repository.WithLocationLockAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<PolicyDto>>>(), default)
+            .Returns(call => call.Arg<Func<Task<PolicyDto>>>()());
+        var input = new PolicyWrite(location.Id, room.Id, ChargeCategory.Water, "WATER", "Water",
+            ChargingMethod.Metered, 15000, new(2026, 10, 30), null);
+        var existing = new BillingPolicy { LocationId = location.Id, RoomId = room.Id,
+            Category = input.Category, ChargeCode = input.ChargeCode, Name = input.Name,
+            Method = input.Method, Rate = 10000, EffectiveFrom = new(2026, 10, 31) };
+        repository.FindAsync<BillingPolicy>(existing.Id, default).Returns(existing);
+        if (locked)
+        {
+            var error = await Assert.ThrowsAsync<PropertyException>(() => service.CreatePolicyAsync(input, default));
+            Assert.Equal("room_pricing_locked_by_contract", error.Code);
+            Assert.Equal("room_pricing_locked_by_contract", (await Assert.ThrowsAsync<PropertyException>(() => service.UpdateFuturePolicyAsync(existing.Id, new(input, 1), default))).Code);
+            Assert.Equal("room_pricing_locked_by_contract", (await Assert.ThrowsAsync<PropertyException>(() => service.ReplacePolicyAsync(existing.Id, new(input with { EffectiveFrom = new(2026, 11, 1) }, 1), default))).Code);
+            Assert.Equal("room_pricing_locked_by_contract", (await Assert.ThrowsAsync<PropertyException>(() => service.EndPolicyAsync(existing.Id, new(new(2026, 11, 1), 1, "Synthetic reason"), default))).Code);
+            Assert.Equal(10000, existing.Rate);
+            Assert.Equal(1, existing.Version);
+            repository.DidNotReceive().Add(Arg.Any<BillingPolicy>());
+        }
+        else Assert.Equal(15000, (await service.CreatePolicyAsync(input, default)).Rate);
+        Assert.Equal(15000, (await service.CreatePolicyAsync(input with { RoomId = null }, default)).Rate);
+    }
+
+    [Theory]
     [InlineData(16, 59, true)]
     [InlineData(17, 0, false)]
     public async Task FutureEditCannotBecomeEffectiveOnTheNewVietnamBusinessDate(int hour, int minute, bool accepted)

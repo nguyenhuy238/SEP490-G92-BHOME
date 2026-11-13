@@ -14,7 +14,7 @@ public sealed class Compact24MigrationBaselineTests
         using var db = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>()
             .UseNpgsql("Host=127.0.0.1;Database=offline_snapshot;Username=unconfigured").Options);
         Assert.False(db.Database.HasPendingModelChanges());
-        Assert.Equal([Compact24Baseline.Id, "20261110000100_LifecycleAlignment", "20261111000100_PhysicalResidenceClosure", "20261111035703_SettlementReceivableLedger", "20261111050000_SettlementBankAllocations", "20261111060000_ReceiptExcessDisposition", "20261111070000_ExternalPaymentPayer", "20261111080000_DepositReceiptAllocation", "20261112000100_SePayIntegration"], db.Database.GetMigrations());
+        Assert.Equal([Compact24Baseline.Id, "20261110000100_LifecycleAlignment", "20261111000100_PhysicalResidenceClosure", "20261111035703_SettlementReceivableLedger", "20261111050000_SettlementBankAllocations", "20261111060000_ReceiptExcessDisposition", "20261111070000_ExternalPaymentPayer", "20261111080000_DepositReceiptAllocation", "20261112000100_SePayIntegration", "20261113000100_PersonMonthlyServiceFees"], db.Database.GetMigrations());
         Assert.Contains("CREATE TABLE users", Compact24Baseline.MigrationSql);
         Assert.DoesNotContain("\nCOMMIT;", Compact24Baseline.MigrationSql);
     }

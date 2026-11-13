@@ -53,6 +53,11 @@ it('creates Staff without asking for or transmitting an initial password', async
     target: { value: 'new-staff@example.invalid' },
   });
   fireEvent.change(screen.getByLabelText(/Loại công việc/), { target: { value: 'PartTime' } });
+  const salary = screen.getByLabelText(/Mức lương thỏa thuận/);
+  fireEvent.change(salary, { target: { value: '3000000' } });
+  expect(salary).toHaveValue('3.000.000');
+  fireEvent.change(salary, { target: { value: '9007199254740993' } });
+  expect(salary).toHaveValue('9.007.199.254.740.993');
   fireEvent.submit(document.getElementById('staff-editor')!);
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
   await waitFor(() =>
@@ -66,6 +71,7 @@ it('creates Staff without asking for or transmitting an initial password', async
     ([path, init]) => path === '/api/v1/staff' && init?.method === 'POST',
   )!;
   expect(JSON.parse(call[1].body)).not.toHaveProperty('initialPassword');
+  expect(JSON.parse(call[1].body).employment.baseRate).toBe('9007199254740993');
 });
 it('loads server staff and forwards search and account status filters', async () => {
   mount();

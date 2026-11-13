@@ -7,10 +7,11 @@ using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using System.Text.Json;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractRepository(BHomePersistenceContext db) : IContractRepository
+internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorkspaceStore? setup = null) : IContractRepository
 {
     public async Task<ContractPage> ListAsync(ContractListScope scope, int page, int pageSize, Guid? locationId, ContractStatus? status, CancellationToken t)
     {
@@ -119,6 +120,37 @@ internal sealed class ContractRepository(BHomePersistenceContext db) : IContract
             g.OrderByDescending(x => x.RoomId.HasValue ? 2 : x.RoomTypeId.HasValue ? 1 : 0).First())
             .OrderBy(x => x.ChargeCode, StringComparer.Ordinal).Select(PropertyService.Map).ToArray();
         return new(roomId, effectiveOn, charges, new[] { "RENT", "ELECTRICITY", "WATER" }.Except(charges.Select(x => x.ChargeCode)).ToArray());
+    }
+    public async Task<bool> HasUtilityProfileAsync(Guid roomId, DateOnly from, DateOnly to, CancellationToken t)
+    {
+        if (setup is null) return false;
+        var location = await setup.RoomLocationAsync(roomId, t) ?? throw ContractException.Missing();
+        var profiles = (await setup.ListAsync(location, "UtilityProfile", t))
+            .Select(d => (d.Id, Profile: d.Data.Deserialize<UtilityProfileWrite>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!))
+            .Where(d => d.Profile.RoomId == roomId).ToArray();
+        return profiles.Any(d =>
+        {
+            var replacement = profiles.Where(next => next.Profile.ReplacesId == d.Id)
+                .Select(next => (DateOnly?)next.Profile.EffectiveFrom).Min();
+            var effectiveTo = d.Profile.EffectiveTo;
+            if (replacement is { } next && (effectiveTo is null || effectiveTo >= next))
+                effectiveTo = next.AddDays(-1);
+            return d.Profile.EffectiveFrom <= to && (effectiveTo is null || effectiveTo >= from);
+        });
+    }
+    public async Task<IReadOnlyList<Contract>> BindingContractsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, CancellationToken t)
+    {
+        var contracts = db.Set<Contract>().AsNoTracking().Include(c => c.Residents)
+            .Where(c => c.RoomId == roomId && c.Id != exceptId && c.Kind != ContractKind.Addendum &&
+                c.StartDate <= to && (c.ActualEndDate ?? c.EndDate) >= from);
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            contracts = contracts.Where(c => c.Status == ContractStatus.Active ||
+                c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation ||
+                c.Kind == ContractKind.Holding && c.Status == ContractStatus.Draft && c.ApprovedAt != null);
+        else
+            contracts = contracts.Where(c => c.Status == ContractStatus.Active ||
+                c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation);
+        return await contracts.ToArrayAsync(t);
     }
     public Task<bool> HoldingConflictAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, CancellationToken t) =>
         db.Set<Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.StartDate <= to && c.EndDate >= from &&

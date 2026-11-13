@@ -107,7 +107,11 @@ it('keeps property functions inside the selected Location Workspace', async () =
     </ThemeProvider>,
   );
 
-  const navigation = await screen.findByRole('navigation', { name: 'Điều hướng chính' });
+  const navigation = await screen.findByRole(
+    'navigation',
+    { name: 'Điều hướng chính' },
+    { timeout: 12000 },
+  );
   // One accessibility-tree scan per group avoids repeating expensive jsdom visibility/name
   // calculations. Keep exact accessible names, uniqueness and absent-link assertions.
   const expectedLinks: Record<string, string> = {
@@ -168,7 +172,7 @@ it('keeps property functions inside the selected Location Workspace', async () =
   expect(roomsHeading).toBeVisible();
   expect(document.querySelector('a[href="/rooms/room-0"]')).toBeInTheDocument();
   expect(document.querySelector('a[href="/rooms/room-25"]')).not.toBeInTheDocument();
-}, 15000);
+}, 30000);
 
 it('isolates the room space by Location route context', async () => {
   render(

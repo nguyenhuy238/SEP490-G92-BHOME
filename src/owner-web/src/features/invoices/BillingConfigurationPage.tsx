@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -184,7 +185,10 @@ export function ScheduleForm({
         'finalMonthOffset',
         'dueDay',
         'dueMonthOffset',
-      ].map((key) => [key, current ? String(current[key as keyof BillingSchedule]) : '']),
+      ].map((key) => [
+        key,
+        key === 'rentSource' ? '1' : current ? String(current[key as keyof BillingSchedule]) : '',
+      ]),
     ),
   );
   const [error, setError] = useState(''),
@@ -244,11 +248,15 @@ export function ScheduleForm({
         {!current && (
           <Alert severity="info">Chọn đầy đủ các quy tắc trước khi lập hóa đơn đầu tiên.</Alert>
         )}
-        {choice('rentSource', 'Nguồn tiền thuê cả phòng', [
-          'Biểu giá của phòng / cơ sở',
-          'Tiền thuê của hợp đồng đại diện',
+        <TextField label="Nguồn tiền thuê cả phòng" value="Giá đã chốt trong hợp đồng" disabled />
+        <Alert severity="info">
+          Tiền thuê, đơn giá điện nước và các khoản dịch vụ của hợp đồng được giữ cố định. Lịch hóa
+          đơn chỉ điều khiển kỳ tính tiền, ngày chốt và cách làm tròn.
+        </Alert>
+        {choice('rateDate', 'Mốc tham chiếu kỳ (không thay đổi giá hợp đồng)', [
+          'Ngày đầu tháng',
+          'Ngày cuối tháng',
         ])}
-        {choice('rateDate', 'Mốc áp dụng giá trong kỳ', ['Ngày đầu tháng', 'Ngày cuối tháng'])}
         {choice('partialMonth', 'Phí cố định khi ở không đủ tháng', [
           'Thu cả tháng',
           'Theo số ngày phòng có khách / số ngày tháng',
@@ -325,6 +333,7 @@ export function PolicyForm({
     [code, setCode] = useState(previous?.chargeCode ?? ''),
     [reason, setReason] = useState('');
   const [roomId, setRoomId] = useState(previous?.roomId ?? '');
+  const [serviceMethod, setServiceMethod] = useState(previous?.method === 2 ? '2' : '0');
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const [rawError, setRawError] = useState<unknown>(null);
@@ -338,9 +347,7 @@ export function PolicyForm({
           event.preventDefault();
           if (lock.current) return;
           if (!/^\d{1,14}(\.\d{1,4})?$/.test(rate)) {
-            setError(
-              'Nhập giá không âm, tối đa 4 chữ số thập phân, không có dấu phân cách hàng nghìn.',
-            );
+            setError('Nhập giá không âm, tối đa 14 chữ số phần nguyên và 4 chữ số thập phân.');
             return;
           }
           lock.current = true;
@@ -353,7 +360,7 @@ export function PolicyForm({
             category: cat,
             chargeCode: cat === 3 ? code : ['RENT', 'ELECTRICITY', 'WATER'][cat],
             name,
-            method: cat === 1 || cat === 2 ? 1 : 0,
+            method: cat === 1 || cat === 2 ? 1 : cat === 3 ? Number(serviceMethod) : 0,
             rate,
             effectiveFrom: date,
             effectiveTo: endDate || null,
@@ -412,7 +419,11 @@ export function PolicyForm({
           label="Khoản thu"
           value={category}
           disabled={!!previous}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setServiceMethod('0');
+            setRate('');
+          }}
         >
           {['Tiền thuê', 'Điện / kWh', 'Nước / m³', 'Phí dịch vụ / tháng'].map((text, i) => (
             <MenuItem key={text} value={String(i)}>
@@ -428,17 +439,32 @@ export function PolicyForm({
         />
         {category === '3' && (
           <TextField
+            select
+            label="Cách tính phí dịch vụ"
+            value={serviceMethod}
+            onChange={(e) => {
+              setServiceMethod(e.target.value);
+              setRate('');
+            }}
+          >
+            <MenuItem value="0">Cố định/phòng/tháng</MenuItem>
+            <MenuItem value="2">Cố định/người/tháng</MenuItem>
+          </TextField>
+        )}
+        {category === '3' && (
+          <TextField
             required
             label="Mã phí dịch vụ"
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
           />
         )}
-        <TextField
+        <MoneyField
+          allowDecimal
           required
           label="Đơn giá VND"
           value={rate}
-          onChange={(e) => setRate(e.target.value)}
+          onValueChange={(raw) => setRate(raw)}
           slotProps={{ htmlInput: { inputMode: 'decimal' } }}
         />
         <TextField

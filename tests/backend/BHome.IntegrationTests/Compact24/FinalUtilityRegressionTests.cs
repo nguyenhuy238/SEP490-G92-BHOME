@@ -8,49 +8,49 @@ public sealed class FinalUtilityRegressionTests
     public async Task FullyOffsetDepositDoesNotCreateAFictitiousRefund()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveCumulativeTiers(reviewRefund: true, offsetAllDeposit: true); }
+        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveContractRates(reviewRefund: true, offsetAllDeposit: true); }
         finally { await fixture.DisposeAsync(); }
     }
     [CompactPostgresFact]
     public async Task OwnerReviewsChargesAndRefundsOnlyTheDepositRemainingAfterOffsets()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveCumulativeTiers(reviewRefund: true); }
+        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveContractRates(reviewRefund: true); }
         finally { await fixture.DisposeAsync(); }
     }
     [CompactPostgresFact]
     public async Task BillableBaselineAndCumulativeTieredPricing()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveCumulativeTiers(); }
+        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveContractRates(); }
         finally { await fixture.DisposeAsync(); }
     }
     [CompactPostgresFact]
     public async Task SettlementBeforeInvoiceDoesNotBillTheSameConsumptionAgain()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveCumulativeTiers(true); }
+        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveContractRates(true); }
         finally { await fixture.DisposeAsync(); }
     }
     [CompactPostgresFact]
     public async Task MissingQuotaOrAlteredPhotosCannotCreateAnOfficialCharge()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveCumulativeTiers(failuresOnly: true); }
+        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveContractRates(failuresOnly: true); }
         finally { await fixture.DisposeAsync(); }
     }
     [CompactPostgresFact]
     public async Task ConcurrentSettlementAndInvoiceCannotDoubleChargeUsage()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveCumulativeTiers(raceInvoice: true); }
+        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveContractRates(raceInvoice: true); }
         finally { await fixture.DisposeAsync(); }
     }
     [CompactPostgresFact]
     public async Task DifferentRoomContractsCanConfirmFinalReadingsOnTheSameDay()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveCumulativeTiers(sameDayFinals: true); }
+        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveContractRates(sameDayFinals: true); }
         finally { await fixture.DisposeAsync(); }
     }
 }

@@ -34,12 +34,19 @@ import { ErrorState, LoadingState } from '../../../components/common/PortalUI';
 import { LocationSection, LocationEmpty } from '../components/LocationSection';
 import { todayVietnam } from '../../staff/staffContracts';
 import { EndPolicyDialog } from '../components/EndPolicyDialog';
+import { UtilityWorkspace } from '../../property/UtilityWorkspace';
 
-export function LocationPricingWorkspace({ locationId }: { locationId: string }) {
+export function LocationPricingWorkspace({
+  locationId,
+  initialTab = 0,
+}: {
+  locationId: string;
+  initialTab?: number;
+}) {
   const api = useInvoiceApi();
   const { session } = useAuth();
   const owner = session?.roles.includes('Owner') ?? false;
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(initialTab);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [editing, setEditing] = useState<Policy | null | undefined>();
@@ -54,7 +61,7 @@ export function LocationPricingWorkspace({ locationId }: { locationId: string })
         `/api/v1/billing-policies?${new URLSearchParams({ locationId, page: String(page + 1), pageSize: '20', ...(search ? { search } : {}), ...(tab === 0 ? { chargeCategory: '0' } : {}) })}`,
         { signal },
       ),
-    enabled: tab !== 2,
+    enabled: tab === 0 || tab === 1,
   });
   const schedule = useQuery({
     queryKey: ['billing-schedule', session?.userId, locationId],
@@ -74,7 +81,7 @@ export function LocationPricingWorkspace({ locationId }: { locationId: string })
       title="Giá thuê & biểu phí"
       description="Quản lý từng khoản thu theo phạm vi và ngày hiệu lực. Giá riêng của phòng được ưu tiên theo quy tắc backend; hợp đồng và hóa đơn đã chốt giữ nguyên lịch sử."
       actions={
-        owner && tab !== 2 ? (
+        owner && (tab === 0 || tab === 1) ? (
           <Button
             variant="contained"
             onClick={() => {
@@ -96,6 +103,8 @@ export function LocationPricingWorkspace({ locationId }: { locationId: string })
       <Paper variant="outlined">
         <Tabs
           value={tab}
+          variant="scrollable"
+          scrollButtons="auto"
           onChange={(_, value: number) => {
             setTab(value);
             setPage(0);
@@ -104,9 +113,12 @@ export function LocationPricingWorkspace({ locationId }: { locationId: string })
           <Tab label="Giá thuê" />
           <Tab label="Tất cả khoản thu" />
           <Tab label="Lịch & quy tắc hóa đơn" />
+          <Tab label="Điện & nước" />
         </Tabs>
       </Paper>
-      {tab === 2 ? (
+      {tab === 3 ? (
+        <UtilityWorkspace locationId={locationId} />
+      ) : tab === 2 ? (
         !owner ? (
           <Alert severity="info">Chỉ Owner được quản lý lịch và quy tắc hóa đơn.</Alert>
         ) : schedule.isPending ? (
@@ -188,7 +200,16 @@ export function LocationPricingWorkspace({ locationId }: { locationId: string })
                               }
                             />
                           </TableCell>
-                          <TableCell>{formatBillingDecimal(policy.rate)} đ</TableCell>
+                          <TableCell>
+                            {formatBillingDecimal(policy.rate)} đ/
+                            {policy.method === 2
+                              ? 'người/tháng'
+                              : policy.method === 1
+                                ? policy.category === 2
+                                  ? 'm³'
+                                  : 'kWh'
+                                : 'phòng/tháng'}
+                          </TableCell>
                           <TableCell>
                             {policy.effectiveFrom.split('-').reverse().join('/')} →{' '}
                             {policy.effectiveTo?.split('-').reverse().join('/') ?? 'Không thời hạn'}

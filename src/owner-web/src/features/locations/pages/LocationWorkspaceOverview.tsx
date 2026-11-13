@@ -1,14 +1,6 @@
 import { Button, Chip, Paper, Stack, Typography, Box } from '@mui/material';
 import { Link } from 'react-router';
-import {
-  DoorOpen,
-  Package,
-  Coins,
-  ScrollText,
-  Shapes,
-  ArrowUpRight,
-  CheckCircle2,
-} from 'lucide-react';
+import { DoorOpen, Package, Coins, ScrollText, ArrowUpRight, CheckCircle2 } from 'lucide-react';
 import type { LocationMetadata } from '../../../../../../packages/client-core/src/locationSetup';
 
 export function LocationWorkspaceOverview({
@@ -19,7 +11,6 @@ export function LocationWorkspaceOverview({
   id: string;
   metadata?: LocationMetadata;
   summary?: {
-    roomDefaults?: number;
     rooms?: number;
     assets?: number;
     pricesAndFees?: number;
@@ -28,16 +19,6 @@ export function LocationWorkspaceOverview({
   };
 }) {
   const sections = [
-    {
-      key: 'room-types',
-      title: 'Gợi ý tạo phòng',
-      count: summary?.roomDefaults,
-      icon: Shapes,
-      color: '#7650b5',
-      description:
-        'Lưu cấu hình phòng riêng cho cơ sở để tạo phòng nhanh, có thể chỉnh sửa độc lập.',
-      action: 'Quản lý gợi ý',
-    },
     {
       key: 'rooms',
       title: 'Phòng cho thuê',
@@ -62,7 +43,8 @@ export function LocationWorkspaceOverview({
       count: summary?.pricesAndFees,
       icon: Coins,
       color: '#b06b10',
-      description: 'Thiết lập giá theo cơ sở hoặc từng phòng và thời gian hiệu lực.',
+      description:
+        'Thiết lập giá, khoản thu, điện nước và lịch hóa đơn theo cơ sở hoặc từng phòng.',
       action: 'Thiết lập giá & phí',
     },
     {
@@ -199,7 +181,6 @@ export function LocationWorkspaceOverview({
           </Typography>
           <Stack spacing={1.5}>
             {[
-              ['utilities', 'Điện & nước', 'Cấu hình công tơ và dữ liệu chỉ số.'],
               ['history', 'Lịch sử phòng', 'Tra cứu thay đổi theo từng phòng.'],
               ['investment', 'Vốn & chi phí', 'Xem các khoản đầu tư và chi phí cơ sở.'],
               ['settings', 'Thông tin cơ sở', 'Cập nhật tên, địa chỉ và trạng thái.'],

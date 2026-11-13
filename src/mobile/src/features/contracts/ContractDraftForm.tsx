@@ -263,7 +263,7 @@ export function ContractDraftForm({
                   label={label}
                   value={values[name] ?? ''}
                   disabled={busy}
-                  numeric={name === 'requiredDeposit'}
+                  money={name === 'requiredDeposit'}
                   multiline={name === 'terms'}
                   onChange={(value) => set(name, value)}
                 />

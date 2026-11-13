@@ -151,7 +151,7 @@ it('copies only selected configuration, requires asset assignment and new-room f
   next();
   fireEvent.click(screen.getByRole('button', { name: 'Thêm loại phòng' }));
   const editor = within(screen.getByRole('dialog', { name: 'Thêm loại phòng riêng' }));
-  expect(editor.getByLabelText(/Giá thuê mặc định/)).toHaveValue(2500000);
+  expect(editor.getByLabelText(/Giá thuê mặc định/)).toHaveValue('2.500.000');
   fireEvent.change(editor.getByLabelText('Tên loại phòng'), {
     target: { value: 'Synthetic destination type' },
   });
@@ -203,7 +203,11 @@ it('copies only selected configuration, requires asset assignment and new-room f
   expect(payload.roomTypes[0].assets[0]).not.toHaveProperty('references');
   expect(payload.rooms[0]).toMatchObject({ roomNumber: 'P.101', rent: 2500000 });
   expect(payload.fees).toEqual([
-    expect.objectContaining({ chargeCode: 'WIFI', roomKey: payload.rooms[0].key, rate: 50000 }),
+    expect.objectContaining({
+      chargeCode: 'WIFI',
+      roomKey: payload.rooms[0].key,
+      rate: source.fees.find((fee) => fee.id === feeId)?.rate,
+    }),
   ]);
   expect(payload.fees[0]).not.toHaveProperty('sourceRoomId');
   expect(payload.fees[0]).not.toHaveProperty('reference');

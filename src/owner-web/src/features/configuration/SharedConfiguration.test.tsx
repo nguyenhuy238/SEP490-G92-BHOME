@@ -94,7 +94,7 @@ it('edits only a Draft with its loaded version and retains exact defaults', asyn
   );
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Sửa' }));
-  expect(screen.getByLabelText(/Giá thuê tham khảo/)).toHaveValue('12345678901234.0001');
+  expect(screen.getByLabelText(/Giá thuê tham khảo/)).toHaveValue('12.345.678.901.234,0001');
   fill('Mô tả', 'Edited draft');
   fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
   await screen.findByText('Đã lưu bản nháp trên máy chủ.');
@@ -172,7 +172,7 @@ function fill(label: string, value: string) {
   fireEvent.change(screen.getByLabelText(new RegExp(label)), { target: { value } });
 }
 async function select(label: string, value: string) {
-  fireEvent.mouseDown(await screen.findByLabelText(label));
+  fireEvent.mouseDown(await screen.findByLabelText(new RegExp(label)));
   fireEvent.click(await screen.findByRole('option', { name: value }));
 }
 it('creates exact room defaults through the real client and refreshes persisted state', async () => {
@@ -182,7 +182,7 @@ it('creates exact room defaults through the real client and refreshes persisted 
   fill('Tên mẫu', 'New defaults');
   fill('Sức chứa', '4');
   fill('Diện tích', '25.0001');
-  fill('Giá thuê tham khảo', '12345678901234.0001');
+  fill('Giá thuê tham khảo', '12.345.678.901.234,0001');
   fill('Tiện ích', 'Balcony\nWi-Fi');
   fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
   await screen.findByText('Đã lưu bản nháp trên máy chủ.');
@@ -343,8 +343,9 @@ it('submits exact fee rates and effective dates without obsolete scope fields', 
   mount(<ApiConfigurationLibraryPage kind="fee" />);
   fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu' }));
   fill('Tên mẫu', 'Exact reference rent');
-  fill('Đơn giá tham khảo', '12345678901234.0001');
-  fill('Đơn vị', 'VND/month');
+  fill('Đơn giá tham khảo', '12.345.678.901.234,0001');
+  expect(screen.getByLabelText(/Đơn giá tham khảo/)).toHaveValue('12.345.678.901.234,0001');
+  expect(screen.getByLabelText(/Đơn vị/)).toHaveValue('VND/month');
   fill('Hiệu lực từ', '2026-12-01');
   fill('Hiệu lực đến', '2027-12-01');
   fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
@@ -361,6 +362,87 @@ it('submits exact fee rates and effective dates without obsolete scope fields', 
     scope: 'Location',
     effectiveFrom: '2026-12-01',
     effectiveTo: '2027-12-01',
+  });
+});
+it('resets fee identity and rate on category changes and saves water with its canonical unit', async () => {
+  mount(<ApiConfigurationLibraryPage kind="fee" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu' }));
+  fill('Tên mẫu', 'Water rate');
+  fill('Đơn giá tham khảo', '3000000');
+  await select('Nhóm phí', 'Điện');
+  expect(screen.getByLabelText(/Mã khoản thu/)).toHaveValue('ELECTRICITY');
+  expect(screen.getByLabelText(/Đơn vị/)).toHaveValue('kWh');
+  await select('Nhóm phí', 'Nước');
+  expect(screen.getByLabelText(/Mã khoản thu/)).toHaveValue('WATER');
+  expect(screen.getByLabelText(/Đơn vị/)).toHaveValue('m³');
+  expect(screen.getByLabelText(/Đơn giá tham khảo/)).toHaveValue('');
+  fill('Đơn giá tham khảo', '15000');
+  fill('Hiệu lực từ', '2026-12-01');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
+  await screen.findByText('Đã lưu bản nháp trên máy chủ.');
+  const call = state.request.mock.calls.find(
+    ([path, init]) => path.endsWith('/fee-templates') && init?.method === 'POST',
+  );
+  expect(JSON.parse(call![1].body).data).toMatchObject({
+    category: 'Water',
+    chargeCode: 'WATER',
+    method: 'Metered',
+    unit: 'm³',
+    referenceRate: '15000',
+  });
+});
+it('selects a service code and rejects reserved codes before submitting', async () => {
+  mount(<ApiConfigurationLibraryPage kind="fee" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu' }));
+  fill('Tên mẫu', 'Internet fee');
+  await select('Nhóm phí', 'Dịch vụ');
+  await select('Loại dịch vụ gợi ý', 'Internet');
+  expect(screen.getByLabelText(/Mã khoản thu/)).toHaveValue('INTERNET');
+  fill('Đơn giá tham khảo', '100000');
+  fill('Hiệu lực từ', '2026-12-01');
+  fill('Mã khoản thu', 'RENT');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
+  await screen.findByText('Mã khoản thu hoặc cách tính không phù hợp với nhóm phí.');
+  expect(
+    state.request.mock.calls.some(
+      ([path, init]) => path.endsWith('/fee-templates') && init?.method === 'POST',
+    ),
+  ).toBe(false);
+  fill('Mã khoản thu', 'internet');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
+  await screen.findByText('Đã lưu bản nháp trên máy chủ.');
+  const call = state.request.mock.calls.find(
+    ([path, init]) => path.endsWith('/fee-templates') && init?.method === 'POST',
+  );
+  expect(JSON.parse(call![1].body).data).toMatchObject({
+    category: 'ServiceFee',
+    chargeCode: 'INTERNET',
+    method: 'FixedPerRoomPerMonth',
+    unit: 'VND/month',
+  });
+});
+it('creates a per-person monthly service fee with live grouping and canonical payload', async () => {
+  mount(<ApiConfigurationLibraryPage kind="fee" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu' }));
+  fill('Tên mẫu', 'Phí vệ sinh theo người');
+  await select('Nhóm phí', 'Dịch vụ');
+  await select('Loại dịch vụ gợi ý', 'Vệ sinh');
+  await select('Cách tính', 'Cố định mỗi người/tháng');
+  expect(screen.getByLabelText(/Đơn vị/)).toHaveValue('VND/person/month');
+  fill('Đơn giá tham khảo', '3000000');
+  expect(screen.getByLabelText(/Đơn giá tham khảo/)).toHaveValue('3.000.000');
+  fill('Hiệu lực từ', '2026-12-01');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
+  await screen.findByText('Đã lưu bản nháp trên máy chủ.');
+  const call = state.request.mock.calls.find(
+    ([path, init]) => path.endsWith('/fee-templates') && init?.method === 'POST',
+  );
+  expect(JSON.parse(call![1].body).data).toMatchObject({
+    category: 'ServiceFee',
+    chargeCode: 'CLEANING',
+    method: 'FixedPerPersonPerMonth',
+    unit: 'VND/person/month',
+    referenceRate: '3000000',
   });
 });
 it('confirms copy using both server hashes and a durable request key', async () => {

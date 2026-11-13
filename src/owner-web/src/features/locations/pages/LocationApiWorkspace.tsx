@@ -21,11 +21,9 @@ import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ErrorState, LoadingState } from '../../../components/common/PortalUI';
 import {
   Building2,
-  Shapes,
   DoorOpen,
   Package,
   Coins,
-  Zap,
   ScrollText,
   History,
   Settings,
@@ -33,8 +31,6 @@ import {
 } from 'lucide-react';
 import { ApiConfigurationCopy } from '../../configuration/ApiConfigurationCopy';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
-import { useSharedConfigurationApi } from '../../configuration/useSharedConfigurationApi';
-import { UtilityWorkspace } from '../../property/UtilityWorkspace';
 import { LocationAssetsWorkspace } from './LocationAssetsWorkspace';
 import { LocationPricingWorkspace } from './LocationPricingWorkspace';
 import { OperatingPoliciesPanel } from '../../property/OperatingPoliciesPanel';
@@ -44,11 +40,9 @@ import { locationSetupClient } from '../../../../../../packages/client-core/src/
 
 const tabs = [
   ['overview', 'Tổng quan'],
-  ['room-types', 'Gợi ý tạo phòng'],
   ['rooms', 'Phòng'],
   ['assets', 'Tài sản'],
   ['pricing', 'Giá & Phí'],
-  ['utilities', 'Điện & Nước'],
   ['rules', 'Nội quy'],
   ['history', 'Lịch sử phòng'],
   ['settings', 'Thiết lập'],
@@ -56,11 +50,9 @@ const tabs = [
 ];
 const tabIcons: Record<string, typeof Building2> = {
   overview: Building2,
-  'room-types': Shapes,
   rooms: DoorOpen,
   assets: Package,
   pricing: Coins,
-  utilities: Zap,
   rules: ScrollText,
   history: History,
   settings: Settings,
@@ -71,7 +63,6 @@ export function LocationApiWorkspace() {
   const { locationId = '' } = useParams();
   const route = useLocation();
   const api = usePropertySetupApi();
-  const sharedApi = useSharedConfigurationApi();
   const portal = usePortal();
   useEffect(() => {
     if (portal.locationId !== locationId) portal.setLocationId(locationId);
@@ -79,6 +70,7 @@ export function LocationApiWorkspace() {
   const { session } = useAuth();
   const owner = session?.roles.includes('Owner') ?? false;
   const active = route.pathname.split('/')[3] || 'overview';
+  const activeTab = active === 'room-types' ? 'rooms' : active === 'utilities' ? 'pricing' : active;
   const location = useQuery({
     queryKey: ['property-setup', 'location', session?.userId, locationId],
     queryFn: ({ signal }) => api.location(locationId, signal),
@@ -91,8 +83,7 @@ export function LocationApiWorkspace() {
   const summary = useQuery({
     queryKey: ['property-setup', 'location-summary', session?.userId, locationId],
     queryFn: async ({ signal }) => {
-      const [roomDefaults, rooms, assets, policies, rules, templates] = await Promise.allSettled([
-        owner ? sharedApi.roomDefaults(locationId, signal) : Promise.resolve(undefined),
+      const [rooms, assets, policies, rules, templates] = await Promise.allSettled([
         api.rooms(locationId, 1, '', signal),
         api.assets(locationId, 1, '', signal),
         api.request<{ totalCount: number }>(
@@ -103,13 +94,12 @@ export function LocationApiWorkspace() {
         owner ? api.templates(locationId, signal) : Promise.resolve(undefined),
       ]);
       return {
-        roomDefaults: roomDefaults.status === 'fulfilled' ? roomDefaults.value?.length : undefined,
         rooms: rooms.status === 'fulfilled' ? rooms.value.totalCount : undefined,
         assets: assets.status === 'fulfilled' ? assets.value.totalCount : undefined,
         pricesAndFees: policies.status === 'fulfilled' ? policies.value.totalCount : undefined,
         rules: rules.status === 'fulfilled' ? rules.value?.length : undefined,
         assetTemplates: templates.status === 'fulfilled' ? templates.value?.length : undefined,
-        incomplete: [roomDefaults, rooms, assets, policies, rules, templates].some(
+        incomplete: [rooms, assets, policies, rules, templates].some(
           (item) => item.status === 'rejected',
         ),
       };
@@ -223,7 +213,7 @@ export function LocationApiWorkspace() {
       )}
       <Paper variant="outlined" sx={{ p: 0.75, position: 'sticky', top: 75, zIndex: 5 }}>
         <Tabs
-          value={tabs.some(([key]) => key === active) ? active : 'overview'}
+          value={tabs.some(([key]) => key === activeTab) ? activeTab : 'overview'}
           variant="scrollable"
           scrollButtons="auto"
           sx={{
@@ -282,10 +272,12 @@ export function LocationApiWorkspace() {
             <LocationAssetsWorkspace key={locationId} locationId={locationId} />
           ) : ['room-types', 'rooms', 'investment'].includes(active) ? (
             <Outlet />
-          ) : active === 'pricing' ? (
-            <LocationPricingWorkspace key={locationId} locationId={locationId} />
-          ) : active === 'utilities' ? (
-            <UtilityWorkspace key={locationId} locationId={locationId} />
+          ) : activeTab === 'pricing' ? (
+            <LocationPricingWorkspace
+              key={`${locationId}:${active}`}
+              locationId={locationId}
+              initialTab={active === 'utilities' ? 3 : 0}
+            />
           ) : active === 'rules' ? (
             <OperatingPoliciesPanel key={locationId} locationId={locationId} />
           ) : active === 'history' ? (
@@ -303,7 +295,6 @@ export function LocationApiWorkspace() {
                 </Typography>
                 {summary.data && (
                   <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 2 }}>
-                    <Chip label={`${summary.data.roomDefaults ?? '—'} gợi ý tạo phòng`} />
                     <Chip label={`${summary.data.rooms} phòng`} />
                     <Chip label={`${summary.data.assets} tài sản thực tế`} />
                     <Chip label={`${summary.data.assetTemplates} bộ mẫu tài sản`} />

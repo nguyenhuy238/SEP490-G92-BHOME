@@ -56,6 +56,8 @@ import { useSharedConfigurationApi } from '../../configuration/useSharedConfigur
 import { todayVietnam } from '../../staff/staffContracts';
 import type { PortalRecord } from '../../../types/portal';
 import { SetupDropZone, SetupTemplatePicker } from './SetupTemplatePicker';
+import { MoneyField } from '../../../components/common/MoneyField';
+import { formatBillingDecimal } from '../../../../../../packages/client-core/src/invoices';
 
 const steps = [
   'Thông tin cơ sở',
@@ -73,33 +75,30 @@ const libraryKinds: SharedResource[] = [
   'fee-templates',
   'policy-templates',
 ];
-const money = (value: number | null) =>
-  value === null
-    ? 'Chưa đặt'
-    : new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(value) + ' đ';
+const money = (value: number | string | null) =>
+  value === null ? 'Chưa đặt' : formatBillingDecimal(value) + ' đ';
 const norm = (value: string) => value.trim().toLocaleLowerCase();
 const uid = () => crypto.randomUUID();
 const today = () => todayVietnam();
-const validMoney = (value: number | null): value is number =>
-  value !== null &&
-  Number.isFinite(value) &&
-  value >= 0 &&
-  value <= 99999999999999 &&
-  /^\d+(?:\.\d{1,4})?$/.test(String(value));
+const validMoney = (value: number | string | null): boolean =>
+  value !== null && /^\d{1,14}(?:\.\d{1,4})?$/.test(String(value));
+const exactRent = (value: string | number): string | number =>
+  /^\d{1,14}$/.test(String(value)) ? Number(value) : value;
 const categories = ['Tiền thuê', 'Điện', 'Nước', 'Dịch vụ'];
 type DraftRoom = {
   key: string;
   roomNumber: string;
   floor: string;
   roomTypeKey: string;
-  rent: number | null;
+  rent: number | string | null;
 };
 type DraftAsset = SetupAssetRequirement & { references?: SetupSourceReference[] };
 type DraftType = Omit<SetupRoomDefaults, 'assets'> & {
   assets: DraftAsset[];
   rentSource?: SetupSourceReference;
 };
-type DraftFee = SetupFee & {
+type DraftFee = Omit<SetupFee, 'rate'> & {
+  rate: number | string;
   key: string;
   sourceId?: string;
   reference?: SetupSourceReference;
@@ -138,7 +137,7 @@ type Draft = {
   policyDate: string;
   packages: ImportedPackage[];
   rentEffectiveFrom: string;
-  sourceRent: number | null;
+  sourceRent: number | string | null;
   sourceRentReference?: SetupSourceReference;
   submittedPayload?: string;
   submittedKey?: string;
@@ -151,7 +150,7 @@ const uniqueReferences = (references: SetupSourceReference[]) => [
   ...new Map(references.map((item) => [`${item.kind}:${item.id}:${item.version}`, item])).values(),
 ];
 const newType = (
-  referenceRent: number | null = null,
+  referenceRent: number | string | null = null,
   rentSource?: SetupSourceReference,
 ): DraftType => ({
   key: uid(),
@@ -202,7 +201,13 @@ const categoryNumber = (value: string | number): SetupFee['category'] => {
   return index < 0 ? 3 : (index as SetupFee['category']);
 };
 const methodNumber = (value: string | number): SetupFee['method'] =>
-  value === 1 || String(value).toUpperCase() === 'METERED' ? 1 : 0;
+  value === 1 || String(value).toUpperCase() === 'METERED'
+    ? 1
+    : value === 2 || String(value).toUpperCase() === 'FIXEDPERPERSONPERMONTH'
+      ? 2
+      : 0;
+const feeUnitLabel = (category: SetupFee['category'], method: SetupFee['method']) =>
+  method === 2 ? 'người/tháng' : method === 1 ? (category === 2 ? 'm³' : 'kWh') : 'phòng/tháng';
 const feeDate = (value: string) => (value >= today() ? value : today());
 const sourceType = (document: SharedDocument): DraftType => {
   const data = document.data as RoomTemplateData;
@@ -212,7 +217,7 @@ const sourceType = (document: SharedDocument): DraftType => {
     description: document.description,
     capacity: data.capacity,
     area: Number(data.area),
-    referenceRent: data.referenceRent === null ? null : Number(data.referenceRent),
+    referenceRent: data.referenceRent === null ? null : exactRent(data.referenceRent),
     amenities: [...data.amenities],
     sourceId: document.id,
     sourceVersion: document.version,
@@ -316,7 +321,8 @@ function validateSetupStep(draft: Draft, step: number): string | null {
         (fee) =>
           !fee.name.trim() ||
           !/^[A-Z0-9_-]{1,80}$/.test(fee.chargeCode) ||
-          !validMoney(fee.rate) ||
+          String(fee.rate).trim() === '' ||
+          !/^\d{1,14}(?:\.\d{1,4})?$/.test(String(fee.rate)) ||
           !fee.effectiveFrom ||
           fee.effectiveFrom < today() ||
           (!!fee.effectiveTo && fee.effectiveTo < fee.effectiveFrom) ||
@@ -325,7 +331,8 @@ function validateSetupStep(draft: Draft, step: number): string | null {
           (fee.category === 1 && (fee.method !== 1 || fee.chargeCode !== 'ELECTRICITY')) ||
           (fee.category === 2 && (fee.method !== 1 || fee.chargeCode !== 'WATER')) ||
           (fee.category === 3 &&
-            (fee.method !== 0 || ['RENT', 'ELECTRICITY', 'WATER'].includes(fee.chargeCode))),
+            (![0, 2].includes(fee.method) ||
+              ['RENT', 'ELECTRICITY', 'WATER'].includes(fee.chargeCode))),
       )
     )
       return 'Kiểm tra tên, mã khoản thu, phương thức, ngày hiệu lực và phạm vi từng biểu phí.';
@@ -513,18 +520,18 @@ export function LocationSetupWizard({
   }, [draft, storageKey]);
 
   const library = useQuery({
-    queryKey: ['location-setup-library', session?.userId],
+    queryKey: ['property-setup', 'location-setup-library', session?.userId],
     queryFn: async ({ signal }) => {
       const result = await Promise.allSettled(
         libraryKinds.map(async (resource) => {
           const items: SharedDocument[] = [];
           for (let page = 1; ; page += 1) {
-            const data = await shared.list(resource, '', 'Published', page, 100, signal);
-            items.push(...data.items.filter((item) => item.status === 'Published'));
-            if (page * 100 >= data.total) break;
+            const data = await shared.list(resource, '', '', page, 100, signal);
+            items.push(...data.items);
+            if (items.length >= data.total) break;
             if (!data.items.length) throw new Error('Danh sách mẫu thay đổi khi tải.');
           }
-          return [resource, items] as const;
+          return [resource, items.filter((item) => item.status !== 'Archived')] as const;
         }),
       );
       return {
@@ -534,14 +541,43 @@ export function LocationSetupWizard({
         failures: libraryKinds.filter((_, index) => result[index].status === 'rejected'),
       };
     },
-    staleTime: 60_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   });
   const source = useQuery({
     queryKey: ['location-setup-source', session?.userId, draft.sourceLocationId],
     queryFn: ({ signal }) => api.source(draft.sourceLocationId, signal),
     enabled: draft.mode === 'copy' && !!draft.sourceLocationId,
   });
-  const all = (resource: SharedResource) => library.data?.items[resource] ?? [];
+  const all = (resource: SharedResource) =>
+    (library.data?.items[resource] ?? []).filter((item) => item.status === 'Published');
+  const unpublished = (resources: SharedResource[]) =>
+    resources.flatMap((resource) =>
+      (library.data?.items[resource] ?? []).filter((item) => item.status === 'Draft'),
+    );
+  const librarySection =
+    draft.step === 1
+      ? {
+          resources: ['room-type-templates'] as SharedResource[],
+          path: '/configuration/room-types',
+        }
+      : draft.step === 3
+        ? {
+            resources: ['asset-catalog', 'asset-templates'] as SharedResource[],
+            path: '/configuration/assets',
+          }
+        : draft.step === 4
+          ? {
+              resources: ['fee-templates'] as SharedResource[],
+              path: '/configuration/pricing-fees',
+            }
+          : draft.step === 5
+            ? {
+                resources: ['policy-templates'] as SharedResource[],
+                path: '/configuration/policies',
+              }
+            : null;
   const currentType = draft.roomTypes.find((type) => type.key === typeKey) ?? draft.roomTypes[0];
   const assetType = draft.roomTypes.find((type) => type.key === assetTypeKey) ?? draft.roomTypes[0];
   const rentType = draft.roomTypes.find((type) => type.key === rentTypeKey) ?? draft.roomTypes[0];
@@ -788,7 +824,7 @@ export function LocationSetupWizard({
         return;
       }
       updateType(rentType.key, {
-        referenceRent: Number(data.referenceRate),
+        referenceRent: exactRent(data.referenceRate),
         rentSource: reference('fee-templates', item),
       });
       setNotice(
@@ -811,7 +847,7 @@ export function LocationSetupWizard({
           name: item.name,
           chargeCode: data.chargeCode.toUpperCase(),
           method: methodNumber(data.method),
-          rate: Number(data.referenceRate),
+          rate: data.referenceRate,
           roomKey: data.scope === 'Room' ? '' : null,
           requiresRoom: data.scope === 'Room',
           effectiveFrom: feeDate(data.effectiveFrom),
@@ -847,7 +883,7 @@ export function LocationSetupWizard({
         .map((doc) => ({
           id: doc.id,
           name: doc.data.name,
-          detail: `${doc.data.defaults.capacity} người · ${money(doc.data.defaults.referenceRent === null ? null : Number(doc.data.defaults.referenceRent))}`,
+          detail: `${doc.data.defaults.capacity} người · ${money(doc.data.defaults.referenceRent === null ? null : exactRent(doc.data.defaults.referenceRent))}`,
         })),
     },
     {
@@ -864,7 +900,7 @@ export function LocationSetupWizard({
         .map((fee) => ({
           id: fee.id,
           name: fee.name,
-          detail: `${money(Number(fee.rate))}/tháng · chỉ dùng làm tham khảo`,
+          detail: `${money(fee.rate)}/tháng · chỉ dùng làm tham khảo`,
         })),
     },
     {
@@ -891,7 +927,7 @@ export function LocationSetupWizard({
         .map((fee) => ({
           id: fee.id,
           name: fee.name,
-          detail: `${money(Number(fee.rate))} · ${fee.roomId ? 'Cần ánh xạ phòng đích' : 'Cấp cơ sở'}`,
+          detail: `${money(fee.rate)} · ${fee.roomId ? 'Cần ánh xạ phòng đích' : 'Cấp cơ sở'}`,
         })),
     },
     {
@@ -926,7 +962,7 @@ export function LocationSetupWizard({
       setError('Chỉ chọn một giá thuê tham khảo cấp cơ sở.');
       return;
     }
-    const sourceRent = rents.length ? Number(rents[0].rate) : draft.sourceRent;
+    const sourceRent = rents.length ? exactRent(rents[0].rate) : draft.sourceRent;
     const sourceRentReference = rents.length
       ? reference('BillingPolicy', rents[0])
       : draft.sourceRentReference;
@@ -963,7 +999,7 @@ export function LocationSetupWizard({
         referenceRent:
           doc.data.defaults.referenceRent === null
             ? sourceRent
-            : Number(doc.data.defaults.referenceRent),
+            : exactRent(doc.data.defaults.referenceRent),
         rentSource: doc.data.defaults.referenceRent === null ? sourceRentReference : undefined,
         amenities: [...doc.data.defaults.amenities],
         sourceId: doc.id,
@@ -982,7 +1018,7 @@ export function LocationSetupWizard({
         name: fee.name,
         chargeCode: fee.chargeCode,
         method: methodNumber(fee.method),
-        rate: Number(fee.rate),
+        rate: fee.rate,
         roomKey: fee.roomId ? '' : null,
         requiresRoom: !!fee.roomId,
         effectiveFrom: today(),
@@ -1106,6 +1142,36 @@ export function LocationSetupWizard({
         >
           <Stack spacing={2.5}>
             {busy && <LinearProgress />}
+            {librarySection && (
+              <Alert
+                severity="info"
+                action={
+                  <Stack direction="row" spacing={1}>
+                    <Button disabled={library.isFetching} onClick={() => void library.refetch()}>
+                      Làm mới mẫu
+                    </Button>
+                    <Button
+                      component="a"
+                      href={librarySection.path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Mở thư viện mẫu
+                    </Button>
+                  </Stack>
+                }
+              >
+                {library.isFetching
+                  ? 'Đang tải thư viện mẫu…'
+                  : `Có ${unpublished(librarySection.resources).length} mẫu chưa công bố trong nhóm này. Mẫu đã công bố có thể chọn ngay. Bạn có thể mở thư viện để tạo hoặc công bố mẫu, rồi quay lại làm mới; bản nháp cơ sở được giữ nguyên.`}
+                {!library.isFetching &&
+                  unpublished(librarySection.resources).map((doc) => (
+                    <Typography key={doc.id} variant="body2">
+                      {doc.name} · Bản nháp, cần công bố
+                    </Typography>
+                  ))}
+              </Alert>
+            )}
             {error && (
               <Alert severity="error" onClose={() => setError('')}>
                 {error}
@@ -1441,7 +1507,7 @@ export function LocationSetupWizard({
                         return {
                           id: doc.id,
                           name: doc.name,
-                          detail: `${data.area} m² · ${data.capacity} người · ${money(data.referenceRent === null ? null : Number(data.referenceRent))}`,
+                          detail: `${data.area} m² · ${data.capacity} người · ${money(data.referenceRent === null ? null : exactRent(data.referenceRent))}`,
                         };
                       })}
                       selected={draft.roomTypes.flatMap((type) =>
@@ -1630,14 +1696,16 @@ export function LocationSetupWizard({
                               {type?.capacity} người · {type?.area} m²
                             </TableCell>
                             <TableCell>
-                              <TextField
+                              <MoneyField
                                 size="small"
-                                type="number"
+                                allowDecimal
                                 value={room.rent ?? ''}
-                                placeholder={String(type?.referenceRent ?? '')}
-                                onChange={(e) =>
+                                placeholder={
+                                  type?.referenceRent == null ? '' : money(type.referenceRent)
+                                }
+                                onValueChange={(raw) =>
                                   updateRoom(room.key, {
-                                    rent: e.target.value === '' ? null : Number(e.target.value),
+                                    rent: raw === '' ? null : exactRent(raw),
                                   })
                                 }
                                 helperText={room.rent === null ? 'Dùng giá mặc định' : 'Giá riêng'}
@@ -1944,7 +2012,7 @@ export function LocationSetupWizard({
                         return {
                           id: doc.id,
                           name: doc.name,
-                          detail: `${money(Number(data.referenceRate))}/${data.unit} · ${data.scope}`,
+                          detail: `${money(data.referenceRate)}/${feeUnitLabel(categoryNumber(data.category), methodNumber(data.method))} · ${data.scope}`,
                         };
                       })}
                     >
@@ -1984,15 +2052,14 @@ export function LocationSetupWizard({
                             sx={{ alignItems: 'center' }}
                           >
                             <Typography sx={{ flex: 1 }}>{type.name}</Typography>
-                            <TextField
+                            <MoneyField
                               size="small"
-                              type="number"
                               label="Giá thuê/tháng"
+                              allowDecimal
                               value={type.referenceRent ?? ''}
-                              onChange={(e) =>
+                              onValueChange={(raw) =>
                                 updateType(type.key, {
-                                  referenceRent:
-                                    e.target.value === '' ? null : Number(e.target.value),
+                                  referenceRent: raw === '' ? null : exactRent(raw),
                                 })
                               }
                             />
@@ -2031,6 +2098,7 @@ export function LocationSetupWizard({
                                   size="small"
                                   label="Mã khoản thu"
                                   value={fee.chargeCode}
+                                  disabled={fee.category !== 3}
                                   onChange={(e) =>
                                     updateFee(fee.key, { chargeCode: e.target.value.toUpperCase() })
                                   }
@@ -2048,11 +2116,12 @@ export function LocationSetupWizard({
                                     updateFee(fee.key, {
                                       category,
                                       method: category === 1 || category === 2 ? 1 : 0,
+                                      rate: '',
                                       ...(category === 1
                                         ? { chargeCode: 'ELECTRICITY' }
                                         : category === 2
                                           ? { chargeCode: 'WATER' }
-                                          : {}),
+                                          : { chargeCode: '' }),
                                     });
                                   }}
                                 >
@@ -2070,15 +2139,22 @@ export function LocationSetupWizard({
                                   size="small"
                                   label="Phương thức tính"
                                   value={fee.method}
+                                  disabled={fee.category !== 3}
                                   onChange={(e) =>
                                     updateFee(fee.key, {
                                       method: Number(e.target.value) as SetupFee['method'],
+                                      rate: '',
                                     })
                                   }
                                 >
-                                  {fee.category === 3 && (
-                                    <MenuItem value={0}>Cố định/phòng/tháng</MenuItem>
-                                  )}
+                                  {fee.category === 3 && [
+                                    <MenuItem key={0} value={0}>
+                                      Cố định/phòng/tháng
+                                    </MenuItem>,
+                                    <MenuItem key={2} value={2}>
+                                      Cố định/người/tháng
+                                    </MenuItem>,
+                                  ]}
                                   {fee.category !== 3 && (
                                     <MenuItem value={1}>
                                       Theo chỉ số ({fee.category === 2 ? 'm³' : 'kWh'})
@@ -2087,15 +2163,13 @@ export function LocationSetupWizard({
                                 </TextField>
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField
+                                <MoneyField
                                   fullWidth
                                   size="small"
-                                  type="number"
-                                  label="Đơn giá (VND)"
+                                  label={`Đơn giá (VND/${feeUnitLabel(fee.category, fee.method)})`}
                                   value={fee.rate}
-                                  onChange={(e) =>
-                                    updateFee(fee.key, { rate: Number(e.target.value) })
-                                  }
+                                  allowDecimal
+                                  onValueChange={(raw) => updateFee(fee.key, { rate: raw })}
                                 />
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
@@ -2402,7 +2476,7 @@ export function LocationSetupWizard({
                     <Typography sx={{ fontWeight: 700 }}>Biểu phí xác nhận</Typography>
                     {draft.fees.map((fee) => (
                       <Typography key={fee.key} variant="body2">
-                        {fee.name} · {money(fee.rate)} ·{' '}
+                        {fee.name} · {money(fee.rate)}/{feeUnitLabel(fee.category, fee.method)} ·{' '}
                         {fee.roomKey === null
                           ? 'Toàn cơ sở'
                           : draft.rooms.find((room) => room.key === fee.roomKey)?.roomNumber}{' '}
@@ -2514,14 +2588,14 @@ export function LocationSetupWizard({
                       setEditingType({ ...editingType, area: Number(e.target.value) })
                     }
                   />
-                  <TextField
-                    type="number"
+                  <MoneyField
                     label="Giá thuê mặc định (VND/tháng)"
+                    allowDecimal
                     value={editingType.referenceRent ?? ''}
-                    onChange={(e) =>
+                    onValueChange={(raw) =>
                       setEditingType({
                         ...editingType,
-                        referenceRent: e.target.value === '' ? null : Number(e.target.value),
+                        referenceRent: raw === '' ? null : exactRent(raw),
                       })
                     }
                   />

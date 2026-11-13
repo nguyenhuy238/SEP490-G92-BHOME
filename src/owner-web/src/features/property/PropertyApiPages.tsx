@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -149,7 +150,7 @@ export function PropertyApiPage({
               floor: values.floor?.trim() || null,
               roomDefaultsId: type.id,
               expectedVersion: type.version,
-              rent: Number(values.rent),
+              rent: values.rent,
             },
           ],
           effectiveFrom: values.effectiveFrom || todayVietnam(),
@@ -241,9 +242,20 @@ export function PropertyApiPage({
             <Stack direction="row" spacing={1}>
               {kind === 'locations' && <ApiConfigurationCopy />}
               {kind === 'rooms' && (
-                <Button variant="outlined" disabled={!location} onClick={() => setBulkOpen(true)}>
-                  Tạo phòng hàng loạt
-                </Button>
+                <>
+                  {location && (
+                    <Button
+                      component={Link}
+                      to={`/locations/${location}/room-types`}
+                      variant="outlined"
+                    >
+                      Cấu hình mẫu phòng
+                    </Button>
+                  )}
+                  <Button variant="outlined" disabled={!location} onClick={() => setBulkOpen(true)}>
+                    Tạo phòng hàng loạt
+                  </Button>
+                </>
               )}
               <Button
                 variant="contained"
@@ -515,12 +527,12 @@ export function PropertyApiPage({
                             Sức chứa và định mức lấy từ cấu hình đã lưu. Xác nhận giá thuê trước khi
                             tạo.
                           </Alert>
-                          <TextField
+                          <MoneyField
+                            allowDecimal
                             required
-                            type="number"
                             label="Giá thuê xác nhận (VND)"
                             value={values.rent ?? ''}
-                            onChange={(e) => setValues((old) => ({ ...old, rent: e.target.value }))}
+                            onValueChange={(raw) => setValues((old) => ({ ...old, rent: raw }))}
                           />
                           <TextField
                             type="date"
