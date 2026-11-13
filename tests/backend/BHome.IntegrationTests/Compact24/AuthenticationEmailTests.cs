@@ -182,6 +182,14 @@ public sealed partial class Compact24NotificationMvpTests
         anonymous.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
         Assert.Equal("[]", await anonymous.GetStringAsync("/api/v1/capture/locations"));
         Assert.Equal(HttpStatusCode.Forbidden, (await anonymous.GetAsync("/api/v1/staff")).StatusCode);
+        const string changedPassword = "Synthetic!StaffChanged-826";
+        var changed = await anonymous.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = accept.NewPassword, newPassword = changedPassword });
+        changed.EnsureSuccessStatusCode();
+        using var relogin = host.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await relogin.PostAsJsonAsync("/api/v1/auth/login", new { email, password = accept.NewPassword })).StatusCode);
+        var changedLogin = await relogin.PostAsJsonAsync("/api/v1/auth/login", new { email, password = changedPassword });
+        Assert.Equal(HttpStatusCode.OK, changedLogin.StatusCode);
+        anonymous.DefaultRequestHeaders.Authorization = new("Bearer", (await TestAuthResponse.ReadAsync(changedLogin.Content)).AccessToken);
         await pendingDb.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET is_active=false WHERE id={staff.UserId}");
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/v1/auth/me")).StatusCode);
     }
