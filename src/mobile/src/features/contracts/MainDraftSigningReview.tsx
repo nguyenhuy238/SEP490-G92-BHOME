@@ -27,6 +27,7 @@ export function MainDraftSigningReview({
   onBusyChange,
   onDownloadPdf,
   onDraftChanged,
+  onEditDraft,
 }: {
   client: ReturnType<typeof mainDraftClient>;
   draft: MainDraftView;
@@ -35,6 +36,7 @@ export function MainDraftSigningReview({
   onBusyChange?: (busy: boolean) => void;
   onDownloadPdf?: (document: PreviewDocument) => void | Promise<boolean | undefined>;
   onDraftChanged?: (draft: MainDraftView) => void;
+  onEditDraft?: () => void;
 }) {
   const { api, session } = useSession();
   const owner = !!session?.roles.includes('Owner');
@@ -46,6 +48,7 @@ export function MainDraftSigningReview({
   } | null>(null);
   const [tenant, setTenant] = useState('');
   const [file, setFile] = useState<PreviewDocument | null>(null);
+  const [documentBlocker, setDocumentBlocker] = useState('');
   const [reviewed, setReviewed] = useState(false);
   const [readyFile, setReadyFile] = useState('');
   const [busy, setBusy] = useState(false);
@@ -62,6 +65,7 @@ export function MainDraftSigningReview({
     setReviewed(false);
     setReadyFile('');
     if (requiresNewDocument(failure)) {
+      setDocumentBlocker(previewErrorCode(failure));
       setFile(null);
       setReviewed(false);
       setReadyFile('');
@@ -131,11 +135,15 @@ export function MainDraftSigningReview({
         setReadyFile('');
         setFile(null);
         const result = await client.signingReview(draft.id);
-        if (alive.current) setFile(result);
+        if (alive.current) {
+          setDocumentBlocker('');
+          setFile(result);
+        }
       }
     } catch (e) {
       setReviewed(false);
       if (requiresNewDocument(e)) {
+        setDocumentBlocker(previewErrorCode(e));
         setFile(null);
         setReadyFile('');
       }
@@ -183,7 +191,7 @@ export function MainDraftSigningReview({
             sau khi hợp đồng thuê chính được kích hoạt.
           </Text>
         )}
-        {!!feedback && (
+        {!!feedback && !documentBlocker && (
           <Text accessibilityRole="alert" style={ui.red}>
             {feedback}
           </Text>
@@ -198,17 +206,21 @@ export function MainDraftSigningReview({
           <Pill tone="amber">Tài liệu Development · Chưa duyệt cho production</Pill>
         )}
       </Box>
-      {file && (
+      {(file || documentBlocker) && (
         <ContractPdfPreview
           client={client}
           contractId={draft.id}
           document={file}
+          hideUnavailableActions
           busy={busy}
           hasDocx={false}
-          previewErrorCode={null}
-          onRegenerate={() => void run(false)}
-          onOpenPdf={() => onOpenPdf(file)}
-          onDownloadPdf={onDownloadPdf ? () => onDownloadPdf(file) : undefined}
+          previewErrorCode={documentBlocker || null}
+          onRegenerate={() => {
+            if (documentBlocker.includes('save_again') && onEditDraft) onEditDraft();
+            else void run(false);
+          }}
+          onOpenPdf={() => (file ? onOpenPdf(file) : undefined)}
+          onDownloadPdf={onDownloadPdf && file ? () => onDownloadPdf(file) : undefined}
           onOpenDocx={() => {}}
           onDocumentError={invalidateDocument}
           onReady={setReadyFile}

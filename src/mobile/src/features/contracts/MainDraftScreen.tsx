@@ -106,6 +106,8 @@ export function MainDraftScreen({
     alive = useRef(true),
     dirty = useRef(false);
   const operation = useRef<AbortController | null>(null);
+  const currentOperation = (controller: AbortController) =>
+    alive.current && operation.current === controller && !controller.signal.aborted;
   const calendarClose = useRef<(() => void) | null>(null);
   const routePromotion = useRef<{ id: string; client: typeof client } | null>(null);
   const refs = useRef({ roomId, representativeResidentId, residentIds });
@@ -145,6 +147,20 @@ export function MainDraftScreen({
         setLoading(false);
         return;
       }
+      // A route may reuse this component. Retire the previous resource and any generation
+      // still in flight before adopting the new draft (including an explicit reload).
+      operation.current?.abort();
+      operation.current = null;
+      lock.current = false;
+      setBusy(false);
+      setId(initialId ?? '');
+      setSaved(null);
+      setDocuments(null);
+      setReadyFile('');
+      setDocumentBlocker('');
+      setReviewRevision((value) => value + 1);
+      setSigningVisited(false);
+      setMode('edit');
       setLoading(true);
       setError('');
       try {
@@ -225,6 +241,12 @@ export function MainDraftScreen({
   }
   async function save(preview: boolean) {
     if (!client || lock.current || readOnly) return;
+    // Reading an unchanged Owner draft must not increment its version and retire the
+    // PDF another viewer/reviewer is using. Generation already validates current state.
+    if (preview && owner && saved && !dirty.current) {
+      await reviewSaved(false);
+      return;
+    }
     const body = input();
     if (!body) return;
     lock.current = true;
@@ -234,7 +256,7 @@ export function MainDraftScreen({
     operation.current = controller;
     try {
       const prep = await client.prepare(body, controller.signal);
-      if (!alive.current) return;
+      if (!currentOperation(controller)) return;
       setPreparation(prep);
       if (prep.blockers.length) {
         return;
@@ -246,7 +268,7 @@ export function MainDraftScreen({
         controller.signal,
       );
       keys.confirmed('main-draft', body);
-      if (!alive.current) return;
+      if (!currentOperation(controller)) return;
       setId(result.id);
       setReadyFile('');
       setDocumentBlocker('');
@@ -267,17 +289,21 @@ export function MainDraftScreen({
         setDocuments(null);
         setMode('preview');
         const resultFiles = await client.generate(result.id, controller.signal);
-        if (alive.current) {
+        if (currentOperation(controller)) {
+          setDocumentBlocker('');
           setDocuments(resultFiles);
         }
       } else setMode('edit');
     } catch (e) {
+      if (!currentOperation(controller)) return;
       invalidateDocument(e);
       workflowFailure('main-draft', e);
       if (alive.current && !controller.signal.aborted) setError(message(e));
     } finally {
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
   async function openFile(pdf: boolean, override?: PreviewDocument, view = false) {
@@ -294,6 +320,10 @@ export function MainDraftScreen({
       if (pdf && view && Platform.OS === 'web') tab = openPdfWindow();
       const bytes = await client.file(id, document.id, controller.signal);
       try {
+        if (!currentOperation(controller)) {
+          tab?.close();
+          return;
+        }
         const signature = pdf ? [37, 80, 68, 70, 45] : [80, 75, 3, 4];
         if (
           bytes.length < signature.length ||
@@ -329,13 +359,16 @@ export function MainDraftScreen({
       }
     } catch (e) {
       tab?.close();
+      if (!currentOperation(controller)) return;
       invalidateDocument(e);
       workflowFailure('main-draft', e);
       if (alive.current) setError(message(e));
     } finally {
       if (file?.exists) file.delete();
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
   function back() {
@@ -370,9 +403,17 @@ export function MainDraftScreen({
     operation.current = controller;
     try {
       const current = await client.get(id, controller.signal);
+      if (!currentOperation(controller)) return;
       if (current.status !== 'Draft') {
         setDocuments(null);
+        setReadyFile('');
+        setSaved(current);
         setReviewRevision((value) => value + 1);
+        if (owner) {
+          if (releasedHandler.current) releasedHandler.current(current.id);
+          else onList();
+          return;
+        }
         throw { code: 'draft_version_or_status_changed' };
       }
       if (current.version !== saved.version) {
@@ -399,18 +440,23 @@ export function MainDraftScreen({
         setDocuments(null);
         setReviewRevision((value) => value + 1);
         const result = await client.generate(id, controller.signal);
-        if (alive.current) {
+        if (currentOperation(controller)) {
+          setDocumentBlocker('');
+          setError('');
           setDocuments(result);
           setMode('preview');
         }
       }
     } catch (e) {
+      if (!currentOperation(controller)) return;
       invalidateDocument(e);
       workflowFailure('main-draft', e);
       if (alive.current && !controller.signal.aborted) setError(message(e));
     } finally {
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
   async function refreshPrices() {
@@ -432,13 +478,15 @@ export function MainDraftScreen({
     operation.current = controller;
     try {
       const result = await client.prepare({ ...refs.current, startDate: date }, controller.signal);
-      if (alive.current) setPreparation(result);
+      if (currentOperation(controller)) setPreparation(result);
     } catch (e) {
       workflowFailure('main-draft', e);
       if (alive.current && !controller.signal.aborted) setError(message(e));
     } finally {
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
   useEffect(() => {
@@ -512,7 +560,7 @@ export function MainDraftScreen({
                   steps={owner ? ownerContractSteps : undefined}
                 />
                 {loading && <ActivityIndicator accessibilityLabel="Đang tải dữ liệu hợp đồng" />}
-                {!!error && (
+                {!!error && !(owner && mode === 'preview' && documentBlocker) && (
                   <Text accessibilityRole="alert" style={styles.error}>
                     {error}
                   </Text>
@@ -631,6 +679,12 @@ export function MainDraftScreen({
                           onReleased={(next) => (onReleased ? onReleased(next) : onList())}
                           onOpenPdf={(file) => openFile(true, file, true)}
                           onDownloadPdf={(file) => openFile(true, file)}
+                          onEditDraft={() => {
+                            setDocuments(null);
+                            setReadyFile('');
+                            setSigningVisited(false);
+                            setMode('edit');
+                          }}
                           onDraftChanged={(latest) => {
                             setDocuments(null);
                             setReadyFile('');
@@ -728,6 +782,7 @@ export function MainDraftScreen({
                         client={client}
                         contractId={id}
                         document={documents?.pdf ?? null}
+                        hideUnavailableActions={owner}
                         busy={busy}
                         previewErrorCode={documentBlocker || documents?.previewError || null}
                         hasDocx={!!documents?.docx}

@@ -288,3 +288,22 @@ it('bounds a slow page renderer and offers retry instead of leaving its spinner 
   expect(screen.getByText('Hiển thị tài liệu mất nhiều thời gian. Hãy thử lại.')).toBeTruthy();
   expect(screen.getByText('Tải lại trang 1')).toBeTruthy();
 });
+it('offers one rebuild for an Owner missing/integrity blocker without disabled export actions', () => {
+  const onRegenerate = vi.fn();
+  render(
+    <ContractPdfPreview
+      {...props()}
+      document={null}
+      hasDocx={false}
+      hideUnavailableActions
+      previewErrorCode="contract_document_integrity_failed"
+      onRegenerate={onRegenerate}
+    />,
+  );
+  expect(screen.getByText(/Không xác minh được tệp hợp đồng/)).toBeTruthy();
+  expect(screen.queryByText('Tải phiên bản mới')).toBeNull();
+  expect(screen.queryByText('Xem PDF')).toBeNull();
+  expect(screen.queryByText('Tải PDF')).toBeNull();
+  fireEvent.click(screen.getByText('Tạo lại PDF'));
+  expect(onRegenerate).toHaveBeenCalledOnce();
+});

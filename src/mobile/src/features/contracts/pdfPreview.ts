@@ -12,7 +12,7 @@ export function previewError(error: unknown): string {
   if (status === 503) return 'Kho tài liệu hoặc bộ hiển thị chưa sẵn sàng. Hãy thử lại sau.';
   if (status === 404)
     return 'Không tìm thấy tài liệu hoặc bạn không có quyền xem. Hãy tải lại hợp đồng.';
-  if (status === 409) return 'Tài liệu đã thay đổi. Hãy tạo lại bản xem trước.';
+  if (status === 409) return 'Máy chủ chưa cho phép mở tài liệu. Hãy tải lại hợp đồng.';
   return conciseMessage(contractError(error));
 }
 export function previewErrorCode(error: unknown): string {
@@ -28,6 +28,8 @@ export function requiresNewDocument(error: unknown) {
     'draft_version_or_status_changed',
     'draft_configuration_changed_save_again',
     'draft_template_changed_save_again',
+    'contract_document_integrity_failed',
+    'draft_document_missing',
   ].includes(previewErrorCode(error));
 }
 

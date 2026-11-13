@@ -40,4 +40,26 @@ Frontend còn có fallback coi mọi 409 chưa biết là thay đổi tài liệ
 
 Build Debug ban đầu bị DLL lock do Visual Studio/API của người dùng đang chạy. Chạy lại bằng `--artifacts-path .tools/owner-pdf-validation/dotnet` thành công, không dừng debugger của người dùng.
 
-Phần Mobile và kiểm chứng trình duyệt đang tiếp tục.
+### Sửa Mobile
+
+- Phân biệt integrity, object thiếu, snapshot cũ, configuration/template, timeout và 409 chưa biết. Integrity/missing có `Tạo lại PDF`, không bị coi là snapshot cũ.
+- Recovery khóa chống double tap, tải latest Draft rồi generate một lần; không PUT điều khoản. Non-Draft chuyển workflow hiện tại. Thành công xóa blocker cũ, dùng fileId mới; lỗi chỉ xuất hiện một lần trong viewer Owner.
+- Đổi resource/reload hủy request và xóa document/review trước; response đến muộn không thay state hoặc mở/tải tệp của resource cũ. Owner xem Draft chưa sửa không tạo một version mới.
+- Signing-review giữ recovery sau khi bỏ file lỗi; checkbox cũ luôn bị xóa, configuration cần quay lại sửa/lưu nháp. Không đổi phương thức ký hay biểu diễn release thành đã ký.
+- Owner không còn thấy dãy nút export/fullscreen bị vô hiệu khi không có tệp. Staff/Tenant giữ các nhánh workflow hiện hữu.
+
+### Kiểm chứng Mobile/Web
+
+- Full Mobile: **100 files / 1.090 tests PASS**, có regression Staff/Tenant. Lint, typecheck, Prettier và `git diff --check` PASS. Sau khi thêm guard cho download/refresh đến muộn, chạy lại 20 test MainDraftScreen, typecheck và lint các component: PASS.
+- Owner Web contracts: **16 files / 63 tests PASS**; không sửa Owner Web.
+- Workspace build, Expo Web export và `dotnet format whitespace --verify-no-changes` cho các tệp C# sửa: PASS.
+- Chrome với API transport tổng hợp: cả `draft_document_outdated`, `contract_document_integrity_failed`, `draft_document_missing` → recovery → inline PDF → fullscreen/zoom 150% → Blob PDF → download → review → một release → PendingSigning. Mỗi case hai generation theo thao tác đọc/recovery, **không PUT**, không request ngoài dự kiến/page error. Kiểm tra 360/400/768/1280px không tràn ngang; ảnh/PDF/request paths tổng hợp ở `.tools/owner-pdf-validation/followup-*` (ignored).
+- Browser test trên là UI regression với transport tổng hợp; PDF/PNG thật, MinIO thật và API được kiểm tra riêng trong backend suite. Không gộp thành MySign hoặc bank E2E thật.
+
+### Tệp sửa và giới hạn
+
+Backend: `MainDraftService.cs`, `MinioObjectStorage.cs`; tests: `MainDraftApiTests.cs`, `MinioStorageRegressionTests.cs`, `Compact24/MainDraftDocumentRegressionTests.cs`.
+
+Mobile/shared: `MainDraftScreen.tsx`, `MainDraftSigningReview.tsx`, `ContractPdfPreview.tsx`, `pdfPreview.ts`, `packages/client-core/src/mainDrafts.ts`; tests: `main-draft-screen`, `rental-contract-flow`, `contract-pdf-preview`, `pdf-preview`. Không sửa Owner Web, Staff/Tenant screens hoặc thêm migrations.
+
+Phiên localhost thực tế đã được đọc qua UI và xác nhận đúng route; không thực hiện ký/thanh toán. API đang chạy trong debugger dùng DLL cũ; đã yêu cầu người dùng restart sau commit backend `a91e6e29` để nạp sửa. Chưa tuyên bố preview của đúng contract đã PASS cho đến khi kiểm chứng sau restart. Android/iOS thiết bị, MySign/SMTP/bank thật: NOT RUN. Production vẫn cần template được duyệt, Main deposit QR vẫn phụ thuộc API hiện có.

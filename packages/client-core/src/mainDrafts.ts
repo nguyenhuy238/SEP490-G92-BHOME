@@ -148,6 +148,9 @@ export function mainDraftClient(request: MainDraftRequest) {
   };
 }
 export const mainDraftMessages: Record<string, string> = {
+  contract_document_integrity_failed:
+    'Không xác minh được tệp hợp đồng. Hãy tạo lại PDF; nếu còn lỗi, kiểm tra kho tài liệu.',
+  draft_document_missing: 'Tệp hợp đồng không còn trong kho tài liệu. Hãy tạo lại PDF.',
   draft_download_invalid: 'Tệp tải về không hợp lệ. Hãy tạo lại tài liệu rồi thử lại.',
   draft_preview_pdf_required: 'Chọn bản PDF để xem trước. DOCX vẫn có thể mở bên ngoài.',
   draft_preview_invalid_pdf: 'Bản PDF không hợp lệ. Hãy tạo lại tài liệu.',

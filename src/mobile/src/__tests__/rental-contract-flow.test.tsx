@@ -122,19 +122,40 @@ vi.mock('../features/contracts/ContractPdfPreview', () => ({
   ContractPdfPreview: ({
     document,
     onReady,
+    previewErrorCode,
+    onRegenerate,
+    onDocumentError,
   }: {
-    document: { id: string };
+    document: { id: string } | null;
     onReady?: (id: string) => void;
+    previewErrorCode?: string;
+    onRegenerate?: () => void;
+    onDocumentError?: (error: unknown) => void;
   }) => {
     useEffect(() => {
-      onReady?.(document.id);
-    }, [document.id, onReady]);
-    return <span>Private PDF {document.id}</span>;
+      if (document) onReady?.(document.id);
+    }, [document, onReady]);
+    return document ? (
+      <>
+        <span>Private PDF {document.id}</span>
+        <button onClick={() => onDocumentError?.({ code: 'contract_document_integrity_failed' })}>
+          Fail private PDF
+        </button>
+      </>
+    ) : (
+      <>
+        <span>{mainDraftMessages[previewErrorCode ?? '']}</span>
+        <button onClick={onRegenerate}>Tạo lại PDF</button>
+      </>
+    );
   },
 }));
 import { RentalContractFlow } from '../features/contracts/RentalContractFlow';
 import { MainDraftSigningReview } from '../features/contracts/MainDraftSigningReview';
-import { mainDraftClient } from '../../../../packages/client-core/src/mainDrafts';
+import {
+  mainDraftClient,
+  mainDraftMessages,
+} from '../../../../packages/client-core/src/mainDrafts';
 import { rentalContractState } from '../features/contracts/rentalContractState';
 
 function contract(): ContractView {
@@ -404,4 +425,41 @@ it('clears the reviewed document when the server Draft version changes before re
   expect((screen.getByText('Duyệt và chuyển sang chờ ký') as HTMLButtonElement).disabled).toBe(
     true,
   );
+});
+it('keeps a signing-review recovery action after integrity failure and requires a fresh confirmation', async () => {
+  let generation = 0;
+  state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/draft')) return { id: 'draft', status: 'Draft', version: 4 };
+    if (path.endsWith('/accounts')) return [];
+    if (path.endsWith('/signing-review'))
+      return { id: `review-${++generation}`, developmentOnly: true };
+    throw new Error('Unexpected mutation');
+  });
+  render(
+    <MainDraftSigningReview
+      client={mainDraftClient(state.request)}
+      draft={{ id: 'draft', version: 4 } as MainDraftView}
+      onReleased={vi.fn()}
+      onOpenPdf={vi.fn()}
+    />,
+  );
+  await screen.findByText('Khách mới · chấp thuận nội bộ qua email');
+  fireEvent.change(screen.getByLabelText('Người đại diện ký hợp đồng'), {
+    target: { value: '__internal__' },
+  });
+  fireEvent.click(screen.getByText('Tạo bản PDF để duyệt'));
+  await screen.findByText('Private PDF review-1');
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByText('Fail private PDF'));
+  expect(screen.getAllByText(mainDraftMessages.contract_document_integrity_failed!)).toHaveLength(
+    1,
+  );
+  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+  fireEvent.click(screen.getByText('Tạo lại PDF'));
+  await screen.findByText('Private PDF review-2');
+  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+  expect((screen.getByText('Duyệt và chuyển sang chờ ký') as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/release'))).toBe(false);
 });

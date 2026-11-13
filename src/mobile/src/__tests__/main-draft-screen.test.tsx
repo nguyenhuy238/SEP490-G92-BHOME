@@ -271,6 +271,76 @@ it('requires an explicit save after a configuration conflict instead of regenera
     'tenant.synthetic@example.invalid',
   );
 });
+it('shows an Owner document conflict once and clears it after one locked recovery', async () => {
+  state.roles = ['Owner'];
+  const original = state.request.getMockImplementation()!;
+  let finish: ((value: unknown) => void) | undefined;
+  let generation = 0;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/documents')) {
+      if (++generation === 2) return new Promise((resolve) => (finish = resolve));
+      return { docx: { id: 'docx' }, pdf: { id: 'old-pdf' }, previewError: null };
+    }
+    if (path.endsWith('/old-pdf/preview')) throw { status: 409, code: 'draft_document_outdated' };
+    if (path.endsWith('/new-pdf/preview'))
+      return { fileId: 'new-pdf', pages: [{ number: 1, width: 595, height: 842 }] };
+    if (path.includes('/pages/')) return new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    return original(path, init);
+  });
+  setup();
+  await screen.findByText('CCCD: ********0123');
+  fill();
+  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  await screen.findByText('Tải phiên bản mới');
+  expect(
+    screen.getAllByText('Tài liệu thuộc phiên bản cũ. Hãy tạo lại bản xem trước.'),
+  ).toHaveLength(1);
+  const recover = screen.getByText('Tải phiên bản mới');
+  fireEvent.click(recover);
+  fireEvent.click(recover);
+  await waitFor(() => expect(finish).toBeDefined());
+  expect(generation).toBe(2);
+  await act(async () =>
+    finish!({ docx: { id: 'docx-new' }, pdf: { id: 'new-pdf' }, previewError: null }),
+  );
+  await screen.findByText('Hiển thị trang kiểm thử');
+  fireEvent.click(screen.getByText('Hiển thị trang kiểm thử'));
+  expect(screen.queryByText('Tài liệu thuộc phiên bản cũ. Hãy tạo lại bản xem trước.')).toBeNull();
+  expect((screen.getByText('Tiếp tục duyệt hợp đồng') as HTMLButtonElement).disabled).toBe(false);
+});
+it('moves an Owner to the current workflow if the contract is released during document recovery', async () => {
+  state.roles = ['Owner'];
+  const original = state.request.getMockImplementation()!;
+  let released = false;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/documents'))
+      return { docx: { id: 'docx' }, pdf: { id: 'old' }, previewError: null };
+    if (path.endsWith('/old/preview')) throw { status: 409, code: 'draft_document_outdated' };
+    const result = await original(path, init);
+    return path.endsWith('/draft-id') && !init?.method && released
+      ? { ...result, status: 'PendingSigning' }
+      : result;
+  });
+  const onReleased = vi.fn();
+  render(
+    <MainDraftScreen
+      roomId="room"
+      representativeResidentId="resident"
+      residentIds={['resident']}
+      onCancel={vi.fn()}
+      onList={vi.fn()}
+      onReleased={onReleased}
+    />,
+  );
+  await screen.findByText('CCCD: ********0123');
+  fill();
+  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  await screen.findByText('Tải phiên bản mới');
+  released = true;
+  fireEvent.click(screen.getByText('Tải phiên bản mới'));
+  await waitFor(() => expect(onReleased).toHaveBeenCalledWith('draft-id'));
+  expect(state.request.mock.calls.filter(([path]) => path.endsWith('/documents'))).toHaveLength(1);
+});
 it('returns an already released Owner draft to its actual contract detail without regenerating it', async () => {
   state.roles = ['Owner'];
   const original = state.request.getMockImplementation()!;
@@ -294,6 +364,60 @@ it('returns an already released Owner draft to its actual contract detail withou
   );
   await waitFor(() => expect(released).toHaveBeenCalledWith('draft-id'));
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/documents'))).toBe(false);
+});
+it('previews an unchanged Owner draft without saving a new version', async () => {
+  state.roles = ['Owner'];
+  setup('draft-id');
+  await screen.findByText('CCCD: ********0123');
+  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  await screen.findByText(
+    'Máy chủ chưa cấu hình LibreOffice để tạo PDF. Bản nháp và DOCX đã được giữ lại.',
+  );
+  expect(state.request.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0);
+  expect(state.request.mock.calls.filter(([path]) => path.endsWith('/documents'))).toHaveLength(1);
+});
+it('aborts the previous resource and ignores a late document generation after the route changes', async () => {
+  state.roles = ['Owner'];
+  const original = state.request.getMockImplementation()!;
+  let finish: ((value: unknown) => void) | undefined;
+  let signal: AbortSignal | undefined;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/first/documents')) {
+      signal = init?.signal as AbortSignal;
+      return new Promise((resolve) => (finish = resolve));
+    }
+    if (path.endsWith('/second/documents'))
+      return { docx: { id: 'new-docx' }, pdf: { id: 'new-pdf' }, previewError: null };
+    if (path.endsWith('/new-pdf/preview'))
+      return { fileId: 'new-pdf', pages: [{ number: 1, width: 595, height: 842 }] };
+    if (path.includes('/pages/')) return new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const result = await original(path, init);
+    return path.endsWith('/first') || path.endsWith('/second')
+      ? { ...result, id: path.split('/').at(-1) }
+      : result;
+  });
+  const props = {
+    roomId: 'room',
+    representativeResidentId: 'resident',
+    residentIds: ['resident'],
+    onCancel: vi.fn(),
+    onList: vi.fn(),
+  };
+  const rendered = render(<MainDraftScreen {...props} initialId="first" />);
+  await screen.findByText('CCCD: ********0123');
+  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  await waitFor(() => expect(finish).toBeDefined());
+  rendered.rerender(<MainDraftScreen {...props} initialId="second" />);
+  await screen.findByText('CCCD: ********0123');
+  expect(signal?.aborted).toBe(true);
+  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  await screen.findByText('Hiển thị trang kiểm thử');
+  await act(async () =>
+    finish!({ docx: { id: 'old-docx' }, pdf: { id: 'old-pdf' }, previewError: null }),
+  );
+  expect(state.request.mock.calls.some(([path]) => path.includes('/old-pdf/'))).toBe(false);
+  fireEvent.click(screen.getByText('Hiển thị trang kiểm thử'));
+  expect((screen.getByText('Tiếp tục duyệt hợp đồng') as HTMLButtonElement).disabled).toBe(false);
 });
 it('validates contact email, trims the supported draft field and omits issuing-place input', async () => {
   setup();

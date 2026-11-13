@@ -157,6 +157,7 @@ export function ContractPdfPreview({
   onDownloadPdf,
   onDocumentError,
   onReady,
+  hideUnavailableActions = false,
 }: {
   client: Client;
   contractId: string;
@@ -167,6 +168,7 @@ export function ContractPdfPreview({
   onOpenPdf: () => void | Promise<boolean | undefined>;
   onOpenDocx: () => void;
   hasDocx: boolean;
+  hideUnavailableActions?: boolean;
   onDownloadPdf?: () => void;
   onDocumentError?: (error: unknown) => void;
   onReady?: (id: string) => void;
@@ -270,14 +272,16 @@ export function ContractPdfPreview({
               : 'Tài liệu được tạo từ thông tin đã lưu'}
           </Text>
         </View>
-        <IconButton
-          icon="arrow-expand"
-          accessibilityLabel="Xem toàn màn hình"
-          accessibilityHint="Đọc tất cả các trang và phóng to hợp đồng"
-          disabled={!info || busy}
-          onPress={openFullscreen}
-          style={{ width: 44, height: 44, margin: 0 }}
-        />
+        {(!hideUnavailableActions || info) && (
+          <IconButton
+            icon="arrow-expand"
+            accessibilityLabel="Xem toàn màn hình"
+            accessibilityHint="Đọc tất cả các trang và phóng to hợp đồng"
+            disabled={!info || busy}
+            onPress={openFullscreen}
+            style={{ width: 44, height: 44, margin: 0 }}
+          />
+        )}
       </View>
       <View
         onLayout={(event) => {
@@ -310,11 +314,14 @@ export function ContractPdfPreview({
                 fileId && !current?.conflict ? setRevision((value) => value + 1) : onRegenerate()
               }
             >
-              {previewErrorCode?.includes('save_again')
-                ? 'Lưu lại bản nháp'
-                : current?.conflict || previewErrorCode === 'draft_document_outdated'
-                  ? 'Tải phiên bản mới'
-                  : 'Thử lại bản xem trước'}
+              {previewErrorCode === 'contract_document_integrity_failed' ||
+              previewErrorCode === 'draft_document_missing'
+                ? 'Tạo lại PDF'
+                : previewErrorCode?.includes('save_again')
+                  ? 'Lưu lại bản nháp'
+                  : current?.conflict || previewErrorCode === 'draft_document_outdated'
+                    ? 'Tải phiên bản mới'
+                    : 'Thử lại bản xem trước'}
             </Button>
           </View>
         )}
@@ -337,20 +344,22 @@ export function ContractPdfPreview({
         )}
       </View>
       <View style={styles.actions}>
-        <Button
-          compact
-          contentStyle={{ minHeight: 44 }}
-          icon="open-in-new"
-          disabled={!fileId || busy}
-          onPress={() => {
-            void Promise.resolve(onOpenPdf()).then((valid) => {
-              if (valid) onReady?.(fileId);
-            });
-          }}
-        >
-          Xem PDF
-        </Button>
-        {onDownloadPdf && (
+        {(!hideUnavailableActions || fileId) && (
+          <Button
+            compact
+            contentStyle={{ minHeight: 44 }}
+            icon="open-in-new"
+            disabled={!fileId || busy}
+            onPress={() => {
+              void Promise.resolve(onOpenPdf()).then((valid) => {
+                if (valid) onReady?.(fileId);
+              });
+            }}
+          >
+            Xem PDF
+          </Button>
+        )}
+        {onDownloadPdf && (!hideUnavailableActions || fileId) && (
           <Button
             compact
             contentStyle={{ minHeight: 44 }}
@@ -361,15 +370,17 @@ export function ContractPdfPreview({
             Tải PDF
           </Button>
         )}
-        <Button
-          compact
-          contentStyle={{ minHeight: 44 }}
-          icon="file-word-outline"
-          disabled={!hasDocx || busy}
-          onPress={onOpenDocx}
-        >
-          Mở hoặc lưu DOCX
-        </Button>
+        {(!hideUnavailableActions || hasDocx) && (
+          <Button
+            compact
+            contentStyle={{ minHeight: 44 }}
+            icon="file-word-outline"
+            disabled={!hasDocx || busy}
+            onPress={onOpenDocx}
+          >
+            Mở hoặc lưu DOCX
+          </Button>
+        )}
       </View>
       {fullscreen && info && (
         <Modal
