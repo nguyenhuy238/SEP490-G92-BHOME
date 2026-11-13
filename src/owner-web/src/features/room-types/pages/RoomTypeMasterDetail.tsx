@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -13,8 +14,81 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import { BedDouble, Check, Maximize2, Pencil, Users } from 'lucide-react';
-import type { RoomTypeConfiguration } from '../../../../../../packages/client-core/src/propertySetup';
+import { BedDouble, Pencil } from 'lucide-react';
+import type { LocalRoomDefaultsData } from '../../../../../../packages/client-core/src/locationSetup';
+import type { SetupDocument } from '../../../../../../packages/client-core/src/propertySetup';
+import { formatBillingDecimal } from '../../../../../../packages/client-core/src/invoices';
+
+export type LocalRoomDefaults = SetupDocument<LocalRoomDefaultsData>;
+
+function defaultsOrigin(data: LocalRoomDefaultsData) {
+  if (data.copiedFromId || data.sourceLocationId)
+    return (
+      'Sao chép từ cơ sở' +
+      (data.copiedFromVersion != null ? ` · bản ${data.copiedFromVersion}` : '')
+    );
+  if (data.sourceId)
+    return 'Nạp từ mẫu chung' + (data.sourceVersion != null ? ` · bản ${data.sourceVersion}` : '');
+  return 'Tạo tại cơ sở';
+}
+
+export function RoomDefaultsDetails({ item }: { item: LocalRoomDefaults }) {
+  const data = item.data;
+  return (
+    <Stack spacing={2}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+        <Chip size="small" label={item.status === 'Archived' ? 'Ngừng sử dụng' : 'Đang sử dụng'} />
+        <Chip size="small" variant="outlined" label={defaultsOrigin(data)} />
+        <Typography variant="caption" color="text.secondary">
+          Phiên bản {item.version}
+        </Typography>
+      </Stack>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+        {[
+          ['Sức chứa mặc định', `${data.defaults.capacity} người`],
+          ['Diện tích', data.defaults.area == null ? 'Chưa khai báo' : `${data.defaults.area} m²`],
+          [
+            'Giá thuê tham khảo',
+            data.defaults.referenceRent == null
+              ? 'Chưa đặt'
+              : `${formatBillingDecimal(data.defaults.referenceRent)} đ/tháng`,
+          ],
+          ['Gói trang bị', data.assetTemplateId ? 'Đã liên kết' : 'Chưa liên kết'],
+        ].map(([label, value]) => (
+          <Box key={label} sx={{ p: 1.75, bgcolor: 'action.hover', borderRadius: 2 }}>
+            <Typography variant="caption" color="text.secondary">
+              {label}
+            </Typography>
+            <Typography sx={{ fontWeight: 700, mt: 0.5 }}>{value}</Typography>
+          </Box>
+        ))}
+      </Box>
+      <Box>
+        <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Mô tả</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+          {data.description || 'Chưa có mô tả.'}
+        </Typography>
+      </Box>
+      <Box>
+        <Typography sx={{ fontWeight: 700, mb: 1 }}>Tiện nghi</Typography>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          {data.defaults.amenities.map((amenity, index) => (
+            <Chip key={index} size="small" label={amenity} variant="outlined" />
+          ))}
+          {!data.defaults.amenities.length && (
+            <Typography variant="body2" color="text.secondary">
+              Chưa khai báo.
+            </Typography>
+          )}
+        </Stack>
+      </Box>
+      <Alert severity="info">
+        Các giá trị này là gợi ý cho phòng mới. Giá thuê thực tế và tài sản đã kiểm kê được quản lý
+        riêng; chỉnh sửa gợi ý không thay đổi các phòng đã tạo.
+      </Alert>
+    </Stack>
+  );
+}
 
 export function RoomTypeMasterDetail({
   items,
@@ -23,11 +97,11 @@ export function RoomTypeMasterDetail({
   edit,
   inspect,
 }: {
-  items: RoomTypeConfiguration[];
+  items: LocalRoomDefaults[];
   total: number;
   canManage: boolean;
-  edit: (item: RoomTypeConfiguration) => void;
-  inspect: (item: RoomTypeConfiguration) => void;
+  edit: (item: LocalRoomDefaults) => void;
+  inspect: (item: LocalRoomDefaults) => void;
 }) {
   const [selectedId, setSelectedId] = useState('');
   const selected = items.find((item) => item.id === selectedId) ?? items[0];
@@ -40,51 +114,27 @@ export function RoomTypeMasterDetail({
         alignItems: 'start',
       }}
     >
-      <Paper variant="outlined" sx={{ overflow: 'hidden', borderRadius: '12px' }}>
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            px: 2.5,
-            py: 2,
-            alignItems: 'center',
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-          }}
-        >
-          <Typography sx={{ fontWeight: 750, fontSize: 16 }}>Danh sách loại phòng</Typography>
+      <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+        <Stack direction="row" spacing={1} sx={{ p: 2.5, alignItems: 'center' }}>
+          <Typography sx={{ fontWeight: 750 }}>Danh sách gợi ý tạo phòng</Typography>
           <Chip size="small" label={total} />
-          <Typography sx={{ ml: 'auto !important', fontSize: 13, color: 'text.secondary' }}>
-            Chọn dòng để xem cấu hình
-          </Typography>
         </Stack>
         <TableContainer>
-          <Table size="medium" aria-label="Danh sách loại phòng">
+          <Table aria-label="Danh sách gợi ý tạo phòng">
             <TableHead>
               <TableRow>
-                {['Loại phòng', 'Sức chứa', 'Diện tích'].map((title) => (
-                  <TableCell key={title} sx={{ py: 1.5, fontSize: 13 }}>
-                    {title}
-                  </TableCell>
+                {['Gợi ý', 'Sức chứa', 'Diện tích'].map((title) => (
+                  <TableCell key={title}>{title}</TableCell>
                 ))}
               </TableRow>
             </TableHead>
             <TableBody>
               {items.map((item) => (
-                <TableRow
-                  key={item.id}
-                  selected={item.id === selected?.id}
-                  hover
-                  sx={{
-                    '&.Mui-selected': { bgcolor: '#edf3ff' },
-                    '&.Mui-selected:hover': { bgcolor: '#e4edff' },
-                  }}
-                >
+                <TableRow key={item.id} selected={item.id === selected?.id} hover>
                   <TableCell
                     sx={{
                       borderLeft: '3px solid',
                       borderLeftColor: item.id === selected?.id ? 'primary.main' : 'transparent',
-                      py: 2,
                     }}
                   >
                     <Button
@@ -94,158 +144,45 @@ export function RoomTypeMasterDetail({
                         textAlign: 'left',
                         justifyContent: 'flex-start',
                         color: 'text.primary',
-                        fontSize: 14,
-                        lineHeight: 1.5,
                         fontWeight: 700,
-                        minHeight: 0,
                       }}
                     >
-                      {' '}
-                      {item.name}
+                      {item.data.name}
                     </Button>
-                    <Typography
-                      sx={{
-                        fontSize: 12,
-                        mt: 0.75,
-                        color: item.isActive ? 'success.main' : 'text.secondary',
-                      }}
-                    >
-                      {item.isActive ? '● Đang sử dụng' : '● Ngừng sử dụng'}
+                    <Typography variant="caption" sx={{ display: 'block' }} color="text.secondary">
+                      {defaultsOrigin(item.data)}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14 }}>
-                    {item.defaultCapacity} người
-                  </TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap', fontSize: 14 }}>
-                    {item.areaM2 != null ? `${item.areaM2} m²` : '—'}
+                  <TableCell>{item.data.defaults.capacity} người</TableCell>
+                  <TableCell>
+                    {item.data.defaults.area == null ? '—' : `${item.data.defaults.area} m²`}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </TableContainer>
-        <Box sx={{ px: 2.5, py: 2, bgcolor: '#fafbfd' }}>
-          <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.7 }}>
-            Loại phòng mô tả đặc điểm và tiện nghi. Giá thuê và trang bị thực tế được quản lý tại
-            các mục riêng của cơ sở.
-          </Typography>
-        </Box>
       </Paper>
       {selected && (
-        <Paper variant="outlined" sx={{ overflow: 'hidden', borderRadius: '12px' }}>
+        <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
           <Stack
             direction="row"
             spacing={2}
-            sx={{
-              p: 2.5,
-              bgcolor: '#f8faff',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              alignItems: 'center',
-            }}
+            sx={{ p: 2.5, bgcolor: 'action.hover', alignItems: 'center' }}
           >
-            <Box
-              sx={{
-                width: 48,
-                height: 48,
-                bgcolor: '#e4edff',
-                borderRadius: '10px',
-                color: 'primary.main',
-                display: 'grid',
-                placeItems: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <BedDouble size={26} />
-            </Box>
+            <BedDouble size={26} />
             <Box>
-              <Typography
-                sx={{
-                  fontSize: 11,
-                  letterSpacing: 1.2,
-                  fontWeight: 750,
-                  color: 'text.secondary',
-                  mb: 0.5,
-                }}
-              >
-                CẤU HÌNH LOẠI PHÒNG
+              <Typography variant="caption" color="text.secondary">
+                CẤU HÌNH RIÊNG TẠI CƠ SỞ
               </Typography>
-              <Typography component="h2" sx={{ fontSize: 20, fontWeight: 800, lineHeight: 1.4 }}>
-                {selected.name}
+              <Typography component="h2" sx={{ fontSize: 20, fontWeight: 800 }}>
+                {selected.data.name}
               </Typography>
             </Box>
           </Stack>
-          <Stack spacing={3} sx={{ p: 2.5 }}>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-              <Chip
-                size="small"
-                color={selected.isActive ? 'success' : 'default'}
-                label={selected.isActive ? 'Đang sử dụng' : 'Ngừng sử dụng'}
-              />
-              <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-                Phiên bản {selected.version}
-              </Typography>
-            </Stack>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-              {[
-                {
-                  label: 'Sức chứa mặc định',
-                  value: `${selected.defaultCapacity} người`,
-                  Icon: Users,
-                },
-                {
-                  label: 'Diện tích',
-                  value: selected.areaM2 != null ? `${selected.areaM2} m²` : 'Chưa khai báo',
-                  Icon: Maximize2,
-                },
-              ].map(({ label, value, Icon }) => (
-                <Box key={label} sx={{ p: 2, bgcolor: '#f5f7fb', borderRadius: '8px' }}>
-                  <Icon size={18} color="#6a7a91" />
-                  <Typography sx={{ fontSize: 13, color: 'text.secondary', mt: 1 }}>
-                    {label}
-                  </Typography>
-                  <Typography sx={{ fontSize: 19, fontWeight: 750, mt: 0.5 }}>{value}</Typography>
-                </Box>
-              ))}
-            </Box>
-            <Box>
-              <Typography sx={{ fontSize: 14, fontWeight: 750, mb: 1 }}>Mô tả</Typography>
-              <Typography
-                sx={{
-                  fontSize: 14,
-                  color: 'text.secondary',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 1.8,
-                }}
-              >
-                {selected.description ||
-                  'Chưa có mô tả. Bổ sung đặc điểm phòng để dễ phân biệt khi tạo phòng.'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography sx={{ fontSize: 14, fontWeight: 750, mb: 1 }}>
-                Tiện nghi tiêu chuẩn
-              </Typography>
-              {selected.amenities.length ? (
-                <Stack sx={{ gap: 1 }}>
-                  {selected.amenities.map((amenity) => (
-                    <Stack key={amenity} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      <Check size={16} color="#159a60" />
-                      <Typography sx={{ fontSize: 14 }}>{amenity}</Typography>
-                    </Stack>
-                  ))}
-                </Stack>
-              ) : (
-                <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>
-                  Chưa khai báo tiện nghi.
-                </Typography>
-              )}
-            </Box>
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{ pt: 2, borderTop: '1px solid', borderColor: 'divider' }}
-            >
+          <Stack spacing={2.5} sx={{ p: 2.5 }}>
+            <RoomDefaultsDetails item={selected} />
+            <Stack direction="row" spacing={1}>
               {canManage && (
                 <Button
                   startIcon={<Pencil size={16} />}

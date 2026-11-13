@@ -13,10 +13,9 @@ import {
   Typography,
 } from '@mui/material';
 import { DoorOpen, Layers3, Users, TriangleAlert, Pencil, ArrowUpRight } from 'lucide-react';
-import type {
-  RoomConfiguration,
-  RoomTypeConfiguration,
-} from '../../../../../../packages/client-core/src/propertySetup';
+import type { RoomConfiguration } from '../../../../../../packages/client-core/src/propertySetup';
+import type { SetupDocument } from '../../../../../../packages/client-core/src/propertySetup';
+import type { RoomProvenanceData } from '../../../../../../packages/client-core/src/locationSetup';
 import { useRoomOperations } from './useRoomOperations';
 
 const states = [
@@ -28,18 +27,18 @@ const states = [
 
 export function RoomFloorCards({
   rooms,
-  roomTypes = [],
   locationId,
   total,
   edit,
   inspect,
+  provenance,
 }: {
   rooms: RoomConfiguration[];
-  roomTypes?: RoomTypeConfiguration[];
   locationId: string;
   total: number;
   edit?: (room: RoomConfiguration) => void;
   inspect: (id: string) => void;
+  provenance?: SetupDocument<RoomProvenanceData>[];
 }) {
   const [floor, setFloor] = useState('');
   const { occupancy, incidents } = useRoomOperations(
@@ -167,7 +166,6 @@ export function RoomFloorCards({
               .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, 'vi', { numeric: true }))
               .map((room) => {
                 const state = states[room.status] ?? states[3];
-                const type = roomTypes.find((type) => type.id === room.roomTypeId);
                 const occupied = occupancy.data?.items.find((item) => item.roomId === room.id);
                 const reports =
                   incidents.data?.items.filter(
@@ -223,8 +221,10 @@ export function RoomFloorCards({
                           />
                         </Stack>
                         <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-                          {type?.name ?? 'Chưa gán loại phòng'}
-                          {type?.areaM2 != null ? ` · ${type.areaM2} m²` : ''}
+                          {provenance?.find((item) => item.data.roomId === room.id)?.data.name
+                            ? `${provenance.find((item) => item.data.roomId === room.id)!.data.name} · `
+                            : ''}
+                          Tầng {room.floor ?? 'chưa phân tầng'} · Sức chứa {room.capacity} người
                         </Typography>
                         <Stack
                           direction="row"

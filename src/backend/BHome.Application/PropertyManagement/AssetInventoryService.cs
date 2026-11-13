@@ -51,7 +51,10 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
                 {
                     var assignment = await Store.GetAsync(Key($"asset-template-assignment:{room}"), "AssetTemplateAssignment", t);
                     var selected = assignment is null ? null : Read<AssetTemplateAssignment>(assignment).TemplateId;
-                    if (selected is null) selected = (await Store.ListAsync(doc.LocationId, "AssetTemplate", t)).Where(d => d.Status == "Published").OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault()?.Id;
+                    // Legacy rooms retain their explicit location-wide default. Configured rooms
+                    // must not inherit a different room configuration's most recent template.
+                    if (selected is null && await Store.GetAsync(LocationSetupKeys.RoomProvenance(room), "RoomProvenance", t) is null)
+                        selected = (await Store.ListAsync(doc.LocationId, "AssetTemplate", t)).Where(d => d.Status == "Published").OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault()?.Id;
                     if (selected != doc.Id) return "SkippedOtherTemplate";
                     if (!await Store.EligibleRoomAsync(room, t)) return "SkippedNotEligible";
                     var desiredId = Key($"desired:{room}:{doc.Id}:{doc.Version}");
@@ -86,9 +89,16 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
         var templates = (await Store.ListAsync(location, "AssetTemplate", t)).ToDictionary(d => d.Id);
         var assignment = await Store.GetAsync(Key($"asset-template-assignment:{room}"), "AssetTemplateAssignment", t);
         var selected = assignment is null ? null : Read<AssetTemplateAssignment>(assignment).TemplateId;
+        var effectiveTemplate = selected;
+        if (effectiveTemplate is null && await Store.GetAsync(LocationSetupKeys.RoomProvenance(room), "RoomProvenance", t) is null)
+            effectiveTemplate = templates.Values.Where(d => d.Status == "Published").OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault()?.Id;
         var desired = (await Store.ListAsync(location, "DesiredAssets", t)).Where(d => Read<DesiredAssets>(d).RoomId == room)
-            .OrderByDescending(d => Read<DesiredAssets>(d).TemplateId == selected).ThenByDescending(d => templates.GetValueOrDefault(Read<DesiredAssets>(d).TemplateId)?.RecordedAt).ThenBy(d => d.Id).ToArray();
-        var current = desired.FirstOrDefault(); var discrepancies = new List<AssetDiscrepancy>();
+            .OrderByDescending(d => Read<DesiredAssets>(d).TemplateId == effectiveTemplate).ThenByDescending(d => templates.GetValueOrDefault(Read<DesiredAssets>(d).TemplateId)?.RecordedAt).ThenBy(d => d.Id).ToArray();
+        // Retain historical desired inventories, but never verify against an unassigned or superseded template.
+        var current = effectiveTemplate is { } effectiveId && templates.TryGetValue(effectiveId, out var effective) && effective.Status == "Published"
+            ? desired.FirstOrDefault(d => Read<DesiredAssets>(d).TemplateId == effectiveId && Read<DesiredAssets>(d).TemplateVersion == effective.Version)
+            : null;
+        var discrepancies = new List<AssetDiscrepancy>();
         if (current is not null)
         {
             var target = Read<DesiredAssets>(current); var verifications = await Store.ListAsync(location, "AssetVerification", t);
@@ -175,7 +185,8 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
                 if (template.LocationId != location || template.Status != "Published") throw new PropertyException(400, "template_scope_invalid");
             }
             var doc = await Store.SaveAsync(Key($"asset-template-assignment:{room}"), location, "AssetTemplateAssignment", input.TemplateId is null ? "Default" : "Assigned", input, input.ExpectedVersion, Actor, t);
-            template ??= (await Store.ListAsync(location, "AssetTemplate", t)).Where(d => d.Status == "Published").OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault();
+            if (template is null && await Store.GetAsync(LocationSetupKeys.RoomProvenance(room), "RoomProvenance", t) is null)
+                template = (await Store.ListAsync(location, "AssetTemplate", t)).Where(d => d.Status == "Published").OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault();
             if (template is not null) await Sync(template, t, room);
             return doc;
         }, t);
