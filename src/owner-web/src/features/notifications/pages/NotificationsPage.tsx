@@ -78,6 +78,9 @@ export function LiveNotificationsPage() {
         title={composing ? 'Soạn và quản lý thông báo' : 'Thông báo của tôi'}
         subtitle="Thông báo lưu trong tài khoản của bạn; quyền mở hồ sơ được kiểm tra lại khi truy cập."
       />
+      {import.meta.env.DEV && import.meta.env.VITE_SMS_DEMO_ENABLED === 'true' && (
+        <Button onClick={() => navigate('/demo/sms')}>Hộp thư SMS Demo</Button>
+      )}
       {session?.roles?.includes('Owner') && (
         <Tabs
           value={tab}

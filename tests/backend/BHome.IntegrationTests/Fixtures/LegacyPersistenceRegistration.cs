@@ -77,6 +77,14 @@ internal static class LegacyPersistenceRegistration
         services.RemoveAll<IIdentityRetentionRepository>();
         services.RemoveAll<IdentityRetentionService>();
         services.RemoveAll<CompactNotificationWriter>();
+        // SMS recovery/inbox are Compact24 features. The source-schema regression host
+        // explicitly fails them closed instead of retaining adapters to a removed context.
+        services.RemoveAll<SmsPasswordRecovery>();
+        services.RemoveAll<MockSmsSender>();
+        services.RemoveAll<SmsNotificationContent>();
+        services.Replace(ServiceDescriptor.Singleton<ISmsSender>(new LegacyUnavailableSms()));
+        services.Replace(ServiceDescriptor.Singleton<ISmsPasswordRecovery>(new LegacyUnavailableSmsRecovery()));
+        services.Replace(ServiceDescriptor.Singleton<IDemoSmsInbox>(new LegacyUnavailableSmsInbox()));
         services.RemoveAll<INotificationWorkspace>();
         services.RemoveAll<NotificationWorkspaceService>();
         services.RemoveAll<CompactNotificationEvents>();
@@ -100,6 +108,23 @@ internal static class LegacyPersistenceRegistration
         services.Replace(ServiceDescriptor.Scoped<IStaffLocationAccess>(p => p.GetRequiredService<PostgresLocationAssignments>()));
         services.Replace(ServiceDescriptor.Scoped<INotificationRepository, BHome.Infrastructure.Modules.Notifications.NotificationRepository>());
         return services;
+    }
+
+    private sealed class LegacyUnavailableSms : ISmsSender
+    {
+        public bool IsConfigured => false;
+        public Task<SmsReceipt> SendAsync(SmsMessage message, CancellationToken token) => throw new ChannelDeliveryException("sms_unconfigured");
+    }
+    private sealed class LegacyUnavailableSmsRecovery : ISmsPasswordRecovery
+    {
+        public Task<SmsRecoveryRequested> RequestAsync(string identifier, string requesterIp, CancellationToken t) => throw Unavailable();
+        public Task<SmsRecoveryVerified?> VerifyAsync(string identifier, Guid challengeId, string otp, CancellationToken t) => throw Unavailable();
+        public Task<bool> ResetAsync(string identifier, Guid challengeId, string authorization, string newPassword, CancellationToken t) => throw Unavailable();
+        private static BHome.Application.Common.IntegrationUnavailableException Unavailable() => new("SMS recovery requires Compact24 persistence.");
+    }
+    private sealed class LegacyUnavailableSmsInbox : IDemoSmsInbox
+    {
+        public Task<IReadOnlyList<DemoSmsView>> ListAsync(Guid? recipient, string? template, CancellationToken token) => throw new NotificationException(404, "sms_demo_unavailable");
     }
 
 }

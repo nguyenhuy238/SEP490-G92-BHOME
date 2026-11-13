@@ -12,12 +12,12 @@ namespace BHome.Infrastructure.Modules.Notifications;
 internal sealed class NotificationAutomationWorker(IServiceScopeFactory scopes, IOptions<NotificationChannelOptions> options,
     IOptions<JobWorkerOptions> jobs, ILogger<NotificationAutomationWorker> logger,
     IOptions<BHome.Infrastructure.IdentityAccess.AuthenticationEmailOptions> authentication,
-    IHostEnvironment environment) : BackgroundService
+    IHostEnvironment environment, IOptions<BHome.Application.IdentityAccess.SmsRecoveryOptions> recovery) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var authenticationOnly = !options.Value.AutomationEnabled;
-        if (jobs.Value.Enabled || authenticationOnly && !authentication.Value.Configured(environment.IsDevelopment())) return;
+        if (jobs.Value.Enabled || authenticationOnly && !authentication.Value.Configured(environment.IsDevelopment()) && !recovery.Value.Enabled) return;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -26,7 +26,7 @@ internal sealed class NotificationAutomationWorker(IServiceScopeFactory scopes, 
                 // Reuse the durable job lease/retry implementation, allowing account invitations only.
                 // Jobs.Enabled remains false: invoice/contract/payment automation cannot run here.
                 await scope.ServiceProvider.GetRequiredService<PostgresJobWorker>()
-                    .ProcessAllowedAsync(stoppingToken, [AccountInvitationJob.JobName]);
+                    .ProcessAllowedAsync(stoppingToken, [AccountInvitationJob.JobName, SmsPasswordRecovery.JobName]);
                 if (!authenticationOnly) await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(stoppingToken);
                 else await scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>().PublishAuthenticationAsync(stoppingToken);
                 await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().ProcessPendingAsync(stoppingToken, authenticationOnly);
