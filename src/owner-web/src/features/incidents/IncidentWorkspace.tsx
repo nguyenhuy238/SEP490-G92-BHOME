@@ -17,6 +17,7 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { todayVietnam, type StaffAssignment } from '../staff/staffContracts';
 import { IncidentCommandDialog, type IncidentCommand } from './IncidentCommandDialog';
+import { IncidentEvidencePreview } from './IncidentEvidencePreview';
 import {
   incidentStatuses,
   workStatuses,
@@ -330,22 +331,29 @@ export function IncidentDetail({ id }: { id: string }) {
             )}
             <Typography variant="h6">Bằng chứng báo cáo, kiểm tra và hoàn tất</Typography>
             {evidence.data?.map((e) => (
-              <Button
-                key={e.id}
-                onClick={() =>
-                  void action.run(
-                    () =>
-                      downloadOwnerFile(
-                        action.request,
-                        `${root}/${id}/evidence/${e.id}`,
-                        `su-co-${e.kind}-${e.id}`,
-                      ),
-                    'Đã tải bằng chứng.',
-                  )
-                }
-              >
-                {e.kind} · {e.length} byte · {e.workOrderId ? 'Lệnh sửa chữa' : 'Sự cố'}
-              </Button>
+              <Stack key={e.id} spacing={0.5} alignItems="flex-start">
+                {e.contentType?.startsWith('image/') && (
+                  <IncidentEvidencePreview
+                    path={`${root}/${id}/evidence/${e.id}`}
+                    alt={`Ảnh bằng chứng ${e.kind}`}
+                  />
+                )}
+                <Button
+                  onClick={() =>
+                    void action.run(
+                      () =>
+                        downloadOwnerFile(
+                          action.request,
+                          `${root}/${id}/evidence/${e.id}`,
+                          `su-co-${e.kind}-${e.id}`,
+                        ),
+                      'Đã tải bằng chứng.',
+                    )
+                  }
+                >
+                  {e.kind} · {e.length} byte · {e.workOrderId ? 'Lệnh sửa chữa' : 'Sự cố'}
+                </Button>
+              </Stack>
             ))}
             {editable && <DirectEvidenceUpload id={id} />}
             <Typography variant="h6">Ứng phó khẩn cấp và quyết định chi phí</Typography>
