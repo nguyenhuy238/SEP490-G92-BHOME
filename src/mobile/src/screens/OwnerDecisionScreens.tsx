@@ -1,3 +1,4 @@
+import { OwnerApprovalQueue } from '../features/owner/OwnerApprovalQueue';
 import React, { useMemo, useState } from 'react';
 import { Text } from 'react-native-paper';
 import { useLocalSearchParams } from 'expo-router';
@@ -6,18 +7,12 @@ import {
   adjustmentStatus,
   type Adjustment,
 } from '../../../../packages/client-core/src/adjustments';
-import {
-  businessToday,
-  formatContractMoney,
-  type ContractPage,
-} from '../../../../packages/client-core/src/contracts';
+import { businessToday, formatContractMoney } from '../../../../packages/client-core/src/contracts';
 import type { FinancialReport } from '../../../../packages/client-core/src/finance';
 import { paymentText, type BankTransfer } from '../../../../packages/client-core/src/payments';
 import type { Page } from '../../../../packages/client-core/src/invoices';
 import { OwnerWebNotice } from '../components/OwnerWebNotice';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
-import type { IncidentPage, WorkOrder } from '../services/incidents';
-import type { OperationalTask, TaskPage } from '../services/operationalTasks';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useSession } from '../lib/SessionProvider';
@@ -29,116 +24,11 @@ import { AdjustmentEvidenceImage } from './TenantAdjustmentPanel';
 
 const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function CountCard({
-  label,
-  count,
-  icon,
-  open,
-}: {
-  label: string;
-  count: number | null;
-  icon: string;
-  open: () => void;
-}) {
-  return (
-    <Box style={ui.half}>
-      <Metric
-        label={label}
-        value={count === null ? '…' : String(count)}
-        detail="Cần Owner xem xét"
-        icon={icon}
-      />
-      <Action secondary onPress={open}>
-        Mở danh sách
-      </Action>
-    </Box>
-  );
-}
-
 export function OwnerApprovalCenterScreen() {
-  const { go } = useWorkspace();
-  const tasks = useWorkspaceQuery<TaskPage<OperationalTask>>(
-    '/api/v1/operational-tasks?page=1&pageSize=3&status=PendingVerification',
-  );
-  const plans = useWorkspaceQuery<IncidentPage<WorkOrder>>(
-    '/api/v1/work-orders?page=1&pageSize=3&workOrderStatus=PendingApproval',
-  );
-  const verification = useWorkspaceQuery<IncidentPage<WorkOrder>>(
-    '/api/v1/work-orders?page=1&pageSize=3&workOrderStatus=PendingVerification',
-  );
-  const adjustments = useWorkspaceQuery<Page<Adjustment>>(
-    '/api/v1/invoice-adjustments?page=1&pageSize=3&status=Pending',
-  );
-  const signing = useWorkspaceQuery<ContractPage>(
-    '/api/v1/contracts?page=1&pageSize=3&status=PendingSigning',
-  );
-  const activation = useWorkspaceQuery<ContractPage>(
-    '/api/v1/contracts?page=1&pageSize=3&status=PendingActivation',
-  );
-  const payments = useWorkspaceQuery<Page<BankTransfer>>(
-    '/api/v1/payment-transactions?page=1&pageSize=3&paymentStatus=PendingReview',
-  );
-  const queries = [tasks, plans, verification, adjustments, signing, activation, payments];
   return (
     <>
-      <Heading title="Trung tâm phê duyệt" detail="Các quyết định nhanh thuộc thẩm quyền Owner" />
-      {queries.map((query, index) => (
-        <QueryState key={index} {...query} />
-      ))}
-      <Row>
-        <CountCard
-          label="Công việc chờ nghiệm thu"
-          count={tasks.data?.totalCount ?? null}
-          icon="clipboard-check-outline"
-          open={() => go('operations')}
-        />
-        <CountCard
-          label="Phương án sửa chữa"
-          count={plans.data?.totalCount ?? null}
-          icon="wrench-clock-outline"
-          open={() => go('owner-maintenance')}
-        />
-      </Row>
-      <Row>
-        <CountCard
-          label="Bảo trì chờ nghiệm thu"
-          count={verification.data?.totalCount ?? null}
-          icon="shield-check-outline"
-          open={() => go('owner-maintenance')}
-        />
-        <CountCard
-          label="Điều chỉnh hóa đơn"
-          count={adjustments.data?.totalCount ?? null}
-          icon="receipt-text-edit-outline"
-          open={() => go('owner-adjustments')}
-        />
-      </Row>
-      <Row>
-        <CountCard
-          label="Hợp đồng chờ ký"
-          count={signing.data?.totalCount ?? null}
-          icon="file-sign"
-          open={() => go('signing')}
-        />
-        <CountCard
-          label="Hợp đồng chờ kích hoạt"
-          count={activation.data?.totalCount ?? null}
-          icon="file-check-outline"
-          open={() => go('signing')}
-        />
-      </Row>
-      <CountCard
-        label="Giao dịch chờ đối soát"
-        count={payments.data?.totalCount ?? null}
-        icon="bank-transfer"
-        open={() => go('owner-payments')}
-      />
-      <Box>
-        <Heading title="Lối tắt" />
-        <Action secondary onPress={() => go('owner-announcements')}>
-          Thông báo đã gửi
-        </Action>
-      </Box>
+      <Heading title="Trung tâm phê duyệt" detail="Mở hồ sơ để kiểm tra bằng chứng và quyết định" />
+      <OwnerApprovalQueue />
     </>
   );
 }
