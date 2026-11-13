@@ -6,7 +6,8 @@ import { clearAbandonedCaptures } from './captureFiles';
 import { createCredentialStore } from './credentialStore';
 import { MobileSessions, type SessionView } from './sessions';
 
-const Context = createContext<
+// Exported only so ContextPortal can re-provide it inside react-native-paper portals.
+export const SessionContext = createContext<
   (SessionView & { login: MobileSessions['login']; logout: MobileSessions['logout'] }) | null
 >(null);
 export function SessionProvider({ children }: { children: React.ReactNode }) {
@@ -50,7 +51,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     );
   }, [view.api]);
   return (
-    <Context.Provider
+    <SessionContext.Provider
       value={{
         ...view,
         login: (base, name, password) => manager.login(base, name, password),
@@ -58,11 +59,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
-    </Context.Provider>
+    </SessionContext.Provider>
   );
 }
 export function useSession() {
-  const value = useContext(Context);
+  const value = useContext(SessionContext);
   if (!value) throw new Error('SessionProvider missing');
   return value;
 }
