@@ -891,7 +891,7 @@ const styles = StyleSheet.create({
   },
   primaryAction: { flex: 1, minWidth: 0 },
   ownerFooter: { flexDirection: 'column', alignItems: 'stretch' },
-  ownerAction: { minWidth: 0, width: '100%' },
+  ownerAction: { minWidth: 0, width: '100%', maxWidth: 696, alignSelf: 'center' },
   secondaryAction: { flexShrink: 0 },
   personName: { flex: 1, color: s.navy, fontWeight: '600', fontSize: 16 },
   roomName: { color: s.navy, fontWeight: '600', fontSize: 16 },
