@@ -10,6 +10,7 @@ import {
   formatBillingDecimal,
   hasSettlementUsageCoverage,
   hasSettlementFixedCoverage,
+  invoicePersonMonths,
   missingBillingInput,
   type Invoice,
   type InvoiceLine,
@@ -146,6 +147,7 @@ export function InvoiceChargeRow({ line, first }: { line: InvoiceLine; first: bo
 }
 function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
   const utility = line.category === 'Electricity' || line.category === 'Water';
+  const people = invoicePersonMonths(line);
   const unit = line.category === 'Electricity' ? 'kWh' : 'm³';
   const reading = (v: string | null) => (v == null ? 'Chưa có' : formatBillingDecimal(v));
   const discrepancy =
@@ -186,6 +188,16 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
             line.periodDays > 0 ? `${line.occupiedDays}/${line.periodDays} ngày` : 'Chưa có dữ liệu'
           }
         />
+      ) : people ? (
+        <>
+          <InvoiceDetailRow label="Số người tính phí" value={`${people.residentCount} người`} />
+          {people.prorated && (
+            <InvoiceDetailRow
+              label="Ngày cư trú"
+              value={`${people.personDays} người-ngày / ${line.periodDays} ngày trong tháng`}
+            />
+          )}
+        </>
       ) : (
         <InvoiceDetailRow
           label="Số lượng"
@@ -194,7 +206,7 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
       )}
       <InvoiceDetailRow
         label="Đơn giá"
-        value={`${formatBillingDecimal(line.rate)} đ${utility ? `/${unit}` : ''}`}
+        value={`${formatBillingDecimal(line.rate)} đ${utility ? `/${unit}` : people ? '/người/tháng' : ''}`}
       />
       <InvoiceMoneyRow label="Thành tiền" value={line.amount} />
       {line.calculatedAmount != null && (

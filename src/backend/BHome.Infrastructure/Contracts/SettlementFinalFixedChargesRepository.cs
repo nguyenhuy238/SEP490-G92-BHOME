@@ -47,6 +47,7 @@ internal sealed partial class SettlementReceivablesRepository
             if (!ContractBillingPrices.Equivalent(charges, other)) missing.Add("room_contract_price_conflict");
         }
         return new(context, contract.Room.LocationId, period, end, schedule, pricingContract.MonthlyRent, pricingContract.SnapshotHash,
-            occupiedDays, recipients, missing.Distinct().ToArray(), charges);
+            occupiedDays, recipients, missing.Distinct().ToArray(), charges,
+            PersonMonthOccupancy.Read(period, occupancies.Select(o => o.Contract)));
     }
 }

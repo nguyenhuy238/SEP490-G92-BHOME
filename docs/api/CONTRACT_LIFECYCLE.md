@@ -62,6 +62,7 @@ hoặc lấy biểu phí sống để bù. Cấu hình UtilityProfile có công 
 hợp đồng mới trả `contract_utility_profile_requires_review` cho đến khi có cơ chế snapshot tariff được duyệt.
 Hợp đồng đã ràng buộc giá phẳng tiếp tục dùng snapshot. Legacy Main đã ký không có snapshot không được tự backfill
 từ cấu hình hiện tại; cần đối chiếu dữ liệu thỏa thuận gốc trước khi phát hành hóa đơn/quyết toán.
+
 - `GET /api/v1/capture/meter-tasks` bổ sung `contractId` và `confirmedReadingId` nullable,
   giữ nguyên scope Owner/Staff và giới hạn 100 tác vụ hiện có. UI Staff dùng để chọn reading
   Final (`purpose=2`) đúng hợp đồng, loại đồng hồ và ngày kiểm tra; backend kiểm tra lại tất cả.

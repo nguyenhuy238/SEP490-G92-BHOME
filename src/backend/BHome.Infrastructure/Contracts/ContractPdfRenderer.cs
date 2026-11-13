@@ -51,7 +51,8 @@ internal sealed class ContractPdfRenderer(IOptions<ContractPdfOptions> options, 
         var values = Values(snapshot);
         var charges = snapshot.AgreedCharges?.Where(c => c.ChargeCode != "RENT").Select(c =>
             $"{c.Name ?? c.ChargeCode}: {c.Rate.ToString("#,0.####", Vietnamese)} VND/{(c.Category == (int)BHome.Domain.PropertyManagement.ChargeCategory.Electricity ? "kWh" :
-                c.Category == (int)BHome.Domain.PropertyManagement.ChargeCategory.Water ? "m³" : "tháng")}").ToArray() ?? [];
+                c.Category == (int)BHome.Domain.PropertyManagement.ChargeCategory.Water ? "m³" :
+                c.Method == (int)BHome.Domain.PropertyManagement.ChargingMethod.FixedPerPersonPerMonth ? "người/tháng" : "tháng")}").ToArray() ?? [];
         // PdfFont belongs to one PDF document. Only the immutable font bytes are shared between requests.
         var font = PdfFontFactory.CreateFont(FontBytes.Value, PdfEncodings.IDENTITY_H,
             PdfFontFactory.EmbeddingStrategy.FORCE_EMBEDDED);

@@ -52,20 +52,41 @@ beforeEach(() => {
 afterEach(cleanup);
 it('always saves the agreed contract rent source even for a legacy room-price schedule', async () => {
   const onSaved = vi.fn();
-  mount(<ScheduleForm location="location" current={{ locationId: 'location', rateDate: 1,
-    rentSource: 0, partialMonth: 0, rounding: 0, draftDay: 1, draftMonthOffset: 0,
-    finalDay: 2, finalMonthOffset: 0, dueDay: 5, dueMonthOffset: 0, version: 2 }} onSaved={onSaved} />);
+  mount(
+    <ScheduleForm
+      location="location"
+      current={{
+        locationId: 'location',
+        rateDate: 1,
+        rentSource: 0,
+        partialMonth: 0,
+        rounding: 0,
+        draftDay: 1,
+        draftMonthOffset: 0,
+        finalDay: 2,
+        finalMonthOffset: 0,
+        dueDay: 5,
+        dueMonthOffset: 0,
+        version: 2,
+      }}
+      onSaved={onSaved}
+    />,
+  );
   expect(screen.getByLabelText('Nguồn tiền thuê cả phòng')).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Lưu quy tắc hóa đơn' }));
   await waitFor(() => expect(onSaved).toHaveBeenCalled());
-  const write = state.request.mock.calls.find(([path, init]) => path === '/api/v1/billing-schedules' && init?.method === 'PUT');
+  const write = state.request.mock.calls.find(
+    ([path, init]) => path === '/api/v1/billing-schedules' && init?.method === 'PUT',
+  );
   expect(JSON.parse(write![1].body)).toMatchObject({ rentSource: 1, expectedVersion: 2 });
 });
 it('opens utility configuration within pricing and keeps billing policy creation separate', async () => {
   mount(<LocationPricingWorkspace locationId="location" />);
   fireEvent.click(screen.getByRole('tab', { name: 'Điện & nước' }));
   expect(await screen.findByRole('tab', { name: 'Công tơ & Chỉ số' })).toBeInTheDocument();
-  expect(await screen.findByRole('button', { name: 'Thêm biểu giá điện nước' })).toBeInTheDocument();
+  expect(
+    await screen.findByRole('button', { name: 'Thêm biểu giá điện nước' }),
+  ).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Thêm khoản thu' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: 'Giá thuê' }));
   expect(screen.getByRole('button', { name: 'Thêm khoản thu' })).toBeInTheDocument();
@@ -93,6 +114,9 @@ it('previews bulk rooms without writing, then persists the reviewed room numbers
   fireEvent.click(screen.getByRole('button', { name: 'Tạo danh sách xem trước' }));
   expect(state.request.mock.calls.some(([, init]) => init?.method)).toBe(false);
   fireEvent.change(screen.getByLabelText('Số phòng 1'), { target: { value: 'P.201' } });
+  const rent = screen.getByLabelText('Giá thuê phòng 1');
+  fireEvent.change(rent, { target: { value: '3.500.000,1250' } });
+  expect(rent).toHaveValue('3.500.000,1250');
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận tạo 5 phòng' }));
   await waitFor(() =>
     expect(state.request).toHaveBeenCalledWith(
@@ -111,14 +135,14 @@ it('previews bulk rooms without writing, then persists the reviewed room numbers
         floor: '1',
         roomDefaultsId: 'studio',
         expectedVersion: 3,
-        rent: 3500000,
+        rent: '3500000.1250',
       },
       ...Array.from({ length: 4 }, (_, i) => ({
         roomNumber: `P.${102 + i}`,
         floor: '1',
         roomDefaultsId: 'studio',
         expectedVersion: 3,
-        rent: 3500000,
+        rent: '3500000',
       })),
     ],
   });
@@ -152,12 +176,12 @@ it('creates a policy with an exact rate and retained form on conflict from the L
   fireEvent.change(dialog.getByLabelText(/Tên khoản thu/), {
     target: { value: 'Điện thử nghiệm' },
   });
-  fireEvent.change(dialog.getByLabelText(/Đơn giá VND/), { target: { value: '3000.1234' } });
+  fireEvent.change(dialog.getByLabelText(/Đơn giá VND/), { target: { value: '3.000,1234' } });
   fireEvent.change(dialog.getByLabelText(/Hiệu lực từ ngày/), { target: { value: '2027-01-01' } });
   fireEvent.change(dialog.getByLabelText(/Lý do/), { target: { value: 'Đối chiếu giá' } });
   fireEvent.click(dialog.getByRole('button', { name: 'Lưu biểu giá' }));
   await dialog.findByText(/Cấu hình đã thay đổi/);
-  expect(dialog.getByLabelText(/Đơn giá VND/)).toHaveValue('3000.1234');
+  expect(dialog.getByLabelText(/Đơn giá VND/)).toHaveValue('3.000,1234');
   const post = state.request.mock.calls.find(([, init]) => init?.method === 'POST')!;
   expect(JSON.parse(post[1].body)).toMatchObject({
     locationId: 'location',
@@ -221,15 +245,19 @@ it('loads RoomType details, edits with its current version and retains values on
   fireEvent.change(screen.getByLabelText(/Tên gợi ý/), {
     target: { value: 'Studio đã chỉnh' },
   });
+  const rent = screen.getByLabelText('Giá thuê tham khảo (VND)');
+  expect(rent).toHaveValue('3.500.000');
+  fireEvent.change(rent, { target: { value: '3.600.000,1234' } });
   fireEvent.change(screen.getByLabelText(/Lý do/), { target: { value: 'Kiểm tra phiên bản' } });
   fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
   await screen.findByText(/Dữ liệu đang nhập được giữ nguyên/);
   expect(screen.getByLabelText(/Tên gợi ý/)).toHaveValue('Studio đã chỉnh');
+  expect(rent).toHaveValue('3.600.000,1234');
   expect(
     JSON.parse(state.request.mock.calls.find(([, init]) => init?.method === 'PUT')![1].body),
   ).toMatchObject({
     expectedVersion: 3,
-    defaults: { capacity: 2, amenities: ['Ban công'] },
+    defaults: { capacity: 2, amenities: ['Ban công'], referenceRent: '3600000.1234' },
   });
 });
 

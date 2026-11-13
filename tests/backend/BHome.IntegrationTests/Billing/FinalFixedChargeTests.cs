@@ -13,10 +13,10 @@ namespace BHome.IntegrationTests.Billing;
 
 public sealed partial class InvoiceApiTests
 {
-    internal async Task FinalFixedChargesFollowOwnerPolicyWithoutDuplicateBilling(bool invoiceFirst = false, bool fullMonth = false, bool correctedDeparture = false)
+    internal async Task FinalFixedChargesFollowOwnerPolicyWithoutDuplicateBilling(bool invoiceFirst = false, bool fullMonth = false, bool correctedDeparture = false, bool personFee = false)
     {
         if (correctedDeparture) invoiceFirst = true;
-        var w = await Setup(DateTimeOffset.UtcNow.AddYears(-1)); var finalDate = w.Period.AddDays(14);
+        var w = await Setup(DateTimeOffset.UtcNow.AddYears(-1), personFee: personFee); var finalDate = w.Period.AddDays(14);
         var route = $"/api/v1/contracts/{w.Contract}/move-out/receivables/final-fixed-charges";
         await ConfirmUtilities(w);
         // This test isolates fixed-charge policy/coverage. Inspection metadata is a
@@ -81,6 +81,15 @@ public sealed partial class InvoiceApiTests
         var draft = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract)));
         Assert.Empty(draft.MissingInputs);
         var expected = fullMonth ? 3000000 : InvoiceMath.Amount(3000000, 1, 15, DateTime.DaysInMonth(w.Period.Year, w.Period.Month), PartialMonthRule.OccupiedCalendarDays, VndRounding.AwayFromZero, false);
+        var expectedPerson = fullMonth ? 200002m : InvoiceMath.Amount(100001m, 30, 1,
+            DateTime.DaysInMonth(w.Period.Year, w.Period.Month), PartialMonthRule.OccupiedCalendarDays, VndRounding.AwayFromZero, false);
+        if (personFee)
+        {
+            var person = Assert.Single(draft.Lines, l => l.ChargeCode == "CLEANING");
+            Assert.Equal(2m, person.Quantity); Assert.Equal(expectedPerson, person.Amount);
+            using var snapshot = JsonDocument.Parse(person.UtilityCalculationSnapshot!);
+            Assert.Equal(30, snapshot.RootElement.GetProperty("source").GetProperty("PersonDays").GetInt32());
+        }
         if (invoiceFirst) draft = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize", new InvoiceFinalizeInput(draft.Version)));
         var original = await w.Owner.Client.GetStringAsync($"/api/v1/invoices/{draft.Id}");
         if (correctedDeparture)
@@ -101,7 +110,8 @@ public sealed partial class InvoiceApiTests
         }
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.GetAsync(route)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(route)).StatusCode);
-        var preview = Assert.Single(await Success<FinalFixedChargePreview[]>(await w.Owner.Client.GetAsync(route)));
+        var previews = await Success<FinalFixedChargePreview[]>(await w.Owner.Client.GetAsync(route));
+        var preview = Assert.Single(previews, p => p.ChargeCode == "RENT");
         Assert.Empty(preview.MissingInputs); Assert.Equal(invoiceFirst ? 0 : expected, preview.Amount);
         Assert.Equal(15, preview.Calculation!.OccupiedDays);
         if (correctedDeparture) { Assert.NotEmpty(preview.Calculation.ApprovedAdjustmentIds!); Assert.Equal(3000000 - expected, preview.Calculation.ApprovedReduction); }
@@ -111,8 +121,20 @@ public sealed partial class InvoiceApiTests
         var first = await Success<SettlementReceivable>(results[0]); var replay = await Success<SettlementReceivable>(results[1]); Assert.Equal(first.Id, replay.Id);
         Assert.Equal(invoiceFirst ? 0 : expected, first.Amount);
         Assert.Equal(HttpStatusCode.Conflict, (await UtilityPost(w.Owner.Client, route, input, Guid.NewGuid())).StatusCode);
+        SettlementReceivable? personCharge = null;
+        if (personFee)
+        {
+            var person = Assert.Single(await Success<FinalFixedChargePreview[]>(await w.Owner.Client.GetAsync(route)), p => p.ChargeCode == "CLEANING");
+            Assert.Empty(person.MissingInputs); Assert.Equal(invoiceFirst ? 0m : expectedPerson, person.Amount);
+            Assert.Equal(2, person.Calculation!.ResidentCount); Assert.Equal(30, person.Calculation.PersonDays);
+            personCharge = await Success<SettlementReceivable>(await UtilityPost(w.Owner.Client, route,
+                new FinalFixedChargeApproval(person.ChargeCode, person.Reference, true), Guid.NewGuid()));
+            Assert.Equal(person.Amount, personCharge.Amount);
+        }
         var tenant = await Success<SettlementReceivablePage>(await w.OtherTenant.Client.GetAsync("/api/v1/tenant/settlement-receivables"));
-        Assert.Equal(first.Id, Assert.Single(Assert.Single(tenant.Items).Receivables).Charge.Id);
+        var tenantCharges = Assert.Single(tenant.Items).Receivables;
+        Assert.Equal(personFee ? 2 : 1, tenantCharges.Count);
+        Assert.Contains(tenantCharges, c => c.Charge.Id == first.Id);
         if (!invoiceFirst)
         {
             Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
@@ -120,6 +142,7 @@ public sealed partial class InvoiceApiTests
             Assert.Empty(draft.MissingInputs); Assert.Equal(0, draft.Lines.Single(l => l.Category == "Rent").Amount);
             var final = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize", new InvoiceFinalizeInput(draft.Version)));
             Assert.Equal(expected, first.Amount + final.Lines.Single(l => l.Category == "Rent").Amount);
+            if (personFee) Assert.Equal(expectedPerson, personCharge!.Amount + final.Lines.Single(l => l.ChargeCode == "CLEANING").Amount);
         }
         else Assert.Equal(original, await w.Owner.Client.GetStringAsync($"/api/v1/invoices/{draft.Id}"));
         await using var verification = fixture.Factory.Services.CreateAsyncScope();

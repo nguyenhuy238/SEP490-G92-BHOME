@@ -201,6 +201,32 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it('refreshes newly published templates without losing the current setup draft', async () => {
+  let published = false;
+  state.request.mockImplementation(async (path: string) => {
+    if (path.startsWith('/api/v1/shared-configuration/room-type-templates?')) {
+      const item = {
+        ...template,
+        name: 'New room template',
+        status: published ? 'Published' : 'Draft',
+      };
+      return { items: [item], total: 1, page: 1, pageSize: 100 };
+    }
+    return mockReads(path);
+  });
+  mount(<LocationSetupWizard locations={[]} onClose={vi.fn()} onComplete={vi.fn()} />);
+  enterInfo();
+  expect(await screen.findByText('New room template · Bản nháp, cần công bố')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Thêm New room template' })).not.toBeInTheDocument();
+  published = true;
+  fireEvent.click(button('Làm mới mẫu'));
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm New room template' }));
+  expect(screen.getByText('Cấu hình riêng (1)')).toBeInTheDocument();
+  expect(JSON.parse(sessionStorage.getItem(draftKey)!).location.name).toBe(
+    'Synthetic native setup',
+  );
+});
+
 it('reads versioned local RoomDefaults from the location-scoped endpoint', async () => {
   defaultsPage();
   expect((await screen.findAllByText('Synthetic applied defaults')).length).toBeGreaterThan(0);
@@ -278,6 +304,31 @@ it('loads only Published templates, saves provenance, and retries an uncertain r
       if (++attempts === 1) throw new Error('Synthetic connection failure');
       return response;
     }
+    if (path.startsWith('/api/v1/shared-configuration/fee-templates?')) {
+      return {
+        items: [
+          {
+            ...template,
+            id: 'synthetic-person-fee',
+            resource: 'fee-templates',
+            name: 'Synthetic person service',
+            data: {
+              category: 'ServiceFee',
+              chargeCode: 'CLEANING',
+              method: 'FixedPerPersonPerMonth',
+              unit: 'VND/person/month',
+              scope: 'Location',
+              referenceRate: '30000.1234',
+              effectiveFrom: '2026-01-01',
+              effectiveTo: null,
+            },
+          },
+        ],
+        total: 1,
+        page: 1,
+        pageSize: 100,
+      };
+    }
     return mockReads(path);
   });
   mount(
@@ -294,7 +345,12 @@ it('loads only Published templates, saves provenance, and retries an uncertain r
   ).not.toBeInTheDocument();
   next();
   generate('2');
-  finishSteps();
+  next();
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm Synthetic person service' }));
+  next();
+  next();
+  expect(screen.getByText('7. Xem lại và hoàn tất')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox', { name: /Tôi xác nhận giá thuê/ }));
   fireEvent.click(button('Xác nhận hoàn tất thiết lập'));
   expect(await screen.findByText('Synthetic connection failure')).toBeInTheDocument();
   expect(completed).not.toHaveBeenCalled();
@@ -307,6 +363,9 @@ it('loads only Published templates, saves provenance, and retries an uncertain r
     capacity: 2,
     referenceRent: 3000000,
   });
+  expect(payload(writes()[0]).fees).toEqual([
+    expect.objectContaining({ category: 3, method: 2, chargeCode: 'CLEANING', rate: '30000.1234' }),
+  ]);
   fireEvent.click(button('Xác nhận hoàn tất thiết lập'));
   await waitFor(() => expect(completed).toHaveBeenCalledWith(response));
   expect(writes()).toHaveLength(2);

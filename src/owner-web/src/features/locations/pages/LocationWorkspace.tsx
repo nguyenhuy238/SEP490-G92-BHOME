@@ -56,7 +56,11 @@ function MockLocationWorkspace() {
   const currentSubPath = route.pathname.split('/')[3] || 'overview';
   // Map legacy subpaths if needed
   const activeTab =
-    currentSubPath === 'room-types' ? 'rooms' : currentSubPath === 'utilities' ? 'pricing' : currentSubPath;
+    currentSubPath === 'room-types'
+      ? 'rooms'
+      : currentSubPath === 'utilities'
+        ? 'pricing'
+        : currentSubPath;
 
   const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
   const [isCopyWizardOpen, setIsCopyWizardOpen] = useState(false);

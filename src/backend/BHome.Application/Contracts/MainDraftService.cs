@@ -81,7 +81,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         if (string.IsNullOrWhiteSpace(room.Location.Address)) blockers.Add("location_address_required");
         if (settings is null) blockers.Add("owner_contract_settings_required");
         blockers.AddRange(pricing.MissingRequiredCharges.Select(code => "missing_policy_" + code.ToLowerInvariant()));
-        if (pricing.Charges.Any(p => p.ChargeCode is "ELECTRICITY" or "WATER" ? p.Method != ChargingMethod.Metered : p.Method != ChargingMethod.FixedPerRoomPerMonth)) blockers.Add("unsupported_contract_charge_unit");
+        if (pricing.Charges.Any(p => !PropertyRules.ValidCharge(p.Category, p.Method, p.ChargeCode))) blockers.Add("unsupported_contract_charge_unit");
         var summaries = new List<DraftTenantSummary>();
         foreach (var r in residents)
         {

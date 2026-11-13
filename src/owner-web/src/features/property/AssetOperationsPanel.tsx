@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useState } from 'react';
 import {
   Alert,
@@ -139,10 +140,11 @@ function MetadataEditor({
           slotProps={{ htmlInput: { min: 1, step: 1 } }}
           onChange={(event) => setQuantity(event.target.value)}
         />
-        <TextField
+        <MoneyField
+          allowDecimal
           label="Giá mua VND"
           value={cost}
-          onChange={(event) => setCost(event.target.value)}
+          onValueChange={(raw) => setCost(raw)}
         />
         <TextField
           type="date"

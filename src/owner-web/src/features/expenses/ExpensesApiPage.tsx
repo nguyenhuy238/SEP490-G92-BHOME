@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -479,15 +480,13 @@ export function ExpensesApiPage() {
                   slotProps={{ htmlInput: { maxLength: 60 } }}
                   onChange={(e) => editField('category', e.target.value)}
                 />
-                <TextField
+                <MoneyField
+                  maxRawLength={18}
                   required
                   label="Số tiền (VND)"
                   disabled={busy}
                   value={editor.value.amount}
-                  slotProps={{
-                    htmlInput: { pattern: '[0-9]+', maxLength: 18, inputMode: 'numeric' },
-                  }}
-                  onChange={(e) => editField('amount', e.target.value)}
+                  onValueChange={(raw) => editField('amount', raw)}
                 />
                 <TextField
                   required

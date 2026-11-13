@@ -19,6 +19,7 @@ import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { locationSetupClient } from '../../../../../../packages/client-core/src/locationSetup';
 import { usePortal } from '../../../app/PortalProvider';
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
+import { MoneyField } from '../../../components/common/MoneyField';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
 import { invoiceError } from '../../../../../../packages/client-core/src/invoices';
 import { ConflictReload } from '../../locations/components/ConflictReload';
@@ -111,7 +112,7 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
                 .filter(Boolean),
             ),
           ],
-          referenceRent: form.referenceRent.trim() ? Number(form.referenceRent) : null,
+          referenceRent: form.referenceRent.trim() ? form.referenceRent : null,
         },
         assetTemplateId: form.assetTemplateId || null,
         expectedVersion: editing?.version ?? 0,
@@ -314,10 +315,12 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
               {field('amenities', 'Tiện nghi, phân cách bằng dấu phẩy', {
                 helperText: 'Ví dụ: Điều hòa, Ban công, Bếp riêng',
               })}
-              {field('referenceRent', 'Giá thuê tham khảo (VND)', {
-                type: 'number',
-                slotProps: { htmlInput: { min: 0, step: 1 } },
-              })}
+              <MoneyField
+                label="Giá thuê tham khảo (VND)"
+                allowDecimal
+                value={form.referenceRent}
+                onValueChange={(raw) => setForm((old) => ({ ...old, referenceRent: raw }))}
+              />
               {templates.error && (
                 <ErrorState error={templates.error} retry={() => void templates.refetch()} />
               )}

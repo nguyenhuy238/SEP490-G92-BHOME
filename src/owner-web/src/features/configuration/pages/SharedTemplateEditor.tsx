@@ -26,6 +26,7 @@ import { ErrorState, LoadingState } from '../../../components/common/PortalUI';
 import { UtilityField } from '../../property/UtilityFormTools';
 import type { UtilityFieldDefinition } from '../../property/UtilityFormTools';
 import { useSharedConfigurationApi } from '../useSharedConfigurationApi';
+import { MoneyField } from '../../../components/common/MoneyField';
 
 const feeDefaults: Record<string, { chargeCode: string; method: string; unit: string }> = {
   Rent: { chargeCode: 'RENT', method: 'FixedPerRoomPerMonth', unit: 'VND/month' },
@@ -33,6 +34,11 @@ const feeDefaults: Record<string, { chargeCode: string; method: string; unit: st
   Water: { chargeCode: 'WATER', method: 'Metered', unit: 'm³' },
   ServiceFee: { chargeCode: '', method: 'FixedPerRoomPerMonth', unit: 'VND/month' },
 };
+const personMethod = 'FixedPerPersonPerMonth';
+const feeUnit = (category: string, method: string) =>
+  category === 'ServiceFee' && method === personMethod
+    ? 'VND/person/month'
+    : feeDefaults[category].unit;
 
 export function SharedTemplateEditor({
   resource,
@@ -69,8 +75,11 @@ export function SharedTemplateEditor({
         result[key] = Array.isArray(value) ? value.join('\n') : value == null ? '' : String(value);
     if (resource === 'fee-templates' && feeDefaults[result.category]) {
       const defaults = feeDefaults[result.category];
-      result.method = defaults.method;
-      result.unit = defaults.unit;
+      result.method =
+        result.category === 'ServiceFee' && result.method === personMethod
+          ? personMethod
+          : defaults.method;
+      result.unit = feeUnit(result.category, result.method);
       if (result.category !== 'ServiceFee') result.chargeCode = defaults.chargeCode;
     }
     return result;
@@ -84,7 +93,18 @@ export function SharedTemplateEditor({
     setValues((old) => {
       const next = typeof update === 'function' ? update(old) : update;
       if (resource === 'fee-templates' && next.category !== old.category) {
-        return { ...next, ...(feeDefaults[next.category] ?? { chargeCode: '', method: '', unit: '' }), referenceRate: '' };
+        return {
+          ...next,
+          ...(feeDefaults[next.category] ?? { chargeCode: '', method: '', unit: '' }),
+          referenceRate: '',
+        };
+      }
+      if (
+        resource === 'fee-templates' &&
+        next.method !== old.method &&
+        feeDefaults[next.category]
+      ) {
+        return { ...next, unit: feeUnit(next.category, next.method), referenceRate: '' };
       }
       return next;
     });
@@ -120,14 +140,24 @@ export function SharedTemplateEditor({
                   { id: 'ServiceFee', label: 'Dịch vụ' },
                 ],
               },
-              { name: 'chargeCode', label: 'Mã khoản thu', disabled: values.category !== 'ServiceFee' },
+              {
+                name: 'chargeCode',
+                label: 'Mã khoản thu',
+                disabled: values.category !== 'ServiceFee',
+              },
               {
                 name: 'method',
                 label: 'Cách tính',
-                options: values.category === 'Electricity' || values.category === 'Water'
-                  ? [{ id: 'Metered', label: 'Theo đồng hồ' }]
-                  : [{ id: 'FixedPerRoomPerMonth', label: 'Cố định mỗi phòng/tháng' }],
-                disabled: true,
+                options:
+                  values.category === 'Electricity' || values.category === 'Water'
+                    ? [{ id: 'Metered', label: 'Theo đồng hồ' }]
+                    : [
+                        { id: 'FixedPerRoomPerMonth', label: 'Cố định mỗi phòng/tháng' },
+                        ...(values.category === 'ServiceFee'
+                          ? [{ id: personMethod, label: 'Cố định mỗi người/tháng' }]
+                          : []),
+                      ],
+                disabled: values.category !== 'ServiceFee',
               },
               { name: 'referenceRate', label: 'Đơn giá tham khảo' },
               { name: 'unit', label: 'Đơn vị', disabled: true },
@@ -149,15 +179,22 @@ export function SharedTemplateEditor({
     if (resource === 'fee-templates') {
       const defaults = feeDefaults[values.category];
       const code = (values.chargeCode ?? '').trim().toUpperCase();
-      if (!defaults || values.method !== defaults.method ||
-          (values.category === 'ServiceFee'
-            ? !/^[A-Z0-9_-]{1,80}$/.test(code) || ['RENT', 'ELECTRICITY', 'WATER'].includes(code)
-            : code !== defaults.chargeCode)) {
+      if (
+        !defaults ||
+        (values.method !== defaults.method &&
+          !(values.category === 'ServiceFee' && values.method === personMethod)) ||
+        (values.category === 'ServiceFee'
+          ? !/^[A-Z0-9_-]{1,80}$/.test(code) || ['RENT', 'ELECTRICITY', 'WATER'].includes(code)
+          : code !== defaults.chargeCode)
+      ) {
         setValidationError('Mã khoản thu hoặc cách tính không phù hợp với nhóm phí.');
         return;
       }
-      if (!values.referenceRate?.trim() || !Number.isFinite(Number(values.referenceRate)) || Number(values.referenceRate) < 0 ||
-          !values.effectiveFrom || (values.effectiveTo && values.effectiveTo < values.effectiveFrom)) {
+      if (
+        !/^\d{1,14}(?:\.\d{1,4})?$/.test(values.referenceRate ?? '') ||
+        !values.effectiveFrom ||
+        (values.effectiveTo && values.effectiveTo < values.effectiveFrom)
+      ) {
         setValidationError('Kiểm tra đơn giá và khoảng thời gian hiệu lực.');
         return;
       }
@@ -187,7 +224,7 @@ export function SharedTemplateEditor({
                   chargeCode: values.chargeCode.trim().toUpperCase(),
                   method: values.method,
                   referenceRate: values.referenceRate ?? '',
-                  unit: feeDefaults[values.category].unit,
+                  unit: feeUnit(values.category, values.method),
                   scope: values.scope as 'Location' | 'Room',
                   effectiveFrom: values.effectiveFrom ?? '',
                   effectiveTo: values.effectiveTo || null,
@@ -223,21 +260,48 @@ export function SharedTemplateEditor({
             />
             {fields.map((field) => (
               <Stack key={field.name} spacing={1}>
-                {resource === 'fee-templates' && field.name === 'chargeCode' && values.category === 'ServiceFee' && (
-                  <TextField select label="Loại dịch vụ gợi ý" value={['INTERNET', 'CLEANING', 'PARKING', 'MANAGEMENT'].includes(values.chargeCode) ? values.chargeCode : ''}
-                    onChange={(e) => updateFields((old) => ({ ...old, chargeCode: e.target.value }))}>
-                    <MenuItem value="">Dịch vụ khác / nhập mã riêng</MenuItem>
-                    <MenuItem value="INTERNET">Internet</MenuItem>
-                    <MenuItem value="CLEANING">Vệ sinh</MenuItem>
-                    <MenuItem value="PARKING">Gửi xe</MenuItem>
-                    <MenuItem value="MANAGEMENT">Quản lý tòa nhà</MenuItem>
-                  </TextField>
+                {resource === 'fee-templates' &&
+                  field.name === 'chargeCode' &&
+                  values.category === 'ServiceFee' && (
+                    <TextField
+                      select
+                      label="Loại dịch vụ gợi ý"
+                      value={
+                        ['INTERNET', 'CLEANING', 'PARKING', 'MANAGEMENT'].includes(
+                          values.chargeCode,
+                        )
+                          ? values.chargeCode
+                          : ''
+                      }
+                      onChange={(e) =>
+                        updateFields((old) => ({ ...old, chargeCode: e.target.value }))
+                      }
+                    >
+                      <MenuItem value="">Dịch vụ khác / nhập mã riêng</MenuItem>
+                      <MenuItem value="INTERNET">Internet</MenuItem>
+                      <MenuItem value="CLEANING">Vệ sinh</MenuItem>
+                      <MenuItem value="PARKING">Gửi xe</MenuItem>
+                      <MenuItem value="MANAGEMENT">Quản lý tòa nhà</MenuItem>
+                    </TextField>
+                  )}
+                {['referenceRent', 'referencePrice', 'referenceRate'].includes(field.name) ? (
+                  <MoneyField
+                    label={field.label}
+                    required={!field.optional}
+                    value={values[field.name] ?? ''}
+                    allowDecimal
+                    onValueChange={(raw) => updateFields((old) => ({ ...old, [field.name]: raw }))}
+                  />
+                ) : (
+                  <UtilityField field={field} values={values} setValues={updateFields} />
                 )}
-                <UtilityField field={field} values={values} setValues={updateFields} />
               </Stack>
             ))}
             {resource === 'fee-templates' && values.category === 'ServiceFee' && (
-              <Alert severity="info">Nhập mã riêng cho từng dịch vụ, ví dụ INTERNET, CLEANING hoặc PARKING. Hiện hỗ trợ phí cố định theo phòng/tháng.</Alert>
+              <Alert severity="info">
+                Nhập mã riêng cho từng dịch vụ, ví dụ INTERNET, CLEANING hoặc PARKING. Chọn phí theo
+                phòng/tháng hoặc người/tháng. Đơn giá được khóa theo hợp đồng.
+              </Alert>
             )}
             {resource === 'room-type-templates' && (
               <>

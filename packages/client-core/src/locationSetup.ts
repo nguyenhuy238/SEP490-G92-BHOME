@@ -27,7 +27,7 @@ export interface SetupRoomDefaults {
   description: string;
   capacity: number;
   area: number;
-  referenceRent: number | null;
+  referenceRent: number | string | null;
   amenities: string[];
   assets: SetupAssetRequirement[];
   sourceId: string | null;
@@ -39,15 +39,15 @@ export interface SetupRoom {
   roomNumber: string;
   floor: string;
   roomTypeKey: string;
-  rent: number;
+  rent: number | string;
 }
 export interface SetupFee {
   roomKey: string | null;
   category: 0 | 1 | 2 | 3;
   chargeCode: string;
   name: string;
-  method: 0 | 1;
-  rate: number;
+  method: 0 | 1 | 2;
+  rate: number | string;
   effectiveFrom: string;
   effectiveTo: string | null;
 }
@@ -132,7 +132,7 @@ export interface ConfiguredRoomInput {
   floor: string | null;
   roomDefaultsId: string;
   expectedVersion: number;
-  rent: number;
+  rent: number | string;
 }
 export interface ConfiguredRoomsInput {
   rooms: ConfiguredRoomInput[];

@@ -19,6 +19,7 @@ import {
 } from '../../../../../packages/client-core/src/finance';
 import { PageHeader } from '../../components/common/PortalUI';
 import { OptionPicker } from '../../components/common/OptionPicker';
+import { MoneyField } from '../../components/common/MoneyField';
 import { displayContractDate } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { useFinanceApi } from '../expenses/useFinanceApi';
@@ -223,28 +224,45 @@ export function FinancialScenariosApiPage() {
             <Box
               sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}
             >
-              {fields.map(([field, label]) => (
-                <TextField
-                  key={field}
-                  required
-                  label={label}
-                  disabled={busy}
-                  value={input.assumptions[field]}
-                  slotProps={{
-                    htmlInput: {
-                      inputMode: 'decimal',
-                      pattern: field.endsWith('Percent') ? '[0-9]+([.][0-9]+)?' : '[0-9]+',
-                      maxLength: 24,
-                    },
-                  }}
-                  onChange={(e) =>
-                    change({
-                      ...input,
-                      assumptions: { ...input.assumptions, [field]: e.target.value },
-                    })
-                  }
-                />
-              ))}
+              {fields.map(([field, label]) =>
+                !field.endsWith('Percent') ? (
+                  <MoneyField
+                    key={field}
+                    required
+                    label={label}
+                    disabled={busy}
+                    value={input.assumptions[field]}
+                    maxRawLength={24}
+                    onValueChange={(raw) =>
+                      change({
+                        ...input,
+                        assumptions: { ...input.assumptions, [field]: raw },
+                      })
+                    }
+                  />
+                ) : (
+                  <TextField
+                    key={field}
+                    required
+                    label={label}
+                    disabled={busy}
+                    value={input.assumptions[field]}
+                    slotProps={{
+                      htmlInput: {
+                        inputMode: 'decimal',
+                        pattern: field.endsWith('Percent') ? '[0-9]+([.][0-9]+)?' : '[0-9]+',
+                        maxLength: 24,
+                      },
+                    }}
+                    onChange={(e) =>
+                      change({
+                        ...input,
+                        assumptions: { ...input.assumptions, [field]: e.target.value },
+                      })
+                    }
+                  />
+                ),
+              )}
             </Box>
             <Stack direction="row" spacing={2}>
               <Button type="submit" variant="contained" disabled={busy}>

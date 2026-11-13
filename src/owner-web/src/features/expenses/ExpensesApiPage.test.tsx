@@ -117,7 +117,7 @@ it('loads detail and submits the server revision and correction reason', async (
   mock.updateExpense.mockResolvedValue({ ...expense, version: 2 });
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết / chỉnh sửa' }));
-  await screen.findByDisplayValue('500000');
+  await screen.findByDisplayValue('500.000');
   fireEvent.change(screen.getByLabelText(/Lý do chỉnh sửa/), {
     target: { value: 'Đối chiếu lại' },
   });

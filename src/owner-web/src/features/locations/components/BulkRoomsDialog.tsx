@@ -1,3 +1,4 @@
+import { MoneyField } from '../../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -65,7 +66,7 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
           floor: row.floor.trim() || null,
           roomDefaultsId: row.roomDefaultsId,
           expectedVersion: row.expectedVersion,
-          rent: Number(row.rent),
+          rent: row.rent,
         })),
         effectiveFrom,
       };
@@ -257,16 +258,14 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
                         </TableCell>
                         <TableCell>{row.capacity} người</TableCell>
                         <TableCell>
-                          <TextField
-                            type="number"
+                          <MoneyField
+                            allowDecimal
                             size="small"
                             value={row.rent}
                             disabled={save.isPending}
-                            onChange={(e) =>
+                            onValueChange={(raw) =>
                               setRows((old) =>
-                                old.map((item, i) =>
-                                  i === index ? { ...item, rent: e.target.value } : item,
-                                ),
+                                old.map((item, i) => (i === index ? { ...item, rent: raw } : item)),
                               )
                             }
                             slotProps={{

@@ -97,7 +97,8 @@ public sealed partial class Compact24OwnerSetupTests
             ("Rent", "RENT", "FixedPerRoomPerMonth", "VND / th\u00e1ng", "VND/month"),
             ("Electricity", "electricity", "Metered", "VND / kWh", "kWh"),
             ("Water", "water", "Metered", "m3", "m\u00b3"),
-            ("ServiceFee", "internet", "FixedPerRoomPerMonth", "VND/month", "VND/month") })
+            ("ServiceFee", "internet", "FixedPerRoomPerMonth", "VND/month", "VND/month"),
+            ("ServiceFee", "cleaning", "FixedPerPersonPerMonth", "VND/person/month", "VND/person/month") })
         {
             var data = JsonSerializer.SerializeToElement(new { category, chargeCode = code, method, referenceRate = "1000", unit, scope = "Location", effectiveFrom = Today });
             var saved = await Read<SharedDocument>(await owner.PostAsJsonAsync(route, SharedInput("fee-templates") with { Data = data }));
@@ -105,6 +106,7 @@ public sealed partial class Compact24OwnerSetupTests
             Assert.Equal(code.ToUpperInvariant(), saved.Data.GetProperty("chargeCode").GetString());
         }
         var badFees = new object[] {
+            new { category = "ServiceFee", chargeCode = "CLEANING", method = "FixedPerPersonPerMonth", referenceRate = "1", unit = "VND/month", scope = "Location", effectiveFrom = Today },
             new { category = "Water", chargeCode = "WATER", method = "Metered", referenceRate = "1", unit = "kWh", scope = "Location", effectiveFrom = Today },
             new { category = "Electricity", chargeCode = "ELECTRICITY", method = "Metered", referenceRate = "1", unit = "VND/month", scope = "Location", effectiveFrom = Today },
             new { category = "ServiceFee", chargeCode = "WATER", method = "FixedPerRoomPerMonth", referenceRate = "1", unit = "VND/month", scope = "Location", effectiveFrom = Today },

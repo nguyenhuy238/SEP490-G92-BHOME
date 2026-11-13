@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatBillingDecimal } from '../../../../../../packages/client-core/src/invoices';
 import {
   Alert,
   Button,
@@ -318,7 +319,8 @@ function SharedDataSummary({ document }: { document: SharedDocument }) {
     return (
       <Typography>
         Sức chứa: {data.capacity} · Diện tích: {data.area} m² · Giá tham khảo:{' '}
-        {data.referenceRent ?? 'Chưa đặt'} · Tiện ích: {data.amenities.join(', ')}
+        {data.referenceRent == null ? 'Chưa đặt' : formatBillingDecimal(data.referenceRent)} · Tiện
+        ích: {data.amenities.join(', ')}
       </Typography>
     );
   if ('content' in data)
@@ -331,13 +333,13 @@ function SharedDataSummary({ document }: { document: SharedDocument }) {
   if ('referenceRate' in data)
     return (
       <Typography>
-        {data.chargeCode} · {data.referenceRate} {data.unit} · {data.effectiveFrom} –{' '}
-        {data.effectiveTo ?? 'Không giới hạn'}
+        {data.chargeCode} · {formatBillingDecimal(data.referenceRate)} {data.unit} ·{' '}
+        {data.effectiveFrom} – {data.effectiveTo ?? 'Không giới hạn'}
       </Typography>
     );
   return (
     <Typography>
-      {data.category} · {data.unit} · Giá tham khảo: {data.referencePrice}
+      {data.category} · {data.unit} · Giá tham khảo: {formatBillingDecimal(data.referencePrice)}
     </Typography>
   );
 }

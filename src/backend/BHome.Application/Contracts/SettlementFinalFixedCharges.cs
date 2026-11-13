@@ -8,7 +8,8 @@ namespace BHome.Application.Contracts;
 
 public sealed record FinalFixedChargeContext(SettlementChargeContext Context, Guid LocationId, DateOnly Period, DateOnly HandoverDate,
     BillingSchedule? Schedule, decimal MonthlyRent, string SignedContractHash, int OccupiedDays, Guid[] RecipientUserIds,
-    IReadOnlyList<string> MissingInputs, IReadOnlyList<PolicyDto>? ContractCharges = null);
+    IReadOnlyList<string> MissingInputs, IReadOnlyList<PolicyDto>? ContractCharges = null,
+    PersonMonthOccupancy? People = null);
 public sealed record FinalFixedChargePreview(string ChargeCode, string Name, DateOnly BillingPeriod, string Reference,
     [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString | System.Text.Json.Serialization.JsonNumberHandling.WriteAsString)] decimal? Amount,
     FixedChargeSource? Calculation, Guid? ExistingReceivableId, IReadOnlyList<string> MissingInputs);
@@ -26,7 +27,7 @@ public sealed partial class SettlementReceivablesService
         if (source.Schedule is null) missing.Add("billing_schedule_required");
         if (missing.Count > 0) return [new("", "Tiền thuê và phí cố định", source.Period, "", null, null, null, missing.Distinct().Order().ToArray())];
         var schedule = source.Schedule!;
-        var policies = (source.ContractCharges ?? []).Where(p => p.Method == ChargingMethod.FixedPerRoomPerMonth).ToList();
+        var policies = (source.ContractCharges ?? []).Where(p => p.Method is ChargingMethod.FixedPerRoomPerMonth or ChargingMethod.FixedPerPersonPerMonth).ToList();
         if (source.ContractCharges is null) missing.Add("contract_price_snapshot_missing");
         if (!policies.Any(p => p.Category == ChargeCategory.Rent)) missing.Add("rate_Rent");
         if (missing.Count > 0) return [new("", "Tiền thuê và phí cố định", source.Period, "", null, null, null, missing)];
@@ -34,13 +35,16 @@ public sealed partial class SettlementReceivablesService
         foreach (var policy in policies.OrderBy(p => p.ChargeCode))
         {
             var coverage = await fixedCoverage.ReadAsync(source.Context.View.RoomId, source.Period, policy.ChargeCode, token);
-            var calculated = FixedChargeCalculation.Calculate(source.Period, policy, schedule, source.SignedContractHash, source.OccupiedDays, coverage);
+            FixedChargeResult calculated;
+            try { calculated = FixedChargeCalculation.Calculate(source.Period, policy, schedule, source.SignedContractHash, source.OccupiedDays, coverage, source.People); }
+            catch (Exception error) when (error is OverflowException or ArgumentOutOfRangeException) { throw ContractException.Invalid("settlement_amount_out_of_range"); }
             var existing = source.Context.View.Receivables.FirstOrDefault(r => r.Charge.FixedCharge == calculated.Source)?.Charge.Id;
             // The latest cumulative source remains authoritative after a zero acknowledgement.
             if (existing is null && calculated.Amount == 0)
                 existing = source.Context.View.Receivables.FirstOrDefault(r => r.Charge.FixedCharge is { } prior &&
                     prior.BillingPeriod == source.Period && prior.ChargeCode == policy.ChargeCode && prior.PolicyReference == calculated.Source.PolicyReference &&
-                    prior.CumulativePricedAmount == calculated.Source.CumulativePricedAmount && prior.OccupiedDays == source.OccupiedDays)?.Charge.Id;
+                    prior.CumulativePricedAmount == calculated.Source.CumulativePricedAmount && prior.OccupiedDays == source.OccupiedDays &&
+                    prior.ResidentCount == calculated.Source.ResidentCount && prior.PersonDays == calculated.Source.PersonDays)?.Charge.Id;
             var row = new FinalFixedChargePreview(policy.ChargeCode, policy.Name, source.Period, "", calculated.Amount, calculated.Source, existing, calculated.MissingInputs);
             result.Add(row with { Reference = "FIXED-" + Fingerprint(id, new { source.Context.View.Reference, source.HandoverDate, source.RecipientUserIds, row }) });
         }

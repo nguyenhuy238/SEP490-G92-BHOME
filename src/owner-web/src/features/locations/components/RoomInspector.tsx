@@ -149,7 +149,10 @@ export function RoomInspector({
                 )}
                 <Typography>Sức chứa: {room.data.capacity} người</Typography>
                 {(room.data.status === 1 || room.data.status === 2) && (
-                  <Alert severity="info">Phòng đang có ràng buộc hợp đồng. Giá và phí thực thu xem tại hợp đồng; biểu giá cấu hình không thay đổi các khoản đã chốt.</Alert>
+                  <Alert severity="info">
+                    Phòng đang có ràng buộc hợp đồng. Giá và phí thực thu xem tại hợp đồng; biểu giá
+                    cấu hình không thay đổi các khoản đã chốt.
+                  </Alert>
                 )}
                 <Typography>
                   Người ở theo hợp đồng hiện tại:{' '}

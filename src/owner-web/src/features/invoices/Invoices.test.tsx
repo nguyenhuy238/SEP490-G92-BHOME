@@ -185,6 +185,41 @@ it('keeps incomplete drafts visible and disables finalization', async () => {
   await screen.findByText(/Chỉ số nước hợp lệ đã xác nhận/);
   expect(screen.getByText('Phát hành hóa đơn')).toBeDisabled();
 });
+it('shows the signed per-person fee and actual person-days without claiming prior settlement', async () => {
+  mocks.api.get.mockResolvedValue({
+    ...invoice,
+    lines: [
+      {
+        ...invoice.lines[0],
+        category: 'ServiceFee',
+        chargeCode: 'CLEANING',
+        name: 'Vệ sinh theo người',
+        rate: '30000',
+        quantity: '2',
+        amount: '45000',
+        meterReadingId: null,
+        previousReading: null,
+        confirmedReading: null,
+        utilityCalculationSnapshot: JSON.stringify({
+          kind: 'FixedChargeCoverage/v1',
+          source: {
+            ResidentCount: 2,
+            PersonDays: 45,
+            PeriodDays: 30,
+            PartialMonth: 1,
+            AlreadyPricedAmount: 0,
+          },
+        }),
+      },
+    ],
+  });
+  mount(<LiveInvoicesPage />);
+  fireEvent.click(await screen.findByText('Xem chi tiết'));
+  await screen.findByText('Vệ sinh theo người');
+  expect(screen.getByText('30.000 đ/người/tháng')).toBeInTheDocument();
+  expect(screen.getByText('45 người-ngày')).toBeInTheDocument();
+  expect(screen.queryByText(/Đã ghi nhận trong quyết toán/)).not.toBeInTheDocument();
+});
 it('shows an empty list and a retryable failure without inventing financial values', async () => {
   mocks.api.list.mockRejectedValue({ status: 403 });
   mount(<LiveInvoicesPage />);

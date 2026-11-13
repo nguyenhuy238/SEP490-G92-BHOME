@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
@@ -391,12 +392,12 @@ function DecisionForm({ value, saved }: { value: Adjustment; saved: () => Promis
           </MenuItem>
         ))}
       </TextField>
-      <TextField
+      <MoneyField
         label="Giá trị sau điều chỉnh (VND)"
         value={amount}
         disabled={busy}
-        onChange={(e) => {
-          setAmount(e.target.value);
+        onValueChange={(raw) => {
+          setAmount(raw);
           changed();
         }}
       />

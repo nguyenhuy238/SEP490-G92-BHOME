@@ -200,7 +200,16 @@ export function LocationPricingWorkspace({
                               }
                             />
                           </TableCell>
-                          <TableCell>{formatBillingDecimal(policy.rate)} đ</TableCell>
+                          <TableCell>
+                            {formatBillingDecimal(policy.rate)} đ/
+                            {policy.method === 2
+                              ? 'người/tháng'
+                              : policy.method === 1
+                                ? policy.category === 2
+                                  ? 'm³'
+                                  : 'kWh'
+                                : 'phòng/tháng'}
+                          </TableCell>
                           <TableCell>
                             {policy.effectiveFrom.split('-').reverse().join('/')} →{' '}
                             {policy.effectiveTo?.split('-').reverse().join('/') ?? 'Không thời hạn'}

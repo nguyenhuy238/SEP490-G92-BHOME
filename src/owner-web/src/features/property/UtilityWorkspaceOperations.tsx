@@ -469,7 +469,7 @@ function SourceBillEditor({
           },
           { name: 'period', label: 'Tháng hóa đơn nguồn', type: 'month' as const },
           { name: 'consumption', label: 'Sản lượng trên hóa đơn nguồn' },
-          { name: 'amount', label: 'Tổng tiền hóa đơn nguồn VND' },
+          { name: 'amount', label: 'Tổng tiền hóa đơn nguồn VND', type: 'money' as const },
           { name: 'reference', label: 'Số tham chiếu hóa đơn nhà cung cấp' },
         ].map((field) => (
           <UtilityField key={field.name} field={field} values={values} setValues={setValues} />

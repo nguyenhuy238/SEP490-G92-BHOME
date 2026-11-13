@@ -31,7 +31,7 @@ public static class ContractBillingPrices
                 c.Rate < 0 || c.Version < 1 || c.PolicyId == Guid.Empty || string.IsNullOrWhiteSpace(c.ChargeCode))
             { missing.Add("contract_price_snapshot_invalid"); return []; }
             var method = (ChargingMethod)c.Method;
-            if (category is ChargeCategory.Electricity or ChargeCategory.Water ? method != ChargingMethod.Metered : method != ChargingMethod.FixedPerRoomPerMonth)
+            if (!PropertyRules.ValidCharge(category, method, c.ChargeCode))
             { missing.Add("contract_price_snapshot_invalid"); return []; }
             charges.Add(new(c.PolicyId, locationId, contract.RoomId, category, c.ChargeCode, string.IsNullOrWhiteSpace(c.Name) ? c.ChargeCode : c.Name,
                 method, c.Rate, c.EffectiveFrom, c.EffectiveTo, c.Version));

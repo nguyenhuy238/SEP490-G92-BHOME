@@ -47,7 +47,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()} {string.Join(Environment.NewLine, BHome.IntegrationTests.Compact24.Compact24WorkflowFixture.Diagnostics.TakeLast(2))}");
         return (await response.Content.ReadFromJsonAsync<T>())!;
     }
-    private async Task<Workspace> Setup(DateTimeOffset? activatedAt = null, bool includeService = false, DateOnly? primaryStart = null, decimal primaryDeposit = 0)
+    private async Task<Workspace> Setup(DateTimeOffset? activatedAt = null, bool includeService = false, DateOnly? primaryStart = null, decimal primaryDeposit = 0, bool personFee = false)
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff);
         var tenant = await User(Roles.Tenant); var other = await User(Roles.Tenant);
@@ -78,6 +78,7 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
             new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddYears(-1), Today.AddYears(1)));
         var fees = new List<(ChargeCategory Category, string Code, decimal Rate)> { (ChargeCategory.Rent, "RENT", 3000000m), (ChargeCategory.Electricity, "ELECTRICITY", 3500m), (ChargeCategory.Water, "WATER", 15000m) };
         if (includeService) fees.Add((ChargeCategory.ServiceFee, "INTERNET", 100000m));
+        if (personFee) fees.Add((ChargeCategory.ServiceFee, "CLEANING", 100001m));
         var policies = new List<BillingPolicy>();
         foreach (var (category, code, rate) in fees)
         {
@@ -87,7 +88,8 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
                 Category = category,
                 ChargeCode = code,
                 Name = "Synthetic " + code,
-                Method = category is ChargeCategory.Electricity or ChargeCategory.Water ? ChargingMethod.Metered : ChargingMethod.FixedPerRoomPerMonth,
+                Method = category is ChargeCategory.Electricity or ChargeCategory.Water ? ChargingMethod.Metered :
+                    code == "CLEANING" ? ChargingMethod.FixedPerPersonPerMonth : ChargingMethod.FixedPerRoomPerMonth,
                 Rate = rate,
                 EffectiveFrom = period.AddYears(-1)
             };

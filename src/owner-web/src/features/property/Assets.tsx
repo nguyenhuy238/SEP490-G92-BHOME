@@ -370,7 +370,7 @@ function AssetContent({ db }: { db: DemoDatabase }) {
             { key: 'catalog', label: 'Danh mục thiết bị', options: p.catalog },
             { key: 'code', label: 'Mã phiếu mua / tài sản', required: true },
             { key: 'quantity', label: 'Số lượng mua', type: 'number', required: true },
-            { key: 'cost', label: 'Đơn giá mua (VND)', type: 'number', required: true },
+            { key: 'cost', label: 'Đơn giá mua (VND)', type: 'money', required: true },
             { key: 'serial', label: 'Serial (chỉ cho số lượng 1)' },
             { key: 'date', label: 'Ngày mua', type: 'date', required: true },
             { key: 'supplier', label: 'Nhà cung cấp', required: true },
@@ -441,7 +441,7 @@ function AssetContent({ db }: { db: DemoDatabase }) {
               ],
             },
             { key: 'date', label: 'Ngày ghi nhận', type: 'date', required: true },
-            { key: 'amount', label: 'Chi phí hoặc giá trị khấu hao (VND)', type: 'number' },
+            { key: 'amount', label: 'Chi phí hoặc giá trị khấu hao (VND)', type: 'money' },
             { key: 'note', label: 'Nội dung, lý do và chứng từ tham chiếu', required: true },
           ]}
           onClose={() => setEventAsset('')}

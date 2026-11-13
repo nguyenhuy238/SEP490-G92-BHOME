@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -287,16 +288,16 @@ export function ContractDraftDialog({
                   ? ['requiredDeposit']
                   : ['monthlyRent', 'requiredDeposit']
                 ).map((key) => (
-                  <TextField
+                  <MoneyField
+                    maxRawLength={18}
                     fullWidth
                     key={key}
                     label={
                       key === 'requiredDeposit' ? 'Cọc yêu cầu (VND)' : 'Tiền thuê tháng (VND)'
                     }
-                    slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 18 } }}
                     value={values[key] ?? ''}
                     disabled={busy}
-                    onChange={(e) => set(key, e.target.value)}
+                    onValueChange={(raw) => set(key, raw)}
                   />
                 ))}
               </Stack>

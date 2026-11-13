@@ -238,7 +238,11 @@ export function ContractDetailPanel({
         )}
       </Paper>
 
-      {(c.agreedCharges?.length || c.priceLockedAt || ['Active', 'PendingSigning', 'PendingActivation', 'Terminated', 'Superseded'].includes(c.status)) ? (
+      {c.agreedCharges?.length ||
+      c.priceLockedAt ||
+      ['Active', 'PendingSigning', 'PendingActivation', 'Terminated', 'Superseded'].includes(
+        c.status,
+      ) ? (
         <ChartCard title="Giá & phí theo hợp đồng">
           <Stack spacing={1.5}>
             {c.agreedCharges?.length ? (
@@ -249,15 +253,33 @@ export function ContractDetailPanel({
                     : 'Biểu phí dự kiến của bản nháp; sẽ được khóa khi hợp đồng có ràng buộc.'}
                 </Alert>
                 {c.agreedCharges.map((charge) => (
-                  <Stack key={charge.chargeCode} direction="row" sx={{ justifyContent: 'space-between', gap: 2 }}>
-                    <Typography variant="body2">{charge.name || charge.chargeCode} · {charge.chargeCode}</Typography>
+                  <Stack
+                    key={charge.chargeCode}
+                    direction="row"
+                    sx={{ justifyContent: 'space-between', gap: 2 }}
+                  >
+                    <Typography variant="body2">
+                      {charge.name || charge.chargeCode} · {charge.chargeCode}
+                    </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {formatBillingDecimal(charge.rate)} đ/{charge.category === 1 ? 'kWh' : charge.category === 2 ? 'm³' : 'tháng'}
+                      {formatBillingDecimal(charge.rate)} đ/
+                      {charge.category === 1
+                        ? 'kWh'
+                        : charge.category === 2
+                          ? 'm³'
+                          : charge.method === 2
+                            ? 'người/tháng'
+                            : 'tháng'}
                     </Typography>
                   </Stack>
                 ))}
               </>
-            ) : <Alert severity="warning">Hợp đồng chưa có biểu phí đã chốt để đối chiếu. Không sử dụng giá cấu hình hiện tại thay thế.</Alert>}
+            ) : (
+              <Alert severity="warning">
+                Hợp đồng chưa có biểu phí đã chốt để đối chiếu. Không sử dụng giá cấu hình hiện tại
+                thay thế.
+              </Alert>
+            )}
           </Stack>
         </ChartCard>
       ) : null}

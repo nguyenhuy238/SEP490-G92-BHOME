@@ -73,7 +73,19 @@ export interface ContractView {
   locationId: string;
   signingMode?: string;
   snapshotHash?: string;
-  agreedCharges?: { policyId: string; chargeCode: string; category: number; method: number; rate: string; effectiveFrom: string; effectiveTo: string | null; version: number; name?: string | null }[] | null;
+  agreedCharges?:
+    | {
+        policyId: string;
+        chargeCode: string;
+        category: number;
+        method: number;
+        rate: string;
+        effectiveFrom: string;
+        effectiveTo: string | null;
+        version: number;
+        name?: string | null;
+      }[]
+    | null;
 }
 export interface ContractTemplate {
   id: string;
@@ -341,6 +353,8 @@ export interface SettlementReceivable {
   approvedAt: string;
 }
 export interface FixedChargeSource {
+  residentCount?: number | string | null;
+  personDays?: number | string | null;
   policyCalculatedAmount?: string | null;
   approvedReduction?: string;
   approvedAdjustmentIds?: string[] | null;
@@ -1056,10 +1070,14 @@ export const labels: Record<string, string> = {
   inspection_evidence_not_available: 'Ảnh không thuộc người lập biên bản hoặc đã được sử dụng.',
   inspection_upload_not_allowed: 'Chưa được tải ảnh hoặc đã đủ 5 ảnh.',
   invalid_contract_period_or_residents: 'Kiểm tra kỳ thuê, người đại diện và danh sách người ở.',
-  contract_price_snapshot_missing: 'Hợp đồng chưa có biểu phí đã chốt. Cần đối chiếu điều khoản gốc trước khi tiếp tục.',
-  contract_price_snapshot_invalid: 'Biểu phí đã chốt không hợp lệ. Cần đối chiếu hợp đồng trước khi tiếp tục.',
-  contract_utility_profile_requires_review: 'Phòng sử dụng biểu giá điện nước nâng cao; cần xác nhận biểu giá hợp đồng trước khi ký.',
-  room_contract_price_conflict: 'Các hợp đồng cùng phòng có biểu phí không đồng nhất trong kỳ thuê. Cần đối chiếu trước khi tiếp tục.',
+  contract_price_snapshot_missing:
+    'Hợp đồng chưa có biểu phí đã chốt. Cần đối chiếu điều khoản gốc trước khi tiếp tục.',
+  contract_price_snapshot_invalid:
+    'Biểu phí đã chốt không hợp lệ. Cần đối chiếu hợp đồng trước khi tiếp tục.',
+  contract_utility_profile_requires_review:
+    'Phòng sử dụng biểu giá điện nước nâng cao; cần xác nhận biểu giá hợp đồng trước khi ký.',
+  room_contract_price_conflict:
+    'Các hợp đồng cùng phòng có biểu phí không đồng nhất trong kỳ thuê. Cần đối chiếu trước khi tiếp tục.',
 };
 export const text = (value: string) =>
   labels[value] ?? 'Trạng thái hoặc điều kiện cần kiểm tra với Owner';

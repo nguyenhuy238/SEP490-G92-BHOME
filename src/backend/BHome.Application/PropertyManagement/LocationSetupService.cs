@@ -22,14 +22,15 @@ public sealed record LocalRoomDefaultsWrite(string Name, string Description, Sha
 public sealed record SetupAssetRequirement(string Name, string Category, string TrackingMode, int Quantity);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SetupRoomDefaultsInput(Guid Key, string Name, string Description, int Capacity, decimal Area,
-    decimal? ReferenceRent, string[] Amenities, SetupAssetRequirement[] Assets, Guid? SourceId = null,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? ReferenceRent, string[] Amenities, SetupAssetRequirement[] Assets, Guid? SourceId = null,
     int? SourceVersion = null, string? SourceKind = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SetupRoomInput(Guid Key, string RoomNumber, string Floor, Guid RoomTypeKey,
-    [property: JsonRequired] decimal Rent);
+    [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal Rent);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SetupFeeInput(Guid? RoomKey, [property: JsonRequired] ChargeCategory Category, string ChargeCode,
-    string Name, [property: JsonRequired] ChargingMethod Method, [property: JsonRequired] decimal Rate,
+    string Name, [property: JsonRequired] ChargingMethod Method,
+    [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal Rate,
     DateOnly EffectiveFrom, DateOnly? EffectiveTo);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SetupPolicyInput(string Title, string Content, DateOnly EffectiveFrom);
@@ -43,7 +44,7 @@ public sealed record LocationSetupSource(IReadOnlyList<SetupDocument> RoomTypes,
     IReadOnlyList<PolicyDto> Fees, IReadOnlyList<SetupDocument> Policies, string SourceState);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ConfiguredRoomInput(string RoomNumber, string? Floor, Guid RoomDefaultsId, int ExpectedVersion,
-    [property: JsonRequired] decimal Rent);
+    [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal Rent);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ConfiguredRoomsInput(ConfiguredRoomInput[] Rooms, DateOnly EffectiveFrom);
 public sealed record RoomProvenanceData(Guid RoomId, Guid RoomDefaultsId, int RoomDefaultsVersion, string Name,

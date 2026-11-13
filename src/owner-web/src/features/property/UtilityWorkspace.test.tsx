@@ -100,7 +100,7 @@ it('creates an exact tiered tariff without browser charge calculation', async ()
   fill('Nhóm áp dụng', 'Owner class');
   fill('Căn cứ giá do Owner kiểm tra', 'Owner source');
   fill('Biểu giá hiệu lực từ', '2026-12-01');
-  fill('Đơn giá bậc 1', '1234.56789');
+  fill('Đơn giá bậc 1', '1.234,56789');
   fireEvent.click(screen.getByLabelText('Đã xác minh căn cứ giá'));
   fireEvent.click(screen.getByRole('button', { name: 'Lưu biểu giá điện nước' }));
   await waitFor(() =>

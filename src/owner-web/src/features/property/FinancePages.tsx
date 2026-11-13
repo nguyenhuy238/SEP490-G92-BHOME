@@ -256,12 +256,12 @@ function PriceEditor({
       fields={[
         { key: 'target', label: 'Áp dụng cho', options: targets, required: true },
         { key: 'name', label: 'Tên phiên bản', required: true },
-        { key: 'rent', label: 'Giá thuê (VND/tháng)', type: 'number', required: true },
-        { key: 'electricityRate', label: 'Điện (VND/kWh)', type: 'number' },
-        { key: 'waterRate', label: 'Nước (VND/m³)', type: 'number' },
-        { key: 'environmentRate', label: 'Vệ sinh môi trường (VND/tháng)', type: 'number' },
-        { key: 'securityRate', label: 'Dịch vụ an ninh trật tự (VND/tháng)', type: 'number' },
-        { key: 'otherServiceRate', label: 'Dịch vụ khác (VND/tháng)', type: 'number' },
+        { key: 'rent', label: 'Giá thuê (VND/tháng)', type: 'money', required: true },
+        { key: 'electricityRate', label: 'Điện (VND/kWh)', type: 'money' },
+        { key: 'waterRate', label: 'Nước (VND/m³)', type: 'money' },
+        { key: 'environmentRate', label: 'Vệ sinh môi trường (VND/tháng)', type: 'money' },
+        { key: 'securityRate', label: 'Dịch vụ an ninh trật tự (VND/tháng)', type: 'money' },
+        { key: 'otherServiceRate', label: 'Dịch vụ khác (VND/tháng)', type: 'money' },
         { key: 'start', label: 'Hiệu lực từ', type: 'date', required: true },
         { key: 'end', label: 'Hiệu lực đến (để trống nếu chưa xác định)', type: 'date' },
       ]}
@@ -491,7 +491,7 @@ function InvestmentContent({ db }: { db: DemoDatabase }) {
               label: 'Nhóm ghi nhận',
               options: ['Đầu tư ban đầu', 'Vận hành', 'Bảo trì'].map((id) => ({ id, name: id })),
             },
-            { key: 'amount', label: 'Số tiền (VND)', type: 'number', required: true },
+            { key: 'amount', label: 'Số tiền (VND)', type: 'money', required: true },
             {
               key: 'roomId',
               label: 'Phòng liên quan',

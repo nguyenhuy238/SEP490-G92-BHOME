@@ -16,6 +16,8 @@ public sealed class SharedFeeValidationTests
     [InlineData("Electricity", "electricity", "Metered", "VND / kWh", "kWh")]
     [InlineData("Water", "water", "Metered", "m3", "m\u00b3")]
     [InlineData("ServiceFee", "internet", "FixedPerRoomPerMonth", "VND/month", "VND/month")]
+    [InlineData("ServiceFee", "cleaning", "FixedPerPersonPerMonth", "VND/person/month", "VND/person/month")]
+    [InlineData("ServiceFee", "cleaning", "FixedPerPersonPerMonth", "VND / ng\u01b0\u1eddi / th\u00e1ng", "VND/person/month")]
     public async Task NormalizesSupportedUnits(string category, string code, string method, string unit, string expected)
     {
         var result = await validator.ValidateAsync("fee-templates", Fee(category, code, method, unit), default);
@@ -30,6 +32,9 @@ public sealed class SharedFeeValidationTests
     [InlineData("ServiceFee", "WATER", "FixedPerRoomPerMonth", "VND/month")]
     [InlineData("Water", "WATER", "FixedPerRoomPerMonth", "m3")]
     [InlineData("ServiceFee", "INTERNET", "Metered", "kWh")]
+    [InlineData("ServiceFee", "CLEANING", "FixedPerPersonPerMonth", "VND/month")]
+    [InlineData("ServiceFee", "CLEANING", "FixedPerRoomPerMonth", "VND/person/month")]
+    [InlineData("Rent", "RENT", "FixedPerPersonPerMonth", "VND/person/month")]
     public async Task RejectsIncompatibleCharges(string category, string code, string method, string unit) =>
         await Assert.ThrowsAsync<PropertyException>(() => validator.ValidateAsync("fee-templates", Fee(category, code, method, unit), default));
 }

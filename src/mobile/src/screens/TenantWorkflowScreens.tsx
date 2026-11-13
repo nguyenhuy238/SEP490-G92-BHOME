@@ -158,7 +158,7 @@ export function InvoiceAdjustment() {
         />
         <Input
           label="Số tiền đề nghị kiểm tra (đ, nếu có)"
-          numeric
+          money
           value={form.data.amount}
           onChange={(value) => form.change('amount', value)}
         />

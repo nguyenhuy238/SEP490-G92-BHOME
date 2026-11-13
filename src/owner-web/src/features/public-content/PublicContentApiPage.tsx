@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
 import {
@@ -179,10 +180,10 @@ function ContentEditor({ data, path, room }: { data: PublicContent; path: string
           disabled={action.busy}
         />
         {room ? (
-          <TextField
+          <MoneyField
             label="Giá tham khảo (VND)"
             value={price}
-            onChange={(e) => setPrice(e.target.value)}
+            onValueChange={(raw) => setPrice(raw)}
             disabled={action.busy}
           />
         ) : (

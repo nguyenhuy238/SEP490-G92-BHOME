@@ -1,13 +1,6 @@
 import { Button, Chip, Paper, Stack, Typography, Box } from '@mui/material';
 import { Link } from 'react-router';
-import {
-  DoorOpen,
-  Package,
-  Coins,
-  ScrollText,
-  ArrowUpRight,
-  CheckCircle2,
-} from 'lucide-react';
+import { DoorOpen, Package, Coins, ScrollText, ArrowUpRight, CheckCircle2 } from 'lucide-react';
 import type { LocationMetadata } from '../../../../../../packages/client-core/src/locationSetup';
 
 export function LocationWorkspaceOverview({
@@ -50,7 +43,8 @@ export function LocationWorkspaceOverview({
       count: summary?.pricesAndFees,
       icon: Coins,
       color: '#b06b10',
-      description: 'Thiết lập giá, khoản thu, điện nước và lịch hóa đơn theo cơ sở hoặc từng phòng.',
+      description:
+        'Thiết lập giá, khoản thu, điện nước và lịch hóa đơn theo cơ sở hoặc từng phòng.',
       action: 'Thiết lập giá & phí',
     },
     {

@@ -201,6 +201,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
             invoice.Recipients.Add(new InvoiceRecipient { InvoiceId = invoice.Id, TenantUserId = tenantId });
         var occupiedDays = Enumerable.Range(0, end.Day).Count(day => occupants.Any(o => o.Contract.StartDate <= start.AddDays(day) &&
             (o.Contract.ActualEndDate ?? o.Contract.EndDate) >= start.AddDays(day)));
+        var people = PersonMonthOccupancy.Read(start, occupants.Select(o => o.Contract));
         var missing = new List<string>();
         if (occupants.Any(o => !o.ContactsComplete)) missing.Add("occupant_account_email_required");
         var charges = ContractBillingPrices.Read(representative.Contract, invoice.LocationId, missing);
@@ -221,9 +222,10 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
                 // Do not charge another tenancy's usage or silently skip an intermediate month.
                 if ((reading.BillablePrevious ?? reading.Reading.PreviousValue) is null) { missing.Add("baseline_" + policy.Category); continue; }
             }
-            var quantity = metered ? (reading!.BillableConsumption ?? reading.Reading.Consumption)!.Value : 1m;
+            var perPerson = policy.Method == ChargingMethod.FixedPerPersonPerMonth;
+            var quantity = metered ? (reading!.BillableConsumption ?? reading.Reading.Consumption)!.Value : perPerson ? people.ResidentCount : 1m;
             decimal amount;
-            try { amount = InvoiceMath.Amount(policy.Rate, quantity, occupiedDays, end.Day, schedule.PartialMonth, schedule.Rounding, metered); }
+            try { amount = perPerson ? 0 : InvoiceMath.Amount(policy.Rate, quantity, occupiedDays, end.Day, schedule.PartialMonth, schedule.Rounding, metered); }
             catch (Exception error) when (error is OverflowException or ArgumentOutOfRangeException) { throw new InvoiceException(400, "invoice_amount_out_of_range"); }
             UtilityCalculation? utility = null;
             if (metered && reading!.FullyCovered)
@@ -237,12 +239,15 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
                     missing.Add("utility_increment_policy_changed");
                 utility = new(amount, ContractBillingPrices.FlatSnapshot(policy, schedule, quantity, amount), []);
             }
-            else if (!metered && fixedCoverage is not null)
+            else if (!metered && (fixedCoverage is not null || perPerson))
             {
-                var prior = await fixedCoverage.ReadAsync(invoice.RoomId, start, policy.ChargeCode, t);
-                if (prior.Count > 0)
+                if (perPerson && fixedCoverage is null) missing.Add("fixed_charge_coverage_unavailable");
+                var prior = fixedCoverage is null ? [] : await fixedCoverage.ReadAsync(invoice.RoomId, start, policy.ChargeCode, t);
+                if (prior.Count > 0 || perPerson)
                 {
-                    var fixedResult = FixedChargeCalculation.Calculate(start, policy, schedule, representative.Contract.SnapshotHash, occupiedDays, prior);
+                    FixedChargeResult fixedResult;
+                    try { fixedResult = FixedChargeCalculation.Calculate(start, policy, schedule, representative.Contract.SnapshotHash, occupiedDays, prior, people); }
+                    catch (Exception error) when (error is OverflowException or ArgumentOutOfRangeException) { throw new InvoiceException(400, "invoice_amount_out_of_range"); }
                     missing.AddRange(fixedResult.MissingInputs);
                     amount = fixedResult.Amount ?? 0;
                     utility = new(amount, JsonSerializer.Serialize(new { kind = "FixedChargeCoverage/v1", source = fixedResult.Source }), fixedResult.MissingInputs);

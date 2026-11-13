@@ -92,7 +92,7 @@ public static class ContractChargeSnapshot
             if (charges.SingleOrDefault(c => c.ChargeCode == code) is not { } charge ||
                 charge.Category != (int)category || charge.Method != (int)ChargingMethod.Metered)
                 throw ContractException.Conflict("missing_policy_" + code.ToLowerInvariant());
-        if (charges.Any(c => c.Category == (int)ChargeCategory.ServiceFee && c.Method != (int)ChargingMethod.FixedPerRoomPerMonth))
+        if (charges.Any(c => !PropertyRules.ValidCharge((ChargeCategory)c.Category, (ChargingMethod)c.Method, c.ChargeCode)))
             throw ContractException.Conflict("unsupported_contract_charge_unit");
     }
 
