@@ -13,8 +13,11 @@ import { LocationsListPage } from './pages/LocationsListPage';
 import { RoomTypesApiPage } from '../room-types/pages/RoomTypesApiPage';
 import { LocationSetupWizard } from './setup/LocationSetupWizard';
 
+type SetupRequest = (path: string, init?: RequestInit) => Promise<unknown>;
+type SetupRequestCall = Parameters<SetupRequest>;
+
 const state = vi.hoisted(() => ({
-  request: vi.fn(),
+  request: vi.fn<SetupRequest>(),
   db: null as DemoDatabase | null,
   roles: ['Owner'],
 }));
@@ -119,8 +122,11 @@ function finishSteps() {
   fireEvent.click(screen.getByRole('checkbox', {name: /Tôi xác nhận giá thuê/}));
 }
 const writes = () => state.request.mock.calls.filter(([,init]) => init?.method === 'POST');
-const payload = (call: any[]): LocationSetupInput => JSON.parse(String(call[1].body));
-const key = (call: any[]) => new Headers(call[1].headers).get('Idempotency-Key');
+const payload = ([, init]: SetupRequestCall): LocationSetupInput => {
+  if (typeof init?.body !== 'string') throw new Error('Expected a JSON setup request body');
+  return JSON.parse(init.body) as LocationSetupInput;
+};
+const key = ([, init]: SetupRequestCall) => new Headers(init?.headers).get('Idempotency-Key');
 beforeEach(() => {
   vi.resetAllMocks(); sessionStorage.clear(); state.db = createSeed(); state.roles = ['Owner'];
   state.request.mockImplementation(async (path: string, init?: RequestInit) =>
