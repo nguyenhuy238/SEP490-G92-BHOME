@@ -148,6 +148,12 @@ export function mainDraftClient(request: MainDraftRequest) {
   };
 }
 export const mainDraftMessages: Record<string, string> = {
+  verified_contract_signer_required:
+    'Hồ sơ bên thuê không khớp hợp đồng. Hãy tải lại hoặc kiểm tra hồ sơ đại diện.',
+  verified_residents_with_email_required:
+    'Hồ sơ bên thuê cần email đã xác nhận trước khi gửi lời mời ký.',
+  verified_tenant_account_required:
+    'Tài khoản liên kết chưa đủ điều kiện ký. Hãy kiểm tra hồ sơ bên thuê.',
   contract_document_integrity_failed:
     'Không xác minh được tệp hợp đồng. Hãy tạo lại PDF; nếu còn lỗi, kiểm tra kho tài liệu.',
   draft_document_missing: 'Tệp hợp đồng không còn trong kho tài liệu. Hãy tạo lại PDF.',

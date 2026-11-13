@@ -345,7 +345,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             var (_, settings, _) = await ReviewInputs(c, t);
             if (input.TenantUserId is { } tenant && !await repository.ActiveUserInRoleAsync(tenant, Roles.Tenant, t)) throw ContractException.Invalid("verified_tenant_account_required");
             var representative = (await repository.ResidentsAsync(c.RoomId, [c.RepresentativeResidentId], t)).Single();
-            if (representative.TenantUserId is { } linked && linked != input.TenantUserId || c.TenantUserId is { } signer && signer != input.TenantUserId)
+            // Account linkage is established by verified onboarding, never by the release form.
+            if (representative.TenantUserId != input.TenantUserId || c.TenantUserId is { } signer && signer != input.TenantUserId)
                 throw ContractException.Conflict("resident_account_already_linked");
             if (await repository.ConflictsAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, c.Residents.Select(r => r.ResidentId).ToArray(), t))
                 throw ContractException.Conflict("room_contract_conflict");

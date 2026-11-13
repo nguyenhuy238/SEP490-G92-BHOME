@@ -1,11 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Checkbox, Text } from 'react-native-paper';
 import {
-  contractClient,
   contractError,
   mutationKeys,
   type PreviewDocument,
-  type NamedOption,
 } from '../../../../../packages/client-core/src/contracts';
 import {
   mainDraftMessages,
@@ -13,7 +11,7 @@ import {
   type MainDraftView,
 } from '../../../../../packages/client-core/src/mainDrafts';
 import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
-import { ChoiceField } from '../../components/WorkflowControls';
+import { verifiedDraftSigner, type MainDraftSigner } from '../owner/mainDraftSigner';
 import { useSession } from '../../lib/SessionProvider';
 import { randomUUID } from '../../lib/randomUUID';
 import { ContractPdfPreview } from './ContractPdfPreview';
@@ -43,10 +41,10 @@ export function MainDraftSigningReview({
   const [snapshot, setSnapshot] = useState<{
     api: typeof api;
     revision: number;
-    accounts: NamedOption[];
+    draft: MainDraftView;
+    signer: MainDraftSigner | null;
     error: string;
   } | null>(null);
-  const [tenant, setTenant] = useState('');
   const [file, setFile] = useState<PreviewDocument | null>(null);
   const [documentBlocker, setDocumentBlocker] = useState('');
   const [reviewed, setReviewed] = useState(false);
@@ -54,8 +52,15 @@ export function MainDraftSigningReview({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
-  const current = snapshot?.api === api && snapshot.revision === revision ? snapshot : null;
-  const accounts = current?.accounts ?? [];
+  const current =
+    snapshot?.api === api && snapshot.draft === draft && snapshot.revision === revision
+      ? snapshot
+      : null;
+  const signer = current?.signer;
+  const tenant = signer?.tenantUserId;
+  const representative = draft.preparation?.residents.find(
+    (person) => person.id === draft.input?.representativeResidentId,
+  );
   const loading = owner && !current;
   const feedback = error || current?.error;
   const [keys] = useState(() => mutationKeys(randomUUID));
@@ -81,23 +86,32 @@ export function MainDraftSigningReview({
   useEffect(() => {
     if (!owner || !api) return;
     const controller = new AbortController();
-    const contracts = contractClient((path, init, type) => api.request(path, init, type));
-    void contracts
-      .tenantAccounts(controller.signal)
+    void api
+      .request<MainDraftSigner>(`/api/v1/residents/${draft.input.representativeResidentId}`, {
+        signal: controller.signal,
+      })
       .then((result) => {
-        if (!controller.signal.aborted) setSnapshot({ api, revision, accounts: result, error: '' });
+        const signer = verifiedDraftSigner(draft, result);
+        if (!controller.signal.aborted) setSnapshot({ api, draft, revision, signer, error: '' });
       })
       .catch((e) => {
         if (!controller.signal.aborted)
-          setSnapshot({ api, revision, accounts: [], error: contractError(e) });
+          setSnapshot({
+            api,
+            draft,
+            revision,
+            signer: null,
+            error: mainDraftMessages[previewErrorCode(e)] ?? contractError(e),
+          });
       });
     return () => controller.abort();
-  }, [owner, api, revision]);
+  }, [owner, api, revision, draft]);
   async function run(release: boolean) {
     if (
       lock.current ||
       !owner ||
-      (release && (!file || readyFile !== file.id || !reviewed || !tenant))
+      !signer ||
+      (release && (!file || readyFile !== file.id || !reviewed))
     )
       return;
     lock.current = true;
@@ -120,9 +134,23 @@ export function MainDraftSigningReview({
         onDraftChanged?.(latest);
         throw { code: 'draft_version_or_status_changed' };
       }
+      const resolved = verifiedDraftSigner(
+        latest,
+        await api!.request<MainDraftSigner>(
+          `/api/v1/residents/${latest.input.representativeResidentId}`,
+        ),
+      );
+      if (!alive.current) return;
+      if (resolved.tenantUserId !== tenant || resolved.contactEmail !== signer.contactEmail) {
+        setFile(null);
+        setReadyFile('');
+        setReviewed(false);
+        setRevision((value) => value + 1);
+        throw { code: 'verified_contract_signer_required' };
+      }
       if (release) {
         const input = {
-          tenantUserId: tenant === '__internal__' ? null : tenant,
+          tenantUserId: resolved.tenantUserId,
           expectedVersion: draft.version,
           reviewedFileId: file!.id,
           humanReviewed: true,
@@ -172,35 +200,33 @@ export function MainDraftSigningReview({
     <>
       <Box>
         <Heading title="Duyệt hợp đồng đưa đi ký" />
-        <ChoiceField
-          label="Người đại diện ký hợp đồng"
-          value={tenant}
-          options={[
-            { id: '__internal__', label: 'Khách mới · chấp thuận nội bộ qua email' },
-            ...accounts,
-          ]}
-          disabled={busy || loading}
-          onChange={(value) => {
-            setTenant(value);
-            setReviewed(false);
-          }}
-        />
-        {!loading && !accounts.length && (
+        <Heading title="Thông tin bên thuê" />
+        <Text>{representative?.fullName ?? 'Chưa tải được hồ sơ bên thuê'}</Text>
+        <Text>{representative?.maskedCitizenNumber}</Text>
+        {signer && <Pill tone="green">Đã xác minh · Người ký theo hợp đồng</Pill>}
+        {draft.preparation?.residents
+          .filter((person) => !person.representative)
+          .map((person) => (
+            <Text key={person.id}>Cùng ở: {person.fullName}</Text>
+          ))}
+        <Text>Email hồ sơ: {signer?.contactEmail ?? 'Chưa tải được'}</Text>
+        <Heading title="Phương thức ký" />
+        {signer && (
           <Text>
-            Khách mới chấp thuận nội bộ qua email trước khi có tài khoản. Máy chủ chỉ cấp tài khoản
-            sau khi hợp đồng thuê chính được kích hoạt.
+            {tenant ? 'Viettel MySign · Tài khoản đã liên kết' : 'Email OTP · Chấp thuận nội bộ'}
           </Text>
         )}
+        {loading && <Text>Đang kiểm tra bên thuê…</Text>}
         {!!feedback && !documentBlocker && (
           <Text accessibilityRole="alert" style={ui.red}>
             {feedback}
           </Text>
         )}
-        <Action secondary disabled={busy || loading} onPress={() => void run(false)}>
+        <Action secondary disabled={busy || loading || !signer} onPress={() => void run(false)}>
           {busy ? 'Đang xử lý…' : 'Tạo bản PDF để duyệt'}
         </Action>
         <Action secondary disabled={busy || loading} onPress={() => setRevision((v) => v + 1)}>
-          Tải lại tài khoản
+          Tải lại hồ sơ bên thuê
         </Action>
         {file?.developmentOnly && (
           <Pill tone="amber">Tài liệu Development · Chưa duyệt cho production</Pill>
@@ -230,11 +256,11 @@ export function MainDraftSigningReview({
         <Checkbox.Item
           label="Tôi đã xem PDF và xác nhận người đại diện, cách ký"
           status={reviewed ? 'checked' : 'unchecked'}
-          disabled={!file || readyFile !== file.id || !tenant || busy}
+          disabled={!file || readyFile !== file.id || !signer || busy}
           onPress={() => setReviewed((v) => !v)}
         />
         <Action
-          disabled={!file || readyFile !== file.id || !tenant || !reviewed || busy || loading}
+          disabled={!file || readyFile !== file.id || !signer || !reviewed || busy || loading}
           onPress={() => void run(true)}
         >
           Duyệt và chuyển sang chờ ký
