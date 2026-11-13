@@ -104,6 +104,12 @@ export function OwnerOverviewScreen() {
       <Action icon="tools" onPress={() => go('owner-incidents')}>
         Sự cố và bảo trì
       </Action>
+      <Action secondary onPress={() => go('owner-emergencies')}>
+        Sự cố khẩn cấp
+      </Action>
+      <Action secondary onPress={() => go('owner-residence')}>
+        Kết quả tạm trú
+      </Action>
       <Action icon="file-document-outline" onPress={() => go('signing')}>
         Hợp đồng & Vòng đời
       </Action>

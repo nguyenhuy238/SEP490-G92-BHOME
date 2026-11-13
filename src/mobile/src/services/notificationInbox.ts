@@ -120,6 +120,8 @@ export async function notificationDestination(
     return { screen: 'tenant-meters', params: { roomId: target.objectId } };
   if (target.objectType === 'Residence' && role === 'Tenant')
     return { screen: 'residence', params: { residentId: target.objectId } };
+  if (target.objectType === 'Residence' && role === 'Owner')
+    return { screen: 'owner-residence', params: { residentId: target.objectId } };
   if (target.objectType === 'Contract' && role !== 'Staff')
     return {
       screen: role === 'Tenant' ? 'contract' : 'signing',

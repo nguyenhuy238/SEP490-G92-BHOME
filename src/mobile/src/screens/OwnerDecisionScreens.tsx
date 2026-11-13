@@ -37,10 +37,14 @@ import { AdjustmentEvidenceImage } from './TenantAdjustmentPanel';
 const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function OwnerApprovalCenterScreen() {
+  const { go } = useWorkspace();
   return (
     <>
       <Heading title="Trung tâm phê duyệt" detail="Mở hồ sơ để kiểm tra bằng chứng và quyết định" />
       <OwnerApprovalQueue />
+      <Action secondary onPress={() => go('owner-residence')}>
+        Kết quả tạm trú cần xem xét
+      </Action>
     </>
   );
 }
