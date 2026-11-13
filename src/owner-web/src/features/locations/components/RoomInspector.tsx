@@ -5,6 +5,7 @@ import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import type { RoomConfiguration } from '../../../../../../packages/client-core/src/propertySetup';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
+import { locationSetupClient } from '../../../../../../packages/client-core/src/locationSetup';
 import { useRoomOperations } from './useRoomOperations';
 import { Link } from 'react-router';
 import {
@@ -32,6 +33,13 @@ export function RoomInspector({
     queryFn: ({ signal }) => api.request<RoomConfiguration>(`/api/v1/rooms/${roomId}`, { signal }),
   });
   const operations = useRoomOperations(room.data?.locationId ?? '', [roomId]);
+  const provenance = useQuery({
+    queryKey: ['property-setup', 'room-provenance', session?.userId, room.data?.locationId],
+    queryFn: ({ signal }) =>
+      locationSetupClient(api.request).roomProvenance(room.data!.locationId, signal),
+    enabled: !!room.data?.locationId && !!session?.roles.includes('Owner'),
+  });
+  const configuration = provenance.data?.find((item) => item.data.roomId === roomId)?.data;
   const occupancy = operations.occupancy.data?.items.find((item) => item.roomId === roomId);
   const reports =
     operations.incidents.data?.items.filter(
@@ -93,6 +101,35 @@ export function RoomInspector({
                   }
                 />
                 <Typography>Tầng: {room.data.floor ?? 'Chưa phân tầng'}</Typography>
+                {session?.roles.includes('Owner') &&
+                  (configuration ? (
+                    <>
+                      <Typography>
+                        Gợi ý khi tạo phòng: {configuration.name} (phiên bản{' '}
+                        {configuration.roomDefaultsVersion})
+                      </Typography>
+                      <Typography>
+                        Diện tích: {configuration.area} m² · Sức chứa mặc định:{' '}
+                        {configuration.defaultCapacity}
+                      </Typography>
+                      <Typography>
+                        Tiện nghi: {configuration.amenities.join(', ') || 'Chưa thiết lập'}
+                      </Typography>
+                    </>
+                  ) : provenance.error ? (
+                    <Alert
+                      severity="warning"
+                      action={<Button onClick={() => void provenance.refetch()}>Thử lại</Button>}
+                    >
+                      Chưa tải được cấu hình nguồn của phòng.
+                    </Alert>
+                  ) : provenance.isPending ? (
+                    <Typography color="text.secondary">Đang tải cấu hình nguồn…</Typography>
+                  ) : (
+                    <Typography color="text.secondary">
+                      Phòng không có cấu hình nguồn được ghi nhận.
+                    </Typography>
+                  ))}
                 {prices.error ? (
                   <Alert
                     severity="warning"

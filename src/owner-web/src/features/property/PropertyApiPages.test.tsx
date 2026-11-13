@@ -169,10 +169,11 @@ it('requires confirmation before deactivating an existing Location', async () =>
     ).toBe(true),
   );
 });
-it('creates a native Room while loading RoomType display metadata', async () => {
+it('creates a native Room while loading local defaults and provenance', async () => {
   state.request.mockImplementation(async (path: string) => {
     if (path === '/api/v1/capture/locations')
       return [{ id: 'location', label: 'Synthetic Location' }];
+    if (path.endsWith('/room-defaults') || path.endsWith('/room-provenance')) return [];
     return { items: [], totalCount: 0 };
   });
   mount('rooms');
@@ -196,7 +197,11 @@ it('creates a native Room while loading RoomType display metadata', async () => 
       }),
     }),
   );
-  expect(state.request.mock.calls.some(([path]) => path.includes('/api/v1/room-types'))).toBe(true);
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/room-defaults'))).toBe(true);
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/room-provenance'))).toBe(true);
+  expect(state.request.mock.calls.some(([path]) => path.includes('/api/v1/room-types'))).toBe(
+    false,
+  );
 });
 it('reads physical Asset fields through the scoped native list and pagination', async () => {
   state.request.mockImplementation(async (path: string) => {
@@ -242,7 +247,9 @@ it('sends room status filtering to the backend instead of filtering a paginated 
   state.request.mockImplementation(async (path: string) =>
     path === '/api/v1/capture/locations'
       ? [{ id: 'location', label: 'Synthetic Location' }]
-      : { items: [], totalCount: 0 },
+      : path.endsWith('/room-defaults') || path.endsWith('/room-provenance')
+        ? []
+        : { items: [], totalCount: 0 },
   );
   mount('rooms');
   await chooseLocation();

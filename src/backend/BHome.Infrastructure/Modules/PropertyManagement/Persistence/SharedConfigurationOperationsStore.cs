@@ -7,11 +7,25 @@ namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
 internal sealed partial class SharedConfigurationStore
 {
+    public Task<bool> LocationCodeExistsAsync(string code, Guid? exceptLocation, CancellationToken t) =>
+        sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE task_type='SYSTEM_JOB' AND task_data->>'recordType'='SetupLocationMetadata' AND lower(trim(task_data->'document'->'data'->>'code'))=lower(@code) AND location_id<>@except)", t,
+            ("code", code.Trim()), ("except", exceptLocation ?? Guid.Empty));
     public Task<bool> HasApplicationAsync(Guid family, Guid location, CancellationToken t) => sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE task_type='COMMAND' AND location_id=@location AND task_data->>'recordType'='SharedConfigurationOperation' AND task_data->'operation'->>'kind'='Apply' AND task_data->'operation'->>'familyId'=@family)", t, ("location", location), ("family", family.ToString()));
     public async Task<IReadOnlyList<PolicyDto>> PoliciesAsync(Guid location, CancellationToken t)
     {
         var rows = await db.Set<BillingPolicy>().AsNoTracking().Where(p => p.LocationId == location).OrderBy(p => p.Id)
             .Select(p => new PolicyDto(p.Id, p.LocationId, p.RoomId, p.Category, p.ChargeCode, p.Name, p.Method, p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version, p.FirstUsedAt, p.RoomTypeId)).Take(1001).ToArrayAsync(t);
+        if (rows.Length > 1000) throw new PropertyException(409, "configuration_copy_page_limit"); return rows;
+    }
+    public async Task<IReadOnlyList<PolicyDto>> SetupCopyPoliciesAsync(Guid location, CancellationToken t)
+    {
+        // Filter before the bounded read: per-room rent and legacy room-type pricing
+        // are not copyable setup inputs, and must not exhaust the configuration limit.
+        var rows = await db.Set<BillingPolicy>().AsNoTracking()
+            .Where(p => p.LocationId == location && p.RoomTypeId == null && (p.RoomId == null || p.Category != ChargeCategory.Rent))
+            .OrderBy(p => p.Id)
+            .Select(p => new PolicyDto(p.Id, p.LocationId, p.RoomId, p.Category, p.ChargeCode, p.Name, p.Method, p.Rate,
+                p.EffectiveFrom, p.EffectiveTo, p.Version, null, null)).Take(1001).ToArrayAsync(t);
         if (rows.Length > 1000) throw new PropertyException(409, "configuration_copy_page_limit"); return rows;
     }
     public async Task<SharedOperation?> OperationAsync(Guid actor, string kind, Guid key, CancellationToken t)
