@@ -115,7 +115,9 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   if (
     role === 'Owner' &&
     !createHolding &&
-    (create || createHolding || mainDraftId || params.mainDraftId || params.roomId)
+    !mainDraftId &&
+    !params.mainDraftId &&
+    (create || params.roomId)
   )
     return (
       <>
@@ -371,7 +373,7 @@ function LiveContractDetail({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
-  if (c.onboardingDraft && role === 'Staff')
+  if (c.onboardingDraft && ['Staff', 'Owner'].includes(role))
     return (
       <MainDraftScreen
         initialId={c.id}
@@ -394,6 +396,7 @@ function LiveContractDetail({
       />
     );
   const rental =
+    role !== 'Owner' &&
     c.kind === 'Main' &&
     ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status);
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
@@ -419,7 +422,6 @@ function LiveContractDetail({
         <Text style={ui.red}>HỢP ĐỒNG DEMO · Dữ liệu minh họa, không dùng làm hợp đồng thật.</Text>
       )}
       <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
-      {role === 'Owner' && c.kind !== 'Holding' && <OwnerWebNotice />}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -539,10 +541,14 @@ function LiveContractDetail({
             c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status)) && (
               <ContractEvidence api={api} contractId={id} pdf />
             )}
-          {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
+          {signer &&
+            !c.isDevelopmentDemo &&
+            !(role === 'Owner' && c.signingMode === 'INTERNAL_OTP_DRAWN') && (
+              <SigningCertificates api={api} />
+            )}
         </Box>
       )}
-      {section === 'signing' && role === 'Owner' && c.kind === 'Holding' && (
+      {section === 'signing' && role === 'Owner' && (
         <OwnerHoldingSigning api={api} contract={c} onChanged={detail.reload} />
       )}
       {((section === 'signing' && !rental) || section === 'history') && (

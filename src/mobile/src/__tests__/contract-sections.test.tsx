@@ -265,15 +265,31 @@ it('shows separate populated lifecycle groups on the list page', async () => {
   expect(screen.getByText('5. Đã kết thúc / hủy')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Tạo nháp hợp đồng thuê' })).toBeNull();
 });
-it('keeps Owner contract status and navigation without financial mutation forms', () => {
+it('shows Owner contract state and only actions appropriate for an Active contract', () => {
   state.role = 'Owner';
   render(<ContractScreen />);
-  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+  expect(screen.queryByText('Thực hiện trên Owner Web')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
   expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Gia hạn & trả phòng' }));
-  expect(screen.queryByRole('button', { name: 'Tạo bản gia hạn' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Chuẩn bị gia hạn' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Hoàn tất trả phòng' })).toBeNull();
   expect(screen.queryByText('Action form')).toBeNull();
+});
+it.each([true, false])('gates Owner Main activation on backend readiness=%s', (ready) => {
+  state.role = 'Owner';
+  state.contract.status = 'PendingActivation';
+  state.readiness = {
+    ready,
+    verifiedDeposit: '1000000',
+    remainingDeposit: ready ? '0' : '1000000',
+    blockers: ready ? [] : ['verified_signature_evidence_required'],
+  };
+  render(<ContractScreen />);
+  fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
+  expect(
+    (screen.getByRole('button', { name: 'Kích hoạt hợp đồng' }) as HTMLButtonElement).disabled,
+  ).toBe(!ready);
 });
 it('routes an old Owner prepare entry to Owner Web without opening a draft form', () => {
   state.role = 'Owner';
