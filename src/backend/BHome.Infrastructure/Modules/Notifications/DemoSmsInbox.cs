@@ -19,8 +19,8 @@ internal sealed class DemoSmsInbox(IOptions<SmsOptions> options, IHostEnvironmen
     internal bool Available => options.Value.MockAllowed(environment.EnvironmentName);
     internal SmsReceipt Add(SmsMessage message, string content)
     {
-        if (!Available || !options.Value.DemoAccounts.TryGetValue(message.RecipientId, out var configured) ||
-            VietnameseSmsPhone.Normalize(configured) != message.Phone) throw new ChannelDeliveryException("sms_demo_recipient_required");
+        if (!Available || !options.Value.DemoAccounts.TryGetValue(message.RecipientId.ToString(), out var configured) ||
+            VietnameseSmsPhone.Normalize(configured) != message.Phone) throw new ChannelDeliveryException("sms_demo_allowlist_required");
         lock (gate)
         {
             Prune();
@@ -61,7 +61,7 @@ internal sealed class MockSmsSender(DemoSmsInbox inbox, Compact24DbContext db)
         if (user?.Email?.EndsWith("@sms-demo.example.invalid", StringComparison.OrdinalIgnoreCase) != true ||
             user.UserName?.EndsWith(".sms-demo", StringComparison.Ordinal) != true ||
             VietnameseSmsPhone.Normalize(user.PhoneNumber) != message.Phone)
-            throw new ChannelDeliveryException("sms_demo_recipient_required");
+            throw new ChannelDeliveryException("sms_demo_account_required");
         return inbox.Add(message, content);
     }
 }

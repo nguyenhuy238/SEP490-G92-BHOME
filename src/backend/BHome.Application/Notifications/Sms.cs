@@ -18,7 +18,7 @@ public sealed class SmsOptions
     public string CallbackUrl { get; set; } = "";
     public bool LiveTestEnabled { get; set; }
     public bool DemoIsolated { get; set; }
-    public Dictionary<Guid, string> DemoAccounts { get; set; } = [];
+    public Dictionary<string, string> DemoAccounts { get; set; } = [];
     public string[] EnabledTemplates { get; set; } = [];
     public string[] ApprovedTemplates { get; set; } = [];
 

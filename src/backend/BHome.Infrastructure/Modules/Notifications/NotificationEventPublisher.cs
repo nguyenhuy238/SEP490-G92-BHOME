@@ -11,7 +11,8 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Notifications;
 
-internal sealed partial class NotificationEventPublisher(BHomePersistenceContext db, IBackgroundJobQueue queue, TimeProvider clock, CompactNotificationEvents? extended = null) : INotificationEventPublisher, IBackgroundJobHandler, IJobScheduleContributor
+internal sealed partial class NotificationEventPublisher(BHomePersistenceContext db, IBackgroundJobQueue queue, TimeProvider clock, CompactNotificationEvents? extended = null,
+    Microsoft.Extensions.Options.IOptions<SmsOptions>? sms = null) : INotificationEventPublisher, IBackgroundJobHandler, IJobScheduleContributor
 {
     public string Name => "notification-publish";
     public Task EnqueueDueAsync(CancellationToken t) => queue.EnqueueAsync(new(Name, clock.GetUtcNow().ToString("yyyyMMddHHmm"), "{}"), t);
@@ -25,8 +26,11 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"notification:" + key},0))", t);
         if (await db.Set<NotificationPublication>().AnyAsync(p => p.EventKey == key, t)) return 0;
         var count = 0; var recipients = 0;
-        foreach (var i in (await resolve()).DistinctBy(i => i.Recipient))
+        foreach (var sourceIntent in (await resolve()).DistinctBy(i => i.Recipient))
         {
+            var i = sourceIntent;
+            if (sms?.Value.Enabled == true && SmsNotificationPolicy.Template(i.EventType.Length > 0 ? i.EventType : EventType(key), i.Role) is { } template && sms.Value.EnabledTemplates.Contains(template))
+                i = i with { Channels = (i.Channels ?? ["IN_APP", "PUSH"]).Append("SMS").Distinct().ToArray() };
             if (!await ActiveRole(i.Recipient, i.Role, t)) continue; recipients++;
             if (await db.Set<UserNotification>().AnyAsync(n => n.RecipientUserId == i.Recipient && n.EventKey == key, t)) continue;
             db.Add(new UserNotification

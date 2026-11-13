@@ -8,12 +8,12 @@ using Microsoft.Extensions.Options;
 
 namespace BHome.Infrastructure.Modules.Notifications;
 
-internal sealed class NotificationChannelProvider(IOptions<NotificationChannelOptions> options, IHostEnvironment environment, MailKitEmailSender email) : INotificationChannelProvider
+internal sealed class NotificationChannelProvider(IOptions<NotificationChannelOptions> options, IHostEnvironment environment, MailKitEmailSender email, ISmsSender sms) : INotificationChannelProvider
 {
     private NotificationChannelOptions Config => options.Value;
     private bool Sandbox => Config.Mode == "Sandbox" && (environment.IsDevelopment() || environment.IsEnvironment("Testing"));
-    public bool IsConfigured(string channel) => channel == "EMAIL" && email.IsConfigured || Sandbox;
-    public bool SupportsIdempotency(string channel) => !(channel == "EMAIL" && email.IsConfigured) && Sandbox;
+    public bool IsConfigured(string channel) => channel == "SMS" ? sms.IsConfigured : channel == "EMAIL" && email.IsConfigured || Sandbox;
+    public bool SupportsIdempotency(string channel) => channel == "SMS" || !(channel == "EMAIL" && email.IsConfigured) && Sandbox;
     public async Task<string> SendAsync(ChannelMessage message, CancellationToken t)
     {
         t.ThrowIfCancellationRequested();

@@ -12,6 +12,19 @@ namespace BHome.IntegrationTests.Notifications;
 public sealed class SmsGatewayTests
 {
     [Theory]
+    [InlineData("INVOICE_FINALIZED", "Tenant", "SMS-03")]
+    [InlineData("INVOICE_FINALIZED", "Staff", null)]
+    [InlineData("INVOICE_OVERDUE", "Owner", null)]
+    [InlineData("CONTRACT_EXPIRY_REMINDER", "Tenant", "SMS-05")]
+    [InlineData("CONTRACT_EXPIRY_REMINDER", "Owner", null)]
+    [InlineData("INCIDENT_EMERGENCY_SUBMITTED", "Staff", "SMS-06")]
+    [InlineData("INCIDENT_EMERGENCY_SUBMITTED", "Tenant", null)]
+    [InlineData("CONTRACT_SIGNING_REQUIRED", "Tenant", null)]
+    [InlineData("CONTRACT_SIGNING_INVITATION", "Tenant", "SMS-02")]
+    [InlineData("TEMPORARY_RESIDENCE_ACTION", "Tenant", null)]
+    public void CriticalSmsPolicyRejectsIneligibleRolesAndRoutineEvents(string eventType, string role, string? template)
+        => Assert.Equal(template, SmsNotificationPolicy.Template(eventType, role));
+    [Theory]
     [InlineData("0901 234 567", "84901234567")]
     [InlineData("+84 (901) 234-567", "84901234567")]
     [InlineData("84901234567", "84901234567")]
@@ -115,7 +128,7 @@ public sealed class SmsGatewayTests
     public void MockInboxRequiresIsolationAndAllowlistDeduplicatesAndExpiresOtpContent()
     {
         var clock = new Clock(); var id = Guid.NewGuid();
-        var config = Config("Mock"); config.DemoIsolated = true; config.DemoAccounts[id] = "0901234567";
+        var config = Config("Mock"); config.DemoIsolated = true; config.DemoAccounts[id.ToString()] = "0901234567";
         var inbox = new DemoSmsInbox(Options.Create(config), new Environment("Development"), clock);
         var message = Message(id) with { ExpiresAt = clock.GetUtcNow().AddMinutes(5) };
         var receipt = inbox.Add(message, "synthetic OTP");

@@ -124,6 +124,9 @@ public static class DependencyInjection
         services.AddHttpClient<BHome.Infrastructure.Modules.Notifications.EsmsSmsSender>()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddScoped<BHome.Application.Notifications.ISmsSender, BHome.Infrastructure.Modules.Notifications.SmsGateway>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.SmsNotificationContent>();
+        services.AddScoped(p => new BHome.Infrastructure.Modules.Notifications.EsmsDeliveryCallback(
+            p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter>(), p.GetRequiredService<IOptions<BHome.Application.Notifications.SmsOptions>>()));
         services.AddScoped<BHome.Application.Notifications.INotificationWorkspace, BHome.Infrastructure.Modules.Notifications.CompactNotificationWorkspace>();
         services.AddScoped<BHome.Application.Notifications.NotificationWorkspaceService>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationEvents>();

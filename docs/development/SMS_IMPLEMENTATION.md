@@ -28,3 +28,13 @@ Orbit lookup did not find eSMS-specific endpoints; the official provider contrac
 Use `Sms__ApiKey` and `Sms__SecretKey` environment variables or the existing .NET User Secrets ID `bhome-api-development`. Never put credentials into tracked files. Defaults disable delivery. Mock additionally requires an isolated Development/Demo environment and explicit synthetic recipient mapping. Production requires `ProductionEnabled`, an approved Brandname and per-template approval. No automatic fallback to Mock.
 
 The gateway uses proposed ASCII templates SMS-01 through SMS-06. The 459-character application limit is conservative and does not predict provider segmentation or billing. Dynamic text is bounded and normalized. Register the exact template content with eSMS before enabling Production.
+
+## Business delivery
+
+SMS extends the existing channel outbox. Eligible current users require a confirmed mobile number. A stable event/normalized-phone key deduplicates shared contacts; the provider RequestId stays unchanged on retries. Sender timeouts/duplicate responses enter PendingReview; permanent provider rejections do not retry. Retry attempts are bounded by the existing channel policy and stop before the provider's 24-hour deduplication limit.
+
+Signing alerts consume `InternalSigningInvitationApproved` or `ContractSigningRequested`; draft/preparation notices do not qualify. No signing tokens enter SMS. Invoice delivery rechecks Final status and snapshot recipient entitlement; debt additionally rechecks due date and outstanding amount. Expiry is representative-Tenant-only, within 30 days. Emergency uses existing Owner/assigned-Staff routing. In-app/email/push remain independent.
+
+The eSMS GET callback `/api/v1/sms/esms/callback` accepts production reports only from the three IPs in the verified provider documentation, with matching RequestId, provider reference and single-recipient counts. Proxy deployments must preserve the actual remote source using explicitly trusted proxy configuration; never trust arbitrary forwarded headers. Terminal reports are idempotent. Accepted/SandboxAccepted/Simulated are distinct from Delivered. Configure ingress access logging to omit callback query strings (provider callbacks can include a recipient phone).
+
+Live Sandbox request checked 2026-11-13: documented `Sandbox=1` returned CodeResult 100. This is provider acceptance, without physical delivery. Credentials were loaded from User Secrets and no raw request/response was logged. Production is disabled; Brandname/template approval and physical delivery remain unverified.
