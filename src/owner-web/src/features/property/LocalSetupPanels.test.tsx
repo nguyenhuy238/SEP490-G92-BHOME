@@ -48,6 +48,8 @@ const policy = {
   },
 };
 function reads(path: string) {
+  if (path.endsWith('/configuration')) return { canEdit: true };
+  if (path.endsWith('/room-defaults')) return [];
   if (path.endsWith('/rooms')) return [{ id: 'room', label: 'A101' }];
   if (path.includes('asset-templates?')) return [template];
   if (path.includes('/asset-inventory'))
@@ -120,7 +122,7 @@ it('publishes a local Draft using its loaded version and shows per-Room sync out
   });
   mount(<LocalAssetSetup locationId="location" />);
   fireEvent.click(await screen.findByRole('button', { name: 'Công bố bộ mẫu' }));
-  await screen.findByText(/A101: Đã tạo định mức/);
+  await screen.findByText(/A101: Đã cập nhật định mức/);
   await screen.findByText(/Chưa đủ điều kiện đồng bộ/);
   expect(state.request).toHaveBeenCalledWith('/api/v1/asset-templates/template/publish', {
     method: 'POST',
@@ -135,13 +137,73 @@ it('publishes a local Draft using its loaded version and shows per-Room sync out
 it('assigns a template with the server assignment version after reload', async () => {
   mount(<LocalAssetSetup locationId="location" />);
   await room();
-  fireEvent.click(screen.getByRole('button', { name: 'Gán bộ mẫu cho phòng' }));
+  const assign = screen.getByRole('button', { name: 'Gán bộ mẫu cho phòng' });
+  await waitFor(() => expect(assign).toBeEnabled());
+  fireEvent.click(assign);
   await waitFor(() =>
     expect(state.request).toHaveBeenCalledWith('/api/v1/rooms/room/asset-template', {
       method: 'PUT',
       body: JSON.stringify({ templateId: 'template', expectedVersion: 7 }),
     }),
   );
+});
+
+it('edits the existing type requirements and applies only to the chosen type through the scoped API', async () => {
+  const roomDefaults = {
+    id: 'type',
+    locationId: 'location',
+    kind: 'RoomDefaults',
+    status: 'Recorded',
+    version: 5,
+    data: {
+      name: 'Studio',
+      assetTemplateId: template.id,
+      defaults: { capacity: 2, area: 20, amenities: [], referenceRent: '3000000' },
+    },
+  };
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/room-defaults')) return [roomDefaults];
+    if (path.endsWith('/asset-requirements') && init?.method === 'POST')
+      return {
+        defaults: { ...roomDefaults, version: 6 },
+        template,
+        rooms: [
+          { roomId: 'room', status: 'Applied' },
+          { roomId: 'occupied', status: 'SkippedNotEligible' },
+        ],
+      };
+    return reads(path);
+  });
+  mount(<LocalAssetSetup locationId="location" mode="templates" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa định mức Studio' }));
+  fireEvent.change(screen.getByLabelText(/Số lượng 1/), { target: { value: '3' } });
+  fireEvent.click(
+    screen.getByRole('checkbox', { name: 'Áp dụng cho các phòng hiện có thuộc loại này' }),
+  );
+  fireEvent.change(screen.getByLabelText(/Lý do thay đổi/), {
+    target: { value: 'Updated requirements' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu và áp dụng' }));
+  await screen.findByText(/1 phòng đã áp dụng · 1 bỏ qua/);
+  expect(state.request).toHaveBeenCalledWith(
+    '/api/v1/locations/location/room-defaults/type/asset-requirements',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expectedVersion: 5,
+        items: [{ ...item, quantity: 3 }],
+        applyToExistingRooms: true,
+        reason: 'Updated requirements',
+      }),
+    },
+  );
+  expect(
+    state.request.mock.calls.some(
+      ([path, init]) =>
+        init?.method && (path.includes('/asset-templates/') || path === '/api/v1/assets'),
+    ),
+  ).toBe(false);
 });
 it('uploads private evidence and retries ambiguous verification with the same evidence and desired version', async () => {
   let attempts = 0;

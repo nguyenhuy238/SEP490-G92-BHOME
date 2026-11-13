@@ -41,8 +41,11 @@ public sealed class ContractBillingPricesTests
         var service = Assert.Single(ContractBillingPrices.Read(c, Guid.NewGuid(), missing), x => x.Category == ChargeCategory.ServiceFee);
         Assert.Empty(missing); Assert.Equal(ChargingMethod.FixedPerPersonPerMonth, service.Method);
         var original = ContractChargeSnapshot.Read(c);
-        c.AgreedPriceSnapshot = JsonSerializer.Serialize(original with { Charges = original.Charges.Select(x =>
-            x.ChargeCode == "INTERNET" ? x with { Method = (int)ChargingMethod.FixedPerRoomPerMonth } : x).ToArray() });
+        c.AgreedPriceSnapshot = JsonSerializer.Serialize(original with
+        {
+            Charges = original.Charges.Select(x =>
+            x.ChargeCode == "INTERNET" ? x with { Method = (int)ChargingMethod.FixedPerRoomPerMonth } : x).ToArray()
+        });
         Assert.Empty(ContractBillingPrices.Read(c, Guid.NewGuid(), missing));
         Assert.Contains("contract_price_snapshot_invalid", missing);
     }

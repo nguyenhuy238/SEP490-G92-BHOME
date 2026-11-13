@@ -62,12 +62,14 @@ public static class ContractChargeSnapshot
     internal static IReadOnlyList<HoldingPriceCharge> FromPolicies(Contract contract, IReadOnlyList<PolicyDto> policies)
     {
         var charges = policies.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category, (int)p.Method,
-            p.ChargeCode == "RENT" ? contract.MonthlyRent : p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version) { Name = p.Name }).ToList();
+            p.ChargeCode == "RENT" ? contract.MonthlyRent : p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version)
+        { Name = p.Name }).ToList();
         // The direct contract/renewal API already accepts an agreed rent explicitly.
         // It may have no RENT policy; the contract itself is then the rate source.
         if (!charges.Any(p => p.ChargeCode == "RENT"))
             charges.Add(new(Guid.Empty, "RENT", (int)ChargeCategory.Rent, (int)ChargingMethod.FixedPerRoomPerMonth,
-                contract.MonthlyRent, contract.StartDate, null, 0) { Name = "Tiền thuê phòng" });
+                contract.MonthlyRent, contract.StartDate, null, 0)
+            { Name = "Tiền thuê phòng" });
         return charges.OrderBy(p => p.ChargeCode, StringComparer.Ordinal).ToArray();
     }
 
@@ -75,7 +77,8 @@ public static class ContractChargeSnapshot
     {
         contract.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.MonthlyRent,
             contract.RequiredDeposit, contract.StartDate, contract.EndDate, contract.HoldingExpiryAt ?? default,
-            trigger, at.ToUniversalTime(), charges) { SnapshotVersion = 1 });
+            trigger, at.ToUniversalTime(), charges)
+        { SnapshotVersion = 1 });
         _ = Read(contract);
     }
 

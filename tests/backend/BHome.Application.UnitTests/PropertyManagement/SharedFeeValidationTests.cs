@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using BHome.Application.PropertyManagement;
 using NSubstitute;
 

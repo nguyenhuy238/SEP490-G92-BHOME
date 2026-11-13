@@ -38,8 +38,16 @@ public sealed class PersonMonthlyFeeMigrationTests
             Assert.Equal(ChargingMethod.FixedPerRoomPerMonth, before.Method);
             Assert.Equal(100000m, before.Rate);
             Assert.Equal("UNKNOWN_LEGACY_METHOD", await db.Database.SqlQuery<string>($"SELECT calculation_method AS \"Value\" FROM billing_policies WHERE id={historical}").SingleAsync());
-            var fee = new BillingPolicy { LocationId = location, Category = ChargeCategory.ServiceFee, ChargeCode = "PER_PERSON",
-                Name = "Synthetic person fee", Method = ChargingMethod.FixedPerPersonPerMonth, Rate = 125000.1234m, EffectiveFrom = today };
+            var fee = new BillingPolicy
+            {
+                LocationId = location,
+                Category = ChargeCategory.ServiceFee,
+                ChargeCode = "PER_PERSON",
+                Name = "Synthetic person fee",
+                Method = ChargingMethod.FixedPerPersonPerMonth,
+                Rate = 125000.1234m,
+                EffectiveFrom = today
+            };
             db.Add(fee); await db.SaveChangesAsync();
             db.ChangeTracker.Clear();
             var saved = await db.Set<BillingPolicy>().AsNoTracking().SingleAsync(p => p.Id == fee.Id);

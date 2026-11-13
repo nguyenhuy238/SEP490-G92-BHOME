@@ -50,6 +50,7 @@ import { RoomFloorCards } from '../locations/components/RoomFloorCards';
 import { RoomInspector } from '../locations/components/RoomInspector';
 import { useRoomOperations } from '../locations/components/useRoomOperations';
 import { ConflictReload } from '../locations/components/ConflictReload';
+import { RoomConfigurationEditor } from './RoomConfigurationEditor';
 
 type Kind = 'locations' | 'rooms' | 'assets';
 type Row = LocationConfiguration | RoomConfiguration | PhysicalAsset;
@@ -118,6 +119,7 @@ export function PropertyApiPage({
   const [view, setView] = useState(kind === 'rooms' ? 'cards' : 'table');
   const [bulkOpen, setBulkOpen] = useState(false);
   const [inspectedRoom, setInspectedRoom] = useState('');
+  const [editingRoom, setEditingRoom] = useState<RoomConfiguration | null>(null);
   const [open, setOpen] = useState(createInitially);
   const [confirmInactive, setConfirmInactive] = useState(false);
   const [inspectedAsset, setInspectedAsset] = useState('');
@@ -256,6 +258,11 @@ export function PropertyApiPage({
     },
   });
   const edit = (row: Row | null) => {
+    if (row && 'capacity' in row) {
+      setNotice('');
+      setEditingRoom(row);
+      return;
+    }
     save.reset();
     setEditing(row);
     setNotice('');
@@ -576,7 +583,7 @@ export function PropertyApiPage({
                                 (item) => item.data.roomId === row.id,
                               )?.data;
                               return source
-                                ? `${source.name} · v${source.roomDefaultsVersion}`
+                                ? source.name || 'Chưa phân loại'
                                 : !canManage
                                   ? '—'
                                   : provenance.isPending
@@ -965,6 +972,18 @@ export function PropertyApiPage({
         </form>
       </Dialog>
       {bulkOpen && <BulkRoomsDialog locationId={location} close={() => setBulkOpen(false)} />}
+      {editingRoom && canManage && (
+        <RoomConfigurationEditor
+          key={editingRoom.id}
+          locationId={editingRoom.locationId}
+          roomId={editingRoom.id}
+          close={() => setEditingRoom(null)}
+          saved={() => {
+            setEditingRoom(null);
+            setNotice('Máy chủ đã lưu cấu hình.');
+          }}
+        />
+      )}
       {inspectedRoom && (
         <RoomInspector
           key={inspectedRoom}

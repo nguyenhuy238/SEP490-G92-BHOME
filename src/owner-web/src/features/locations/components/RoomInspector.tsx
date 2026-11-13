@@ -7,7 +7,6 @@ import {
   Chip,
   Divider,
   Drawer,
-  Paper,
   Stack,
   Tab,
   Tabs,
@@ -45,13 +44,20 @@ export function RoomInspector({
     queryFn: ({ signal }) => api.request<RoomConfiguration>(`/api/v1/rooms/${roomId}`, { signal }),
   });
   const operations = useRoomOperations(room.data?.locationId ?? '', [roomId]);
-  const provenance = useQuery({
-    queryKey: ['property-setup', 'room-provenance', session?.userId, room.data?.locationId],
+  const owner = session?.roles.includes('Owner') ?? false;
+  const configurationView = useQuery({
+    queryKey: [
+      'property-setup',
+      'room-configuration',
+      session?.userId,
+      room.data?.locationId,
+      roomId,
+    ],
     queryFn: ({ signal }) =>
-      locationSetupClient(api.request).roomProvenance(room.data!.locationId, signal),
-    enabled: !!room.data?.locationId && !!session?.roles.includes('Owner'),
+      locationSetupClient(api.request).roomConfiguration(room.data!.locationId, roomId, signal),
+    enabled: !!room.data?.locationId && owner,
   });
-  const configuration = provenance.data?.find((item) => item.data.roomId === roomId)?.data;
+  const configuration = configurationView.data?.provenance?.data;
   const occupancy = operations.occupancy.data?.items.find((item) => item.roomId === roomId);
   const reports =
     operations.incidents.data?.items.filter(
@@ -65,9 +71,21 @@ export function RoomInspector({
         `/api/v1/rooms/${roomId}/prices?effectiveOn=${effectiveOn}`,
         { signal },
       ),
-    enabled: tab === 0,
+    enabled: tab === 0 && !owner,
   });
-  const rent = prices.data?.charges.find((charge) => charge.category === 0);
+  const rent = owner
+    ? configurationView.data?.rent
+    : prices.data?.charges.find((charge) => charge.category === 0);
+  const scheduledRent = configurationView.data?.scheduledRent;
+  const rentQuery = owner ? configurationView : prices;
+  const inventory = useQuery({
+    queryKey: ['property-setup', 'inventory', session?.userId, roomId],
+    queryFn: ({ signal }) => api.inventory(roomId, signal),
+    enabled: tab === 1 && !owner,
+  });
+  const inventoryData = owner ? configurationView.data?.inventory : inventory.data;
+  const inventoryQuery = owner ? configurationView : inventory;
+  const desired = inventoryData?.desired.find((item) => item.id === inventoryData.currentDesiredId);
   const history = useQuery({
     queryKey: ['property-setup', 'room-history', session?.userId, roomId, page],
     queryFn: ({ signal }) =>
@@ -76,7 +94,7 @@ export function RoomInspector({
         totalCount: number;
         limitations: string[];
       }>(`/api/v1/rooms/${roomId}/history?page=${page}&pageSize=20`, { signal }),
-    enabled: tab === 1,
+    enabled: tab === 2,
   });
   return (
     <Drawer
@@ -86,22 +104,30 @@ export function RoomInspector({
       slotProps={{
         paper: {
           'aria-labelledby': 'room-inspector-title',
-          sx: { width: { xs: '100%', sm: 560 }, p: { xs: 2, sm: 3 }, bgcolor: 'background.paper' },
+          sx: { width: { xs: '100%', sm: 560 }, bgcolor: 'background.paper' },
         },
       }}
     >
-      <Stack spacing={2}>
+      <Stack spacing={2} sx={{ p: { xs: 2, sm: 2.5 } }}>
         <Stack
           direction="row"
           sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}
         >
-          <Typography
-            id="room-inspector-title"
-            variant="h5"
-            sx={{ fontWeight: 800, fontSize: '1.5rem', overflowWrap: 'anywhere' }}
-          >
-            Phòng {room.data?.roomNumber ?? ''}
-          </Typography>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              id="room-inspector-title"
+              variant="h5"
+              sx={{ fontWeight: 750, overflowWrap: 'anywhere' }}
+            >
+              Phòng {room.data?.roomNumber ?? ''}
+            </Typography>
+            {room.data && (
+              <Typography variant="body2" color="text.secondary">
+                {room.data.floor ? `Tầng ${room.data.floor}` : 'Chưa phân tầng'} ·{' '}
+                {room.data.capacity} người
+              </Typography>
+            )}
+          </Box>
           <Button onClick={close} sx={{ minHeight: 44, flexShrink: 0 }}>
             Đóng
           </Button>
@@ -113,7 +139,8 @@ export function RoomInspector({
           variant="fullWidth"
           sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
         >
-          <Tab label="Thông tin phòng" />
+          <Tab label="Thông tin" />
+          <Tab label="Tài sản" />
           <Tab label="Lịch sử" />
         </Tabs>
         {tab === 0 ? (
@@ -122,7 +149,7 @@ export function RoomInspector({
           ) : room.error ? (
             <ErrorState error={room.error} retry={() => void room.refetch()} />
           ) : (
-            <Stack spacing={2.5}>
+            <Stack spacing={2}>
               <Stack
                 direction="row"
                 sx={{
@@ -150,96 +177,43 @@ export function RoomInspector({
                   }
                 />
                 {edit && (
-                  <Button variant="contained" onClick={() => edit(room.data)}>
+                  <Button
+                    variant="contained"
+                    disabled={!configurationView.data?.canEdit || configurationView.isFetching}
+                    onClick={() => edit(configurationView.data?.room ?? room.data)}
+                    sx={{ minHeight: { xs: 44, sm: 36 } }}
+                  >
                     Chỉnh sửa phòng
                   </Button>
                 )}
               </Stack>
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                  gap: 2,
-                  p: 2,
-                  bgcolor: 'background.default',
-                  borderRadius: '10px',
-                }}
-              >
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Tầng
-                  </Typography>
-                  <Typography sx={{ fontWeight: 750, fontSize: 18, overflowWrap: 'anywhere' }}>
-                    {room.data.floor ?? 'Chưa phân tầng'}
-                  </Typography>
-                </Box>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Sức chứa
-                  </Typography>
-                  <Typography sx={{ fontWeight: 750, fontSize: 18 }}>
-                    {room.data.capacity} người
-                  </Typography>
-                </Box>
-              </Box>
-              <Divider />
-              <Stack spacing={1}>
-                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800 }}>
-                  Cấu hình khi tạo phòng
-                </Typography>
-                {session?.roles.includes('Owner') &&
-                  (configuration ? (
-                    <>
-                      <Typography>
-                        Gợi ý khi tạo phòng: {configuration.name} (phiên bản{' '}
-                        {configuration.roomDefaultsVersion})
-                      </Typography>
-                      <Typography>
-                        Diện tích: {configuration.area} m² · Sức chứa mặc định:{' '}
-                        {configuration.defaultCapacity}
-                      </Typography>
-                      <Typography>
-                        Tiện nghi: {configuration.amenities.join(', ') || 'Chưa thiết lập'}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Bản lưu khi tạo phòng; thay đổi gợi ý không cập nhật bản ghi này.
-                      </Typography>
-                    </>
-                  ) : provenance.error ? (
-                    <Alert
-                      severity="warning"
-                      action={<Button onClick={() => void provenance.refetch()}>Thử lại</Button>}
-                    >
-                      Chưa tải được cấu hình nguồn của phòng.
-                    </Alert>
-                  ) : provenance.isPending ? (
-                    <Typography color="text.secondary">Đang tải cấu hình nguồn…</Typography>
-                  ) : (
-                    <Typography color="text.secondary">
-                      Phòng không có cấu hình nguồn được ghi nhận.
-                    </Typography>
-                  ))}
-              </Stack>
-              <Divider />
-              <Stack spacing={1}>
-                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800 }}>
-                  Giá thuê
-                </Typography>
-                {prices.error ? (
+              {owner && configurationView.data && !configurationView.data.canEdit && (
+                <Alert severity="info">
+                  {configurationView.data.lockReason === 'location_inactive'
+                    ? 'Cơ sở đã ngừng hoạt động. Không thể chỉnh sửa cấu hình phòng.'
+                    : configurationView.data.lockReason === 'room_has_obligations'
+                      ? 'Phòng còn nghĩa vụ chưa hoàn tất. Cấu hình được giữ nguyên.'
+                      : 'Phòng đang có hợp đồng chưa kết thúc. Cấu hình và giá thuê được giữ nguyên.'}
+                </Alert>
+              )}
+              <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: '12px' }}>
+                {rentQuery.error ? (
                   <Alert
                     severity="warning"
-                    action={<Button onClick={() => void prices.refetch()}>Thử lại</Button>}
+                    action={<Button onClick={() => void rentQuery.refetch()}>Thử lại</Button>}
                   >
                     Chưa tải được giá thuê hiệu lực.
                   </Alert>
                 ) : (
                   <Box>
                     <Typography variant="body2" color="text.secondary">
-                      Giá thuê cấu hình (cho hợp đồng tương lai)
+                      {rent?.effectiveFrom && rent.effectiveFrom > effectiveOn
+                        ? 'Giá thuê sắp hiệu lực'
+                        : 'Giá thuê cấu hình'}
                     </Typography>
                     <Typography
                       sx={{
-                        fontWeight: 750,
+                        fontWeight: 700,
                         fontSize: rent ? 22 : 15,
                         fontVariantNumeric: 'tabular-nums',
                         overflowWrap: 'anywhere',
@@ -247,25 +221,83 @@ export function RoomInspector({
                     >
                       {rent
                         ? `${formatBillingDecimal(rent.rate)} đ / tháng`
-                        : prices.isPending
+                        : rentQuery.isPending
                           ? 'Đang tải…'
                           : 'Chưa có giá thuê hiệu lực'}
                     </Typography>
                   </Box>
                 )}
                 <Typography variant="caption" color="text.secondary">
-                  Giá cấu hình theo ngày {effectiveOn.split('-').reverse().join('/')}.
+                  {rent?.effectiveFrom
+                    ? `Hiệu lực từ ${rent.effectiveFrom.split('-').reverse().join('/')}`
+                    : `Theo ngày ${effectiveOn.split('-').reverse().join('/')}`}
+                  {' · Cho hợp đồng tương lai'}
                 </Typography>
-                {(room.data.status === 1 || room.data.status === 2) && (
-                  <Alert severity="info">
-                    Phòng đang có ràng buộc hợp đồng. Giá và phí thực thu xem tại hợp đồng; biểu giá
-                    cấu hình không thay đổi các khoản đã chốt.
-                  </Alert>
+                {scheduledRent && scheduledRent.id !== rent?.id && (
+                  <Box sx={{ pt: 1.5, mt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Giá thuê sắp hiệu lực
+                    </Typography>
+                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                      {formatBillingDecimal(scheduledRent.rate)} đ / tháng
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Từ ngày {scheduledRent.effectiveFrom.split('-').reverse().join('/')}
+                    </Typography>
+                  </Box>
                 )}
-              </Stack>
+                {(room.data.status === 1 || room.data.status === 2) && (
+                  <Typography variant="body2" sx={{ mt: 1 }} color="text.secondary">
+                    Giá thực thu theo hợp đồng; các khoản đã chốt được giữ nguyên.
+                  </Typography>
+                )}
+              </Box>
+              {owner && (
+                <Stack spacing={1}>
+                  <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    Cấu hình phòng
+                  </Typography>
+                  {configurationView.error ? (
+                    <Alert
+                      severity="warning"
+                      action={
+                        <Button onClick={() => void configurationView.refetch()}>Thử lại</Button>
+                      }
+                    >
+                      Chưa tải được cấu hình.
+                    </Alert>
+                  ) : configurationView.isPending ? (
+                    <Typography color="text.secondary">Đang tải cấu hình…</Typography>
+                  ) : configuration ? (
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                        gap: 1.5,
+                      }}
+                    >
+                      <RoomFact label="Loại phòng" value={configuration.name || 'Chưa phân loại'} />
+                      <RoomFact
+                        label="Diện tích"
+                        value={
+                          configuration.area === null ? 'Chưa ghi nhận' : `${configuration.area} m²`
+                        }
+                      />
+                      <RoomFact
+                        label="Tiện nghi"
+                        value={configuration.amenities.join(', ') || 'Chưa thiết lập'}
+                      />
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      Chưa ghi nhận cấu hình bổ sung.
+                    </Typography>
+                  )}
+                </Stack>
+              )}
               <Divider />
               <Stack spacing={1}>
-                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800 }}>
+                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
                   Người ở theo hợp đồng
                 </Typography>
                 <Stack
@@ -278,7 +310,7 @@ export function RoomInspector({
                   }}
                 >
                   <Typography variant="body2" color="text.secondary">
-                    Người ở theo hợp đồng hiện tại
+                    Số người hiện tại
                   </Typography>
                   <Typography
                     sx={{
@@ -308,15 +340,11 @@ export function RoomInspector({
                     {person.role === 'Representative' ? 'Đại diện' : 'Người cùng ở'}
                   </Typography>
                 ))}
-                <Typography variant="caption" color="text.secondary">
-                  Trạng thái giữ chỗ và có khách được cập nhật qua quy trình hợp đồng và kích hoạt
-                  tương ứng.
-                </Typography>
               </Stack>
               <Divider />
               <Stack spacing={1}>
                 <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800 }}>
-                  Báo cáo sự cố đang mở
+                  Sự cố đang mở
                 </Typography>
                 {operations.incidents.data && !operations.incidents.data.complete && (
                   <Alert severity="warning">Danh sách sự cố chưa đầy đủ.</Alert>
@@ -332,7 +360,10 @@ export function RoomInspector({
                   </Alert>
                 ) : reports.length ? (
                   reports.map((report) => (
-                    <Paper key={report.id} variant="outlined" sx={{ p: 2 }}>
+                    <Box
+                      key={report.id}
+                      sx={{ py: 1, borderBottom: '1px solid', borderColor: 'divider' }}
+                    >
                       <Typography sx={{ fontWeight: 700 }}>
                         {report.code} ·{' '}
                         {report.severity === 'Emergency' ? 'Khẩn cấp' : 'Thông thường'}
@@ -346,7 +377,7 @@ export function RoomInspector({
                       >
                         Xem báo cáo
                       </Button>
-                    </Paper>
+                    </Box>
                   ))
                 ) : (
                   <Typography variant="body2" color="text.secondary">
@@ -356,9 +387,103 @@ export function RoomInspector({
                   </Typography>
                 )}
               </Stack>
-              <Typography variant="caption" color="text.secondary">
-                Phiên bản phòng: {room.data.version}
-              </Typography>
+            </Stack>
+          )
+        ) : tab === 1 ? (
+          inventoryQuery.isPending ? (
+            <LoadingState />
+          ) : inventoryQuery.error ? (
+            <ErrorState error={inventoryQuery.error} retry={() => void inventoryQuery.refetch()} />
+          ) : (
+            <Stack spacing={2}>
+              <Stack spacing={1}>
+                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  Định mức mong muốn
+                </Typography>
+                {desired ? (
+                  desired.data.items.map((item) => (
+                    <Stack
+                      key={item.id}
+                      direction="row"
+                      sx={{
+                        alignItems: 'baseline',
+                        justifyContent: 'space-between',
+                        gap: 1,
+                        py: 1,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
+                          {item.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.category}
+                        </Typography>
+                      </Box>
+                      <Typography sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                        {item.quantity}
+                      </Typography>
+                    </Stack>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Chưa có định mức được áp dụng.
+                  </Typography>
+                )}
+              </Stack>
+              <Stack spacing={1}>
+                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  Tài sản thực tế
+                </Typography>
+                {inventoryData?.physical.length ? (
+                  inventoryData.physical.map((asset) => (
+                    <Stack
+                      key={asset.id}
+                      direction="row"
+                      sx={{
+                        justifyContent: 'space-between',
+                        alignItems: 'baseline',
+                        gap: 1,
+                        py: 1,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
+                          {asset.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {asset.code || 'Chưa có mã'} · {asset.condition}
+                        </Typography>
+                      </Box>
+                      <Typography sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                        {inventoryData.metadata?.[asset.id]?.quantity ?? '—'}
+                      </Typography>
+                    </Stack>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Chưa ghi nhận tài sản vật lý.
+                  </Typography>
+                )}
+                {!!inventoryData?.discrepancies?.length && (
+                  <Alert severity="warning">
+                    {inventoryData.discrepancies.length} tài sản cần đối chiếu khi kiểm kê.
+                  </Alert>
+                )}
+                {room.data && (
+                  <Button
+                    component={Link}
+                    to={`/locations/${room.data.locationId}/assets`}
+                    sx={{ alignSelf: 'flex-start' }}
+                  >
+                    Quản lý & kiểm kê tài sản
+                  </Button>
+                )}
+              </Stack>
             </Stack>
           )
         ) : history.isPending ? (
@@ -376,12 +501,15 @@ export function RoomInspector({
               <Alert severity="info">Chưa có lịch sử được ghi nhận.</Alert>
             )}
             {history.data.items.map((item) => (
-              <Paper key={item.id} variant="outlined" sx={{ p: 2 }}>
+              <Box
+                key={item.id}
+                sx={{ py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}
+              >
                 <Typography variant="caption" color="text.secondary">
                   {formatInstant(item.occurredAt)}
                 </Typography>
                 <Typography sx={{ mt: 1 }}>{item.summary}</Typography>
-              </Paper>
+              </Box>
             ))}
             <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
               <Button disabled={page === 1} onClick={() => setPage(page - 1)}>
@@ -401,5 +529,16 @@ export function RoomInspector({
         )}
       </Stack>
     </Drawer>
+  );
+}
+
+function RoomFact({ label, value }: { label: string; value: string }) {
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography variant="caption" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{value}</Typography>
+    </Box>
   );
 }

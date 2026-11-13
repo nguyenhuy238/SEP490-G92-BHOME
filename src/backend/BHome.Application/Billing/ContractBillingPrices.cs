@@ -52,7 +52,12 @@ public static class ContractBillingPrices
     public static string FlatSnapshot(PolicyDto policy, BillingSchedule schedule, decimal quantity, decimal amount) =>
         JsonSerializer.Serialize(new
         {
-            kind = "FlatMeteredIncrement/v1", policyId = policy.Id, policyVersion = policy.Version,
-            rate = policy.Rate, rounding = schedule.Rounding, quantity, amount
+            kind = "FlatMeteredIncrement/v1",
+            policyId = policy.Id,
+            policyVersion = policy.Version,
+            rate = policy.Rate,
+            rounding = schedule.Rounding,
+            quantity,
+            amount
         });
 }

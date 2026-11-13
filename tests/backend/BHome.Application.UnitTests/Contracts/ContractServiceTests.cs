@@ -190,7 +190,8 @@ public sealed class ContractServiceTests
         var persistedDocument = new ContractDocument(holding.Id, holding.RoomId, holding.OwnerSignerId, holding.TenantUserId!.Value,
             holding.RepresentativeResidentId, holding.Residents.Select(x => x.ResidentId).Order().ToArray(), holding.StartDate, holding.EndDate,
             decimal.Truncate(holding.MonthlyRent), decimal.Truncate(holding.RequiredDeposit), holding.HoldingContractId,
-            holding.AppliedHoldingDeposit, holding.Terms, holding.SnapshotHash) { AgreedCharges = ContractChargeSnapshot.Read(holding).Charges };
+            holding.AppliedHoldingDeposit, holding.Terms, holding.SnapshotHash)
+        { AgreedCharges = ContractChargeSnapshot.Read(holding).Charges };
         Assert.Equal(holding.SnapshotHash, ContractDocumentSnapshot.Hash(persistedDocument));
     }
 

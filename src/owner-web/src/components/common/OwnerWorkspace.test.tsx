@@ -6,6 +6,19 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+it('renders after resetting mocks without losing the default media query implementation', () => {
+  vi.resetAllMocks();
+  expect(window.matchMedia('(max-width:599px)').matches).toBe(false);
+  render(
+    <OwnerTable
+      rows={['Phòng 101']}
+      columns={[{ label: 'Phòng', render: (row) => row }]}
+      id={(row) => row}
+    />,
+  );
+  expect(screen.getByRole('table')).toBeInTheDocument();
+  expect(screen.getByText('Phòng 101')).toBeVisible();
+});
 it('prioritizes loading and failure over a misleading empty state and supports retry', () => {
   const retry = vi.fn();
   const props = { rows: [] as string[], columns: [], id: (row: string) => row };

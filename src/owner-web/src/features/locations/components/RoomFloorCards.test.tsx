@@ -73,6 +73,32 @@ beforeEach(() => {
       };
     if (path.includes('/prices?'))
       return { charges: [{ category: 0, rate: '3500000' }], missingRequiredCharges: [] };
+    if (path.endsWith('/configuration'))
+      return {
+        room,
+        provenance: {
+          id: 'provenance',
+          locationId: 'location',
+          kind: 'RoomProvenance',
+          status: 'Recorded',
+          version: 1,
+          data: {
+            roomId: 'room',
+            roomDefaultsId: 'defaults',
+            roomDefaultsVersion: 2,
+            name: 'Studio lưu tại phòng',
+            area: 25,
+            amenities: ['Ban công'],
+            defaultCapacity: 2,
+            referenceRent: 3200000,
+          },
+        },
+        canEdit: true,
+        lockReason: null,
+        scheduledRent: null,
+        rent: { category: 0, rate: '3500000', effectiveFrom: '2026-11-01' },
+        inventory: { physical: [], desired: [], assignmentVersion: 0, assignedTemplateId: null },
+      };
     return room;
   });
 });
@@ -168,7 +194,9 @@ it('follows server pagination for operation data and marks bounded results incom
 it('opens current room data with an edit callback using the detail version, plus its scoped incident link', async () => {
   const edit = vi.fn();
   mount(<RoomInspector roomId="room" close={vi.fn()} edit={edit} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa phòng' }));
+  const editButton = await screen.findByRole('button', { name: 'Chỉnh sửa phòng' });
+  await waitFor(() => expect(editButton).toBeEnabled());
+  fireEvent.click(editButton);
   expect(edit).toHaveBeenCalledWith(expect.objectContaining({ id: 'room', version: 7 }));
   await waitFor(() =>
     expect(screen.getByRole('link', { name: 'Xem báo cáo' })).toHaveAttribute(
@@ -177,6 +205,30 @@ it('opens current room data with an edit callback using the detail version, plus
     ),
   );
   expect(screen.getByText(/3.500.000 đ/)).toBeInTheDocument();
-  expect(screen.getByText(/Studio lưu tại phòng.*phiên bản 2/)).toBeInTheDocument();
-  expect(screen.getByText(/Tiện nghi: Ban công/)).toBeInTheDocument();
+  expect(screen.getByText('Studio lưu tại phòng')).toBeInTheDocument();
+  expect(screen.getByText('Ban công')).toBeInTheDocument();
+  expect(screen.queryByText(/phiên bản 2/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Tài sản' }));
+  expect(screen.getByText('Định mức mong muốn')).toBeInTheDocument();
+  expect(screen.getByText('Chưa ghi nhận tài sản vật lý.')).toBeInTheDocument();
+});
+
+it('locks the drawer edit action when the server reports a contract, regardless of room status', async () => {
+  const original = state.request.getMockImplementation()!;
+  state.request.mockImplementation(async (path: string) => {
+    const data = await original(path);
+    if (path.endsWith('/configuration'))
+      return {
+        ...data,
+        room: { ...room, status: 0 },
+        canEdit: false,
+        lockReason: 'room_configuration_locked_by_contract',
+      };
+    return data;
+  });
+  const edit = vi.fn();
+  mount(<RoomInspector roomId="room" close={vi.fn()} edit={edit} />);
+  await screen.findByText(/Phòng đang có hợp đồng chưa kết thúc/);
+  expect(screen.getByRole('button', { name: 'Chỉnh sửa phòng' })).toBeDisabled();
+  expect(edit).not.toHaveBeenCalled();
 });

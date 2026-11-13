@@ -28,10 +28,28 @@ public sealed partial class InvoiceApiTests
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             var policies = await db.Set<BillingPolicy>().AsNoTracking().Where(p => p.LocationId == w.Location).ToArrayAsync();
-            foreach (var p in policies) db.Add(new BillingPolicy { LocationId = w.Location, RoomId = w.Room, ChargeCode = p.ChargeCode,
-                Category = p.Category, Name = p.Name + " new", Method = p.Method, Rate = p.Rate * 2, EffectiveFrom = w.Period });
-            db.Add(new BillingPolicy { LocationId = w.Location, RoomId = w.Room, ChargeCode = "PARKING", Name = "New fee", Category = ChargeCategory.ServiceFee,
-                Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 50000, EffectiveFrom = w.Period });
+            foreach (var p in policies) db.Add(new BillingPolicy
+            {
+                LocationId = w.Location,
+                RoomId = w.Room,
+                ChargeCode = p.ChargeCode,
+                Category = p.Category,
+                Name = p.Name + " new",
+                Method = p.Method,
+                Rate = p.Rate * 2,
+                EffectiveFrom = w.Period
+            });
+            db.Add(new BillingPolicy
+            {
+                LocationId = w.Location,
+                RoomId = w.Room,
+                ChargeCode = "PARKING",
+                Name = "New fee",
+                Category = ChargeCategory.ServiceFee,
+                Method = ChargingMethod.FixedPerRoomPerMonth,
+                Rate = 50000,
+                EffectiveFrom = w.Period
+            });
             await db.SaveChangesAsync();
         }
         var ready = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/refresh", new InvoiceFinalizeInput(draft.Version)));

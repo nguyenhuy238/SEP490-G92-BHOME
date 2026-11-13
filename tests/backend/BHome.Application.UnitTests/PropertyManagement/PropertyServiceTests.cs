@@ -157,9 +157,17 @@ public sealed class PropertyServiceTests
             .Returns(call => call.Arg<Func<Task<PolicyDto>>>()());
         var input = new PolicyWrite(location.Id, room.Id, ChargeCategory.Water, "WATER", "Water",
             ChargingMethod.Metered, 15000, new(2026, 10, 30), null);
-        var existing = new BillingPolicy { LocationId = location.Id, RoomId = room.Id,
-            Category = input.Category, ChargeCode = input.ChargeCode, Name = input.Name,
-            Method = input.Method, Rate = 10000, EffectiveFrom = new(2026, 10, 31) };
+        var existing = new BillingPolicy
+        {
+            LocationId = location.Id,
+            RoomId = room.Id,
+            Category = input.Category,
+            ChargeCode = input.ChargeCode,
+            Name = input.Name,
+            Method = input.Method,
+            Rate = 10000,
+            EffectiveFrom = new(2026, 10, 31)
+        };
         repository.FindAsync<BillingPolicy>(existing.Id, default).Returns(existing);
         if (locked)
         {

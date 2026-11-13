@@ -19,15 +19,46 @@ public sealed partial class Compact24OwnerSetupTests
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-            var person = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, TenantUserId = w.Tenant.Id,
-                DisplayLabel = "Synthetic pricing lock", VerificationStatus = IdentityVerificationStatus.Verified };
+            var person = new Resident
+            {
+                RoomId = w.Room,
+                OwnerUserId = w.Owner.Id,
+                TenantUserId = w.Tenant.Id,
+                DisplayLabel = "Synthetic pricing lock",
+                VerificationStatus = IdentityVerificationStatus.Verified
+            };
             residentId = person.Id; db.Add(person);
-            db.Add(new BillingPolicy { LocationId = w.Location, RoomId = w.Room, Category = ChargeCategory.Rent,
-                ChargeCode = "RENT", Name = "Rent", Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 3000000, EffectiveFrom = Today });
-            db.Add(new BillingPolicy { LocationId = w.Location, Category = ChargeCategory.Electricity,
-                ChargeCode = "ELECTRICITY", Name = "Electricity", Method = ChargingMethod.Metered, Rate = 3500, EffectiveFrom = Today });
-            db.Add(new BillingPolicy { LocationId = w.Location, Category = ChargeCategory.Water,
-                ChargeCode = "WATER", Name = "Water", Method = ChargingMethod.Metered, Rate = 12000, EffectiveFrom = Today });
+            db.Add(new BillingPolicy
+            {
+                LocationId = w.Location,
+                RoomId = w.Room,
+                Category = ChargeCategory.Rent,
+                ChargeCode = "RENT",
+                Name = "Rent",
+                Method = ChargingMethod.FixedPerRoomPerMonth,
+                Rate = 3000000,
+                EffectiveFrom = Today
+            });
+            db.Add(new BillingPolicy
+            {
+                LocationId = w.Location,
+                Category = ChargeCategory.Electricity,
+                ChargeCode = "ELECTRICITY",
+                Name = "Electricity",
+                Method = ChargingMethod.Metered,
+                Rate = 3500,
+                EffectiveFrom = Today
+            });
+            db.Add(new BillingPolicy
+            {
+                LocationId = w.Location,
+                Category = ChargeCategory.Water,
+                ChargeCode = "WATER",
+                Name = "Water",
+                Method = ChargingMethod.Metered,
+                Rate = 12000,
+                EffectiveFrom = Today
+            });
             await db.SaveChangesAsync();
         }
         var input = new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, residentId, [residentId], Today,

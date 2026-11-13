@@ -56,8 +56,17 @@ public sealed partial class InvoiceApiTests
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-            db.Add(new BillingPolicy { LocationId = w.Location, RoomId = w.Room, Category = ChargeCategory.Electricity,
-                ChargeCode = "ELECTRICITY", Name = "Synthetic new rate", Method = ChargingMethod.Metered, Rate = 9000, EffectiveFrom = w.Period });
+            db.Add(new BillingPolicy
+            {
+                LocationId = w.Location,
+                RoomId = w.Room,
+                Category = ChargeCategory.Electricity,
+                ChargeCode = "ELECTRICITY",
+                Name = "Synthetic new rate",
+                Method = ChargingMethod.Metered,
+                Rate = 9000,
+                EffectiveFrom = w.Period
+            });
             await db.SaveChangesAsync();
         }
         await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w) with { FinalMonthOffset = 0 }));

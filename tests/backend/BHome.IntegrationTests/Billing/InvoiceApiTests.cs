@@ -100,7 +100,9 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
             tenancy.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(tenancy.MonthlyRent, tenancy.RequiredDeposit,
                 tenancy.StartDate, tenancy.EndDate, default, "SyntheticSigned", DateTimeOffset.UtcNow,
                 policies.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category, (int)p.Method,
-                    p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version) { Name = p.Name }).ToArray()) { SnapshotVersion = 1 });
+                    p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version)
+                { Name = p.Name }).ToArray())
+            { SnapshotVersion = 1 });
             SealFixture(tenancy);
         }
         await db.SaveChangesAsync();
@@ -110,7 +112,8 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
     {
         var document = new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, c.TenantUserId!.Value, c.RepresentativeResidentId,
             c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit,
-            c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash) { AgreedCharges = ContractChargeSnapshot.Read(c).Charges };
+            c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash)
+        { AgreedCharges = ContractChargeSnapshot.Read(c).Charges };
         c.SnapshotHash = ContractDocumentSnapshot.Hash(document);
     }
     private static BillingScheduleWrite Schedule(Workspace w) => new(w.Location, BillingRateDate.PeriodStart, BillingRentSource.RoomPolicy,

@@ -97,8 +97,11 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     internal static ContractDocument Document(Contract c) => new(c.Id, c.RoomId, c.OwnerSignerId, c.SigningMode == ContractSigningModes.Internal ? Guid.Empty : RequireTenant(c),
         c.RepresentativeResidentId, c.Residents.Select(x => x.ResidentId).Order().ToArray(), c.StartDate, c.EndDate,
         c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash)
-    { IsOperatingPolicyAmendment = c.Kind == ContractKind.Addendum, IsInternalResidentAcceptance = c.SigningMode == ContractSigningModes.Internal,
-        AgreedCharges = ContractChargeSnapshot.DocumentCharges(c) };
+    {
+        IsOperatingPolicyAmendment = c.Kind == ContractKind.Addendum,
+        IsInternalResidentAcceptance = c.SigningMode == ContractSigningModes.Internal,
+        AgreedCharges = ContractChargeSnapshot.DocumentCharges(c)
+    };
     private static void Seal(Contract c)
     {
         // Native VND columns have scale 0; hash the exact values that survive a database round-trip.

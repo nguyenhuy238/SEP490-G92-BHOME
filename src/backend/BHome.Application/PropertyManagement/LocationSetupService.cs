@@ -47,8 +47,26 @@ public sealed record ConfiguredRoomInput(string RoomNumber, string? Floor, Guid 
     [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal Rent);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ConfiguredRoomsInput(ConfiguredRoomInput[] Rooms, DateOnly EffectiveFrom);
-public sealed record RoomProvenanceData(Guid RoomId, Guid RoomDefaultsId, int RoomDefaultsVersion, string Name,
-    decimal Area, string[] Amenities, int DefaultCapacity, decimal? ReferenceRent);
+public sealed record RoomProvenanceData(Guid RoomId, Guid? RoomDefaultsId, int? RoomDefaultsVersion, string Name,
+    decimal? Area, string[] Amenities, int DefaultCapacity, decimal? ReferenceRent);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record RoomRentEdit([property: JsonRequired, JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal Rate,
+    [property: JsonRequired] DateOnly EffectiveFrom, Guid? ExpectedPolicyId = null, int? ExpectedPolicyVersion = null);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record RoomAssetsEdit(AssetTemplateItem[] Items, int ExpectedAssignmentVersion);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record RoomConfigurationEdit(string RoomNumber, string? Floor, int Capacity,
+    [property: JsonRequired] RoomStatus Status, int ExpectedVersion, int ExpectedProvenanceVersion,
+    string Reason, Guid? RoomDefaultsId = null, int? ExpectedDefaultsVersion = null,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? Area = null,
+    string[]? Amenities = null, RoomRentEdit? Rent = null, RoomAssetsEdit? Assets = null);
+public sealed record RoomConfigurationView(RoomDto Room, SetupDocument? Provenance, AssetInventory Inventory,
+    bool CanEdit, string? LockReason, PolicyDto? Rent, PolicyDto? ScheduledRent);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record RoomAssetRequirementsEdit(int ExpectedVersion, AssetTemplateItem[] Items,
+    [property: JsonRequired] bool ApplyToExistingRooms, string Reason);
+public sealed record RoomAssetRequirementsResult(SetupDocument Defaults, SetupDocument? Template, IReadOnlyList<AssetSyncRoom> Rooms);
 
 internal static class LocationSetupKeys
 {
@@ -154,6 +172,8 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
             {
                 var assetTemplate = await ScopedDocument(location, template, "AssetTemplate", t);
                 if (assetTemplate.Status != "Published") throw new PropertyException(409, "published_template_required");
+                if (SharedDataValidator.Read<AssetTemplateWrite>(assetTemplate.Data).ScopeRoomId is not null)
+                    throw new PropertyException(400, "template_scope_invalid");
             }
             // Preserve lineage when editing a copied/applied document; only editable local fields are replaced.
             var data = before is null ? new JsonObject() : JsonNode.Parse(before.Data.GetRawText())!.AsObject();
@@ -168,11 +188,177 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
     public async Task<IReadOnlyList<SetupDocument>> RoomProvenanceAsync(Guid location, CancellationToken t)
     { _ = Owner(); _ = await properties.GetLocationAsync(location, t); return await local.ListAsync(location, "RoomProvenance", t); }
 
+    private async Task<RoomDto> ScopedRoom(Guid location, Guid roomId, CancellationToken t)
+    {
+        var room = await properties.GetRoomAsync(roomId, t);
+        if (room.LocationId != location) throw new PropertyException(404, "resource_not_found");
+        return room;
+    }
+
+    private async Task<(PolicyDto? Current, PolicyDto? Scheduled)> RoomRent(Guid room, CancellationToken t)
+    {
+        var resolved = (await properties.ResolvePricesAsync(room, Today, t)).Charges
+            .SingleOrDefault(p => p.ChargeCode == "RENT" && p.Category == ChargeCategory.Rent);
+        // Setup can create a future effective rent. Expose that policy to the editor
+        // rather than attempting to insert a conflicting overlapping policy.
+        PolicyDto? upcoming = null;
+        for (var page = 1; ; page++)
+        {
+            var rows = await properties.PoliciesAsync(new PropertyQuery { RoomId = room, ChargeCategory = ChargeCategory.Rent, Page = page, PageSize = 100 }, t);
+            foreach (var policy in rows.Items.Where(p => p.ChargeCode == "RENT" && p.EffectiveFrom > Today))
+                if (upcoming is null || policy.EffectiveFrom < upcoming.EffectiveFrom) upcoming = policy;
+            if ((long)page * rows.PageSize >= rows.TotalCount) return (resolved, upcoming);
+        }
+    }
+
+    public async Task<RoomConfigurationView> RoomConfigurationAsync(Guid location, Guid roomId, CancellationToken t)
+    {
+        _ = Owner();
+        var room = await ScopedRoom(location, roomId, t);
+        var provenance = await local.GetAsync(LocationSetupKeys.RoomProvenance(roomId), "RoomProvenance", t);
+        var reason = await local.RoomConfigurationLockReasonAsync(roomId, t);
+        var rent = await RoomRent(roomId, t);
+        return new(room, provenance, await assets.InventoryAsync(roomId, t), reason is null, reason,
+            rent.Current ?? rent.Scheduled, rent.Scheduled);
+    }
+
+    private async Task SaveRoomRent(RoomDto room, RoomRentEdit input, string reason, CancellationToken t)
+    {
+        _ = SharedDataValidator.Money(input.Rate);
+        if (input.EffectiveFrom < Today) throw new PropertyException(400, "invalid_rent_effective_date");
+        var rent = await RoomRent(room.Id, t);
+        var current = input.ExpectedPolicyId == rent.Scheduled?.Id && rent.Scheduled is not null
+            ? rent.Scheduled : rent.Current ?? rent.Scheduled;
+        if (current?.Id != input.ExpectedPolicyId || current?.Version != input.ExpectedPolicyVersion)
+            throw new PropertyException(409, "stale_version");
+        if (current is not null && current.Rate == input.Rate && current.EffectiveFrom == input.EffectiveFrom) return;
+        var policy = new PolicyWrite(room.LocationId, room.Id, ChargeCategory.Rent, "RENT",
+            current?.RoomId == room.Id ? current.Name : $"Rent {room.RoomNumber}",
+            ChargingMethod.FixedPerRoomPerMonth, input.Rate, input.EffectiveFrom, null, reason);
+        if (current?.RoomId != room.Id)
+            await properties.CreatePolicyAsync(policy, t);
+        else if (current.EffectiveFrom > Today && current.FirstUsedAt is null)
+            await properties.UpdateFuturePolicyAsync(current.Id, new(policy with { EffectiveTo = current.EffectiveTo }, current.Version), t);
+        else if (current.EffectiveTo is { } end && end < input.EffectiveFrom)
+            await properties.CreatePolicyAsync(policy, t);
+        else
+            await properties.ReplacePolicyAsync(current.Id, new(policy with { EffectiveTo = current.EffectiveTo }, current.Version), t);
+    }
+
+    public Task<RoomConfigurationView> UpdateRoomConfigurationAsync(Guid location, Guid roomId, RoomConfigurationEdit input, CancellationToken t)
+    {
+        var actor = Owner(); var reason = Text(input.Reason, 500);
+        return local.TransactionAsync(location, async () =>
+        {
+            var room = await ScopedRoom(location, roomId, t);
+            if (await local.RoomConfigurationLockReasonAsync(roomId, t) is { } locked)
+                throw new PropertyException(409, locked);
+            if (room.Version != input.ExpectedVersion || input.ExpectedVersion < 1)
+                throw new PropertyException(409, "stale_version");
+            var prior = await local.GetAsync(LocationSetupKeys.RoomProvenance(roomId), "RoomProvenance", t);
+            if ((prior?.Version ?? 0) != input.ExpectedProvenanceVersion)
+                throw new PropertyException(409, "stale_version");
+            var provenance = prior is null ? null : SharedDataValidator.Read<RoomProvenanceData>(prior.Data);
+            var typeId = input.RoomDefaultsId ?? provenance?.RoomDefaultsId;
+            var changedType = typeId != provenance?.RoomDefaultsId;
+            SetupDocument? type = null;
+            if (input.RoomDefaultsId is { } selected)
+            {
+                type = await ScopedDocument(location, selected, "RoomDefaults", t);
+                if (type.Status != "Recorded" || type.Version != input.ExpectedDefaultsVersion)
+                    throw new PropertyException(409, "stale_room_defaults");
+            }
+            var defaults = type is null ? null : Defaults(type);
+            var area = input.Area ?? (changedType ? defaults?.Area : provenance?.Area);
+            var amenities = input.Amenities ?? (changedType ? defaults?.Amenities : provenance?.Amenities) ?? [];
+            if (area is { } size)
+                _ = await ValidateDefaults(new(input.Capacity, size, amenities, null), t);
+            else if (input.Amenities is not null)
+                _ = await ValidateDefaults(new(input.Capacity, 1m, amenities, null), t);
+            var nextProvenance = new RoomProvenanceData(roomId, typeId,
+                changedType ? type?.Version : provenance?.RoomDefaultsVersion,
+                changedType && type is not null ? Name(type) : provenance?.Name ?? "",
+                area, amenities.Select(a => a.Trim()).ToArray(),
+                changedType ? defaults!.Capacity : provenance?.DefaultCapacity ?? input.Capacity,
+                changedType ? defaults?.ReferenceRent : provenance?.ReferenceRent);
+            var saved = await properties.SaveRoomAsync(roomId, new(location, input.RoomNumber, input.Floor,
+                input.Capacity, input.Status, input.ExpectedVersion, reason), t);
+            // Creating provenance for a legacy room must not silently lose its
+            // effective asset assignment. Pin its existing fallback before saving.
+            if (prior is null && (typeId is not null || area is not null || input.Amenities is not null) && input.Assets is null)
+            {
+                var inventory = await assets.InventoryAsync(roomId, t);
+                var assignment = await local.GetAsync(LocationSetupKeys.Key($"asset-template-assignment:{roomId}"), "AssetTemplateAssignment", t);
+                if (inventory.AssignedTemplateId is null && assignment?.Status != "None")
+                {
+                    var fallback = (await local.ListAsync(location, "AssetTemplate", t)).Where(AssetInventoryService.IsLocationDefault)
+                        .OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault();
+                    if (fallback is not null) await assets.AssignRequirementsAsync(location, roomId, fallback, inventory.AssignmentVersion, t);
+                }
+            }
+            if (prior is not null || typeId is not null || area is not null || input.Amenities is not null)
+            {
+                var data = JsonSerializer.SerializeToNode(nextProvenance, Json)!.AsObject();
+                data["reason"] = reason;
+                await local.SaveAsync(LocationSetupKeys.RoomProvenance(roomId), location, "RoomProvenance", "Recorded",
+                    data, input.ExpectedProvenanceVersion, actor, t);
+            }
+            if (input.Rent is not null) await SaveRoomRent(saved, input.Rent, reason, t);
+            if (input.Assets is not null)
+            {
+                var inventory = await assets.InventoryAsync(roomId, t);
+                if (inventory.AssignmentVersion != input.Assets.ExpectedAssignmentVersion)
+                    throw new PropertyException(409, "stale_version");
+                var template = await assets.CreateRequirementsAsync(location, $"Room {saved.RoomNumber} assets", input.Assets.Items, roomId, t);
+                await assets.AssignRequirementsAsync(location, roomId, template, input.Assets.ExpectedAssignmentVersion, t);
+            }
+            return await RoomConfigurationAsync(location, roomId, t);
+        }, t);
+    }
+
+    public Task<RoomAssetRequirementsResult> UpdateRoomAssetRequirementsAsync(Guid location, Guid id, RoomAssetRequirementsEdit input, CancellationToken t)
+    {
+        var actor = Owner(); var reason = Text(input.Reason, 500);
+        return local.TransactionAsync(location, async () =>
+        {
+            _ = await properties.GetLocationAsync(location, t);
+            var before = await ScopedDocument(location, id, "RoomDefaults", t);
+            if (before.Status != "Recorded" || before.Version != input.ExpectedVersion)
+                throw new PropertyException(409, "stale_room_defaults");
+            var name = Name(before);
+            var suffix = $" assets {before.Version + 1}";
+            var template = await assets.CreateRequirementsAsync(location, name[..Math.Min(name.Length, 150 - suffix.Length)] + suffix, input.Items, null, t);
+            var data = JsonNode.Parse(before.Data.GetRawText())!.AsObject();
+            data["assetTemplateId"] = template is null ? null : JsonValue.Create(template.Id);
+            data["reason"] = reason;
+            var updated = await local.SaveAsync(id, location, "RoomDefaults", "Recorded", data, before.Version, actor, t);
+            var results = new List<AssetSyncRoom>();
+            if (input.ApplyToExistingRooms)
+            {
+                foreach (var document in await local.ListAsync(location, "RoomProvenance", t))
+                {
+                    var provenance = SharedDataValidator.Read<RoomProvenanceData>(document.Data);
+                    if (provenance.RoomDefaultsId != id) continue;
+                    if (await local.RoomConfigurationLockReasonAsync(provenance.RoomId, t) is not null)
+                    {
+                        results.Add(new(provenance.RoomId, "SkippedNotEligible"));
+                        continue;
+                    }
+                    var inventory = await assets.InventoryAsync(provenance.RoomId, t);
+                    await assets.AssignRequirementsAsync(location, provenance.RoomId, template, inventory.AssignmentVersion, t);
+                    results.Add(new(provenance.RoomId, "Applied"));
+                }
+            }
+            return new RoomAssetRequirementsResult(updated, template, results);
+        }, t);
+    }
+
     private async Task<LocationSetupSource> Source(Guid location, CancellationToken t)
     {
         _ = await properties.GetLocationAsync(location, t);
         var defaults = (await local.ListAsync(location, "RoomDefaults", t)).Where(d => d.Status == "Recorded").OrderBy(d => d.Id).ToArray();
-        var templates = (await local.ListAsync(location, "AssetTemplate", t)).Where(d => d.Status is "Draft" or "Published").OrderBy(d => d.Id).ToArray();
+        var templates = (await local.ListAsync(location, "AssetTemplate", t)).Where(d => (d.Status is "Draft" or "Published") &&
+            SharedDataValidator.Read<AssetTemplateWrite>(d.Data).ScopeRoomId is null).OrderBy(d => d.Id).ToArray();
         // A room-scoped service/utility fee is selectable only by mapping it to a new room key.
         // Room rent is explicitly confirmed per new room; legacy room-type scopes cannot be copied.
         var fees = (await shared.SetupCopyPoliciesAsync(location, t)).OrderBy(p => p.Id).ToArray();
@@ -376,7 +562,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 Guid? assetTemplateId = null;
                 if (type.Assets.Length > 0)
                 {
-                    var template = await assets.SaveTemplateAsync(null, new(location.Id, type.Name.Trim(), type.Assets.Select(asset => new AssetTemplateItem(Guid.NewGuid(), asset.Name.Trim(), asset.Category.Trim(), asset.TrackingMode, asset.Quantity)).ToArray()), t);
+                    var template = await assets.SaveTemplateAsync(null, new(location.Id, type.Name.Trim(), type.Assets.Select(asset => new AssetTemplateItem(Guid.NewGuid(), asset.Name.Trim(), asset.Category.Trim(), asset.TrackingMode, asset.Quantity)).ToArray(), Scoped: true), t);
                     await assets.PublishAsync(template.Id, template.Version, t); assetTemplateId = template.Id; created.Add(template.Id);
                 }
                 var data = new JsonObject
