@@ -44,6 +44,7 @@ import { StaffContractsList } from './StaffContractsList';
 import { defaultStaffContractListView } from './staffContractList';
 import { mobileContractActions } from './contractSections';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
+import { OwnerHoldingSigning } from '../owner/OwnerHoldingSigning';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -540,6 +541,9 @@ function LiveContractDetail({
             )}
           {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
         </Box>
+      )}
+      {section === 'signing' && role === 'Owner' && c.kind === 'Holding' && (
+        <OwnerHoldingSigning api={api} contract={c} onChanged={detail.reload} />
       )}
       {((section === 'signing' && !rental) || section === 'history') && (
         <ContractWorkflowPanel

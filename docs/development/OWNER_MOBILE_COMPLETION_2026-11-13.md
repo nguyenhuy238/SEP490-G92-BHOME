@@ -43,4 +43,8 @@ Endpoint lời mời thực tế: `POST /api/v1/contracts/{id}/signing-invitatio
 
 ## Thực thi và kết quả
 
-Sẽ cập nhật bằng kết quả lệnh thực chạy, commit và giới hạn E2E sau từng giai đoạn.
+Giai đoạn 1: `a0ef9bf` — dashboard cache theo session, 8 nhóm hồ sơ chờ duyệt có deep link từng ID. Lint, typecheck, format:check PASS; Mobile 93 files / 1.031 tests PASS. Fixture connectivity được cập nhật để kiểm tra cache dùng chung khi remount và abort khi đóng session.
+
+Giai đoạn 2: thêm OwnerHoldingSigning bằng internalSigning client hiện có; chọn hạn lời mời theo giờ Việt Nam và giới hạn 24 giờ đúng backend; trạng thái email/OTP/thu hồi; Owner confirm chỉ sau tenantAcceptedAt + documentHash. Không lưu/hiển thị token, không đánh dấu signed khi gửi invitation. Bốn component tests kiểm tra role/method/approval, payload giờ Việt Nam, chống gửi lặp, refresh và provider failure.
+
+Giới hạn API hiện tại: InternalSigningStatus không trả recipient email; chỉ hiển thị người đại diện theo contract và trạng thái máy chủ. Không bịa email, không truy vấn thêm identity sâu để lấy email. Gửi lại là tạo lời mời thay thế đúng endpoint hiện có; API không có retry SMTP riêng. Recipient signing và việc thư thực sự đến hộp thư chưa được kiểm tra E2E.

@@ -5,15 +5,11 @@ import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../workspace/useWorkspaceQuery';
 import { useSession } from '../../lib/SessionProvider';
 import type { WorkspaceScreen } from '../workspace/navigation';
-import type { QueryPolicy } from '../../lib/queryCache';
+export { ownerQueuePolicy } from './ownerQueryPolicy';
+import { ownerQueuePolicy } from './ownerQueryPolicy';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { formatContractMoney } from '../../../../../packages/client-core/src/contracts';
 
-export const ownerQueuePolicy: QueryPolicy = {
-  staleTime: 30_000,
-  gcTime: 20 * 60_000,
-  tags: ['contracts', 'tasks', 'incidents', 'invoices', 'payments', 'notifications'],
-};
 type QueueRecord = {
   id: string;
   title?: string;
