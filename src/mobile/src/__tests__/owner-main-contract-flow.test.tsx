@@ -69,6 +69,9 @@ vi.mock('../features/owner/OwnerHoldingSigning', () => ({
 import { OwnerMainContractFlow } from '../features/owner/OwnerMainContractFlow';
 const c = {
   id: 'contract',
+  startDate: '2026-11-13',
+  endDate: '2027-11-13',
+  monthlyRent: '3000000',
   status: 'PendingSigning',
   kind: 'Main',
   signatures: [],

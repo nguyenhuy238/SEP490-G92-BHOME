@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Text } from 'react-native-paper';
 import {
   contractActions,
+  displayContractDate,
   formatContractMoney,
   mutationKeys,
   text,
@@ -71,6 +72,18 @@ export function OwnerMainContractFlow({
         completed={completed}
         steps={ownerContractSteps}
       />
+      <Box>
+        <Heading title={`Phòng ${contract.roomNumber ?? '—'}`} detail={contract.locationName} />
+        <Text>
+          {displayContractDate(contract.startDate)} – {displayContractDate(contract.endDate)}
+        </Text>
+        <Text>
+          Đại diện:{' '}
+          {contract.occupants?.find((person) => person.representative)?.label ??
+            'Theo hồ sơ hợp đồng'}
+        </Text>
+        <Text>{formatContractMoney(contract.monthlyRent)} / tháng</Text>
+      </Box>
       <Text style={ui.muted}>
         Duyệt đưa đi ký chưa phải chữ ký. Kích hoạt chỉ sau khi máy chủ xác nhận đủ điều kiện.
       </Text>
@@ -135,7 +148,14 @@ export function OwnerMainContractFlow({
           <Heading title="Điều kiện kích hoạt" />
           <Text>Owner: {ownerSigned ? 'Đã xác minh ký' : 'Chưa xác minh ký'}</Text>
           <Text>Người đại diện: {tenantSigned ? 'Đã xác minh ký' : 'Chưa xác minh ký'}</Text>
-          <Text>Cọc: {server.depositVerified ? 'Đã đối chiếu đủ' : 'Chưa đủ đối chiếu'}</Text>
+          <Text>
+            Cọc:{' '}
+            {readiness
+              ? server.depositVerified
+                ? 'Đã đối chiếu đủ'
+                : 'Chưa đủ đối chiếu'
+              : 'Xem hồ sơ cọc để đối chiếu'}
+          </Text>
           {readiness?.blockers.map((blocker) => (
             <Text key={blocker} style={ui.red}>
               {text(blocker)}

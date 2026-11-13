@@ -31,9 +31,9 @@ export function MainDraftSigningReview({
   client: ReturnType<typeof mainDraftClient>;
   draft: MainDraftView;
   onReleased: (id: string) => void;
-  onOpenPdf: (document: PreviewDocument) => void;
+  onOpenPdf: (document: PreviewDocument) => void | Promise<boolean | undefined>;
   onBusyChange?: (busy: boolean) => void;
-  onDownloadPdf?: (document: PreviewDocument) => void;
+  onDownloadPdf?: (document: PreviewDocument) => void | Promise<boolean | undefined>;
   onDraftChanged?: (draft: MainDraftView) => void;
 }) {
   const { api, session } = useSession();

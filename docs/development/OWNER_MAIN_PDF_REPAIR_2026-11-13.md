@@ -28,3 +28,9 @@ Giai đoạn 1: `a5d46ae` — bounded preview metadata/page, phân biệt confli
 Giai đoạn 2: Owner Main có bốn bước riêng; bước duyệt nháp yêu cầu PDF hiện tại đọc được, xóa checkbox khi lỗi hoặc file/version đổi, re-read draft trước generation/release. Không coi release là ký. OwnerMainContractFlow dùng trạng thái MySign/chấp thuận nội bộ theo signingMode, số cọc/readiness backend và actions hiện có. Owner route nhận draft không còn Draft chuyển về contract thật, không giữ mainDraftId cũ. Staff/Tenant giữ flow và nhãn bước đang có.
 
 API deposit-payment hiện chỉ trả position/reference; chưa có endpoint QR cọc. Không tạo QR giả hoặc dùng QR invoice thay cọc. Theo dõi tiền cọc và xác minh dùng endpoint hiện có; activation vẫn phụ thuộc readiness backend.
+
+Giai đoạn 2: `1d9b15f`; lint/typecheck/format PASS; Mobile 100 files / 1.075 tests PASS. Backend: 1 release workflow PASS và 6 preview/release-negative tests PASS. MySign trong fixture là simulator; không phải bằng chứng ký provider thật.
+
+Giai đoạn 3: Owner không hiển thị UUID nháp; summary ngắn, nhãn Duyệt & ký rõ ràng. Viewer dùng cache PNG chỉ trong vòng đời document, xóa khi background/document đổi, tránh render lại trang 1 khi mở/đóng fullscreen. Xem PDF hợp lệ bên ngoài có thể mở bước review khi rasterizer không sẵn sàng; vẫn phải human-confirm PDF chính xác trước release. Recovery chỉ rõ Tải phiên bản mới hoặc Lưu lại bản nháp theo mã lỗi.
+
+Đã chạy toàn bộ MainDraftApiTests: 13 PASS, có LibreOffice thực và PDF→PNG trong container, MIME/file integrity, tenant/outside access denial và snapshot outdated. Không sửa backend hoặc dữ liệu người dùng.

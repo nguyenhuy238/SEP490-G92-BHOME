@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AppState,
   FlatList,
@@ -42,6 +42,7 @@ function PdfPage({
   active,
   onDocumentError,
   onReady,
+  pageCache,
 }: {
   client: Client;
   contractId: string;
@@ -51,6 +52,7 @@ function PdfPage({
   active: boolean;
   onDocumentError?: (error: unknown) => void;
   onReady?: (id: string) => void;
+  pageCache: Map<number, string>;
 }) {
   const [revision, setRevision] = useState(0);
   const key = `${contractId}/${fileId}/${page.number}/${revision}`;
@@ -59,10 +61,15 @@ function PdfPage({
     key: string;
     uri: string;
     error: string;
-  } | null>(null);
+  } | null>(() =>
+    pageCache.has(page.number)
+      ? { client, key, uri: pageCache.get(page.number)!, error: '' }
+      : null,
+  );
   const current = active && result?.client === client && result.key === key ? result : null;
   useEffect(() => {
     if (!active) return;
+    if (pageCache.has(page.number)) return;
     const controller = new AbortController();
     void boundedPreview(
       (signal) => client.previewPage(contractId, fileId, page.number, signal),
@@ -70,13 +77,17 @@ function PdfPage({
     ).then(
       (bytes) => {
         try {
-          if (!controller.signal.aborted)
-            setResult({ client, key, uri: previewPngUri(bytes), error: '' });
+          if (!controller.signal.aborted) {
+            const uri = previewPngUri(bytes);
+            pageCache.set(page.number, uri);
+            setResult({ client, key, uri, error: '' });
+          }
         } catch (error) {
           if (!controller.signal.aborted) {
             const message = previewError(error);
             setResult({ client, key, uri: '', error: message });
             workflowFailure('main-draft', error);
+            onDocumentError?.(error);
           }
         } finally {
           bytes.fill(0);
@@ -92,7 +103,7 @@ function PdfPage({
       },
     );
     return () => controller.abort();
-  }, [client, contractId, fileId, page.number, key, active, onDocumentError]);
+  }, [client, contractId, fileId, page.number, key, active, onDocumentError, pageCache]);
   const height = (width * page.height) / page.width;
   return (
     <View style={{ width, minHeight: current?.error ? undefined : Math.min(height, 240), gap: 8 }}>
@@ -117,14 +128,16 @@ function PdfPage({
           resizeMode="contain"
           onLoad={() => onReady?.(fileId)}
           style={{ width, height, backgroundColor: c.white }}
-          onError={() =>
+          onError={() => {
+            pageCache.delete(page.number);
+            onDocumentError?.({ code: 'draft_preview_render_failed' });
             setResult({
               client,
               key,
               uri: '',
               error: 'Thiết bị chưa hiển thị được trang này. Hãy tải lại hoặc mở PDF bên ngoài.',
-            })
-          }
+            });
+          }}
         />
       )}
     </View>
@@ -151,7 +164,7 @@ export function ContractPdfPreview({
   busy: boolean;
   previewErrorCode: string | null;
   onRegenerate: () => void;
-  onOpenPdf: () => void;
+  onOpenPdf: () => void | Promise<boolean | undefined>;
   onOpenDocx: () => void;
   hasDocx: boolean;
   onDownloadPdf?: () => void;
@@ -165,6 +178,10 @@ export function ContractPdfPreview({
   const [zoom, setZoom] = useState(1);
   const [active, setActive] = useState(true);
   const fileId = document?.id ?? '';
+  const pageCache = useMemo(
+    () => ({ client, contractId, fileId, pages: new Map<number, string>() }),
+    [client, contractId, fileId],
+  ).pages;
   const key = `${contractId}/${fileId}/${revision}`;
   const [result, setResult] = useState<{
     client: Client;
@@ -179,12 +196,13 @@ export function ContractPdfPreview({
       const foreground = state === 'active';
       setActive(foreground);
       if (!foreground) {
+        pageCache.clear();
         setResult(null);
         setFullscreen(false);
       }
     });
     return () => listener.remove();
-  }, []);
+  }, [pageCache]);
   useEffect(() => {
     if (!fileId || !active) return;
     const controller = new AbortController();
@@ -292,7 +310,11 @@ export function ContractPdfPreview({
                 fileId && !current?.conflict ? setRevision((value) => value + 1) : onRegenerate()
               }
             >
-              Thử lại bản xem trước
+              {previewErrorCode?.includes('save_again')
+                ? 'Lưu lại bản nháp'
+                : current?.conflict || previewErrorCode === 'draft_document_outdated'
+                  ? 'Tải phiên bản mới'
+                  : 'Thử lại bản xem trước'}
             </Button>
           </View>
         )}
@@ -308,6 +330,7 @@ export function ContractPdfPreview({
               active={active}
               onDocumentError={onDocumentError}
               onReady={onReady}
+              pageCache={pageCache}
             />
             <Text style={styles.pageNumber}>Trang 1 / {info.pages.length}</Text>
           </>
@@ -319,7 +342,11 @@ export function ContractPdfPreview({
           contentStyle={{ minHeight: 44 }}
           icon="open-in-new"
           disabled={!fileId || busy}
-          onPress={onOpenPdf}
+          onPress={() => {
+            void Promise.resolve(onOpenPdf()).then((valid) => {
+              if (valid) onReady?.(fileId);
+            });
+          }}
         >
           Xem PDF
         </Button>
@@ -406,6 +433,7 @@ export function ContractPdfPreview({
                         active={active}
                         onDocumentError={onDocumentError}
                         onReady={onReady}
+                        pageCache={pageCache}
                       />
                     </ScrollView>
                   </View>

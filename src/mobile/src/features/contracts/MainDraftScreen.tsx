@@ -322,6 +322,7 @@ export function MainDraftScreen({
             dialogTitle: pdf ? 'Xem hợp đồng PDF' : 'Mở hợp đồng DOCX',
           });
         }
+        return true;
       } finally {
         bytes.fill(0);
       }
@@ -489,7 +490,9 @@ export function MainDraftScreen({
                 {mode === 'preview'
                   ? 'Xem trước hợp đồng'
                   : mode === 'signing'
-                    ? 'Ký hợp đồng'
+                    ? owner
+                      ? 'Duyệt & ký hợp đồng'
+                      : 'Ký hợp đồng'
                     : 'Tạo hợp đồng thuê'}
               </Text>
             </View>
@@ -527,7 +530,11 @@ export function MainDraftScreen({
                         {id && (
                           <Box>
                             <Pill>{labels[saved?.status ?? 'Draft'] ?? saved?.status}</Pill>
-                            <Text selectable>Mã hợp đồng: {id}</Text>
+                            {owner ? (
+                              <Text>Hồ sơ nháp đã lưu</Text>
+                            ) : (
+                              <Text selectable>Mã hợp đồng: {id}</Text>
+                            )}
                           </Box>
                         )}
                         <Box>
@@ -620,8 +627,8 @@ export function MainDraftScreen({
                           draft={saved}
                           onBusyChange={setBusy}
                           onReleased={(next) => (onReleased ? onReleased(next) : onList())}
-                          onOpenPdf={(file) => void openFile(true, file, true)}
-                          onDownloadPdf={(file) => void openFile(true, file)}
+                          onOpenPdf={(file) => openFile(true, file, true)}
+                          onDownloadPdf={(file) => openFile(true, file)}
                           onDraftChanged={(latest) => {
                             setDocuments(null);
                             setReadyFile('');
@@ -720,10 +727,10 @@ export function MainDraftScreen({
                         contractId={id}
                         document={documents?.pdf ?? null}
                         busy={busy}
-                        previewErrorCode={documents?.previewError ?? null}
+                        previewErrorCode={documentBlocker || documents?.previewError || null}
                         hasDocx={!!documents?.docx}
                         onRegenerate={() => void reviewSaved(false)}
-                        onOpenPdf={() => void openFile(true, undefined, true)}
+                        onOpenPdf={() => openFile(true, undefined, true)}
                         onDownloadPdf={() => void openFile(true)}
                         onDocumentError={invalidateDocument}
                         onReady={setReadyFile}

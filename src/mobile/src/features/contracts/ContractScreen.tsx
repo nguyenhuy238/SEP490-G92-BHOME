@@ -420,7 +420,7 @@ function LiveContractDetail({
     ['overview', 'signing'].includes(section);
   return (
     <>
-      {!rental && (
+      {!rental && !ownerMain && (
         <Heading
           title={`Phòng ${c.roomNumber || c.roomId}`}
           detail={`${text(c.kind)} · ${c.locationName ?? ''}`}
@@ -487,7 +487,7 @@ function LiveContractDetail({
         Tải lại trạng thái
       </Button>
       {!!notice && <Text style={ui.blue}>{notice}</Text>}
-      {section === 'overview' && !rental && (
+      {section === 'overview' && !rental && !ownerMain && (
         <>
           <Box>
             <Heading title="Kỳ thuê & Người ở" />

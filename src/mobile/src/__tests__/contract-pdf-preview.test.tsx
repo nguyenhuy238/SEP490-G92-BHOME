@@ -136,6 +136,7 @@ it('loads authenticated page bytes into a real inline preview, opens all pages a
   expect(request.mock.calls.some(([path]) => path.endsWith('/pages/2'))).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Xem toàn màn hình' }));
   await screen.findByAltText('Trang 3 của hợp đồng PDF');
+  expect(request.mock.calls.filter(([path]) => path.endsWith('/pages/1'))).toHaveLength(1);
   const before = (screen.getByAltText('Trang 1 của hợp đồng PDF') as HTMLImageElement).style.width;
   fireEvent.click(screen.getByRole('button', { name: 'Phóng to hợp đồng' }));
   expect(screen.getByText('3 trang · 150%')).toBeTruthy();
@@ -149,6 +150,25 @@ it('loads authenticated page bytes into a real inline preview, opens all pages a
   fireEvent.click(screen.getByRole('button', { name: 'Mở hoặc lưu DOCX' }));
   expect(options.onOpenPdf).toHaveBeenCalledOnce();
   expect(options.onOpenDocx).toHaveBeenCalledOnce();
+});
+it('only marks an external PDF ready after authenticated viewing succeeds', async () => {
+  const ready = vi.fn();
+  let finish!: (valid: boolean) => void;
+  const open = vi.fn(
+    () =>
+      new Promise<boolean>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(<ContractPdfPreview {...props()} onReady={ready} onOpenPdf={open} />);
+  await screen.findByAltText('Trang 1 của hợp đồng PDF');
+  expect(ready).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('Xem PDF'));
+  expect(ready).not.toHaveBeenCalled();
+  await act(async () => {
+    finish(true);
+  });
+  expect(ready).toHaveBeenCalledWith('pdf');
 });
 it('shows a loading state on slow networks, retries authorization/API failures and preserves external fallback', async () => {
   request.mockRejectedValueOnce({ status: 401 });
@@ -232,7 +252,7 @@ it('regenerates instead of retrying the same outdated file and distinguishes con
   const options = props();
   render(<ContractPdfPreview {...options} />);
   await screen.findByText('Tài liệu thuộc phiên bản cũ. Hãy tạo lại bản xem trước.');
-  fireEvent.click(screen.getByText('Thử lại bản xem trước'));
+  fireEvent.click(screen.getByText('Tải phiên bản mới'));
   expect(options.onRegenerate).toHaveBeenCalledOnce();
   expect(request).toHaveBeenCalledTimes(1);
   cleanup();

@@ -233,8 +233,8 @@ it('recovers an outdated file using the latest draft version and a new document 
   await screen.findByText('CCCD: ********0123');
   fill();
   fireEvent.click(screen.getByText('Xem trước hợp đồng'));
-  await screen.findByText('Tài liệu thuộc phiên bản cũ. Hãy tạo lại bản xem trước.');
-  fireEvent.click(screen.getByText('Thử lại bản xem trước'));
+  await screen.findAllByText('Tài liệu thuộc phiên bản cũ. Hãy tạo lại bản xem trước.');
+  fireEvent.click(screen.getByText('Tải phiên bản mới'));
   await waitFor(() =>
     expect(state.request.mock.calls.some(([path]) => path.endsWith('/new-pdf/preview'))).toBe(true),
   );
