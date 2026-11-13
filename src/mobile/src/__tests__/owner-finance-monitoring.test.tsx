@@ -34,6 +34,10 @@ vi.mock('../components/WorkspaceQueryState', () => ({
   Pagination: () => null,
 }));
 vi.mock('./../screens/TenantAdjustmentPanel', () => ({ AdjustmentEvidenceImage: () => null }));
+vi.mock('../features/owner/OwnerFinancialActions', () => ({
+  OwnerAdjustmentDecision: () => <div>Quyết định điều chỉnh</div>,
+  OwnerPaymentDecision: () => <div>Đối chiếu và quyết định</div>,
+}));
 vi.mock('../features/workspace/useWorkspaceQuery', () => ({
   useWorkspaceQuery: (path: string) => ({
     reload: state.reload,
@@ -81,18 +85,20 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
-it('shows bank receipt monitoring without allocation or rejection controls', () => {
+it('composes bank receipt monitoring with Owner decisions and a refund handoff', () => {
   render(<OwnerPaymentReviewScreen />);
   expect(screen.getByText('50.000 ₫')).toBeTruthy();
   expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+  expect(screen.getByText('Đối chiếu và quyết định')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Phân bổ vào hóa đơn' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Từ chối' })).toBeNull();
   expect(screen.queryByRole('textbox')).toBeNull();
   expect(state.request).not.toHaveBeenCalled();
 });
-it('shows adjustment status without approving or changing money on Mobile', () => {
+it('composes adjustment evidence with the Owner decision form', () => {
   render(<OwnerAdjustmentReviewScreen />);
-  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+  expect(screen.getByText('Quyết định điều chỉnh')).toBeTruthy();
+  expect(screen.queryByText('Thực hiện trên Owner Web')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Phê duyệt' })).toBeNull();
   expect(screen.queryByRole('textbox')).toBeNull();
   expect(state.request).not.toHaveBeenCalled();

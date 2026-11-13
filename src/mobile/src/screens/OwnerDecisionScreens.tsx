@@ -1,4 +1,9 @@
 import { OwnerApprovalQueue } from '../features/owner/OwnerApprovalQueue';
+import { ownerQueuePolicy } from '../features/owner/ownerQueryPolicy';
+import {
+  OwnerAdjustmentDecision,
+  OwnerPaymentDecision,
+} from '../features/owner/OwnerFinancialActions';
 import React, { useMemo, useState } from 'react';
 import { Text } from 'react-native-paper';
 import { useLocalSearchParams } from 'expo-router';
@@ -8,8 +13,15 @@ import {
   type Adjustment,
 } from '../../../../packages/client-core/src/adjustments';
 import { businessToday, formatContractMoney } from '../../../../packages/client-core/src/contracts';
-import type { FinancialReport } from '../../../../packages/client-core/src/finance';
-import { paymentText, type BankTransfer } from '../../../../packages/client-core/src/payments';
+import {
+  formatFinanceMoney,
+  type FinancialReport,
+} from '../../../../packages/client-core/src/finance';
+import {
+  paymentText,
+  type BankTransfer,
+  type DebtSummary,
+} from '../../../../packages/client-core/src/payments';
 import type { Page } from '../../../../packages/client-core/src/invoices';
 import { OwnerWebNotice } from '../components/OwnerWebNotice';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
@@ -39,6 +51,7 @@ export function OwnerAdjustmentListScreen() {
   const [status, setStatus] = useState('Pending');
   const query = useWorkspaceQuery<Page<Adjustment>>(
     `/api/v1/invoice-adjustments?page=${page}&pageSize=20${status ? `&status=${status}` : ''}`,
+    { cache: ownerQueuePolicy },
   );
   return (
     <>
@@ -105,7 +118,9 @@ export function OwnerAdjustmentReviewScreen() {
   const { api } = useSession();
   const { go } = useWorkspace();
   const id = adjustmentId && idPattern.test(adjustmentId) ? adjustmentId : '';
-  const query = useWorkspaceQuery<Adjustment>(id ? `/api/v1/invoice-adjustments/${id}` : null);
+  const query = useWorkspaceQuery<Adjustment>(id ? `/api/v1/invoice-adjustments/${id}` : null, {
+    cache: ownerQueuePolicy,
+  });
   const client = useMemo(() => (api ? adjustmentClient(api.request.bind(api)) : null), [api]);
   const item = query.data;
   if (!id)
@@ -142,7 +157,20 @@ export function OwnerAdjustmentReviewScreen() {
                 ? 'Không nhập'
                 : formatContractMoney(item.proposedAmount)}
             </Text>
-            <Text>Trạng thái hóa đơn: {item.invoiceStatus}</Text>
+            <Text>
+              Trạng thái hóa đơn: {item.invoiceStatus === 'Draft' ? 'Bản nháp' : 'Đã phát hành'}
+            </Text>
+            {item.financials && (
+              <>
+                <Text>
+                  Phải thu hiện hành: {formatContractMoney(item.financials.effectivePayableAmount)}
+                </Text>
+                <Text>
+                  Đã phân bổ: {formatContractMoney(item.financials.allocatedPayments)} · Còn nợ:{' '}
+                  {formatContractMoney(item.financials.outstandingAmount)}
+                </Text>
+              </>
+            )}
             <Text>Bằng chứng: {item.evidence.length} ảnh/tệp</Text>
             {client &&
               item.evidence.map((file, index) => (
@@ -156,7 +184,13 @@ export function OwnerAdjustmentReviewScreen() {
                 />
               ))}
           </Box>
-          <OwnerWebNotice task="Duyệt hoặc từ chối điều chỉnh hóa đơn" />
+          {!query.loading && !query.error && (
+            <OwnerAdjustmentDecision
+              key={`${item.id}:${item.version}:${item.currentInvoice?.version}:${item.currentFinancialVersion}:${query.updatedAt}`}
+              item={item}
+              onChanged={query.reload}
+            />
+          )}
           {item.decision && (
             <Box>
               <Heading title="Kết quả" />
@@ -176,6 +210,7 @@ export function OwnerPaymentListScreen() {
   const [status, setStatus] = useState('PendingReview');
   const query = useWorkspaceQuery<Page<BankTransfer>>(
     `/api/v1/payment-transactions?page=${page}&pageSize=20${status ? `&paymentStatus=${status}` : ''}`,
+    { cache: ownerQueuePolicy },
   );
   return (
     <>
@@ -234,6 +269,7 @@ export function OwnerPaymentReviewScreen() {
   const { go } = useWorkspace();
   const transfer = useWorkspaceQuery<BankTransfer>(
     id ? `/api/v1/payment-transactions/${id}` : null,
+    { cache: ownerQueuePolicy },
   );
   if (!id)
     return (
@@ -257,13 +293,44 @@ export function OwnerPaymentReviewScreen() {
             </Row>
             <Heading
               title={formatContractMoney(item.amount)}
-              detail={`${item.providerIdentity} · ${item.bankReference}`}
+              detail={`${item.providerIdentity.startsWith('SEPAY:') ? (item.providerIdentity === 'SEPAY:TEST' ? 'SePay thử nghiệm' : 'SePay') : 'Sao kê ngân hàng'} · ${item.bankReference}`}
             />
             <Text>Nội dung: {item.transferDescription}</Text>
             <Text>Tham chiếu sao kê: {item.statementReference}</Text>
             <Text>Căn cứ xác minh: {item.verificationReason}</Text>
+            <Text>{item.isDevelopmentDemo ? 'Dữ liệu thử nghiệm' : 'Giao dịch thực tế'}</Text>
+            {item.allocatedAmount !== undefined && (
+              <Text>Đã phân bổ: {formatContractMoney(item.allocatedAmount)}</Text>
+            )}
+            {item.unallocatedAmount !== undefined && (
+              <Text>Chưa phân bổ: {formatContractMoney(item.unallocatedAmount)}</Text>
+            )}
+            {item.reason && <Text>{paymentText(item.reason)}</Text>}
+            {!!item.allocatedDepositContractId && (
+              <Action
+                secondary
+                onPress={() =>
+                  go('signing', {
+                    contractId: item.allocatedDepositContractId!,
+                    section: 'signing',
+                  })
+                }
+              >
+                Xem hợp đồng nhận cọc
+              </Action>
+            )}
           </Box>
-          <OwnerWebNotice task="Đối soát, phân bổ và xử lý hoàn tiền" />
+          {!transfer.loading && !transfer.error && (
+            <OwnerPaymentDecision
+              key={`${item.id}:${transfer.updatedAt}`}
+              item={item}
+              onChanged={transfer.reload}
+            />
+          )}
+          <Action secondary onPress={() => go('signing')}>
+            Đối chiếu cọc theo hợp đồng
+          </Action>
+          <OwnerWebNotice task="Xử lý khoản hoàn tiền và người trả bên ngoài" />
         </>
       )}
     </>
@@ -309,6 +376,9 @@ export function OwnerFinanceScreen() {
     `/api/v1/financial-reports?from=${from}&to=${today}${locationId ? `&locationId=${locationId}` : ''}`,
   );
   const t = query.data?.total;
+  const debt = useWorkspaceQuery<DebtSummary>(
+    `/api/v1/debts/summary?${locationId ? `locationId=${locationId}` : ''}`,
+  );
   return (
     <>
       <Heading
@@ -325,6 +395,15 @@ export function OwnerFinanceScreen() {
         onChange={setLocationId}
       />
       <QueryState {...query} />
+      {!!debt.error && <Text style={ui.red}>{debt.error}</Text>}
+      {debt.data && (
+        <Box>
+          <Text>
+            Hóa đơn quá hạn: {debt.data.overdueInvoiceCount} · Nợ quá hạn:{' '}
+            {formatContractMoney(debt.data.overdueAmount)}
+          </Text>
+        </Box>
+      )}
       {t && (
         <>
           <Row>
@@ -350,7 +429,7 @@ export function OwnerFinanceScreen() {
             />
             <Metric
               label="Lợi nhuận vận hành"
-              value={formatContractMoney(t.operatingProfit)}
+              value={formatFinanceMoney(t.operatingProfit)}
               detail="Thu trừ chi phí"
               icon="chart-line"
             />
