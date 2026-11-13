@@ -23,9 +23,11 @@ public sealed class EsmsDeliveryCallback
         var history = System.Text.Json.JsonSerializer.Serialize(new { recordType = "SmsDeliveryReport", requestId = report.RequestId, providerReference = report.SMSID, state, at = sql.Now }, CompactNotificationWriter.Json);
         // Conditional single transition also handles callbacks arriving before SendAsync returns.
         var updated = await sql.Execute("""
-            UPDATE notifications SET delivery_status=@state,locked_until=NULL,lease_token=NULL,next_delivery_at=NULL,
+            UPDATE notifications SET delivery_status=CASE WHEN event_data->>'recordType'='SmsRecoveryChallenge' THEN delivery_status ELSE @state END,locked_until=NULL,lease_token=NULL,next_delivery_at=NULL,
               delivery_history=delivery_history||jsonb_build_array(@history::jsonb)
-            WHERE record_kind='OUTBOX' AND event_data->>'channel'='SMS' AND delivery_status IN ('Processing','ProviderAccepted','PendingReview')
+            WHERE record_kind='OUTBOX' AND event_data->>'channel'='SMS' AND
+              (delivery_status IN ('Processing','ProviderAccepted','PendingReview') OR event_data->>'recordType'='SmsRecoveryChallenge')
+              AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='SmsDeliveryReport')
               AND EXISTS(SELECT 1 FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='SmsSubmission' AND h->>'requestId'=@request)
               AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelAttempt'
                 AND h->>'providerReference' IS NOT NULL AND h->>'providerReference'<>@provider)

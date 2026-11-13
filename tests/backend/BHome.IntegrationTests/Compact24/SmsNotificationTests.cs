@@ -26,12 +26,13 @@ public sealed partial class Compact24NotificationMvpTests
             ["NotificationChannels:Mode"] = "Sandbox"
         };
         var accounts = new[] { w.Owner, w.Staff }.Concat(w.Tenants).ToArray();
+        var phonePrefix = "09" + System.Security.Cryptography.RandomNumberGenerator.GetInt32(1000000, 9999999).ToString();
         await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         for (var index = 0; index < accounts.Length; index++)
         {
             var account = accounts[index]; var name = account.Id.ToString("N") + ".sms-demo";
             // Dedicated synthetic recipient identities, never actual Tenant contacts.
-            var phone = "090123456" + index;
+            var phone = phonePrefix + index;
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET username={name},normalized_username={name.ToUpperInvariant()},email={name + "@sms-demo.example.invalid"},normalized_email={(name + "@sms-demo.example.invalid").ToUpperInvariant()},phone={phone},phone_confirmed=true WHERE id={account.Id}");
             config[$"Sms:DemoAccounts:{account.Id}"] = phone;
         }
@@ -84,7 +85,9 @@ public sealed partial class Compact24NotificationMvpTests
         var w = await Seed(); using var host = await SmsHost(w);
         // Two eligible occupants share one normalized contact. One SMS per invoice/phone.
         await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET phone={"+84 901234562"} WHERE id={w.Tenants[1].Id}");
+        var sharedPhone = (await db.Users.AsNoTracking().SingleAsync(u => u.Id == w.Tenants[0].Id)).PhoneNumber!;
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET phone={"+84 " + sharedPhone[1..]} WHERE id={w.Tenants[1].Id}");
+        host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SmsOptions>>().Value.DemoAccounts[w.Tenants[1].Id.ToString()] = sharedPhone;
         var invoice = await SmsInvoice(w); await Task.WhenAll(Pump(host), Pump(host)); await DispatchSms(host); await DispatchSms(host);
         var messages = host.Services.GetRequiredService<DemoSmsInbox>().List();
         var sms = Assert.Single(messages, m => m.TemplateId == "SMS-03");

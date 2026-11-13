@@ -109,6 +109,11 @@ public static class DependencyInjection
         services.AddScoped<IIdentityPersistence, CompactIdentityPersistence>();
         services.AddScoped<IAuthenticationSessions, IdentitySessionService>();
         services.AddScoped<IPasswordService, IdentityPasswordService>();
+        services.AddOptions<SmsRecoveryOptions>().BindConfiguration("SmsRecovery")
+            .Validate(o => o.Valid(), "Invalid SMS recovery limits or missing base64 secret key (at least 32 random bytes).").ValidateOnStart();
+        services.AddScoped<SmsPasswordRecovery>();
+        services.AddScoped<ISmsPasswordRecovery>(p => p.GetRequiredService<SmsPasswordRecovery>());
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<SmsPasswordRecovery>());
         services.AddScoped<ISecurityAudit, IdentitySecurityAudit>();
         services.AddOptions<AuthenticationEmailOptions>().BindConfiguration("AuthenticationEmail")
             .Validate(o => o.ResendCooldownSeconds is >= 30 and <= 3600, "Authentication email cooldown must be 30-3600 seconds.").ValidateOnStart();

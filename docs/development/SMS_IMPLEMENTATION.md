@@ -38,3 +38,19 @@ Signing alerts consume `InternalSigningInvitationApproved` or `ContractSigningRe
 The eSMS GET callback `/api/v1/sms/esms/callback` accepts production reports only from the three IPs in the verified provider documentation, with matching RequestId, provider reference and single-recipient counts. Proxy deployments must preserve the actual remote source using explicitly trusted proxy configuration; never trust arbitrary forwarded headers. Terminal reports are idempotent. Accepted/SandboxAccepted/Simulated are distinct from Delivered. Configure ingress access logging to omit callback query strings (provider callbacks can include a recipient phone).
 
 Live Sandbox request checked 2026-11-13: documented `Sandbox=1` returned CodeResult 100. This is provider acceptance, without physical delivery. Credentials were loaded from User Secrets and no raw request/response was logged. Production is disabled; Brandname/template approval and physical delivery remain unverified.
+
+## SMS password recovery
+
+Existing email endpoints remain unchanged. Anonymous, no-store endpoints:
+
+- `POST /api/v1/auth/sms-recovery/request`: `{identifier}` → generic 202 `{challengeId,retryAfterSeconds,expiresInSeconds}`.
+- `POST /api/v1/auth/sms-recovery/verify`: `{identifier,challengeId,otp}` → short-lived `{authorization,expiresInSeconds}` or generic 400.
+- `POST /api/v1/auth/sms-recovery/reset`: `{identifier,challengeId,authorization,newPassword,confirmPassword}` → 204 or generic 400.
+
+Only active eligible Owner/Staff/Tenant accounts with previously confirmed Vietnamese mobile numbers qualify. Ambiguous identifiers, pending account setup, unverified/missing phones and unsupported second-factor accounts fail closed. Sandbox end-user recovery returns 503 for every identifier because Sandbox does not deliver OTPs.
+
+HMAC-SHA256 uses a separate base64 `SmsRecovery__HashKey` of at least 32 random bytes. OTPs are bound to account/challenge/purpose; recovery grants are random 256-bit single-use values stored as HMACs. Identity security stamp and confirmed phone are rechecked at verification/reset. Defaults: five minutes, five guesses, 60-second resend cooldown. Distributed account/phone/IP request limits use hashed metadata, a PostgreSQL advisory lock and the existing audit container. The existing Auth IP limiter also covers verify/reset.
+
+Delivery is asynchronous through the existing durable job queue: the transient delivery envelope is protected by ASP.NET Data Protection, while the challenge stores only a keyed OTP hash. Persist/protect the production Data Protection key ring using the existing deployment mechanism. No plaintext OTP or reset authorization enters durable notification records, jobs or logs. Delivery failure does not reveal account existence. The same user-row lock as session rotation serializes verification and reset across API instances; a successful reset uses Identity, consumes recovery grants and revokes sessions without changing roles/assignments/contracts.
+
+No schema migration is needed: technical recovery state uses immutable OUTBOX payloads with append-only state history; user-facing INBOX queries cannot expose it. Key rotation invalidates outstanding recovery challenges. Mock Inbox OTPs are short-lived and limited to configured synthetic accounts; it is not a phone verification mechanism for real users.
