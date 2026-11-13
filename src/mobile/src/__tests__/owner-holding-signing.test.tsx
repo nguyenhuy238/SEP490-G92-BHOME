@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   changed: vi.fn(),
   role: 'Owner',
   verified: true,
+  recipientMatches: true,
   status: null as InternalSigningStatus | null,
 }));
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -20,6 +21,10 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
   useWorkspaceQuery: (path: string) => ({
     data: path?.includes('/residents/')
       ? {
+          id: state.recipientMatches ? id : 'unrelated',
+          roomId: 'room',
+          residentType: 'Representative',
+          tenantUserId: null,
           contactEmail: 'representative@example.invalid',
           verificationStatus: state.verified ? 'Verified' : 'Pending',
         }
@@ -110,6 +115,7 @@ const mount = (c = contract) =>
 beforeEach(() => {
   state.role = 'Owner';
   state.verified = true;
+  state.recipientMatches = true;
   state.status = {
     mode: 'INTERNAL_OTP_DRAWN',
     state: 'AwaitingAcceptance',
@@ -118,6 +124,28 @@ beforeEach(() => {
     ownerAcceptedAt: null,
     invitations: [],
   };
+});
+it('allows Main invitations only for the persisted representative and reports actual email delivery blockers', () => {
+  const main = { ...contract, kind: 'Main', roomId: 'room', tenantUserId: null };
+  state.recipientMatches = false;
+  const view = mount(main);
+  expect(screen.queryByText('Gửi lời mời ký qua email')).toBeNull();
+  expect(screen.getByText(/Hồ sơ người nhận không khớp/)).toBeTruthy();
+  state.recipientMatches = true;
+  state.status = {
+    ...state.status!,
+    invitations: [
+      {
+        id: 'invitation',
+        status: 'InvitationPendingManualDelivery',
+        expiresAt: '2026-11-14T00:00:00Z',
+      },
+    ],
+  };
+  view.rerender(<OwnerHoldingSigning api={api} contract={main} onChanged={state.changed} />);
+  expect(screen.getByText('Gửi lời mời ký qua email')).toBeTruthy();
+  expect(screen.getByText(/Email chưa được gửi thành công/)).toBeTruthy();
+  expect(state.request).not.toHaveBeenCalled();
 });
 afterEach(() => {
   cleanup();

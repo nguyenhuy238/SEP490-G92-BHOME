@@ -17,12 +17,13 @@ import { ownerQueuePolicy } from './ownerQueryPolicy';
 import { OwnerHoldingSigning } from './OwnerHoldingSigning';
 import { RentalContractStepper } from '../contracts/RentalContractStepper';
 import { rentalContractState } from '../contracts/rentalContractState';
-import { ContractActionForm } from '../contracts/ContractActionForm';
+import { ContractActionForm, SigningCertificates } from '../contracts/ContractActionForm';
 import { ContractWorkflowPanel } from '../contracts/ContractWorkflowPanel';
 import { randomUUID } from '../../lib/randomUUID';
 import { useSession } from '../../lib/SessionProvider';
 
 import { ownerContractSteps } from './ownerContractSteps';
+const signingStatusPolicy = { ...ownerQueuePolicy, staleTime: 0 };
 export function OwnerMainContractFlow({
   api,
   contract,
@@ -39,9 +40,10 @@ export function OwnerMainContractFlow({
   const { session } = useSession();
   const server = rentalContractState(contract, readiness);
   const internal = contract.signingMode === 'INTERNAL_OTP_DRAWN';
+  const mySign = !internal && ['', 'MYSIGN', 'MYSIGN_SANDBOX'].includes(contract.signingMode ?? '');
   const consent = useWorkspaceQuery<InternalSigningStatus>(
     internal ? `/api/v1/contracts/${contract.id}/internal-signing` : null,
-    { cache: ownerQueuePolicy },
+    { cache: signingStatusPolicy },
   );
   const ownerSigned = internal ? !!consent.data?.ownerAcceptedAt : server.owner === 'signed';
   const tenantSigned = internal ? !!consent.data?.tenantAcceptedAt : server.tenant === 'signed';
@@ -54,7 +56,7 @@ export function OwnerMainContractFlow({
   const [keys] = useState(() => mutationKeys(randomUUID));
   if (!session?.roles.includes('Owner')) return null;
   const operations =
-    step === 1
+    step === 1 && mySign
       ? ['signing', 'signing/sync', 'signing/recover']
       : step === 2
         ? ['deposit-verifications']
@@ -104,23 +106,37 @@ export function OwnerMainContractFlow({
               detail={
                 internal
                   ? 'Chấp thuận nội bộ qua email và OTP'
-                  : contract.isDevelopmentDemo
-                    ? 'Ký mô phỏng Development'
-                    : 'Chữ ký số MySign'
+                  : !mySign
+                    ? 'Phương thức ký chưa được hỗ trợ'
+                    : contract.isDevelopmentDemo
+                      ? 'Ký mô phỏng Development'
+                      : 'Chữ ký số MySign'
               }
             />
             <Text>Hồ sơ đã được chuyển sang chờ ký; chưa đồng nghĩa hai bên đã ký.</Text>
             <Text>Owner: {ownerSigned ? 'Đã xác minh' : 'Chờ xác nhận ký'}</Text>
             <Text>Người đại diện: {tenantSigned ? 'Đã xác minh' : 'Chờ xác nhận ký'}</Text>
             {consent.error && <Text style={ui.red}>{consent.error}</Text>}
-            {!internal && (
+            {!internal && mySign && (
               <Text>
                 Gửi yêu cầu → xác nhận trên MySign → kiểm tra kết quả ký. Chỉ kết quả đã xác minh
                 mới được ghi nhận.
               </Text>
             )}
           </Box>
-          {internal && <OwnerHoldingSigning api={api} contract={contract} onChanged={onChanged} />}
+          {internal && (
+            <OwnerHoldingSigning
+              api={api}
+              contract={contract}
+              onChanged={() => {
+                consent.reload();
+                onChanged();
+              }}
+            />
+          )}
+          {mySign && actorId === contract.ownerSignerId && !contract.isDevelopmentDemo && (
+            <SigningCertificates api={api} />
+          )}
         </>
       )}
       {step === 2 && (

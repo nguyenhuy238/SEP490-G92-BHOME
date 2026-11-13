@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   accepted: false,
   request: vi.fn(),
   changed: vi.fn(),
+  refresh: vi.fn(),
 }));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ session: { roles: ['Owner'] } }),
@@ -18,6 +19,7 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
       ? { tenantAcceptedAt: '2026-11-13T00:00:00Z', ownerAcceptedAt: null }
       : null,
     error: '',
+    reload: state.refresh,
   }),
 }));
 vi.mock('react-native-paper', () => ({
@@ -59,12 +61,18 @@ vi.mock('../features/contracts/ContractActionForm', () => ({
     action: { operation: string };
     onSuccess: () => void;
   }) => <button onClick={onSuccess}>Thực hiện {action.operation}</button>,
+  SigningCertificates: () => <span>Chứng thư của Owner hiện tại</span>,
 }));
 vi.mock('../features/contracts/ContractWorkflowPanel', () => ({
   ContractWorkflowPanel: () => <span>PDF từ máy chủ</span>,
 }));
 vi.mock('../features/owner/OwnerHoldingSigning', () => ({
-  OwnerHoldingSigning: () => <span>Chấp thuận nội bộ</span>,
+  OwnerHoldingSigning: ({ onChanged }: { onChanged: () => void }) => (
+    <>
+      <span>Chấp thuận nội bộ</span>
+      <button onClick={onChanged}>Refresh internal evidence</button>
+    </>
+  ),
 }));
 import { OwnerMainContractFlow } from '../features/owner/OwnerMainContractFlow';
 const c = {
@@ -106,10 +114,22 @@ it('separates requesting MySign from a verified signature and refreshes after th
   mount();
   expect(screen.getByText(/Chữ ký số MySign/)).toBeTruthy();
   expect(screen.queryByText('Chấp thuận nội bộ')).toBeNull();
+  expect(screen.getByText('Chứng thư của Owner hiện tại')).toBeTruthy();
   fireEvent.click(screen.getByText('Yêu cầu ký MySign'));
   fireEvent.click(screen.getByText('Thực hiện signing'));
   expect(state.changed).toHaveBeenCalledOnce();
   expect(screen.getByText('Owner: Chờ xác nhận ký')).toBeTruthy();
+});
+it('refreshes parent evidence after internal actions and does not fall back from an unknown signing mode', () => {
+  const view = mount({ ...c, signingMode: 'INTERNAL_OTP_DRAWN' });
+  fireEvent.click(screen.getByText('Refresh internal evidence'));
+  expect(state.refresh).toHaveBeenCalledOnce();
+  expect(state.changed).toHaveBeenCalledOnce();
+  view.unmount();
+  mount({ ...c, signingMode: 'UNSUPPORTED_PROVIDER' });
+  expect(screen.getByText(/Phương thức ký chưa được hỗ trợ/)).toBeTruthy();
+  expect(screen.queryByText('Yêu cầu ký MySign')).toBeNull();
+  expect(screen.queryByText('Chấp thuận nội bộ')).toBeNull();
 });
 it('does not complete a step just by visiting it or enable activation with missing signatures/deposit', () => {
   mount();

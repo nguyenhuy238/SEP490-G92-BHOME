@@ -67,7 +67,14 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
     allowed ? `/api/v1/contracts/${contract.id}/internal-signing` : null,
     { cache: ownerSigningPolicy },
   );
-  const recipient = useWorkspaceQuery<{ contactEmail: string | null; verificationStatus: string }>(
+  const recipient = useWorkspaceQuery<{
+    id: string;
+    roomId: string | null;
+    residentType: string;
+    tenantUserId: string | null;
+    contactEmail: string | null;
+    verificationStatus: string;
+  }>(
     contract.representativeResidentId
       ? `/api/v1/residents/${contract.representativeResidentId}`
       : null,
@@ -80,6 +87,12 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
   const [error, setError] = useFeedbackState();
   const lock = useRef(false);
   const status = query.data;
+  const recipientMatches =
+    contract.kind !== 'Main' ||
+    (recipient.data?.id === contract.representativeResidentId &&
+      recipient.data.roomId === contract.roomId &&
+      recipient.data.residentType === 'Representative' &&
+      recipient.data.tenantUserId === contract.tenantUserId);
   const open =
     ['Draft', 'PendingSigning'].includes(contract.status) &&
     !contract.onboardingDraft &&
@@ -91,6 +104,7 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
     !!status &&
     !query.error &&
     !recipient.error &&
+    recipientMatches &&
     recipient.data?.verificationStatus === 'Verified' &&
     !!recipient.data.contactEmail &&
     !status.tenantAcceptedAt;
@@ -154,6 +168,11 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
           {recipient.error}
         </Text>
       )}
+      {contract.kind === 'Main' && !!recipient.data && !recipientMatches && (
+        <Text accessibilityRole="alert" style={ui.red}>
+          Hồ sơ người nhận không khớp hợp đồng. Hãy tải lại hồ sơ bên thuê.
+        </Text>
+      )}
       {query.loading && <Text>Đang tải trạng thái ký…</Text>}
       {!!(error || query.error) && (
         <Text accessibilityRole="alert" style={ui.red}>
@@ -162,6 +181,15 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
       )}
       {status && (
         <>
+          {contract.kind === 'Main' &&
+            status.invitations.some((invitation) =>
+              ['OwnerApprovedLink', 'InvitationPendingManualDelivery'].includes(invitation.status),
+            ) && (
+              <Text accessibilityRole="alert" style={ui.red}>
+                Email chưa được gửi thành công. Kiểm tra cấu hình hoặc dịch vụ email trước khi tạo
+                lời mời mới.
+              </Text>
+            )}
           <Text>
             Người đại diện:{' '}
             {status.tenantAcceptedAt
