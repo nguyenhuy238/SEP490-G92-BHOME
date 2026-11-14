@@ -109,6 +109,7 @@ $secretsId = [string]$apiProject.Project.PropertyGroup.UserSecretsId
 if (-not $secretsId) { throw 'API project has no UserSecretsId for Visual Studio mobile configuration.' }
 $mobileSettings | ConvertTo-Json -Compress | dotnet user-secrets set --id $secretsId | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Could not synchronize Visual Studio mobile configuration.' }
+& (Join-Path $PSScriptRoot 'Initialize-LocalSigning.ps1')
 Write-Output 'Visual Studio Development configuration synchronized. Restart debugging to apply it; do not start a second API.'
 if (-not $SkipDatabase) {
     # The active persistence is Compact24. Legacy EF migrations would add the

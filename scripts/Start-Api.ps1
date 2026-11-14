@@ -9,6 +9,7 @@ if (-not (Test-Path -LiteralPath $configurationFile)) { throw 'Selected environm
 $env:BHOME_ENV_FILE = $configurationFile
 foreach ($line in Get-Content -LiteralPath $configurationFile) {
     if ($line -match '^((ConnectionStrings|Jwt|Sessions|AuthRateLimit|AuthWeb|AuthenticationEmail|ObjectStorage|Jobs|Email|Cors|BankIntegration|SePay|NotificationIntegration|NotificationChannels|OwnerSetup|ElectronicContractIntegration|Ocr|IdentityProtection|Capture|Kestrel|MobileDevelopment|Api|MainDraft|DevelopmentDatabase|DigitalSigning|AnonymousSigning|HoldingTesting)__[^=]+|AllowedHosts)=(.*)$') {
+        if ($Matches[1] -eq 'AnonymousSigning__OtpHmacKey' -and [string]::IsNullOrWhiteSpace($Matches[3])) { continue }
         [Environment]::SetEnvironmentVariable($Matches[1], $Matches[3], 'Process')
     }
 }
