@@ -39,6 +39,9 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
   router: { canGoBack: () => false, back: vi.fn() },
 }));
+vi.mock('../components/ContextPortal', () => ({
+  ContextPortal: ({ children }: { children: React.ReactNode }) => children,
+}));
 vi.mock('expo-crypto', () => ({ randomUUID: () => crypto.randomUUID() }));
 vi.mock('../components/CameraCapture', () => ({ CameraCapture: () => null }));
 vi.mock('expo-image-picker', () => ({

@@ -1,4 +1,12 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
+import { ScrollLockContext } from './ScrollLock';
 import {
   Keyboard,
   ScrollView,
@@ -18,6 +26,8 @@ export const KeyboardFormScrollView = forwardRef<ScrollHandle, ScrollViewProps>(
     const scrollY = useRef(0);
     const frame = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
     useImperativeHandle(ref, () => scroll.current!, []);
+    // A drawing child (signature pad) locks scrolling while the finger is down.
+    const [locked, setLocked] = useState(false);
     const reveal = useCallback(() => {
       if (focused.current === null || keyboardTop.current === null) return;
       if (frame.current !== null) cancelAnimationFrame(frame.current);
@@ -58,23 +68,26 @@ export const KeyboardFormScrollView = forwardRef<ScrollHandle, ScrollViewProps>(
       };
     }, [reveal]);
     return (
-      <ScrollView
-        {...props}
-        ref={scroll}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        automaticallyAdjustKeyboardInsets={false}
-        onFocusCapture={(event) => {
-          focused.current = event.nativeEvent.target;
-          reveal();
-          props.onFocusCapture?.(event);
-        }}
-        onScroll={(event) => {
-          scrollY.current = event.nativeEvent.contentOffset.y;
-          props.onScroll?.(event);
-        }}
-        scrollEventThrottle={props.scrollEventThrottle ?? 16}
-      />
+      <ScrollLockContext.Provider value={setLocked}>
+        <ScrollView
+          {...props}
+          scrollEnabled={!locked && props.scrollEnabled !== false}
+          ref={scroll}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={false}
+          onFocusCapture={(event) => {
+            focused.current = event.nativeEvent.target;
+            reveal();
+            props.onFocusCapture?.(event);
+          }}
+          onScroll={(event) => {
+            scrollY.current = event.nativeEvent.contentOffset.y;
+            props.onScroll?.(event);
+          }}
+          scrollEventThrottle={props.scrollEventThrottle ?? 16}
+        />
+      </ScrollLockContext.Provider>
     );
   },
 );
