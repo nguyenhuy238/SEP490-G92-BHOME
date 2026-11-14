@@ -15,6 +15,7 @@ export function IdentityFlowFrame({
   personLabel,
   onClose,
   children,
+  footer,
 }: {
   modal: boolean;
   visible: boolean;
@@ -23,6 +24,7 @@ export function IdentityFlowFrame({
   personLabel: string;
   onClose: () => void;
   children: React.ReactNode;
+  footer?: React.ReactNode;
 }) {
   if (!modal) return <>{children}</>;
   if (!visible) return null;
@@ -31,7 +33,8 @@ export function IdentityFlowFrame({
       visible
       transparent={false}
       presentationStyle="fullScreen"
-      animationType="slide"
+      // Web safe-area measurement must not include a slide's offscreen translation.
+      animationType={Platform.OS === 'web' ? 'fade' : 'slide'}
       statusBarTranslucent
       onRequestClose={onClose}
     >
@@ -71,6 +74,7 @@ export function IdentityFlowFrame({
               </KeyboardFormScrollView>
             </KeyboardAvoidingView>
           )}
+          {!!footer && <View style={styles.footer}>{footer}</View>}
         </SafeAreaView>
         <ToastHost modal />
       </SafeAreaProvider>
@@ -81,6 +85,14 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F5F7FB' },
   dark: { backgroundColor: '#07121F' },
   body: { flex: 1 },
+  footer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

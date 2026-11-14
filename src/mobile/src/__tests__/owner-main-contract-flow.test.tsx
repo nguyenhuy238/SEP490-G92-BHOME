@@ -6,6 +6,7 @@ import type { ContractView, Readiness } from '../../../../packages/client-core/s
 const state = vi.hoisted(() => ({
   mode: 'MYSIGN',
   accepted: false,
+  error: '',
   request: vi.fn(),
   changed: vi.fn(),
   refresh: vi.fn(),
@@ -18,36 +19,41 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
     data: state.accepted
       ? { tenantAcceptedAt: '2026-11-13T00:00:00Z', ownerAcceptedAt: null }
       : null,
-    error: '',
+    error: state.error,
     reload: state.refresh,
   }),
 }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
-vi.mock('../components/WorkspaceKit', () => ({
-  ui: {},
-  Box: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
-  Heading: ({ title, detail }: { title: string; detail?: string }) => (
-    <h2>
-      {title} {detail}
-    </h2>
-  ),
-  Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-  Action: ({
-    children,
-    onPress,
-    disabled,
-  }: {
-    children: React.ReactNode;
-    onPress: () => void;
-    disabled?: boolean;
-  }) => (
-    <button disabled={disabled} onClick={onPress}>
-      {children}
-    </button>
-  ),
-}));
+vi.mock('../components/WorkspaceKit', async () => {
+  const { default: View } = await vi.importActual<{
+    default: React.ComponentType<{ children: React.ReactNode }>;
+  }>('react-native-web/dist/cjs/exports/View');
+  return {
+    ui: {},
+    Box: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    Heading: ({ title, detail }: { title: string; detail?: string }) => (
+      <h2>
+        {title} {detail}
+      </h2>
+    ),
+    Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    Action: ({
+      children,
+      onPress,
+      disabled,
+    }: {
+      children: React.ReactNode;
+      onPress: () => void;
+      disabled?: boolean;
+    }) => (
+      <button disabled={disabled} onClick={onPress}>
+        {children}
+      </button>
+    ),
+  };
+});
 vi.mock('../features/contracts/RentalContractStepper', () => ({
   RentalContractStepper: ({ completed }: { completed: string[] }) => (
     <output>{JSON.stringify(completed)}</output>
@@ -108,7 +114,24 @@ const mount = (contract = c, r = readiness(false)) =>
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   state.accepted = false;
+  state.error = '';
+});
+it.each(['INTERNAL_OTP_DRAWN', 'MYSIGN'])(
+  'renders pending signing without raw text inside a native View (%s)',
+  (signingMode) => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mount({ ...c, signingMode });
+    expect(errors).not.toHaveBeenCalled();
+  },
+);
+it('renders an internal signing API error inside Text', () => {
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+  state.error = 'Signing status unavailable';
+  mount({ ...c, signingMode: 'INTERNAL_OTP_DRAWN' });
+  expect(screen.getByText(state.error)).toBeTruthy();
+  expect(errors).not.toHaveBeenCalled();
 });
 it('separates requesting MySign from a verified signature and refreshes after the action', () => {
   mount();

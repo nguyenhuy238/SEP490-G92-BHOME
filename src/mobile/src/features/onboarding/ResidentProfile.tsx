@@ -221,6 +221,8 @@ export function ResidentProfile({
           </Button>
           <IdentityWizard
             residentId={residentId}
+            locationId={data.locationId}
+            roomId={data.resident.roomId}
             personLabel={data.resident.displayLabel}
             mode={wizardMode}
             onModeChange={setWizardMode}

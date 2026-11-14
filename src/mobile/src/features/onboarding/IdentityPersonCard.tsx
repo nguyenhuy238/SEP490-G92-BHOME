@@ -61,6 +61,11 @@ export function IdentityPersonCard({
       >
         {status}
       </Pill>
+      {!!person.verificationError && (
+        <Text accessibilityRole="alert" style={{ color: s.red }}>
+          {person.verificationError}
+        </Text>
+      )}
       {person.status !== 'confirmed' && (
         <View style={styles.progress}>
           {(['front', 'back'] as const).map((face) => (

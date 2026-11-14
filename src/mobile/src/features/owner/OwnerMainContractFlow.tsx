@@ -119,7 +119,7 @@ export function OwnerMainContractFlow({
             <Text>Hồ sơ đã được chuyển sang chờ ký; chưa đồng nghĩa hai bên đã ký.</Text>
             <Text>Owner: {ownerSigned ? 'Đã xác minh' : 'Chờ xác nhận ký'}</Text>
             <Text>Người đại diện: {tenantSigned ? 'Đã xác minh' : 'Chờ xác nhận ký'}</Text>
-            {consent.error && <Text style={ui.red}>{consent.error}</Text>}
+            {!!consent.error && <Text style={ui.red}>{consent.error}</Text>}
             {!internal && mySign && (
               <Text>
                 Gửi yêu cầu → xác nhận trên MySign → kiểm tra kết quả ký. Chỉ kết quả đã xác minh

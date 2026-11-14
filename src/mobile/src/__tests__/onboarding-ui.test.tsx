@@ -4,7 +4,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 const state = vi.hoisted(() => ({
   json: vi.fn(),
+  request: vi.fn(),
   image: vi.fn(),
+  protect: vi.fn(),
+  platform: 'android',
   go: vi.fn(),
   resetScroll: vi.fn(),
   registerExitGuard: vi.fn(() => () => {}),
@@ -24,7 +27,7 @@ vi.mock('expo-router', () => ({
   },
 }));
 vi.mock('expo-screen-capture', () => ({
-  usePreventScreenCapture: () => {},
+  usePreventScreenCapture: state.protect,
   enableAppSwitcherProtectionAsync: vi.fn(),
   disableAppSwitcherProtectionAsync: vi.fn(),
 }));
@@ -33,7 +36,7 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
 }));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({
-    api: { json: state.json, image: state.image },
+    api: { json: state.json, image: state.image, request: state.request },
     session: { roles: ['Staff'] },
   }),
 }));
@@ -41,18 +44,24 @@ vi.mock('react-native', () => ({
   Modal: ({
     children,
     onRequestClose,
+    animationType,
   }: {
     children: React.ReactNode;
     onRequestClose: () => void;
+    animationType: string;
   }) => (
-    <div role="dialog">
+    <div role="dialog" data-animation={animationType}>
       <button onClick={onRequestClose}>Android Back</button>
       {children}
     </div>
   ),
   ScrollView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   KeyboardAvoidingView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Platform: { OS: 'android' },
+  Platform: {
+    get OS() {
+      return state.platform;
+    },
+  },
   AppState: {
     addEventListener: (_event: string, listener: (value: string) => void) => {
       state.listeners.push(listener);
@@ -78,7 +87,13 @@ vi.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 vi.mock('react-native-paper', () => ({
   MD3LightTheme: { colors: {} },
   configureFonts: () => ({}),
-  Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+  Text: ({
+    children,
+    accessibilityRole,
+  }: {
+    children?: React.ReactNode;
+    accessibilityRole?: React.AriaRole;
+  }) => <span role={accessibilityRole}>{children}</span>,
   Icon: () => null,
   ActivityIndicator: () => <span>Đang tải</span>,
   Button: ({
@@ -282,6 +297,8 @@ beforeEach(() => {
   state.listeners = [];
   state.failConfirm = false;
   state.serial = 0;
+  state.platform = 'android';
+  state.request.mockResolvedValue([]);
   state.image.mockRejectedValue(new Error('OCR tạm thời không khả dụng'));
   state.json.mockImplementation(async (path: string) => {
     if (path.endsWith('/confirm')) {
@@ -311,6 +328,132 @@ function namePerson(label: string) {
     },
   });
 }
+function startEmailConflict(entry: 'Nhập thủ công' | 'Bắt đầu quét CCCD' = 'Nhập thủ công') {
+  render(<OnboardingScreen />);
+  selectRoom();
+  namePerson('Synthetic occupant');
+  fireEvent.change(screen.getByLabelText('Email người ở'), {
+    target: { value: 'synthetic@example.invalid' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+  state.json.mockRejectedValueOnce(new MobileApiError(409, 'resident_email_already_associated'));
+  fireEvent.click(screen.getByRole('button', { name: entry }));
+}
+it.each([0, 1])(
+  'offers an explicit existing profile link without confirming or recreating it (status %i)',
+  async (verificationStatus) => {
+    state.request.mockResolvedValueOnce([
+      {
+        id: 'existing',
+        roomId: 'room',
+        email: 'SYNTHETIC@example.invalid',
+        displayLabel: 'Existing synthetic occupant',
+        residentType: 0,
+        verificationStatus,
+      },
+    ]);
+    startEmailConflict();
+    const open = await screen.findByRole('button', { name: 'Mở hồ sơ đã có tại phòng này' });
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      expect.stringContaining('Email này đã gắn với một hồ sơ người ở'),
+    );
+    expect(state.request).toHaveBeenCalledWith('/api/v1/capture/locations/location/residents', {
+      signal: undefined,
+    });
+    expect(state.json).toHaveBeenCalledOnce();
+    expect(state.image).not.toHaveBeenCalled();
+    expect(state.go).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    fireEvent.click(open);
+    expect(state.go).toHaveBeenCalledWith('onboarding', {
+      residentId: 'existing',
+      locationId: 'location',
+    });
+  },
+);
+it.each(['Nhập thủ công', 'Bắt đầu quét CCCD'] as const)(
+  'lets Staff correct a conflicting email then open %s',
+  async (entry) => {
+    startEmailConflict(entry);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sửa email người ở' }));
+    expect(screen.getByLabelText('Tên gọi hồ sơ')).toHaveProperty('value', 'Synthetic occupant');
+    fireEvent.change(screen.getByLabelText('Email người ở'), {
+      target: { value: 'new@example.invalid' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+    fireEvent.click(screen.getByRole('button', { name: entry }));
+    await screen.findByRole('dialog');
+    expect(state.json).toHaveBeenCalledTimes(2);
+    expect(state.json.mock.calls[1][1]).toMatchObject({
+      roomId: 'room',
+      email: 'new@example.invalid',
+    });
+    expect(screen.queryByText('Kiểm tra hồ sơ đã có')).toBeNull();
+  },
+);
+it.each(['another-room', 'another-email', 'not-visible', 'lookup-failed'])(
+  'does not resolve an existing identity from an unsuitable scoped match (%s)',
+  async (scenario) => {
+    if (scenario === 'lookup-failed') state.request.mockRejectedValueOnce(new MobileApiError(403));
+    else
+      state.request.mockResolvedValueOnce(
+        scenario === 'not-visible'
+          ? []
+          : [
+              {
+                id: 'unrelated',
+                roomId: scenario === 'another-room' ? 'other' : 'room',
+                email:
+                  scenario === 'another-email'
+                    ? 'other@example.invalid'
+                    : 'synthetic@example.invalid',
+              },
+            ],
+      );
+    startEmailConflict();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Kiểm tra danh sách người ở' })).toHaveProperty(
+        'disabled',
+        false,
+      ),
+    );
+    expect(screen.queryByRole('button', { name: 'Mở hồ sơ đã có tại phòng này' })).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(state.json).toHaveBeenCalledOnce();
+    expect(state.go).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+  },
+);
+it('opens manual identity on Web without mounting the unsupported native screen-capture hook', async () => {
+  state.platform = 'web';
+  render(<OnboardingScreen />);
+  selectRoom();
+  namePerson('Synthetic web occupant');
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Nhập thủ công' }));
+  await screen.findByRole('dialog');
+  expect(screen.getByRole('textbox', { name: 'Số CCCD (12 chữ số)' })).toBeTruthy();
+  expect(screen.getByRole('dialog').getAttribute('data-animation')).toBe('fade');
+  cleanup();
+  expect(state.protect).not.toHaveBeenCalled();
+});
+it('keeps native screen-capture protection on Android', async () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  namePerson('Synthetic native occupant');
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+  await openIdentity();
+  expect(state.protect).toHaveBeenCalledWith('identity-wizard-resident-1');
+  expect(screen.getByRole('dialog').getAttribute('data-animation')).toBe('slide');
+});
 async function openIdentity(index = 0) {
   if (screen.queryByRole('dialog')) closeIdentity();
   fireEvent.click(
@@ -436,7 +579,9 @@ it('allows manual confirmation after OCR failure and completes only after the se
   fireEvent.click(screen.getByRole('checkbox'));
   state.failConfirm = true;
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-  await screen.findByText('Không thể hoàn thành. Kiểm tra kết nối và địa chỉ HTTPS.');
+  await within(screen.getByRole('dialog')).findByText(
+    'Không thể hoàn thành. Kiểm tra kết nối và địa chỉ HTTPS.',
+  );
   expect(
     (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
@@ -464,6 +609,148 @@ it('does not blindly create another Resident after a timeout with an unknown sav
   expect(state.json).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('dialog')).toBeNull();
 });
+async function submitAlreadyConfirmed() {
+  render(<OnboardingScreen />);
+  selectRoom();
+  namePerson('Synthetic recovered occupant');
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+  await openIdentity();
+  manualIdentity();
+  state.json.mockRejectedValueOnce(new MobileApiError(409, 'identity_already_confirmed'));
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
+  await screen.findByRole('button', { name: 'Dùng hồ sơ đã xác nhận' });
+}
+it('recovers identity_already_confirmed only after explicit use of the same server-verified resident', async () => {
+  await submitAlreadyConfirmed();
+  expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
+    'disabled',
+    true,
+  );
+  expect(screen.getByRole('button', { name: 'Xác nhận thông tin' })).toHaveProperty(
+    'disabled',
+    true,
+  );
+  state.request.mockResolvedValueOnce([
+    { id: 'resident-1', roomId: 'room', verificationStatus: 1 },
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng hồ sơ đã xác nhận' }));
+  await screen.findByText('Đã xác nhận 1/1 người ở');
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(state.json).toHaveBeenCalledTimes(2); // Create + rejected confirm, no overwrite/replay.
+  act(() => state.listeners.forEach((listener) => listener('background')));
+  expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
+    'disabled',
+    false,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
+  expect(state.go).toHaveBeenCalledWith('prepare-contract', {
+    roomId: 'room',
+    representativeResidentId: 'resident-1',
+    residentIds: '["resident-1"]',
+  });
+});
+it.each(['wrong-id', 'wrong-room', 'pending', 'rejected', 'forbidden'])(
+  'keeps identity recovery blocked when the scoped lookup is unsuitable (%s)',
+  async (scenario) => {
+    await submitAlreadyConfirmed();
+    if (scenario === 'forbidden') state.request.mockRejectedValueOnce(new MobileApiError(403));
+    else
+      state.request.mockResolvedValueOnce([
+        {
+          id: scenario === 'wrong-id' ? 'other' : 'resident-1',
+          roomId: scenario === 'wrong-room' ? 'other' : 'room',
+          verificationStatus: scenario === 'pending' ? 0 : scenario === 'rejected' ? 2 : 1,
+        },
+      ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Dùng hồ sơ đã xác nhận' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Dùng hồ sơ đã xác nhận' })).toHaveProperty(
+        'disabled',
+        false,
+      ),
+    );
+    expect(screen.getByText('Đã xác nhận 0/1 người ở')).toBeTruthy();
+    expect(state.go).not.toHaveBeenCalled();
+    expect(state.json).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+  },
+);
+it('keeps a rejected confirmation error visible after closing the form and can read back a committed save', async () => {
+  await submitAlreadyConfirmed();
+  closeIdentity();
+  expect(screen.getByRole('alert').textContent).toContain('Dữ liệu vừa nhập không được ghi đè');
+  state.request.mockResolvedValueOnce([
+    { id: 'resident-1', roomId: 'room', verificationStatus: 1 },
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trạng thái đã lưu' }));
+  await screen.findByText('Đã xác nhận 1/1 người ở');
+  act(() => state.listeners.forEach((listener) => listener('background')));
+  expect(screen.getByText('Đã xác nhận 1/1 người ở')).toBeTruthy();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(state.json).toHaveBeenCalledTimes(2);
+});
+it('recovers a committed confirmation after the app backgrounds before its response arrives', async () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  namePerson('Synthetic delayed confirmation');
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+  await openIdentity();
+  manualIdentity();
+  let complete!: (result: unknown) => void;
+  state.json.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
+  act(() => state.listeners.forEach((listener) => listener('background')));
+  await act(async () => complete({ id: 'resident-1', verificationStatus: 1 }));
+  expect(screen.getByText('Đã xác nhận 0/1 người ở')).toBeTruthy();
+  state.request.mockResolvedValueOnce([
+    { id: 'resident-1', roomId: 'room', verificationStatus: 1 },
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trạng thái đã lưu' }));
+  await screen.findByText('Đã xác nhận 1/1 người ở');
+  expect(state.json).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
+    'disabled',
+    false,
+  );
+});
+it.each(['pending', 'wrong-id', 'wrong-room', 'forbidden'])(
+  'does not recover an unverified or inaccessible saved status (%s)',
+  async (scenario) => {
+    render(<OnboardingScreen />);
+    selectRoom();
+    namePerson('Synthetic pending check');
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+    await openIdentity();
+    closeIdentity();
+    if (scenario === 'forbidden') state.request.mockRejectedValueOnce(new MobileApiError(403));
+    else
+      state.request.mockResolvedValueOnce([
+        {
+          id: scenario === 'wrong-id' ? 'other' : 'resident-1',
+          roomId: scenario === 'wrong-room' ? 'other' : 'room',
+          verificationStatus: scenario === 'pending' ? 0 : 1,
+        },
+      ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trạng thái đã lưu' }));
+    await screen.findByRole('alert');
+    expect(screen.getByText('Đã xác nhận 0/1 người ở')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(state.json).toHaveBeenCalledOnce();
+  },
+);
 it('retains unconfirmed identity edits across steps and keeps each person separate', async () => {
   render(<OnboardingScreen />);
   selectRoom();
@@ -684,7 +971,9 @@ it('does not mark a person confirmed when the response lacks a verified status',
   state.json.mockResolvedValueOnce({ id: 'resident-1', verificationStatus: 0 });
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-  await screen.findByText('Không thể hoàn thành. Kiểm tra kết nối và địa chỉ HTTPS.');
+  await within(screen.getByRole('dialog')).findByText(
+    'Không thể hoàn thành. Kiểm tra kết nối và địa chỉ HTTPS.',
+  );
   expect(screen.getByText('Đã xác nhận 0/1 người ở')).toBeTruthy();
   expect(
     (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,

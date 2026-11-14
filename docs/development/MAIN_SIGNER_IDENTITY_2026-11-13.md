@@ -1,5 +1,13 @@
 # Hoàn thiện định danh bên thuê và ký Main Contract
 
+## Sửa lỗi render màn hình ký — 14/11/2026
+
+Truy vết: màn hình Owner ký Main Contract (BF-03/04, UC-15/16, GBR-04) → `OwnerMainContractFlow` → regression `owner-main-contract-flow.test.tsx`. Đây là sửa render; không đổi quy tắc ký hoặc kích hoạt.
+
+`consent.error` bằng chuỗi rỗng khi không có lỗi. Điều kiện `{consent.error && ...}` đưa chuỗi rỗng vào `Surface/View`, khiến React Native Web báo `Unexpected text node: . A text node cannot be a child of a <View>.`. Đổi điều kiện sang boolean để bỏ qua phần tử khi không có lỗi; lỗi API vẫn hiển thị trong `Text`.
+
+Test dùng `View` thật của React Native Web thay cho HTML `section` và kiểm tra `console.error`: hai trường hợp PendingSigning (internal/MySign) tái hiện đúng cảnh báo trước sửa; sau sửa cả hai qua, trường hợp lỗi API vẫn hiển thị đúng. Full Mobile: **101 files / 1.109 tests PASS**. Browser check trước đây chỉ bắt `pageerror`, nên không phát hiện cảnh báo qua `console.error`; không coi kết quả đó là bằng chứng đã kiểm tra invariant này.
+
 ## Truy vết và kế hoạch
 
 Yêu cầu được duyệt ngày 13/11/2026 BR-01..05 → BF-03/04, UC-15/16, GBR-04; quyết định nghiệp vụ 10/11 BR-01/04/05/07. Nhánh `member/QHuy`, base `ffe9320b`, working tree ban đầu sạch. Không thay Staff/Tenant screens, billing, occupancy, schema hoặc provider policy.

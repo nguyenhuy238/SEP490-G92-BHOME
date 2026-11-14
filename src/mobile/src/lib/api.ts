@@ -30,6 +30,7 @@ export interface Resident {
   verificationStatus: number;
   residentType?: number;
   confirmedAt?: string | null;
+  email?: string | null;
 }
 export type { MeterTask } from '../../../../packages/client-core/src/meter';
 export class MobileApiError extends Error {
@@ -148,6 +149,9 @@ export function errorMessage(error: unknown): string {
       requestDiagnostic(error)
     );
   const messages: Record<string, string> = {
+    resident_email_already_associated:
+      'Email này đã gắn với một hồ sơ người ở. Hãy kiểm tra hồ sơ đã có hoặc sửa email nếu nhập nhầm.',
+    resident_email_required: 'Mỗi người ở cần một email riêng hợp lệ.',
     secure_storage_unavailable:
       'Không truy cập được kho bảo mật của thiết bị. Hãy mở khóa thiết bị và thử đăng nhập lại.',
     request_timeout:
@@ -158,7 +162,8 @@ export function errorMessage(error: unknown): string {
     human_confirmation_required: 'Bạn cần xác nhận đã kiểm tra dữ liệu.',
     duplicate_or_conflicting_record:
       'Dữ liệu bị trùng hoặc đã thay đổi. Hãy tải lại danh sách; hệ thống không tự gộp hồ sơ.',
-    identity_already_confirmed: 'Hồ sơ đã xác nhận với nội dung khác. Hãy liên hệ Owner.',
+    identity_already_confirmed:
+      'Hồ sơ đã được xác nhận trước đó. Dữ liệu vừa nhập không được ghi đè. Dùng hồ sơ đã xác nhận để tiếp tục; liên hệ Owner nếu cần sửa hồ sơ.',
     confirmed_baseline_required: 'Cần xác nhận chỉ số ban đầu của đồng hồ trước.',
     meter_reset_or_rollover_requires_review:
       'Chỉ số giảm. Cần Owner xử lý thay/reset hoặc quay vòng đồng hồ theo quy trình riêng.',
