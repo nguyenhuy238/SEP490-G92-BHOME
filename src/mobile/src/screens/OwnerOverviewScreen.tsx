@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback } from 'react';
 import { View } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { Action, ui } from '../components/WorkspaceKit';
@@ -6,41 +6,32 @@ import {
   DashboardCard as Box,
   DashboardSection,
   DashboardMetric as Metric,
-  DashboardActions as QuickActions,
   DashboardSummary,
 } from '../components/DashboardKit';
 import { useSession } from '../lib/SessionProvider';
-import { errorMessage } from '../lib/api';
-import { conciseMessage, showError } from '../lib/toast';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
-import { loadOwnerOverview, type OwnerOverview } from '../services/ownerOverview';
+import { loadOwnerOverview } from '../services/ownerOverview';
+import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import { ownerQueuePolicy, OwnerApprovalQueue } from '../features/owner/OwnerApprovalQueue';
+import type { MobileApi } from '../lib/api';
+import { OwnerAttentionSummary } from '../features/owner/OwnerAttentionSummary';
+import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
+const loadOverview = (api: MobileApi, _path: string, signal: AbortSignal) =>
+  loadOwnerOverview(api, signal);
 
 export function OwnerOverviewScreen() {
   const { api, session } = useSession();
   const { go } = useWorkspace();
-  const [revision, setRevision] = useState(0);
-  const [state, setState] = useState<{
-    data: OwnerOverview | null;
-    error: string;
-    loading: boolean;
-  }>({ data: null, error: '', loading: true });
-  useEffect(() => {
-    if (!api || !session?.roles.includes('Owner')) return;
-    const controller = new AbortController();
-    void loadOwnerOverview(api, controller.signal).then(
-      (data) => {
-        if (!controller.signal.aborted) setState({ data, error: '', loading: false });
-      },
-      (error) => {
-        if (!controller.signal.aborted) {
-          const message = conciseMessage(errorMessage(error));
-          setState({ data: null, error: message, loading: false });
-          showError(message);
-        }
-      },
-    );
-    return () => controller.abort();
-  }, [api, session, revision]);
+  const state = useWorkspaceQuery(
+    api && session?.roles.includes('Owner') ? '/owner-mobile/overview' : null,
+    { cache: ownerQueuePolicy, load: loadOverview },
+  );
+  const reload = state.reload;
+  const refresh = useCallback(() => {
+    api?.queryCache.invalidate(ownerQueuePolicy.tags);
+    reload();
+  }, [api, reload]);
+  useWorkspaceHeaderRefresh(refresh, state.fetching, { title: 'Tổng quan' });
   if (!api || !session?.roles.includes('Owner'))
     return <Text>Cần đăng nhập Owner để xem tổng quan.</Text>;
   return (
@@ -50,26 +41,23 @@ export function OwnerOverviewScreen() {
         detail="Cơ sở, phòng và hợp đồng trong phạm vi tài khoản"
       />
       <DashboardSection title="THAO TÁC NHANH">
-        <QuickActions
-          items={[
-            { label: 'Phê duyệt', icon: 'clipboard-check-outline', onPress: () => go('approvals') },
-            { label: 'Vận hành', icon: 'tune-variant', onPress: () => go('operations') },
-            {
-              label: 'Tài chính',
-              icon: 'chart-line',
-              onPress: () => go('owner-finance'),
-            },
-          ]}
-        />
+        <View style={ui.wrap}>
+          <View style={ui.half}>
+            <Action onPress={() => go('approvals')}>Phê duyệt</Action>
+          </View>
+          <View style={ui.half}>
+            <Action secondary onPress={() => go('operations')}>
+              Vận hành
+            </Action>
+          </View>
+          <View style={ui.half}>
+            <Action secondary onPress={() => go('owner-finance')}>
+              Tài chính
+            </Action>
+          </View>
+        </View>
       </DashboardSection>
-      <Action
-        secondary
-        disabled={state.loading}
-        onPress={() => {
-          setState({ data: null, error: '', loading: true });
-          setRevision((value) => value + 1);
-        }}
-      >
+      <Action secondary disabled={state.fetching} onPress={refresh}>
         Tải lại dữ liệu
       </Action>
       <DashboardSection title="TỔNG QUAN CƠ SỞ">
@@ -121,8 +109,18 @@ export function OwnerOverviewScreen() {
           </View>
         )}
       </DashboardSection>
+      <OwnerAttentionSummary />
+      <DashboardSection title="CẦN XỬ LÝ">
+        <OwnerApprovalQueue compact />
+      </DashboardSection>
       <Action icon="tools" onPress={() => go('owner-incidents')}>
         Sự cố và bảo trì
+      </Action>
+      <Action secondary onPress={() => go('owner-emergencies')}>
+        Sự cố khẩn cấp
+      </Action>
+      <Action secondary onPress={() => go('owner-residence')}>
+        Kết quả tạm trú
       </Action>
       <Action icon="file-document-outline" onPress={() => go('signing')}>
         Hợp đồng & Vòng đời

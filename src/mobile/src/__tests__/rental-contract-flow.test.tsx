@@ -1,11 +1,27 @@
 // @vitest-environment jsdom
-import React from 'react';
+import React, { useEffect } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ContractView, Readiness } from '../../../../packages/client-core/src/contracts';
 import type { MainDraftView } from '../../../../packages/client-core/src/mainDrafts';
-const state = vi.hoisted(() => ({ request: vi.fn(), roles: ['Owner'] }));
-const transport = { request: state.request };
+const state = vi.hoisted(() => ({
+  request: vi.fn(),
+  roles: ['Owner'],
+  signer: {
+    id: 'resident',
+    roomId: 'room',
+    residentType: 'Representative',
+    verificationStatus: 'Verified',
+    tenantUserId: null as string | null,
+    contactEmail: 'synthetic@example.invalid',
+  },
+}));
+const transport = {
+  request: (path: string, ...args: unknown[]) =>
+    path.startsWith('/api/v1/residents/')
+      ? Promise.resolve(state.signer)
+      : state.request(path, ...args),
+};
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ api: transport, session: { roles: state.roles } }),
 }));
@@ -119,15 +135,63 @@ vi.mock('../features/contracts/ContractWorkflowPanel', () => ({
   ContractWorkflowPanel: () => <span>Private documents</span>,
 }));
 vi.mock('../features/contracts/ContractPdfPreview', () => ({
-  ContractPdfPreview: ({ document }: { document: { id: string } }) => (
-    <span>Private PDF {document.id}</span>
-  ),
+  ContractPdfPreview: ({
+    document,
+    onReady,
+    previewErrorCode,
+    onRegenerate,
+    onDocumentError,
+  }: {
+    document: { id: string } | null;
+    onReady?: (id: string) => void;
+    previewErrorCode?: string;
+    onRegenerate?: () => void;
+    onDocumentError?: (error: unknown) => void;
+  }) => {
+    useEffect(() => {
+      if (document) onReady?.(document.id);
+    }, [document, onReady]);
+    return document ? (
+      <>
+        <span>Private PDF {document.id}</span>
+        <button onClick={() => onDocumentError?.({ code: 'contract_document_integrity_failed' })}>
+          Fail private PDF
+        </button>
+      </>
+    ) : (
+      <>
+        <span>{mainDraftMessages[previewErrorCode ?? '']}</span>
+        <button onClick={onRegenerate}>Tạo lại PDF</button>
+      </>
+    );
+  },
 }));
 import { RentalContractFlow } from '../features/contracts/RentalContractFlow';
 import { MainDraftSigningReview } from '../features/contracts/MainDraftSigningReview';
-import { mainDraftClient } from '../../../../packages/client-core/src/mainDrafts';
+import {
+  mainDraftClient,
+  mainDraftMessages,
+} from '../../../../packages/client-core/src/mainDrafts';
 import { rentalContractState } from '../features/contracts/rentalContractState';
 
+function reviewDraft(version = 4): MainDraftView {
+  return {
+    id: 'draft',
+    status: 'Draft',
+    version,
+    input: { roomId: 'room', representativeResidentId: 'resident', residentIds: ['resident'] },
+    preparation: {
+      residents: [
+        {
+          id: 'resident',
+          fullName: 'Verified signer',
+          maskedCitizenNumber: '********0000',
+          representative: true,
+        },
+      ],
+    },
+  } as MainDraftView;
+}
 function contract(): ContractView {
   return {
     id: 'contract',
@@ -180,6 +244,8 @@ function flow(c = contract(), role = 'Owner', readiness: Readiness | null = null
 beforeEach(() => {
   state.request.mockReset();
   state.roles = ['Owner'];
+  state.signer.tenantUserId = null;
+  state.signer.id = 'resident';
 });
 afterEach(cleanup);
 it('labels completed Development signing as simulated while allowing inspection of the remaining conditions', () => {
@@ -266,9 +332,11 @@ it('does not offer Owner signing or financial controls to Staff', () => {
   expect(screen.queryByRole('button', { name: 'Yêu cầu ký MySign' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Xác minh cọc ngân hàng' })).toBeNull();
 });
-it('allows Owner release only with an actual reviewed file, selected Tenant and explicit confirmation, preventing double submission', async () => {
+it('releases with the verified linked signer, exact reviewed file and explicit confirmation, preventing double submission', async () => {
   let resolve!: (value: unknown) => void;
+  state.signer.tenantUserId = 'tenant';
   state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/draft')) return reviewDraft();
     if (path.endsWith('/accounts')) return [{ id: 'tenant', label: 'Tenant tổng hợp' }];
     if (path.endsWith('/signing-review')) return { id: 'review', developmentOnly: true };
     if (path.endsWith('/release'))
@@ -281,20 +349,19 @@ it('allows Owner release only with an actual reviewed file, selected Tenant and 
   render(
     <MainDraftSigningReview
       client={mainDraftClient(state.request)}
-      draft={{ id: 'draft', version: 4 } as MainDraftView}
+      draft={reviewDraft()}
       onReleased={released}
       onOpenPdf={vi.fn()}
     />,
   );
   const submit = screen.getByRole('button', {
-    name: 'Xác nhận chuyển sang ký',
+    name: 'Duyệt và chuyển sang chờ ký',
   }) as HTMLButtonElement;
   expect(submit.disabled).toBe(true);
-  await screen.findByText('Tenant tổng hợp');
-  fireEvent.change(screen.getByLabelText('Tài khoản Tenant đại diện'), {
-    target: { value: 'tenant' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo PDF đưa đi ký' }));
+  await screen.findByText('Viettel MySign · Tài khoản đã liên kết');
+  expect(screen.queryByRole('combobox')).toBeNull();
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/accounts'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo bản PDF để duyệt' }));
   await screen.findByText('Private PDF review');
   expect(submit.disabled).toBe(true);
   fireEvent.click(screen.getByRole('checkbox'));
@@ -313,6 +380,52 @@ it('allows Owner release only with an actual reviewed file, selected Tenant and 
   resolve({ id: 'draft' });
   await waitFor(() => expect(released).toHaveBeenCalledWith('draft'));
 });
+it('blocks review when the resident endpoint does not match the persisted representative', async () => {
+  state.signer.id = 'unrelated';
+  render(
+    <MainDraftSigningReview
+      client={mainDraftClient(state.request)}
+      draft={reviewDraft()}
+      onReleased={vi.fn()}
+      onOpenPdf={vi.fn()}
+    />,
+  );
+  await screen.findByText(mainDraftMessages.verified_contract_signer_required!);
+  expect((screen.getByText('Tạo bản PDF để duyệt') as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole('combobox')).toBeNull();
+  expect(state.request).not.toHaveBeenCalled();
+});
+it('releases an Owner-reviewed new Tenant draft through the supported anonymous signing branch', async () => {
+  state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/draft')) return reviewDraft();
+    if (path.endsWith('/accounts')) return [];
+    if (path.endsWith('/signing-review')) return { id: 'review', developmentOnly: true };
+    if (path.endsWith('/release')) return { id: 'draft' };
+    throw new Error('Unexpected test request');
+  });
+  const released = vi.fn();
+  render(
+    <MainDraftSigningReview
+      client={mainDraftClient(state.request)}
+      draft={reviewDraft()}
+      onReleased={released}
+      onOpenPdf={vi.fn()}
+    />,
+  );
+  await screen.findByText('Email OTP · Chấp thuận nội bộ');
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo bản PDF để duyệt' }));
+  await screen.findByText('Private PDF review');
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Duyệt và chuyển sang chờ ký' }));
+  await waitFor(() => expect(released).toHaveBeenCalledWith('draft'));
+  const release = state.request.mock.calls.find(([path]) => path.endsWith('/release'))!;
+  expect(JSON.parse(release[1].body)).toEqual({
+    tenantUserId: null,
+    expectedVersion: 4,
+    reviewedFileId: 'review',
+    humanReviewed: true,
+  });
+});
 it('shows Staff handoff without requesting accounts, signing-review or release', () => {
   state.roles = ['Staff'];
   render(
@@ -326,35 +439,69 @@ it('shows Staff handoff without requesting accounts, signing-review or release',
   expect(screen.getByText('Chờ Chủ cơ sở duyệt để ký')).toBeTruthy();
   expect(state.request).not.toHaveBeenCalled();
 });
-it('allows Owner to release a reviewed Main draft without a Tenant account for email OTP signing', async () => {
+it('clears the reviewed document when the server Draft version changes before release', async () => {
+  let currentVersion = 4;
   state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/draft')) return reviewDraft(currentVersion);
     if (path.endsWith('/accounts')) return [];
-    if (path.endsWith('/signing-review')) return { id: 'review-new', developmentOnly: true };
-    if (path.endsWith('/release')) return { id: 'draft-new' };
-    throw new Error('Unexpected test request');
+    if (path.endsWith('/signing-review')) return { id: 'review', developmentOnly: true };
+    throw new Error('Unexpected mutation');
   });
-  const released = vi.fn();
+  const changed = vi.fn();
   render(
     <MainDraftSigningReview
       client={mainDraftClient(state.request)}
-      draft={{ id: 'draft-new', version: 2 } as MainDraftView}
-      onReleased={released}
+      draft={reviewDraft()}
+      onReleased={vi.fn()}
+      onOpenPdf={vi.fn()}
+      onDraftChanged={changed}
+    />,
+  );
+  await screen.findByText('Email OTP · Chấp thuận nội bộ');
+  fireEvent.click(screen.getByText('Tạo bản PDF để duyệt'));
+  await screen.findByText('Private PDF review');
+  fireEvent.click(screen.getByRole('checkbox'));
+  currentVersion = 5;
+  fireEvent.click(screen.getByText('Duyệt và chuyển sang chờ ký'));
+  await screen.findByText('Bản nháp đã thay đổi hoặc không còn ở trạng thái Draft. Hãy tải lại.');
+  expect(changed).toHaveBeenCalledWith(expect.objectContaining({ version: 5 }));
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/release'))).toBe(false);
+  expect(screen.queryByText('Private PDF review')).toBeNull();
+  expect((screen.getByText('Duyệt và chuyển sang chờ ký') as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+});
+it('keeps a signing-review recovery action after integrity failure and requires a fresh confirmation', async () => {
+  let generation = 0;
+  state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/draft')) return reviewDraft();
+    if (path.endsWith('/accounts')) return [];
+    if (path.endsWith('/signing-review'))
+      return { id: `review-${++generation}`, developmentOnly: true };
+    throw new Error('Unexpected mutation');
+  });
+  render(
+    <MainDraftSigningReview
+      client={mainDraftClient(state.request)}
+      draft={reviewDraft()}
+      onReleased={vi.fn()}
       onOpenPdf={vi.fn()}
     />,
   );
-  await screen.findByText(
-    'Chưa có tài khoản Tenant. Người ở mới ký qua email và OTP; tài khoản chỉ được cấp sau khi hợp đồng kích hoạt.',
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo PDF đưa đi ký' }));
-  await screen.findByText('Private PDF review-new');
+  await screen.findByText('Email OTP · Chấp thuận nội bộ');
+  fireEvent.click(screen.getByText('Tạo bản PDF để duyệt'));
+  await screen.findByText('Private PDF review-1');
   fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chuyển sang ký' }));
-  await waitFor(() => expect(released).toHaveBeenCalledWith('draft-new'));
-  const call = state.request.mock.calls.find(([path]) => path.endsWith('/release'));
-  expect(JSON.parse(call![1].body)).toEqual({
-    tenantUserId: null,
-    expectedVersion: 2,
-    reviewedFileId: 'review-new',
-    humanReviewed: true,
-  });
+  fireEvent.click(screen.getByText('Fail private PDF'));
+  expect(screen.getAllByText(mainDraftMessages.contract_document_integrity_failed!)).toHaveLength(
+    1,
+  );
+  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+  fireEvent.click(screen.getByText('Tạo lại PDF'));
+  await screen.findByText('Private PDF review-2');
+  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+  expect((screen.getByText('Duyệt và chuyển sang chờ ký') as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/release'))).toBe(false);
 });

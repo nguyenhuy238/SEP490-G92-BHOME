@@ -21,6 +21,7 @@ import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
+import { OwnerMoveOutDecisions } from '../owner/OwnerMoveOutDecisions';
 
 export function ContractLifecyclePanel({
   api,
@@ -314,7 +315,23 @@ export function ContractLifecyclePanel({
         </>
       )}
       {role === 'Owner' && (
-        <OwnerWebNotice task="Xác nhận biên bản, duyệt khoản phải thu, cấn trừ và quyết toán" />
+        <>
+          {!q.loading && !q.error && (
+            <OwnerMoveOutDecisions
+              key={`${id}:${moveOut.version}:${q.inspections[0]?.version}:${summary?.reference}`}
+              api={api}
+              id={id}
+              moveOut={moveOut}
+              inspection={q.inspections[0]}
+              summary={summary}
+              onChanged={() => {
+                q.reload();
+                onChanged();
+              }}
+            />
+          )}
+          <OwnerWebNotice task="Quản lý khoản phải thu, cấn trừ cọc và thực chi hoàn tiền" />
+        </>
       )}
       {q.history.map((h) => (
         <Text key={h.version} variant="bodySmall">

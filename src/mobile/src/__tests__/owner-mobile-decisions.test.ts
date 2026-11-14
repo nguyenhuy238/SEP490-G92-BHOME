@@ -40,13 +40,32 @@ it('exposes Owner-only decision screens without opening them to Tenant', () => {
     'owner-payment-detail',
     'owner-announcements',
     'owner-finance',
+    'owner-residence',
   ] as const) {
     expect(canOpenScreen('Owner', screen)).toBe(true);
     expect(canOpenScreen('Tenant', screen)).toBe(false);
+    expect(canOpenScreen('Staff', screen)).toBe(false);
   }
 });
 
-it('enables Holding management for Owner on Mobile while other contract decisions remain on Owner Web', () => {
+it.each([
+  ['Residence', 'owner-residence', 'residentId'],
+  ['Contract', 'signing', 'contractId'],
+  ['OperationalTask', 'task-detail', 'taskId'],
+  ['Incident', 'incident-detail', 'incidentId'],
+  ['WorkOrder', 'maintenance-detail', 'workOrderId'],
+  ['BankTransfer', 'owner-payment-detail', 'paymentId'],
+])(
+  'opens the existing Owner %s destination from the authorized target',
+  async (objectType, screen, parameter) => {
+    const api = { request: vi.fn().mockResolvedValue({ objectType, objectId: id }) };
+    await expect(
+      notificationDestination(api as never, 'Owner', id, new AbortController().signal),
+    ).resolves.toEqual({ screen, params: { [parameter]: id } });
+  },
+);
+
+it('enables existing Owner contract decisions while keeping Staff approvals unavailable', () => {
   expect(contractActions(holding('Draft'), null, 'Owner', id).map((x) => x.operation)).toContain(
     'holding-approval',
   );
@@ -70,10 +89,22 @@ it('enables Holding management for Owner on Mobile while other contract decision
   expect(
     mobileContractActions(holding('Active'), null, 'Owner', id).map((item) => item.operation),
   ).toContain('holding-conversion');
+  for (const status of ['Draft', 'PendingSigning', 'PendingActivation']) {
+    expect(
+      mobileContractActions({ ...holding(status), kind: 'Main' }, null, 'Owner', id).map(
+        (item) => item.operation,
+      ),
+    ).toContain('activate');
+  }
+  expect(
+    mobileContractActions({ ...holding('Cancelled'), kind: 'Main' }, null, 'Owner', id),
+  ).toEqual([]);
+  expect(
+    mobileContractActions({ ...holding('Active'), kind: 'Main' }, null, 'Owner', id).map(
+      (item) => item.operation,
+    ),
+  ).toContain('renewals');
   for (const status of ['Draft', 'PendingSigning', 'PendingActivation', 'Active', 'Cancelled']) {
-    expect(mobileContractActions({ ...holding(status), kind: 'Main' }, null, 'Owner', id)).toEqual(
-      [],
-    );
     expect(
       mobileContractActions(holding(status), null, 'Staff', id).some((item) =>
         ['holding-approval', 'holding-activation', 'deposit-verifications'].includes(
