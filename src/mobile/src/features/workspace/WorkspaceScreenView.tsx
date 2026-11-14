@@ -40,11 +40,7 @@ import {
   TenantContract,
   MoveInChecklist,
 } from '../../screens/TenantScreens';
-import {
-  Profile,
-  Notifications,
-  SecuritySettings,
-} from '../../screens/SharedScreens';
+import { Profile, Notifications, SecuritySettings } from '../../screens/SharedScreens';
 
 import { OnboardingScreen } from '../../screens/OnboardingScreen';
 import { ContractScreen } from '../../features/contracts/ContractScreen';

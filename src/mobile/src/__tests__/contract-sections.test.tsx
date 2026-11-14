@@ -238,6 +238,19 @@ it('preserves an Owner draft deep link as Web guidance and returns to the list w
   await screen.findByText('Hợp đồng & Vòng đời');
   expect(screen.queryByText(`Draft ${id}`)).toBeNull();
 });
+it('opens Owner Holding metadata from the list without creating a Main draft route', async () => {
+  state.role = 'Owner';
+  state.params = {};
+  state.request.mockResolvedValue({
+    items: [{ ...summary('Draft', 'Holding', id), onboardingDraft: true }],
+    totalCount: 1,
+    page: 1,
+    pageSize: 20,
+  });
+  render(<ContractScreen />);
+  fireEvent.click(await screen.findByText('Xem hợp đồng'));
+  expect(router.setParams).toHaveBeenCalledWith({ contractId: id, mainDraftId: '', roomId: '' });
+});
 it.each([
   { contractId: 'malformed' },
   { contractId: id, mainDraftId: 'bc050000-0000-4000-8000-000000004004' },
