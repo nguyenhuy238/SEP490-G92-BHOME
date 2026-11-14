@@ -29,7 +29,10 @@ public sealed class EmailTransportTests
     {
         var email = new MailKitEmailSender(Options.Create(new EmailOptions
         {
-            Enabled = smtp, Username = "sender@example.invalid", FromEmail = "sender@example.invalid", AppPassword = "synthetic-password"
+            Enabled = smtp,
+            Username = "sender@example.invalid",
+            FromEmail = "sender@example.invalid",
+            AppPassword = "synthetic-password"
         }), NullLogger<MailKitEmailSender>.Instance);
         var security = new BHome.Infrastructure.Contracts.AnonymousSigningSecurity(
             Options.Create(new BHome.Infrastructure.Contracts.AnonymousSigningOptions()), new SigningChannel(channel),

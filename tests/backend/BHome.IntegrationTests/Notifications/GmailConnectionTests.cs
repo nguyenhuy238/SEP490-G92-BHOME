@@ -31,7 +31,8 @@ public sealed class GmailConnectionTests
         Assert.NotNull(root);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
-            ApplicationName = "BHome.Api", EnvironmentName = "Development",
+            ApplicationName = "BHome.Api",
+            EnvironmentName = "Development",
             ContentRootPath = Path.Combine(root.FullName, "src", "backend", "BHome.Api")
         });
         builder.Services.AddInfrastructure(builder.Configuration);
