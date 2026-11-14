@@ -13,6 +13,52 @@ namespace BHome.IntegrationTests.PaymentsDebt;
 public sealed partial class PaymentLedgerTests
 {
     [Fact]
+    public async Task OwnerDebtSummaryCoversAllPagesAndExcludesSettledInvoicesWithoutExposingStaffFinance()
+    {
+        var w = await Setup(); using var owner = await Client(w.Owner); using var staff = await Client(w.Staff); using var tenant = await Client(w.Tenants[0]);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var original = await db.Set<BHome.Domain.Billing.Invoice>().AsNoTracking().SingleAsync(i => i.Id == w.Invoice);
+            var second = new BHome.Domain.Billing.Invoice
+            {
+                RoomId = w.Room,
+                LocationId = w.Location,
+                RoomNumber = original.RoomNumber,
+                LocationName = original.LocationName,
+                BillingPeriod = original.BillingPeriod.AddMonths(1),
+                RepresentativeContractId = w.Contract,
+                RepresentativeTenantUserId = w.Tenants[0],
+                Total = 100000,
+                CreatedByUserId = w.Owner,
+                ScheduledFinalDate = original.ScheduledFinalDate,
+                DueDate = original.DueDate.AddDays(7),
+                ScheduleSnapshot = "{}",
+                Lines = [new BHome.Domain.Billing.InvoiceLine { Category = BHome.Domain.PropertyManagement.ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Rate = 100000, Quantity = 1, Amount = 100000, OccupiedDays = 30, PeriodDays = 30, RateDate = original.BillingPeriod.AddMonths(1) }],
+                Recipients = w.Tenants.Select(t => new BHome.Domain.Billing.InvoiceRecipient { TenantUserId = t }).ToList()
+            };
+            db.Add(second); await db.SaveChangesAsync(); second.Status = BHome.Domain.Billing.InvoiceStatus.Final; second.FinalizedByUserId = w.Owner; second.FinalizedAt = DateTimeOffset.UtcNow; await db.SaveChangesAsync();
+        }
+        var path = $"/api/v1/debts/summary?locationId={w.Location}&pageSize=1";
+        var summary = (await owner.GetFromJsonAsync<DebtSummary>(path))!;
+        Assert.Equal(200000m, summary.OutstandingAmount); Assert.Equal(100000m, summary.OverdueAmount); Assert.Equal(2, summary.InvoiceCount); Assert.Equal(1, summary.OverdueInvoiceCount);
+        Assert.Equal(summary, await owner.GetFromJsonAsync<DebtSummary>(path + "&page=2"));
+        using (var json = System.Text.Json.JsonDocument.Parse(await owner.GetStringAsync(path)))
+        {
+            var amount = json.RootElement.GetProperty("outstandingAmount");
+            Assert.Equal(System.Text.Json.JsonValueKind.String, amount.ValueKind);
+            Assert.Equal(200000m, decimal.Parse(amount.GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        }
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync(path)).StatusCode); Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync(path + "&roomId=" + Guid.Empty)).StatusCode);
+        var empty = (await owner.GetFromJsonAsync<DebtSummary>(path + "&roomId=" + Guid.NewGuid()))!; Assert.Equal(new DebtSummary(0, 0, 0, 0), empty);
+        var transfer = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w), Guid.NewGuid(), default));
+        await As(w.Owner, Roles.Owner, s => s.AllocateAsync(transfer.Id, new(w.Invoice, null, true), Guid.NewGuid(), default));
+        var settled = (await owner.GetFromJsonAsync<DebtSummary>(path))!;
+        Assert.Equal(new DebtSummary(100000, 0, 1, 0), settled);
+        using var anonymous = fixture.Factory.CreateClient(); Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
+    }
+    [Fact]
     public async Task StaffTenantRoleCombinationDoesNotExposeFullFinancialDetailsOutsideOwnEntitlement()
     {
         var own = await Setup(); var outside = await Setup();

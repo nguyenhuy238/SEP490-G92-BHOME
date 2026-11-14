@@ -23,7 +23,7 @@ function setup() {
   return render(
     <ThemeProvider theme={theme}>
       <MemoryRouter>
-        <AuthProvider transport="web">
+        <AuthProvider transport="web" restoreOnMount={false}>
           <LoginPage />
         </AuthProvider>
       </MemoryRouter>
@@ -32,7 +32,7 @@ function setup() {
 }
 
 function fillLogin() {
-  fireEvent.change(screen.getByLabelText('Email'), {
+  fireEvent.change(screen.getByLabelText('Email hoặc số điện thoại'), {
     target: { value: ' synthetic-owner@example.invalid ' },
   });
   fireEvent.change(screen.getByLabelText('Mật khẩu'), {
@@ -40,9 +40,42 @@ function fillLogin() {
   });
 }
 
+it('shows independent required errors and clears only the corrected field', () => {
+  const fetch = vi.fn();
+  vi.stubGlobal('fetch', fetch);
+  setup();
+  fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập vào hệ thống' }));
+  expect(screen.getByText('Vui lòng nhập email hoặc số điện thoại.')).toBeInTheDocument();
+  expect(screen.getByText('Vui lòng nhập mật khẩu.')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Email hoặc số điện thoại'), {
+    target: { value: 'owner@example.invalid' },
+  });
+  expect(screen.queryByText('Vui lòng nhập email hoặc số điện thoại.')).not.toBeInTheDocument();
+  expect(screen.getByText('Vui lòng nhập mật khẩu.')).toBeInTheDocument();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('submits a registered phone through the existing phone login contract', async () => {
+  const fetch = vi.fn().mockResolvedValue(json(session));
+  vi.stubGlobal('fetch', fetch);
+  setup();
+  fireEvent.change(screen.getByLabelText('Email hoặc số điện thoại'), {
+    target: { value: '090-123 4567' },
+  });
+  fireEvent.change(screen.getByLabelText('Mật khẩu'), {
+    target: { value: 'Synthetic!Password-493' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập vào hệ thống' }));
+  await screen.findByText(/Đăng nhập thành công/);
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+    phone: '+84901234567',
+    password: 'Synthetic!Password-493',
+  });
+});
+
 it('keeps required fields empty, masks the password, and explains unsupported remember-login', () => {
   setup();
-  const identifier = screen.getByLabelText('Email');
+  const identifier = screen.getByLabelText('Email hoặc số điện thoại');
   expect(identifier).toBeRequired();
   expect(identifier).toHaveValue('');
   expect(screen.getByLabelText('Mật khẩu')).toHaveAttribute('type', 'password');
@@ -57,7 +90,7 @@ it('does not send an empty or whitespace-only identifier', () => {
   const fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
   setup();
-  fireEvent.change(screen.getByLabelText('Email'), { target: { value: '   ' } });
+  fireEvent.change(screen.getByLabelText('Email hoặc số điện thoại'), { target: { value: '   ' } });
   fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: 'synthetic' } });
   fireEvent.submit(screen.getByRole('button', { name: 'Đăng nhập vào hệ thống' }).closest('form')!);
   expect(fetchMock).not.toHaveBeenCalled();
@@ -109,7 +142,7 @@ it.each([401, 429, 503])(
     fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập vào hệ thống' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
       status === 401
-        ? 'Email hoặc mật khẩu không đúng'
+        ? 'Email, số điện thoại hoặc mật khẩu không chính xác'
         : status === 429
           ? 'quá nhiều lần'
           : 'không khả dụng',

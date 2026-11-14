@@ -61,16 +61,22 @@ public sealed class Compact24MigrationTests
         while (!File.Exists(Path.Combine(root.FullName, "src", "backend", "BHome.sln"))) root = root.Parent ?? throw new InvalidOperationException("Repository root unavailable.");
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var executable = Path.Combine(root.FullName, "tools", "BHome.Compact24Migration", "bin", configuration, "net8.0", "BHome.Compact24Migration.dll");
-        var report = Path.Combine(Path.GetTempPath(), "bhome-compact24-cli-" + Guid.NewGuid().ToString("N") + ".json");
+        Assert.True(File.Exists(executable), $"The migration CLI was not built for {configuration}. Build src/backend/BHome.sln before running this test.");
         async Task<(int Exit, JsonDocument Report)> Run(string action, string connection)
         {
-            var start = new System.Diagnostics.ProcessStartInfo("dotnet") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-            start.ArgumentList.Add(executable); start.ArgumentList.Add(action); start.ArgumentList.Add(report);
-            start.Environment["BHOME_COMPACT24_SOURCE"] = connection; start.Environment["BHOME_COMPACT24_TARGET"] = pair.Fixture.Connection;
-            using var process = System.Diagnostics.Process.Start(start)!;
-            var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync(); await Task.WhenAll(output, error);
-            return (process.ExitCode, JsonDocument.Parse(await File.ReadAllTextAsync(report)));
+            var report = Path.Combine(Path.GetTempPath(), "bhome-compact24-cli-" + Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                var start = new System.Diagnostics.ProcessStartInfo("dotnet") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+                start.ArgumentList.Add(executable); start.ArgumentList.Add(action); start.ArgumentList.Add(report);
+                start.Environment["BHOME_COMPACT24_SOURCE"] = connection; start.Environment["BHOME_COMPACT24_TARGET"] = pair.Fixture.Connection;
+                using var process = System.Diagnostics.Process.Start(start)!;
+                var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync(); await Task.WhenAll(output, error);
+                Assert.True(File.Exists(report), $"The migration CLI exited with code {process.ExitCode} without writing its report.");
+                return (process.ExitCode, JsonDocument.Parse(await File.ReadAllTextAsync(report)));
+            }
+            finally { File.Delete(report); }
         }
         var inspected = await Run("--inspect", source);
         using (inspected.Report) { Assert.Equal(0, inspected.Exit); Assert.Equal("PREFLIGHT_READY", inspected.Report.RootElement.GetProperty("Status").GetString()); }
@@ -84,7 +90,6 @@ public sealed class Compact24MigrationTests
         var forbidden = new NpgsqlConnectionStringBuilder(source) { Database = "bhome" };
         var rejected = await Run("--inspect", forbidden.ConnectionString);
         using (rejected.Report) { Assert.NotEqual(0, rejected.Exit); Assert.Equal("fixture_database_names_required", rejected.Report.RootElement.GetProperty("Code").GetString()); }
-        File.Delete(report);
     }
 
     [CompactPostgresFact]
@@ -93,6 +98,13 @@ public sealed class Compact24MigrationTests
         await using var contracts = new BHome.IntegrationTests.Contracts.ContractFixture(capture); await contracts.InitializeAsync();
         await new BHome.IntegrationTests.Contracts.ContractLifecycleApiTests(contracts).T10_T11_T12_T13_T14_InspectionFinalMetersPendingSettlementAndCompletedMoveOut();
     });
+
+    [CompactPostgresFact]
+    public Task CompleteCopyRejectsAlteredDerivedDepositAllocationAndRollsBackAllTargetRows() => CopyWorkflow("CorruptDerivedDeposit", async capture =>
+    {
+        await using var contracts = new BHome.IntegrationTests.Contracts.ContractFixture(capture); await contracts.InitializeAsync();
+        await new BHome.IntegrationTests.Contracts.ContractLifecycleApiTests(contracts).T10_T11_T12_T13_T14_InspectionFinalMetersPendingSettlementAndCompletedMoveOut();
+    }, corruptDerivedDeposit: true);
 
     [CompactPostgresFact]
     public Task CompleteCopyPreservesActualPdfSigningDirectoryAndDocumentEvidence() => CopyWorkflow("ActualPdfSigning", async capture =>
@@ -192,7 +204,9 @@ public sealed class Compact24MigrationTests
             ConfirmedAt = DateTimeOffset.UtcNow
         });
         await pair.Source.SaveChangesAsync();
-        var result = await new Compact24DataMigration(pair.Source, pair.Target).CopyAsync();
+        Compact24DataCopyResult result;
+        try { result = await new Compact24DataMigration(pair.Source, pair.Target).CopyAsync(); }
+        catch (Compact24MigrationException error) { throw new Xunit.Sdk.XunitException("Synthetic copy rejected: " + error.Code); }
         Assert.True(result.Committed); Assert.Equal(70, result.Tables.Count); Assert.All(result.Tables, table => Assert.True(table.KeysAndValuesMatch));
         await Compact24Evidence.WriteAsync("PropertyAndBankConfiguration", result);
     }
@@ -204,7 +218,8 @@ public sealed class Compact24MigrationTests
         await new BHome.IntegrationTests.Contracts.MainDraftApiTests(contracts).VerifiedOnboardingCreatesDraftWithoutTenantAndPersistsDocxWhenPdfConverterMissing();
     });
 
-    private static async Task CopyWorkflow(string scenarioName, Func<BHome.IntegrationTests.Ocr.CaptureFixture, Task> scenario, Func<BHomeDbContext, Task>? beforeCopy = null)
+    private static async Task CopyWorkflow(string scenarioName, Func<BHome.IntegrationTests.Ocr.CaptureFixture, Task> scenario, Func<BHomeDbContext, Task>? beforeCopy = null,
+        bool corruptDerivedDeposit = false)
     {
         await using var pair = await Pair.Create();
         using var root = new ApiFactory { ConnectionString = pair.Source.Database.GetConnectionString()! };
@@ -226,8 +241,31 @@ public sealed class Compact24MigrationTests
         });
         await scenario(new BHome.IntegrationTests.Ocr.CaptureFixture(host, "http://private-storage-test.invalid"));
         if (beforeCopy is not null) await beforeCopy(pair.Source);
-        var result = await new Compact24DataMigration(pair.Source, pair.Target).CopyAsync();
+        if (corruptDerivedDeposit)
+        {
+            var deposits = await pair.Source.Set<BHome.Domain.TenantContracts.DepositVerification>().CountAsync();
+            Assert.True(deposits > 0);
+            await pair.Target.Database.ExecuteSqlRawAsync("""
+                CREATE FUNCTION compact_test_alter_deposit() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW.target_deposit_contract_id IS NOT NULL THEN NEW.amount := NEW.amount - 1; END IF;
+                    RETURN NEW;
+                END $$;
+                CREATE TRIGGER zz_compact_test_alter_deposit BEFORE INSERT ON payment_allocations
+                FOR EACH ROW EXECUTE FUNCTION compact_test_alter_deposit();
+                """);
+            var failure = await Assert.ThrowsAsync<Compact24MigrationException>(() => new Compact24DataMigration(pair.Source, pair.Target).CopyAsync());
+            Assert.Equal("derived_deposit_allocation_reconciliation_failed", failure.Code);
+            Assert.Empty(await pair.Target.Users.ToArrayAsync());
+            Assert.Empty(await pair.Target.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().ToArrayAsync());
+            Assert.Equal(deposits, await pair.Source.Set<BHome.Domain.TenantContracts.DepositVerification>().CountAsync());
+            return;
+        }
+        Compact24DataCopyResult result;
+        try { result = await new Compact24DataMigration(pair.Source, pair.Target).CopyAsync(); }
+        catch (Compact24MigrationException error) { throw new Xunit.Sdk.XunitException("Synthetic copy rejected: " + error.Code); }
         Assert.True(result.Committed); Assert.True(result.SourceReadOnly); Assert.Equal(70, result.Tables.Count);
+        Assert.Equal(await pair.Source.Set<BHome.Domain.TenantContracts.DepositVerification>().CountAsync(), result.DerivedDepositAllocations);
         Assert.All(result.Tables, table => { Assert.True(table.KeysAndValuesMatch); Assert.Equal(table.SourceRows, table.TargetRecords); });
         await Compact24Evidence.WriteAsync(scenarioName, result);
     }

@@ -105,11 +105,41 @@ public sealed class StaffLocationAssignmentsController(ICurrentUser currentUser,
         return assignments is null ? NotFound() : Ok(assignments);
     }
 
+    [HttpGet("by-staff")]
+    [Authorize(Policy = Permissions.StaffAssignments.Manage)]
+    public async Task<ActionResult<IReadOnlyList<StaffAssignmentDetail>>> ListStaffAssignments(
+        [FromQuery] Guid staffUserId, CancellationToken cancellationToken)
+    {
+        if (staffUserId == Guid.Empty)
+        {
+            ModelState.AddModelError("staffUserId", "Staff user ID is required.");
+            return ValidationProblem(ModelState);
+        }
+        return Ok(await locations.ListStaffAssignmentsAsync(staffUserId, cancellationToken));
+    }
+
     [HttpPut("{locationId:guid}"), Authorize(Policy = Permissions.StaffAssignments.Manage)]
     public async Task<ActionResult<ChangeAssignmentResult>> Replace(Guid locationId,
         ChangeStaffAssignmentRequest request, CancellationToken t) =>
         Result(await locations.ReplaceAssignmentAsync(UserId, locationId, request.StaffUserId,
             request.EffectiveFrom, request.LocationVersion, request.Reason, t));
+
+    [HttpPut("assignment/{assignmentId:guid}"), Authorize(Policy = Permissions.StaffAssignments.Manage)]
+    public async Task<ActionResult<UpdateAssignmentPeriodResult>> UpdatePeriod(Guid assignmentId,
+        UpdateStaffAssignmentPeriodRequest request, CancellationToken t)
+    {
+        var result = await locations.UpdateAssignmentPeriodAsync(UserId, assignmentId, request.StartDate,
+            request.EndDate, request.LocationVersion, request.Reason, t);
+        return result.Status switch
+        {
+            UpdateAssignmentPeriodStatus.Changed => Ok(result),
+            UpdateAssignmentPeriodStatus.Invalid => Problem(statusCode: 400, title: "Invalid assignment period."),
+            UpdateAssignmentPeriodStatus.AssignmentNotFound => NotFound(),
+            UpdateAssignmentPeriodStatus.StaleVersion => Conflict(new ProblemDetails { Status = 409, Title = "Location version is stale." }),
+            UpdateAssignmentPeriodStatus.DateRangeOverlaps => Conflict(new ProblemDetails { Status = 409, Title = "The Location already has a Staff assignment during this date range." }),
+            _ => throw new InvalidOperationException("Unsupported assignment period result.")
+        };
+    }
 
     [HttpDelete("{locationId:guid}"), Authorize(Policy = Permissions.StaffAssignments.Manage)]
     public async Task<ActionResult<ChangeAssignmentResult>> Remove(Guid locationId,
@@ -135,4 +165,6 @@ public sealed record CreateStaffAssignmentRequest(Guid LocationId, Guid StaffUse
 public sealed record ChangeStaffAssignmentRequest(Guid StaffUserId, DateOnly EffectiveFrom,
     [Range(1, int.MaxValue)] int LocationVersion, [Required, StringLength(500)] string Reason);
 public sealed record RemoveStaffAssignmentRequest(DateOnly EffectiveFrom,
+    [Range(1, int.MaxValue)] int LocationVersion, [Required, StringLength(500)] string Reason);
+public sealed record UpdateStaffAssignmentPeriodRequest(DateOnly StartDate, DateOnly EndDate,
     [Range(1, int.MaxValue)] int LocationVersion, [Required, StringLength(500)] string Reason);

@@ -9,15 +9,17 @@ export const emptyCaptureProgress = (): CaptureProgress => ({
 export interface OnboardingPerson {
   key: string;
   label: string;
+  email?: string;
   residentId?: string;
   status: IdentityStatus;
   captureProgress?: CaptureProgress;
+  creationUncertain?: boolean;
+  verificationError?: string;
 }
 export const onboardingSteps = [
   { key: 'room', label: 'Chọn phòng' },
   { key: 'people', label: 'Người ở' },
   { key: 'identity', label: 'CCCD' },
-  { key: 'review', label: 'Xác nhận' },
 ] as const;
 export const identityStatusLabels: Record<IdentityStatus, string> = {
   unscanned: 'Chưa quét',
@@ -29,7 +31,14 @@ export function peopleReady(people: readonly OnboardingPerson[], representative:
   return (
     people.length > 0 &&
     people.some((p) => p.key === representative) &&
-    people.every((p) => p.label.trim().length > 0 && p.label.trim().length <= 150)
+    people.every(
+      (p) =>
+        p.label.trim().length > 0 &&
+        p.label.trim().length <= 150 &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email?.trim() ?? '') &&
+        (p.email?.trim().length ?? 0) <= 256,
+    ) &&
+    new Set(people.map((p) => p.email?.trim().toLowerCase())).size === people.length
   );
 }
 export function allIdentitiesConfirmed(people: readonly OnboardingPerson[]): boolean {

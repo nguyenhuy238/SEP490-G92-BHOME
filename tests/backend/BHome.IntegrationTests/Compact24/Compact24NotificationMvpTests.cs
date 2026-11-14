@@ -24,7 +24,7 @@ using Microsoft.EntityFrameworkCore;
 namespace BHome.IntegrationTests.Compact24;
 
 [Trait("Category", "CompactPostgres")]
-public sealed class Compact24NotificationMvpTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
+public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
     private const string Password = "Synthetic!Notification-927";
     private sealed record Workspace(ApplicationUser Owner, ApplicationUser Staff, ApplicationUser[] Tenants, Guid Location, Guid Room, Guid[] Contracts, Guid[] Residents);
@@ -73,6 +73,61 @@ public sealed class Compact24NotificationMvpTests(Compact24Fixture fixture) : IC
     }
     private async Task Pump(WebApplicationFactory<Program>? host = null)
     { await using var s = (host ?? fixture.Factory!).Services.CreateAsyncScope(); await s.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(default); }
+    private sealed class ResidenceClock(DateTimeOffset at) : TimeProvider
+    { internal DateTimeOffset Now = at; public override DateTimeOffset GetUtcNow() => Now; }
+
+    [CompactPostgresFact]
+    public async Task ResidenceDeliveryCannotReuseAnotherActiveContractAfterTheOriginalOccupancyCloses()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner);
+        (await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location}/notification-policy", new NotificationReminderPolicy(ResidenceEnabled: true, ResidenceFrequency: "WEEKLY", LocalSendHour: 0))).EnsureSuccessStatusCode();
+        await using var check = fixture.Factory!.Services.CreateAsyncScope(); var data = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await data.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET actual_residence_from={Today.AddDays(-1)},registration_status='Pending' WHERE contract_id={w.Contracts[0]}");
+        await Pump();
+        var notice = await data.Set<UserNotification>().Where(n => n.RecipientUserId == w.Tenants[0].Id && n.EventType == "TEMPORARY_RESIDENCE_ACTION").Select(n => n.Id).SingleAsync();
+        await data.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET actual_move_out_date={Today} WHERE contract_id={w.Contracts[0]}");
+        // A new eligible occupancy must not make the old Contract-specific reminder deliverable again.
+        await data.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO contract_residents(contract_id,resident_id,resident_role,residence_from,actual_residence_from,registration_status)
+            VALUES({w.Contracts[1]},{w.Residents[0]},1,{Today},{Today},'Pending')
+            """);
+        var provider = new ChannelProbe(); using var host = fixture.Factory.WithWebHostBuilder(b =>
+        { b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["NotificationChannels:Enabled"] = "true" })); b.ConfigureServices(s => s.AddSingleton<INotificationChannelProvider>(provider)); });
+        await using var scope = host.Services.CreateAsyncScope(); var worker = scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>();
+        await worker.EnqueueDueAsync(default);
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var delivery = await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM notifications WHERE event_data->>'recordType'='ChannelDelivery' AND event_data->>'notificationId'={notice.ToString()}").SingleAsync();
+        await worker.DeliverAsync(delivery, default);
+        Assert.Equal("Suppressed", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());
+        Assert.Empty(provider.Messages);
+    }
+
+    [CompactPostgresFact]
+    public async Task ResidenceRemindersContinuePerConfiguredWindowStopOnClosureAndNeverReachStaff()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner);
+        (await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location}/notification-policy", new NotificationReminderPolicy(ResidenceEnabled: true, ResidenceFrequency: "WEEKLY", LocalSendHour: 0))).EnsureSuccessStatusCode();
+        await using var check = fixture.Factory!.Services.CreateAsyncScope(); var db = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET actual_residence_from={Today.AddDays(-1)},registration_status='Pending',owner_confirmed_at={DateTimeOffset.UtcNow} WHERE contract_id={w.Contracts[0]}"); // Legacy stamp is not Completed.
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET actual_residence_from={Today.AddDays(-1)},actual_move_out_date={Today},registration_status='InProgress' WHERE contract_id={w.Contracts[1]}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET actual_residence_from={Today.AddDays(-1)},registration_status='Completed' WHERE contract_id={w.Contracts[2]}");
+        var clock = new ResidenceClock(new DateTimeOffset(Today.ToDateTime(new TimeOnly(12, 0)), TimeSpan.FromHours(7)).ToUniversalTime());
+        using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<TimeProvider>(clock)));
+        async Task<UserNotification[]> Notices() => await db.Set<UserNotification>().AsNoTracking().Where(n => n.LocationId == w.Location && n.EventType == "TEMPORARY_RESIDENCE_ACTION").ToArrayAsync();
+        await Task.WhenAll(Pump(host), Pump(host));
+        var first = await Notices(); Assert.Equal(2, first.Length); Assert.All(first, n => { Assert.Equal(w.Residents[0], n.RelatedObjectId); Assert.Contains(n.RecipientUserId, new[] { w.Owner.Id, w.Tenants[0].Id }); });
+        clock.Now = clock.Now.AddDays(8); await Task.WhenAll(Pump(host), Pump(host));
+        Assert.Equal(4, (await Notices()).Length);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET registration_status='Completed' WHERE contract_id={w.Contracts[0]}");
+        clock.Now = clock.Now.AddDays(8); await Pump(host); Assert.Equal(4, (await Notices()).Length);
+        // Synthetic legacy role mismatch must never grant Staff a residence reminder.
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contract_residents SET registration_status='Pending' WHERE contract_id={w.Contracts[2]}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET user_id={w.Staff.Id} WHERE id={w.Residents[2]}");
+        await Pump(host); await Pump(host);
+        var final = await Notices(); Assert.Equal(5, final.Length); Assert.DoesNotContain(final, n => n.RecipientUserId == w.Staff.Id);
+        Assert.Single(final, n => n.RelatedObjectId == w.Residents[2] && n.RecipientUserId == w.Owner.Id);
+        Assert.DoesNotContain(final, n => n.RelatedObjectId == w.Residents[1]);
+    }
     private static AnnouncementWrite Announcement(Guid location) => new("Synthetic notice", "Synthetic maintenance information", new("LOCATION", LocationIds: [location]), ["IN_APP", "EMAIL", "PUSH"]);
 
     [CompactPostgresFact]
@@ -167,7 +222,7 @@ public sealed class Compact24NotificationMvpTests(Compact24Fixture fixture) : IC
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location}/notification-policy", new NotificationReminderPolicy(EmergencyEnabled: true))).StatusCode);
     }
     [CompactPostgresFact]
-    public async Task ResidenceWeeklyAndMonthlyDeduplicateAndStopAfterOwnerConfirmation()
+    public async Task ResidenceWeeklyAndMonthlyDeduplicateAndStopAfterCompletedRegistration()
     {
         var w = await Seed(); using var owner = await Client(w.Owner);
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
@@ -226,7 +281,7 @@ public sealed class Compact24NotificationMvpTests(Compact24Fixture fixture) : IC
     {
         var w = await Seed(); var mailbox = new InvitationMailbox(); using var host = fixture.Factory!.WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<IPasswordResetDelivery>(mailbox)));
         using var owner = await Client(w.Owner, host); var email = Guid.NewGuid().ToString("N") + "@example.invalid";
-        var input = new BHome.Application.Operations.StaffCreate(email, "Synthetic staff", null, Password, new(null, "PartTime", Today, null, null, null, "Active"));
+        var input = new BHome.Application.Operations.StaffCreate(email, "Synthetic staff", null, null, new(null, "PartTime", Today, null, null, null, "Active"));
         var response = await owner.PostAsJsonAsync("/api/v1/staff", input); response.EnsureSuccessStatusCode(); var staff = (await response.Content.ReadFromJsonAsync<BHome.Application.Operations.StaffView>())!;
         (await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null)).EnsureSuccessStatusCode(); Assert.NotNull(mailbox.Token);
         using var anonymous = host.CreateClient(); Assert.Equal(HttpStatusCode.NoContent, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", new AcceptInvitationRequest(email, mailbox.Token!, Password))).StatusCode);

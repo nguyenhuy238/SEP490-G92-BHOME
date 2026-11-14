@@ -84,7 +84,9 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
           setRequests((before) => [...before, { id, kind, role, summary }]);
         },
         startPreview: (next) => {
-          if (session || !__DEV__) return;
+          // Owner uses only live, server-authorized screens. The legacy Owner mock
+          // must not be mistaken for an operational workspace.
+          if (session || !__DEV__ || next === 'Owner') return;
           setPreviewRole(next);
           router.replace(workspaceTabHref(homeScreen[next]));
         },

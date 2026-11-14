@@ -99,6 +99,6 @@ public sealed class PermissionApiTests(AuthenticationDatabaseFixture fixture) : 
         Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = user.Email, password = Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<LoginResult>())!;
+        return await TestAuthResponse.ReadAsync(response.Content);
     }
 }

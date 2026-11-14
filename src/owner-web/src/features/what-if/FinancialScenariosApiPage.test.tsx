@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { FinancialScenariosApiPage } from './FinancialScenariosApiPage';
+import { financeMonthPeriod } from '../finance/monthPeriods';
 const mock = vi.hoisted(() => ({
   locations: vi.fn(),
   scenarios: vi.fn(),
@@ -47,6 +48,16 @@ const result = {
 };
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(window.matchMedia).mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
   mock.locations.mockResolvedValue([]);
   mock.scenarios.mockResolvedValue([]);
   mock.analyzeScenario.mockResolvedValue(result);
@@ -109,4 +120,38 @@ it('loads saved snapshots for review and comparison without replaying analysis',
   await screen.findByText('So sánh: Kịch bản tổng hợp');
   expect(mock.analyzeScenario).not.toHaveBeenCalled();
   expect(mock.scenario).toHaveBeenCalledTimes(2);
+});
+it('shows negative forecasts and the full baseline period without recalculating actual records', async () => {
+  mock.analyzeScenario.mockResolvedValue({
+    ...result,
+    baseline: {
+      ...result.baseline,
+      total: { issued: '1000', verifiedCollections: '900', operatingProfit: '-500' },
+    },
+    result: {
+      ...result.result,
+      monthlyProfitDifference: '-999999999999999999',
+      monthlyProfit: '-200',
+    },
+  });
+  mount();
+  fill();
+  await screen.findByText('Lợi nhuận / tháng: -200 ₫');
+  expect(
+    screen.getByText('Chênh lệch lợi nhuận tháng so với nền: -999.999.999.999.999.999 ₫'),
+  ).toBeInTheDocument();
+  expect(screen.getByText('Lợi nhuận kỳ nền: -500 ₫')).toBeInTheDocument();
+  expect(
+    screen.getByText('Dữ liệu thực tế trong kỳ nền 01/11/2026 – 30/11/2026'),
+  ).toBeInTheDocument();
+  expect(mock.saveScenario).not.toHaveBeenCalled();
+});
+it('sets a completed baseline month with one explicit click without analyzing or saving', () => {
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng tháng trước làm kỳ nền' }));
+  const period = financeMonthPeriod(-1);
+  expect(screen.getByLabelText(/Dữ liệu nền từ/)).toHaveValue(period.from);
+  expect(screen.getByLabelText(/Dữ liệu nền đến/)).toHaveValue(period.to);
+  expect(mock.analyzeScenario).not.toHaveBeenCalled();
+  expect(mock.saveScenario).not.toHaveBeenCalled();
 });

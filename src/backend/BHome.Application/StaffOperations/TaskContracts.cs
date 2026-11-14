@@ -25,6 +25,7 @@ public sealed class TaskQuery
     [Range(1, 1000000)] public int Page { get; set; } = 1;
     [Range(1, 100)] public int PageSize { get; set; } = 20;
     public Guid? LocationId { get; set; }
+    public Guid? StaffUserId { get; set; }
     public MeterTaskStatus? Status { get; set; }
     public OperationalTaskPriority? Priority { get; set; }
     public bool? IsOverdue { get; set; }
@@ -38,6 +39,7 @@ public sealed record TaskView(Guid Id, Guid LocationId, string Kind, string Titl
     DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 public sealed record TaskHistoryView(Guid Id, Guid ActorId, string Action, string Note, string ChangesJson,
     Guid? ResponsibleStaffUserId, DateTimeOffset OccurredAt, bool WasOverdue, int TaskVersion);
+public sealed record TaskActorView(Guid UserId, string DisplayName);
 public sealed record TaskEvidenceView(Guid Id, string ContentType, long Length, Guid UploadedByUserId,
     DateTimeOffset CreatedAt, Guid? SubmissionId);
 public sealed record TaskNotificationView(Guid Id, Guid TaskId, string Event, DateTimeOffset CreatedAt, DateTimeOffset? ReadAt);
@@ -74,6 +76,7 @@ public interface IOperationalTaskRepository
     Task<TaskResponsibility?> ResponsibilityAsync(Guid locationId, DateOnly date, CancellationToken t);
     Task<TaskPage<TaskView>> ListAsync(TaskQuery query, Guid? staffId, DateOnly date, DateTimeOffset now, CancellationToken t);
     Task<TaskPage<TaskHistoryView>> HistoryAsync(Guid taskId, int page, int size, CancellationToken t);
+    Task<IReadOnlyList<TaskActorView>> ActorsAsync(Guid taskId, CancellationToken t);
     Task<OperationalTaskCommand?> CommandAsync(Guid actorId, Guid key, CancellationToken t);
     Task<IReadOnlyList<OperationalTaskEvidence>> EvidenceAsync(Guid taskId, CancellationToken t);
     Task<IReadOnlyList<Guid>> OwnersAsync(CancellationToken t);

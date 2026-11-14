@@ -124,13 +124,19 @@ describe('onboarding API adapter', () => {
       () => {},
       transport,
     );
-    await captureService(api).createResident('synthetic-room', 'Workspace label', 1);
+    await captureService(api).createResident(
+      'synthetic-room',
+      'Workspace label',
+      1,
+      'occupant@example.invalid',
+    );
     const [url, init] = transport.mock.calls[0]!;
     expect(url).toBe('https://api.test/api/v1/capture/residents');
     expect(JSON.parse(init!.body as string)).toEqual({
       roomId: 'synthetic-room',
       displayLabel: 'Workspace label',
       residentType: 1,
+      email: 'occupant@example.invalid',
     });
     expect(init!.credentials).toBe('omit');
     expect(new Headers(init!.headers).get('Authorization')).toBe('Bearer synthetic-token');

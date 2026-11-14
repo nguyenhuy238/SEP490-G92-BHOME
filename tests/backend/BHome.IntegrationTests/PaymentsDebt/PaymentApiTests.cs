@@ -37,12 +37,14 @@ public sealed partial class PaymentLedgerTests
         var key = Guid.NewGuid(); var registration = await Post(owner, root, input, key); registration.EnsureSuccessStatusCode();
         var transfer = (await registration.Content.ReadFromJsonAsync<TransferView>())!;
         Assert.Equal("PendingReview", transfer.Status);
+        Assert.Contains((await owner.GetFromJsonAsync<PagedResult<TransferView>>(root + "?paymentStatus=PendingReview"))!.Items, p => p.Id == transfer.Id);
         var unpaidBody = await owner.GetStringAsync($"/api/v1/debts?roomId={w.Room}");
         using (var json = System.Text.Json.JsonDocument.Parse(unpaidBody))
             Assert.Equal("100000", json.RootElement.GetProperty("items")[0].GetProperty("outstandingAmount").GetString());
         Assert.Equal(transfer.Id, (await (await Post(owner, root, input, key)).Content.ReadFromJsonAsync<TransferView>())!.Id);
         var allocation = await Post(owner, $"{root}/{transfer.Id}/allocate", new PaymentMatchInput(w.Invoice, w.Tenants[0], true)); allocation.EnsureSuccessStatusCode();
         Assert.Equal("Allocated", (await allocation.Content.ReadFromJsonAsync<PaymentReviewResult>())!.Status);
+        Assert.Contains((await owner.GetFromJsonAsync<PagedResult<TransferView>>(root + "?paymentStatus=Allocated"))!.Items, p => p.Id == transfer.Id);
         var scoped = (await owner.GetFromJsonAsync<PagedResult<TransferView>>($"{root}?locationId={w.Location}&roomId={w.Room}"))!;
         Assert.Contains(scoped.Items, p => p.Id == transfer.Id && p.AllocatedInvoiceId == w.Invoice);
         var unrelated = (await owner.GetFromJsonAsync<PagedResult<TransferView>>($"{root}?roomId={Guid.NewGuid()}"))!;
@@ -54,6 +56,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal("invoice_already_settled", (await (await Post(owner, $"{root}/{unmatched.Id}/allocate", new PaymentMatchInput(w.Invoice, null, true))).Content.ReadFromJsonAsync<PaymentReviewResult>())!.Reason);
         var rejected = await Post(owner, $"{root}/{unmatched.Id}/reject", new PaymentRejectInput("Không đủ bằng chứng để phân bổ; giao dịch được giữ lại.")); rejected.EnsureSuccessStatusCode();
         Assert.Equal("Rejected", (await owner.GetFromJsonAsync<TransferView>($"{root}/{unmatched.Id}"))!.Status);
+        Assert.Contains((await owner.GetFromJsonAsync<PagedResult<TransferView>>(root + "?paymentStatus=Rejected"))!.Items, p => p.Id == unmatched.Id);
         var history = (await owner.GetFromJsonAsync<PagedResult<ReconciliationView>>($"{root}/{unmatched.Id}/reconciliation-history"))!;
         Assert.Equal(3, history.TotalCount); Assert.Equal("Rejected", history.Items[0].Decision);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, $"{root}/{transfer.Id}/reject", new PaymentRejectInput("Cannot undo an allocation"))).StatusCode);

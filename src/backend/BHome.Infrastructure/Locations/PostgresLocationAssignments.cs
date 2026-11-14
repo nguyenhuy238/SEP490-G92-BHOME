@@ -20,6 +20,36 @@ internal sealed class PostgresLocationAssignments(BHomeDbContext db) : ILocation
         int expectedLocationVersion, string reason, CancellationToken cancellationToken) =>
         Task.FromResult(new ChangeAssignmentResult(ChangeAssignmentStatus.Invalid));
 
+    public async Task<UpdateAssignmentPeriodResult> UpdateAssignmentPeriodAsync(Guid actorId, Guid assignmentId,
+        DateOnly startDate, DateOnly endDate, int expectedLocationVersion, string reason, CancellationToken cancellationToken)
+    {
+        if (actorId == Guid.Empty || assignmentId == Guid.Empty || startDate > endDate || expectedLocationVersion < 1 ||
+            string.IsNullOrWhiteSpace(reason)) return new(UpdateAssignmentPeriodStatus.Invalid);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var assignment = await db.StaffLocationAssignments.SingleOrDefaultAsync(x => x.Id == assignmentId, cancellationToken);
+        if (assignment is null) return new(UpdateAssignmentPeriodStatus.AssignmentNotFound);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({assignment.LocationId.ToString()}, 0))", cancellationToken);
+        var location = await db.Locations.SingleAsync(x => x.Id == assignment.LocationId, cancellationToken);
+        if (location.Version != expectedLocationVersion)
+            return new(UpdateAssignmentPeriodStatus.StaleVersion, LocationVersion: location.Version);
+        var today = BusinessDate.Today();
+        var isCurrent = assignment.StartDate <= today && today <= assignment.EndDate;
+        if (assignment.EndDate < today || isCurrent && (startDate > today || endDate < today))
+            return new(UpdateAssignmentPeriodStatus.Invalid);
+        if (await db.StaffLocationAssignments.AsNoTracking().AnyAsync(x => x.LocationId == assignment.LocationId &&
+            x.Id != assignmentId && x.StartDate <= endDate && startDate <= x.EndDate, cancellationToken))
+            return new(UpdateAssignmentPeriodStatus.DateRangeOverlaps);
+        assignment.ChangePeriod(startDate, endDate);
+        location.Version++;
+        try { await db.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: "23P01" })
+        { return new(UpdateAssignmentPeriodStatus.DateRangeOverlaps); }
+        await transaction.CommitAsync(cancellationToken);
+        return new(UpdateAssignmentPeriodStatus.Changed,
+            new(assignment.Id, assignment.StaffUserId, assignment.StartDate, assignment.EndDate), location.Version);
+    }
+
     public async Task<IReadOnlyList<LocationSummary>> ListAssignedLocationsAsync(Guid staffUserId,
         DateOnly effectiveDate, CancellationToken cancellationToken) =>
         await db.StaffLocationAssignments.AsNoTracking()
@@ -78,6 +108,16 @@ internal sealed class PostgresLocationAssignments(BHomeDbContext db) : ILocation
             .Select(x => new StaffAssignmentSummary(x.Id, x.StaffUserId, x.StartDate, x.EndDate))
             .ToArrayAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<StaffAssignmentDetail>> ListStaffAssignmentsAsync(Guid staffUserId,
+        CancellationToken cancellationToken) =>
+        await db.StaffLocationAssignments.AsNoTracking()
+            .Where(x => x.StaffUserId == staffUserId)
+            .Join(db.Locations.AsNoTracking(), assignment => assignment.LocationId, location => location.Id,
+                (assignment, location) => new StaffAssignmentDetail(assignment.Id, assignment.StaffUserId,
+                    location.Id, location.Name, assignment.StartDate, assignment.EndDate))
+            .OrderByDescending(x => x.StartDate).ThenBy(x => x.LocationName).ThenBy(x => x.Id)
+            .ToArrayAsync(cancellationToken);
 
     public Task<bool> IsAssignedAsync(Guid staffId, Guid locationId, CancellationToken cancellationToken)
     {

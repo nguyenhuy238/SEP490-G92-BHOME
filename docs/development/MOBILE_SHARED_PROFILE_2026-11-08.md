@@ -1,5 +1,7 @@
 # BHOME Mobile — Hồ sơ cá nhân dùng chung
 
+> Lịch sử triển khai ngày 08/11. Chính sách logout khi đổi liên hệ bên dưới đã được yêu cầu mới ngày 12/11 thay thế: Profile giữ phiên, xác nhận mật khẩu hiện tại khi đổi liên hệ, email mới cần verification; Tenant phải có name/phone trước Home. Xem [Authentication final verification](AUTHENTICATION_FINAL_VERIFICATION.md). Không dùng kết quả test cũ trong tài liệu này làm bằng chứng mới.
+
 Ngày: 08/11/2026. Phạm vi: frontend mobile cho Owner, Staff và Tenant; yêu cầu trực tiếp của người dùng “Redesign and Integrate Shared Profile Screens”. Trace: **UC-03 / BE-03**, quyền `account.view-own` và `account.update-own` cho cả ba role theo `RolePermissions.cs:14–15`. Đối chiếu `OperationsContracts.cs`, `OperationsService.cs`, `CompactOperationsRepository.cs`, `LoginIdentifier.cs` và mục BE-03 của tài liệu backend delivery. Không sửa backend, schema, API hoặc quy tắc phân quyền.
 
 ## Luồng triển khai

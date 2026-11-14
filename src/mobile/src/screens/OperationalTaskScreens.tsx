@@ -14,6 +14,7 @@ import { Pagination, QueryState } from '../components/WorkspaceQueryState';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
+import { queryPolicies } from '../lib/queryPolicies';
 import { errorMessage, type Named } from '../lib/api';
 import { StaffTaskListScreen } from './StaffTaskListScreen';
 import { StaffTaskDetailScreen } from './StaffTaskDetailScreen';
@@ -40,8 +41,10 @@ function OwnerTaskList({ approvals }: { approvals: boolean }) {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState(approvals ? 'PendingVerification' : '');
   const [create, setCreate] = useState(false);
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const query = useWorkspaceQuery<TaskPage<OperationalTask>>(
-    `/api/v1/operational-tasks?page=${page}&pageSize=20${status ? `&status=${status}` : ''}`,
+    `/api/v1/operational-tasks?page=${page}&pageSize=20${status ? `&status=${status}` : ''}${overdueOnly ? '&isOverdue=true' : ''}`,
+    { cache: queryPolicies.tasks },
   );
   if (create && role === 'Owner')
     return (
@@ -82,6 +85,14 @@ function OwnerTaskList({ approvals }: { approvals: boolean }) {
         ]}
         onChange={(next) => {
           setStatus(next);
+          setPage(1);
+        }}
+      />
+      <Checkbox.Item
+        label="Chỉ công việc quá hạn"
+        status={overdueOnly ? 'checked' : 'unchecked'}
+        onPress={() => {
+          setOverdueOnly((value) => !value);
           setPage(1);
         }}
       />

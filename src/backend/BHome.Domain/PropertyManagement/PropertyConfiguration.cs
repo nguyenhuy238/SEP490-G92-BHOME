@@ -6,7 +6,7 @@ public enum RoomStatus { Available, OnHold, Occupied, Unavailable }
 public enum RoomTransitionSource { Configuration, ContractActivation, ContractTermination, HoldingActivation, HoldingRelease }
 public enum AssetStatus { Active, NeedsRepair, UnderRepair, Retired }
 public enum ChargeCategory { Rent, Electricity, Water, ServiceFee }
-public enum ChargingMethod { FixedPerRoomPerMonth, Metered }
+public enum ChargingMethod { FixedPerRoomPerMonth, Metered, FixedPerPersonPerMonth }
 
 public sealed class RoomType : AuditableEntity
 {
@@ -102,7 +102,7 @@ public static class PropertyRules
             ChargeCategory.Rent => method == ChargingMethod.FixedPerRoomPerMonth && code == "RENT",
             ChargeCategory.Electricity => method == ChargingMethod.Metered && code == "ELECTRICITY",
             ChargeCategory.Water => method == ChargingMethod.Metered && code == "WATER",
-            ChargeCategory.ServiceFee => method == ChargingMethod.FixedPerRoomPerMonth &&
+            ChargeCategory.ServiceFee => method is ChargingMethod.FixedPerRoomPerMonth or ChargingMethod.FixedPerPersonPerMonth &&
                 code is not ("RENT" or "ELECTRICITY" or "WATER"),
             _ => false
         };

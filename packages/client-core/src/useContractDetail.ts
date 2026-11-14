@@ -14,7 +14,12 @@ export interface ContractDetail {
   readiness: Readiness | null;
   history: SettlementReview[];
 }
-export function useContractDetail(client: ContractClient, id: string, role: string) {
+export function useContractDetail(
+  client: ContractClient,
+  id: string,
+  role: string,
+  refreshIntervalMs = 0,
+) {
   const [state, setState] = useState<{
     id: string;
     data: ContractDetail | null;
@@ -22,17 +27,25 @@ export function useContractDetail(client: ContractClient, id: string, role: stri
     loading: boolean;
   }>({ id: '', data: null, error: '', loading: false });
   const [revision, setRevision] = useState(0);
+  const [refreshError, setRefreshError] = useState('');
   const reload = useCallback(() => setRevision((v) => v + 1), []);
   useEffect(() => {
     if (!id) return;
     const controller = new AbortController();
     const signal = controller.signal;
+    let running = false;
+    let pollingEligible = false;
     // All subsequent reads are scoped by a successful contract lookup.
-    async function load() {
-      setState({ id, data: null, error: '', loading: true });
+    async function load(background = false) {
+      if (running || signal.aborted) return;
+      running = true;
+      if (!background) setState({ id, data: null, error: '', loading: true });
       try {
         const contract = await client.get(id, signal);
-        if (contract.onboardingDraft) {
+        pollingEligible =
+          (contract.kind === 'Holding' || contract.kind === 'Main') &&
+          ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status);
+        if (contract.kind === 'Main' && contract.onboardingDraft) {
           if (!signal.aborted)
             setState({
               id,
@@ -42,10 +55,13 @@ export function useContractDetail(client: ContractClient, id: string, role: stri
             });
           return;
         }
-        const moveOut = await client.moveOut(id, signal).catch((e: unknown) => {
-          if ((e as { status?: number })?.status === 404) return null;
-          throw e;
-        });
+        const moveOut =
+          contract.kind === 'Holding'
+            ? null
+            : await client.moveOut(id, signal).catch((e: unknown) => {
+                if ((e as { status?: number })?.status === 404) return null;
+                throw e;
+              });
         const financial = role === 'Owner' || role === 'Tenant';
         const [readiness, history] = await Promise.all([
           financial && ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status)
@@ -53,24 +69,43 @@ export function useContractDetail(client: ContractClient, id: string, role: stri
             : Promise.resolve(null),
           financial && moveOut ? client.history(id, signal) : Promise.resolve([]),
         ]);
-        if (!signal.aborted)
-          setState({
-            id,
-            data: { contract, moveOut, readiness, history },
-            error: '',
-            loading: false,
-          });
+        if (!signal.aborted) {
+          setRefreshError('');
+          const data = { contract, moveOut, readiness, history };
+          setState((previous) =>
+            previous.id === id &&
+            !previous.loading &&
+            !previous.error &&
+            JSON.stringify(previous.data) === JSON.stringify(data)
+              ? previous
+              : { id, data, error: '', loading: false },
+          );
+        }
       } catch (e) {
-        if (!signal.aborted) setState({ id, data: null, error: contractError(e), loading: false });
+        if (!signal.aborted && background) setRefreshError(contractError(e));
+        if (!signal.aborted && !background)
+          setState({ id, data: null, error: contractError(e), loading: false });
+      } finally {
+        running = false;
       }
     }
     void load();
-    return () => controller.abort();
-  }, [client, id, role, revision]);
+    const timer =
+      refreshIntervalMs > 0
+        ? setInterval(() => {
+            if (pollingEligible) void load(true);
+          }, refreshIntervalMs)
+        : null;
+    return () => {
+      controller.abort();
+      if (timer !== null) clearInterval(timer);
+    };
+  }, [client, id, role, revision, refreshIntervalMs]);
   return {
     data: state.id === id ? state.data : null,
     error: state.id === id ? state.error : '',
     loading: !!id && (state.id !== id || state.loading),
     reload,
+    refreshError,
   };
 }

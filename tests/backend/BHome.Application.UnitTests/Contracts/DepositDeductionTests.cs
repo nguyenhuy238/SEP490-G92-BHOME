@@ -60,19 +60,26 @@ public sealed class DepositDeductionTests
     private sealed class Actor(string role, Guid? id) : ICurrentUser
     { public Guid? UserId => id; public bool IsInRole(string candidate) => candidate == role; }
     [Fact]
-    public async Task ProductionCannotApproveDeductionsAgainstASimulatedContract()
+    public async Task OwnerCannotCreateAnotherLegacyPlan()
     {
-        var repo = Substitute.For<IDepositDeductionRepository>(); var files = Substitute.For<IDepositDeductionEvidence>();
+        var repo = Substitute.For<IDepositDeductionRepository>();
         repo.TransactionAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<DepositDeductionPlan>>>(), Arg.Any<CancellationToken>())
             .Returns(c => c.Arg<Func<Task<DepositDeductionPlan>>>()());
-        var summary = new ContractSettlementSummary(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Synthetic", Guid.NewGuid(),
-            10000, 0, 0, null, null, null, [], [], false, false, "source");
-        repo.ContextAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(new DepositDeductionContext(summary, "Active", "Inspected",
-            Guid.NewGuid(), 1, true, false, [asset], [new(proof, "private", "image/png")], true));
-        var service = new DepositDeductionService(repo, files, new Actor("Owner", Guid.NewGuid()), TimeProvider.System, new PaymentRuntimeMode(false));
+        var service = new DepositDeductionService(repo, new Actor("Owner", Guid.NewGuid()), new PaymentRuntimeMode(false));
         var error = await Assert.ThrowsAsync<ContractException>(() => service.ApproveAsync(Guid.NewGuid(), Input(), Guid.NewGuid(), default));
-        Assert.Equal("development_payment_unavailable", error.Code); Assert.Empty(files.ReceivedCalls());
-        await repo.DidNotReceiveWithAnyArgs().SaveAsync(default!, default);
+        Assert.Equal("settlement_receivables_replace_legacy_deductions", error.Code);
+    }
+    [Fact]
+    public async Task ProductionCannotReplayADevelopmentLegacyDecision()
+    {
+        var repo = Substitute.For<IDepositDeductionRepository>();
+        repo.TransactionAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<DepositDeductionPlan>>>(), Arg.Any<CancellationToken>())
+            .Returns(c => c.Arg<Func<Task<DepositDeductionPlan>>>()());
+        repo.OperationAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(new DepositDeductionPlan(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, 1, Guid.NewGuid(), DateTimeOffset.UtcNow,
+            "Synthetic legacy demo", "source", 10000, [], [], Guid.NewGuid(), "historical", true));
+        var service = new DepositDeductionService(repo, new Actor("Owner", Guid.NewGuid()), new PaymentRuntimeMode(false));
+        Assert.Equal("development_payment_unavailable", (await Assert.ThrowsAsync<ContractException>(() => service.ApproveAsync(Guid.NewGuid(), Input(), Guid.NewGuid(), default))).Code);
     }
     [Theory]
     [InlineData("Staff", 403)]
@@ -80,9 +87,9 @@ public sealed class DepositDeductionTests
     [InlineData("", 401)]
     public async Task NonOwnerIsDeniedBeforeAnySourceOrPrivateFileLookup(string role, int status)
     {
-        var repo = Substitute.For<IDepositDeductionRepository>(); var files = Substitute.For<IDepositDeductionEvidence>();
-        var service = new DepositDeductionService(repo, files, new Actor(role, role == "" ? null : Guid.NewGuid()), TimeProvider.System);
+        var repo = Substitute.For<IDepositDeductionRepository>();
+        var service = new DepositDeductionService(repo, new Actor(role, role == "" ? null : Guid.NewGuid()));
         var error = await Assert.ThrowsAsync<ContractException>(() => service.ApproveAsync(Guid.NewGuid(), Input(), Guid.NewGuid(), default));
-        Assert.Equal(status, error.Status); Assert.Empty(repo.ReceivedCalls()); Assert.Empty(files.ReceivedCalls());
+        Assert.Equal(status, error.Status); Assert.Empty(repo.ReceivedCalls());
     }
 }

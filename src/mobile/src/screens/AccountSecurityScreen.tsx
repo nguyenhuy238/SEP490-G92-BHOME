@@ -6,13 +6,14 @@ import { router } from 'expo-router';
 import { Text, TextInput } from 'react-native-paper';
 import { Action, Box, Heading, ui } from '../components/WorkspaceKit';
 import { useSession } from '../lib/SessionProvider';
-import { errorMessage } from '../lib/api';
+import { errorMessage, MobileApiError } from '../lib/api';
 
 export function AccountSecurityScreen() {
   const { api, logout } = useSession();
   const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [visible, setVisible] = useState({ current: false, password: false, confirm: false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useFeedbackState();
   const lock = useRef(false);
@@ -22,6 +23,7 @@ export function AccountSecurityScreen() {
         setCurrent('');
         setPassword('');
         setConfirm('');
+        setVisible({ current: false, password: false, confirm: false });
       }
     });
     return () => listener.remove();
@@ -30,6 +32,18 @@ export function AccountSecurityScreen() {
     if (!api || lock.current) return;
     if (!current || !password || password !== confirm) {
       setError('Nhập mật khẩu hiện tại và xác nhận mật khẩu mới khớp nhau.');
+      return;
+    }
+    if (current.length > 1024 || password.length < 12 || password.length > 1024) {
+      setError('Mật khẩu mới phải từ 12 đến 1024 ký tự.');
+      return;
+    }
+    if (current === password) {
+      setError('Mật khẩu mới phải khác mật khẩu hiện tại.');
+      return;
+    }
+    if (!/^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}]).{12,1024}$/u.test(password)) {
+      setError('Mật khẩu mới phải gồm chữ hoa, chữ thường, số và ký tự đặc biệt.');
       return;
     }
     lock.current = true;
@@ -43,6 +57,7 @@ export function AccountSecurityScreen() {
       setCurrent('');
       setPassword('');
       setConfirm('');
+      setVisible({ current: false, password: false, confirm: false });
       // Password change revokes sessions server-side. Always clear the local credentials too.
       try {
         await logout();
@@ -52,7 +67,11 @@ export function AccountSecurityScreen() {
       router.replace('/');
       showSuccess('Đã đổi mật khẩu. Hãy đăng nhập lại.');
     } catch (e) {
-      setError(errorMessage(e));
+      setError(
+        e instanceof MobileApiError && e.status === 400
+          ? 'Không thể đổi mật khẩu. Vui lòng kiểm tra mật khẩu hiện tại và bảo đảm mật khẩu mới đáp ứng yêu cầu bên dưới. Nếu vẫn lỗi, hãy đăng nhập lại rồi thử lại.'
+          : errorMessage(e),
+      );
     } finally {
       lock.current = false;
       setBusy(false);
@@ -67,7 +86,17 @@ export function AccountSecurityScreen() {
           accessibilityLabel="Mật khẩu hiện tại"
           value={current}
           onChangeText={setCurrent}
-          secureTextEntry
+          secureTextEntry={!visible.current}
+          right={
+            <TextInput.Icon
+              icon={visible.current ? 'eye-off' : 'eye'}
+              accessibilityLabel={
+                visible.current ? 'Ẩn mật khẩu hiện tại' : 'Hiện mật khẩu hiện tại'
+              }
+              onPress={() => setVisible((v) => ({ ...v, current: !v.current }))}
+              disabled={busy}
+            />
+          }
           autoCapitalize="none"
           autoCorrect={false}
           disabled={busy}
@@ -78,7 +107,15 @@ export function AccountSecurityScreen() {
           accessibilityLabel="Mật khẩu mới"
           value={password}
           onChangeText={setPassword}
-          secureTextEntry
+          secureTextEntry={!visible.password}
+          right={
+            <TextInput.Icon
+              icon={visible.password ? 'eye-off' : 'eye'}
+              accessibilityLabel={visible.password ? 'Ẩn mật khẩu mới' : 'Hiện mật khẩu mới'}
+              onPress={() => setVisible((v) => ({ ...v, password: !v.password }))}
+              disabled={busy}
+            />
+          }
           autoCapitalize="none"
           autoCorrect={false}
           disabled={busy}
@@ -89,12 +126,25 @@ export function AccountSecurityScreen() {
           accessibilityLabel="Xác nhận mật khẩu mới"
           value={confirm}
           onChangeText={setConfirm}
-          secureTextEntry
+          secureTextEntry={!visible.confirm}
+          right={
+            <TextInput.Icon
+              icon={visible.confirm ? 'eye-off' : 'eye'}
+              accessibilityLabel={
+                visible.confirm ? 'Ẩn xác nhận mật khẩu mới' : 'Hiện xác nhận mật khẩu mới'
+              }
+              onPress={() => setVisible((v) => ({ ...v, confirm: !v.confirm }))}
+              disabled={busy}
+            />
+          }
           autoCapitalize="none"
           autoCorrect={false}
           disabled={busy}
           mode="outlined"
         />
+        <Text>
+          Mật khẩu mới từ 12 đến 1024 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.
+        </Text>
         <Text>Sau khi đổi mật khẩu thành công, bạn cần đăng nhập lại.</Text>
         {!!error && (
           <Text accessibilityRole="alert" style={ui.red}>

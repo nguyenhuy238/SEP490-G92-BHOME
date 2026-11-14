@@ -1,3 +1,4 @@
+import { MoneyField } from './MoneyField';
 import { workflowTransitions } from '../../services/workflowTransitions';
 import { useState } from 'react';
 import {
@@ -217,12 +218,12 @@ export function DetailPanel({
       )}
       {kind === 'invoices' && row.status === 'Yêu cầu điều chỉnh' && (
         <Stack spacing={1} sx={{ my: 2 }}>
-          <TextField
+          <MoneyField
+            allowNegative
             label="Số tiền điều chỉnh (+/- VND)"
             size="small"
-            type="number"
             value={adjustment}
-            onChange={(e) => setAdjustment(e.target.value)}
+            onValueChange={(raw) => setAdjustment(raw)}
           />
           <TextField
             label="Lý do điều chỉnh"

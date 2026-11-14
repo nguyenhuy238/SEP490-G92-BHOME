@@ -32,7 +32,7 @@ public sealed partial class ContractLifecycleApiTests
         if (termination)
         {
             await Success<ContractView>(await Post(w.Owner, Path(id, "activate")));
-            await SettledBoundary(w, id);
+            await ConfirmedPhysicalBoundary(w, id);
         }
         var before = (await w.Owner.Client.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!;
         var input = new RoomWrite(w.Location, "RENAMED", before.Floor, before.Capacity, before.Status,
@@ -68,22 +68,27 @@ public sealed partial class ContractLifecycleApiTests
             (await actual.Set<Contract>().SingleAsync(c => c.Id == id)).Status);
     }
 
-    private async Task SettledBoundary(Workspace w, Guid id)
+    private async Task ConfirmedPhysicalBoundary(Workspace w, Guid id)
     {
         await Success<MoveOutView>(await Post(w.Tenant, Path(id, "termination-requests"), new TerminationInput(Today, "Synthetic reviewed move-out")));
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
+        await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/schedule"), new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(5))));
         var electricity = await FinalReading(w, id, BHome.Domain.Billing.UtilityType.Electricity);
         var water = await FinalReading(w, id, BHome.Domain.Billing.UtilityType.Water);
-        await using var seed = fixture.Factory.Services.CreateAsyncScope();
-        var db = seed.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        // Seed the already-reviewed boundary; this is not evidence for the real financial settlement flow.
-        var moveOut = await db.Set<ContractMoveOut>().SingleAsync(m => m.ContractId == id);
-        moveOut.Status = MoveOutStatus.Settled;
-        moveOut.InspectedAt = DateTimeOffset.UtcNow;
-        moveOut.ElectricityReadingId = electricity;
-        moveOut.WaterReadingId = water;
-        moveOut.SettlementLedgerReference = "TEST-ONLY-LEDGER-" + id;
-        await db.SaveChangesAsync(); fixture.Ledger.Resolved[id] = true;
+        var choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
+        var openingElectricity = choices.Readings.First(r => r.UtilityType == 0); var openingWater = choices.Readings.First(r => r.UtilityType == 1);
+        using var openingPhoto = new ByteArrayContent(Image()); openingPhoto.Headers.ContentType = new("image/png");
+        var openingFile = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), openingPhoto))).Id;
+        await Success<HandoverView>(await Post(w.Staff, Path(id, "handover"), new HandoverInput(0, openingElectricity.Date,
+            "Synthetic original room", "Synthetic original keys", "", [], openingElectricity.Id, openingWater.Id, [openingFile])));
+        await Success<HandoverView>(await Post(w.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(1, "Synthetic present")));
+        await Success<HandoverView>(await Post(w.Staff, Path(id, "handover/staff-confirmation"), new HandoverDecision(1, "Synthetic checked")));
+        using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
+        var evidence = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), photo))).Id;
+        await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), new InspectionInput(electricity, water,
+            "Synthetic physical condition", [evidence], [], "Synthetic final room", "Synthetic returned keys")));
+        var inspection = (await Success<FinalInspectionView[]>(await w.Owner.Client.GetAsync(Path(id, "move-out/inspections")))).First();
+        await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/inspection-review"), new InspectionReviewInput(inspection.Version, true, "Synthetic Owner physical approval", true)));
     }
 
     internal async Task RemainingContractKeepsRoomOccupiedWithoutVersionBump()
@@ -105,7 +110,7 @@ public sealed partial class ContractLifecycleApiTests
         var second = await Active(w with { Tenant = tenant, Resident = resident.Id });
         var before = (await w.Owner.Client.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!;
         Assert.Equal(2, before.Version);
-        await SettledBoundary(w, first);
+        await ConfirmedPhysicalBoundary(w, first);
         await Success<ContractView>(await Post(w.Owner, Path(first, "move-out/complete"), new CompletionInput(Today)));
         var after = (await w.Owner.Client.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!;
         Assert.Equal(RoomStatus.Occupied, after.Status); Assert.Equal(before.Version, after.Version);

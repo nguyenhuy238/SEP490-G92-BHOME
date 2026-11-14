@@ -95,12 +95,7 @@ internal sealed class PostgresRoomInsightsRepository(BHomePersistenceContext db)
         var occupancy = await contracts.AnyAsync(c => c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.Residents.Any(r =>
             r.ResidenceFrom <= today && (r.ResidenceTo == null || r.ResidenceTo >= today)), token);
         var active = await contracts.AnyAsync(c => c.Status == ContractStatus.Active, token);
-        var pending = await contracts.AnyAsync(c =>
-            (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
-             c.Status == ContractStatus.PendingActivation) &&
-            (c.Signatures.Any(s => s.Status == SignatureStatus.Signed && s.SignedAt != null &&
-                s.SignedObjectKey != null && s.SignedObjectKey != "" && s.SignedHash != null && s.SignedHash != "") ||
-             db.Set<DepositVerification>().Any(d => d.ContractId == c.Id && d.Amount > 0)), token);
+        var pending = await PostgresPropertyRepository.BindingPendingContractsAsync(db, contracts, token);
         return new(residents, occupancy, active, pending);
     }
 

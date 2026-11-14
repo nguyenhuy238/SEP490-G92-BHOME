@@ -30,8 +30,11 @@ public sealed record InvoiceView(Guid Id, Guid RoomId, Guid LocationId, string R
     IReadOnlyList<string> MissingInputs, DateOnly ScheduledFinalDate, DateOnly DueDate, DateTimeOffset? FinalizedAt,
     Guid RepresentativeTenantUserId, IReadOnlyList<InvoiceLineView> Lines);
 public sealed record InvoiceScope(Guid Actor, bool Owner, bool Tenant);
+public sealed record InvoiceListFilter(Guid? LocationId = null, DateOnly? BillingPeriod = null, InvoiceStatus? Status = null);
 public sealed record BillingOccupancy(Contract Contract, IReadOnlyList<Guid> TenantIds, bool ContactsComplete = true);
-public sealed record BillingReading(MeterReading Reading, DateOnly ReadingDate);
+public sealed record BillingReading(MeterReading Reading, DateOnly ReadingDate, decimal? BillablePrevious = null,
+    decimal? BillableConsumption = null, decimal AlreadyBilledQuantity = 0, string? PreviousPricingSnapshot = null,
+    bool FullyCovered = false, string? CoverageSnapshot = null, IReadOnlyList<string>? MissingInputs = null);
 public sealed class InvoiceException(int status, string code) : Exception("Billing operation rejected.")
 {
     public int Status { get; } = status;
@@ -45,7 +48,7 @@ public interface IInvoiceRepository
     Task<Room?> RoomAsync(Guid roomId, CancellationToken t);
     Task<Invoice?> FindAsync(Guid id, InvoiceScope scope, CancellationToken t);
     Task<Invoice?> ForPeriodAsync(Guid roomId, DateOnly period, CancellationToken t);
-    Task<PagedResult<Invoice>> ListAsync(InvoiceScope scope, int page, int pageSize, Guid? roomId, CancellationToken t);
+    Task<PagedResult<Invoice>> ListAsync(InvoiceScope scope, int page, int pageSize, Guid? roomId, CancellationToken t, InvoiceListFilter? filter = null);
     Task<IReadOnlyList<BillingOccupancy>> OccupanciesAsync(Guid roomId, DateOnly from, DateOnly to, CancellationToken t);
     Task<BillingReading?> ReadingAsync(Guid roomId, UtilityType type, DateOnly period, CancellationToken t);
     Task RecordPolicyUsageAsync(Guid[] ids, DateTimeOffset at, CancellationToken t);

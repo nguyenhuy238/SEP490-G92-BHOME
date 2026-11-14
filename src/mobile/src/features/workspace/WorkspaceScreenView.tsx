@@ -19,6 +19,7 @@ import { useWorkspace } from '../../features/workspace/WorkspaceProvider';
 import { canOpenScreen, homeScreen, isWorkspaceScreen } from '../../features/workspace/navigation';
 import { OwnerHome, ApprovalCenter, Operations } from '../../screens/OwnerScreens';
 import { OwnerOverviewScreen } from '../../screens/OwnerOverviewScreen';
+import { OwnerResidenceScreen } from '../../screens/OwnerResidenceScreen';
 import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens';
 import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
 import { StaffScheduleScreen } from '../../screens/StaffScheduleScreen';
@@ -37,7 +38,6 @@ import {
   Profile,
   Notifications,
   SecuritySettings,
-  NotificationPreferences,
 } from '../../screens/SharedScreens';
 
 import { OnboardingScreen } from '../../screens/OnboardingScreen';
@@ -61,6 +61,15 @@ import {
   TenantResidenceScreen,
 } from '../../screens/TenantServiceScreens';
 import { ProfileEditScreen } from '../../screens/ProfileEditScreen';
+import {
+  OwnerAdjustmentListScreen,
+  OwnerAdjustmentReviewScreen,
+  OwnerAnnouncementScreen,
+  OwnerApprovalCenterScreen,
+  OwnerFinanceScreen,
+  OwnerPaymentListScreen,
+  OwnerPaymentReviewScreen,
+} from '../../screens/OwnerDecisionScreens';
 import { useSession } from '../../lib/SessionProvider';
 import {
   ContractPreparation,
@@ -120,6 +129,13 @@ const screens = {
   'task-detail': TaskDetail,
   'owner-home': OwnerHome,
   approvals: ApprovalCenter,
+  'owner-adjustments': OwnerAdjustmentListScreen,
+  'owner-adjustment-detail': OwnerAdjustmentReviewScreen,
+  'owner-payments': OwnerPaymentListScreen,
+  'owner-payment-detail': OwnerPaymentReviewScreen,
+  'owner-announcements': OwnerAnnouncementScreen,
+  'owner-finance': OwnerFinanceScreen,
+  'owner-residence': OwnerResidenceScreen,
   operations: Operations,
   'staff-home': StaffHome,
   'work-orders': WorkOrders,
@@ -134,7 +150,7 @@ const screens = {
   notifications: Notifications,
   'send-notification': StaffNotificationScreen,
   security: SecuritySettings,
-  preferences: NotificationPreferences,
+  preferences: () => <UnavailableWorkspaceScreen screen="preferences" />,
 };
 export function WorkspaceScreenView({ screen }: { screen: string }) {
   const { role, preview, go } = useWorkspace();
@@ -207,7 +223,7 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
           content = <OperationalTasksScreen />;
           break;
         case 'approvals':
-          content = <OperationalTasksScreen approvals />;
+          content = <OwnerApprovalCenterScreen />;
           break;
         case 'operations':
           content = <OwnerOperationsScreen />;
@@ -229,6 +245,15 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
           break;
         case 'profile-edit':
           content = <ProfileEditScreen />;
+          break;
+        case 'owner-adjustments':
+        case 'owner-adjustment-detail':
+        case 'owner-payments':
+        case 'owner-payment-detail':
+        case 'owner-announcements':
+        case 'owner-finance':
+        case 'owner-residence':
+          content = <Screen />;
           break;
         case 'incident-detail':
         case 'incident-inbox':

@@ -15,6 +15,15 @@ using Npgsql;
 
 namespace BHome.IntegrationTests.Compact24;
 
+public sealed class CompactPostgresTheoryAttribute : TheoryAttribute
+{
+    public CompactPostgresTheoryAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN")))
+            Skip = "Set BHOME_COMPACT24_TEST_ADMIN to an authorized loopback PostgreSQL admin for disposable databases.";
+    }
+}
+
 public sealed class CompactPostgresFactAttribute : FactAttribute
 {
     public CompactPostgresFactAttribute()
@@ -29,6 +38,39 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
 {
     private const string Password = "Synthetic!Password-493";
     private const string NewPassword = "Synthetic!Password-927";
+
+    [CompactPostgresFact]
+    public async Task AnonymousRequestsCannotReadProtectedProfilesSessionsOrContractsButCanReadThePublishedCatalog()
+    {
+        using var client = fixture.Factory!.CreateClient();
+        foreach (var path in new[] { "/api/v1/auth/me", "/api/v1/session", "/api/v1/account/profile", "/api/v1/contracts" })
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/public/locations")).StatusCode);
+    }
+
+    [CompactPostgresFact]
+    public async Task InvalidPasswordChangesLeaveBothSessionsAndPasswordHashUnchanged()
+    {
+        var user = await Seed(); using var a = fixture.Factory!.CreateClient(); using var b = fixture.Factory.CreateClient();
+        var first = await Login(a, user.Email!); var second = await Login(b, user.Email!);
+        Bearer(a, first); Bearer(b, second);
+        foreach (var input in new[] {
+            new { currentPassword = Password, newPassword = Password },
+            new { currentPassword = "Wrong!Password-493", newPassword = NewPassword },
+            new { currentPassword = Password, newPassword = "short" },
+            new { currentPassword = "", newPassword = NewPassword } })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, (await a.PostAsJsonAsync("/api/v1/auth/change-password", input)).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await a.GetAsync("/api/v1/auth/me")).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await b.GetAsync("/api/v1/auth/me")).StatusCode);
+        }
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        Assert.Equal(user.PasswordHash, (await db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id)).PasswordHash);
+        Assert.Equal(HttpStatusCode.NoContent, (await a.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = Password, newPassword = NewPassword })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await a.GetAsync("/api/v1/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await b.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
 
     [CompactPostgresFact]
     public async Task SameApiAndIdentityHashWorkWithoutAnyLegacyContextOrTable()
@@ -54,7 +96,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
     }
 
     [CompactPostgresFact]
-    public async Task UpdatedProfilePhoneCanSignInAndRevokesThePreviousSession()
+    public async Task UpdatedProfilePhoneCanSignInAndPreservesThePreviousSession()
     {
         var user = await Seed(); using var client = fixture.Factory!.CreateClient();
         var session = await Login(client, user.Email!); Bearer(client, session);
@@ -64,15 +106,17 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
             fullName = "Synthetic Tenant",
             phone = "090-123 4567",
             email = user.Email,
-            version = profile.Version
+            version = profile.Version,
+            currentPassword = Password
         });
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/auth/me")).StatusCode);
+        // Approved 12/11/2026 policy: profile changes preserve an authenticated session.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/auth/me")).StatusCode);
 
         client.DefaultRequestHeaders.Authorization = null;
         var byPhone = await client.PostAsJsonAsync("/api/v1/auth/login", new { phone = "090 123 4567", password = Password });
         Assert.Equal(HttpStatusCode.OK, byPhone.StatusCode);
-        Assert.Equal(user.Id, (await byPhone.Content.ReadFromJsonAsync<LoginResult>())!.UserId);
+        Assert.Equal(user.Id, (await TestAuthResponse.ReadAsync(byPhone.Content)).UserId);
     }
 
     [CompactPostgresFact]
@@ -83,7 +127,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
         var first = await Login(client, user.Email!);
         var rotated = await client.PostAsJsonAsync("/api/v1/auth/refresh", new { first.RefreshToken });
         Assert.Equal(HttpStatusCode.OK, rotated.StatusCode);
-        var second = (await rotated.Content.ReadFromJsonAsync<LoginResult>())!;
+        var second = await TestAuthResponse.ReadAsync(rotated.Content);
         Assert.NotEqual(first.RefreshToken, second.RefreshToken);
         Assert.Equal(first.SessionId, second.SessionId);
         var replay = await client.PostAsJsonAsync("/api/v1/auth/refresh", new { first.RefreshToken });
@@ -101,7 +145,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
         var responses = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => client.PostAsJsonAsync("/api/v1/auth/refresh", new { first.RefreshToken })));
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Unauthorized);
-        var winner = (await responses.Single(r => r.StatusCode == HttpStatusCode.OK).Content.ReadFromJsonAsync<LoginResult>())!;
+        var winner = await TestAuthResponse.ReadAsync(responses.Single(r => r.StatusCode == HttpStatusCode.OK).Content);
         Bearer(client, winner);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/session")).StatusCode);
     }
@@ -248,7 +292,7 @@ public sealed class Compact24AuthTests(Compact24Fixture fixture) : IClassFixture
     {
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<LoginResult>())!;
+        return await TestAuthResponse.ReadAsync(response.Content);
     }
     private static void Bearer(HttpClient client, LoginResult session) => client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
     private sealed class ResetDelivery : IPasswordResetDelivery

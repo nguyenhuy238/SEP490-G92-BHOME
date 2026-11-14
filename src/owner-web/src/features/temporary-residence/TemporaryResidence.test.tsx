@@ -25,7 +25,7 @@ vi.mock('../contracts/useContractsApi', () => ({
 vi.mock('../../components/common/ResourcePage', () => ({
   ResourcePage: () => <div>Mock mode</div>,
 }));
-vi.mock('../../services/config', () => ({ isMockMode: false }));
+vi.mock('../../services/config', () => ({ isMockMode: false, apiBaseUrl: '' }));
 let task: ResidenceTask;
 beforeEach(() => {
   vi.clearAllMocks();

@@ -1,3 +1,5 @@
+export { formatMeterReading } from '../../../../../packages/client-core/src/localization';
+
 // Fixed-point arithmetic matches the backend's numeric(18,4) without rounding a
 // 14-digit meter reading through a JavaScript floating-point number.
 export function normalizedReading(input: string) {

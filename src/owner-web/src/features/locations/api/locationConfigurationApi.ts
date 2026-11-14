@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { createApiClient } from '../../../../../../packages/client-core/src/api';
-import { getApiBaseUrl } from '../../../../../../packages/client-core/src/config';
+import { apiBaseUrl } from '../../../services/config';
 import type { Page } from '../../property-api/propertyApi';
 
 export interface SetupDocument<T> {
@@ -76,7 +76,7 @@ export function useLocationConfigurationApi() {
   const { client } = useAuth();
   return useMemo(() => {
     const request = createApiClient(
-      getApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.DEV),
+      apiBaseUrl,
       () => client.session?.accessToken,
       client.clear,
       client.refresh,

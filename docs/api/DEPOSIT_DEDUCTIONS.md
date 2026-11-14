@@ -1,5 +1,13 @@
 # Quyết định khấu trừ cọc — UC-19, BE-19/BE-X07
 
+## 11/11/2026 — Luồng cũ chỉ đọc/replay theo BR-20/21
+
+Thiệt hại mới phải dùng [khoản phải thu và cấn trừ riêng](SETTLEMENT_RECEIVABLES.md), có thể vượt số cọc. Không tạo hoặc revise `DepositDeductionV1` mới, kể cả khi chưa có receivable. `POST /contracts/{id}/deposit-deductions` vẫn kiểm Owner/key/input và chỉ trả 200 khi replay đúng key + normalized fingerprint của quyết định đã tồn tại; key mới trả 409 `settlement_receivables_replace_legacy_deductions`, payload/key khác trả conflict. Production tiếp tục chặn replay dữ liệu demo. Repository không còn mutation save/context tạo legacy plan qua Application.
+
+Owner Web hiển thị quyết định cũ/phiên bản/nội dung/số tiền/chứng từ dưới dạng chỉ đọc, hướng dẫn dùng receivable + explicit deposit offset cho phát sinh mới. Không sửa/chuyển đổi/xóa plan đã có. Refund, settlement ledger, latest historical version, evidence integrity và reporting của hồ sơ cũ được giữ. Trường hợp cần sửa số tiền lịch sử hoặc evidence bất nhất vẫn phải đối chiếu; không lách bằng một legacy plan mới hoặc tự phát sinh khoản trùng. Phần dưới ghi lại contract/hành vi lịch sử trước BR-20/21, không còn là quyền tạo mới.
+
+Regression tạo dữ liệu legacy bằng fixture rõ ràng trong disposable DB (typed plan + proof hash + audit), kiểm exact replay, version history, phần cọc còn lại/toàn bộ cọc đã dùng, original invoice/report không đổi, tampered proof chặn closure/refund. Không dùng retired POST để giả lập historical creation, không bỏ các assertion về money/proof.
+
 Cập nhật 06/11/2026. Triển khai theo ủy quyền người dùng cho OQ-01/05 khi chưa có quyết định chi tiết
 trong repository; không thay approved SRS hoặc đặt công thức phí. SRS UC-19 p1833–1840: Staff ghi
 inspection/evidence, Owner xác nhận tình trạng, quyết định Security Deposit deduction và chỉ đóng

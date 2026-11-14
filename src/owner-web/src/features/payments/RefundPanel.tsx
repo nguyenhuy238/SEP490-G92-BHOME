@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -20,7 +21,7 @@ import { useRefundApi } from './useRefundApi';
 import { settlementBlocker } from '../../../../../packages/client-core/src/useContractLifecycle';
 type RefundPanelProps = {
   sourceId: string;
-  sourceKind?: 'Receipt' | 'SecurityDeposit';
+  sourceKind?: 'Receipt' | 'SecurityDeposit' | 'HoldingDeposit';
   onChanged?: () => void;
 };
 export function RefundPanel(props: RefundPanelProps) {
@@ -35,9 +36,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
   const source = useQuery({
     queryKey: ['refund-source', session?.userId, sourceKind, sourceId],
     queryFn: ({ signal }) =>
-      sourceKind === 'SecurityDeposit'
-        ? api.depositSource(sourceId, signal)
-        : api.source(sourceId, signal),
+      sourceKind !== 'Receipt' ? api.depositSource(sourceId, signal) : api.source(sourceId, signal),
   });
   const [person, setPerson] = useState(''),
     [amount, setAmount] = useState(''),
@@ -56,13 +55,18 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
         source.data.refundedAmount,
         source.data.reservedAmount,
         source.data.depositDeductions?.id,
+        source.data.approvedDepositOffsets,
         source.data.beneficiaries.map((p) => p.id),
+        source.data.externalBeneficiary?.attestationId,
         source.data.requests.map((r) => [r.id, r.version, r.executionIntent?.key]),
       ])
     : '';
   const checked = !!signature && reviewedSource === signature;
+  const hasOffsets =
+    !!source.data?.approvedDepositOffsets &&
+    !/^0(?:\.0+)?$/.test(source.data.approvedDepositOffsets);
   const depositConfirmed =
-    sourceKind !== 'SecurityDeposit' ||
+    sourceKind === 'Receipt' ||
     (beneficiarySource === signature && zeroDeductionSource === signature);
   const blocked = (source.data?.blockers?.length ?? 0) > 0;
   const key = useRef({ signature: '', value: crypto.randomUUID() }),
@@ -97,12 +101,15 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
       if (key.current.signature !== signature)
         key.current = { signature, value: crypto.randomUUID() };
       const body = {
-        beneficiaryResidentId: person,
+        beneficiaryResidentId: person.startsWith('external:') ? null : person,
+        ...(person.startsWith('external:')
+          ? { externalPayerAttestationId: person.slice('external:'.length) }
+          : {}),
         amount: value,
         reason,
         humanConfirmed: checked,
       };
-      if (sourceKind === 'SecurityDeposit') {
+      if (sourceKind !== 'Receipt') {
         if (!source.data?.financialReference) throw { code: 'refund_source_changed' };
         await api.createDeposit(
           sourceId,
@@ -111,13 +118,15 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
             expectedFinancialReference: source.data.financialReference,
             beneficiaryVerified: beneficiarySource === signature,
             noDeductionsConfirmed:
-              !source.data.depositDeductions && zeroDeductionSource === signature,
+              !source.data.depositDeductions && !hasOffsets && zeroDeductionSource === signature,
             ...(source.data.depositDeductions
               ? {
                   expectedDeductionPlanId: source.data.depositDeductions.id,
                   deductionsConfirmed: zeroDeductionSource === signature,
                 }
-              : {}),
+              : hasOffsets
+                ? { deductionsConfirmed: zeroDeductionSource === signature }
+                : {}),
           },
           key.current.value,
         );
@@ -136,11 +145,15 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
   return (
     <Stack spacing={2}>
       <Typography variant="h6">
-        {sourceKind === 'SecurityDeposit'
-          ? source.data?.depositDeductions
-            ? 'Hoàn cọc theo quyết định khấu trừ'
-            : 'Hoàn cọc không khấu trừ'
-          : 'Hoàn tiền thừa từ giao dịch'}
+        {sourceKind === 'HoldingDeposit'
+          ? 'Hoàn cọc giữ chỗ do không cung cấp được phòng'
+          : sourceKind === 'SecurityDeposit'
+            ? hasOffsets
+              ? 'Hoàn phần cọc còn lại sau cấn trừ'
+              : source.data?.depositDeductions
+                ? 'Hoàn cọc theo quyết định khấu trừ'
+                : 'Hoàn cọc không khấu trừ'
+            : 'Hoàn tiền thừa từ giao dịch'}
       </Typography>
       <Alert severity="info">
         Owner tự thực hiện chuyển khoản hoàn bên ngoài. BHOME chỉ ghi nhận sau khi Owner đối chiếu
@@ -159,8 +172,8 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
             </Alert>
           )}
           <Typography>
-            {sourceKind === 'SecurityDeposit' ? 'Cọc đã xác minh' : 'Tiền thừa ban đầu'}:{' '}
-            {sourceKind === 'SecurityDeposit'
+            {sourceKind !== 'Receipt' ? 'Cọc đã xác minh' : 'Tiền thừa ban đầu'}:{' '}
+            {sourceKind !== 'Receipt'
               ? source.data.verifiedDepositAmount == null
                 ? 'Chờ đối chiếu'
                 : formatContractMoney(source.data.verifiedDepositAmount)
@@ -192,15 +205,18 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
               ))}
             </Paper>
           )}
-          {sourceKind === 'SecurityDeposit' && (
+          {sourceKind !== 'Receipt' && (
             <Alert severity="info">
-              Danh sách là người ở đủ điều kiện, không xác định ai đã nộp cọc. Owner phải đối chiếu
-              bằng chứng nộp cọc trước khi chọn người nhận.
+              {sourceKind === 'SecurityDeposit'
+                ? 'Owner đối chiếu thỏa thuận hợp đồng và xác nhận người nhận phần cọc còn lại. Danh sách không tự chọn người đại diện hoặc người đã nộp cọc.'
+                : 'Danh sách là người ở đủ điều kiện, không xác định ai đã nộp cọc. Owner phải đối chiếu bằng chứng nộp cọc trước khi chọn người nhận.'}
             </Alert>
           )}
-          {source.data.beneficiaries.length === 0 ? (
+          {source.data.beneficiaries.length === 0 && !source.data.externalBeneficiary ? (
             <Alert severity="warning">
-              Chưa có hồ sơ người thực trả đã xác minh. Owner cần làm rõ nguồn trước khi hoàn.
+              {sourceKind === 'SecurityDeposit'
+                ? 'Chưa có người nhận đủ điều kiện trong danh sách. Owner cần làm rõ người nhận theo thỏa thuận hợp đồng.'
+                : 'Chưa có hồ sơ người thực trả đã xác minh. Owner cần làm rõ nguồn trước khi hoàn.'}
             </Alert>
           ) : (
             <>
@@ -220,13 +236,18 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                     {p.label}
                   </MenuItem>
                 ))}
+                {source.data.externalBeneficiary && (
+                  <MenuItem value={`external:${source.data.externalBeneficiary.attestationId}`}>
+                    {source.data.externalBeneficiary.label} · Người trả bên ngoài
+                  </MenuItem>
+                )}
               </TextField>
-              <TextField
+              <MoneyField
                 label="Số tiền yêu cầu hoàn (VND)"
                 value={amount}
                 disabled={busy}
-                onChange={(e) => {
-                  setAmount(e.target.value);
+                onValueChange={(raw) => {
+                  setAmount(raw);
                   changed();
                 }}
               />
@@ -247,9 +268,13 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                     onChange={(e) => setReviewedSource(e.target.checked ? signature : null)}
                   />
                 }
-                label="Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn"
+                label={
+                  sourceKind === 'SecurityDeposit'
+                    ? 'Tôi xác nhận nguồn tiền và người nhận hoàn theo thỏa thuận hợp đồng'
+                    : 'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn'
+                }
               />
-              {sourceKind === 'SecurityDeposit' && (
+              {sourceKind !== 'Receipt' && (
                 <>
                   <FormControlLabel
                     control={
@@ -259,7 +284,11 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                         onChange={(e) => setBeneficiarySource(e.target.checked ? signature : null)}
                       />
                     }
-                    label="Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp"
+                    label={
+                      sourceKind === 'SecurityDeposit'
+                        ? 'Tôi đã đối chiếu thỏa thuận hợp đồng và xác nhận người nhận hoàn cọc'
+                        : 'Tôi đã đối chiếu bằng chứng nộp cọc và xác minh người nhận là người nộp'
+                    }
                   />
                   <FormControlLabel
                     control={
@@ -272,9 +301,11 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                       />
                     }
                     label={
-                      source.data.depositDeductions
-                        ? 'Tôi đã đọc quyết định khấu trừ đã duyệt và xác nhận chỉ hoàn phần còn lại'
-                        : 'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý'
+                      hasOffsets
+                        ? `Tôi đã đối chiếu ${formatContractMoney(source.data.approvedDepositOffsets ?? '0')} cấn trừ đã duyệt và chỉ hoàn phần cọc còn lại`
+                        : source.data.depositDeductions
+                          ? 'Tôi đã đọc quyết định khấu trừ đã duyệt và xác nhận chỉ hoàn phần còn lại'
+                          : 'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý'
                     }
                   />
                 </>
@@ -286,7 +317,12 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                   !checked ||
                   !depositConfirmed ||
                   blocked ||
-                  !source.data.beneficiaries.some((p) => p.id === person) ||
+                  !(
+                    source.data.beneficiaries.some((p) => p.id === person) ||
+                    (sourceKind === 'Receipt' &&
+                      source.data.externalBeneficiary &&
+                      person === `external:${source.data.externalBeneficiary.attestationId}`)
+                  ) ||
                   !amount ||
                   !reason.trim() ||
                   source.data.availableAmount === null ||

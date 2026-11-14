@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using BHome.Application.Billing;
+using BHome.Application.Contracts;
 using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
+using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,8 +17,15 @@ public sealed partial class PaymentLedgerTests
     private async Task AddAutomationRates(Workspace w)
     {
         await using var s = fixture.Factory.Services.CreateAsyncScope(); var db = s.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        foreach (var (category, code, rate) in new[] { (ChargeCategory.Rent, "RENT", 100000m), (ChargeCategory.Electricity, "ELECTRICITY", 2m), (ChargeCategory.Water, "WATER", 3m) })
-            db.Add(new BillingPolicy { LocationId = w.Location, Category = category, ChargeCode = code, Name = "Synthetic automation " + code, Rate = rate, Method = category == ChargeCategory.Rent ? ChargingMethod.FixedPerRoomPerMonth : ChargingMethod.Metered, EffectiveFrom = CurrentPeriod().AddMonths(-1) });
+        var policies = new[] { (ChargeCategory.Rent, "RENT", 100000m), (ChargeCategory.Electricity, "ELECTRICITY", 2m), (ChargeCategory.Water, "WATER", 3m) }
+            .Select(p => new BillingPolicy { LocationId = w.Location, Category = p.Item1, ChargeCode = p.Item2, Name = "Synthetic automation " + p.Item2, Rate = p.Item3, Method = p.Item1 == ChargeCategory.Rent ? ChargingMethod.FixedPerRoomPerMonth : ChargingMethod.Metered, EffectiveFrom = CurrentPeriod().AddMonths(-1) }).ToArray();
+        db.AddRange(policies);
+        foreach (var c in await db.Set<Contract>().Include(c => c.Residents).Where(c => c.RoomId == w.Room).ToArrayAsync())
+        {
+            var charges = policies.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category, (int)p.Method, p.Category == ChargeCategory.Rent ? c.MonthlyRent : p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version) { Name = p.Name }).ToArray();
+            c.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(c.MonthlyRent, c.RequiredDeposit, c.StartDate, c.EndDate, default, "SyntheticSigned", DateTimeOffset.UtcNow, charges) { SnapshotVersion = 1 });
+            c.SnapshotHash = ContractDocumentSnapshot.Hash(new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, c.TenantUserId!.Value, c.RepresentativeResidentId, c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit, c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash) { AgreedCharges = charges });
+        }
         await db.SaveChangesAsync();
     }
     [Fact]

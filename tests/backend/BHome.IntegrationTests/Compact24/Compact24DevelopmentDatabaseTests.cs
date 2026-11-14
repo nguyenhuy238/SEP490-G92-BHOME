@@ -118,17 +118,42 @@ public sealed class Compact24DevelopmentDatabaseTests
     }
 
     [CompactPostgresFact]
-    public async Task Native383ColumnSchemaCanRefreshGuardsWithoutChangingColumns()
+    public async Task CurrentNativeSchemaCanRefreshPropertyGuardsWithoutChangingColumns()
     {
         await using var database = new DevelopmentFixture();
         await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection);
         await using var connection = new NpgsqlConnection(database.Connection); await connection.OpenAsync();
+        await using var before = new NpgsqlCommand("SELECT count(*) FROM information_schema.columns WHERE table_schema='public'", connection);
+        var originalColumns = await before.ExecuteScalarAsync();
         await using (var remove = new NpgsqlCommand("DROP TRIGGER work_order_consistent ON operational_tasks; DROP FUNCTION bhome24_work_order_guard()", connection))
             await remove.ExecuteNonQueryAsync();
         Assert.Equal("UPGRADED", (await Compact24PropertyUpgrade.ApplyAsync("Development", database.Connection)).State);
         await using var count = new NpgsqlCommand("SELECT count(*) FROM information_schema.columns WHERE table_schema='public'", connection);
-        Assert.Equal(383L, await count.ExecuteScalarAsync());
+        Assert.Equal(originalColumns, await count.ExecuteScalarAsync());
         Assert.Equal("READY", (await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection, checkOnly: true)).State);
+    }
+
+    [CompactPostgresFact]
+    public async Task PropertyRefreshRefusesUnrelatedMoneyGuardChanges()
+    {
+        await using var database = new DevelopmentFixture();
+        await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection);
+        await using var db = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(database.Connection).Options);
+        await db.Database.ExecuteSqlRawAsync("CREATE OR REPLACE FUNCTION bhome24_deposit_refund_valid(refund_id uuid) RETURNS boolean LANGUAGE sql STABLE AS $fn$ SELECT true $fn$;");
+        Assert.Equal("RUNTIME_MIGRATION_REQUIRED", (await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection, checkOnly: true)).State);
+        Assert.Equal("property_upgrade_source_requires_manual_review", (await Assert.ThrowsAsync<DevelopmentDatabaseException>(() => Compact24PropertyUpgrade.ApplyAsync("Development", database.Connection))).Code);
+        Assert.False(await db.IsSchemaReadyAsync());
+    }
+
+    [CompactPostgresFact]
+    public async Task PropertyRefreshDoesNotDiscardUnknownColumns()
+    {
+        await using var database = new DevelopmentFixture();
+        await Compact24DevelopmentDatabase.PrepareAsync("Development", database.Connection);
+        await using var db = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(database.Connection).Options);
+        await db.Database.ExecuteSqlRawAsync("ALTER TABLE locations ADD COLUMN synthetic_unapproved_field integer");
+        Assert.Equal("property_upgrade_source_requires_manual_review", (await Assert.ThrowsAsync<DevelopmentDatabaseException>(() => Compact24PropertyUpgrade.ApplyAsync("Development", database.Connection))).Code);
+        Assert.True(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='locations' AND column_name='synthetic_unapproved_field') AS \"Value\"").SingleAsync());
     }
 
     private static async Task RestorePreviousPropertyShape(string connectionString)

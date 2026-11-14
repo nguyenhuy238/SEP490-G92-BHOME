@@ -49,6 +49,9 @@ ConnectionStrings__Database=synthetic-db
 Jwt__SigningKey=synthetic-key
 Sessions__RefreshTokenDays=7
 ObjectStorage__Endpoint=synthetic-storage
+DevelopmentDatabase__InitializeOnStartup=false
+DevelopmentDatabase__AllowPreviousPropertySchema=false
+MainDraft__SigningProvider=synthetic-provider
 IdentityProtection__EncryptionKeys__local-v1=synthetic-identity-key
 EXPO_PUBLIC_API_BASE_URL=https://other-machine.local:7240
 UNRELATED_SECRET=synthetic-unrelated
@@ -58,6 +61,9 @@ Api__PublicBaseUrl=$(throw 'must-not-evaluate')
 Assert-Equal $syntheticSettings['ConnectionStrings:Database'] 'synthetic-db' 'sync local database to Visual Studio'
 Assert-Equal $syntheticSettings['Jwt:SigningKey'] 'synthetic-key' 'sync local JWT settings to Visual Studio'
 Assert-Equal $syntheticSettings['ObjectStorage:Endpoint'] 'synthetic-storage' 'sync local storage settings'
+Assert-Equal $syntheticSettings['DevelopmentDatabase:InitializeOnStartup'] 'false' 'Neon must not invoke the loopback-only database initializer'
+Assert-Equal $syntheticSettings['DevelopmentDatabase:AllowPreviousPropertySchema'] 'false' 'preserve the selected database compatibility setting'
+Assert-Equal $syntheticSettings['MainDraft:SigningProvider'] 'synthetic-provider' 'preserve selected contract configuration'
 Assert-Equal $syntheticSettings['IdentityProtection:EncryptionKeys:local-v1'] 'synthetic-identity-key' 'preserve identity settings'
 Assert-Equal $syntheticSettings.ContainsKey('UNRELATED_SECRET') $false 'do not import unknown settings'
 Assert-Equal $syntheticSettings.ContainsKey('EXPO_PUBLIC_API_BASE_URL') $false 'do not import client workstation configuration'
@@ -238,9 +244,9 @@ $global:prepared += $LanIp
     catch {
         if ($_.Exception.Message -notlike 'API HTTPS readiness failed*') { throw }
         Assert-Equal $_.Exception.Message.Contains('Check the running API/Visual Studio output') $true 'reused API failure does not direct users to stale standalone logs'
-        Assert-Equal $_.Exception.Message.Contains('scripts/Update-LocalDatabase.ps1 -Check') $true 'provide read-only database diagnosis before suggesting migration'
-        Assert-Equal $_.Exception.Message.Contains('-UpgradePropertySchema') $true 'property schema upgrade has its own explicit command'
-        Assert-Equal $_.Exception.Message.Contains('ECONNREFUSED means no API listener') $true 'distinguish startup refusal from HTTP readiness failure'
+        Assert-Equal $_.Exception.Message.Contains('scripts/Test-Database.ps1 -EnvironmentFile') $true 'use read-only diagnostics for the selected profile'
+        Assert-Equal $_.Exception.Message.Contains('-RecreateDatabase') $false 'a readiness timeout must not suggest database recreation'
+        Assert-Equal $_.Exception.Message.Contains('API port 7240 is listening') $true 'distinguish an active listener from connection refusal'
     }
     Assert-Equal $global:apiDiagnoses 2 'diagnose existing API without launching a duplicate'
     Assert-Equal $global:stopped.Contains(123) $false 'unhealthy debugger API remains owned by user'

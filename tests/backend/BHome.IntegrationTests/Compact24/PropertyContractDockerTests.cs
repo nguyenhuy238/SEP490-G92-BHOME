@@ -68,6 +68,8 @@ public sealed class PropertyContractDockerFixture : IAsyncLifetime
 [Trait("Category", "Docker")]
 public sealed class PropertyContractDockerTests(PropertyContractDockerFixture fixture) : IClassFixture<PropertyContractDockerFixture>
 {
+    [Fact] public Task MixedStaffContractList() => new ContractLifecycleApiTests(fixture.Contracts).StaffListIncludesHoldingAndMainWithTypeSpecificFieldsAndPreservesLocationScope();
+    [Fact] public Task HoldingLocationConfiguration() => new ContractLifecycleApiTests(fixture.Contracts).HoldingSettingsAreLocationScopedVersionedAndDoNotRewriteCreatedContracts();
     [Fact] public Task AssetConfigurationHistory() => new PropertyApiTests(fixture.Properties).FullConfigurationUpdatesRequireVersionsAndRetainActorAndSnapshots();
     [Theory]
     [InlineData(false)]

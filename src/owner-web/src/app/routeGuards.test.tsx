@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, expect, it, vi } from 'vitest';
 import { LoginRoute, ProtectedRoute } from './routeGuards';
@@ -7,6 +7,8 @@ const state = vi.hoisted(() => ({
   restoring: false,
   restoredRoles: null as string[] | null,
   logout: vi.fn(async () => {}),
+  restoreError: '',
+  retryRestore: vi.fn(async () => {}),
 }));
 vi.mock('../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({
@@ -16,10 +18,12 @@ vi.mock('../../../../packages/client-core/src/auth', () => ({
         ? { roles: ['Owner'] }
         : null,
     isRestoring: state.restoring,
+    restoreError: state.restoreError,
+    retryRestore: state.retryRestore,
     client: { logout: state.logout },
   }),
 }));
-vi.mock('../services/config', () => ({ isMockMode: false }));
+vi.mock('../services/config', () => ({ isMockMode: false, apiBaseUrl: '' }));
 vi.mock('../features/auth/pages/LoginPage', () => ({
   LoginPage: () => <span>Login required</span>,
 }));
@@ -29,6 +33,19 @@ afterEach(() => {
   state.restoring = false;
   state.restoredRoles = null;
   state.logout.mockClear();
+  state.restoreError = '';
+  state.retryRestore.mockClear();
+});
+
+it('keeps an unavailable restoration on the protected path without rendering private content or redirecting to login', () => {
+  state.restoreError = 'Temporary server outage';
+  render(<App />);
+  expect(screen.getByText('Temporary server outage')).toBeInTheDocument();
+  expect(screen.queryByText('Login required')).not.toBeInTheDocument();
+  expect(screen.queryByText('/invoices?invoiceId=synthetic#detail')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText('Thử khôi phục phiên'));
+  expect(state.retryRestore).toHaveBeenCalledOnce();
+  expect(state.logout).not.toHaveBeenCalled();
 });
 function Target() {
   const location = useLocation();

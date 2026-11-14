@@ -47,6 +47,9 @@ vi.mock('../components/WorkflowControls', () => ({
   ChoiceField: () => <div />,
 }));
 import { ContractLifecyclePanel } from '../features/contracts/ContractLifecyclePanel';
+vi.mock('../lib/SessionProvider', () => ({
+  useSession: () => ({ session: { roles: ['Owner'] } }),
+}));
 afterEach(cleanup);
 const id = '00000000-0000-0000-0000-000000000001';
 const data: SettlementSummary = {
@@ -117,6 +120,19 @@ it('Tenant reads server deposit reservation without Owner refund/approval action
   expect(screen.queryByText('Xác nhận kiểm tra')).toBeNull();
   expect(screen.queryByText(/đủ điều kiện xem xét hoàn tất/)).toBeNull();
   expect(request.mock.calls.some(([path]) => path.endsWith('/inspection-preparation'))).toBe(false);
+  expect(request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
+});
+it('Owner can review settlement while complex financial execution stays on Owner Web', async () => {
+  const { request, panel } = setup();
+  render(panel('Owner'));
+  expect(await screen.findByText(/Cọc giữ chỗ hoàn: 400.000/)).toBeTruthy();
+  expect(
+    screen.getByText(/Quản lý khoản phải thu, cấn trừ cọc và thực chi hoàn tiền tại Owner Web/),
+  ).toBeTruthy();
+  expect(
+    (screen.getByRole('button', { name: 'Lưu xem xét quyết toán' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  expect(screen.getByLabelText('Căn cứ quyết định')).toBeTruthy();
   expect(request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
 });
 it('shows verified manual return only from the server and retains unknown amounts as unknown', async () => {

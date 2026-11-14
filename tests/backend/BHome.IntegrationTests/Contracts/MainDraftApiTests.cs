@@ -32,11 +32,13 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
     private sealed record Workspace(HttpClient Owner, HttpClient Staff, HttpClient Outside, Guid OwnerId, Guid Room, Guid Location, Guid Resident);
     private async Task<(HttpClient Client, Guid Id)> User(string role)
     {
-        var id = Guid.NewGuid(); var email = $"{id:N}@example.invalid"; const string password = "Synthetic-Draft!874";
+        var id = Guid.NewGuid(); var email = $"{id:N}@example.invalid"; const string password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            var user = new ApplicationUser { Id = id, UserName = email, Email = email, IsActive = true };
+            // These signing actors represent established accounts; pending invitation
+            // setup is covered by the dedicated onboarding/authentication regressions.
+            var user = new ApplicationUser { Id = id, UserName = email, Email = email, EmailConfirmed = true, IsActive = true };
             user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, password);
             id = user.Id; email = user.Email!;
         }
@@ -115,6 +117,34 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         Assert.Contains(code, await response.Content.ReadAsStringAsync());
     }
     [Fact]
+    public async Task ContactEmailRoundTripsEncryptedWithoutAccountCreationOrIssuePlaceSupplement()
+    {
+        var w = await Setup();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var beforeUsers = await db.Users.CountAsync();
+        var input = Input(w) with { TenantEmail = "  synthetic.contact@example.invalid  ", TenantPlaceOfIssue = "" };
+        var key = Guid.NewGuid();
+        var draft = await Save(w, input, key);
+        Assert.Equal("synthetic.contact@example.invalid", draft.Input.TenantEmail);
+        Assert.Equal(draft.Id, (await Save(w, input, key)).Id);
+        var reopened = await w.Staff.GetFromJsonAsync<MainDraftView>($"{Root}/{draft.Id}");
+        Assert.Equal(draft.Input.TenantEmail, reopened!.Input.TenantEmail);
+        var stored = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == draft.Id);
+        Assert.DoesNotContain("synthetic.contact", stored.DraftMetadata);
+        Assert.Null(stored.TenantUserId);
+        Assert.Equal(beforeUsers, await db.Users.CountAsync());
+        Assert.Equal(HttpStatusCode.NotFound, (await w.Outside.GetAsync($"{Root}/{draft.Id}")).StatusCode);
+        var documents = await w.Staff.PostAsync($"{Root}/{draft.Id}/documents", null);
+        await Success(documents);
+        using var invalid = new HttpRequestMessage(HttpMethod.Put, $"{Root}/{draft.Id}")
+        { Content = JsonContent.Create(input with { TenantEmail = "invalid email", ExpectedVersion = draft.Version }) };
+        invalid.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Staff.SendAsync(invalid)).StatusCode);
+        // Adding an optional contact must not change serialization/snapshots of older drafts.
+        Assert.DoesNotContain("TenantEmail", JsonSerializer.Serialize(Input(w)));
+    }
+    [Fact]
     public async Task ActualLibreOfficeConversionPersistsPrivatePdfWithVietnameseAndIssueDate()
     {
         var w = await Setup(); var draft = await Save(w);
@@ -169,18 +199,101 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
             await File.WriteAllBytesAsync(System.IO.Path.Combine(destination, "preview-page-last.png"), last);
         }
         var updated = await Save(w, Input(w) with { EndDate = Today.AddYears(2), ExpectedVersion = draft.Version }, id: draft.Id);
-        Assert.Equal(HttpStatusCode.Conflict, (await client.GetAsync(previewRoute + "/preview")).StatusCode);
+        var stale = await client.GetAsync(previewRoute + "/preview");
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        Assert.Contains("draft_document_outdated", await stale.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.Conflict, (await client.GetAsync(previewRoute + "/pages/1")).StatusCode);
         var refreshed = await client.PostAsync($"{Root}/{draft.Id}/documents", null); await Success(refreshed);
         var updatedFiles = (await refreshed.Content.ReadFromJsonAsync<MainDraftFiles>())!;
         Assert.NotNull(updatedFiles.Pdf); Assert.NotEqual(files.Pdf.Id, updatedFiles.Pdf.Id);
         var updatedInfo = await client.GetFromJsonAsync<DraftPreviewInfo>($"{Root}/{draft.Id}/documents/{updatedFiles.Pdf.Id}/preview");
         Assert.Equal(updatedFiles.Pdf.Id, updatedInfo!.FileId);
+        var currentPage = await client.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{updatedFiles.Pdf.Id}/pages/1");
+        Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, currentPage[..8]);
+        var repeated = await client.PostAsync($"{Root}/{draft.Id}/documents", null); await Success(repeated);
+        Assert.Equal(updatedFiles.Pdf.Id, (await repeated.Content.ReadFromJsonAsync<MainDraftFiles>())!.Pdf!.Id);
         await using var verification = fixture.Factory.Services.CreateAsyncScope();
-        var context = verification.ServiceProvider.GetRequiredService<BHomeDbContext>();
+        var context = verification.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var stored = await context.Set<Contract>().Include(c => c.Signatures).SingleAsync(c => c.Id == updated.Id);
         Assert.Equal(ContractStatus.Draft, stored.Status); Assert.Empty(stored.Signatures);
+        Assert.Equal(stored.SnapshotHash, (await context.Set<ContractDocumentFile>().SingleAsync(f => f.Id == updatedFiles.Pdf.Id)).SnapshotHash);
         Assert.Equal(RoomStatus.Available, (await context.Set<Room>().FindAsync(w.Room))!.Status);
+    }
+    [Fact]
+    public async Task ConfigurationChangeBlocksGenerationUntilExplicitDraftSave()
+    {
+        var w = await Setup(); var draft = await Save(w);
+        await Success(await w.Owner.PostAsync($"{Root}/{draft.Id}/documents", null));
+        var current = (await w.Owner.GetFromJsonAsync<MainContractSettings>($"{Root}/settings/{w.Location}"))!;
+        await Success(await w.Owner.PutAsJsonAsync($"{Root}/settings/{w.Location}", new MainContractSettingsInput(
+            w.OwnerId, current.EffectiveFrom, current.EffectiveTo, current.SecurityDeposit + 100000,
+            current.PaymentTerms, current.AdditionalTerms, current.Owner, current.Version)));
+        foreach (var action in new[] { "documents", "signing-review" })
+        {
+            var blocked = await w.Owner.PostAsync($"{Root}/{draft.Id}/{action}", null);
+            Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+            Assert.Contains("draft_configuration_changed_save_again", await blocked.Content.ReadAsStringAsync());
+        }
+        var unchanged = (await w.Owner.GetFromJsonAsync<MainDraftView>($"{Root}/{draft.Id}"))!;
+        Assert.Equal(draft.Version, unchanged.Version);
+        Assert.Equal(draft.Preparation.SecurityDeposit, unchanged.Preparation.SecurityDeposit);
+        var saved = await Save(w, Input(w) with { ExpectedVersion = draft.Version }, id: draft.Id);
+        Assert.Equal(current.SecurityDeposit + 100000, saved.Preparation.SecurityDeposit);
+        await Success(await w.Owner.PostAsync($"{Root}/{draft.Id}/documents", null));
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExplicitGenerationReplacesMissingOrCorruptDraftFilesWithoutChangingTerms(bool corrupt)
+    {
+        var w = await Setup(); var draft = await Save(w);
+        var config = fixture.Factory.Services.GetRequiredService<IConfiguration>();
+        var settings = config.GetSection("IdentityProtection").AsEnumerable().ToDictionary(x => x.Key, x => x.Value);
+        settings["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local";
+        await using var host = fixture.Factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(settings)));
+        using var owner = host.CreateClient(); owner.DefaultRequestHeaders.Authorization = w.Owner.DefaultRequestHeaders.Authorization;
+        var response = await owner.PostAsync($"{Root}/{draft.Id}/documents", null); await Success(response);
+        var original = (await response.Content.ReadFromJsonAsync<MainDraftFiles>())!;
+        var reviewResponse = await owner.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(reviewResponse);
+        var originalReview = (await reviewResponse.Content.ReadFromJsonAsync<ContractDocumentView>())!;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
+            foreach (var file in await db.Set<ContractDocumentFile>().Where(f => f.ContractId == draft.Id).ToArrayAsync())
+            {
+                if (corrupt)
+                {
+                    using var bytes = new MemoryStream("synthetic-corruption"u8.ToArray());
+                    await storage.PutAsync(file.ObjectKey, bytes, bytes.Length, file.ContentType, default);
+                }
+                else await storage.DeleteAsync(file.ObjectKey, default);
+            }
+        }
+        var oldRoute = $"{Root}/{draft.Id}/documents/{original.Pdf!.Id}";
+        var rejected = await owner.GetAsync(oldRoute + "/preview");
+        Assert.Equal(corrupt ? HttpStatusCode.Conflict : HttpStatusCode.NotFound, rejected.StatusCode);
+        Assert.Contains(corrupt ? "contract_document_integrity_failed" : "draft_document_missing", await rejected.Content.ReadAsStringAsync());
+        var regenerated = await owner.PostAsync($"{Root}/{draft.Id}/documents", null); await Success(regenerated);
+        var fresh = (await regenerated.Content.ReadFromJsonAsync<MainDraftFiles>())!;
+        Assert.NotEqual(original.Pdf.Id, fresh.Pdf!.Id); Assert.NotEqual(original.Docx.Id, fresh.Docx.Id);
+        await Success(await owner.GetAsync($"{Root}/{draft.Id}/documents/{fresh.Pdf.Id}/preview"));
+        var bytesNow = await owner.GetByteArrayAsync($"{Root}/{draft.Id}/documents/{fresh.Pdf.Id}");
+        Assert.Equal("%PDF-", System.Text.Encoding.ASCII.GetString(bytesNow, 0, 5));
+        var refreshedReview = await owner.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(refreshedReview);
+        var currentReview = (await refreshedReview.Content.ReadFromJsonAsync<ContractDocumentView>())!;
+        Assert.NotEqual(originalReview.Id, currentReview.Id);
+        await Success(await owner.GetAsync($"{Root}/{draft.Id}/documents/{currentReview.Id}/preview"));
+        var repeatReview = await owner.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(repeatReview);
+        Assert.Equal(currentReview.Id, (await repeatReview.Content.ReadFromJsonAsync<ContractDocumentView>())!.Id);
+        var unchanged = (await owner.GetFromJsonAsync<MainDraftView>($"{Root}/{draft.Id}"))!;
+        Assert.Equal(draft.Version, unchanged.Version);
+        Assert.Equal(JsonSerializer.Serialize(draft.Input), JsonSerializer.Serialize(unchanged.Input));
+        await using var verify = host.Services.CreateAsyncScope();
+        var context = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        Assert.Equal(6, await context.Set<ContractDocumentFile>().CountAsync(f => f.ContractId == draft.Id));
+        Assert.Equal(ContractStatus.Draft, (await context.Set<Contract>().SingleAsync(c => c.Id == draft.Id)).Status);
+        Assert.Empty(await context.Set<ContractSignature>().Where(s => s.ContractId == draft.Id).ToArrayAsync());
     }
     [Fact]
     public async Task RejectsDuplicateInvalidPeriodUnassignedStaffAndNonDraftEdits()

@@ -3,20 +3,20 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
-import { Action, Box, Heading, Pill, Row, ui } from '../components/WorkspaceKit';
+import { Action, Box, Heading, ui } from '../components/WorkspaceKit';
 import { ChoiceField } from '../components/WorkflowControls';
 import { OnboardingStepper } from '../components/OnboardingStepper';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useSession } from '../lib/SessionProvider';
 import { captureService } from '../services/captureService';
-import { errorMessage } from '../lib/api';
+import { errorMessage, MobileApiError } from '../lib/api';
 import { useCaptureScope } from '../features/onboarding/useCaptureScope';
 import { IdentityPersonCard } from '../features/onboarding/IdentityPersonCard';
 import { IdentityWizard } from '../features/onboarding/IdentityWizard';
+import { ResidentProfile } from '../features/onboarding/ResidentProfile';
 import { OnboardingPeopleStep } from '../features/onboarding/OnboardingPeopleStep';
 import {
   allIdentitiesConfirmed,
-  identityStatusLabels,
   onboardingSteps,
   peopleReady,
   residentType,
@@ -26,22 +26,65 @@ import {
 } from '../features/onboarding/onboarding';
 import { staffColors as s } from '../theme/theme';
 
-const blankPerson = (key: string): OnboardingPerson => ({ key, label: '', status: 'unscanned' });
+const blankPerson = (key: string): OnboardingPerson => ({
+  key,
+  label: '',
+  email: '',
+  status: 'unscanned',
+});
 export function OnboardingScreen() {
-  const { residentId } = useLocalSearchParams<{ residentId?: string }>();
+  const { residentId, locationId } = useLocalSearchParams<{
+    residentId?: string;
+    locationId?: string;
+  }>();
+  return residentId ? (
+    <ResidentProfile key={residentId} residentId={residentId} locationId={locationId} />
+  ) : (
+    <NewResidentOnboarding />
+  );
+}
+function NewResidentOnboarding() {
+  const { locationId, roomId } = useLocalSearchParams<{ locationId?: string; roomId?: string }>();
   const { preview, go, resetScroll, registerExitGuard, requestNavigation } = useWorkspace();
   const { api } = useSession();
-  const scope = useCaptureScope({ autoSelectAssignedLocation: true });
+  const scope = useCaptureScope({
+    autoSelectAssignedLocation: true,
+    inlineErrors: true,
+    initialLocationId: locationId,
+  });
+  const appliedInitialRoom = useRef(false);
+  const { location, rooms, setRoom } = scope;
+  const selectableRooms = rooms.filter((room) =>
+    ['Available', 'Occupied'].includes(room.status ?? ''),
+  );
+  useEffect(() => {
+    if (
+      !appliedInitialRoom.current &&
+      roomId &&
+      location === locationId &&
+      rooms.some(
+        (room) => room.id === roomId && ['Available', 'Occupied'].includes(room.status ?? ''),
+      )
+    ) {
+      setRoom(roomId);
+      appliedInitialRoom.current = true;
+    }
+  }, [roomId, locationId, location, rooms, setRoom]);
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<HouseholdMode>('family');
   const [people, setPeople] = useState<OnboardingPerson[]>([blankPerson('person-1')]);
   const [representative, setRepresentative] = useState('person-1');
   const [editing, setEditing] = useState('person-1');
   const [identityKey, setIdentityKey] = useState('person-1');
-  const [identityOpen, setIdentityOpen] = useState(!!residentId);
+  const [identityOpen, setIdentityOpen] = useState(false);
   const [identityMode, setIdentityMode] = useState<'capture' | 'verify'>('capture');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useFeedbackState();
+  const [emailConflict, setEmailConflict] = useState<{
+    personKey: string;
+    locationId: string;
+    residentId?: string;
+  } | null>(null);
+  const [error, setError] = useFeedbackState('error', false);
   const [finished, setFinished] = useState(false);
   const [discarded, setDiscarded] = useState(false);
   const serial = useRef(1);
@@ -50,8 +93,7 @@ export function OnboardingScreen() {
   const dirty =
     !finished &&
     !discarded &&
-    (!!residentId ||
-      !!scope.room ||
+    (!!scope.room ||
       (scope.locations.length > 1 && !!scope.location) ||
       people.some((p) => !!p.label || !!p.residentId));
   const dirtyRef = useRef(dirty);
@@ -73,7 +115,7 @@ export function OnboardingScreen() {
         setIdentityOpen(false);
         unregister();
       };
-    }, [registerExitGuard, disablePrevention]),
+    }, [registerExitGuard, disablePrevention, setIdentityOpen]),
   );
   useEffect(() => {
     alive.current = true;
@@ -85,10 +127,13 @@ export function OnboardingScreen() {
     setPeople((before) => before.map((p) => (p.key === key ? { ...p, ...changes } : p)));
   const changeStatus = (key: string, status: IdentityStatus) =>
     setPeople((before) =>
-      before.map((p) => (p.key === key && p.status !== status ? { ...p, status } : p)),
+      before.map((p) =>
+        p.key === key && p.status !== 'confirmed' && p.status !== status ? { ...p, status } : p,
+      ),
     );
   const move = (next: number) => {
     setError('');
+    setEmailConflict(null);
     setStep(next);
     resetScroll();
   };
@@ -98,17 +143,52 @@ export function OnboardingScreen() {
     !scope.loading &&
     !scope.error &&
     scope.locations.some((l) => l.id === scope.location) &&
-    scope.rooms.some((r) => r.id === scope.room);
+    selectableRooms.some((r) => r.id === scope.room);
   const peopleValid = peopleReady(people, representative);
   const allConfirmed = allIdentitiesConfirmed(people);
   const created = people.some((p) => !!p.residentId);
   const confirmedCount = people.filter((p) => p.status === 'confirmed').length;
   const recognizing = people.some((p) => p.status === 'recognizing');
+  const checkSavedIdentities = async () => {
+    if (!api || preview || lock.current || recognizing || !scope.location) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const residents = await captureService(api).residents(scope.location);
+      if (!alive.current) return;
+      const verified = new Set(
+        residents
+          .filter((r) => r.roomId === scope.room && r.verificationStatus === 1)
+          .map((r) => r.id),
+      );
+      setPeople((before) =>
+        before.map((p) =>
+          p.residentId && verified.has(p.residentId)
+            ? { ...p, status: 'confirmed', verificationError: '' }
+            : p,
+        ),
+      );
+      if (
+        people.some(
+          (p) => p.status !== 'confirmed' && (!p.residentId || !verified.has(p.residentId)),
+        )
+      )
+        setError(
+          'Còn hồ sơ chưa được máy chủ xác nhận. Mở Nhập thủ công, kiểm tra thông tin và bấm Xác nhận thông tin; nếu có lỗi, xem thông báo trên hồ sơ.',
+        );
+    } catch (e) {
+      if (alive.current) setError(errorMessage(e));
+    } finally {
+      lock.current = false;
+      if (alive.current) setBusy(false);
+    }
+  };
   const openIdentity = async (
     person: OnboardingPerson,
     entryMode: 'capture' | 'verify' = person.status === 'pending' ? 'verify' : 'capture',
   ) => {
-    if (lock.current || recognizing) return;
+    if (lock.current || recognizing || person.creationUncertain) return;
     if (!roomValid || !peopleValid) {
       setError('Kiểm tra phòng và thông tin người ở trước khi tiếp tục.');
       return;
@@ -122,6 +202,7 @@ export function OnboardingScreen() {
     lock.current = true;
     setBusy(true);
     setError('');
+    setEmailConflict(null);
     try {
       const id = preview
         ? `sample-${person.key}`
@@ -131,6 +212,7 @@ export function OnboardingScreen() {
                 scope.room,
                 person.label.trim(),
                 residentType(mode, person.key, representative),
+                person.email!.trim(),
               )
             ).id
           : null;
@@ -140,39 +222,44 @@ export function OnboardingScreen() {
         setIdentityOpen(true);
       }
     } catch (e) {
-      if (alive.current) setError(errorMessage(e));
+      if (alive.current) {
+        if (e instanceof MobileApiError && (e.status === 0 || e.status >= 500)) {
+          patch(person.key, { creationUncertain: true });
+          setError(
+            'Chưa xác định hồ sơ đã được tạo hay chưa. Kiểm tra danh sách người ở trước khi tạo tiếp.',
+          );
+        } else if (
+          e instanceof MobileApiError &&
+          e.status === 409 &&
+          e.code === 'resident_email_already_associated'
+        ) {
+          setError(errorMessage(e));
+          const conflict = { personKey: person.key, locationId: scope.location };
+          setEmailConflict(conflict);
+          try {
+            // Only inspect the existing scoped summary API. Never resolve a global email
+            // or attach an identity to the new draft based on an email match.
+            const residents = await captureService(api!).residents(scope.location);
+            const matches = residents.filter(
+              (resident) =>
+                resident.roomId === scope.room &&
+                resident.email?.trim().toLowerCase() === person.email?.trim().toLowerCase(),
+            );
+            if (alive.current && matches.length === 1)
+              setEmailConflict({ ...conflict, residentId: matches[0].id });
+          } catch {
+            if (alive.current)
+              setError(
+                `${errorMessage(e)} Chưa tải được danh sách hồ sơ; hãy kiểm tra lại từ danh sách người ở.`,
+              );
+          }
+        } else setError(errorMessage(e));
+      }
     } finally {
       lock.current = false;
       if (alive.current) setBusy(false);
     }
   };
-  if (residentId)
-    return (
-      <>
-        <Heading title="Xác minh CCCD người ở" />
-        <Action onPress={() => setIdentityOpen(true)}>
-          {finished ? 'Xem trạng thái' : 'Tiếp tục xác minh'}
-        </Action>
-        <IdentityWizard
-          residentId={residentId}
-          preview={preview}
-          modal
-          visible={identityOpen}
-          personLabel="Hồ sơ người ở"
-          mode={identityMode}
-          onModeChange={setIdentityMode}
-          onDismiss={() => setIdentityOpen(false)}
-          onConfirmed={() => {
-            dirtyRef.current = false;
-            setFinished(true);
-            setIdentityOpen(false);
-          }}
-          onCancel={() => go('rooms')}
-          onComplete={() => go('rooms')}
-        />
-        <Button onPress={() => go('rooms')}>Về danh sách người ở</Button>
-      </>
-    );
   if (discarded)
     return (
       <Box>
@@ -184,7 +271,6 @@ export function OnboardingScreen() {
     ...(roomValid ? ['room'] : []),
     ...(step >= 2 && peopleValid ? ['people'] : []),
     ...(allConfirmed ? ['identity'] : []),
-    ...(finished ? ['review'] : []),
   ];
   return (
     <>
@@ -192,7 +278,7 @@ export function OnboardingScreen() {
         title={step === 1 ? 'Thông tin người ở' : 'Tiếp nhận khách thuê'}
         detail={
           step === 1
-            ? 'Bước 2/4 – Thêm người thuê'
+            ? 'Bước 2/3 · Người ở'
             : 'Chuẩn bị hồ sơ người ở, kiểm tra và xác nhận thông tin.'
         }
       />
@@ -223,7 +309,7 @@ export function OnboardingScreen() {
           <ChoiceField
             label="Phòng *"
             value={scope.room}
-            options={scope.rooms}
+            options={selectableRooms}
             disabled={created || !scope.location || scope.loading}
             onChange={scope.setRoom}
           />
@@ -241,17 +327,19 @@ export function OnboardingScreen() {
               <Text style={ui.muted}>Liên hệ chủ cơ sở để được hỗ trợ.</Text>
             </View>
           )}
-          {!!scope.location && !scope.loading && !scope.error && !scope.rooms.length && (
-            <Text>Chưa có phòng để lựa chọn tại cơ sở này.</Text>
+          {!!scope.location && !scope.loading && !scope.error && !selectableRooms.length && (
+            <Text>Chưa có phòng phù hợp để tiếp nhận tại cơ sở này.</Text>
           )}
           {roomValid && (
             <View style={styles.summary}>
               <Text variant="titleMedium">
                 Phòng {scope.rooms.find((r) => r.id === scope.room)?.label}
               </Text>
-              <Text style={ui.muted}>
-                {scope.locations.find((l) => l.id === scope.location)?.label}
-              </Text>
+              {scope.rooms.find((r) => r.id === scope.room)?.capacity != null && (
+                <Text style={ui.muted}>
+                  Sức chứa: {scope.rooms.find((r) => r.id === scope.room)?.capacity} người
+                </Text>
+              )}
             </View>
           )}
           {created && (
@@ -288,6 +376,7 @@ export function OnboardingScreen() {
             if (representative === key) setRepresentative(next[0].key);
           }}
           onLabelChange={(key, label) => patch(key, { label })}
+          onEmailChange={(key, email) => patch(key, { email })}
           onBack={() => move(0)}
           onContinue={() => move(2)}
         />
@@ -307,12 +396,13 @@ export function OnboardingScreen() {
             person={person}
             label={person.label || `Người ở ${index + 1}`}
             role={person.key === representative ? 'Người đại diện' : 'Thành viên'}
-            disabled={busy || recognizing}
+            disabled={busy || recognizing || !!person.creationUncertain}
             onScan={() => {
               const progress = person.captureProgress;
               const both = progress?.front === 'recognized' && progress?.back === 'recognized';
               const started =
                 progress && (progress.front !== 'unscanned' || progress.back !== 'unscanned');
+              if (person.status === 'confirmed') return;
               void openIdentity(
                 person,
                 both || (!started && person.status === 'pending') ? 'verify' : 'capture',
@@ -328,6 +418,8 @@ export function OnboardingScreen() {
             <IdentityWizard
               key={person.key}
               residentId={person.residentId!}
+              locationId={scope.location}
+              roomId={scope.room}
               preview={preview}
               active={step === 2 && identityKey === person.key}
               modal
@@ -338,15 +430,16 @@ export function OnboardingScreen() {
               onDismiss={() => setIdentityOpen(false)}
               onStatusChange={(status) => changeStatus(person.key, status)}
               onCaptureProgress={(captureProgress) => patch(person.key, { captureProgress })}
+              onSaveError={(verificationError) => patch(person.key, { verificationError })}
               onConfirmed={() => {
-                changeStatus(person.key, 'confirmed');
+                patch(person.key, { status: 'confirmed', verificationError: '' });
                 setIdentityOpen(false);
                 resetScroll();
               }}
               onComplete={() => {
                 const next = people.find((p) => p.status !== 'confirmed' && p.key !== person.key);
                 if (next) void openIdentity(next);
-                else move(3);
+                else setIdentityOpen(false);
               }}
               onCancel={() => move(1)}
             />
@@ -356,99 +449,81 @@ export function OnboardingScreen() {
             Xác nhận thông tin của từng người ở trước khi hoàn tất tiếp nhận.
           </Text>
         )}
-        <Action disabled={!allConfirmed || busy} onPress={() => move(3)}>
-          Kiểm tra và hoàn tất
+        {created && !allConfirmed && !preview && (
+          <Button disabled={busy || recognizing} onPress={() => void checkSavedIdentities()}>
+            Kiểm tra trạng thái đã lưu
+          </Button>
+        )}
+        {mode === 'individual' && people.length > 1 && (
+          <ChoiceField
+            label="Người thuê tạo hợp đồng"
+            value={representative}
+            options={people.map((p) => ({ id: p.key, label: p.label }))}
+            onChange={setRepresentative}
+            disabled={!allConfirmed || busy}
+          />
+        )}
+        <Action
+          disabled={!allConfirmed || busy || recognizing || preview}
+          onPress={() => {
+            dirtyRef.current = false;
+            setFinished(true);
+            go('prepare-contract', {
+              roomId: scope.room,
+              representativeResidentId: people.find((p) => p.key === representative)!.residentId!,
+              residentIds: JSON.stringify(
+                mode === 'individual'
+                  ? [people.find((p) => p.key === representative)!.residentId!]
+                  : people.map((p) => p.residentId!),
+              ),
+            });
+          }}
+        >
+          Tiếp tục tạo hợp đồng
         </Action>
       </View>
-      {step === 3 && (
-        <>
-          <Box style={styles.panel}>
-            <Heading title={finished ? 'Đã hoàn tất thông tin người thuê' : 'Kiểm tra lần cuối'} />
-            {finished && <Icon source="check-circle-outline" size={44} color={s.green} />}
-            <Text>Cơ sở: {scope.locations.find((l) => l.id === scope.location)?.label}</Text>
-            <Text>Phòng: {scope.rooms.find((r) => r.id === scope.room)?.label}</Text>
-            <Text>Hình thức: {mode === 'family' ? 'Hộ gia đình' : 'Cá nhân / Nhóm bạn'}</Text>
-            <Text>Người đại diện: {people.find((p) => p.key === representative)?.label}</Text>
-            {people.map((p) => (
-              <Row key={p.key} spread>
-                <Text style={ui.grow}>{p.label}</Text>
-                <Pill tone={p.status === 'confirmed' ? 'green' : 'amber'}>
-                  {identityStatusLabels[p.status]}
-                </Pill>
-              </Row>
-            ))}
-            <Text variant="bodySmall" style={ui.muted}>
-              {preview
-                ? 'Đây là bản xem trước, không lưu hồ sơ.'
-                : 'Thông tin CCCD được lưu riêng sau từng lần xác nhận. Hợp đồng được chuẩn bị ở bước tiếp theo.'}
-            </Text>
-            {!finished && (
-              <Action
-                disabled={!allConfirmed || busy}
-                onPress={() => {
-                  dirtyRef.current = false;
-                  setFinished(true);
-                }}
-              >
-                Hoàn tất tiếp nhận
-              </Action>
-            )}
-            {finished && (
-              <>
-                <Text>
-                  {preview
-                    ? 'Đã hoàn tất bản xem trước.'
-                    : 'Thông tin từng người đã được xác nhận và lưu.'}
-                </Text>
-                {!preview && (
-                  <>
-                    <Action
-                      onPress={() =>
-                        go('prepare-contract', {
-                          roomId: scope.room,
-                          representativeResidentId: people.find((p) => p.key === representative)!
-                            .residentId!,
-                          residentIds: JSON.stringify(
-                            mode === 'individual'
-                              ? [people.find((p) => p.key === representative)!.residentId!]
-                              : people.map((p) => p.residentId!),
-                          ),
-                        })
-                      }
-                    >
-                      Tiếp tục tạo hợp đồng
-                    </Action>
-                    {mode === 'individual' &&
-                      people
-                        .filter((p) => p.key !== representative)
-                        .map((person) => (
-                          <Action
-                            key={person.key}
-                            secondary
-                            onPress={() =>
-                              go('prepare-contract', {
-                                roomId: scope.room,
-                                representativeResidentId: person.residentId!,
-                                residentIds: JSON.stringify([person.residentId!]),
-                              })
-                            }
-                          >
-                            Tạo hợp đồng riêng cho {person.label}
-                          </Action>
-                        ))}
-                  </>
-                )}
-                <Button onPress={() => go('rooms')}>Xem danh sách người ở</Button>
-              </>
-            )}
-          </Box>
-          {!finished && <Button onPress={() => move(1)}>Quay lại chỉnh sửa người ở</Button>}
-        </>
-      )}
       {!!error && (
         <Text accessibilityRole="alert" style={ui.red}>
           {error}
         </Text>
+      )}
+      {step === 2 && emailConflict && (
+        <Box>
+          <Heading title="Kiểm tra hồ sơ đã có" />
+          <Text>
+            Hồ sơ có thể đã được tạo ở lần tiếp nhận trước. Kiểm tra đúng người và phòng trước khi
+            tiếp tục xác minh; hồ sơ trong phiên này chưa được xác nhận.
+          </Text>
+          {emailConflict.residentId ? (
+            <Button
+              disabled={busy}
+              onPress={() =>
+                go('onboarding', {
+                  residentId: emailConflict.residentId!,
+                  locationId: emailConflict.locationId,
+                })
+              }
+            >
+              Mở hồ sơ đã có tại phòng này
+            </Button>
+          ) : (
+            <Button disabled={busy} onPress={() => go('rooms')}>
+              Kiểm tra danh sách người ở
+            </Button>
+          )}
+          <Button
+            disabled={busy}
+            onPress={() => {
+              setEditing(emailConflict.personKey);
+              move(1);
+            }}
+          >
+            Sửa email người ở
+          </Button>
+        </Box>
+      )}
+      {people.some((person) => person.creationUncertain) && (
+        <Button onPress={() => go('rooms')}>Kiểm tra danh sách người ở</Button>
       )}
       {step > 0 && step !== 1 && !finished && (
         <Button disabled={busy || recognizing} icon="arrow-left" onPress={() => move(step - 1)}>

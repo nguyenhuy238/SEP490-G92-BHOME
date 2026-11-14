@@ -57,11 +57,14 @@ public sealed partial class FinancialReportRepository(BHomePersistenceContext db
               AND ({filter.RoomId}::uuid IS NULL OR i.room_id={filter.RoomId}) GROUP BY i.location_id
             """).ToDictionaryAsync(c => c.LocationId, token);
         var refunds = await RefundAccountingAsync(filter, start, end, token);
+        var settlements = await SettlementSourcesAsync(filter, start, end, token);
         var result = names.Select(l =>
         {
             issued.TryGetValue(l.Id, out var i); expense.TryGetValue(l.Id, out var e); collected.TryGetValue(l.Id, out var c); counts.TryGetValue(l.Id, out var r);
-            return new FinanceBasis(l.Id, l.Name, i?.Issued ?? 0, i?.Adjustments ?? 0, c?.Collected ?? 0, e?.Operating ?? 0, i?.Debt ?? 0,
-                e?.Investment ?? 0, c?.CumulativeCollected ?? 0, e?.CumulativeOperating ?? 0, r?.Total ?? 0, r?.Occupied ?? 0);
+            settlements.TryGetValue(l.Id, out var s);
+            return new FinanceBasis(l.Id, l.Name, (i?.Issued ?? 0) + (s?.Charges ?? 0), i?.Adjustments ?? 0, (c?.Collected ?? 0) + (s?.Collections ?? 0), e?.Operating ?? 0, (i?.Debt ?? 0) + (s?.Debt ?? 0),
+                e?.Investment ?? 0, (c?.CumulativeCollected ?? 0) + (s?.CumulativeCollections ?? 0), e?.CumulativeOperating ?? 0, r?.Total ?? 0, r?.Occupied ?? 0,
+                s?.Charges ?? 0, s?.Debt ?? 0, s?.Collections ?? 0, s?.DepositOffsets ?? 0, s?.HoldingForfeitures ?? 0);
         }).ToArray();
         var historical = await HistoricalAsync(filter, token);
         await transaction.CommitAsync(token); return new(result, refunds.HasUnclassified, historical, refunds.DepositReturned);

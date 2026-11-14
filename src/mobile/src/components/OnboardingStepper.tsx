@@ -14,12 +14,14 @@ export function OnboardingStepper({
   completed = [],
   comfortable = false,
   showCaption = true,
+  wrap = false,
 }: {
   steps: readonly ProgressStep[];
   current: number;
   completed?: readonly string[];
   comfortable?: boolean;
   showCaption?: boolean;
+  wrap?: boolean;
 }) {
   return (
     <View style={styles.root} accessibilityLabel={`Bước ${current + 1}/${steps.length}`}>
@@ -28,14 +30,14 @@ export function OnboardingStepper({
           Bước {current + 1}/{steps.length} · {steps[current]?.label}
         </Text>
       )}
-      <View style={styles.track}>
+      <View style={[styles.track, wrap && { flexWrap: 'wrap', rowGap: 12 }]}>
         {steps.map((step, index) => {
           const done = completed.includes(step.key);
           const active = index === current;
           const color = done ? s.green : active ? s.blue : c.muted;
           return (
-            <View key={step.key} style={styles.step}>
-              {index > 0 && (
+            <View key={step.key} style={[styles.step, wrap && { flex: 0, width: '25%' }]}>
+              {index > 0 && (!wrap || index % 4 !== 0) && (
                 <View
                   style={[
                     styles.line,

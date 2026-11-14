@@ -10,6 +10,7 @@ import { useSession } from '../lib/SessionProvider';
 import { useFeedbackState } from '../lib/useFeedbackState';
 import { showSuccess } from '../lib/toast';
 import { errorMessage, type MeterTask, type Proposal } from '../lib/api';
+import { formatMeterReading } from '../../../../packages/client-core/src/localization';
 import type { ConfirmedReading } from '../../../../packages/client-core/src/meter';
 import { meterService } from '../services/meterService';
 import { meterOcrFeedback } from '../services/meterOcrFeedback';
@@ -207,9 +208,10 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
   const unit = task?.utilityType === 0 ? 'kWh' : 'm³';
   const meterLabel = task?.utilityType === 0 ? 'Điện' : 'Nước';
   const captureLabel = task?.utilityType === 0 ? 'Chụp công tơ điện' : 'Chụp đồng hồ nước';
+  const isInitial = task?.purpose === 0;
   const validation = task ? readingError(reading, task.decimalPlaces) : '';
-  const decreased = readingDecreased(reading, task?.previousValue ?? null);
-  const consumption = estimatedConsumption(reading, task?.previousValue ?? null);
+  const decreased = !isInitial && readingDecreased(reading, task?.previousValue ?? null);
+  const consumption = isInitial ? null : estimatedConsumption(reading, task?.previousValue ?? null);
   const editable = !!task && task.status < 2;
 
   async function recognize(bytes: Uint8Array<ArrayBuffer>) {
@@ -310,7 +312,7 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
   }
   return (
     <WorkspaceShell screen="meter-reading" onBack={back} backDisabled={busy} contentRevision={step}>
-      <Heading title="Ghi chỉ số điện nước" />
+      <Heading title="Ghi chỉ số điện nước" detail="Quản lý ghi chỉ số theo phòng" />
       {loading && <ActivityIndicator accessibilityLabel="Đang tải tác vụ" />}
       {!!error && (
         <Text accessibilityRole="alert" style={styles.error}>
@@ -329,15 +331,18 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
         </Button>
       )}
       {task && (
-        <Box style={{ padding: 14, gap: 8 }}>
-          <Heading title={`${meterLabel} · Phòng ${task.room}`} detail={task.location} />
-          <Text style={ui.muted}>
-            {task.meterCode} · {meterRoundLabel(task)}
-          </Text>
+        <Box style={{ padding: 14, gap: 6 }}>
+          <Heading
+            title={`${meterLabel} · Phòng ${task.room}`}
+            detail={`${task.meterCode} · ${meterRoundLabel(task)}`}
+          />
+          <Text variant="labelMedium">Cơ sở: {task.location}</Text>
           {step === 1 && (
             <Text>
-              Chỉ số trước: {task.previousValue ?? 'Chưa có'}{' '}
-              {task.previousValue !== null ? unit : ''}
+              Chỉ số trước:{' '}
+              {task.previousValue !== null
+                ? formatMeterReading(task.previousValue, unit)
+                : 'Chưa có'}
             </Text>
           )}
         </Box>
@@ -345,13 +350,24 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
       {saved ? (
         <Box style={{ padding: 14, gap: 10 }}>
           <Pill tone="green">Đã lưu chỉ số</Pill>
-          <Text variant="headlineMedium">
-            {saved.confirmedValue} {unit}
+          {isInitial && <Pill tone="blue">Đã lưu chỉ số ban đầu</Pill>}
+          <Text variant="headlineMedium">{formatMeterReading(saved.confirmedValue, unit)}</Text>
+          <Text>
+            Chỉ số trước:{' '}
+            {saved.previousValue !== null
+              ? formatMeterReading(saved.previousValue, unit)
+              : 'Chưa có'}
           </Text>
-          <Text>Chỉ số trước: {saved.previousValue ?? 'Chưa có'}</Text>
           <Text>
             Tiêu thụ:{' '}
-            {saved.consumption === null ? 'Chỉ số ban đầu' : `${saved.consumption} ${unit}`}
+            {isInitial || saved.consumption === null
+              ? 'Chỉ số ban đầu'
+              : formatMeterReading(saved.consumption, unit)}
+          </Text>
+          <Text variant="bodySmall" style={ui.muted}>
+            {isInitial
+              ? 'Giá trị này được lưu làm mốc chỉ số ban đầu cho phòng, không tính tiền tiêu thụ định kỳ.'
+              : 'Chỉ số và mức tiêu thụ đã lưu vào hệ thống để tổng hợp vào hóa đơn kỳ theo lịch cấu hình.'}
           </Text>
           <Button mode="contained" contentStyle={{ minHeight: 48 }} onPress={onReturn}>
             Về tổng quan phòng
@@ -382,12 +398,19 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
               <Box style={{ padding: 14, gap: 10 }}>
                 {step === 2 && !!notice && <Text accessibilityLiveRegion="polite">{notice}</Text>}
                 <Text>
-                  Chỉ số trước: {task.previousValue ?? 'Chưa có'}{' '}
-                  {task.previousValue !== null ? unit : ''}
+                  Chỉ số trước:{' '}
+                  {task.previousValue !== null
+                    ? formatMeterReading(task.previousValue, unit)
+                    : 'Chưa có'}
                 </Text>
+                {isInitial && (
+                  <Text style={ui.muted}>
+                    Loại ghi: Chỉ số ban đầu (mốc khởi tạo, không tính tiêu thụ tháng)
+                  </Text>
+                )}
                 {!!proposal?.proposedFields.reading && (
                   <Text>
-                    Chỉ số OCR: {proposal.proposedFields.reading} {unit}
+                    Chỉ số OCR: {formatMeterReading(proposal.proposedFields.reading, unit)}
                   </Text>
                 )}
                 {!!proposal?.warnings.length && (
@@ -412,7 +435,7 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
                 )}
                 {consumption !== null && (
                   <Text variant="titleMedium">
-                    Tiêu thụ dự kiến: {consumption} {unit}
+                    Tiêu thụ dự kiến: {formatMeterReading(consumption, unit)}
                   </Text>
                 )}
                 <Checkbox.Item

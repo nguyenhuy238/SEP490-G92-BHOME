@@ -19,13 +19,13 @@ using OpenCvSharp;
 namespace BHome.IntegrationTests.Compact24;
 
 [Trait("Category", "CompactPostgres")]
-public sealed class Compact24RefundTests
+public sealed partial class Compact24RefundTests
 {
     private const string Root = "/api/v1/refund-requests";
-    private static async Task<(HttpClient Client, Guid Source)> Setup(Compact24WorkflowFixture fixture)
+    private static async Task<(HttpClient Client, Guid Source)> Setup(Compact24WorkflowFixture fixture, bool verifiedPayer = true)
     {
         await new PaymentLedgerTests(fixture.Capture).OwnerConfirmedAmountPolicyPreservesPartialDebtAndUnallocatedExcess(120000,
-            "verified_excess_payment_pending_review", verifiedPayer: true);
+            "verified_excess_payment_pending_review", verifiedPayer: verifiedPayer);
         await using var scope = fixture.Capture.Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var owner = await db.Users.SingleAsync(u => EF.Property<string[]>(u, "roles").Contains("Owner"));

@@ -1,664 +1,531 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
-  Alert,
+  Box,
   Button,
   Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
+  Chip,
+  Collapse,
   FormControlLabel,
   MenuItem,
   Paper,
+  Snackbar,
   Stack,
+  Tab,
+  Tabs,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
-import { PageHeader, StatusChip, ConfirmDialog } from '../../components/common/PortalUI';
-import { OwnerFeedback, OwnerPagination, OwnerTable } from '../../components/common/OwnerWorkspace';
+import { Plus } from 'lucide-react';
+import { OwnerFeedback, OwnerPagination } from '../../components/common/OwnerWorkspace';
 import { OwnerLocationPicker } from '../../components/common/OwnerSelectors';
-import {
-  ownerQuery,
-  useOwnerAction,
-  useOwnerQuery,
-  type OwnerPage,
-} from '../../hooks/useOwnerWorkspace';
-import { useMeterApi } from '../meters/useMeterApi';
-import { downloadOwnerFile } from '../../services/ownerDownloads';
+import { ownerQuery, useOwnerQuery, type OwnerPage } from '../../hooks/useOwnerWorkspace';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
-import {
-  taskStatus,
-  vietnamDateInput,
-  vietnamInstant,
-  type OwnerTask,
-  type TaskWork,
-  type TaskHistory,
-  type TaskEvidence,
-  type RecurringTemplate,
-} from './taskContracts';
-const root = '/api/v1/operational-tasks';
-const emptyWork: TaskWork = {
-  title: '',
-  requirements: '',
-  priority: 'Normal',
-  dueAt: '',
-  evidenceRequired: false,
-};
+import { taskStatus, vietnamInstant, type OwnerTask } from './taskContracts';
+import { taskRoot, useTaskDirectory, responsibleName } from './useOperationalTasksApi';
+import { TaskDetailDrawer, TaskStatus } from './components/TaskDetailDrawer';
+import { TaskEditorDialog } from './components/TaskEditorDialog';
+import { RecurringTasks } from './components/RecurringTasks';
+import { KPIGrid, PageHeader } from '../../components/common/PortalUI';
+
 export function TasksApiPage() {
-  const [params] = useSearchParams();
-  const [location, setLocation] = useState(''),
-    [page, setPage] = useState(1),
-    [status, setStatus] = useState(''),
-    [priority, setPriority] = useState(''),
-    [overdue, setOverdue] = useState(false),
-    [id, setId] = useState(params.get('taskId') ?? ''),
-    [editor, setEditor] = useState<OwnerTask | null | undefined>();
-  const [from, setFrom] = useState(''),
-    [to, setTo] = useState('');
+  const compact = useMediaQuery('(max-width:599px)');
+  const [params, setParams] = useSearchParams();
+  const id = params.get('taskId') ?? '';
+  const [initialOperation, setInitialOperation] = useState('');
+  const [tab, setTab] = useState(0),
+    [advanced, setAdvanced] = useState(false),
+    [editor, setEditor] = useState<OwnerTask | null | undefined>(),
+    [notice, setNotice] = useState('');
+  const [filter, setFilter] = useState({
+    location: '',
+    status: '',
+    priority: '',
+    staff: '',
+    overdue: false,
+    from: '',
+    to: '',
+    page: 1,
+  });
+  const update = (value: Partial<typeof filter>) =>
+    setFilter((current) => ({ ...current, ...value, page: 1 }));
+  const select = (id: string) => {
+    const next = new URLSearchParams(params);
+    if (id) next.set('taskId', id);
+    else next.delete('taskId');
+    setParams(next, { replace: true });
+  };
+  const { staff, locations } = useTaskDirectory();
+  const locationName = (id: string) =>
+    locations.data?.find((item) => item.id === id)?.name ?? 'Không tải được tên cơ sở';
+  const query = ownerQuery({
+    locationId: filter.location,
+    status: tab === 2 ? '4' : filter.status,
+    priority: filter.priority,
+    staffUserId: filter.staff,
+    isOverdue: filter.overdue || undefined,
+    dueFrom: filter.from ? vietnamInstant(filter.from) : '',
+    dueTo: filter.to ? vietnamInstant(filter.to) : '',
+    page: filter.page,
+    pageSize: 20,
+  });
   const list = useOwnerQuery<OwnerPage<OwnerTask>>(
-    ['tasks', location, status, priority, overdue, from, to, page],
-    root +
-      '?' +
-      ownerQuery({
-        locationId: location,
-        status,
-        priority,
-        isOverdue: overdue || undefined,
-        dueFrom: from ? vietnamInstant(from) : '',
-        dueTo: to ? vietnamInstant(to) : '',
-        page,
-        pageSize: 20,
-      }),
+    ['tasks', query],
+    taskRoot + '?' + query,
+    tab !== 1,
   );
+  const total = useOwnerQuery<OwnerPage<OwnerTask>>(
+    ['task-summary', 'all'],
+    taskRoot + '?page=1&pageSize=1',
+  );
+  const completed = useOwnerQuery<OwnerPage<OwnerTask>>(
+    ['task-summary', 'completed'],
+    taskRoot + '?status=2&page=1&pageSize=1',
+  );
+  const cancelled = useOwnerQuery<OwnerPage<OwnerTask>>(
+    ['task-summary', 'cancelled'],
+    taskRoot + '?status=3&page=1&pageSize=1',
+  );
+  const overdue = useOwnerQuery<OwnerPage<OwnerTask>>(
+    ['task-summary', 'overdue'],
+    taskRoot + '?isOverdue=true&page=1&pageSize=1',
+  );
+  const pending = useOwnerQuery<OwnerPage<OwnerTask>>(
+    ['task-summary', 'pending'],
+    taskRoot + '?status=4&page=1&pageSize=1',
+  );
+  const incomplete =
+    total.data &&
+    completed.data &&
+    cancelled.data &&
+    !total.error &&
+    !completed.error &&
+    !cancelled.error
+      ? Math.max(0, total.data.totalCount - completed.data.totalCount - cancelled.data.totalCount)
+      : undefined;
+  const refresh = () => {
+    void Promise.all([
+      list.refetch(),
+      total.refetch(),
+      completed.refetch(),
+      cancelled.refetch(),
+      overdue.refetch(),
+      pending.refetch(),
+      staff.refetch(),
+      locations.refetch(),
+    ]);
+  };
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2} sx={{ minWidth: 0 }}>
       <PageHeader
         title="Công việc vận hành"
-        subtitle="Giao việc theo cơ sở, phối hợp và nghiệm thu kết quả."
         actions={
-          <Button variant="contained" onClick={() => setEditor(null)}>
+          <Button
+            variant="contained"
+            startIcon={<Plus size={18} />}
+            onClick={() => setEditor(null)}
+          >
             Tạo công việc
           </Button>
         }
       />
-      <OwnerLocationPicker
-        value={location}
-        change={(v) => {
-          setLocation(v);
-          setPage(1);
-        }}
+      <KPIGrid
+        items={[
+          { label: 'Tổng công việc', value: total.error ? '—' : (total.data?.totalCount ?? '…') },
+          { label: 'Chưa hoàn thành', value: incomplete ?? '—' },
+          {
+            label: 'Quá hạn',
+            value: overdue.error ? '—' : (overdue.data?.totalCount ?? '…'),
+            danger: !overdue.error && (overdue.data?.totalCount ?? 0) > 0,
+          },
+        ]}
       />
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-        <TextField
-          select
-          label="Trạng thái công việc"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
+      <OwnerFeedback
+        error={
+          total.error ||
+          completed.error ||
+          cancelled.error ||
+          overdue.error ||
+          pending.error ||
+          staff.error ||
+          locations.error
+        }
+      />
+      <Paper variant="outlined">
+        <Tabs
+          value={tab}
+          onChange={(_, value: number) => {
+            setTab(value);
+            setFilter((current) => ({ ...current, page: 1 }));
           }}
+          variant="scrollable"
+          allowScrollButtonsMobile
         >
-          <MenuItem value="">Tất cả</MenuItem>
-          {['Assigned', 'InProgress', 'Completed', 'Cancelled', 'PendingVerification'].map(
-            (v, i) => (
-              <MenuItem key={v} value={String(i)}>
-                {taskStatus[v]}
-              </MenuItem>
-            ),
-          )}
-        </TextField>
-        <TextField
-          select
-          label="Ưu tiên"
-          value={priority}
-          onChange={(e) => {
-            setPriority(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả</MenuItem>
-          <MenuItem value="0">Bình thường</MenuItem>
-          <MenuItem value="1">Cao</MenuItem>
-        </TextField>
-        <FormControlLabel
-          label="Chỉ quá hạn"
-          control={
-            <Checkbox
-              checked={overdue}
-              onChange={(_, v) => {
-                setOverdue(v);
-                setPage(1);
-              }}
-            />
-          }
-        />
-        <Button onClick={() => void list.refetch()}>Tải lại</Button>
-      </Stack>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-        <TextField
-          type="datetime-local"
-          label="Hạn từ (giờ Việt Nam)"
-          value={from}
-          onChange={(e) => {
-            setFrom(e.target.value);
-            setPage(1);
-          }}
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
-        <TextField
-          type="datetime-local"
-          label="Hạn đến (giờ Việt Nam)"
-          value={to}
-          onChange={(e) => {
-            setTo(e.target.value);
-            setPage(1);
-          }}
-          slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: from } }}
-        />
-      </Stack>
-      <OwnerFeedback busy={list.isFetching} error={list.error} />
-      <Paper>
-        <OwnerTable
-          rows={list.data?.items ?? []}
-          id={(x) => x.id}
-          select={(x) => setId(x.id)}
-          columns={[
-            { label: 'Công việc', render: (x) => x.title },
-            {
-              label: 'Trạng thái',
-              render: (x) => <StatusChip label={taskStatus[x.status] ?? x.status} />,
-            },
-            {
-              label: 'Hạn / ưu tiên',
-              render: (x) =>
-                `${x.dueAt ? formatInstant(x.dueAt) : 'Chưa có hạn'} · ${x.priority} ${x.isOverdue ? '· Quá hạn' : ''}`,
-            },
-            {
-              label: 'Người phụ trách',
-              render: (x) =>
-                x.responsibilityAvailable
-                  ? x.currentResponsibleStaffUserId
-                  : 'Chưa có người phụ trách',
-            },
-          ]}
-        />
+          <Tab label="Danh sách công việc" />
+          <Tab label="Lịch công việc định kỳ" />
+          <Tab
+            label={`Chờ nghiệm thu${pending.data && !pending.error ? ' (' + pending.data.totalCount + ')' : ''}`}
+          />
+        </Tabs>
       </Paper>
-      <OwnerPagination
-        page={page}
-        total={list.data?.totalCount ?? 0}
-        change={setPage}
-        busy={list.isFetching}
-      />
-      {id && <TaskDetail key={id} id={id} close={() => setId('')} edit={setEditor} />}
-      {location && <RecurringTemplates key={location} location={location} />}
-      {editor !== undefined && (
-        <TaskEditor task={editor} initialLocation={location} close={() => setEditor(undefined)} />
-      )}
-    </Stack>
-  );
-}
-function TaskDetail({
-  id,
-  close,
-  edit,
-}: {
-  id: string;
-  close: () => void;
-  edit: (task: OwnerTask) => void;
-}) {
-  const [page, setPage] = useState(1),
-    [operation, setOperation] = useState(''),
-    [note, setNote] = useState('');
-  const detail = useOwnerQuery<OwnerTask>(['task', id], `${root}/${id}`);
-  const history = useOwnerQuery<OwnerPage<TaskHistory>>(
-    ['task-history', id, page],
-    `${root}/${id}/history?page=${page}&pageSize=20`,
-    !!detail.data,
-  );
-  const evidence = useOwnerQuery<TaskEvidence[]>(
-    ['task-evidence', id],
-    `${root}/${id}/evidence`,
-    !!detail.data,
-  );
-  const { request } = useMeterApi();
-  const action = useOwnerAction();
-  const task = detail.data;
-  const mutable = task?.kind === 'AdHoc' && !['Completed', 'Cancelled'].includes(task.status);
-  return (
-    <Paper sx={{ p: 2 }}>
-      <Stack spacing={2}>
-        <OwnerFeedback
-          busy={detail.isFetching || history.isFetching || evidence.isFetching || action.busy}
-          error={action.error || detail.error || history.error || evidence.error}
-          notice={action.notice}
+      {tab === 1 ? (
+        <RecurringTasks
+          key={filter.location}
+          location={filter.location}
+          change={(value) => update({ location: value })}
+          locationName={locationName}
+          notify={setNotice}
         />
-        {task && (
-          <>
-            <Typography variant="h6">
-              {task.title} · {taskStatus[task.status] ?? task.status}
-            </Typography>
-            <Typography sx={{ whiteSpace: 'pre-wrap' }}>{task.requirements}</Typography>
-            <Typography>
-              Kết quả: {task.result ?? 'Chưa gửi'} · Phiên bản {task.version}
-            </Typography>
-            <Typography>
-              Người phụ trách hiện tại: {task.currentResponsibleStaffUserId ?? 'Chưa có'} · Khi
-              giao: {task.recordedStaffUserId ?? 'Chưa có'}
-            </Typography>
-            {!task.responsibilityAvailable && (
-              <Alert severity="warning">
-                Cần phân công người phụ trách cơ sở trước khi giao hoặc thực hiện việc.
-              </Alert>
+      ) : (
+        <>
+          {tab === 2 && (
+            <Box>
+              <Typography sx={{ fontSize: 18, fontWeight: 600 }}>
+                Công việc chờ nghiệm thu
+              </Typography>
+              <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>
+                Kiểm tra kết quả và bằng chứng do nhân viên gửi.
+              </Typography>
+            </Box>
+          )}
+          <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+            <Stack spacing={1.5} sx={{ p: 2 }}>
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={1.5}
+                sx={{ alignItems: { md: 'center' } }}
+              >
+                <Box sx={{ flex: 2, minWidth: 200 }}>
+                  <OwnerLocationPicker
+                    simple
+                    value={filter.location}
+                    change={(value) => update({ location: value })}
+                  />
+                </Box>
+                {tab !== 2 && (
+                  <TextField
+                    size="small"
+                    select
+                    label="Trạng thái công việc"
+                    value={filter.status}
+                    onChange={(e) => update({ status: e.target.value })}
+                    sx={{ flex: 1, minWidth: 180 }}
+                  >
+                    <MenuItem value="">Tất cả</MenuItem>
+                    {[
+                      'Assigned',
+                      'InProgress',
+                      'Completed',
+                      'Cancelled',
+                      'PendingVerification',
+                    ].map((value, index) => (
+                      <MenuItem key={value} value={String(index)}>
+                        {taskStatus[value]}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )}
+                <TextField
+                  size="small"
+                  select
+                  label="Ưu tiên"
+                  value={filter.priority}
+                  onChange={(e) => update({ priority: e.target.value })}
+                  sx={{ minWidth: 130 }}
+                >
+                  <MenuItem value="">Tất cả</MenuItem>
+                  <MenuItem value="0">Bình thường</MenuItem>
+                  <MenuItem value="1">Cao</MenuItem>
+                </TextField>
+                <FormControlLabel
+                  label="Chỉ quá hạn"
+                  control={
+                    <Checkbox
+                      checked={filter.overdue}
+                      onChange={(_, value) => update({ overdue: value })}
+                    />
+                  }
+                />
+              </Stack>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                <Button aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}>
+                  Bộ lọc nâng cao
+                </Button>
+                <Button onClick={refresh}>Làm mới</Button>
+                <Button
+                  onClick={() =>
+                    setFilter({
+                      location: '',
+                      status: '',
+                      priority: '',
+                      staff: '',
+                      overdue: false,
+                      from: '',
+                      to: '',
+                      page: 1,
+                    })
+                  }
+                >
+                  Xóa bộ lọc
+                </Button>
+              </Stack>
+              <Collapse in={advanced}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 1 }}>
+                  <TextField
+                    size="small"
+                    select
+                    label="Staff phụ trách"
+                    value={filter.staff}
+                    onChange={(e) => update({ staff: e.target.value })}
+                    sx={{ flex: 1, minWidth: 180 }}
+                  >
+                    <MenuItem value="">Tất cả Staff</MenuItem>
+                    {staff.data?.map((person) => (
+                      <MenuItem key={person.userId} value={person.userId}>
+                        {person.fullName || person.email}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    size="small"
+                    type="datetime-local"
+                    label="Hạn từ (giờ Việt Nam)"
+                    value={filter.from}
+                    onChange={(e) => update({ from: e.target.value })}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                  <TextField
+                    size="small"
+                    type="datetime-local"
+                    label="Hạn đến (giờ Việt Nam)"
+                    value={filter.to}
+                    onChange={(e) => update({ to: e.target.value })}
+                    slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: filter.from } }}
+                  />
+                </Stack>
+              </Collapse>
+            </Stack>
+            <OwnerFeedback busy={list.isFetching} error={list.error} />
+            {tab === 2 ? (
+              <Stack spacing={2} sx={{ p: 2 }}>
+                {list.data?.items.map((task) => (
+                  <Paper key={task.id} variant="outlined" sx={{ p: 2 }}>
+                    <Stack spacing={1}>
+                      <Typography sx={{ fontSize: 16, fontWeight: 600 }}>{task.title}</Typography>
+                      <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+                        {locationName(task.locationId)} · {responsibleName(task, staff.data ?? [])}
+                      </Typography>
+                      <TaskStatus task={task} />
+                      <Typography sx={{ fontSize: 13 }}>
+                        Hạn: {task.dueAt ? formatInstant(task.dueAt) : 'Chưa đặt'}
+                      </Typography>
+                      <Typography sx={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>
+                        {task.result || 'Chưa có kết quả.'}
+                      </Typography>
+                      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                        <Button
+                          variant="outlined"
+                          onClick={() => {
+                            setInitialOperation('');
+                            select(task.id);
+                          }}
+                        >
+                          Xem chi tiết
+                        </Button>
+                        <Button
+                          variant="contained"
+                          onClick={() => {
+                            setInitialOperation('verify');
+                            select(task.id);
+                          }}
+                        >
+                          Nghiệm thu
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setInitialOperation('rework');
+                            select(task.id);
+                          }}
+                        >
+                          Yêu cầu làm lại
+                        </Button>
+                      </Stack>
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            ) : (
+              <TableContainer>
+                <Table
+                  size="small"
+                  aria-label="Danh sách công việc"
+                  sx={{ minWidth: compact ? 0 : 700, tableLayout: compact ? 'fixed' : 'auto' }}
+                >
+                  <TableHead>
+                    <TableRow>
+                      {(compact
+                        ? ['Công việc', 'Thao tác']
+                        : [
+                            'Công việc',
+                            'Trạng thái',
+                            'Hạn hoàn thành',
+                            'Người phụ trách',
+                            'Thao tác',
+                          ]
+                      ).map((label) => (
+                        <TableCell
+                          key={label}
+                          scope="col"
+                          align={label === 'Thao tác' ? 'right' : 'left'}
+                          sx={{
+                            fontWeight: 600,
+                            width: compact && label === 'Thao tác' ? 112 : undefined,
+                          }}
+                        >
+                          {label}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {list.data?.items.map((task) => (
+                      <TableRow
+                        key={task.id}
+                        hover
+                        tabIndex={0}
+                        onClick={() => select(task.id)}
+                        onKeyDown={(event) => {
+                          if (
+                            event.target === event.currentTarget &&
+                            ['Enter', ' '].includes(event.key)
+                          ) {
+                            event.preventDefault();
+                            select(task.id);
+                          }
+                        }}
+                        sx={{
+                          cursor: 'pointer',
+                          '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
+                        }}
+                      >
+                        <TableCell sx={{ maxWidth: 280 }}>
+                          <Typography
+                            component="div"
+                            sx={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}
+                          >
+                            {task.title}{' '}
+                            {task.priority === 'High' && (
+                              <Chip size="small" label="Ưu tiên cao" color="warning" />
+                            )}
+                          </Typography>
+                          <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+                            {locationName(task.locationId)}
+                          </Typography>
+                          {compact && (
+                            <Stack
+                              spacing={0.75}
+                              sx={{ mt: 1, alignItems: 'flex-start', overflowWrap: 'anywhere' }}
+                            >
+                              <TaskStatus task={task} />
+                              <Typography
+                                variant="caption"
+                                color={task.isOverdue ? 'error.main' : 'text.secondary'}
+                              >
+                                Hạn: {task.dueAt ? formatInstant(task.dueAt) : 'Chưa có hạn'}
+                              </Typography>
+                              <Typography variant="body2">
+                                {responsibleName(task, staff.data ?? [])}
+                              </Typography>
+                            </Stack>
+                          )}
+                        </TableCell>
+                        {!compact && (
+                          <>
+                            <TableCell>
+                              <TaskStatus task={task} />
+                            </TableCell>
+                            <TableCell sx={{ color: task.isOverdue ? 'error.main' : undefined }}>
+                              {task.dueAt ? formatInstant(task.dueAt) : 'Chưa có hạn'}
+                            </TableCell>
+                            <TableCell>{responsibleName(task, staff.data ?? [])}</TableCell>
+                          </>
+                        )}
+                        <TableCell align="right" sx={{ verticalAlign: 'top' }}>
+                          <Button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              select(task.id);
+                            }}
+                          >
+                            Xem chi tiết
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
-            {task.verifiedAt && (
-              <Typography>
-                Nghiệm thu: {formatInstant(task.verifiedAt)} · {task.verifiedByUserId}
+            {!list.isPending && !list.error && !list.data?.items.length && (
+              <Typography sx={{ p: 3, textAlign: 'center', fontSize: 14 }}>
+                Không có công việc phù hợp.
               </Typography>
             )}
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-              <Button
-                disabled={!mutable || !['Assigned', 'InProgress'].includes(task.status)}
-                onClick={() => edit(task)}
-              >
-                Sửa công việc
-              </Button>
-              {[
-                ['coordinate', 'Ghi chú phối hợp'],
-                ['assign', 'Đồng bộ người phụ trách'],
-                ['cancel', 'Hủy công việc'],
-                ['verify', 'Nghiệm thu'],
-                ['rework', 'Yêu cầu làm lại'],
-              ].map(([op, label]) => (
-                <Button
-                  key={op}
-                  disabled={
-                    action.busy ||
-                    detail.isFetching ||
-                    !mutable ||
-                    (['verify', 'rework'].includes(op) && task.status !== 'PendingVerification') ||
-                    (op === 'assign' && !task.responsibilityAvailable)
-                  }
-                  onClick={() => {
-                    setOperation(op);
-                    setNote('');
-                  }}
-                >
-                  {label}
-                </Button>
-              ))}
-            </Stack>
-            <Typography variant="subtitle1">Minh chứng</Typography>
-            {!evidence.data?.length && <Typography>Chưa có minh chứng.</Typography>}
-            {evidence.data?.map((x) => (
-              <Button
-                key={x.id}
-                disabled={action.busy}
-                onClick={() =>
-                  void action.run(
-                    () =>
-                      downloadOwnerFile(
-                        request,
-                        `${root}/${id}/evidence/${x.id}`,
-                        `cong-viec-${x.id}.${x.contentType === 'image/png' ? 'png' : 'jpg'}`,
-                      ),
-                    'Đã tải minh chứng.',
-                  )
-                }
-              >
-                Tải ảnh · {formatInstant(x.createdAt)} · {x.length} bytes{' '}
-                {x.submissionId ? '· Đã gửi nghiệm thu' : ''}
-              </Button>
-            ))}
-            <Typography variant="subtitle1">Lịch sử / vướng mắc</Typography>
-            <OwnerTable
-              rows={history.data?.items ?? []}
-              id={(x) => x.id}
-              columns={[
-                { label: 'Thời gian', render: (x) => formatInstant(x.occurredAt) },
-                { label: 'Thao tác', render: (x) => `${x.action} · v${x.taskVersion}` },
-                { label: 'Nội dung', render: (x) => x.note },
-                { label: 'Người thực hiện', render: (x) => x.actorId },
-              ]}
-            />
-            <OwnerPagination page={page} total={history.data?.totalCount ?? 0} change={setPage} />
-          </>
-        )}
-        <Button onClick={close}>Đóng chi tiết</Button>
-        <ConfirmDialog
-          error={action.error}
-          open={!!operation}
-          title="Xác nhận xử lý công việc"
-          busy={action.busy}
-          onClose={() => setOperation('')}
-          onConfirm={() => {
-            if (!task || (!['verify', 'assign'].includes(operation) && !note.trim())) return;
-            void action
-              .run(() =>
-                action.command(`${root}/${id}/${operation}`, 'POST', {
-                  version: task.version,
-                  note: note || null,
-                }),
-              )
-              .then((ok) => {
-                if (ok) setOperation('');
-              });
-          }}
-        >
-          <Stack spacing={2}>
-            <Typography>
-              Máy chủ kiểm tra trạng thái, phiên bản và minh chứng trước khi chấp nhận.
-            </Typography>
-            <TextField
-              label="Ghi chú / lý do"
-              required={!['verify', 'assign'].includes(operation)}
-              multiline
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              slotProps={{ htmlInput: { maxLength: 8000 } }}
-            />
-            {!['verify', 'assign'].includes(operation) && !note.trim() && (
-              <Alert severity="info">Cần nhập nội dung trước khi xác nhận.</Alert>
+            {list.data && (
+              <Box sx={{ p: 2 }}>
+                {list.data.totalCount > 20 ? (
+                  <OwnerPagination
+                    page={filter.page}
+                    total={list.data.totalCount}
+                    busy={list.isFetching}
+                    change={(page) => setFilter((current) => ({ ...current, page }))}
+                  />
+                ) : (
+                  <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+                    {list.data.totalCount} công việc
+                  </Typography>
+                )}
+              </Box>
             )}
-          </Stack>
-        </ConfirmDialog>
-      </Stack>
-    </Paper>
-  );
-}
-function WorkFields({ work, change }: { work: TaskWork; change: (value: TaskWork) => void }) {
-  return (
-    <>
-      <TextField
-        required
-        label="Tên công việc"
-        value={work.title}
-        onChange={(e) => change({ ...work, title: e.target.value })}
-        slotProps={{ htmlInput: { maxLength: 200 } }}
-      />
-      <TextField
-        required
-        multiline
-        label="Yêu cầu"
-        value={work.requirements}
-        onChange={(e) => change({ ...work, requirements: e.target.value })}
-        slotProps={{ htmlInput: { maxLength: 8000 } }}
-      />
-      <TextField
-        select
-        label="Mức ưu tiên"
-        value={work.priority}
-        onChange={(e) => change({ ...work, priority: e.target.value })}
-      >
-        <MenuItem value="Normal">Bình thường</MenuItem>
-        <MenuItem value="High">Cao</MenuItem>
-      </TextField>
-      <TextField
-        required
-        type="datetime-local"
-        label="Thời điểm (giờ Việt Nam)"
-        value={work.dueAt}
-        onChange={(e) => change({ ...work, dueAt: e.target.value })}
-        slotProps={{ inputLabel: { shrink: true } }}
-      />
-      <FormControlLabel
-        label="Bắt buộc minh chứng"
-        control={
-          <Checkbox
-            checked={work.evidenceRequired}
-            onChange={(_, v) => change({ ...work, evidenceRequired: v })}
-          />
-        }
-      />
-    </>
-  );
-}
-function TaskEditor({
-  task,
-  initialLocation,
-  close,
-}: {
-  task: OwnerTask | null;
-  initialLocation: string;
-  close: () => void;
-}) {
-  const [location, setLocation] = useState(task?.locationId ?? initialLocation),
-    [reason, setReason] = useState('');
-  const [work, setWork] = useState<TaskWork>(
-    task
-      ? {
-          title: task.title,
-          requirements: task.requirements,
-          priority: task.priority,
-          evidenceRequired: task.evidenceRequired,
-          dueAt: vietnamDateInput(task.dueAt ?? ''),
-        }
-      : emptyWork,
-  );
-  const action = useOwnerAction();
-  return (
-    <Dialog
-      open
-      fullWidth
-      onClose={() => {
-        if (!action.busy) close();
-      }}
-    >
-      <DialogTitle>{task ? 'Sửa công việc' : 'Tạo công việc'}</DialogTitle>
-      <DialogContent>
-        <form
-          id="task-editor"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void action
-              .run(() =>
-                action.command(
-                  task ? `${root}/${task.id}` : root,
-                  task ? 'PUT' : 'POST',
-                  task
-                    ? {
-                        version: task.version,
-                        work: { ...work, dueAt: vietnamInstant(work.dueAt) },
-                        reason,
-                      }
-                    : {
-                        locationId: location,
-                        work: { ...work, dueAt: vietnamInstant(work.dueAt) },
-                      },
-                ),
-              )
-              .then((ok) => {
-                if (ok) close();
-              });
+          </Paper>
+        </>
+      )}
+      {id && (
+        <TaskDetailDrawer
+          key={id}
+          id={id}
+          close={() => {
+            setInitialOperation('');
+            select('');
           }}
-        >
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <OwnerFeedback {...action} />
-            {!task && <OwnerLocationPicker required value={location} change={setLocation} />}
-            <WorkFields work={work} change={setWork} />
-            {task && (
-              <TextField
-                required
-                label="Lý do sửa"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                slotProps={{ htmlInput: { maxLength: 2000 } }}
-              />
-            )}
-          </Stack>
-        </form>
-      </DialogContent>
-      <DialogActions>
-        <Button disabled={action.busy} onClick={close}>
-          Hủy
-        </Button>
-        <Button disabled={action.busy || !location} type="submit" form="task-editor">
-          Lưu công việc
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-function RecurringTemplates({ location }: { location: string }) {
-  const list = useOwnerQuery<RecurringTemplate[]>(
-    ['recurring-tasks', location],
-    `/api/v1/operational-task-templates?locationId=${location}`,
-  );
-  const [editor, setEditor] = useState<RecurringTemplate | null | undefined>(),
-    [remove, setRemove] = useState<RecurringTemplate | null>(null);
-  const action = useOwnerAction();
-  return (
-    <Paper sx={{ p: 2 }}>
-      <Stack spacing={2}>
-        <Typography variant="h6">Mẫu công việc định kỳ</Typography>
-        <OwnerFeedback
-          busy={list.isFetching || action.busy}
-          error={action.error || list.error}
-          notice={action.notice}
+          edit={setEditor}
+          staff={staff.data ?? []}
+          locationName={locationName}
+          notify={setNotice}
+          initialOperation={initialOperation}
         />
-        <Button onClick={() => setEditor(null)}>Tạo mẫu định kỳ</Button>
-        <OwnerTable
-          rows={list.data ?? []}
-          id={(x) => x.id}
-          select={setEditor}
-          columns={[
-            { label: 'Mẫu', render: (x) => x.title },
-            {
-              label: 'Lặp lại',
-              render: (x) => `${x.intervalDays} ngày · hạn ${x.dueAfterHours} giờ`,
-            },
-            { label: 'Lần tiếp', render: (x) => formatInstant(x.nextRunAt) },
-            { label: 'Hoạt động', render: (x) => (x.isActive ? 'Có' : 'Không') },
-            { label: 'Xóa', render: (x) => <Button onClick={() => setRemove(x)}>Xóa mẫu</Button> },
-          ]}
+      )}
+      {editor !== undefined && (
+        <TaskEditorDialog
+          task={editor}
+          initialLocation={filter.location}
+          close={() => setEditor(undefined)}
+          notify={setNotice}
         />
-        <ConfirmDialog
-          error={action.error}
-          open={!!remove}
-          title="Xóa mẫu định kỳ"
-          busy={action.busy}
-          onClose={() => setRemove(null)}
-          onConfirm={() => {
-            if (remove)
-              void action
-                .run(() =>
-                  action.command(
-                    `/api/v1/operational-task-templates/${remove.id}?locationId=${location}&version=${remove.version}`,
-                    'DELETE',
-                  ),
-                )
-                .then((ok) => {
-                  if (ok) setRemove(null);
-                });
-          }}
-        >
-          Các công việc đã tạo vẫn giữ lịch sử.
-        </ConfirmDialog>
-        {editor !== undefined && (
-          <TemplateEditor
-            location={location}
-            template={editor}
-            close={() => setEditor(undefined)}
-          />
-        )}
-      </Stack>
-    </Paper>
-  );
-}
-function TemplateEditor({
-  location,
-  template,
-  close,
-}: {
-  location: string;
-  template: RecurringTemplate | null;
-  close: () => void;
-}) {
-  const [work, setWork] = useState<TaskWork>(
-    template
-      ? {
-          title: template.title,
-          requirements: template.requirements,
-          priority: template.priority,
-          evidenceRequired: template.evidenceRequired,
-          dueAt: vietnamDateInput(template.nextRunAt),
-        }
-      : emptyWork,
-  );
-  const [days, setDays] = useState(template?.intervalDays ?? 1),
-    [hours, setHours] = useState(template?.dueAfterHours ?? 24),
-    [active, setActive] = useState(template?.isActive ?? true);
-  const action = useOwnerAction();
-  return (
-    <Dialog
-      open
-      fullWidth
-      onClose={() => {
-        if (!action.busy) close();
-      }}
-    >
-      <DialogTitle>Mẫu định kỳ · thời điểm là lần chạy tiếp</DialogTitle>
-      <DialogContent>
-        <form
-          id="recurring-editor"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const { dueAt, ...fields } = work;
-            void action
-              .run(() =>
-                action.command(
-                  '/api/v1/operational-task-templates' + (template ? `/${template.id}` : ''),
-                  template ? 'PUT' : 'POST',
-                  {
-                    ...fields,
-                    locationId: location,
-                    intervalDays: days,
-                    dueAfterHours: hours,
-                    nextRunAt: vietnamInstant(dueAt),
-                    isActive: active,
-                    version: template?.version ?? 0,
-                  },
-                ),
-              )
-              .then((ok) => {
-                if (ok) close();
-              });
-          }}
-        >
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <OwnerFeedback {...action} />
-            <WorkFields work={work} change={setWork} />
-            <TextField
-              type="number"
-              required
-              label="Chu kỳ (ngày)"
-              value={days}
-              onChange={(e) => setDays(Number(e.target.value))}
-              slotProps={{ htmlInput: { min: 1, max: 365 } }}
-            />
-            <TextField
-              type="number"
-              required
-              label="Thời gian hoàn thành (giờ)"
-              value={hours}
-              onChange={(e) => setHours(Number(e.target.value))}
-              slotProps={{ htmlInput: { min: 1, max: 720 } }}
-            />
-            <FormControlLabel
-              label="Mẫu hoạt động"
-              control={<Checkbox checked={active} onChange={(_, v) => setActive(v)} />}
-            />
-          </Stack>
-        </form>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={close} disabled={action.busy}>
-          Hủy
-        </Button>
-        <Button form="recurring-editor" type="submit" disabled={action.busy}>
-          Lưu mẫu
-        </Button>
-      </DialogActions>
-    </Dialog>
+      )}
+      <Snackbar
+        open={!!notice}
+        message={notice}
+        autoHideDuration={5000}
+        onClose={() => setNotice('')}
+      />
+    </Stack>
   );
 }

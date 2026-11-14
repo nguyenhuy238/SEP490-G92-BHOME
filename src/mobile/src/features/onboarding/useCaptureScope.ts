@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSession } from '../../lib/SessionProvider';
 import { errorMessage, type Named, type Resident } from '../../lib/api';
 import { conciseMessage, showError } from '../../lib/toast';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { captureService } from '../../services/captureService';
 
-export function useCaptureScope({ autoSelectAssignedLocation = false } = {}) {
+export function useCaptureScope({
+  autoSelectAssignedLocation = false,
+  inlineErrors = false,
+  initialLocationId = '',
+} = {}) {
   const { api } = useSession();
   const { preview } = useWorkspace();
   const [location, setLocation] = useState('');
@@ -36,9 +40,11 @@ export function useCaptureScope({ autoSelectAssignedLocation = false } = {}) {
         setLocation((current) =>
           next.some((item) => item.id === current)
             ? current
-            : autoSelectAssignedLocation && next.length === 1
-              ? next[0].id
-              : '',
+            : next.some((item) => item.id === initialLocationId)
+              ? initialLocationId
+              : autoSelectAssignedLocation && next.length === 1
+                ? next[0].id
+                : '',
         );
       } catch (e) {
         if (active) {
@@ -46,7 +52,7 @@ export function useCaptureScope({ autoSelectAssignedLocation = false } = {}) {
           setLocation('');
           const message = conciseMessage(errorMessage(e));
           setLocationError(message);
-          showError(message);
+          if (!inlineErrors) showError(message);
         }
       } finally {
         if (active) setLocationsLoading(false);
@@ -57,7 +63,7 @@ export function useCaptureScope({ autoSelectAssignedLocation = false } = {}) {
       active = false;
       controller.abort();
     };
-  }, [api, preview, revision, autoSelectAssignedLocation]);
+  }, [api, preview, revision, autoSelectAssignedLocation, inlineErrors, initialLocationId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -74,8 +80,18 @@ export function useCaptureScope({ autoSelectAssignedLocation = false } = {}) {
           : preview
             ? [
                 [
-                  { id: 'sample-301', label: '301', parentId: location },
-                  { id: 'sample-302', label: '302', parentId: location },
+                  {
+                    id: 'sample-301',
+                    label: '301',
+                    parentId: location,
+                    status: 'Occupied',
+                  },
+                  {
+                    id: 'sample-302',
+                    label: '302',
+                    parentId: location,
+                    status: 'Available',
+                  },
                 ],
                 [
                   {
@@ -101,7 +117,7 @@ export function useCaptureScope({ autoSelectAssignedLocation = false } = {}) {
           setRoom('');
           const message = conciseMessage(errorMessage(e));
           setRoomError(message);
-          showError(message);
+          if (!inlineErrors) showError(message);
         }
       } finally {
         if (active) setRoomsLoading(false);
@@ -112,8 +128,15 @@ export function useCaptureScope({ autoSelectAssignedLocation = false } = {}) {
       active = false;
       controller.abort();
     };
-  }, [api, preview, location, revision]);
+  }, [api, preview, location, revision, inlineErrors]);
 
+  const selectLocation = useCallback((id: string) => {
+    setLocation(id);
+    setRoom('');
+    setRooms([]);
+    setResidents([]);
+  }, []);
+  const reload = useCallback(() => setRevision((value) => value + 1), []);
   return {
     location,
     room,
@@ -122,13 +145,8 @@ export function useCaptureScope({ autoSelectAssignedLocation = false } = {}) {
     residents,
     loading: locationsLoading || roomsLoading,
     error: locationError || roomError,
-    selectLocation: (id: string) => {
-      setLocation(id);
-      setRoom('');
-      setRooms([]);
-      setResidents([]);
-    },
+    selectLocation,
     setRoom,
-    reload: () => setRevision((value) => value + 1),
+    reload,
   };
 }

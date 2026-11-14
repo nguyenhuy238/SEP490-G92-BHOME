@@ -1,0 +1,12 @@
+simulation: esms-unavailable
+routing: path
+mocks:
+  - name: esms
+    routeKey: esms
+    origin: rest.esms.vn
+    path: postman/mocks/esms
+    scenarios:
+      - overrides:
+          conditions:
+            error:
+              status_code: 503

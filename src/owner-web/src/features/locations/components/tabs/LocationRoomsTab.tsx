@@ -1,3 +1,4 @@
+import { MoneyField } from '../../../../components/common/MoneyField';
 import { useState } from 'react';
 import {
   Box,
@@ -605,16 +606,15 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
                 />
               </Grid>
               <Grid size={{ xs: 12 }}>
-                <TextField
+                <MoneyField
                   fullWidth
-                  type="number"
                   size="small"
                   label="Giá thuê mặc định (VND/tháng)"
                   value={editingType.defaultRate}
-                  onChange={(e) =>
+                  onValueChange={(raw) =>
                     setEditingType({
                       ...editingType,
-                      defaultRate: parseInt(e.target.value, 10) || 5000000,
+                      defaultRate: Number(raw),
                     })
                   }
                 />

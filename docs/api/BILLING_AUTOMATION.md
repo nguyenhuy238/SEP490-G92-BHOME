@@ -52,6 +52,18 @@ GET query roomId/period. Owner chọn eligible Contract; snapshot selection appe
 không tự chọn GUID/tiền thuê. Draft đã có không refresh/overwrite, giữ approved corrections,
 Final và viewer snapshots. Thiếu giá/chỉ số lưu MissingInputs, không dùng OCR proposal.
 
+Phí dịch vụ `FixedPerPersonPerMonth` (BF-01/UC-07, BF-05/UC-21, JOB-10) dùng
+đơn giá đã khóa trong hợp đồng. Backend tính theo thành viên ContractResident
+thuộc hợp đồng đã kích hoạt, với khoảng ngày cư trú giao với kỳ và thời hạn hợp đồng;
+mỗi ResidentId chỉ tính một lần cho mỗi ngày phòng, kể cả hợp đồng chồng lấn/gia hạn.
+FullMonth tính mỗi người phát sinh cư trú trong kỳ một tháng. OccupiedCalendarDays
+tính đơn giá × tổng ngày-người / số ngày thực của tháng, làm tròn VND một lần
+theo lịch tính phí đã lưu. Quantity là số người khác nhau trong kỳ; trường
+OccupiedDays là số ngày phòng có hợp đồng, không dùng để suy lại phí theo người.
+Snapshot FixedChargeCoverage/v1 lưu ResidentCount và PersonDays để quyết toán
+cùng kỳ chỉ thu phần chưa tính. Thiếu dữ liệu cư trú, coverage hoặc giá đã ký
+giữ Draft/PendingInputs; không dùng sức chứa phòng để ước lượng.
+
 JOB-10 Final handler `billing-final`, phase `Final`. Chỉ Owner-enabled plan đã ủy quyền,
 đúng ngày và Owner còn active/role mới chạy. InvoiceService kiểm tra lại authority/calendar
 trong financial lock; pending adjustment chặn. Approved Draft corrections không bị job refresh;

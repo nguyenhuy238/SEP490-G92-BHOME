@@ -54,7 +54,7 @@ async function choose(label: string) {
 }
 it('saves the current version and reloads persisted settings before showing success', async () => {
   await open();
-  await screen.findByDisplayValue('3000000');
+  await screen.findByDisplayValue('3.000.000');
   fireEvent.change(screen.getByLabelText(/Tiền cọc đảm bảo/), { target: { value: '4000000' } });
   mocks.settings.mockResolvedValue({ ...settings, version: 3, securityDeposit: '4000000' });
   fireEvent.submit(document.getElementById('main-contract-settings')!);
@@ -64,7 +64,7 @@ it('saves the current version and reloads persisted settings before showing succ
     expect.objectContaining({ securityDeposit: '4000000', expectedVersion: 2 }),
   );
   expect(mocks.settings).toHaveBeenCalledTimes(2);
-  expect(screen.getByLabelText(/Tiền cọc đảm bảo/)).toHaveValue('4000000');
+  expect(screen.getByLabelText(/Tiền cọc đảm bảo/)).toHaveValue('4.000.000');
 });
 it('clears old values during location loading and ignores a late response from an aborted request', async () => {
   let finish!: (value: MainContractSettings) => void;
@@ -78,16 +78,16 @@ it('clears old values during location loading and ignores a late response from a
   await waitFor(() => expect(mocks.settings).toHaveBeenCalledWith('a', expect.any(AbortSignal)));
   expect(screen.getByRole('button', { name: 'Lưu cấu hình' })).toBeDisabled();
   await choose('Cơ sở B');
-  await screen.findByDisplayValue('3000000');
+  await screen.findByDisplayValue('3.000.000');
   await act(async () => {
     finish({ ...settings, securityDeposit: '9999999' });
   });
-  expect(screen.queryByDisplayValue('9999999')).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue('9.999.999')).not.toBeInTheDocument();
   expect(mocks.settings.mock.calls[0][1].aborted).toBe(true);
 });
 it('does not offer stale values after a failed reload or report a failed save as successful', async () => {
   await open();
-  await screen.findByDisplayValue('3000000');
+  await screen.findByDisplayValue('3.000.000');
   mocks.setSettings.mockRejectedValue({ status: 409 });
   fireEvent.submit(document.getElementById('main-contract-settings')!);
   await waitFor(() => expect(screen.getByRole('alert')).toBeDefined());
@@ -95,5 +95,5 @@ it('does not offer stale values after a failed reload or report a failed save as
   mocks.settings.mockRejectedValue({ status: 503 });
   await choose('Cơ sở B');
   await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu cấu hình' })).toBeDisabled());
-  expect(screen.queryByDisplayValue('3000000')).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue('3.000.000')).not.toBeInTheDocument();
 });

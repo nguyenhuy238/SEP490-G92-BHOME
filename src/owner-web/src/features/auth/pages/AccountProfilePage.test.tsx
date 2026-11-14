@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   login: vi.fn(),
   changePassword: vi.fn(),
   clear: vi.fn(),
+  requestEmailVerification: vi.fn(),
 }));
 
 vi.mock('../hooks/useAccountProfileApi', () => ({
@@ -24,6 +25,7 @@ vi.mock('../../../../../../packages/client-core/src/auth', () => ({
       login: mocks.login,
       changePassword: mocks.changePassword,
       clear: mocks.clear,
+      requestEmailVerification: mocks.requestEmailVerification,
       session: { roles: ['Owner'] },
     },
   }),
@@ -59,9 +61,10 @@ beforeEach(() => {
   mocks.login.mockReset().mockResolvedValue(undefined);
   mocks.changePassword.mockReset();
   mocks.clear.mockReset();
+  mocks.requestEmailVerification.mockReset().mockResolvedValue(undefined);
 });
 
-it('verifies the current password and restores the session when contact details change', async () => {
+it('passes current-password proof to the update and preserves the session while requesting new-email verification', async () => {
   mocks.update.mockResolvedValue({
     ...profile,
     email: 'owner.updated@example.invalid',
@@ -82,23 +85,20 @@ it('verifies the current password and restores the session when contact details 
   fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
   await waitFor(() =>
-    expect(mocks.login).toHaveBeenNthCalledWith(1, 'owner@example.invalid', 'Current!Password-493'),
-  );
-  await waitFor(() =>
     expect(mocks.update).toHaveBeenCalledWith({
       fullName: 'Owner tổng hợp',
-      phone: '0900000000',
+      phone: '+84900000000',
       email: 'owner.updated@example.invalid',
       version: 'profile-v1',
+      currentPassword: 'Current!Password-493',
     }),
   );
   await waitFor(() =>
-    expect(mocks.login).toHaveBeenNthCalledWith(
-      2,
-      'owner.updated@example.invalid',
-      'Current!Password-493',
-    ),
+    expect(mocks.requestEmailVerification).toHaveBeenCalledWith('owner.updated@example.invalid'),
   );
+  expect(mocks.login).not.toHaveBeenCalled();
+  expect(mocks.logout).not.toHaveBeenCalled();
+  expect(mocks.clear).not.toHaveBeenCalled();
 });
 
 it('loads the real profile contract and updates only editable fields with its version', async () => {
@@ -115,7 +115,7 @@ it('loads the real profile contract and updates only editable fields with its ve
   await waitFor(() =>
     expect(mocks.update).toHaveBeenCalledWith({
       fullName: 'Owner đã cập nhật',
-      phone: '0900000000',
+      phone: '+84900000000',
       email: 'owner@example.invalid',
       version: 'profile-v1',
     }),

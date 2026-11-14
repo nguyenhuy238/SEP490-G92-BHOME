@@ -106,7 +106,7 @@ TaskView: id, locationId, kind, title, requirements, priority, dueAt, evidenceRe
 
 `currentResponsibleStaffUserId` là live lookup; `recordedStaffUserId` là snapshot ghi nhận gần nhất. Khi Staff kế tiếp thực hiện mutation/upload, server đồng bộ snapshot và thêm responsibility_changed history trong cùng transaction. Không có Staff: Owner vẫn đọc được task và thấy responsibilityAvailable=false; không tạo/assign hoặc cho Staff thực thi mới. Không có Staff-to-Staff transfer API.
 
-List filters: page mặc định 1, pageSize mặc định 20 (tối đa 100), locationId, status, priority, isOverdue, dueFrom, dueTo. History/notifications dùng page/pageSize. TaskPage gồm items/page/pageSize/totalCount. Tất cả phân trang/query scope trên server.
+List filters: page mặc định 1, pageSize mặc định 20 (tối đa 100), locationId, staffUserId (Owner only), status, priority, isOverdue, dueFrom, dueTo. `staffUserId` lọc theo Staff đang phụ trách hiện tại; Staff caller luôn bị giới hạn bởi Staff userId của token, không thể dùng query để xem Staff khác. History/notifications dùng page/pageSize. TaskPage gồm items/page/pageSize/totalCount. Tất cả phân trang/query scope trên server.
 
 ## Lỗi
 

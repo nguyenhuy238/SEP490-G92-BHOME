@@ -1,7 +1,6 @@
 using System.Text.Json;
 using BHome.Application.Contracts;
 using BHome.Domain.TenantContracts;
-using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
@@ -25,8 +24,7 @@ internal static class DepositDeductionRecords
     }
 }
 
-internal sealed class DepositDeductionRepository(BHomePersistenceContext db, IContractRepository contracts,
-    IContractSettlementLedger ledger) : IDepositDeductionRepository
+internal sealed class DepositDeductionRepository(BHomePersistenceContext db, IContractRepository contracts) : IDepositDeductionRepository
 {
     public async Task<T> TransactionAsync<T>(Guid contractId, Func<Task<T>> work, CancellationToken token)
     {
@@ -34,22 +32,6 @@ internal sealed class DepositDeductionRepository(BHomePersistenceContext db, ICo
         var room = await db.Set<Contract>().AsNoTracking().Where(c => c.Id == contractId).Select(c => (Guid?)c.RoomId).SingleOrDefaultAsync(token)
             ?? throw ContractException.Missing();
         return await contracts.InTransactionAsync(room, work, token);
-    }
-    public async Task<DepositDeductionContext> ContextAsync(Guid contractId, CancellationToken token)
-    {
-        if (ledger is not IContractSettlementDetails details) throw new ContractException(503, "settlement_summary_unavailable");
-        var contract = await db.Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == contractId, token) ?? throw ContractException.Missing();
-        var summary = await details.SummaryAsync(contractId, token);
-        var move = await db.Set<ContractMoveOut>().AsNoTracking().SingleOrDefaultAsync(m => m.ContractId == contractId, token);
-        var inspection = await db.Set<ContractFinalInspection>().AsNoTracking().Where(i => i.ContractId == contractId)
-            .OrderByDescending(i => i.Version).FirstOrDefaultAsync(token);
-        var snapshot = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot);
-        var ids = snapshot?.EvidenceIds ?? [];
-        var files = await db.Set<ContractInspectionEvidence>().AsNoTracking().Where(e => e.ContractId == contractId && e.IsLinked && ids.Contains(e.Id))
-            .Select(e => new DeductionFile(e.Id, e.ObjectKey, e.ContentType)).ToArrayAsync(token);
-        return new(summary, contract.Status.ToString(), move?.Status.ToString() ?? "Missing", inspection?.Id ?? Guid.Empty,
-            inspection?.Version ?? 0, inspection?.OwnerDecision == "Confirmed", inspection?.NoAdditionalCharges ?? true,
-            snapshot?.Assets.Select(a => a.Id).ToArray() ?? [], files, contract.IsDevelopmentDemo);
     }
     public async Task<DepositDeductionPlan?> OperationAsync(Guid actor, Guid key, CancellationToken token)
     {
@@ -59,20 +41,5 @@ internal sealed class DepositDeductionRepository(BHomePersistenceContext db, ICo
               AND h->'state'->>'approvedByUserId'={actor.ToString()}
             """).SingleOrDefaultAsync(token);
         return json is null ? null : JsonSerializer.Deserialize<DepositDeductionPlan>(json, DepositDeductionRecords.Json);
-    }
-    public async Task SaveAsync(DepositDeductionPlan plan, CancellationToken token)
-    {
-        var json = JsonSerializer.Serialize(new { recordType = DepositDeductionRecords.Kind, recordKey = plan.Id, state = plan }, DepositDeductionRecords.Json);
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET history=history||jsonb_build_array({json}::jsonb) WHERE id={plan.ContractId}", token);
-        db.SecurityAudit.Add(new SecurityAuditRecord
-        {
-            UserId = plan.ApprovedByUserId,
-            TargetId = plan.Id,
-            TargetType = "DepositDeduction",
-            Event = "DepositDeductionApproved",
-            Succeeded = true,
-            OccurredAt = plan.ApprovedAt
-        });
-        await db.SaveChangesAsync(token);
     }
 }

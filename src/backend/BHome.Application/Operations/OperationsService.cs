@@ -48,8 +48,10 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     public async Task<ProfileView> UpdateProfileAsync(ProfileUpdate input, CancellationToken t)
     {
         Require(Permissions.Account.UpdateOwn); Validate(input);
-        if (string.IsNullOrWhiteSpace(input.FullName) || string.IsNullOrWhiteSpace(input.Email))
+        if (string.IsNullOrWhiteSpace(input.FullName) || input.FullName.Trim().Length < 2 || string.IsNullOrWhiteSpace(input.Email))
             throw OperationsException.Invalid("profile_fields_required");
+        if (user.IsInRole(Roles.Tenant) && string.IsNullOrWhiteSpace(input.Phone))
+            throw OperationsException.Invalid("tenant_profile_phone_required");
         return await repository.UpdateProfileAsync(Actor, input with
         {
             FullName = input.FullName.Trim(),
@@ -300,7 +302,8 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     {
         Require(Permissions.OperationalTasks.Manage); Validate(input);
         if (input.LocationId == Guid.Empty || input.NextRunAt == default || string.IsNullOrWhiteSpace(input.Title) ||
-            string.IsNullOrWhiteSpace(input.Requirements)) throw OperationsException.Invalid("invalid_recurring_task_template");
+            string.IsNullOrWhiteSpace(input.Requirements) || !RecurringTaskSchedule.IsValid(input))
+            throw OperationsException.Invalid("invalid_recurring_task_template");
         return await repository.SaveTemplateAsync(Actor, id, input with
         {
             Title = input.Title.Trim(),

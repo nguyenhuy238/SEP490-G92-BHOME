@@ -115,11 +115,11 @@ it('opens the actual overdue task and offers retry on partial failure', () => {
   fireEvent.click(screen.getByText('Chưa tải đủ tác vụ ưu tiên · Thử lại'));
   expect(state.reload).toHaveBeenCalledOnce();
 });
-it('exposes all 14 Staff functions and keeps maintenance separate from operational tasks', () => {
+it('exposes all 15 Staff functions and keeps maintenance separate from operational tasks', () => {
   render(<StaffDashboard />);
   expect(screen.queryByText('TIẾP NHẬN & HỢP ĐỒNG')).toBeNull();
-  fireEvent.click(screen.getByText('Xem tất cả chức năng (14)'));
-  expect(staffFeatureGroups.reduce((total, group) => total + group.items.length, 0)).toBe(14);
+  fireEvent.click(screen.getByText('Xem tất cả chức năng (15)'));
+  expect(staffFeatureGroups.reduce((total, group) => total + group.items.length, 0)).toBe(15);
   for (const group of staffFeatureGroups) {
     expect(screen.getByText(group.title)).toBeTruthy();
     for (const item of group.items) {
@@ -131,6 +131,8 @@ it('exposes all 14 Staff functions and keeps maintenance separate from operation
   expect(state.go).toHaveBeenLastCalledWith('staff-maintenance');
   fireEvent.click(screen.getByText('Hóa đơn'));
   expect(state.go).toHaveBeenLastCalledWith('staff-invoices');
+  fireEvent.click(screen.getByText('Tạo hợp đồng giữ chỗ'));
+  expect(state.go).toHaveBeenLastCalledWith('prepare-contract', { kind: 'Holding' });
   fireEvent.click(screen.getByText('Thu gọn chức năng'));
   expect(screen.queryByText('SỰ CỐ & BẢO TRÌ')).toBeNull();
 });

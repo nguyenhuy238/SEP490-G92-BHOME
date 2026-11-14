@@ -105,12 +105,25 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         return list;
     }
     public async Task<IReadOnlyList<Guid>> RoomsAsync(Guid locationId, CancellationToken t) => await db.Set<Room>().Where(r => r.LocationId == locationId).OrderBy(r => r.Id).Select(r => r.Id).ToArrayAsync(t);
+    public async Task<string?> RoomConfigurationLockReasonAsync(Guid roomId, CancellationToken t)
+    {
+        var room = await db.Set<Room>().AsNoTracking().Where(r => r.Id == roomId)
+            .Select(r => new { r.Status, Active = r.Location.IsActive }).SingleOrDefaultAsync(t);
+        if (room is null) return "resource_not_found";
+        if (!room.Active) return "location_inactive";
+        if (await db.Set<Contract>().AnyAsync(c => c.RoomId == roomId &&
+            (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning ||
+             c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Active), t))
+            return "room_configuration_locked_by_contract";
+        if (room.Status is RoomStatus.Occupied or RoomStatus.OnHold ||
+            await PostgresPropertyRepository.UnresolvedResidents(db).AnyAsync(r => r.RoomId == roomId, t))
+            return "room_has_obligations";
+        return null;
+    }
     public async Task<bool> EligibleRoomAsync(Guid roomId, CancellationToken t)
     {
         if (!await db.Set<Room>().AnyAsync(r => r.Id == roomId && r.Status == RoomStatus.Available && r.Location.IsActive, t)) return false;
-        if (await db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && (c.Status == ContractStatus.Active ||
-            (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation) &&
-            (c.Signatures.Any(s => s.SignedAt != null) || db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TargetDepositContractId == c.Id))), t)) return false;
+        if (await RoomConfigurationLockReasonAsync(roomId, t) is not null) return false;
         return (await new PropertyLifecycleChecks(db).RoomBlockersAsync(roomId, t)).Count == 0;
     }
     public Task<Asset?> AssetAsync(Guid id, CancellationToken t) => db.Set<Asset>().SingleOrDefaultAsync(a => a.Id == id, t);

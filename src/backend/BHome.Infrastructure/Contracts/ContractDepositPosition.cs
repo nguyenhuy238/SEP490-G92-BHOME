@@ -25,7 +25,7 @@ internal sealed class ContractDepositPosition(BHomePersistenceContext db) : ICon
               (SELECT count(*)::integer FROM refund_requests r
                 WHERE source_deposit_contract_id = ANY({contractIds}) AND status IN ('REQUESTED','APPROVED','COMPLETED')
                 AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(r.history) h
-                  WHERE h->>'recordType'='SecurityDepositRefundV1'
+                  WHERE h->>'recordType' IN ('SecurityDepositRefundV1','HoldingDepositRefundV1')
                     AND h->'state'->>'sourceReference'={financialReference}
                     AND h->'state'->>'beneficiaryVerified'='true'
                     AND (h->'state'->>'noDeductionsConfirmed'='true' OR h->'state'->>'deductionsConfirmed'='true')

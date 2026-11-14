@@ -1,36 +1,57 @@
 import {
-  contractStates,
   type ContractClient,
   type ContractSummary,
 } from '../../../../../packages/client-core/src/contracts';
 
 export const staffContractTabs = [
-  { id: '', label: 'Tất cả', statuses: [...contractStates] as string[] },
-  { id: 'Draft', label: 'Bản nháp', statuses: ['Draft'] },
-  { id: 'PendingSigning', label: 'Chờ ký', statuses: ['PendingSigning'] },
-  { id: 'PendingActivation', label: 'Chờ kích hoạt', statuses: ['PendingActivation'] },
-  { id: 'Active', label: 'Đang hiệu lực', statuses: ['Active'] },
-  { id: 'closed', label: 'Đã kết thúc', statuses: ['Terminated', 'Superseded', 'Cancelled'] },
+  { id: '', label: 'Tất cả', dimension: 'all' },
+  { id: 'Holding', label: 'Giữ chỗ', dimension: 'kind' },
+  { id: 'Main', label: 'Chính thức', dimension: 'kind' },
+  { id: 'Draft', label: 'Bản nháp', dimension: 'status' },
+  { id: 'PendingSigning', label: 'Chờ ký', dimension: 'status' },
+  { id: 'Active', label: 'Đang hiệu lực', dimension: 'status' },
+  { id: 'PendingActivation', label: 'Chờ kích hoạt', dimension: 'status' },
+  { id: 'closed', label: 'Đã kết thúc', dimension: 'status' },
 ];
 export const staffContractSorts = [
-  { id: 'newest', label: 'Ngày thuê mới nhất' },
-  { id: 'oldest', label: 'Ngày thuê cũ nhất' },
-  { id: 'rent-asc', label: 'Giá thuê tăng dần' },
-  { id: 'rent-desc', label: 'Giá thuê giảm dần' },
+  { id: 'newest', label: 'Ngày hợp đồng mới nhất' },
+  { id: 'oldest', label: 'Ngày hợp đồng cũ nhất' },
+  { id: 'rent-asc', label: 'Số tiền tăng dần' },
+  { id: 'rent-desc', label: 'Số tiền giảm dần' },
 ];
 export const staffContractPageSize = 5;
 export interface StaffContractListView {
+  kind: string;
   status: string;
   search: string;
   sort: string;
   page: number;
 }
 export const defaultStaffContractListView: StaffContractListView = {
+  kind: '',
   status: '',
   search: '',
   sort: 'newest',
   page: 1,
 };
+
+export function staffContractTabSelected(
+  tab: (typeof staffContractTabs)[number],
+  view: StaffContractListView,
+) {
+  if (tab.dimension === 'all') return !view.kind && !view.status;
+  return (tab.dimension === 'kind' ? view.kind : view.status) === tab.id;
+}
+
+export function staffContractTabView(
+  tab: (typeof staffContractTabs)[number],
+  view: StaffContractListView,
+  toggle = false,
+): StaffContractListView {
+  if (tab.dimension === 'all') return { ...view, kind: '', status: '', page: 1 };
+  const dimension = tab.dimension === 'kind' ? 'kind' : 'status';
+  return { ...view, [dimension]: toggle && view[dimension] === tab.id ? '' : tab.id, page: 1 };
+}
 
 export async function loadStaffContracts(api: ContractClient, signal: AbortSignal) {
   const contracts = new Map<string, ContractSummary>();
@@ -50,6 +71,34 @@ export async function loadStaffContracts(api: ContractClient, signal: AbortSigna
     if (!batch.items.length || contracts.size === before)
       throw new Error('Không tải đủ danh sách hợp đồng. Hãy tải lại.');
   }
+}
+
+export const staffContractKindLabel = (kind: string) =>
+  kind === 'Holding'
+    ? 'Giữ chỗ'
+    : kind === 'Main'
+      ? 'Chính thức'
+      : kind === 'Renewal'
+        ? 'Chính thức · Gia hạn'
+        : kind === 'Addendum'
+          ? 'Chính thức · Phụ lục'
+          : kind;
+
+export const staffContractAmount = (contract: ContractSummary) =>
+  contract.kind === 'Holding' ? contract.requiredDeposit : contract.monthlyRent;
+
+export function isMainOnboardingDraft(contract: Pick<ContractSummary, 'kind' | 'onboardingDraft'>) {
+  return contract.kind === 'Main' && !!contract.onboardingDraft;
+}
+
+const closedStatuses = ['Terminated', 'Superseded', 'Cancelled', 'Expired', 'Converted', 'Applied'];
+function matchesKind(contract: ContractSummary, kind: string) {
+  return (
+    !kind ||
+    (kind === 'Main'
+      ? ['Main', 'Renewal', 'Addendum'].includes(contract.kind)
+      : contract.kind === kind)
+  );
 }
 
 function searchable(value: string) {
@@ -72,21 +121,34 @@ export function staffContractPage(
   search: string,
   sort: string,
   page: number,
+  kind = '',
 ) {
   const query = searchable(search.trim());
-  const statuses = staffContractTabs.find((tab) => tab.id === status)?.statuses ?? [];
   const filtered = contracts.filter(
     (contract) =>
-      statuses.includes(contract.status) &&
+      matchesKind(contract, kind) &&
+      (!status ||
+        (status === 'closed'
+          ? closedStatuses.includes(contract.status)
+          : contract.status === status)) &&
       (!query ||
         searchable(
-          [contract.roomNumber, contract.id, contract.locationName, contract.kind].join(' '),
+          [
+            contract.roomNumber,
+            contract.id,
+            contract.locationName,
+            contract.kind,
+            staffContractKindLabel(contract.kind),
+          ].join(' '),
         ).includes(query)),
   );
   filtered.sort((a, b) => {
     const difference = sort.startsWith('rent-')
-      ? compareRent(a.monthlyRent, b.monthlyRent) * (sort === 'rent-desc' ? -1 : 1)
-      : a.startDate.localeCompare(b.startDate) * (sort === 'oldest' ? 1 : -1);
+      ? compareRent(staffContractAmount(a) ?? '0', staffContractAmount(b) ?? '0') *
+        (sort === 'rent-desc' ? -1 : 1)
+      : (a.kind === 'Holding' ? (a.holdingExpiresAt ?? '') : a.startDate).localeCompare(
+          b.kind === 'Holding' ? (b.holdingExpiresAt ?? '') : b.startDate,
+        ) * (sort === 'oldest' ? 1 : -1);
     return (
       difference ||
       a.roomNumber.localeCompare(b.roomNumber, 'vi', { numeric: true }) ||

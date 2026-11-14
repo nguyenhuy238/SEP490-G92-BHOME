@@ -63,6 +63,50 @@ Tạo giá/phí: `locationId`, `roomId` tùy chọn, `category`, `chargeCode`, `
 
 ## Invariants giữ nguyên
 
+### Chỉnh sửa phòng và yêu cầu tài sản theo gợi ý tạo phòng
+
+BF01 / UC04–UC07 / FE01; GBR01–03, GBR08–09, GBR13 và DBR02.
+Các API Owner sau dùng dữ liệu Compact24 hiện hữu, không khôi phục RoomType
+hay thêm bảng/cột:
+
+- `GET /locations/{locationId}/rooms/{roomId}/configuration` trả về
+  `room`, `provenance`, `inventory`, `canEdit`, `lockReason`, `rent`
+  và `scheduledRent`. `rent` là giá hiệu lực hiện tại, hoặc giá đã lên lịch
+  gần nhất nếu chưa có giá hiệu lực. `scheduledRent` là giá riêng phòng
+  tương lai gần nhất, nếu có.
+- `PUT /locations/{locationId}/rooms/{roomId}/configuration` nhận
+  `roomNumber,floor,capacity,status,expectedVersion,expectedProvenanceVersion,reason`.
+  Có thể gửi `roomDefaultsId,expectedDefaultsVersion,area,amenities`.
+  Bỏ qua loại phòng để giữ liên kết hiện tại; khi chọn loại khác, diện tích
+  và tiện nghi mặc định được lấy từ phiên bản đã chọn nếu không gửi hai trường này.
+  Lịch sử provenance cũ vẫn được lưu. Trạng thái OnHold/Occupied do hợp đồng
+  kiểm soát. Version 0 chỉ dùng cho tài liệu provenance chưa tồn tại.
+- Để thay đổi giá, gửi `rent:{rate,effectiveFrom,expectedPolicyId,expectedPolicyVersion}`.
+  Giá gửi dạng decimal string chính xác. Bỏ qua `rent` nếu không thay đổi.
+  Giá hiệu lực cũ chỉ được thay thế từ ngày tương lai; giá tương lai chưa dùng
+  có thể chỉnh bằng đúng version. Giá riêng phòng mới có thể bắt đầu hôm nay.
+  Không chỉnh sửa lịch sử giá, hợp đồng hoặc hóa đơn đã chốt.
+- Để thay đổi yêu cầu tài sản riêng phòng, gửi
+  `assets:{items,expectedAssignmentVersion}`. Mỗi item gồm
+  `id,name,category,trackingMode,quantity`; danh sách rỗng xóa yêu cầu hiện hành,
+  không xóa tài sản vật lý. Bỏ qua `assets` để giữ nguyên yêu cầu.
+- `POST /locations/{locationId}/room-defaults/{id}/asset-requirements` nhận
+  `expectedVersion,items,applyToExistingRooms,reason`, trả
+  `{defaults,template,rooms:[{roomId,status}]}`. Tạo một yêu cầu tài sản
+  Published độc lập (hoặc `template:null` nếu xóa), cập nhật gợi ý tạo phòng
+  cho các phòng tạo mới. Khi chọn áp dụng, chỉ xét phòng có provenance đúng
+  gợi ý tại cùng Location; trả `Applied` hoặc `SkippedNotEligible`.
+  Phòng thuộc gợi ý khác hoặc không được gán gợi ý không nằm trong kết quả.
+  Phiên bản mới không trở thành mặc định chung của phòng cũ.
+
+Backend kiểm tra lại cùng Location lock với giao dịch hợp đồng. Mọi hợp đồng
+Draft, PendingSigning, PendingActivation hoặc Active (bao gồm Holding) đều khóa
+thay đổi cấu hình; phòng Occupied/OnHold và người ở còn nghĩa vụ cũng bị khóa.
+API trả 409 `room_configuration_locked_by_contract`, `room_has_obligations`
+hoặc `stale_version` nếu dữ liệu không còn hợp lệ. Thay đổi phòng, giá và
+yêu cầu tài sản là một transaction; lỗi không để lại cập nhật một phần.
+Không thay đổi bản ghi tài sản vật lý hoặc tự xác nhận tài sản đã lắp đặt.
+
 Location dùng optimistic concurrency qua `version`. Tạo mới thường trả version 1; gán Staff cũng tăng version của Location vì assignment nằm trong cùng aggregate. Trước PUT, GET `/locations/{id}` để lấy version hiện tại. Gửi version cũ trả 409 với `code: stale_version`; đọc lại và xem thay đổi trước khi gửi lại. Trong Postman: **28 → 36 → 37**, không tự tăng version bằng suy đoán.
 
 - Giá riêng Room được ưu tiên hơn giá Location theo từng `chargeCode` và ngày hiệu lực. Trả về các khoản bắt buộc còn thiếu, không tự ước tính.

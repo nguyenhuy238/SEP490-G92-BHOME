@@ -84,7 +84,7 @@ async function fillForm(room = false) {
   fireEvent.change(screen.getByLabelText(/Tên khoản thu/), {
     target: { value: 'Synthetic electricity' },
   });
-  fireEvent.change(screen.getByLabelText(/Đơn giá VND/), { target: { value: '3000.1250' } });
+  fireEvent.change(screen.getByLabelText(/Đơn giá VND/), { target: { value: '3.000,1250' } });
   fireEvent.change(screen.getByLabelText(/Hiệu lực từ ngày/), { target: { value: '2026-12-01' } });
   fireEvent.change(screen.getByLabelText(/Lý do \/ ghi chú/), {
     target: { value: 'Synthetic approval' },
@@ -138,7 +138,7 @@ it.each([400, 409])(
     await screen.findByText(
       status === 409 ? /Cấu hình đã thay đổi hoặc bị xung đột/ : /Dữ liệu chưa hợp lệ/,
     );
-    expect(screen.getByLabelText(/Đơn giá VND/)).toHaveValue('3000.1250');
+    expect(screen.getByLabelText(/Đơn giá VND/)).toHaveValue('3.000,1250');
     expect(screen.queryByText('Đã lưu cấu hình.')).toBeNull();
   },
 );

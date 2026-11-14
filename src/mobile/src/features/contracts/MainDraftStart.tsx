@@ -9,16 +9,23 @@ import {
 import { Box, Heading } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { MainDraftScreen } from './MainDraftScreen';
+import { router } from 'expo-router';
 
 // Standalone entry for already-onboarded Residents. The onboarding handoff supplies these IDs directly.
 export function MainDraftStart({
   api,
   onCancel,
   onList,
+  onReleased,
+  owner = false,
+  onSaved,
 }: {
   api: ContractClient;
   onCancel: () => void;
   onList: () => void;
+  onReleased?: (id: string) => void;
+  owner?: boolean;
+  onSaved?: (id: string) => void;
 }) {
   const [location, setLocation] = useState(''),
     [room, setRoom] = useState(''),
@@ -51,9 +58,16 @@ export function MainDraftStart({
   if (open)
     return (
       <MainDraftScreen
+        onReleased={onReleased}
         initialId={draftId || undefined}
         persistRoute={false}
-        onSaved={setDraftId}
+        onSaved={(next) => {
+          setDraftId(next);
+          if (owner) {
+            onSaved?.(next);
+            router.setParams({ contractId: next, mainDraftId: '', roomId: '' });
+          }
+        }}
         roomId={room}
         representativeResidentId={representative}
         residentIds={people}
@@ -95,33 +109,59 @@ export function MainDraftStart({
       {!!room && !residents.length && (
         <Text>Phòng chưa có hồ sơ đã xác minh. Hoàn tất tiếp nhận trước khi lập hợp đồng.</Text>
       )}
-      {residents.map((person) => (
-        <Checkbox.Item
-          key={person.id}
-          label={person.label}
-          status={people.includes(person.id) ? 'checked' : 'unchecked'}
-          disabled={!!draftId}
-          onPress={() => {
-            setPeople((before) =>
-              before.includes(person.id)
-                ? before.filter((id) => id !== person.id)
-                : [...before, person.id],
-            );
-            if (representative === person.id) setRepresentative('');
+      {owner && (
+        <ChoiceField
+          label="Bên thuê / đại diện đã xác minh"
+          value={representative}
+          options={residents.filter((person) => person.residentType === 'Representative')}
+          disabled={loading || !!draftId}
+          onChange={(next) => {
+            setRepresentative(next);
+            setPeople(next ? [next] : []);
           }}
         />
-      ))}
-      <ChoiceField
-        label="Người đại diện hợp đồng"
-        value={representative}
-        options={residents.filter((r) => people.includes(r.id) && r.residentType !== 'CoOccupant')}
-        disabled={loading || !!draftId}
-        onChange={setRepresentative}
-      />
+      )}
+      {owner && (
+        <Text>
+          Mỗi người thuê đại diện lập hợp đồng riêng. Chỉ thêm thành viên cùng ở đã xác nhận vào hợp
+          đồng của đại diện này.
+        </Text>
+      )}
+      {(owner ? residents.filter((person) => person.residentType === 'CoOccupant') : residents).map(
+        (person) => (
+          <Checkbox.Item
+            key={person.id}
+            label={person.label}
+            status={people.includes(person.id) ? 'checked' : 'unchecked'}
+            disabled={!!draftId || (owner && !representative)}
+            onPress={() => {
+              setPeople((before) =>
+                before.includes(person.id)
+                  ? before.filter((id) => id !== person.id)
+                  : [...before, person.id],
+              );
+              if (representative === person.id) setRepresentative('');
+            }}
+          />
+        ),
+      )}
+      {!owner && (
+        <ChoiceField
+          label="Người đại diện hợp đồng"
+          value={representative}
+          options={residents.filter(
+            (r) => people.includes(r.id) && r.residentType !== 'CoOccupant',
+          )}
+          disabled={loading || !!draftId}
+          onChange={setRepresentative}
+        />
+      )}
       <Button
         contentStyle={{ minHeight: 48 }}
         mode="contained"
-        disabled={loading || !room || !people.length || !people.includes(representative)}
+        disabled={
+          loading || !room || !representative || !people.length || !people.includes(representative)
+        }
         onPress={() => setOpen(true)}
       >
         {draftId ? 'Mở lại hợp đồng nháp' : 'Tiếp tục tạo hợp đồng nháp'}

@@ -6,6 +6,12 @@ export interface ApiProblem {
   correlationId?: string;
   errors?: Record<string, string[]>;
 }
+export function infrastructureError(error: unknown): string | undefined {
+  const value = error as { code?: string; problem?: { code?: string } } | null;
+  if ((value?.code ?? value?.problem?.code) === 'database_schema_incompatible')
+    return 'Máy chủ và cơ sở dữ liệu chưa đồng bộ. Cần quản trị viên cập nhật hệ thống.';
+  return undefined;
+}
 export function requestDiagnostic(error: {
   status?: number;
   requestPath?: string;

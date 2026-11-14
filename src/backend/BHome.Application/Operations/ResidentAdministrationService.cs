@@ -15,10 +15,12 @@ public sealed class ResidentAdministrationQuery
     public int PageSize { get; set; } = 20;
 }
 public sealed record ResidentTenancy(Guid ContractId, string Status, string Role, DateOnly ResidenceFrom, DateOnly? ResidenceTo);
-public sealed record ResidentAdministrationView(Guid Id, Guid LocationId, Guid RoomId, string RoomNumber,
+public sealed record ResidentAccountView(bool IsActive, bool EmailConfirmed, DateTimeOffset? InvitationAcceptedAt,
+    string? InvitationDispatchState, string? JobState, string? DeliveryState);
+public sealed record ResidentAdministrationView(Guid Id, Guid? LocationId, Guid? RoomId, string RoomNumber,
     string DisplayLabel, string ResidentType, string VerificationStatus, DateTimeOffset? ConfirmedAt,
     Guid? TenantUserId, string? ContactEmail, string? ContactPhone, string Version,
-    IReadOnlyList<ResidentTenancy> Tenancies);
+    IReadOnlyList<ResidentTenancy> Tenancies, ResidentAccountView? Account = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ResidentLabelUpdate([Required, StringLength(150, MinimumLength = 1)] string DisplayLabel,
     [Required, StringLength(64, MinimumLength = 64)] string Version, [Required, StringLength(500)] string Reason);

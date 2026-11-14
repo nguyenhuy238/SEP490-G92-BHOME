@@ -436,7 +436,10 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>(); var person = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, TenantUserId = w.Tenant.Id, DisplayLabel = "Synthetic Holding Tenant", VerificationStatus = IdentityVerificationStatus.Verified }; db.Add(person); resident = person.Id;
-            db.Add(new BillingPolicy { LocationId = w.Location, Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 3000000, EffectiveFrom = Today }); await db.SaveChangesAsync();
+            db.AddRange(
+                new BillingPolicy { LocationId = w.Location, Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Synthetic rent", Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 3000000, EffectiveFrom = Today },
+                new BillingPolicy { LocationId = w.Location, Category = ChargeCategory.Electricity, ChargeCode = "ELECTRICITY", Name = "Synthetic electricity", Method = ChargingMethod.Metered, Rate = 3500, EffectiveFrom = Today },
+                new BillingPolicy { LocationId = w.Location, Category = ChargeCategory.Water, ChargeCode = "WATER", Name = "Synthetic water", Method = ChargingMethod.Metered, Rate = 15000, EffectiveFrom = Today }); await db.SaveChangesAsync();
         }
         async Task<HttpResponseMessage> Post(HttpClient client, string path, object? input = null)
         { client.DefaultRequestHeaders.Remove("Idempotency-Key"); client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString()); return input is null ? await client.PostAsync(path, null) : await client.PostAsJsonAsync(path, input); }

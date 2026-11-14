@@ -1,3 +1,4 @@
+import { MoneyField } from './MoneyField';
 import { useState } from 'react';
 import {
   Alert,
@@ -159,28 +160,25 @@ export function PricingPanel() {
               <Alert severity="info">
                 Chỉ cấu hình cho kỳ hiệu lực mới; hóa đơn đã phát hành được giữ nguyên.
               </Alert>
-              <TextField
+              <MoneyField
                 required
-                type="number"
                 label="Điện (VND/kWh)"
                 value={electricity}
-                onChange={(e) => setElectricity(Number(e.target.value))}
+                onValueChange={(raw) => setElectricity(Number(raw))}
                 slotProps={{ htmlInput: { min: 0, step: 1 } }}
               />
-              <TextField
+              <MoneyField
                 required
-                type="number"
                 label="Nước (VND/m³)"
                 value={water}
-                onChange={(e) => setWater(Number(e.target.value))}
+                onValueChange={(raw) => setWater(Number(raw))}
                 slotProps={{ htmlInput: { min: 0, step: 1 } }}
               />
-              <TextField
+              <MoneyField
                 required
-                type="number"
                 label="Internet (VND/phòng)"
                 value={service}
-                onChange={(e) => setService(Number(e.target.value))}
+                onValueChange={(raw) => setService(Number(raw))}
                 slotProps={{ htmlInput: { min: 0, step: 1 } }}
               />
               <TextField

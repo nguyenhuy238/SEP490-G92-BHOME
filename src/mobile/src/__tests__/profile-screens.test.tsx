@@ -7,6 +7,7 @@ import { ProfileScreen } from '../screens/ProfileScreen';
 import { ProfileEditScreen } from '../screens/ProfileEditScreen';
 import { loadAccountProfile, profilePath, type AccountProfile } from '../services/accountProfile';
 import { queryPolicies } from '../lib/queryPolicies';
+import { normalizeLoginPhone } from '../../../../packages/client-core/src/loginValidation';
 import { getToastSnapshot } from '../lib/toast';
 
 const s = vi.hoisted(() => ({
@@ -207,7 +208,13 @@ it.each([
   'loads the real %s profile contract and keeps internal metadata out of the UI',
   async (role, label) => {
     s.role = role;
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json({ ...initial, roles: [role] }));
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (url) =>
+        String(url).endsWith('/api/v1/capture/locations')
+          ? json([{ id: 'assigned-location', label: 'Synthetic assigned Location' }])
+          : json({ ...initial, roles: [role] }),
+      );
     setup(fetcher);
     render(<ProfileScreen />);
     await screen.findByText(label);
@@ -215,11 +222,16 @@ it.each([
     expect(screen.getByText(initial.email!)).toBeTruthy();
     expect(screen.getByTestId('initials').textContent).toBe('KT');
     expect(screen.getByText('Tài khoản đang hoạt động')).toBeTruthy();
+    if (role === 'Staff') {
+      await screen.findByText('Synthetic assigned Location');
+      expect(screen.queryByRole('button', { name: 'Synthetic assigned Location' })).toBeNull();
+    }
     expect(screen.queryByText(/synthetic-a|version-1|Đã xác thực danh tính/)).toBeNull();
-    expect(fetcher).toHaveBeenCalledExactlyOnceWith(
+    expect(fetcher).toHaveBeenCalledWith(
       'https://api.example.invalid' + profilePath,
       expect.objectContaining({ headers: expect.any(Headers) }),
     );
+    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith(profilePath))).toHaveLength(1);
     expect(new Headers(fetcher.mock.calls[0][1]?.headers).get('Authorization')).toBe(
       'Bearer synthetic-token',
     );
@@ -305,7 +317,7 @@ it.each(['Tenant', 'Staff', 'Owner'])(
     const put = fetcher.mock.calls.find(([, init]) => init?.method === 'PUT')!;
     expect(JSON.parse(put[1]!.body as string)).toEqual({
       fullName: saved.fullName,
-      phone: initial.phone,
+      phone: normalizeLoginPhone(initial.phone!),
       email: initial.email,
       version: initial.version,
     });
@@ -313,7 +325,11 @@ it.each(['Tenant', 'Staff', 'Owner'])(
     view.rerender(<ProfileScreen />);
     await screen.findByText(saved.email!);
     expect(screen.getAllByText(saved.fullName)).toHaveLength(2);
-    expect(fetcher.mock.calls.filter(([, init]) => init?.method !== 'PUT')).toHaveLength(1);
+    expect(
+      fetcher.mock.calls.filter(
+        ([url, init]) => String(url).endsWith(profilePath) && init?.method !== 'PUT',
+      ),
+    ).toHaveLength(1);
     view.rerender(<ProfileEditScreen />);
     await screen.findByDisplayValue(saved.fullName);
     fireEvent.click(screen.getByText('Lưu thay đổi'));
@@ -332,7 +348,10 @@ it('validates name, email and phone before making any PUT', async () => {
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'invalid' } });
   fireEvent.change(screen.getByLabelText('Số điện thoại'), { target: { value: 'abc' } });
   fireEvent.click(screen.getByText('Lưu thay đổi'));
-  expect(screen.getAllByRole('alert')).toHaveLength(3);
+  expect(screen.getAllByRole('alert')).toHaveLength(4);
+  expect(
+    screen.getByText('Vui lòng nhập mật khẩu hiện tại để xác nhận thay đổi liên hệ.'),
+  ).toBeTruthy();
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
 it.each(['email_already_used', 'phone_already_used'])(
@@ -428,12 +447,14 @@ it('prevents duplicate submissions and normalizes accepted phone separators befo
   fireEvent.click(screen.getByText('Lưu thay đổi'));
   await waitFor(() => expect(finish).toBeDefined());
   expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
-  expect(JSON.parse(fetcher.mock.calls.at(-1)![1]!.body as string).phone).toBe(initial.phone);
+  expect(JSON.parse(fetcher.mock.calls.at(-1)![1]!.body as string).phone).toBe(
+    normalizeLoginPhone(initial.phone!),
+  );
   await act(async () => finish(json({ ...initial, version: 'version-2' })));
   expect(s.logout).not.toHaveBeenCalled();
 });
 it.each(['email', 'phone'] as const)(
-  'cleans up sessions and guides sign-in after a successful %s change',
+  'preserves the session after a successful %s change with current-password proof',
   async (field) => {
     const changed = {
       ...initial,
@@ -450,10 +471,14 @@ it.each(['email', 'phone'] as const)(
     fireEvent.change(screen.getByLabelText(field === 'email' ? 'Email' : 'Số điện thoại'), {
       target: { value: changed[field] },
     });
+    fireEvent.change(screen.getByLabelText('Mật khẩu hiện tại để xác nhận'), {
+      target: { value: 'Synthetic!Profile-795' },
+    });
     fireEvent.click(screen.getByText('Lưu thay đổi'));
-    await waitFor(() => expect(s.logout).toHaveBeenCalledOnce());
-    expect(s.replace).toHaveBeenCalledWith('/');
-    expect(getToastSnapshot().toast?.message).toMatch(/đăng nhập lại/);
+    await waitFor(() => expect(s.back).toHaveBeenCalledOnce());
+    expect(s.logout).not.toHaveBeenCalled();
+    expect(s.replace).not.toHaveBeenCalled();
+    expect(getToastSnapshot().toast?.message).toMatch(/Phiên đăng nhập được giữ/);
   },
 );
 it('cancels editing without PUT and confirms logout before clearing the session', async () => {

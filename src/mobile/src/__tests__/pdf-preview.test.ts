@@ -1,5 +1,10 @@
 import { expect, it } from 'vitest';
-import { previewPngUri, validPreviewInfo } from '../features/contracts/pdfPreview';
+import {
+  previewPngUri,
+  validPreviewInfo,
+  previewError,
+  requiresNewDocument,
+} from '../features/contracts/pdfPreview';
 
 it('encodes binary pages exactly without native or browser-only base64 APIs', () => {
   for (const tail of [0, 1, 2, 3, 12345]) {
@@ -11,6 +16,19 @@ it('encodes binary pages exactly without native or browser-only base64 APIs', ()
     );
   }
   expect(() => previewPngUri(new Uint8Array())).toThrow('draft_preview_render_failed');
+});
+it('distinguishes integrity, missing storage, configuration and unknown 409 errors', () => {
+  const integrity = previewError({ status: 409, code: 'contract_document_integrity_failed' });
+  expect(integrity).toContain('Không xác minh được tệp');
+  expect(integrity).not.toContain('phiên bản cũ');
+  expect(requiresNewDocument({ code: 'contract_document_integrity_failed' })).toBe(true);
+  expect(previewError({ status: 404, code: 'draft_document_missing' })).toContain(
+    'không còn trong kho',
+  );
+  expect(requiresNewDocument({ code: 'draft_document_missing' })).toBe(true);
+  expect(previewError({ status: 409, code: 'unrecognized_conflict' })).not.toContain('thay đổi');
+  expect(requiresNewDocument({ status: 409, code: 'unrecognized_conflict' })).toBe(false);
+  expect(previewError({ code: 'draft_configuration_changed_save_again' })).toContain('lưu nháp');
 });
 it('validates file identity, page ordering, count and dimensions', () => {
   expect(

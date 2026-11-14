@@ -8,7 +8,7 @@ import { ResourcePage } from './ResourcePage';
 import { theme } from '../../theme/theme';
 import { createMockRepository } from '../../services/repositories/mockPortalRepository';
 import { AuthProvider } from '../../../../../packages/client-core/src/auth';
-vi.mock('../../services/config', () => ({ isMockMode: true }));
+vi.mock('../../services/config', () => ({ isMockMode: true, apiBaseUrl: '' }));
 beforeEach(() => localStorage.clear());
 function mount() {
   render(

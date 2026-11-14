@@ -20,6 +20,7 @@ import {
   Typography,
 } from '@mui/material';
 import { X } from 'lucide-react';
+import { MoneyField } from '../../components/common/MoneyField';
 import { usePortalData } from '../../hooks/usePortalData';
 import {
   ConfirmDialog,
@@ -211,7 +212,7 @@ export function DataList<T extends { id: string }>({
 export interface FormField {
   key: string;
   label: string;
-  type?: 'number' | 'date' | 'text';
+  type?: 'number' | 'date' | 'text' | 'money';
   options?: { id: string; name: string }[];
   required?: boolean;
   helper?: string;
@@ -278,28 +279,41 @@ export function EditDrawer({
         }}
         sx={{ display: 'grid', gap: 2 }}
       >
-        {fields.map((f) => (
-          <TextField
-            key={f.key}
-            label={f.label}
-            value={values[f.key] || ''}
-            select={!!f.options}
-            type={f.type || 'text'}
-            required={f.required}
-            helperText={f.helper}
-            slotProps={{
-              inputLabel: { shrink: true },
-              htmlInput: { step: f.type === 'number' ? 'any' : undefined },
-            }}
-            onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
-          >
-            {f.options?.map((o) => (
-              <MenuItem key={o.id} value={o.id}>
-                {o.name || '—'}
-              </MenuItem>
-            ))}
-          </TextField>
-        ))}
+        {fields.map((f) =>
+          f.type === 'money' ? (
+            <MoneyField
+              allowDecimal
+              key={f.key}
+              label={f.label}
+              value={values[f.key] || ''}
+              required={f.required}
+              helperText={f.helper}
+              slotProps={{ inputLabel: { shrink: true } }}
+              onValueChange={(raw) => setValues({ ...values, [f.key]: raw })}
+            />
+          ) : (
+            <TextField
+              key={f.key}
+              label={f.label}
+              value={values[f.key] || ''}
+              select={!!f.options}
+              type={f.type || 'text'}
+              required={f.required}
+              helperText={f.helper}
+              slotProps={{
+                inputLabel: { shrink: true },
+                htmlInput: { step: f.type === 'number' ? 'any' : undefined },
+              }}
+              onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+            >
+              {f.options?.map((o) => (
+                <MenuItem key={o.id} value={o.id}>
+                  {o.name || '—'}
+                </MenuItem>
+              ))}
+            </TextField>
+          ),
+        )}
         {children}
         {error && <Alert severity="error">{error}</Alert>}
         <Divider />

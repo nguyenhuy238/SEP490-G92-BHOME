@@ -1,6 +1,9 @@
 // D011/D012 REST contract. Amounts remain decimal strings throughout the clients.
-import { ApiError, requestDiagnostic } from './api';
+import { ApiError, infrastructureError, requestDiagnostic } from './api';
 import { groupVietnameseIntegerDigits } from './localization';
+import type { RoomConfiguration } from './propertySetup';
+import type { Page } from './invoices';
+import type { HoldingPreparation } from './holdingSettings';
 export const contractStates = [
   'Draft',
   'PendingSigning',
@@ -25,6 +28,8 @@ export interface ContractSummary {
   startDate: string;
   endDate: string;
   monthlyRent: string;
+  requiredDeposit?: string;
+  holdingExpiresAt?: string | null;
 }
 export interface ContractPage {
   items: ContractSummary[];
@@ -65,6 +70,7 @@ export interface ContractView {
   holdingContractId: string | null;
   appliedHoldingDeposit: string;
   isDevelopmentDemo?: boolean;
+  initialPaymentRequired?: boolean;
   roomNumber?: string;
   locationName?: string;
   occupants?: { id: string; label: string; representative: boolean }[] | null;
@@ -74,6 +80,21 @@ export interface ContractView {
   convertedMainContractId?: string | null;
   reservedCapacity?: number | null;
   locationId: string;
+  signingMode?: string;
+  snapshotHash?: string;
+  agreedCharges?:
+    | {
+        policyId: string;
+        chargeCode: string;
+        category: number;
+        method: number;
+        rate: string;
+        effectiveFrom: string;
+        effectiveTo: string | null;
+        version: number;
+        name?: string | null;
+      }[]
+    | null;
 }
 export interface ContractTemplate {
   id: string;
@@ -192,6 +213,8 @@ export interface MoveOut {
   evidenceIds: string[];
   inspectionStaffId?: string | null;
   version?: number;
+  ownerConfirmedInspection?: boolean;
+  financialReviewStatus?: 'PendingReview' | 'OwnerReviewed';
 }
 export interface ContractExpiryNotice {
   id: string;
@@ -222,6 +245,9 @@ export interface InspectionPreparation {
   otherTenantsRemain: boolean;
 }
 export interface SettlementSummary {
+  approvedDepositOffsets?: string;
+  chargeReview?: SettlementChargeReview | null;
+  receivables?: SettlementReceivableBalance[] | null;
   obligationReference?: string;
   depositDeductions?: DepositDeductionPlan | null;
   financialReference?: string;
@@ -267,12 +293,194 @@ export interface SettlementSummary {
   reference: string;
   transferVerificationStatus: string;
 }
+export interface HoldingDepositStatus {
+  contractId: string;
+  status: string;
+  required: string;
+  verified: string;
+  remaining: string;
+  requiresManualReview: boolean;
+  priceLockedAt: string | null;
+  priceLockTrigger: string | null;
+  disposition?: {
+    cause: string;
+    status: string;
+    forfeitedAmount: string;
+    refundRequired: string;
+    refunded: string;
+    reserved: string;
+    financialReference: string;
+  } | null;
+}
+export interface SettlementChargeReview {
+  id: string;
+  contractId: string;
+  sourceReference: string;
+  chargeIds: string[];
+  reason: string;
+  approvedAt: string;
+}
+export interface SettlementChargeReviewPreview {
+  reference: string;
+  review: SettlementChargeReview | null;
+  isCurrent: boolean;
+  missingInputs: string[];
+}
 export interface DepositDeductionItem {
   assetId: string | null;
   reasonCode: 'TenantDamage';
   amount: string;
   description: string;
   evidenceIds: string[];
+}
+export interface SettlementReceivable {
+  fixedCharge?: FixedChargeSource | null;
+  utility?: {
+    meterId: string;
+    utilityType: string;
+    billingPeriod: string;
+    baseline: BillableMeterPoint;
+    final: BillableMeterPoint;
+    alreadyBilledQuantity: string;
+    quantity: string;
+    cumulativePricingSnapshot: string;
+    pricePolicyId?: string | null;
+    pricePolicyVersion?: number | null;
+  } | null;
+  id: string;
+  contractId: string;
+  roomId: string;
+  kind: string;
+  sourceKey: string;
+  inspectionId: string;
+  inspectionVersion: number;
+  assetId: string | null;
+  amount: string;
+  description: string;
+  calculationPolicy: string;
+  evidence: { id: string; length: number; sha256: string }[];
+  approvedAt: string;
+}
+export interface FixedChargeSource {
+  residentCount?: number | string | null;
+  personDays?: number | string | null;
+  policyCalculatedAmount?: string | null;
+  approvedReduction?: string;
+  approvedAdjustmentIds?: string[] | null;
+  billingPeriod: string;
+  chargeCode: string;
+  category: string;
+  rate: string;
+  partialMonth: number;
+  rounding: number;
+  occupiedDays: string | number;
+  periodDays: string | number;
+  cumulativePricedAmount: string;
+  alreadyPricedAmount: string;
+}
+export interface FinalFixedChargePreview {
+  chargeCode: string;
+  name: string;
+  billingPeriod: string;
+  reference: string;
+  amount: string | null;
+  calculation: FixedChargeSource | null;
+  existingReceivableId: string | null;
+  missingInputs: string[];
+}
+export interface SettlementReceivableBalance {
+  charge: SettlementReceivable;
+  allocated: string;
+  outstanding: string;
+  status: 'Unpaid' | 'PartiallyPaid' | 'Paid';
+}
+export interface DepositOffsetApproval {
+  id: string;
+  receivableId: string | null;
+  invoiceId: string | null;
+  sourceDepositContractId: string;
+  amount: string;
+  reason: string;
+  approvedAt: string;
+  allocationId: string;
+}
+export interface SettlementReceivables {
+  payers?: { userId: string; displayLabel: string }[] | null;
+  invoices?:
+    | {
+        id: string;
+        billingPeriod: string;
+        payable: string;
+        allocated: string;
+        outstanding: string;
+      }[]
+    | null;
+  contractId: string;
+  roomId: string;
+  roomNumber: string;
+  reference: string;
+  availableDeposit: string;
+  receivables: SettlementReceivableBalance[];
+  offsets: DepositOffsetApproval[];
+}
+export interface DamageChargeInput {
+  expectedReference: string;
+  inspectionId: string;
+  inspectionVersion: number;
+  assetId: string | null;
+  amount: string;
+  description: string;
+  evidenceIds: string[];
+  humanConfirmed: boolean;
+}
+export interface DepositOffsetInput {
+  expectedReference: string;
+  receivableId: string | null;
+  invoiceId: string | null;
+  amount: string;
+  reason: string;
+  humanConfirmed: boolean;
+}
+export interface SettlementTransferInstructions {
+  availability: string;
+  bankIdentifier: string | null;
+  accountNumber: string | null;
+  accountHolder: string | null;
+  outstandingAmount: string;
+  transferReference: string;
+  qrImageDataUri: string | null;
+  isDevelopmentDemo: boolean;
+}
+export interface BillableMeterPoint {
+  readingId: string;
+  evidenceId: string;
+  date: string;
+  value: string;
+  sourceKind: string;
+  sourceId: string;
+}
+export interface FinalUtilityPreview {
+  pricePolicyId?: string | null;
+  pricePolicyVersion?: number | null;
+  contractId: string;
+  utilityType: 'Electricity' | 'Water';
+  billingPeriod: string;
+  reference: string;
+  baseline: BillableMeterPoint | null;
+  final: BillableMeterPoint | null;
+  alreadyBilledQuantity: string;
+  quantity: string | null;
+  amount: string | null;
+  calculationSnapshot: string;
+  existingReceivableId: string | null;
+  missingInputs: string[];
+}
+export interface SettlementBankResult {
+  transferId: string;
+  status: string;
+  reason: string;
+  allocatedAmount: string;
+  unallocatedAmount: string;
 }
 export interface DepositDeductionPlan {
   id: string;
@@ -337,7 +545,48 @@ export type ContractRequest = <T>(
 const root = '/api/v1/contracts';
 const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
+  const holdingRoomReadiness = (id: string, signal?: AbortSignal, effectiveOn?: string) =>
+    request<{
+      roomId: string;
+      purpose: string;
+      status: string;
+      isReady: boolean;
+      blockers: { code: string; message: string }[];
+      unverifiedConditions: { code: string; message: string }[];
+    }>(
+      `/api/v1/rooms/${encodeURIComponent(id)}/readiness?purpose=Holding${effectiveOn ? '&effectiveOn=' + encodeURIComponent(effectiveOn) : ''}`,
+      { signal },
+    );
   return {
+    holdingRoomReadiness,
+    createHoldingResident: (roomId: string, displayLabel: string, email: string) =>
+      request<{ id: string }>('/api/v1/capture/residents', {
+        method: 'POST',
+        body: JSON.stringify({
+          roomId,
+          displayLabel: displayLabel.trim(),
+          residentType: 0,
+          email: email.trim(),
+        }),
+      }),
+    holdingRooms: (page = 1, signal?: AbortSignal) =>
+      request<Page<RoomConfiguration>>(
+        `/api/v1/rooms?roomStatus=Available&page=${page}&pageSize=100`,
+        { signal },
+      ),
+    holdingRoomReady: async (id: string, signal?: AbortSignal, effectiveOn?: string) => {
+      const result = await holdingRoomReadiness(id, signal, effectiveOn);
+      return (
+        result?.roomId === id &&
+        result.purpose === 'Holding' &&
+        result.status === 'Ready' &&
+        result.isReady === true &&
+        Array.isArray(result.blockers) &&
+        result.blockers.length === 0 &&
+        Array.isArray(result.unverifiedConditions) &&
+        result.unverifiedConditions.length === 0
+      );
+    },
     /** The authenticated transport, so related clients (digital signing) share auth and refresh. */
     transport: request,
     expiryReminders: (signal?: AbortSignal) =>
@@ -348,6 +597,90 @@ export function contractClient(request: ContractRequest) {
       request<InspectionPreparation>(`${root}/${id}/move-out/inspection-preparation`, { signal }),
     settlementSummary: (id: string, signal?: AbortSignal) =>
       request<SettlementSummary>(`${root}/${id}/move-out/settlement-summary`, { signal }),
+    settlementReceivables: (id: string, signal?: AbortSignal) =>
+      request<SettlementReceivables>(`${root}/${id}/move-out/receivables`, { signal }),
+    settlementChargeReview: (id: string, signal?: AbortSignal) =>
+      request<SettlementChargeReviewPreview>(`${root}/${id}/move-out/receivables/charge-review`, {
+        signal,
+      }),
+    approveSettlementChargeReview: (
+      id: string,
+      body: { expectedReference: string; reason: string; allChargesConfirmed: boolean },
+      key: string,
+    ) =>
+      request<SettlementChargeReview>(`${root}/${id}/move-out/receivables/charge-review`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
+    finalUtilities: (id: string, signal?: AbortSignal) =>
+      request<FinalUtilityPreview[]>(`${root}/${id}/move-out/receivables/final-utilities`, {
+        signal,
+      }),
+    finalFixedCharges: (id: string, signal?: AbortSignal) =>
+      request<FinalFixedChargePreview[]>(`${root}/${id}/move-out/receivables/final-fixed-charges`, {
+        signal,
+      }),
+    approveFinalFixedCharge: (
+      id: string,
+      body: {
+        chargeCode: string;
+        expectedReference: string;
+        policyAppliesToSignedTermsConfirmed: boolean;
+      },
+      key: string,
+    ) =>
+      request<SettlementReceivable>(`${root}/${id}/move-out/receivables/final-fixed-charges`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
+    approveFinalUtility: (
+      id: string,
+      body: { utilityType: number; expectedReference: string; humanConfirmed: boolean },
+      key: string,
+    ) =>
+      request<SettlementReceivable>(`${root}/${id}/move-out/receivables/final-utilities`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
+    settlementTransferInstructions: (id: string, chargeId: string, signal?: AbortSignal) =>
+      request<SettlementTransferInstructions>(
+        `${root}/${id}/move-out/receivables/${chargeId}/transfer-instructions`,
+        { signal },
+      ),
+    allocateSettlementBank: (
+      id: string,
+      chargeId: string,
+      body: {
+        expectedReference: string;
+        transferId: string;
+        paidByUserId: string | null;
+        humanConfirmed: boolean;
+      },
+      key: string,
+    ) =>
+      request<SettlementBankResult>(
+        `${root}/${id}/move-out/receivables/${chargeId}/bank-allocations`,
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          body: JSON.stringify(body),
+        },
+      ),
+    approveDamageCharge: (id: string, body: DamageChargeInput, key: string) =>
+      request<SettlementReceivable>(`${root}/${id}/move-out/receivables/damage`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
+    approveDepositOffset: (id: string, body: DepositOffsetInput, key: string) =>
+      request<DepositOffsetApproval>(`${root}/${id}/move-out/receivables/deposit-offsets`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
     approveDepositDeductions: (
       id: string,
       body: {
@@ -425,6 +758,7 @@ export function contractClient(request: ContractRequest) {
             typeof item.id !== 'string' ||
             typeof item.roomNumber !== 'string' ||
             typeof item.locationName !== 'string' ||
+            typeof item.kind !== 'string' ||
             typeof item.status !== 'string' ||
             typeof item.startDate !== 'string' ||
             typeof item.endDate !== 'string' ||
@@ -436,6 +770,11 @@ export function contractClient(request: ContractRequest) {
     },
     configuration: (signal?: AbortSignal) =>
       request<ContractConfiguration>(root + '/configuration', { signal }),
+    holdingPreparation: (roomId: string, signal?: AbortSignal) =>
+      request<HoldingPreparation>(
+        `${root}/holdings/preparation?roomId=${encodeURIComponent(roomId)}`,
+        { signal },
+      ),
     handover: (id: string, signal?: AbortSignal) =>
       request<HandoverView>(root + '/' + id + '/handover', { signal }),
     handoverHistory: (id: string, signal?: AbortSignal) =>
@@ -524,11 +863,14 @@ export function contractClient(request: ContractRequest) {
     meterTasks: (signal?: AbortSignal) =>
       request<FinalMeterTask[]>('/api/v1/capture/meter-tasks', { signal }),
     mutate: <T>(id: string | null, operation: string, body: unknown, key: string) =>
-      request<T>(root + (id ? `/${id}/${operation}` : ''), {
-        method: 'POST',
-        headers: { 'Idempotency-Key': key },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      }),
+      request<T>(
+        root + (id ? `/${id}/${operation}` : operation === 'holdings' ? '/holdings' : ''),
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        },
+      ),
     document: (id: string, signal?: AbortSignal) =>
       request<Blob>(
         `${root}/${id}/document`,
@@ -574,6 +916,12 @@ export function certificateStatus(certificate: Certificate, now = Date.now()) {
 export const canUseCertificate = (certificate: Certificate) =>
   certificateStatus(certificate) === 'Có thể dùng';
 export const labels: Record<string, string> = {
+  holding_settings_required:
+    'Cơ sở chưa có cấu hình giữ chỗ. Owner cần lưu cấu hình trên Owner Web.',
+  holding_settings_changed_reload: 'Cấu hình giữ chỗ đã thay đổi. Hãy tải lại trước khi lưu.',
+  holding_configuration_changed_reload:
+    'Giá phòng hoặc cấu hình giữ chỗ đã thay đổi. Hãy tải lại trước khi tạo hợp đồng.',
+  invalid_holding_configuration: 'Kiểm tra số tháng giữ chỗ, hệ số tiền cọc và điều khoản.',
   Main: 'Hợp đồng thuê',
   Renewal: 'Gia hạn',
   Draft: 'Bản nháp',
@@ -584,6 +932,11 @@ export const labels: Record<string, string> = {
   Applied: 'Đã áp dụng',
   holding_owner_approval_required: 'Cần Owner phê duyệt hợp đồng giữ chỗ.',
   holding_deposit_insufficient: 'Cọc giữ chỗ đã xác minh chưa đủ.',
+  main_deposit_excess_requires_manual_review:
+    'Giao dịch vượt phần cọc còn thiếu. Hãy đối chiếu toàn bộ receipt ngân hàng và phần dư phải hoàn; không sửa số tiền sao kê để ghi thành cọc.',
+  holding_deposit_excess_requires_manual_review:
+    'Giao dịch vượt phần cọc giữ chỗ còn thiếu. Cần đối chiếu receipt và phần dư phải hoàn riêng.',
+  deposit_not_payable: 'Hợp đồng này không còn nhận thêm tiền cọc.',
   holding_expired: 'Hợp đồng giữ chỗ đã hết hạn.',
   HoldingDraftCreated: 'Lập bản nháp giữ chỗ',
   HoldingApproved: 'Owner phê duyệt giữ chỗ',
@@ -672,12 +1025,19 @@ export const labels: Record<string, string> = {
     'Nhà cung cấp không còn trả về chứng thư đã chọn. Hãy kiểm tra và khai báo lại chứng thư của bạn.',
   contract_not_in_effective_period: 'Chưa đến hoặc đã qua kỳ hiệu lực.',
   verified_signature_evidence_required: 'Cần đủ bằng chứng ký đã xác minh của Owner và Tenant.',
+  internal_acceptance_evidence_required:
+    'Cần chấp thuận đúng PDF bằng OTP của người đại diện và xác nhận của Owner.',
+  resident_email_required: 'Mỗi người ở cần có email riêng trước khi kích hoạt.',
+  verified_residents_with_email_required:
+    'Cần xác minh hồ sơ và email riêng hợp lệ cho tất cả người ở.',
+  internal_signing_flow_required: 'Hợp đồng này dùng lời mời ký nội bộ qua OTP.',
+  signing_otp_key_not_configured: 'Dịch vụ xác nhận OTP chưa được cấu hình.',
   verified_residents_required: 'Cần xác minh tất cả người ở và người đại diện.',
   invalid_contract_signers: 'Tài khoản bên ký chưa hợp lệ.',
   security_deposit_insufficient: 'Tiền cọc đã xác minh chưa đủ.',
   room_contract_conflict: 'Phòng có hợp đồng đang xung đột.',
   financial_ledger_and_deposit_policy:
-    'Chờ đối chiếu nghĩa vụ, cọc và giao dịch thực tế; chưa đủ điều kiện giải phóng phòng.',
+    'Chờ đối chiếu nghĩa vụ, cọc và giao dịch thực tế; trạng thái bàn giao được theo dõi riêng.',
   contract_not_ready_for_activation:
     'Chưa đủ điều kiện kích hoạt. Hãy tải lại điều kiện từ máy chủ.',
   bank_transaction_already_allocated: 'Giao dịch ngân hàng đã được phân bổ. Hãy kiểm tra sao kê.',
@@ -693,6 +1053,10 @@ export const labels: Record<string, string> = {
   deposit_deduction_review_changed:
     'Số liệu hoặc phiên bản quyết định đã đổi. Tải lại và xem xét trước khi duyệt.',
   deposit_deduction_not_ready: 'Chưa đủ điều kiện khấu trừ hoặc đã có khoản hoàn giữ chỗ/hoàn tất.',
+  settlement_receivables_replace_legacy_deductions:
+    'Luồng khấu trừ cũ chỉ đọc. Ghi thiệt hại thành khoản phải thu rồi duyệt cấn trừ cọc riêng.',
+  receipt_payer_already_external:
+    'Giao dịch có người thực trả bên ngoài đã xác minh; để người trả Tenant trống và xem hồ sơ payer của giao dịch.',
   deposit_deduction_exceeds_available:
     'Tổng khấu trừ vượt cọc còn khả dụng. Cần xử lý phần nghĩa vụ còn thiếu.',
   invalid_deposit_deduction_item:
@@ -704,15 +1068,43 @@ export const labels: Record<string, string> = {
     'Chứng từ thiệt hại không khớp bản đã duyệt. Cần Owner đối chiếu lại.',
   settlement_review_changed:
     'Số liệu quyết toán đã thay đổi. Tải lại để đối chiếu và xác nhận phiên bản mới.',
+  final_utility_inputs_required:
+    'Còn thiếu mốc đã tính tiền, chỉ số chốt, ảnh hoặc chính sách giá hợp lệ. Bổ sung rồi xem lại trước khi duyệt.',
+  settlement_source_already_charged:
+    'Nguồn thiệt hại này đã có khoản phải thu được duyệt. Kiểm tra sổ hiện có để tránh tính hai lần.',
+  settlement_idempotency_conflict:
+    'Mã thao tác đã được dùng với nội dung khác. Kiểm tra kết quả trước khi tạo quyết định mới.',
+  settlement_charge_not_ready:
+    'Cần biên bản đã được Owner duyệt và nhóm người thuê đủ điều kiện trước khi ghi nhận khoản phải thu.',
+  settlement_evidence_integrity_failed:
+    'Ảnh nguồn không còn khớp với bản đã duyệt. Cần đối chiếu lại trước khi ghi giảm nợ.',
+  deposit_offset_not_available:
+    'Cọc còn dùng không đủ hoặc đang có khoản giữ cho hoàn tiền. Tải lại số dư để kiểm tra.',
+  deposit_offset_target_invalid:
+    'Khoản đích hoặc số tiền cấn trừ không còn hợp lệ. Tải lại số dư nghĩa vụ.',
+  payer_not_settlement_recipient:
+    'Tài khoản người trả chưa thuộc nhóm người thuê của khoản phải thu. Kiểm tra lại người thực chuyển tiền.',
   move_out_version_changed: 'Lịch / biên bản đã thay đổi. Tải lại trước khi thực hiện.',
   inspection_changed_or_reviewed:
     'Biên bản đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',
   move_out_not_settled: 'Chưa thể đóng hợp đồng: kiểm tra quyết toán và ngày biên bản.',
+  move_out_handover_required: 'Cần biên bản đã kiểm tra và ngày bàn giao thực tế hợp lệ.',
+  owner_confirmed_inspection_required:
+    'Owner cần duyệt biên bản kiểm tra và chỉ số chốt trước khi bàn giao.',
+  inspection_snapshot_invalid: 'Biên bản hoặc chỉ số chốt đã thay đổi; cần kiểm tra lại.',
   signer_already_requested: 'Đã có yêu cầu ký. Hãy kiểm tra trạng thái trước khi thử lại.',
   previous_signature_pending: 'Bên ký trước chưa hoàn tất. Hãy chờ xác minh.',
   inspection_evidence_not_available: 'Ảnh không thuộc người lập biên bản hoặc đã được sử dụng.',
   inspection_upload_not_allowed: 'Chưa được tải ảnh hoặc đã đủ 5 ảnh.',
   invalid_contract_period_or_residents: 'Kiểm tra kỳ thuê, người đại diện và danh sách người ở.',
+  contract_price_snapshot_missing:
+    'Hợp đồng chưa có biểu phí đã chốt. Cần đối chiếu điều khoản gốc trước khi tiếp tục.',
+  contract_price_snapshot_invalid:
+    'Biểu phí đã chốt không hợp lệ. Cần đối chiếu hợp đồng trước khi tiếp tục.',
+  contract_utility_profile_requires_review:
+    'Phòng sử dụng biểu giá điện nước nâng cao; cần xác nhận biểu giá hợp đồng trước khi ký.',
+  room_contract_price_conflict:
+    'Các hợp đồng cùng phòng có biểu phí không đồng nhất trong kỳ thuê. Cần đối chiếu trước khi tiếp tục.',
 };
 export const text = (value: string) =>
   labels[value] ?? 'Trạng thái hoặc điều kiện cần kiểm tra với Owner';
@@ -729,6 +1121,8 @@ export function contractError(error: unknown): string {
   } | null;
   const code = e?.code ?? e?.problem?.code;
   const diagnostic = e ? requestDiagnostic(e) : '';
+  const infrastructure = infrastructureError(error);
+  if (infrastructure) return infrastructure + diagnostic;
   if (code === 'request_timeout')
     return (
       'Máy chủ không phản hồi trong 15 giây. Hãy tải lại để kiểm tra trước khi gửi lại.' +
@@ -758,8 +1152,9 @@ export function contractError(error: unknown): string {
   );
 }
 export function formatContractMoney(value: string) {
-  if (!/^\d+$/.test(value)) return '—';
-  return groupVietnameseIntegerDigits(value) + '\u00a0₫';
+  const whole = /^(\d+)(?:\.0+)?$/.exec(value)?.[1];
+  if (whole === undefined) return '—';
+  return groupVietnameseIntegerDigits(whole) + '\u00a0₫';
 }
 export function dateOnly(value: string): string {
   const iso = /^\d{2}\/\d{2}\/\d{4}$/.test(value) ? value.split('/').reverse().join('-') : value;
@@ -845,7 +1240,7 @@ export function contractActions(
   actorId: string,
   signingMethods?: readonly string[],
 ): ContractAction[] {
-  if (c.onboardingDraft) return [];
+  if (c.kind === 'Main' && c.onboardingDraft) return [];
   const owner = role === 'Owner',
     staff = role === 'Staff',
     tenant = role === 'Tenant' && c.tenantUserId === actorId;
@@ -864,6 +1259,7 @@ export function contractActions(
   const result: ContractAction[] = [];
   if (
     signer &&
+    c.signingMode !== 'INTERNAL_OTP_DRAWN' &&
     (c.kind !== 'Holding' || !!c.approvedAt) &&
     ['Draft', 'PendingSigning'].includes(c.status) &&
     !mine.some((s) => s.status !== 'Failed') &&
@@ -911,7 +1307,8 @@ export function contractActions(
   if (
     owner &&
     !c.previousContractId &&
-    !['Terminated', 'Superseded', 'Cancelled'].includes(c.status)
+    ['Main', 'Holding'].includes(c.kind) &&
+    !['Terminated', 'Superseded', 'Cancelled', 'Expired', 'Converted', 'Applied'].includes(c.status)
   )
     result.push(
       action(
@@ -927,16 +1324,19 @@ export function contractActions(
             max: 2000,
           },
         ],
-        'Chỉ xác minh giao dịch đã đối chiếu sao kê ngân hàng. Ảnh chuyển khoản riêng lẻ chưa đủ chứng minh tiền đã về.',
+        'Chỉ xác minh giao dịch đã đối chiếu sao kê, không vượt phần cọc còn thiếu sau Holding đã áp dụng. Giao dịch có phần dư phải đối chiếu receipt và khoản hoàn riêng; không sửa số tiền sao kê. Ảnh chuyển khoản riêng lẻ chưa đủ chứng minh tiền đã về.',
       ),
     );
   if (c.kind === 'Holding') {
     const expired = !!c.holdingExpiresAt && Date.parse(c.holdingExpiresAt) <= Date.now();
     if (owner && c.status === 'Draft' && !c.approvedAt && !expired)
       result.push(
-        action('holding-approval', 'Duyệt hợp đồng giữ chỗ', [
-          { name: 'reason', label: 'Căn cứ phê duyệt', type: 'multiline', max: 2000 },
-        ]),
+        action(
+          'holding-approval',
+          'Phê duyệt hợp đồng giữ chỗ',
+          [{ name: 'reason', label: 'Căn cứ phê duyệt', type: 'multiline', max: 2000 }],
+          'Kiểm tra phòng, thời hạn, giá và tiền giữ chỗ trước khi phê duyệt. Phê duyệt chưa đồng nghĩa phòng đã được giữ.',
+        ),
       );
     if (owner && waiting && c.approvedAt && !expired)
       result.push(
@@ -944,20 +1344,32 @@ export function contractActions(
           'holding-activation',
           'Kích hoạt giữ chỗ',
           [],
-          'Máy chủ yêu cầu đủ chữ ký và cọc ngân hàng đã xác minh trước khi giữ phòng.',
+          'Chỉ kích hoạt sau khi máy chủ xác nhận đủ phê duyệt, chữ ký, tiền giữ chỗ và phòng hợp lệ.',
         ),
       );
     if (owner && ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status))
       result.push(
-        action('holding-cancellation', 'Hủy giữ chỗ', [
-          { name: 'reason', label: 'Lý do hủy', type: 'multiline', max: 2000 },
-        ]),
+        action(
+          'holding-cancellation',
+          'Hủy hợp đồng giữ chỗ',
+          [{ name: 'reason', label: 'Lý do hủy', type: 'multiline', max: 2000 }],
+          'Chọn rõ nguyên nhân: Tenant tự hủy thì mất cọc; Owner không cung cấp được phòng phải hoàn bên ngoài và ghi nhận bằng chứng thực chi. Lịch sử được giữ lại.',
+        ),
       );
     if ((owner || staff) && active && !expired && !c.convertedMainContractId)
       result.push(
-        action('holding-conversion', 'Chuyển sang hợp đồng thuê chính', [
-          { name: 'requiredSecurityDeposit', label: 'Cọc hợp đồng thuê (VND)', type: 'money' },
-        ]),
+        action(
+          'holding-conversion',
+          'Chuyển sang hợp đồng thuê chính',
+          [
+            {
+              name: 'requiredSecurityDeposit',
+              label: 'Tiền cọc thuê yêu cầu (VND)',
+              type: 'money',
+            },
+          ],
+          'Tạo bản nháp hợp đồng thuê chính và áp dụng tiền giữ chỗ đã xác minh; chưa tự kích hoạt hợp đồng thuê.',
+        ),
       );
     return result;
   }
@@ -992,7 +1404,7 @@ export function contractActions(
         'Owner cần duyệt yêu cầu. Gửi yêu cầu chưa kết thúc hợp đồng hoặc giải phóng phòng.',
       ),
     );
-  if (active && !m && owner)
+  if (active && !m && owner && c.kind !== 'Holding')
     result.push(action('expiry-move-out', 'Lập yêu cầu trả phòng khi hết hạn', proposedFields));
   if (owner && m?.status === 'Requested')
     result.push(action('move-out/approve', 'Duyệt yêu cầu trả phòng'));
@@ -1020,7 +1432,7 @@ export function contractActions(
         'Cần đến ngày trả phòng, đủ ảnh hiện trạng và chỉ số chốt đúng hợp đồng/ngày kiểm tra.',
       ),
     );
-  if (owner && m && ['Inspected', 'PendingSettlement', 'Settled'].includes(m.status))
+  if (owner && m && ['Inspected', 'PendingSettlement', 'Settled', 'Completed'].includes(m.status))
     result.push(
       action(
         'move-out/settlement',
@@ -1036,13 +1448,19 @@ export function contractActions(
         'Lưu quyết định vào lịch sử. Chỉ đánh dấu đã quyết toán khi máy chủ đối chiếu đầy đủ nghĩa vụ, cọc và giao dịch thực tế.',
       ),
     );
-  if (owner && m?.status === 'Settled')
+  if (
+    owner &&
+    active &&
+    m &&
+    ['Inspected', 'PendingSettlement', 'Settled'].includes(m.status) &&
+    (m.ownerConfirmedInspection || m.status === 'Settled')
+  )
     result.push(
       action(
         'move-out/complete',
         'Hoàn tất trả phòng',
         [{ name: 'actualEndDate', label: 'Ngày kết thúc thực tế', type: 'date' }],
-        'Máy chủ kiểm tra lại quyết toán trước khi kết thúc hợp đồng và giải phóng phòng. Ngày phải trùng ngày lập biên bản.',
+        'Xác nhận hoàn tất bàn giao vật lý theo biên bản Owner đã duyệt. Nợ, cọc và hoàn tiền tiếp tục được theo dõi riêng. Ngày phải trùng ngày lập biên bản.',
       ),
     );
   return result;
@@ -1072,6 +1490,12 @@ export function actionPayload(
   }
   if (a.operation === 'renewals' && String(body.endDate) <= c.endDate)
     throw new Error('Ngày hết hạn mới phải sau ngày hết hạn hiện tại.');
+  if (a.operation === 'holding-cancellation') {
+    if (!['0', '1'].includes(values.cause) || values.humanConfirmed !== 'true')
+      throw new Error('Chọn nguyên nhân hủy và xác nhận đã đối chiếu trách nhiệm về cọc.');
+    body.cause = Number(values.cause);
+    body.humanConfirmed = true;
+  }
   if (a.operation === 'termination-requests' || a.operation === 'expiry-move-out') {
     if (String(body.proposedDate) < businessToday())
       throw new Error('Ngày trả phòng không được trong quá khứ.');
@@ -1087,7 +1511,11 @@ export function actionPayload(
   }
   return body;
 }
-function draftCore(values: Record<string, string>, residentIds: string[]) {
+function draftCore(
+  values: Record<string, string>,
+  residentIds: string[],
+  tenantUserId: string | null = guid(values.tenantUserId ?? ''),
+) {
   const startDate = dateOnly(values.startDate ?? ''),
     endDate = dateOnly(values.endDate ?? '');
   if (endDate <= startDate) throw new Error('Ngày hết hạn phải sau ngày bắt đầu.');
@@ -1100,7 +1528,7 @@ function draftCore(values: Record<string, string>, residentIds: string[]) {
   return {
     roomId: guid(values.roomId ?? ''),
     ownerSignerId: guid(values.ownerSignerId ?? ''),
-    tenantUserId: guid(values.tenantUserId ?? ''),
+    tenantUserId,
     representativeResidentId: guid(values.representativeResidentId),
     residentIds: residentIds.map(guid),
     startDate,
@@ -1127,7 +1555,7 @@ export function holdingDraftPayload(values: Record<string, string>, residentIds:
   )
     throw new Error('Kiểm tra số người giữ chỗ và thời điểm hết hạn.');
   return {
-    ...draftCore(values, residentIds),
+    ...draftCore(values, residentIds, values.tenantUserId ? guid(values.tenantUserId) : null),
     holdingDeposit: vnd(values.requiredDeposit ?? ''),
     expiresAt: expires.toISOString(),
     reservedCapacity: capacity,

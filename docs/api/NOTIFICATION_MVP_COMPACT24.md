@@ -141,7 +141,8 @@ hóa đơn, hợp đồng hoặc thanh toán**. Khi Jobs.Enabled=true, scheduler
 worker riêng nhường lại để không chạy hai lịch độc lập. Dedup/lease vẫn bảo vệ nhiều API instance.
 
 Sandbox chỉ dùng được ở Development/Testing; receipt `sandbox:*` không chứng minh email/push đã đến thiết bị.
-Production mặc định Unconfigured/tắt. Có adapter SMTP chuẩn .NET cho EMAIL, TLS mặc định bật.
+Production mặc định Unconfigured/tắt. EMAIL hiện dùng MailKit với STARTTLS bắt buộc;
+cấu hình, retry và endpoint kiểm tra được cập nhật tại [Gmail SMTP](GMAIL_SMTP.md).
 PUSH production chưa chọn Firebase/Expo; thay INotificationChannelProvider bằng adapter được duyệt,
 còn MVP dùng sandbox/mock như Q7. Không gọi provider thật khi chưa cấu hình.
 
@@ -156,8 +157,9 @@ NotificationChannels__RetrySeconds=30
 NotificationChannels__TimeoutSeconds=15
 ```
 
-SMTP dùng Mode=Smtp và SmtpHost/SmtpPort/SmtpUseTls/SmtpUser/SmtpPassword/FromAddress qua
-environment/user-secrets; không commit credential. `.env.example` chỉ có placeholder.
+SMTP mới dùng Email.Enabled và Email:AppPassword qua environment/user-secrets; mapping cấu hình
+Mode=Smtp/SmtpHost/SmtpPort/SmtpUseTls/SmtpUser/SmtpPassword/FromAddress cũ vẫn được giữ.
+Không commit credential. `.env.example` chỉ có giá trị không bí mật.
 Staff lịch sử và production provider là giới hạn vận hành cần giữ rõ khi tích hợp UI.
 
 ## Kiểm thử

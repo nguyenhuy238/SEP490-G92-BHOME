@@ -136,3 +136,31 @@ máy chủ static tạm cho kiểm tra trình duyệt, không tuyên bố đã k
 
 Không có migration mới. Không sửa migration `20261029170352_ContractActivationLifecycle.cs`.
 Không commit, push hoặc merge.
+
+## Cập nhật Owner Mobile ngày 12/11/2026
+
+Phạm vi yêu cầu được đối chiếu với BF-02, BF-03/BF-04, BF-06, BF-07;
+UC-08..19, UC-22..30; GBR-01..04, GBR-10..12 và GBR-18. Backend và các
+DTO hiện hữu tiếp tục là nguồn sự thật; đợt này không thêm endpoint, migration
+hoặc quy tắc tài chính.
+
+- Action Center hiển thị hồ sơ ưu tiên và mở thẳng công việc chờ nghiệm thu,
+  phương án/chờ nghiệm thu Work Order, hợp đồng chờ ký hoặc kích hoạt.
+- Owner Mobile được thực hiện các quyết định Incident/Work Order mà backend đã
+  cấp quyền: review, giao/xử lý trực tiếp, duyệt phương án, nghiệm thu, yêu cầu
+  làm lại và quyết định chi phí khẩn cấp. Mọi mutation vẫn gửi version và qua
+  kiểm tra quyền của API.
+- Main Tenancy Contract cho phép Owner ký, đồng bộ/khôi phục trạng thái ký và
+  kích hoạt khi readiness từ backend cho phép. Soạn hợp đồng và toàn bộ quyết
+  định Holding Contract vẫn ở Owner Web.
+- Điều chỉnh hóa đơn, đối soát/phân bổ thanh toán, hoàn tiền và soạn thông báo
+  vẫn là màn theo dõi trên Mobile; quyết định tiền và phát hành nội dung vẫn ở
+  Owner Web.
+- Bỏ lối vào `/setup`, giao diện Owner mẫu cũ và tùy chọn thông báo giả khỏi
+  hành trình Owner. Danh sách/chi tiết hợp đồng và Action Center tự đồng bộ khi
+  quay lại màn hình; nút tải lại thường trực được bỏ, chỉ giữ retry khi có lỗi
+  hoặc thao tác đồng bộ nghiệp vụ cụ thể.
+
+Kiểm tra thực thi cho thay đổi này: Mobile Vitest 76 file / 885 test PASS;
+TypeScript, ESLint và `git diff --check` PASS. Chưa chạy E2E trên thiết bị Android
+thật trong đợt này.

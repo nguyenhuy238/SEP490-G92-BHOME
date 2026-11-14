@@ -3,6 +3,7 @@ import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
 import { isMockMode } from '../../../services/config';
 import { demoAuth, useDemoSession } from '../../../services/demoAuth';
+import { invalidCredentialsMessage } from '../../../../../../packages/client-core/src/loginValidation';
 
 // Reuse the confirmed auth contract and cookie/JWT transport from client-core.
 // No credentials or token copies are written to localStorage/sessionStorage.
@@ -33,7 +34,7 @@ export function useOwnerLogin() {
       if (!(failure instanceof ApiError)) {
         setError('Không thể kết nối máy chủ. Vui lòng kiểm tra kết nối và thử lại.');
       } else if (failure.status === 401) {
-        setError('Email hoặc mật khẩu không đúng. Vui lòng kiểm tra và thử lại.');
+        setError(invalidCredentialsMessage);
       } else if (failure.status === 403) {
         setError('Yêu cầu đăng nhập không được phép từ nguồn truy cập này.');
       } else if (failure.status === 429) {

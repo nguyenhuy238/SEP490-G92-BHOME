@@ -19,6 +19,7 @@ public interface ISetupWorkspaceStore
     Task<Guid?> RoomLocationAsync(Guid roomId, CancellationToken t);
     Task<IReadOnlyList<Guid>> RoomsAsync(Guid locationId, CancellationToken t);
     Task<bool> EligibleRoomAsync(Guid roomId, CancellationToken t);
+    Task<string?> RoomConfigurationLockReasonAsync(Guid roomId, CancellationToken t);
     Task<Asset?> AssetAsync(Guid id, CancellationToken t);
     Task SaveAssetAsync(Asset asset, Guid actor, string reason, CancellationToken t);
     Task<IReadOnlyList<Asset>> AssetsAsync(Guid roomId, CancellationToken t);
@@ -34,7 +35,8 @@ public interface ISetupWorkspaceStore
     Task<(Guid LocationId, UtilityType Type)?> MeterScopeAsync(Guid meterId, CancellationToken t);
 }
 public sealed record AssetTemplateItem(Guid Id, string Name, string Category, string TrackingMode, int Quantity);
-public sealed record AssetTemplateWrite(Guid LocationId, string Name, AssetTemplateItem[] Items, int ExpectedVersion = 0);
+public sealed record AssetTemplateWrite(Guid LocationId, string Name, AssetTemplateItem[] Items, int ExpectedVersion = 0,
+    bool Scoped = false, Guid? ScopeRoomId = null);
 public sealed record TemplatePublish(int ExpectedVersion);
 public sealed record AssetTemplateAssignment(Guid? TemplateId, int ExpectedVersion = 0);
 public sealed record DesiredAssets(Guid TemplateId, int TemplateVersion, Guid RoomId, AssetTemplateItem[] Items, string Status);

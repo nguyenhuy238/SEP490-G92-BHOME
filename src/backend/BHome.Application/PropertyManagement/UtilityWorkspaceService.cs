@@ -4,7 +4,7 @@ using BHome.Domain.Billing;
 
 namespace BHome.Application.PropertyManagement;
 
-public sealed partial class UtilityWorkspaceService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access) : SetupWorkspaceService(store, user, access), IUtilityBilling
+public sealed partial class UtilityWorkspaceService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access, IPropertyRepository properties) : SetupWorkspaceService(store, user, access), IUtilityBilling
 {
     private static void Period(DateOnly period) { if (period == default || period.Day != 1) throw new PropertyException(400, "billing_period_required"); }
     private static void Range(DateOnly from, DateOnly? to) { if (from == default || to < from) throw new PropertyException(400, "invalid_effective_period"); }
@@ -98,6 +98,7 @@ public sealed partial class UtilityWorkspaceService(ISetupWorkspaceStore store, 
         if (tariff.LocationId != input.LocationId || Read<UtilityTariffWrite>(tariff).UtilityType != input.UtilityType) throw new PropertyException(400, "tariff_scope_invalid");
         return await Store.TransactionAsync(input.LocationId, async () =>
         {
+            await RoomPricingLock.EnsureUnlockedAsync(properties, input.RoomId, t);
             var originals = await Store.ListAsync(input.LocationId, "UtilityProfile", t);
             if (input.ReplacesId is { } source)
             {

@@ -13,7 +13,8 @@ import {
   Stack,
   TextField,
 } from '@mui/material';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
+import { MoneyField } from '../common/MoneyField';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { makeRecord } from '../../services/mock/seed';
@@ -221,12 +222,20 @@ export function RecordEditor({
                 ))}
               </TextField>
             )}
-            <TextField
-              label="Số tiền (VND)"
-              type="number"
-              {...form.register('amount', { valueAsNumber: true })}
-              error={!!form.formState.errors.amount}
-              helperText={form.formState.errors.amount?.message}
+            <Controller
+              name="amount"
+              control={form.control}
+              render={({ field }) => (
+                <MoneyField
+                  label="Số tiền (VND)"
+                  name={field.name}
+                  value={Number.isNaN(field.value) ? '' : field.value}
+                  onBlur={field.onBlur}
+                  onValueChange={(raw) => field.onChange(raw === '' ? NaN : Number(raw))}
+                  error={!!form.formState.errors.amount}
+                  helperText={form.formState.errors.amount?.message}
+                />
+              )}
             />
             <Stack direction="row" spacing={2}>
               <TextField
@@ -331,19 +340,37 @@ export function RecordEditor({
                 />
               </Stack>
             )}
-            {extraFields.map((field) => (
-              <TextField
-                key={field}
-                label={definition.columns.find((column) => column.field === field)?.label || field}
-                value={draft.attributes[field] || ''}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    attributes: { ...draft.attributes, [field]: e.target.value },
-                  })
-                }
-              />
-            ))}
+            {extraFields.map((field) =>
+              ['rent', 'holdingDeposit', 'deposit'].includes(field) ? (
+                <MoneyField
+                  key={field}
+                  label={
+                    definition.columns.find((column) => column.field === field)?.label || field
+                  }
+                  value={draft.attributes[field] || ''}
+                  onValueChange={(raw) =>
+                    setDraft({
+                      ...draft,
+                      attributes: { ...draft.attributes, [field]: raw },
+                    })
+                  }
+                />
+              ) : (
+                <TextField
+                  key={field}
+                  label={
+                    definition.columns.find((column) => column.field === field)?.label || field
+                  }
+                  value={draft.attributes[field] || ''}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      attributes: { ...draft.attributes, [field]: e.target.value },
+                    })
+                  }
+                />
+              ),
+            )}
             <TextField
               multiline
               minRows={3}

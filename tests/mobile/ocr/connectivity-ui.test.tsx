@@ -1,17 +1,25 @@
 // @vitest-environment jsdom
-import React from 'react';
+import React, { useEffect } from 'react';
+import { QueryCache } from '../../../src/mobile/src/lib/queryCache';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 const mocks = vi.hoisted(() => ({
   load: vi.fn(),
-  session: { api: {}, baseUrl: 'https://api.test', session: { roles: ['Owner'] } },
+  session: {
+    api: { queryCache: null as QueryCache | null },
+    baseUrl: 'https://api.test',
+    session: { roles: ['Owner'] },
+  },
   go: vi.fn(),
 }));
 vi.mock('react-native', () => ({
   StyleSheet: { create: (s: unknown) => s },
   View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
-vi.mock('expo-router', () => ({ router: { push: vi.fn() } }));
+vi.mock('expo-router', () => ({
+  router: { push: vi.fn() },
+  useFocusEffect: (callback: () => (() => void) | undefined) => useEffect(callback, [callback]),
+}));
 vi.mock('react-native-paper', () => ({
   MD3LightTheme: { colors: {} },
   configureFonts: () => ({}),
@@ -79,11 +87,24 @@ vi.mock('../../../src/mobile/src/services/ownerOverview', () => ({
   loadOwnerOverview: mocks.load,
 }));
 import { OwnerOverviewScreen } from '../../../src/mobile/src/screens/OwnerOverviewScreen';
+vi.mock('../../../src/mobile/src/features/owner/OwnerAttentionSummary', () => ({
+  OwnerAttentionSummary: () => null,
+}));
+vi.mock('../../../src/mobile/src/features/owner/OwnerApprovalQueue', async (original) => ({
+  ...(await original<object>()),
+  OwnerApprovalQueue: () => null,
+}));
+import { beforeEach } from 'vitest';
+beforeEach(() => {
+  mocks.session.api.queryCache = new QueryCache();
+});
 import { MobileApiError } from '../../../src/mobile/src/lib/api';
 
 afterEach(() => {
   cleanup();
+  mocks.session.api.queryCache?.dispose();
   vi.clearAllMocks();
+  mocks.load.mockReset();
 });
 it('shows loading, an explicit failure, and a retry that really reloads the Owner API', async () => {
   let reject!: (error: Error) => void;
@@ -104,6 +125,7 @@ it('shows loading, an explicit failure, and a retry that really reloads the Owne
     });
   render(<OwnerOverviewScreen />);
   expect(screen.getByText('Đang tải tổng quan')).toBeTruthy();
+  await waitFor(() => expect(mocks.load).toHaveBeenCalledTimes(1));
   reject(new MobileApiError(500, undefined, '/api/v1/rooms'));
   await screen.findByText(/Máy chủ gặp lỗi xử lý/);
   expect(screen.queryByText(/HTTP 500|GET \/api\/v1\//)).toBeNull();
@@ -115,11 +137,14 @@ it('shows loading, an explicit failure, and a retry that really reloads the Owne
   fireEvent.click(screen.getByText('Hợp đồng & Vòng đời'));
   expect(mocks.go).toHaveBeenCalledWith('signing');
 });
-it('aborts obsolete dashboard reads on unmount', async () => {
+it('shares the in-flight dashboard read on return and aborts when the session cache closes', async () => {
   mocks.load.mockImplementationOnce(() => new Promise(() => {}));
   const view = render(<OwnerOverviewScreen />);
   await waitFor(() => expect(mocks.load).toHaveBeenCalledTimes(1));
   const signal = mocks.load.mock.calls[0]![1] as AbortSignal;
   view.unmount();
+  render(<OwnerOverviewScreen />);
+  expect(mocks.load).toHaveBeenCalledTimes(1);
+  mocks.session.api.queryCache!.dispose();
   expect(signal.aborted).toBe(true);
 });

@@ -10,7 +10,7 @@ using NpgsqlTypes;
 namespace BHome.Infrastructure.Modules.Notifications;
 
 // Parameterized access to the existing notification/workspace containers. No schema inference.
-internal sealed class CompactNotificationWriter(Compact24DbContext db, TimeProvider clock)
+internal sealed class CompactNotificationWriter(Compact24DbContext db, TimeProvider clock, Microsoft.Extensions.Options.IOptions<SmsOptions>? sms = null)
 {
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     internal DateTimeOffset Now => clock.GetUtcNow();
@@ -46,10 +46,12 @@ internal sealed class CompactNotificationWriter(Compact24DbContext db, TimeProvi
             RelatedObjectId = target,
             Priority = priority,
             Source = source,
-            Channels = channels ?? ["IN_APP", "PUSH"],
+            Channels = NotificationEmailPolicy.Channels(eventType, role, channels ?? ["IN_APP", "PUSH"]),
             CreatedAt = now,
             SourceTaskNotificationId = taskSource
         };
+        if (sms?.Value.Enabled == true && SmsNotificationPolicy.Template(eventType, role) is { } template && sms.Value.EnabledTemplates.Contains(template))
+            state.Channels = state.Channels.Append("SMS").Distinct().ToArray();
         var data = JsonSerializer.Serialize(new { schemaVersion = 2, recordType = "UserNotification", audienceRole = role, category, state }, Json);
         return await Execute("""
             INSERT INTO notifications(id,record_kind,recipient_user_id,location_id,event_key,notification_type,title,message,related_entity_type,related_entity_id,event_data,event_at,delivery_status)

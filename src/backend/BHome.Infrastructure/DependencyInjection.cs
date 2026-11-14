@@ -109,15 +109,52 @@ public static class DependencyInjection
         services.AddScoped<IIdentityPersistence, CompactIdentityPersistence>();
         services.AddScoped<IAuthenticationSessions, IdentitySessionService>();
         services.AddScoped<IPasswordService, IdentityPasswordService>();
+        services.AddOptions<SmsRecoveryOptions>().BindConfiguration("SmsRecovery")
+            .Validate(o => o.Valid(), "Invalid SMS recovery limits or missing base64 secret key (at least 32 random bytes).").ValidateOnStart();
+        services.AddScoped<SmsPasswordRecovery>();
+        services.AddScoped<ISmsPasswordRecovery>(p => p.GetRequiredService<SmsPasswordRecovery>());
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<SmsPasswordRecovery>());
         services.AddScoped<ISecurityAudit, IdentitySecurityAudit>();
-        services.AddScoped<IPasswordResetDelivery, BHome.Infrastructure.Modules.Notifications.PasswordEmailDelivery>();
+        services.AddOptions<AuthenticationEmailOptions>().BindConfiguration("AuthenticationEmail")
+            .Validate(o => o.ResendCooldownSeconds is >= 30 and <= 3600, "Authentication email cooldown must be 30-3600 seconds.").ValidateOnStart();
+        services.AddScoped<AuthenticationEmailDelivery>();
+        services.AddScoped<IEmailVerification, EmailVerificationService>();
+        services.AddScoped<IPasswordResetDelivery>(p => p.GetRequiredService<AuthenticationEmailDelivery>());
         services.AddScoped<IAccountInvitations, AccountInvitations>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter>();
+        services.AddOptions<BHome.Application.Notifications.SmsOptions>().BindConfiguration("Sms")
+            .Validate(o => o.Valid(), "Invalid SMS configuration; check mode, provider, endpoint, templates and credentials in secrets.").ValidateOnStart();
+        services.AddSingleton<BHome.Infrastructure.Modules.Notifications.DemoSmsInbox>();
+        services.AddScoped<BHome.Application.Notifications.IDemoSmsInbox, BHome.Infrastructure.Modules.Notifications.DemoSmsAccess>();
+        services.AddHostedService<BHome.Infrastructure.Modules.Notifications.DemoSmsCleanup>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.MockSmsSender>();
+        services.AddHttpClient<BHome.Infrastructure.Modules.Notifications.EsmsSmsSender>()
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<BHome.Application.Notifications.ISmsSender, BHome.Infrastructure.Modules.Notifications.SmsGateway>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.SmsNotificationContent>();
+        services.AddScoped(p => new BHome.Infrastructure.Modules.Notifications.EsmsDeliveryCallback(
+            p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter>(), p.GetRequiredService<IOptions<BHome.Application.Notifications.SmsOptions>>()));
         services.AddScoped<BHome.Application.Notifications.INotificationWorkspace, BHome.Infrastructure.Modules.Notifications.CompactNotificationWorkspace>();
         services.AddScoped<BHome.Application.Notifications.NotificationWorkspaceService>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationEvents>();
         services.AddOptions<BHome.Application.Notifications.NotificationChannelOptions>().BindConfiguration("NotificationChannels")
             .Validate(o => o.Mode is "Unconfigured" or "Sandbox" or "Smtp" && o.MaxAttempts is >= 1 and <= 10 && o.RetrySeconds is >= 1 and <= 3600 && o.TimeoutSeconds is >= 1 and <= 45, "Invalid notification channel options.").ValidateOnStart();
+        services.AddOptions<BHome.Application.Notifications.EmailOptions>().BindConfiguration("Email")
+            .PostConfigure(o =>
+            {
+                // Compatibility for deployments using the previous SMTP configuration keys.
+                if (!o.Enabled && configuration["NotificationChannels:Mode"] == "Smtp")
+                {
+                    var legacy = configuration.GetSection("NotificationChannels").Get<BHome.Application.Notifications.NotificationChannelOptions>()!;
+                    o.Enabled = true; o.Host = legacy.SmtpHost ?? ""; o.Port = legacy.SmtpPort;
+                    o.Username = legacy.SmtpUser ?? ""; o.AppPassword = legacy.SmtpPassword ?? "";
+                    o.FromEmail = legacy.FromAddress ?? ""; o.UseStartTls = legacy.SmtpUseTls;
+                }
+            })
+            .Validate(o => o.Valid(), "Email configuration invalid: check Email host, port, username, sender, STARTTLS, timeout and Email:AppPassword in secrets.").ValidateOnStart();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
+        services.AddScoped<BHome.Application.Notifications.IDevelopmentEmailTest, BHome.Infrastructure.Modules.Notifications.DevelopmentEmailTest>();
         services.AddScoped<BHome.Application.Notifications.INotificationChannelProvider, BHome.Infrastructure.Modules.Notifications.NotificationChannelProvider>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>();
         services.AddHostedService<BHome.Infrastructure.Modules.Notifications.NotificationAutomationWorker>();
@@ -144,6 +181,10 @@ public static class DependencyInjection
             BHome.Infrastructure.Modules.Operations.OperationsFiles>();
         services.AddScoped<BHome.Application.Operations.OperationsService>();
         services.AddScoped<BHome.Application.Operations.IResidentAdministrationRepository, BHome.Infrastructure.Modules.Operations.ResidentAdministrationRepository>();
+        services.AddOptions<BHome.Application.Operations.IdentityRetentionOptions>().BindConfiguration("IdentityRetention");
+        services.AddScoped(sp => sp.GetRequiredService<IOptions<BHome.Application.Operations.IdentityRetentionOptions>>().Value);
+        services.AddScoped<BHome.Application.Operations.IIdentityRetentionRepository, BHome.Infrastructure.Modules.Operations.IdentityRetentionRepository>();
+        services.AddScoped<BHome.Application.Operations.IdentityRetentionService>();
         services.AddScoped<BHome.Application.Operations.ResidentAdministrationService>();
         services.AddScoped<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>();
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.Operations.RecurringOperationsJob>());
@@ -161,6 +202,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PropertyManagement.SharedConfigurationService>();
         services.AddScoped<BHome.Application.PropertyManagement.SharedConfigurationApplicationService>();
         services.AddScoped<BHome.Application.PropertyManagement.LocationConfigurationCopyService>();
+        services.AddScoped<BHome.Application.PropertyManagement.LocationSetupService>();
         services.AddScoped<BHome.Application.PropertyManagement.AssetInventoryService>();
         services.AddScoped<BHome.Application.PropertyManagement.SetupEvidenceService>();
         services.AddScoped<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();
@@ -178,14 +220,50 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.IncidentMaintenance.IncidentService>();
         services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
         services.AddHostedService<BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFileCleanup>();
-        services.AddScoped<IBankTransactionProvider, UnconfiguredBankProvider>();
+        services.AddScoped<UnconfiguredBankProvider>();
+        services.AddScoped<IBankTransactionProvider>(p => p.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>().Enabled
+            ? p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayApiClient>() : p.GetRequiredService<UnconfiguredBankProvider>());
+        services.AddOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>()
+            .Configure<IConfiguration>((options, config) => config.GetSection("SePay").Bind(options))
+            .Validate<IHostEnvironment>((options, host) => options.Valid(host.EnvironmentName),
+                "SePay requires isolated Test/Live configuration, a strong webhook secret and receiving accounts.")
+            .ValidateOnStart();
+        services.AddSingleton(p => p.GetRequiredService<IOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>>().Value);
+        services.AddSingleton<BHome.Application.PaymentsDebt.SePay.SePayWebhookSecurity>();
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayRepository, BHome.Infrastructure.PaymentsDebt.SePayRepository>();
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.IPaymentCodeRegistry, BHome.Infrastructure.PaymentsDebt.PaymentCodeRegistry>();
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.SePayService>();
+        services.AddHttpClient<BHome.Infrastructure.PaymentsDebt.SePayApiClient>((p, client) =>
+        {
+            var settings = p.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>();
+            if (!settings.Enabled) return;
+            client.BaseAddress = new Uri(settings.ApiBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(settings.RequestTimeoutSeconds);
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<BHome.Application.PaymentsDebt.SePay.ISePayTransactionClient>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayApiClient>());
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.SePayReconciliationJob>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.SePayPollingJob>();
+        services.AddScoped<BHome.Infrastructure.PaymentsDebt.SePayScheduling>();
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayScheduling>());
+        services.AddHostedService<BHome.Infrastructure.PaymentsDebt.SePayAutomationWorker>();
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
         services.AddScoped<BHome.Application.Contracts.ContractService>();
+        services.AddScoped<BHome.Application.Billing.ITenantMeterReadings, BHome.Infrastructure.Billing.TenantMeterReadingsRepository>();
+        services.AddScoped<BHome.Application.Billing.TenantMeterReadingService>();
+        services.AddScoped<BHome.Application.Contracts.AnonymousContractSigningService>();
+        services.AddScoped<BHome.Application.Contracts.IPostActivationTenantProvisioning, BHome.Infrastructure.IdentityAccess.PostActivationTenantProvisioning>();
+        services.AddScoped<BHome.Infrastructure.IdentityAccess.AccountInvitations>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.IdentityAccess.AccountInvitationJob>();
+        services.AddScoped<BHome.Application.Contracts.IAnonymousSigningRepository, BHome.Infrastructure.Contracts.AnonymousSigningRepository>();
+        services.AddOptions<BHome.Infrastructure.Contracts.AnonymousSigningOptions>().Bind(configuration.GetSection("AnonymousSigning"));
+        services.AddScoped<BHome.Application.Contracts.IAnonymousSigningSecurity, BHome.Infrastructure.Contracts.AnonymousSigningSecurity>();
+        services.AddScoped<BHome.Application.Contracts.IInternalAcceptanceRenderer, BHome.Infrastructure.Contracts.InternalAcceptanceRenderer>();
         services.AddScoped<BHome.Application.Contracts.IAdministrativeContractReadiness>(provider =>
             provider.GetRequiredService<BHome.Application.Contracts.ContractService>());
         services.AddScoped<BHome.Application.Contracts.MainDraftService>();
+        services.AddScoped<BHome.Application.Contracts.IHoldingSettingsData, BHome.Infrastructure.Contracts.HoldingSettingsData>();
         services.AddScoped<BHome.Application.Finance.IExpenseRepository, BHome.Infrastructure.Finance.ExpenseRepository>();
         services.AddScoped<BHome.Application.Finance.ExpenseService>();
         services.AddScoped<BHome.Application.Finance.IExpenseEvidenceRepository, BHome.Infrastructure.Finance.ExpenseEvidenceRepository>();
@@ -227,7 +305,10 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IContractDepositPosition, BHome.Infrastructure.Contracts.ContractDepositPosition>();
         services.AddScoped<BHome.Application.Contracts.IDepositDeductionRepository, BHome.Infrastructure.Contracts.DepositDeductionRepository>();
         services.AddScoped<BHome.Application.Contracts.IDepositDeductionEvidence, BHome.Infrastructure.Contracts.DepositDeductionEvidence>();
+        services.AddScoped<BHome.Application.Contracts.ISettlementChargeEvidence, BHome.Infrastructure.Contracts.SettlementChargeEvidence>();
         services.AddScoped<BHome.Application.Contracts.DepositDeductionService>();
+        services.AddScoped<BHome.Application.Contracts.ISettlementReceivablesRepository, BHome.Infrastructure.Contracts.SettlementReceivablesRepository>();
+        services.AddScoped<BHome.Application.Contracts.SettlementReceivablesService>();
         services.AddScoped<BHome.Application.Contracts.IContractHoldingLedger, BHome.Infrastructure.Contracts.CompactContractHoldingLedger>();
         services.AddScoped<BHome.Application.Contracts.IContractFileStore, BHome.Infrastructure.Contracts.ContractFileStore>();
         services.AddSingleton<BHome.Application.Contracts.IContractImageValidator, BHome.Infrastructure.Contracts.ContractImageValidator>();
@@ -264,6 +345,11 @@ public static class DependencyInjection
         services.AddScoped<ICaptureRepository, CaptureRepository>();
         services.AddScoped<CaptureService>();
         services.AddScoped<BHome.Application.Billing.IInvoiceRepository, BHome.Infrastructure.Billing.InvoiceRepository>();
+        services.AddScoped<BHome.Application.Billing.IFixedChargeCoverage, BHome.Infrastructure.Billing.FixedChargeCoverageRepository>();
+        services.AddScoped<BHome.Application.PaymentsDebt.IReceiptExcessRepository, BHome.Infrastructure.PaymentsDebt.ReceiptExcessRepository>();
+        services.AddScoped<BHome.Application.PaymentsDebt.IExternalPaymentPayerRepository, BHome.Infrastructure.PaymentsDebt.ExternalPaymentPayerRepository>();
+        services.AddScoped<BHome.Application.PaymentsDebt.ExternalPaymentPayerService>();
+        services.AddScoped<BHome.Application.PaymentsDebt.ReceiptExcessService>();
         services.AddScoped<BHome.Application.Billing.IAdjustmentRepository, BHome.Infrastructure.Billing.AdjustmentRepository>();
         services.AddScoped<BHome.Application.Billing.IAdjustmentEvidenceFiles, BHome.Infrastructure.Billing.AdjustmentEvidenceFiles>();
         services.AddScoped<BHome.Application.Billing.AdjustmentService>();
@@ -298,6 +384,9 @@ public static class DependencyInjection
             provider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing"));
         services.AddSingleton<BHome.Application.PaymentsDebt.ITransferQrGenerator, BHome.Infrastructure.PaymentsDebt.VietQrGenerator>();
         services.AddScoped<BHome.Application.PaymentsDebt.TransferInstructionsService>();
+        services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPaymentLedger, BHome.Infrastructure.PaymentsDebt.MainInitialPaymentLedger>();
+        services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPayments, BHome.Infrastructure.PaymentsDebt.MainInitialPayments>();
+        services.AddSingleton<BHome.Application.Contracts.IHoldingTestScope, BHome.Infrastructure.Contracts.HoldingTestScope>();
         services.AddHostedService<MeterEvidenceCleanup>();
         services.AddOptions<IdentityProtectionOptions>().Bind(configuration.GetSection("IdentityProtection"));
         services.AddSingleton<IIdentityProtection, IdentityProtection>();
@@ -313,7 +402,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IContractExpiryRepository>(p => p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());
         services.AddScoped<BHome.Application.Contracts.ContractExpiryService>();
         services.AddHostedService<BHome.Infrastructure.Contracts.ContractExpiryScheduler>();
-        services.AddHostedService<PostgresJobWorker>();
+        services.AddSingleton<PostgresJobWorker>();
+        services.AddHostedService(p => p.GetRequiredService<PostgresJobWorker>());
         return services;
     }
 }

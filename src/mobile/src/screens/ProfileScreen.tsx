@@ -17,11 +17,15 @@ import { roleLabel, sessionRole } from '../features/workspace/navigation';
 import { colors, staffColors } from '../theme/theme';
 import { showError, showWarning } from '../lib/toast';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
+import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import type { Named } from '../lib/api';
 
 export function ProfileScreen() {
   const { session, logout } = useSession();
   const { go, preview, leavePreview } = useWorkspace();
   const profile = useProfile();
+  const staff = sessionRole(session?.roles ?? []) === 'Staff';
+  const locations = useWorkspaceQuery<Named[]>(staff ? '/api/v1/capture/locations' : null);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -101,6 +105,20 @@ export function ProfileScreen() {
             </View>
           </View>
           <ProfileInfoCard profile={data} edit={() => go('profile-edit')} />
+          {staff && (
+            <View style={styles.card}>
+              <Text variant="titleMedium">Cơ sở được phân công</Text>
+              {Array.isArray(locations.data) ? (
+                locations.data.length ? (
+                  locations.data.map((location) => <Text key={location.id}>{location.label}</Text>)
+                ) : (
+                  <Text>Chưa có cơ sở được phân công hiện tại.</Text>
+                )
+              ) : (
+                <Text>{locations.error || 'Đang tải cơ sở được phân công…'}</Text>
+              )}
+            </View>
+          )}
         </>
       )}
       <View style={[styles.card, { padding: 0, gap: 0, overflow: 'hidden' }]}>

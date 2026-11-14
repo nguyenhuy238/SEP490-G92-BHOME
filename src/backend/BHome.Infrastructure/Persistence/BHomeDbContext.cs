@@ -32,6 +32,9 @@ public sealed class BHomeDbContext(DbContextOptions<BHomeDbContext> options)
     {
         base.OnModelCreating(builder);
         builder.ConfigureCapture();
+        // Freeze the archived source schema for offline import/regression. Runtime Compact24
+        // supports pre-account/departed Residents with a nullable current Room independently.
+        builder.Entity<BHome.Domain.TenantContracts.Resident>().Property(r => r.RoomId).IsRequired();
         builder.ConfigureContracts();
         builder.Entity<ApplicationUser>().Property(x => x.IsActive).HasDefaultValue(true);
         builder.ApplyConfigurationsFromAssembly(typeof(BHomeDbContext).Assembly);

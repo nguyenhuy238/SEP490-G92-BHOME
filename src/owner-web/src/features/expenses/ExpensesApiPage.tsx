@@ -1,6 +1,8 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
   Alert,
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -10,22 +12,33 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router';
+import { Link as RouterLink, useInRouterContext, useParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
   financeError,
+  formatFinanceMoney,
   type Expense,
   type ExpenseFilter,
   type ExpenseInput,
 } from '../../../../../packages/client-core/src/finance';
 import { formatDraftMoney } from '../../../../../packages/client-core/src/mainDrafts';
-import { PageHeader } from '../../components/common/PortalUI';
+import { FilterToolbar, PageHeader } from '../../components/common/PortalUI';
+import { OptionPicker } from '../../components/common/OptionPicker';
 import { useFinanceApi } from './useFinanceApi';
 import { ExpenseEvidencePanel } from './ExpenseEvidencePanel';
+import { todayVietnam } from '../staff/staffContracts';
 
 type Editor = { value: ExpenseInput; previous?: Expense; key: string; reason: string };
 export function ExpensesApiPage() {
@@ -34,6 +47,7 @@ export function ExpensesApiPage() {
   const { session } = useAuth();
   const actor = session?.userId;
   const { locationId: routeLocation } = useParams();
+  const routed = useInRouterContext();
   const [filter, setFilter] = useState<ExpenseFilter>({ page: 1 });
   const [editor, setEditor] = useState<Editor | null>(null);
   const [busy, setBusy] = useState(false),
@@ -45,9 +59,18 @@ export function ExpensesApiPage() {
     queryFn: ({ signal }) => api.locations(signal),
   });
   const scopedFilter = { ...filter, locationId: routeLocation || filter.locationId };
+  const invalidRange = !!(filter.from && filter.to && filter.from > filter.to);
+  const today = todayVietnam();
+  const reportFilter = { from: `${today.slice(0, 7)}-01`, to: today, locationId: routeLocation };
+  const report = useQuery({
+    queryKey: ['financial-report', actor, reportFilter],
+    queryFn: ({ signal }) => api.report(reportFilter, signal),
+    enabled: !!routeLocation,
+  });
   const rows = useQuery({
     queryKey: ['expenses', actor, scopedFilter],
     queryFn: ({ signal }) => api.expenses(scopedFilter, signal),
+    enabled: !invalidRange,
   });
   const references = useQuery({
     queryKey: ['expense-references', actor, editor?.value.locationId, editor?.value.roomId],
@@ -78,7 +101,7 @@ export function ExpensesApiPage() {
     }
   }
   async function save() {
-    if (!editor || lock.current) return;
+    if (!editor || lock.current || editor.previous?.canEdit === false) return;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -93,6 +116,7 @@ export function ExpensesApiPage() {
         );
       else await api.createExpense(editor.value, editor.key);
       await queryClient.invalidateQueries({ queryKey: ['expenses', actor] });
+      await queryClient.invalidateQueries({ queryKey: ['financial-report', actor] });
       setEditor(null);
       setSuccess('Đã lưu khoản chi.');
     } catch (e) {
@@ -109,8 +133,14 @@ export function ExpensesApiPage() {
   return (
     <>
       <PageHeader
+        group={null}
+        headingLevel={routeLocation ? 'h2' : 'h1'}
         title="Đầu tư ban đầu & Chi phí"
-        subtitle="Khoản chi thực tế theo cơ sở; lịch sử chỉnh sửa được lưu trên máy chủ."
+        subtitle={
+          routeLocation
+            ? undefined
+            : 'Khoản chi thực tế theo cơ sở; lịch sử chỉnh sửa được lưu trên máy chủ.'
+        }
         actions={
           <Button
             variant="contained"
@@ -124,7 +154,10 @@ export function ExpensesApiPage() {
                 value: {
                   locationId: routeLocation || filter.locationId || locations.data![0].id,
                   roomId: null,
-                  expenseType: 'OPERATING',
+                  expenseType:
+                    filter.expenseType === 'INITIAL_INVESTMENT'
+                      ? 'INITIAL_INVESTMENT'
+                      : 'OPERATING',
                   category: '',
                   amount: '',
                   occurredOn: '',
@@ -137,16 +170,78 @@ export function ExpensesApiPage() {
           </Button>
         }
       />
+      {routeLocation && (
+        <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, mb: 2 }}>
+          <Typography variant="h2" component="h3" sx={{ fontSize: '1.15rem', fontWeight: 800 }}>
+            Tổng hợp vốn & chi phí
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+            Báo cáo đến {today.split('-').reverse().join('/')}. Không phụ thuộc bộ lọc danh sách bên
+            dưới.
+          </Typography>
+          {report.isPending && <LinearProgress aria-label="Đang tải báo cáo chi phí" />}
+          {report.isError && (
+            <Alert
+              severity="warning"
+              action={<Button onClick={() => void report.refetch()}>Thử lại</Button>}
+            >
+              {financeError(report.error)}
+            </Alert>
+          )}
+          {report.data && (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                gap: 2,
+              }}
+            >
+              <Box sx={{ minWidth: 0, p: 2, bgcolor: 'background.default', borderRadius: '10px' }}>
+                <Typography variant="body2" color="text.secondary">
+                  Vốn đầu tư ban đầu lũy kế
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: '1.5rem',
+                    fontWeight: 800,
+                    overflowWrap: 'anywhere',
+                    fontVariantNumeric: 'tabular-nums',
+                    mt: 0.5,
+                  }}
+                >
+                  {formatFinanceMoney(report.data.total.initialInvestment)}
+                </Typography>
+              </Box>
+              <Box sx={{ minWidth: 0, p: 2, bgcolor: 'background.default', borderRadius: '10px' }}>
+                <Typography variant="body2" color="text.secondary">
+                  Chi phí vận hành từ đầu tháng
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: '1.5rem',
+                    fontWeight: 800,
+                    overflowWrap: 'anywhere',
+                    fontVariantNumeric: 'tabular-nums',
+                    mt: 0.5,
+                  }}
+                >
+                  {formatFinanceMoney(report.data.total.operatingExpenses)}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+        </Paper>
+      )}
       {error && !editor && <Alert severity="error">{error}</Alert>}
       {success && <Alert severity="success">{success}</Alert>}
-      {(rows.isPending || locations.isPending) && <LinearProgress />}
-      {(rows.error || locations.error) && (
+      {((!invalidRange && rows.isPending) || locations.isPending) && <LinearProgress />}
+      {((!invalidRange && rows.error) || locations.error) && (
         <Alert
           severity="error"
           action={
             <Button
               onClick={() => {
-                void rows.refetch();
+                if (!invalidRange) void rows.refetch();
                 void locations.refetch();
               }}
             >
@@ -154,41 +249,45 @@ export function ExpensesApiPage() {
             </Button>
           }
         >
-          {financeError(rows.error || locations.error)}
+          {financeError((!invalidRange && rows.error) || locations.error)}
         </Alert>
       )}
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ my: 2 }}>
-        <TextField
-          select
-          label="Cơ sở"
-          value={routeLocation || filter.locationId || ''}
-          disabled={!!routeLocation}
-          onChange={(e) => changeFilter('locationId', e.target.value)}
-        >
-          <MenuItem value="">Tất cả cơ sở</MenuItem>
-          {locations.data?.map((l) => (
-            <MenuItem key={l.id} value={l.id}>
-              {l.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Loại khoản chi"
-          value={filter.expenseType || ''}
-          onChange={(e) => changeFilter('expenseType', e.target.value)}
-        >
-          <MenuItem value="">Tất cả</MenuItem>
-          {types.map((t) => (
-            <MenuItem key={t.id} value={t.id}>
-              {t.name}
-            </MenuItem>
-          ))}
-        </TextField>
+      <Tabs
+        aria-label="Loại khoản chi"
+        value={filter.expenseType || ''}
+        onChange={(_, v: string) => changeFilter('expenseType', v)}
+        variant="scrollable"
+        allowScrollButtonsMobile
+        sx={{
+          mb: 2,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          '& .MuiTab-root': { minHeight: 44 },
+        }}
+      >
+        <Tab value="" label="Tất cả khoản chi" />
+        {types.map((t) => (
+          <Tab key={t.id} value={t.id} label={t.name} />
+        ))}
+      </Tabs>
+      <FilterToolbar>
+        {!routeLocation && (
+          <OptionPicker
+            label="Cơ sở"
+            value={routeLocation || filter.locationId || ''}
+            disabled={!!routeLocation}
+            options={locations.data ?? []}
+            loading={locations.isPending}
+            error={!!locations.error}
+            change={(id) => changeFilter('locationId', id)}
+          />
+        )}
         <TextField
           label="Danh mục"
           value={filter.category || ''}
           onChange={(e) => changeFilter('category', e.target.value)}
+          helperText="Nhập tên danh mục chính xác"
+          slotProps={{ htmlInput: { maxLength: 60 } }}
         />
         <TextField
           label="Từ ngày"
@@ -203,33 +302,117 @@ export function ExpensesApiPage() {
           slotProps={{ inputLabel: { shrink: true } }}
           value={filter.to || ''}
           onChange={(e) => changeFilter('to', e.target.value)}
+          error={invalidRange}
+          helperText={invalidRange ? 'Ngày kết thúc phải từ ngày bắt đầu trở đi.' : undefined}
         />
-      </Stack>
-      {!rows.error && rows.data?.items.length === 0 && (
+        <Button
+          onClick={() => setFilter({ page: 1, expenseType: filter.expenseType })}
+          disabled={!filter.locationId && !filter.category && !filter.from && !filter.to}
+        >
+          Xóa bộ lọc
+        </Button>
+      </FilterToolbar>
+      {invalidRange && <Alert severity="warning">Chọn lại khoảng ngày để xem khoản chi.</Alert>}
+      {!invalidRange && !rows.error && rows.data?.items.length === 0 && (
         <Alert severity="info">Chưa có khoản chi phù hợp.</Alert>
       )}
-      {!rows.error &&
-        rows.data?.items.map((e) => (
-          <Paper key={e.id} sx={{ p: 2, mb: 1 }}>
-            <Typography variant="h6">
-              {e.category} — {formatDraftMoney(e.amount)}
-            </Typography>
-            <Typography>
-              {e.occurredOn.split('-').reverse().join('/')} ·{' '}
-              {locations.data?.find((l) => l.id === e.locationId)?.label} ·{' '}
-              {types.find((t) => t.id === e.expenseType)?.name}
-            </Typography>
-            <Typography>{e.note}</Typography>
-            {(e.assetName || e.taskTitle) && (
-              <Typography>{[e.assetName, e.taskTitle].filter(Boolean).join(' · ')}</Typography>
-            )}
-            <Button disabled={busy} onClick={() => void view(e.id)}>
-              Chi tiết / chỉnh sửa
-            </Button>
-          </Paper>
-        ))}
-      {rows.data && (
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+      {!invalidRange && !rows.error && !!rows.data?.items.length && (
+        <TableContainer component={Paper} variant="outlined">
+          <Table size="small" sx={{ minWidth: 700 }} aria-label="Khoản chi thực tế">
+            <TableHead>
+              <TableRow>
+                <TableCell>Khoản chi</TableCell>
+                <TableCell>Ngày phát sinh</TableCell>
+                <TableCell>Phạm vi</TableCell>
+                <TableCell align="right">Số tiền</TableCell>
+                <TableCell>Thao tác</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.data.items.map((e) => (
+                <TableRow key={e.id} hover>
+                  <TableCell sx={{ maxWidth: 320 }}>
+                    <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
+                      {e.category}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {types.find((t) => t.id === e.expenseType)?.name ?? e.expenseType}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{
+                        whiteSpace: 'pre-wrap',
+                        overflowWrap: 'anywhere',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {e.note}
+                    </Typography>
+                    {(e.assetName || e.taskTitle) && (
+                      <Typography variant="caption">
+                        {[e.assetName, e.taskTitle].filter(Boolean).join(' · ')}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                    {e.occurredOn.split('-').reverse().join('/')}
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">
+                      {locations.data?.find((l) => l.id === e.locationId)?.label ??
+                        'Cơ sở đã liên kết'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {e.roomId ? 'Phòng riêng' : 'Toàn cơ sở / khu chung'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      whiteSpace: 'nowrap',
+                      fontVariantNumeric: 'tabular-nums',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {formatDraftMoney(e.amount)}
+                  </TableCell>
+                  <TableCell>
+                    <Stack sx={{ alignItems: 'flex-start' }}>
+                      <Button disabled={busy} onClick={() => void view(e.id)}>
+                        {e.canEdit ? 'Chi tiết / chỉnh sửa' : 'Xem chi tiết'}
+                      </Button>
+                      {routed && e.taskId && (
+                        <Button
+                          component={RouterLink}
+                          to={`/maintenance?workOrderId=${encodeURIComponent(e.taskId)}`}
+                        >
+                          Xem Work Order
+                        </Button>
+                      )}
+                      {!e.canEdit && (
+                        <Typography variant="caption" color="text.secondary">
+                          Do nghiệp vụ nguồn quản lý
+                        </Typography>
+                      )}
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+      {!invalidRange && rows.data && (
+        <Stack
+          direction="row"
+          useFlexGap
+          spacing={1.5}
+          sx={{ alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', mt: 1.5 }}
+        >
           <Button
             disabled={(filter.page || 1) <= 1 || rows.isFetching}
             onClick={() => setFilter((f) => ({ ...f, page: (f.page || 1) - 1 }))}
@@ -237,7 +420,7 @@ export function ExpensesApiPage() {
             Trang trước
           </Button>
           <Typography>
-            Trang {rows.data.page} · {rows.data.total} khoản chi
+            Trang {rows.data.page} · {rows.data.total} khoản chi phù hợp
           </Typography>
           <Button
             disabled={rows.data.page * rows.data.pageSize >= rows.data.total || rows.isFetching}
@@ -276,7 +459,7 @@ export function ExpensesApiPage() {
                   select
                   required
                   label="Cơ sở ghi nhận"
-                  disabled={busy || !!editor.previous}
+                  disabled={busy || !!editor.previous || !!routeLocation}
                   value={editor.value.locationId}
                   onChange={(e) =>
                     setEditor(
@@ -340,9 +523,11 @@ export function ExpensesApiPage() {
                       {r.label}
                     </MenuItem>
                   ))}
-                  {editor.previous?.roomId &&
-                    !references.data?.rooms.some((r) => r.id === editor.previous!.roomId) && (
-                      <MenuItem value={editor.previous.roomId}>Phòng đã liên kết</MenuItem>
+                  {editor.value.roomId &&
+                    !references.data?.rooms.some((r) => r.id === editor.value.roomId) && (
+                      <MenuItem value={editor.value.roomId}>
+                        {editor.previous ? 'Phòng đã liên kết' : 'Phòng đã chọn'}
+                      </MenuItem>
                     )}
                 </TextField>
                 <TextField
@@ -447,26 +632,24 @@ export function ExpensesApiPage() {
                 <TextField
                   required
                   label="Danh mục khoản chi"
-                  disabled={busy}
+                  disabled={busy || editor.previous?.canEdit === false}
                   value={editor.value.category}
                   slotProps={{ htmlInput: { maxLength: 60 } }}
                   onChange={(e) => editField('category', e.target.value)}
                 />
-                <TextField
+                <MoneyField
+                  maxRawLength={18}
                   required
                   label="Số tiền (VND)"
-                  disabled={busy}
+                  disabled={busy || editor.previous?.canEdit === false}
                   value={editor.value.amount}
-                  slotProps={{
-                    htmlInput: { pattern: '[0-9]+', maxLength: 18, inputMode: 'numeric' },
-                  }}
-                  onChange={(e) => editField('amount', e.target.value)}
+                  onValueChange={(raw) => editField('amount', raw)}
                 />
                 <TextField
                   required
                   label="Ngày phát sinh"
                   type="date"
-                  disabled={busy}
+                  disabled={busy || editor.previous?.canEdit === false}
                   value={editor.value.occurredOn}
                   slotProps={{ inputLabel: { shrink: true } }}
                   onChange={(e) => editField('occurredOn', e.target.value)}
@@ -475,12 +658,12 @@ export function ExpensesApiPage() {
                   required
                   multiline
                   label="Nội dung / tham chiếu chứng từ"
-                  disabled={busy}
+                  disabled={busy || editor.previous?.canEdit === false}
                   value={editor.value.note}
                   slotProps={{ htmlInput: { maxLength: 4000 } }}
                   onChange={(e) => editField('note', e.target.value)}
                 />
-                {editor.previous && (
+                {editor.previous?.canEdit && (
                   <TextField
                     required
                     label="Lý do chỉnh sửa"

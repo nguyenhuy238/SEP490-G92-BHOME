@@ -1,6 +1,7 @@
 using BHome.Application.Operations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BHome.Api.Controllers.Operations;
 
@@ -9,7 +10,7 @@ namespace BHome.Api.Controllers.Operations;
 public sealed class AccountProfileController(OperationsService service) : ControllerBase
 {
     [HttpGet] public Task<ProfileView> Get(CancellationToken t) => service.ProfileAsync(t);
-    [HttpPut] public Task<ProfileView> Update(ProfileUpdate input, CancellationToken t) => service.UpdateProfileAsync(input, t);
+    [HttpPut, EnableRateLimiting("Auth")] public Task<ProfileView> Update(ProfileUpdate input, CancellationToken t) => service.UpdateProfileAsync(input, t);
 }
 
 [ApiController, Route("api/v1/staff"), Authorize]

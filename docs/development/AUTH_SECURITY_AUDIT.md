@@ -124,8 +124,8 @@ JWT trước triển khai không có sid/stamp cần đăng nhập lại. Downgr
 thực tế cần backup/archival được duyệt. Original Report 3/4 và .env giữ nguyên.
 
 API giữ POST login và GET /api/v1/session. Thêm refresh/logout/logout-all/me/change-password/
-forgot-password/reset-password trong cùng AuthController. Các trường login cũ giữ nguyên; thêm
-sessionId, refreshToken, sessionExpiresAt. Không có đăng ký công khai hoặc admin endpoint không scope.
+forgot-password/reset-password trong cùng AuthController. Login/refresh chỉ trả transport credentials:
+access token và, với Mobile, refresh token. Không có đăng ký công khai hoặc admin endpoint không scope.
 Chi tiết JSON, policies, HTTP codes và cookie transport tại
 [API conventions](../api/API_CONVENTIONS.md#sessions-refresh-and-credentials).
 
@@ -140,7 +140,7 @@ Chi tiết JSON, policies, HTTP codes và cookie transport tại
 
 JWT key vẫn lấy qua secret manager/environment >=32 byte. Nạp cấu hình bằng cơ chế launcher/user-secrets
 hiện có; dotnet run không tự đọc .env. Web auth POST dùng X-BHome-Client:web và credentials:include;
-refreshToken=null trong JSON. Cookie __Secure-bhome-refresh là HttpOnly/Secure/Strict/host-only,
+không trả refresh token trong JSON. Cookie __Secure-bhome-refresh là HttpOnly/Secure/Strict/host-only,
 path /api/v1/auth; custom header và exact Origin là CSRF boundary. Cần cả CORS và AuthWeb origins.
 General CORS origins không tự được phép dùng auth cookie. Cookie không xác thực protected API;
 protected API chỉ dùng Bearer. Web cần HTTPS và cùng site; HTTP frontend + HTTPS API local mặc định

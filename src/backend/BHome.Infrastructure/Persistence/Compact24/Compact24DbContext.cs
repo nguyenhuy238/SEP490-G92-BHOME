@@ -14,8 +14,7 @@ public sealed partial class Compact24DbContext(DbContextOptions<Compact24DbConte
 
     public override BHomePersistenceContext CreateIndependentContext() => new Compact24DbContext(options, compatibility);
     public override async Task<bool> IsSchemaReadyAsync(CancellationToken token = default) =>
-        await Database.CanConnectAsync(token) && (await Compact24Schema.VerifyAsync(this, token) ||
-            compatibility?.AllowPreviousPropertySchema == true && await Compact24Schema.VerifyPreviousPropertyAsync(this, token));
+        await Database.CanConnectAsync(token) && await Compact24Schema.VerifyAsync(this, token);
     internal DbSet<CompactRefreshRow> Refresh => Set<CompactRefreshRow>();
 
     protected override void OnModelCreating(ModelBuilder model)

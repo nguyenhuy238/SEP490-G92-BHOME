@@ -19,7 +19,10 @@ public sealed partial class PaymentLedgerTests
             var target = await client.GetFromJsonAsync<NotificationTarget>($"/api/v1/notifications/{closed.Id}/target");
             Assert.Equal(w.Contract, target!.ObjectId); Assert.Equal("Contract", target.ObjectType);
             Assert.Equal(deductions ? 1 : 0, notices.Count(n => n.RelatedObjectId == w.Contract && n.Title == "Owner đã ghi nhận quyết định khấu trừ cọc"));
-            Assert.Equal(returned ? 1 : 0, notices.Count(n => n.RelatedObjectId == w.Contract && n.Title == "Giao dịch hoàn cọc đã được xác minh thủ công"));
+            var refundNotices = (await client.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications?pageSize=100"))!.Items;
+            Assert.Equal(returned ? 1 : 0, refundNotices.Count(n => n.Title == "Giao dịch hoàn cọc đã được xác minh thủ công" &&
+                (n.RelatedObjectType == "Contract" && n.RelatedObjectId == w.Contract ||
+                 n.RelatedObjectType == "Refund" && client == tenant)));
             Assert.DoesNotContain(notices, n => n.Title.Contains("400000", StringComparison.Ordinal) || n.Summary.Contains("SYN", StringComparison.Ordinal) || n.Summary.Contains("sha256", StringComparison.Ordinal));
             var before = notices.Count;
             await PumpNotifications();

@@ -1,9 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { LocationWorkspaceOverview } from './LocationWorkspaceOverview';
+import { LocationWorkspaceSettings } from './LocationWorkspaceSettings';
 import {
   Alert,
+  MenuItem,
+  Box,
   Button,
   Chip,
-  MenuItem,
+  Autocomplete,
+  Divider,
+  TablePagination,
   Paper,
   Stack,
   Tab,
@@ -12,189 +18,501 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { Link, Outlet, useLocation, useParams } from 'react-router';
+import { Link, Outlet, useLocation, useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 
-import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
+import { ErrorState, LoadingState } from '../../../components/common/PortalUI';
+import {
+  Building2,
+  DoorOpen,
+  Package,
+  Coins,
+  ScrollText,
+  History,
+  Settings,
+  Wallet,
+  Plus,
+  ArrowLeft,
+} from 'lucide-react';
 import { ApiConfigurationCopy } from '../../configuration/ApiConfigurationCopy';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
-import { UtilityWorkspace } from '../../property/UtilityWorkspace';
-import { usePortalData } from '../../../hooks/usePortalData';
-import { LocationAssetsTab } from '../components/tabs/LocationAssetsTab';
-import { LocationPricingTab } from '../components/tabs/LocationPricingTab';
-import { LocationRulesTab } from '../components/tabs/LocationRulesTab';
+import { LocationAssetsWorkspace } from './LocationAssetsWorkspace';
+import { LocationPricingWorkspace } from './LocationPricingWorkspace';
+import { OperatingPoliciesPanel } from '../../property/OperatingPoliciesPanel';
+import { usePortal } from '../../../app/PortalProvider';
+import { formatInstant } from '../../../../../../packages/client-core/src/localization';
+import { LocationSection, LocationEmpty } from '../components/LocationSection';
+import type { OccupancySummary } from '../../property-api/propertyApi';
+import { financeClient, financeError } from '../../../../../../packages/client-core/src/finance';
+import { todayVietnam } from '../../staff/staffContracts';
+import { locationRoomCounts } from './locationOverviewData';
 
 const tabs = [
   ['overview', 'Tổng quan'],
-  ['room-types', 'Loại phòng'],
   ['rooms', 'Phòng'],
   ['assets', 'Tài sản'],
   ['pricing', 'Giá & Phí'],
-  ['utilities', 'Điện & Nước'],
   ['rules', 'Nội quy'],
   ['history', 'Lịch sử phòng'],
-  ['settings', 'Thiết lập'],
   ['investment', 'Vốn & Chi phí'],
+  ['settings', 'Thiết lập'],
 ];
+const tabIcons: Record<string, typeof Building2> = {
+  overview: Building2,
+  rooms: DoorOpen,
+  assets: Package,
+  pricing: Coins,
+  rules: ScrollText,
+  history: History,
+  settings: Settings,
+  investment: Wallet,
+};
 
 export function LocationApiWorkspace() {
   const { locationId = '' } = useParams();
   const route = useLocation();
   const api = usePropertySetupApi();
-  const portalData = usePortalData();
+  const portal = usePortal();
+  useEffect(() => {
+    if (portal.locationId !== locationId) portal.setLocationId(locationId);
+  }, [locationId, portal]);
   const { session } = useAuth();
+  const owner = session?.roles.includes('Owner') ?? false;
   const active = route.pathname.split('/')[3] || 'overview';
+  const activeTab = active === 'room-types' ? 'rooms' : active === 'utilities' ? 'pricing' : active;
   const location = useQuery({
     queryKey: ['property-setup', 'location', session?.userId, locationId],
     queryFn: ({ signal }) => api.location(locationId, signal),
   });
-  const portalLocation = portalData.data?.records.locations.find((item) => item.id === locationId);
+  const occupancy = useQuery({
+    queryKey: ['property-setup', 'location-occupancy', session?.userId, locationId],
+    queryFn: ({ signal }) =>
+      api.request<OccupancySummary>(
+        `/api/v1/locations/${encodeURIComponent(locationId)}/occupancy-summary`,
+        { signal },
+      ),
+    enabled: !!locationId,
+  });
+  const roomCounts = locationRoomCounts(occupancy.data);
   const summary = useQuery({
-    queryKey: ['property-setup', 'location-summary', session?.userId, locationId],
+    queryKey: ['property-setup', 'location-open-incidents', session?.userId, locationId],
     queryFn: async ({ signal }) => {
-      const [roomTypes, rooms, assets, policies, rules, templates] = await Promise.all([
-        api.roomTypes(locationId, 1, '', signal),
-        api.rooms(locationId, 1, '', signal),
-        api.assets(locationId, 1, '', signal),
-        api.request<{ totalCount: number }>(
-          `/api/v1/billing-policies?locationId=${encodeURIComponent(locationId)}&page=1&pageSize=1`,
-          { signal },
+      const rows = await Promise.all(
+        [0, 1].map((status) =>
+          api.request<{ totalCount: number }>(
+            `/api/v1/incidents?locationId=${encodeURIComponent(locationId)}&status=${status}&page=1&pageSize=1`,
+            { signal },
+          ),
         ),
-        api.policies(locationId, signal),
-        api.templates(locationId, signal),
-      ]);
-      return {
-        roomTypes: roomTypes.totalCount,
-        rooms: rooms.totalCount,
-        assets: assets.totalCount,
-        pricesAndFees: policies.totalCount,
-        rules: rules.length,
-        assetTemplates: templates.length,
-      };
+      );
+      if (!rows.every((row) => Number.isSafeInteger(row.totalCount) && row.totalCount >= 0))
+        throw new Error('Không đọc được số liệu sự cố');
+      return { openIncidents: rows.reduce((total, row) => total + row.totalCount, 0) };
     },
+    enabled: active === 'overview' && !!locationId,
+  });
+  const today = todayVietnam();
+  const financeFilter = { from: `${today.slice(0, 7)}-01`, to: today, locationId };
+  const finance = useQuery({
+    queryKey: ['financial-report', session?.userId, financeFilter],
+    queryFn: ({ signal }) => financeClient(api.request).report(financeFilter, signal),
+    enabled: owner && active === 'overview' && !!locationId,
   });
   if (location.isPending) return <LoadingState />;
   if (location.error)
     return <ErrorState error={location.error} retry={() => void location.refetch()} />;
   return (
-    <Stack spacing={2}>
-      <PageHeader
-        title={location.data.name}
-        subtitle={location.data.address}
-        actions={
-          <Stack direction="row">
-            <ApiConfigurationCopy sourceLocationId={locationId} />
-            <Button component={Link} to="/locations">
-              Danh sách cơ sở
-            </Button>
-          </Stack>
-        }
-      />
-      <Tabs
-        value={tabs.some(([key]) => key === active) ? active : 'overview'}
-        variant="scrollable"
-        scrollButtons="auto"
-      >
-        {tabs.map(([key, label]) => (
-          <Tab
-            key={key}
-            value={key}
-            label={label}
-            component={Link}
-            to={`/locations/${locationId}/${key}`}
-          />
-        ))}
-      </Tabs>
-      {active === 'assets' ? (
-        portalData.data && portalLocation ? (
-          <LocationAssetsTab db={portalData.data} location={portalLocation} />
-        ) : (
-          <LoadingState />
-        )
-      ) : ['room-types', 'rooms', 'investment'].includes(active) ? (
-        <Outlet />
-      ) : active === 'pricing' ? (
-        portalData.data && portalLocation ? (
-          <LocationPricingTab db={portalData.data} location={portalLocation} />
-        ) : (
-          <LoadingState />
-        )
-      ) : active === 'utilities' ? (
-        <UtilityWorkspace locationId={locationId} />
-      ) : active === 'rules' ? (
-        <LocationRulesTab locationId={locationId} />
-      ) : active === 'history' ? (
-        <LocationRoomHistory locationId={locationId} />
-      ) : (
-        <Paper sx={{ p: 3 }}>
-          <Stack spacing={2}>
-            <Typography>Địa chỉ: {location.data.address}</Typography>
-            <Typography>{location.data.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}</Typography>
-            <Typography>
-              Cấu hình phòng, tài sản, giá và nội quy được quản lý riêng cho cơ sở này. Thay đổi
-              trạng thái do máy chủ kiểm tra theo nghĩa vụ đang mở.
-            </Typography>
-            {summary.data && (
-              <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 2 }}>
-                <Chip label={`${summary.data.roomTypes} loại phòng`} />
-                <Chip label={`${summary.data.rooms} phòng`} />
-                <Chip label={`${summary.data.assets} tài sản thực tế`} />
-                <Chip label={`${summary.data.assetTemplates} bộ mẫu tài sản`} />
-                <Chip label={`${summary.data.pricesAndFees} chính sách giá & phí`} />
-                <Chip label={`${summary.data.rules} nội quy`} />
+    <Stack
+      spacing={2}
+      sx={{
+        minWidth: 0,
+        '& .MuiPaper-outlined': { borderRadius: '12px', boxShadow: 'none' },
+        '& .MuiTableCell-head': { bgcolor: 'background.default' },
+        '& .MuiTableRow-root.MuiTableRow-hover:hover': { bgcolor: 'action.hover' },
+        '& .MuiTablePagination-toolbar': { flexWrap: 'wrap' },
+        '& .MuiButtonBase-root:focus-visible': {
+          outline: '2px solid',
+          outlineColor: 'primary.main',
+          outlineOffset: 2,
+        },
+      }}
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Button
+          component={Link}
+          to="/locations"
+          startIcon={<ArrowLeft size={16} />}
+          color="inherit"
+          sx={{ px: 0, color: 'text.secondary', mb: 0.25, minHeight: { xs: 44, sm: 28 } }}
+        >
+          Danh sách cơ sở
+        </Button>
+        <Stack
+          direction={{ xs: 'column', lg: 'row' }}
+          spacing={1.5}
+          sx={{ alignItems: { lg: 'center' }, justifyContent: 'space-between' }}
+        >
+          <Stack
+            direction="row"
+            spacing={1.25}
+            sx={{ alignItems: 'flex-start', minWidth: 0, flex: 1 }}
+          >
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                flexShrink: 0,
+                display: 'grid',
+                placeItems: 'center',
+                borderRadius: '12px',
+                bgcolor: 'primary.light',
+                color: 'primary.main',
+              }}
+            >
+              <Building2 size={21} />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Stack
+                direction="row"
+                useFlexGap
+                spacing={1}
+                sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+              >
+                <Typography component="h1" variant="h1" sx={{ overflowWrap: 'anywhere' }}>
+                  {location.data.name}
+                </Typography>
+                <Chip
+                  size="small"
+                  label={location.data.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}
+                  sx={
+                    location.data.isActive
+                      ? { bgcolor: '#eaf7ef', color: 'success.dark', fontWeight: 700 }
+                      : undefined
+                  }
+                />
               </Stack>
-            )}
-            <Button component={Link} to="/locations">
-              Chỉnh sửa thông tin cơ sở
-            </Button>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.25, overflowWrap: 'anywhere' }}
+              >
+                {location.data.address} ·{' '}
+                {roomCounts.rooms != null
+                  ? `${roomCounts.rooms} phòng`
+                  : occupancy.isPending
+                    ? 'Đang tải số liệu phòng'
+                    : 'Chưa có số liệu phòng'}
+              </Typography>
+            </Box>
           </Stack>
-        </Paper>
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{ flexShrink: 0, flexWrap: 'wrap', alignItems: 'center', maxWidth: '100%' }}
+          >
+            {owner && active === 'overview' && (
+              <ApiConfigurationCopy key={locationId} sourceLocationId={locationId} compactTrigger />
+            )}
+            {owner && active === 'overview' && location.data.isActive && (
+              <Button
+                component={Link}
+                to={`/locations/${locationId}/rooms?action=create`}
+                variant="contained"
+                startIcon={<Plus size={18} />}
+              >
+                Thêm phòng
+              </Button>
+            )}
+          </Stack>
+        </Stack>
+      </Box>
+      {!location.data.isActive && (
+        <Alert severity="info">
+          Cơ sở đang ngừng hoạt động. Việc mở lại cơ sở không tự động chuyển các phòng ngừng khai
+          thác thành phòng trống.
+        </Alert>
+      )}
+      <Paper
+        component="nav"
+        aria-label="Các phân hệ cơ sở"
+        variant="outlined"
+        sx={{ minWidth: 0, p: 0, position: 'sticky', top: 64, zIndex: 5, overflow: 'hidden' }}
+      >
+        <Tabs
+          value={tabs.some(([key]) => key === activeTab) ? activeTab : 'overview'}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          aria-label="Quản lý cơ sở"
+          sx={{
+            minHeight: 42,
+            '& .MuiTabs-indicator': { height: 2, borderRadius: '2px 2px 0 0' },
+            '& .MuiTab-root': {
+              minHeight: { xs: 44, md: 42 },
+              '@media (pointer:coarse)': { minHeight: 44 },
+              py: 0.75,
+              px: 1.5,
+              borderRadius: 0,
+              textTransform: 'none',
+              fontWeight: 650,
+              color: 'text.secondary',
+            },
+            '& .Mui-selected': { bgcolor: 'primary.light', color: 'primary.main' },
+          }}
+        >
+          {tabs.map(([key, label]) => (
+            <Tab
+              key={key}
+              value={key}
+              label={label}
+              icon={(() => {
+                const Icon = tabIcons[key];
+                return <Icon size={16} strokeWidth={1.8} />;
+              })()}
+              iconPosition="start"
+              component={Link}
+              to={`/locations/${locationId}/${key}`}
+            />
+          ))}
+        </Tabs>
+      </Paper>
+      {active === 'overview' ? (
+        <>
+          {summary.error && (
+            <Alert
+              severity="warning"
+              action={<Button onClick={() => void summary.refetch()}>Thử lại</Button>}
+            >
+              Chưa tải được số liệu sự cố.
+            </Alert>
+          )}
+          {occupancy.isError && (
+            <Alert
+              severity="warning"
+              action={<Button onClick={() => void occupancy.refetch()}>Thử lại</Button>}
+            >
+              Chưa tải được trạng thái khai thác phòng.
+            </Alert>
+          )}
+          <LocationWorkspaceOverview
+            id={locationId}
+            summary={{ ...summary.data, ...roomCounts }}
+            active={location.data.isActive}
+            loading={occupancy.isPending}
+            owner={owner}
+            finance={{
+              data: finance.data,
+              loading: finance.isPending,
+              error: finance.isError ? financeError(finance.error) : undefined,
+              retry: () => void finance.refetch(),
+              from: financeFilter.from,
+              to: financeFilter.to,
+            }}
+          />
+        </>
+      ) : active === 'settings' ? (
+        <LocationWorkspaceSettings key={locationId} location={location.data} />
+      ) : (
+        <>
+          {active === 'assets' ? (
+            <LocationAssetsWorkspace key={locationId} locationId={locationId} />
+          ) : ['room-types', 'rooms', 'investment'].includes(active) ? (
+            <Outlet />
+          ) : activeTab === 'pricing' ? (
+            <LocationPricingWorkspace
+              key={`${locationId}:${active}`}
+              locationId={locationId}
+              initialTab={active === 'utilities' ? 3 : 0}
+            />
+          ) : active === 'rules' ? (
+            <OperatingPoliciesPanel key={locationId} locationId={locationId} />
+          ) : active === 'history' ? (
+            <LocationRoomHistory key={locationId} locationId={locationId} />
+          ) : (
+            <Paper sx={{ p: 3 }}>
+              <Stack spacing={2}>
+                <Typography>Không tìm thấy phân hệ này.</Typography>
+                <Button component={Link} to={`/locations/${locationId}/overview`}>
+                  Về Tổng quan
+                </Button>
+              </Stack>
+            </Paper>
+          )}
+        </>
       )}
     </Stack>
   );
 }
 
-function LocationRoomHistory({ locationId }: { locationId: string }) {
+const historyEventLabels: Record<string, string> = {
+  RoomStatusOrConfiguration: 'Cấu hình / trạng thái phòng',
+  HoldingActivated: 'Kích hoạt hợp đồng giữ chỗ',
+  HoldingExpired: 'Hợp đồng giữ chỗ hết hạn',
+  HoldingCancelled: 'Hủy hợp đồng giữ chỗ',
+  HoldingConverted: 'Chuyển đổi hợp đồng giữ chỗ',
+  ContractActivated: 'Kích hoạt hợp đồng thuê',
+  ContractEnded: 'Kết thúc kỳ thuê',
+  OccupancyStarted: 'Bắt đầu thời gian cư trú',
+  OccupancyEnded: 'Kết thúc thời gian cư trú',
+};
+const historySummaryLabels: Record<string, string> = {
+  Created: 'Tạo phòng',
+  Updated: 'Cập nhật phòng',
+  'A Holding Contract was activated.': 'Hợp đồng giữ chỗ được kích hoạt.',
+  'A Main Tenancy Contract was activated.': 'Hợp đồng thuê chính thức được kích hoạt.',
+  'A Holding Contract became Expired.': 'Hợp đồng giữ chỗ đã hết hạn.',
+  'A Holding Contract became Cancelled.': 'Hợp đồng giữ chỗ đã bị hủy.',
+  'A Holding Contract became Converted.': 'Hợp đồng giữ chỗ đã được chuyển đổi.',
+  'A Main Tenancy Contract occupancy period ended.':
+    'Thời gian cư trú của hợp đồng thuê đã kết thúc.',
+  'A resident occupancy interval started.': 'Một khoảng thời gian cư trú bắt đầu.',
+  'A resident occupancy interval ended.': 'Một khoảng thời gian cư trú kết thúc.',
+};
+
+export function LocationRoomHistory({ locationId }: { locationId: string }) {
   const api = usePropertySetupApi();
   const { session } = useAuth();
-  const [roomId, setRoomId] = useState('');
+  const [params, setParams] = useSearchParams();
+  const roomId = params.get('roomId') ?? '';
+  const from = params.get('from') ?? '';
+  const to = params.get('to') ?? '';
+  const eventType = params.get('eventType') ?? '';
+  const validDates =
+    (!from || /^\d{4}-\d{2}-\d{2}$/.test(from)) &&
+    (!to || /^\d{4}-\d{2}-\d{2}$/.test(to)) &&
+    (!from || !to || from <= to);
   const [page, setPage] = useState(1);
+  const changeFilter = (name: string, value: string) => {
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (value) next.set(name, value);
+        else next.delete(name);
+        return next;
+      },
+      { replace: true },
+    );
+    setPage(1);
+  };
   const rooms = useQuery({
     queryKey: ['property-setup', 'room-options', session?.userId, locationId],
     queryFn: ({ signal }) => api.roomOptions(locationId, signal),
   });
   const history = useQuery({
-    queryKey: ['property-setup', 'history', session?.userId, roomId, page],
+    queryKey: [
+      'property-setup',
+      'history',
+      session?.userId,
+      locationId,
+      roomId,
+      page,
+      from,
+      to,
+      eventType,
+    ],
     queryFn: ({ signal }) =>
       api.request<{
-        items: { id: string; summary: string; occurredAt: string }[];
+        items: {
+          id: string;
+          summary: string;
+          occurredAt: string;
+          eventType?: string;
+          source?: string;
+        }[];
         totalCount: number;
         limitations: string[];
-      }>(`/api/v1/rooms/${encodeURIComponent(roomId)}/history?page=${page}&pageSize=20`, {
-        signal,
-      }),
-    enabled: !!roomId,
+      }>(
+        `/api/v1/rooms/${encodeURIComponent(roomId)}/history?${new URLSearchParams({ page: String(page), pageSize: '20', ...(from ? { from } : {}), ...(to ? { to } : {}), ...(eventType ? { eventType } : {}) })}`,
+        {
+          signal,
+        },
+      ),
+    enabled: validDates && !!roomId && !!rooms.data?.some((room) => room.id === roomId),
   });
   return (
-    <Stack spacing={2}>
-      <TextField
-        select
-        label="Phòng xem lịch sử"
-        value={roomId}
-        onChange={(event) => {
-          setRoomId(event.target.value);
-          setPage(1);
-        }}
-      >
-        <MenuItem value="">Chọn phòng</MenuItem>
-        {rooms.data?.map((room) => (
-          <MenuItem key={room.id} value={room.id}>
-            {room.label}
-          </MenuItem>
-        ))}
-      </TextField>
+    <LocationSection title="Lịch sử vận hành phòng">
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack
+          direction="row"
+          useFlexGap
+          spacing={1.5}
+          sx={{ flexWrap: 'wrap', alignItems: 'flex-start' }}
+        >
+          <Autocomplete
+            options={rooms.data ?? []}
+            value={rooms.data?.find((room) => room.id === roomId) ?? null}
+            getOptionLabel={(room) => room.label}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            loading={rooms.isPending}
+            onChange={(_, value) => {
+              changeFilter('roomId', value?.id ?? '');
+            }}
+            renderInput={(props) => (
+              <TextField {...props} label="Phòng xem lịch sử" placeholder="Tìm theo số phòng" />
+            )}
+            sx={{ width: { xs: '100%', sm: 260 }, maxWidth: '100%' }}
+          />
+          <TextField
+            type="date"
+            label="Từ ngày"
+            value={from}
+            onChange={(e) => changeFilter('from', e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ width: { xs: '100%', sm: 170 } }}
+          />
+          <TextField
+            type="date"
+            label="Đến ngày"
+            value={to}
+            onChange={(e) => changeFilter('to', e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            error={!validDates}
+            helperText={!validDates ? 'Khoảng ngày không hợp lệ' : undefined}
+            sx={{ width: { xs: '100%', sm: 170 } }}
+          />
+          <TextField
+            select
+            label="Loại sự kiện"
+            value={eventType}
+            onChange={(e) => changeFilter('eventType', e.target.value)}
+            sx={{ width: { xs: '100%', sm: 220 }, minWidth: 0 }}
+          >
+            <MenuItem value="">Tất cả sự kiện</MenuItem>
+            {Object.entries(historyEventLabels).map(([key, label]) => (
+              <MenuItem key={key} value={key}>
+                {label}
+              </MenuItem>
+            ))}
+          </TextField>
+          {(from || to || eventType) && (
+            <Button
+              sx={{ alignSelf: 'flex-start', flexShrink: 0 }}
+              onClick={() => {
+                setParams(roomId ? { roomId } : {}, { replace: true });
+                setPage(1);
+              }}
+            >
+              Xóa bộ lọc
+            </Button>
+          )}
+        </Stack>
+      </Paper>
       {rooms.error && <ErrorState error={rooms.error} retry={() => void rooms.refetch()} />}
-      {roomId &&
+      {!roomId && (
+        <LocationEmpty
+          title="Chọn phòng để tra cứu"
+          description="Tìm và chọn một phòng tại cơ sở để xem các sự kiện đã ghi nhận."
+        />
+      )}
+      {roomId && rooms.data && !rooms.data.some((room) => room.id === roomId) && (
+        <Alert severity="warning">
+          Phòng không có trong danh sách của cơ sở này. Hãy chọn lại.
+        </Alert>
+      )}
+      {validDates &&
+        roomId &&
+        rooms.data?.some((room) => room.id === roomId) &&
         (history.isPending ? (
           <LoadingState />
         ) : history.error ? (
@@ -203,30 +521,72 @@ function LocationRoomHistory({ locationId }: { locationId: string }) {
           <>
             {history.data.limitations.map((item) => (
               <Alert key={item} severity="info">
-                {item}
+                {item ===
+                'Property audit predating the current append-only capture may be incomplete.'
+                  ? 'Lịch sử trước thời điểm bắt đầu ghi nhật ký thay đổi có thể chưa đầy đủ.'
+                  : item}
               </Alert>
             ))}
-            {!history.data.items.length && <Typography>Chưa có lịch sử phù hợp.</Typography>}
-            {history.data.items.map((item) => (
-              <Paper key={item.id} sx={{ p: 2 }}>
-                <Typography>
-                  {new Date(item.occurredAt).toLocaleString('vi-VN')} · {item.summary}
+            {!history.data.items.length ? (
+              <LocationEmpty
+                title="Chưa có lịch sử phù hợp"
+                description="Các sự kiện đã ghi nhận sẽ xuất hiện ở đây."
+              />
+            ) : (
+              <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
+                <Typography component="h3" variant="h2" sx={{ mb: 2 }}>
+                  Sự kiện đã ghi nhận
                 </Typography>
+                <Stack
+                  component="ol"
+                  divider={<Divider />}
+                  spacing={2}
+                  sx={{ listStyle: 'none', p: 0, m: 0 }}
+                >
+                  {history.data.items.map((item) => (
+                    <Stack
+                      component="li"
+                      key={item.id}
+                      direction="row"
+                      spacing={1.5}
+                      sx={{ alignItems: 'flex-start' }}
+                    >
+                      <Box sx={{ color: 'primary.main', mt: 0.5 }}>
+                        <History size={19} aria-hidden="true" />
+                      </Box>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          component="time"
+                          dateTime={item.occurredAt}
+                        >
+                          {formatInstant(item.occurredAt)}
+                        </Typography>
+                        {item.eventType && (
+                          <Typography sx={{ mt: 0.25, fontWeight: 700 }}>
+                            {historyEventLabels[item.eventType] ?? item.eventType}
+                          </Typography>
+                        )}
+                        <Typography sx={{ mt: 0.25, overflowWrap: 'anywhere' }}>
+                          {historySummaryLabels[item.summary] ?? item.summary}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  ))}
+                </Stack>
+                <TablePagination
+                  component="div"
+                  count={history.data.totalCount}
+                  page={page - 1}
+                  rowsPerPage={20}
+                  rowsPerPageOptions={[20]}
+                  onPageChange={(_, next) => setPage(next + 1)}
+                />
               </Paper>
-            ))}
-            <Stack direction="row">
-              <Button disabled={page === 1} onClick={() => setPage(page - 1)}>
-                Trang trước
-              </Button>
-              <Button
-                disabled={page * 20 >= history.data.totalCount}
-                onClick={() => setPage(page + 1)}
-              >
-                Trang sau
-              </Button>
-            </Stack>
+            )}
           </>
         ))}
-    </Stack>
+    </LocationSection>
   );
 }

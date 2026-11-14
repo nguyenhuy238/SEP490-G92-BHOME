@@ -6,7 +6,7 @@ const auth = vi.hoisted(() => ({
   session: { userId: 'owner', sessionId: 'session-one', roles: ['Owner'] },
 }));
 vi.mock('../../../../packages/client-core/src/auth', () => ({ useAuth: () => auth }));
-vi.mock('../services/config', () => ({ isMockMode: false }));
+vi.mock('../services/config', () => ({ isMockMode: false, apiBaseUrl: '' }));
 afterEach(cleanup);
 it('drops cached business data when the session or effective roles change', () => {
   const { result, rerender } = renderHook(() => useQueryClient(), {

@@ -14,6 +14,8 @@ public sealed class MeterCaptureRegressionTests(Compact24WorkflowFixture fixture
     [CompactPostgresFact]
     public Task ConfirmationAndReplay() => new CaptureWorkflowTests(fixture.Capture).ConfirmMeterWorkflowAsync(verifyMinioObject: false);
     [CompactPostgresFact]
+    public Task SameDayInitialAndPeriodic() => new CaptureWorkflowTests(fixture.Capture).PeriodicReadingOnBaselineDateUsesConfirmedInitialValueWithoutAllowingMeterDecrease();
+    [CompactPostgresFact]
     public Task InvalidConfirmation() => new CaptureWorkflowTests(fixture.Capture).MissingBaselineWrongEvidenceAndUnconfirmedOrNegativeReadingCannotCompleteTask();
     [CompactPostgresFact]
     public Task StorageFailure() => new CaptureWorkflowTests(fixture.Capture).PartialStorageFailureLeavesDurableCleanupIntentAndCannotCreateConfirmedReading();

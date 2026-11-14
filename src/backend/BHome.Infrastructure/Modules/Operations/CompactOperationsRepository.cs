@@ -1,7 +1,10 @@
 using System.Data;
 using System.Globalization;
 using System.Text.Json;
+using System.Security.Cryptography;
+using BHome.Infrastructure.IdentityAccess;
 using BHome.Application.Operations;
+using BHome.Application.IdentityAccess;
 using BHome.Domain.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
@@ -13,7 +16,8 @@ using NpgsqlTypes;
 
 namespace BHome.Infrastructure.Modules.Operations;
 
-internal sealed class CompactOperationsRepository(Compact24DbContext db, UserManager<ApplicationUser> users)
+internal sealed class CompactOperationsRepository(Compact24DbContext db, UserManager<ApplicationUser> users,
+    SignInManager<ApplicationUser> signIn)
     : IOperationsRepository
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -32,24 +36,42 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     public async Task<ProfileView> UpdateProfileAsync(Guid userId, ProfileUpdate input, DateTimeOffset now, CancellationToken t)
     {
         await using var tx = await db.Database.BeginTransactionAsync(t); await Open(t);
+        var account = await db.Users.FromSqlInterpolated($"SELECT * FROM users WHERE id={userId} FOR UPDATE").SingleOrDefaultAsync(t)
+            ?? throw OperationsException.Missing();
+        await db.Entry(account).ReloadAsync(t);
+        if (!account.IsActive) throw OperationsException.Forbidden();
+        if (account.ConcurrencyStamp != input.Version) throw OperationsException.Conflict("stale_profile_version");
+        var emailChanged = !string.Equals(account.Email, input.Email, StringComparison.OrdinalIgnoreCase);
+        var phoneChanged = LoginIdentifier.NormalizePhone(account.PhoneNumber) != input.Phone;
+        if (emailChanged || phoneChanged)
+        {
+            if (string.IsNullOrWhiteSpace(input.CurrentPassword)) throw OperationsException.Invalid("current_password_required");
+            if (!(await signIn.CheckPasswordSignInAsync(account, input.CurrentPassword, lockoutOnFailure: true)).Succeeded)
+            {
+                await Audit(userId, "ProfileContactReauthenticationFailed", "User", userId, now, t);
+                await tx.CommitAsync(t); // Preserve Identity failed-attempt/lockout state, without applying profile changes.
+                throw OperationsException.Invalid("current_password_invalid");
+            }
+        }
         await EnsurePhoneAvailable(userId, input.Phone, t);
         var normalized = input.Email.ToUpperInvariant(); var nextVersion = Guid.NewGuid().ToString("N");
         await using var command = Command("""
             UPDATE users SET full_name=@name,phone=@phone,email=@email,normalized_email=@normalized,
-                username=@email,normalized_username=@normalized,
-                email_confirmed=CASE WHEN normalized_email=@normalized THEN email_confirmed ELSE false END,
-                phone_confirmed=CASE WHEN phone IS NOT DISTINCT FROM @phone THEN phone_confirmed ELSE false END,
-                security_stamp=CASE WHEN normalized_email=@normalized AND phone IS NOT DISTINCT FROM @phone THEN security_stamp ELSE @stamp END,
+                username=CASE WHEN @emailChanged THEN @email ELSE username END,
+                normalized_username=CASE WHEN @emailChanged THEN @normalized ELSE normalized_username END,
+                email_confirmed=CASE WHEN @emailChanged THEN false ELSE email_confirmed END,
+                phone_confirmed=CASE WHEN @phoneChanged THEN false ELSE phone_confirmed END,
+                reset_consumed_at=CASE WHEN @emailChanged AND reset_token_hash IS NOT NULL THEN @now ELSE reset_consumed_at END,
                 concurrency_stamp=@next,
                 history=history||jsonb_build_array(jsonb_build_object('action','ProfileUpdated','actorId',id,
-                    'occurredAt',@now,'emailChanged',normalized_email IS DISTINCT FROM @normalized,
-                    'phoneChanged',phone IS DISTINCT FROM @phone))
+                    'occurredAt',@now,'emailChanged',@emailChanged,'phoneChanged',@phoneChanged))
             WHERE id=@id AND concurrency_stamp=@version
             """);
         command.Parameters.AddWithValue("name", input.FullName); command.Parameters.AddWithValue("phone", (object?)input.Phone ?? DBNull.Value);
         command.Parameters.AddWithValue("email", input.Email); command.Parameters.AddWithValue("normalized", normalized);
-        command.Parameters.AddWithValue("stamp", Guid.NewGuid().ToString("N")); command.Parameters.AddWithValue("next", nextVersion);
-        command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("id", userId); command.Parameters.AddWithValue("version", input.Version);
+        command.Parameters.AddWithValue("emailChanged", emailChanged); command.Parameters.AddWithValue("phoneChanged", phoneChanged);
+        command.Parameters.AddWithValue("next", nextVersion);
+        command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("id", userId); command.Parameters.AddWithValue("version", account.ConcurrencyStamp!);
         try
         {
             if (await command.ExecuteNonQueryAsync(t) != 1) throw OperationsException.Conflict("stale_profile_version");
@@ -108,7 +130,9 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             ConcurrencyStamp = Guid.NewGuid().ToString("N")
         };
         db.PrepareUserRole(user, Roles.Staff);
-        var created = await users.CreateAsync(user, input.InitialPassword);
+        AccountInvitations.MarkPendingSetup(db, user, now);
+        // Legacy InitialPassword is accepted for request compatibility but never used or delivered.
+        var created = await users.CreateAsync(user, Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)) + "!aA1");
         if (!created.Succeeded) throw OperationsException.Invalid("invalid_staff_account");
         if (!await users.IsInRoleAsync(user, Roles.Staff))
         {
@@ -176,7 +200,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         await using var command = Command("""
             UPDATE contract_residents cr SET actual_residence_from=@actual,registration_status=@status,
                 registration_result_at=@result,owner_confirmed_by_user_id=NULL,owner_confirmed_at=NULL,
-                history=history||jsonb_build_array(jsonb_build_object('action','TenantStatusUpdated','actorId',@actor,
+                history=cr.history||jsonb_build_array(jsonb_build_object('action','TenantStatusUpdated','actorId',@actor,
                     'occurredAt',@now,'status',@status,'note',@note))
             FROM residents r,contracts c WHERE cr.contract_id=@contract AND cr.resident_id=@resident
               AND r.id=cr.resident_id AND r.user_id=@actor AND c.id=cr.contract_id AND c.status=3
@@ -185,8 +209,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
               AND (@status<>'Completed' OR (cr.registration_evidence_key IS NOT NULL AND @result IS NOT NULL))
             """);
         command.Parameters.AddWithValue("actual", input.ActualResidenceFrom); command.Parameters.AddWithValue("status", input.Status);
-        command.Parameters.AddWithValue("result", (object?)input.ResultAt ?? DBNull.Value); command.Parameters.AddWithValue("actor", actorId);
-        command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("note", (object?)input.Note ?? DBNull.Value);
+        command.Parameters.AddWithValue("result", NpgsqlDbType.TimestampTz, (object?)input.ResultAt ?? DBNull.Value); command.Parameters.AddWithValue("actor", actorId);
+        command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("note", NpgsqlDbType.Text, (object?)input.Note ?? DBNull.Value);
         command.Parameters.AddWithValue("contract", contractId); command.Parameters.AddWithValue("resident", residentId);
         if (await command.ExecuteNonQueryAsync(t) != 1) throw OperationsException.Conflict("invalid_residence_transition");
     });
@@ -211,7 +235,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         await using var command = Command("""
             UPDATE contract_residents cr SET registration_evidence_key=@key,
                 owner_confirmed_by_user_id=NULL,owner_confirmed_at=NULL,
-                history=history||jsonb_build_array(jsonb_build_object('action','EvidenceUploaded','actorId',@actor,
+                history=cr.history||jsonb_build_array(jsonb_build_object('action','EvidenceUploaded','actorId',@actor,
                   'occurredAt',@now,'contentType',@type,'length',@length))
             FROM residents r,contracts c WHERE cr.contract_id=@contract AND cr.resident_id=@resident
               AND r.id=cr.resident_id AND r.user_id=@actor AND c.id=cr.contract_id AND c.status=3
@@ -420,7 +444,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         if (existing >= 0 && templates[existing].Version != input.Version) throw OperationsException.Conflict("stale_recurring_template_version");
         if (!id.HasValue && input.Version != 0) throw OperationsException.Invalid("invalid_recurring_template_version");
         var next = new RecurringTaskTemplateView(templateId, input.LocationId, input.Title, input.Requirements, input.Priority,
-            input.EvidenceRequired, input.IntervalDays, input.NextRunAt, input.DueAfterHours, input.IsActive, existing < 0 ? 1 : templates[existing].Version + 1);
+            input.EvidenceRequired, input.IntervalDays, input.NextRunAt, input.DueAfterHours, input.IsActive,
+            existing < 0 ? 1 : templates[existing].Version + 1, input.ScheduleType, input.DayOfWeek, input.DayOfMonth);
         if (existing < 0) templates.Add(next); else templates[existing] = next;
         await SaveTemplates(input.LocationId, templates, actorId, now, "RecurringTemplateSaved", t);
         await tx.CommitAsync(t); return next;
@@ -449,7 +474,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
                 var template = templates[i]; if (!template.IsActive || template.NextRunAt > now) continue;
                 var scheduled = template.NextRunAt; var assignment = await CurrentResponsible(location, DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime), t);
                 if (await InsertRecurringTask(template, scheduled, assignment, now, t)) created++;
-                do { scheduled = scheduled.AddDays(template.IntervalDays); } while (scheduled <= now);
+                do { scheduled = RecurringTaskSchedule.Next(template, scheduled); } while (scheduled <= now);
                 templates[i] = template with { NextRunAt = scheduled, Version = template.Version + 1 }; changed = true;
             }
             if (changed) await SaveTemplates(location, templates, Guid.Empty, now, "RecurringTasksGenerated", t);
@@ -694,8 +719,10 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             await phoneLock.ExecuteNonQueryAsync(t);
         }
         await using var duplicate = Command("""
-            SELECT EXISTS(SELECT 1 FROM users WHERE id<>@id AND phone IS NOT NULL AND
-              replace(replace(replace(replace(replace(phone,' ',''),'-',''),'.',''),'(',''),')','')=@phone)
+            SELECT EXISTS(SELECT 1 FROM users u CROSS JOIN LATERAL
+              (SELECT replace(replace(replace(replace(replace(u.phone,' ',''),'-',''),'.',''),'(',''),')','') AS value) p
+              WHERE u.id<>@id AND u.phone IS NOT NULL AND
+                CASE WHEN p.value LIKE '0%' AND length(p.value) IN (10,11) THEN '+84'||substring(p.value FROM 2) ELSE p.value END=@phone)
             """);
         duplicate.Parameters.AddWithValue("id", userId); duplicate.Parameters.AddWithValue("phone", phone);
         if ((bool)(await duplicate.ExecuteScalarAsync(t))!) throw OperationsException.Conflict("phone_already_used");

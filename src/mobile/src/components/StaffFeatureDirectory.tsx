@@ -16,7 +16,7 @@ function StaffFeatureGrid({
   onOpen,
 }: {
   items: StaffFeature[];
-  onOpen: (screen: WorkspaceScreen) => void;
+  onOpen: (screen: WorkspaceScreen, params?: Record<string, string>) => void;
 }) {
   return (
     <View style={styles.grid}>
@@ -30,7 +30,7 @@ function StaffFeatureGrid({
             background={
               item.screen === 'staff-emergencies' ? staffColors.redSoft : staffColors.blueSoft
             }
-            onPress={() => onOpen(item.screen)}
+            onPress={() => (item.params ? onOpen(item.screen, item.params) : onOpen(item.screen))}
             compact
             incident={['report-incident', 'staff-maintenance', 'staff-emergencies'].includes(
               item.screen,
@@ -43,7 +43,11 @@ function StaffFeatureGrid({
   );
 }
 
-export function StaffFeatureDirectory({ onOpen }: { onOpen: (screen: WorkspaceScreen) => void }) {
+export function StaffFeatureDirectory({
+  onOpen,
+}: {
+  onOpen: (screen: WorkspaceScreen, params?: Record<string, string>) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const count = staffFeatureGroups.reduce((total, group) => total + group.items.length, 0);
   return (

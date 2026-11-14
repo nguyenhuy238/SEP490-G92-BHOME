@@ -25,6 +25,7 @@ export function useSetupAction() {
   return {
     busy: mutation.isPending,
     error: mutation.error ? invoiceError(mutation.error) : '',
+    rawError: mutation.error,
     notice,
     run: (action: () => Promise<unknown>, message = 'Máy chủ đã xử lý yêu cầu.') => {
       if (lock.current) return;

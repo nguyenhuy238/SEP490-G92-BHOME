@@ -1,8 +1,11 @@
+import { RentalContractStepper } from './RentalContractStepper';
+import { MainDraftSigningReview } from './MainDraftSigningReview';
+import { workflowFailure } from '../../lib/workflowFailure';
 import { ContractPdfPreview } from './ContractPdfPreview';
 import { ContractPreviewSummary } from './ContractPreviewSummary';
 import { KeyboardFormScrollView } from '../../components/KeyboardFormScrollView';
 import { useFeedbackState } from '../../lib/useFeedbackState';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, IconButton, Portal, Text, TextInput } from 'react-native-paper';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -23,20 +26,27 @@ import {
   displayContractDate,
   mutationKeys,
   labels,
+  type PreviewDocument,
 } from '../../../../../packages/client-core/src/contracts';
 import { useSession } from '../../lib/SessionProvider';
 import { randomUUID } from '../../lib/randomUUID';
 import { inputDate } from '../../lib/identity';
-import { Box, Heading, Pill } from '../../components/WorkspaceKit';
-import { staffColors as s } from '../../theme/theme';
+import { Box, Heading, Pill, Row } from '../../components/WorkspaceKit';
+import { staffColors as s, colors as c } from '../../theme/theme';
 import { ContractDateField } from '../../components/ContractDateField';
 import { ToastHost } from '../../components/ToastHost';
-import { showSuccess, showWarning } from '../../lib/toast';
+import { showSuccess } from '../../lib/toast';
+import { previewErrorCode, requiresNewDocument } from './pdfPreview';
+import { deliverWebDocument, openPdfWindow } from './webContractDocument';
+import { ownerContractSteps } from '../owner/ownerContractSteps';
 
 const iso = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 function message(error: unknown) {
-  const code = (error as { code?: string }).code;
+  const code = previewErrorCode(error);
+  if (code === 'pdf_popup_blocked')
+    return 'Trình duyệt chặn cửa sổ PDF. Cho phép cửa sổ bật lên hoặc chọn Tải PDF.';
+  if (code === 'pdf_window_closed') return 'Cửa sổ PDF đã đóng. Chọn Xem PDF để mở lại.';
   if ((error as { status?: number })?.status === 503 && !mainDraftMessages[code ?? ''])
     return 'Máy chủ chưa xử lý được hợp đồng. Hãy thử lại sau.';
   if (error instanceof Error && error.message === 'Thiết bị chưa có trình mở tài liệu.')
@@ -52,6 +62,7 @@ export function MainDraftScreen({
   onList,
   onSaved,
   persistRoute = true,
+  onReleased,
 }: {
   initialId?: string;
   roomId: string;
@@ -61,8 +72,10 @@ export function MainDraftScreen({
   onList: () => void;
   onSaved?: (id: string) => void;
   persistRoute?: boolean;
+  onReleased?: (id: string) => void;
 }) {
-  const { api } = useSession();
+  const { api, session } = useSession();
+  const owner = !!session?.roles.includes('Owner');
   const client = useMemo(
     () => (api ? mainDraftClient((path, init, type) => api.request(path, init, type)) : null),
     [api],
@@ -75,12 +88,17 @@ export function MainDraftScreen({
   const [end, setEnd] = useState('');
   const [phone, setPhone] = useState(''),
     [place, setPlace] = useState(''),
+    [email, setEmail] = useState(''),
     [notes, setNotes] = useState('');
-  const [mode, setMode] = useState<'edit' | 'preview' | 'success'>('edit');
+  const [mode, setMode] = useState<'edit' | 'preview' | 'signing'>('edit');
+  const [signingVisited, setSigningVisited] = useState(false);
   const [documents, setDocuments] = useState<MainDraftFiles | null>(null);
+  const [reviewRevision, setReviewRevision] = useState(0);
+  const [readyFile, setReadyFile] = useState(''),
+    [documentBlocker, setDocumentBlocker] = useState('');
   const [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true),
-    [error, setError] = useFeedbackState();
+    [error, setError] = useFeedbackState('error', false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [revision, setRevision] = useState(0);
   const [keys] = useState(() => mutationKeys(randomUUID));
@@ -88,9 +106,31 @@ export function MainDraftScreen({
     alive = useRef(true),
     dirty = useRef(false);
   const operation = useRef<AbortController | null>(null);
+  const formScroll = useRef<React.ComponentRef<typeof KeyboardFormScrollView>>(null);
+  useEffect(() => {
+    if (owner) formScroll.current?.scrollTo({ y: 0, animated: false });
+  }, [mode, owner]);
+  const currentOperation = (controller: AbortController) =>
+    alive.current && operation.current === controller && !controller.signal.aborted;
   const calendarClose = useRef<(() => void) | null>(null);
   const routePromotion = useRef<{ id: string; client: typeof client } | null>(null);
   const refs = useRef({ roomId, representativeResidentId, residentIds });
+  const releasedHandler = useRef(onReleased);
+  useEffect(() => {
+    releasedHandler.current = onReleased;
+  }, [onReleased]);
+  const invalidateDocument = useCallback(
+    (error: unknown) => {
+      setReadyFile('');
+      if (!requiresNewDocument(error)) return;
+      setDocuments(null);
+      setReviewRevision((value) => value + 1);
+      setReadyFile('');
+      setDocumentBlocker(previewErrorCode(error));
+      setError(message(error));
+    },
+    [setError],
+  );
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -111,12 +151,30 @@ export function MainDraftScreen({
         setLoading(false);
         return;
       }
+      // A route may reuse this component. Retire the previous resource and any generation
+      // still in flight before adopting the new draft (including an explicit reload).
+      operation.current?.abort();
+      operation.current = null;
+      lock.current = false;
+      setBusy(false);
+      setId(initialId ?? '');
+      setSaved(null);
+      setDocuments(null);
+      setReadyFile('');
+      setDocumentBlocker('');
+      setReviewRevision((value) => value + 1);
+      setSigningVisited(false);
+      setMode('edit');
       setLoading(true);
       setError('');
       try {
         if (initialId) {
           const draft = await client!.get(initialId, controller.signal);
           if (controller.signal.aborted) return;
+          if (owner && draft.status !== 'Draft') {
+            releasedHandler.current?.(draft.id);
+            return;
+          }
           setId(draft.id);
           setSaved(draft);
           setPreparation(draft.preparation);
@@ -126,6 +184,11 @@ export function MainDraftScreen({
           setPhone(draft.input.tenantPhone);
           setPlace(draft.input.tenantPlaceOfIssue);
           setNotes(draft.input.notes);
+          setEmail(
+            draft.input.tenantEmail ??
+              draft.preparation.residents.find((r) => r.representative)?.email ??
+              '',
+          );
           dirty.current = false;
         } else {
           const result = await client!.prepare(
@@ -135,9 +198,11 @@ export function MainDraftScreen({
           if (!controller.signal.aborted) {
             setPreparation(result);
             setPhone(result.residents.find((r) => r.representative)?.phone ?? '');
+            setEmail(result.residents.find((r) => r.representative)?.email ?? '');
           }
         }
       } catch (e) {
+        workflowFailure('main-draft', e);
         if (!controller.signal.aborted) setError(message(e));
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -145,7 +210,35 @@ export function MainDraftScreen({
     }
     void load();
     return () => controller.abort();
-  }, [client, initialId, revision, setError]);
+  }, [client, initialId, revision, setError, owner]);
+  useEffect(() => {
+    if (!client || !id || mode !== 'signing' || saved?.status !== 'Draft') return;
+    const controller = new AbortController();
+    let running = false;
+    let finished = false;
+    const timer = setInterval(() => {
+      if (running || finished || lock.current) return;
+      running = true;
+      void client
+        .get(id, controller.signal)
+        .then((latest) => {
+          if (controller.signal.aborted || latest.status === 'Draft') return;
+          finished = true;
+          if (onReleased) onReleased(latest.id);
+          else onList();
+        })
+        .catch((e) => {
+          if (!controller.signal.aborted) setError(message(e));
+        })
+        .finally(() => {
+          running = false;
+        });
+    }, 5000);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [client, id, mode, saved?.status, onReleased, onList, setError]);
   function input(): MainDraftInput | null {
     const errors: Record<string, string> = {};
     let from = '',
@@ -162,7 +255,8 @@ export function MainDraftScreen({
     }
     if (from && to && to <= from) errors.end = 'Ngày kết thúc phải sau ngày bắt đầu.';
     if (!phone.trim()) errors.phone = 'Bổ sung số điện thoại người thuê.';
-    if (!place.trim()) errors.place = 'Bổ sung nơi cấp theo giấy tờ.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || email.trim().length > 256)
+      errors.email = 'Nhập email người thuê hợp lệ.';
     setFieldErrors(errors);
     return Object.keys(errors).length
       ? null
@@ -173,11 +267,18 @@ export function MainDraftScreen({
           notes,
           tenantPhone: phone.trim(),
           tenantPlaceOfIssue: place.trim(),
+          tenantEmail: email.trim(),
           expectedVersion: saved?.version ?? 0,
         };
   }
   async function save(preview: boolean) {
     if (!client || lock.current || readOnly) return;
+    // Reading an unchanged Owner draft must not increment its version and retire the
+    // PDF another viewer/reviewer is using. Generation already validates current state.
+    if (preview && owner && saved && !dirty.current) {
+      await reviewSaved(false);
+      return;
+    }
     const body = input();
     if (!body) return;
     lock.current = true;
@@ -187,10 +288,9 @@ export function MainDraftScreen({
     operation.current = controller;
     try {
       const prep = await client.prepare(body, controller.signal);
-      if (!alive.current) return;
+      if (!currentOperation(controller)) return;
       setPreparation(prep);
       if (prep.blockers.length) {
-        setError(prep.blockers.map((code) => mainDraftMessages[code] ?? code).join('\n'));
         return;
       }
       const result = await client.save(
@@ -200,10 +300,15 @@ export function MainDraftScreen({
         controller.signal,
       );
       keys.confirmed('main-draft', body);
-      if (!alive.current) return;
+      if (!currentOperation(controller)) return;
       setId(result.id);
+      setReadyFile('');
+      setDocumentBlocker('');
+      setDocuments(null);
+      setReviewRevision((value) => value + 1);
       setSaved(result);
       setPhone(result.input.tenantPhone);
+      setEmail(result.input.tenantEmail ?? email.trim());
       setPreparation(result.preparation);
       dirty.current = false;
       if (initialId !== result.id) routePromotion.current = { id: result.id, client };
@@ -216,23 +321,25 @@ export function MainDraftScreen({
         setDocuments(null);
         setMode('preview');
         const resultFiles = await client.generate(result.id, controller.signal);
-        if (alive.current) {
+        if (currentOperation(controller)) {
+          setDocumentBlocker('');
           setDocuments(resultFiles);
-          if (resultFiles.previewError)
-            showWarning(
-              mainDraftMessages[resultFiles.previewError] ?? 'Bản nháp đã lưu; chưa tạo được PDF.',
-            );
         }
-      } else setMode('success');
+      } else setMode('edit');
     } catch (e) {
+      if (!currentOperation(controller)) return;
+      invalidateDocument(e);
+      workflowFailure('main-draft', e);
       if (alive.current && !controller.signal.aborted) setError(message(e));
     } finally {
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
-  async function openFile(pdf: boolean) {
-    const document = pdf ? documents?.pdf : documents?.docx;
+  async function openFile(pdf: boolean, override?: PreviewDocument, view = false) {
+    const document = override ?? (pdf ? documents?.pdf : documents?.docx);
     if (!client || !document || lock.current) return;
     lock.current = true;
     setBusy(true);
@@ -240,9 +347,15 @@ export function MainDraftScreen({
     let file: File | null = null;
     const controller = new AbortController();
     operation.current = controller;
+    let tab: Window | null = null;
     try {
+      if (pdf && view && Platform.OS === 'web') tab = openPdfWindow();
       const bytes = await client.file(id, document.id, controller.signal);
       try {
+        if (!currentOperation(controller)) {
+          tab?.close();
+          return;
+        }
         const signature = pdf ? [37, 80, 68, 70, 45] : [80, 75, 3, 4];
         if (
           bytes.length < signature.length ||
@@ -253,12 +366,12 @@ export function MainDraftScreen({
           ? 'application/pdf'
           : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         if (Platform.OS === 'web') {
-          const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-          const a = window.document.createElement('a');
-          a.href = url;
-          a.download = `hop-dong-nhap.${pdf ? 'pdf' : 'docx'}`;
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          deliverWebDocument(
+            bytes,
+            pdf,
+            `hop-dong-phong-${preparation?.roomNumber ?? 'thue'}-${document.id.slice(0, 8)}.${pdf ? 'pdf' : 'docx'}`,
+            tab,
+          );
         } else {
           if (!(await Sharing.isAvailableAsync()))
             throw new Error('Thiết bị chưa có trình mở tài liệu.');
@@ -272,15 +385,22 @@ export function MainDraftScreen({
             dialogTitle: pdf ? 'Xem hợp đồng PDF' : 'Mở hợp đồng DOCX',
           });
         }
+        return true;
       } finally {
         bytes.fill(0);
       }
     } catch (e) {
+      tab?.close();
+      if (!currentOperation(controller)) return;
+      invalidateDocument(e);
+      workflowFailure('main-draft', e);
       if (alive.current) setError(message(e));
     } finally {
       if (file?.exists) file.delete();
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
   function back() {
@@ -291,7 +411,7 @@ export function MainDraftScreen({
     }
     if (busy) return;
     if (mode !== 'edit') {
-      setMode('edit');
+      setMode(mode === 'signing' ? 'preview' : 'edit');
       return;
     }
     if (dirty.current)
@@ -303,6 +423,11 @@ export function MainDraftScreen({
   }
   async function reviewSaved(confirm: boolean) {
     if (!client || !saved || lock.current) return;
+    if (confirm && owner && (!documents?.pdf || readyFile !== documents.pdf.id)) return;
+    if (!confirm && documentBlocker.includes('save_again')) {
+      setMode('edit');
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError('');
@@ -310,25 +435,60 @@ export function MainDraftScreen({
     operation.current = controller;
     try {
       const current = await client.get(id, controller.signal);
-      if (current.version !== saved.version || current.status !== 'Draft')
+      if (!currentOperation(controller)) return;
+      if (current.status !== 'Draft') {
+        setDocuments(null);
+        setReadyFile('');
+        setSaved(current);
+        setReviewRevision((value) => value + 1);
+        if (owner) {
+          if (releasedHandler.current) releasedHandler.current(current.id);
+          else onList();
+          return;
+        }
         throw { code: 'draft_version_or_status_changed' };
+      }
+      if (current.version !== saved.version) {
+        setSaved(current);
+        setDocuments(null);
+        setReviewRevision((value) => value + 1);
+        setPreparation(current.preparation);
+        refs.current = current.input;
+        setStart(displayContractDate(current.input.startDate));
+        setEnd(displayContractDate(current.input.endDate));
+        setPhone(current.input.tenantPhone);
+        setPlace(current.input.tenantPlaceOfIssue);
+        setEmail(current.input.tenantEmail ?? '');
+        setNotes(current.input.notes);
+        dirty.current = false;
+        if (confirm) throw { code: 'draft_version_or_status_changed' };
+      }
       if (confirm) {
         if (alive.current) {
-          setMode('success');
-          showSuccess('Đã lưu hợp đồng nháp.');
+          setSigningVisited(true);
+          setMode('signing');
         }
       } else {
+        setDocuments(null);
+        setReviewRevision((value) => value + 1);
         const result = await client.generate(id, controller.signal);
-        if (alive.current) {
+        if (currentOperation(controller)) {
+          setDocumentBlocker('');
+          setError('');
           setDocuments(result);
           setMode('preview');
         }
       }
     } catch (e) {
+      if (!currentOperation(controller)) return;
+      invalidateDocument(e);
+      workflowFailure('main-draft', e);
       if (alive.current && !controller.signal.aborted) setError(message(e));
     } finally {
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
   async function refreshPrices() {
@@ -350,23 +510,55 @@ export function MainDraftScreen({
     operation.current = controller;
     try {
       const result = await client.prepare({ ...refs.current, startDate: date }, controller.signal);
-      if (alive.current) setPreparation(result);
+      if (currentOperation(controller)) setPreparation(result);
     } catch (e) {
+      workflowFailure('main-draft', e);
       if (alive.current && !controller.signal.aborted) setError(message(e));
     } finally {
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
+  useEffect(() => {
+    if (!client || loading || readOnly || !preparation) return;
+    let date: string;
+    try {
+      date = inputDate(start)!;
+    } catch {
+      return;
+    }
+    if (date === preparation.effectiveOn) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      void client
+        .prepare({ ...refs.current, startDate: date }, controller.signal)
+        .then((result) => {
+          if (!controller.signal.aborted) setPreparation(result);
+        })
+        .catch((e) => {
+          if (!controller.signal.aborted) setError(message(e));
+        });
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [client, loading, readOnly, start, preparation, setError]);
   const edit = (setter: (v: string) => void) => (value: string) => {
     setter(value);
     dirty.current = true;
+    setReadyFile('');
     setDocuments(null);
   };
   const representative = preparation?.residents.find((r) => r.representative);
+  // The web modal inherits the app's safe-area context. A nested provider can measure
+  // the opening animation as a full-height bottom inset and collapse the scroll area.
+  const ModalSafeArea = Platform.OS === 'web' ? React.Fragment : SafeAreaProvider;
   return (
     <Modal visible presentationStyle="fullScreen" onRequestClose={back} animationType="slide">
-      <SafeAreaProvider>
+      <ModalSafeArea>
         <Portal.Host>
           <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.root}>
             <View style={styles.header}>
@@ -379,8 +571,10 @@ export function MainDraftScreen({
               <Text style={styles.title}>
                 {mode === 'preview'
                   ? 'Xem trước hợp đồng'
-                  : mode === 'success'
-                    ? 'Đã tạo hợp đồng nháp'
+                  : mode === 'signing'
+                    ? owner
+                      ? 'Duyệt & ký hợp đồng'
+                      : 'Ký hợp đồng'
                     : 'Tạo hợp đồng thuê'}
               </Text>
             </View>
@@ -389,11 +583,17 @@ export function MainDraftScreen({
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
               <KeyboardFormScrollView
+                ref={formScroll}
+                style={styles.grow}
                 contentContainerStyle={styles.content}
                 keyboardShouldPersistTaps="handled"
               >
+                <RentalContractStepper
+                  current={mode === 'signing' ? 1 : 0}
+                  steps={owner ? ownerContractSteps : undefined}
+                />
                 {loading && <ActivityIndicator accessibilityLabel="Đang tải dữ liệu hợp đồng" />}
-                {!!error && (
+                {!!error && !(owner && mode === 'preview' && documentBlocker) && (
                   <Text accessibilityRole="alert" style={styles.error}>
                     {error}
                   </Text>
@@ -413,69 +613,136 @@ export function MainDraftScreen({
                         {id && (
                           <Box>
                             <Pill>{labels[saved?.status ?? 'Draft'] ?? saved?.status}</Pill>
-                            <Text selectable>Mã hợp đồng: {id}</Text>
+                            {owner ? (
+                              <Text>Hồ sơ nháp đã lưu</Text>
+                            ) : (
+                              <Text selectable>Mã hợp đồng: {id}</Text>
+                            )}
                           </Box>
                         )}
                         <Box>
-                          <Heading title="Thông tin phòng" detail="Dữ liệu do máy chủ cung cấp" />
-                          <Text>
+                          <Heading title="Thông tin phòng" />
+                          <Text style={styles.roomName}>
                             {preparation.locationName} · Phòng {preparation.roomNumber}
                           </Text>
-                          <Text>{preparation.address}</Text>
-                          <Text>
-                            Giá thuê:{' '}
-                            {preparation.charges.some((p) => p.chargeCode === 'RENT')
-                              ? formatDraftMoney(
-                                  preparation.charges.find((p) => p.chargeCode === 'RENT')!.rate,
-                                )
-                              : 'Chưa cấu hình'}{' '}
-                            / tháng
-                          </Text>
+                          <Text style={styles.support}>{preparation.address}</Text>
+                          {preparation.charges.some((p) => p.chargeCode === 'RENT') && (
+                            <Text>
+                              Giá thuê:{' '}
+                              {formatDraftMoney(
+                                preparation.charges.find((p) => p.chargeCode === 'RENT')!.rate,
+                              )}
+                              /tháng
+                            </Text>
+                          )}
                         </Box>
                         <Box>
-                          <Heading title="Người thuê đã xác minh" />
-                          <Text>{representative?.fullName} · Đại diện</Text>
-                          <Text>CCCD: {representative?.maskedCitizenNumber}</Text>
-                          <Text>
-                            Ngày cấp:{' '}
-                            {representative?.dateOfIssue
-                              ? displayContractDate(representative.dateOfIssue)
-                              : 'Chưa có dữ liệu'}
+                          <Heading title="Người thuê" />
+                          <Row spread>
+                            <Text style={styles.personName}>{representative?.fullName}</Text>
+                            <Pill tone="green">Đã xác minh</Pill>
+                          </Row>
+                          <Text style={styles.support}>
+                            Đại diện · {preparation.residents.length} người ở
                           </Text>
-                          <Text>
-                            {preparation.residents.length} người ở · Bên cho thuê:{' '}
-                            {preparation.ownerName ?? 'Chưa cấu hình'}
+                          {!!representative?.maskedCitizenNumber && (
+                            <Text>CCCD: {representative.maskedCitizenNumber}</Text>
+                          )}
+                          <TextInput
+                            label="Email người thuê *"
+                            accessibilityLabel="Email người thuê *"
+                            placeholder="Nhập email người thuê"
+                            value={email}
+                            onChangeText={edit(setEmail)}
+                            onBlur={() => setEmail((v) => v.trim())}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            maxLength={256}
+                            mode="outlined"
+                            disabled={busy || readOnly}
+                            error={!!fieldErrors.email}
+                          />
+                          {!!fieldErrors.email && (
+                            <Text style={styles.error}>{fieldErrors.email}</Text>
+                          )}
+                          <Text style={styles.support}>
+                            Email liên hệ, chưa tạo tài khoản Tenant.
                           </Text>
-                          <Text>
-                            Thông tin định danh chỉ đọc. Nếu sai, cần xử lý qua quy trình hồ sơ được
-                            phép.
-                          </Text>
+                          <TextInput
+                            label="Số điện thoại người thuê"
+                            accessibilityLabel="Số điện thoại người thuê"
+                            value={phone}
+                            keyboardType="phone-pad"
+                            maxLength={30}
+                            mode="outlined"
+                            disabled={busy || readOnly || !!representative?.phone}
+                            error={!!fieldErrors.phone}
+                            onChangeText={edit(setPhone)}
+                          />
+                          {!!fieldErrors.phone && (
+                            <Text style={styles.error}>{fieldErrors.phone}</Text>
+                          )}
                         </Box>
                       </>
                     ) : (
                       <ContractPreviewSummary
+                        showSigner={!(owner && mode === 'signing')}
                         preparation={preparation}
                         status={saved?.status ?? 'Draft'}
                         start={start}
                         end={end}
                       />
                     )}
-                    {preparation.blockers.map((code) => (
-                      <Text key={code} style={styles.error}>
-                        {mainDraftMessages[code] ?? code}
-                      </Text>
-                    ))}
-                    {mode === 'success' && (
-                      <Text selectable style={{ color: '#475569', fontSize: 12 }}>
-                        Mã hợp đồng: {id}
-                      </Text>
+                    {!!preparation.blockers.length && (
+                      <View style={styles.notice} accessibilityRole="alert">
+                        <Text style={styles.noticeTitle}>Thiếu cấu hình hợp đồng</Text>
+                        {preparation.blockers.map((code) => (
+                          <Text key={code} style={styles.support}>
+                            {mainDraftMessages[code] ??
+                              'Cần Owner kiểm tra điều kiện hợp đồng trên hệ thống.'}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+                    {signingVisited && client && saved && (
+                      <View style={mode === 'signing' ? undefined : { display: 'none' }}>
+                        <MainDraftSigningReview
+                          key={`${id}:${saved.version}:${reviewRevision}`}
+                          client={client}
+                          draft={saved}
+                          onBusyChange={setBusy}
+                          onReleased={(next) => (onReleased ? onReleased(next) : onList())}
+                          onOpenPdf={(file) => openFile(true, file, true)}
+                          onDownloadPdf={(file) => openFile(true, file)}
+                          onEditDraft={() => {
+                            setDocuments(null);
+                            setReadyFile('');
+                            setSigningVisited(false);
+                            setMode('edit');
+                          }}
+                          onDraftChanged={(latest) => {
+                            setDocuments(null);
+                            setReadyFile('');
+                            setSigningVisited(false);
+                            setSaved(latest);
+                            setPreparation(latest.preparation);
+                            refs.current = latest.input;
+                            setStart(displayContractDate(latest.input.startDate));
+                            setEnd(displayContractDate(latest.input.endDate));
+                            setPhone(latest.input.tenantPhone);
+                            setEmail(latest.input.tenantEmail ?? '');
+                            setPlace(latest.input.tenantPlaceOfIssue);
+                            setNotes(latest.input.notes);
+                            dirty.current = false;
+                            setMode('preview');
+                          }}
+                        />
+                      </View>
                     )}
                     {mode === 'edit' ? (
                       <Box>
-                        <Heading
-                          title="Điều khoản thuê"
-                          detail="Giá và tiền cọc lấy từ cấu hình Owner theo ngày bắt đầu."
-                        />
+                        <Heading title="Điều khoản thuê" detail="Áp dụng theo ngày bắt đầu thuê." />
                         <ContractDateField
                           onCalendarChange={(close) => {
                             calendarClose.current = close;
@@ -496,29 +763,6 @@ export function MainDraftScreen({
                           disabled={busy || readOnly}
                           error={fieldErrors.end}
                         />
-                        {(
-                          [
-                            ['phone', 'Số điện thoại người thuê', phone, setPhone],
-                            ['place', 'Nơi cấp CCCD (chưa có trong hồ sơ)', place, setPlace],
-                          ] as const
-                        ).map(([name, label, value, setter]) => (
-                          <View key={name} style={{ gap: 4 }}>
-                            <TextInput
-                              label={name === 'place' ? 'Nơi cấp CCCD' : label}
-                              value={value}
-                              mode="outlined"
-                              error={!!fieldErrors[name]}
-                              disabled={
-                                busy || readOnly || (name === 'phone' && !!representative?.phone)
-                              }
-                              onChangeText={edit(setter)}
-                              accessibilityLabel={label}
-                            />
-                            {!!fieldErrors[name] && (
-                              <Text style={styles.error}>{fieldErrors[name]}</Text>
-                            )}
-                          </View>
-                        ))}
                         <Button
                           contentStyle={{ minHeight: 48 }}
                           disabled={busy || readOnly}
@@ -527,28 +771,44 @@ export function MainDraftScreen({
                           Cập nhật giá theo ngày bắt đầu
                         </Button>
                         {preparation.charges.map((p) => (
-                          <Text key={p.id}>
-                            {p.name}: {formatDraftMoney(p.rate)}
-                            {p.chargeCode === 'ELECTRICITY'
-                              ? '/kWh'
-                              : p.chargeCode === 'WATER'
-                                ? '/m³'
-                                : '/tháng'}
-                          </Text>
+                          <Row key={p.id} spread>
+                            <Text style={styles.chargeName}>
+                              {{
+                                RENT: 'Giá thuê',
+                                ELECTRICITY: 'Điện',
+                                WATER: 'Nước',
+                                WIFI: 'Wi-Fi',
+                              }[p.chargeCode] ?? p.name}
+                            </Text>
+                            <Text style={styles.chargeValue}>
+                              {formatDraftMoney(p.rate)}
+                              {p.chargeCode === 'ELECTRICITY'
+                                ? '/kWh'
+                                : p.chargeCode === 'WATER'
+                                  ? '/m³'
+                                  : '/tháng'}
+                            </Text>
+                          </Row>
                         ))}
-                        <Text>
-                          Tiền cọc dự kiến:{' '}
-                          {preparation.securityDeposit === null
-                            ? 'Chưa cấu hình'
-                            : formatDraftMoney(preparation.securityDeposit)}
-                        </Text>
-                        <Text>Thanh toán: {preparation.paymentTerms ?? 'Chưa cấu hình'}</Text>
+                        {preparation.securityDeposit !== null && (
+                          <Row spread>
+                            <Text>Tiền cọc</Text>
+                            <Text>{formatDraftMoney(preparation.securityDeposit)}</Text>
+                          </Row>
+                        )}
+                        {!!preparation.paymentTerms && (
+                          <Text>Thanh toán: {preparation.paymentTerms}</Text>
+                        )}
+                        <Heading title="Ghi chú / điều khoản bổ sung" />
                         <TextInput
                           label="Điều khoản bổ sung / ghi chú"
+                          accessibilityLabel="Điều khoản bổ sung / ghi chú"
+                          placeholder="Nhập điều khoản bổ sung (nếu có)"
                           value={notes}
                           onChangeText={edit(setNotes)}
                           mode="outlined"
                           multiline
+                          numberOfLines={3}
                           maxLength={4000}
                           disabled={busy || readOnly}
                         />
@@ -558,25 +818,32 @@ export function MainDraftScreen({
                         client={client}
                         contractId={id}
                         document={documents?.pdf ?? null}
+                        hideUnavailableActions={owner}
                         busy={busy}
-                        previewErrorCode={documents?.previewError ?? null}
+                        previewErrorCode={documentBlocker || documents?.previewError || null}
                         hasDocx={!!documents?.docx}
                         onRegenerate={() => void reviewSaved(false)}
-                        onOpenPdf={() => void openFile(true)}
+                        onOpenPdf={() => openFile(true, undefined, true)}
+                        onDownloadPdf={() => void openFile(true)}
+                        onDocumentError={invalidateDocument}
+                        onReady={setReadyFile}
                         onOpenDocx={() => void openFile(false)}
                       />
                     ) : null}
                   </>
                 )}
               </KeyboardFormScrollView>
-              <View style={styles.footer}>
+              <View style={[styles.footer, owner && styles.ownerFooter]}>
                 {busy && <ActivityIndicator />}
                 {mode === 'edit' ? (
                   <>
                     <Button
                       contentStyle={{ minHeight: 48 }}
-                      mode="outlined"
-                      disabled={busy || readOnly || loading || !preparation}
+                      mode="text"
+                      style={owner ? styles.ownerAction : styles.secondaryAction}
+                      disabled={
+                        busy || readOnly || loading || !preparation || !!preparation.blockers.length
+                      }
                       onPress={() => void save(false)}
                     >
                       Lưu nháp
@@ -585,7 +852,10 @@ export function MainDraftScreen({
                       contentStyle={{ minHeight: 48 }}
                       mode="contained"
                       buttonColor={s.blue}
-                      disabled={busy || readOnly || loading || !preparation}
+                      style={owner ? styles.ownerAction : styles.primaryAction}
+                      disabled={
+                        busy || readOnly || loading || !preparation || !!preparation.blockers.length
+                      }
                       onPress={() => void save(true)}
                     >
                       Xem trước hợp đồng
@@ -594,24 +864,31 @@ export function MainDraftScreen({
                 ) : (
                   <>
                     <Button
+                      style={owner ? styles.ownerAction : styles.primaryAction}
+                      labelStyle={{ fontSize: 12 }}
                       contentStyle={{ minHeight: 48 }}
                       disabled={busy || readOnly}
-                      onPress={() =>
-                        mode === 'preview' ? setMode('edit') : void reviewSaved(false)
-                      }
+                      onPress={() => (mode === 'preview' ? setMode('edit') : setMode('preview'))}
                     >
                       {mode === 'preview' ? 'Chỉnh sửa thông tin' : 'Xem hợp đồng'}
                     </Button>
                     {mode === 'preview' ? (
                       <Button
+                        style={owner ? styles.ownerAction : styles.primaryAction}
+                        labelStyle={{ fontSize: 12 }}
                         contentStyle={{ minHeight: 48 }}
                         mode="contained"
-                        disabled={busy || readOnly}
+                        disabled={
+                          busy ||
+                          readOnly ||
+                          !documents?.pdf ||
+                          (owner && readyFile !== documents.pdf.id)
+                        }
                         onPress={() => void reviewSaved(true)}
                       >
-                        Lưu hợp đồng nháp
+                        {owner ? 'Tiếp tục duyệt hợp đồng' : 'Tiếp tục ký hợp đồng'}
                       </Button>
-                    ) : (
+                    ) : !owner ? (
                       <Button
                         contentStyle={{ minHeight: 48 }}
                         mode="contained"
@@ -620,7 +897,7 @@ export function MainDraftScreen({
                       >
                         Về danh sách hợp đồng
                       </Button>
-                    )}
+                    ) : null}
                   </>
                 )}
               </View>
@@ -628,22 +905,36 @@ export function MainDraftScreen({
           </SafeAreaView>
           <ToastHost modal />
         </Portal.Host>
-      </SafeAreaProvider>
+      </ModalSafeArea>
     </Modal>
   );
 }
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: s.background },
+  root: { flex: 1, backgroundColor: c.background },
   grow: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', backgroundColor: s.navy, paddingRight: 16 },
   title: { flex: 1, color: '#FFFFFF', fontSize: 18, lineHeight: 24, fontWeight: '700' },
   content: { padding: 16, gap: 16, maxWidth: 720, width: '100%', alignSelf: 'center' },
   footer: {
-    padding: 16,
-    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
   },
+  primaryAction: { flex: 1, minWidth: 0 },
+  ownerFooter: { flexDirection: 'column', alignItems: 'stretch' },
+  ownerAction: { minWidth: 0, width: '100%', maxWidth: 696, alignSelf: 'center' },
+  secondaryAction: { flexShrink: 0 },
+  personName: { flex: 1, color: s.navy, fontWeight: '600', fontSize: 16 },
+  roomName: { color: s.navy, fontWeight: '600', fontSize: 16 },
+  support: { color: '#475569', fontSize: 13, lineHeight: 19 },
+  chargeName: { flex: 1, minWidth: 0, color: c.muted, fontSize: 14 },
+  chargeValue: { flexShrink: 1, textAlign: 'right', color: c.ink, fontSize: 14, fontWeight: '600' },
+  notice: { backgroundColor: '#FFF8E6', padding: 14, gap: 6, borderRadius: 12 },
+  noticeTitle: { color: s.navy, fontSize: 15, fontWeight: '600' },
   error: { color: '#B91C1C', fontSize: 14, lineHeight: 20 },
 });

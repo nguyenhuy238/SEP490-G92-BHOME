@@ -1,28 +1,24 @@
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { useState } from 'react';
 import { Alert, Button, MenuItem, Stack, TextField } from '@mui/material';
+import { Link, useSearchParams } from 'react-router';
 import { isMockMode } from '../../../services/config';
-import { PageHeader } from '../../../components/common/PortalUI';
+import { PageHeader, FilterToolbar } from '../../../components/common/PortalUI';
 import { OwnerLocationPicker, OwnerRoomPicker } from '../../../components/common/OwnerSelectors';
 import { OwnerFeedback } from '../../../components/common/OwnerWorkspace';
 import { useOwnerQuery } from '../../../hooks/useOwnerWorkspace';
 import { ContractHandoverPanel } from '../../contracts/ContractHandoverPanel';
 import { useContractsApi } from '../../contracts/useContractsApi';
-import {
-  guid,
-  displayContractDate,
-  text,
-} from '../../../../../../packages/client-core/src/contracts';
+import { displayContractDate, text } from '../../../../../../packages/client-core/src/contracts';
 export default function HandoversPage() {
   return isMockMode ? <ResourcePage kind="handovers" variant="handover" /> : <HandoverLookup />;
 }
 function HandoverLookup() {
+  const [params] = useSearchParams();
   const api = useContractsApi();
   const [location, setLocation] = useState(''),
     [room, setRoom] = useState('');
-  const [contract, setContract] = useState(''),
-    [lookup, setLookup] = useState(''),
-    [error, setError] = useState('');
+  const [contract, setContract] = useState(params.get('contractId') ?? '');
   const history = useOwnerQuery<{
     periods: { contractId: string; from: string; to: string; contractStatus: string }[];
   }>(['handover-room-contracts', room], `/api/v1/rooms/${room}/occupancy-history`, !!room);
@@ -32,24 +28,26 @@ function HandoverLookup() {
         title="Bàn giao nhận phòng"
         subtitle="Owner xem biên bản, chỉ số đầu kỳ và xác nhận. Staff và Tenant thực hiện bàn giao trên Mobile."
       />
-      <OwnerLocationPicker
-        value={location}
-        change={(id) => {
-          setLocation(id);
-          setRoom('');
-          setContract('');
-        }}
-      />
-      <OwnerRoomPicker
-        key={location}
-        location={location}
-        value={room}
-        change={(id) => {
-          setRoom(id);
-          setContract('');
-        }}
-      />
-      <OwnerFeedback busy={history.isFetching} error={history.error || error} />
+      <FilterToolbar>
+        <OwnerLocationPicker
+          value={location}
+          change={(id) => {
+            setLocation(id);
+            setRoom('');
+            setContract('');
+          }}
+        />
+        <OwnerRoomPicker
+          key={location}
+          location={location}
+          value={room}
+          change={(id) => {
+            setRoom(id);
+            setContract('');
+          }}
+        />
+      </FilterToolbar>
+      <OwnerFeedback busy={history.isFetching} error={history.error} />
       {room && (
         <TextField
           select
@@ -68,23 +66,11 @@ function HandoverLookup() {
       {room && history.data?.periods.length === 0 && (
         <Alert severity="info">Phòng chưa có lịch sử thuê.</Alert>
       )}
-      <TextField
-        label="Mã hợp đồng (UUID)"
-        value={lookup}
-        onChange={(e) => setLookup(e.target.value.trim())}
-      />
       <Button
-        onClick={() => {
-          try {
-            guid(lookup);
-            setError('');
-            setContract(lookup);
-          } catch {
-            setError('Nhập UUID hợp đồng hợp lệ.');
-          }
-        }}
+        component={Link}
+        to={contract ? `/contracts?contractId=${encodeURIComponent(contract)}` : '/contracts'}
       >
-        Tra cứu biên bản
+        {contract ? 'Mở hợp đồng và kiểm tra trả phòng' : 'Chọn từ danh sách hợp đồng'}
       </Button>
       {contract && <ContractHandoverPanel key={contract} api={api} id={contract} />}
     </Stack>

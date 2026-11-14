@@ -1,11 +1,12 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { Alert, Checkbox, FormControlLabel, MenuItem, TextField } from '@mui/material';
 import type { UtilityValues } from './utilityFormValues';
+import { MoneyField } from '../../components/common/MoneyField';
 
 export interface UtilityFieldDefinition {
   name: string;
   label: string;
-  type?: 'text' | 'date' | 'month' | 'number' | 'check';
+  type?: 'text' | 'date' | 'month' | 'number' | 'check' | 'money';
   optional?: boolean;
   options?: { id: string; label: string }[];
   disabled?: boolean;
@@ -32,6 +33,16 @@ export function UtilityField({
             }
           />
         }
+      />
+    );
+  if (field.type === 'money')
+    return (
+      <MoneyField
+        required={!field.optional}
+        disabled={field.disabled}
+        label={field.label}
+        value={values[field.name] ?? ''}
+        onValueChange={(raw) => setValues((old) => ({ ...old, [field.name]: raw }))}
       />
     );
   return (

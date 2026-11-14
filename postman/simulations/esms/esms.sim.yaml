@@ -1,0 +1,7 @@
+simulation: esms
+routing: path
+mocks:
+  - name: esms
+    routeKey: esms
+    origin: rest.esms.vn
+    path: postman/mocks/esms

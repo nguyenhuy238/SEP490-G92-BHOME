@@ -77,3 +77,33 @@ it('does not treat a streamed response failure as a healthy API', async () => {
   });
   expect(await probeMobileApi(input, get)).toBe(false);
 });
+
+it('accepts a slow but healthy startup response within the explicit Neon timeout', async () => {
+  vi.useFakeTimers();
+  const { request, response } = fixture();
+  const get = vi.fn((_url: URL, _options: object, callback: (value: typeof response) => void) => {
+    setTimeout(() => {
+      callback(response);
+      response.end('Healthy');
+    }, 6000);
+    return request;
+  });
+  const result = probeMobileApi({ ...input, timeoutMs: 15000 }, get);
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(request.destroy).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(await result).toBe(true);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('still terminates an unresponsive request at the explicit startup timeout', async () => {
+  vi.useFakeTimers();
+  const { request } = fixture();
+  const result = probeMobileApi(
+    { ...input, timeoutMs: 15000 },
+    vi.fn(() => request),
+  );
+  await vi.advanceTimersByTimeAsync(15000);
+  expect(await result).toBe(false);
+  expect(request.destroy).toHaveBeenCalledOnce();
+});

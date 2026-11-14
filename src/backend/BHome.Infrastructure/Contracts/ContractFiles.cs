@@ -69,6 +69,10 @@ public sealed class ContractFileCleanup(IServiceScopeFactory scopes, TimeProvide
             var linked = await db.Set<ContractSignature>().AnyAsync(s => s.PreparedObjectKey == file.ObjectKey || s.SignedObjectKey == file.ObjectKey, t) ||
                 await db.Set<ContractInspectionEvidence>().AnyAsync(e => e.ObjectKey == file.ObjectKey, t) ||
                 await db.Set<ContractDocumentFile>().AnyAsync(e => e.ObjectKey == file.ObjectKey, t);
+            if (!linked && db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+                linked = await db.Set<ContractSigningInvitation>().AnyAsync(i => i.DocumentObjectKey == file.ObjectKey ||
+                    i.SignatureObjectKey == file.ObjectKey || i.AcceptedDocumentObjectKey == file.ObjectKey, t) ||
+                    await db.Set<Contract>().AnyAsync(c => c.SigningMode == ContractSigningModes.Internal && c.InternalAcceptance.Contains(file.ObjectKey), t);
             if (!linked) await storage.DeleteAsync(file.ObjectKey, t);
             db.Remove(file); await db.SaveChangesAsync(t); await tx.CommitAsync(t);
         }

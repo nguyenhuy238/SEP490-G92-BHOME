@@ -1,5 +1,17 @@
 # Staff Location assignments
 
+## Owner Web update — 12 November 2026
+
+UC-09 / BF-02 presentation now uses Location-first `/staff-assignments`, with a detail Drawer and separate create/replace/period/remove dialog flows. The existing staff profile links with `staffUserId`; clearing filters restores all Locations. No backend, DTO, permission or database change.
+
+Current controller and Compact24 source supersede the historical boundary below: `by-staff`, `assignment/{assignmentId}`, replace/remove and `staff-change-preview` are implemented. Replacement/removal use today's Vietnam date and the version from Location GET. Period edits keep the assignment ID; ended records cannot be edited. `DateOnly.MaxValue` is displayed as “Không xác định thời hạn”. Preview codes GENERAL, METER_READ, WORK_ORDER and MOVE_OUT_INSPECTION are translated; unknown codes remain visible.
+
+`useLocationAssignments.ts` reads all Location/Staff pages, caches assignments per Location with actor-scoped keys, and loads at most four assignment requests concurrently. Partial failures suppress exact KPIs and expose row retry. Successful mutations use the existing Owner action invalidation and refresh. A 409 preserves input, reloads version/assignments/preview and requires explicit review before another submission; no optimistic write or frontend Task reassignment.
+
+Affected UI: `StaffAssignments.tsx`, `pages/StaffAssignmentsPage.tsx`, `components/AssignmentDetailDrawer.tsx`, `components/AssignmentDialog.tsx`, the Staff profile navigation link, and `StaffAssignments.test.tsx`.
+
+Validation: TypeScript, production build, Oxlint and diff whitespace check passed. Focused Staff/Assignment suite: 35 tests passed across two files, covering date boundaries, pagination/concurrency/cancellation, filters, missing data, mutation payloads, overlap, preview restrictions, 409 review and HTTP failures. Vite retains its shared chunk >500 kB warning. Browser visual QA and live backend writes were not run.
+
 ## Traceability
 
 - Scope: BF-01, BF-02; UC-04, UC-08, UC-10..12; DBR-01; GBR-01..03.

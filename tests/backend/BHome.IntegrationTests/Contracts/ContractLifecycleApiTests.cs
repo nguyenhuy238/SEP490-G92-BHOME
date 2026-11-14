@@ -41,7 +41,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            var user = new ApplicationUser { Id = id, UserName = name, Email = name, LockoutEnabled = true };
+            // These actors model established accounts that already completed setup.
+            // Pending/unconfirmed onboarding is exercised separately by authentication tests.
+            var user = new ApplicationUser { Id = id, UserName = name, Email = name, EmailConfirmed = true, LockoutEnabled = true };
             user = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider, user, role, password);
             id = user.Id; name = user.Email!;
         }
@@ -57,6 +59,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Representative", VerificationStatus = IdentityVerificationStatus.Verified };
         db.AddRange(location, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-30), Today.AddDays(60)));
+        db.AddRange(
+            new BillingPolicy { LocationId = location.Id, Category = ChargeCategory.Electricity, ChargeCode = "ELECTRICITY", Name = "Synthetic electricity", Method = ChargingMethod.Metered, Rate = 3500, EffectiveFrom = Today.AddMonths(-1) },
+            new BillingPolicy { LocationId = location.Id, Category = ChargeCategory.Water, ChargeCode = "WATER", Name = "Synthetic water", Method = ChargingMethod.Metered, Rate = 15000, EffectiveFrom = Today.AddMonths(-1) });
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id, resident.Id);
     }
     private static string Path(Guid id, string operation = "") => $"/api/v1/contracts/{id}" + (operation.Length == 0 ? "" : "/" + operation);
@@ -66,7 +71,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         request.Headers.Add("Idempotency-Key", (key ?? Guid.NewGuid()).ToString()); return await actor.Client.SendAsync(request);
     }
     private static async Task<T> Success<T>(HttpResponseMessage response)
-    { Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()} {string.Join(Environment.NewLine, BHome.IntegrationTests.Compact24.Compact24WorkflowFixture.Diagnostics.TakeLast(2))}"); return (await response.Content.ReadFromJsonAsync<T>())!; }
+    { Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()} {string.Join(Environment.NewLine, ApiFactory.Diagnostics.TakeLast(2))}"); return (await response.Content.ReadFromJsonAsync<T>())!; }
     private static ContractDraftInput Input(Workspace w) => new(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], Today.AddDays(-10), Today.AddDays(30), 3000000, 3000000, "SYNTHETIC TEST TERMS");
     private async Task<Guid> Draft(Workspace w) => (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts", Input(w)))).Id;
     private static async Task Signed(Workspace w, Guid id)
@@ -420,28 +425,38 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var history = (await w.Owner.Client.GetFromJsonAsync<MoveOutHistoryView[]>(Path(id, "move-out/history")))!;
         Assert.Equal(3, history.Length); Assert.Equal("Scheduled", history[0].Action);
         var electricity = await FinalReading(w, id, UtilityType.Electricity); var water = await FinalReading(w, id, UtilityType.Water);
+        var choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
+        var openingElectricity = choices.Readings.First(r => r.UtilityType == 0);
+        var openingWater = choices.Readings.First(r => r.UtilityType == 1);
+        using var openingPhoto = new ByteArrayContent(Image()); openingPhoto.Headers.ContentType = new("image/png");
+        var openingFile = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), openingPhoto))).Id;
+        await Success<HandoverView>(await Post(w.Staff, Path(id, "handover"), new HandoverInput(0, openingElectricity.Date,
+            "Synthetic original room", "Synthetic original keys", "", [], openingElectricity.Id, openingWater.Id, [openingFile])));
+        await Success<HandoverView>(await Post(w.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(1, "Synthetic present")));
+        await Success<HandoverView>(await Post(w.Staff, Path(id, "handover/staff-confirmation"), new HandoverDecision(1, "Synthetic checked")));
         using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
         var evidence = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), photo))).Id;
-        var inspect = new InspectionInput(electricity, water, "Synthetic room and asset condition", [evidence]);
+        var inspect = new InspectionInput(electricity, water, "Synthetic room and asset condition", [evidence],
+            [], "Synthetic final room", "Synthetic returned keys");
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Staff, Path(id, "move-out/inspection"), inspect with { WaterReadingId = electricity })).StatusCode);
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), inspect));
         var reviewedInspection = (await w.Owner.Client.GetFromJsonAsync<MoveOutView>(Path(id, "move-out")))!;
         Assert.Equal(inspect.Notes, reviewedInspection.InspectionNotes); Assert.Contains(evidence, reviewedInspection.EvidenceIds!);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today))).StatusCode);
+        var finalInspection = (await Success<FinalInspectionView[]>(await w.Owner.Client.GetAsync(Path(id, "move-out/inspections")))).First();
+        await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/inspection-review"),
+            new InspectionReviewInput(finalInspection.Version, true, "Synthetic reviewed physical handover")));
         var pending = await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/settlement"), new SettlementInput("Pending approved financial module")));
         Assert.Equal("PendingSettlement", pending.Status);
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today))).StatusCode);
-        fixture.Ledger.Resolved[id] = true; // TEST ONLY: authoritative ledger boundary, never a production switch.
-        await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/settlement"), new SettlementInput("Synthetic verified settlement evidence")));
-        fixture.Ledger.Resolved[id] = false;
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today))).StatusCode);
-        var reopened = await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/settlement"), new SettlementInput("Synthetic ledger changed; review again")));
-        Assert.Equal("PendingSettlement", reopened.Status);
-        fixture.Ledger.Resolved[id] = true;
-        await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/settlement"), new SettlementInput("Synthetic revalidated financial decision")));
-        Assert.Equal(4, (await w.Owner.Client.GetFromJsonAsync<SettlementReviewView[]>(Path(id, "move-out/settlement-history")))!.Length);
+        Assert.Equal("PendingReview", pending.FinancialReviewStatus);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(Path(id, "move-out/settlement-history"))).StatusCode);
         var key = Guid.NewGuid(); var replies = await Task.WhenAll(Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today), key), Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today), key));
         Assert.All(replies, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+        fixture.Ledger.Resolved[id] = true; // TEST ONLY: check finance can continue after physical closure.
+        var settledLater = await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/settlement"), new SettlementInput("Synthetic verified settlement after handover")));
+        Assert.Equal("Completed", settledLater.Status);
+        Assert.Equal("OwnerReviewed", settledLater.FinancialReviewStatus);
+        Assert.Equal(2, (await w.Owner.Client.GetFromJsonAsync<SettlementReviewView[]>(Path(id, "move-out/settlement-history")))!.Length);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(ContractStatus.Terminated, (await db.Set<Contract>().SingleAsync(c => c.Id == id)).Status);
         Assert.Equal(RoomStatus.Available, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
@@ -678,7 +693,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
                 await using var diagnosticScope = host.Services.CreateAsyncScope();
                 var diagnosticDb = diagnosticScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
                 var stored = await diagnosticDb.Set<ContractSignature>().AsNoTracking().SingleAsync(s => s.Id == requested.Id);
-                throw new Xunit.Sdk.XunitException($"Expected Pending; response={requested.Status}; stored={stored.Status}; providerReferencePresent={stored.ProviderReference is not null}; {string.Join(Environment.NewLine, BHome.IntegrationTests.Compact24.Compact24WorkflowFixture.Diagnostics.TakeLast(2))}");
+                throw new Xunit.Sdk.XunitException($"Expected Pending; response={requested.Status}; stored={stored.Status}; providerReferencePresent={stored.ProviderReference is not null}; {string.Join(Environment.NewLine, ApiFactory.Diagnostics.TakeLast(2))}");
             }
             var replay = await Success<SignatureView>(await Post(actor, Path(id, "signing"), input, key));
             Assert.Equal(requested.Id, replay.Id);

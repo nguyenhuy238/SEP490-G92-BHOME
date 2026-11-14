@@ -28,7 +28,8 @@ Cấu hình local `.env` được đặt đúng hai giá trị session bằng 7;
 Cấu hình ngắn hơn 7 ngày vẫn được phép; không cho kéo dài hơn mức đã duyệt.
 
 Refresh nhận `{ "refreshToken": "<token hiện tại>" }` với JSON/mobile transport, không cần Bearer.
-Thành công trả 200 và bộ access/refresh token mới, cùng sessionId/sessionExpiresAt ban đầu.
+Thành công trả 200 với `accessToken` và `refreshToken` mới. Client đọc `sub`, `role`, `sid` và `exp`
+từ access token khi cần; hạn tuyệt đối của session chỉ do server quản lý và không nằm trong response.
 Token không hợp lệ, hết hạn, phiên đã bị thu hồi hoặc reuse trả 401 chung. Body token vượt
 256 ký tự bị request validation từ chối 400. Thời hạn token không vượt session deadline.
 Ranh giới expiry là exclusive: đúng thời điểm ExpiresAt đã không hợp lệ.

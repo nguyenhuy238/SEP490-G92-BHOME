@@ -30,7 +30,9 @@ export function LoginPage() {
     (location.state as { passwordReset?: boolean } | null)?.passwordReset,
   );
   const loggedOutAll = Boolean((location.state as { loggedOutAll?: boolean } | null)?.loggedOutAll);
-  const [resetOpen, setResetOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(
+    Boolean((location.state as { emailRecovery?: boolean } | null)?.emailRecovery),
+  );
   const [resetUserName, setResetUserName] = useState('');
   const [resetValidation, setResetValidation] = useState('');
   const supportPhone = import.meta.env.VITE_SUPPORT_PHONE as string | undefined;
@@ -137,6 +139,9 @@ export function LoginPage() {
                   setResetOpen(true);
                 }}
               />
+              <Button component={RouterLink} to="/forgot-password">
+                Quên mật khẩu qua SMS
+              </Button>
             </Stack>
           )}
 
@@ -219,6 +224,9 @@ export function LoginPage() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Nhập email của tài khoản đã được cấp để yêu cầu hướng dẫn khôi phục.
             </Typography>
+            <Button component={RouterLink} to="/confirm-email" disabled={auth.resetBusy}>
+              Chưa xác nhận email? Gửi liên kết xác nhận
+            </Button>
             <TextField
               autoFocus
               fullWidth

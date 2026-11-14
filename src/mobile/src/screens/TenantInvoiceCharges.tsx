@@ -8,28 +8,84 @@ import {
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import {
   formatBillingDecimal,
+  hasSettlementUsageCoverage,
+  hasSettlementFixedCoverage,
+  invoicePersonMonths,
   missingBillingInput,
   type Invoice,
   type InvoiceLine,
 } from '../../../../packages/client-core/src/invoices';
 import { Pill } from '../components/WorkspaceKit';
 import { InvoiceDetailRow, InvoiceMoneyRow, invoiceUi } from '../components/InvoiceDetailUi';
-import { positiveAmount } from '../features/tenant/paymentPresentation';
+import { positiveAmount, tenantPaymentLabel } from '../features/tenant/paymentPresentation';
+import type { InvoicePayment } from '../../../../packages/client-core/src/payments';
 import { colors } from '../theme/theme';
 
-export function TenantInvoiceSummary({ invoice }: { invoice: Invoice }) {
+export function TenantInvoiceSummary({
+  invoice,
+  payment,
+  onPay,
+}: {
+  invoice: Invoice;
+  payment?: InvoicePayment | null;
+  onPay?: () => void;
+}) {
   const period = invoice.billingPeriod.slice(0, 7).split('-').reverse().join('/');
+  const state =
+    invoice.status === 'Final' &&
+    payment?.invoiceId === invoice.id &&
+    payment.paymentStatus !== 'NotIssued'
+      ? payment
+      : null;
+  const overdue =
+    state?.paymentStatus === 'Unpaid' &&
+    positiveAmount(state.outstandingAmount) &&
+    state.overdueDays > 0;
+  const canPay = state?.paymentStatus === 'Unpaid' && positiveAmount(state.outstandingAmount);
   return (
-    <View style={invoiceUi.section}>
-      <Text style={invoiceUi.heading}>{`Phòng ${invoice.roomNumber} · Tháng ${period}`}</Text>
-      <Text style={invoiceUi.secondary}>{invoice.locationName}</Text>
+    <View style={invoiceUi.card}>
+      <Text style={invoiceUi.heading}>Phòng {invoice.roomNumber}</Text>
+      <Text style={invoiceUi.secondary}>
+        Tháng {period} · {invoice.locationName}
+      </Text>
       <View style={invoiceUi.row}>
         <Pill tone="neutral">{invoice.status === 'Final' ? 'Đã phát hành' : 'Bản nháp'}</Pill>
-        <Text style={invoiceUi.secondary}>Hạn {displayContractDate(invoice.dueDate)}</Text>
+        {state && (
+          <Pill tone={overdue ? 'red' : state.paymentStatus === 'Paid' ? 'green' : 'blue'}>
+            {tenantPaymentLabel(state)}
+          </Pill>
+        )}
       </View>
+      <View>
+        <Text style={invoiceUi.secondary}>
+          {state
+            ? 'Còn phải thanh toán'
+            : invoice.status === 'Draft'
+              ? 'Tổng tạm tính'
+              : 'Tổng hóa đơn'}
+        </Text>
+        <Text style={invoiceUi.hero}>
+          {formatContractMoney(state?.outstandingAmount ?? invoice.total)}
+        </Text>
+      </View>
+      <Text style={invoiceUi.secondary}>
+        Hạn thanh toán: {displayContractDate(state?.dueDate ?? invoice.dueDate)}
+      </Text>
+      {overdue && <Text style={{ color: colors.red }}>Quá hạn {state.overdueDays} ngày</Text>}
+      {state?.pendingReview && (
+        <Text style={{ color: colors.amber }}>
+          Đang chờ đối soát. Trạng thái sẽ cập nhật sau khi xác minh.
+        </Text>
+      )}
+      {canPay && onPay && (
+        <Button mode="contained" icon="qrcode" contentStyle={{ minHeight: 44 }} onPress={onPay}>
+          Xem mã QR thanh toán
+        </Button>
+      )}
       {invoice.status === 'Draft' && (
         <Text style={invoiceUi.secondary}>
-          Dự kiến chốt {displayContractDate(invoice.scheduledFinalDate)}. Chưa thể thanh toán.
+          Hóa đơn tạm tính — đang chờ phát hành. Dự kiến chốt{' '}
+          {displayContractDate(invoice.scheduledFinalDate)}. Chưa thể thanh toán.
         </Text>
       )}
       {!!invoice.missingInputs.length && (
@@ -46,24 +102,19 @@ const categoryIcon: Record<string, string> = {
   Electricity: 'lightning-bolt-outline',
   Water: 'water-outline',
   ServiceFee: 'receipt-text-outline',
+  Other: 'cash-multiple',
 };
 const categoryLabel: Record<string, string> = {
   Rent: 'Tiền phòng',
   Electricity: 'Tiền điện',
   Water: 'Tiền nước',
   ServiceFee: 'Phí dịch vụ',
+  Other: 'Khoản thu khác',
 };
 
 export function InvoiceChargeRow({ line, first }: { line: InvoiceLine; first: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const utility = line.category === 'Electricity' || line.category === 'Water';
-  const days =
-    line.periodDays > 0 ? `${line.occupiedDays}/${line.periodDays} ngày` : 'Chi tiết tiền phòng';
-  const secondary = utility
-    ? 'Chi tiết chỉ số'
-    : line.category === 'Rent'
-      ? days
-      : 'Đơn giá & số lượng';
   const name = line.name || categoryLabel[line.category];
   return (
     <View style={!first && invoiceUi.chargeBorder}>
@@ -74,27 +125,20 @@ export function InvoiceChargeRow({ line, first }: { line: InvoiceLine; first: bo
         onPress={() => setExpanded(!expanded)}
       >
         <View style={invoiceUi.charge}>
-          <Icon
-            source={categoryIcon[line.category] ?? 'receipt-text-outline'}
-            size={18}
-            color={colors.muted}
-          />
+          {utility && (
+            <Icon
+              source={categoryIcon[line.category] ?? 'receipt-text-outline'}
+              size={18}
+              color={colors.muted}
+            />
+          )}
           <View style={invoiceUi.chargeText}>
             <Text style={invoiceUi.title} numberOfLines={1}>
               {name}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={invoiceUi.secondary} numberOfLines={1}>
-                {secondary}
-              </Text>
-              <Icon
-                source={expanded ? 'chevron-up' : 'chevron-right'}
-                size={14}
-                color={colors.muted}
-              />
-            </View>
           </View>
           <Text style={invoiceUi.chargeAmount}>{formatContractMoney(line.amount)}</Text>
+          <Icon source={expanded ? 'chevron-up' : 'chevron-right'} size={16} color={colors.muted} />
         </View>
       </TouchableRipple>
       {expanded && <InvoiceChargeDetails line={line} />}
@@ -103,6 +147,7 @@ export function InvoiceChargeRow({ line, first }: { line: InvoiceLine; first: bo
 }
 function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
   const utility = line.category === 'Electricity' || line.category === 'Water';
+  const people = invoicePersonMonths(line);
   const unit = line.category === 'Electricity' ? 'kWh' : 'm³';
   const reading = (v: string | null) => (v == null ? 'Chưa có' : formatBillingDecimal(v));
   const discrepancy =
@@ -112,7 +157,18 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
   return (
     <View style={invoiceUi.chargeDetails}>
       <InvoiceDetailRow label="Tên khoản thu" value={line.name} />
-      {utility ? (
+      {hasSettlementFixedCoverage(line) && (
+        <Text style={invoiceUi.secondary}>
+          Số tiền trên dòng này đã loại phần tiền thuê/phí ghi nhận trong khoản phải thu trả phòng.
+          Khoản phải thu vẫn có số dư riêng do máy chủ xác nhận.
+        </Text>
+      )}
+      {utility && hasSettlementUsageCoverage(line) ? (
+        <Text style={invoiceUi.secondary}>
+          Phần tiêu thụ này đã được ghi nhận trong khoản phải thu khi trả phòng, không cộng lại trên
+          hóa đơn. Xem sổ phải thu để kiểm tra số còn nợ.
+        </Text>
+      ) : utility ? (
         <>
           <InvoiceDetailRow label="Chỉ số cũ" value={reading(line.previousReading)} />
           <InvoiceDetailRow label="Chỉ số mới" value={reading(line.confirmedReading)} />
@@ -132,6 +188,16 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
             line.periodDays > 0 ? `${line.occupiedDays}/${line.periodDays} ngày` : 'Chưa có dữ liệu'
           }
         />
+      ) : people ? (
+        <>
+          <InvoiceDetailRow label="Số người tính phí" value={`${people.residentCount} người`} />
+          {people.prorated && (
+            <InvoiceDetailRow
+              label="Ngày cư trú"
+              value={`${people.personDays} người-ngày / ${line.periodDays} ngày trong tháng`}
+            />
+          )}
+        </>
       ) : (
         <InvoiceDetailRow
           label="Số lượng"
@@ -140,7 +206,7 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
       )}
       <InvoiceDetailRow
         label="Đơn giá"
-        value={`${formatBillingDecimal(line.rate)} đ${utility ? `/${unit}` : ''}`}
+        value={`${formatBillingDecimal(line.rate)} đ${utility ? `/${unit}` : people ? '/người/tháng' : ''}`}
       />
       <InvoiceMoneyRow label="Thành tiền" value={line.amount} />
       {line.calculatedAmount != null && (
@@ -165,8 +231,8 @@ function InvoiceChargeDetails({ line }: { line: InvoiceLine }) {
 export function TenantInvoiceCharges({ invoice }: { invoice: Invoice }) {
   const [info, setInfo] = useState(false);
   return (
-    <View style={invoiceUi.section}>
-      <Text style={invoiceUi.heading}>Chi tiết các khoản thu</Text>
+    <View style={invoiceUi.card}>
+      <Text style={invoiceUi.heading}>Các khoản thu</Text>
       <View>
         {invoice.lines.map((line, index) => (
           <InvoiceChargeRow key={line.id} line={line} first={index === 0} />

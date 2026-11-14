@@ -88,7 +88,7 @@ export async function loadTenantInvoice(
         obj(line) &&
         fields(line, ['id', 'category', 'name', 'rateDate']) &&
         day(line.rateDate) &&
-        ['Rent', 'Electricity', 'Water', 'ServiceFee'].includes(line.category as string) &&
+        ['Rent', 'Electricity', 'Water', 'ServiceFee', 'Other'].includes(line.category as string) &&
         decimal(line.rate) &&
         (line.quantity === null || decimal(line.quantity)) &&
         money(line.amount) &&

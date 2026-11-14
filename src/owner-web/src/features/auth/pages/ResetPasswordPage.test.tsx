@@ -12,11 +12,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup() {
+function setup(entry = '/reset-password') {
   return render(
     <ThemeProvider theme={theme}>
-      <AuthProvider transport="web">
-        <MemoryRouter initialEntries={['/reset-password']}>
+      <AuthProvider transport="web" restoreOnMount={false}>
+        <MemoryRouter initialEntries={[entry]}>
           <Routes>
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/login" element={<span>Đăng nhập bằng mật khẩu mới</span>} />
@@ -26,6 +26,15 @@ function setup() {
     </ThemeProvider>,
   );
 }
+
+it('loads one-time credentials from the email fragment without a fetch or persistent storage', () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal('fetch', fetchMock);
+  setup('/reset-password#userName=owner%40example.invalid&token=synthetic-link-token');
+  expect(screen.getByLabelText(/^Email/)).toHaveValue('owner@example.invalid');
+  expect(screen.getByLabelText(/^Mã đặt lại/)).toHaveValue('synthetic-link-token');
+  expect(fetchMock).not.toHaveBeenCalled();
+});
 
 function fill(confirmation = 'Next!Password-493') {
   fireEvent.change(screen.getByLabelText(/^Email/), {

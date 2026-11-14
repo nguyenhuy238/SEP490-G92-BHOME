@@ -1,3 +1,4 @@
+import { MoneyField } from '../../../../components/common/MoneyField';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -178,6 +179,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
   // Fee Policies
   const [mockFeePolicies, setMockFeePolicies] = useState<FeePolicyItem[]>(INITIAL_FEE_POLICIES);
   const [editingFee, setEditingFee] = useState<FeePolicyItem | null>(null);
+  const [editingFeeRate, setEditingFeeRate] = useState('0');
 
   const policyQuery = useQuery({
     queryKey: ['billing-policies', location.id],
@@ -203,10 +205,10 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
 
   // Override Dialog
   const [overrideTargetRoom, setOverrideTargetRoom] = useState<string | null>(null);
-  const [overrideValue, setOverrideValue] = useState<number>(6000000);
+  const [overrideValue, setOverrideValue] = useState('6000000');
 
   const handleSaveOverride = () => {
-    if (overrideTargetRoom) {
+    if (overrideTargetRoom && /^\d+(?:\.\d+)?$/.test(overrideValue)) {
       if (!isMockMode) {
         const room = rooms.find((item) => item.code === overrideTargetRoom);
         if (!room) {
@@ -223,7 +225,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
           chargeCode: 'RENT',
           name: `Giá thuê phòng ${room.code}`,
           method: 0,
-          rate: String(overrideValue),
+          rate: overrideValue,
           effectiveFrom: currentBusinessDate(existing ? 1 : 0),
           effectiveTo: null,
           reason: 'Điều chỉnh giá thuê riêng từ Owner Web',
@@ -236,19 +238,20 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
         setOverrideTargetRoom(null);
         return;
       }
-      setRateOverrides((prev) => ({ ...prev, [overrideTargetRoom]: overrideValue }));
+      setRateOverrides((prev) => ({ ...prev, [overrideTargetRoom]: Number(overrideValue) }));
       setOverrideTargetRoom(null);
     }
   };
 
   const handleSaveFee = () => {
-    if (!editingFee || !editingFee.name.trim() || editingFee.unitPrice < 0) return;
+    if (!editingFee || !editingFee.name.trim() || !/^\d+(?:\.\d+)?$/.test(editingFeeRate)) return;
     if (!isMockMode) {
       const existing = apiPolicies.find((policy) => policy.id === editingFee.id);
       const input = feeWrite(location.id, {
         ...editingFee,
         effectiveDate: existing ? currentBusinessDate(1) : editingFee.effectiveDate,
       });
+      input.rate = editingFeeRate;
       if (existing) {
         input.roomId = existing.roomId;
         input.category = categoryNumber(existing.category);
@@ -266,6 +269,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
     }
     const savedFee = {
       ...editingFee,
+      unitPrice: Number(editingFeeRate),
       id: editingFee.id || `fee-${Date.now()}`,
       name: editingFee.name.trim(),
     };
@@ -323,7 +327,10 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
           <Button
             variant="contained"
             startIcon={<Plus size={16} />}
-            onClick={() => setEditingFee({ ...EMPTY_FEE })}
+            onClick={() => {
+              setEditingFee({ ...EMPTY_FEE });
+              setEditingFeeRate('0');
+            }}
           >
             Thêm khoản phí
           </Button>
@@ -428,7 +435,11 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                           startIcon={<Edit2 size={13} />}
                           onClick={() => {
                             setOverrideTargetRoom(room.code);
-                            setOverrideValue(appliedRate);
+                            setOverrideValue(
+                              isMockMode
+                                ? String(appliedRate)
+                                : String(roomRent?.rate ?? locationRent?.rate ?? 0),
+                            );
                           }}
                         >
                           {isOverridden ? 'Sửa giá' : 'Đặt giá riêng'}
@@ -542,7 +553,14 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                             size="small"
                             variant="outlined"
                             startIcon={<Edit2 size={13} />}
-                            onClick={() => setEditingFee({ ...fee })}
+                            onClick={() => {
+                              setEditingFee({ ...fee });
+                              setEditingFeeRate(
+                                String(
+                                  apiPolicies.find((p) => p.id === fee.id)?.rate ?? fee.unitPrice,
+                                ),
+                              );
+                            }}
                           >
                             Cấu hình
                           </Button>
@@ -669,13 +687,13 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
               Nhập giá thuê áp dụng riêng cho phòng này. Mức giá này sẽ ưu tiên áp dụng khi lập hợp
               đồng thuê mới.
             </Typography>
-            <TextField
+            <MoneyField
+              allowDecimal
               fullWidth
-              type="number"
               size="small"
               label="Giá thuê mới (VND/tháng)"
               value={overrideValue}
-              onChange={(e) => setOverrideValue(parseInt(e.target.value, 10) || 0)}
+              onValueChange={setOverrideValue}
               slotProps={{
                 input: {
                   endAdornment: <InputAdornment position="end">VND</InputAdornment>,
@@ -687,7 +705,11 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
             <Button variant="outlined" onClick={() => setOverrideTargetRoom(null)}>
               Hủy
             </Button>
-            <Button variant="contained" onClick={handleSaveOverride}>
+            <Button
+              variant="contained"
+              disabled={!/^\d+(?:\.\d+)?$/.test(overrideValue)}
+              onClick={handleSaveOverride}
+            >
               Lưu giá riêng
             </Button>
           </DialogActions>
@@ -753,17 +775,12 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
                   </TextField>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
+                  <MoneyField
+                    allowDecimal
                     fullWidth
-                    type="number"
                     label="Đơn giá"
-                    value={editingFee.unitPrice}
-                    onChange={(event) =>
-                      setEditingFee({
-                        ...editingFee,
-                        unitPrice: Math.max(0, Number(event.target.value) || 0),
-                      })
-                    }
+                    value={editingFeeRate}
+                    onValueChange={setEditingFeeRate}
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
@@ -842,7 +859,10 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
               <Button
                 variant="contained"
                 disabled={
-                  !editingFee.name.trim() || !editingFee.effectiveDate || policyMutation.isPending
+                  !editingFee.name.trim() ||
+                  !editingFee.effectiveDate ||
+                  !/^\d+(?:\.\d+)?$/.test(editingFeeRate) ||
+                  policyMutation.isPending
                 }
                 onClick={handleSaveFee}
               >

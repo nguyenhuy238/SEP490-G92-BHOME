@@ -1,5 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/SePayIntegration.sql" LogicalName="BHome.Compact24.SePayIntegration.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/MainInitialPayment.sql" LogicalName="BHome.Compact24.MainInitialPayment.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/LifecycleAlignment.sql" LogicalName="BHome.Compact24.LifecycleAlignment.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/PhysicalResidenceClosure.sql" LogicalName="BHome.Compact24.PhysicalResidenceClosure.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/SettlementReceivableLedger.sql" LogicalName="BHome.Compact24.SettlementReceivableLedger.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/SettlementBankAllocations.sql" LogicalName="BHome.Compact24.SettlementBankAllocations.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/ReceiptExcessDisposition.sql" LogicalName="BHome.Compact24.ReceiptExcessDisposition.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/ExternalPaymentPayer.sql" LogicalName="BHome.Compact24.ExternalPaymentPayer.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/DepositReceiptAllocation.sql" LogicalName="BHome.Compact24.DepositReceiptAllocation.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/PersonMonthlyServiceFees.sql" LogicalName="BHome.Compact24.PersonMonthlyServiceFees.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Compatibility/compact24-2026-11-04.schema-reference" LogicalName="BHome.Compact24.PreviousProperty.schema-reference" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/InitialCompact24.sql" LogicalName="BHome.Compact24.InitialBaseline.sql" />
     <EmbeddedResource Include="../../../docs/database/2026-11-03/compact-24/UPGRADE_LOCATION_ROOM.sql" LogicalName="BHome.Compact24.PropertyUpgrade.sql" />
@@ -7,6 +17,7 @@
     <EmbeddedResource Include="../../../docs/mau-hop-dong-thue-nha-tro-ngan-gon.docx" LogicalName="BHome.Contracts.main-tenancy-original.docx" />
     <PackageReference Include="PDFtoImage" Version="5.4.0" />
     <PackageReference Include="QRCoder" Version="1.8.1" />
+    <PackageReference Include="MailKit" Version="4.17.0" />
     <ProjectReference Include="../../digital-signing/BHome.DigitalSigning.Infrastructure/BHome.DigitalSigning.Infrastructure.csproj" />
     <ProjectReference Include="../../digital-signing/BHome.DigitalSigning.MySign/BHome.DigitalSigning.MySign.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

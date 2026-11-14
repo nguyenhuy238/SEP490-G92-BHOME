@@ -5,6 +5,7 @@ export interface StaffFeature {
   detail: string;
   icon: string;
   screen: WorkspaceScreen;
+  params?: Record<string, string>;
   pending?: boolean;
   partial?: boolean;
 }
@@ -18,6 +19,13 @@ export const staffFeatureGroups: { title: string; items: StaffFeature[] }[] = [
         detail: 'CCCD & người cùng ở',
         icon: 'account-plus-outline',
         screen: 'onboarding',
+      },
+      {
+        title: 'Tạo hợp đồng giữ chỗ',
+        detail: 'Chọn phòng, đại diện & tiền cọc',
+        icon: 'file-document-plus-outline',
+        screen: 'prepare-contract',
+        params: { kind: 'Holding' },
       },
       {
         title: 'Hợp đồng',

@@ -39,7 +39,7 @@ public sealed partial class InvoiceApiTests
         Assert.Equal("Final", final.Status); Assert.Equal(3109250, final.Total);
     }
     [Fact]
-    public async Task SourceChangeMakesDraftCorrectionExplicitlyPendingAndPreventsFinalization()
+    public async Task RoomPolicyChangeDoesNotInvalidateApprovedDraftCorrection()
     {
         var w = await Setup(); var draft = await Ready(w); var request = await Request(w, draft);
         var approved = await Success<AdjustmentView>(await AdjustmentPost(w.Owner.Client, $"/api/v1/invoice-adjustments/{request.Id}/approve",
@@ -50,8 +50,11 @@ public sealed partial class InvoiceApiTests
             db.Add(new BillingPolicy { LocationId = w.Location, RoomId = w.Room, Category = ChargeCategory.Rent, ChargeCode = "RENT", Name = "Changed synthetic source", Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 4000000, EffectiveFrom = w.Period }); await db.SaveChangesAsync();
         }
         var refresh = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/refresh", new InvoiceFinalizeInput(approved.CurrentInvoice!.Version)));
-        Assert.Contains("draft_correction_source_changed", refresh.MissingInputs);
-        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize", new InvoiceFinalizeInput(refresh.Version))).StatusCode);
+        Assert.Empty(refresh.MissingInputs);
+        var rent = refresh.Lines.Single(l => l.ChargeCode == "RENT");
+        Assert.Equal(3000000, rent.CalculatedAmount); Assert.Equal(2990000, rent.Amount);
+        var final = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize", new InvoiceFinalizeInput(refresh.Version)));
+        Assert.Equal("Final", final.Status);
     }
     [Fact]
     public async Task OwnerApproveRejectRacePersistsExactlyOneDecisionAndOneResult()

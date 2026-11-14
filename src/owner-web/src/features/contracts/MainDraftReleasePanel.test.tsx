@@ -92,6 +92,26 @@ it('blocks unsaved inputs', async () => {
   expect(screen.getByRole('button', { name: 'Tạo và xem PDF đưa đi ký' })).toBeDisabled();
   expect(mounted).not.toHaveBeenCalled();
 });
+it('releases a reviewed PDF for a new resident without creating or requiring an account', async () => {
+  mock.tenantAccounts.mockResolvedValue([]);
+  mock.release.mockResolvedValue({ id: 'draft' });
+  const done = mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo và xem PDF đưa đi ký' }));
+  await screen.findByTitle('PDF được chọn để đưa đi ký');
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chuyển sang ký' }));
+  await waitFor(() => expect(done).toHaveBeenCalledOnce());
+  expect(mock.release).toHaveBeenCalledWith(
+    'draft',
+    {
+      tenantUserId: null,
+      expectedVersion: 3,
+      reviewedFileId: 'review',
+      humanReviewed: true,
+    },
+    expect.any(String),
+  );
+});
 it('shows a blocked template without fabricating a review file', async () => {
   mock.signingReview.mockRejectedValue({
     status: 503,

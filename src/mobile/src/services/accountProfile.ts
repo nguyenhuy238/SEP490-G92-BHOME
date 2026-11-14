@@ -1,4 +1,5 @@
 import { MobileApiError, type MobileApi } from '../lib/api';
+import { normalizeLoginPhone } from '../../../../packages/client-core/src/loginValidation';
 
 // OperationsContracts.cs: ProfileView / ProfileUpdate (UC-03).
 export interface AccountProfile {
@@ -20,6 +21,7 @@ export interface ProfileUpdate {
   phone: string | null;
   email: string;
   version: string;
+  currentPassword?: string;
 }
 export const profilePath = '/api/v1/account/profile';
 
@@ -58,6 +60,7 @@ export async function updateAccountProfile(
         phone: input.phone,
         email: input.email,
         version: input.version,
+        ...(input.currentPassword ? { currentPassword: input.currentPassword } : {}),
       }),
     }),
   );
@@ -69,12 +72,11 @@ export function profileFields(p: AccountProfile): ProfileFields {
 // at most 30 input characters; spaces, -, ., (, ) are accepted separators.
 export function normalizeProfilePhone(value: string): string | null | undefined {
   if (!value.trim()) return null;
-  if (value.length > 30) return undefined;
-  const compact = value.trim().replace(/[ .()-]/g, '');
-  return /^\+?[0-9]{8,15}$/.test(compact) ? compact : undefined;
+  return normalizeLoginPhone(value);
 }
 export function validateProfile(
   fields: ProfileFields,
+  tenant = false,
 ): Partial<Record<keyof ProfileFields, string>> {
   const errors: Partial<Record<keyof ProfileFields, string>> = {};
   const name = fields.fullName.trim(),
@@ -94,10 +96,14 @@ export function validateProfile(
     errors.email = 'Nhập email hợp lệ, tối đa 256 ký tự.';
   if (normalizeProfilePhone(fields.phone) === undefined)
     errors.phone = 'Nhập số điện thoại gồm 8–15 chữ số, có thể bắt đầu bằng +.';
+  if (tenant && !fields.phone.trim()) errors.phone = 'Vui lòng nhập số điện thoại.';
   return errors;
 }
 export function contactChanged(before: AccountProfile, after: AccountProfile) {
-  return before.email?.toUpperCase() !== after.email?.toUpperCase() || before.phone !== after.phone;
+  return (
+    before.email?.toUpperCase() !== after.email?.toUpperCase() ||
+    normalizeProfilePhone(before.phone ?? '') !== normalizeProfilePhone(after.phone ?? '')
+  );
 }
 export function profileError(error: unknown): string {
   if (error instanceof MobileApiError) {
@@ -107,6 +113,10 @@ export function profileError(error: unknown): string {
       return 'Email này đã được sử dụng. Vui lòng chọn email khác.';
     if (error.code === 'phone_already_used')
       return 'Số điện thoại này đã được sử dụng. Vui lòng kiểm tra lại.';
+    if (error.code === 'current_password_required')
+      return 'Vui lòng nhập mật khẩu hiện tại để xác nhận thay đổi liên hệ.';
+    if (error.code === 'current_password_invalid') return 'Mật khẩu hiện tại không đúng.';
+    if (error.code === 'tenant_profile_phone_required') return 'Vui lòng nhập số điện thoại.';
     if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
     if (error.status === 403) return 'Bạn không có quyền cập nhật hồ sơ này.';
     if (error.status === 404) return 'Chưa tìm thấy hồ sơ của tài khoản này.';

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import { ThemeProvider } from '@mui/material';
@@ -9,7 +9,7 @@ import { AppRouter } from './router';
 import { portalRoutes } from './routePaths';
 import { demoAuth, DEMO_USER, DEMO_PASSWORD } from '../services/demoAuth';
 import { theme } from '../theme/theme';
-vi.mock('../services/config', () => ({ isMockMode: true }));
+vi.mock('../services/config', () => ({ isMockMode: true, apiBaseUrl: '' }));
 // jsdom has no physical chart/grid layout; behavioral smoke tests do not assert pixels.
 vi.mock('recharts', async () => {
   const real = await vi.importActual<typeof import('recharts')>('recharts');
@@ -38,7 +38,7 @@ it('protects deep links and returns to the requested screen after demo login', a
     </ThemeProvider>,
   );
   expect(await screen.findByRole('heading', { name: 'Đăng nhập tài khoản' })).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('Email'), {
+  fireEvent.change(screen.getByLabelText('Email hoặc số điện thoại'), {
     target: { value: DEMO_USER },
   });
   fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: DEMO_PASSWORD } });
@@ -67,14 +67,18 @@ it.each(portalRoutes)(
         </AuthProvider>
       </ThemeProvider>,
     );
-    expect(
-      await screen.findByRole('heading', { level: 1 }, { timeout: 12000 }),
-    ).toBeInTheDocument();
+    // Wait for the lazy page's real heading without scanning every cell in the
+    // mock property/finance tables on each polling iteration.
+    await waitFor(() => expect(document.querySelector('h1')).toBeVisible(), {
+      timeout: 20000,
+    });
+    expect(document.querySelectorAll('h1')).toHaveLength(1);
+    expect(document.querySelector('h1')).toHaveRole('heading');
     expect(screen.getByRole('navigation', { name: 'Điều hướng chính' })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   },
-  15000,
+  30000,
 );
 
 it('renders the investment child route inside a Location Workspace', async () => {
@@ -107,16 +111,20 @@ it('keeps property functions inside the selected Location Workspace', async () =
     </ThemeProvider>,
   );
 
-  const navigation = await screen.findByRole('navigation', { name: 'Điều hướng chính' });
+  const navigation = await screen.findByRole(
+    'navigation',
+    { name: 'Điều hướng chính' },
+    { timeout: 12000 },
+  );
   // One accessibility-tree scan per group avoids repeating expensive jsdom visibility/name
   // calculations. Keep exact accessible names, uniqueness and absent-link assertions.
   const expectedLinks: Record<string, string> = {
     '/locations': 'Cơ sở',
     '/configuration/room-types': 'Mẫu loại phòng',
-    '/configuration/assets': 'Danh mục tài sản',
+    '/configuration/assets': 'Tài sản dùng chung',
   };
   const propertyLinks = within(navigation).getAllByRole('link', {
-    name: /^(Cơ sở|Mẫu loại phòng|Danh mục tài sản)$/,
+    name: /^(Cơ sở|Mẫu loại phòng|Tài sản dùng chung)$/,
   });
   expect(propertyLinks.map((link) => link.getAttribute('href')).sort()).toEqual(
     Object.keys(expectedLinks).sort(),
@@ -139,25 +147,36 @@ it('keeps property functions inside the selected Location Workspace', async () =
   });
   expect(locationLinks[0]).toHaveAttribute('href', '/locations/loc-1/overview');
   fireEvent.click(locationLinks[0]);
-  expect(
-    await screen.findByRole(
-      'heading',
-      { level: 1, name: 'BHOME Central 1 - Bạch Đằng' },
-      { timeout: 12000 },
-    ),
-  ).toBeInTheDocument();
-  expect(screen.getByRole('tab', { name: 'Phòng & Sơ đồ tầng' })).toHaveAttribute(
-    'href',
-    '/locations/loc-1/rooms',
+  // Locate exact visible text before asserting semantics, avoiding repeated whole-page
+  // accessibility scans over the room grid on a two-core CI runner.
+  const heading = await screen.findByText(
+    'BHOME Central 1 - Bạch Đằng',
+    { selector: 'h1', exact: true },
+    { timeout: 12000 },
   );
-  expect(screen.getByRole('tab', { name: 'Vốn & Chi phí' })).toHaveAttribute(
-    'href',
-    '/locations/loc-1/investment',
-  );
-  expect(screen.getByRole('heading', { name: 'Không gian phòng theo tầng' })).toBeInTheDocument();
+  expect(heading).toHaveRole('heading');
+  expect(heading).toHaveAccessibleName('BHOME Central 1 - Bạch Đằng');
+  expect(heading).toBeVisible();
+  for (const [name, href] of [
+    ['Phòng & Sơ đồ tầng', '/locations/loc-1/rooms'],
+    ['Vốn & Chi phí', '/locations/loc-1/investment'],
+  ]) {
+    const tab = screen.getByText(name, { selector: 'a[role="tab"]', exact: true });
+    expect(tab).toHaveRole('tab');
+    expect(tab).toHaveAccessibleName(name);
+    expect(tab).toBeVisible();
+    expect(tab).toHaveAttribute('href', href);
+  }
+  const roomsHeading = screen.getByText('Không gian phòng theo tầng', {
+    selector: 'h2',
+    exact: true,
+  });
+  expect(roomsHeading).toHaveRole('heading');
+  expect(roomsHeading).toHaveAccessibleName('Không gian phòng theo tầng');
+  expect(roomsHeading).toBeVisible();
   expect(document.querySelector('a[href="/rooms/room-0"]')).toBeInTheDocument();
   expect(document.querySelector('a[href="/rooms/room-25"]')).not.toBeInTheDocument();
-}, 15000);
+}, 30000);
 
 it('isolates the room space by Location route context', async () => {
   render(

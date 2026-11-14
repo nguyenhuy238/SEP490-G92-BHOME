@@ -33,10 +33,13 @@ internal sealed class AssetTemplateSyncJob(ISetupWorkspaceStore store, CompactNo
                 {
                     var status = await store.TransactionAsync(template.LocationId, async () =>
                     {
-                        var latest = (await store.ListAsync(template.LocationId, "AssetTemplate", t)).Where(d => d.Status == "Published").OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault();
+                        var latest = (await store.ListAsync(template.LocationId, "AssetTemplate", t)).Where(AssetInventoryService.IsLocationDefault).OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault();
                         var assignmentId = new Guid(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"asset-template-assignment:{room}")).AsSpan(0, 16));
                         var assignment = await store.GetAsync(assignmentId, "AssetTemplateAssignment", t);
-                        var selected = assignment?.Data.Deserialize<AssetTemplateAssignment>(CompactNotificationWriter.Json)?.TemplateId ?? latest?.Id;
+                        var provenanceId = new Guid(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"room-provenance:{room}")).AsSpan(0, 16));
+                        var provenance = await store.GetAsync(provenanceId, "RoomProvenance", t);
+                        var selected = assignment?.Data.Deserialize<AssetTemplateAssignment>(CompactNotificationWriter.Json)?.TemplateId;
+                        if (selected is null && provenance is null && assignment?.Status != "None") selected = latest?.Id;
                         if (selected != template.Id) return "SkippedOtherTemplate";
                         if (!await store.EligibleRoomAsync(room, t)) return "SkippedNotEligible";
                         var id = new Guid(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"desired:{room}:{template.Id}:{template.Version}")).AsSpan(0, 16));

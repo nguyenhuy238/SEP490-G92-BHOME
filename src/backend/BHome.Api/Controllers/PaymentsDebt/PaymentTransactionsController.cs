@@ -16,7 +16,8 @@ public sealed class PaymentTransactionsController(PaymentService service) : Cont
     [HttpGet("{id:guid}")] public Task<TransferView> Get(Guid id, CancellationToken t) => service.TransferAsync(id, t);
     [HttpPost] public Task<TransferView> Register(PaymentTransferInput input, CancellationToken t) => service.RegisterAsync(input, Key(), t);
     [HttpPost("{id:guid}/allocate")] public Task<PaymentReviewResult> Allocate(Guid id, PaymentMatchInput input, CancellationToken t) => service.AllocateAsync(id, input, Key(), t);
-    [HttpPost("{id:guid}/allocate-holding-deposit")] public Task<PaymentReviewResult> AllocateDeposit(Guid id, PaymentDepositMatchInput input, CancellationToken t) => service.AllocateDepositAsync(id, input, Key(), t);
+    [HttpGet("{id:guid}/deposit-context")] public Task<DepositAllocationContext> DepositContext(Guid id, [FromQuery] Guid contractId, CancellationToken t) => service.DepositContextAsync(id, contractId, t);
+    [HttpPost("{id:guid}/allocate-deposit"), HttpPost("{id:guid}/allocate-holding-deposit")] public Task<PaymentReviewResult> AllocateDeposit(Guid id, PaymentDepositMatchInput input, CancellationToken t) => service.AllocateDepositAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/reject")] public Task<PaymentReviewResult> Reject(Guid id, PaymentRejectInput input, CancellationToken t) => service.RejectAsync(id, input, Key(), t);
     [HttpGet("{id:guid}/reconciliation-history")] public Task<PagedResult<ReconciliationView>> History(Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken t = default) => service.ReviewsAsync(id, page, pageSize, t);
 }
@@ -27,4 +28,11 @@ public sealed class InvoicePaymentController(PaymentService service) : Controlle
 {
     [HttpGet] public Task<InvoicePaymentView> Get(Guid id, CancellationToken t) => service.InvoicePaymentAsync(id, t);
     [HttpGet("eligible-payers"), Authorize(Roles = Roles.Owner)] public Task<IReadOnlyList<PayerChoice>> Payers(Guid id, CancellationToken t) => service.PayersAsync(id, t);
+}
+
+[ApiController, Route("api/v1/contracts/{id:guid}/deposit-payment"), Authorize(Roles = Roles.Owner)]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+public sealed class ContractDepositPaymentController(PaymentService service) : ControllerBase
+{
+    [HttpGet] public Task<ContractDepositPosition> Get(Guid id, CancellationToken token) => service.DepositPositionAsync(id, token);
 }

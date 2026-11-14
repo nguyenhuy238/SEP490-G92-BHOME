@@ -5,6 +5,7 @@ using BHome.Api.IdentityAccess;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Text.Json.Serialization;
 
 namespace BHome.Api.Controllers.IdentityAccess;
 
@@ -18,24 +19,19 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
     [HttpPost("login")]
     [AllowAnonymous]
     [RequestSizeLimit(16 * 1024)]
-    public async Task<ActionResult<LoginResult>> Login(LoginRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<AuthTokenResponse>> Login(LoginRequest request, CancellationToken cancellationToken)
     {
         Response.Headers.CacheControl = "no-store";
         Response.Headers.Pragma = "no-cache";
-        if (string.IsNullOrWhiteSpace(request.Email) == string.IsNullOrWhiteSpace(request.Phone))
-        {
-            ModelState.AddModelError("identifier", "Provide exactly one email or phone number.");
-            return ValidationProblem(ModelState);
-        }
         var session = await login.LoginAsync(request.Phone ?? request.Email, request.Password, cancellationToken, request.Device);
         return session is null
-            ? Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Sign-in failed.")
+            ? Problem(statusCode: StatusCodes.Status401Unauthorized, title: LoginService.InvalidCredentialsMessage)
             : Ok(Transport(session));
     }
 
     [HttpPost("refresh")]
     [AllowAnonymous]
-    public async Task<ActionResult<LoginResult>> Refresh(RefreshRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<AuthTokenResponse>> Refresh(RefreshRequest request, CancellationToken cancellationToken)
     {
         var token = AuthTransportFilter.IsWeb(Request) ? Request.Cookies[AuthTransportFilter.CookieName] : request.RefreshToken;
         var result = string.IsNullOrWhiteSpace(token) ? null : await sessions.RefreshAsync(token, cancellationToken);
@@ -87,11 +83,11 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
     private Guid UserId => Guid.Parse(User.FindFirst("sub")!.Value);
     private Guid SessionId => Guid.Parse(User.FindFirst("sid")!.Value);
 
-    private LoginResult Transport(LoginResult result)
+    private AuthTokenResponse Transport(LoginResult result)
     {
-        if (!AuthTransportFilter.IsWeb(Request)) return result;
+        if (!AuthTransportFilter.IsWeb(Request)) return new AuthTokenResponse(result.AccessToken, result.RefreshToken);
         Response.Cookies.Append(AuthTransportFilter.CookieName, result.RefreshToken!, AuthTransportFilter.CookieOptions(result.SessionExpiresAt));
-        return result with { RefreshToken = null };
+        return new AuthTokenResponse(result.AccessToken);
     }
 
     private void ClearCookie() => Response.Cookies.Delete(AuthTransportFilter.CookieName, AuthTransportFilter.CookieOptions());
@@ -104,13 +100,28 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
     }
 }
 
-public sealed record LoginRequest(
-    [EmailAddress, StringLength(LoginService.MaxEmailLength)] string? Email,
-    [StringLength(LoginIdentifier.MaxPhoneLength), RegularExpression(@"^\+?[0-9 .()\-]{8,30}$")] string? Phone,
-    [Required, StringLength(LoginService.MaxPasswordLength)] string? Password,
-    [StringLength(256)] string? Device = null);
+public sealed record LoginRequest(string? Email, string? Phone, string? Password, string? Device = null) : IValidatableObject
+{
+    public IEnumerable<ValidationResult> Validate(ValidationContext context)
+    {
+        var email = !string.IsNullOrWhiteSpace(Email);
+        var phone = !string.IsNullOrWhiteSpace(Phone);
+        if (!email && !phone) yield return new("Vui lòng nhập email hoặc số điện thoại.", ["identifier"]);
+        if (email && phone) yield return new("Chỉ nhập email hoặc số điện thoại.", ["identifier"]);
+        if (email && (Email!.Length > LoginService.MaxEmailLength || !LoginIdentifier.IsEmail(Email.Trim())))
+            yield return new("Email không đúng định dạng.", ["email"]);
+        if (phone && LoginIdentifier.NormalizePhone(Phone) is null)
+            yield return new("Số điện thoại không đúng định dạng.", ["phone"]);
+        if (string.IsNullOrWhiteSpace(Password)) yield return new("Vui lòng nhập mật khẩu.", ["password"]);
+        else if (Password.Length > LoginService.MaxPasswordLength) yield return new("Mật khẩu vượt quá độ dài cho phép.", ["password"]);
+        if (Device?.Length > 256) yield return new("Thông tin thiết bị vượt quá độ dài cho phép.", ["device"]);
+    }
+}
 
 public sealed record RefreshRequest([StringLength(256)] string? RefreshToken = null);
+public sealed record AuthTokenResponse(
+    string AccessToken,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RefreshToken = null);
 public sealed record ChangePasswordRequest(
     [Required, StringLength(LoginService.MaxPasswordLength)] string? CurrentPassword,
     [Required, StringLength(LoginService.MaxPasswordLength, MinimumLength = 12)] string? NewPassword);

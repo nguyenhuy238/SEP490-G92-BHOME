@@ -20,7 +20,7 @@ const RoomTypesPage = lazy(() => import('../features/room-types/pages/RoomTypesP
 const AssetsPage = lazy(() => import('../features/assets/pages/AssetsPage'));
 const PricingPage = lazy(() => import('../features/pricing/pages/PricingPage'));
 const StaffPage = lazy(() => import('../features/staff/pages/StaffPage'));
-const SchedulesPage = lazy(() => import('../features/schedules/pages/SchedulesPage'));
+const StaffAssignmentsPage = lazy(() => import('../features/staff/pages/StaffAssignmentsPage'));
 const TasksPage = lazy(() => import('../features/tasks/pages/TasksPage'));
 const TenantsPage = lazy(() => import('../features/tenants/pages/TenantsPage'));
 const ContractsPage = lazy(() => import('../features/contracts/pages/ContractsPage'));
@@ -39,6 +39,7 @@ const IncidentsPage = lazy(() => import('../features/incidents/pages/IncidentsPa
 const MaintenancePage = lazy(() => import('../features/maintenance/pages/MaintenancePage'));
 const ExpensesPage = lazy(() => import('../features/expenses/pages/ExpensesPage'));
 const DashboardPage = lazy(() => import('../features/dashboard/pages/DashboardPage'));
+const FinanceHomePage = lazy(() => import('../features/finance/FinanceHomePage'));
 const ReportsPage = lazy(() => import('../features/reports/pages/ReportsPage'));
 const WhatIfPage = lazy(() => import('../features/what-if/pages/WhatIfPage'));
 const PublicContentPage = lazy(() => import('../features/public-content/pages/PublicContentPage'));
@@ -68,6 +69,15 @@ const PolicyTemplatesPage = lazy(() =>
   })),
 );
 const ResetPasswordPage = lazy(() => import('../features/auth/pages/ResetPasswordPage'));
+const HoldingSettingsPage = lazy(() => import('../features/contracts/pages/HoldingSettingsPage'));
+const SmsRecoveryPage = lazy(() => import('../features/auth/pages/SmsRecoveryPage'));
+const DemoSmsInboxPage =
+  import.meta.env.DEV && import.meta.env.VITE_SMS_DEMO_ENABLED === 'true'
+    ? lazy(() => import('../features/notifications/pages/DemoSmsInboxPage'))
+    : null;
+const ConfirmEmailPage = lazy(() => import('../features/auth/pages/ConfirmEmailPage'));
+const AcceptInvitationPage = lazy(() => import('../features/auth/pages/AcceptInvitationPage'));
+const AnonymousSigningPage = lazy(() => import('../features/contracts/pages/AnonymousSigningPage'));
 const AccountProfilePage = lazy(() => import('../features/auth/pages/AccountProfilePage'));
 export function AppRouter() {
   return (
@@ -76,16 +86,22 @@ export function AppRouter() {
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/forgot-password" element={<SmsRecoveryPage />} />
+          <Route path="/confirm-email" element={<ConfirmEmailPage />} />
+          <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+          <Route path="/contract-signing" element={<AnonymousSigningPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/notifications" element={<NotificationsPage />} />
+              {DemoSmsInboxPage && <Route path="/demo/sms" element={<DemoSmsInboxPage />} />}
               <Route path="/account/profile" element={<AccountProfilePage />} />
               <Route path="/locations" element={<LocationsPage />} />
               <Route path="/configuration/room-types" element={<RoomTypeTemplatesPage />} />
               <Route path="/configuration/assets" element={<AssetCatalogPage />} />
               <Route path="/configuration/pricing-fees" element={<PricingFeeTemplatesPage />} />
               <Route path="/configuration/policies" element={<PolicyTemplatesPage />} />
+              <Route path="/configuration/holding-contracts" element={<HoldingSettingsPage />} />
               <Route path="/locations/:locationId" element={<LocationWorkspace />}>
                 <Route index element={<Navigate to="overview" replace />} />
                 <Route path="overview" element={<></>} />
@@ -108,14 +124,16 @@ export function AppRouter() {
               <Route path="/assets" element={<AssetsPage />} />
               <Route path="/pricing" element={<PricingPage />} />
               <Route path="/staff" element={<StaffPage />} />
-              <Route path="/schedules" element={<SchedulesPage />} />
-              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/staff-assignments" element={<StaffAssignmentsPage />} />
+              <Route path="/operational-tasks" element={<TasksPage />} />
+              <Route path="/tasks" element={<Navigate to="/operational-tasks" replace />} />
               <Route path="/tenants" element={<TenantsPage />} />
               <Route path="/contracts" element={<ContractsPage />} />
               <Route path="/digital-signing" element={<DigitalSigningPage />} />
               <Route path="/handovers" element={<HandoversPage />} />
               <Route path="/temporary-residence" element={<TemporaryResidencePage />} />
               <Route path="/meters" element={<MetersPage />} />
+              <Route path="/finance" element={<FinanceHomePage />} />
               <Route path="/invoices" element={<InvoicesPage />} />
               <Route path="/billing-automation" element={<AutomationPage />} />
               <Route path="/invoice-adjustments" element={<AdjustmentsPage />} />

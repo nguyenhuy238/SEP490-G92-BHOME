@@ -78,6 +78,20 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
             .Select(x => new TaskHistoryView(x.Id, x.ActorId, x.Action, x.Note, x.ChangesJson, x.ResponsibleStaffUserId, x.OccurredAt, x.WasOverdue, x.TaskVersion)).ToArrayAsync(t);
         return new(items, page, size, count);
     }
+    public async Task<IReadOnlyList<TaskActorView>> ActorsAsync(Guid taskId, CancellationToken t)
+    {
+        var actorIds = db.Set<OperationalTaskHistory>().AsNoTracking().Where(x => x.TaskId == taskId)
+            .Select(x => x.ActorId).Distinct();
+        var entity = db.Model.FindEntityType(typeof(ApplicationUser));
+        if (entity?.FindProperty("full_name") is not null)
+            return await db.Users.AsNoTracking().Where(x => actorIds.Contains(x.Id))
+                .Select(x => new TaskActorView(x.Id,
+                    EF.Property<string>(x, "full_name") ?? x.Email ?? x.UserName ?? x.Id.ToString()))
+                .OrderBy(x => x.DisplayName).ToArrayAsync(t);
+        return await db.Users.AsNoTracking().Where(x => actorIds.Contains(x.Id))
+            .Select(x => new TaskActorView(x.Id, x.Email ?? x.UserName ?? x.Id.ToString()))
+            .OrderBy(x => x.DisplayName).ToArrayAsync(t);
+    }
     public Task<OperationalTaskCommand?> CommandAsync(Guid actorId, Guid key, CancellationToken t) => db.Set<OperationalTaskCommand>().AsNoTracking()
         .SingleOrDefaultAsync(x => x.ActorId == actorId && x.Key == key, t);
     public async Task<IReadOnlyList<OperationalTaskEvidence>> EvidenceAsync(Guid taskId, CancellationToken t) =>

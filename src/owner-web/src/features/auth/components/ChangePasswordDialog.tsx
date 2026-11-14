@@ -29,7 +29,6 @@ const passwordRule = /^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{Nd})(?=.*[^\p{L}\p{N}]).{
 
 export function ChangePasswordDialog({
   open,
-  accountEmail,
   onClose,
   onChanged,
   onReauthenticationRequired,
@@ -62,6 +61,10 @@ export function ChangePasswordDialog({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
+    if (newPassword === currentPassword) {
+      setError('Mật khẩu mới phải khác mật khẩu hiện tại.');
+      return;
+    }
     if (newPassword !== confirmation) {
       setError('Mật khẩu mới và phần xác nhận không khớp.');
       return;
@@ -75,23 +78,13 @@ export function ChangePasswordDialog({
 
     setBusyAction('change');
     setError('');
-    let passwordChanged = false;
     try {
       await client.changePassword(currentPassword, newPassword);
-      passwordChanged = true;
-      await client.login(accountEmail, newPassword);
-      if (!client.session?.roles.includes('Owner')) {
-        client.clear();
-        throw new Error('Owner session was not restored.');
-      }
+      client.clear();
       reset();
       onChanged();
+      onReauthenticationRequired();
     } catch (failure) {
-      if (passwordChanged) {
-        reset();
-        onReauthenticationRequired();
-        return;
-      }
       if (failure instanceof ApiError && failure.status === 400) {
         setError('Không thể đổi mật khẩu. Hãy kiểm tra mật khẩu hiện tại và yêu cầu bảo mật.');
       } else if (failure instanceof ApiError && failure.status === 401) {
@@ -181,7 +174,7 @@ export function ChangePasswordDialog({
           />
           <Typography variant="caption" color="text.secondary">
             Tối thiểu 12 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Các phiên cũ sẽ bị thu
-            hồi; phiên hiện tại sẽ được xác thực lại tự động bằng mật khẩu mới.
+            hồi; bạn cần đăng nhập lại bằng mật khẩu mới.
           </Typography>
         </Stack>
       </DialogContent>

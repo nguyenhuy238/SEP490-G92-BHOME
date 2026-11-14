@@ -43,10 +43,45 @@ Liên quan UC-13 (tiếp nhận/CCCD), UC-15/16 (hợp đồng), quy tắc xác 
 
 - GET `/api/v1/capture/locations`
 - GET `/api/v1/capture/locations/{locationId}/rooms`
-- POST `/api/v1/capture/residents`: `{ roomId, displayLabel, residentType }`
+- POST `/api/v1/capture/residents`: `{ roomId, displayLabel, residentType, email }` (email riêng bắt buộc theo BR-01/05 được ghi nhận ngày 10/11/2026).
 - POST `/api/v1/ocr/identity/{residentId}/{front|back}`: bytes ảnh qua MobileApi.image, xác thực hiện có.
 - POST `/api/v1/capture/residents/{residentId}/confirm`: dữ liệu đã chỉnh + humanConfirmed=true.
 - Các truy vấn hợp đồng và readiness dùng client/hook hiện có.
+
+## Khôi phục khi trùng email — 14/11/2026
+
+Truy vết: BF-03/04, UC-13, GBR-01/02/13; BR-01/05 trong `docs/development/BHOME_NQH_IMPLEMENTATION_RESULTS_2026-11-10.md`. Không đổi chính sách email duy nhất, quyền Staff hoặc lưu trữ CCCD.
+
+Trước khi mở nhập tay/camera, Mobile tạo hồ sơ qua POST residents. `409 resident_email_already_associated` nghĩa là email đã gắn với Resident; chưa phải lỗi OCR. UI trước đây hiện lỗi 409 chung và không có đường khôi phục cụ thể.
+
+- Hiện thông báo đúng mã lỗi, giữ dữ liệu nháp và cho quay lại sửa email của người đang thao tác.
+- Sau xung đột, chỉ đọc GET `/api/v1/capture/locations/{locationId}/residents` hiện có. Nếu đúng một summary khớp email (không phân biệt hoa/thường) và đúng phòng, cho thao tác mở hồ sơ cũ qua `residentId`/`locationId`. Trang chi tiết tải lại scoped summary và dùng trạng thái xác minh từ backend.
+- Không tự nối hồ sơ cũ vào nhóm mới, xác nhận CCCD hoặc tạo lại hồ sơ. Không truy vấn global email hoặc dữ liệu định danh đã giải mã. Khác phòng, không tìm thấy, response không có email hoặc lookup thất bại: hướng dẫn kiểm tra danh sách trong phạm vi hiện có. Không lộ ID/phòng ngoài phạm vi.
+- `IdentityWizard` chỉ mount hook chống chụp màn hình trên native; Web không gọi API ScreenCapture không được hỗ trợ. Giữ bảo vệ native và xóa dữ liệu tạm khi background.
+
+Kiểm tra tự động: **101 files / 1.119 tests Mobile PASS**, lint và typecheck PASS. Thêm 10 ca: pending/verified existing profile, sửa email rồi vào manual/camera, khác phòng/email/không thấy/lookup lỗi, Web không gọi native hook, Android giữ hook. Các fixture dùng dữ liệu tổng hợp; không thay dữ liệu live, schema, API hoặc backend.
+
+Chrome với Web export và transport tổng hợp PASS: đăng nhập Staff → tạo bị 409 → thông báo/mở hồ sơ đúng phòng → xác nhận rời phiên qua guard hiện có → tải lại hồ sơ scoped → mở/đóng nhập tay. Chỉ một POST create, không gọi OCR/confirm, không page error hoặc ScreenCapture error; không tràn ngang ở 360/768/1280px. Browser script/artifacts ở `.tools/owner-pdf-validation/onboarding-email*` (ignored). Lượt đầu dùng development export với static server bị lỗi module resolution, không được tính PASS. Camera/OCR thật, thiết bị Android/iOS và backend live: **NOT RUN** cho lượt sửa UI này.
+
+## Sửa form nhập tay trống trên Web — 14/11/2026
+
+Truy vết: UC-13 / GBR-13 → `IdentityFlowFrame` (modal dùng chung cho nhập tay và kiểm tra OCR). Không đổi dữ liệu xác nhận hoặc business rules.
+
+Tái hiện bằng Chrome: các input có trong DOM nhưng ScrollView cao **0px**; SafeAreaView có `paddingBottom: 900px` trên viewport cao 900px. Safe-area-context 5.10.1 của Mobile đo provider trong lúc modal `slide` đang dịch xuống ngoài màn hình, giữ nhầm phần dịch chuyển thành safe-area inset. Kiểm tra browser ở lượt trước chỉ chờ input tồn tại, chưa kiểm tra clipping/khả năng nhập nên bỏ sót lỗi này.
+
+Modal Web đổi sang `fade` để provider không bị dịch chuyển khi đo; native giữ `slide`. Không sửa node_modules, dependency hoặc safe-area toàn ứng dụng. Test component xác minh Web/native chọn animation tương ứng. Browser regression được lưu ở `tests/mobile/onboarding.browser.cjs`: tái hiện lỗi trước sửa, sau sửa input có viewport khác 0, nhập được CCCD/họ tên/ngày sinh/ngày cấp, cuộn tới nút xác nhận, nút vẫn bị khóa khi chưa đối chiếu giấy tờ, đóng/mở lại giữ dữ liệu tạm. PASS trên 360/768/1280/1920px, không page error/ScreenCapture error; ảnh kiểm tra ở `.tools/onboarding-browser` (ignored). Dùng synthetic transport và dữ liệu tổng hợp, không gọi OCR/confirm hoặc sửa hồ sơ thật. Thiết bị native/camera thật: **NOT RUN**. Full Mobile **101 files / 1.119 tests PASS**; lint/typecheck/format PASS.
+
+Chạy lại từ repo root với Node 22: export Mobile Web tới `src/mobile/.expo/onboarding-email-browser` bằng `EXPO_NO_DOTENV=1` và `EXPO_PUBLIC_API_BASE_URL=https://api.example.invalid`, rồi `node tests/mobile/onboarding.browser.cjs`. Có thể đặt `BHOME_MOBILE_WEB_DIST` cho thư mục export khác và `BHOME_BROWSER_EXECUTABLE` cho executable Chrome/Chromium hiện có. Script không truy cập API live.
+
+## Khôi phục hồ sơ đã xác nhận nhưng UI còn 0/1 — 14/11/2026
+
+Truy vết: BF-03/04, UC-13 → UC-15/16; GBR-01/02/13. Response người dùng cung cấp: POST confirm trả **409 `identity_already_confirmed`**. `CaptureRepository.ConfirmIdentityAsync` chỉ trả mã này khi Resident đã Verified và payload nhập lại khác nội dung được bảo vệ đã lưu. Không phải bằng chứng OCR hoặc lưu ban đầu thất bại; không được bỏ guard bất biến hoặc ghi đè identity để làm nút tiếp tục bật.
+
+- `IdentityWizard` hiển thị lỗi rõ và thao tác **Dùng hồ sơ đã xác nhận**. Sau thao tác chủ động, đọc scoped ResidentSummary hiện có và bắt buộc trùng Resident ID, Room ID, VerificationStatus=Verified trước khi cập nhật UI. Không POST confirm lần nữa, không nhận nội dung vừa nhập làm nội dung đã lưu, không gọi `onVerifiedSummary` bằng dữ liệu nhập lại. Nếu cần sửa identity đã xác nhận, liên hệ Owner theo quy trình hiện có.
+- `OnboardingScreen` có **Kiểm tra trạng thái đã lưu** cho trường hợp response bị mất/ứng dụng background sau khi server commit. Chỉ khôi phục ID đã tạo trong phiên tại đúng phòng; không tự ghép theo email. Callback xóa dữ liệu tạm không hạ trạng thái đã được server xác nhận. Không mở contract khi pending, sai ID/phòng hoặc lookup bị từ chối.
+- Lỗi confirm được giữ trên card sau đóng modal; Web đặt ô đối chiếu, nút lưu và lỗi ở footer dễ thấy. Native giữ controls trong vùng cuộn có xử lý bàn phím. Không đổi yêu cầu humanConfirmed, privacy background, API hoặc backend.
+- Regression bao gồm đúng mã 409, explicit recovery, negative scope/status, mất response lúc background và check-saved-state. Browser có hai chế độ: lỗi 503 rồi retry thành công; và `BHOME_ONBOARDING_CONFIRM_CONFLICT=1` cho 409 rồi đọc lại Verified. Cả hai đi tới **1/1 → prepare-contract với đúng IDs**; 409 chỉ một POST confirm, không ghi đè. Browser mock preparation dùng DTO đầy đủ; các lượt fixture thiếu trường trước đó thất bại, không được tính PASS. Dùng dữ liệu tổng hợp, không xác nhận CCCD hoặc sửa hồ sơ live.
+- Đã chạy sau sửa: **101 files / 1.131 tests Mobile PASS**, Mobile lint/typecheck, browser-script ESLint, Prettier và diff whitespace PASS. Expo Web export và cả hai browser modes PASS. Camera/OCR thật, API live và thiết bị native: **NOT RUN**; không dùng số test này làm bằng chứng đã lưu lại dữ liệu người dùng.
 
 ## Phần chưa có API tương ứng
 

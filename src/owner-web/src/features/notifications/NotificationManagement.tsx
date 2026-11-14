@@ -20,6 +20,10 @@ import {
 } from '../../hooks/useOwnerWorkspace';
 import { guid } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
+import {
+  AnnouncementRecipientPicker,
+  type AnnouncementRecipient,
+} from './AnnouncementRecipientPicker';
 interface Announcement {
   id: string;
   title: string;
@@ -27,6 +31,7 @@ interface Announcement {
   channels: string[];
   status: string;
   recipientCount: number;
+  priority?: string;
   sentAt: string | null;
   audience?: { type: string; locationIds?: string[]; roomIds?: string[]; userIds?: string[] };
 }
@@ -47,8 +52,8 @@ export function NotificationManagement() {
   const [policyLocation, setPolicyLocation] = useState('');
   const [type, setType] = useState('LOCATION'),
     [location, setLocation] = useState(''),
-    [room, setRoom] = useState(''),
-    [users, setUsers] = useState('');
+    [room, setRoom] = useState('');
+  const [recipients, setRecipients] = useState<AnnouncementRecipient[]>([]);
   const [title, setTitle] = useState(''),
     [body, setBody] = useState(''),
     [email, setEmail] = useState(false),
@@ -77,19 +82,21 @@ export function NotificationManagement() {
     ['announcements-drafts', draftPage],
     `/api/v1/announcements/drafts?page=${draftPage}&pageSize=20`,
   );
-  const fingerprint = JSON.stringify({ type, location, room, users, title, body, email, priority });
+  const fingerprint = JSON.stringify({
+    type,
+    location,
+    room,
+    recipients,
+    title,
+    body,
+    email,
+    priority,
+  });
   function audience() {
     if (type === 'LOCATION') return { type, locationIds: [guid(location)] };
     if (type === 'ROOM') return { type, roomIds: [guid(room)] };
     if (type === 'USER' || type === 'SELECTED_USERS') {
-      const userIds = [
-        ...new Set(
-          users
-            .split(/[\s,;]+/)
-            .filter(Boolean)
-            .map(guid),
-        ),
-      ];
+      const userIds = [...new Set(recipients.map((r) => guid(r.id)))];
       if (!userIds.length || (type === 'USER' && userIds.length !== 1))
         throw new Error('Chọn đúng tài khoản người nhận.');
       return { type, userIds };
@@ -120,7 +127,10 @@ export function NotificationManagement() {
           label="Phạm vi người nhận"
           value={type}
           disabled={!!draft || action.busy}
-          onChange={(e) => setType(e.target.value)}
+          onChange={(e) => {
+            setType(e.target.value);
+            setRecipients([]);
+          }}
         >
           {[
             ['ALL_TENANTS', 'Tất cả Tenant'],
@@ -134,7 +144,7 @@ export function NotificationManagement() {
             </MenuItem>
           ))}
         </TextField>
-        {['LOCATION', 'ROOM'].includes(type) && (
+        {!draft && ['LOCATION', 'ROOM'].includes(type) && (
           <OwnerLocationPicker
             value={location}
             change={(id) => {
@@ -144,7 +154,7 @@ export function NotificationManagement() {
             required
           />
         )}
-        {type === 'ROOM' && (
+        {!draft && type === 'ROOM' && (
           <OwnerRoomPicker
             key={location}
             location={location}
@@ -153,13 +163,12 @@ export function NotificationManagement() {
             required
           />
         )}
-        {['USER', 'SELECTED_USERS'].includes(type) && (
-          <TextField
-            label="UUID tài khoản Tenant (cách nhau bằng dấu phẩy)"
-            value={users}
-            disabled={!!draft || action.busy}
-            onChange={(e) => setUsers(e.target.value)}
-            helperText="Máy chủ chỉ chọn người nhận đủ điều kiện trong phạm vi hiện tại."
+        {!draft && ['USER', 'SELECTED_USERS'].includes(type) && (
+          <AnnouncementRecipientPicker
+            value={recipients}
+            change={setRecipients}
+            single={type === 'USER'}
+            disabled={action.busy}
           />
         )}
         <TextField
@@ -253,12 +262,12 @@ export function NotificationManagement() {
         {draft && (
           <>
             <Alert severity="info">
-              Nháp {draft.id} · {draft.title} · {draft.body} · {draft.channels.join(', ')} ·{' '}
+              Nháp đã lưu · {draft.title} · {draft.body} · {draft.channels.join(', ')} ·{' '}
               {draft.status} · Phạm vi đã lưu:{' '}
               {draft.audience?.type === 'ALL_TENANTS'
                 ? 'Tất cả Tenant'
                 : draft.audience
-                  ? `${({ LOCATION: 'Cơ sở', ROOM: 'Phòng', USER: 'Tài khoản', SELECTED_USERS: 'Tài khoản đã chọn' } as Record<string, string>)[draft.audience.type] ?? 'Phạm vi đã chọn'}: ${(draft.audience.locationIds ?? draft.audience.roomIds ?? draft.audience.userIds ?? []).join(', ')}`
+                  ? `${({ LOCATION: 'Cơ sở', ROOM: 'Phòng', USER: 'Tài khoản', SELECTED_USERS: 'Tài khoản đã chọn' } as Record<string, string>)[draft.audience.type] ?? 'Phạm vi đã chọn'}: ${(draft.audience.locationIds ?? draft.audience.roomIds ?? draft.audience.userIds ?? []).length} mục`
                   : 'Theo dữ liệu nháp máy chủ'}
             </Alert>
             <Button
@@ -311,12 +320,19 @@ export function NotificationManagement() {
         </Button>
         <OwnerTable
           rows={drafts.data ?? []}
+          loading={drafts.isFetching}
+          error={drafts.error}
+          retry={() => void drafts.refetch()}
+          label="Thông báo nháp"
           id={(n) => n.id}
           select={(n) => {
             setDraft(n);
             setTitle(n.title);
             setBody(n.body);
             setEmail(n.channels.includes('EMAIL'));
+            setType(n.audience?.type ?? 'LOCATION');
+            setPriority(n.priority ?? 'P2');
+            setPreview(null);
             setConfirm(false);
           }}
           columns={[
@@ -345,6 +361,9 @@ export function NotificationManagement() {
             onClick={() => {
               setDraft(null);
               setPreview(null);
+              setLocation('');
+              setRoom('');
+              setRecipients([]);
             }}
           >
             Quay lại soạn thông báo
@@ -353,6 +372,10 @@ export function NotificationManagement() {
         <Typography variant="h6">Thông báo đã gửi</Typography>
         <OwnerTable
           rows={sent.data ?? []}
+          loading={sent.isFetching}
+          error={sent.error}
+          retry={() => void sent.refetch()}
+          label="Thông báo đã gửi"
           id={(n) => n.id}
           columns={[
             { label: 'Thông báo', render: (n) => `${n.title} · ${n.body}` },
@@ -419,9 +442,17 @@ function NotificationDelivery() {
         }}
       >
         <MenuItem value="">Tất cả</MenuItem>
-        {['Pending', 'Delivered', 'Failed'].map((s) => (
+        {Object.entries({
+          Unconfigured: 'Chưa cấu hình',
+          Pending: 'Chờ phát',
+          Processing: 'Đang phát',
+          Delivered: 'Đã phát',
+          Failed: 'Thất bại',
+          PendingReview: 'Cần kiểm tra',
+          Suppressed: 'Đã ngừng phát',
+        }).map(([s, label]) => (
           <MenuItem key={s} value={s}>
-            {s}
+            {label}
           </MenuItem>
         ))}
       </TextField>

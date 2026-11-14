@@ -42,6 +42,8 @@ public sealed class OperationalTasksController(OperationalTaskService service) :
     public Task<TaskView> Cancel(Guid id, TaskAction input, CancellationToken t) => service.ActAsync(id, "cancel", input, Key(), t);
     [HttpGet("{id:guid}/history")]
     public Task<TaskPage<TaskHistoryView>> History(Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken t = default) => service.HistoryAsync(id, page, pageSize, t);
+    [HttpGet("{id:guid}/actors")]
+    public Task<IReadOnlyList<TaskActorView>> Actors(Guid id, CancellationToken t) => service.ActorsAsync(id, t);
     [HttpGet("{id:guid}/evidence")]
     public Task<IReadOnlyList<TaskEvidenceView>> Evidence(Guid id, CancellationToken t) => service.EvidenceAsync(id, t);
     [HttpPut("{id:guid}/evidence"), Authorize(Policy = Permissions.OperationalTasks.Execute), Consumes("image/png", "image/jpeg"), RequestSizeLimit(20 * 1024 * 1024)]

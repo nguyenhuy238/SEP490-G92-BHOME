@@ -51,7 +51,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 if (original.StartsWith("Hôm nay ngày")) replacement = $"Hôm nay ngày {clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)):dd/MM/yyyy}; tại địa chỉ: {data.Address}";
                 else if (original.StartsWith("Ông/bà:")) replacement = side == 1 ? $"Ông/bà: {owner.FullName}. Sinh ngày: {Date(owner.DateOfBirth)}" : $"Ông/bà: {tenant.FullName}. Sinh ngày: {Date(tenant.DateOfBirth)}";
                 else if (original.StartsWith("Nơi đăng ký")) replacement = $"Nơi đăng ký HK thường trú: {(side == 1 ? owner.Address : tenant.ResidentialAddress)}";
-                else if (original.StartsWith("CMND số:") || original.StartsWith("Số CMND:")) replacement = side == 1 ? $"CCCD số: {owner.CitizenNumber}; cấp ngày {Date(owner.DateOfIssue)} tại: {owner.PlaceOfIssue}" : $"CCCD số: {tenant.CitizenIdentityNumber}; cấp ngày {Date(tenant.DateOfIssue.Value)} tại: {data.State.Input.TenantPlaceOfIssue}";
+                else if (original.StartsWith("CMND số:") || original.StartsWith("Số CMND:")) replacement = side == 1 ? $"CCCD số: {owner.CitizenNumber}; cấp ngày {Date(owner.DateOfIssue)} tại: {owner.PlaceOfIssue}" : $"CCCD số: {tenant.CitizenIdentityNumber}; cấp ngày {Date(tenant.DateOfIssue.Value)}" + (string.IsNullOrWhiteSpace(data.State.Input.TenantPlaceOfIssue) ? "" : $" tại: {data.State.Input.TenantPlaceOfIssue}");
                 else if (original.StartsWith("Số điện thoại:")) replacement = $"Số điện thoại: {(side == 1 ? owner.Phone : data.State.Input.TenantPhone)}";
                 else if (original.StartsWith("Bên A đồng ý")) replacement = $"Bên A đồng ý cho bên B thuê 01 phòng {data.RoomNumber}, cơ sở {data.LocationName}, tại địa chỉ: {data.Address}";
                 else if (original.StartsWith("Giá thuê:")) replacement = $"Giá thuê: {Money(data.Contract.MonthlyRent)} đ/tháng";
@@ -65,7 +65,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 else if (original.Contains('…') || original.Contains("....") || original.Contains("{{")) throw new ContractException(503, "contract_template_slots_changed");
                 if (original == "TRÁCH NHIỆM CỦA CÁC BÊN")
                 {
-                    var extra = charges.Where(c => c.ChargeCode is not ("RENT" or "ELECTRICITY" or "WATER")).Select(c => $"{c.Name}: {Money(c.Rate)} đ/phòng/tháng.");
+                    var extra = charges.Where(c => c.ChargeCode is not ("RENT" or "ELECTRICITY" or "WATER")).Select(c => $"{c.Name}: {Money(c.Rate)} đ/{(c.Method == BHome.Domain.PropertyManagement.ChargingMethod.FixedPerPersonPerMonth ? "người" : "phòng")}/tháng.");
                     var occupants = data.Occupants is { Length: > 0 } ? "Thành viên cùng ở: " + string.Join(", ", data.Occupants) : "";
                     var text = string.Join("\n", extra.Append(occupants).Append(data.Contract.Terms).Where(x => !string.IsNullOrWhiteSpace(x)));
                     if (text.Length > 0)

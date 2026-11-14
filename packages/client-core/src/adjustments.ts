@@ -1,4 +1,4 @@
-import { ApiError } from './api';
+import { ApiError, infrastructureError } from './api';
 import type { ContractRequest } from './contracts';
 import { formatContractMoney } from './contracts';
 import type { Invoice, Page } from './invoices';
@@ -146,6 +146,8 @@ export function signedVnd(amount: string) {
     : (amount !== '0' ? '+' : '') + formatContractMoney(amount);
 }
 export function adjustmentError(error: unknown) {
+  const infrastructure = infrastructureError(error);
+  if (infrastructure) return infrastructure;
   const x =
     error instanceof ApiError
       ? { status: error.status, code: error.problem?.code }

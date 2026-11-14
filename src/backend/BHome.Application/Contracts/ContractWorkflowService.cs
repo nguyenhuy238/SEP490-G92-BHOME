@@ -12,6 +12,7 @@ public sealed partial class ContractService
         ? DemoEnabled && signature.Status == SignatureStatus.Simulated : signature.Status == SignatureStatus.Signed;
     private void RequireSigningMode(Contract contract)
     {
+        if (contract.SigningMode == ContractSigningModes.Internal) throw ContractException.Conflict("internal_signing_flow_required");
         if (contract.IsDevelopmentDemo != DemoEnabled) throw ContractException.Conflict("signing_mode_mismatch");
     }
 

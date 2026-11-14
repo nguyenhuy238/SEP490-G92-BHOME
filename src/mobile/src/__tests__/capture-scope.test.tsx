@@ -21,6 +21,18 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it('restores a requested location only when it is still assigned', async () => {
+  state.locations.push({ id: 'other', label: 'Cơ sở khác' });
+  const { result } = renderHook(() => useCaptureScope({ initialLocationId: 'other' }));
+  await waitFor(() => expect(result.current.rooms[0]?.id).toBe('other-room'));
+  expect(result.current.location).toBe('other');
+});
+it('does not request data for a location outside the assigned list', async () => {
+  const { result } = renderHook(() => useCaptureScope({ initialLocationId: 'removed' }));
+  await waitFor(() => expect(result.current.locations).toHaveLength(1));
+  expect(result.current.location).toBe('');
+  expect(state.api.request.mock.calls.some(([path]) => path.includes('/removed/'))).toBe(false);
+});
 it('automatically loads rooms for the only assigned location without a location selection', async () => {
   const { result } = renderHook(() => useCaptureScope({ autoSelectAssignedLocation: true }));
   await waitFor(() => expect(result.current.rooms).toHaveLength(1));

@@ -68,7 +68,9 @@ export function OwnerSigningPanel({
   const [method, setMethod] = useState<string | null>(null);
   const mine = c.signatures.filter((s) => s.signerUserId === actorId);
   const current = [...mine].reverse().find((s) => s.status !== 'Failed') ?? null;
-  const inApp = (methods?.methods ?? []).filter((m) => m === 'UPLOAD_PROOF' || m === 'OTP');
+  const inApp = (methods?.methods ?? []).filter(
+    (m): m is 'OTP' | 'UPLOAD_PROOF' => m === 'UPLOAD_PROOF' || m === 'OTP',
+  );
   if (c.ownerSignerId !== actorId || c.isDevelopmentDemo || !methods) return null;
   if (current && DONE.includes(current.status)) return null;
   if (current?.method === 'OTP' && OPEN(current))
@@ -78,8 +80,8 @@ export function OwnerSigningPanel({
       <UploadStep signing={signing} contractId={c.id} signature={current} onDone={onChanged} />
     );
   if (current || !['Draft', 'PendingSigning'].includes(c.status) || !inApp.length) return null;
-  const preferred = inApp.includes(methods.default ?? '') ? methods.default! : inApp[0];
-  const chosen = method && inApp.includes(method) ? method : preferred;
+  const preferred = inApp.find((m) => m === methods.default) ?? inApp[0];
+  const chosen = inApp.find((m) => m === method) ?? preferred;
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack spacing={1.5}>

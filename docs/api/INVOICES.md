@@ -1,5 +1,12 @@
 # BH-21 — Billing API
 
+10/11/2026 — GET `/api/v1/invoices` hỗ trợ thêm `locationId`, `billingPeriod=YYYY-MM-01`
+và `status=Draft|Final`, kết hợp với `roomId`, `page`, `pageSize` cũ. Các bộ lọc áp dụng
+sau scope Owner/recipient Tenant và trước count/pagination; response không đổi.
+Trạng thái ngoài enum, Location ID rỗng hoặc kỳ không phải ngày đầu tháng/năm 2000–9997
+trả 400. Bỏ các tham số mới giữ nguyên hành vi cũ. Không thay quy tắc Room + tháng,
+phát hành, số dư hoặc quyền Staff. Truy vết UC-21, GBR-02/09, NFR usability.
+
 Cập nhật **06/11/2026**: runtime Compact24; [trạng thái](API_IMPLEMENTATION_STATUS.md).
 JOB-09/10 đã có trong [Billing automation](BILLING_AUTOMATION.md), chỉ chạy theo plan Owner opt-in
 và quyền được kiểm lại. Notification publisher đã có; email/push thật vẫn Unconfigured.

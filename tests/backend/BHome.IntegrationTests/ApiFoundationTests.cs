@@ -99,6 +99,24 @@ public sealed class ApiFoundationTests : IClassFixture<ApiFactory>
     }
 
     [Theory]
+    [InlineData("42703", false, 503)]
+    [InlineData("42P01", false, 503)]
+    [InlineData("42883", false, 503)]
+    [InlineData("42703", true, 503)]
+    [InlineData("23514", false, 500)]
+    public async Task SchemaMismatchIsUnavailableWithoutExposingDatabaseDetails(string state, bool wrapped, int status)
+    {
+        var response = await client.GetAsync($"/test-probes/schema-error/{state}/{wrapped}");
+        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(response.Headers.GetValues("X-Correlation-ID").Single(), body.GetProperty("correlationId").GetString());
+        if (status == 503) Assert.Equal("database_schema_incompatible", body.GetProperty("code").GetString());
+        else Assert.False(body.TryGetProperty("code", out _));
+        Assert.DoesNotContain("PRIVATE_TEST_DETAIL", body.ToString());
+        Assert.False(body.TryGetProperty("exception", out _));
+    }
+
+    [Theory]
     [InlineData(400)]
     [InlineData(403)]
     [InlineData(404)]

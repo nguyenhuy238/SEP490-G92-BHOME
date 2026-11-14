@@ -361,6 +361,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         if (input.RoomTypeId is { } roomType && !await repository.AnyAsync<RoomType>(x =>
                 x.Id == roomType && x.LocationId == location.Id && x.IsActive, t))
             throw Error(400, "policy_scope_invalid");
+        await RoomPricingLock.EnsureUnlockedAsync(repository, input.RoomId, t);
     }
     private static BillingPolicy NewPolicy(PolicyWrite input) => new()
     {
@@ -437,6 +438,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             await LocationAsync(found.LocationId, true, t);
             var x = await repository.FindAsync<BillingPolicy>(id, t) ?? throw Error(404, "resource_not_found");
             CheckVersion(x.Version, input.Version);
+            await RoomPricingLock.EnsureUnlockedAsync(repository, x.RoomId, t);
             if (input.EffectiveTo < Today || input.EffectiveTo < x.EffectiveFrom ||
                 x.EffectiveTo.HasValue && input.EffectiveTo > x.EffectiveTo || Text(input.Reason).Length == 0)
                 throw Error(400, "policy_end_invalid");

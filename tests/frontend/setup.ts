@@ -4,7 +4,9 @@ import { afterEach, vi } from 'vitest';
 afterEach(cleanup);
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
+  // Keep the default implementation when a suite calls vi.resetAllMocks().
+  // Tests can still override it with mockImplementation for a mobile viewport.
+  value: vi.fn((query: string) => ({
     matches: false,
     media: query,
     onchange: null,

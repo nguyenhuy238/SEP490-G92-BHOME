@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ContractClient } from '../../../../packages/client-core/src/contracts';
 const state = vi.hoisted(() => ({ prepare: vi.fn(), opened: vi.fn() }));
+vi.mock('expo-router', () => ({ router: { setParams: vi.fn() } }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({
@@ -78,6 +79,7 @@ vi.mock('../features/contracts/MainDraftScreen', () => ({
   },
 }));
 import { MainDraftStart } from '../features/contracts/MainDraftStart';
+import { router } from 'expo-router';
 beforeEach(() => {
   vi.clearAllMocks();
   state.prepare.mockResolvedValue({
@@ -155,4 +157,72 @@ it('reopens the saved draft instead of creating another one after closing the st
   expect(state.opened).toHaveBeenLastCalledWith(
     expect.objectContaining({ initialId: 'saved-draft', persistRoute: false }),
   );
+});
+it('keeps independent representatives separate, includes only explicitly selected co-occupants and persists the Owner draft route', async () => {
+  state.prepare.mockResolvedValue({
+    locations: [{ id: 'location', label: 'Location' }],
+    rooms: [{ id: 'room', label: 'Room' }],
+    residents: [
+      {
+        id: 'a',
+        roomId: 'room',
+        label: 'Individual A',
+        verified: true,
+        residentType: 'Representative',
+      },
+      {
+        id: 'b',
+        roomId: 'room',
+        label: 'Individual B',
+        verified: true,
+        residentType: 'Representative',
+      },
+      {
+        id: 'member',
+        roomId: 'room',
+        label: 'Confirmed co-occupant',
+        verified: true,
+        residentType: 'CoOccupant',
+      },
+    ],
+    ownerSigners: [],
+  });
+  const saved = vi.fn();
+  render(
+    <MainDraftStart
+      owner
+      onSaved={saved}
+      api={{ preparation: state.prepare } as unknown as ContractClient}
+      onCancel={vi.fn()}
+      onList={vi.fn()}
+    />,
+  );
+  await waitFor(() =>
+    expect((screen.getByLabelText('Phòng') as HTMLSelectElement).disabled).toBe(false),
+  );
+  fireEvent.change(screen.getByLabelText('Phòng'), { target: { value: 'room' } });
+  fireEvent.change(screen.getByLabelText('Bên thuê / đại diện đã xác minh'), {
+    target: { value: 'a' },
+  });
+  expect(screen.queryByRole('checkbox', { name: 'Individual B' })).toBeNull();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Confirmed co-occupant' }));
+  fireEvent.change(screen.getByLabelText('Bên thuê / đại diện đã xác minh'), {
+    target: { value: 'b' },
+  });
+  await waitFor(() =>
+    expect((screen.getByText('Tiếp tục tạo hợp đồng nháp') as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByText('Tiếp tục tạo hợp đồng nháp'));
+  expect(state.opened).toHaveBeenLastCalledWith(
+    expect.objectContaining({ representativeResidentId: 'b', residentIds: ['b'] }),
+  );
+  fireEvent.click(screen.getByText('Test saved'));
+  expect(saved).toHaveBeenCalledWith('saved-draft');
+  expect(router.setParams).toHaveBeenCalledWith({
+    contractId: 'saved-draft',
+    mainDraftId: '',
+    roomId: '',
+  });
 });
