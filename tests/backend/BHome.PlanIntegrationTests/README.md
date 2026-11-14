@@ -8,23 +8,23 @@ nghiệp vụ: test gọi API đang chạy qua HTTP (hộp đen) và chỉ đọ
 Vì vậy test fail nghĩa là API hoặc DB **khác với tài liệu test**. Đó có thể là lỗi của hệ thống, hoặc tài liệu cần cập nhật.
 Cần xem từng trường hợp trước khi sửa.
 
-| Thư mục | Sheet |
-| --- | --- |
-| `Authentication/` | Authentication (IT-AUTH-*) |
-| `LocationAssignment/` | Location & Assignment (ITC-LOC-*) |
-| `SecurityTest/` | SecurityTest (TC-SEC-*) |
-| `BF01LocationSetup/` … `BF07Incident/` | BF-01 … BF-07 (ITC-BFxx-*) |
+| Thư mục                                | Sheet                             |
+| -------------------------------------- | --------------------------------- |
+| `Authentication/`                      | Authentication (IT-AUTH-*)        |
+| `LocationAssignment/`                  | Location & Assignment (ITC-LOC-*) |
+| `SecurityTest/`                        | SecurityTest (TC-SEC-*)           |
+| `BF01LocationSetup/` … `BF07Incident/` | BF-01 … BF-07 (ITC-BFxx-*)        |
 
 ## Chạy
 
-1. Chạy API (mặc định `https://localhost:7240`, theo sheet *Test Cases*) với database có sẵn tài khoản test.
+1. Chạy API (mặc định `https://localhost:7240`, theo sheet _Test Cases_) với database có sẵn tài khoản test.
 2. Cấu hình bằng `plan-tests.settings.json` hoặc biến môi trường. Biến môi trường được ưu tiên hơn file:
 
-| Biến | Ý nghĩa |
-| --- | --- |
-| `BHOME_IT_BASE_URL` | Địa chỉ API |
-| `BHOME_IT_DB` | Connection string PostgreSQL của API. Không đặt thì các test cần kiểm tra DB sẽ **Skip** |
-| `BHOME_IT_INSECURE_TLS` | `true` để chấp nhận chứng chỉ dev |
+| Biến                                                    | Ý nghĩa                                                                                                                                                                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BHOME_IT_BASE_URL`                                     | Địa chỉ API                                                                                                                                                                                                   |
+| `BHOME_IT_DB`                                           | Connection string PostgreSQL của API. Không đặt thì các test cần kiểm tra DB sẽ **Skip**                                                                                                                      |
+| `BHOME_IT_INSECURE_TLS`                                 | `true` để chấp nhận chứng chỉ dev                                                                                                                                                                             |
 | `BHOME_IT_ACCOUNT_<TÊN>_EMAIL` / `_PASSWORD` / `_PHONE` | Tài khoản theo tên: `OWNER`, `STAFF`, `TENANT` (mặc định lấy từ sheet) và các tài khoản phụ mà test yêu cầu (`STAFF2`, `TENANT2`, `LOCKOUT`…). Thiếu tài khoản thì test đó **Skip** và ghi rõ cần chuẩn bị gì |
 
 3. Chạy:

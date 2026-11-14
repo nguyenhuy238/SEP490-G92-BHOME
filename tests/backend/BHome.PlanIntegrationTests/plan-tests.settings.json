@@ -4,8 +4,12 @@
   "acceptAnyServerCertificate": true,
   "database": null,
   "accounts": {
-    "owner":  { "email": "chutro.nguyenhuy@gmail.com",     "password": "HuyChuTro@2026" },
-    "staff":  { "email": "quanly.tanbinh@bhome.vn",        "password": "StaffTanBinh@2026" },
-    "tenant": { "email": "khachthue.phong201@gmail.com",   "password": "KhachThue@2026", "phone": "0912345678" }
+    "owner": { "email": "chutro.nguyenhuy@gmail.com", "password": "HuyChuTro@2026" },
+    "staff": { "email": "quanly.tanbinh@bhome.vn", "password": "StaffTanBinh@2026" },
+    "tenant": {
+      "email": "khachthue.phong201@gmail.com",
+      "password": "KhachThue@2026",
+      "phone": "0912345678"
+    }
   }
 }
