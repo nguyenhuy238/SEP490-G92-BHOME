@@ -189,6 +189,7 @@ function OtpStart({
         Bỏ trống nếu muốn dùng ảnh chữ ký đã lưu. Chữ ký sẽ đặt vào ô của bạn trên hợp đồng.
       </Text>
       <Checkbox.Item
+        mode="android"
         label="Tôi đã đọc toàn bộ hợp đồng và đồng ý ký điện tử. Tôi hiểu chữ ký này có giá trị như cam kết của tôi đối với hợp đồng."
         labelVariant="bodySmall"
         status={agreed ? 'checked' : 'unchecked'}
