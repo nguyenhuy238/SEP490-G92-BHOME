@@ -134,12 +134,14 @@ export function Action({
   icon,
   secondary = false,
   disabled = false,
+  minHeight = 44,
 }: {
   children: React.ReactNode;
   onPress: () => void;
   icon?: string;
   secondary?: boolean;
   disabled?: boolean;
+  minHeight?: number;
 }) {
   return (
     <Button
@@ -148,7 +150,7 @@ export function Action({
       onPress={onPress}
       disabled={disabled}
       style={{ borderRadius: 8 }}
-      contentStyle={{ minHeight: 44 }}
+      contentStyle={{ minHeight }}
       labelStyle={{ fontSize: 12 }}
     >
       {children}
@@ -159,10 +161,12 @@ export function Filters({
   options,
   selected,
   onChange,
+  minTouchSize,
 }: {
   options: readonly string[];
   selected: string;
   onChange: (value: string) => void;
+  minTouchSize?: number;
 }) {
   return (
     <ScrollView
@@ -176,8 +180,16 @@ export function Filters({
           selected={selected === label}
           showSelectedCheck={false}
           onPress={() => onChange(label)}
-          style={{ backgroundColor: selected === label ? c.primary : c.white, borderRadius: 8 }}
-          textStyle={{ color: selected === label ? c.white : c.muted, fontSize: 12 }}
+          style={{
+            backgroundColor: selected === label ? c.primary : c.white,
+            borderRadius: 8,
+            ...(minTouchSize ? { minWidth: minTouchSize, minHeight: minTouchSize } : {}),
+          }}
+          textStyle={{
+            color: selected === label ? c.white : c.muted,
+            fontSize: 12,
+            ...(minTouchSize ? { lineHeight: minTouchSize, marginVertical: 0 } : {}),
+          }}
         >
           {label}
         </Chip>

@@ -57,6 +57,15 @@ export const screenRoles = {
   preferences: ['Owner', 'Staff', 'Tenant'],
 } satisfies Record<string, MobileRole[]>;
 export type WorkspaceScreen = keyof typeof screenRoles;
+// Legacy deep links stay valid without mounting management forms on mobile.
+export const ownerWebOnlyScreens: Partial<Record<WorkspaceScreen, string>> = {
+  'owner-adjustments': 'Quản lý điều chỉnh hóa đơn',
+  'owner-adjustment-detail': 'Điều chỉnh hóa đơn',
+  'owner-payments': 'Đối soát giao dịch ngân hàng',
+  'owner-payment-detail': 'Đối soát giao dịch ngân hàng',
+  'owner-announcements': 'Quản lý thông báo toàn cơ sở',
+  'owner-finance': 'Báo cáo tài chính, vốn đầu tư và chi phí chi tiết',
+};
 export function isWorkspaceScreen(value: string): value is WorkspaceScreen {
   return Object.hasOwn(screenRoles, value);
 }
@@ -86,7 +95,7 @@ export const tabs: Record<MobileRole, { screen: WorkspaceScreen; title: string; 
   {
     Owner: [
       { screen: 'owner-home', title: 'Tổng quan', icon: 'view-dashboard-outline' },
-      { screen: 'approvals', title: 'Theo dõi duyệt', icon: 'clipboard-check-outline' },
+      { screen: 'approvals', title: 'Cần xử lý', icon: 'clipboard-check-outline' },
       { screen: 'operations', title: 'Vận hành', icon: 'tune-variant' },
       { screen: 'profile', title: 'Tài khoản', icon: 'account-cog-outline' },
     ],
@@ -105,6 +114,7 @@ export const tabs: Record<MobileRole, { screen: WorkspaceScreen; title: string; 
   };
 
 export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): WorkspaceScreen {
+  if (role === 'Owner' && screen === 'signing') return 'approvals';
   if (screen === 'profile-edit') return 'profile';
   if (role === 'Tenant') {
     if (['profile', 'security', 'preferences'].includes(screen)) return 'profile';

@@ -53,8 +53,8 @@ const c = {
 const changed = vi.fn();
 let state: HoldingSandboxState;
 let ownerConfirmed = true;
-function Harness({ contract = c }: { contract?: ContractView }) {
-  const sandbox = useHoldingSandbox(api, contract);
+function Harness({ contract = c, allowed = true }: { contract?: ContractView; allowed?: boolean }) {
+  const sandbox = useHoldingSandbox(api, contract, allowed);
   return sandbox.data ? (
     <HoldingSandboxFlow
       api={api}
@@ -124,6 +124,11 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+it('does not load sandbox capabilities when the mobile role excludes test tools', () => {
+  render(<Harness allowed={false} />);
+  expect(screen.getByText('Luồng thật')).toBeTruthy();
+  expect(request).not.toHaveBeenCalled();
 });
 it('requires both server simulation results before QR and verified deposit before OnHold', async () => {
   render(<Harness />);

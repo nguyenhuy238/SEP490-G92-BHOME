@@ -118,7 +118,7 @@ public sealed partial class MainDraftApiTests
                 {
                     id = Guid.NewGuid().ToString(),
                     gateway = "ACB",
-                    transactionDate = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                    transactionDate = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).ToString("yyyy-MM-dd HH:mm:ss"),
                     accountNumber = "0000000001",
                     transferType = "in",
                     transferAmount = quote.OutstandingAmount,

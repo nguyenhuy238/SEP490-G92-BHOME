@@ -54,9 +54,11 @@ export function DashboardCard({
 export function DashboardStatus({
   children,
   tone = 'blue',
+  palette,
 }: {
   children: React.ReactNode;
   tone?: 'blue' | 'green' | 'red' | 'amber' | 'neutral';
+  palette?: { background: string; foreground: string };
 }) {
   const [backgroundColor, color] = {
     blue: [s.blueSoft, s.blue],
@@ -68,7 +70,7 @@ export function DashboardStatus({
   return (
     <View
       style={{
-        backgroundColor,
+        backgroundColor: palette?.background ?? backgroundColor,
         borderRadius: 20,
         paddingHorizontal: 12,
         paddingVertical: 8,
@@ -76,7 +78,10 @@ export function DashboardStatus({
         maxWidth: '100%',
       }}
     >
-      <Text variant="labelMedium" style={[typography.label, { color }]}>
+      <Text
+        variant="labelMedium"
+        style={[typography.label, { color: palette?.foreground ?? color }]}
+      >
         {children}
       </Text>
     </View>
@@ -112,11 +117,13 @@ export function DashboardHeading({
   detail,
   action,
   onPress,
+  minActionHeight = 44,
 }: {
   title: string;
   detail?: string;
   action?: string;
   onPress?: () => void;
+  minActionHeight?: number;
 }) {
   return (
     <View style={dashboardStyles.sectionHeading}>
@@ -132,7 +139,7 @@ export function DashboardHeading({
         )}
       </View>
       {!!action && (
-        <Button onPress={onPress} textColor={s.blue} contentStyle={{ minHeight: 44 }}>
+        <Button onPress={onPress} textColor={s.blue} contentStyle={{ minHeight: minActionHeight }}>
           {action}
         </Button>
       )}
@@ -145,15 +152,22 @@ export function DashboardSection({
   children,
   action,
   onPress,
+  minActionHeight,
 }: {
   title: string;
   children: React.ReactNode;
   action?: string;
   onPress?: () => void;
+  minActionHeight?: number;
 }) {
   return (
     <View style={dashboardStyles.section}>
-      <DashboardHeading title={title} action={action} onPress={onPress} />
+      <DashboardHeading
+        title={title}
+        action={action}
+        onPress={onPress}
+        minActionHeight={minActionHeight}
+      />
       {children}
     </View>
   );

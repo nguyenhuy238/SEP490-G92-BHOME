@@ -1453,6 +1453,7 @@ it('shows Owner verification only after server data loads and sends the matching
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
     if (String(url).includes('/history')) return json(page([]));
     if (String(url).endsWith('/evidence')) return json([]);
+    if (String(url).includes('/capture/')) return json([]);
     return json({ ...task, status: init?.method === 'POST' ? 'Completed' : 'PendingVerification' });
   });
   setApi(fetcher);
@@ -1460,6 +1461,8 @@ it('shows Owner verification only after server data loads and sends the matching
   await screen.findByText(task.title);
   fireEvent.change(screen.getByLabelText('Thao tác'), { target: { value: 'verify' } });
   fireEvent.click(screen.getByText('Xác nhận thao tác'));
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  fireEvent.click(screen.getByText('Xác nhận gửi'));
   await screen.findByText('Máy chủ đã ghi nhận thao tác.');
   const post = fetcher.mock.calls.find(([, init]) => init?.method === 'POST')!;
   expect(post[0]).toContain('/verify');
@@ -1472,6 +1475,42 @@ it('rejects invalid task deep links before loading private data', () => {
   render(<OperationalTaskDetail />);
   expect(screen.getByText(/Mã công việc không hợp lệ/)).toBeTruthy();
   expect(fetcher).not.toHaveBeenCalled();
+});
+
+it('keeps an Owner verification pending until the server responds and prevents duplicate submissions', async () => {
+  mocks.role = 'Owner';
+  mocks.actor = 'owner';
+  let finish!: (value: Response) => void;
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
+    if (init?.method === 'POST')
+      return new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+    if (String(url).includes('/history')) return json(page([]));
+    if (String(url).endsWith('/evidence') || String(url).includes('/capture/')) return json([]);
+    return json({ ...task, status: 'PendingVerification' });
+  });
+  setApi(fetcher);
+  render(<OperationalTaskDetail />);
+  await screen.findByText(task.title);
+  expect(screen.queryByRole('option', { name: 'Đồng bộ phân công' })).toBeNull();
+  expect(screen.queryByText('Sửa yêu cầu & thời hạn')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Thao tác'), { target: { value: 'verify' } });
+  fireEvent.click(screen.getByText('Xác nhận thao tác'));
+  const send = screen.getByRole('button', { name: 'Xác nhận gửi' });
+  fireEvent.click(send);
+  fireEvent.click(send);
+  await waitFor(() =>
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1),
+  );
+  expect((screen.getByText('Xác nhận thao tác') as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByText('Máy chủ đã ghi nhận thao tác.')).toBeNull();
+  await act(async () => finish(json({ code: 'task_version_conflict' }, 409)));
+  await waitFor(() =>
+    expect((screen.getByText('Xác nhận thao tác') as HTMLButtonElement).disabled).toBe(false),
+  );
+  expect(screen.queryByText('Máy chủ đã ghi nhận thao tác.')).toBeNull();
+  expect(screen.queryByText('task_version_conflict')).toBeNull();
 });
 it('renders Tenant contracts from the scoped endpoint without fetching Owner or Staff records', async () => {
   mocks.role = 'Tenant';

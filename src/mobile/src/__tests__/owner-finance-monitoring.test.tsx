@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
+vi.mock('../theme/theme', () => ({ colors: {}, staffColors: {} }));
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({ request: vi.fn(), reload: vi.fn(), go: vi.fn() }));
@@ -19,6 +20,7 @@ vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('react-native', () => ({
+  StyleSheet: { create: (value: unknown) => value },
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('../components/WorkspaceKit', () => ({

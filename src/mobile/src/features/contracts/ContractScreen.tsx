@@ -46,6 +46,7 @@ import { defaultStaffContractListView, isMainOnboardingDraft } from './staffCont
 import { useWorkspaceHeaderRefresh } from '../../components/WorkspaceHeaderContext';
 import { mobileContractActions } from './contractSections';
 import { OwnerMainContractFlow } from '../owner/OwnerMainContractFlow';
+import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -116,17 +117,17 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       invalidOwnerRoute = true;
     }
   }
-  function openContract(contract: { id: string; onboardingDraft?: boolean }) {
+  function openContract(contract: { id: string; kind: string; onboardingDraft?: boolean }) {
     if (role === 'Owner') {
       setCreate(false);
       setMainDraftId('');
       setSelected('');
       router.setParams({
         contractId: contract.id,
-        mainDraftId: contract.onboardingDraft ? contract.id : '',
+        mainDraftId: isMainOnboardingDraft(contract) ? contract.id : '',
         roomId: '',
       });
-    } else if (contract.onboardingDraft) setMainDraftId(contract.id);
+    } else if (isMainOnboardingDraft(contract)) setMainDraftId(contract.id);
     else setSelected(contract.id);
   }
   const previousContracts = useRef<string[]>([]);
@@ -157,6 +158,11 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   if (!client || !session || !role) return <Text>Cần đăng nhập để xem hợp đồng.</Text>;
   if (invalidOwnerRoute)
     return <Text>Tham chiếu hợp đồng không hợp lệ. Hãy mở lại từ danh sách hợp đồng.</Text>;
+  if (
+    role === 'Owner' &&
+    (prepare || params.kind === 'Holding' || params.roomId || params.mainDraftId)
+  )
+    return <OwnerWebNotice task="Soạn và chuẩn bị hồ sơ hợp đồng" />;
   if (createHolding && ['Owner', 'Staff'].includes(role))
     return (
       <ContractDraftForm
@@ -310,21 +316,6 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         title="Hợp đồng & Vòng đời"
         detail="Theo dõi hợp đồng trong phạm vi tài khoản của bạn."
       />
-      {role === 'Owner' && (
-        <>
-          <Action
-            onPress={() => {
-              setMainDraftId('');
-              setSelected('');
-              setCreate(true);
-              router.setParams({ contractId: '', mainDraftId: '', roomId: '' });
-            }}
-          >
-            Tạo hợp đồng thuê
-          </Action>
-          <Action onPress={() => setCreateHolding(true)}>Tạo hợp đồng giữ chỗ</Action>
-        </>
-      )}
       {['Owner', 'Tenant'].includes(role) && (
         <ContractExpiryPanel api={client} onOpen={setSelected} />
       )}
@@ -432,10 +423,12 @@ function LiveContractDetail({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
-  if (isMainOnboardingDraft(c) && ['Staff', 'Owner'].includes(role))
+  if (isMainOnboardingDraft(c) && role === 'Owner')
+    return <OwnerWebNotice task="Chuẩn bị và phát hành hồ sơ hợp đồng nháp" />;
+  if (isMainOnboardingDraft(c) && role === 'Staff')
     return (
       <MainDraftScreen
-        persistRoute={role !== 'Owner'}
+        persistRoute
         initialId={c.id}
         onReleased={(next) => {
           router.setParams({ mainDraftId: '', roomId: '', contractId: next });

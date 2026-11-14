@@ -95,6 +95,9 @@ public static class DatabaseProbe
                     var runtime = db.Database.GetMigrations().ToArray();
                     await output.WriteLineAsync($"Compact24EFHistory=PRESENT; applied={applied.Length}; pending={runtime.Except(applied).Count()}; unknown={applied.Except(runtime).Count()}");
                     await output.WriteLineAsync($"PendingCompact24Migrations={string.Join(',', runtime.Except(applied))}");
+                    await output.WriteLineAsync($"UnknownCompact24Migrations={string.Join(',', applied.Except(runtime))}");
+                    if (!ready && applied.Except(runtime).Any())
+                        await output.WriteLineAsync("SchemaAheadOfCheckout=REVIEW_REQUIRED; synchronize the matching application changes; do not downgrade or recreate the shared database.");
                 }
                 else await output.WriteLineAsync("Compact24EFHistory=ABSENT; existing_local_SQL_schema_is_not_automatically_adopted");
             }
