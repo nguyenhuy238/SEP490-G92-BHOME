@@ -9,6 +9,7 @@ namespace BHome.Infrastructure.UnitTests.IdentityAccess;
 // Pre-conditions, inputs and expected results are taken from the sheet, not from the code.
 // Accounts are synthetic and created in an isolated PostgreSQL database per test (never the shared Neon DB).
 [Collection(AccountProvisioningCollection.Name)]
+[Trait("Suite", "QA-SrsUnit")]
 public sealed class LoginUnitTests(PostgresContainerFixture postgres) : IAsyncLifetime
 {
     private AccountProvisioningWorld world = null!;
