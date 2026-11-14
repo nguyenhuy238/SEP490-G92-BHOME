@@ -590,7 +590,7 @@ it('retains input and shows backend concurrency diagnostics without reporting su
   expect(s.success).not.toHaveBeenCalled();
   expect(screen.getByLabelText('Loại sự cố')).toHaveProperty('value', 'Kỹ thuật');
 });
-it('downloads authorized evidence on demand and supports fullscreen preview', async () => {
+it('loads authorized evidence automatically, retries on demand and supports fullscreen preview', async () => {
   s.request.mockResolvedValue(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
   render(
     <EvidenceImage
@@ -605,10 +605,11 @@ it('downloads authorized evidence on demand and supports fullscreen preview', as
       }}
     />,
   );
-  expect(s.request).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByText('Tải ảnh minh chứng'));
   await screen.findByAltText('Ảnh minh chứng đã tải từ máy chủ');
+  expect(s.request).toHaveBeenCalledTimes(1);
   expect(s.request.mock.calls[0][0]).toBe(`/api/v1/incidents/${id}/evidence/${eid}`);
+  fireEvent.click(await screen.findByText('Tải lại ảnh'));
+  await waitFor(() => expect(s.request).toHaveBeenCalledTimes(2));
   fireEvent.click(screen.getByText('Xem ảnh toàn màn hình'));
   expect(screen.getByAltText('Ảnh minh chứng toàn màn hình')).toBeTruthy();
 });
