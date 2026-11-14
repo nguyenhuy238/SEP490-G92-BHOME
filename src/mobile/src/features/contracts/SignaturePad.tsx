@@ -1,27 +1,36 @@
-import React, { useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 import type { DrawnSignature } from '../../../../../packages/client-core/src/signing';
+import { useScrollLock } from '../../components/ScrollLock';
 
 type Point = [number, number];
 
 // Signature drawn with a finger: the strokes are kept as points and drawn as short rotated bars, so no native drawing
 // library is needed. The server turns the same points into the signer's transparent PNG
 // (POST /digital-signing/signature-image/drawn).
+//
+// Two things keep drawing smooth:
+// - the page ScrollView is locked while the finger is down, so a vertical stroke draws instead of scrolling;
+// - finished strokes are memoised, so a move only re-renders the stroke being drawn.
 export function SignaturePad({
   onChange,
   disabled,
-  height = 170,
+  height = 200,
 }: {
   onChange: (drawing: DrawnSignature | null) => void;
   disabled?: boolean;
   height?: number;
 }) {
-  const [strokes, setStrokes] = useState<Point[][]>([]);
+  const lockScroll = useScrollLock();
+  const [done, setDone] = useState<Point[][]>([]);
+  const [live, setLive] = useState<Point[] | null>(null);
   const [width, setWidth] = useState(0);
   const current = useRef<Point[] | null>(null);
-  // The strokes as drawn so far; state only drives rendering.
+  // The finished strokes; state only drives rendering.
   const all = useRef<Point[][]>([]);
+  // Never leave the page unscrollable if the pad unmounts mid-stroke.
+  useEffect(() => () => lockScroll(false), [lockScroll]);
 
   const point = (e: GestureResponderEvent): Point => [
     Math.round(Math.min(Math.max(0, e.nativeEvent.locationX), width) * 10) / 10,
@@ -29,7 +38,7 @@ export function SignaturePad({
   ];
   const publish = (next: Point[][]) => {
     all.current = next;
-    setStrokes(next);
+    setDone(next);
     const points = next.reduce((n, s) => n + s.length, 0);
     onChange(
       points >= 5 && width > 0
@@ -37,14 +46,25 @@ export function SignaturePad({
         : null,
     );
   };
+  const finish = () => {
+    lockScroll(false);
+    const stroke = current.current;
+    current.current = null;
+    setLive(null);
+    // A tap leaves a single point: keep it as a dot so the stroke is not lost.
+    if (stroke) publish([...all.current, stroke.length === 1 ? [stroke[0], stroke[0]] : stroke]);
+  };
   const handlers = {
     onStartShouldSetResponder: () => !disabled,
     onMoveShouldSetResponder: () => !disabled,
+    // Claim the touch before a parent ScrollView can.
+    onStartShouldSetResponderCapture: () => !disabled,
+    onMoveShouldSetResponderCapture: () => !disabled,
     onResponderTerminationRequest: () => false,
     onResponderGrant: (e: GestureResponderEvent) => {
+      lockScroll(true);
       current.current = [point(e)];
-      all.current = [...all.current, current.current];
-      setStrokes(all.current);
+      setLive(current.current);
     },
     onResponderMove: (e: GestureResponderEvent) => {
       const stroke = current.current;
@@ -53,14 +73,12 @@ export function SignaturePad({
       const last = stroke[stroke.length - 1];
       if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 2) return;
       stroke.push(p);
-      all.current = [...all.current.slice(0, -1), [...stroke]];
-      setStrokes(all.current);
+      setLive([...stroke]);
     },
-    onResponderRelease: () => {
-      current.current = null;
-      publish(all.current);
-    },
+    onResponderRelease: finish,
+    onResponderTerminate: finish,
   };
+  const empty = !done.length && !live;
 
   return (
     <View>
@@ -78,9 +96,6 @@ export function SignaturePad({
           overflow: 'hidden',
         }}
       >
-        {strokes.map((stroke, i) =>
-          stroke.slice(1).map((p, j) => <Segment key={`${i}-${j}`} from={stroke[j]} to={p} />),
-        )}
         <View
           pointerEvents="none"
           style={{
@@ -92,7 +107,11 @@ export function SignaturePad({
             borderColor: '#ddd',
           }}
         />
-        {!strokes.length && (
+        {done.map((stroke, i) => (
+          <Stroke key={i} points={stroke} />
+        ))}
+        {live && <Stroke points={live} />}
+        {empty && (
           <Text
             pointerEvents="none"
             style={{
@@ -107,18 +126,29 @@ export function SignaturePad({
           </Text>
         )}
       </View>
-      <Button disabled={disabled || !strokes.length} onPress={() => publish([])}>
+      <Button disabled={disabled || !done.length} onPress={() => publish([])}>
         Xoá và vẽ lại
       </Button>
     </View>
   );
 }
 
+// A finished stroke never changes, so it is not re-rendered while the next one is drawn.
+const Stroke = memo(function Stroke({ points }: { points: Point[] }) {
+  return (
+    <>
+      {points.slice(1).map((p, j) => (
+        <Segment key={j} from={points[j]} to={p} />
+      ))}
+    </>
+  );
+});
+
 // One short bar between two points, rotated around its centre.
 function Segment({ from, to }: { from: Point; to: Point }) {
   const dx = to[0] - from[0],
     dy = to[1] - from[1];
-  const length = Math.max(1, Math.hypot(dx, dy));
+  const length = Math.max(3, Math.hypot(dx, dy) + 1.5);
   return (
     <View
       pointerEvents="none"
