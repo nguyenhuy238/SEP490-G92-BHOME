@@ -18,7 +18,7 @@ const contract = {
 } as ContractView;
 function show(sandboxAvailable = true, reject = false) {
   let confirmed = false;
-  const request = vi.fn(async (path: string, _init?: RequestInit) => {
+  const request = vi.fn(async (path: string) => {
     if (path.endsWith('/owner-confirmation')) {
       if (reject) throw { status: 403 };
       confirmed = true;
