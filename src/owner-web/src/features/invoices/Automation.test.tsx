@@ -5,8 +5,11 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, expect, it, vi } from 'vitest';
 import { theme } from '../../theme/theme';
 import { LiveAutomationPage } from './AutomationPage';
+import { invoiceClient } from '../../../../../packages/client-core/src/invoices';
 const mocks = vi.hoisted(() => ({ request: vi.fn(), schedule: vi.fn() }));
-vi.mock('./useInvoiceApi', () => ({ useInvoiceApi: () => mocks }));
+vi.mock('./useInvoiceApi', () => ({
+  useInvoiceApi: () => ({ ...invoiceClient(mocks.request), ...mocks }),
+}));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner' } }),
 }));
@@ -36,6 +39,7 @@ function respond(developerActionsEnabled = true) {
   mocks.schedule.mockResolvedValue({ version: 3 });
   mocks.request.mockImplementation(async (path: string) => {
     if (path === '/api/v1/capture/locations') return [{ id: 'loc', label: 'Synthetic' }];
+    if (path.startsWith('/api/v1/invoices?')) return { items: [], totalCount: 0, pageSize: 20 };
     if (path.includes('/history')) return [];
     if (path.includes('/preview?'))
       return {
@@ -113,4 +117,44 @@ it('shows API failure and permits refresh', async () => {
   mount();
   expect(await screen.findByRole('alert')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Thử lại' })).toBeEnabled();
+});
+
+it('recalculates the existing draft with its version and shows the returned inputs', async () => {
+  respond(false);
+  const read = mocks.request.getMockImplementation()!;
+  const draft = {
+    id: 'draft',
+    version: 4,
+    roomNumber: 'A101',
+    total: '1000',
+    missingInputs: ['confirmed_reading_Electricity'],
+  };
+  mocks.request.mockImplementation(async (path: string) => {
+    if (path.startsWith('/api/v1/invoices?'))
+      return { items: [draft], totalCount: 1, pageSize: 20 };
+    if (path === '/api/v1/invoices/draft/refresh')
+      return { ...draft, version: 5, total: '4000', missingInputs: ['confirmed_reading_Water'] };
+    return read(path);
+  });
+  mount();
+  await choose();
+  expect(await screen.findByText(/Thiếu:.*điện/i)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Làm mới lịch và kết quả' }));
+  await waitFor(() =>
+    expect(
+      mocks.request.mock.calls.filter(([path]) => path.startsWith('/api/v1/invoices?')),
+    ).toHaveLength(2),
+  );
+  expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([]);
+  fireEvent.click(screen.getByRole('button', { name: 'Cập nhật Invoice Draft' }));
+  expect(await screen.findByText(/Thiếu:.*nước/i)).toBeInTheDocument();
+  expect(screen.queryByText(/Thiếu:.*điện/i)).not.toBeInTheDocument();
+  expect(screen.getByText(/4\.000 ₫/)).toBeInTheDocument();
+  expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([
+    ['/api/v1/invoices/draft/refresh', { method: 'POST', body: '{"expectedVersion":4}' }],
+  ]);
+  expect(mocks.request).toHaveBeenCalledWith(
+    '/api/v1/invoices?page=1&pageSize=20&locationId=loc&billingPeriod=2026-11-01&status=Draft',
+    expect.anything(),
+  );
 });

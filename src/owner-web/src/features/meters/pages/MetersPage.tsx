@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   Alert,
+  Box,
   Button,
   LinearProgress,
   MenuItem,
@@ -72,73 +73,102 @@ export function LiveMetersPage() {
     <>
       <PageHeader
         title="Ghi chỉ số điện nước"
-        subtitle="Kết quả Staff xác nhận được lưu trên hệ thống và dùng làm đầu vào lập hóa đơn."
+        subtitle="Theo dõi nhiệm vụ ghi số, kiểm tra chỉ số đã xác nhận trước khi lập hóa đơn."
       />
       <Stack spacing={2}>
-        <FilterToolbar>
-          <TextField
-            select
-            label="Cơ sở ghi số"
-            value={location}
-            onChange={(e) => {
-              setLocation(e.target.value);
-              setRoom('');
-              setPage(1);
-            }}
+        <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2 }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            sx={{ justifyContent: 'space-between', gap: 1, mb: 2 }}
           >
-            <MenuItem value="">Tất cả cơ sở</MenuItem>
-            {locations.data?.map((l) => (
-              <MenuItem key={l.id} value={l.id}>
-                {l.label}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
-            label="Phòng ghi số"
-            value={room}
-            disabled={!location}
-            onChange={(e) => {
-              setRoom(e.target.value);
-              setPage(1);
-            }}
-          >
-            <MenuItem value="">Tất cả phòng</MenuItem>
-            {rooms.data?.map((r) => (
-              <MenuItem key={r.id} value={r.id}>
-                {r.label}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
-            label="Trạng thái tác vụ"
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPage(1);
-            }}
-          >
-            <MenuItem value="">Tất cả trạng thái</MenuItem>
-            {['Đã giao', 'Đang thực hiện', 'Đã xác nhận', 'Đã hủy', 'Chờ xác minh'].map(
-              (label, i) => (
-                <MenuItem key={i} value={String(i)}>
-                  {label}
-                </MenuItem>
-              ),
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                Tìm nhiệm vụ ghi chỉ số
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Chọn cơ sở, phòng và trạng thái để kiểm tra tiến độ ghi số.
+              </Typography>
+            </Box>
+            {(location || room || status || dueDate) && (
+              <Button
+                size="small"
+                onClick={() => {
+                  setLocation('');
+                  setRoom('');
+                  setStatus('');
+                  setDueDate('');
+                  setPage(1);
+                }}
+              >
+                Xóa bộ lọc
+              </Button>
             )}
-          </TextField>
-          <TextField
-            label="Ngày đến hạn"
-            type="date"
-            value={dueDate}
-            slotProps={{ inputLabel: { shrink: true } }}
-            onChange={(e) => {
-              setDueDate(e.target.value);
-              setPage(1);
-            }}
-          />
-        </FilterToolbar>
+          </Stack>
+          <FilterToolbar>
+            <TextField
+              select
+              label="Cơ sở ghi số"
+              value={location}
+              onChange={(e) => {
+                setLocation(e.target.value);
+                setRoom('');
+                setPage(1);
+              }}
+            >
+              <MenuItem value="">Tất cả cơ sở</MenuItem>
+              {locations.data?.map((l) => (
+                <MenuItem key={l.id} value={l.id}>
+                  {l.label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              label="Phòng ghi số"
+              value={room}
+              disabled={!location}
+              onChange={(e) => {
+                setRoom(e.target.value);
+                setPage(1);
+              }}
+            >
+              <MenuItem value="">Tất cả phòng</MenuItem>
+              {rooms.data?.map((r) => (
+                <MenuItem key={r.id} value={r.id}>
+                  {r.label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              label="Trạng thái tác vụ"
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+            >
+              <MenuItem value="">Tất cả trạng thái</MenuItem>
+              {['Đã giao', 'Đang thực hiện', 'Đã xác nhận', 'Đã hủy', 'Chờ xác minh'].map(
+                (label, i) => (
+                  <MenuItem key={i} value={String(i)}>
+                    {label}
+                  </MenuItem>
+                ),
+              )}
+            </TextField>
+            <TextField
+              label="Ngày đến hạn"
+              type="date"
+              value={dueDate}
+              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(e) => {
+                setDueDate(e.target.value);
+                setPage(1);
+              }}
+            />
+          </FilterToolbar>
+        </Paper>
         {(locations.error || rooms.error || evidenceError) && (
           <Alert severity="error">
             {evidenceError || contractError(locations.error || rooms.error)}
@@ -157,7 +187,28 @@ export function LiveMetersPage() {
           <Alert severity="info">Chưa có tác vụ ghi chỉ số.</Alert>
         )}
         {!!tasks.data?.length && !tasks.error && (
-          <Paper>
+          <Paper variant="outlined" sx={{ overflow: 'hidden', borderRadius: 2 }}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1, p: 2 }}
+            >
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  Nhiệm vụ ghi số
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Chọn một dòng để xem phân công, chỉ số và bằng chứng xác nhận.
+                </Typography>
+              </Box>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={tasks.isFetching}
+                onClick={() => void tasks.refetch()}
+              >
+                Làm mới
+              </Button>
+            </Stack>
             <OwnerTable
               rows={tasks.data}
               id={(t) => t.id}
@@ -189,7 +240,11 @@ export function LiveMetersPage() {
             />
           </Paper>
         )}
-        <Stack direction="row" spacing={1}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}
+        >
           <Button disabled={page === 1 || tasks.isFetching} onClick={() => setPage(page - 1)}>
             Trang trước
           </Button>
@@ -200,24 +255,28 @@ export function LiveMetersPage() {
           >
             Trang sau
           </Button>
-          <Button disabled={tasks.isFetching} onClick={() => void tasks.refetch()}>
-            Làm mới
-          </Button>
         </Stack>
-        <Stack direction="row" spacing={1}>
-          <TextField
-            label="Mã tác vụ cần tra cứu"
-            value={taskId}
-            onChange={(e) => setTaskId(e.target.value)}
-            fullWidth
-          />
-          <Button
-            disabled={!/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(taskId)}
-            onClick={() => setSelected(taskId)}
-          >
-            Tra cứu
-          </Button>
-        </Stack>
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+            Tra cứu bằng mã nhiệm vụ
+          </Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            <TextField
+              size="small"
+              label="Mã tác vụ cần tra cứu"
+              value={taskId}
+              onChange={(e) => setTaskId(e.target.value)}
+              fullWidth
+            />
+            <Button
+              variant="outlined"
+              disabled={!/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(taskId)}
+              onClick={() => setSelected(taskId)}
+            >
+              Tra cứu
+            </Button>
+          </Stack>
+        </Paper>
         {selected && detail.isPending && <LinearProgress />}
         {detail.error && (
           <Alert
@@ -228,8 +287,11 @@ export function LiveMetersPage() {
           </Alert>
         )}
         {detail.data && (
-          <Paper sx={{ p: 3 }}>
+          <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 2 }}>
             <Stack spacing={1}>
+              <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700 }}>
+                CHI TIẾT NHIỆM VỤ GHI CHỈ SỐ
+              </Typography>
               <Typography variant="h6">
                 {detail.data.location} · Phòng {detail.data.room}
               </Typography>
@@ -241,9 +303,17 @@ export function LiveMetersPage() {
                 Ngày ghi: {detail.data.readingDate.split('-').reverse().join('/')} · Kỳ:{' '}
                 {detail.data.billingPeriod?.slice(0, 7) ?? 'Ban đầu / trả phòng'}
               </Typography>
-              <Typography>
-                Chỉ số trước: {detail.data.previousValue ?? 'Chưa có baseline xác nhận'}
-              </Typography>
+              <Paper
+                variant="outlined"
+                sx={{ p: 1.5, my: 1, bgcolor: 'background.default', borderRadius: 1.5 }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  Chỉ số dùng để đối chiếu
+                </Typography>
+                <Typography sx={{ fontWeight: 700 }}>
+                  Chỉ số trước: {detail.data.previousValue ?? 'Chưa có baseline xác nhận'}
+                </Typography>
+              </Paper>
               <Typography>
                 Hạn ghi số: {detail.data.dueAt ? formatInstant(detail.data.dueAt) : 'Chưa cấu hình'}
               </Typography>

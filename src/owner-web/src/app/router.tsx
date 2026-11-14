@@ -39,6 +39,7 @@ const IncidentsPage = lazy(() => import('../features/incidents/pages/IncidentsPa
 const MaintenancePage = lazy(() => import('../features/maintenance/pages/MaintenancePage'));
 const ExpensesPage = lazy(() => import('../features/expenses/pages/ExpensesPage'));
 const DashboardPage = lazy(() => import('../features/dashboard/pages/DashboardPage'));
+const FinanceHomePage = lazy(() => import('../features/finance/FinanceHomePage'));
 const ReportsPage = lazy(() => import('../features/reports/pages/ReportsPage'));
 const WhatIfPage = lazy(() => import('../features/what-if/pages/WhatIfPage'));
 const PublicContentPage = lazy(() => import('../features/public-content/pages/PublicContentPage'));
@@ -123,6 +124,7 @@ export function AppRouter() {
               <Route path="/handovers" element={<HandoversPage />} />
               <Route path="/temporary-residence" element={<TemporaryResidencePage />} />
               <Route path="/meters" element={<MetersPage />} />
+              <Route path="/finance" element={<FinanceHomePage />} />
               <Route path="/invoices" element={<InvoicesPage />} />
               <Route path="/billing-automation" element={<AutomationPage />} />
               <Route path="/invoice-adjustments" element={<AdjustmentsPage />} />

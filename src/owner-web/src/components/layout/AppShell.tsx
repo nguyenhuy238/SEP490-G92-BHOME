@@ -23,6 +23,9 @@ import {
   Bell,
   Building2,
   CalendarDays,
+  ChartNoAxesCombined,
+  ChevronDown,
+  ChevronRight,
   ClipboardList,
   DoorOpen,
   FileText,
@@ -78,6 +81,7 @@ const iconMap: Record<string, typeof Building2> = {
   handovers: KeyRound,
   'temporary-residence': ShieldCheck,
   meters: Gauge,
+  finance: ChartNoAxesCombined,
   invoices: Receipt,
   'billing-automation': CalendarDays,
   'invoice-adjustments': Receipt,
@@ -114,6 +118,7 @@ const navGroups = [
   [
     'Tài chính & Hóa đơn',
     [
+      'finance',
       'meters',
       'invoices',
       'billing-automation',
@@ -153,6 +158,7 @@ const navLabels: Record<string, string> = {
   handovers: 'Bàn giao phòng',
   'temporary-residence': 'Đăng ký tạm trú',
   meters: 'Chỉ số điện nước',
+  finance: 'Bắt đầu tại đây',
   invoices: 'Hóa đơn',
   'billing-automation': 'Lịch tự động',
   'invoice-adjustments': 'Điều chỉnh hóa đơn',
@@ -168,12 +174,26 @@ const navLabels: Record<string, string> = {
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false),
     [resetOpen, setResetOpen] = useState(false);
+  const [financeExpandedOverride, setFinanceExpandedOverride] = useState<boolean | null>(null);
   const { data } = usePortalData();
   const portal = usePortal();
   const action = usePortalAction();
   const navigate = useNavigate();
   const location = useLocation();
   const current = location.pathname.split('/')[1] || 'dashboard';
+  const inFinanceArea = [
+    'finance',
+    'meters',
+    'invoices',
+    'billing-automation',
+    'invoice-adjustments',
+    'payments',
+    'debts',
+    'expenses',
+    'reports',
+    'what-if',
+  ].includes(current);
+  const financeExpanded = financeExpandedOverride ?? (inFinanceArea && current !== 'finance');
   const workspaceParts = location.pathname.split('/');
   const inLocationWorkspace = workspaceParts[1] === 'locations' && Boolean(workspaceParts[2]);
   const selectedLocation = data?.records.locations.find((row) => row.id === workspaceParts[2]);
@@ -211,46 +231,73 @@ export function AppShell() {
                 pt: 1.5,
                 pb: 0.5,
                 fontSize: 10,
-                letterSpacing: 1,
+                letterSpacing: group === 'Tài chính & Hóa đơn' ? 0.5 : 1,
                 textTransform: 'uppercase',
-                color: 'text.secondary',
+                color: group === 'Tài chính & Hóa đơn' ? 'primary.main' : 'text.secondary',
+                fontWeight: group === 'Tài chính & Hóa đơn' ? 850 : 600,
               }}
             >
               {group}
             </Typography>
             <List dense disablePadding>
-              {items.map((key) => {
-                const Icon = iconMap[key];
-                return (
-                  <ListItemButton
-                    component={NavLink}
-                    to={`/${key}`}
-                    key={key}
-                    onClick={() => {
-                      setMobileOpen(false);
-                      portal.setSearch('');
-                    }}
-                    sx={{
-                      mx: 1.25,
-                      my: 0.25,
-                      borderRadius: 1.25,
-                      minHeight: 41,
-                      py: 0.75,
-                      color: '#53657f',
-                      '&:hover': { bgcolor: '#f4f7fc' },
-                      '&.active': { bgcolor: '#ebf2ff', color: 'primary.main', fontWeight: 800 },
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 28, color: 'inherit' }}>
-                      <Icon size={17} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={navLabels[key]}
-                      slotProps={{ primary: { sx: { fontSize: 12 } } }}
-                    />
-                  </ListItemButton>
-                );
-              })}
+              {items
+                .filter(
+                  (key) => group !== 'Tài chính & Hóa đơn' || financeExpanded || key === 'finance',
+                )
+                .map((key) => {
+                  const Icon = iconMap[key];
+                  return (
+                    <ListItemButton
+                      component={NavLink}
+                      to={`/${key}`}
+                      key={key}
+                      onClick={() => {
+                        setMobileOpen(false);
+                        portal.setSearch('');
+                      }}
+                      sx={{
+                        mx: 1.25,
+                        my: 0.25,
+                        borderRadius: 1.25,
+                        minHeight: 41,
+                        py: 0.75,
+                        color: '#53657f',
+                        '&:hover': { bgcolor: '#f4f7fc' },
+                        '&.active': { bgcolor: '#ebf2ff', color: 'primary.main', fontWeight: 800 },
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 28, color: 'inherit' }}>
+                        <Icon size={17} />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={navLabels[key]}
+                        slotProps={{ primary: { sx: { fontSize: 12 } } }}
+                      />
+                    </ListItemButton>
+                  );
+                })}
+              {group === 'Tài chính & Hóa đơn' && (
+                <ListItemButton
+                  aria-expanded={financeExpanded}
+                  onClick={() => setFinanceExpandedOverride(!financeExpanded)}
+                  sx={{
+                    mx: 1.25,
+                    my: 0.25,
+                    minHeight: 41,
+                    borderRadius: 1.25,
+                    color: 'text.secondary',
+                    '&:hover': { bgcolor: '#f4f7fc' },
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 28, color: 'inherit' }}>
+                    {financeExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={financeExpanded ? 'Thu gọn các mục' : 'Xem các chức năng khác'}
+                    slotProps={{ primary: { sx: { fontSize: 12, fontWeight: 650 } } }}
+                  />
+                </ListItemButton>
+              )}
             </List>
           </Box>
         ))}
@@ -435,8 +482,24 @@ export function AppShell() {
         >
           <Breadcrumbs sx={{ fontSize: 10, mb: 1 }}>
             <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>Hệ thống</Typography>
+            {inFinanceArea && current !== 'finance' && (
+              <Box
+                component={NavLink}
+                to="/finance"
+                sx={{
+                  fontSize: 11,
+                  color: 'primary.main',
+                  fontWeight: 700,
+                  textDecoration: 'none',
+                  '&:hover': { textDecoration: 'underline' },
+                  '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
+                }}
+              >
+                Tài chính & Hóa đơn
+              </Box>
+            )}
             <Typography sx={{ fontSize: 10, color: 'primary.main' }}>
-              {navLabels[current] ||
+              {(current === 'finance' ? 'Bắt đầu tại đây' : navLabels[current]) ||
                 featureDefinitions.find((f) => f.kind === (current as ResourceKind))?.title}
             </Typography>
           </Breadcrumbs>

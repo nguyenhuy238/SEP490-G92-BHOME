@@ -1,7 +1,12 @@
 import { useRef, useState } from 'react';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
+  Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -15,6 +20,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { ChevronDown } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link as RouterLink, useInRouterContext, useParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
@@ -116,7 +122,7 @@ export function ExpensesApiPage() {
       <PageHeader
         group={null}
         title="Đầu tư ban đầu & Chi phí"
-        subtitle="Khoản chi thực tế theo cơ sở; lịch sử chỉnh sửa được lưu trên máy chủ."
+        subtitle="Theo dõi chi phí và vốn đầu tư theo cơ sở. Xem chi tiết hoặc ghi khoản chi ngay tại đây."
         actions={
           <Button
             variant="contained"
@@ -166,49 +172,86 @@ export function ExpensesApiPage() {
           {financeError(rows.error || locations.error)}
         </Alert>
       )}
-      <Tabs
-        aria-label="Loại khoản chi"
-        value={filter.expenseType || ''}
-        onChange={(_, v: string) => changeFilter('expenseType', v)}
-        variant="scrollable"
-        allowScrollButtonsMobile
-        sx={{ mb: 2 }}
-      >
-        <Tab value="" label="Tất cả khoản chi" />
-        {types.map((t) => (
-          <Tab key={t.id} value={t.id} label={t.name} />
-        ))}
-      </Tabs>
-      <FilterToolbar>
-        <OptionPicker
-          label="Cơ sở"
-          value={routeLocation || filter.locationId || ''}
-          disabled={!!routeLocation}
-          options={locations.data ?? []}
-          loading={locations.isPending}
-          error={!!locations.error}
-          change={(id) => changeFilter('locationId', id)}
-        />
-        <TextField
-          label="Danh mục"
-          value={filter.category || ''}
-          onChange={(e) => changeFilter('category', e.target.value)}
-        />
-        <TextField
-          label="Từ ngày"
-          type="date"
-          slotProps={{ inputLabel: { shrink: true } }}
-          value={filter.from || ''}
-          onChange={(e) => changeFilter('from', e.target.value)}
-        />
-        <TextField
-          label="Đến ngày"
-          type="date"
-          slotProps={{ inputLabel: { shrink: true } }}
-          value={filter.to || ''}
-          onChange={(e) => changeFilter('to', e.target.value)}
-        />
-      </FilterToolbar>
+      <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, mb: 2, borderRadius: 2 }}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, gap: 1 }}
+        >
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Tìm khoản chi
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Chọn loại khoản chi và phạm vi cần xem.
+            </Typography>
+          </Box>
+          {(filter.locationId ||
+            filter.category ||
+            filter.from ||
+            filter.to ||
+            filter.expenseType) && (
+            <Button size="small" onClick={() => setFilter({ page: 1 })}>
+              Xóa bộ lọc
+            </Button>
+          )}
+        </Stack>
+        <Tabs
+          aria-label="Loại khoản chi"
+          value={filter.expenseType || ''}
+          onChange={(_, v: string) => changeFilter('expenseType', v)}
+          variant="scrollable"
+          allowScrollButtonsMobile
+          sx={{ my: 1.5, borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab value="" label="Tất cả khoản chi" />
+          {types.map((t) => (
+            <Tab key={t.id} value={t.id} label={t.name} />
+          ))}
+        </Tabs>
+        <FilterToolbar>
+          <OptionPicker
+            label="Cơ sở"
+            value={routeLocation || filter.locationId || ''}
+            disabled={!!routeLocation}
+            options={locations.data ?? []}
+            loading={locations.isPending}
+            error={!!locations.error}
+            change={(id) => changeFilter('locationId', id)}
+          />
+          <TextField
+            label="Danh mục"
+            value={filter.category || ''}
+            onChange={(e) => changeFilter('category', e.target.value)}
+          />
+          <TextField
+            label="Từ ngày"
+            type="date"
+            slotProps={{ inputLabel: { shrink: true } }}
+            value={filter.from || ''}
+            onChange={(e) => changeFilter('from', e.target.value)}
+          />
+          <TextField
+            label="Đến ngày"
+            type="date"
+            slotProps={{ inputLabel: { shrink: true } }}
+            value={filter.to || ''}
+            onChange={(e) => changeFilter('to', e.target.value)}
+          />
+        </FilterToolbar>
+      </Paper>
+      {rows.data && (
+        <Stack
+          direction="row"
+          sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}
+        >
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            Danh sách khoản chi ({rows.data.total})
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Chọn Chi tiết / chỉnh sửa để xem chứng từ và thông tin liên quan.
+          </Typography>
+        </Stack>
+      )}
       {!rows.error && rows.data?.items.length === 0 && (
         <Alert severity="info">Chưa có khoản chi phù hợp.</Alert>
       )}
@@ -218,45 +261,84 @@ export function ExpensesApiPage() {
             key={e.id}
             variant="outlined"
             sx={{
-              p: 2.5,
-              mb: 2,
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', lg: '1.5fr 1fr' },
-              columnGap: 3,
-              rowGap: 1,
-              '& > .MuiTypography-h6': { fontWeight: 750 },
-              '& > .MuiButton-root': { justifySelf: 'start' },
+              p: { xs: 1.5, sm: 2 },
+              mb: 1.25,
+              borderRadius: 2,
             }}
           >
-            <Typography variant="h6">
-              {e.category} — {formatDraftMoney(e.amount)}
-            </Typography>
-            <Typography>
-              {e.occurredOn.split('-').reverse().join('/')} ·{' '}
-              {locations.data?.find((l) => l.id === e.locationId)?.label} ·{' '}
-              {types.find((t) => t.id === e.expenseType)?.name}
-            </Typography>
-            <Typography sx={{ whiteSpace: 'pre-wrap', color: 'text.secondary', lineHeight: 1.7 }}>
-              {e.note}
-            </Typography>
-            {(e.assetName || e.taskTitle) && (
-              <Typography>{[e.assetName, e.taskTitle].filter(Boolean).join(' · ')}</Typography>
-            )}
-            {routed && e.taskId && (
-              <Button
-                component={RouterLink}
-                to={`/maintenance?workOrderId=${encodeURIComponent(e.taskId)}`}
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between', gap: 2 }}
+            >
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Stack
+                  direction="row"
+                  sx={{ gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 0.75 }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    {e.category} — {formatDraftMoney(e.amount)}
+                  </Typography>
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={types.find((t) => t.id === e.expenseType)?.name ?? e.expenseType}
+                  />
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  {e.occurredOn.split('-').reverse().join('/')} ·{' '}
+                  {locations.data?.find((l) => l.id === e.locationId)?.label}
+                </Typography>
+                {e.note && (
+                  <Typography
+                    variant="body2"
+                    sx={{ mt: 0.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                  >
+                    {e.note}
+                  </Typography>
+                )}
+                {(e.assetName || e.taskTitle) && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', mt: 0.5 }}
+                  >
+                    Liên kết: {[e.assetName, e.taskTitle].filter(Boolean).join(' · ')}
+                  </Typography>
+                )}
+              </Box>
+              <Stack
+                spacing={1}
+                sx={{ alignItems: { xs: 'flex-start', md: 'flex-end' }, flexShrink: 0 }}
               >
-                Xem Work Order
-              </Button>
-            )}
-            <Button disabled={busy} onClick={() => void view(e.id)}>
-              Chi tiết / chỉnh sửa
-            </Button>
+                <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                  {routed && e.taskId && (
+                    <Button
+                      size="small"
+                      component={RouterLink}
+                      to={`/maintenance?workOrderId=${encodeURIComponent(e.taskId)}`}
+                    >
+                      Xem Work Order
+                    </Button>
+                  )}
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={busy}
+                    onClick={() => void view(e.id)}
+                  >
+                    Chi tiết / chỉnh sửa
+                  </Button>
+                </Stack>
+              </Stack>
+            </Stack>
           </Paper>
         ))}
       {rows.data && (
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: 'center', justifyContent: 'center', my: 2 }}
+        >
           <Button
             disabled={(filter.page || 1) <= 1 || rows.isFetching}
             onClick={() => setFilter((f) => ({ ...f, page: (f.page || 1) - 1 }))}
@@ -280,9 +362,9 @@ export function ExpensesApiPage() {
           if (!busy) setEditor(null);
         }}
         fullWidth
-        maxWidth="sm"
+        maxWidth="md"
       >
-        <DialogTitle>{editor?.previous ? 'Chi tiết khoản chi' : 'Ghi khoản chi'}</DialogTitle>
+        <DialogTitle>{editor?.previous ? 'Chi tiết khoản chi' : 'Ghi khoản chi mới'}</DialogTitle>
         <DialogContent>
           {editor && (
             <form
@@ -299,6 +381,14 @@ export function ExpensesApiPage() {
                     Khoản chi này do nghiệp vụ nguồn quản lý; chỉnh sửa tại nghiệp vụ nguồn.
                   </Alert>
                 )}
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    1. Chọn cơ sở phát sinh
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Khoản chi thuộc cơ sở nào? Bạn có thể liên kết phòng hoặc tài sản ở bước 3.
+                  </Typography>
+                </Box>
                 <TextField
                   select
                   required
@@ -327,177 +417,75 @@ export function ExpensesApiPage() {
                     </MenuItem>
                   ))}
                 </TextField>
-                {references.error && (
-                  <Alert severity="error">
-                    Không tải được lựa chọn phòng/tài sản/Work Order.{' '}
-                    <Button type="button" onClick={() => void references.refetch()}>
-                      Thử lại lựa chọn
-                    </Button>
-                  </Alert>
-                )}
-                {references.data?.truncated && (
-                  <Alert severity="warning">
-                    Danh sách lựa chọn vượt giới hạn 500 mục. Cần thu hẹp dữ liệu nguồn trước khi
-                    chọn tham chiếu chưa hiển thị.
-                  </Alert>
-                )}
-                <TextField
-                  select
-                  label="Phòng ghi nhận"
-                  value={editor.value.roomId || ''}
-                  disabled={busy || !!editor.previous || references.isPending || !!references.error}
-                  onChange={(e) =>
-                    setEditor(
-                      (v) =>
-                        v && {
-                          ...v,
-                          value: {
-                            ...v.value,
-                            roomId: e.target.value || null,
-                            assetId: null,
-                            taskId: null,
-                          },
-                        },
-                    )
-                  }
-                >
-                  <MenuItem value="">Toàn cơ sở / khu chung</MenuItem>
-                  {references.data?.rooms.map((r) => (
-                    <MenuItem key={r.id} value={r.id}>
-                      {r.label}
-                    </MenuItem>
-                  ))}
-                  {editor.previous?.roomId &&
-                    !references.data?.rooms.some((r) => r.id === editor.previous!.roomId) && (
-                      <MenuItem value={editor.previous.roomId}>Phòng đã liên kết</MenuItem>
-                    )}
-                </TextField>
-                <TextField
-                  select
-                  label="Tài sản liên quan"
-                  value={editor.value.assetId || ''}
-                  disabled={
-                    busy ||
-                    !!editor.previous ||
-                    !!references.data?.workOrders.find((t) => t.id === editor.value.taskId)
-                      ?.assetId ||
-                    references.isPending ||
-                    !!references.error
-                  }
-                  onChange={(e) => editField('assetId', e.target.value || null)}
-                >
-                  <MenuItem value="">Không gắn tài sản</MenuItem>
-                  {references.data?.assets.map((a) => (
-                    <MenuItem key={a.id} value={a.id}>
-                      {a.label}
-                    </MenuItem>
-                  ))}
-                  {editor.previous?.assetId &&
-                    !references.data?.assets.some((a) => a.id === editor.previous!.assetId) && (
-                      <MenuItem value={editor.previous.assetId}>
-                        {editor.previous.assetName || 'Tài sản đã liên kết'}
-                      </MenuItem>
-                    )}
-                </TextField>
-                <TextField
-                  select
-                  label="Work Order liên quan"
-                  value={editor.value.taskId || ''}
-                  disabled={
-                    busy ||
-                    !!editor.previous ||
-                    editor.value.expenseType !== 'OPERATING' ||
-                    references.isPending ||
-                    !!references.error
-                  }
-                  onChange={(e) => {
-                    const task = references.data?.workOrders.find((t) => t.id === e.target.value);
-                    setEditor(
-                      (v) =>
-                        v && {
-                          ...v,
-                          value: {
-                            ...v.value,
-                            taskId: task?.id || null,
-                            assetId: task?.assetId ?? null,
-                          },
-                        },
-                    );
+                <Box sx={{ pt: 1 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    2. Nội dung & số tiền
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Điền thông tin thực tế để lưu vào sổ chi phí.
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                    gap: 2,
                   }}
                 >
-                  <MenuItem value="">Không gắn Work Order</MenuItem>
-                  {references.data?.workOrders.map((t) => (
-                    <MenuItem key={t.id} value={t.id}>
-                      {t.label}
-                    </MenuItem>
-                  ))}
-                  {editor.previous?.taskId &&
-                    !references.data?.workOrders.some((t) => t.id === editor.previous!.taskId) && (
-                      <MenuItem value={editor.previous.taskId}>
-                        {editor.previous.taskTitle || 'Công việc đã liên kết'}
-                      </MenuItem>
-                    )}
-                </TextField>
-                {!references.isPending &&
-                  !references.error &&
-                  references.data?.workOrders.length === 0 && (
-                    <Typography variant="body2">
-                      Chưa có Work Order được ghi nhận trong phạm vi này.
-                    </Typography>
-                  )}
-                <TextField
-                  select
-                  required
-                  label="Phân loại"
-                  disabled={busy || !!editor.previous}
-                  value={editor.value.expenseType}
-                  onChange={(e) =>
-                    setEditor(
-                      (v) =>
-                        v && {
-                          ...v,
-                          value: {
-                            ...v.value,
-                            expenseType: e.target.value as ExpenseInput['expenseType'],
-                            taskId: null,
+                  <TextField
+                    select
+                    required
+                    label="Phân loại"
+                    disabled={busy || !!editor.previous}
+                    value={editor.value.expenseType}
+                    onChange={(e) =>
+                      setEditor(
+                        (v) =>
+                          v && {
+                            ...v,
+                            value: {
+                              ...v.value,
+                              expenseType: e.target.value as ExpenseInput['expenseType'],
+                              taskId: null,
+                            },
                           },
-                        },
-                    )
-                  }
-                >
-                  {types.map((t) => (
-                    <MenuItem key={t.id} value={t.id}>
-                      {t.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  required
-                  label="Danh mục khoản chi"
-                  disabled={busy}
-                  value={editor.value.category}
-                  slotProps={{ htmlInput: { maxLength: 60 } }}
-                  onChange={(e) => editField('category', e.target.value)}
-                />
-                <TextField
-                  required
-                  label="Số tiền (VND)"
-                  disabled={busy}
-                  value={editor.value.amount}
-                  slotProps={{
-                    htmlInput: { pattern: '[0-9]+', maxLength: 18, inputMode: 'numeric' },
-                  }}
-                  onChange={(e) => editField('amount', e.target.value)}
-                />
-                <TextField
-                  required
-                  label="Ngày phát sinh"
-                  type="date"
-                  disabled={busy}
-                  value={editor.value.occurredOn}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  onChange={(e) => editField('occurredOn', e.target.value)}
-                />
+                      )
+                    }
+                  >
+                    {types.map((t) => (
+                      <MenuItem key={t.id} value={t.id}>
+                        {t.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    required
+                    label="Danh mục khoản chi"
+                    disabled={busy}
+                    value={editor.value.category}
+                    slotProps={{ htmlInput: { maxLength: 60 } }}
+                    onChange={(e) => editField('category', e.target.value)}
+                  />
+                  <TextField
+                    required
+                    label="Số tiền (VND)"
+                    disabled={busy}
+                    value={editor.value.amount}
+                    slotProps={{
+                      htmlInput: { pattern: '[0-9]+', maxLength: 18, inputMode: 'numeric' },
+                    }}
+                    onChange={(e) => editField('amount', e.target.value)}
+                  />
+                  <TextField
+                    required
+                    label="Ngày phát sinh"
+                    type="date"
+                    disabled={busy}
+                    value={editor.value.occurredOn}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    onChange={(e) => editField('occurredOn', e.target.value)}
+                  />
+                </Box>
                 <TextField
                   required
                   multiline
@@ -507,6 +495,158 @@ export function ExpensesApiPage() {
                   slotProps={{ htmlInput: { maxLength: 4000 } }}
                   onChange={(e) => editField('note', e.target.value)}
                 />
+                <Accordion
+                  variant="outlined"
+                  defaultExpanded={Boolean(
+                    editor.previous?.roomId || editor.previous?.assetId || editor.previous?.taskId,
+                  )}
+                  sx={{ borderRadius: '10px !important', '&:before': { display: 'none' } }}
+                >
+                  <AccordionSummary
+                    expandIcon={<ChevronDown size={18} />}
+                    aria-controls="expense-reference-details"
+                    id="expense-reference-header"
+                  >
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                        3. Liên kết bổ sung (không bắt buộc)
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Chỉ mở khi khoản chi thuộc phòng, tài sản hoặc công việc bảo trì cụ thể.
+                      </Typography>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails id="expense-reference-details">
+                    <Stack spacing={2}>
+                      {references.error && (
+                        <Alert severity="error">
+                          Không tải được lựa chọn phòng/tài sản/Work Order.{' '}
+                          <Button type="button" onClick={() => void references.refetch()}>
+                            Thử lại lựa chọn
+                          </Button>
+                        </Alert>
+                      )}
+                      {references.data?.truncated && (
+                        <Alert severity="warning">
+                          Danh sách lựa chọn vượt giới hạn 500 mục. Cần thu hẹp dữ liệu nguồn trước
+                          khi chọn tham chiếu chưa hiển thị.
+                        </Alert>
+                      )}
+                      <TextField
+                        select
+                        label="Phòng ghi nhận"
+                        value={editor.value.roomId || ''}
+                        disabled={
+                          busy || !!editor.previous || references.isPending || !!references.error
+                        }
+                        onChange={(e) =>
+                          setEditor(
+                            (v) =>
+                              v && {
+                                ...v,
+                                value: {
+                                  ...v.value,
+                                  roomId: e.target.value || null,
+                                  assetId: null,
+                                  taskId: null,
+                                },
+                              },
+                          )
+                        }
+                      >
+                        <MenuItem value="">Toàn cơ sở / khu chung</MenuItem>
+                        {references.data?.rooms.map((r) => (
+                          <MenuItem key={r.id} value={r.id}>
+                            {r.label}
+                          </MenuItem>
+                        ))}
+                        {editor.previous?.roomId &&
+                          !references.data?.rooms.some((r) => r.id === editor.previous!.roomId) && (
+                            <MenuItem value={editor.previous.roomId}>Phòng đã liên kết</MenuItem>
+                          )}
+                      </TextField>
+                      <TextField
+                        select
+                        label="Tài sản liên quan"
+                        value={editor.value.assetId || ''}
+                        disabled={
+                          busy ||
+                          !!editor.previous ||
+                          !!references.data?.workOrders.find((t) => t.id === editor.value.taskId)
+                            ?.assetId ||
+                          references.isPending ||
+                          !!references.error
+                        }
+                        onChange={(e) => editField('assetId', e.target.value || null)}
+                      >
+                        <MenuItem value="">Không gắn tài sản</MenuItem>
+                        {references.data?.assets.map((a) => (
+                          <MenuItem key={a.id} value={a.id}>
+                            {a.label}
+                          </MenuItem>
+                        ))}
+                        {editor.previous?.assetId &&
+                          !references.data?.assets.some(
+                            (a) => a.id === editor.previous!.assetId,
+                          ) && (
+                            <MenuItem value={editor.previous.assetId}>
+                              {editor.previous.assetName || 'Tài sản đã liên kết'}
+                            </MenuItem>
+                          )}
+                      </TextField>
+                      <TextField
+                        select
+                        label="Work Order liên quan"
+                        value={editor.value.taskId || ''}
+                        disabled={
+                          busy ||
+                          !!editor.previous ||
+                          editor.value.expenseType !== 'OPERATING' ||
+                          references.isPending ||
+                          !!references.error
+                        }
+                        onChange={(e) => {
+                          const task = references.data?.workOrders.find(
+                            (t) => t.id === e.target.value,
+                          );
+                          setEditor(
+                            (v) =>
+                              v && {
+                                ...v,
+                                value: {
+                                  ...v.value,
+                                  taskId: task?.id || null,
+                                  assetId: task?.assetId ?? null,
+                                },
+                              },
+                          );
+                        }}
+                      >
+                        <MenuItem value="">Không gắn Work Order</MenuItem>
+                        {references.data?.workOrders.map((t) => (
+                          <MenuItem key={t.id} value={t.id}>
+                            {t.label}
+                          </MenuItem>
+                        ))}
+                        {editor.previous?.taskId &&
+                          !references.data?.workOrders.some(
+                            (t) => t.id === editor.previous!.taskId,
+                          ) && (
+                            <MenuItem value={editor.previous.taskId}>
+                              {editor.previous.taskTitle || 'Công việc đã liên kết'}
+                            </MenuItem>
+                          )}
+                      </TextField>
+                      {!references.isPending &&
+                        !references.error &&
+                        references.data?.workOrders.length === 0 && (
+                          <Typography variant="body2">
+                            Chưa có Work Order được ghi nhận trong phạm vi này.
+                          </Typography>
+                        )}
+                    </Stack>
+                  </AccordionDetails>
+                </Accordion>
                 {editor.previous && (
                   <TextField
                     required

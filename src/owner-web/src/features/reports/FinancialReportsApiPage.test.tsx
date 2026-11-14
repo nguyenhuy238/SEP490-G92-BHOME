@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { FinancialReportsApiPage } from './FinancialReportsApiPage';
+import { financeMonthPeriod } from '../finance/monthPeriods';
 const mock = vi.hoisted(() => ({ locations: vi.fn(), rooms: vi.fn(), report: vi.fn() }));
 vi.mock('../expenses/useFinanceApi', () => ({ useFinanceApi: () => mock }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
@@ -215,4 +216,21 @@ it('rejects a reversed date range before requesting financial figures', () => {
   fireEvent.submit(screen.getByRole('button', { name: 'Xem báo cáo' }).closest('form')!);
   expect(screen.getByText('Chọn khoảng ngày hợp lệ.')).toBeInTheDocument();
   expect(mock.report).not.toHaveBeenCalled();
+});
+it('offers a complete month shortcut and distinguishes unsent filter changes from loaded results', async () => {
+  mock.report.mockResolvedValue(backendReport);
+  mount();
+  const preset = financeMonthPeriod(-1);
+  expect(screen.getByLabelText(/Từ ngày/)).toHaveValue(preset.from);
+  expect(screen.getByLabelText(/Đến ngày/)).toHaveValue(preset.to);
+  expect(mock.report).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem báo cáo' }));
+  await screen.findByText('Lợi nhuận vận hành: 700 ₫');
+  expect(mock.report).toHaveBeenCalledWith(
+    { from: preset.from, to: preset.to, locationId: undefined },
+    expect.any(AbortSignal),
+  );
+  fireEvent.change(screen.getByLabelText(/Từ ngày/), { target: { value: '2026-01-01' } });
+  expect(screen.getByText(/số liệu đang hiển thị vẫn thuộc kỳ trước đó/)).toBeInTheDocument();
+  expect(mock.report).toHaveBeenCalledTimes(1);
 });

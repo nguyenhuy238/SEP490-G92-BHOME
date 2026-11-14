@@ -5,10 +5,12 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Drawer,
   FormControlLabel,
   LinearProgress,
   MenuItem,
@@ -17,6 +19,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { X } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
@@ -39,7 +42,7 @@ export default function AdjustmentsPage() {
     <>
       <PageHeader
         title="Điều chỉnh hóa đơn"
-        subtitle="Owner xem xét yêu cầu và kết quả tài chính."
+        subtitle="Xem yêu cầu từ khách thuê, kiểm tra khoản phí và quyết định điều chỉnh."
       />
       {isMockMode ? (
         <Alert severity="info">Bật chế độ API để sử dụng luồng điều chỉnh hóa đơn.</Alert>
@@ -88,67 +91,98 @@ export function OwnerAdjustmentList({
   });
   return (
     <Stack spacing={2}>
-      <FilterToolbar>
-        <TextField
-          select
-          label="Cơ sở điều chỉnh"
-          value={location}
-          onChange={(e) => {
-            setLocation(e.target.value);
-            setRoom('');
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả cơ sở</MenuItem>
-          {locations.data?.map((x) => (
-            <MenuItem key={x.id} value={x.id}>
-              {x.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Phòng điều chỉnh"
-          value={room}
-          onChange={(e) => {
-            setRoom(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả phòng</MenuItem>
-          {rooms.data?.map((x) => (
-            <MenuItem key={x.id} value={x.id}>
-              {x.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        {!invoiceId && (
-          <TextField
-            label="Lọc theo mã hóa đơn"
-            value={invoice}
-            onChange={(e) => {
-              setInvoice(e.target.value);
-              setPage(1);
-            }}
-          />
-        )}
-        <TextField
-          select
-          label="Trạng thái yêu cầu"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả trạng thái</MenuItem>
-          {['Pending', 'Approved', 'Rejected'].map((x) => (
-            <MenuItem key={x} value={x}>
-              {adjustmentStatus(x)}
-            </MenuItem>
-          ))}
-        </TextField>
-      </FilterToolbar>
+      <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2 }}>
+        <Stack spacing={1.5}>
+          <Stack
+            direction="row"
+            sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}
+          >
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                Tìm yêu cầu điều chỉnh
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Lọc theo cơ sở, phòng hoặc trạng thái để tìm yêu cầu cần xử lý.
+              </Typography>
+            </Box>
+            {(location || room || (!invoiceId && invoice) || status) && (
+              <Button
+                size="small"
+                onClick={() => {
+                  setLocation('');
+                  setRoom('');
+                  if (!invoiceId) setInvoice('');
+                  setStatus('');
+                  setPage(1);
+                }}
+              >
+                Xóa bộ lọc
+              </Button>
+            )}
+          </Stack>
+          <FilterToolbar>
+            <TextField
+              select
+              label="Cơ sở điều chỉnh"
+              value={location}
+              onChange={(e) => {
+                setLocation(e.target.value);
+                setRoom('');
+                setPage(1);
+              }}
+            >
+              <MenuItem value="">Tất cả cơ sở</MenuItem>
+              {locations.data?.map((x) => (
+                <MenuItem key={x.id} value={x.id}>
+                  {x.label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              label="Phòng điều chỉnh"
+              value={room}
+              onChange={(e) => {
+                setRoom(e.target.value);
+                setPage(1);
+              }}
+            >
+              <MenuItem value="">Tất cả phòng</MenuItem>
+              {rooms.data?.map((x) => (
+                <MenuItem key={x.id} value={x.id}>
+                  {x.label}
+                </MenuItem>
+              ))}
+            </TextField>
+            {!invoiceId && (
+              <TextField
+                label="Lọc theo mã hóa đơn"
+                value={invoice}
+                onChange={(e) => {
+                  setInvoice(e.target.value);
+                  setPage(1);
+                }}
+              />
+            )}
+            <TextField
+              select
+              label="Trạng thái yêu cầu"
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+            >
+              <MenuItem value="">Tất cả trạng thái</MenuItem>
+              {['Pending', 'Approved', 'Rejected'].map((x) => (
+                <MenuItem key={x} value={x}>
+                  {adjustmentStatus(x)}
+                </MenuItem>
+              ))}
+            </TextField>
+          </FilterToolbar>
+        </Stack>
+      </Paper>
       {(list.isPending || locations.isPending) && <LinearProgress />}
       {(list.error || locations.error || rooms.error) && (
         <Alert
@@ -171,54 +205,201 @@ export function OwnerAdjustmentList({
       {!list.error && !list.isPending && list.data?.items.length === 0 && (
         <Alert severity="info">Không có yêu cầu phù hợp.</Alert>
       )}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1 }}
+      >
+        <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }} aria-label="Lọc nhanh yêu cầu">
+          <Button
+            size="small"
+            variant={status === 'Pending' ? 'contained' : 'outlined'}
+            onClick={() => {
+              setStatus('Pending');
+              setPage(1);
+            }}
+          >
+            Cần duyệt
+          </Button>
+          <Button
+            size="small"
+            variant={status === '' ? 'contained' : 'outlined'}
+            onClick={() => {
+              setStatus('');
+              setPage(1);
+            }}
+          >
+            Tất cả yêu cầu
+          </Button>
+        </Stack>
+      </Stack>
+      {list.data && (
+        <Stack
+          direction="row"
+          sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
+        >
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            Danh sách yêu cầu ({list.data.totalCount})
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Ưu tiên xem các yêu cầu đang chờ duyệt
+          </Typography>
+        </Stack>
+      )}
       {list.data?.items.map((x) => (
-        <Paper key={x.id} sx={{ p: 2 }}>
-          <Stack spacing={1}>
-            <Typography>
-              {x.locationName} · Phòng {x.roomNumber} · {x.billingPeriod.slice(0, 7)} ·{' '}
-              {x.invoiceStatus === 'Draft' ? 'Nháp' : 'Đã phát hành'}
-            </Typography>
-            <Typography>
-              {adjustmentStatus(x.status)} · {x.chargeCode ?? 'Toàn hóa đơn'} · Giá trị khi gửi:{' '}
-              {formatContractMoney(x.currentAmount)}
-            </Typography>
-            <Button onClick={() => setSelected(x.id)}>Xem yêu cầu điều chỉnh</Button>
+        <Paper
+          key={x.id}
+          variant="outlined"
+          sx={{
+            px: { xs: 1.5, md: 2 },
+            py: 1.5,
+            borderRadius: 2,
+            borderColor: selected === x.id ? 'primary.main' : 'divider',
+            bgcolor: selected === x.id ? 'action.selected' : 'background.paper',
+          }}
+        >
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, gap: 1.5 }}
+          >
+            <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+              <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                <Typography sx={{ fontWeight: 700 }}>Phòng {x.roomNumber}</Typography>
+                <Chip
+                  size="small"
+                  color={
+                    x.status === 'Pending'
+                      ? 'warning'
+                      : x.status === 'Approved'
+                        ? 'success'
+                        : 'default'
+                  }
+                  variant={x.status === 'Pending' ? 'filled' : 'outlined'}
+                  label={adjustmentStatus(x.status)}
+                />
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={x.invoiceStatus === 'Draft' ? 'Hóa đơn nháp' : 'Đã phát hành'}
+                />
+              </Stack>
+              <Typography variant="body2" color="text.secondary">
+                {x.locationName} · Kỳ {x.billingPeriod.slice(0, 7)} ·{' '}
+                {x.chargeCode ?? 'Toàn hóa đơn'}
+              </Typography>
+              <Typography variant="body2">
+                Giá trị khi gửi: <strong>{formatContractMoney(x.currentAmount)}</strong>
+              </Typography>
+            </Stack>
+            <Button
+              variant={selected === x.id ? 'contained' : 'outlined'}
+              size="small"
+              onClick={() => setSelected(x.id)}
+              sx={{ flexShrink: 0, alignSelf: { xs: 'flex-start', md: 'center' } }}
+            >
+              {selected === x.id ? 'Đang xem chi tiết' : 'Xem & xử lý'}
+            </Button>
           </Stack>
         </Paper>
       ))}
-      <Stack direction="row" spacing={2}>
-        <Button disabled={page === 1} onClick={() => setPage(page - 1)}>
-          Yêu cầu trước
-        </Button>
-        <Typography>Trang {page}</Typography>
-        <Button
-          disabled={!list.data || page * 20 >= list.data.totalCount}
-          onClick={() => setPage(page + 1)}
+      {list.data && list.data.totalCount > 0 && (
+        <Stack direction="row" spacing={1} sx={{ justifyContent: 'center', alignItems: 'center' }}>
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={page === 1}
+            onClick={() => setPage(page - 1)}
+          >
+            Yêu cầu trước
+          </Button>
+          <Typography variant="body2" color="text.secondary">
+            Trang {page}
+          </Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={page * 20 >= list.data.totalCount}
+            onClick={() => setPage(page + 1)}
+          >
+            Yêu cầu sau
+          </Button>
+        </Stack>
+      )}
+      <Drawer
+        anchor="right"
+        open={!!selected}
+        onClose={() => setSelected('')}
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: '100%', md: 780 },
+              maxWidth: '100vw',
+              bgcolor: 'background.default',
+            },
+          },
+        }}
+      >
+        <Stack
+          direction="row"
+          sx={{
+            px: { xs: 2, md: 3 },
+            py: 2,
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            position: 'sticky',
+            top: 0,
+            zIndex: 1,
+          }}
         >
-          Yêu cầu sau
-        </Button>
-      </Stack>
-      {selected && <OwnerAdjustmentDetail key={selected} id={selected} />}
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+              Xem & xử lý yêu cầu
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Kiểm tra bằng chứng, số dư và hóa đơn trước khi quyết định.
+            </Typography>
+          </Box>
+          <Button startIcon={<X size={16} />} variant="outlined" onClick={() => setSelected('')}>
+            Đóng
+          </Button>
+        </Stack>
+        <Box sx={{ p: { xs: 1.5, md: 2.5 }, minWidth: 0 }}>
+          {selected && <OwnerAdjustmentDetail key={selected} id={selected} />}
+        </Box>
+      </Drawer>
     </Stack>
   );
 }
 export function FinancialSummary({ value }: { value: AdjustmentFinancials }) {
   return (
-    <Stack spacing={1}>
-      <Typography>Tiền hóa đơn gốc: {formatContractMoney(value.originalIssuedAmount)}</Typography>
-      <Typography>Điều chỉnh sau phát hành: {signedVnd(value.approvedAdjustmentTotal)}</Typography>
-      <Typography>
-        Nghĩa vụ hiện hành: {formatContractMoney(value.effectivePayableAmount)} · Đã xác minh:{' '}
-        {formatContractMoney(value.allocatedPayments)}
+    <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+        Số tiền sau điều chỉnh
       </Typography>
-      <Typography>Còn phải trả: {formatContractMoney(value.outstandingAmount)}</Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+        <Typography variant="body2">
+          Tiền hóa đơn gốc: {formatContractMoney(value.originalIssuedAmount)}
+        </Typography>
+        <Typography variant="body2">
+          Điều chỉnh sau phát hành: {signedVnd(value.approvedAdjustmentTotal)}
+        </Typography>
+        <Typography variant="body2">
+          Nghĩa vụ hiện hành: {formatContractMoney(value.effectivePayableAmount)} · Đã xác minh:{' '}
+          {formatContractMoney(value.allocatedPayments)}
+        </Typography>
+        <Typography sx={{ fontWeight: 700 }}>
+          Còn phải trả: {formatContractMoney(value.outstandingAmount)}
+        </Typography>
+      </Box>
       {value.reviewStatus === 'PendingReview' && (
-        <Alert severity="warning">
+        <Alert severity="warning" sx={{ mt: 1.5 }}>
           Tiền thừa chờ xem xét: {formatContractMoney(value.potentialExcessAmount)}. Chưa hoàn tiền
           hoặc chuyển credit.
         </Alert>
       )}
-    </Stack>
+    </Paper>
   );
 }
 export function OwnerAdjustmentDetail({ id }: { id: string }) {
@@ -230,9 +411,17 @@ export function OwnerAdjustmentDetail({ id }: { id: string }) {
     queryFn: ({ signal }) => api.get(id, signal),
   });
   return (
-    <Paper sx={{ p: 3 }}>
+    <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 2 }}>
       <Stack spacing={2}>
-        <Typography variant="h6">Chi tiết yêu cầu điều chỉnh</Typography>
+        <Stack
+          direction="row"
+          sx={{ justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}
+        >
+          <Typography variant="h6">Chi tiết yêu cầu điều chỉnh</Typography>
+          <Button size="small" variant="outlined" onClick={() => void detail.refetch()}>
+            Tải lại yêu cầu
+          </Button>
+        </Stack>
         {detail.isPending && <LinearProgress />}
         {detail.error && (
           <Alert
@@ -244,11 +433,33 @@ export function OwnerAdjustmentDetail({ id }: { id: string }) {
         )}
         {detail.data && (
           <>
-            <Typography>
-              {detail.data.locationName} · Phòng {detail.data.roomNumber} ·{' '}
-              {adjustmentStatus(detail.data.status)}
-            </Typography>
-            <Typography>Lý do yêu cầu: {detail.data.reason}</Typography>
+            <Stack direction="row" sx={{ flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+              <Typography sx={{ fontWeight: 700 }}>
+                {detail.data.locationName} · Phòng {detail.data.roomNumber}
+              </Typography>
+              <Chip
+                size="small"
+                color={
+                  detail.data.status === 'Pending'
+                    ? 'warning'
+                    : detail.data.status === 'Approved'
+                      ? 'success'
+                      : 'default'
+                }
+                label={adjustmentStatus(detail.data.status)}
+              />
+            </Stack>
+            <Paper
+              variant="outlined"
+              sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1.5 }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                Lý do khách thuê gửi
+              </Typography>
+              <Typography sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
+                Lý do yêu cầu: {detail.data.reason}
+              </Typography>
+            </Paper>
             <Typography>
               Khoản tranh chấp: {detail.data.chargeCode ?? 'Toàn hóa đơn'} · Khi gửi:{' '}
               {formatContractMoney(detail.data.currentAmount)} · Đề xuất:{' '}
@@ -266,14 +477,37 @@ export function OwnerAdjustmentDetail({ id }: { id: string }) {
               Hóa đơn gốc khi gửi: {snapshotTotal(detail.data)} · Gửi lúc{' '}
               {formatInstant(detail.data.submittedAt)}
             </Typography>
-            {detail.data.currentInvoice.lines.map((line) => (
-              <Typography key={line.id}>
-                {line.name}: {formatContractMoney(line.amount)}
-                {line.calculatedAmount != null
-                  ? ` · Trước correction: ${formatContractMoney(line.calculatedAmount)}`
-                  : ''}
-              </Typography>
-            ))}
+            {detail.data.currentInvoice.lines.length > 0 && (
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                  Các khoản trên hóa đơn hiện tại
+                </Typography>
+                <Stack spacing={0.75}>
+                  {detail.data.currentInvoice.lines.map((line) => (
+                    <Stack
+                      key={line.id}
+                      direction={{ xs: 'column', sm: 'row' }}
+                      sx={{
+                        justifyContent: 'space-between',
+                        gap: 0.5,
+                        px: 1.5,
+                        py: 1,
+                        bgcolor: 'background.default',
+                        borderRadius: 1,
+                      }}
+                    >
+                      <Typography variant="body2">{line.name}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                        {formatContractMoney(line.amount)}
+                        {line.calculatedAmount != null
+                          ? ` · Trước correction: ${formatContractMoney(line.calculatedAmount)}`
+                          : ''}
+                      </Typography>
+                    </Stack>
+                  ))}
+                </Stack>
+              </Box>
+            )}
             {detail.data.financials && <FinancialSummary value={detail.data.financials} />}
             {detail.data.evidence.map((e, index) => (
               <PrivateEvidence key={e.id} requestId={id} fileId={e.id} number={index + 1} />
@@ -306,7 +540,6 @@ export function OwnerAdjustmentDetail({ id }: { id: string }) {
                 }}
               />
             )}
-            <Button onClick={() => void detail.refetch()}>Tải lại yêu cầu</Button>
           </>
         )}
       </Stack>

@@ -1,8 +1,13 @@
 import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
+  Box,
   Button,
+  Chip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -16,9 +21,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
+  formatBillingDecimal,
   invoiceError,
   missingBillingInput,
 } from '../../../../../packages/client-core/src/invoices';
@@ -83,12 +90,14 @@ export function LiveAutomationPage() {
     <>
       <PageHeader
         title="Lịch tự động & Thông báo"
-        subtitle="Lịch theo cơ sở và kỳ, múi giờ Asia/Ho_Chi_Minh."
+        subtitle="Theo dõi tiến độ ghi số, lập nháp, phát hành và những dữ liệu cần xử lý trong từng kỳ."
+        actions={
+          <Button size="small" component={Link} variant="outlined" to="/pricing">
+            Thiết lập giá & lịch hóa đơn
+          </Button>
+        }
       />
       <Stack spacing={2}>
-        <Button component={Link} to="/pricing">
-          Cấu hình giá, lịch Draft / Final / hạn thanh toán
-        </Button>
         {locations.isPending && <LinearProgress />}
         {locations.error && (
           <Alert severity="error">
@@ -97,26 +106,49 @@ export function LiveAutomationPage() {
           </Alert>
         )}
         {locations.data?.length === 0 && <Alert severity="info">Chưa có cơ sở.</Alert>}
-        <TextField
-          select
-          label="Cơ sở tự động"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-        >
-          <MenuItem value="">Chọn cơ sở</MenuItem>
-          {locations.data?.map((l) => (
-            <MenuItem key={l.id} value={l.id}>
-              {l.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          type="month"
-          label="Kỳ hóa đơn"
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
+        <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
+          <Stack spacing={1.5}>
+            <Box>
+              <Typography sx={{ fontWeight: 700 }}>Kỳ cần theo dõi</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Chọn cơ sở và kỳ hóa đơn để xem lịch chạy thực tế và xử lý các mục đang chờ.
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                gap: 2,
+              }}
+            >
+              <TextField
+                select
+                size="small"
+                label="Cơ sở tự động"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              >
+                <MenuItem value="">Chọn cơ sở</MenuItem>
+                {locations.data?.map((l) => (
+                  <MenuItem key={l.id} value={l.id}>
+                    {l.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                size="small"
+                type="month"
+                label="Kỳ hóa đơn"
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Box>
+          </Stack>
+        </Paper>
+        {locations.isSuccess && (!location || !/^\d{4}-\d{2}$/.test(period)) && (
+          <Alert severity="info">Chọn cơ sở và kỳ hóa đơn để hiển thị tiến độ tự động.</Alert>
+        )}
         {location && /^\d{4}-\d{2}$/.test(period) && (
           <AutomationLocation
             key={location + period + session?.userId}
@@ -133,6 +165,9 @@ function AutomationLocation({ location, period }: { location: string; period: st
   const cache = useQueryClient();
   const { session } = useAuth();
   const [settings, setSettings] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [showRepresentative, setShowRepresentative] = useState(false);
+  const [showDeliveries, setShowDeliveries] = useState(false);
   const key = ['automation', session?.userId, location, period];
   const query = `locationId=${location}&period=${period}`;
   const data = useQuery({
@@ -185,16 +220,65 @@ function AutomationLocation({ location, period }: { location: string; period: st
       setBusy(false);
     }
   }
+  const needsRepresentative = data.data?.executions.some((execution) =>
+    automationIssues(execution.exceptionsJson).some(
+      (issue) => issue.code === 'representative_selection_required',
+    ),
+  );
   return (
     <Stack spacing={2}>
-      <Button onClick={() => void data.refetch()}>Làm mới lịch và kết quả</Button>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1 }}
+      >
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Tổng quan kỳ {period.slice(0, 7)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Kết quả được đồng bộ với dữ liệu máy chủ.
+          </Typography>
+        </Box>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => {
+            void data.refetch();
+            void cache.invalidateQueries({
+              queryKey: ['automation-drafts', session?.userId, location, period],
+            });
+          }}
+        >
+          Làm mới lịch và kết quả
+        </Button>
+      </Stack>
       {data.isPending && <LinearProgress />}
       {data.error && <Alert severity="error">{invoiceError(data.error)}</Alert>}
       {error && <Alert severity="error">{error}</Alert>}
       {notice && <Alert severity="info">{notice}</Alert>}
       {data.data && (
         <>
-          <Button onClick={() => setSettings(true)}>Cấu hình lịch hóa đơn</Button>
+          <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 2 }}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1.5 }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 700 }}>Thao tác cho kỳ đang xem</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Theo dõi các bước bên dưới hoặc mở cấu hình để thay đổi lịch áp dụng.
+                </Typography>
+              </Box>
+              <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
+                <Button variant="outlined" component={Link} to="/invoices">
+                  Mở danh sách hóa đơn
+                </Button>
+                <Button variant="outlined" onClick={() => setSettings(true)}>
+                  Cấu hình lịch hóa đơn
+                </Button>
+              </Stack>
+            </Stack>
+          </Paper>
           <Dialog
             open={settings}
             onClose={() => setSettings(false)}
@@ -221,60 +305,157 @@ function AutomationLocation({ location, period }: { location: string; period: st
               <Button onClick={() => setSettings(false)}>Đóng cấu hình lịch</Button>
             </DialogActions>
           </Dialog>
-          <Paper sx={{ p: 2 }}>
+          <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
             <Stack spacing={2}>
-              <Typography variant="h6">Lịch kỳ đang xem</Typography>
-              <Alert severity={data.data.preview.workerEnabled ? 'info' : 'warning'}>
-                {data.data.preview.workerEnabled
-                  ? 'Worker tự động đang bật trên máy chủ này.'
-                  : 'Worker tự động đang tắt trên máy chủ này. Chạy ngay chỉ là thao tác Development/Testing.'}
-              </Alert>
-              <Typography>
+              <Stack
+                direction="row"
+                sx={{
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  01 · Lịch chạy kỳ này
+                </Typography>
+                <Chip
+                  size="small"
+                  color={data.data.preview.workerEnabled ? 'success' : 'default'}
+                  variant="outlined"
+                  label={data.data.preview.workerEnabled ? 'Worker đang bật' : 'Worker đang tắt'}
+                />
+              </Stack>
+              {!data.data.preview.workerEnabled && (
+                <Alert severity="warning">
+                  Worker tự động đang tắt trên máy chủ. Chạy ngay chỉ dùng trong môi trường
+                  Development/Testing khi máy chủ cho phép.
+                </Alert>
+              )}
+              <Typography variant="body2" color="text.secondary">
                 Ngày nghiệp vụ: {data.data.preview.businessDate} · {data.data.preview.timeZone}
               </Typography>
               {data.data.preview.phases.length === 0 && (
-                <Alert severity="warning">Thiếu cấu hình tự động cho kỳ này.</Alert>
-              )}
-              {data.data.preview.phases.map((p) => (
-                <Stack
-                  key={p.phase}
-                  direction="row"
-                  spacing={2}
-                  sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+                <Alert
+                  severity="warning"
+                  action={<Button onClick={() => setSettings(true)}>Cấu hình ngay</Button>}
                 >
-                  <Typography>
-                    {phaseLabel[p.phase]} · {p.scheduledDate} ·{' '}
-                    {p.eligible
-                      ? 'Đến lịch, cần kiểm tra dữ liệu'
-                      : 'Chưa đến lịch hoặc chưa bật quyền'}
-                  </Typography>
-                  {data.data.preview.developerActionsEnabled && (
-                    <Button disabled={!p.eligible || busy} onClick={() => void run(p.phase)}>
-                      Chạy ngay: {phaseLabel[p.phase]}
-                    </Button>
-                  )}
-                </Stack>
-              ))}
-              <Typography variant="body2">
+                  Chưa có lịch tự động cho kỳ này.
+                </Alert>
+              )}
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, minmax(0, 1fr))' },
+                  gap: 1.5,
+                }}
+              >
+                {data.data.preview.phases.map((p, i) => (
+                  <Paper
+                    key={p.phase}
+                    variant="outlined"
+                    sx={{ p: 2, borderRadius: 1.5, minWidth: 0 }}
+                  >
+                    <Stack spacing={1.5}>
+                      <Stack
+                        direction="row"
+                        sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          Bước {i + 1}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          color={p.eligible ? 'warning' : 'default'}
+                          variant="outlined"
+                          label={p.eligible ? 'Đến lịch' : 'Chưa đến lịch'}
+                        />
+                      </Stack>
+                      <Box>
+                        <Typography sx={{ fontWeight: 700 }}>{phaseLabel[p.phase]}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Ngày dự kiến: {p.scheduledDate.split('-').reverse().join('/')}
+                        </Typography>
+                      </Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {p.eligible
+                          ? 'Đến lịch, cần kiểm tra dữ liệu'
+                          : 'Chưa đến lịch hoặc chưa bật quyền'}
+                      </Typography>
+                      {data.data.preview.developerActionsEnabled && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={!p.eligible || busy}
+                          onClick={() => void run(p.phase)}
+                        >
+                          Chạy ngay: {phaseLabel[p.phase]}
+                        </Button>
+                      )}
+                    </Stack>
+                  </Paper>
+                ))}
+              </Box>
+              <Typography variant="caption" color="text.secondary">
                 Lần tiếp theo phụ thuộc ngày cấu hình và kết quả gần nhất. Worker bỏ qua lần đã hoàn
                 tất; PendingInputs được kiểm tra lại, Failed dừng tự động sau 4 lần xử lý.
               </Typography>
             </Stack>
           </Paper>
-          <Typography variant="h6">Kết quả & Ngoại lệ</Typography>
+          <AutomationDrafts location={location} period={period} />
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              03 · Kết quả & việc cần xử lý
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Các cảnh báo bên dưới lấy từ kết quả chạy thực tế. Mở công việc tương ứng để xử lý.
+            </Typography>
+          </Box>
+          {needsRepresentative && (
+            <Alert
+              severity="warning"
+              action={
+                <Button size="small" onClick={() => setShowRepresentative(true)}>
+                  Chọn hợp đồng
+                </Button>
+              }
+            >
+              Có phòng/kỳ đang thiếu hợp đồng đại diện. Mở mục hợp đồng bên dưới để chọn.
+            </Alert>
+          )}
           {data.data.executions.length === 0 && (
             <Alert severity="info">Chưa có lần chạy cho cơ sở/kỳ này.</Alert>
           )}
           {data.data.executions.map((e) => (
-            <Paper key={e.id} sx={{ p: 2 }}>
+            <Paper key={e.id} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
               <Stack spacing={1}>
-                <Typography variant="h6">
-                  {phaseLabel[e.phase]} · {e.status}
-                </Typography>
-                <Typography>
+                <Stack
+                  direction="row"
+                  sx={{
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 1,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <Typography sx={{ fontWeight: 700 }}>{phaseLabel[e.phase]}</Typography>
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    color={
+                      e.status === 'Failed'
+                        ? 'error'
+                        : e.status === 'Completed'
+                          ? 'success'
+                          : 'warning'
+                    }
+                    label={e.status}
+                  />
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
                   Bắt đầu: {date(e.lastStartedAt)} · Kết thúc: {date(e.finishedAt)}
                 </Typography>
-                <Typography>
+                <Typography variant="body2">
                   Tạo: {e.createdCount} · Đã tồn tại / replay: {e.existingCount} · Lần xử lý:{' '}
                   {e.attempts}
                 </Typography>
@@ -291,40 +472,286 @@ function AutomationLocation({ location, period }: { location: string; period: st
                         Mở công việc
                       </Button>
                     )}
+                    {!issue.taskId &&
+                      [
+                        'active_meter_configuration_required',
+                        'meter_replacement_review_required',
+                      ].includes(issue.code) && (
+                        <Button component={Link} to="/meters" size="small">
+                          Kiểm tra đồng hồ
+                        </Button>
+                      )}
+                    {issue.code === 'representative_selection_required' && (
+                      <Button size="small" onClick={() => setShowRepresentative(true)}>
+                        Chọn hợp đồng đại diện
+                      </Button>
+                    )}
+                    {[
+                      'draft_invoice_required',
+                      'draft_missing_inputs',
+                      'confirmed_billing_inputs_required',
+                    ].includes(issue.code) && (
+                      <Button size="small" component={Link} to="/invoices">
+                        Xem hóa đơn
+                      </Button>
+                    )}
+                    {issue.code === 'automation_authorization_changed' && (
+                      <Button size="small" onClick={() => setSettings(true)}>
+                        Kiểm tra cấu hình
+                      </Button>
+                    )}
                   </Alert>
                 ))}
               </Stack>
             </Paper>
           ))}
-          <Typography variant="h6">Lịch sử xử lý (tối đa 100 lần gần nhất)</Typography>
-          {data.data.attempts.map((a) => (
-            <Typography key={a.id}>
-              Lần {a.sequence} · {a.status} · {date(a.startedAt)} → {date(a.finishedAt)}
-            </Typography>
-          ))}
-          <Typography variant="h6">Hàng đợi bền vững (30 lượt gần nhất)</Typography>
-          {data.data.queue.length === 0 && (
-            <Typography>Chưa có lượt chạy được scheduler đưa vào hàng đợi.</Typography>
-          )}
-          {data.data.queue.map((j) => (
-            <Paper key={j.id} sx={{ p: 2 }}>
-              <Typography>
-                {j.name} · {j.state} · Lần {j.attempts}/4
-              </Typography>
-              <Typography>
-                Đến lượt / thử lại: {date(j.availableAt)}
-                {j.lockedUntil ? ` · Lease đến ${date(j.lockedUntil)}` : ''}
-              </Typography>
-              {j.lastErrorCode && <Alert severity="warning">{j.lastErrorCode}</Alert>}
-            </Paper>
-          ))}
-          <RepresentativeForm location={location} period={period} />
-          <DeliveryMonitor location={location} />
+          <Accordion
+            disableGutters
+            variant="outlined"
+            expanded={showRepresentative}
+            onChange={(_, expanded) => setShowRepresentative(expanded)}
+            sx={{ borderRadius: '8px !important', overflow: 'hidden' }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+              <Stack sx={{ gap: 0.25 }}>
+                <Typography sx={{ fontWeight: 700 }}>04 · Chọn hợp đồng đại diện</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Mở khi nhiều hợp đồng cùng thuộc một phòng/kỳ hoặc có cảnh báo cần chọn
+                </Typography>
+              </Stack>
+            </AccordionSummary>
+            <AccordionDetails>
+              <RepresentativeForm location={location} period={period} />
+            </AccordionDetails>
+          </Accordion>
+          <Accordion
+            disableGutters
+            variant="outlined"
+            expanded={showDeliveries}
+            onChange={(_, expanded) => setShowDeliveries(expanded)}
+            sx={{ borderRadius: '8px !important', overflow: 'hidden' }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+              <Stack sx={{ gap: 0.25 }}>
+                <Typography sx={{ fontWeight: 700 }}>05 · Theo dõi gửi thông báo</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Kiểm tra email/push và trạng thái các lần gửi khi cần
+                </Typography>
+              </Stack>
+            </AccordionSummary>
+            <AccordionDetails>
+              <DeliveryMonitor location={location} />
+            </AccordionDetails>
+          </Accordion>
+          <Accordion
+            disableGutters
+            variant="outlined"
+            expanded={showDiagnostics}
+            onChange={(_, expanded) => setShowDiagnostics(expanded)}
+            sx={{ borderRadius: '8px !important', overflow: 'hidden' }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+              <Stack sx={{ gap: 0.25 }}>
+                <Typography sx={{ fontWeight: 700 }}>Lịch sử & hàng đợi xử lý</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {data.data.attempts.length} lần xử lý · {data.data.queue.length} mục hàng đợi
+                </Typography>
+              </Stack>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={2}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Lịch sử xử lý (tối đa 100 lần gần nhất)
+                </Typography>
+                {data.data.attempts.length === 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Chưa có lịch sử xử lý.
+                  </Typography>
+                )}
+                {data.data.attempts.map((a) => (
+                  <Typography key={a.id} variant="body2" color="text.secondary">
+                    Lần {a.sequence} · {a.status} · {date(a.startedAt)} → {date(a.finishedAt)}
+                  </Typography>
+                ))}
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Hàng đợi xử lý (30 lượt gần nhất)
+                </Typography>
+                {data.data.queue.length === 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Chưa có lượt chạy được scheduler đưa vào hàng đợi.
+                  </Typography>
+                )}
+                {data.data.queue.map((j) => (
+                  <Paper key={j.id} variant="outlined" sx={{ p: 1.75, borderRadius: 1.5 }}>
+                    <Typography sx={{ fontWeight: 600 }}>
+                      {j.name} · {j.state} · Lần {j.attempts}/4
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Đến lượt / thử lại: {date(j.availableAt)}
+                      {j.lockedUntil ? ` · Lease đến ${date(j.lockedUntil)}` : ''}
+                    </Typography>
+                    {j.lastErrorCode && <Alert severity="warning">{j.lastErrorCode}</Alert>}
+                  </Paper>
+                ))}
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
         </>
       )}
     </Stack>
   );
 }
+function AutomationDrafts({ location, period }: { location: string; period: string }) {
+  const api = useInvoiceApi();
+  const cache = useQueryClient();
+  const { session } = useAuth();
+  const [page, setPage] = useState(1);
+  const [activeId, setActiveId] = useState('');
+  const [feedback, setFeedback] = useState<{ room: string; error?: string }>();
+  const lock = useRef(false);
+  const key = ['automation-drafts', session?.userId, location, period, page];
+  const drafts = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) =>
+      api.list(page, signal, '', { locationId: location, billingPeriod: period, status: 'Draft' }),
+  });
+
+  async function refreshDraft(id: string, version: number, room: string) {
+    if (lock.current) return;
+    lock.current = true;
+    setActiveId(id);
+    setFeedback(undefined);
+    try {
+      const updated = await api.refresh(id, version);
+      await cache.cancelQueries({ queryKey: key, exact: true });
+      cache.setQueryData(
+        key,
+        (previous: typeof drafts.data) =>
+          previous && {
+            ...previous,
+            items: previous.items.map((item) => (item.id === id ? updated : item)),
+          },
+      );
+      setFeedback({ room });
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ['invoices', session?.userId] }),
+        cache.invalidateQueries({ queryKey: ['invoice', session?.userId, id] }),
+      ]);
+    } catch (e) {
+      setFeedback({ room, error: invoiceError(e) });
+      const result = await drafts.refetch();
+      if (page > 1 && result.data?.items.length === 0) setPage(page - 1);
+    } finally {
+      lock.current = false;
+      setActiveId('');
+    }
+  }
+
+  return (
+    <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
+      <Stack spacing={2}>
+        <Stack
+          direction="row"
+          sx={{ justifyContent: 'space-between', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}
+        >
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              02 · Hóa đơn nháp của kỳ
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Cập nhật từng bản nháp để lấy lại số liệu đã xác nhận trước khi phát hành.
+            </Typography>
+          </Box>
+          {drafts.data && (
+            <Chip size="small" variant="outlined" label={`${drafts.data.totalCount} bản nháp`} />
+          )}
+        </Stack>
+        {drafts.isPending && <LinearProgress />}
+        {drafts.error && <Alert severity="error">{invoiceError(drafts.error)}</Alert>}
+        {feedback && (
+          <Alert severity={feedback.error ? 'error' : 'success'}>
+            Phòng {feedback.room} · {feedback.error ?? 'Đã tính lại hóa đơn nháp.'}
+          </Alert>
+        )}
+        {drafts.data?.totalCount === 0 && <Alert severity="info">Chưa có hóa đơn nháp.</Alert>}
+        {drafts.data?.items.map((draft) => (
+          <Paper variant="outlined" key={draft.id} sx={{ p: 1.75, borderRadius: 1.5 }}>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              sx={{ justifyContent: 'space-between', gap: 1.5, alignItems: { md: 'center' } }}
+            >
+              <Stack spacing={0.5} sx={{ minWidth: 0, flex: 1 }}>
+                <Stack direction="row" sx={{ gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontWeight: 700 }}>Phòng {draft.roomNumber}</Typography>
+                  <Chip
+                    size="small"
+                    color={draft.missingInputs.length > 0 ? 'warning' : 'success'}
+                    variant="outlined"
+                    label={draft.missingInputs.length > 0 ? 'Thiếu dữ liệu' : 'Đủ dữ liệu'}
+                  />
+                </Stack>
+                <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                  {formatBillingDecimal(draft.total)} ₫
+                </Typography>
+              </Stack>
+              {draft.missingInputs.length > 0 && (
+                <Alert
+                  severity="warning"
+                  sx={{ flex: 2, width: { xs: '100%', md: 'auto' }, py: 0.25 }}
+                >
+                  {draft.missingInputs.map((code) => (
+                    <Typography key={code} variant="body2">
+                      Thiếu: {missingBillingInput(code)}
+                    </Typography>
+                  ))}
+                </Alert>
+              )}
+              <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
+                <Button size="small" component={Link} to={`/invoices?invoiceId=${draft.id}`}>
+                  Xem hóa đơn
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={!!activeId}
+                  onClick={() => void refreshDraft(draft.id, draft.version, draft.roomNumber)}
+                >
+                  {activeId === draft.id ? 'Đang cập nhật…' : 'Cập nhật Invoice Draft'}
+                </Button>
+              </Stack>
+            </Stack>
+          </Paper>
+        ))}
+        {drafts.data && (page > 1 || drafts.data.totalCount > drafts.data.pageSize) && (
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ justifyContent: 'flex-end', alignItems: 'center' }}
+          >
+            <Button
+              size="small"
+              disabled={page === 1 || !!activeId}
+              onClick={() => setPage(page - 1)}
+            >
+              Trang trước
+            </Button>
+            <Typography variant="body2" color="text.secondary">
+              Trang {page}
+            </Typography>
+            <Button
+              size="small"
+              disabled={page * drafts.data.pageSize >= drafts.data.totalCount || !!activeId}
+              onClick={() => setPage(page + 1)}
+            >
+              Trang sau
+            </Button>
+          </Stack>
+        )}
+      </Stack>
+    </Paper>
+  );
+}
+
 function AutomationForm({
   location,
   period,
@@ -354,7 +781,7 @@ function AutomationForm({
     .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom) || b.version - a.version)[0];
   const c = selected ? automationCalendar(selected) : null;
   return (
-    <Paper sx={{ p: 2 }}>
+    <Box sx={{ pt: 1 }}>
       <Stack
         component="form"
         spacing={2}
@@ -388,71 +815,93 @@ function AutomationForm({
             });
         }}
       >
-        <Typography variant="h6">Cấu hình tự động</Typography>
-        <Typography>
-          Phiên bản mới nhất: {current?.version ?? 'Chưa có'} · Lịch hóa đơn hiện tại:{' '}
-          {calendarVersion || 'Chưa cấu hình'}
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Cấu hình tự động
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Phiên bản mới nhất: {current?.version ?? 'Chưa có'} · Lịch hóa đơn hiện tại:{' '}
+            {calendarVersion || 'Chưa cấu hình'}
+          </Typography>
+        </Box>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          Thời điểm áp dụng & ghi số
         </Typography>
-        <TextField
-          required
-          type="month"
-          label="Áp dụng từ kỳ"
-          value={effective}
-          onChange={(e) => setEffective(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
-        <TextField
-          required
-          type="number"
-          label="Ngày giao việc ghi số"
-          value={day}
-          onChange={(e) => setDay(e.target.value)}
-          slotProps={{ htmlInput: { min: 1, max: 31 } }}
-        />
-        <TextField
-          required
-          type="number"
-          label="Ngày hết hạn ghi số"
-          value={due}
-          onChange={(e) => setDue(e.target.value)}
-          slotProps={{ htmlInput: { min: 1, max: 31 } }}
-        />
-        <TextField
-          required
-          select
-          label="Tháng cộng thêm cho hạn ghi số"
-          value={offset}
-          onChange={(e) => setOffset(e.target.value)}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+            gap: 2,
+          }}
         >
-          <MenuItem value="">Chọn tháng</MenuItem>
-          {[0, 1, 2].map((v) => (
-            <MenuItem key={v} value={String(v)}>
-              {v}
-            </MenuItem>
-          ))}
-        </TextField>
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={enabled}
-              onChange={(e) => {
-                setEnabled(e.target.checked);
-                if (!e.target.checked) setFinal(false);
-              }}
+          <TextField
+            required
+            type="month"
+            label="Áp dụng từ kỳ"
+            value={effective}
+            onChange={(e) => setEffective(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            required
+            type="number"
+            label="Ngày giao việc ghi số"
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+            slotProps={{ htmlInput: { min: 1, max: 31 } }}
+          />
+          <TextField
+            required
+            type="number"
+            label="Ngày hết hạn ghi số"
+            value={due}
+            onChange={(e) => setDue(e.target.value)}
+            slotProps={{ htmlInput: { min: 1, max: 31 } }}
+          />
+          <TextField
+            required
+            select
+            label="Tháng cộng thêm cho hạn ghi số"
+            value={offset}
+            onChange={(e) => setOffset(e.target.value)}
+          >
+            <MenuItem value="">Chọn tháng</MenuItem>
+            {[0, 1, 2].map((v) => (
+              <MenuItem key={v} value={String(v)}>
+                {v}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Box>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          Quyền tự động
+        </Typography>
+        <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1.5 }}>
+          <Stack spacing={0.5}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={enabled}
+                  onChange={(e) => {
+                    setEnabled(e.target.checked);
+                    if (!e.target.checked) setFinal(false);
+                  }}
+                />
+              }
+              label="Bật tự động cho cơ sở"
             />
-          }
-          label="Bật tự động cho cơ sở"
-        />
-        <FormControlLabel
-          control={
-            <Checkbox
-              disabled={!enabled}
-              checked={final}
-              onChange={(e) => setFinal(e.target.checked)}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  disabled={!enabled}
+                  checked={final}
+                  onChange={(e) => setFinal(e.target.checked)}
+                />
+              }
+              label="Tôi cho phép tự động phát hành khi đủ dữ liệu theo lịch đã lưu"
             />
-          }
-          label="Tôi cho phép tự động phát hành khi đủ dữ liệu theo lịch đã lưu"
-        />
+          </Stack>
+        </Paper>
         {c && (
           <Alert severity="info">
             Kỳ đang xem dùng phiên bản tự động {selected.version}, lịch hóa đơn{' '}
@@ -470,18 +919,26 @@ function AutomationForm({
         <Button
           type="submit"
           variant="contained"
+          sx={{ alignSelf: { sm: 'flex-start' } }}
           disabled={busy || !calendarVersion || !day || !due || offset === ''}
         >
           Lưu phiên bản tự động
         </Button>
-        {history.map((p) => (
-          <Typography key={p.id} variant="body2">
-            v{p.version} · từ {p.effectiveFrom} · {p.enabled ? 'Bật' : 'Tắt'} · quyền Final:{' '}
-            {p.authorizeAutomaticFinalization ? 'Có' : 'Không'} · {date(p.recordedAt)}
-          </Typography>
-        ))}
+        {!!history.length && (
+          <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+              Lịch sử cấu hình
+            </Typography>
+            {history.map((p) => (
+              <Typography key={p.id} variant="body2" color="text.secondary" sx={{ py: 0.5 }}>
+                v{p.version} · từ {p.effectiveFrom} · {p.enabled ? 'Bật' : 'Tắt'} · quyền Final:{' '}
+                {p.authorizeAutomaticFinalization ? 'Có' : 'Không'} · {date(p.recordedAt)}
+              </Typography>
+            ))}
+          </Box>
+        )}
       </Stack>
-    </Paper>
+    </Box>
   );
 }
 function RepresentativeForm({ location, period }: { location: string; period: string }) {
@@ -524,62 +981,83 @@ function RepresentativeForm({ location, period }: { location: string; period: st
       }>(`/api/v1/rooms/${room}/occupancy-history`, { signal }),
   });
   return (
-    <Paper sx={{ p: 2 }}>
+    <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
       <Stack spacing={2}>
-        <Typography variant="h6">Hợp đồng đại diện hóa đơn phòng</Typography>
-        <Typography variant="body2">
-          Khi nhiều hợp đồng cùng kỳ, chọn đại diện từ lịch sử thuê phòng. Máy chủ kiểm tra phòng,
-          kỳ và quyền trước khi lưu.
-        </Typography>
-        <Button component={Link} to="/contracts">
-          Xem hợp đồng
-        </Button>
-        <TextField
-          select
-          label="Phòng chọn đại diện"
-          value={room}
-          onChange={(e) => {
-            setRoom(e.target.value);
-            setContract('');
-            setNotice('');
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          sx={{ gap: 1, justifyContent: 'space-between', alignItems: { sm: 'center' } }}
+        >
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              04 · Hợp đồng đại diện
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Khi có nhiều hợp đồng trong cùng kỳ, chọn đại diện từ lịch sử thuê phòng.
+            </Typography>
+          </Box>
+          <Button component={Link} to="/contracts" size="small">
+            Xem hợp đồng
+          </Button>
+        </Stack>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            gap: 2,
           }}
         >
-          <MenuItem value="">Chọn phòng</MenuItem>
-          {rooms.data?.map((r) => (
-            <MenuItem key={r.id} value={r.id}>
-              {r.label}
-            </MenuItem>
-          ))}
-        </TextField>
+          <TextField
+            select
+            label="Phòng chọn đại diện"
+            value={room}
+            onChange={(e) => {
+              setRoom(e.target.value);
+              setContract('');
+              setNotice('');
+            }}
+          >
+            <MenuItem value="">Chọn phòng</MenuItem>
+            {rooms.data?.map((r) => (
+              <MenuItem key={r.id} value={r.id}>
+                {r.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Hợp đồng đại diện"
+            value={contract}
+            onChange={(e) => setContract(e.target.value)}
+            disabled={!room || contracts.isFetching}
+          >
+            <MenuItem value="">Chọn hợp đồng</MenuItem>
+            {contracts.data?.periods
+              .filter((c) => ['Active', 'Terminated', 'Superseded'].includes(c.contractStatus))
+              .map((c) => (
+                <MenuItem key={c.contractId} value={c.contractId}>
+                  {c.from} – {c.to} · {c.occupants.map((o) => o.displayLabel).join(', ')}
+                </MenuItem>
+              ))}
+          </TextField>
+        </Box>
         {(rooms.error || selection.error || contracts.error) && (
           <Alert severity="error">
             {invoiceError(rooms.error ?? selection.error ?? contracts.error)}
           </Alert>
         )}
         {selection.data && (
-          <Typography>
+          <Typography variant="body2" color="text.secondary">
             Đang chọn: {selection.data.contractId} · v{selection.data.version}
           </Typography>
         )}
-        <TextField
-          select
-          label="Hợp đồng đại diện"
-          value={contract}
-          onChange={(e) => setContract(e.target.value)}
-          disabled={!room || contracts.isFetching}
-        >
-          <MenuItem value="">Chọn hợp đồng</MenuItem>
-          {contracts.data?.periods
-            .filter((c) => ['Active', 'Terminated', 'Superseded'].includes(c.contractStatus))
-            .map((c) => (
-              <MenuItem key={c.contractId} value={c.contractId}>
-                {c.from} – {c.to} · {c.occupants.map((o) => o.displayLabel).join(', ')}
-              </MenuItem>
-            ))}
-        </TextField>
+        <Typography variant="caption" color="text.secondary">
+          Máy chủ kiểm tra phòng, kỳ và quyền trước khi lưu lựa chọn này.
+        </Typography>
         {error && <Alert severity="error">{error}</Alert>}
         {notice && <Alert severity="success">{notice}</Alert>}
         <Button
+          variant="contained"
+          sx={{ alignSelf: { sm: 'flex-start' } }}
           disabled={!room || !contract || !selection.isSuccess || busy}
           onClick={() => {
             if (lock.current) return;
@@ -639,9 +1117,28 @@ function DeliveryMonitor({ location }: { location: string }) {
     refetchInterval: 30000,
   });
   return (
-    <Paper sx={{ p: 2 }}>
-      <Stack spacing={1}>
-        <Typography variant="h6">Gửi thông báo bên ngoài</Typography>
+    <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
+      <Stack spacing={1.5}>
+        <Stack
+          direction="row"
+          sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
+        >
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              05 · Gửi thông báo bên ngoài
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Tình trạng chuyển tiếp email / push theo cấu hình dịch vụ.
+            </Typography>
+          </Box>
+          {data.data && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`${data.data.deliveries.totalCount} lượt gửi`}
+            />
+          )}
+        </Stack>
         {data.isPending && <LinearProgress />}
         {data.error && <Alert severity="error">{invoiceError(data.error)}</Alert>}
         {data.data && (
@@ -649,25 +1146,56 @@ function DeliveryMonitor({ location }: { location: string }) {
             <Alert severity={data.data.configured ? 'info' : 'warning'}>
               {data.data.configured
                 ? `Provider đã cấu hình; tối đa ${data.data.maxAttempts} lần.`
-                : 'Unconfigured: chưa có provider chính thức. Hộp thông báo trong ứng dụng vẫn hoạt động.'}
+                : 'Chưa có provider gửi bên ngoài. Hộp thông báo trong ứng dụng vẫn hoạt động.'}
             </Alert>
-            {data.data.deliveries.items.map((d) => (
-              <Typography key={d.id}>
-                {d.category} · {d.state} · Lần {d.attempts} · Lần tới: {date(d.nextAttemptAt)}{' '}
-                {d.errorCode}
+            {data.data.deliveries.items.length === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                Chưa có lượt gửi bên ngoài trong danh sách này.
               </Typography>
+            )}
+            {data.data.deliveries.items.map((d) => (
+              <Paper variant="outlined" key={d.id} sx={{ p: 1.5, borderRadius: 1.5 }}>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  sx={{ gap: 1, alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+                >
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                      {d.category}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Lần {d.attempts} · Lần tới: {date(d.nextAttemptAt)}
+                    </Typography>
+                  </Box>
+                  <Chip size="small" variant="outlined" label={d.state} />
+                </Stack>
+                {d.errorCode && (
+                  <Typography variant="caption" color="error.main">
+                    Mã lỗi: {d.errorCode}
+                  </Typography>
+                )}
+              </Paper>
             ))}
-            <Stack direction="row">
-              <Button disabled={page === 1} onClick={() => setPage(page - 1)}>
-                Trang trước
-              </Button>
-              <Button
-                disabled={page * 20 >= data.data.deliveries.totalCount}
-                onClick={() => setPage(page + 1)}
+            {(page > 1 || page * 20 < data.data.deliveries.totalCount) && (
+              <Stack
+                direction="row"
+                sx={{ alignItems: 'center', justifyContent: 'flex-end', gap: 1 }}
               >
-                Trang sau
-              </Button>
-            </Stack>
+                <Button size="small" disabled={page === 1} onClick={() => setPage(page - 1)}>
+                  Trang trước
+                </Button>
+                <Typography variant="body2" color="text.secondary">
+                  Trang {page}
+                </Typography>
+                <Button
+                  size="small"
+                  disabled={page * 20 >= data.data.deliveries.totalCount}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Trang sau
+                </Button>
+              </Stack>
+            )}
           </>
         )}
       </Stack>

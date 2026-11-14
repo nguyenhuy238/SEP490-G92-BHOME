@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@mui/material';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -142,4 +142,14 @@ it('retries the real list and displays an explicit empty state', async () => {
   mocks.api.list.mockResolvedValue({ items: [], totalCount: 0 });
   fireEvent.click(retry);
   await screen.findByText('Không có yêu cầu phù hợp.');
+});
+it('opens an adjustment next to the list and returns without resetting list context', async () => {
+  mocks.api.list.mockResolvedValue({ items: [value], totalCount: 1 });
+  mount(<OwnerAdjustmentList />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Xem & xử lý' }));
+  expect(await screen.findByText('Xem & xử lý yêu cầu')).toBeInTheDocument();
+  expect(await screen.findByText('Sai tiền thuê', { exact: false })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  await waitFor(() => expect(screen.queryByText('Xem & xử lý yêu cầu')).not.toBeInTheDocument());
+  expect(screen.getByRole('button', { name: 'Xem & xử lý' })).toBeInTheDocument();
 });
