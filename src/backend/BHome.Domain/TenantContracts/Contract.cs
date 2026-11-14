@@ -11,6 +11,9 @@ public enum MoveOutStatus { Requested, Approved, Inspected, PendingSettlement, S
 // Signed versions are never edited. A renewal is a new version of the same tenancy.
 public sealed class Contract : AuditableEntity
 {
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string SigningMode { get; set; } = "";
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string InternalAcceptance { get; set; } = "{}";
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public bool InitialPaymentRequired { get; set; }
     [System.ComponentModel.DataAnnotations.Schema.NotMapped] public Guid? ParentContractId { get; set; }
     [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string OperatingPolicySnapshot { get; set; } = "";
     public Guid RoomId { get; set; }

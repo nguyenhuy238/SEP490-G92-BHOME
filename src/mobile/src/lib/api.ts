@@ -1,11 +1,10 @@
 import { requestDiagnostic } from '../../../../packages/client-core/src/api';
+import { invalidCredentialsMessage } from '../../../../packages/client-core/src/loginValidation';
 import { QueryCache } from './queryCache';
 import { mutationTags } from './queryPolicies';
+import type { TokenSession } from '../../../../packages/client-core/src/jwtSession';
 
-export interface Session {
-  userId: string;
-  roles: string[];
-  accessToken: string;
+export interface Session extends TokenSession {
   refreshToken: string;
 }
 export interface Proposal {
@@ -21,12 +20,17 @@ export interface Named {
   id: string;
   label: string;
   parentId?: string;
+  status?: string | null;
+  capacity?: number | null;
 }
 export interface Resident {
   id: string;
   roomId: string;
   displayLabel: string;
   verificationStatus: number;
+  residentType?: number;
+  confirmedAt?: string | null;
+  email?: string | null;
 }
 export type { MeterTask } from '../../../../packages/client-core/src/meter';
 export class MobileApiError extends Error {
@@ -47,6 +51,7 @@ export async function mobileResponse<T>(
   init: RequestInit,
   transport: typeof fetch,
   decode: (response: Response) => Promise<T>,
+  timeoutMilliseconds = 15000,
 ): Promise<T> {
   const controller = new AbortController();
   const cancel = () => controller.abort();
@@ -57,7 +62,7 @@ export async function mobileResponse<T>(
   const timeout = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, 15000);
+  }, timeoutMilliseconds);
   try {
     const response = await transport(base + path, {
       ...init,
@@ -138,18 +143,27 @@ export function errorMessage(error: unknown): string {
     return error.message;
   if (!(error instanceof MobileApiError))
     return 'Không thể hoàn thành. Kiểm tra kết nối và địa chỉ HTTPS.';
+  if (error.code === 'request_timeout' && contractDocumentTimeout(error.requestPath ?? '') > 15000)
+    return (
+      'Tạo hoặc hiển thị PDF mất quá nhiều thời gian. Bản nháp đã lưu vẫn được giữ; hãy thử tải lại bản xem trước.' +
+      requestDiagnostic(error)
+    );
   const messages: Record<string, string> = {
+    resident_email_already_associated:
+      'Email này đã gắn với một hồ sơ người ở. Hãy kiểm tra hồ sơ đã có hoặc sửa email nếu nhập nhầm.',
+    resident_email_required: 'Mỗi người ở cần một email riêng hợp lệ.',
     secure_storage_unavailable:
       'Không truy cập được kho bảo mật của thiết bị. Hãy mở khóa thiết bị và thử đăng nhập lại.',
     request_timeout:
       'Máy chủ không phản hồi trong 15 giây. Kết quả chưa được xác nhận; hãy tải lại trước khi gửi lại.',
     invalid_response:
       'Phản hồi máy chủ không đúng định dạng BHOME. Kiểm tra địa chỉ API và phiên bản ứng dụng.',
-    invalid_credentials: 'Email hoặc mật khẩu không đúng, hoặc tài khoản chưa thể đăng nhập.',
+    invalid_credentials: invalidCredentialsMessage,
     human_confirmation_required: 'Bạn cần xác nhận đã kiểm tra dữ liệu.',
     duplicate_or_conflicting_record:
       'Dữ liệu bị trùng hoặc đã thay đổi. Hãy tải lại danh sách; hệ thống không tự gộp hồ sơ.',
-    identity_already_confirmed: 'Hồ sơ đã xác nhận với nội dung khác. Hãy liên hệ Owner.',
+    identity_already_confirmed:
+      'Hồ sơ đã được xác nhận trước đó. Dữ liệu vừa nhập không được ghi đè. Dùng hồ sơ đã xác nhận để tiếp tục; liên hệ Owner nếu cần sửa hồ sơ.',
     confirmed_baseline_required: 'Cần xác nhận chỉ số ban đầu của đồng hồ trước.',
     meter_reset_or_rollover_requires_review:
       'Chỉ số giảm. Cần Owner xử lý thay/reset hoặc quay vòng đồng hồ theo quy trình riêng.',
@@ -192,6 +206,15 @@ export function errorMessage(error: unknown): string {
       'Yêu cầu chưa thành công. Hãy tải lại để kiểm tra.') + requestDiagnostic(error)
   );
 }
+// DOCX→PDF and PDF→PNG each have a 45-second server conversion deadline.
+// Ordinary requests keep their short timeout; mutations are never automatically replayed.
+function contractDocumentTimeout(path: string): number {
+  return /^\/api\/v1\/contracts\/main-drafts\/[a-f0-9-]{36}\/(?:signing-review|documents(?:\/[a-f0-9-]{36}\/pages\/[1-9][0-9]*)?)$/i.test(
+    path,
+  )
+    ? 60000
+    : 15000;
+}
 export class MobileApi {
   readonly queryCache = new QueryCache();
   constructor(
@@ -221,13 +244,47 @@ export class MobileApi {
     const original = this.token();
     if (original) headers.set('Authorization', 'Bearer ' + original);
     const sendOnce = () =>
-      mobileResponse(this.base, path, { ...init, headers }, this.transport, async (response) => {
-        if (response.status === 204) return undefined as T;
-        if (responseType === 'bytes') return new Uint8Array(await response.arrayBuffer()) as T;
-        return responseType === 'blob'
-          ? (response.blob() as Promise<T>)
-          : (response.json() as Promise<T>);
-      });
+      mobileResponse(
+        this.base,
+        path,
+        { ...init, headers },
+        this.transport,
+        async (response) => {
+          if (response.status === 204) return undefined as T;
+          if (responseType === 'bytes') {
+            const draftDocument =
+              /^\/api\/v1\/contracts\/main-drafts\/[^/]+\/documents\/[^/]+$/.test(path);
+            const mime = (response.headers.get('content-type') ?? '')
+              .split(';')[0]!
+              .trim()
+              .toLowerCase();
+            if (
+              draftDocument &&
+              ![
+                'application/pdf',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              ].includes(mime)
+            )
+              throw new MobileApiError(502, 'draft_download_invalid', path);
+            const bytes = new Uint8Array(await response.arrayBuffer());
+            if (draftDocument) {
+              const signature = mime === 'application/pdf' ? [37, 80, 68, 70, 45] : [80, 75, 3, 4];
+              if (
+                bytes.length < signature.length ||
+                signature.some((value, index) => bytes[index] !== value)
+              ) {
+                bytes.fill(0);
+                throw new MobileApiError(502, 'draft_download_invalid', path);
+              }
+            }
+            return bytes as T;
+          }
+          return responseType === 'blob'
+            ? (response.blob() as Promise<T>)
+            : (response.json() as Promise<T>);
+        },
+        contractDocumentTimeout(path),
+      );
     const send = async () => {
       try {
         return await sendOnce();

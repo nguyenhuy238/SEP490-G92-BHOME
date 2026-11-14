@@ -47,10 +47,13 @@ function probeMobileApi({ address, ca, expectedAddress, timeoutMs = 2500 }, get 
 
 module.exports = { probeMobileApi };
 if (require.main === module) {
-  const [address, certificate, expectedAddress] = process.argv.slice(2);
+  const [address, certificate, expectedAddress, timeout = '2500'] = process.argv.slice(2);
   try {
+    const timeoutMs = Number(timeout);
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000)
+      throw new Error('Invalid probe timeout.');
     const ca = new X509Certificate(readFileSync(certificate)).toString();
-    probeMobileApi({ address, ca, expectedAddress }).then((healthy) => {
+    probeMobileApi({ address, ca, expectedAddress, timeoutMs }).then((healthy) => {
       // This one-shot probe must also stop pending OS DNS work after the deadline.
       process.exit(healthy ? 0 : 1);
     });

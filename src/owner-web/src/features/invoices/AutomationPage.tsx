@@ -3,6 +3,10 @@ import { Link, useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   Checkbox,
   FormControlLabel,
   LinearProgress,
@@ -26,7 +30,7 @@ import {
   type AutomationExecution,
   type AutomationAttempt,
 } from '../../../../../packages/client-core/src/billingAutomation';
-import { PageHeader } from '../../components/common/PortalUI';
+import { PageHeader, FilterToolbar, StatusChip } from '../../components/common/PortalUI';
 import { isMockMode } from '../../services/config';
 import { useInvoiceApi } from './useInvoiceApi';
 
@@ -79,12 +83,13 @@ export function LiveAutomationPage() {
     <>
       <PageHeader
         title="Lịch tự động & Thông báo"
-        subtitle="Lịch theo cơ sở và kỳ, múi giờ Asia/Ho_Chi_Minh."
+        actions={
+          <Button component={Link} to="/pricing">
+            Cấu hình giá và lịch hóa đơn
+          </Button>
+        }
       />
       <Stack spacing={2}>
-        <Button component={Link} to="/pricing">
-          Cấu hình giá, lịch Draft / Final / hạn thanh toán
-        </Button>
         {locations.isPending && <LinearProgress />}
         {locations.error && (
           <Alert severity="error">
@@ -93,26 +98,28 @@ export function LiveAutomationPage() {
           </Alert>
         )}
         {locations.data?.length === 0 && <Alert severity="info">Chưa có cơ sở.</Alert>}
-        <TextField
-          select
-          label="Cơ sở tự động"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-        >
-          <MenuItem value="">Chọn cơ sở</MenuItem>
-          {locations.data?.map((l) => (
-            <MenuItem key={l.id} value={l.id}>
-              {l.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          type="month"
-          label="Kỳ hóa đơn"
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
+        <FilterToolbar>
+          <TextField
+            select
+            label="Cơ sở tự động"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+          >
+            <MenuItem value="">Chọn cơ sở</MenuItem>
+            {locations.data?.map((l) => (
+              <MenuItem key={l.id} value={l.id}>
+                {l.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            type="month"
+            label="Kỳ hóa đơn"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        </FilterToolbar>
         {location && /^\d{4}-\d{2}$/.test(period) && (
           <AutomationLocation
             key={location + period + session?.userId}
@@ -128,6 +135,7 @@ function AutomationLocation({ location, period }: { location: string; period: st
   const api = useInvoiceApi();
   const cache = useQueryClient();
   const { session } = useAuth();
+  const [settings, setSettings] = useState(false);
   const key = ['automation', session?.userId, location, period];
   const query = `locationId=${location}&period=${period}`;
   const data = useQuery({
@@ -182,24 +190,58 @@ function AutomationLocation({ location, period }: { location: string; period: st
   }
   return (
     <Stack spacing={2}>
-      <Button onClick={() => void data.refetch()}>Làm mới lịch và kết quả</Button>
+      <Stack
+        direction="row"
+        useFlexGap
+        spacing={1}
+        sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}
+      >
+        <Button disabled={data.isFetching} onClick={() => void data.refetch()}>
+          Làm mới lịch và kết quả
+        </Button>
+        {data.data && !data.error && (
+          <Button variant="outlined" onClick={() => setSettings(true)}>
+            Cấu hình lịch hóa đơn
+          </Button>
+        )}
+      </Stack>
       {data.isPending && <LinearProgress />}
       {data.error && <Alert severity="error">{invoiceError(data.error)}</Alert>}
       {error && <Alert severity="error">{error}</Alert>}
       {notice && <Alert severity="info">{notice}</Alert>}
-      {data.data && (
+      {data.data && !data.error && (
         <>
-          <AutomationForm
-            key={data.data.history[0]?.id ?? 'new'}
-            location={location}
-            period={period}
-            history={data.data.history}
-            calendarVersion={data.data.calendar?.version ?? 0}
-            saved={() => void cache.invalidateQueries({ queryKey: ['automation'] })}
-          />
-          <Paper sx={{ p: 2 }}>
-            <Stack spacing={2}>
-              <Typography variant="h6">Lịch kỳ đang xem</Typography>
+          <Dialog
+            open={settings}
+            onClose={() => setSettings(false)}
+            maxWidth="md"
+            fullWidth
+            aria-labelledby="automation-settings-title"
+          >
+            <DialogTitle id="automation-settings-title">Cấu hình lịch hóa đơn</DialogTitle>
+            <DialogContent>
+              {settings && (
+                <AutomationForm
+                  key={data.data.history[0]?.id ?? 'new'}
+                  location={location}
+                  period={period}
+                  history={data.data.history}
+                  calendarVersion={data.data.calendar?.version ?? 0}
+                  saved={() => {
+                    void cache.invalidateQueries({ queryKey: ['automation'] });
+                  }}
+                />
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSettings(false)}>Đóng cấu hình lịch</Button>
+            </DialogActions>
+          </Dialog>
+          <Paper variant="outlined" sx={{ p: 1.5 }}>
+            <Stack spacing={1.5}>
+              <Typography variant="h2" component="h2">
+                Lịch kỳ đang xem
+              </Typography>
               <Alert severity={data.data.preview.workerEnabled ? 'info' : 'warning'}>
                 {data.data.preview.workerEnabled
                   ? 'Worker tự động đang bật trên máy chủ này.'
@@ -219,11 +261,15 @@ function AutomationLocation({ location, period }: { location: string; period: st
                   sx={{ flexWrap: 'wrap', alignItems: 'center' }}
                 >
                   <Typography>
-                    {phaseLabel[p.phase]} · {p.scheduledDate} ·{' '}
-                    {p.eligible
-                      ? 'Đến lịch, cần kiểm tra dữ liệu'
-                      : 'Chưa đến lịch hoặc chưa bật quyền'}
+                    {phaseLabel[p.phase]} · {p.scheduledDate.split('-').reverse().join('/')}
                   </Typography>
+                  <StatusChip
+                    label={
+                      p.eligible
+                        ? 'Đến lịch, cần kiểm tra dữ liệu'
+                        : 'Chưa đến lịch hoặc chưa bật quyền'
+                    }
+                  />
                   {data.data.preview.developerActionsEnabled && (
                     <Button disabled={!p.eligible || busy} onClick={() => void run(p.phase)}>
                       Chạy ngay: {phaseLabel[p.phase]}
@@ -242,7 +288,7 @@ function AutomationLocation({ location, period }: { location: string; period: st
             <Alert severity="info">Chưa có lần chạy cho cơ sở/kỳ này.</Alert>
           )}
           {data.data.executions.map((e) => (
-            <Paper key={e.id} sx={{ p: 2 }}>
+            <Paper key={e.id} variant="outlined" sx={{ p: 1.5, overflowWrap: 'anywhere' }}>
               <Stack spacing={1}>
                 <Typography variant="h6">
                   {phaseLabel[e.phase]} · {e.status}
@@ -273,6 +319,9 @@ function AutomationLocation({ location, period }: { location: string; period: st
             </Paper>
           ))}
           <Typography variant="h6">Lịch sử xử lý (tối đa 100 lần gần nhất)</Typography>
+          {data.data.attempts.length === 0 && (
+            <Typography color="text.secondary">Chưa có lịch sử xử lý.</Typography>
+          )}
           {data.data.attempts.map((a) => (
             <Typography key={a.id}>
               Lần {a.sequence} · {a.status} · {date(a.startedAt)} → {date(a.finishedAt)}
@@ -283,7 +332,7 @@ function AutomationLocation({ location, period }: { location: string; period: st
             <Typography>Chưa có lượt chạy được scheduler đưa vào hàng đợi.</Typography>
           )}
           {data.data.queue.map((j) => (
-            <Paper key={j.id} sx={{ p: 2 }}>
+            <Paper key={j.id} variant="outlined" sx={{ p: 1.5, overflowWrap: 'anywhere' }}>
               <Typography>
                 {j.name} · {j.state} · Lần {j.attempts}/4
               </Typography>
@@ -485,13 +534,27 @@ function RepresentativeForm({ location, period }: { location: string; period: st
         { signal },
       )) ?? null,
   });
+  const contracts = useQuery({
+    queryKey: ['automation-contract-options', session?.userId, room],
+    enabled: !!room,
+    queryFn: ({ signal }) =>
+      api.request<{
+        periods: {
+          contractId: string;
+          from: string;
+          to: string;
+          contractStatus: string;
+          occupants: { displayLabel: string }[];
+        }[];
+      }>(`/api/v1/rooms/${room}/occupancy-history`, { signal }),
+  });
   return (
     <Paper sx={{ p: 2 }}>
       <Stack spacing={2}>
         <Typography variant="h6">Hợp đồng đại diện hóa đơn phòng</Typography>
         <Typography variant="body2">
-          Khi nhiều hợp đồng cùng kỳ, chọn hợp đồng tại màn Hợp đồng và nhập mã; backend kiểm tra
-          phòng, kỳ và quyền trước khi lưu.
+          Khi nhiều hợp đồng cùng kỳ, chọn đại diện từ lịch sử thuê phòng. Máy chủ kiểm tra phòng,
+          kỳ và quyền trước khi lưu.
         </Typography>
         <Button component={Link} to="/contracts">
           Xem hợp đồng
@@ -513,8 +576,10 @@ function RepresentativeForm({ location, period }: { location: string; period: st
             </MenuItem>
           ))}
         </TextField>
-        {(rooms.error || selection.error) && (
-          <Alert severity="error">{invoiceError(rooms.error ?? selection.error)}</Alert>
+        {(rooms.error || selection.error || contracts.error) && (
+          <Alert severity="error">
+            {invoiceError(rooms.error ?? selection.error ?? contracts.error)}
+          </Alert>
         )}
         {selection.data && (
           <Typography>
@@ -522,10 +587,21 @@ function RepresentativeForm({ location, period }: { location: string; period: st
           </Typography>
         )}
         <TextField
-          label="Mã hợp đồng đại diện"
+          select
+          label="Hợp đồng đại diện"
           value={contract}
           onChange={(e) => setContract(e.target.value)}
-        />
+          disabled={!room || contracts.isFetching}
+        >
+          <MenuItem value="">Chọn hợp đồng</MenuItem>
+          {contracts.data?.periods
+            .filter((c) => ['Active', 'Terminated', 'Superseded'].includes(c.contractStatus))
+            .map((c) => (
+              <MenuItem key={c.contractId} value={c.contractId}>
+                {c.from} – {c.to} · {c.occupants.map((o) => o.displayLabel).join(', ')}
+              </MenuItem>
+            ))}
+        </TextField>
         {error && <Alert severity="error">{error}</Alert>}
         {notice && <Alert severity="success">{notice}</Alert>}
         <Button

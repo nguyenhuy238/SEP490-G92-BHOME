@@ -32,7 +32,7 @@ public sealed partial class PaymentLedgerTests
 
     internal async Task UndisputedDepositIsReservedManuallyReturnedAndRecheckedBeforeContractClosure(bool interruptedUpload = false)
     {
-        var w = await Setup(); await ReadySettlementFixture(w, false);
+        var w = await Setup(); await ReadySettlementFixture(w, false, agreedDeposit: 400000);
         using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]); using var staff = await Client(w.Staff);
         var contract = $"/api/v1/contracts/{w.Contract}"; var sourceRoute = contract + "/deposit-refunds";
         await RefundValue<ContractId>(await Post(owner, contract + "/deposit-verifications",
@@ -52,6 +52,17 @@ public sealed partial class PaymentLedgerTests
         var created = await Task.WhenAll(Post(owner, sourceRoute, input, key), Post(owner, sourceRoute, input, key));
         var row = await RefundValue<RefundView>(created[0]); Assert.Equal(row.Id, (await RefundValue<RefundView>(created[1])).Id);
         Assert.Null(row.SourcePaymentId); Assert.Equal(w.Contract, row.SourceDepositContractId);
+        await using (var savedScope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var saved = savedScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            Assert.Equal("CONTRACT_AGREEMENT_OWNER_CONFIRMED", await saved.Database.SqlQuery<string>($"""
+                SELECT h->'state'->>'beneficiaryBasis' AS "Value" FROM refund_requests r
+                CROSS JOIN LATERAL jsonb_array_elements(r.history) WITH ORDINALITY e(h,n)
+                WHERE r.id={row.Id} AND h->>'recordType'='SecurityDepositRefundV1' ORDER BY n LIMIT 1
+                """).SingleAsync());
+        }
+        var tenantRefund = Assert.Single((await RefundValue<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>>(await tenant.GetAsync("/api/v1/tenant/refunds"))).Items);
+        Assert.Equal("SecurityDeposit", tenantRefund.SourceKind); Assert.Equal(row.Id, tenantRefund.Id); Assert.Equal("REQUESTED", tenantRefund.Status);
         Assert.Equal(0, (await RefundValue<RefundSource>(await owner.GetAsync(sourceRoute))).AvailableAmount);
         var report = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
         Assert.False(report.HasUnclassifiedRefunds); Assert.Equal("0", report.VerifiedDepositReturns);
@@ -65,14 +76,15 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal("APPROVED", approved.Status);
         await PumpNotifications();
         var pendingNotices = (await tenant.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<BHome.Application.Notifications.NotificationView>>(
-            "/api/v1/notifications?category=Contract&pageSize=100"))!.Items;
-        Assert.Single(pendingNotices, n => n.RelatedObjectId == w.Contract && n.Title == "Yêu cầu hoàn cọc đã được duyệt, chờ thực hiện");
-        Assert.DoesNotContain(pendingNotices, n => n.RelatedObjectId == w.Contract && n.Title == "Giao dịch hoàn cọc đã được xác minh thủ công");
+            "/api/v1/notifications?category=Payment&pageSize=100"))!.Items;
+        Assert.Single(pendingNotices, n => n.RelatedObjectId == row.Id && n.Title == "Yêu cầu hoàn cọc đã được duyệt, chờ thực hiện");
+        Assert.DoesNotContain(pendingNotices, n => n.RelatedObjectId == row.Id && n.Title == "Giao dịch hoàn cọc đã được xác minh thủ công");
         var pending = await RefundValue<ContractSettlementSummary>(await owner.GetAsync(contract + "/move-out/settlement-summary"));
         Assert.False(pending.Resolved); Assert.Equal(400000, pending.Calculation!.DepositReserved);
         await RefundValue<MoveOutView>(await Post(owner, contract + "/move-out/settlement", new SettlementInput("Still awaiting bank", pending.Reference)));
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, contract + "/move-out/complete", new CompletionInput(today))).StatusCode);
+        var completionKey = Guid.NewGuid();
+        (await Post(owner, contract + "/move-out/complete", new CompletionInput(today), completionKey)).EnsureSuccessStatusCode();
         using var mat = new Mat(40, 100, MatType.CV_8UC3, Scalar.White); var bytes = mat.ImEncode(".png");
         var at = DateTimeOffset.UtcNow; var executionKey = Guid.NewGuid();
         if (interruptedUpload)
@@ -95,12 +107,14 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(0, final.ApprovedDeductions); Assert.Equal("VerifiedManual", final.TransferVerificationStatus);
         Assert.Equal(summary.FinancialReference, final.FinancialReference); Assert.NotEqual(summary.Reference, final.Reference);
         await RefundValue<MoveOutView>(await Post(owner, contract + "/move-out/settlement", new SettlementInput("Synthetic final bank statement checked", final.Reference)));
-        await RefundValue<ContractView>(await Post(owner, contract + "/move-out/complete", new CompletionInput(today)));
+        await RefundValue<ContractView>(await Post(owner, contract + "/move-out/complete", new CompletionInput(today), completionKey));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::integer AS \"Value\" FROM refund_requests WHERE source_deposit_contract_id={w.Contract} AND status='COMPLETED'").SingleAsync());
         Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == row.Id && a.Event == "DepositRefundCompleted"));
         var afterReturn = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
         Assert.False(afterReturn.HasUnclassifiedRefunds); Assert.Equal("400000", afterReturn.VerifiedDepositReturns);
+        tenantRefund = Assert.Single((await RefundValue<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>>(await tenant.GetAsync("/api/v1/tenant/refunds"))).Items);
+        Assert.Equal("COMPLETED", tenantRefund.Status); Assert.NotNull(tenantRefund.ExecutedAt);
         Assert.Equal(report.Total.OperatingExpenses, afterReturn.Total.OperatingExpenses);
         Assert.Equal(report.Total.VerifiedCollections, afterReturn.Total.VerifiedCollections);
         Assert.Equal(report.Capital.NetRecovery, afterReturn.Capital.NetRecovery);
@@ -119,7 +133,7 @@ public sealed partial class PaymentLedgerTests
     }
     internal async Task ChangedObligationsInvalidateDepositRefundApprovalAndRejectedReservationIsReleased()
     {
-        var w = await Setup(); await ReadySettlementFixture(w, true); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
+        var w = await Setup(); await ReadySettlementFixture(w, true, agreedDeposit: 20000); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
         var contract = $"/api/v1/contracts/{w.Contract}"; var route = contract + "/deposit-refunds";
         await RefundValue<ContractId>(await Post(owner, contract + "/deposit-verifications", new DepositInput("SYN-CHANGED-" + Guid.NewGuid(), 20000, "Synthetic")));
         var source = await RefundValue<RefundSource>(await owner.GetAsync(route));
@@ -133,7 +147,7 @@ public sealed partial class PaymentLedgerTests
     }
     internal async Task UnclassifiedFullDepositRefundCannotAuthorizeClosureOrDuplicateReturn()
     {
-        var w = await Setup(); await ReadySettlementFixture(w, true); using var owner = await Client(w.Owner);
+        var w = await Setup(); await ReadySettlementFixture(w, true, agreedDeposit: 20000); using var owner = await Client(w.Owner);
         var contract = $"/api/v1/contracts/{w.Contract}";
         await RefundValue<ContractId>(await Post(owner, contract + "/deposit-verifications", new DepositInput("SYN-IMPORT-" + Guid.NewGuid(), 20000, "Synthetic")));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();

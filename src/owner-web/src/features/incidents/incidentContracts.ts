@@ -1,4 +1,11 @@
 // IncidentContracts.cs: read enums are names; write enums use numeric values.
+import { formatContractMoney } from '../../../../../packages/client-core/src/contracts';
+export function formatIncidentMoney(value: number | null | undefined) {
+  if (value == null) return 'Chưa có';
+  return Number.isSafeInteger(value) && value >= 0
+    ? formatContractMoney(String(value))
+    : 'Cần đối chiếu số tiền trên chứng từ.';
+}
 export interface Incident {
   id: string;
   code: string;
@@ -16,6 +23,7 @@ export interface Incident {
   version: number;
   staffAvailable: boolean | null;
   escalationEnabled: boolean;
+  createdAt: string;
 }
 export interface WorkOrder {
   id: string;
@@ -35,6 +43,7 @@ export interface WorkOrder {
   vendor: string | null;
   proposalVersion: number;
   planApproved: boolean;
+  canStart: boolean;
   approvedById: string | null;
   approvedAt: string | null;
   result: string | null;

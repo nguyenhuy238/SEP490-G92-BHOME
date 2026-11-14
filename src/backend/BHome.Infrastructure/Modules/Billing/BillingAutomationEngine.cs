@@ -11,7 +11,7 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Billing;
 
-internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db, IBillingAutomationSchedules schedules, TimeProvider clock, IInvoiceRepository invoiceRepository, IPropertyRepository propertyRepository, IStaffLocationAccess staffAccess) : IBillingAutomationEngine
+internal sealed partial class BillingAutomationEngine(BHomePersistenceContext db, IBillingAutomationSchedules schedules, TimeProvider clock, IInvoiceRepository invoiceRepository, IFixedChargeCoverage fixedCoverage) : IBillingAutomationEngine
 {
     private DateOnly Today => BillingAutomationDates.BusinessDate(clock.GetUtcNow());
     public Task<IReadOnlyList<BillingQueueView>> QueueAsync(Guid location, DateOnly period, CancellationToken t) => db.BillingQueueAsync(location, period, t);

@@ -36,6 +36,11 @@ internal static class Compact24DomainModel
         model.Entity<IdentityUserRole<Guid>>().HasKey(x => new { x.UserId, x.RoleId });
 
         var contract = model.Entity<Contract>();
+        model.Entity<Resident>().Property(x => x.ContactEmail).HasMaxLength(256);
+        contract.Property(x => x.SigningMode);
+        contract.Property(x => x.InternalAcceptance);
+        contract.Property(x => x.InitialPaymentRequired);
+        model.Entity<ContractSigningInvitation>().HasKey(x => x.Id);
         model.Entity<BHome.Domain.Billing.InvoiceLine>().Property(x => x.UtilityCalculationSnapshot);
         contract.Property(x => x.ParentContractId); contract.Property(x => x.OperatingPolicySnapshot);
         contract.Property(x => x.HoldingExpiryAt); contract.Property(x => x.ReservedCapacity);
@@ -48,6 +53,10 @@ internal static class Compact24DomainModel
         var allocation = model.Entity<BHome.Domain.PaymentsDebt.PaymentAllocation>();
         allocation.Property(x => x.TransferId).IsRequired(false); allocation.Property(x => x.InvoiceId).IsRequired(false);
         allocation.Property(x => x.SourceDepositContractId); allocation.Property(x => x.TargetDepositContractId);
+        allocation.Property(x => x.TargetSettlementContractId); allocation.Property(x => x.SettlementReceivableId); allocation.Property(x => x.DepositOffsetApprovalId);
+        allocation.Property(x => x.TargetInitialContractId);
+        allocation.HasOne<Contract>().WithMany().HasForeignKey(x => x.TargetInitialContractId).OnDelete(DeleteBehavior.Restrict);
+        allocation.HasOne<Contract>().WithMany().HasForeignKey(x => x.TargetSettlementContractId).OnDelete(DeleteBehavior.Restrict);
         allocation.HasOne<Contract>().WithMany().HasForeignKey(x => x.SourceDepositContractId).OnDelete(DeleteBehavior.Restrict);
         allocation.HasOne<Contract>().WithMany().HasForeignKey(x => x.TargetDepositContractId).OnDelete(DeleteBehavior.Restrict);
         model.Entity<BHome.Domain.PaymentsDebt.PaymentReconciliation>().Property(x => x.DepositContractId);

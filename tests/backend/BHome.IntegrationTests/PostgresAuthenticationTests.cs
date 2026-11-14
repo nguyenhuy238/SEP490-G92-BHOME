@@ -35,7 +35,7 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
-        var session = await response.Content.ReadFromJsonAsync<LoginResult>();
+        var session = await TestAuthResponse.ReadAsync(response.Content);
         Assert.NotNull(session);
         Assert.Equal(user.Id, session.UserId);
         Assert.Equal([role], session.Roles);
@@ -89,7 +89,8 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         });
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Sign-in failed.", body);
+        using var problem = System.Text.Json.JsonDocument.Parse(body);
+        Assert.Equal(LoginService.InvalidCredentialsMessage, problem.RootElement.GetProperty("title").GetString());
         Assert.DoesNotContain("accessToken", body);
         Assert.DoesNotContain(user.UserName!, body);
         Assert.DoesNotContain(TestPassword, body);
@@ -122,7 +123,7 @@ public sealed class PostgresAuthenticationTests(AuthenticationDatabaseFixture fi
         var response = await client.PostAsJsonAsync("/api/v1/auth/login",
             new { email = user.Email!.ToUpperInvariant(), password = TestPassword });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(user.Id, (await response.Content.ReadFromJsonAsync<LoginResult>())!.UserId);
+        Assert.Equal(user.Id, (await TestAuthResponse.ReadAsync(response.Content)).UserId);
 
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();

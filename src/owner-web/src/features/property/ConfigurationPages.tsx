@@ -284,7 +284,7 @@ function TypeContent({ db }: { db: DemoDatabase }) {
     { key: 'description', label: 'Mô tả' },
     { key: 'area', label: 'Diện tích mặc định (m²)', type: 'number', required: true },
     { key: 'capacity', label: 'Sức chứa tối đa', type: 'number', required: true },
-    { key: 'rent', label: 'Giá thuê mặc định (VND/tháng)', type: 'number', required: true },
+    { key: 'rent', label: 'Giá thuê mặc định (VND/tháng)', type: 'money', required: true },
     { key: 'amenities', label: 'Tiện ích' },
     {
       key: 'status',

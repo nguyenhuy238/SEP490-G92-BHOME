@@ -1,5 +1,13 @@
 # Tài chính Owner trên Compact24
 
+## Quyết định khóa giá hợp đồng (13/11/2026)
+
+Thay thế quy tắc nguồn giá thuê tùy chọn cũ (BF-01/UC-04–07, BF-03/04, BF-05/UC-20–21, JOB-10): tất cả khoản thu tiền thuê, điện, nước và dịch vụ cố định đã thỏa thuận được lưu trong `Contract.AgreedPriceSnapshot` phiên bản 1 và gắn vào tài liệu/hash hợp đồng. Hợp đồng giữ chỗ được Owner duyệt khóa các khoản thu; hợp đồng chính thức chuyển từ giữ chỗ kế thừa đúng đơn giá đã chốt. Hợp đồng chính thức trực tiếp khóa khi phát hành/khởi tạo ký. Gia hạn là phiên bản mới, không sửa hợp đồng cũ.
+
+- Không tạo, sửa, thay thế, kết thúc biểu phí riêng của phòng hoặc cấu hình profile điện nước riêng khi phòng có hợp đồng ràng buộc; API trả 409 `room_pricing_locked_by_contract`. Biểu phí chung vẫn được cấu hình cho giao dịch mới. Chỉ giải phóng khóa khi không còn hợp đồng ràng buộc (hủy/hết hạn/kết thúc lifecycle); quá ngày thuê nhưng chưa hoàn tất trả phòng vẫn bảo toàn giá.
+- Hóa đơn và quyết toán lấy giá từ snapshot hợp đồng, không từ biểu giá hiện hành. Lịch hóa đơn lưu `RepresentativeContract` kể cả client cũ gửi `RoomPolicy`; đọc cấu hình cũ không thay đổi hóa đơn đã phát hành. Số lượng thực tế từ chỉ số đã xác nhận; đơn giá điện/nước cố định. Hợp đồng cùng phòng có biểu phí khác nhau trong kỳ cần đối chiếu, không tự tính giá trộn.
+- Hợp đồng cũ thiếu snapshot đã ký không tự lấy giá hiện tại để bổ sung; chặn tính/phát hành phần thiếu và yêu cầu đối chiếu điều khoản gốc. Biểu giá điện nước nâng cao theo profile/định mức chưa có snapshot hợp đồng tương thích; cần đối chiếu trước khi ký, không tự chuyển giá bậc thang sang giá phẳng. Không thay đổi hóa đơn lịch sử hoặc chạy migration dữ liệu trong đợt này.
+
 Cập nhật **06/11/2026**. [Trạng thái bàn giao](API_IMPLEMENTATION_STATUS.md),
 [danh mục routes](API_RUNTIME_ROUTES.md). Browser đã chạy các đường đi mô tả cuối tài liệu;
 review UI và nghiệm thu native/provider vẫn còn riêng.
@@ -79,7 +87,7 @@ Bổ sung 06/11 theo ủy quyền chính sách: hoàn tiền thừa receipt qua 
 
 Response thêm `verifiedDepositReturns` (chuỗi decimal): tổng hoàn gốc cọc **đã phân loại, không demo** theo executed_at trong kỳ ngày Việt Nam và đúng Location/Room filter. Đây là subtotal nguồn đã xác minh, không phải số dư ngân hàng hoặc tổng nghĩa vụ cọc; REQUESTED/APPROVED không được tính. Nguồn cũ chưa có trường này trong saved What-if snapshot giữ null, không tự thay thành 0. Owner Web hiển thị riêng với note: mô hình profit/net/recovery hiện tại vẫn là Invoice allocations/OPEX; phần giữ cọc bồi thường TenantDamage chưa cộng vào các chỉ số đó. Chi phí sửa chữa phải ghi qua Expenses, không tự sinh từ deduction hoặc double-count thành OPEX. Chưa có báo cáo tổng liability/realized damage compensation hoặc kế toán/thuế.
 
-Owner Web `/reports` dùng `FinancialReportsApiPage` trong API mode: chọn khoảng/cơ sở, xem tổng, theo Location và hoàn vốn. Hiển thị unavailable reason; không fallback demo khi lỗi. Room filter hỗ trợ ở API, chưa có selector trên UI. Chi phí Staff/maintenance cần được ghi trong expenses để tính vào báo cáo; chưa tự sinh payroll hoặc hợp nhất module chưa có. Không tuyên bố đã có báo cáo kế toán/thuế. Handoff `INITIAL_API_UI_READY`, Vũ Xuân Trường.
+Owner Web `/reports` dùng `FinancialReportsApiPage` trong API mode: chọn khoảng/cơ sở/phòng theo tên, xem tổng, theo Location và hoàn vốn. Room choices tái sử dụng GET capture locations/rooms được phân quyền; đổi Location xóa Room cũ. KPI và biểu đồ lấy số liệu server, chỉ quy đổi tỷ lệ chiều dài thanh; nhãn tiền giữ chuỗi decimal chính xác, gồm số âm. Hiển thị unavailable reason; không fallback demo khi lỗi. Chi phí Staff/maintenance cần được ghi trong expenses để tính vào báo cáo; chưa tự sinh payroll hoặc hợp nhất module chưa có. Không có subtotal maintenance riêng trong DTO hiện tại nên không dựng chỉ tiêu này từ một trang chi phí. Không tuyên bố đã có báo cáo kế toán/thuế. Handoff `INITIAL_API_UI_READY`, Vũ Xuân Trường.
 
 ### Lấp đầy theo kỳ (06/11/2026)
 
@@ -120,7 +128,7 @@ TLS test dùng certificate localhost sinh tạm, API readiness pin certificate �
 
 `--finance --main-draft` mở rộng bằng Verify-SharedBillingClients: một representative và hai co-occupants xác minh riêng, Owner liên kết hai tài khoản co-occupant; chỉ representative ký hợp đồng. Không tạo ba hợp đồng để chứng minh hóa đơn chung. Room/Asset và biểu giá tổng hợp đã có trước là fixture ban đầu; biểu giá có hiệu lực ngày trước vì API thật cấm tạo biểu giá lùi ngày. Test kiểm lại guard 400 này. Không seed Active Contract, reading, Invoice, allocation, Adjustment hoặc Refund trực tiếp. Staff/Tenant dùng MobileApi và shared client thật; Owner dùng bản build Web thật; đây chưa phải native device E2E.
 
-Test cấu hình riêng lịch draft/final ngày 1, due ngày 28, PeriodEnd rate, RepresentativeContract rent, FullMonth, AwayFromZero; không đổi default policy dự án. Sau bàn giao Initial 100, periodic human-confirm 120 cho cả hai utility, hóa đơn có thuê 3.000.000 + điện 70.000 + nước 360.000 = 3.430.000 VND, không nhân tiền thuê theo số người. Thiếu readings giữ Draft; Tenant không finalize. Ba tài khoản được thấy cùng Invoice/confirmed values và QR từ backend; Tenant ngoài phạm vi 404, Staff không xem chi tiết tiền.
+Test cấu hình riêng lịch draft/final ngày 1, due ngày 28, PeriodEnd rate, RepresentativeContract rent, FullMonth, AwayFromZero; đây là cấu hình kiểm thử lịch sử; quy tắc hiện hành bắt buộc sử dụng giá đã chốt trong hợp đồng. Sau bàn giao Initial 100, periodic human-confirm 120 cho cả hai utility, hóa đơn có thuê 3.000.000 + điện 70.000 + nước 360.000 = 3.430.000 VND, không nhân tiền thuê theo số người. Thiếu readings giữ Draft; Tenant không finalize. Ba tài khoản được thấy cùng Invoice/confirmed values và QR từ backend; Tenant ngoài phạm vi 404, Staff không xem chi tiết tiền.
 
 Owner browser đối chiếu giao dịch tổng hợp 1.000.000 và phân bổ cho người trả thật → ba tài khoản còn nợ 2.430.000. Co-occupant gửi yêu cầu khoản điện 70.000→50.000 kèm ảnh private; Owner browser xác nhận và phê duyệt → Adjustment riêng -20.000, nghĩa vụ 3.410.000/còn nợ 2.410.000; giữ nguyên Final Invoice JSON/lines/total/version. Request/evidence chỉ requester/Owner thấy, các Tenant còn lại được thấy effect lên số dư mà không nhận request cá nhân.
 

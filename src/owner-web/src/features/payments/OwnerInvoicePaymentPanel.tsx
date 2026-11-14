@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -33,6 +34,10 @@ import {
 import { usePaymentApi } from './usePaymentApi';
 import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { RefundPanel } from './RefundPanel';
+import { ReceiptExcessPanel } from './ReceiptExcessPanel';
+import { ExternalPaymentPayerPanel } from './ExternalPaymentPayerPanel';
+import { PaymentInvoicePicker } from './PaymentInvoicePicker';
+import { StatusChip } from '../../components/common/PortalUI';
 
 export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
   const api = usePaymentApi();
@@ -48,9 +53,11 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
     queryFn: ({ signal }) => api.instructions(invoiceId, signal),
   });
   return (
-    <Paper sx={{ p: 2 }}>
-      <Stack spacing={2}>
-        <Typography variant="h6">Thanh toán & Đối soát</Typography>
+    <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0, overflowWrap: 'anywhere' }}>
+      <Stack spacing={1.5}>
+        <Typography variant="h2" component="h2">
+          Thanh toán & Đối soát
+        </Typography>
         {state.isPending && <LinearProgress />}
         {state.error && (
           <Alert
@@ -60,12 +67,20 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
             {paymentError(state.error)}
           </Alert>
         )}
-        {state.data && (
+        {state.data && !state.error && (
           <>
-            <Typography>
-              {paymentText(state.data.paymentStatus)} · Còn phải trả:{' '}
-              {formatContractMoney(state.data.outstandingAmount)}
-            </Typography>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+            >
+              <Box sx={{ alignSelf: 'flex-start' }}>
+                <StatusChip label={paymentText(state.data.paymentStatus)} />
+              </Box>
+              <Typography sx={{ fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>
+                Còn phải trả: {formatContractMoney(state.data.outstandingAmount)}
+              </Typography>
+            </Stack>
             <Typography>
               Đã ghi nhận: {formatContractMoney(state.data.paidAmount)} · Quá hạn:{' '}
               {state.data.overdueDays} ngày
@@ -81,8 +96,8 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
             {state.data.reviewStatus === 'PendingReview' && (
               <Alert severity="warning">
                 Tiền thừa chờ xem xét:{' '}
-                {formatContractMoney(state.data.potentialExcessAmount ?? '0')}. Chưa hoàn tiền hoặc
-                chuyển credit.
+                {formatContractMoney(state.data.potentialExcessAmount ?? '0')}. Owner cần đối chiếu
+                người thực trả và ghi bằng chứng hoàn tiền thực tế.
               </Alert>
             )}
             {state.data.pendingReview && state.data.reviewStatus !== 'PendingReview' && (
@@ -93,7 +108,14 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
             {state.data.history.map((item) => (
               <Typography key={item.id}>
                 {formatInstant(item.paidAt)} · {formatContractMoney(item.amount)} · Người trả:{' '}
-                {item.paidBy} · Owner xác minh sao kê
+                {item.paidBy} ·{' '}
+                {item.verificationSource === 'SePayTest'
+                  ? 'SePay thử nghiệm xác minh'
+                  : item.verificationSource === 'SePayLive'
+                    ? 'SePay xác minh'
+                    : item.verificationSource === 'OwnerBankStatement'
+                      ? 'Owner xác minh sao kê'
+                      : 'Nguồn xác minh khác'}
               </Typography>
             ))}
             {state.data.paymentStatus !== 'NotIssued' && (
@@ -110,7 +132,7 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
           </>
         )}
         {instructions.error && <Alert severity="error">{paymentError(instructions.error)}</Alert>}
-        {instructions.data?.accountNumber && (
+        {!instructions.error && instructions.data?.accountNumber && (
           <>
             {instructions.data.isDevelopmentDemo && (
               <Alert severity="warning">Tài khoản tổng hợp demo. Không chuyển tiền thật.</Alert>
@@ -129,7 +151,7 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
             )}
           </>
         )}
-        {instructions.data && !instructions.data.accountNumber && (
+        {!instructions.error && instructions.data && !instructions.data.accountNumber && (
           <Alert severity="info">
             {paymentText(
               instructions.data.availability === 'NotIssued'
@@ -146,10 +168,16 @@ export function RecordTransferForm({
   invoiceId,
   state,
   onClose,
+  initialDescription,
+  onRecorded,
+  depositContractId,
 }: {
   invoiceId: string;
   state?: InvoicePayment;
   onClose: () => void;
+  initialDescription?: string;
+  onRecorded?: (receiptId: string) => void;
+  depositContractId?: string;
 }) {
   const api = usePaymentApi();
   const cache = useQueryClient();
@@ -159,7 +187,7 @@ export function RecordTransferForm({
     [reference, setReference] = useState(''),
     [amount, setAmount] = useState(state?.outstandingAmount ?? ''),
     [occurred, setOccurred] = useState(''),
-    [description, setDescription] = useState(state?.transferReference ?? '');
+    [description, setDescription] = useState(state?.transferReference ?? initialDescription ?? '');
   const [statement, setStatement] = useState(''),
     [reason, setReason] = useState(''),
     [checked, setChecked] = useState(false),
@@ -175,7 +203,11 @@ export function RecordTransferForm({
     return (
       <>
         <Alert severity="success">Đã lưu giao dịch đã đối chiếu sao kê.</Alert>
-        <ReconcileTransfer transfer={saved} initialInvoiceId={invoiceId} />
+        {onRecorded ? (
+          <Button onClick={() => onRecorded(saved.id)}>Đối chiếu receipt cọc vừa lưu</Button>
+        ) : (
+          <ReconcileTransfer transfer={saved} initialInvoiceId={invoiceId} />
+        )}
         <Button onClick={onClose}>Đóng biểu mẫu</Button>
       </>
     );
@@ -211,6 +243,7 @@ export function RecordTransferForm({
               statementReference: statement,
               verificationReason: reason,
               proposedInvoiceId: invoiceId || null,
+              ...(depositContractId ? { proposedDepositContractId: depositContractId } : {}),
               humanVerified: checked,
               isDevelopmentDemo: demo,
             },
@@ -247,12 +280,12 @@ export function RecordTransferForm({
           changed();
         }}
       />
-      <TextField
+      <MoneyField
         required
         label="Số tiền thực nhận VND"
         value={amount}
-        onChange={(e) => {
-          setAmount(e.target.value);
+        onValueChange={(raw) => {
+          setAmount(raw);
           changed();
         }}
       />
@@ -354,6 +387,8 @@ export function ReconcileTransfer({
     queryFn: ({ signal }) => api.reviews(transfer.id, signal),
   });
   const [refundsOpen, setRefundsOpen] = useState(false);
+  const [choosing, setChoosing] = useState(false),
+    [invoiceLabel, setInvoiceLabel] = useState('');
   const data = latest.data ?? transfer;
   async function perform(rejection = false) {
     if (lock.current) return;
@@ -378,6 +413,7 @@ export function ReconcileTransfer({
           ['payment-reviews'],
           ['payment-invoices'],
           ['payment-history'],
+          ['debt-summary'],
         ].map((queryKey) => cache.invalidateQueries({ queryKey })),
       );
     } catch (e) {
@@ -393,6 +429,13 @@ export function ReconcileTransfer({
         <Typography>
           {data.bankReference} · {formatContractMoney(data.amount)} · {paymentText(data.status)}
         </Typography>
+        <Typography variant="body2">
+          Ngày giao dịch: {formatInstant(data.occurredAt)} · Nguồn {data.providerIdentity}
+        </Typography>
+        <Typography variant="body2">
+          Nội dung: {data.transferDescription || 'Không có nội dung'} · Sao kê:{' '}
+          {data.statementReference}
+        </Typography>
         <Typography>
           {data.reason === 'verified_excess_payment_pending_review'
             ? 'Đã phân bổ đủ hóa đơn từ giao dịch có tiền thừa. Xem trạng thái xử lý tại mục hoàn tiền.'
@@ -405,12 +448,22 @@ export function ReconcileTransfer({
           </Typography>
         )}
         {notice && <Alert severity="info">{notice}</Alert>}
+        <ExternalPaymentPayerPanel transferId={transfer.id} />
         {data.status === 'Allocated' &&
           data.unallocatedAmount !== undefined &&
           /^0*(?:\.0+)?$/.test(data.unallocatedAmount) === false && (
             <Button onClick={() => setRefundsOpen(true)}>Xử lý hoàn tiền thừa</Button>
           )}
         {refundsOpen && <RefundPanel key={transfer.id} sourceId={transfer.id} />}
+        {(data.status === 'ExcessRefundPending' ||
+          data.status === 'ExcessRefundCompleted' ||
+          (data.status === 'PendingReview' && invoiceId)) && (
+          <ReceiptExcessPanel
+            key={`${transfer.id}:${invoiceId}`}
+            transferId={transfer.id}
+            target={data.status === 'PendingReview' ? { invoiceId } : undefined}
+          />
+        )}
         {(latest.error || history.error) && (
           <Alert
             severity="error"
@@ -430,16 +483,31 @@ export function ReconcileTransfer({
         )}
         {data.status === 'PendingReview' && (
           <>
-            <TextField
-              label="Mã hóa đơn cần phân bổ"
-              value={invoiceId}
-              onChange={(e) => {
-                setInvoiceId(e.target.value);
-                setPayer('');
-                setChecked(false);
-                key.current = crypto.randomUUID();
-              }}
-            />
+            <Typography>
+              {invoiceLabel ||
+                (invoiceId
+                  ? 'Đang xem hóa đơn gợi ý từ giao dịch. Kiểm tra trước khi phân bổ.'
+                  : 'Chưa chọn hóa đơn để phân bổ.')}
+            </Typography>
+            <Button disabled={busy} onClick={() => setChoosing(true)}>
+              Chọn hóa đơn cần phân bổ
+            </Button>
+            {choosing && (
+              <PaymentInvoicePicker
+                open
+                close={() => setChoosing(false)}
+                choose={(i) => {
+                  setInvoiceId(i.invoiceId);
+                  setInvoiceLabel(
+                    `${i.locationName} · Phòng ${i.roomNumber} · ${i.billingPeriod.slice(0, 7)}`,
+                  );
+                  setPayer('');
+                  setChecked(false);
+                  setChoosing(false);
+                  key.current = crypto.randomUUID();
+                }}
+              />
+            )}
             <TextField
               select
               label="Người thực trả đã xác minh"

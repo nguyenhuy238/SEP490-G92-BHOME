@@ -967,6 +967,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("date")
                         .HasColumnName("RateDate");
 
+                    b.Property<string>("UtilityCalculationSnapshot")
+                        .HasColumnType("text")
+                        .HasColumnName("UtilityCalculationSnapshot");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CorrectionRequestId");
@@ -980,7 +984,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.amount)::numeric AS \"Amount\",(((t.calculation_snapshot->'compactState'->>'calculatedAmount'))::numeric)::numeric AS \"CalculatedAmount\",(COALESCE(((t.calculation_snapshot->'compactState'->>'category'))::integer,0))::integer AS \"Category\",(t.charge_code)::text AS \"ChargeCode\",(((t.calculation_snapshot->'compactState'->>'confirmedReading'))::numeric)::numeric AS \"ConfirmedReading\",(((t.calculation_snapshot->'compactState'->>'correctionRequestId'))::uuid)::uuid AS \"CorrectionRequestId\",(t.invoice_id)::uuid AS \"InvoiceId\",(t.meter_reading_id)::uuid AS \"MeterReadingId\",(t.description)::text AS \"Name\",(COALESCE(((t.calculation_snapshot->'compactState'->>'occupiedDays'))::integer,0))::integer AS \"OccupiedDays\",(COALESCE(((t.calculation_snapshot->'compactState'->>'periodDays'))::integer,0))::integer AS \"PeriodDays\",(t.billing_policy_id)::uuid AS \"PolicyId\",(((t.calculation_snapshot->'compactState'->>'policyVersion'))::integer)::integer AS \"PolicyVersion\",(((t.calculation_snapshot->'compactState'->>'previousReading'))::numeric)::numeric AS \"PreviousReading\",(t.quantity)::numeric AS \"Quantity\",(t.unit_price)::numeric AS \"Rate\",(COALESCE(((t.calculation_snapshot->'compactState'->>'rateDate'))::date,'0001-01-01'::date))::date AS \"RateDate\" FROM invoice_items t WHERE TRUE");
+                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.amount)::numeric AS \"Amount\",(((t.calculation_snapshot->'compactState'->>'calculatedAmount'))::numeric)::numeric AS \"CalculatedAmount\",(COALESCE(((t.calculation_snapshot->'compactState'->>'category'))::integer,0))::integer AS \"Category\",(t.charge_code)::text AS \"ChargeCode\",(((t.calculation_snapshot->'compactState'->>'confirmedReading'))::numeric)::numeric AS \"ConfirmedReading\",(((t.calculation_snapshot->'compactState'->>'correctionRequestId'))::uuid)::uuid AS \"CorrectionRequestId\",(t.invoice_id)::uuid AS \"InvoiceId\",(t.meter_reading_id)::uuid AS \"MeterReadingId\",(t.description)::text AS \"Name\",(COALESCE(((t.calculation_snapshot->'compactState'->>'occupiedDays'))::integer,0))::integer AS \"OccupiedDays\",(COALESCE(((t.calculation_snapshot->'compactState'->>'periodDays'))::integer,0))::integer AS \"PeriodDays\",(t.billing_policy_id)::uuid AS \"PolicyId\",(((t.calculation_snapshot->'compactState'->>'policyVersion'))::integer)::integer AS \"PolicyVersion\",(((t.calculation_snapshot->'compactState'->>'previousReading'))::numeric)::numeric AS \"PreviousReading\",(t.quantity)::numeric AS \"Quantity\",(t.unit_price)::numeric AS \"Rate\",(COALESCE(((t.calculation_snapshot->'compactState'->>'rateDate'))::date,'0001-01-01'::date))::date AS \"RateDate\",(((t.calculation_snapshot->'compactState'->>'utilityCalculationSnapshot'))::text)::text AS \"UtilityCalculationSnapshot\" FROM invoice_items t WHERE TRUE");
                 });
 
             modelBuilder.Entity("BHome.Domain.Billing.InvoiceRecipient", b =>
@@ -2526,6 +2530,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreatedAt");
 
+                    b.Property<Guid?>("DepositOffsetApprovalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DepositOffsetApprovalId");
+
                     b.Property<Guid?>("InvoiceId")
                         .HasColumnType("uuid")
                         .HasColumnName("InvoiceId");
@@ -2534,6 +2542,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("PaidByUserId");
 
+                    b.Property<Guid?>("SettlementReceivableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("SettlementReceivableId");
+
                     b.Property<Guid?>("SourceDepositContractId")
                         .HasColumnType("uuid")
                         .HasColumnName("SourceDepositContractId");
@@ -2541,6 +2553,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<Guid?>("TargetDepositContractId")
                         .HasColumnType("uuid")
                         .HasColumnName("TargetDepositContractId");
+
+                    b.Property<Guid?>("TargetSettlementContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TargetSettlementContractId");
 
                     b.Property<Guid?>("TransferId")
                         .HasColumnType("uuid")
@@ -2564,6 +2580,8 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.HasIndex("TargetDepositContractId");
 
+                    b.HasIndex("TargetSettlementContractId");
+
                     b.HasIndex("TransferId")
                         .IsUnique();
 
@@ -2571,7 +2589,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.allocated_at)::timestamptz AS \"AllocatedAt\",(t.amount)::numeric AS \"Amount\",(COALESCE((s.data->>'createdAt')::timestamptz,t.allocated_at))::timestamptz AS \"CreatedAt\",(t.target_invoice_id)::uuid AS \"InvoiceId\",(t.paid_by_user_id)::uuid AS \"PaidByUserId\",(t.source_deposit_contract_id)::uuid AS \"SourceDepositContractId\",(t.target_deposit_contract_id)::uuid AS \"TargetDepositContractId\",(t.source_payment_id)::uuid AS \"TransferId\",(COALESCE((s.data->>'updatedAt')::timestamptz,t.allocated_at))::timestamptz AS \"UpdatedAt\",(t.created_by_user_id)::uuid AS \"VerifiedByUserId\" FROM payment_allocations t LEFT JOIN payments p ON p.id=t.source_payment_id LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='PaymentAllocation' AND h->>'recordKey'=t.id::text ORDER BY n DESC LIMIT 1) s ON TRUE WHERE (t.target_invoice_id IS NOT NULL AND t.source_payment_id IS NOT NULL) OR (t.target_deposit_contract_id IS NOT NULL AND (t.source_payment_id IS NOT NULL OR t.source_deposit_contract_id IS NOT NULL))");
+                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.allocated_at)::timestamptz AS \"AllocatedAt\",(t.amount)::numeric AS \"Amount\",(COALESCE((s.data->>'createdAt')::timestamptz,t.allocated_at))::timestamptz AS \"CreatedAt\",(t.deposit_offset_approval_id)::uuid AS \"DepositOffsetApprovalId\",(t.target_invoice_id)::uuid AS \"InvoiceId\",(t.paid_by_user_id)::uuid AS \"PaidByUserId\",(t.settlement_receivable_id)::uuid AS \"SettlementReceivableId\",(t.source_deposit_contract_id)::uuid AS \"SourceDepositContractId\",(t.target_deposit_contract_id)::uuid AS \"TargetDepositContractId\",(t.target_settlement_contract_id)::uuid AS \"TargetSettlementContractId\",(t.source_payment_id)::uuid AS \"TransferId\",(COALESCE((s.data->>'updatedAt')::timestamptz,t.allocated_at))::timestamptz AS \"UpdatedAt\",(COALESCE(t.created_by_user_id,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"VerifiedByUserId\" FROM payment_allocations t LEFT JOIN payments p ON p.id=t.source_payment_id LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='PaymentAllocation' AND h->>'recordKey'=t.id::text ORDER BY n DESC LIMIT 1) s ON TRUE WHERE t.target_invoice_id IS NOT NULL OR t.target_deposit_contract_id IS NOT NULL OR t.target_settlement_contract_id IS NOT NULL");
                 });
 
             modelBuilder.Entity("BHome.Domain.PaymentsDebt.PaymentCommand", b =>
@@ -2816,7 +2834,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.amount)::numeric AS \"Amount\",(t.transaction_reference)::text AS \"BankReference\",(COALESCE(((t.verification_data->'compactState'->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(t.currency)::text AS \"Currency\",(COALESCE(((t.verification_data->'compactState'->>'isDevelopmentDemo'))::boolean,FALSE))::boolean AS \"IsDevelopmentDemo\",(COALESCE(((t.verification_data->'compactState'->>'normalizedReference'))::text,''))::text AS \"NormalizedReference\",(t.received_at)::timestamptz AS \"OccurredAt\",(((t.verification_data->'compactState'->>'proposedDepositContractId'))::uuid)::uuid AS \"ProposedDepositContractId\",(((t.verification_data->'compactState'->>'proposedInvoiceId'))::uuid)::uuid AS \"ProposedInvoiceId\",(t.provider_code)::text AS \"ProviderIdentity\",(COALESCE(((t.verification_data->'compactState'->>'statementReference'))::text,''))::text AS \"StatementReference\",(t.remittance_info)::text AS \"TransferDescription\",(COALESCE(((t.verification_data->'compactState'->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(COALESCE(((t.verification_data->'compactState'->>'verificationReason'))::text,''))::text AS \"VerificationReason\",(COALESCE(((t.verification_data->'compactState'->>'verificationSource'))::text,''))::text AS \"VerificationSource\",(t.verified_at)::timestamptz AS \"VerifiedAt\",(t.verified_by_user_id)::uuid AS \"VerifiedByUserId\" FROM payments t WHERE t.verification_data ? 'compactState'");
+                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.amount)::numeric AS \"Amount\",(t.transaction_reference)::text AS \"BankReference\",(COALESCE(((t.verification_data->'compactState'->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(t.currency)::text AS \"Currency\",(COALESCE(((t.verification_data->'compactState'->>'isDevelopmentDemo'))::boolean,FALSE))::boolean AS \"IsDevelopmentDemo\",(COALESCE(((t.verification_data->'compactState'->>'normalizedReference'))::text,''))::text AS \"NormalizedReference\",(t.received_at)::timestamptz AS \"OccurredAt\",(((t.verification_data->'compactState'->>'proposedDepositContractId'))::uuid)::uuid AS \"ProposedDepositContractId\",(((t.verification_data->'compactState'->>'proposedInvoiceId'))::uuid)::uuid AS \"ProposedInvoiceId\",(t.provider_code)::text AS \"ProviderIdentity\",(COALESCE(((t.verification_data->'compactState'->>'statementReference'))::text,''))::text AS \"StatementReference\",(t.remittance_info)::text AS \"TransferDescription\",(COALESCE(((t.verification_data->'compactState'->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(COALESCE(((t.verification_data->'compactState'->>'verificationReason'))::text,''))::text AS \"VerificationReason\",(COALESCE(((t.verification_data->'compactState'->>'verificationSource'))::text,''))::text AS \"VerificationSource\",(t.verified_at)::timestamptz AS \"VerifiedAt\",(COALESCE(t.verified_by_user_id,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"VerifiedByUserId\" FROM payments t WHERE t.verification_data ? 'compactState'");
                 });
 
             modelBuilder.Entity("BHome.Domain.PaymentsDebt.ReceivingBankAccount", b =>
@@ -3035,7 +3053,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.category)::integer AS \"Category\",(t.charge_code)::text AS \"ChargeCode\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(t.effective_from)::date AS \"EffectiveFrom\",(t.effective_to)::date AS \"EffectiveTo\",(t.first_used_at)::timestamptz AS \"FirstUsedAt\",(t.location_id)::uuid AS \"LocationId\",(CASE t.calculation_method WHEN 'METERED' THEN 1 ELSE 0 END)::integer AS \"Method\",(COALESCE(((s.data->>'name'))::text,''))::text AS \"Name\",(t.rate)::numeric AS \"Rate\",(t.room_id)::uuid AS \"RoomId\",(((s.data->>'roomTypeId'))::uuid)::uuid AS \"RoomTypeId\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(t.version)::integer AS \"Version\" FROM billing_policies t LEFT JOIN LATERAL (SELECT h.value->'state' AS data FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='BillingPolicy' ORDER BY h.n DESC LIMIT 1) s ON TRUE WHERE TRUE");
+                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.category)::integer AS \"Category\",(t.charge_code)::text AS \"ChargeCode\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(t.effective_from)::date AS \"EffectiveFrom\",(t.effective_to)::date AS \"EffectiveTo\",(t.first_used_at)::timestamptz AS \"FirstUsedAt\",(t.location_id)::uuid AS \"LocationId\",(CASE t.calculation_method WHEN 'METERED' THEN 1 WHEN 'FIXED_PER_PERSON_PER_MONTH' THEN 2 WHEN 'FIXED_PER_ROOM_PER_MONTH' THEN 0 ELSE -1 END)::integer AS \"Method\",(COALESCE(((s.data->>'name'))::text,''))::text AS \"Name\",(t.rate)::numeric AS \"Rate\",(t.room_id)::uuid AS \"RoomId\",(((s.data->>'roomTypeId'))::uuid)::uuid AS \"RoomTypeId\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(t.version)::integer AS \"Version\" FROM billing_policies t LEFT JOIN LATERAL (SELECT h.value->'state' AS data FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='BillingPolicy' ORDER BY h.n DESC LIMIT 1) s ON TRUE WHERE TRUE");
                 });
 
             modelBuilder.Entity("BHome.Domain.PropertyManagement.Chain", b =>
@@ -3597,6 +3615,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("HoldingExpiryAt");
 
+                    b.Property<string>("InternalAcceptance")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("InternalAcceptance");
+
                     b.Property<bool>("IsDevelopmentDemo")
                         .HasColumnType("boolean")
                         .HasColumnName("IsDevelopmentDemo");
@@ -3622,9 +3645,18 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("numeric(18,0)")
                         .HasColumnName("MonthlyRent");
 
+                    b.Property<string>("OperatingPolicySnapshot")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("OperatingPolicySnapshot");
+
                     b.Property<Guid>("OwnerSignerId")
                         .HasColumnType("uuid")
                         .HasColumnName("OwnerSignerId");
+
+                    b.Property<Guid?>("ParentContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ParentContractId");
 
                     b.Property<Guid?>("PreviousContractId")
                         .HasColumnType("uuid")
@@ -3654,6 +3686,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<Guid>("RoomId")
                         .HasColumnType("uuid")
                         .HasColumnName("RoomId");
+
+                    b.Property<string>("SigningMode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("SigningMode");
 
                     b.Property<string>("SnapshotHash")
                         .IsRequired()
@@ -3711,7 +3748,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.activated_at)::timestamptz AS \"ActivatedAt\",(t.activated_by_user_id)::uuid AS \"ActivatedByUserId\",(t.actual_end_date)::date AS \"ActualEndDate\",(COALESCE(((s.data->>'agreedPriceSnapshot'))::text,''))::text AS \"AgreedPriceSnapshot\",(t.applied_holding_deposit)::numeric AS \"AppliedHoldingDeposit\",(((s.data->>'approvalReason'))::text)::text AS \"ApprovalReason\",(((s.data->>'approvedAt'))::timestamptz)::timestamptz AS \"ApprovedAt\",(((s.data->>'approvedByUserId'))::uuid)::uuid AS \"ApprovedByUserId\",(((s.data->>'convertedMainContractId'))::uuid)::uuid AS \"ConvertedMainContractId\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(t.draft_metadata)::jsonb AS \"DraftMetadata\",(t.version)::integer AS \"DraftVersion\",(t.end_date)::date AS \"EndDate\",(((s.data->>'holdingAllocationReference'))::text)::text AS \"HoldingAllocationReference\",(t.source_holding_contract_id)::uuid AS \"HoldingContractId\",(t.holding_expiry_at)::timestamptz AS \"HoldingExpiryAt\",(COALESCE(((s.data->>'isDevelopmentDemo'))::boolean,FALSE))::boolean AS \"IsDevelopmentDemo\",(CASE t.contract_type WHEN 'RENEWAL' THEN 1 WHEN 'HOLDING' THEN 2 ELSE 0 END)::integer AS \"Kind\",(((s.data->>'lifecycleActorId'))::uuid)::uuid AS \"LifecycleActorId\",(((s.data->>'lifecycleAt'))::timestamptz)::timestamptz AS \"LifecycleAt\",(((s.data->>'lifecycleReason'))::text)::text AS \"LifecycleReason\",(t.monthly_rent)::numeric AS \"MonthlyRent\",(t.owner_signer_id)::uuid AS \"OwnerSignerId\",(t.previous_contract_id)::uuid AS \"PreviousContractId\",(((s.data->>'priceLockTrigger'))::text)::text AS \"PriceLockTrigger\",(((s.data->>'priceLockedAt'))::timestamptz)::timestamptz AS \"PriceLockedAt\",(t.representative_resident_id)::uuid AS \"RepresentativeResidentId\",(t.deposit_required)::numeric AS \"RequiredDeposit\",(t.reserved_capacity)::smallint AS \"ReservedCapacity\",(t.room_id)::uuid AS \"RoomId\",(t.snapshot_hash)::text AS \"SnapshotHash\",(t.start_date)::date AS \"StartDate\",(t.status)::integer AS \"Status\",(t.tenant_user_id)::uuid AS \"TenantUserId\",(t.terms)::text AS \"Terms\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\" FROM contracts t LEFT JOIN LATERAL (SELECT h.value->'state' AS data FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='Contract' ORDER BY h.n DESC LIMIT 1) s ON TRUE WHERE t.contract_type IN ('MAIN','RENEWAL','HOLDING')");
+                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.activated_at)::timestamptz AS \"ActivatedAt\",(t.activated_by_user_id)::uuid AS \"ActivatedByUserId\",(t.actual_end_date)::date AS \"ActualEndDate\",(COALESCE(((s.data->>'agreedPriceSnapshot'))::text,''))::text AS \"AgreedPriceSnapshot\",(t.applied_holding_deposit)::numeric AS \"AppliedHoldingDeposit\",(((s.data->>'approvalReason'))::text)::text AS \"ApprovalReason\",(((s.data->>'approvedAt'))::timestamptz)::timestamptz AS \"ApprovedAt\",(((s.data->>'approvedByUserId'))::uuid)::uuid AS \"ApprovedByUserId\",(((s.data->>'convertedMainContractId'))::uuid)::uuid AS \"ConvertedMainContractId\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(t.draft_metadata)::jsonb AS \"DraftMetadata\",(t.version)::integer AS \"DraftVersion\",(t.end_date)::date AS \"EndDate\",(((s.data->>'holdingAllocationReference'))::text)::text AS \"HoldingAllocationReference\",(t.source_holding_contract_id)::uuid AS \"HoldingContractId\",(t.holding_expiry_at)::timestamptz AS \"HoldingExpiryAt\",(COALESCE(((s.data->>'internalAcceptance'))::text,''))::text AS \"InternalAcceptance\",(COALESCE(((s.data->>'isDevelopmentDemo'))::boolean,FALSE))::boolean AS \"IsDevelopmentDemo\",(CASE t.contract_type WHEN 'RENEWAL' THEN 1 WHEN 'HOLDING' THEN 2 WHEN 'ADDENDUM' THEN 3 ELSE 0 END)::integer AS \"Kind\",(((s.data->>'lifecycleActorId'))::uuid)::uuid AS \"LifecycleActorId\",(((s.data->>'lifecycleAt'))::timestamptz)::timestamptz AS \"LifecycleAt\",(((s.data->>'lifecycleReason'))::text)::text AS \"LifecycleReason\",(t.monthly_rent)::numeric AS \"MonthlyRent\",(COALESCE(((s.data->>'operatingPolicySnapshot'))::text,''))::text AS \"OperatingPolicySnapshot\",(t.owner_signer_id)::uuid AS \"OwnerSignerId\",(t.parent_contract_id)::uuid AS \"ParentContractId\",(t.previous_contract_id)::uuid AS \"PreviousContractId\",(((s.data->>'priceLockTrigger'))::text)::text AS \"PriceLockTrigger\",(((s.data->>'priceLockedAt'))::timestamptz)::timestamptz AS \"PriceLockedAt\",(t.representative_resident_id)::uuid AS \"RepresentativeResidentId\",(t.deposit_required)::numeric AS \"RequiredDeposit\",(t.reserved_capacity)::smallint AS \"ReservedCapacity\",(t.room_id)::uuid AS \"RoomId\",(COALESCE(((s.data->>'signingMode'))::text,''))::text AS \"SigningMode\",(t.snapshot_hash)::text AS \"SnapshotHash\",(t.start_date)::date AS \"StartDate\",(t.status)::integer AS \"Status\",(t.tenant_user_id)::uuid AS \"TenantUserId\",(t.terms)::text AS \"Terms\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\" FROM contracts t LEFT JOIN LATERAL (SELECT h.value->'state' AS data FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='Contract' ORDER BY h.n DESC LIMIT 1) s ON TRUE WHERE t.contract_type IN ('MAIN','RENEWAL','HOLDING','ADDENDUM')");
                 });
 
             modelBuilder.Entity("BHome.Domain.TenantContracts.ContractDocumentFile", b =>
@@ -4570,6 +4607,125 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(COALESCE(((t.signing_data->'compactState'->>'certificateChain'))::text,''))::text AS \"CertificateChain\",(t.certificate_id)::uuid AS \"CertificateId\",(t.contract_id)::uuid AS \"ContractId\",(t.requested_at)::timestamptz AS \"CreatedAt\",(COALESCE(((t.signing_data->'compactState'->>'credentialId'))::text,''))::text AS \"CredentialId\",(COALESCE(((t.signing_data->'compactState'->>'dataToSignDigest'))::text,''))::text AS \"DataToSignDigest\",(COALESCE(((t.signing_data->'compactState'->>'documentDigest'))::text,''))::text AS \"DocumentDigest\",(t.expires_at)::timestamptz AS \"ExpiresAt\",(COALESCE(((t.signing_data->'compactState'->>'fieldName'))::text,''))::text AS \"FieldName\",(t.prepared_hash)::text AS \"PreparedHash\",(t.prepared_object_key)::text AS \"PreparedObjectKey\",(t.provider_reference)::text AS \"ProviderReference\",(COALESCE(((t.signing_data->'compactState'->>'providerUserId'))::text,''))::text AS \"ProviderUserId\",(t.signed_at)::timestamptz AS \"SignedAt\",(t.signed_hash)::text AS \"SignedHash\",(t.signed_object_key)::text AS \"SignedObjectKey\",(t.signer_user_id)::uuid AS \"SignerUserId\",(t.snapshot_hash)::text AS \"SnapshotHash\",(t.source_hash)::text AS \"SourceHash\",(t.signing_status)::integer AS \"Status\",(COALESCE(((t.signing_data->'compactState'->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\" FROM contract_signings t WHERE TRUE");
                 });
 
+            modelBuilder.Entity("BHome.Domain.TenantContracts.ContractSigningInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Id");
+
+                    b.Property<DateTimeOffset?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("AcceptedAt");
+
+                    b.Property<string>("AcceptedDocumentHash")
+                        .HasColumnType("text")
+                        .HasColumnName("AcceptedDocumentHash");
+
+                    b.Property<string>("AcceptedDocumentObjectKey")
+                        .HasColumnType("text")
+                        .HasColumnName("AcceptedDocumentObjectKey");
+
+                    b.Property<Guid>("ApprovedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ApprovedByUserId");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ContractId");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreatedAt");
+
+                    b.Property<string>("DeliveryStatus")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("DeliveryStatus");
+
+                    b.Property<string>("DocumentHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("DocumentHash");
+
+                    b.Property<string>("DocumentObjectKey")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("DocumentObjectKey");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ExpiresAt");
+
+                    b.Property<int>("OtpAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("OtpAttempts");
+
+                    b.Property<DateTimeOffset?>("OtpExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("OtpExpiresAt");
+
+                    b.Property<string>("OtpHash")
+                        .HasColumnType("text")
+                        .HasColumnName("OtpHash");
+
+                    b.Property<int>("OtpSendCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("OtpSendCount");
+
+                    b.Property<DateTimeOffset?>("OtpSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("OtpSentAt");
+
+                    b.Property<string>("RecipientEmail")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("RecipientEmail");
+
+                    b.Property<Guid>("ResidentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ResidentId");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("RevokedAt");
+
+                    b.Property<DateTimeOffset?>("SessionExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("SessionExpiresAt");
+
+                    b.Property<string>("SessionHash")
+                        .HasColumnType("text")
+                        .HasColumnName("SessionHash");
+
+                    b.Property<string>("SignatureHash")
+                        .HasColumnType("text")
+                        .HasColumnName("SignatureHash");
+
+                    b.Property<string>("SignatureObjectKey")
+                        .HasColumnType("text")
+                        .HasColumnName("SignatureObjectKey");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("SnapshotHash");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("TokenHash");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("UpdatedAt");
+
+                    b.HasKey("Id");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT (COALESCE(((s.data->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(((s.data->>'acceptedAt'))::timestamptz)::timestamptz AS \"AcceptedAt\",(((s.data->>'acceptedDocumentHash'))::text)::text AS \"AcceptedDocumentHash\",(((s.data->>'acceptedDocumentObjectKey'))::text)::text AS \"AcceptedDocumentObjectKey\",(COALESCE(((s.data->>'approvedByUserId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ApprovedByUserId\",(COALESCE(((s.data->>'contractId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ContractId\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((s.data->>'deliveryStatus'))::text,''))::text AS \"DeliveryStatus\",(COALESCE(((s.data->>'documentHash'))::text,''))::text AS \"DocumentHash\",(COALESCE(((s.data->>'documentObjectKey'))::text,''))::text AS \"DocumentObjectKey\",(COALESCE(((s.data->>'expiresAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"ExpiresAt\",(COALESCE(((s.data->>'otpAttempts'))::integer,0))::integer AS \"OtpAttempts\",(((s.data->>'otpExpiresAt'))::timestamptz)::timestamptz AS \"OtpExpiresAt\",(((s.data->>'otpHash'))::text)::text AS \"OtpHash\",(COALESCE(((s.data->>'otpSendCount'))::integer,0))::integer AS \"OtpSendCount\",(((s.data->>'otpSentAt'))::timestamptz)::timestamptz AS \"OtpSentAt\",(COALESCE(((s.data->>'recipientEmail'))::text,''))::text AS \"RecipientEmail\",(COALESCE(((s.data->>'residentId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ResidentId\",(((s.data->>'revokedAt'))::timestamptz)::timestamptz AS \"RevokedAt\",(((s.data->>'sessionExpiresAt'))::timestamptz)::timestamptz AS \"SessionExpiresAt\",(((s.data->>'sessionHash'))::text)::text AS \"SessionHash\",(((s.data->>'signatureHash'))::text)::text AS \"SignatureHash\",(((s.data->>'signatureObjectKey'))::text)::text AS \"SignatureObjectKey\",(COALESCE(((s.data->>'snapshotHash'))::text,''))::text AS \"SnapshotHash\",(COALESCE(((s.data->>'tokenHash'))::text,''))::text AS \"TokenHash\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\" FROM contracts t CROSS JOIN LATERAL (SELECT DISTINCT ON (h.value->>'recordKey') h.value->'state' AS data, h.value->>'deleted' AS deleted FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='ContractSigningInvitation' ORDER BY h.value->>'recordKey',h.n DESC) s WHERE COALESCE(s.deleted,'false')<>'true'");
+                });
+
             modelBuilder.Entity("BHome.Domain.TenantContracts.DepositVerification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4641,6 +4797,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("ConfirmedByUserId");
 
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("ContactEmail");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreatedAt");
@@ -4674,7 +4835,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("ResidentType");
 
-                    b.Property<Guid>("RoomId")
+                    b.Property<Guid?>("RoomId")
                         .HasColumnType("uuid")
                         .HasColumnName("RoomId");
 
@@ -4704,7 +4865,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.verified_at)::timestamptz AS \"ConfirmedAt\",(t.verified_by_user_id)::uuid AS \"ConfirmedByUserId\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(t.display_label)::text AS \"DisplayLabel\",(t.hmac_key_version)::text AS \"HmacKeyVersion\",(t.identity_data)::jsonb AS \"IdentityData\",(t.identity_hmac)::text AS \"IdentityHmac\",(t.identity_owner_scope_id)::uuid AS \"OwnerUserId\",(COALESCE(((s.data->>'residentType'))::integer,0))::integer AS \"ResidentType\",(t.current_room_id)::uuid AS \"RoomId\",(t.user_id)::uuid AS \"TenantUserId\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(t.verification_status)::integer AS \"VerificationStatus\" FROM residents t LEFT JOIN LATERAL (SELECT h.value->'state' AS data FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='Resident' ORDER BY h.n DESC LIMIT 1) s ON TRUE WHERE TRUE");
+                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(t.verified_at)::timestamptz AS \"ConfirmedAt\",(t.verified_by_user_id)::uuid AS \"ConfirmedByUserId\",(t.contact_email)::text AS \"ContactEmail\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(t.display_label)::text AS \"DisplayLabel\",(t.hmac_key_version)::text AS \"HmacKeyVersion\",(t.identity_data)::jsonb AS \"IdentityData\",(t.identity_hmac)::text AS \"IdentityHmac\",(t.identity_owner_scope_id)::uuid AS \"OwnerUserId\",(COALESCE(((s.data->>'residentType'))::integer,0))::integer AS \"ResidentType\",(t.current_room_id)::uuid AS \"RoomId\",(t.user_id)::uuid AS \"TenantUserId\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(t.verification_status)::integer AS \"VerificationStatus\" FROM residents t LEFT JOIN LATERAL (SELECT h.value->'state' AS data FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='Resident' ORDER BY h.n DESC LIMIT 1) s ON TRUE WHERE TRUE");
                 });
 
             modelBuilder.Entity("BHome.Infrastructure.IdentityAccess.SecurityAuditRecord", b =>
@@ -5767,6 +5928,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasForeignKey("TargetDepositContractId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("BHome.Domain.TenantContracts.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("TargetSettlementContractId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BHome.Domain.PaymentsDebt.PaymentTransfer", null)
                         .WithMany()
                         .HasForeignKey("TransferId")
@@ -6264,8 +6430,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasOne("BHome.Domain.PropertyManagement.Room", "Room")
                         .WithMany()
                         .HasForeignKey("RoomId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()

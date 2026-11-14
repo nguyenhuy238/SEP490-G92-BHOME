@@ -8,7 +8,12 @@ import { MobileSessions, type SessionView } from './sessions';
 
 // Exported only so ContextPortal can re-provide it inside react-native-paper portals.
 export const SessionContext = createContext<
-  (SessionView & { login: MobileSessions['login']; logout: MobileSessions['logout'] }) | null
+  | (SessionView & {
+      login: MobileSessions['login'];
+      logout: MobileSessions['logout'];
+      retryRestore: () => Promise<void>;
+    })
+  | null
 >(null);
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [manager] = useState(
@@ -56,6 +61,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         ...view,
         login: (base, name, password) => manager.login(base, name, password),
         logout: () => manager.logout(),
+        retryRestore: () => manager.reconnect(),
       }}
     >
       {children}

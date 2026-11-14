@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Contracts;
 internal sealed class CompactContractHoldingLedger(BHomePersistenceContext db, TimeProvider clock) : IContractHoldingLedger
 {
     public async Task<HoldingDepositApplication> ApplyAsync(Guid holdingContractId, Guid mainContractId, Guid roomId,
-        Guid tenantUserId, decimal requiredDeposit, CancellationToken token)
+        Guid? tenantUserId, decimal requiredDeposit, CancellationToken token)
     {
         if (db is not Compact24DbContext) throw new IntegrationUnavailableException("BF-03A Compact24 holding ledger");
         var holding = await db.Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == holdingContractId, token)

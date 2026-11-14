@@ -1,4 +1,4 @@
-import { ApiError } from './api';
+import { ApiError, infrastructureError } from './api';
 import type { Page } from './invoices';
 
 export interface VerifiedPayment {
@@ -52,6 +52,9 @@ export interface BankAccount {
   version: number;
 }
 export interface BankTransfer {
+  allocatedDepositContractId?: string | null;
+  allocatedSettlementContractId?: string | null;
+  allocatedSettlementReceivableId?: string | null;
   id: string;
   providerIdentity: string;
   bankReference: string;
@@ -72,6 +75,7 @@ export interface BankTransfer {
   unallocatedAmount?: string;
 }
 export interface TransferInput {
+  proposedDepositContractId?: string;
   providerIdentity: string;
   bankReference: string;
   amount: string;
@@ -109,6 +113,12 @@ export interface DebtInvoice {
   approvedAdjustmentTotal?: string | null;
   potentialExcessAmount?: string | null;
 }
+export interface DebtSummary {
+  outstandingAmount: string;
+  overdueAmount: string;
+  invoiceCount: number;
+  overdueInvoiceCount: number;
+}
 export interface PaymentHistory {
   id: string;
   invoiceId: string;
@@ -128,7 +138,84 @@ export interface PayerChoice {
   userId: string;
   displayLabel: string;
 }
+export interface SePayEvent {
+  id: string;
+  mode: string;
+  status: string;
+  reason: string | null;
+  transferId: string | null;
+  receivedAt: string;
+}
+export interface ReceiptExcessTarget {
+  depositContractId?: string | null;
+  invoiceId?: string | null;
+  settlementContractId?: string | null;
+  receivableId?: string | null;
+  holdingContractId?: string | null;
+}
+export interface ReceiptExcessDisposition {
+  id: string;
+  transferId: string;
+  target: ReceiptExcessTarget;
+  roomId: string;
+  amount: string;
+  payerResidentId: string | null;
+  externalPayerAttestationId?: string | null;
+  payerUserId: string | null;
+  payerLabel: string;
+  reason: string;
+  approvedAt: string;
+  isDevelopmentDemo: boolean;
+}
+export interface ReceiptExcessContext {
+  externalPayer?: ExternalPaymentPayer | null;
+  transferId: string;
+  target: ReceiptExcessTarget;
+  roomId: string;
+  amount: string;
+  outstanding: string;
+  transferReference: string;
+  payers: { residentId: string; userId: string | null; label: string }[];
+  reference: string;
+  problems: string[];
+  disposition: ReceiptExcessDisposition | null;
+  isDevelopmentDemo: boolean;
+}
+export interface ExternalPaymentPayer {
+  id: string;
+  transferId: string;
+  payerLabel: string;
+  reason: string;
+  transferFingerprint: string;
+  verifiedAt: string;
+  isDevelopmentDemo: boolean;
+}
+export interface ExternalPaymentPayerContext {
+  transferId: string;
+  transferFingerprint: string;
+  statementReference: string;
+  problems: string[];
+  payer: ExternalPaymentPayer | null;
+  isDevelopmentDemo: boolean;
+}
+export interface DepositAllocationContext {
+  transferId: string;
+  contractId: string;
+  reference: string;
+  depositReference: string;
+  required: string;
+  received: string;
+  remaining: string;
+  proposedAllocation: string;
+  excess: string;
+  payers: { residentId: string; userId: string | null; label: string }[];
+  externalPayer: ExternalPaymentPayer | null;
+  problems: string[];
+  isDevelopmentDemo: boolean;
+}
 export interface PaymentFilter {
+  depositContractId?: string;
+  settlementContractId?: string;
   page?: number;
   locationId?: string;
   roomId?: string;
@@ -151,6 +238,56 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
     });
   const root = '/api/v1/payment-transactions';
   return {
+    sepayEvents: (page: number, signal?: AbortSignal) =>
+      request<Page<SePayEvent>>(`/api/v1/integrations/sepay/events?page=${page}&pageSize=20`, {
+        signal,
+      }),
+    externalPayer: (id: string, signal?: AbortSignal) =>
+      request<ExternalPaymentPayerContext>(`${root}/${encodeURIComponent(id)}/external-payer`, {
+        signal,
+      }),
+    confirmExternalPayer: (
+      id: string,
+      body: {
+        expectedTransferFingerprint: string;
+        payerLabel: string;
+        reason: string;
+        payerHasNoResidentProfile: boolean;
+        humanConfirmed: boolean;
+      },
+      key: string,
+    ) =>
+      mutation<ExternalPaymentPayer>(`${root}/${encodeURIComponent(id)}/external-payer`, body, key),
+    excessDisposition: async (id: string, signal?: AbortSignal) =>
+      (await request<ReceiptExcessDisposition | null>(
+        `${root}/${encodeURIComponent(id)}/excess-disposition`,
+        { signal },
+      )) ?? null,
+    excessContext: (id: string, target: ReceiptExcessTarget, signal?: AbortSignal) => {
+      const query = new URLSearchParams();
+      for (const [name, value] of Object.entries(target)) if (value) query.set(name, value);
+      return request<ReceiptExcessContext>(
+        `${root}/${encodeURIComponent(id)}/excess-disposition/context?${query}`,
+        { signal },
+      );
+    },
+    confirmExcess: (
+      id: string,
+      input: {
+        target: ReceiptExcessTarget;
+        expectedReference: string;
+        payerResidentId: string | null;
+        externalPayerAttestationId?: string;
+        reason: string;
+        humanConfirmed: boolean;
+      },
+      key: string,
+    ) =>
+      mutation<ReceiptExcessDisposition>(
+        `${root}/${encodeURIComponent(id)}/excess-disposition`,
+        input,
+        key,
+      ),
     payment: (id: string, signal?: AbortSignal) =>
       request<InvoicePayment>(`/api/v1/invoices/${encodeURIComponent(id)}/payment`, { signal }),
     instructions: (id: string, signal?: AbortSignal) =>
@@ -166,6 +303,8 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
       request<Page<DebtInvoice>>('/api/v1/payment-invoices?' + paymentQuery(filter), { signal }),
     debts: (filter: PaymentFilter, signal?: AbortSignal) =>
       request<Page<DebtInvoice>>('/api/v1/debts?' + paymentQuery(filter), { signal }),
+    debtSummary: (filter: PaymentFilter, signal?: AbortSignal) =>
+      request<DebtSummary>('/api/v1/debts/summary?' + paymentQuery(filter), { signal }),
     history: (filter: PaymentFilter, signal?: AbortSignal) =>
       request<Page<PaymentHistory>>('/api/v1/payment-history?' + paymentQuery(filter), { signal }),
     transfers: (filter: PaymentFilter, signal?: AbortSignal) =>
@@ -185,6 +324,37 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
       ),
     reject: (id: string, reason: string, key: string) =>
       mutation(`${root}/${encodeURIComponent(id)}/reject`, { reason }, key),
+    depositContext: (id: string, contractId: string, signal?: AbortSignal) =>
+      request<DepositAllocationContext>(
+        `${root}/${encodeURIComponent(id)}/deposit-context?contractId=${encodeURIComponent(contractId)}`,
+        { signal },
+      ),
+    depositPosition: (contractId: string, signal?: AbortSignal) =>
+      request<{
+        contractId: string;
+        transferReference: string;
+        required: string;
+        received: string;
+        remaining: string;
+        isDevelopmentDemo: boolean;
+      }>(`/api/v1/contracts/${encodeURIComponent(contractId)}/deposit-payment`, { signal }),
+    allocateDeposit: (
+      id: string,
+      input: {
+        contractId: string;
+        paidByUserId: string | null;
+        paidByResidentId?: string;
+        externalPayerAttestationId?: string;
+        expectedReference: string;
+        humanVerified: boolean;
+      },
+      key: string,
+    ) =>
+      mutation<{ status: string; reason: string }>(
+        `${root}/${encodeURIComponent(id)}/allocate-deposit`,
+        input,
+        key,
+      ),
     allocateHolding: (id: string, contractId: string, paidByUserId: string, key: string) =>
       mutation<{ status: string; reason: string }>(
         `${root}/${encodeURIComponent(id)}/allocate-holding-deposit`,
@@ -204,6 +374,30 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
   };
 }
 const labels: Record<string, string> = {
+  deposit_context_changed: 'Nguồn hoặc số cọc đã đổi. Tải lại và xác nhận lại.',
+  deposit_payer_confirmation_required:
+    'Chọn đúng Resident thuộc hợp đồng hoặc người trả bên ngoài đã xác minh.',
+  deposit_allocation_confirmation_required:
+    'Cần xác nhận giao dịch và người thực trả trước khi phân bổ cọc.',
+  deposit_already_satisfied: 'Cọc đã đủ; giao dịch mới cần đối chiếu hoàn toàn bộ.',
+  deposit_not_payable: 'Hợp đồng đã đóng hoặc không nhận thêm cọc.',
+  deposit_transfer_reference_mismatch: 'Nội dung giao dịch chưa khớp tham chiếu cọc của hợp đồng.',
+  verified_deposit_excess_refund_required:
+    'Đã phân bổ đủ phần cọc thiếu; phần dư phải hoàn người thực trả.',
+  verified_partial_deposit: 'Đã ghi nhận cọc một phần, chưa đủ cọc thỏa thuận.',
+  verified_deposit: 'Đã phân bổ vào cọc đã thỏa thuận.',
+  ExcessRefundPending: 'Phải hoàn tiền dư',
+  ExcessRefundCompleted: 'Đã hoàn tiền dư',
+  verified_whole_excess_refund_required: 'Toàn bộ giao dịch phải hoàn cho người thực trả.',
+  verified_whole_excess_refund_completed: 'Đã hoàn toàn bộ giao dịch cho người thực trả.',
+  verified_whole_excess_returned: 'Đã hoàn toàn bộ giao dịch cho người thực trả.',
+  verified_partial_excess_returned: 'Đã hoàn một phần tiền dư; tiếp tục xử lý số còn lại.',
+  receipt_target_not_settled: 'Nghĩa vụ vẫn còn số tiền phải trả; cần đối soát phân bổ trước.',
+  receipt_verified_payer_required: 'Cần xác minh hồ sơ người thực trả trước khi hoàn.',
+  verified_bank_receipt_required: 'Giao dịch chưa đủ điều kiện xác minh tiền ngân hàng thực nhận.',
+  development_payment_mismatch: 'Giao dịch và nghĩa vụ phải cùng chế độ dữ liệu.',
+  refund_source_requires_manual_review: 'Giao dịch đã có yêu cầu hoàn; cần kiểm tra hồ sơ hiện có.',
+  bank_transaction_already_allocated: 'Giao dịch đã được phân bổ; xem hồ sơ hoàn phần dư.',
   Paid: 'Đã thanh toán',
   verified_partial_payment: 'Đã ghi nhận thanh toán một phần; tiếp tục theo dõi dư nợ.',
   verified_excess_payment_pending_review:
@@ -229,10 +423,32 @@ export function paymentText(value: string) {
   return labels[value] ?? 'Cần kiểm tra thông tin đối soát';
 }
 export function paymentError(error: unknown) {
+  const infrastructure = infrastructureError(error);
+  if (infrastructure) return infrastructure;
   const value = error as { status?: number; code?: string; problem?: { code?: string } };
   const code =
     error instanceof ApiError ? error.problem?.code : (value?.code ?? value?.problem?.code);
   const errors: Record<string, string> = {
+    deposit_context_changed: labels.deposit_context_changed,
+    deposit_payer_confirmation_required: labels.deposit_payer_confirmation_required,
+    deposit_allocation_confirmation_required: labels.deposit_allocation_confirmation_required,
+    deposit_already_satisfied: labels.deposit_already_satisfied,
+    deposit_not_payable: labels.deposit_not_payable,
+    deposit_transfer_reference_mismatch: labels.deposit_transfer_reference_mismatch,
+    external_payer_confirmation_required:
+      'Cần đối chiếu sao kê, nhập nhãn người thực trả và xác nhận không có hồ sơ Resident.',
+    external_payer_review_changed:
+      'Nguồn giao dịch hoặc điều kiện xác minh đã thay đổi. Tải lại để kiểm tra.',
+    external_payer_already_confirmed: 'Người trả bên ngoài đã được xác nhận cho giao dịch này.',
+    receipt_payer_already_external:
+      'Giao dịch có người thực trả bên ngoài đã xác minh; không gắn thành thanh toán của Tenant.',
+    receipt_excess_already_confirmed: 'Giao dịch đã xác nhận phải hoàn. Tải lại hồ sơ hoàn tiền.',
+    receipt_excess_review_changed: 'Số liệu đối chiếu đã thay đổi. Tải lại và xác nhận lại.',
+    receipt_excess_not_ready:
+      'Chưa đủ điều kiện xác nhận toàn bộ tiền dư. Kiểm tra các mục còn vướng.',
+    receipt_verified_payer_required: 'Chọn đúng hồ sơ người thực trả đã được xác minh.',
+    receipt_excess_confirmation_required:
+      'Cần chọn người thực trả, nhập lý do và xác nhận đối chiếu.',
     invalid_verified_bank_transfer:
       'Kiểm tra số tiền VND nguyên, thời gian và bằng chứng sao kê; cần xác nhận của Owner.',
     payment_idempotency_key_reused:

@@ -37,6 +37,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{DADBFE4A
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.DigitalSigning.UnitTests", "..\digital-signing\tests\BHome.DigitalSigning.UnitTests\BHome.DigitalSigning.UnitTests.csproj", "{89BD996A-8ECA-49BF-8446-AC6E06F6228B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BHome.Compact24Migration", "..\..\tools\BHome.Compact24Migration\BHome.Compact24Migration.csproj", "{95D492CF-F331-43FB-B765-53C652693899}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -103,6 +105,10 @@ Global
 		{89BD996A-8ECA-49BF-8446-AC6E06F6228B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{89BD996A-8ECA-49BF-8446-AC6E06F6228B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{89BD996A-8ECA-49BF-8446-AC6E06F6228B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{95D492CF-F331-43FB-B765-53C652693899}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{95D492CF-F331-43FB-B765-53C652693899}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{95D492CF-F331-43FB-B765-53C652693899}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{95D492CF-F331-43FB-B765-53C652693899}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -113,5 +119,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{69C36A7C-E548-4D84-A3E2-768D1DBBE2F4} = {5FDE5147-F662-454B-8576-7994ADD6805B}
 		{89BD996A-8ECA-49BF-8446-AC6E06F6228B} = {DADBFE4A-1372-4C5C-A23E-56D0811AF591}
+		{95D492CF-F331-43FB-B765-53C652693899} = {5FDE5147-F662-454B-8576-7994ADD6805B}
 	EndGlobalSection
 EndGlobal

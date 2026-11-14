@@ -140,6 +140,7 @@ CREATE TABLE assets (
 CREATE TABLE residents (
     id uuid PRIMARY KEY,
     user_id uuid REFERENCES users(id),
+    contact_email varchar(256),
     current_room_id uuid REFERENCES rooms(id),
     identity_owner_scope_id uuid NOT NULL REFERENCES users(id),
     display_label varchar(150) NOT NULL,
@@ -152,6 +153,7 @@ CREATE TABLE residents (
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array')
 );
 CREATE UNIQUE INDEX ux_resident_identity ON residents(identity_owner_scope_id,hmac_key_version,identity_hmac) WHERE identity_hmac IS NOT NULL;
+CREATE UNIQUE INDEX ux_resident_contact_email ON residents(lower(btrim(contact_email))) WHERE contact_email IS NOT NULL;
 
 -- 08 One Contract table: documents, handovers, inspections and settlement are typed snapshots.
 CREATE TABLE contracts (
@@ -186,7 +188,7 @@ CREATE TABLE contracts (
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array'),
     CHECK (end_date>start_date),
     CHECK (tenant_user_id IS NULL OR tenant_user_id<>owner_signer_id),
-    CHECK (status<>3 OR (activated_at IS NOT NULL AND activated_by_user_id IS NOT NULL AND tenant_user_id IS NOT NULL)),
+    CONSTRAINT ck_contract_active_metadata CHECK (status<>3 OR (activated_at IS NOT NULL AND activated_by_user_id IS NOT NULL)),
     CHECK (previous_contract_id IS NULL OR previous_contract_id<>id),
     CHECK (parent_contract_id IS NULL OR parent_contract_id<>id),
     CHECK (source_holding_contract_id IS NULL OR source_holding_contract_id<>id)
@@ -237,7 +239,7 @@ CREATE TABLE contract_residents (
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array'),
     PRIMARY KEY(contract_id,resident_id),
     CHECK (residence_to IS NULL OR residence_to>=residence_from),
-    CHECK (actual_move_out_date IS NULL OR (actual_residence_from IS NOT NULL AND actual_move_out_date>=actual_residence_from))
+    CONSTRAINT ck_resident_actual_dates CHECK (actual_move_out_date IS NULL OR actual_residence_from IS NULL OR actual_move_out_date>=actual_residence_from)
 );
 
 -- 11 Independent incident lifecycle; child Work Orders use operational_tasks.
@@ -370,7 +372,12 @@ CREATE TABLE billing_policies (
     version integer NOT NULL DEFAULT 1 CHECK (version>0),
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array'),
     FOREIGN KEY(room_id,location_id) REFERENCES rooms(id,location_id),
-    CHECK (effective_to IS NULL OR effective_to>=effective_from)
+    CHECK (effective_to IS NULL OR effective_to>=effective_from),
+    CONSTRAINT ck_billing_policy_calculation_method CHECK (
+      (category = 0 AND calculation_method = 'FIXED_PER_ROOM_PER_MONTH') OR
+      (category IN (1, 2) AND calculation_method = 'METERED') OR
+      (category = 3 AND calculation_method IN ('FIXED_PER_ROOM_PER_MONTH', 'FIXED_PER_PERSON_PER_MONTH'))
+    )
 );
 CREATE INDEX ix_policy_effective ON billing_policies(location_id,charge_code,effective_from);
 
@@ -469,21 +476,28 @@ CREATE TABLE payment_allocations (
     source_deposit_contract_id uuid REFERENCES contracts(id),
     target_invoice_id uuid REFERENCES invoices(id),
     target_deposit_contract_id uuid REFERENCES contracts(id),
+    target_initial_contract_id uuid REFERENCES contracts(id),
+    target_settlement_contract_id uuid REFERENCES contracts(id),
+    settlement_receivable_id uuid,
+    deposit_offset_approval_id uuid,
     amount numeric(18,0) NOT NULL CHECK (amount<>0),
     reversal_of_allocation_id uuid UNIQUE REFERENCES payment_allocations(id),
     operation_key uuid NOT NULL,
     line_number smallint NOT NULL CHECK (line_number>0),
     paid_by_user_id uuid REFERENCES users(id),
-    created_by_user_id uuid NOT NULL REFERENCES users(id),
+    created_by_user_id uuid REFERENCES users(id),
     allocated_at timestamptz NOT NULL,
     reason text NOT NULL,
     UNIQUE(operation_key,line_number),
     CHECK ((source_payment_id IS NULL)<>(source_deposit_contract_id IS NULL)),
-    CHECK ((target_invoice_id IS NULL)<>(target_deposit_contract_id IS NULL)),
+    CONSTRAINT ck_allocation_one_target CHECK (num_nonnulls(target_invoice_id,target_deposit_contract_id,target_settlement_contract_id,target_initial_contract_id)=1),
+    CONSTRAINT ck_allocation_receivable_target CHECK ((target_settlement_contract_id IS NULL)=(settlement_receivable_id IS NULL)),
     CHECK ((amount>0 AND reversal_of_allocation_id IS NULL) OR (amount<0 AND reversal_of_allocation_id IS NOT NULL)),
     CHECK (source_deposit_contract_id IS NULL OR target_deposit_contract_id IS NULL OR source_deposit_contract_id<>target_deposit_contract_id),
     CHECK (reversal_of_allocation_id IS NULL OR reversal_of_allocation_id<>id)
 );
+CREATE UNIQUE INDEX ux_allocation_offset_approval ON payment_allocations(deposit_offset_approval_id) WHERE deposit_offset_approval_id IS NOT NULL;
+CREATE INDEX ix_allocation_receivable ON payment_allocations(target_settlement_contract_id,settlement_receivable_id);
 CREATE INDEX ix_allocation_invoice ON payment_allocations(target_invoice_id);
 CREATE INDEX ix_allocation_source ON payment_allocations(source_payment_id,source_deposit_contract_id);
 
@@ -492,7 +506,9 @@ CREATE TABLE refund_requests (
     id uuid PRIMARY KEY,
     source_payment_id uuid REFERENCES payments(id),
     source_deposit_contract_id uuid REFERENCES contracts(id),
-    beneficiary_resident_id uuid NOT NULL REFERENCES residents(id),
+    beneficiary_resident_id uuid REFERENCES residents(id),
+    beneficiary_kind varchar(12) NOT NULL DEFAULT 'RESIDENT',
+    external_payer_attestation_id uuid,
     requested_by_user_id uuid NOT NULL REFERENCES users(id),
     requested_at timestamptz NOT NULL,
     requested_amount numeric(18,0) NOT NULL CHECK (requested_amount>0),
@@ -508,6 +524,8 @@ CREATE TABLE refund_requests (
     version integer NOT NULL DEFAULT 1 CHECK (version>0),
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array'),
     CHECK ((source_payment_id IS NULL)<>(source_deposit_contract_id IS NULL)),
+    CONSTRAINT ck_refund_beneficiary CHECK ((beneficiary_kind='RESIDENT' AND beneficiary_resident_id IS NOT NULL AND external_payer_attestation_id IS NULL) OR
+      (beneficiary_kind='EXTERNAL' AND beneficiary_resident_id IS NULL AND external_payer_attestation_id IS NOT NULL AND source_payment_id IS NOT NULL)),
     CHECK (status NOT IN ('APPROVED','REJECTED','COMPLETED') OR (decided_by_user_id IS NOT NULL AND decided_at IS NOT NULL)),
     CHECK (status<>'COMPLETED' OR (executed_at IS NOT NULL AND external_refund_reference IS NOT NULL AND execution_evidence_key IS NOT NULL))
 );
@@ -839,4 +857,465 @@ BEGIN
         RAISE EXCEPTION 'Compact design must contain exactly 24 tables';
     END IF;
 END $count$;
+CREATE FUNCTION bhome24_settlement_allocation_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE charge jsonb; approval jsonb; approval_contract uuid; source_room uuid; target_room uuid;
+  budget numeric; outstanding numeric; allocated numeric; invoice_contract uuid; invoice_state smallint;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0));
+  IF NEW.target_settlement_contract_id IS NOT NULL THEN
+    SELECT h->'state',c.room_id INTO charge,target_room FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h
+      WHERE c.id=NEW.target_settlement_contract_id AND h->>'recordType'='SettlementReceivableV1' AND h->>'recordKey'=NEW.settlement_receivable_id::text;
+    IF charge IS NULL OR (charge->>'contractId')::uuid<>NEW.target_settlement_contract_id OR (charge->>'roomId')::uuid<>target_room
+      OR NOT EXISTS(SELECT 1 FROM users WHERE id=(charge->>'approvedByUserId')::uuid AND 'Owner'=ANY(roles)) THEN
+      RAISE EXCEPTION 'Approved settlement source required' USING ERRCODE='23514';
+    END IF;
+    SELECT COALESCE(sum(amount),0) INTO allocated FROM payment_allocations WHERE target_settlement_contract_id=NEW.target_settlement_contract_id AND settlement_receivable_id=NEW.settlement_receivable_id;
+    outstanding:=(charge->>'amount')::numeric-allocated;
+    IF allocated+NEW.amount<0 OR NEW.amount>outstanding THEN RAISE EXCEPTION 'Settlement allocation exceeds obligation' USING ERRCODE='23514'; END IF;
+  END IF;
+  IF NEW.deposit_offset_approval_id IS NOT NULL THEN
+    SELECT h->'state',c.id,c.room_id INTO approval,approval_contract,target_room FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h
+      WHERE h->>'recordType'='DepositOffsetApprovalV1' AND h->>'recordKey'=NEW.deposit_offset_approval_id::text;
+    IF approval IS NULL OR NEW.source_payment_id IS NOT NULL OR NEW.source_deposit_contract_id IS NULL OR NEW.target_deposit_contract_id IS NOT NULL OR NEW.amount<=0
+      OR (approval->>'allocationId')::uuid IS DISTINCT FROM NEW.id OR (approval->>'sourceDepositContractId')::uuid IS DISTINCT FROM NEW.source_deposit_contract_id
+      OR (approval->>'receivableId')::uuid IS DISTINCT FROM NEW.settlement_receivable_id OR (approval->>'invoiceId')::uuid IS DISTINCT FROM NEW.target_invoice_id
+      OR (approval->>'amount')::numeric IS DISTINCT FROM NEW.amount OR (approval->>'approvedByUserId')::uuid IS DISTINCT FROM NEW.created_by_user_id
+      OR (NEW.target_settlement_contract_id IS NOT NULL AND NEW.target_settlement_contract_id<>approval_contract)
+      OR NOT EXISTS(SELECT 1 FROM users WHERE id=NEW.created_by_user_id AND is_active AND 'Owner'=ANY(roles)) THEN
+      RAISE EXCEPTION 'Exact Owner deposit approval required' USING ERRCODE='23514';
+    END IF;
+    SELECT room_id INTO source_room FROM contracts WHERE id=NEW.source_deposit_contract_id AND contract_type='MAIN';
+    IF source_room IS DISTINCT FROM target_room THEN RAISE EXCEPTION 'Deposit must belong to the same Room' USING ERRCODE='23514'; END IF;
+    SELECT COALESCE((SELECT sum(amount) FROM payment_allocations WHERE target_deposit_contract_id=NEW.source_deposit_contract_id),0)
+      -COALESCE((SELECT sum(amount) FROM payment_allocations WHERE source_deposit_contract_id=NEW.source_deposit_contract_id),0)
+      -COALESCE((SELECT sum(requested_amount) FROM refund_requests WHERE source_deposit_contract_id=NEW.source_deposit_contract_id AND status IN ('REQUESTED','APPROVED','COMPLETED')),0) INTO budget;
+    IF NEW.amount>budget THEN RAISE EXCEPTION 'Deposit is spent or reserved' USING ERRCODE='23514'; END IF;
+    IF NEW.target_invoice_id IS NOT NULL THEN
+      SELECT room_id,contract_id,status,base_total_amount INTO source_room,invoice_contract,invoice_state,outstanding FROM invoices WHERE id=NEW.target_invoice_id;
+      IF source_room IS DISTINCT FROM target_room OR invoice_state IS DISTINCT FROM 1 OR NOT EXISTS(
+        WITH RECURSIVE versions AS (SELECT id,previous_contract_id FROM contracts WHERE id=approval_contract
+          UNION ALL SELECT c.id,c.previous_contract_id FROM contracts c JOIN versions v ON c.id=v.previous_contract_id)
+        SELECT 1 FROM versions WHERE id=invoice_contract) THEN RAISE EXCEPTION 'Invoice outside deposit tenancy' USING ERRCODE='23514'; END IF;
+      outstanding:=outstanding+COALESCE((SELECT sum(approved_delta_amount) FROM invoice_adjustments WHERE invoice_id=NEW.target_invoice_id AND status IN ('APPROVED','APPLIED') AND decision_snapshot->>'invoiceStatus'='1'),0)
+        -COALESCE((SELECT sum(amount) FROM payment_allocations WHERE target_invoice_id=NEW.target_invoice_id),0);
+      IF NEW.amount>outstanding THEN RAISE EXCEPTION 'Offset exceeds invoice balance' USING ERRCODE='23514'; END IF;
+    END IF;
+  ELSIF NEW.source_deposit_contract_id IS NOT NULL AND NEW.target_deposit_contract_id IS NULL THEN
+    RAISE EXCEPTION 'Deposit offset approval required' USING ERRCODE='23514';
+  END IF;
+  IF NEW.reversal_of_allocation_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM payment_allocations original
+    WHERE original.id=NEW.reversal_of_allocation_id AND original.target_settlement_contract_id IS NOT DISTINCT FROM NEW.target_settlement_contract_id
+      AND original.settlement_receivable_id IS NOT DISTINCT FROM NEW.settlement_receivable_id) THEN
+    RAISE EXCEPTION 'Reversal must preserve settlement target' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER allocation_settlement_guard BEFORE INSERT ON payment_allocations FOR EACH ROW EXECUTE FUNCTION bhome24_settlement_allocation_guard();
+
+CREATE FUNCTION bhome24_settlement_bank_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE charge jsonb; receipt_amount numeric; receipt_ref text; outstanding numeric;
+BEGIN
+  IF NEW.target_settlement_contract_id IS NULL OR NEW.source_payment_id IS NULL THEN RETURN NEW; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0));
+  SELECT h->'state' INTO charge FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h
+    WHERE c.id=NEW.target_settlement_contract_id AND h->>'recordType'='SettlementReceivableV1' AND h->>'recordKey'=NEW.settlement_receivable_id::text;
+  SELECT amount,upper(btrim(transaction_reference)) INTO receipt_amount,receipt_ref FROM payments WHERE id=NEW.source_payment_id AND status='VERIFIED';
+  outstanding:=(charge->>'amount')::numeric-COALESCE((SELECT sum(amount) FROM payment_allocations
+    WHERE target_settlement_contract_id=NEW.target_settlement_contract_id AND settlement_receivable_id=NEW.settlement_receivable_id),0);
+  IF charge IS NULL OR receipt_amount IS NULL OR NEW.amount<=0 OR NEW.amount<>LEAST(receipt_amount,outstanding)
+    OR EXISTS(SELECT 1 FROM payment_allocations WHERE source_payment_id=NEW.source_payment_id)
+    OR (NEW.paid_by_user_id IS NOT NULL AND NOT (charge->'recipientUserIds' @> jsonb_build_array(NEW.paid_by_user_id::text)))
+    OR EXISTS(SELECT 1 FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h
+      WHERE h->>'recordType'='BankReferenceClaim' AND h->'state'->>'normalizedReference'=receipt_ref) THEN
+    RAISE EXCEPTION 'Bank receipt must be verified, unclaimed and allocated once to its remaining settlement obligation' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER allocation_settlement_bank_guard BEFORE INSERT ON payment_allocations FOR EACH ROW EXECUTE FUNCTION bhome24_settlement_bank_guard();
+
+CREATE FUNCTION bhome24_receipt_disposition_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE receipt_amount numeric; receipt_ref text; allocated numeric; reserved numeric;
+BEGIN
+  IF NEW.source_payment_id IS NULL OR NEW.amount<=0 THEN RETURN NEW; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0));
+  SELECT amount,upper(btrim(transaction_reference)) INTO receipt_amount,receipt_ref FROM payments WHERE id=NEW.source_payment_id AND status='VERIFIED';
+  SELECT COALESCE(sum(amount),0) INTO allocated FROM payment_allocations WHERE source_payment_id=NEW.source_payment_id;
+  SELECT COALESCE(sum(requested_amount),0) INTO reserved FROM refund_requests
+    WHERE source_payment_id=NEW.source_payment_id AND status IN ('REQUESTED','APPROVED','COMPLETED');
+  IF receipt_amount IS NULL OR allocated+reserved+NEW.amount>receipt_amount OR EXISTS(
+    SELECT 1 FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h
+    WHERE p.id=NEW.source_payment_id AND h->>'recordType'='ReceiptExcessDispositionV1') OR EXISTS(
+    SELECT 1 FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h
+    WHERE h->>'recordType'='BankReferenceClaim' AND h->'state'->>'normalizedReference'=receipt_ref) THEN
+    RAISE EXCEPTION 'A refundable receipt or reserved refund cannot fund another allocation' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER allocation_receipt_disposition_guard BEFORE INSERT ON payment_allocations FOR EACH ROW EXECUTE FUNCTION bhome24_receipt_disposition_guard();
+
+-- Runtime guards shared verbatim with the canonical fresh DDL.
+CREATE OR REPLACE FUNCTION bhome24_external_payer_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE payer jsonb; old_payer jsonb; entries integer;
+BEGIN
+  SELECT count(*),jsonb_agg(h->'state')->0 INTO entries,payer FROM jsonb_array_elements(NEW.history) h WHERE h->>'recordType'='ExternalPaymentPayerV1';
+  IF entries=0 THEN RETURN NEW; END IF;
+  IF entries<>1 THEN RAISE EXCEPTION 'External payer attestation is immutable and unique per receipt' USING ERRCODE='23514'; END IF;
+  IF TG_OP='UPDATE' THEN
+    SELECT h->'state' INTO old_payer FROM jsonb_array_elements(OLD.history) h WHERE h->>'recordType'='ExternalPaymentPayerV1';
+    IF old_payer IS NOT NULL THEN
+      IF old_payer IS DISTINCT FROM payer THEN RAISE EXCEPTION 'External payer attestation cannot be replaced' USING ERRCODE='23514'; END IF;
+      RETURN NEW;
+    END IF;
+  END IF;
+  IF NEW.status<>'VERIFIED' OR payer->>'transferId' IS DISTINCT FROM NEW.id::text OR
+    payer->>'normalizedBankReference' IS DISTINCT FROM upper(btrim(NEW.transaction_reference)) OR
+    COALESCE(payer->>'receiptAmount','') !~ '^[0-9]+$' OR COALESCE(payer->>'transferFingerprint','') !~ '^[A-F0-9]{64}$' OR
+    nullif(btrim(payer->>'payerLabel'),'') IS NULL OR NOT EXISTS(SELECT 1 FROM users u WHERE u.id::text=payer->>'verifiedByUserId' AND u.is_active AND 'Owner'=ANY(u.roles)) THEN
+    RAISE EXCEPTION 'External payer requires an Owner-verified bank receipt' USING ERRCODE='23514';
+  END IF;
+  IF (payer->>'receiptAmount')::numeric<>NEW.amount OR EXISTS(SELECT 1 FROM payment_allocations a WHERE a.source_payment_id=NEW.id AND a.paid_by_user_id IS NOT NULL) OR
+    EXISTS(SELECT 1 FROM refund_requests r WHERE r.source_payment_id=NEW.id AND r.status IN ('REQUESTED','APPROVED','COMPLETED')) OR
+    EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.history) h WHERE h->>'recordType'='ReceiptExcessDispositionV1' AND h->'state'->>'payerResidentId' IS NOT NULL) THEN
+    RAISE EXCEPTION 'Receipt already has a different payer or refund obligation' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER payment_external_payer_guard BEFORE INSERT OR UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION bhome24_external_payer_guard();
+
+CREATE OR REPLACE FUNCTION bhome24_external_allocation_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.source_payment_id IS NOT NULL AND NEW.paid_by_user_id IS NOT NULL AND EXISTS(
+    SELECT 1 FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h WHERE p.id=NEW.source_payment_id AND h->>'recordType'='ExternalPaymentPayerV1') THEN
+    RAISE EXCEPTION 'External payer receipt cannot be relabeled as a Tenant payment' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER allocation_external_payer_guard BEFORE INSERT ON payment_allocations FOR EACH ROW EXECUTE FUNCTION bhome24_external_allocation_guard();
+
+CREATE OR REPLACE FUNCTION bhome24_external_refund_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE receipt payments%ROWTYPE; payer jsonb; state jsonb; allocated numeric; reserved numeric;
+BEGIN
+  IF TG_OP='UPDATE' AND ROW(OLD.source_payment_id,OLD.source_deposit_contract_id,OLD.beneficiary_kind,OLD.beneficiary_resident_id,OLD.external_payer_attestation_id,OLD.requested_amount)
+    IS DISTINCT FROM ROW(NEW.source_payment_id,NEW.source_deposit_contract_id,NEW.beneficiary_kind,NEW.beneficiary_resident_id,NEW.external_payer_attestation_id,NEW.requested_amount) THEN
+    RAISE EXCEPTION 'Refund source, beneficiary and amount are immutable' USING ERRCODE='23514';
+  END IF;
+  IF NEW.beneficiary_kind<>'EXTERNAL' OR NEW.status NOT IN ('REQUESTED','APPROVED','COMPLETED') THEN RETURN NEW; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0));
+  SELECT * INTO receipt FROM payments WHERE id=NEW.source_payment_id AND status='VERIFIED';
+  SELECT h->'state' INTO payer FROM jsonb_array_elements(receipt.history) h WHERE h->>'recordType'='ExternalPaymentPayerV1' AND h->'state'->>'id'=NEW.external_payer_attestation_id::text;
+  SELECT h->'state' INTO state FROM jsonb_array_elements(NEW.history) WITH ORDINALITY e(h,n) WHERE h->>'recordType'='ExcessReceiptRefundV1' ORDER BY n DESC LIMIT 1;
+  IF receipt.id IS NULL OR payer IS NULL OR state->>'classification' IS DISTINCT FROM 'ExcessReceiptRefundV1' OR
+    state->>'externalPayerAttestationId' IS DISTINCT FROM NEW.external_payer_attestation_id::text OR EXISTS(
+      SELECT 1 FROM payment_allocations a WHERE a.source_payment_id=receipt.id AND a.paid_by_user_id IS NOT NULL) OR NOT (
+      EXISTS(SELECT 1 FROM payment_allocations a WHERE a.source_payment_id=receipt.id) OR EXISTS(
+        SELECT 1 FROM jsonb_array_elements(receipt.history) h WHERE h->>'recordType'='ReceiptExcessDispositionV1'
+          AND h->'state'->>'externalPayerAttestationId'=NEW.external_payer_attestation_id::text AND h->'state'->>'payerResidentId' IS NULL
+          AND h->'state'->>'id'=state->>'receiptExcessDispositionId')) THEN
+    RAISE EXCEPTION 'External refund requires the exact verified payer and allocated or whole excess source' USING ERRCODE='23514';
+  END IF;
+  IF NEW.status='COMPLETED' AND (state->'upload'->>'objectKey' IS DISTINCT FROM NEW.execution_evidence_key OR
+    state->'upload'->>'externalReference' IS DISTINCT FROM NEW.external_refund_reference OR COALESCE(state->'upload'->>'sha256','') !~ '^[A-F0-9]{64}$' OR
+    NOT EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(state->'events')='array' THEN state->'events' ELSE '[]'::jsonb END) event WHERE event->>'action'='Completed')) THEN
+    RAISE EXCEPTION 'External refund completion requires matching execution evidence metadata' USING ERRCODE='23514';
+  END IF;
+  SELECT COALESCE(sum(amount),0) INTO allocated FROM payment_allocations WHERE source_payment_id=receipt.id;
+  SELECT COALESCE(sum(requested_amount),0) INTO reserved FROM refund_requests WHERE source_payment_id=receipt.id AND id<>NEW.id AND status IN ('REQUESTED','APPROVED','COMPLETED');
+  IF allocated+reserved+NEW.requested_amount>receipt.amount THEN RAISE EXCEPTION 'External refund exceeds unallocated receipt funds' USING ERRCODE='23514'; END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER refund_external_payer_guard BEFORE INSERT OR UPDATE ON refund_requests FOR EACH ROW EXECUTE FUNCTION bhome24_external_refund_guard();
+
+CREATE OR REPLACE FUNCTION bhome24_external_refund_valid(refund_id uuid) RETURNS boolean LANGUAGE sql STABLE AS $fn$
+  SELECT EXISTS(SELECT 1 FROM refund_requests r JOIN payments p ON p.id=r.source_payment_id
+    JOIN LATERAL (SELECT h->'state' state FROM jsonb_array_elements(r.history) WITH ORDINALITY e(h,n)
+      WHERE h->>'recordType'='ExcessReceiptRefundV1' ORDER BY n DESC LIMIT 1) proof ON true
+    JOIN LATERAL (SELECT h->'state' state FROM jsonb_array_elements(p.history) h WHERE h->>'recordType'='ExternalPaymentPayerV1'
+      AND h->'state'->>'id'=r.external_payer_attestation_id::text) payer ON true
+    WHERE r.id=refund_id AND r.status='COMPLETED' AND r.beneficiary_kind='EXTERNAL' AND r.beneficiary_resident_id IS NULL AND r.source_deposit_contract_id IS NULL
+      AND p.status='VERIFIED' AND payer.state->>'transferId'=p.id::text AND payer.state->>'normalizedBankReference'=upper(btrim(p.transaction_reference))
+      AND CASE WHEN payer.state->>'receiptAmount' ~ '^[0-9]+$' THEN (payer.state->>'receiptAmount')::numeric END=p.amount
+      AND payer.state->>'transferFingerprint' ~ '^[A-F0-9]{64}$' AND nullif(btrim(payer.state->>'payerLabel'),'') IS NOT NULL
+      AND proof.state->>'classification'='ExcessReceiptRefundV1' AND proof.state->>'externalPayerAttestationId'=r.external_payer_attestation_id::text
+      AND r.executed_at IS NOT NULL AND proof.state->'upload'->>'objectKey'=r.execution_evidence_key
+      AND proof.state->'upload'->>'externalReference'=r.external_refund_reference AND proof.state->'upload'->>'sha256' ~ '^[A-F0-9]{64}$'
+      AND EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(proof.state->'events')='array' THEN proof.state->'events' ELSE '[]'::jsonb END) event WHERE event->>'action'='Completed')
+      AND NOT EXISTS(SELECT 1 FROM payment_allocations a WHERE a.source_payment_id=p.id AND a.paid_by_user_id IS NOT NULL)
+      AND (EXISTS(SELECT 1 FROM payment_allocations a WHERE a.source_payment_id=p.id) OR EXISTS(SELECT 1 FROM jsonb_array_elements(p.history) h
+        WHERE h->>'recordType'='ReceiptExcessDispositionV1' AND h->'state'->>'id'=proof.state->>'receiptExcessDispositionId'
+          AND h->'state'->>'externalPayerAttestationId'=r.external_payer_attestation_id::text AND h->'state'->>'payerResidentId' IS NULL))
+      AND p.amount>=(SELECT COALESCE(sum(a.amount),0) FROM payment_allocations a WHERE a.source_payment_id=p.id)
+        +(SELECT COALESCE(sum(rr.requested_amount),0) FROM refund_requests rr WHERE rr.source_payment_id=p.id AND rr.status='COMPLETED'))
+$fn$;
+
 COMMIT;
+
+-- No rewrite of existing receipts/allocations. New writes respect the agreed deposit budget.
+CREATE FUNCTION bhome24_deposit_receipt_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE old_records jsonb; records jsonb; record jsonb;
+BEGIN
+  SELECT COALESCE(jsonb_agg(h),'[]'::jsonb) INTO records FROM jsonb_array_elements(NEW.history) h WHERE h->>'recordType'='DepositReceiptAllocationV1';
+  IF TG_OP='UPDATE' THEN
+    SELECT COALESCE(jsonb_agg(h),'[]'::jsonb) INTO old_records FROM jsonb_array_elements(OLD.history) h WHERE h->>'recordType'='DepositReceiptAllocationV1';
+    IF old_records<>'[]'::jsonb AND old_records IS DISTINCT FROM records THEN RAISE EXCEPTION 'Deposit payer snapshot is immutable' USING ERRCODE='23514'; END IF;
+  END IF;
+  IF jsonb_array_length(records)>1 THEN RAISE EXCEPTION 'Only one deposit allocation per receipt' USING ERRCODE='23514'; END IF;
+  IF records='[]'::jsonb THEN RETURN NEW; END IF;
+  record:=records->0->'state';
+  IF record->>'payerResidentId' IS NOT NULL AND EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.history) h WHERE h->>'recordType'='ExternalPaymentPayerV1') THEN
+    RAISE EXCEPTION 'Resident depositor cannot be relabeled as an external payer' USING ERRCODE='23514';
+  END IF;
+  IF old_records=records THEN RETURN NEW; END IF;
+  IF NEW.status<>'VERIFIED' OR record->>'transferId' IS DISTINCT FROM NEW.id::text OR
+    record->>'normalizedBankReference' IS DISTINCT FROM upper(btrim(NEW.transaction_reference)) OR
+    COALESCE(record->>'receiptAmount','') !~ '^[0-9]+$' OR COALESCE(record->>'allocatedAmount','') !~ '^[0-9]+$' OR
+    COALESCE(record->>'transferFingerprint','') !~ '^[A-F0-9]{64}$' OR
+    (record->>'receiptAmount')::numeric<>NEW.amount OR (record->>'allocatedAmount')::numeric<=0 OR (record->>'allocatedAmount')::numeric>NEW.amount OR
+    (record->>'payerResidentId' IS NULL)=(record->>'externalPayerAttestationId' IS NULL) OR
+    NOT EXISTS(SELECT 1 FROM users u WHERE u.id::text=record->>'verifiedByUserId' AND u.is_active AND 'Owner'=ANY(u.roles)) THEN
+    RAISE EXCEPTION 'Deposit receipt requires a verified source and explicit payer' USING ERRCODE='23514';
+  END IF;
+  IF record->>'payerResidentId' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM residents r JOIN contract_residents cr ON cr.resident_id=r.id
+    WHERE r.id::text=record->>'payerResidentId' AND cr.contract_id::text=record->>'contractId' AND r.verification_status=1
+      AND r.user_id::text IS NOT DISTINCT FROM record->>'payerUserId') THEN
+    RAISE EXCEPTION 'Deposit payer must be a verified contract Resident' USING ERRCODE='23514';
+  END IF;
+  IF record->>'externalPayerAttestationId' IS NOT NULL AND (record->>'payerUserId' IS NOT NULL OR NOT EXISTS(
+    SELECT 1 FROM jsonb_array_elements(NEW.history) h WHERE h->>'recordType'='ExternalPaymentPayerV1' AND h->'state'->>'id'=record->>'externalPayerAttestationId')) THEN
+    RAISE EXCEPTION 'Deposit external payer must match its attestation' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER payment_deposit_receipt_guard BEFORE INSERT OR UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION bhome24_deposit_receipt_guard();
+
+CREATE FUNCTION bhome24_deposit_allocation_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE required numeric; received numeric; receipt_amount numeric; record jsonb;
+BEGIN
+  IF NEW.target_deposit_contract_id IS NULL OR NEW.amount<=0 THEN RETURN NEW; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0));
+  SELECT deposit_required INTO required FROM contracts WHERE id=NEW.target_deposit_contract_id FOR UPDATE;
+  SELECT COALESCE(sum(amount),0) INTO received FROM payment_allocations WHERE target_deposit_contract_id=NEW.target_deposit_contract_id;
+  IF NEW.amount>required-received THEN RAISE EXCEPTION 'Deposit allocation exceeds agreed remaining funds' USING ERRCODE='23514'; END IF;
+  IF NEW.source_payment_id IS NOT NULL THEN
+    SELECT amount INTO receipt_amount FROM payments WHERE id=NEW.source_payment_id;
+    IF NEW.amount<>LEAST(receipt_amount,required-received) THEN RAISE EXCEPTION 'Deposit receipt allocation must preserve its excess' USING ERRCODE='23514'; END IF;
+    SELECT h->'state' INTO record FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h
+      WHERE p.id=NEW.source_payment_id AND h->>'recordType'='DepositReceiptAllocationV1';
+    IF record IS NOT NULL AND (record->>'allocationId' IS DISTINCT FROM NEW.id::text OR record->>'contractId' IS DISTINCT FROM NEW.target_deposit_contract_id::text OR
+      (record->>'allocatedAmount')::numeric<>NEW.amount OR record->>'payerUserId' IS DISTINCT FROM NEW.paid_by_user_id::text OR record->>'verifiedByUserId' IS DISTINCT FROM NEW.created_by_user_id::text) THEN
+      RAISE EXCEPTION 'Deposit allocation must match immutable payer snapshot' USING ERRCODE='23514';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER allocation_deposit_budget_guard BEFORE INSERT ON payment_allocations FOR EACH ROW EXECUTE FUNCTION bhome24_deposit_allocation_guard();
+
+CREATE FUNCTION bhome24_deposit_receipt_refund_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE payer jsonb; receipt_amount numeric; allocated numeric; reserved numeric;
+BEGIN
+  IF NEW.source_payment_id IS NULL THEN RETURN NEW; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0));
+  SELECT h->'state',p.amount INTO payer,receipt_amount FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h
+    WHERE p.id=NEW.source_payment_id AND h->>'recordType'='DepositReceiptAllocationV1' AND h->'state'->>'payerResidentId' IS NOT NULL;
+  IF payer IS NULL THEN RETURN NEW; END IF;
+  IF NEW.beneficiary_kind<>'RESIDENT' OR NEW.beneficiary_resident_id::text IS DISTINCT FROM payer->>'payerResidentId' OR NEW.source_deposit_contract_id IS NOT NULL THEN
+    RAISE EXCEPTION 'Deposit receipt excess must return to the actual Resident payer' USING ERRCODE='23514';
+  END IF;
+  IF NEW.status IN ('REQUESTED','APPROVED','COMPLETED') THEN
+    SELECT COALESCE(sum(amount),0) INTO allocated FROM payment_allocations WHERE source_payment_id=NEW.source_payment_id;
+    SELECT COALESCE(sum(requested_amount),0) INTO reserved FROM refund_requests WHERE source_payment_id=NEW.source_payment_id AND id<>NEW.id AND status IN ('REQUESTED','APPROVED','COMPLETED');
+    IF allocated<=0 OR reserved+NEW.requested_amount>receipt_amount-allocated THEN RAISE EXCEPTION 'Deposit receipt refund exceeds its remaining excess' USING ERRCODE='23514'; END IF;
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER refund_deposit_receipt_guard BEFORE INSERT OR UPDATE ON refund_requests FOR EACH ROW EXECUTE FUNCTION bhome24_deposit_receipt_refund_guard();
+
+CREATE FUNCTION bhome24_deposit_refund_valid(refund_id uuid) RETURNS boolean LANGUAGE sql STABLE AS $fn$
+  SELECT EXISTS(SELECT 1 FROM refund_requests r JOIN payments p ON p.id=r.source_payment_id
+    JOIN payment_allocations a ON a.source_payment_id=p.id AND a.target_deposit_contract_id IS NOT NULL
+    JOIN residents person ON person.id=r.beneficiary_resident_id
+    LEFT JOIN LATERAL (SELECT h->'state' state FROM jsonb_array_elements(p.history) h WHERE h->>'recordType'='DepositReceiptAllocationV1') payer ON true
+    CROSS JOIN LATERAL (SELECT h->'state' state FROM jsonb_array_elements(r.history) WITH ORDINALITY e(h,n)
+      WHERE h->>'recordType'='ExcessReceiptRefundV1' ORDER BY n DESC LIMIT 1) proof
+    WHERE r.id=refund_id AND r.status='COMPLETED' AND r.beneficiary_kind='RESIDENT' AND r.source_deposit_contract_id IS NULL AND p.status='VERIFIED'
+      AND (payer.state->>'payerResidentId'=person.id::text AND payer.state->>'allocationId'=a.id::text
+        AND payer.state->>'contractId'=a.target_deposit_contract_id::text AND (payer.state->>'allocatedAmount')::numeric=a.amount
+        OR payer.state IS NULL AND a.paid_by_user_id=person.user_id)
+      AND proof.state->>'classification'='ExcessReceiptRefundV1' AND r.executed_at IS NOT NULL
+      AND proof.state->'upload'->>'objectKey'=r.execution_evidence_key AND proof.state->'upload'->>'externalReference'=r.external_refund_reference
+      AND proof.state->'upload'->>'sha256' ~ '^[A-F0-9]{64}$'
+      AND EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(proof.state->'events')='array' THEN proof.state->'events' ELSE '[]'::jsonb END) e WHERE e->>'action'='Completed')
+      AND p.amount-(SELECT COALESCE(sum(aa.amount),0) FROM payment_allocations aa WHERE aa.source_payment_id=p.id)
+        >=(SELECT COALESCE(sum(rr.requested_amount),0) FROM refund_requests rr WHERE rr.source_payment_id=p.id AND rr.status='COMPLETED'))
+$fn$;
+
+ALTER TABLE payment_allocations ALTER COLUMN created_by_user_id DROP NOT NULL;
+CREATE INDEX ix_sepay_bank_reference ON payments ((upper(btrim(verification_data->'sepay'->>'bankReference'))))
+  WHERE provider_code IN ('SEPAY:TEST','SEPAY:LIVE') AND verification_method='AUTO';
+CREATE INDEX ix_manual_bank_reference ON payments ((upper(btrim(transaction_reference))))
+  WHERE provider_code NOT IN ('SEPAY:TEST','SEPAY:LIVE');
+CREATE UNIQUE INDEX ux_sepay_obligation_code ON operational_tasks
+  ((task_data->'state'->>'mode'),(task_data->'state'->>'kind'),(task_data->'state'->>'obligationId'))
+  WHERE task_data->>'recordType'='PaymentCodeV1';
+CREATE UNIQUE INDEX ux_sepay_event_identity ON operational_tasks
+  ((task_data->>'mode'),upper(task_data->'transaction'->>'gateway'),(task_data->'transaction'->>'accountNumber'),(task_data->'transaction'->>'id'))
+  WHERE task_data->>'recordType'='SePayEventV1';
+
+CREATE FUNCTION bhome24_sepay_technical_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE state jsonb; target_location uuid;
+BEGIN
+  IF TG_OP<>'INSERT' AND OLD.task_data->>'recordType'='PaymentCodeV1' THEN
+    RAISE EXCEPTION 'Issued payment codes are immutable and cannot be reused' USING ERRCODE='23514';
+  END IF;
+  IF TG_OP<>'INSERT' AND OLD.task_data->>'recordType'='SePayEventV1' THEN
+    IF TG_OP='DELETE' OR NEW.task_type<>'COMMAND' OR NEW.task_data->>'recordType' IS DISTINCT FROM 'SePayEventV1' OR ROW(OLD.id,OLD.source_key,OLD.task_data->'transaction',OLD.task_data->>'mode') IS DISTINCT FROM
+      ROW(NEW.id,NEW.source_key,NEW.task_data->'transaction',NEW.task_data->>'mode') THEN
+      RAISE EXCEPTION 'Provider event identity and evidence are immutable' USING ERRCODE='23514';
+    END IF;
+  END IF;
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  IF NEW.task_data->>'recordType'='PaymentCodeV1' THEN
+    state:=NEW.task_data->'state';
+    IF state->>'kind'='Invoice' THEN SELECT location_id INTO target_location FROM invoices WHERE id=(state->>'obligationId')::uuid;
+    ELSIF state->>'kind' IN ('Deposit','MainInitial') THEN SELECT r.location_id INTO target_location FROM contracts c JOIN rooms r ON r.id=c.room_id WHERE c.id=(state->>'obligationId')::uuid;
+    END IF;
+    IF NEW.task_type<>'COMMAND' OR NEW.status<>'Issued' OR COALESCE(state->>'code','') !~ '^BH[0-9]{8}$' OR
+      COALESCE(state->>'mode','') NOT IN ('Test','Live') OR NEW.source_key IS DISTINCT FROM 'payment-code:'||(state->>'code') OR
+      target_location IS NULL OR target_location IS DISTINCT FROM NEW.location_id OR target_location::text IS DISTINCT FROM state->>'locationId' THEN
+      RAISE EXCEPTION 'Payment code must bind one scoped obligation' USING ERRCODE='23514';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER sepay_technical_guard BEFORE INSERT OR UPDATE OR DELETE ON operational_tasks FOR EACH ROW EXECUTE FUNCTION bhome24_sepay_technical_guard();
+
+CREATE FUNCTION bhome24_sepay_receipt_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE event jsonb;
+BEGIN
+  IF NEW.verification_method<>'AUTO' OR NEW.provider_code NOT IN ('SEPAY:TEST','SEPAY:LIVE') THEN RETURN NEW; END IF;
+  SELECT task_data INTO event FROM operational_tasks WHERE id=(NEW.verification_data->'sepay'->>'eventId')::uuid AND task_data->>'recordType'='SePayEventV1';
+  IF event IS NULL OR NEW.verified_by_user_id IS NOT NULL OR event->>'mode' IS DISTINCT FROM NEW.verification_data->'sepay'->>'mode' OR
+    NEW.verification_data->'sepay'->>'bankReference' IS DISTINCT FROM event->'transaction'->>'referenceCode' OR
+    NEW.provider_code IS DISTINCT FROM 'SEPAY:'||upper(event->>'mode') OR event->'transaction'->>'transferType'<>'in' OR
+    NEW.amount IS DISTINCT FROM (event->'transaction'->>'transferAmount')::numeric OR
+    NEW.receiving_account_key IS DISTINCT FROM (event->>'mode')||':'||upper(event->'transaction'->>'gateway')||':'||(event->'transaction'->>'accountNumber') THEN
+    RAISE EXCEPTION 'Automatic receipt requires durable matching provider evidence' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER sepay_receipt_guard BEFORE INSERT OR UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION bhome24_sepay_receipt_guard();
+
+CREATE FUNCTION bhome24_allocation_actor_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.created_by_user_id IS NULL AND NOT EXISTS(SELECT 1 FROM payments p WHERE p.id=NEW.source_payment_id
+    AND p.status='VERIFIED' AND p.verification_method='AUTO' AND p.provider_code IN ('SEPAY:TEST','SEPAY:LIVE') AND p.verification_data ? 'sepay') THEN
+    RAISE EXCEPTION 'Allocation requires a human actor or verified provider source' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER allocation_actor_guard BEFORE INSERT ON payment_allocations FOR EACH ROW EXECUTE FUNCTION bhome24_allocation_actor_guard();
+
+CREATE FUNCTION bhome24_sepay_reference_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE receipt payments%ROWTYPE; reference text;
+BEGIN
+  IF NEW.source_payment_id IS NULL OR NEW.amount<=0 THEN RETURN NEW; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0));
+  SELECT * INTO receipt FROM payments WHERE id=NEW.source_payment_id;
+  IF receipt.provider_code IN ('SEPAY:TEST','SEPAY:LIVE') AND receipt.verification_method='AUTO' THEN
+    reference:=upper(btrim(receipt.verification_data->'sepay'->>'bankReference'));
+    IF reference IS NULL OR EXISTS(SELECT 1 FROM payments p WHERE p.provider_code NOT IN ('SEPAY:TEST','SEPAY:LIVE')
+      AND upper(btrim(p.transaction_reference))=reference) THEN
+      RAISE EXCEPTION 'Unscoped bank reference requires manual review' USING ERRCODE='23514';
+    END IF;
+  ELSE
+    reference:=upper(btrim(receipt.transaction_reference));
+    IF EXISTS(SELECT 1 FROM payments p JOIN payment_allocations a ON a.source_payment_id=p.id
+      WHERE p.provider_code IN ('SEPAY:TEST','SEPAY:LIVE') AND p.verification_method='AUTO'
+        AND upper(btrim(p.verification_data->'sepay'->>'bankReference'))=reference) THEN
+      RAISE EXCEPTION 'Bank transaction already allocated through provider verification' USING ERRCODE='23514';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $fn$;
+CREATE TRIGGER allocation_sepay_reference_guard BEFORE INSERT ON payment_allocations FOR EACH ROW EXECUTE FUNCTION bhome24_sepay_reference_guard();
+
+
+-- One receipt may fund a Main security deposit and its initial rent/service obligation.
+-- No new table; immutable order snapshots live in operational_tasks with their own record type.
+ALTER TABLE payment_allocations ADD COLUMN IF NOT EXISTS target_initial_contract_id uuid REFERENCES contracts(id);
+ALTER TABLE payment_allocations DROP CONSTRAINT IF EXISTS ck_allocation_one_target;
+ALTER TABLE payment_allocations ADD CONSTRAINT ck_allocation_one_target CHECK
+  (num_nonnulls(target_invoice_id,target_deposit_contract_id,target_settlement_contract_id,target_initial_contract_id)=1);
+CREATE INDEX IF NOT EXISTS ix_allocation_initial_contract ON payment_allocations(target_initial_contract_id);
+
+CREATE OR REPLACE FUNCTION bhome24_initial_payment_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE receipt payments%ROWTYPE; contract contracts%ROWTYPE; quote jsonb; code text;
+  deposit_paid numeric; rental_paid numeric; rental_due numeric; receipt_used numeric;
+BEGIN
+  IF NEW.target_initial_contract_id IS NULL THEN RETURN NEW; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0));
+  IF NEW.source_payment_id IS NULL OR NEW.source_deposit_contract_id IS NOT NULL OR NEW.amount<=0 THEN
+    RAISE EXCEPTION 'Initial payment requires a verified bank receipt' USING ERRCODE='23514';
+  END IF;
+  SELECT * INTO receipt FROM payments WHERE id=NEW.source_payment_id FOR UPDATE;
+  SELECT * INTO contract FROM contracts WHERE id=NEW.target_initial_contract_id;
+  SELECT task_data->'state' INTO quote FROM operational_tasks
+    WHERE source_key='main-initial:'||contract.id::text AND task_data->>'recordType'='MainInitialPaymentV1';
+  SELECT task_data->'state'->>'code' INTO code FROM operational_tasks
+    WHERE task_data->>'recordType'='PaymentCodeV1' AND task_data->'state'->>'kind'='MainInitial'
+    AND task_data->'state'->>'obligationId'=contract.id::text
+    AND upper(task_data->'state'->>'mode')=split_part(receipt.provider_code,':',2);
+  IF quote IS NULL OR code IS NULL OR receipt.status<>'VERIFIED' OR receipt.verification_method<>'AUTO'
+    OR receipt.provider_code NOT IN ('SEPAY:TEST','SEPAY:LIVE') OR contract.contract_type<>'MAIN' OR contract.status<>2
+    OR quote->>'snapshotHash'<>contract.snapshot_hash
+    OR (quote->>'requiredDeposit')::numeric<>contract.deposit_required OR (quote->>'monthlyRent')::numeric<>contract.monthly_rent
+    OR COALESCE(receipt.remittance_info,'') !~* ('(^|[^A-Za-z0-9])'||code||'([^A-Za-z0-9]|$)') THEN
+    RAISE EXCEPTION 'Initial payment order or source is invalid' USING ERRCODE='23514';
+  END IF;
+  SELECT COALESCE(sum(amount),0) INTO deposit_paid FROM payment_allocations WHERE target_deposit_contract_id=contract.id;
+  SELECT COALESCE(sum(amount),0) INTO rental_paid FROM payment_allocations WHERE target_initial_contract_id=contract.id;
+  SELECT (quote->>'monthlyRent')::numeric+COALESCE(sum((fee->>'amount')::numeric),0)
+    INTO rental_due FROM jsonb_array_elements(quote->'charges') fee;
+  SELECT COALESCE(sum(amount),0) INTO receipt_used FROM payment_allocations WHERE source_payment_id=receipt.id;
+  IF NEW.amount<>rental_due-rental_paid OR deposit_paid<(quote->>'requiredDeposit')::numeric
+    OR receipt_used+NEW.amount<>receipt.amount
+    OR EXISTS(SELECT 1 FROM payment_allocations WHERE source_payment_id=receipt.id AND
+      (target_deposit_contract_id IS DISTINCT FROM contract.id OR target_initial_contract_id IS NOT NULL)) THEN
+    RAISE EXCEPTION 'Initial payment amount or allocation differs' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $fn$;
+DROP TRIGGER IF EXISTS allocation_initial_payment_guard ON payment_allocations;
+CREATE TRIGGER allocation_initial_payment_guard BEFORE INSERT ON payment_allocations FOR EACH ROW EXECUTE FUNCTION bhome24_initial_payment_guard();
+
+CREATE OR REPLACE FUNCTION bhome24_initial_order_immutable() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF OLD.task_data->>'recordType'='MainInitialPaymentV1' THEN
+    RAISE EXCEPTION 'Initial payment orders are immutable' USING ERRCODE='23514';
+  END IF;
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END $fn$;
+DROP TRIGGER IF EXISTS main_initial_order_immutable ON operational_tasks;
+CREATE TRIGGER main_initial_order_immutable BEFORE UPDATE OR DELETE ON operational_tasks FOR EACH ROW EXECUTE FUNCTION bhome24_initial_order_immutable();
+
+CREATE OR REPLACE FUNCTION bhome24_receipt_disposition_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE receipt_amount numeric; receipt_ref text; allocated numeric; reserved numeric;
+BEGIN
+  IF NEW.source_payment_id IS NULL OR NEW.amount<=0 THEN RETURN NEW; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0));
+  SELECT amount,upper(btrim(transaction_reference)) INTO receipt_amount,receipt_ref FROM payments WHERE id=NEW.source_payment_id AND status='VERIFIED';
+  SELECT COALESCE(sum(amount),0) INTO allocated FROM payment_allocations WHERE source_payment_id=NEW.source_payment_id;
+  SELECT COALESCE(sum(requested_amount),0) INTO reserved FROM refund_requests
+    WHERE source_payment_id=NEW.source_payment_id AND status IN ('REQUESTED','APPROVED','COMPLETED');
+  IF receipt_amount IS NULL OR allocated+reserved+NEW.amount>receipt_amount OR EXISTS(
+    SELECT 1 FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h
+    WHERE p.id=NEW.source_payment_id AND h->>'recordType'='ReceiptExcessDispositionV1') OR EXISTS(
+    SELECT 1 FROM payments p CROSS JOIN LATERAL jsonb_array_elements(p.history) h
+    WHERE h->>'recordType'='BankReferenceClaim' AND h->'state'->>'normalizedReference'=receipt_ref
+      AND NOT (NEW.target_initial_contract_id IS NOT NULL AND p.id=NEW.source_payment_id AND EXISTS(
+        SELECT 1 FROM payment_allocations a WHERE a.id=(h->'state'->>'allocationId')::uuid
+          AND a.source_payment_id=NEW.source_payment_id AND a.target_deposit_contract_id=NEW.target_initial_contract_id))) THEN
+    RAISE EXCEPTION 'A refundable receipt or reserved refund cannot fund another allocation' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $fn$;

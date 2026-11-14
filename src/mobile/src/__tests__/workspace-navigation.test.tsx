@@ -566,7 +566,7 @@ it('renders four labeled Staff tabs at 60dp and applies Android bottom inset exa
 });
 
 it.each([
-  ['Owner', 'owner-home', ['Tổng quan', 'Phê duyệt', 'Vận hành', 'Tài khoản']],
+  ['Owner', 'owner-home', ['Tổng quan', 'Theo dõi duyệt', 'Vận hành', 'Tài khoản']],
   ['Staff', 'staff-home', ['Trang chủ', 'Công việc', 'Thông báo', 'Cá nhân']],
   ['Tenant', 'tenant-home', ['Trang chủ', 'Hóa đơn', 'Yêu cầu', 'Cá nhân']],
 ] as const)('keeps %s destinations in the shared Staff shell', (role, home, labels) => {

@@ -31,6 +31,11 @@ export interface TaskHistory {
   occurredAt: string;
   taskVersion: number;
   actorId: string;
+  responsibleStaffUserId: string | null;
+}
+export interface TaskActor {
+  userId: string;
+  displayName: string;
 }
 export interface TaskEvidence {
   id: string;
@@ -47,11 +52,14 @@ export interface RecurringTemplate extends Omit<TaskWork, 'dueAt'> {
   dueAfterHours: number;
   isActive: boolean;
   version: number;
+  scheduleType?: 'IntervalDays' | 'Daily' | 'Weekly' | 'Monthly';
+  dayOfWeek?: number | null;
+  dayOfMonth?: number | null;
 }
 export const taskStatus: Record<string, string> = {
   Assigned: 'Đã giao',
   InProgress: 'Đang thực hiện',
-  PendingVerification: 'Chờ Owner nghiệm thu',
+  PendingVerification: 'Chờ nghiệm thu',
   Completed: 'Đã hoàn thành',
   Cancelled: 'Đã hủy',
 };

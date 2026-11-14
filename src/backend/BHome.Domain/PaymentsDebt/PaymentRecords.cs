@@ -29,6 +29,10 @@ public sealed class PaymentAllocation : AuditableEntity
     public Guid? SourceDepositContractId { get; set; }
     public Guid? InvoiceId { get; set; }
     public Guid? TargetDepositContractId { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public Guid? TargetInitialContractId { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public Guid? TargetSettlementContractId { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public Guid? SettlementReceivableId { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public Guid? DepositOffsetApprovalId { get; set; }
     public decimal Amount { get; set; }
     public Guid? PaidByUserId { get; set; }
     public Guid VerifiedByUserId { get; set; }

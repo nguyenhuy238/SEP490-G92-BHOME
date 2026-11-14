@@ -44,7 +44,7 @@ function renderPanel(contract: ContractView, transport: ReturnType<typeof vi.fn>
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <OwnerSigningPanel
-        api={contractClient(transport)}
+        api={contractClient(transport as unknown as Parameters<typeof contractClient>[0])}
         contract={contract}
         actorId={owner}
         methods={methods}

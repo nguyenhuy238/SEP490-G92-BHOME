@@ -7,6 +7,15 @@ import { ui } from './WorkspaceKit';
 import { fontStyle, typography } from '../theme/typography';
 
 export const invoiceUi = StyleSheet.create({
+  card: {
+    backgroundColor: c.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    padding: 14,
+    gap: 10,
+  },
+  stack: { gap: 12 },
   surface: { backgroundColor: c.white, borderRadius: 14, paddingHorizontal: 16 },
   section: { paddingVertical: 18, gap: 10, borderBottomWidth: 1, borderBottomColor: c.border },
   heading: { ...typography.sectionHeading, color: c.ink },
@@ -29,8 +38,8 @@ export const invoiceUi = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 12,
-    minHeight: 64,
+    paddingVertical: 10,
+    minHeight: 48,
   },
   chargeText: { flex: 1, minWidth: 0, gap: 2 },
   chargeDetails: { gap: 8, paddingBottom: 12, paddingLeft: 28 },
@@ -49,7 +58,7 @@ export const invoiceUi = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 12,
-    paddingTop: 16,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: c.border,
   },
@@ -94,11 +103,8 @@ export const invoiceUi = StyleSheet.create({
   detail: { gap: 8 },
   divider: { borderTopWidth: 1, borderTopColor: c.border, paddingTop: 12, gap: 8 },
   hero: {
+    ...typography.money,
     color: c.navy,
-    fontFamily: 'Inter-SemiBold',
-    fontVariant: ['tabular-nums'],
-    fontSize: 30,
-    lineHeight: 40,
   },
 });
 export function InvoiceMoneyRow({ label, value }: { label: string; value: string }) {

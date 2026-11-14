@@ -15,7 +15,8 @@ export interface RoomConfiguration {
   capacity: number;
   status: number;
   version: number;
-  roomTypeId: string | null;
+  /** Archived response compatibility; current Room writes do not accept this field. */
+  roomTypeId?: string | null;
 }
 export interface RoomTypeConfiguration {
   id: string;
@@ -44,7 +45,7 @@ export type LocationInput = Omit<LocationConfiguration, 'id' | 'version'> & {
   version: number;
   reason: string;
 };
-export type RoomInput = Omit<RoomConfiguration, 'id' | 'version'> & {
+export type RoomInput = Omit<RoomConfiguration, 'id' | 'version' | 'roomTypeId'> & {
   version: number;
   reason: string;
 };
@@ -78,6 +79,8 @@ export interface LocalAssetTemplate {
   name: string;
   items: LocalAssetItem[];
   expectedVersion?: number;
+  scoped?: boolean;
+  scopeRoomId?: string | null;
 }
 export interface DesiredAssets {
   templateId: string;

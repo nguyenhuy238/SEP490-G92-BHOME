@@ -23,7 +23,8 @@ public sealed record ProfileUpdate(
     [Required, StringLength(150, MinimumLength = 2)] string FullName,
     [StringLength(30)] string? Phone,
     [Required, EmailAddress, StringLength(256)] string Email,
-    [Required, StringLength(256)] string Version);
+    [Required, StringLength(256)] string Version,
+    [StringLength(1024)] string? CurrentPassword = null);
 
 public sealed record EmploymentView(Guid Id, string? ContractNumber, string EmploymentType,
     DateOnly StartDate, DateOnly? EndDate, string? SalaryType, decimal? BaseRate, string Status);
@@ -46,7 +47,7 @@ public sealed record StaffCreate(
     [Required, EmailAddress, StringLength(256)] string Email,
     [Required, StringLength(150, MinimumLength = 2)] string FullName,
     [StringLength(30)] string? Phone,
-    [Required, StringLength(256, MinimumLength = 12)] string InitialPassword,
+    [StringLength(256)] string? InitialPassword,
     EmploymentWrite Employment);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -132,7 +133,8 @@ public sealed record RoomPublicContentWrite(
 
 public sealed record RecurringTaskTemplateView(Guid Id, Guid LocationId, string Title, string Requirements,
     string Priority, bool EvidenceRequired, int IntervalDays, DateTimeOffset NextRunAt,
-    int DueAfterHours, bool IsActive, int Version);
+    int DueAfterHours, bool IsActive, int Version, string ScheduleType = "IntervalDays",
+    int? DayOfWeek = null, int? DayOfMonth = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RecurringTaskTemplateWrite(
@@ -145,7 +147,10 @@ public sealed record RecurringTaskTemplateWrite(
     DateTimeOffset NextRunAt,
     [Range(1, 720)] int DueAfterHours,
     bool IsActive,
-    int Version = 0);
+    int Version = 0,
+    [RegularExpression("IntervalDays|Daily|Weekly|Monthly")] string ScheduleType = "IntervalDays",
+    [Range(1, 7)] int? DayOfWeek = null,
+    [Range(1, 31)] int? DayOfMonth = null);
 
 public sealed record OperationsFile(string ObjectKey, string ContentType, long Length);
 

@@ -26,8 +26,9 @@ fail without issuing a session. UserName is not a login request field. Passwords
 passed unchanged to Identity. Login body limit is 16 KiB; oversized requests return
 sanitized 413 ProblemDetails. This describes the current LoginRequest/Controller;
 the former email-only convention was superseded by the implemented phone workflow.
-On success, HTTP 200 returns `userId`, `roles`, `accessToken`, ISO-8601 `expiresAt`, `sessionId`,
-`refreshToken` and `sessionExpiresAt`. An optional `device` label is bounded to 256 characters and
+On success, HTTP 200 returns `accessToken` and, for mobile transport, `refreshToken`. The client derives
+the current `userId`, `role`, access-token expiry and session ID from the signed JWT claims when needed.
+The absolute session expiry remains server-controlled and is not exposed in the response. An optional `device` label is bounded to 256 characters and
 never used as an authorization signal. Roles come
 only from Identity persistence; extra request properties cannot select roles. Responses use
 `Cache-Control: no-store` and `Pragma: no-cache`. Send the token as Bearer authorization for the
@@ -51,20 +52,22 @@ Authenticated account/session actions now declare fixed permissions: `account.vi
 and the session probe, `account.change-password` for password change, `sessions.revoke-own` for
 logout/logout-all. All three business roles retain these own-account actions. Login/refresh and
 password recovery entry points retain their explicit anonymous access and credential validation.
+Gmail delivery, protected authentication outbox, callback allowlists and invitation setup are
+documented in [Authentication email](AUTHENTICATION_EMAIL.md).
 New business actions use `[Authorize(Policy = Permissions.<Module>.<Action>)]` plus service-layer
 `PermissionAccess.CanAccessAsync` with server-loaded scope. Permission grants are fixed in Domain,
 not accepted from request/JWT permission claims. See the [catalog and integration guide](../development/FIXED_ROLE_PERMISSIONS.md).
 
-| Method / `/api/v1/auth/` route | Authentication / input                                                                    | Result                                                                                              |
-| ------------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| POST `login`                   | Anonymous; `email`, `password`, optional `device`                                         | 200 session or generic 401                                                                          |
-| POST `refresh`                 | Anonymous entry; valid refresh credential; JSON `{refreshToken}` for mobile, `{}` for web | 200 rotated session or generic 401                                                                  |
-| POST `logout`                  | Bearer                                                                                    | 204; revoke current session                                                                         |
-| POST `logout-all`              | Bearer                                                                                    | 204; revoke all user's sessions                                                                     |
-| GET `me`                       | Bearer                                                                                    | 200 `{userId,sessionId,roles}`                                                                      |
-| POST `change-password`         | Bearer; `currentPassword`, `newPassword`                                                  | 204 + revoke all sessions; generic 400 on failure                                                   |
-| POST `forgot-password`         | Anonymous; `userName`                                                                     | 202 generic response when delivery adapter is ready; uniformly 503 with current unavailable adapter |
-| POST `reset-password`          | Anonymous; `userName`, `token` (max 4096), `newPassword`                                  | 204 + revoke all sessions; generic 400 on failure                                                   |
+| Method / `/api/v1/auth/` route | Authentication / input                                                                    | Result                                                                         |
+| ------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| POST `login`                   | Anonymous; `email`, `password`, optional `device`                                         | 200 session or generic 401                                                     |
+| POST `refresh`                 | Anonymous entry; valid refresh credential; JSON `{refreshToken}` for mobile, `{}` for web | 200 rotated session or generic 401                                             |
+| POST `logout`                  | Bearer                                                                                    | 204; revoke current session                                                    |
+| POST `logout-all`              | Bearer                                                                                    | 204; revoke all user's sessions                                                |
+| GET `me`                       | Bearer                                                                                    | 200 `{userId,sessionId,roles}`                                                 |
+| POST `change-password`         | Bearer; `currentPassword`, `newPassword`                                                  | 204 + revoke all sessions; generic 400 on failure                              |
+| POST `forgot-password`         | Anonymous; `userName` (registered email or legacy username)                               | Generic 202 when SMTP/callbacks are configured; uniformly 503 when unavailable |
+| POST `reset-password`          | Anonymous; `userName`, `token` (max 4096), `newPassword`                                  | 204 + revoke all sessions; generic 400 on failure                              |
 
 All auth bodies are limited to 16 KiB; bounded validation failures return 400. New passwords use
 Identity's existing policy: at least 12 characters with uppercase, lowercase, digit and non-alphanumeric.
@@ -95,7 +98,7 @@ network/503 error preserves it and surfaces the failure. A 403 permission denial
 refresh. See [refresh implementation and verification](../development/REFRESH_TOKEN_SESSIONS.md).
 
 Web opts in using `X-BHome-Client: web` on auth POSTs and browser `credentials: include`. The server
-returns `refreshToken: null` and a `__Secure-bhome-refresh` cookie with HttpOnly, Secure, SameSite=Strict,
+omits `refreshToken` and returns a `__Secure-bhome-refresh` cookie with HttpOnly, Secure, SameSite=Strict,
 host-only, path `/api/v1/auth`. Cookie writes/reads require the custom header and an exact Origin in
 `AuthWeb:AllowedOrigins` or the API's own origin. CORS also needs the Owner origin explicitly allowed.
 General CORS origins (including Public Web) do not automatically qualify for auth cookie transport.
@@ -329,3 +332,9 @@ nhận giao dịch Owner đã thực hiện bên ngoài, không có API tự chu
 khác payload trả 409; tải lại, review và chỉ retry cùng key khi giữ đúng payload/bytes. Upload intent
 được lưu bền vững trước storage; Pending/Approved chưa phải Completed. Không tự retry tài chính
 chỉ vì browser timeout. Tham chiếu [Finance](FINANCE.md) cho report/What-if và các chỉ tiêu unavailable.
+
+## Runtime schema mismatch
+
+PostgreSQL undefined column/table/function (`42703`, `42P01`, `42883`), trực tiếp hoặc trong DbUpdateException, trả HTTP 503 với safe code `database_schema_incompatible` và correlation ID. Không trả tên bảng/cột, SQL hoặc exception detail trong response. Constraint violations và lỗi khác giữ mapping hiện hành; không đánh đồng mọi lỗi database với schema drift.
+
+Owner clients giải thích máy chủ/database chưa đồng bộ và cần quản trị viên cập nhật. Không giả danh sách rỗng/thành công, không tự migrate hoặc retry giao dịch tài chính. Operator dùng DatabaseProbe/readiness và quy trình migration có backup; frontend không có quyền DDL. Các lỗi 401/403 và object-level authorization giữ nguyên.

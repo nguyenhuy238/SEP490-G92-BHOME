@@ -25,6 +25,13 @@ export const screenRoles = {
   'task-detail': ['Owner', 'Staff'],
   'owner-home': ['Owner'],
   approvals: ['Owner'],
+  'owner-adjustments': ['Owner'],
+  'owner-adjustment-detail': ['Owner'],
+  'owner-payments': ['Owner'],
+  'owner-payment-detail': ['Owner'],
+  'owner-announcements': ['Owner'],
+  'owner-finance': ['Owner'],
+  'owner-residence': ['Owner'],
   operations: ['Owner'],
   'staff-home': ['Staff'],
   'work-orders': ['Staff'],
@@ -79,7 +86,7 @@ export const tabs: Record<MobileRole, { screen: WorkspaceScreen; title: string; 
   {
     Owner: [
       { screen: 'owner-home', title: 'Tổng quan', icon: 'view-dashboard-outline' },
-      { screen: 'approvals', title: 'Phê duyệt', icon: 'clipboard-check-outline' },
+      { screen: 'approvals', title: 'Theo dõi duyệt', icon: 'clipboard-check-outline' },
       { screen: 'operations', title: 'Vận hành', icon: 'tune-variant' },
       { screen: 'profile', title: 'Tài khoản', icon: 'account-cog-outline' },
     ],
@@ -136,9 +143,25 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
       'incident-detail',
       'incident-inbox',
       'maintenance-detail',
+      'owner-adjustments',
+      'owner-adjustment-detail',
+      'owner-payments',
+      'owner-payment-detail',
+      'owner-announcements',
+      'owner-finance',
+      'owner-residence',
     ].includes(screen)
   )
-    return 'operations';
+    return [
+      'owner-adjustments',
+      'owner-adjustment-detail',
+      'owner-payments',
+      'owner-payment-detail',
+    ].includes(screen)
+      ? 'approvals'
+      : screen === 'owner-finance'
+        ? 'owner-home'
+        : 'operations';
   if (['contract', 'checklist', 'residence', 'contract-request'].includes(screen))
     return 'tenant-home';
   if (['security', 'preferences'].includes(screen)) return 'profile';

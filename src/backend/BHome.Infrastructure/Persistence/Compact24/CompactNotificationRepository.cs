@@ -7,7 +7,7 @@ using NpgsqlTypes;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-internal sealed class CompactNotificationRepository(Compact24DbContext db) : INotificationRepository
+internal sealed class CompactNotificationRepository(Compact24DbContext db, BHome.Application.Billing.ITenantMeterReadings readings) : INotificationRepository
 {
     private const string SourceRead = "(SELECT old.read_at FROM notifications old WHERE old.record_kind='OUTBOX' AND old.id=(n.event_data->'state'->>'sourceTaskNotificationId')::uuid AND COALESCE(old.event_data->'state'->>'recipientUserId',old.event_data->'state'->>'recipientId')=@actor::text)";
     private const string EffectiveRead = "COALESCE(n.read_at," + SourceRead + ")";
@@ -93,8 +93,26 @@ internal sealed class CompactNotificationRepository(Compact24DbContext db) : INo
             type = reader.GetString(0); related = reader.GetGuid(1); location = reader.IsDBNull(2) ? null : reader.GetGuid(2);
         }
         command.Parameters.AddWithValue("target", related);
+        if (type == "MeterReading")
+            return scope.Tenant && await readings.CanViewAsync(scope.Actor, related, token) ? new(type, related, location) : null;
+        if (type == "Refund")
+        {
+            command.CommandText = """
+                SELECT r.source_payment_id FROM refund_requests r LEFT JOIN residents person ON person.id=r.beneficiary_resident_id
+                WHERE r.id=@target AND r.source_payment_id IS NOT NULL AND r.source_deposit_contract_id IS NULL
+                  AND (@owner OR (@tenant AND r.beneficiary_kind='RESIDENT' AND person.user_id=@actor))
+                  AND EXISTS(SELECT 1 FROM jsonb_array_elements(r.history) h WHERE h->>'recordType'='ExcessReceiptRefundV1')
+                """;
+            var source = await command.ExecuteScalarAsync(token);
+            if (source is Guid receipt) return scope.Owner ? new("BankTransfer", receipt) : new("Refund", related);
+            var depositContract = await BHome.Infrastructure.Modules.Notifications.NotificationEventPublisher.DepositRefundNotices(db)
+                .Where(n => n.RefundId == related && (scope.Owner && n.OwnerId == scope.Actor || scope.Tenant && n.BeneficiaryUserId == scope.Actor))
+                .Select(n => (Guid?)n.ContractId).Distinct().SingleOrDefaultAsync(token);
+            return depositContract is { } contract ? scope.Owner ? new("Contract", contract) : new("Refund", related) : null;
+        }
         command.CommandText = type switch
         {
+            "SettlementReceivable" => "SELECT EXISTS(SELECT 1 FROM contracts c CROSS JOIN LATERAL jsonb_array_elements(c.history) h WHERE h->>'recordType'='SettlementReceivableV1' AND h->>'recordKey'=@target::text AND (@owner OR (@tenant AND h->'state'->'recipientUserIds' @> jsonb_build_array(@actor::text))))",
             "Invoice" => "SELECT EXISTS(SELECT 1 FROM invoices i WHERE i.id=@target AND (@owner OR (@tenant AND @actor=ANY(i.recipient_user_ids))))",
             "Adjustment" => "SELECT EXISTS(SELECT 1 FROM invoice_adjustments a JOIN invoices i ON i.id=a.invoice_id WHERE a.id=@target AND (@owner OR (@tenant AND a.requested_by_user_id=@actor AND @actor=ANY(i.recipient_user_ids))))",
             "Location" => "SELECT EXISTS(SELECT 1 FROM locations l WHERE l.id=@target AND (@owner OR (@staff AND l.is_active AND EXISTS(SELECT 1 FROM jsonb_array_elements(l.staff_assignments) a WHERE (a->>'staffUserId')::uuid=@actor AND (a->>'startDate')::date<=@today AND (a->>'endDate')::date>=@today))))",

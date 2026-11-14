@@ -11,6 +11,7 @@ export function formatBillingDecimal(value: string | number): string {
 }
 
 export interface InvoiceLine {
+  utilityCalculationSnapshot?: string | null;
   id: string;
   category: string;
   chargeCode: string;
@@ -28,6 +29,53 @@ export interface InvoiceLine {
   confirmedReading: string | null;
   calculatedAmount?: string | null;
   correctionRequestId?: string | null;
+}
+export function hasSettlementUsageCoverage(line: InvoiceLine): boolean {
+  if (!/^0(?:\.0+)?$/.test(line.amount) || !line.utilityCalculationSnapshot) return false;
+  try {
+    return JSON.parse(line.utilityCalculationSnapshot)?.kind === 'CoveredBySettlement/v1';
+  } catch {
+    return false;
+  }
+}
+export function hasSettlementFixedCoverage(line: InvoiceLine): boolean {
+  if (!line.utilityCalculationSnapshot) return false;
+  try {
+    const snapshot = JSON.parse(line.utilityCalculationSnapshot);
+    if (snapshot?.kind !== 'FixedChargeCoverage/v1') return false;
+    const source = snapshot.source;
+    if (source && (source.ResidentCount != null || source.residentCount != null))
+      return Number(source.AlreadyPricedAmount ?? source.alreadyPricedAmount ?? 0) > 0;
+    return true;
+  } catch {
+    return false;
+  }
+}
+/** A person-month line can carry calculation evidence even when no settlement was deducted. */
+export function invoicePersonMonths(
+  line: InvoiceLine,
+): { residentCount: number; personDays: number; prorated: boolean } | null {
+  try {
+    const snapshot = JSON.parse(line.utilityCalculationSnapshot ?? 'null');
+    if (snapshot?.kind !== 'FixedChargeCoverage/v1' || !snapshot.source) return null;
+    const source = snapshot.source;
+    const residentCount = Number(source.ResidentCount ?? source.residentCount);
+    const personDays = Number(source.PersonDays ?? source.personDays);
+    if (
+      !Number.isSafeInteger(residentCount) ||
+      residentCount < 0 ||
+      !Number.isSafeInteger(personDays) ||
+      personDays < 0
+    )
+      return null;
+    return {
+      residentCount,
+      personDays,
+      prorated: Number(source.PartialMonth ?? source.partialMonth) === 1,
+    };
+  } catch {
+    return null;
+  }
 }
 export interface Invoice {
   id: string;
@@ -51,6 +99,11 @@ export interface Page<T> {
   page: number;
   pageSize: number;
   totalCount: number;
+}
+export interface InvoiceListFilter {
+  locationId?: string;
+  billingPeriod?: string;
+  status?: 'Draft' | 'Final';
 }
 export interface BillingSchedule {
   locationId: string;
@@ -101,11 +154,12 @@ export function invoiceClient(request: <T>(path: string, init?: RequestInit) => 
   const json = <T>(path: string, body: unknown, method = 'POST') =>
     request<T>(path, { method, body: JSON.stringify(body) });
   return {
-    list: (page = 1, signal?: AbortSignal, roomId = '') =>
-      request<Page<Invoice>>(
-        `/api/v1/invoices?page=${page}&pageSize=20${roomId ? `&roomId=${encodeURIComponent(roomId)}` : ''}`,
-        { signal },
-      ),
+    list: (page = 1, signal?: AbortSignal, roomId = '', filter: InvoiceListFilter = {}) => {
+      const query = new URLSearchParams({ page: String(page), pageSize: '20' });
+      if (roomId) query.set('roomId', roomId);
+      for (const [key, value] of Object.entries(filter)) if (value) query.set(key, value);
+      return request<Page<Invoice>>(`/api/v1/invoices?${query}`, { signal });
+    },
     get: (id: string, signal?: AbortSignal) =>
       request<Invoice>(`/api/v1/invoices/${encodeURIComponent(id)}`, { signal }),
     draft: (roomId: string, billingPeriod: string, representativeContractId: string) =>
@@ -139,6 +193,7 @@ export function invoiceClient(request: <T>(path: string, init?: RequestInit) => 
   };
 }
 const messages: Record<string, string> = {
+  invalid_invoice_filter: 'Chọn cơ sở, kỳ tháng và trạng thái hóa đơn hợp lệ.',
   stale_version: 'Cấu hình đã thay đổi. Tải lại và kiểm tra phiên bản trước khi lưu.',
   duplicate_or_overlapping_configuration:
     'Cấu hình bị trùng hoặc có kỳ hiệu lực chồng lấn. Kiểm tra dữ liệu trước khi lưu.',
@@ -157,6 +212,8 @@ const messages: Record<string, string> = {
   representative_contract_not_eligible:
     'Chọn hợp đồng của phòng có hiệu lực trong kỳ cần lập hóa đơn.',
   invoice_period_already_exists: 'Phòng đã có hóa đơn kỳ này với hợp đồng đại diện khác.',
+  room_pricing_locked_by_contract:
+    'Phòng đang có hợp đồng ràng buộc giá. Chỉ được đổi biểu giá riêng sau khi hợp đồng hết hiệu lực hoặc bị hủy.',
 };
 export function invoiceError(error: unknown): string {
   const value = error as { status?: number; code?: string; problem?: { code?: string } };
@@ -177,6 +234,57 @@ export function invoiceError(error: unknown): string {
 }
 export function missingBillingInput(code: string): string {
   const labels: Record<string, string> = {
+    meter_replacement_allocation_required:
+      'Cần Owner duyệt phân bổ tiêu thụ khi thay đồng hồ trong kỳ',
+    final_utility_amount_out_of_range: 'Lượng hoặc số tiền vượt phạm vi hợp lệ; cần đối chiếu lại',
+    legacy_deduction_requires_migration_review:
+      'Đã có quyết định khấu trừ cọc theo hồ sơ cũ; cần đối chiếu trước khi chuyển sang khoản phải thu',
+    occupant_account_email_required:
+      'Cần tài khoản và email hợp lệ cho các thành viên thuộc nghĩa vụ',
+    billing_schedule_required: 'Owner cần chọn chính sách và lịch tính tiền áp dụng',
+    billing_schedule_snapshot_invalid: 'Cần đối chiếu chính sách của kỳ trước khi tính khoản chốt',
+    owner_confirmed_inspection_required: 'Cần Owner xác nhận biên bản và chỉ số chốt',
+    final_meter_readings_required: 'Thiếu chỉ số điện/nước chốt đã xác nhận',
+    room_billing_period_still_open:
+      'Phòng còn hợp đồng tiếp tục thuê; đối chiếu tiền thuê qua hóa đơn chung của kỳ, không tự chia phần cá nhân',
+    fixed_charge_policy_changed:
+      'Chính sách tiền thuê/phí khác nguồn đã tính; cần Owner đối chiếu trước khi thu thêm',
+    fixed_charge_occupancy_changed:
+      'Khoảng ở thay đổi so với khoản đã ghi nhận; cần điều chỉnh có phê duyệt',
+    fixed_charge_coverage_invalid: 'Nguồn khoản thu tiền thuê/phí cần được đối chiếu',
+    fixed_charge_occupancy_required: 'Thiếu khoảng ở hợp lệ để tính tiền thuê',
+    fixed_charge_resident_occupancy_required:
+      'Thiếu danh sách hoặc khoảng cư trú hợp lệ để tính phí theo người.',
+    signed_contract_snapshot_required: 'Thiếu phiên bản điều khoản hợp đồng đã ký',
+    contract_charge_snapshot_required:
+      'Thiếu biểu phí đã chốt của hợp đồng. Cần đối chiếu điều khoản gốc trước khi tính tiền.',
+    contract_price_snapshot_missing:
+      'Thiếu biểu phí đã chốt của hợp đồng. Cần đối chiếu điều khoản gốc trước khi tính tiền.',
+    contract_price_snapshot_invalid:
+      'Biểu phí đã chốt không hợp lệ. Cần đối chiếu điều khoản gốc trước khi tính tiền.',
+    room_contract_price_conflict:
+      'Các hợp đồng trong phòng có biểu phí đã chốt khác nhau. Cần đối chiếu trước khi lập hóa đơn chung.',
+    confirmed_billable_baseline_required: 'Thiếu mốc ban đầu hoặc mốc đã tính tiền có chứng từ',
+    settlement_metered_policy_required: 'Cần một chính sách giá theo chỉ số phù hợp',
+    utility_pricing_baseline_required: 'Thiếu chính sách giá của phần tiêu thụ đã ghi nhận',
+    utility_profile_changed_since_billing:
+      'Chính sách điện/nước đã thay đổi; cần đối chiếu phần đã tính',
+    utility_increment_policy_changed:
+      'Biểu giá hoặc định mức của phần đã ghi nhận thay đổi; cần đối chiếu',
+    utility_increment_requires_adjustment: 'Cần quyết định điều chỉnh; không tự tạo khoản thu âm',
+    utility_quota_verification_required: 'Thiếu định mức miễn phí đã xác nhận',
+    utility_period_split_requires_review: 'Cần phân đoạn tiêu thụ theo biểu giá hiệu lực',
+    utility_period_breakdown_stale: 'Phân đoạn tiêu thụ cần được Owner kiểm tra lại',
+    utility_prior_period_billing_required: 'Còn kỳ trước chưa có mốc tính tiền phù hợp',
+    utility_prior_occupancy_allocation_required:
+      'Có tiêu thụ trước mốc nhận phòng mới cần Owner phân định',
+    utility_duplicate_billing_detected:
+      'Lịch sử có khoảng tiêu thụ trùng; cần đối chiếu trước khi thu thêm',
+    utility_coverage_gap_requires_review: 'Lịch sử tiêu thụ có khoảng chưa được đối chiếu',
+    utility_billed_source_integrity_failed: 'Nguồn đã tính tiền không khớp với chỉ số gốc',
+    utility_calculation_snapshot_invalid: 'Chứng cứ tính giá cần được kiểm tra lại',
+    final_reading_below_billed_baseline: 'Chỉ số chốt thấp hơn mốc đã tính tiền; cần đối chiếu',
+    inspection_snapshot_invalid: 'Chỉ số hoặc ảnh không còn khớp với biên bản đã duyệt',
     rate_Rent: 'Giá thuê',
     rate_Electricity: 'Giá điện',
     rate_Water: 'Giá nước',

@@ -6,17 +6,15 @@ import {
   Box,
   Button,
   Drawer,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   LinearProgress,
   MenuItem,
   Pagination,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
@@ -30,7 +28,14 @@ import {
   text,
 } from '../../../../../../packages/client-core/src/contracts';
 import { ResourcePage } from '../../../components/common/ResourcePage';
-import { PageHeader, StatusChip } from '../../../components/common/PortalUI';
+import {
+  PageHeader,
+  FilterToolbar,
+  StatusChip,
+  LoadingState,
+  ErrorState,
+} from '../../../components/common/PortalUI';
+import { OwnerTable } from '../../../components/common/OwnerWorkspace';
 import { isMockMode } from '../../../services/config';
 import { useContractsApi } from '../useContractsApi';
 import { ContractDraftDialog } from '../ContractDraftDialog';
@@ -63,6 +68,7 @@ function LiveContractsPage() {
     [selectedLocation, setSelectedLocation] = useState('');
   const [mainDraft, setMainDraft] = useState(false);
   const [holding, setHolding] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [draft, setDraft] = useState(false),
     [lookup, setLookup] = useState(''),
     [lookupError, setLookupError] = useState('');
@@ -81,10 +87,10 @@ function LiveContractsPage() {
   return (
     <>
       <PageHeader
-        title="Hợp đồng thuê & Vòng đời"
-        subtitle="UC-15 / UC-16 / UC-19 · Nháp → Ký điện tử → Xác minh cọc → Kích hoạt → Gia hạn / Trả phòng"
+        title="Hợp đồng thuê"
         actions={
           <>
+            <Button onClick={() => setSettings(true)}>Cấu hình hợp đồng</Button>
             <Button
               variant="contained"
               onClick={() => {
@@ -107,30 +113,69 @@ function LiveContractsPage() {
         }
       />
       <Stack spacing={2}>
-        <MainDraftSettingsPanel api={api} />
-        <ContractConfigurationPanel api={api} />
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Typography variant="h6">Nhắc gia hạn / trả phòng</Typography>
-          <Button onClick={() => void reminders.refetch()} disabled={reminders.isFetching}>
-            Tải lại nhắc hết hạn
-          </Button>
-          {reminders.error && <Alert severity="error">{contractError(reminders.error)}</Alert>}
-          {reminders.data?.length === 0 && (
-            <Typography>Chưa có nhắc hết hạn đã được xử lý.</Typography>
+        <Paper variant="outlined" sx={{ p: 1.5 }}>
+          <Stack
+            direction="row"
+            useFlexGap
+            spacing={1}
+            sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
+          >
+            <Typography variant="h2" component="h2">
+              Nhắc gia hạn / trả phòng
+            </Typography>
+            <Button onClick={() => void reminders.refetch()} disabled={reminders.isFetching}>
+              Tải lại nhắc hết hạn
+            </Button>
+          </Stack>
+          {reminders.isPending ? (
+            <LinearProgress aria-label="Đang tải nhắc hết hạn" />
+          ) : reminders.error ? (
+            <Alert severity="error">{contractError(reminders.error)}</Alert>
+          ) : reminders.data?.length ? (
+            <Stack spacing={0.75} sx={{ mt: 1 }}>
+              {reminders.data.map((n) => (
+                <Stack
+                  key={n.id}
+                  direction={{ xs: 'column', sm: 'row' }}
+                  useFlexGap
+                  spacing={1}
+                  sx={{
+                    alignItems: { sm: 'center' },
+                    justifyContent: 'space-between',
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                    pt: 0.75,
+                  }}
+                >
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>
+                      Phòng {n.roomNumber} · {n.locationName}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {n.stage === 'Expired' ? 'Đã hết hạn' : 'Sắp hết hạn'}{' '}
+                      {displayContractDate(n.endDate)} · Cần gia hạn hoặc xử lý trả phòng.
+                    </Typography>
+                  </Box>
+                  <Button
+                    onClick={() => {
+                      setSelected(n.contractId);
+                      setMainDraft(false);
+                      setSelectedLocation('');
+                    }}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    Mở hợp đồng
+                  </Button>
+                </Stack>
+              ))}
+            </Stack>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Chưa có nhắc hết hạn đã được xử lý.
+            </Typography>
           )}
-          {(reminders.data ?? []).map((n) => (
-            <Alert
-              key={n.id}
-              severity="warning"
-              action={<Button onClick={() => setSelected(n.contractId)}>Mở hợp đồng</Button>}
-            >
-              Phòng {n.roomNumber} · {n.locationName} ·{' '}
-              {n.stage === 'Expired' ? 'Đã hết hạn' : 'Sắp hết hạn'}{' '}
-              {displayContractDate(n.endDate)}. Cần gia hạn hoặc xử lý trả phòng.
-            </Alert>
-          ))}
         </Paper>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <FilterToolbar>
           <TextField
             select
             label="Cơ sở của hợp đồng"
@@ -139,7 +184,7 @@ function LiveContractsPage() {
               setLocation(e.target.value);
               setPage(1);
             }}
-            sx={{ minWidth: 220 }}
+            sx={{ maxWidth: { sm: 220 } }}
           >
             <MenuItem value="">Tất cả cơ sở</MenuItem>
             {(locations.data ?? []).map((o) => (
@@ -156,7 +201,7 @@ function LiveContractsPage() {
               setStatus(e.target.value);
               setPage(1);
             }}
-            sx={{ minWidth: 200 }}
+            sx={{ maxWidth: { sm: 200 } }}
           >
             <MenuItem value="">Tất cả trạng thái</MenuItem>
             {contractStates.map((s) => (
@@ -168,68 +213,72 @@ function LiveContractsPage() {
           <Button disabled={list.isFetching} onClick={() => void list.refetch()}>
             Tải lại danh sách
           </Button>
-        </Stack>
+        </FilterToolbar>
         {locations.error && (
           <Alert severity="warning">
             Chưa tải được bộ lọc cơ sở.{' '}
             <Button onClick={() => void locations.refetch()}>Thử lại</Button>
           </Alert>
         )}
-        {list.isFetching && <LinearProgress aria-label="Đang tải danh sách hợp đồng" />}
         {list.error ? (
-          <Alert severity="error">{contractError(list.error)}</Alert>
+          <ErrorState
+            error={new Error(contractError(list.error))}
+            retry={() => void list.refetch()}
+          />
+        ) : list.isPending ? (
+          <LoadingState />
         ) : (
-          <Paper variant="outlined">
-            <TableContainer>
-              <Table aria-label="Danh sách hợp đồng">
-                <TableHead>
-                  <TableRow>
-                    {[
-                      'Phòng / Cơ sở',
-                      'Loại / Trạng thái',
-                      'Kỳ thuê',
-                      'Tiền thuê tháng',
-                      'Thao tác',
-                    ].map((h) => (
-                      <TableCell key={h}>{h}</TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(list.data?.items ?? []).map((c) => (
-                    <TableRow key={c.id} hover>
-                      <TableCell>
-                        <Typography sx={{ fontWeight: 600 }}>Phòng {c.roomNumber}</Typography>
-                        <Typography variant="caption">{c.locationName}</Typography>
-                      </TableCell>
-                      <TableCell>
+          <Paper variant="outlined" sx={{ minWidth: 0 }}>
+            {list.data?.items.length ? (
+              <OwnerTable
+                label="Danh sách hợp đồng"
+                rows={list.data.items}
+                id={(c) => c.id}
+                loading={list.isFetching}
+                selectLabel="Chi tiết"
+                select={(c) => {
+                  setSelected(c.id);
+                  setMainDraft(!!c.onboardingDraft);
+                  setSelectedLocation(c.locationId);
+                }}
+                columns={[
+                  {
+                    label: 'Phòng / Cơ sở',
+                    render: (c) => (
+                      <>
+                        <Typography sx={{ fontWeight: 650 }}>Phòng {c.roomNumber}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {c.locationName}
+                        </Typography>
+                      </>
+                    ),
+                  },
+                  {
+                    label: 'Loại / Trạng thái',
+                    render: (c) => (
+                      <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
                         <Typography variant="caption">{text(c.kind)}</Typography>
-                        <br />
                         <StatusChip label={text(c.status)} />
-                      </TableCell>
-                      <TableCell>
-                        {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
-                      </TableCell>
-                      <TableCell>{formatContractMoney(c.monthlyRent)}</TableCell>
-                      <TableCell>
-                        <Button
-                          disabled={list.isFetching}
-                          onClick={() => {
-                            setSelected(c.id);
-                            setMainDraft(!!c.onboardingDraft);
-                            setSelectedLocation(c.locationId);
-                          }}
-                        >
-                          Chi tiết
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            {!list.isFetching && !list.data?.items.length && (
-              <Typography role="status" sx={{ p: 3, textAlign: 'center' }}>
+                      </Stack>
+                    ),
+                  },
+                  {
+                    label: 'Kỳ thuê',
+                    render: (c) =>
+                      `${displayContractDate(c.startDate)} – ${displayContractDate(c.endDate)}`,
+                  },
+                  {
+                    label: 'Tiền thuê tháng',
+                    render: (c) => (
+                      <Typography sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 650 }}>
+                        {formatContractMoney(c.monthlyRent)}
+                      </Typography>
+                    ),
+                  },
+                ]}
+              />
+            ) : (
+              <Typography role="status" sx={{ p: 2, textAlign: 'center' }}>
                 Chưa có hợp đồng phù hợp. Tạo bản nháp hoặc đổi bộ lọc.
               </Typography>
             )}
@@ -254,7 +303,7 @@ function LiveContractsPage() {
             value={lookup}
             onChange={(e) => setLookup(e.target.value.trim())}
             size="small"
-            sx={{ minWidth: 320 }}
+            sx={{ maxWidth: { sm: 360 }, minWidth: 0 }}
           />
           <Button
             onClick={() => {
@@ -262,6 +311,7 @@ function LiveContractsPage() {
                 guid(lookup);
                 setLookupError('');
                 setSelected(lookup);
+                setMainDraft(false);
                 setSelectedLocation('');
               } catch (e) {
                 setLookupError((e as Error).message);
@@ -273,6 +323,26 @@ function LiveContractsPage() {
         </Stack>
         {!!lookupError && <Alert severity="error">{lookupError}</Alert>}
       </Stack>
+      <Dialog
+        open={settings}
+        onClose={() => setSettings(false)}
+        maxWidth="md"
+        fullWidth
+        aria-labelledby="contract-settings-title"
+      >
+        <DialogTitle id="contract-settings-title">Cấu hình mẫu và quy trình hợp đồng</DialogTitle>
+        <DialogContent>
+          {settings && (
+            <Stack spacing={2}>
+              <MainDraftSettingsPanel api={api} />
+              <ContractConfigurationPanel api={api} />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSettings(false)}>Đóng cấu hình</Button>
+        </DialogActions>
+      </Dialog>
       <Drawer
         anchor="right"
         open={!!selected}
@@ -282,7 +352,7 @@ function LiveContractsPage() {
         }}
         slotProps={{ paper: { sx: { width: { xs: '100%', md: 760 }, maxWidth: '100%' } } }}
       >
-        <Box sx={{ p: { xs: 2, sm: 3 } }}>
+        <Box sx={{ p: { xs: 1.5, sm: 2 }, minWidth: 0, overflowWrap: 'anywhere' }}>
           <Stack direction="row" sx={{ justifyContent: 'space-between', mb: 2 }}>
             <Typography component="h2" variant="h5">
               Chi tiết hợp đồng
@@ -335,6 +405,7 @@ function LiveContractsPage() {
           onCreated={(id) => {
             setDraft(false);
             setSelected(id);
+            setMainDraft(false);
             setSelectedLocation('');
             void list.refetch();
           }}

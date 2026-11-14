@@ -1,198 +1,353 @@
 import { useState } from 'react';
-import { Alert, Button, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
-import { ConfirmDialog } from '../../components/common/PortalUI';
-import { OwnerFeedback, OwnerPagination, OwnerTable } from '../../components/common/OwnerWorkspace';
+import { useSearchParams } from 'react-router';
 import {
-  useOwnerAction,
-  useOwnerQuery,
-  type OwnerLocation,
-  type OwnerPage,
-} from '../../hooks/useOwnerWorkspace';
-import { todayVietnam, type Staff, type StaffAssignment } from './staffContracts';
+  Button,
+  MenuItem,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+  useMediaQuery,
+} from '@mui/material';
+import { Plus, RefreshCw } from 'lucide-react';
+import { OwnerFeedback } from '../../components/common/OwnerWorkspace';
+import { KPIGrid, PageHeader } from '../../components/common/PortalUI';
+import { todayVietnam } from './staffContracts';
+import { assignmentDate, assignmentState, useLocationAssignments } from './useLocationAssignments';
+import {
+  AssignedStaff,
+  AssignmentDetailDrawer,
+  AssignmentStatusChip,
+} from './components/AssignmentDetailDrawer';
+import { AssignmentDialog, type AssignmentIntent } from './components/AssignmentDialog';
 
-export function StaffAssignments({ staff }: { staff: Staff }) {
-  const action = useOwnerAction();
-  const [page, setPage] = useState(1),
-    [location, setLocation] = useState('');
-  const [start, setStart] = useState(todayVietnam()),
-    [end, setEnd] = useState('');
-  const [reason, setReason] = useState(''),
-    [confirm, setConfirm] = useState('');
-  const locations = useOwnerQuery<OwnerPage<OwnerLocation>>(
-    ['assignment-locations', page],
-    `/api/v1/locations?page=${page}&pageSize=20`,
-  );
-  const selected = useOwnerQuery<OwnerLocation>(
-    ['assignment-location', location],
-    `/api/v1/locations/${location}`,
-    !!location,
-  );
-  const assignments = useOwnerQuery<StaffAssignment[]>(
-    ['staff-assignments', location],
-    `/api/v1/staff-location-assignments?locationId=${location}`,
-    !!location,
-  );
+export function StaffAssignments() {
+  const compact = useMediaQuery('(max-width:599px)');
+  const { data, directory, refresh, retryLocation } = useLocationAssignments();
+  const [params, setParams] = useSearchParams();
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const staffId = params.get('staffUserId') ?? '';
+  const [selected, setSelected] = useState('');
+  const [intent, setIntent] = useState<AssignmentIntent>();
+  const [notice, setNotice] = useState('');
   const today = todayVietnam();
-  const current = assignments.data?.find((x) => x.startDate <= today && x.endDate >= today);
-  async function save() {
-    const base = '/api/v1/staff-location-assignments';
-    const ok = await action.run(() =>
-      action.command(
-        confirm === 'assign' ? base : `${base}/${location}`,
-        confirm === 'assign' ? 'POST' : confirm === 'remove' ? 'DELETE' : 'PUT',
-        confirm === 'assign'
-          ? { locationId: location, staffUserId: staff.userId, startDate: start, endDate: end }
-          : {
-              ...(confirm === 'replace' ? { staffUserId: staff.userId } : {}),
-              effectiveFrom: today,
-              locationVersion: selected.data!.version,
-              reason,
-            },
-      ),
+  const staff = directory.data ?? [];
+  const rows = data.data ?? [];
+  const complete =
+    !!data.data && !data.isError && rows.every((row) => !!row.assignments && !row.error);
+  const assigned = rows.filter((row) =>
+    row.assignments?.some((item) => assignmentState(item, today) === 'current'),
+  ).length;
+  const visible = rows.filter((row) => {
+    const current = row.assignments?.find((item) => assignmentState(item, today) === 'current');
+    const person = staff.find((item) => item.userId === current?.staffUserId);
+    const text = [row.location.name, person?.fullName, person?.email]
+      .join(' ')
+      .toLocaleLowerCase('vi');
+    return (
+      text.includes(search.toLocaleLowerCase('vi')) &&
+      (!staffId || row.assignments?.some((item) => item.staffUserId === staffId)) &&
+      (!status ||
+        (!!row.assignments &&
+          !row.error &&
+          (status === 'current'
+            ? !!current
+            : status === 'empty'
+              ? !current
+              : row.assignments.some((item) => assignmentState(item, today) === 'future'))))
     );
-    if (ok) {
-      setConfirm('');
-      setReason('');
-    }
-  }
+  });
+  const clear = () => {
+    setSearch('');
+    setStatus('');
+    const next = new URLSearchParams(params);
+    next.delete('staffUserId');
+    setParams(next, { replace: true });
+  };
   return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={2}>
-        <Typography variant="h6">Phân công cơ sở · {staff.fullName}</Typography>
-        <OwnerFeedback
-          busy={
-            locations.isFetching || selected.isFetching || assignments.isFetching || action.busy
-          }
-          error={action.error || locations.error || selected.error || assignments.error}
-          notice={action.notice}
-        />
-        <TextField
-          select
-          label="Cơ sở cần xem hoặc phân công"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-        >
-          <MenuItem value="">Chọn cơ sở</MenuItem>
-          {locations.data?.items.map((x) => (
-            <MenuItem key={x.id} value={x.id}>
-              {x.name}
-            </MenuItem>
-          ))}
-        </TextField>
-        <OwnerPagination
-          page={page}
-          total={locations.data?.totalCount ?? 0}
-          change={setPage}
-          busy={locations.isFetching}
-        />
-        {location && (
-          <>
-            <Alert severity="info">
-              {current
-                ? `Nhân viên đang phụ trách: ${current.staffUserId}`
-                : 'Chưa có người phụ trách trong ngày hiện tại.'}{' '}
-              Thay hoặc gỡ phân công có hiệu lực hôm nay; máy chủ kiểm tra và cập nhật công việc còn
-              mở.
-            </Alert>
-            <OwnerTable
-              rows={assignments.data ?? []}
-              id={(x) => x.id}
-              columns={[
-                {
-                  label: 'Nhân viên',
-                  render: (x) => (x.staffUserId === staff.userId ? staff.fullName : x.staffUserId),
-                },
-                { label: 'Từ ngày', render: (x) => x.startDate },
-                { label: 'Đến ngày', render: (x) => x.endDate },
-              ]}
-            />
-            {!current && (
-              <>
-                <TextField
-                  required
-                  type="date"
-                  label="Hiệu lực từ"
-                  value={start}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  onChange={(e) => setStart(e.target.value)}
-                />
-                <TextField
-                  required
-                  type="date"
-                  label="Hiệu lực đến"
-                  value={end}
-                  slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: start } }}
-                  onChange={(e) => setEnd(e.target.value)}
-                />
-              </>
+    <Stack spacing={2} sx={{ minWidth: 0 }}>
+      <PageHeader
+        title="Phân công nhân viên"
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<Plus size={18} />}
+            disabled={!complete || !directory.data || !!directory.error}
+            onClick={() => setIntent({ mode: 'create' })}
+          >
+            Tạo phân công
+          </Button>
+        }
+      />
+      <KPIGrid
+        items={[
+          { label: 'Tổng cơ sở', value: data.isPending ? '…' : complete ? rows.length : '—' },
+          {
+            label: 'Đã có người phụ trách',
+            value: data.isPending ? '…' : complete ? assigned : '—',
+            tone: 'success',
+          },
+          {
+            label: 'Chưa có người phụ trách',
+            value: data.isPending ? '…' : complete ? rows.length - assigned : '—',
+          },
+        ]}
+      />
+      <OwnerFeedback
+        busy={data.isFetching || directory.isFetching}
+        error={data.error || directory.error}
+        notice={notice}
+      />
+      <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ p: 2 }}>
+          <TextField
+            size="small"
+            label="Tìm tên cơ sở hoặc nhân viên"
+            placeholder="Tìm tên cơ sở hoặc nhân viên..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            sx={{ flex: 2 }}
+          />
+          <TextField
+            size="small"
+            select
+            label="Trạng thái"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            sx={{ flex: 1, minWidth: 200 }}
+          >
+            <MenuItem value="">Tất cả cơ sở</MenuItem>
+            <MenuItem value="current">Đang có người phụ trách</MenuItem>
+            <MenuItem value="empty">Chưa có người phụ trách</MenuItem>
+            <MenuItem value="future">Có phân công sắp hiệu lực</MenuItem>
+          </TextField>
+          <TextField
+            size="small"
+            select
+            label="Nhân viên"
+            value={staffId}
+            onChange={(event) => {
+              const next = new URLSearchParams(params);
+              if (event.target.value) next.set('staffUserId', event.target.value);
+              else next.delete('staffUserId');
+              setParams(next, { replace: true });
+            }}
+            sx={{ flex: 1, minWidth: 180 }}
+          >
+            <MenuItem value="">Tất cả nhân viên</MenuItem>
+            {staffId && !staff.some((item) => item.userId === staffId) && (
+              <MenuItem value={staffId}>{staffId}</MenuItem>
             )}
-            <TextField
-              label="Lý do thay / gỡ phân công"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              slotProps={{ htmlInput: { maxLength: 500 } }}
-            />
-            <Stack direction="row" spacing={1}>
-              <Button
-                disabled={
-                  action.busy ||
-                  !staff.isActive ||
-                  !selected.data?.isActive ||
-                  !!assignments.error ||
-                  assignments.isFetching ||
-                  !assignments.data ||
-                  !!current ||
-                  !start ||
-                  !end ||
-                  end < start
-                }
-                onClick={() => setConfirm('assign')}
-              >
-                Phân công nhân viên này
-              </Button>
-              <Button
-                disabled={
-                  action.busy ||
-                  !staff.isActive ||
-                  !selected.data ||
-                  !!assignments.error ||
-                  assignments.isFetching ||
-                  !current ||
-                  current.staffUserId === staff.userId ||
-                  !reason.trim()
-                }
-                onClick={() => setConfirm('replace')}
-              >
-                Thay người phụ trách bằng nhân viên này
-              </Button>
-              <Button
-                color="error"
-                disabled={
-                  action.busy ||
-                  !selected.data ||
-                  !!assignments.error ||
-                  assignments.isFetching ||
-                  current?.staffUserId !== staff.userId ||
-                  !reason.trim()
-                }
-                onClick={() => setConfirm('remove')}
-              >
-                Gỡ phân công hiện tại
-              </Button>
-            </Stack>
-          </>
+            {staff.map((item) => (
+              <MenuItem key={item.userId} value={item.userId}>
+                {item.fullName || item.email}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Button
+            startIcon={<RefreshCw size={17} />}
+            onClick={() => void refresh()}
+            disabled={data.isFetching}
+          >
+            Làm mới
+          </Button>
+        </Stack>
+        {(search || status || staffId) && (
+          <Button sx={{ ml: 2 }} onClick={clear}>
+            Xóa bộ lọc
+          </Button>
         )}
-        <ConfirmDialog
-          error={action.error}
-          open={!!confirm}
-          title="Xác nhận thay đổi người phụ trách"
-          busy={action.busy}
-          onClose={() => setConfirm('')}
-          onConfirm={() => void save()}
-        >
-          Máy chủ sẽ kiểm tra trách nhiệm còn mở và phiên bản cơ sở. Thay đổi được ghi vào lịch sử.
-        </ConfirmDialog>
-      </Stack>
-    </Paper>
+        <TableContainer>
+          <Table
+            size="small"
+            aria-label="Phân công theo cơ sở"
+            sx={{ minWidth: compact ? 0 : 720, tableLayout: compact ? 'fixed' : 'auto' }}
+          >
+            <TableHead>
+              <TableRow>
+                {(compact
+                  ? ['Cơ sở', 'Thao tác']
+                  : ['Cơ sở', 'Người phụ trách', 'Thời gian hiệu lực', 'Trạng thái', 'Thao tác']
+                ).map((label) => (
+                  <TableCell
+                    key={label}
+                    scope="col"
+                    align={label === 'Thao tác' ? 'right' : 'left'}
+                    sx={{
+                      fontWeight: 600,
+                      width: compact && label === 'Thao tác' ? 112 : undefined,
+                    }}
+                  >
+                    {label}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {visible.map((row) => {
+                const current = row.assignments?.find(
+                  (item) => assignmentState(item, today) === 'current',
+                );
+                const future = row.assignments
+                  ?.filter((item) => assignmentState(item, today) === 'future')
+                  .sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
+                return (
+                  <TableRow
+                    key={row.location.id}
+                    hover
+                    tabIndex={row.error ? undefined : 0}
+                    onClick={() => {
+                      if (!row.error) setSelected(row.location.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (
+                        event.target === event.currentTarget &&
+                        (event.key === 'Enter' || event.key === ' ')
+                      ) {
+                        event.preventDefault();
+                        if (!row.error) setSelected(row.location.id);
+                      }
+                    }}
+                    sx={{
+                      cursor: 'pointer',
+                      '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
+                    }}
+                  >
+                    <TableCell sx={{ fontWeight: 600, maxWidth: 240, overflowWrap: 'anywhere' }}>
+                      {row.location.name}
+                      {compact && (
+                        <Stack
+                          spacing={0.75}
+                          sx={{ mt: 1, alignItems: 'flex-start', fontWeight: 400 }}
+                        >
+                          {row.error ? (
+                            <Typography variant="caption" color="error.main">
+                              Chưa tải được phân công
+                            </Typography>
+                          ) : (
+                            <>
+                              <AssignmentStatusChip
+                                state={current ? 'current' : future ? 'future' : 'empty'}
+                              />
+                              {current ? (
+                                <AssignedStaff staff={staff} id={current.staffUserId} />
+                              ) : (
+                                <Typography variant="body2">
+                                  {future
+                                    ? 'Sắp nhận việc: ' +
+                                      (staff.find((item) => item.userId === future.staffUserId)
+                                        ?.fullName || future.staffUserId)
+                                    : 'Chưa có người phụ trách'}
+                                </Typography>
+                              )}
+                              <Typography variant="caption" color="text.secondary">
+                                {current
+                                  ? assignmentDate(current.startDate) +
+                                    ' – ' +
+                                    assignmentDate(current.endDate)
+                                  : '—'}
+                              </Typography>
+                            </>
+                          )}
+                        </Stack>
+                      )}
+                    </TableCell>
+                    {!compact && (
+                      <>
+                        <TableCell>
+                          {row.error ? (
+                            'Chưa tải được phân công'
+                          ) : current ? (
+                            <AssignedStaff staff={staff} id={current.staffUserId} />
+                          ) : (
+                            <Stack>
+                              <Typography sx={{ fontSize: 14 }}>Chưa có người phụ trách</Typography>
+                              {future && (
+                                <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                                  Sắp nhận việc:{' '}
+                                  {staff.find((item) => item.userId === future.staffUserId)
+                                    ?.fullName || future.staffUserId}
+                                </Typography>
+                              )}
+                            </Stack>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {current
+                            ? assignmentDate(current.startDate) +
+                              ' – ' +
+                              assignmentDate(current.endDate)
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {row.error ? (
+                            'Lỗi tải dữ liệu'
+                          ) : (
+                            <AssignmentStatusChip
+                              state={current ? 'current' : future ? 'future' : 'empty'}
+                            />
+                          )}
+                        </TableCell>
+                      </>
+                    )}
+                    <TableCell align="right" sx={{ verticalAlign: 'top' }}>
+                      <Button
+                        disabled={!row.error && (!!directory.error || !directory.data)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (row.error) void retryLocation(row.location.id);
+                          else if (current) setSelected(row.location.id);
+                          else setIntent({ mode: 'create', locationId: row.location.id });
+                        }}
+                      >
+                        {row.error ? 'Thử lại' : current ? 'Chi tiết' : 'Phân công'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        {!visible.length && (
+          <Typography sx={{ p: 3, textAlign: 'center', fontSize: 14 }}>
+            {data.isPending
+              ? 'Đang tải cơ sở…'
+              : data.error
+                ? 'Không tải được danh sách cơ sở. Hãy thử làm mới.'
+                : 'Không có cơ sở phù hợp.'}
+          </Typography>
+        )}
+        <Typography sx={{ p: 2, fontSize: 13, color: 'text.secondary' }}>
+          {visible.length} cơ sở
+        </Typography>
+      </Paper>
+      <AssignmentDetailDrawer
+        row={rows.find((row) => row.location.id === selected && !row.error)}
+        staff={staff}
+        today={today}
+        close={() => setSelected('')}
+        act={setIntent}
+      />
+      {intent && (
+        <AssignmentDialog
+          intent={intent}
+          locations={rows.map((row) => row.location)}
+          staff={staff}
+          close={() => setIntent(undefined)}
+          saved={async () => {
+            await refresh();
+            setNotice('Đã cập nhật phân công.');
+          }}
+        />
+      )}
+    </Stack>
   );
 }

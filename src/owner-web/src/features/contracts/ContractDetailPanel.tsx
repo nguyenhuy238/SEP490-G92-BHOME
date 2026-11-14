@@ -37,17 +37,20 @@ import {
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
+import { formatBillingDecimal } from '../../../../../packages/client-core/src/invoices';
 import { ChartCard, StatusChip } from '../../components/common/PortalUI';
 import { ContractActionDialog } from './ContractActionDialog';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
 import { HoldingDepositPanel } from './HoldingDepositPanel';
+import { DepositReceiptPanel } from './DepositReceiptPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 import { MainDraftDetailPanel } from './MainDraftDetailPanel';
 import { ContractPolicyPanel } from './ContractPolicyPanel';
 import { OwnerSigningPanel } from './OwnerSigningPanel';
 import { useSigningMethods } from './useContractsApi';
 import { signingMethodLabel } from '../../../../../packages/client-core/src/signing';
+import { InternalSigningPanel } from './InternalSigningPanel';
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob),
@@ -129,15 +132,20 @@ export function ContractDetailPanel({
   const activated = !!c.activatedAt || ['Active', 'Terminated', 'Superseded'].includes(c.status);
   const depositDone = activated || (!!r && Number(r.remainingDeposit) === 0);
   const steps = [
-    { label: 'Bản nháp', done: c.status !== 'Draft' },
-    { label: `Ký số (${signedCount}/2)`, done: signedCount === 2 || activated },
+    { label: 'Bản nháp', done: c.status !== 'Draft' || (c.kind === 'Holding' && !!c.approvedAt) },
+    {
+      label:
+        c.signingMode === 'INTERNAL_OTP_DRAWN' ? 'Xác nhận hai bên' : `Ký số (${signedCount}/2)`,
+      done:
+        c.signingMode === 'INTERNAL_OTP_DRAWN'
+          ? c.status === 'PendingActivation' || activated
+          : signedCount === 2 || activated,
+    },
     { label: 'Xác minh cọc', done: depositDone },
     { label: 'Kích hoạt', done: activated },
   ];
-  const activeStep = Math.max(
-    0,
-    steps.findIndex((s) => !s.done),
-  );
+  const nextStep = steps.findIndex((s) => !s.done);
+  const activeStep = nextStep < 0 ? steps.length : nextStep;
   const representative =
     c.occupants?.find((o) => o.representative)?.label || c.representativeResidentId;
   const facts: [string, ReactNode][] = [
@@ -203,7 +211,16 @@ export function ContractDetailPanel({
         <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
           Mã hợp đồng {c.id}
         </Typography>
-        <Stepper activeStep={activeStep} alternativeLabel sx={{ my: 2 }}>
+        <ContractNavigation id={c.id} />
+        <Stepper
+          activeStep={activeStep}
+          alternativeLabel
+          sx={{
+            my: 1.5,
+            '& .MuiStep-root': { px: { xs: 0.25, sm: 1 } },
+            '& .MuiStepLabel-label': { overflowWrap: 'anywhere' },
+          }}
+        >
           {steps.map((s) => (
             <Step key={s.label} completed={s.done}>
               <StepLabel>{s.label}</StepLabel>
@@ -240,6 +257,11 @@ export function ContractDetailPanel({
 
       {!!error && <Alert severity="error">{error}</Alert>}
       {!!notice && <Alert severity="success">{notice}</Alert>}
+      {c.kind === 'Holding' && c.signingMode === 'INTERNAL_OTP_DRAWN' && c.isDevelopmentDemo && (
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+          <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
+        </Paper>
+      )}
 
       {/* 2. What to do next: the actions the server allows now, and what still blocks activation */}
       <ChartCard title="Việc cần làm">
@@ -296,98 +318,162 @@ export function ContractDetailPanel({
         </Stack>
       </ChartCard>
 
+      {c.agreedCharges?.length ||
+      c.priceLockedAt ||
+      ['Active', 'PendingSigning', 'PendingActivation', 'Terminated', 'Superseded'].includes(
+        c.status,
+      ) ? (
+        <ChartCard title="Giá & phí theo hợp đồng">
+          <Stack spacing={1.5}>
+            {c.agreedCharges?.length ? (
+              <>
+                <Alert severity="info">
+                  {c.priceLockedAt || c.approvedAt || c.status !== 'Draft'
+                    ? 'Biểu phí đã chốt được giữ nguyên trong suốt hợp đồng. Hóa đơn sử dụng đơn giá này, không sử dụng biểu giá mới của phòng.'
+                    : 'Biểu phí dự kiến của bản nháp; sẽ được khóa khi hợp đồng có ràng buộc.'}
+                </Alert>
+                {c.agreedCharges.map((charge) => (
+                  <Stack
+                    key={charge.chargeCode}
+                    direction={{ xs: 'column', sm: 'row' }}
+                    sx={{
+                      justifyContent: 'space-between',
+                      gap: { xs: 0.5, sm: 2 },
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    <Typography variant="body2">
+                      {charge.name || charge.chargeCode} · {charge.chargeCode}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {formatBillingDecimal(charge.rate)} đ/
+                      {charge.category === 1
+                        ? 'kWh'
+                        : charge.category === 2
+                          ? 'm³'
+                          : charge.method === 2
+                            ? 'người/tháng'
+                            : 'tháng'}
+                    </Typography>
+                  </Stack>
+                ))}
+              </>
+            ) : (
+              <Alert severity="warning">
+                Hợp đồng chưa có biểu phí đã chốt để đối chiếu. Không sử dụng giá cấu hình hiện tại
+                thay thế.
+              </Alert>
+            )}
+          </Stack>
+        </ChartCard>
+      ) : null}
+
       {/* 3. Signatures: one line per party, then the signed PDF */}
-      <ChartCard
-        title="Chữ ký số"
-        subtitle={
-          c.isDevelopmentDemo
-            ? 'Mô phỏng Development — không dùng chứng thư hoặc chữ ký điện tử'
-            : signingMethods && !signingMethods.methods.includes('VIETTEL_MYSIGN')
-              ? 'Chủ trọ ký số MySign (chứng thư qua VNeID) · Người thuê ký điện tử, xác thực OTP email'
-              : 'Mỗi bên ký bằng chứng thư Viettel MySign của chính mình'
-        }
-        action={
-          signer &&
-          !c.isDevelopmentDemo &&
-          (!signingMethods || signingMethods.methods.includes('VIETTEL_MYSIGN')) ? (
-            <SigningSetupLink />
-          ) : undefined
-        }
-      >
-        <Stack divider={<Divider flexItem />} spacing={1}>
-          {parties.map((p) => (
-            <Stack
-              key={p.party}
-              direction="row"
-              spacing={1}
-              sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+      {c.signingMode !== 'INTERNAL_OTP_DRAWN' && (
+        <ChartCard
+          title="Chữ ký số"
+          subtitle={
+            c.isDevelopmentDemo
+              ? 'Mô phỏng Development — không dùng chứng thư hoặc chữ ký điện tử'
+              : signingMethods && !signingMethods.methods.includes('VIETTEL_MYSIGN')
+                ? 'Chủ trọ ký số MySign (chứng thư qua VNeID) · Người thuê ký điện tử, xác thực OTP email'
+                : 'Mỗi bên ký bằng chứng thư Viettel MySign của chính mình'
+          }
+          action={
+            signer &&
+            !c.isDevelopmentDemo &&
+            (!signingMethods || signingMethods.methods.includes('VIETTEL_MYSIGN')) ? (
+              <SigningSetupLink />
+            ) : undefined
+          }
+        >
+          <Stack divider={<Divider flexItem />} spacing={1}>
+            {parties.map((p) => (
+              <Stack
+                key={p.party}
+                direction="row"
+                spacing={1}
+                sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+              >
+                <Typography sx={{ fontWeight: 600, minWidth: 150 }}>
+                  {p.party} · {p.role}
+                  {p.id === actorId ? ' (bạn)' : ''}
+                </Typography>
+                {p.signature ? (
+                  <StatusChip label={text(p.signature.status)} />
+                ) : (
+                  <Chip size="small" variant="outlined" label="Chưa có yêu cầu ký" />
+                )}
+                {p.signature && !c.isDevelopmentDemo && (
+                  <Typography variant="body2" color="text.secondary">
+                    {signingMethodLabel(p.signature.method)}
+                  </Typography>
+                )}
+                {p.signature?.signedAt && (
+                  <Typography variant="body2" color="text.secondary">
+                    {formatInstant(p.signature.signedAt)}
+                  </Typography>
+                )}
+                {p.signature?.certificateSubject && p.signature.method !== 'OTP' && (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ overflowWrap: 'anywhere' }}
+                  >
+                    {p.signature.certificateSubject}
+                    {p.signature.certificateIssuer ? ` (${p.signature.certificateIssuer})` : ''}
+                  </Typography>
+                )}
+              </Stack>
+            ))}
+          </Stack>
+          {signer && (
+            <Box sx={{ mt: 2 }}>
+              <OwnerSigningPanel
+                api={api}
+                contract={c}
+                actorId={actorId}
+                methods={signingMethods}
+                onChanged={() => {
+                  detail.reload();
+                  onChanged();
+                }}
+              />
+            </Box>
+          )}
+          <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              disabled={busy || !anySigned}
+              onClick={() => void openSigned()}
             >
-              <Typography sx={{ fontWeight: 600, minWidth: 150 }}>
-                {p.party} · {p.role}
-                {p.id === actorId ? ' (bạn)' : ''}
-              </Typography>
-              {p.signature ? (
-                <StatusChip label={text(p.signature.status)} />
-              ) : (
-                <Chip size="small" variant="outlined" label="Chưa có yêu cầu ký" />
-              )}
-              {p.signature && !c.isDevelopmentDemo && (
-                <Typography variant="body2" color="text.secondary">
-                  {signingMethodLabel(p.signature.method)}
-                </Typography>
-              )}
-              {p.signature?.signedAt && (
-                <Typography variant="body2" color="text.secondary">
-                  {formatInstant(p.signature.signedAt)}
-                </Typography>
-              )}
-              {p.signature?.certificateSubject && p.signature.method !== 'OTP' && (
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ overflowWrap: 'anywhere' }}
-                >
-                  {p.signature.certificateSubject}
-                  {p.signature.certificateIssuer ? ` (${p.signature.certificateIssuer})` : ''}
-                </Typography>
-              )}
-            </Stack>
-          ))}
-        </Stack>
-        {signer && (
-          <Box sx={{ mt: 2 }}>
-            <OwnerSigningPanel
-              api={api}
-              contract={c}
-              actorId={actorId}
-              methods={signingMethods}
-              onChanged={() => {
-                detail.reload();
-                onChanged();
-              }}
-            />
-          </Box>
-        )}
-        <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
-          <Button
-            variant="outlined"
-            disabled={busy || !anySigned}
-            onClick={() => void openSigned()}
-          >
-            Xem hợp đồng đã ký
-          </Button>
-          <Button
-            disabled={busy || !anySigned}
-            onClick={() =>
-              void run(async () => downloadBlob(await api.document(id), 'hop-dong.pdf'))
-            }
-          >
-            Tải tài liệu ký
-          </Button>
-        </Stack>
-      </ChartCard>
+              Xem hợp đồng đã ký
+            </Button>
+            <Button
+              disabled={busy || !anySigned}
+              onClick={() =>
+                void run(async () => downloadBlob(await api.document(id), 'hop-dong.pdf'))
+              }
+            >
+              Tải tài liệu ký
+            </Button>
+          </Stack>
+        </ChartCard>
+      )}
 
       {/* 4. Reference material, folded away until needed */}
+      {['Main', 'Holding'].includes(c.kind) && !c.previousContractId && (
+        <DepositReceiptPanel
+          contract={c}
+          changed={() => {
+            detail.reload();
+            onChanged();
+          }}
+        />
+      )}
       {c.kind === 'Holding' && (
         <HoldingDepositPanel
           contract={c}
@@ -419,6 +505,9 @@ export function ContractDetailPanel({
           </Box>
         </AccordionDetails>
       </Accordion>
+      {c.signingMode === 'INTERNAL_OTP_DRAWN' && !(c.kind === 'Holding' && c.isDevelopmentDemo) && (
+        <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
+      )}
       <ContractWorkflowPanel api={api} contract={c} />
       {c.kind !== 'Holding' && typeof api.transport === 'function' && (
         <ContractPolicyPanel
@@ -521,6 +610,20 @@ export function ContractDetailPanel({
           }}
         />
       )}
+    </Stack>
+  );
+}
+function ContractNavigation({ id }: { id: string }) {
+  const routed = useInRouterContext();
+  if (!routed) return null;
+  return (
+    <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
+      <Button component={RouterLink} to={`/handovers?contractId=${encodeURIComponent(id)}`}>
+        Mở biên bản bàn giao
+      </Button>
+      <Button component={RouterLink} to="/temporary-residence">
+        Theo dõi tạm trú
+      </Button>
     </Stack>
   );
 }

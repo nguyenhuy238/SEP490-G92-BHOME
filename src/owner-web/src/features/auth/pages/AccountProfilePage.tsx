@@ -21,6 +21,7 @@ import { ApiError } from '../../../../../../packages/client-core/src/api';
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
 import { ChangePasswordDialog } from '../components/ChangePasswordDialog';
 import { useAccountProfileApi, type AccountProfile } from '../hooks/useAccountProfileApi';
+import { normalizeLoginPhone } from '../../../../../../packages/client-core/src/loginValidation';
 
 interface ProfileForm {
   fullName: string;
@@ -50,6 +51,7 @@ export default function AccountProfilePage() {
   const [reauthPassword, setReauthPassword] = useState('');
   const [logoutError, setLogoutError] = useState(false);
   const [formError, setFormError] = useState('');
+  const [verificationMessage, setVerificationMessage] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
 
   const queryKey = ['account-profile', session?.userId] as const;
@@ -64,39 +66,53 @@ export default function AccountProfilePage() {
   const update = useMutation({
     mutationFn: async () => {
       const current = profile.data!;
-      const contactChanged =
-        activeForm.email.trim() !== (current.email ?? '') ||
-        (activeForm.phone.trim() || null) !== current.phone;
-      if (contactChanged) await client.login(current.email!, reauthPassword);
       return api.update({
         fullName: activeForm.fullName.trim(),
         email: activeForm.email.trim(),
-        phone: activeForm.phone.trim() || null,
+        phone: normalizeLoginPhone(activeForm.phone) ?? null,
         version: current.version,
+        ...(contactChanged ? { currentPassword: reauthPassword } : {}),
       });
     },
     onSuccess: async (updated) => {
-      const credentialsChanged =
-        updated.email !== profile.data?.email || updated.phone !== profile.data?.phone;
+      const emailChanged = updated.email?.toUpperCase() !== profile.data?.email?.toUpperCase();
       queryClient.setQueryData(queryKey, updated);
       setForm(null);
       setFormError('');
-      if (credentialsChanged) {
+      setReauthPassword('');
+      setSaved(true);
+      setVerificationMessage('');
+      if (emailChanged) {
         try {
-          await client.login(updated.email!, reauthPassword);
-          if (!client.session?.roles.includes('Owner'))
-            throw new Error('Owner session was not restored.');
-          setReauthPassword('');
-          setSaved(true);
+          await client.requestEmailVerification(updated.email!);
+          setVerificationMessage(
+            'Đã lưu hồ sơ và tiếp nhận yêu cầu xác nhận email mới. Kiểm tra hộp thư để xác nhận trước khi dùng quên mật khẩu.',
+          );
         } catch {
-          client.clear();
-          navigate('/login', { replace: true, state: { profileCredentialsChanged: true } });
+          setVerificationMessage(
+            'Đã lưu hồ sơ. Chưa thể gửi liên kết xác nhận email mới; bạn có thể yêu cầu lại ở trang Xác nhận email.',
+          );
         }
-      } else {
-        setSaved(true);
       }
     },
-    onError: (failure) => {
+    onError: async (failure) => {
+      if (failure instanceof ApiError && failure.problem?.code === 'current_password_invalid') {
+        setReauthPassword('');
+        // Identity may update only its concurrency stamp after a failed attempt.
+        // Rebase that version only when every displayed profile field is unchanged.
+        try {
+          const latest = await api.get();
+          if (
+            JSON.stringify(formFrom(profile.data!)) === JSON.stringify(formFrom(latest)) &&
+            latest.userId === profile.data!.userId &&
+            latest.isActive === profile.data!.isActive &&
+            JSON.stringify(latest.roles) === JSON.stringify(profile.data!.roles)
+          )
+            queryClient.setQueryData(queryKey, latest);
+        } catch {
+          /* The original safe field error remains; a revoked session is handled by the API client. */
+        }
+      }
       if (failure instanceof ApiError && failure.status === 401) {
         setFormError('Mật khẩu hiện tại không đúng hoặc phiên đăng nhập đã hết hạn.');
       } else if (failure instanceof ApiError && failure.status === 409) {
@@ -106,7 +122,11 @@ export default function AccountProfilePage() {
             : 'Hồ sơ đã thay đổi ở nơi khác. Vui lòng tải lại trước khi lưu.',
         );
       } else if (failure instanceof ApiError && failure.status === 400) {
-        setFormError('Thông tin hồ sơ chưa hợp lệ. Vui lòng kiểm tra lại các trường.');
+        setFormError(
+          failure.problem?.code === 'current_password_invalid'
+            ? 'Mật khẩu hiện tại không đúng.'
+            : 'Thông tin hồ sơ chưa hợp lệ. Vui lòng kiểm tra lại các trường.',
+        );
       } else {
         setFormError('Không thể cập nhật hồ sơ lúc này. Vui lòng thử lại.');
       }
@@ -120,8 +140,8 @@ export default function AccountProfilePage() {
   const current = profile.data;
   const changed = JSON.stringify(activeForm) !== JSON.stringify(formFrom(current));
   const contactChanged =
-    activeForm.email.trim() !== (current.email ?? '') ||
-    (activeForm.phone.trim() || null) !== current.phone;
+    activeForm.email.trim().toUpperCase() !== current.email?.toUpperCase() ||
+    normalizeLoginPhone(activeForm.phone) !== normalizeLoginPhone(current.phone ?? '');
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -130,8 +150,8 @@ export default function AccountProfilePage() {
       setFormError('Họ tên phải có ít nhất 2 ký tự và Email phải đúng định dạng.');
       return;
     }
-    if (activeForm.phone.trim().length > 30) {
-      setFormError('Số điện thoại không được vượt quá 30 ký tự.');
+    if (activeForm.phone.trim() && !normalizeLoginPhone(activeForm.phone)) {
+      setFormError('Số điện thoại không đúng định dạng.');
       return;
     }
     if (contactChanged && !reauthPassword) {
@@ -161,7 +181,6 @@ export default function AccountProfilePage() {
       <PageHeader
         title="Hồ sơ tài khoản"
         group="TÀI KHOẢN OWNER"
-        subtitle="Quản lý thông tin liên hệ và bảo mật của tài khoản đang đăng nhập."
         actions={
           <Button
             variant="outlined"
@@ -176,7 +195,8 @@ export default function AccountProfilePage() {
         sx={{
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 2fr) minmax(280px, 1fr)' },
-          gap: 2.5,
+          gap: 2,
+          minWidth: 0,
         }}
       >
         <Paper
@@ -205,6 +225,11 @@ export default function AccountProfilePage() {
             </Box>
           </Stack>
           <Divider sx={{ mb: 3 }} />
+          {verificationMessage && (
+            <Alert severity="info" action={<Button href="/confirm-email">Xác nhận email</Button>}>
+              {verificationMessage}
+            </Alert>
+          )}
           {formError && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {formError}
@@ -224,14 +249,14 @@ export default function AccountProfilePage() {
               label="Email"
               value={activeForm.email}
               onChange={(event) => setForm({ ...activeForm, email: event.target.value })}
-              helperText="Thay đổi Email sẽ yêu cầu đăng nhập lại để bảo vệ tài khoản."
+              helperText="Email mới cần được xác nhận; phiên đăng nhập được giữ."
               slotProps={{ htmlInput: { maxLength: 256 } }}
             />
             <TextField
               label="Số điện thoại"
               value={activeForm.phone}
               onChange={(event) => setForm({ ...activeForm, phone: event.target.value })}
-              helperText="Thay đổi số điện thoại sẽ yêu cầu đăng nhập lại."
+              helperText="Số điện thoại mới chưa được xác minh qua SMS."
               slotProps={{ htmlInput: { maxLength: 30 } }}
             />
             {contactChanged && (
@@ -242,7 +267,7 @@ export default function AccountProfilePage() {
                 label="Mật khẩu hiện tại để xác nhận"
                 value={reauthPassword}
                 onChange={(event) => setReauthPassword(event.target.value)}
-                helperText="Chỉ dùng trong bộ nhớ để xác thực lại phiên sau khi lưu, không được lưu vào hồ sơ."
+                helperText="Xác nhận thay đổi liên hệ; phiên đăng nhập được giữ. Số điện thoại mới chưa được xác minh qua SMS."
                 slotProps={{ htmlInput: { maxLength: 1024 } }}
               />
             )}
@@ -344,7 +369,7 @@ export default function AccountProfilePage() {
         onClose={() => setPasswordChanged(false)}
       >
         <Alert severity="success" onClose={() => setPasswordChanged(false)}>
-          Đã đổi mật khẩu và xác thực lại phiên hiện tại.
+          Đã đổi mật khẩu. Vui lòng đăng nhập lại.
         </Alert>
       </Snackbar>
       <Snackbar open={logoutError} autoHideDuration={8000} onClose={() => setLogoutError(false)}>

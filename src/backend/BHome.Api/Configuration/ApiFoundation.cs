@@ -13,7 +13,20 @@ public static class ApiFoundation
 {
     public static IServiceCollection AddApiFoundation(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddControllers();
+        services.AddControllers().AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.Converters.Add(new RetiredRoomTypeJsonConverterFactory());
+            options.JsonSerializerOptions.TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver
+            {
+                Modifiers = { info =>
+                {
+                    if (info.Kind == System.Text.Json.Serialization.Metadata.JsonTypeInfoKind.Object &&
+                        (info.Type == typeof(BHome.Application.PropertyManagement.RoomWrite) ||
+                         info.Type == typeof(BHome.Application.PropertyManagement.PolicyWrite)))
+                        info.UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow;
+                } }
+            };
+        });
         services.AddHttpContextAccessor();
         services.AddScoped<AuthTransportFilter>();
         services.AddOptions<AuthRateLimitOptions>().Bind(configuration.GetSection("AuthRateLimit"))
@@ -22,6 +35,10 @@ public static class ApiFoundation
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("EmailTest", context => context.User.IsInRole("Owner")
+                ? RateLimitPartition.GetFixedWindowLimiter("development-email-test", _ => new FixedWindowRateLimiterOptions
+                { PermitLimit = 1, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 })
+                : RateLimitPartition.GetNoLimiter("email-test-unauthorized"));
             options.AddPolicy("Auth", context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions

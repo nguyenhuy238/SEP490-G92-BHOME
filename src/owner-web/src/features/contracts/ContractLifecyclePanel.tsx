@@ -34,6 +34,7 @@ import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { ChartCard } from '../../components/common/PortalUI';
 import { RefundPanel } from '../payments/RefundPanel';
 import { DepositDeductionsPanel } from './DepositDeductionsPanel';
+import { SettlementReceivablesPanel } from './SettlementReceivablesPanel';
 
 export function ContractLifecyclePanel({
   api,
@@ -102,6 +103,12 @@ export function ContractLifecyclePanel({
   return (
     <ChartCard title="Kiểm tra & quyết toán trả phòng">
       <Stack spacing={2}>
+        {moveOut.status === 'Completed' && (
+          <Alert severity="info">
+            Đã hoàn tất bàn giao vật lý. Nợ, cọc và giao dịch hoàn tiền vẫn được đối chiếu riêng;
+            trạng thái này không xác nhận đã thanh toán.
+          </Alert>
+        )}
         <Button disabled={busy || q.loading} onClick={() => void reload()}>
           Tải lại dữ liệu quyết toán
         </Button>
@@ -276,25 +283,27 @@ export function ContractLifecyclePanel({
                 {settlementBlocker(b)}
               </Alert>
             ))}
+            {inspection?.ownerDecision === 'Confirmed' && !summary.depositDeductions && (
+              <SettlementReceivablesPanel
+                key={`receivables:${contract.id}`}
+                api={api}
+                id={contract.id}
+                inspection={inspection}
+                summary={summary}
+                saved={async () => {
+                  await reload();
+                  onChanged();
+                }}
+              />
+            )}
             {!/^0(?:\.0+)?$/.test(summary.verifiedSecurityDeposit) && (
               <>
-                {inspection?.ownerDecision === 'Confirmed' &&
-                  (summary.depositDeductions ||
-                    summary.unresolvedItems.includes(
-                      'final_charges_and_damage_policy_pending',
-                    )) && (
-                    <DepositDeductionsPanel
-                      key={`deductions:${summary.reference}`}
-                      api={api}
-                      id={contract.id}
-                      summary={summary}
-                      inspection={inspection}
-                      saved={async () => {
-                        await reload();
-                        onChanged();
-                      }}
-                    />
-                  )}
+                {inspection?.ownerDecision === 'Confirmed' && summary.depositDeductions && (
+                  <DepositDeductionsPanel
+                    key={`deductions:${summary.reference}`}
+                    summary={summary}
+                  />
+                )}
                 <RefundPanel
                   sourceId={contract.id}
                   sourceKind="SecurityDeposit"
@@ -362,32 +371,35 @@ export function ContractLifecyclePanel({
                 </Button>
               </>
             )}
-            {summary && ['Inspected', 'PendingSettlement', 'Settled'].includes(moveOut.status) && (
-              <>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={checked}
-                      onChange={(e) =>
-                        setReviewedReference(e.target.checked ? summary.reference : null)
-                      }
-                    />
-                  }
-                  label="Tôi đã đọc số liệu và các nghĩa vụ còn chờ xử lý"
-                />
-                <Button
-                  disabled={busy || !checked || !reason.trim()}
-                  onClick={() =>
-                    void save('move-out/settlement', {
-                      decision: reason,
-                      expectedReference: summary.reference,
-                    })
-                  }
-                >
-                  Lưu xem xét quyết toán
-                </Button>
-              </>
-            )}
+            {summary &&
+              ['Inspected', 'PendingSettlement', 'Settled', 'Completed'].includes(
+                moveOut.status,
+              ) && (
+                <>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={checked}
+                        onChange={(e) =>
+                          setReviewedReference(e.target.checked ? summary.reference : null)
+                        }
+                      />
+                    }
+                    label="Tôi đã đọc số liệu và các nghĩa vụ còn chờ xử lý"
+                  />
+                  <Button
+                    disabled={busy || !checked || !reason.trim()}
+                    onClick={() =>
+                      void save('move-out/settlement', {
+                        decision: reason,
+                        expectedReference: summary.reference,
+                      })
+                    }
+                  >
+                    Lưu xem xét quyết toán
+                  </Button>
+                </>
+              )}
           </>
         )}
         {q.history.map((h) => (
@@ -403,7 +415,7 @@ export function ContractLifecyclePanel({
                 ReinspectionRequired: 'Kiểm tra lại',
                 Settled: 'Đã quyết toán',
                 PendingSettlement: 'Chờ quyết toán',
-                Completed: 'Hoàn tất',
+                Completed: 'Hoàn tất bàn giao vật lý',
               } as Record<string, string>
             )[h.action] ?? h.action}
           </Typography>

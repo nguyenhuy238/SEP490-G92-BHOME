@@ -16,9 +16,19 @@ export function reportCsv(report: FinancialReport) {
       'outstandingNow',
       'initialInvestment',
       'netOperatingCashFlow',
+      'settlementApprovedCharges',
+      'settlementOutstandingNow',
+      'settlementVerifiedBankCollections',
+      'depositOffsetsApplied',
+      'holdingForfeitures',
     ],
   ];
-  const append = (id: string, name: string, t: FinancialReport['total']) =>
+  const append = (
+    id: string,
+    name: string,
+    t: FinancialReport['total'],
+    source?: FinancialReport['settlementSources'],
+  ) =>
     rows.push([
       report.filter.from,
       report.filter.to,
@@ -33,10 +43,15 @@ export function reportCsv(report: FinancialReport) {
       t.outstandingNow,
       t.initialInvestment,
       t.netOperatingCashFlow,
+      source?.approvedCharges,
+      source?.outstandingNow,
+      source?.verifiedBankCollections,
+      source?.depositOffsetsApplied,
+      source?.holdingForfeitures,
     ]);
-  append('', 'TOTAL', report.total);
+  append('', 'TOTAL', report.total, report.settlementSources);
   for (const location of report.locations)
-    append(location.locationId, location.locationName, location.totals);
+    append(location.locationId, location.locationName, location.totals, location.settlementSources);
   return (
     '\uFEFF' +
     rows

@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TasksApiPage } from './TasksApiPage';
 import { ApiError } from '../../../../../packages/client-core/src/api';
 const mocks = vi.hoisted(() => ({ request: vi.fn() }));
@@ -23,16 +23,29 @@ const task = {
   result: 'Submitted',
   dueAt: '2026-11-10T00:00:00Z',
 };
+const staff = {
+  userId: 'staff',
+  fullName: 'Staff synthetic',
+  email: 'staff@example.invalid',
+  phone: null,
+  isActive: true,
+  accountVersion: 'v1',
+  employment: null,
+};
 beforeEach(() => {
   mocks.request.mockReset();
-  mocks.request.mockImplementation(async (path: string) =>
-    path.endsWith('/evidence')
+  mocks.request.mockImplementation(async (path: string) => {
+    if (path === '/api/v1/staff?page=1&pageSize=100') return { items: [staff], totalCount: 1 };
+    if (path === '/api/v1/operational-tasks/task/actors')
+      return [{ userId: 'owner', displayName: 'Owner synthetic' }];
+    return path.endsWith('/evidence')
       ? []
       : path === '/api/v1/operational-tasks/task'
         ? task
-        : { items: path.startsWith('/api/v1/operational-tasks?') ? [task] : [], totalCount: 1 },
-  );
+        : { items: path.startsWith('/api/v1/operational-tasks?') ? [task] : [], totalCount: 1 };
+  });
 });
+afterEach(() => vi.unstubAllGlobals());
 function mount() {
   render(
     <MemoryRouter>
@@ -48,7 +61,9 @@ it('uses the reviewed task version for Owner verification and exposes no Staff e
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Nghiệm thu' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Nghiệm thu' });
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: /Đã kiểm tra kết quả/ }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận' }));
   await waitFor(() =>
     expect(mocks.request).toHaveBeenCalledWith(
       '/api/v1/operational-tasks/task/verify',
@@ -70,12 +85,52 @@ it('keeps the same command key on an uncertain verification retry', async () => 
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Nghiệm thu' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
-  await screen.findByRole('alert');
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Nghiệm thu' });
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: /Đã kiểm tra kết quả/ }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận' }));
+  await within(dialog).findByRole('alert');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận' }));
   await waitFor(() =>
     expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2),
   );
   const posts = mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST');
   expect(posts[0][1].headers).toEqual(posts[1][1].headers);
+});
+
+it('forwards the selected Staff filter to the server', async () => {
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Bộ lọc nâng cao' }));
+  const staffFilter = await screen.findByRole('combobox', { name: 'Staff phụ trách' });
+  fireEvent.mouseDown(staffFilter);
+  fireEvent.click(await screen.findByRole('option', { name: 'Staff synthetic' }));
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      expect.stringContaining('staffUserId=staff'),
+      expect.anything(),
+    ),
+  );
+});
+
+it('keeps task status, due date and review action visible in the compact table', async () => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('max-width:599px'),
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+    onchange: null,
+  }));
+  mount();
+  const table = await screen.findByRole('table', { name: 'Danh sách công việc' });
+  const row = await within(table).findByRole('row', { name: /Synthetic task/ });
+  expect(
+    within(table)
+      .getAllByRole('columnheader')
+      .map((cell) => cell.textContent),
+  ).toEqual(['Công việc', 'Thao tác']);
+  expect(within(row).getByText(/Hạn:/)).toBeVisible();
+  fireEvent.click(within(row).getByRole('button', { name: 'Xem chi tiết' }));
+  expect(await screen.findByRole('button', { name: 'Nghiệm thu' })).toBeVisible();
 });

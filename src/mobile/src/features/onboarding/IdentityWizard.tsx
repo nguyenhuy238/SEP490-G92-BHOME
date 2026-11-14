@@ -1,3 +1,4 @@
+import { workflowFailure } from '../../lib/workflowFailure';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Platform, View } from 'react-native';
@@ -8,9 +9,11 @@ import {
   disableAppSwitcherProtectionAsync,
 } from 'expo-screen-capture';
 import { CameraCapture } from '../../components/CameraCapture';
+import { IdentityDateField } from '../../components/IdentityDateField';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { useSession } from '../../lib/SessionProvider';
-import { errorMessage, type Proposal } from '../../lib/api';
+import { errorMessage, MobileApiError, type Proposal } from '../../lib/api';
+import { captureService } from '../../services/captureService';
 import {
   confirmedIdentity,
   emptyIdentity,
@@ -33,6 +36,8 @@ import { useWorkspace } from '../workspace/WorkspaceProvider';
 
 interface Props {
   residentId: string;
+  locationId?: string;
+  roomId?: string;
   preview?: boolean;
   active?: boolean;
   modal?: boolean;
@@ -43,12 +48,20 @@ interface Props {
   onDismiss?: () => void;
   onComplete: () => void;
   onConfirmed?: () => void;
+  onSaveError?: (message: string) => void;
+  onVerifiedSummary?: (summary: { fullName: string; dateOfBirth: string | null }) => void;
   onStatusChange?: (status: IdentityStatus) => void;
   onCaptureProgress?: (progress: CaptureProgress) => void;
   onCancel: () => void;
 }
+function IdentityScreenCaptureProtection({ residentId }: { residentId: string }) {
+  usePreventScreenCapture(`identity-wizard-${residentId}`);
+  return null;
+}
 export function IdentityWizard({
   residentId,
+  locationId,
+  roomId,
   preview = false,
   active = true,
   modal = false,
@@ -60,6 +73,8 @@ export function IdentityWizard({
   onComplete,
   onCancel,
   onConfirmed,
+  onSaveError,
+  onVerifiedSummary,
   onStatusChange,
   onCaptureProgress,
 }: Props) {
@@ -88,8 +103,9 @@ export function IdentityWizard({
   const fieldOrigin = useRef<Partial<Record<keyof IdentityFields, IdentitySide | 'manual'>>>({});
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useFeedbackState();
-  const [notice, setNotice] = useFeedbackState('info');
+  const [alreadyConfirmed, setAlreadyConfirmed] = useState(false);
+  const [error, setError] = useFeedbackState('error', false);
+  const [notice, setNotice] = useFeedbackState('info', false);
   const [warnings, setWarnings] = useState<string[]>([]);
   const sideWarnings = useRef<Record<IdentitySide, string[]>>({ front: [], back: [] });
   const [placeOfIssue, setPlaceOfIssue] = useState('');
@@ -123,7 +139,6 @@ export function IdentityWizard({
     }
     wasVisible.current = shown;
   }, [modal, visible, active]);
-  usePreventScreenCapture(`identity-wizard-${residentId}`);
   useEffect(() => {
     if (Platform.OS === 'ios') void enableAppSwitcherProtectionAsync().catch(() => {});
     const clear = () => {
@@ -239,6 +254,7 @@ export function IdentityWizard({
       );
       if (epoch === generation.current) acceptProposal(proposal);
     } catch (e) {
+      workflowFailure('identity', e);
       if (epoch === generation.current) {
         setError(errorMessage(e));
         setNotice('OCR chưa thành công; nhập thủ công vẫn khả dụng.');
@@ -254,14 +270,62 @@ export function IdentityWizard({
       }
     }
   };
+  const finishVerification = (summary?: { fullName: string; dateOfBirth: string | null }) => {
+    confirmed.current = true;
+    onSaveError?.('');
+    statusCallback.current?.('confirmed');
+    if (summary) onVerifiedSummary?.(summary);
+    current.current = emptyIdentity();
+    setFields(emptyIdentity());
+    setSources({});
+    setChecked(false);
+    setPlaceOfIssue('');
+    setWarnings([]);
+    setStep('done');
+    resetScroll();
+    onConfirmed?.();
+  };
+  const restoreVerifiedIdentity = async () => {
+    if (!api || !locationId || !roomId || lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    const epoch = generation.current;
+    try {
+      const residents = await captureService(api).residents(locationId);
+      if (epoch !== generation.current) return;
+      if (
+        !residents.some(
+          (r) => r.id === residentId && r.roomId === roomId && r.verificationStatus === 1,
+        )
+      )
+        throw new MobileApiError(404);
+      finishVerification();
+      showSuccess(
+        'Đã dùng hồ sơ được máy chủ xác nhận trước đó. Dữ liệu nhập lại không được ghi đè.',
+      );
+    } catch (e) {
+      if (epoch === generation.current) {
+        const message = errorMessage(e);
+        setError(message);
+        onSaveError?.(message);
+      }
+    } finally {
+      if (epoch === generation.current) {
+        lock.current = false;
+        setBusy(false);
+      }
+    }
+  };
   const save = async () => {
-    if (lock.current || !checked) return;
+    if (lock.current || confirmed.current || alreadyConfirmed || !checked) return;
     setAttempted(true);
     let input: ReturnType<typeof confirmedIdentity>;
     try {
       input = confirmedIdentity(current.current);
     } catch {
-      setError('Vui lòng kiểm tra các trường được đánh dấu.');
+      const message = 'Vui lòng kiểm tra các trường được đánh dấu.';
+      setError(message);
+      onSaveError?.(message);
       return;
     }
     if (!preview && (!api || !session?.roles.includes('Staff'))) {
@@ -271,6 +335,7 @@ export function IdentityWizard({
     setBusy(true);
     lock.current = true;
     setError('');
+    onSaveError?.('');
     const epoch = generation.current;
     const controller = new AbortController();
     abort.current = controller;
@@ -286,20 +351,23 @@ export function IdentityWizard({
           throw new Error('Chưa nhận được xác nhận lưu hồ sơ. Vui lòng kiểm tra lại.');
       }
       if (epoch !== generation.current) return;
-      confirmed.current = true;
       if (!preview) showSuccess('Đã xác nhận và lưu thông tin CCCD.');
-      statusCallback.current?.('confirmed');
-      onConfirmed?.();
-      current.current = emptyIdentity();
-      setFields(emptyIdentity());
-      setSources({});
-      setChecked(false);
-      setPlaceOfIssue('');
-      setWarnings([]);
-      setStep('done');
-      resetScroll();
+      finishVerification({ fullName: input.fullName, dateOfBirth: input.dateOfBirth });
     } catch (e) {
-      if (epoch === generation.current) setError(errorMessage(e));
+      workflowFailure('identity', e);
+      if (epoch === generation.current) {
+        const message = errorMessage(e);
+        if (
+          e instanceof MobileApiError &&
+          e.status === 409 &&
+          e.code === 'identity_already_confirmed' &&
+          locationId &&
+          roomId
+        )
+          setAlreadyConfirmed(true);
+        setError(message);
+        onSaveError?.(message);
+      }
     } finally {
       clearTimeout(timeout);
       if (epoch === generation.current) {
@@ -321,6 +389,37 @@ export function IdentityWizard({
     if (onDismiss) onDismiss();
     else onCancel();
   };
+  const confirmationActions = (
+    <>
+      {!!error && (
+        <Text accessibilityRole="alert" style={ui.red}>
+          {error}
+        </Text>
+      )}
+      <Checkbox.Item
+        label="Tôi đã đối chiếu giấy tờ gốc và xác nhận toàn bộ thông tin"
+        status={checked ? 'checked' : 'unchecked'}
+        onPress={() => setChecked(!checked)}
+        disabled={busy || alreadyConfirmed}
+      />
+      <Action
+        icon="shield-check-outline"
+        disabled={!checked || busy || alreadyConfirmed}
+        onPress={() => void save()}
+      >
+        {busy
+          ? 'Đang lưu thông tin…'
+          : preview
+            ? 'Xác nhận bản mẫu (không lưu máy chủ)'
+            : 'Xác nhận thông tin'}
+      </Action>
+      {alreadyConfirmed && !!locationId && !!roomId && (
+        <Button mode="contained" disabled={busy} onPress={() => void restoreVerifiedIdentity()}>
+          Dùng hồ sơ đã xác nhận
+        </Button>
+      )}
+    </>
+  );
   const wrap = (children: React.ReactNode) => (
     <IdentityFlowFrame
       modal={modal}
@@ -335,7 +434,16 @@ export function IdentityWizard({
       }
       personLabel={personLabel}
       onClose={closeFlow}
+      footer={
+        modal &&
+        Platform.OS === 'web' &&
+        step === 'verify' &&
+        (preview || session?.roles.includes('Staff'))
+          ? confirmationActions
+          : undefined
+      }
     >
+      {Platform.OS !== 'web' && <IdentityScreenCaptureProtection residentId={residentId} />}
       {children}
     </IdentityFlowFrame>
   );
@@ -499,6 +607,44 @@ export function IdentityWizard({
       ) : (
         <Box>
           <Pill tone="amber">Chờ bạn kiểm tra và xác nhận</Pill>
+          {typeof __DEV__ !== 'undefined' && __DEV__ && (
+            <Button
+              mode="outlined"
+              icon="lightning-bolt-outline"
+              disabled={busy}
+              onPress={() => {
+                const samples: IdentityFields = {
+                  citizenIdentityNumber: `999${Date.now().toString().slice(-9)}`,
+                  fullName: 'Nguoi Kiem Thu',
+                  dateOfBirth: '01/01/2000',
+                  gender: 'Nam',
+                  nationality: 'Việt Nam',
+                  placeOfOrigin: 'Hà Nội',
+                  residentialAddress: 'Địa chỉ kiểm thử, Hà Nội',
+                  dateOfIssue: '01/01/2024',
+                  dateOfExpiry: '01/01/2034',
+                };
+                const next = { ...current.current };
+                const nextSources = { ...sources };
+                for (const [key] of identityFields) {
+                  if (next[key].trim()) continue;
+                  next[key] = samples[key];
+                  fieldOrigin.current[key] = 'manual';
+                  nextSources[key] = 'Dữ liệu mẫu kiểm thử';
+                }
+                current.current = next;
+                setFields(next);
+                setSources(nextSources);
+                setChecked(false);
+                statusCallback.current?.('pending');
+                setNotice(
+                  'Đã điền mẫu vào các ô trống. Kiểm tra lại trước khi xác nhận lưu lên hệ thống.',
+                );
+              }}
+            >
+              Điền nhanh dữ liệu test
+            </Button>
+          )}
           <Text variant="bodySmall" style={ui.muted}>
             Kiểm tra số CCCD, họ tên và ngày sinh. Bổ sung phần còn thiếu, tích ô đối chiếu rồi bấm
             Xác nhận thông tin để tiếp tục.
@@ -506,67 +652,73 @@ export function IdentityWizard({
           {[
             ...identityFields.filter(([key]) => key !== 'dateOfIssue'),
             identityFields.find(([key]) => key === 'dateOfIssue')!,
-          ].map(([key, label]) => (
-            <View key={key} style={{ gap: 4 }}>
-              {key === 'citizenIdentityNumber' && <Heading title="Thông tin định danh" />}
-              {key === 'dateOfIssue' && (
-                <Heading title="Thông tin mặt sau" detail="Đối chiếu Ngày cấp trên giấy tờ." />
-              )}
-              <TextInput
-                mode="outlined"
-                accessibilityLabel={label}
-                style={{ minHeight: 50, backgroundColor: c.white }}
-                label={`${key === 'dateOfIssue' ? 'Ngày cấp CCCD (dd/MM/yyyy)' : label}${['citizenIdentityNumber', 'fullName', 'dateOfBirth'].includes(key) ? ' *' : ''}`}
-                value={fields[key]}
-                disabled={busy}
-                error={!!fieldErrors[key] && (scanned || attempted || !!touched[key])}
-                onBlur={() => setTouched((before) => ({ ...before, [key]: true }))}
-                keyboardType={key === 'citizenIdentityNumber' ? 'number-pad' : 'default'}
-                onChangeText={(value) => {
-                  const next = { ...current.current, [key]: value };
-                  current.current = next;
-                  fieldOrigin.current[key] = 'manual';
-                  setFields(next);
-                  statusCallback.current?.('pending');
-                  setChecked(false);
-                  setSources((before) => ({ ...before, [key]: 'Staff nhập / chỉnh sửa' }));
-                }}
-              />
-              <Text
-                accessibilityRole={
-                  fieldErrors[key] && (scanned || attempted || touched[key]) ? 'alert' : undefined
-                }
-                variant="labelSmall"
-                style={
-                  fieldErrors[key] && (scanned || attempted || touched[key]) ? ui.red : ui.muted
-                }
-              >
-                {fieldErrors[key] && (scanned || attempted || touched[key])
-                  ? fieldErrors[key]
-                  : key === 'dateOfIssue' && !fields.dateOfIssue
-                    ? 'Chưa đọc được Ngày cấp. Vui lòng nhập theo giấy tờ.'
-                    : (sources[key] ?? 'Chưa có dữ liệu • Có thể nhập thủ công')}
-              </Text>
-            </View>
-          ))}
+          ].map(([key, label]) => {
+            const onChange = (value: string) => {
+              const next = { ...current.current, [key]: value };
+              current.current = next;
+              fieldOrigin.current[key] = 'manual';
+              setFields(next);
+              statusCallback.current?.('pending');
+              setChecked(false);
+              setSources((before) => ({ ...before, [key]: 'Staff nhập / chỉnh sửa' }));
+            };
+            const onBlur = () => setTouched((before) => ({ ...before, [key]: true }));
+            const error = !!fieldErrors[key] && (scanned || attempted || !!touched[key]);
+            const fieldLabel = `${key === 'dateOfIssue' ? 'Ngày cấp CCCD (dd/MM/yyyy)' : label}${['citizenIdentityNumber', 'fullName', 'dateOfBirth'].includes(key) ? ' *' : ''}`;
+            return (
+              <View key={key} style={{ gap: 4 }}>
+                {key === 'citizenIdentityNumber' && <Heading title="Thông tin định danh" />}
+                {key === 'dateOfIssue' && (
+                  <Heading title="Thông tin mặt sau" detail="Đối chiếu Ngày cấp trên giấy tờ." />
+                )}
+                {key.startsWith('dateOf') ? (
+                  <IdentityDateField
+                    label={fieldLabel}
+                    accessibilityLabel={label}
+                    value={fields[key]}
+                    disabled={busy}
+                    error={error}
+                    onBlur={onBlur}
+                    onChange={onChange}
+                  />
+                ) : (
+                  <TextInput
+                    mode="outlined"
+                    accessibilityLabel={label}
+                    style={{ minHeight: 50, backgroundColor: c.white }}
+                    label={fieldLabel}
+                    value={fields[key]}
+                    disabled={busy}
+                    error={error}
+                    onBlur={onBlur}
+                    keyboardType={key === 'citizenIdentityNumber' ? 'number-pad' : 'default'}
+                    onChangeText={onChange}
+                  />
+                )}
+                <Text
+                  accessibilityRole={
+                    fieldErrors[key] && (scanned || attempted || touched[key]) ? 'alert' : undefined
+                  }
+                  variant="labelSmall"
+                  style={
+                    fieldErrors[key] && (scanned || attempted || touched[key]) ? ui.red : ui.muted
+                  }
+                >
+                  {fieldErrors[key] && (scanned || attempted || touched[key])
+                    ? fieldErrors[key]
+                    : key === 'dateOfIssue' && !fields.dateOfIssue
+                      ? 'Chưa đọc được Ngày cấp. Vui lòng nhập theo giấy tờ.'
+                      : (sources[key] ?? 'Chưa có dữ liệu • Có thể nhập thủ công')}
+                </Text>
+              </View>
+            );
+          })}
           {!!placeOfIssue && (
             <Text variant="bodySmall">
               Nơi cấp đọc từ ảnh: {placeOfIssue} (thông tin tham khảo, chưa lưu vào hồ sơ).
             </Text>
           )}
-          <Checkbox.Item
-            label="Tôi đã đối chiếu giấy tờ gốc và xác nhận toàn bộ thông tin"
-            status={checked ? 'checked' : 'unchecked'}
-            onPress={() => setChecked(!checked)}
-            disabled={busy}
-          />
-          <Action
-            icon="shield-check-outline"
-            disabled={!checked || busy}
-            onPress={() => void save()}
-          >
-            {preview ? 'Xác nhận bản mẫu (không lưu máy chủ)' : 'Xác nhận thông tin'}
-          </Action>
+          {(!modal || Platform.OS !== 'web') && confirmationActions}
           {(['front', 'back'] as const).map((face) => (
             <Button
               key={face}
@@ -600,7 +752,7 @@ export function IdentityWizard({
           {notice}
         </Text>
       )}
-      {!!error && (
+      {!!error && step !== 'verify' && (
         <Text accessibilityRole="alert" style={ui.red}>
           {error}
         </Text>

@@ -11,6 +11,7 @@ export default function ResidentScreen() {
   const [rooms, setRooms] = useState<Named[]>([]);
   const [room, setRoom] = useState('');
   const [label, setLabel] = useState('');
+  const [email, setEmail] = useState('');
   const [kind, setKind] = useState('1');
   const [error, setError] = useFeedbackState();
   const [busy, setBusy] = useState(false);
@@ -28,6 +29,7 @@ export default function ResidentScreen() {
       <Text variant="headlineSmall">Thêm hồ sơ cư dân</Text>
       <Select label="Phòng" items={rooms} selected={room} onSelect={setRoom} />
       <Field label="Nhãn hồ sơ (không dùng số CCCD)" value={label} onChange={setLabel} />
+      <Field label="Email người ở" value={email} onChange={setEmail} />
       <SegmentedButtons
         value={kind}
         onValueChange={setKind}
@@ -39,7 +41,9 @@ export default function ResidentScreen() {
       {!!error && <Text style={styles.error}>{error}</Text>}
       <Button
         mode="contained"
-        disabled={busy || !room || !label.trim()}
+        disabled={
+          busy || !room || !label.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+        }
         loading={busy}
         onPress={async () => {
           if (lock.current) return;
@@ -50,6 +54,7 @@ export default function ResidentScreen() {
               roomId: room,
               displayLabel: label,
               residentType: +kind,
+              email: email.trim(),
             });
             if (session.roles.includes('Staff'))
               router.replace({ pathname: '/identity', params: { residentId: result.id } });

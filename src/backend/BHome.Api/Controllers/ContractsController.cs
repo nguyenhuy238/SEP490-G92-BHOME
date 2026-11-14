@@ -20,6 +20,13 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
 
     [HttpGet("configuration")]
     public Task<ContractWorkflowConfiguration> Configuration(CancellationToken t) => service.ConfigurationAsync(t);
+    [HttpGet("holding-settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
+    public Task<HoldingSettings?> HoldingSettings(Guid locationId, CancellationToken t) => service.HoldingSettingsAsync(locationId, t);
+    [HttpPut("holding-settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
+    public async Task<IActionResult> HoldingSettings(Guid locationId, HoldingSettingsInput input, CancellationToken t)
+    { await service.SetHoldingSettingsAsync(locationId, input, t); return NoContent(); }
+    [HttpGet("holdings/preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
+    public Task<HoldingPreparation> HoldingPreparation(Guid roomId, CancellationToken t) => service.HoldingPreparationAsync(roomId, t);
     [HttpGet("expiry-reminders"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<IReadOnlyList<ContractExpiryNoticeView>> ExpiryReminders(CancellationToken t) => expiry.ListAsync(t);
     [HttpGet("preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
@@ -68,7 +75,7 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     [HttpPost("{id:guid}/holding-activation"), Authorize(Roles = Roles.Owner)]
     public Task<ContractView> ActivateHolding(Guid id, CancellationToken t) => service.ActivateHoldingAsync(id, Key(), t);
     [HttpPost("{id:guid}/holding-cancellation"), Authorize(Roles = Roles.Owner)]
-    public Task<ContractView> CancelHolding(Guid id, HoldingDecisionInput x, CancellationToken t) => service.CancelHoldingAsync(id, x, Key(), t);
+    public Task<ContractView> CancelHolding(Guid id, HoldingCancellationInput x, CancellationToken t) => service.CancelHoldingAsync(id, x, Key(), t);
     [HttpPost("{id:guid}/holding-conversion"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<ContractId> ConvertHolding(Guid id, HoldingConversionInput x, CancellationToken t) => service.ConvertHoldingAsync(id, x, Key(), t);
     [HttpGet("{id:guid}")]

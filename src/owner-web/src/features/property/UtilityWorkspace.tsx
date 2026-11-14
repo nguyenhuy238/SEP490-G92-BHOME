@@ -1,5 +1,19 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useState } from 'react';
-import { Alert, Button, Paper, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Button,
+  Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Paper,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import type {
@@ -27,12 +41,17 @@ export function UtilityWorkspace({ locationId }: { locationId: string }) {
     return <Alert severity="warning">Chỉ Owner được quản lý cấu hình điện nước.</Alert>;
   return (
     <Stack spacing={2}>
-      <Typography variant="h5">Cấu hình điện nước của cơ sở</Typography>
-      <Alert severity="info">
-        Giá và định mức do Owner xác minh. Phép tính chính thức, kiểm tra thiếu dữ liệu và chênh
-        lệch do máy chủ quyết định.
-      </Alert>
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable">
+      <Typography variant="body2" color="text.secondary">
+        Thiết lập giá đã xác minh, gán cho phòng, ghi chỉ số và đối soát hóa đơn nguồn theo kỳ. Máy
+        chủ tính giá chính thức từ dữ liệu đã xác nhận.
+      </Typography>
+      <Tabs
+        aria-label="Nghiệp vụ điện nước"
+        value={tab}
+        onChange={(_, value) => setTab(value)}
+        variant="scrollable"
+        sx={{ bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }}
+      >
         {[
           ['tariffs', 'Biểu giá'],
           ['profiles', 'Cấu hình phòng'],
@@ -69,42 +88,80 @@ function TariffsPanel({ locationId }: { locationId: string }) {
   });
   return (
     <Stack spacing={2}>
-      <Button
-        onClick={() => {
-          setSource(null);
-          setEditing(true);
-        }}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
       >
-        Thêm biểu giá điện nước
-      </Button>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          Biểu giá nhà cung cấp
+        </Typography>
+        <Button
+          variant="contained"
+          onClick={() => {
+            setSource(null);
+            setEditing(true);
+          }}
+        >
+          Thêm biểu giá điện nước
+        </Button>
+      </Stack>
       {tariffs.isPending ? (
         <LoadingState />
       ) : tariffs.error ? (
         <ErrorState error={tariffs.error} retry={() => void tariffs.refetch()} />
       ) : (
         <>
-          {!tariffs.data.length && <Typography>Chưa có biểu giá.</Typography>}
+          {!tariffs.data.length && (
+            <Alert severity="info">
+              Chưa có biểu giá. Thêm biểu giá từ căn cứ đã kiểm tra để gán cho phòng.
+            </Alert>
+          )}
           {tariffs.data.map((tariff) => (
-            <Paper key={tariff.id} sx={{ p: 2 }}>
+            <Paper key={tariff.id} variant="outlined" sx={{ p: 2 }}>
               <Stack spacing={1}>
-                <Typography variant="h6">
-                  {tariff.data.supplier} · {tariff.data.classification}
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', gap: 1 }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    {tariff.data.supplier} · {tariff.data.classification}
+                  </Typography>
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={
+                      tariff.status === 'Verified'
+                        ? 'Đã xác minh'
+                        : tariff.status === 'Draft'
+                          ? 'Bản nháp'
+                          : tariff.status
+                    }
+                    color={tariff.status === 'Verified' ? 'success' : 'default'}
+                  />
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  {tariff.data.utilityType === 0 ? 'Điện' : 'Nước'} · Phiên bản {tariff.version} ·{' '}
+                  {tariff.data.effectiveFrom.split('-').reverse().join('/')} →{' '}
+                  {tariff.data.effectiveTo?.split('-').reverse().join('/') ?? 'Không thời hạn'}
                 </Typography>
-                <Typography>
-                  {tariff.data.utilityType === 0 ? 'Điện' : 'Nước'} · {tariff.data.effectiveFrom} →{' '}
-                  {tariff.data.effectiveTo ?? 'Không hạn'} · {tariff.status}
+                <Typography variant="body2" color="text.secondary">
+                  Căn cứ: {tariff.data.sourceReference}
                 </Typography>
                 {tariff.data.tiers.map((tier, index) => (
-                  <Typography key={index}>
+                  <Typography key={index} sx={{ fontVariantNumeric: 'tabular-nums' }}>
                     Bậc {index + 1}:{' '}
-                    {tier.through == null ? 'Phần còn lại' : `Đến ${setupDecimal(tier.through)}`} ·{' '}
-                    {setupDecimal(tier.rate)} VND/đơn vị
+                    {tier.through == null
+                      ? 'Phần còn lại'
+                      : `Đến ${setupDecimal(tier.through)} ${tariff.data.utilityType === 0 ? 'kWh' : 'm³'}`}{' '}
+                    · {setupDecimal(tier.rate)} đ/{tariff.data.utilityType === 0 ? 'kWh' : 'm³'}
                   </Typography>
                 ))}
                 {tariffs.data.some((row) => row.data.replacesId === tariff.id) ? (
                   <Typography>Đã có biểu giá thay thế.</Typography>
                 ) : (
                   <Button
+                    sx={{ alignSelf: 'flex-start' }}
                     onClick={() => {
                       setSource(tariff);
                       setEditing(true);
@@ -118,14 +175,21 @@ function TariffsPanel({ locationId }: { locationId: string }) {
           ))}
         </>
       )}
-      {editing && (
-        <TariffEditor
-          key={source?.id ?? 'new'}
-          locationId={locationId}
-          source={source}
-          onClose={() => setEditing(false)}
-        />
-      )}
+      <Dialog open={editing} fullWidth maxWidth="md">
+        <DialogTitle>
+          {source ? 'Thay thế biểu giá điện nước' : 'Thêm biểu giá điện nước'}
+        </DialogTitle>
+        <DialogContent>
+          {editing && (
+            <TariffEditor
+              key={source?.id ?? 'new'}
+              locationId={locationId}
+              source={source}
+              onClose={() => setEditing(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Stack>
   );
 }
@@ -238,14 +302,13 @@ function TariffEditor({
                 )
               }
             />
-            <TextField
+            <MoneyField
+              allowDecimal
               required
               label={`Đơn giá bậc ${index + 1}`}
               value={tier.rate}
-              onChange={(event) =>
-                setTiers((old) =>
-                  old.map((row, i) => (i === index ? { ...row, rate: event.target.value } : row)),
-                )
+              onValueChange={(raw) =>
+                setTiers((old) => old.map((row, i) => (i === index ? { ...row, rate: raw } : row)))
               }
             />
             <Button
@@ -300,8 +363,16 @@ function ProfilesPanel({ locationId }: { locationId: string }) {
   return (
     <Stack spacing={2}>
       <Stack direction="row">
-        <Button onClick={() => setProfile(null)}>Gán biểu giá cho phòng</Button>
-        <Button onClick={() => setQuota(null)}>Thêm định mức miễn phí</Button>
+        <Button
+          variant="contained"
+          disabled={rooms.isPending || !!rooms.error || tariffs.isPending || !!tariffs.error}
+          onClick={() => setProfile(null)}
+        >
+          Gán biểu giá cho phòng
+        </Button>
+        <Button disabled={rooms.isPending || !!rooms.error} onClick={() => setQuota(null)}>
+          Thêm định mức miễn phí
+        </Button>
       </Stack>
       {rooms.error && <ErrorState error={rooms.error} retry={() => void rooms.refetch()} />}
       {tariffs.error && <ErrorState error={tariffs.error} retry={() => void tariffs.refetch()} />}
@@ -309,52 +380,93 @@ function ProfilesPanel({ locationId }: { locationId: string }) {
         <LoadingState />
       ) : profiles.error ? (
         <ErrorState error={profiles.error} retry={() => void profiles.refetch()} />
-      ) : (
+      ) : profiles.data.length ? (
         profiles.data.map((row) => (
-          <Paper key={row.id} sx={{ p: 2 }}>
-            <Typography>
+          <Paper key={row.id} variant="outlined" sx={{ p: 2 }}>
+            <Typography sx={{ fontWeight: 700 }}>
               {rooms.data?.find((room) => room.id === row.data.roomId)?.label ?? 'Phòng'} ·{' '}
-              {row.data.utilityType === 0 ? 'Điện' : 'Nước'} · {row.data.effectiveFrom} →{' '}
-              {row.data.effectiveTo ?? 'Không hạn'}
+              {row.data.utilityType === 0 ? 'Điện' : 'Nước'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Hiệu lực {row.data.effectiveFrom.split('-').reverse().join('/')} →{' '}
+              {row.data.effectiveTo?.split('-').reverse().join('/') ?? 'Không thời hạn'} · Phiên bản{' '}
+              {row.version}
+            </Typography>
+            <Typography variant="body2">
+              Biểu giá:{' '}
+              {tariffs.data?.find((tariff) => tariff.id === row.data.tariffId)?.data.supplier ??
+                'Biểu giá đã liên kết'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {row.data.requireQuota ? 'Yêu cầu định mức xác minh' : 'Không yêu cầu định mức'} ·{' '}
+              {row.data.requireReconciliation ? 'Yêu cầu đối soát' : 'Không yêu cầu đối soát'}
             </Typography>
             {profiles.data.some((next) => next.data.replacesId === row.id) ? (
               <Typography>Có cấu hình thay thế.</Typography>
             ) : (
-              <Button onClick={() => setProfile(row)}>Thay cấu hình phòng từ ngày mới</Button>
+              <Button
+                disabled={rooms.isPending || !!rooms.error || tariffs.isPending || !!tariffs.error}
+                onClick={() => setProfile(row)}
+              >
+                Thay cấu hình phòng từ ngày mới
+              </Button>
             )}
           </Paper>
         ))
+      ) : (
+        <Alert severity="info">
+          Chưa có cấu hình điện nước phòng. Gán biểu giá đã xác minh cho từng phòng khi cần.
+        </Alert>
       )}
-      {profile !== undefined && (
-        <ProfileEditor
-          key={profile?.id ?? 'new'}
-          locationId={locationId}
-          source={profile}
-          rooms={rooms.data ?? []}
-          tariffs={tariffs.data ?? []}
-          onClose={() => setProfile(undefined)}
-        />
-      )}
+      <Dialog open={profile !== undefined} fullWidth maxWidth="md">
+        <DialogTitle>Cấu hình biểu giá của phòng</DialogTitle>
+        <DialogContent>
+          {profile !== undefined && (
+            <ProfileEditor
+              key={profile?.id ?? 'new'}
+              locationId={locationId}
+              source={profile}
+              rooms={rooms.data ?? []}
+              tariffs={tariffs.data ?? []}
+              onClose={() => setProfile(undefined)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
       <Typography variant="h6">Định mức theo kỳ đã lưu</Typography>
+      {quotas.isPending && <LoadingState />}
       {quotas.error && <ErrorState error={quotas.error} retry={() => void quotas.refetch()} />}
+      {quotas.data?.length === 0 && (
+        <Typography variant="body2" color="text.secondary">
+          Chưa có định mức miễn phí theo kỳ.
+        </Typography>
+      )}
       {quotas.data?.map((row) => (
-        <Paper key={row.id} sx={{ p: 2 }}>
+        <Paper key={row.id} variant="outlined" sx={{ p: 2 }}>
           <Typography>
             {rooms.data?.find((room) => room.id === row.data.roomId)?.label ?? 'Phòng'} ·{' '}
-            {row.data.period} · {setupDecimal(row.data.freeQuantity)} · {row.status}
+            {row.data.period} · {setupDecimal(row.data.freeQuantity)}{' '}
+            {row.data.utilityType === 0 ? 'kWh' : 'm³'} · Phiên bản {row.version}
           </Typography>
-          <Button onClick={() => setQuota(row)}>Chỉnh định mức</Button>
+          <Button disabled={rooms.isPending || !!rooms.error} onClick={() => setQuota(row)}>
+            Chỉnh định mức
+          </Button>
         </Paper>
       ))}
-      {quota !== undefined && (
-        <QuotaEditor
-          key={quota?.id ?? 'new'}
-          locationId={locationId}
-          source={quota}
-          rooms={rooms.data ?? []}
-          onClose={() => setQuota(undefined)}
-        />
-      )}
+      <Dialog open={quota !== undefined} fullWidth maxWidth="sm">
+        <DialogTitle>Định mức miễn phí theo kỳ</DialogTitle>
+        <DialogContent>
+          {quota !== undefined && (
+            <QuotaEditor
+              key={quota?.id ?? 'new'}
+              locationId={locationId}
+              source={quota}
+              rooms={rooms.data ?? []}
+              onClose={() => setQuota(undefined)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Stack>
   );
 }

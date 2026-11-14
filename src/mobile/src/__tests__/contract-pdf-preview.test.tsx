@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const native = vi.hoisted(() => ({ listeners: new Set<(state: string) => void>() }));
 vi.mock('react-native', () => ({
+  Platform: { OS: 'android' },
   StyleSheet: { create: (s: unknown) => s },
   useWindowDimensions: () => ({ width: 320, height: 640 }),
   Keyboard: { dismiss: vi.fn() },
@@ -117,7 +118,10 @@ beforeEach(() => {
     path.endsWith('/preview') ? info(path.includes('/new-pdf/') ? 'new-pdf' : 'pdf') : png(),
   );
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 it('loads authenticated page bytes into a real inline preview, opens all pages and zooms in fullscreen', async () => {
   const options = props();
@@ -132,6 +136,7 @@ it('loads authenticated page bytes into a real inline preview, opens all pages a
   expect(request.mock.calls.some(([path]) => path.endsWith('/pages/2'))).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Xem toàn màn hình' }));
   await screen.findByAltText('Trang 3 của hợp đồng PDF');
+  expect(request.mock.calls.filter(([path]) => path.endsWith('/pages/1'))).toHaveLength(1);
   const before = (screen.getByAltText('Trang 1 của hợp đồng PDF') as HTMLImageElement).style.width;
   fireEvent.click(screen.getByRole('button', { name: 'Phóng to hợp đồng' }));
   expect(screen.getByText('3 trang · 150%')).toBeTruthy();
@@ -141,10 +146,29 @@ it('loads authenticated page bytes into a real inline preview, opens all pages a
   fireEvent.click(screen.getByRole('button', { name: 'Đóng xem toàn màn hình' }));
   await screen.findByAltText('Trang 1 của hợp đồng PDF');
   expect(screen.queryByRole('dialog')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Tải hoặc mở PDF' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Xem PDF' }));
   fireEvent.click(screen.getByRole('button', { name: 'Mở hoặc lưu DOCX' }));
   expect(options.onOpenPdf).toHaveBeenCalledOnce();
   expect(options.onOpenDocx).toHaveBeenCalledOnce();
+});
+it('only marks an external PDF ready after authenticated viewing succeeds', async () => {
+  const ready = vi.fn();
+  let finish!: (valid: boolean) => void;
+  const open = vi.fn(
+    () =>
+      new Promise<boolean>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(<ContractPdfPreview {...props()} onReady={ready} onOpenPdf={open} />);
+  await screen.findByAltText('Trang 1 của hợp đồng PDF');
+  expect(ready).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('Xem PDF'));
+  expect(ready).not.toHaveBeenCalled();
+  await act(async () => {
+    finish(true);
+  });
+  expect(ready).toHaveBeenCalledWith('pdf');
 });
 it('shows a loading state on slow networks, retries authorization/API failures and preserves external fallback', async () => {
   request.mockRejectedValueOnce({ status: 401 });
@@ -153,9 +177,9 @@ it('shows a loading state on slow networks, retries authorization/API failures a
   await screen.findByText(/Phiên đăng nhập/);
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại bản xem trước' }));
   await screen.findByAltText('Trang 1 của hợp đồng PDF');
-  expect(
-    (screen.getByRole('button', { name: 'Tải hoặc mở PDF' }) as HTMLButtonElement).disabled,
-  ).toBe(false);
+  expect((screen.getByRole('button', { name: 'Xem PDF' }) as HTMLButtonElement).disabled).toBe(
+    false,
+  );
 });
 it('handles missing PDF/conversion errors honestly and allows DOCX and regeneration', () => {
   const options = props();
@@ -189,20 +213,97 @@ it('reports bad page bytes/decode failures, retries the page and does not render
 it('does not show stale pages after editing regenerates the PDF and clears page state in background', async () => {
   const view = render(<ContractPdfPreview {...props()} />);
   await screen.findByAltText('Trang 1 của hợp đồng PDF');
-  const oldRequest = request.mock.calls.find(([path]) => path.endsWith('/pages/1'));
   view.rerender(<ContractPdfPreview {...props()} document={document('new-pdf')} />);
   expect(screen.queryByRole('img')).toBeNull();
   await screen.findByAltText('Trang 1 của hợp đồng PDF');
-  expect(oldRequest?.[1].signal.aborted).toBe(true);
   expect(request.mock.calls.some(([path]) => path.includes('/new-pdf/pages/1'))).toBe(true);
   act(() => native.listeners.forEach((cb) => cb('background')));
   expect(screen.queryByRole('img')).toBeNull();
   view.unmount();
   expect(native.listeners.size).toBe(0);
 });
+it('cancels pending obsolete reads and ignores a late old response', async () => {
+  let resolveOld!: (value: unknown) => void;
+  request.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveOld = resolve;
+      }),
+  );
+  const view = render(<ContractPdfPreview {...props()} />);
+  await act(async () => {});
+  const signal = request.mock.calls[0]![1].signal;
+  view.rerender(<ContractPdfPreview {...props()} document={document('new-pdf')} />);
+  expect(signal.aborted).toBe(true);
+  await screen.findByAltText('Trang 1 của hợp đồng PDF');
+  await act(async () => {
+    resolveOld(info('pdf'));
+  });
+  expect(request.mock.calls.some(([path]) => path.includes('/pdf/pages/'))).toBe(false);
+});
 it('rejects mismatched file references without loading any page', async () => {
   request.mockResolvedValueOnce(info('different-file'));
   render(<ContractPdfPreview {...props()} />);
   await screen.findByText(/Bản xem trước không hợp lệ/);
   expect(request.mock.calls.some(([path]) => path.includes('/pages/'))).toBe(false);
+});
+it('regenerates instead of retrying the same outdated file and distinguishes configuration errors', async () => {
+  request.mockRejectedValueOnce({ status: 409, code: 'draft_document_outdated' });
+  const options = props();
+  render(<ContractPdfPreview {...options} />);
+  await screen.findByText('Tài liệu thuộc phiên bản cũ. Hãy tạo lại bản xem trước.');
+  fireEvent.click(screen.getByText('Tải phiên bản mới'));
+  expect(options.onRegenerate).toHaveBeenCalledOnce();
+  expect(request).toHaveBeenCalledTimes(1);
+  cleanup();
+  request.mockRejectedValueOnce({ status: 409, code: 'draft_configuration_changed_save_again' });
+  render(<ContractPdfPreview {...props()} />);
+  await screen.findByText('Cấu hình đã thay đổi. Tải lại giá và lưu nháp trước khi tạo tài liệu.');
+});
+it('bounds a stuck metadata request even if its transport ignores abort', async () => {
+  vi.useFakeTimers();
+  request.mockImplementation(() => new Promise(() => {}));
+  render(<ContractPdfPreview {...props()} />);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(15_000);
+  });
+  expect(screen.getByText('Hiển thị tài liệu mất nhiều thời gian. Hãy thử lại.')).toBeTruthy();
+  expect(screen.queryByText('Đang tải bản xem trước…')).toBeNull();
+  expect(request.mock.calls[0]![1].signal.aborted).toBe(true);
+});
+it('bounds a slow page renderer and offers retry instead of leaving its spinner visible', async () => {
+  vi.useFakeTimers();
+  request.mockImplementation(async (path: string) =>
+    path.endsWith('/preview') ? info() : new Promise(() => {}),
+  );
+  render(<ContractPdfPreview {...props()} />);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(screen.getByText('Đang tải trang 1…')).toBeTruthy();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(50_000);
+  });
+  expect(screen.queryByText('Đang tải trang 1…')).toBeNull();
+  expect(screen.getByText('Hiển thị tài liệu mất nhiều thời gian. Hãy thử lại.')).toBeTruthy();
+  expect(screen.getByText('Tải lại trang 1')).toBeTruthy();
+});
+it('offers one rebuild for an Owner missing/integrity blocker without disabled export actions', () => {
+  const onRegenerate = vi.fn();
+  render(
+    <ContractPdfPreview
+      {...props()}
+      document={null}
+      hasDocx={false}
+      hideUnavailableActions
+      previewErrorCode="contract_document_integrity_failed"
+      onRegenerate={onRegenerate}
+    />,
+  );
+  expect(screen.getByText(/Không xác minh được tệp hợp đồng/)).toBeTruthy();
+  expect(screen.queryByText('Tải phiên bản mới')).toBeNull();
+  expect(screen.queryByText('Xem PDF')).toBeNull();
+  expect(screen.queryByText('Tải PDF')).toBeNull();
+  fireEvent.click(screen.getByText('Tạo lại PDF'));
+  expect(onRegenerate).toHaveBeenCalledOnce();
 });

@@ -50,3 +50,64 @@ it('saves only the public whitelist and requires saving edits before publishing'
     contactEmail: null,
   });
 });
+it('retries failed content loading without showing a stale editor', async () => {
+  mocks.request.mockRejectedValueOnce({ status: 503 }).mockResolvedValue({
+    locationId: 'location',
+    name: 'Synthetic location',
+    summary: 'Approved summary',
+    amenities: [],
+    photos: [],
+    published: false,
+    publishedAt: null,
+  });
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ContentRecord target="locations" id="location" />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Thử tải lại nội dung' }));
+  await screen.findByLabelText('Giới thiệu công khai');
+  expect(screen.getByText('Chưa xuất bản')).toBeInTheDocument();
+});
+it('requires confirmation and refreshes the server publication state after publishing and removal', async () => {
+  let content = {
+    locationId: 'location',
+    name: 'Synthetic location',
+    summary: 'Approved summary',
+    amenities: [],
+    photos: [],
+    published: false,
+    publishedAt: null as string | null,
+  };
+  mocks.request.mockImplementation(async (path, init) => {
+    if (init?.method === 'POST')
+      content = {
+        ...content,
+        published: path.endsWith('/publish'),
+        publishedAt: path.endsWith('/publish') ? '2026-11-10T00:00:00Z' : null,
+      };
+    return content;
+  });
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ContentRecord target="locations" id="location" />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Xuất bản nội dung đã lưu' }));
+  expect(mocks.request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Xác nhận' }));
+  await screen.findByText('Đã xuất bản');
+  fireEvent.click(screen.getByRole('button', { name: 'Gỡ xuất bản' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Xác nhận' }));
+  await screen.findByText('Chưa xuất bản');
+  expect(
+    mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST').map(([p]) => p),
+  ).toEqual([
+    '/api/v1/public-content/locations/location/publish',
+    '/api/v1/public-content/locations/location/unpublish',
+  ]);
+});

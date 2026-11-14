@@ -4,6 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { Button, Dialog, Icon, Portal, RadioButton, Text, TextInput } from 'react-native-paper';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { CameraCapture } from './CameraCapture';
+import { MoneyTextInput } from './MoneyTextInput';
 import { Action, Box, Heading, Pill, Row, ui } from './WorkspaceKit';
 import { colors as c } from '../theme/theme';
 
@@ -17,23 +18,38 @@ export function ChoiceField({
   options,
   onChange,
   disabled = false,
+  searchable = false,
+  placeholder = 'Chọn…',
+  icon,
 }: {
   label: string;
   value: string;
   options: Choice[];
   onChange: (id: string) => void;
   disabled?: boolean;
+  searchable?: boolean;
+  placeholder?: string;
+  icon?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const visibleOptions = options.filter(
+    (item) =>
+      !searchable ||
+      item.label.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi')),
+  );
   return (
     <View style={{ gap: 4 }}>
       <Text variant="labelMedium">{label}</Text>
       <Button
         mode="outlined"
-        icon="chevron-down"
+        icon={icon ?? 'chevron-down'}
         accessibilityLabel={label}
         disabled={disabled}
-        onPress={() => setOpen(true)}
+        onPress={() => {
+          setSearch('');
+          setOpen(true);
+        }}
         contentStyle={{
           flexDirection: 'row-reverse',
           justifyContent: 'space-between',
@@ -41,14 +57,23 @@ export function ChoiceField({
         }}
         style={{ borderRadius: 10, borderColor: c.border }}
       >
-        {options.find((item) => item.id === value)?.label ?? 'Chọn…'}
+        {options.find((item) => item.id === value)?.label ?? placeholder}
       </Button>
       <Portal>
         <Dialog visible={open} onDismiss={() => setOpen(false)} style={{ maxHeight: '80%' }}>
           <Dialog.Title>{label}</Dialog.Title>
+          {searchable && (
+            <TextInput
+              label="Tìm kiếm"
+              value={search}
+              onChangeText={setSearch}
+              mode="outlined"
+              style={{ marginHorizontal: 24, marginBottom: 12 }}
+            />
+          )}
           <Dialog.ScrollArea>
             <ScrollView>
-              {options.map((item) => (
+              {visibleOptions.map((item) => (
                 <RadioButton.Item
                   key={item.id}
                   label={item.label}
@@ -62,6 +87,9 @@ export function ChoiceField({
               ))}
               {!options.length && (
                 <Text style={{ padding: 20 }}>Không có lựa chọn trong phạm vi được phép.</Text>
+              )}
+              {!!options.length && !visibleOptions.length && (
+                <Text style={{ padding: 20 }}>Không tìm thấy lựa chọn phù hợp.</Text>
               )}
             </ScrollView>
           </Dialog.ScrollArea>
@@ -78,16 +106,33 @@ export function Input({
   value,
   onChange,
   numeric = false,
+  money = false,
   multiline = false,
   disabled = false,
+  email = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   numeric?: boolean;
+  money?: boolean;
   multiline?: boolean;
   disabled?: boolean;
+  email?: boolean;
 }) {
+  if (money)
+    return (
+      <MoneyTextInput
+        mode="outlined"
+        label={label}
+        accessibilityLabel={label}
+        value={value}
+        onChangeText={onChange}
+        disabled={disabled}
+        autoCapitalize="none"
+        style={{ backgroundColor: c.white }}
+      />
+    );
   return (
     <TextInput
       mode="outlined"
@@ -95,10 +140,10 @@ export function Input({
       accessibilityLabel={label}
       value={value}
       onChangeText={onChange}
-      keyboardType={numeric ? 'decimal-pad' : 'default'}
+      keyboardType={email ? 'email-address' : numeric ? 'decimal-pad' : 'default'}
       multiline={multiline}
       disabled={disabled}
-      autoCapitalize={numeric ? 'none' : 'sentences'}
+      autoCapitalize={numeric || email ? 'none' : 'sentences'}
       style={{ backgroundColor: c.white }}
     />
   );

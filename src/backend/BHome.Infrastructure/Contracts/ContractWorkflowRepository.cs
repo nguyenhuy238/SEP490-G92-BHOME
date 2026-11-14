@@ -19,8 +19,8 @@ internal sealed class ContractWorkflowRepository(BHomePersistenceContext db) : I
             (r.Status == RoomStatus.Available || r.Status == RoomStatus.Occupied) && locations.Any(l => l.Id == r.LocationId))
             .OrderBy(r => r.RoomNumber).Take(100).Select(r => new ContractRoomChoice(r.Id, r.RoomNumber, r.LocationId, r.Status.ToString())).ToArrayAsync(t);
         var ids = rooms.Select(r => r.Id).ToArray();
-        var residents = await db.Set<Resident>().AsNoTracking().Where(r => ids.Contains(r.RoomId))
-            .OrderBy(r => r.DisplayLabel).Take(500).Select(r => new ContractResidentChoice(r.Id, r.RoomId, r.DisplayLabel, r.TenantUserId,
+        var residents = await db.Set<Resident>().AsNoTracking().Where(r => r.RoomId != null && ids.Contains(r.RoomId.Value))
+            .OrderBy(r => r.DisplayLabel).Take(500).Select(r => new ContractResidentChoice(r.Id, r.RoomId!.Value, r.DisplayLabel, r.TenantUserId,
                 r.VerificationStatus == IdentityVerificationStatus.Verified, r.ResidentType.ToString())).ToArrayAsync(t);
         var owners = await (from account in db.Users.AsNoTracking()
                             join grant in db.UserRoles on account.Id equals grant.UserId
@@ -84,7 +84,18 @@ internal sealed class ContractWorkflowRepository(BHomePersistenceContext db) : I
     public async Task<IReadOnlyList<ContractHistoryView>> HistoryAsync(Guid id, CancellationToken t) =>
         await db.SecurityAudit.AsNoTracking().Where(a => a.TargetId == id && a.TargetType == "Contract")
             .OrderByDescending(a => a.OccurredAt).Take(100).Select(a => new ContractHistoryView(a.Event, a.UserId, a.OccurredAt)).ToArrayAsync(t);
-    public async Task<IReadOnlyList<DepositVerificationView>> DepositsAsync(Guid id, CancellationToken t) =>
-        await db.Set<DepositVerification>().AsNoTracking().Where(d => d.ContractId == id).OrderByDescending(d => d.VerifiedAt)
+    public async Task<IReadOnlyList<DepositVerificationView>> DepositsAsync(Guid id, CancellationToken t)
+    {
+        var legacy = await db.Set<DepositVerification>().AsNoTracking().Where(d => d.ContractId == id).OrderByDescending(d => d.VerifiedAt)
             .Select(d => new DepositVerificationView(d.Id, d.BankTransactionReference, d.Amount, d.VerificationReason, d.VerifiedByUserId, d.VerifiedAt)).ToArrayAsync(t);
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return legacy;
+        var receipts = await db.Database.SqlQuery<DepositVerificationView>($"""
+            SELECT a.id AS "Id",p.transaction_reference AS "BankTransactionReference",a.amount AS "Amount",a.reason AS "VerificationReason",
+              a.created_by_user_id AS "VerifiedByUserId",a.allocated_at AS "VerifiedAt"
+            FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id
+            WHERE a.target_deposit_contract_id={id} AND p.status='VERIFIED'
+              AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(p.history) h WHERE h->>'recordType'='DepositVerification')
+            """).ToArrayAsync(t);
+        return legacy.Concat(receipts).OrderByDescending(d => d.VerifiedAt).ThenBy(d => d.Id).ToArray();
+    }
 }

@@ -34,8 +34,9 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
         var target = await properties.GetLocationAsync(location, t);
         if (!target.IsActive) throw new PropertyException(409, "location_inactive_or_missing");
         return new(target,
-        input.Groups.Contains("RoomDefaults") ? await local.ListAsync(location, "RoomDefaults", t) : [],
-        input.Groups.Contains("AssetTemplates") ? await local.ListAsync(location, "AssetTemplate", t) : [],
+        input.Groups.Contains("RoomDefaults") ? (await local.ListAsync(location, "RoomDefaults", t)).Where(d => d.Status == "Recorded").ToArray() : [],
+        input.Groups.Contains("AssetTemplates") ? (await local.ListAsync(location, "AssetTemplate", t))
+            .Where(d => SharedDataValidator.Read<AssetTemplateWrite>(d.Data).ScopeRoomId is null).ToArray() : [],
         input.Groups.Contains("FeePolicies") ? await shared.PoliciesAsync(location, t) : [],
         input.Groups.Contains("OperatingPolicies") ? await local.ListAsync(location, "OperatingPolicy", t) : []);
     }
@@ -89,12 +90,12 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
             var created = new List<Guid>();
             foreach (var defaults in source.Defaults)
             {
-                var id = Guid.NewGuid(); await local.SaveAsync(id, input.TargetLocationId, "RoomDefaults", "Recorded", new { name = Name(defaults), defaults = defaults.Data.GetProperty("defaults"), copiedFromId = defaults.Id, copiedFromVersion = defaults.Version, sourceLocationId = input.SourceLocationId }, 0, actor, t); created.Add(id);
+                var id = Guid.NewGuid(); await local.SaveAsync(id, input.TargetLocationId, "RoomDefaults", "Recorded", new { name = Name(defaults), description = defaults.Data.TryGetProperty("description", out var description) ? description.GetString() ?? "" : "", defaults = defaults.Data.GetProperty("defaults"), copiedFromId = defaults.Id, copiedFromVersion = defaults.Version, sourceLocationId = input.SourceLocationId }, 0, actor, t); created.Add(id);
             }
             foreach (var template in source.Assets)
             {
                 var data = template.Data.Deserialize<AssetTemplateWrite>(SharedDataValidator.Json) ?? throw new PropertyException(409, "invalid_source_configuration");
-                created.Add((await assets.SaveTemplateAsync(null, new(input.TargetLocationId, data.Name, data.Items.Select(i => i with { Id = Guid.NewGuid() }).ToArray()), t)).Id);
+                created.Add((await assets.SaveTemplateAsync(null, new(input.TargetLocationId, data.Name, data.Items.Select(i => i with { Id = Guid.NewGuid() }).ToArray(), Scoped: data.Scoped), t)).Id);
             }
             foreach (var fee in EffectiveFees(source, input))
                 created.Add((await properties.CreatePolicyAsync(new(input.TargetLocationId, null, fee.Category, fee.ChargeCode, fee.Name, fee.Method, fee.Rate, input.EffectiveFrom!.Value, fee.EffectiveTo, $"Copied from Location {input.SourceLocationId}, policy {fee.Id}, version {fee.Version}"), t)).Id);

@@ -26,7 +26,7 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         return await work(new PaymentService(scope.ServiceProvider.GetRequiredService<IPaymentRepository>(), new User(actor, role), TimeProvider.System));
     }
-    private async Task<Workspace> Setup()
+    private async Task<Workspace> Setup(bool sharedContract = false)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -48,6 +48,12 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         foreach (var tenant in tenants)
         {
             var resident = new Resident { RoomId = room.Id, TenantUserId = tenant, OwnerUserId = owner, DisplayLabel = "SYNTHETIC TENANT", VerificationStatus = IdentityVerificationStatus.Verified };
+            if (sharedContract && contracts.Count > 0)
+            {
+                db.Add(resident);
+                contracts[0].Residents.Add(new ContractResident { ResidentId = resident.Id, ResidenceFrom = period.AddMonths(-1), Role = ResidentType.CoOccupant });
+                continue;
+            }
             var contract = new Contract
             {
                 RoomId = room.Id,
@@ -163,6 +169,9 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         Assert.Equal(Math.Min(100000, amount), view.PaidAmount); Assert.Equal(amount > 100000, view.PendingReview);
         var receipt = await As(w.Owner, Roles.Owner, s => s.TransferAsync(transfer.Id, default));
         Assert.Equal(Math.Min(100000, amount), receipt.AllocatedAmount); Assert.Equal(Math.Max(0, amount - 100000), receipt.UnallocatedAmount);
+        var summary = await As(w.Owner, Roles.Owner, s => s.DebtSummaryAsync(new() { LocationId = w.Location }, default));
+        Assert.Equal(view.OutstandingAmount, summary.OutstandingAmount); Assert.Equal(view.OutstandingAmount, summary.OverdueAmount);
+        Assert.Equal(amount < 100000 ? 1 : 0, summary.InvoiceCount);
         Assert.Equal(reason, (await As(w.Owner, Roles.Owner, s => s.AllocateAsync(transfer.Id, new(w.Invoice, verifiedPayer ? w.Tenants[0] : null, true), Guid.NewGuid(), default))).Reason);
         if (amount < 100000)
         {
@@ -179,6 +188,8 @@ public sealed partial class PaymentLedgerTests(CaptureFixture fixture) : IClassF
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).RequiredDeposit = 100000;
+            await db.SaveChangesAsync();
             db.Add(new DepositVerification { ContractId = w.Contract, Amount = 100000, BankTransactionReference = input.BankReference, VerificationReason = "SYNTHETIC", VerifiedByUserId = w.Owner, VerifiedAt = DateTimeOffset.UtcNow });
             await db.SaveChangesAsync();
         }

@@ -80,7 +80,7 @@ internal static class MainDraftSettingsSeed
         {
             try
             {
-                var preparation = await drafts.PrepareAsync(resident.RoomId, resident.Id, [resident.Id], today, default);
+                var preparation = await drafts.PrepareAsync(resident.RoomId!.Value, resident.Id, [resident.Id], today, default);
                 if (preparation.Blockers.Count == 0) readyProfiles++;
                 else Console.WriteLine($"Preparation blocked: {string.Join(",", preparation.Blockers)}");
             }

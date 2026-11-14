@@ -11,12 +11,13 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Notifications;
 
-internal sealed partial class NotificationEventPublisher(BHomePersistenceContext db, IBackgroundJobQueue queue, TimeProvider clock, CompactNotificationEvents? extended = null) : INotificationEventPublisher, IBackgroundJobHandler, IJobScheduleContributor
+internal sealed partial class NotificationEventPublisher(BHomePersistenceContext db, IBackgroundJobQueue queue, TimeProvider clock, CompactNotificationEvents? extended = null,
+    Microsoft.Extensions.Options.IOptions<SmsOptions>? sms = null) : INotificationEventPublisher, IBackgroundJobHandler, IJobScheduleContributor
 {
     public string Name => "notification-publish";
     public Task EnqueueDueAsync(CancellationToken t) => queue.EnqueueAsync(new(Name, clock.GetUtcNow().ToString("yyyyMMddHHmm"), "{}"), t);
     public async Task ExecuteAsync(JobExecution job, CancellationToken t) { await PublishPendingAsync(t); }
-    private sealed record Intent(Guid Recipient, string Role, Guid Location, string Category, string Title, string Summary, string Type, Guid ObjectId, Guid? TaskSource = null, DateTimeOffset? ReadAt = null, string EventType = "", string Priority = "P1", string[]? Channels = null);
+    private sealed record Intent(Guid Recipient, string Role, Guid? Location, string Category, string Title, string Summary, string Type, Guid ObjectId, Guid? TaskSource = null, DateTimeOffset? ReadAt = null, string EventType = "", string Priority = "P1", string[]? Channels = null);
     private Task<bool> ActiveRole(Guid id, string role, CancellationToken t) => (from u in db.Users join grant in db.UserRoles on u.Id equals grant.UserId join r in db.Roles on grant.RoleId equals r.Id where u.Id == id && u.IsActive && r.Name == role select u.Id).AnyAsync(t);
     private async Task<int> Publish(string key, Func<Task<IReadOnlyList<Intent>>> resolve, CancellationToken t)
     {
@@ -25,8 +26,11 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"notification:" + key},0))", t);
         if (await db.Set<NotificationPublication>().AnyAsync(p => p.EventKey == key, t)) return 0;
         var count = 0; var recipients = 0;
-        foreach (var i in (await resolve()).DistinctBy(i => i.Recipient))
+        foreach (var sourceIntent in (await resolve()).DistinctBy(i => i.Recipient))
         {
+            var i = sourceIntent;
+            if (sms?.Value.Enabled == true && SmsNotificationPolicy.Template(i.EventType.Length > 0 ? i.EventType : EventType(key), i.Role) is { } template && sms.Value.EnabledTemplates.Contains(template))
+                i = i with { Channels = (i.Channels ?? ["IN_APP", "PUSH"]).Append("SMS").Distinct().ToArray() };
             if (!await ActiveRole(i.Recipient, i.Role, t)) continue; recipients++;
             if (await db.Set<UserNotification>().AnyAsync(n => n.RecipientUserId == i.Recipient && n.EventKey == key, t)) continue;
             db.Add(new UserNotification
@@ -43,7 +47,7 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
                 EventKey = key,
                 EventType = i.EventType.Length > 0 ? i.EventType : EventType(key),
                 Priority = i.Priority,
-                Channels = i.Channels ?? ["IN_APP", "PUSH"],
+                Channels = NotificationEmailPolicy.Channels(i.EventType.Length > 0 ? i.EventType : EventType(key), i.Role, i.Channels ?? ["IN_APP", "PUSH"]),
                 SourceTaskNotificationId = i.TaskSource,
                 CreatedAt = clock.GetUtcNow(),
                 ReadAt = i.ReadAt,
@@ -131,6 +135,6 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
                 list.Add(new(staff, Roles.Staff, e.LocationId, "Task", "Kỳ hóa đơn còn thiếu dữ liệu", "Vui lòng kiểm tra công việc điện/nước được phân công và bổ sung dữ liệu đã xác nhận.", "Location", e.LocationId, EventType: "INVOICE_FINALIZATION_BLOCKED"));
             return list;
         }, t);
-        return count + await PublishSettlementAsync(t) + (extended is null ? 0 : await extended.PublishAsync(t));
+        return count + await PublishSettlementAsync(t) + await PublishReceiptRefundsAsync(t) + (extended is null ? 0 : await extended.PublishAsync(t));
     }
 }
