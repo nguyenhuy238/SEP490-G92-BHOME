@@ -26,6 +26,8 @@ public sealed class TaskQuery
     [Range(1, 100)] public int PageSize { get; set; } = 20;
     public Guid? LocationId { get; set; }
     public Guid? StaffUserId { get; set; }
+    public Guid? RecordedStaffUserId { get; set; }
+    public bool? HasResponsibility { get; set; }
     public MeterTaskStatus? Status { get; set; }
     public OperationalTaskPriority? Priority { get; set; }
     public bool? IsOverdue { get; set; }

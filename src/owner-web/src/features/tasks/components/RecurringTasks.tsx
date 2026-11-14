@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  MenuItem,
   Checkbox,
   Stack,
   TextField,
@@ -26,6 +27,15 @@ import {
 import { useTaskAction } from '../useOperationalTasksApi';
 import { TaskWorkFields } from './TaskEditorDialog';
 const root = '/api/v1/operational-task-templates';
+const weekDays = ['Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy', 'Chủ nhật'];
+const scheduleLabel = (item: RecurringTemplate) =>
+  item.scheduleType === 'Daily'
+    ? 'Hằng ngày'
+    : item.scheduleType === 'Weekly'
+      ? `Hằng tuần · ${weekDays[(item.dayOfWeek ?? 1) - 1] ?? 'Chưa xác định'}`
+      : item.scheduleType === 'Monthly'
+        ? `Hằng tháng · Ngày ${item.dayOfMonth ?? '—'}`
+        : `Mỗi ${item.intervalDays} ngày`;
 export function RecurringTasks({
   location,
   change,
@@ -53,9 +63,6 @@ export function RecurringTasks({
       >
         <Box>
           <Typography sx={{ fontSize: 18, fontWeight: 600 }}>Lịch công việc định kỳ</Typography>
-          <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>
-            Thiết lập các công việc được hệ thống tạo tự động theo chu kỳ.
-          </Typography>
         </Box>
         <Button variant="contained" disabled={!location} onClick={() => setEditor(null)}>
           Tạo lịch định kỳ
@@ -84,12 +91,7 @@ export function RecurringTasks({
               { label: 'Cơ sở', render: () => locationName(location) },
               {
                 label: 'Chu kỳ',
-                render: (item) =>
-                  item.scheduleType === 'Weekly'
-                    ? 'Hàng tuần (lịch đã có)'
-                    : item.scheduleType === 'Monthly'
-                      ? 'Hàng tháng (lịch đã có)'
-                      : `Mỗi ${item.intervalDays} ngày`,
+                render: scheduleLabel,
               },
               { label: 'Lần tạo tiếp theo', render: (item) => formatInstant(item.nextRunAt) },
               { label: 'Hạn hoàn thành', render: (item) => `${item.dueAfterHours} giờ` },
@@ -97,7 +99,7 @@ export function RecurringTasks({
               {
                 label: 'Thao tác',
                 render: (item) => (
-                  <Stack direction="row">
+                  <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                     <Button onClick={() => setEditor(item)}>Chỉnh sửa</Button>
                     <Button onClick={() => setCommand({ item, mode: 'toggle' })}>
                       {item.isActive ? 'Tắt lịch' : 'Bật lịch'}
@@ -253,18 +255,31 @@ function RecurringEditor({
     [active, setActive] = useState(template?.isActive ?? true),
     [missing, setMissing] = useState(false);
   const action = useTaskAction();
-  const calendar = snapshot?.scheduleType && snapshot.scheduleType !== 'IntervalDays';
+  const [scheduleType, setScheduleType] = useState<NonNullable<RecurringTemplate['scheduleType']>>(
+    template?.scheduleType ?? 'IntervalDays',
+  );
+  const [dayOfWeek, setDayOfWeek] = useState(template?.dayOfWeek ?? 1);
+  const [dayOfMonth, setDayOfMonth] = useState(template?.dayOfMonth ?? 1);
+  const interval = scheduleType === 'Weekly' ? 7 : scheduleType === 'IntervalDays' ? days : 1;
+  const nextDate = new Date(next.slice(0, 10) + 'T00:00:00Z');
+  const calendarMismatch =
+    !!next &&
+    ((scheduleType === 'Weekly' && (nextDate.getUTCDay() || 7) !== dayOfWeek) ||
+      (scheduleType === 'Monthly' && nextDate.getUTCDate() !== dayOfMonth));
   const valid =
     work.title.trim() &&
     work.requirements.trim() &&
-    Number.isInteger(days) &&
-    days >= 1 &&
-    days <= 365 &&
+    Number.isInteger(interval) &&
+    interval >= 1 &&
+    interval <= 365 &&
     Number.isInteger(hours) &&
     hours >= 1 &&
     hours <= 720 &&
     next &&
-    Number.isFinite(Date.parse(next + ':00+07:00'));
+    Number.isFinite(Date.parse(next + ':00+07:00')) &&
+    !calendarMismatch &&
+    (scheduleType !== 'Monthly' ||
+      (Number.isInteger(dayOfMonth) && dayOfMonth >= 1 && dayOfMonth <= 31));
   return (
     <Dialog
       open
@@ -298,14 +313,14 @@ function RecurringEditor({
                   {
                     ...fields,
                     locationId: location,
-                    intervalDays: days,
+                    intervalDays: interval,
                     nextRunAt: vietnamInstant(next),
                     dueAfterHours: hours,
                     isActive: active,
                     version: snapshot?.version ?? 0,
-                    scheduleType: snapshot?.scheduleType ?? 'IntervalDays',
-                    dayOfWeek: snapshot?.dayOfWeek ?? null,
-                    dayOfMonth: snapshot?.dayOfMonth ?? null,
+                    scheduleType,
+                    dayOfWeek: scheduleType === 'Weekly' ? dayOfWeek : null,
+                    dayOfMonth: scheduleType === 'Monthly' ? dayOfMonth : null,
                   },
                 ),
               )
@@ -320,21 +335,54 @@ function RecurringEditor({
           <OwnerFeedback error={action.error} busy={action.busy} />
           <TaskWorkFields work={work} change={setWork} includeDue={false} errors={action.fields} />
           <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Cấu hình định kỳ</Typography>
-          {calendar && (
-            <Typography sx={{ fontSize: 13 }}>
-              Giữ nguyên lịch {snapshot?.scheduleType} đã cấu hình. Thao tác này không chuyển lịch
-              sang chu kỳ N ngày.
-            </Typography>
-          )}
           <TextField
-            required
-            type="number"
-            disabled={!!calendar}
-            label="Mỗi bao nhiêu ngày"
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
-            slotProps={{ htmlInput: { min: 1, max: 365 } }}
-          />
+            select
+            label="Chu kỳ"
+            value={scheduleType}
+            onChange={(e) =>
+              setScheduleType(e.target.value as NonNullable<RecurringTemplate['scheduleType']>)
+            }
+          >
+            <MenuItem value="Daily">Hằng ngày</MenuItem>
+            <MenuItem value="Weekly">Hằng tuần</MenuItem>
+            <MenuItem value="Monthly">Hằng tháng</MenuItem>
+            <MenuItem value="IntervalDays">Mỗi N ngày</MenuItem>
+          </TextField>
+          {scheduleType === 'Weekly' && (
+            <TextField
+              select
+              label="Ngày trong tuần"
+              value={dayOfWeek}
+              onChange={(e) => setDayOfWeek(Number(e.target.value))}
+            >
+              {weekDays.map((day, index) => (
+                <MenuItem key={day} value={index + 1}>
+                  {day}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+          {scheduleType === 'Monthly' && (
+            <TextField
+              required
+              type="number"
+              label="Ngày trong tháng"
+              value={dayOfMonth}
+              onChange={(e) => setDayOfMonth(Number(e.target.value))}
+              slotProps={{ htmlInput: { min: 1, max: 31 } }}
+              helperText="Tháng không có ngày đã chọn sẽ được bỏ qua."
+            />
+          )}
+          {scheduleType === 'IntervalDays' && (
+            <TextField
+              required
+              type="number"
+              label="Mỗi bao nhiêu ngày"
+              value={days}
+              onChange={(e) => setDays(Number(e.target.value))}
+              slotProps={{ htmlInput: { min: 1, max: 365 } }}
+            />
+          )}
           <TextField
             required
             type="datetime-local"
@@ -342,6 +390,12 @@ function RecurringEditor({
             value={next}
             onChange={(e) => setNext(e.target.value)}
             slotProps={{ inputLabel: { shrink: true } }}
+            error={calendarMismatch}
+            helperText={
+              calendarMismatch
+                ? 'Thời điểm đầu tiên phải đúng ngày trong chu kỳ đã chọn.'
+                : undefined
+            }
           />
           <TextField
             required

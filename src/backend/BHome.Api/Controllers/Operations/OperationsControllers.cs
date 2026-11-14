@@ -26,6 +26,16 @@ public sealed class StaffAdministrationController(OperationsService service) : C
         return CreatedAtAction(nameof(Get), new { id = result.UserId }, result);
     }
     [HttpPut("{id:guid}")] public Task<StaffView> Update(Guid id, StaffUpdate input, CancellationToken t) => service.UpdateStaffAsync(id, input, t);
+    [HttpGet("{id:guid}/employments")]
+    public Task<IReadOnlyList<EmploymentPeriodView>> Employments(Guid id, CancellationToken t) => service.StaffEmploymentsAsync(id, t);
+    [HttpPost("{id:guid}/employments")]
+    public async Task<ActionResult<StaffView>> CreateEmployment(Guid id, EmploymentPeriodCreate input, CancellationToken t)
+    {
+        var result = await service.CreateEmploymentPeriodAsync(id, input, t);
+        return CreatedAtAction(nameof(Employments), new { id }, result);
+    }
+    [HttpGet("{id:guid}/responsibilities")]
+    public Task<StaffResponsibilitiesView> Responsibilities(Guid id, CancellationToken t) => service.StaffResponsibilitiesAsync(id, t);
 }
 
 [ApiController, Route("api/v1/residence-tasks"), Authorize]
