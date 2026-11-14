@@ -24,12 +24,15 @@ export default defineConfig(({ mode }) => {
     throw new Error(
       'Development API proxy requires HTTPS or an isolated loopback HTTP test server.',
     );
-  const certificate = fileURLToPath(
-    new URL('../../.tools/mobile-tls/localhost.cer', import.meta.url),
-  );
+  // Trust the workstation CA and standalone localhost certificate when present.
+  const certificateDirectory = new URL('../../.tools/mobile-tls/', import.meta.url);
+  const certificates = ['localhost.cer', 'root-ca.cer']
+    .map((name) => fileURLToPath(new URL(name, certificateDirectory)))
+    .filter(existsSync)
+    .map((path) => new X509Certificate(readFileSync(path)).toString());
   const agent =
-    target.protocol === 'https:' && target.hostname === 'localhost' && existsSync(certificate)
-      ? new Agent({ ca: new X509Certificate(readFileSync(certificate)).toString() })
+    target.protocol === 'https:' && target.hostname === 'localhost' && certificates.length
+      ? new Agent({ ca: certificates })
       : undefined;
   return {
     plugins: [react()],

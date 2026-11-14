@@ -7,6 +7,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   MenuItem,
   Paper,
   Stack,
@@ -21,9 +22,13 @@ import type {
   OperatingPolicyInput,
   SetupDocument,
 } from '../../../../../packages/client-core/src/propertySetup';
-import { ErrorState, LoadingState } from '../../components/common/PortalUI';
+import { ConfirmDialog, ErrorState, LoadingState } from '../../components/common/PortalUI';
 import { usePropertySetupApi } from './usePropertySetupApi';
 import { useSetupAction } from './useSetupAction';
+
+const policyStatusLabel = (status: string) =>
+  status === 'Published' ? 'Đã công bố' : status === 'Draft' ? 'Bản nháp' : status;
+const policyDateLabel = (date: string) => date.split('-').reverse().join('/');
 
 export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
   const api = usePropertySetupApi();
@@ -36,6 +41,7 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [preview, setPreview] = useState<SetupDocument<OperatingPolicyInput> | null>(null);
+  const [publishing, setPublishing] = useState<SetupDocument<OperatingPolicyInput> | null>(null);
   const policies = useQuery({
     queryKey: ['property-setup', 'policies', session?.userId, locationId],
     queryFn: ({ signal }) => api.policies(locationId, signal),
@@ -48,39 +54,53 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
   if (policies.isPending) return <LoadingState />;
   if (policies.error)
     return <ErrorState error={policies.error} retry={() => void policies.refetch()} />;
+  const filtered = policies.data.filter(
+    (policy) =>
+      (!status || policy.status === status) &&
+      `${policy.data.title} ${policy.data.content}`
+        .toLocaleLowerCase('vi')
+        .includes(search.trim().toLocaleLowerCase('vi')),
+  );
   return (
     <LocationSection
       title="Nội quy cơ sở"
-      description="Soạn bản nháp, xem trước nội dung, công bố và tra cứu lịch sử. Chỉ nội quy đã công bố mới được dùng cho các thỏa thuận mới."
+      actions={
+        owner ? (
+          <Button
+            variant="contained"
+            onClick={() => {
+              setEditing(null);
+              setCopied(undefined);
+            }}
+          >
+            Tạo bản nháp nội quy
+          </Button>
+        ) : undefined
+      }
     >
-      <Alert severity="info">
-        Công bố nội quy mới không thay thế nội quy đã ký. Hợp đồng cũ chỉ thay đổi qua phụ lục được
-        ký và Owner áp dụng.
-      </Alert>
-      {owner && (
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setCopied(undefined);
-          }}
-        >
-          Tạo bản nháp nội quy
-        </Button>
-      )}
       {action.error && <Alert severity="error">{action.error}</Alert>}
       {action.notice && <Alert severity="success">{action.notice}</Alert>}
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+      <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 } }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.5}
+          useFlexGap
+          sx={{ flexWrap: 'wrap', alignItems: { sm: 'center' } }}
+        >
           <TextField
             fullWidth
+            size="small"
             label="Tìm nội quy"
+            sx={{ flex: { sm: '1 1 220px' }, minWidth: 0, maxWidth: { sm: 360 } }}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <TextField
             select
+            size="small"
             label="Trạng thái"
-            sx={{ minWidth: 180 }}
+            fullWidth={false}
+            sx={{ width: { xs: '100%', sm: 180 }, flexShrink: 0 }}
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           >
@@ -91,88 +111,96 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
           <Button onClick={() => void policies.refetch()}>Làm mới</Button>
         </Stack>
       </Paper>
-      {!policies.data.length && (
+      {!filtered.length && (
         <LocationEmpty
-          title="Chưa có nội quy"
-          description="Tạo bản nháp để chuẩn bị nội dung áp dụng tại cơ sở."
+          title={policies.data.length ? 'Không tìm thấy nội quy phù hợp' : 'Chưa có nội quy'}
+          description={
+            policies.data.length
+              ? 'Thử đổi từ khóa hoặc trạng thái.'
+              : 'Tạo bản nháp để chuẩn bị nội dung áp dụng tại cơ sở.'
+          }
         />
       )}
-      {policies.data
-        .filter(
-          (policy) =>
-            (!status || policy.status === status) &&
-            `${policy.data.title} ${policy.data.content}`
-              .toLocaleLowerCase('vi')
-              .includes(search.toLocaleLowerCase('vi')),
-        )
-        .map((policy) => (
-          <Paper key={policy.id} sx={{ p: 2 }}>
-            <Stack spacing={1}>
-              <Typography variant="h6">{policy.data.title}</Typography>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                <Chip
-                  size="small"
-                  color={policy.status === 'Published' ? 'success' : 'default'}
-                  label={policy.status === 'Published' ? 'Đã công bố' : 'Bản nháp'}
-                />
-                <Typography variant="body2" color="text.secondary">
-                  Phiên bản {policy.version} · Hiệu lực{' '}
-                  {policy.data.effectiveFrom.split('-').reverse().join('/')}
-                </Typography>
-              </Stack>
-              <Typography
-                sx={{
-                  whiteSpace: 'pre-wrap',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 3,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                }}
-              >
-                {policy.data.content}
+      {filtered.map((policy) => (
+        <Paper key={policy.id} variant="outlined" sx={{ p: { xs: 2, md: 2.5 } }}>
+          <Stack spacing={1.5}>
+            <Typography
+              component="h3"
+              variant="h6"
+              sx={{ fontWeight: 800, overflowWrap: 'anywhere' }}
+            >
+              {policy.data.title}
+            </Typography>
+            <Stack
+              direction="row"
+              useFlexGap
+              spacing={1}
+              sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+            >
+              <Chip
+                size="small"
+                color={policy.status === 'Published' ? 'success' : 'default'}
+                label={policyStatusLabel(policy.status)}
+              />
+              <Typography variant="body2" color="text.secondary">
+                Hiệu lực {policyDateLabel(policy.data.effectiveFrom)}
               </Typography>
-              <Stack direction="row" spacing={1}>
-                <Button variant="outlined" onClick={() => setPreview(policy)}>
-                  Xem nội dung
-                </Button>
-                <Button onClick={() => setHistoryId(policy.id)}>Lịch sử sửa đổi</Button>
-                {owner &&
-                  (policy.status === 'Draft' ? (
-                    <>
-                      <Button
-                        onClick={() => {
-                          setCopied(undefined);
-                          setEditing(policy);
-                        }}
-                      >
-                        Sửa nội quy nháp
-                      </Button>
-                      <Button
-                        disabled={action.busy}
-                        onClick={() =>
-                          action.run(
-                            () => api.publishPolicy(policy.id, policy.version),
-                            'Máy chủ đã công bố nội quy. Hợp đồng đã ký được giữ nguyên.',
-                          )
-                        }
-                      >
-                        Công bố nội quy
-                      </Button>
-                    </>
-                  ) : (
+            </Stack>
+            <Typography
+              sx={{
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'anywhere',
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              {policy.data.content}
+            </Typography>
+            <Stack
+              direction="row"
+              sx={{
+                flexWrap: 'wrap',
+                gap: 1,
+                pt: 1.5,
+                borderTop: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Button variant="outlined" onClick={() => setPreview(policy)}>
+                Xem nội dung
+              </Button>
+              <Button onClick={() => setHistoryId(policy.id)}>Lịch sử sửa đổi</Button>
+              {owner &&
+                (policy.status === 'Draft' ? (
+                  <>
                     <Button
                       onClick={() => {
-                        setCopied({ ...policy.data, effectiveFrom: '', expectedVersion: 0 });
-                        setEditing(null);
+                        setCopied(undefined);
+                        setEditing(policy);
                       }}
                     >
-                      Tạo nội quy mới từ bản này
+                      Sửa nội quy nháp
                     </Button>
-                  ))}
-              </Stack>
+                    <Button disabled={action.busy} onClick={() => setPublishing(policy)}>
+                      Công bố nội quy
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      setCopied({ ...policy.data, effectiveFrom: '', expectedVersion: 0 });
+                      setEditing(null);
+                    }}
+                  >
+                    Tạo nội quy mới từ bản này
+                  </Button>
+                ))}
             </Stack>
-          </Paper>
-        ))}
+          </Stack>
+        </Paper>
+      ))}
       <Dialog open={editing !== undefined} fullWidth maxWidth="md">
         <DialogTitle>{editing ? 'Sửa bản nháp nội quy' : 'Soạn nội quy mới'}</DialogTitle>
         <DialogContent>
@@ -190,9 +218,16 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
       <Dialog open={!!preview} onClose={() => setPreview(null)} fullWidth maxWidth="md">
         <DialogTitle>{preview?.data.title}</DialogTitle>
         <DialogContent>
-          <Typography color="text.secondary" sx={{ mb: 2 }}>
-            Hiệu lực từ {preview?.data.effectiveFrom}
-          </Typography>
+          {preview && (
+            <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+              <Chip size="small" variant="outlined" label={policyStatusLabel(preview.status)} />
+              <Typography variant="body2" color="text.secondary">
+                Phiên bản {preview.version} · Hiệu lực từ{' '}
+                {policyDateLabel(preview.data.effectiveFrom)}
+              </Typography>
+            </Stack>
+          )}
+          <Divider sx={{ mb: 2 }} />
           <Typography sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.9 }}>
             {preview?.data.content}
           </Typography>
@@ -201,31 +236,69 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
           <Button onClick={() => setPreview(null)}>Đóng</Button>
         </DialogActions>
       </Dialog>
+      <ConfirmDialog
+        open={!!publishing}
+        title="Công bố nội quy?"
+        busy={action.busy}
+        onClose={() => setPublishing(null)}
+        onConfirm={() => {
+          if (!publishing) return;
+          action.run(async () => {
+            await api.publishPolicy(publishing.id, publishing.version);
+            setPublishing(null);
+          }, 'Máy chủ đã công bố nội quy. Hợp đồng đã ký được giữ nguyên.');
+        }}
+      >
+        {publishing && (
+          <Stack spacing={1}>
+            <Typography sx={{ fontWeight: 700 }}>{publishing.data.title}</Typography>
+            <Typography variant="body2">
+              Phiên bản {publishing.version} · Hiệu lực từ{' '}
+              {policyDateLabel(publishing.data.effectiveFrom)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Nội quy mới dùng cho các thỏa thuận mới. Hợp đồng đã ký giữ nguyên nội dung; thay đổi
+              chỉ qua phụ lục đã ký và được Owner áp dụng.
+            </Typography>
+            {action.error && <Alert severity="error">{action.error}</Alert>}
+          </Stack>
+        )}
+      </ConfirmDialog>
       <Dialog open={!!historyId} onClose={() => setHistoryId('')} fullWidth maxWidth="md">
         <DialogTitle>Lịch sử phiên bản nội quy</DialogTitle>
         <DialogContent>
           {historyId && (
-            <Paper sx={{ p: 2 }}>
-              <Typography variant="h6">Lịch sử sửa đổi của nội quy đã chọn</Typography>
+            <Stack spacing={2}>
               {history.isPending ? (
                 <LoadingState />
               ) : history.error ? (
                 <ErrorState error={history.error} retry={() => void history.refetch()} />
-              ) : (
-                history.data?.map((revision) => (
-                  <Stack key={revision.version} spacing={1} sx={{ py: 1 }}>
-                    <Typography>
-                      Phiên bản {revision.version} · {revision.status} ·{' '}
+              ) : history.data?.length ? (
+                history.data.map((revision) => (
+                  <Stack
+                    key={revision.version}
+                    spacing={1}
+                    sx={{ py: 2, borderTop: '1px solid', borderColor: 'divider' }}
+                  >
+                    <Typography sx={{ fontWeight: 700 }}>
+                      Phiên bản {revision.version} · {policyStatusLabel(revision.status)} ·{' '}
                       {revision.recordedAt
-                        ? new Date(revision.recordedAt).toLocaleString('vi-VN')
+                        ? new Date(revision.recordedAt).toLocaleString('vi-VN', {
+                            timeZone: 'Asia/Ho_Chi_Minh',
+                          })
                         : ''}
                     </Typography>
-                    <Typography>{revision.data.title}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Hiệu lực từ {policyDateLabel(revision.data.effectiveFrom)}
+                    </Typography>
+                    <Typography sx={{ fontWeight: 700 }}>{revision.data.title}</Typography>
                     <Typography sx={{ whiteSpace: 'pre-wrap' }}>{revision.data.content}</Typography>
                   </Stack>
                 ))
+              ) : (
+                <Typography color="text.secondary">Chưa có lịch sử phiên bản.</Typography>
               )}
-            </Paper>
+            </Stack>
           )}
         </DialogContent>
         <DialogActions>

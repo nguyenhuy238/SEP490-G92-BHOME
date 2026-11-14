@@ -8,18 +8,31 @@ internal static class LocalDevelopmentCli
 {
     public static async Task<int> Main(string[] args)
     {
-        if (args.Length == 2 && args[0] == "seed-job09" && args[1] is "--inspect" or "--seed")
+        if (args.SequenceEqual(new[] { "test-sms-provider" }))
         {
             try
             {
                 var config = new ConfigurationBuilder().AddEnvironmentVariables().Build();
                 var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
+                services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? ""));
+                SmsProviderProbe.ConfigureSimulation(services, config); services.AddInfrastructure(config);
+                await using var provider = services.BuildServiceProvider(); await SmsProviderProbe.RunAsync(provider); return 0;
+            }
+            catch (BHome.Application.Notifications.ChannelDeliveryException error) { Console.Error.WriteLine("SMS probe rejected: " + error.Code); return 1; }
+            catch (Exception error) { Console.Error.WriteLine($"SMS probe failed ({error.GetType().Name}); private values suppressed."); return 1; }
+        }
+        if (args.SequenceEqual(new[] { "seed-sms-demo" }))
+        {
+            try
+            {
+                var config = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+                var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
+                services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? ""));
                 services.AddInfrastructure(config);
                 await using var provider = services.BuildServiceProvider();
-                await Job09Seed.RunAsync(provider, args[1]);
-                return 0;
+                await SmsDemoSeed.RunAsync(provider); return 0;
             }
-            catch (Exception error) { Console.Error.WriteLine(error is LocalTestAccountException ? error.Message : $"JOB09_FAILED {error.GetType().Name}; credentials suppressed."); if(error is Npgsql.PostgresException pg) Console.Error.WriteLine($"code={pg.SqlState}; constraint={pg.ConstraintName}; message={pg.MessageText}"); return 1; }
+            catch (Exception error) { Console.Error.WriteLine($"SMS demo initialization failed ({error.GetType().Name}); private values suppressed."); return 1; }
         }
         if (args.Length == 3 && args[0] == "seed-tenant-mobile-demo" && args[2] is "--inspect" or "--seed" or "--verify")
         {

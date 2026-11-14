@@ -4,22 +4,8 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 
 export function mobileContractActions(...args: Parameters<typeof contractActions>) {
-  const actions = contractActions(...args);
-  if (args[2] === 'Owner') {
-    return actions.filter((item) =>
-      [
-        'signing',
-        'signing/sync',
-        'signing/recover',
-        'activate',
-        'holding-approval',
-        'holding-activation',
-        'holding-conversion',
-      ].includes(item.operation),
-    );
-  }
-  return actions.filter(
-    (item) => !['move-out/inspection', 'move-out/settlement'].includes(item.operation),
+  return contractActions(...args).filter(
+    (action) => !['move-out/inspection', 'move-out/settlement'].includes(action.operation),
   );
 }
 

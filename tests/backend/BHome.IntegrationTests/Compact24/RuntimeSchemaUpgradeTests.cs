@@ -68,7 +68,7 @@ public sealed class RuntimeSchemaUpgradeTests
                 foreach (var table in tables)
                 {
                     // Names are this fixed fixture allowlist; no user input enters SQL identifiers.
-                    var sql = $"SELECT COALESCE(jsonb_agg(to_jsonb(t)-ARRAY['contact_email','target_settlement_contract_id','settlement_receivable_id','deposit_offset_approval_id','beneficiary_kind','external_payer_attestation_id'] ORDER BY id),'[]'::jsonb)::text AS \"Value\" FROM {table} t";
+                    var sql = $"SELECT COALESCE(jsonb_agg(to_jsonb(t)-ARRAY['contact_email','target_settlement_contract_id','settlement_receivable_id','deposit_offset_approval_id','beneficiary_kind','external_payer_attestation_id','target_initial_contract_id'] ORDER BY id),'[]'::jsonb)::text AS \"Value\" FROM {table} t";
                     result.Add(await db.Database.SqlQueryRaw<string>(sql).SingleAsync());
                 }
                 return result.ToArray();
@@ -79,10 +79,13 @@ public sealed class RuntimeSchemaUpgradeTests
                 $"SELECT contact_email AS \"Value\" FROM residents LIMIT 0").ToArrayAsync());
             Assert.Equal("42703", missing.SqlState);
             using var diagnostics = new StringWriter();
+            var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
             Assert.Equal(2, await DatabaseProbe.RunAsync(target.ConnectionString, diagnostics));
-            Assert.Contains("applied=1; pending=8; unknown=0", diagnostics.ToString());
+            Assert.Contains($"applied=1; pending={pending.Length}; unknown=0", diagnostics.ToString());
+            Assert.Contains($"PendingCompact24Migrations={string.Join(',', pending)}", diagnostics.ToString());
             Assert.Contains("20261110000100_LifecycleAlignment", diagnostics.ToString());
             Assert.Contains("20261111080000_DepositReceiptAllocation", diagnostics.ToString());
+            Assert.Contains("20261113000100_PersonMonthlyServiceFees", diagnostics.ToString());
             var upgrade = db.GetService<IMigrator>().GenerateScript("20261108112733_InitialCompact24", null, MigrationsSqlGenerationOptions.NoTransactions);
             await using (var transaction = await db.Database.BeginTransactionAsync())
             {

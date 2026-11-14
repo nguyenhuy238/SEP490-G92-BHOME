@@ -14,6 +14,7 @@ export interface OnboardingPerson {
   status: IdentityStatus;
   captureProgress?: CaptureProgress;
   creationUncertain?: boolean;
+  verificationError?: string;
 }
 export const onboardingSteps = [
   { key: 'room', label: 'Chọn phòng' },

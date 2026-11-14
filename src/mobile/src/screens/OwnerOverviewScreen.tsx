@@ -1,266 +1,141 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import React, { useCallback } from 'react';
+import { View } from 'react-native';
+import { ActivityIndicator, Text } from 'react-native-paper';
+import { Action, ui } from '../components/WorkspaceKit';
 import {
-  ActivityIndicator,
-  Button,
-  Icon,
-  ProgressBar,
-  Text,
-  TouchableRipple,
-} from 'react-native-paper';
-import { colors as c, staffColors as s } from '../theme/theme';
-import { typography } from '../theme/typography';
+  DashboardCard as Box,
+  DashboardSection,
+  DashboardMetric as Metric,
+  DashboardSummary,
+} from '../components/DashboardKit';
 import { useSession } from '../lib/SessionProvider';
-import { errorMessage } from '../lib/api';
-import { conciseMessage, showError } from '../lib/toast';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
-import { loadOwnerOverview, type OwnerOverview } from '../services/ownerOverview';
+import { loadOwnerOverview } from '../services/ownerOverview';
+import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import { ownerQueuePolicy, OwnerApprovalQueue } from '../features/owner/OwnerApprovalQueue';
+import type { MobileApi } from '../lib/api';
+import { OwnerAttentionSummary } from '../features/owner/OwnerAttentionSummary';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.section}>
-      <Text accessibilityRole="header" style={styles.sectionTitle}>
-        {title}
-      </Text>
-      {children}
-    </View>
-  );
-}
-
-function LinkRow({
-  icon,
-  title,
-  detail,
-  onPress,
-}: {
-  icon: string;
-  title: string;
-  detail: string;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableRipple onPress={onPress} accessibilityRole="button" accessibilityLabel={title}>
-      <View style={styles.link}>
-        <View style={styles.linkIcon}>
-          <Icon source={icon} size={21} color={s.blue} />
-        </View>
-        <View style={styles.grow}>
-          <Text style={styles.rowTitle}>{title}</Text>
-          <Text style={styles.secondary} numberOfLines={1}>
-            {detail}
-          </Text>
-        </View>
-        <Icon source="chevron-right" size={18} color={c.muted} />
-      </View>
-    </TouchableRipple>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.metric}>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.secondary}>{label}</Text>
-    </View>
-  );
-}
-
-function OverviewCard({ data }: { data: OwnerOverview }) {
-  const occupancy = Math.min(1, Math.max(0, data.operationalOccupancyRate / 100));
-  return (
-    <View style={styles.surface}>
-      <View style={styles.metrics}>
-        <Metric label="Cơ sở" value={String(data.locations)} />
-        <Metric label="Phòng" value={String(data.rooms)} />
-        <Metric label="Phòng đang ở" value={String(data.occupiedRooms)} />
-        <Metric label="Hợp đồng" value={String(data.contracts)} />
-      </View>
-      <View style={styles.divider} />
-      <View style={styles.occupancyHeading}>
-        <View style={styles.grow}>
-          <Text style={styles.rowTitle}>Tỷ lệ lấp đầy</Text>
-          <Text style={styles.secondary}>{data.availableRooms} phòng đang trống</Text>
-        </View>
-        <Text style={styles.occupancyValue}>{data.operationalOccupancyRate.toFixed(1)}%</Text>
-      </View>
-      <ProgressBar progress={occupancy} color={s.blue} style={styles.progress} />
-    </View>
-  );
-}
+const loadOverview = (api: MobileApi, _path: string, signal: AbortSignal) =>
+  loadOwnerOverview(api, signal);
 
 export function OwnerOverviewScreen() {
   const { api, session } = useSession();
   const { go } = useWorkspace();
-  const request = useRef<AbortController | null>(null);
-  const [state, setState] = useState<{
-    data: OwnerOverview | null;
-    error: string;
-    loading: boolean;
-  }>({ data: null, error: '', loading: true });
-
-  const allowed = !!api && !!session?.roles.includes('Owner');
-  const reload = useCallback(() => {
-    if (!api || !allowed) return;
-    request.current?.abort();
-    const controller = new AbortController();
-    request.current = controller;
-    setState((current) => ({ ...current, error: '', loading: true }));
-    void loadOwnerOverview(api, controller.signal).then(
-      (data) => {
-        if (!controller.signal.aborted) setState({ data, error: '', loading: false });
-      },
-      (error) => {
-        if (!controller.signal.aborted) {
-          const message = conciseMessage(errorMessage(error));
-          setState((current) => ({ ...current, error: message, loading: false }));
-          showError(message);
-        }
-      },
-    );
-  }, [api, allowed]);
-  useFocusEffect(
-    useCallback(() => {
-      reload();
-      return () => request.current?.abort();
-    }, [reload]),
+  const state = useWorkspaceQuery(
+    api && session?.roles.includes('Owner') ? '/owner-mobile/overview' : null,
+    { cache: ownerQueuePolicy, load: loadOverview },
   );
-
-  useWorkspaceHeaderRefresh(reload, state.loading);
-
-  if (!allowed) return <Text>Cần đăng nhập Owner để xem tổng quan.</Text>;
-
+  const reload = state.reload;
+  const refresh = useCallback(() => {
+    api?.queryCache.invalidate(ownerQueuePolicy.tags);
+    reload();
+  }, [api, reload]);
+  useWorkspaceHeaderRefresh(refresh, state.fetching, { title: 'Tổng quan' });
+  if (!api || !session?.roles.includes('Owner'))
+    return <Text>Cần đăng nhập Owner để xem tổng quan.</Text>;
   return (
-    <View style={styles.page}>
-      <View style={styles.intro}>
-        <View style={styles.grow}>
-          <Text style={styles.title}>Tổng quan BHOME</Text>
-          <Text style={styles.secondary}>Theo dõi cơ sở và xử lý công việc quan trọng</Text>
+    <>
+      <DashboardSummary
+        title="Tổng quan BHOME"
+        detail="Cơ sở, phòng và hợp đồng trong phạm vi tài khoản"
+      />
+      <DashboardSection title="THAO TÁC NHANH">
+        <View style={ui.wrap}>
+          <View style={ui.half}>
+            <Action onPress={() => go('approvals')}>Phê duyệt</Action>
+          </View>
+          <View style={ui.half}>
+            <Action secondary onPress={() => go('operations')}>
+              Vận hành
+            </Action>
+          </View>
+          <View style={ui.half}>
+            <Action secondary onPress={() => go('owner-finance')}>
+              Tài chính
+            </Action>
+          </View>
         </View>
-        {state.loading && <ActivityIndicator size={20} accessibilityLabel="Đang tải tổng quan" />}
-      </View>
-
-      {!!state.error && (
-        <View style={styles.errorBox}>
-          <Text accessibilityRole="alert" style={styles.errorText}>
+      </DashboardSection>
+      <Action secondary disabled={state.fetching} onPress={refresh}>
+        Tải lại dữ liệu
+      </Action>
+      <DashboardSection title="TỔNG QUAN CƠ SỞ">
+        {state.loading && <ActivityIndicator accessibilityLabel="Đang tải tổng quan" />}
+        {!!state.error && (
+          <Text accessibilityRole="alert" style={ui.red}>
             {state.error}
           </Text>
-          <Button compact onPress={reload}>
-            Thử lại
-          </Button>
-        </View>
-      )}
-      {state.data && <OverviewCard data={state.data} />}
-
-      <Section title="Cần xử lý">
-        <View style={styles.surface}>
-          <LinkRow
-            icon="clipboard-check-outline"
-            title="Phê duyệt"
-            detail="Yêu cầu và quyết định đang chờ"
-            onPress={() => go('approvals')}
-          />
-          <View style={styles.rowDivider} />
-          <LinkRow
-            icon="tune-variant"
-            title="Vận hành"
-            detail="Công việc, phòng và tình trạng cơ sở"
-            onPress={() => go('operations')}
-          />
-          <View style={styles.rowDivider} />
-          <LinkRow
-            icon="tools"
-            title="Sự cố và bảo trì"
-            detail="Theo dõi sự cố, khẩn cấp và lệnh sửa chữa"
-            onPress={() => go('owner-incidents')}
-          />
-        </View>
-      </Section>
-
-      <Section title="Quản lý">
-        <View style={styles.surface}>
-          <LinkRow
-            icon="file-document-outline"
-            title="Hợp đồng & Vòng đời"
-            detail="Theo dõi ký, kích hoạt và trạng thái hợp đồng"
-            onPress={() => go('signing')}
-          />
-          <View style={styles.rowDivider} />
-          <LinkRow
-            icon="chart-line"
-            title="Tài chính"
-            detail="Doanh thu, công nợ và chi phí"
-            onPress={() => go('owner-finance')}
-          />
-          <View style={styles.rowDivider} />
-          <LinkRow
-            icon="bullhorn-outline"
-            title="Thông báo đã gửi"
-            detail="Xem lại thông tin đã gửi tới người dùng"
-            onPress={() => go('owner-announcements')}
-          />
-        </View>
-      </Section>
-
-      <View style={styles.surface}>
-        <LinkRow
-          icon="account-cog-outline"
-          title="Tài khoản & Đăng xuất"
-          detail="Thông tin cá nhân, bảo mật và tùy chọn"
-          onPress={() => go('profile')}
-        />
-      </View>
-    </View>
+        )}
+        {state.data && (
+          <View style={ui.wrap}>
+            <Metric
+              label="Cơ sở"
+              value={String(state.data.locations)}
+              icon="office-building-outline"
+              detail="Tổng số cơ sở"
+            />
+            <Metric
+              label="Phòng"
+              value={String(state.data.rooms)}
+              icon="door-open"
+              detail="Tổng số phòng"
+            />
+            <Metric
+              label="Phòng đang ở"
+              value={String(state.data.occupiedRooms)}
+              icon="home-account"
+              detail="Phòng hiện đang có người thuê"
+            />
+            <Metric
+              label="Hợp đồng"
+              value={String(state.data.contracts)}
+              icon="file-document-outline"
+              detail="Tất cả trạng thái"
+            />
+            <Metric
+              label="Phòng trống"
+              value={String(state.data.availableRooms)}
+              icon="home-search-outline"
+              detail="Sẵn sàng theo trạng thái phòng"
+            />
+            <Metric
+              label="Tỷ lệ lấp đầy"
+              value={`${state.data.operationalOccupancyRate.toFixed(1)}%`}
+              icon="chart-donut"
+              detail="Phòng đang ở / tổng số phòng"
+              progress={Math.min(1, Math.max(0, state.data.operationalOccupancyRate / 100))}
+            />
+          </View>
+        )}
+      </DashboardSection>
+      <OwnerAttentionSummary />
+      <DashboardSection title="CẦN XỬ LÝ">
+        <OwnerApprovalQueue compact />
+      </DashboardSection>
+      <Action icon="tools" onPress={() => go('owner-incidents')}>
+        Sự cố và bảo trì
+      </Action>
+      <Action secondary onPress={() => go('owner-emergencies')}>
+        Sự cố khẩn cấp
+      </Action>
+      <Action secondary onPress={() => go('owner-residence')}>
+        Kết quả tạm trú
+      </Action>
+      <Action icon="file-document-outline" onPress={() => go('signing')}>
+        Hợp đồng & Vòng đời
+      </Action>
+      <Box>
+        <Action secondary onPress={() => go('owner-finance')}>
+          Xem doanh thu, công nợ và chi phí
+        </Action>
+        <Action secondary onPress={() => go('owner-announcements')}>
+          Thông báo đã gửi
+        </Action>
+      </Box>
+      <Action secondary onPress={() => go('profile')}>
+        Tài khoản & Đăng xuất
+      </Action>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  page: { width: '100%', gap: 22 },
-  intro: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 2 },
-  title: { ...typography.screenTitle, color: '#173654' },
-  secondary: { ...typography.secondary, color: c.muted, flexShrink: 1 },
-  grow: { flex: 1, minWidth: 0, gap: 3 },
-  surface: {
-    backgroundColor: c.white,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: c.border,
-    overflow: 'hidden',
-  },
-  section: { gap: 12 },
-  sectionTitle: { ...typography.sectionHeading, color: '#173654' },
-  metrics: { flexDirection: 'row', flexWrap: 'wrap', padding: 8 },
-  metric: { width: '50%', minHeight: 82, padding: 10, justifyContent: 'center', gap: 3 },
-  metricValue: { ...typography.value, color: '#173654', fontVariant: ['tabular-nums'] },
-  divider: { height: 1, backgroundColor: c.border, marginHorizontal: 16 },
-  occupancyHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-  },
-  occupancyValue: { ...typography.value, color: s.blue, fontVariant: ['tabular-nums'] },
-  progress: { height: 6, borderRadius: 3, margin: 16, marginTop: 12 },
-  link: { minHeight: 70, flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-  linkIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: s.blueSoft,
-  },
-  rowTitle: { ...typography.link, color: '#173654' },
-  rowDivider: { height: 1, backgroundColor: c.border, marginLeft: 64 },
-  errorBox: {
-    borderRadius: 14,
-    padding: 12,
-    backgroundColor: c.redSoft,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  errorText: { ...typography.secondary, color: c.red, flex: 1 },
-});

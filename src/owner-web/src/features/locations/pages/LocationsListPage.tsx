@@ -44,12 +44,12 @@ import {
 import type { CopyConfigurationGroup } from '../types/locationConfig';
 import { isMockMode } from '../../../services/config';
 import { propertyError, usePropertyApi, type LocationDto } from '../../property-api/propertyApi';
-import { usePropertySetupApi } from '../../property/usePropertySetupApi';
-
-const SETUP_TARGET_KEY = 'bhome-owner-location-setup-target-v1';
+import { LocationSetupWizard } from '../setup/LocationSetupWizard';
+import type { LocationSetupResult } from '../../../../../../packages/client-core/src/locationSetup';
+import { NativeLocationsListPage } from './NativeLocationsListPage';
 
 export function LocationsListPage() {
-  return <MockLocationsListPage />;
+  return isMockMode ? <MockLocationsListPage /> : <NativeLocationsListPage />;
 }
 
 function MockLocationsListPage() {
@@ -57,7 +57,6 @@ function MockLocationsListPage() {
   const query = usePortalData();
   const action = usePortalAction();
   const propertyApi = usePropertyApi();
-  const setupApi = usePropertySetupApi();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const apiAction = useMutation({
@@ -115,8 +114,10 @@ function MockLocationsListPage() {
   const handleOpenCopyWizard = (sourceLocId?: string) => {
     if (!isMockMode) {
       const source = sourceLocId || locations[0]?.id;
-      if (source) navigate(`/locations/${source}/settings`);
-      else portal.notify('Tạo cơ sở trước, sau đó mở Sao chép cấu hình tại cơ sở nguồn.');
+      if (source) {
+        setSelectedSourceForCopy(source);
+        setIsSetupWizardOpen(true);
+      } else portal.notify('Chưa có cơ sở nguồn để sao chép.');
       return;
     }
     setSelectedSourceForCopy(sourceLocId || locations[0]?.id || '');
@@ -127,216 +128,6 @@ function MockLocationsListPage() {
     newLocationRecord: PortalRecord,
     wizardData: InitialLocationSetupResult,
   ) => {
-    if (!isMockMode) {
-      let createdLocation;
-      const pendingLocationId = sessionStorage.getItem(SETUP_TARGET_KEY);
-      if (pendingLocationId) {
-        try {
-          createdLocation = await setupApi.location(pendingLocationId);
-        } catch {
-          sessionStorage.removeItem(SETUP_TARGET_KEY);
-        }
-      }
-      if (!createdLocation) {
-        const candidates = await setupApi.locations(1, newLocationRecord.name);
-        createdLocation = candidates.items.find(
-          (item) =>
-            item.name.trim() === newLocationRecord.name.trim() &&
-            item.address.trim() === (newLocationRecord.attributes.address || '').trim(),
-        );
-      }
-      createdLocation ??= await setupApi.saveLocation(null, {
-        name: newLocationRecord.name,
-        address: newLocationRecord.attributes.address || '',
-        isActive: true,
-        version: 0,
-        reason: 'Tạo cơ sở từ Setup Wizard Owner Web',
-      });
-      sessionStorage.setItem(SETUP_TARGET_KEY, createdLocation.id);
-      const loadAllRooms = async () => {
-        const firstPage = await setupApi.rooms(createdLocation.id, 1);
-        const items = [...firstPage.items];
-        const pageCount = Math.ceil(firstPage.totalCount / firstPage.pageSize);
-        for (let page = 2; page <= pageCount; page += 1) {
-          const nextPage = await setupApi.rooms(createdLocation.id, page);
-          items.push(...nextPage.items);
-        }
-        return items;
-      };
-      const sharedRoomTemplates = await setupApi.request<{
-        items: { name: string; status: string }[];
-      }>('/api/v1/shared-configuration/room-type-templates?page=1&pageSize=100');
-      for (const roomType of wizardData.roomTypes) {
-        if (
-          !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(roomType.id) &&
-          !sharedRoomTemplates.items.some(
-            (item) =>
-              item.name.trim().toLocaleLowerCase() === roomType.name.trim().toLocaleLowerCase(),
-          )
-        ) {
-          await setupApi.request('/api/v1/shared-configuration/room-type-templates', {
-            method: 'POST',
-            body: JSON.stringify({
-              name: roomType.name,
-              description: roomType.description,
-              data: {
-                capacity: roomType.maxOccupants,
-                area: roomType.area,
-                amenities: roomType.facilities,
-                referenceRent: roomType.defaultRate,
-              },
-              expectedVersion: 0,
-            }),
-          });
-        }
-      }
-      const existingRooms = await loadAllRooms();
-      const missingRooms = wizardData.rooms.filter(
-        (room) => !existingRooms.some((item) => item.roomNumber === room.code),
-      );
-      for (const room of missingRooms) {
-        const defaults = wizardData.roomTypes.find((item) => item.id === room.roomTypeId);
-        if (!defaults) throw new Error(`Phòng ${room.code} chưa chọn cấu hình sức chứa.`);
-        await setupApi.saveRoom(null, {
-          locationId: createdLocation.id,
-          roomNumber: room.code,
-          floor: String(room.floor),
-          capacity: defaults.maxOccupants,
-          status: 0,
-          version: 0,
-          reason: 'Tạo phòng từ Setup Wizard',
-        });
-      }
-      const createdRooms = await loadAllRooms();
-      const today = new Date().toISOString().slice(0, 10);
-      const effective = (value: string) => (value && value > today ? value : today);
-      const existingPolicies = await setupApi.request<{
-        items: { roomId: string | null; chargeCode: string }[];
-      }>(
-        `/api/v1/billing-policies?locationId=${encodeURIComponent(createdLocation.id)}&page=1&pageSize=100`,
-      );
-      for (const room of createdRooms) {
-        if (
-          existingPolicies.items.some(
-            (policy) => policy.roomId === room.id && policy.chargeCode === 'RENT',
-          )
-        )
-          continue;
-        const draftRoom = wizardData.rooms.find((item) => item.code === room.roomNumber);
-        const roomType = wizardData.roomTypes.find((item) => item.id === draftRoom?.roomTypeId);
-        const rate = wizardData.rateOverrides[room.roomNumber] ?? roomType?.defaultRate;
-        if (rate === undefined) continue;
-        await setupApi.request('/api/v1/billing-policies', {
-          method: 'POST',
-          body: JSON.stringify({
-            locationId: createdLocation.id,
-            roomId: room.id,
-            category: 0,
-            chargeCode: 'RENT',
-            name: `Giá thuê phòng ${room.roomNumber}`,
-            method: 0,
-            rate,
-            effectiveFrom: today,
-            effectiveTo: null,
-            reason: 'Thiết lập giá thuê của cơ sở từ Setup Wizard',
-          }),
-        });
-      }
-      const feeCategory = (type: string) => (type === 'ELECTRICITY' ? 1 : type === 'WATER' ? 2 : 3);
-      const feeCode = (type: string, id: string) =>
-        type === 'ELECTRICITY'
-          ? 'ELECTRICITY'
-          : type === 'WATER'
-            ? 'WATER'
-            : `SERVICE_${type}_${id}`.replace(/[^A-Z0-9_-]/g, '_').slice(0, 80);
-      for (const fee of wizardData.feePolicies) {
-        const chargeCode = fee.chargeCode?.trim() || feeCode(fee.type, fee.id);
-        const targetRoom =
-          fee.applicationScope === 'PER_ROOM'
-            ? createdRooms.find((room) => room.roomNumber === fee.targetRoomCode)
-            : undefined;
-        if (fee.applicationScope === 'PER_ROOM' && !targetRoom)
-          throw new Error(
-            `Khoản phí "${fee.name}" chưa chọn được phòng áp dụng (${fee.targetRoomCode || 'chưa chọn'}).`,
-          );
-        if (
-          existingPolicies.items.some(
-            (policy) =>
-              policy.roomId === (targetRoom?.id ?? null) && policy.chargeCode === chargeCode,
-          )
-        )
-          continue;
-        const method =
-          fee.calculationMethod === 'PER_KWH' || fee.calculationMethod === 'PER_M3' ? 1 : 0;
-        await setupApi.request('/api/v1/billing-policies', {
-          method: 'POST',
-          body: JSON.stringify({
-            locationId: createdLocation.id,
-            roomId: targetRoom?.id ?? null,
-            category: feeCategory(fee.type),
-            chargeCode,
-            name: fee.name,
-            method,
-            rate: fee.unitPrice,
-            effectiveFrom: effective(fee.effectiveDate),
-            effectiveTo: fee.effectiveTo || null,
-            reason: 'Thiết lập biểu phí từ Setup Wizard',
-          }),
-        });
-      }
-      const existingRules = await setupApi.policies(createdLocation.id);
-      for (const rule of wizardData.houseRules) {
-        if (existingRules.some((item) => item.data.title === rule.name)) continue;
-        await setupApi.savePolicy(null, {
-          locationId: createdLocation.id,
-          title: rule.name,
-          content: rule.content,
-          effectiveFrom: effective(rule.effectiveDate),
-        });
-      }
-      const existingTemplates = await setupApi.templates(createdLocation.id);
-      for (const roomType of wizardData.roomTypes) {
-        const requirements = wizardData.roomTypeTemplates[roomType.id] ?? [];
-        if (!requirements.length) continue;
-        const templateName = `Định mức ${roomType.name}`;
-        const existingTemplate = existingTemplates.find((item) => item.data.name === templateName);
-        const template =
-          existingTemplate ??
-          (await setupApi.saveTemplate(null, {
-            locationId: createdLocation.id,
-            name: templateName,
-            items: requirements.map((requirement) => {
-              const catalog = wizardData.assetCatalog.find(
-                (item) => item.id === requirement.catalogId,
-              );
-              return {
-                id: crypto.randomUUID(),
-                name: catalog?.name ?? requirement.catalogId,
-                category: catalog?.category ?? 'Khác',
-                trackingMode: 'BulkQuantity' as const,
-                quantity: requirement.quantity,
-              };
-            }),
-          }));
-        if (template.status === 'Draft')
-          await setupApi.publishTemplate(template.id, template.version);
-        for (const room of createdRooms.filter((item) =>
-          wizardData.rooms.some(
-            (draft) => draft.code === item.roomNumber && draft.roomTypeId === roomType.id,
-          ),
-        )) {
-          const inventory = await setupApi.inventory(room.id);
-          if (inventory.assignedTemplateId !== template.id)
-            await setupApi.assignTemplate(room.id, template.id, inventory.assignmentVersion);
-        }
-      }
-      await queryClient.invalidateQueries({ queryKey: ['portal', 'api'] });
-      await queryClient.invalidateQueries({ queryKey: ['property-setup'] });
-      setSuccessToast(`Đã tạo và cấu hình cơ sở "${createdLocation.name}" từ dữ liệu Backend.`);
-      sessionStorage.removeItem(SETUP_TARGET_KEY);
-      navigate(`/locations/${createdLocation.id}/overview`);
-      return true;
-    }
     const roomTypes = wizardData.roomTypes.map((roomType) =>
       makeRecord('room-types', {
         id: `${roomType.id}-${newLocationRecord.id}`,
@@ -386,6 +177,16 @@ function MockLocationsListPage() {
       },
     );
     return true;
+  };
+
+  const handleNativeSetupComplete = async (result: LocationSetupResult) => {
+    await queryClient.invalidateQueries({ queryKey: ['portal', 'api'] });
+    await queryClient.invalidateQueries({ queryKey: ['property-setup'] });
+    await queryClient.invalidateQueries({ queryKey: ['billing-policies'] });
+    setIsSetupWizardOpen(false);
+    setSelectedSourceForCopy('');
+    setSuccessToast(`Đã lưu cấu hình cơ sở "${result.location.name}".`);
+    navigate(`/locations/${result.location.id}/overview`);
   };
 
   const handleCopySuccess = (result: {
@@ -452,7 +253,10 @@ function MockLocationsListPage() {
             <Button
               variant="contained"
               startIcon={<Plus size={16} />}
-              onClick={() => setIsSetupWizardOpen(true)}
+              onClick={() => {
+                setSelectedSourceForCopy('');
+                setIsSetupWizardOpen(true);
+              }}
             >
               Thêm cơ sở
             </Button>
@@ -839,12 +643,26 @@ function MockLocationsListPage() {
       </Grid>
 
       {/* Initial Location Setup Wizard Modal */}
-      <InitialLocationSetupWizard
-        open={isSetupWizardOpen}
-        onClose={() => setIsSetupWizardOpen(false)}
-        db={db}
-        onComplete={handleSetupComplete}
-      />
+      {isMockMode ? (
+        <InitialLocationSetupWizard
+          open={isSetupWizardOpen}
+          onClose={() => setIsSetupWizardOpen(false)}
+          db={db}
+          onComplete={handleSetupComplete}
+        />
+      ) : (
+        isSetupWizardOpen && (
+          <LocationSetupWizard
+            locations={locations}
+            initialSource={selectedSourceForCopy || undefined}
+            onClose={() => {
+              setIsSetupWizardOpen(false);
+              setSelectedSourceForCopy('');
+            }}
+            onComplete={handleNativeSetupComplete}
+          />
+        )
+      )}
 
       {/* Copy Configuration Wizard Modal */}
       <CopyConfigurationWizard

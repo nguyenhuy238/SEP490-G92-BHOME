@@ -59,6 +59,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC", Status = RoomStatus.Available };
         var resident = new Resident { RoomId = room.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Representative", VerificationStatus = IdentityVerificationStatus.Verified };
         db.AddRange(location, room, resident, new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddDays(-30), Today.AddDays(60)));
+        db.AddRange(
+            new BillingPolicy { LocationId = location.Id, Category = ChargeCategory.Electricity, ChargeCode = "ELECTRICITY", Name = "Synthetic electricity", Method = ChargingMethod.Metered, Rate = 3500, EffectiveFrom = Today.AddMonths(-1) },
+            new BillingPolicy { LocationId = location.Id, Category = ChargeCategory.Water, ChargeCode = "WATER", Name = "Synthetic water", Method = ChargingMethod.Metered, Rate = 15000, EffectiveFrom = Today.AddMonths(-1) });
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id, resident.Id);
     }
     private static string Path(Guid id, string operation = "") => $"/api/v1/contracts/{id}" + (operation.Length == 0 ? "" : "/" + operation);
@@ -68,7 +71,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         request.Headers.Add("Idempotency-Key", (key ?? Guid.NewGuid()).ToString()); return await actor.Client.SendAsync(request);
     }
     private static async Task<T> Success<T>(HttpResponseMessage response)
-    { Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()} {string.Join(Environment.NewLine, BHome.IntegrationTests.Compact24.Compact24WorkflowFixture.Diagnostics.TakeLast(2))}"); return (await response.Content.ReadFromJsonAsync<T>())!; }
+    { Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()} {string.Join(Environment.NewLine, ApiFactory.Diagnostics.TakeLast(2))}"); return (await response.Content.ReadFromJsonAsync<T>())!; }
     private static ContractDraftInput Input(Workspace w) => new(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], Today.AddDays(-10), Today.AddDays(30), 3000000, 3000000, "SYNTHETIC TEST TERMS");
     private async Task<Guid> Draft(Workspace w) => (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts", Input(w)))).Id;
     private static async Task Signed(Workspace w, Guid id)
@@ -690,7 +693,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
                 await using var diagnosticScope = host.Services.CreateAsyncScope();
                 var diagnosticDb = diagnosticScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
                 var stored = await diagnosticDb.Set<ContractSignature>().AsNoTracking().SingleAsync(s => s.Id == requested.Id);
-                throw new Xunit.Sdk.XunitException($"Expected Pending; response={requested.Status}; stored={stored.Status}; providerReferencePresent={stored.ProviderReference is not null}; {string.Join(Environment.NewLine, BHome.IntegrationTests.Compact24.Compact24WorkflowFixture.Diagnostics.TakeLast(2))}");
+                throw new Xunit.Sdk.XunitException($"Expected Pending; response={requested.Status}; stored={stored.Status}; providerReferencePresent={stored.ProviderReference is not null}; {string.Join(Environment.NewLine, ApiFactory.Diagnostics.TakeLast(2))}");
             }
             var replay = await Success<SignatureView>(await Post(actor, Path(id, "signing"), input, key));
             Assert.Equal(requested.Id, replay.Id);

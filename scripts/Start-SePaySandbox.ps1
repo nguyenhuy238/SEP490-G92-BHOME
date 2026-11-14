@@ -55,7 +55,7 @@ if ($DatabaseOnly) { Write-Output 'Sandbox database container is running. No sch
 $saved = @{}
 Push-Location $repo
 try {
-    foreach ($name in @($settings.Keys | Where-Object { $_ -match '^(ConnectionStrings|Jwt|SePay|SePaySandbox|Jobs|NotificationChannels|OwnerSetup|Email|Cors|AuthWeb|DevelopmentDatabase|Kestrel|Api)__|^AllowedHosts$' }) + @('DOTNET_ENVIRONMENT','ASPNETCORE_ENVIRONMENT','BHOME_ENV_FILE','BHOME_DEV_TEST_PASSWORD')) {
+    foreach ($name in @($settings.Keys | Where-Object { $_ -match '^(ConnectionStrings|Jwt|SePay|SePaySandbox|Jobs|NotificationChannels|OwnerSetup|ContractWorkflow|Email|AuthenticationEmail|AnonymousSigning|Cors|AuthWeb|DevelopmentDatabase|Kestrel|Api)__|^AllowedHosts$' }) + @('DOTNET_ENVIRONMENT','ASPNETCORE_ENVIRONMENT','BHOME_ENV_FILE','BHOME_DEV_TEST_PASSWORD')) {
         $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
         [Environment]::SetEnvironmentVariable($name, $settings[$name], 'Process')
     }

@@ -7,7 +7,7 @@
 **/build/
 **/coverage/
 .tools/
-.playwright-mcp/
+.artifacts/
 __pycache__/
 .tmp/
 TestResults/

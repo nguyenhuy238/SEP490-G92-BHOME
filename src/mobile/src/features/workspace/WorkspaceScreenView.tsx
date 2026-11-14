@@ -19,6 +19,7 @@ import { useWorkspace } from '../../features/workspace/WorkspaceProvider';
 import { canOpenScreen, homeScreen, isWorkspaceScreen } from '../../features/workspace/navigation';
 import { OwnerHome, ApprovalCenter, Operations } from '../../screens/OwnerScreens';
 import { OwnerOverviewScreen } from '../../screens/OwnerOverviewScreen';
+import { OwnerResidenceScreen } from '../../screens/OwnerResidenceScreen';
 import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens';
 import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
 import { StaffScheduleScreen } from '../../screens/StaffScheduleScreen';
@@ -134,6 +135,7 @@ const screens = {
   'owner-payment-detail': OwnerPaymentReviewScreen,
   'owner-announcements': OwnerAnnouncementScreen,
   'owner-finance': OwnerFinanceScreen,
+  'owner-residence': OwnerResidenceScreen,
   operations: Operations,
   'staff-home': StaffHome,
   'work-orders': WorkOrders,
@@ -250,6 +252,7 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
         case 'owner-payment-detail':
         case 'owner-announcements':
         case 'owner-finance':
+        case 'owner-residence':
           content = <Screen />;
           break;
         case 'incident-detail':

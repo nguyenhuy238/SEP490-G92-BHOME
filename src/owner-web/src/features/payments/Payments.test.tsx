@@ -45,6 +45,23 @@ it('pages verified payment history independently of the debt invoice page', asyn
   expect(mocks.api.history.mock.calls.at(-1)?.[0].page).toBe(2);
   expect(mocks.api.debts.mock.calls.at(-1)?.[0].page).toBe(1);
 });
+it('returns to page one of bank transfers when changing the visible billing period', async () => {
+  mocks.api.transfers.mockResolvedValue({ items: [], totalCount: 41 });
+  mount(<PaymentManagementPage />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Đối soát giao dịch' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Giao dịch sau' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Giao dịch sau' }));
+  await waitFor(() => expect(mocks.api.transfers.mock.calls.at(-1)?.[0].page).toBe(2));
+  fireEvent.change(screen.getByLabelText('Kỳ hóa đơn cần lọc'), { target: { value: '2026-11' } });
+  await waitFor(() =>
+    expect(mocks.api.transfers.mock.calls.at(-1)?.[0]).toMatchObject({
+      page: 1,
+      billingPeriod: '2026-11-01',
+    }),
+  );
+  expect(mocks.api.allocate).not.toHaveBeenCalled();
+  expect(mocks.api.register).not.toHaveBeenCalled();
+});
 const transfer = {
   id: 'transfer',
   providerIdentity: 'SYNTHETIC',
@@ -128,6 +145,16 @@ function mount(element: React.ReactNode, route = '/payments') {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(window.matchMedia).mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
   mocks.api.payment.mockResolvedValue(state);
   mocks.api.instructions.mockResolvedValue({ availability: 'ReceivingAccountUnavailable' });
   mocks.api.payers.mockResolvedValue([{ userId: 'tenant', displayLabel: 'Khách tổng hợp A' }]);

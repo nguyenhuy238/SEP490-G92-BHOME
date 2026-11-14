@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -241,12 +242,12 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                   </MenuItem>
                 )}
               </TextField>
-              <TextField
+              <MoneyField
                 label="Số tiền yêu cầu hoàn (VND)"
                 value={amount}
                 disabled={busy}
-                onChange={(e) => {
-                  setAmount(e.target.value);
+                onValueChange={(raw) => {
+                  setAmount(raw);
                   changed();
                 }}
               />

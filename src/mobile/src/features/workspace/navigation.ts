@@ -31,6 +31,7 @@ export const screenRoles = {
   'owner-payment-detail': ['Owner'],
   'owner-announcements': ['Owner'],
   'owner-finance': ['Owner'],
+  'owner-residence': ['Owner'],
   operations: ['Owner'],
   'staff-home': ['Staff'],
   'work-orders': ['Staff'],
@@ -148,6 +149,7 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
       'owner-payment-detail',
       'owner-announcements',
       'owner-finance',
+      'owner-residence',
     ].includes(screen)
   )
     return [

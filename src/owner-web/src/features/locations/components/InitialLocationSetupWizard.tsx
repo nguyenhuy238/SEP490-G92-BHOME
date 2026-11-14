@@ -1,3 +1,4 @@
+import { MoneyField } from '../../../components/common/MoneyField';
 import { useEffect, useState } from 'react';
 import {
   Alert,
@@ -1702,13 +1703,12 @@ export function InitialLocationSetupWizard({
                           />
                         </TableCell>
                         <TableCell>
-                          <TextField
+                          <MoneyField
                             size="small"
-                            type="number"
                             placeholder="Nhập giá riêng"
                             value={override !== undefined ? override : ''}
-                            onChange={(e) => {
-                              const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                            onValueChange={(raw) => {
+                              const val = raw ? parseInt(raw, 10) : undefined;
                               setRateOverrides((prev) => {
                                 const next = { ...prev };
                                 if (val) next[room.code] = val;
@@ -2334,14 +2334,13 @@ export function InitialLocationSetupWizard({
                   })
                 }
               />
-              <TextField
-                type="number"
+              <MoneyField
                 label="Giá thuê mặc định"
                 value={editingRoomType.defaultRate}
-                onChange={(event) =>
+                onValueChange={(raw) =>
                   setEditingRoomType({
                     ...editingRoomType,
-                    defaultRate: Number(event.target.value),
+                    defaultRate: Number(raw),
                   })
                 }
               />
@@ -2535,13 +2534,11 @@ export function InitialLocationSetupWizard({
                 <MenuItem value="PER_ROOM">Theo phòng</MenuItem>
                 <MenuItem value="PER_BILLING_PERIOD">Theo kỳ hóa đơn</MenuItem>
               </TextField>
-              <TextField
-                type="number"
+              <MoneyField
+                allowDecimal
                 label="Đơn giá"
                 value={editingFee.unitPrice}
-                onChange={(event) =>
-                  setEditingFee({ ...editingFee, unitPrice: Number(event.target.value) })
-                }
+                onValueChange={(raw) => setEditingFee({ ...editingFee, unitPrice: Number(raw) })}
               />
               <TextField
                 label="Đơn vị"

@@ -1,5 +1,14 @@
 # BHOME API implementation status
 
+BF01 update **2026-11-13** (`FE/truong` working tree): atomic initial location setup,
+selective source copy with explicit destination-room fee mapping, independent
+versioned RoomDefaults, room provenance, configured-room creation and location
+metadata are implemented on Compact24. See the
+[decision](../architecture/BF01_LOCATION_SETUP_DECISION_2026-11-13.md) and
+[implementation and executed tests](../development/BF01_LOCATION_SETUP_IMPLEMENTATION_2026-11-13.md).
+The dated route inventory and counts below remain historical; they have not been
+regenerated for this addition.
+
 SePay update **2026-11-12**: opt-in authenticated webhook, permanent BH code registry,
 provider-verified ledger allocation, JOB-03 recovery/polling and Owner event review are
 implemented. See [SePay configuration and test guide](SEPAY.md). The inventory and

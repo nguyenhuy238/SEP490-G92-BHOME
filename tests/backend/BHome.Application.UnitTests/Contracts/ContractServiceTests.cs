@@ -17,6 +17,36 @@ namespace BHome.Application.UnitTests.Contracts;
 public sealed class ContractServiceTests
 {
     [Fact]
+    public async Task HoldingPreparationUsesLocationMonthsAndRentMultiplierWithVietnamMidnightExpiry()
+    {
+        var rig = new Rig();
+        rig.Settings.GetAsync(rig.Room.LocationId, default).ReturnsForAnyArgs(new HoldingSettings(rig.Room.LocationId, 2, 1.5m, "Owner configured terms", 3));
+        var result = await rig.Service.HoldingPreparationAsync(rig.Room.Id, default);
+        Assert.Equal(Today, result.StartDate); Assert.Equal(Today.AddMonths(2), result.EndDate);
+        Assert.Equal(new DateTimeOffset(2026, 12, 28, 17, 0, 0, TimeSpan.Zero), result.ExpiresAt);
+        Assert.Equal(4500000, result.HoldingDeposit); Assert.Equal(3000000, result.MonthlyRent);
+        Assert.Equal(3, result.SettingsVersion);
+    }
+    [Fact]
+    public async Task HoldingPreparationDoesNotInventMissingLocationConfiguration()
+    {
+        var rig = new Rig();
+        var error = await Assert.ThrowsAsync<ContractException>(() => rig.Service.HoldingPreparationAsync(rig.Room.Id, default));
+        Assert.Equal("holding_settings_required", error.Code);
+    }
+    [Fact]
+    public async Task HoldingMetadataDoesNotTurnItsDetailIntoMainOnboarding()
+    {
+        var rig = new Rig();
+        var id = await rig.Service.CreateHoldingAsync(rig.HoldingDraft, Guid.NewGuid(), default);
+        var holding = rig.Contracts.Single();
+        holding.DraftMetadata = "{\"holdingNote\":\"synthetic\"}";
+        var detail = await rig.Service.GetAsync(id.Id, default);
+        Assert.Equal("Holding", detail.Kind);
+        Assert.False(detail.OnboardingDraft);
+        Assert.Equal(rig.HoldingDraft.HoldingDeposit, detail.RequiredDeposit);
+    }
+    [Fact]
     public async Task HoldingReadinessUsesHoldingApprovalInsteadOfMainContractRules()
     {
         var rig = new Rig();
@@ -45,6 +75,7 @@ public sealed class ContractServiceTests
         public readonly IContractSettlementLedger Ledger = Substitute.For<IContractSettlementLedger>();
         public readonly IContractHoldingLedger Holdings = Substitute.For<IContractHoldingLedger>();
         public readonly IContractDepositPosition Positions = Substitute.For<IContractDepositPosition>();
+        public readonly IHoldingSettingsData Settings = Substitute.For<IHoldingSettingsData>();
         public readonly List<Contract> Contracts = [];
         public readonly List<ContractMoveOut> Moves = [];
         public readonly List<ContractOperation> Operations = [];
@@ -66,7 +97,14 @@ public sealed class ContractServiceTests
             Repo.BankReferenceAsync(default!, default).ReturnsForAnyArgs(c => Deposits.SingleOrDefault(d => d.BankTransactionReference == c.Arg<string>()));
             Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(Room.Id, Today,
                 [new PolicyDto(Guid.NewGuid(), Room.LocationId, Room.Id, ChargeCategory.Rent, "RENT", "Rent",
-                    ChargingMethod.FixedPerRoomPerMonth, 3000000, Today.AddMonths(-1), null, 1)], []));
+                    ChargingMethod.FixedPerRoomPerMonth, 3000000, Today.AddMonths(-1), null, 1),
+                 new PolicyDto(Guid.NewGuid(), Room.LocationId, Room.Id, ChargeCategory.Electricity, "ELECTRICITY", "Electricity",
+                    ChargingMethod.Metered, 3500, Today.AddMonths(-1), null, 1),
+                 new PolicyDto(Guid.NewGuid(), Room.LocationId, Room.Id, ChargeCategory.Water, "WATER", "Water",
+                    ChargingMethod.Metered, 15000, Today.AddMonths(-1), null, 1),
+                 new PolicyDto(Guid.NewGuid(), Room.LocationId, Room.Id, ChargeCategory.ServiceFee, "INTERNET", "Internet",
+                    ChargingMethod.FixedPerRoomPerMonth, 100000, Today.AddMonths(-1), null, 1)], []));
+            Repo.BindingContractsAsync(default, default, default, default, default).ReturnsForAnyArgs(Array.Empty<Contract>());
             Repo.MainForHoldingAsync(default, default).ReturnsForAnyArgs(c => Contracts.SingleOrDefault(x => x.HoldingContractId == c.Arg<Guid>()));
             Repo.OperationAsync(default, default, default!, default).ReturnsForAnyArgs(c => Operations.SingleOrDefault(o => o.ActorId == c.ArgAt<Guid>(0) && o.Key == c.ArgAt<Guid>(1) && o.Operation == c.Arg<string>()));
             Repo.InTransactionAsync(default, default(Func<Task<ContractId>>)!, default).ReturnsForAnyArgs(c => c.Arg<Func<Task<ContractId>>>()());
@@ -87,7 +125,7 @@ public sealed class ContractServiceTests
             });
             Holdings.ApplyAsync(default, default, default, default, default, default).ReturnsForAnyArgs(Task.FromException<HoldingDepositApplication>(new IntegrationUnavailableException("holding ledger")));
             Positions.ReadAsync(default!, default, default!).ReturnsForAnyArgs(call => (DepositLedgerPosition?)new(Deposits.Where(d => call.Arg<Guid[]>().Contains(d.ContractId)).Sum(d => d.Amount), 0, 0, 0));
-            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock(), depositPositions: Positions);
+            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock(), depositPositions: Positions, holdingSettings: Settings);
         }
         public ContractDraftInput Draft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id], Today.AddDays(-10), Today.AddDays(30), 3000000, 3000000, "Synthetic approved terms");
         public HoldingDraftInput HoldingDraft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id],
@@ -113,6 +151,44 @@ public sealed class ContractServiceTests
             Storage.CopyToAsync(default!, default!, default).ReturnsForAnyArgs(async x => await x.Arg<Stream>().WriteAsync(bytes));
             Deposits.Add(new DepositVerification { ContractId = c.Id, Amount = c.RequiredDeposit }); return c;
         }
+    }
+
+    [Fact]
+    public async Task MainDraftSealsAgreedRentAndAllRoomChargesAgainstLaterPolicyChanges()
+    {
+        var r = new Rig();
+        var id = await r.Service.CreateAsync(r.Draft with { MonthlyRent = 3200000 }, Guid.NewGuid(), default);
+        var contract = r.Contracts.Single();
+        var snapshot = ContractChargeSnapshot.Read(contract);
+        Assert.Equal(1, snapshot.SnapshotVersion);
+        Assert.Equal(3200000, snapshot.Charges.Single(c => c.ChargeCode == "RENT").Rate);
+        Assert.Equal(3500, snapshot.Charges.Single(c => c.ChargeCode == "ELECTRICITY").Rate);
+        Assert.Equal(15000, snapshot.Charges.Single(c => c.ChargeCode == "WATER").Rate);
+        Assert.Equal(100000, snapshot.Charges.Single(c => c.ChargeCode == "INTERNET").Rate);
+        Assert.True(ContractChargeSnapshot.IsIntact(contract));
+        r.Repo.ResolvePricesAsync(default, default, default).ReturnsForAnyArgs(new ResolvedPrices(r.Room.Id, Today, [], []));
+        var view = await r.Service.GetAsync(id.Id, default);
+        Assert.Equal(snapshot.Charges, view.AgreedCharges);
+        contract.AgreedPriceSnapshot = JsonSerializer.Serialize(snapshot with
+        {
+            Charges = snapshot.Charges.Select(c => c.ChargeCode == "INTERNET" ? c with { Rate = 999999 } : c).ToArray()
+        });
+        Assert.False(ContractChargeSnapshot.IsIntact(contract));
+        Assert.Contains("signed_terms_changed", (await r.Service.ReadinessAsync(contract.Id, default)).Blockers);
+    }
+
+    [Fact]
+    public async Task BindingRejectsIncompleteOrDifferentOverlappingCharges()
+    {
+        var r = new Rig(); var original = await r.Ready(); original.Status = ContractStatus.Active;
+        var next = await r.Service.CreateAsync(r.Draft with { MonthlyRent = 4000000 }, Guid.NewGuid(), default);
+        r.Repo.BindingContractsAsync(default, default, default, default, default).ReturnsForAnyArgs(new[] { original });
+        var readiness = await r.Service.ReadinessAsync(next.Id, default);
+        Assert.Contains("room_contract_price_conflict", readiness.Blockers);
+        var draft = r.Contracts.Single(c => c.Id == next.Id);
+        var snapshot = ContractChargeSnapshot.Read(draft);
+        draft.AgreedPriceSnapshot = JsonSerializer.Serialize(snapshot with { Charges = snapshot.Charges.Where(c => c.ChargeCode != "WATER").ToArray() });
+        Assert.Contains("missing_policy_water", (await r.Service.ReadinessAsync(next.Id, default)).Blockers);
     }
 
     [Fact]
@@ -145,7 +221,8 @@ public sealed class ContractServiceTests
         var persistedDocument = new ContractDocument(holding.Id, holding.RoomId, holding.OwnerSignerId, holding.TenantUserId!.Value,
             holding.RepresentativeResidentId, holding.Residents.Select(x => x.ResidentId).Order().ToArray(), holding.StartDate, holding.EndDate,
             decimal.Truncate(holding.MonthlyRent), decimal.Truncate(holding.RequiredDeposit), holding.HoldingContractId,
-            holding.AppliedHoldingDeposit, holding.Terms, holding.SnapshotHash);
+            holding.AppliedHoldingDeposit, holding.Terms, holding.SnapshotHash)
+        { AgreedCharges = ContractChargeSnapshot.Read(holding).Charges };
         Assert.Equal(holding.SnapshotHash, ContractDocumentSnapshot.Hash(persistedDocument));
     }
 
@@ -223,14 +300,20 @@ public sealed class ContractServiceTests
     public async Task ConversionReusesHoldingLedgerAndDoesNotMarkHoldingConvertedAtDraftTime()
     {
         var r = new Rig(); var id = await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default);
-        var holding = r.Contracts.Single(); holding.Status = ContractStatus.Active; holding.ApprovedAt = new Clock().GetUtcNow();
-        holding.PriceLockedAt = new Clock().GetUtcNow(); holding.AgreedPriceSnapshot = "{\"locked\":true}"; r.Room.Status = RoomStatus.OnHold;
+        await r.Service.ApproveHoldingAsync(id.Id, new("Owner approved terms"), Guid.NewGuid(), default);
+        var holding = r.Contracts.Single(); holding.Status = ContractStatus.Active;
+        holding.PriceLockedAt = new Clock().GetUtcNow(); r.Room.Status = RoomStatus.OnHold;
+        var charges = ContractChargeSnapshot.Read(holding).Charges;
+        r.Repo.ClearReceivedCalls();
         r.Holdings.ApplyAsync(default, default, default, default, default, default).ReturnsForAnyArgs(call =>
             new HoldingDepositApplication(holding.Id, holding.RoomId, holding.TenantUserId!.Value, 2000000, "allocation-once"));
         var mainId = await r.Service.ConvertHoldingAsync(holding.Id, new(3000000), Guid.NewGuid(), default);
         var main = r.Contracts.Single(c => c.Id == mainId.Id);
         Assert.Equal(holding.Id, main.HoldingContractId); Assert.Equal(2000000, main.AppliedHoldingDeposit);
         Assert.Equal(ContractStatus.Active, holding.Status); Assert.Null(holding.ConvertedMainContractId);
+        Assert.Equal(charges, ContractChargeSnapshot.Read(main).Charges);
+        Assert.True(ContractChargeSnapshot.IsIntact(main));
+        await r.Repo.DidNotReceiveWithAnyArgs().ResolvePricesAsync(default, default, default);
     }
 
     [Theory]
