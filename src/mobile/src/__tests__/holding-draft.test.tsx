@@ -8,8 +8,12 @@ import {
   holdingDraftPayload,
 } from '../../../../packages/client-core/src/contracts';
 import { ContractDraftForm } from '../features/contracts/ContractDraftForm';
+import { type MainDraftPreparation } from '../../../../packages/client-core/src/mainDrafts';
 
 const ids = Array.from({ length: 5 }, (_, i) => `00000000-0000-4000-8000-00000000000${i + 1}`);
+vi.mock('../features/contracts/HoldingProgress', () => ({
+  HoldingProgress: ({ current }: { current: number }) => <span>Bước {current + 1}/8</span>,
+}));
 const state = vi.hoisted(() => ({
   role: 'Staff',
   verified: false,
@@ -27,31 +31,50 @@ vi.mock('../features/contracts/HoldingNewTenant', () => ({
     onCreated,
     onConfirmed,
     onVerifiedSummary,
+    stage,
+    onContinue,
+    disabled,
   }: {
     initialResidentId?: string;
     onCreated: (id: string, name: string, email: string) => void;
     onConfirmed: () => void;
     onVerifiedSummary: (summary: { fullName: string; dateOfBirth: string }) => void;
+    stage: 'details' | 'identity';
+    onContinue: () => void;
+    disabled?: boolean;
   }) => (
     <div data-testid="applicant-form" data-resident={initialResidentId ?? ''}>
-      <button onClick={() => onCreated(ids[2], 'Người đăng ký mới', 'applicant@example.test')}>
-        Nhập người giữ chỗ mới
-      </button>
-      <button
-        onClick={() => {
-          state.verified = true;
-          onVerifiedSummary({ fullName: 'Họ tên đã xác minh', dateOfBirth: '1995-05-20' });
-          onConfirmed();
-        }}
-      >
-        Xác nhận CCCD từ backend
-      </button>
+      {stage === 'details' ? (
+        <button
+          disabled={disabled}
+          onClick={() => {
+            onCreated(ids[2], 'Người đăng ký mới', 'applicant@example.test');
+            onContinue();
+          }}
+        >
+          Tiếp tục
+        </button>
+      ) : (
+        <button
+          onClick={() => {
+            state.verified = true;
+            onVerifiedSummary({ fullName: 'Họ tên đã xác minh', dateOfBirth: '1995-05-20' });
+            onConfirmed();
+          }}
+        >
+          Xác nhận CCCD từ backend
+        </button>
+      )}
     </div>
   ),
 }));
 vi.mock('../lib/randomUUID', () => ({ randomUUID: () => '00000000-0000-4000-8000-000000000099' }));
 vi.mock('../theme/theme', () => ({ staffColors: {}, colors: {} }));
+vi.mock('expo-router', () => ({
+  useFocusEffect: (callback: () => void | (() => void)) => React.useEffect(callback, [callback]),
+}));
 vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => {} }) },
   StyleSheet: { create: (styles: unknown) => styles },
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -192,9 +215,36 @@ function makeApi(mutate = vi.fn().mockResolvedValue({ id: ids[0] })) {
     })),
   } as unknown as ContractClient;
 }
-function mount(api = makeApi(), created = vi.fn()) {
-  render(<ContractDraftForm api={api} onCancel={vi.fn()} onCreated={created} />);
-  return { api, created };
+function mount(
+  api = makeApi(),
+  created = vi.fn(),
+  prepare = vi.fn().mockImplementation(
+    async (input) =>
+      ({
+        roomId: input.roomId,
+        locationId: ids[0],
+        locationName: 'Cơ sở A',
+        roomNumber: 'P101',
+        address: 'Địa chỉ mẫu',
+        residents: [],
+        charges: [],
+        ownerName: 'Owner A',
+        effectiveOn: input.startDate,
+        securityDeposit: '1000000',
+        paymentTerms: 'Điều khoản đã cấu hình',
+        blockers: [],
+      }) as MainDraftPreparation,
+  ),
+) {
+  render(
+    <ContractDraftForm
+      api={api}
+      prepareDefaults={prepare}
+      onCancel={vi.fn()}
+      onCreated={created}
+    />,
+  );
+  return { api, created, prepare };
 }
 const continueButton = () => screen.getByRole('button', { name: 'Tiếp tục' });
 async function chooseRoom() {
@@ -202,33 +252,24 @@ async function chooseRoom() {
   fireEvent.change(screen.getByLabelText('Phòng giữ chỗ *'), { target: { value: ids[1] } });
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(continueButton());
-  expect(screen.getByText('Bước 2/3 · Người giữ chỗ')).toBeTruthy();
+  expect(screen.getByText(/2\/8/)).toBeTruthy();
 }
 async function confirmApplicant() {
   await chooseRoom();
-  fireEvent.click(screen.getByText('Nhập người giữ chỗ mới'));
+  fireEvent.click(continueButton());
+  expect(screen.getByText(/3\/8/)).toBeTruthy();
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(screen.getByText('Xác nhận CCCD từ backend'));
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(continueButton());
-  expect(screen.getByText('Bước 3/3 · Xác nhận')).toBeTruthy();
+  expect(screen.getByText(/4\/8/)).toBeTruthy();
 }
-function fillTerms() {
-  for (const [label, value] of [
-    ['Ngày dự kiến bắt đầu thuê (dd/MM/yyyy)', '01/12/2099'],
-    ['Ngày dự kiến kết thúc thuê (dd/MM/yyyy)', '01/12/2100'],
-    ['Ngày hết hạn giữ chỗ (dd/MM/yyyy)', '20/11/2099'],
-    ['Giờ hết hạn giữ chỗ (HH:mm, giờ Việt Nam)', '17:30'],
-    ['Cọc giữ chỗ (VND)', '1000000'],
-    ['Điều khoản đã thống nhất', 'Điều khoản đã thống nhất'],
-  ])
-    fireEvent.change(screen.getByLabelText(label), { target: { value } });
-}
-const submit = () => screen.getByRole('button', { name: 'Tạo hợp đồng giữ chỗ' });
+const submit = () =>
+  screen.getByRole('button', { name: 'Tạo hợp đồng giữ chỗ và tiếp tục bước 5' });
 it('starts at room selection without a duplicate header, refresh icon or location selector', async () => {
   const { api } = mount();
   await screen.findByText('P101 · Cơ sở A');
-  expect(screen.getByText('Bước 1/3 · Chọn phòng')).toBeTruthy();
+  expect(screen.getByText(/1\/8/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Tải lại lựa chọn' })).toBeNull();
   expect(screen.queryByLabelText('Cơ sở')).toBeNull();
@@ -248,7 +289,9 @@ it('loads preparation and readiness for the selected room/location, without any 
 it('requires the new applicant to be verified before continuing, but does not require a Tenant account', async () => {
   const { api } = mount();
   await chooseRoom();
-  fireEvent.click(screen.getByText('Nhập người giữ chỗ mới'));
+  expect(screen.queryByText('CCCD của người giữ chỗ')).toBeNull();
+  fireEvent.click(continueButton());
+  expect(screen.getByText('CCCD của người giữ chỗ')).toBeTruthy();
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(continueButton());
   expect(
@@ -258,78 +301,83 @@ it('requires the new applicant to be verified before continuing, but does not re
   fireEvent.click(screen.getByText('Xác nhận CCCD từ backend'));
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(continueButton());
-  expect(screen.getByText('Xác nhận thông tin giữ chỗ')).toBeTruthy();
+  expect(screen.getByText('Thông tin phòng')).toBeTruthy();
   expect(api.linkTenant).not.toHaveBeenCalled();
 });
-it('reviews verified name, email and birth date and retains the created profile when navigating back', async () => {
+it('reviews verified applicant data and keeps confirmation entirely read-only', async () => {
+  const { api, prepare } = mount();
+  await confirmApplicant();
+  expect(screen.getByText('Họ tên đã xác minh')).toBeTruthy();
+  expect(screen.getByText('applicant@example.test')).toBeTruthy();
+  expect(screen.getByText('20/05/1995')).toBeTruthy();
+  expect(screen.getByText('Đã xác minh')).toBeTruthy();
+  expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+  expect(screen.queryByText('Owner A')).toBeNull();
+  expect(screen.queryByText('Mẫu kỹ thuật không hiển thị')).toBeNull();
+  expect(screen.queryByRole('button', { name: /Chọn Ngày/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Xem mẫu hợp đồng' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Xem chi tiết' })).toBeNull();
+  expect(prepare).not.toHaveBeenCalled();
+  expect((submit() as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(submit());
+  expect(api.mutate).not.toHaveBeenCalled();
+});
+it('does not invent dates or money and does not query a date-dependent configuration without backend dates', async () => {
+  const { api, prepare } = mount();
+  await confirmApplicant();
+  expect(
+    screen.getByText('Chưa có thời hạn giữ chỗ từ hệ thống. Chưa thể tạo hợp đồng.'),
+  ).toBeTruthy();
+  expect(screen.getAllByText('Chưa có dữ liệu')).toHaveLength(3);
+  expect(screen.queryByText(/1 tháng|Tạm dùng|00:00/)).toBeNull();
+  expect(prepare).not.toHaveBeenCalled();
+  expect(api.mutate).not.toHaveBeenCalled();
+});
+
+it('uses the room location Holding quote for dates, deposit and configuration version without Main defaults', async () => {
+  const api = makeApi();
+  api.holdingPreparation = vi.fn().mockResolvedValue({
+    roomId: ids[1],
+    locationId: ids[0],
+    roomNumber: 'P101',
+    settingsVersion: 2,
+    holdingMonths: 2,
+    startDate: '2099-01-01',
+    endDate: '2099-03-01',
+    expiresAt: '2099-02-28T17:00:00Z',
+    monthlyRent: '3000000',
+    holdingDeposit: '1500000',
+    terms: 'Điều khoản giữ chỗ riêng',
+  });
+  const { prepare } = mount(api);
+  await confirmApplicant();
+  await waitFor(() => expect((submit() as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(submit());
+  await waitFor(() =>
+    expect(api.mutate).toHaveBeenCalledWith(
+      null,
+      'holdings',
+      expect.objectContaining({
+        holdingDeposit: '1500000',
+        startDate: '2099-01-01',
+        endDate: '2099-03-01',
+        expiresAt: '2099-02-28T17:00:00Z',
+        settingsVersion: 2,
+        terms: 'Điều khoản giữ chỗ riêng',
+      }),
+      expect.any(String),
+    ),
+  );
+  expect(prepare).not.toHaveBeenCalled();
+});
+it('retains the verified resident when returning from confirmation', async () => {
   mount();
   await confirmApplicant();
-  fillTerms();
-  expect(screen.getByText('Họ và tên người giữ chỗ: Họ tên đã xác minh')).toBeTruthy();
-  expect(screen.getByText('Email: applicant@example.test')).toBeTruthy();
-  expect(screen.getByText('Ngày sinh: 20/05/1995')).toBeTruthy();
-  expect(screen.getByText('Owner ký hợp đồng: Owner A')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   expect(screen.getByTestId('applicant-form').getAttribute('data-resident')).toBe(ids[2]);
   fireEvent.click(continueButton());
-  expect((screen.getByLabelText('Cọc giữ chỗ (VND)') as HTMLInputElement).value).toBe('1000000');
-});
-it('creates exactly one Holding draft with a real resident ID, tenantUserId=null and no identity fields added to the DTO', async () => {
-  const { api, created } = mount();
-  await confirmApplicant();
-  fillTerms();
-  const button = submit();
-  fireEvent.click(button);
-  fireEvent.click(button);
-  await waitFor(() => expect(created).toHaveBeenCalledWith(ids[0]));
-  expect(api.mutate).toHaveBeenCalledExactlyOnceWith(
-    null,
-    'holdings',
-    {
-      roomId: ids[1],
-      ownerSignerId: ids[4],
-      tenantUserId: null,
-      representativeResidentId: ids[2],
-      residentIds: [ids[2]],
-      startDate: '2099-12-01',
-      endDate: '2100-12-01',
-      terms: 'Điều khoản đã thống nhất',
-      holdingDeposit: '1000000',
-      expiresAt: '2099-11-20T10:30:00.000Z',
-      reservedCapacity: 1,
-    },
-    expect.any(String),
-  );
-});
-it('retains a real linked Tenant ID if backend preparation says the created resident has one', async () => {
-  state.linked = true;
-  const { api } = mount();
-  await confirmApplicant();
-  fillTerms();
-  fireEvent.click(submit());
-  await waitFor(() => expect(api.mutate).toHaveBeenCalled());
-  expect(vi.mocked(api.mutate).mock.calls[0][2]).toMatchObject({ tenantUserId: ids[3] });
-});
-it('blocks creating if readiness changes while filling the form', async () => {
-  const { api, created } = mount();
-  await confirmApplicant();
-  fillTerms();
-  vi.mocked(api.holdingRoomReady).mockResolvedValue(false);
-  fireEvent.click(submit());
-  await screen.findByText('Phòng không còn đủ điều kiện giữ chỗ. Vui lòng chọn lại phòng.');
-  expect(api.mutate).not.toHaveBeenCalled();
-  expect(created).not.toHaveBeenCalled();
-});
-it('retains the idempotency key on an uncertain retry', async () => {
-  const mutate = vi.fn().mockRejectedValueOnce({ status: 0 }).mockResolvedValueOnce({ id: ids[0] });
-  const { created } = mount(makeApi(mutate));
-  await confirmApplicant();
-  fillTerms();
-  fireEvent.click(submit());
-  await waitFor(() => expect((submit() as HTMLButtonElement).disabled).toBe(false));
-  fireEvent.click(submit());
-  await waitFor(() => expect(created).toHaveBeenCalledOnce());
-  expect(mutate.mock.calls[0][3]).toBe(mutate.mock.calls[1][3]);
+  expect(screen.getByText('Họ tên đã xác minh')).toBeTruthy();
+  expect((submit() as HTMLButtonElement).disabled).toBe(true);
 });
 it('does not choose arbitrarily when multiple signing Owners are returned', async () => {
   const api = makeApi();

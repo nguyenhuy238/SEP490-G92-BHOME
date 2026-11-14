@@ -23,7 +23,7 @@ vi.mock('../../../../packages/client-core/src/auth', () => ({
     client: { logout: state.logout },
   }),
 }));
-vi.mock('../services/config', () => ({ isMockMode: false }));
+vi.mock('../services/config', () => ({ isMockMode: false, apiBaseUrl: '' }));
 vi.mock('../features/auth/pages/LoginPage', () => ({
   LoginPage: () => <span>Login required</span>,
 }));

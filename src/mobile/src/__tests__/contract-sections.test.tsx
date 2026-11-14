@@ -12,15 +12,28 @@ const state = vi.hoisted(() => ({
   request: vi.fn(),
   contract: {} as Record<string, unknown>,
   readiness: null as Readiness | null,
+  back: vi.fn(),
+  headerBack: undefined as (() => void) | undefined,
   params: null as Record<string, string | undefined> | null,
 }));
 const id = 'bc050000-0000-4000-8000-000000004003';
+vi.mock('../features/contracts/HoldingProgress', () => ({ HoldingProgress: () => null }));
 const transport = { request: state.request };
 vi.mock('../theme/theme', () => ({ colors: {}, staffColors: {} }));
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () =>
     state.params ?? (state.deep ? { contractId: id, section: state.section } : {}),
-  router: { setParams: vi.fn() },
+  router: { setParams: vi.fn(), canGoBack: () => true, back: state.back },
+}));
+vi.mock('../components/WorkspaceHeaderContext', () => ({
+  useWorkspaceHeaderRefresh: (
+    _refresh: () => void,
+    _disabled: boolean,
+    options?: { onBack?: () => void },
+  ) => {
+    state.headerBack = options?.onBack;
+    return true;
+  },
 }));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({
@@ -185,6 +198,25 @@ beforeEach(() => {
   );
 });
 afterEach(cleanup);
+it('removes the duplicate detail back button and registers previous-screen navigation on the topbar', () => {
+  render(<ContractScreen />);
+  expect(screen.queryByRole('button', { name: 'Về danh sách hợp đồng' })).toBeNull();
+  expect(state.headerBack).toBeTypeOf('function');
+  state.headerBack!();
+  expect(state.back).toHaveBeenCalledOnce();
+});
+
+it('opens a Holding draft with metadata in the Holding flow without Main handover tabs', () => {
+  state.contract.kind = 'Holding';
+  state.contract.status = 'Draft';
+  state.contract.onboardingDraft = true;
+  state.contract.signingMode = 'INTERNAL_OTP_DRAWN';
+  render(<ContractScreen />);
+  expect(screen.getByText('Chờ Owner phê duyệt')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Bàn giao' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Gia hạn & trả phòng' })).toBeNull();
+  expect(screen.queryByText('Chữ ký số qua MySign')).toBeNull();
+});
 it('uses the Owner route after list navigation and clears a persisted draft when route IDs are emptied', async () => {
   state.role = 'Owner';
   state.params = {};
@@ -228,14 +260,14 @@ it('allows Owner to approve a Holding draft while Staff cannot approve, verify d
   state.contract.holdingExpiresAt = '2099-12-01T00:00:00Z';
   state.role = 'Owner';
   const view = render(<ContractScreen />);
-  fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ký hợp đồng' }));
   expect(screen.getByRole('button', { name: 'Phê duyệt hợp đồng giữ chỗ' })).toBeTruthy();
   expect(screen.queryByText('Thực hiện trên Owner Web')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Xác minh cọc ngân hàng' })).toBeNull();
   view.unmount();
   state.role = 'Staff';
   render(<ContractScreen />);
-  fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ký hợp đồng' }));
   expect(screen.queryByRole('button', { name: 'Phê duyệt hợp đồng giữ chỗ' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Kích hoạt giữ chỗ' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Xác minh cọc ngân hàng' })).toBeNull();
@@ -253,7 +285,7 @@ it.each([true, false])('gates Holding activation on backend readiness=%s', (read
     blockers: ready ? [] : ['verified_signature_evidence_required'],
   };
   render(<ContractScreen />);
-  fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ký hợp đồng' }));
   expect(
     (screen.getByRole('button', { name: 'Kích hoạt giữ chỗ' }) as HTMLButtonElement).disabled,
   ).toBe(!ready);
@@ -263,7 +295,7 @@ it('preserves Staff conversion for an active unexpired Holding contract', () => 
   state.contract.status = 'Active';
   state.contract.holdingExpiresAt = '2099-12-01T00:00:00Z';
   render(<ContractScreen />);
-  fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ký hợp đồng' }));
   expect(screen.getByRole('button', { name: 'Chuyển sang hợp đồng thuê chính' })).toBeTruthy();
 });
 it('lets Owner open holding configuration directly and return to the contract list', () => {

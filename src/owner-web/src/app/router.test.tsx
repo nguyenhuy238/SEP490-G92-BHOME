@@ -9,7 +9,7 @@ import { AppRouter } from './router';
 import { portalRoutes } from './routePaths';
 import { demoAuth, DEMO_USER, DEMO_PASSWORD } from '../services/demoAuth';
 import { theme } from '../theme/theme';
-vi.mock('../services/config', () => ({ isMockMode: true }));
+vi.mock('../services/config', () => ({ isMockMode: true, apiBaseUrl: '' }));
 // jsdom has no physical chart/grid layout; behavioral smoke tests do not assert pixels.
 vi.mock('recharts', async () => {
   const real = await vi.importActual<typeof import('recharts')>('recharts');

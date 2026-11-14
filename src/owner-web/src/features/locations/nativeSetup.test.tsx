@@ -34,7 +34,7 @@ vi.mock('../configuration/useSharedConfigurationApi', () => ({
       <T,>(path: string, init?: RequestInit) => state.request(path, init) as Promise<T>,
     ),
 }));
-vi.mock('../../services/config', () => ({ isMockMode: false }));
+vi.mock('../../services/config', () => ({ isMockMode: false, apiBaseUrl: '' }));
 vi.mock('../../app/PortalProvider', () => ({
   usePortal: () => ({ notify: vi.fn(), locationId: 'all' }),
 }));

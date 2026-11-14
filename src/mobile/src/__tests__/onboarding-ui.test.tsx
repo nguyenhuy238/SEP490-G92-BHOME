@@ -84,6 +84,21 @@ vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('expo-status-bar', () => ({ StatusBar: () => null }));
+vi.mock('react-native-paper-dates', () => ({
+  registerTranslation: vi.fn(),
+  DatePickerModal: ({
+    onConfirm,
+    onDismiss,
+  }: {
+    onConfirm: (params: { date: Date }) => void;
+    onDismiss: () => void;
+  }) => (
+    <div role="dialog" aria-label="Lịch chọn ngày">
+      <button onClick={() => onConfirm({ date: new Date(2000, 0, 1) })}>Chọn ngày mẫu</button>
+      <button onClick={onDismiss}>Đóng lịch</button>
+    </div>
+  ),
+}));
 vi.mock('react-native-paper', () => ({
   MD3LightTheme: { colors: {} },
   configureFonts: () => ({}),
@@ -479,6 +494,26 @@ function manualIdentity() {
     fireEvent.change(screen.getByRole('textbox', { name: label }), { target: { value } });
   }
 }
+it('opens a calendar for each CCCD date and applies selections without confirming the identity', async () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  namePerson('Người mẫu chọn ngày');
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+  await openIdentity();
+  manualIdentity();
+  for (const label of [
+    'Ngày sinh (dd/MM/yyyy)',
+    'Ngày cấp (dd/MM/yyyy)',
+    'Ngày hết hạn (dd/MM/yyyy)',
+  ]) {
+    fireEvent.click(screen.getByRole('button', { name: `Chọn ${label}` }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn ngày mẫu' }));
+    expect((screen.getByRole('textbox', { name: label }) as HTMLInputElement).value).toBe(
+      '01/01/2000',
+    );
+  }
+  expect(state.json.mock.calls.some(([path]) => String(path).endsWith('/confirm'))).toBe(false);
+});
 it('gates mandatory steps and retains room and multiple people when navigating back', () => {
   render(<OnboardingScreen />);
   expect(screen.queryByRole('combobox', { name: 'Cơ sở được phân công *' })).toBeNull();

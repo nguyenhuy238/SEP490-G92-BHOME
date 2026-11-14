@@ -10,9 +10,9 @@ namespace BHome.Api.Controllers;
 [EnableRateLimiting("Auth")]
 public sealed class AnonymousContractSigningController(AnonymousContractSigningService service) : ControllerBase
 {
-    [HttpGet("api/v1/contracts/{id:guid}/internal-signing"), Authorize(Roles = Roles.Owner)]
+    [HttpGet("api/v1/contracts/{id:guid}/internal-signing"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<InternalSigningStatus> Status(Guid id, CancellationToken t) => service.StatusAsync(id, t);
-    [HttpPost("api/v1/contracts/{id:guid}/signing-invitations"), Authorize(Roles = Roles.Owner)]
+    [HttpPost("api/v1/contracts/{id:guid}/signing-invitations"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<SigningInvitationResult> Invite(Guid id, SigningInvitationInput input, CancellationToken t) => service.InviteAsync(id, input, t);
     [HttpDelete("api/v1/contracts/{id:guid}/signing-invitations/{invitationId:guid}"), Authorize(Roles = Roles.Owner)]
     public async Task<IActionResult> Revoke(Guid id, Guid invitationId, CancellationToken t)

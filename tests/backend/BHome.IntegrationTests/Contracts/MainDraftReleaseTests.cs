@@ -17,10 +17,17 @@ namespace BHome.IntegrationTests.Contracts;
 
 public sealed partial class MainDraftApiTests
 {
-    private WebApplicationFactory<Program> ReleaseHost()
+    private WebApplicationFactory<Program> ReleaseHost(Guid location)
     {
         var settings = fixture.Factory.Services.GetRequiredService<IConfiguration>().GetSection("IdentityProtection").AsEnumerable().ToDictionary(x => x.Key, x => x.Value);
         settings["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local"; settings["ContractWorkflow:SimulatedSigningEnabled"] = "true";
+        settings["SePay:Enabled"] = "true";
+        settings["SePay:Mode"] = "Test";
+        settings["SePay:WebhookSecret"] = "synthetic-release-webhook-secret-not-a-real-key";
+        settings["SePay:ReceivingAccounts:0:LocationId"] = location.ToString();
+        settings["SePay:ReceivingAccounts:0:BankIdentifier"] = "970416";
+        settings["SePay:ReceivingAccounts:0:Gateway"] = "ACB";
+        settings["SePay:ReceivingAccounts:0:AccountNumber"] = "0000000001";
         return fixture.Factory.WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings));
@@ -39,7 +46,7 @@ public sealed partial class MainDraftApiTests
     public async Task ReviewedMainDraftReleasesOnceAndBothPartiesUseTheSamePdfThroughSimulatedActivation()
     {
         var w = await Setup(); var tenant = await User("Tenant"); var outside = await User("Tenant");
-        await using var host = ReleaseHost(); using var staff = InHost(host, w.Staff); using var owner = InHost(host, w.Owner); using var signer = InHost(host, tenant.Client); using var stranger = InHost(host, outside.Client);
+        await using var host = ReleaseHost(w.Location); using var staff = InHost(host, w.Staff); using var owner = InHost(host, w.Owner); using var signer = InHost(host, tenant.Client); using var stranger = InHost(host, outside.Client);
         await using (var seed = host.Services.CreateAsyncScope())
         {
             var resident = await seed.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Set<Resident>().SingleAsync(r => r.Id == w.Resident);
@@ -81,6 +88,58 @@ public sealed partial class MainDraftApiTests
         }
         using (var deposit = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/contracts/{draft.Id}/deposit-verifications") { Content = JsonContent.Create(new DepositInput("SYNTHETIC-RELEASE-" + Guid.NewGuid(), 6200000, "Synthetic bank statement confirmed")) })
         { deposit.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString()); await Success(await owner.SendAsync(deposit)); }
+        // The Compact24 checkout must settle initial rent as well as the security deposit.
+        await using (var paymentScope = host.Services.CreateAsyncScope())
+        {
+            var paymentDb = paymentScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            if (paymentDb is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            {
+                using var unpaid = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/contracts/{draft.Id}/activate") { Content = JsonContent.Create(new { }) };
+                unpaid.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+                Assert.Equal(HttpStatusCode.Conflict, (await owner.SendAsync(unpaid)).StatusCode);
+                paymentDb.Add(new BHome.Domain.PaymentsDebt.ReceivingBankAccount
+                {
+                    LocationId = w.Location,
+                    BankIdentifier = "970416",
+                    AccountNumber = "0000000001",
+                    AccountHolder = "SYNTHETIC TEST",
+                    Enabled = true,
+                    IsDevelopmentDemo = true,
+                    Version = 1,
+                    ConfirmedByUserId = w.OwnerId,
+                    ConfirmedAt = DateTimeOffset.UtcNow
+                });
+                await paymentDb.SaveChangesAsync();
+                var qrResponse = await owner.PostAsync($"/api/v1/contracts/{draft.Id}/initial-payment/transfer-instructions", null);
+                await Success(qrResponse);
+                var quote = (await qrResponse.Content.ReadFromJsonAsync<BHome.Application.PaymentsDebt.MainInitialPaymentView>())!;
+                Assert.Equal(3100000, quote.OutstandingAmount);
+                var body = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    id = Guid.NewGuid().ToString(),
+                    gateway = "ACB",
+                    transactionDate = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                    accountNumber = "0000000001",
+                    transferType = "in",
+                    transferAmount = quote.OutstandingAmount,
+                    code = quote.TransferReference,
+                    content = "Synthetic transfer " + quote.TransferReference,
+                    referenceCode = "SYNTHETIC-INITIAL-" + Guid.NewGuid(),
+                    subAccount = "",
+                    description = "Synthetic",
+                    accumulated = quote.OutstandingAmount
+                });
+                using var webhook = new HttpRequestMessage(HttpMethod.Post, "/api/v1/integrations/sepay/webhook")
+                { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+                var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var digest = System.Security.Cryptography.HMACSHA256.HashData(System.Text.Encoding.UTF8.GetBytes("synthetic-release-webhook-secret-not-a-real-key"), System.Text.Encoding.UTF8.GetBytes(timestamp + "." + body));
+                webhook.Headers.Add("X-SePay-Timestamp", timestamp);
+                webhook.Headers.Add("X-SePay-Signature", "sha256=" + Convert.ToHexString(digest));
+                using var anonymous = host.CreateClient();
+                await Success(await anonymous.SendAsync(webhook));
+                Assert.True(await paymentScope.ServiceProvider.GetRequiredService<BHome.Application.PaymentsDebt.IMainInitialPaymentLedger>().SatisfiedAsync(draft.Id, default));
+            }
+        }
         using (var activate = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/contracts/{draft.Id}/activate") { Content = JsonContent.Create(new { }) })
         { activate.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString()); await Success(await owner.SendAsync(activate)); }
         var active = (await signer.GetFromJsonAsync<ContractView>($"/api/v1/contracts/{draft.Id}"))!; Assert.Equal("Active", active.Status);
@@ -95,7 +154,7 @@ public sealed partial class MainDraftApiTests
     public async Task ReleaseRejectsStaleReviewTamperingAndProductionSampleTemplate()
     {
         var w = await Setup(); var tenant = await User("Tenant");
-        await using var host = ReleaseHost(); using var owner = InHost(host, w.Owner); using var staff = InHost(host, w.Staff);
+        await using var host = ReleaseHost(w.Location); using var owner = InHost(host, w.Owner); using var staff = InHost(host, w.Staff);
         var draft = await Save(w with { Staff = staff });
         var response = await staff.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(response); var review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;
         await using (var scope = host.Services.CreateAsyncScope())
@@ -117,7 +176,7 @@ public sealed partial class MainDraftApiTests
     public async Task ReleaseCannotAssignAnUnrelatedAccountToAnUnlinkedVerifiedResident(bool verifyInternalRelease)
     {
         var w = await Setup(); var unrelated = await User("Tenant");
-        await using var host = ReleaseHost(); using var owner = InHost(host, w.Owner); using var staff = InHost(host, w.Staff);
+        await using var host = ReleaseHost(w.Location); using var owner = InHost(host, w.Owner); using var staff = InHost(host, w.Staff);
         var draft = await Save(w with { Staff = staff });
         var response = await owner.PostAsync($"{Root}/{draft.Id}/signing-review", null); await Success(response);
         var review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;

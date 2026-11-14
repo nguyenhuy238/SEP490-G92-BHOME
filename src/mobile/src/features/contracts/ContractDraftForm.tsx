@@ -1,6 +1,6 @@
 import { conciseMessage } from '../../lib/toast';
 import { useFeedbackState } from '../../lib/useFeedbackState';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
@@ -12,20 +12,18 @@ import {
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
 import { useHoldingPreparation } from './useHoldingPreparation';
-import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
-import { ChoiceField, Input } from '../../components/WorkflowControls';
-import { ContractDateField } from '../../components/ContractDateField';
+import { Box, Heading, ui } from '../../components/WorkspaceKit';
+import { ChoiceField } from '../../components/WorkflowControls';
+import { mainDraftClient } from '../../../../../packages/client-core/src/mainDrafts';
+import type { HoldingPreparation } from '../../../../../packages/client-core/src/holdingSettings';
+import { HoldingConfirmationSummary } from './HoldingConfirmationSummary';
+import { WorkspaceFooter } from '../../components/WorkspaceFooter';
+import { useWorkspaceHeaderRefresh } from '../../components/WorkspaceHeaderContext';
 import { showSuccess } from '../../lib/toast';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { HoldingNewTenant } from './HoldingNewTenant';
-import { OnboardingStepper } from '../../components/OnboardingStepper';
+import { HoldingProgress } from './HoldingProgress';
 import { staffColors } from '../../theme/theme';
-
-const holdingSteps = [
-  { key: 'room', label: 'Chọn phòng' },
-  { key: 'applicant', label: 'Người giữ chỗ' },
-  { key: 'confirm', label: 'Xác nhận' },
-] as const;
 
 export function ContractDraftForm({
   api,
@@ -37,9 +35,16 @@ export function ContractDraftForm({
   onCancel: () => void;
   onCreated: (id: string) => void;
   initialRoomId?: string;
+  prepareDefaults?: ReturnType<typeof mainDraftClient>['prepare'];
 }) {
   const { role } = useWorkspace();
   const [values, setValues] = useState<Record<string, string>>({ roomId: initialRoomId });
+  const [defaults, setDefaults] = useState<{
+    key: string;
+    data?: HoldingPreparation;
+    error?: string;
+  }>({ key: '' });
+  const [defaultsRevision, setDefaultsRevision] = useState(0);
   const [step, setStep] = useState(0),
     [busy, setBusy] = useState(false),
     [error, setError] = useFeedbackState();
@@ -64,8 +69,39 @@ export function ContractDraftForm({
     id: item.id,
     label: `${item.label} · ${query.data?.locations.find((location) => location.id === item.locationId)?.label ?? ''}`,
   }));
-  const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));
   const roomValid = !!room && !!p && !query.loading && !query.error;
+  const preparationAvailable = typeof api.holdingPreparation === 'function';
+  const defaultsKey = `${values.roomId}:${defaultsRevision}`;
+  useEffect(() => {
+    if (step !== 3 || !values.roomId || !api.holdingPreparation) return;
+    const controller = new AbortController();
+    let active = true;
+    void api
+      .holdingPreparation(values.roomId, controller.signal)
+      .then((data) => {
+        if (!active) return;
+        if (data.roomId !== values.roomId || data.locationId !== room?.locationId)
+          throw new Error('Cấu hình trả về không khớp phòng hoặc ngày giữ chỗ.');
+        setDefaults({ key: defaultsKey, data });
+      })
+      .catch((e) => {
+        if (active) setDefaults({ key: defaultsKey, error: contractError(e) });
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [step, values.roomId, room?.locationId, api, defaultsKey]);
+  const configured = defaults.key === defaultsKey ? defaults.data : undefined;
+  const defaultsError = defaults.key === defaultsKey ? defaults.error : undefined;
+  const defaultsReady =
+    !!configured && /^(0|[1-9]\d*)$/.test(configured.holdingDeposit) && !!configured.terms?.trim();
+  let datesReady = false;
+  try {
+    datesReady = dateOnly(configured?.endDate ?? '') > dateOnly(configured?.startDate ?? '');
+  } catch {
+    /* Missing configuration must not produce invented dates. */
+  }
   function validateSelection() {
     if (query.loading || query.error || !room) throw new Error('Chọn phòng giữ chỗ hợp lệ.');
     if (!representative)
@@ -79,19 +115,29 @@ export function ContractDraftForm({
     let body;
     try {
       validateSelection();
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(values.expiryTime ?? ''))
-        throw new Error('Giờ hết hạn phải theo định dạng HH:mm (00:00–23:59).');
-      body = holdingDraftPayload(
-        {
-          ...values,
-          roomId: room!.id,
-          locationId: room!.locationId,
-          ownerSignerId: owner!.id,
-          tenantUserId: representative!.tenantUserId ?? '',
-          expiresAt: `${dateOnly(values.expiryDate ?? '')}T${values.expiryTime ?? ''}`,
-        },
-        [representative!.id],
-      );
+      if (!datesReady)
+        throw new Error('Chưa có thời hạn giữ chỗ từ hệ thống. Chưa thể tạo hợp đồng.');
+      if (!defaultsReady)
+        throw new Error('Chưa có đầy đủ cấu hình tiền cọc và điều khoản cho cơ sở này.');
+      body = {
+        ...holdingDraftPayload(
+          {
+            ...values,
+            startDate: configured!.startDate,
+            endDate: configured!.endDate,
+            requiredDeposit: configured!.holdingDeposit,
+            terms: configured!.terms,
+            roomId: room!.id,
+            locationId: room!.locationId,
+            ownerSignerId: owner!.id,
+            tenantUserId: representative!.tenantUserId ?? '',
+            expiresAt: `${configured!.endDate}T00:00`,
+          },
+          [representative!.id],
+        ),
+        settingsVersion: configured!.settingsVersion,
+        expiresAt: configured!.expiresAt,
+      };
       if (Date.parse(body.expiresAt) <= Date.now())
         throw new Error('Hạn giữ chỗ phải ở tương lai.');
     } catch (e) {
@@ -132,31 +178,35 @@ export function ContractDraftForm({
   function next() {
     try {
       if (!roomValid) throw new Error('Chọn phòng giữ chỗ hợp lệ.');
-      if (step === 1) validateSelection();
+      if (step === 2) {
+        validateSelection();
+        setDefaults({ key: '' });
+      }
       setError('');
       setStep((value) => value + 1);
     } catch (e) {
       setError((e as Error).message);
     }
   }
+  const customHeader = useWorkspaceHeaderRefresh(query.reload, busy || query.loading, {
+    title: 'Tạo hợp đồng giữ chỗ',
+    onBack: back,
+  });
   return (
     <>
-      <Heading title="Tạo hợp đồng giữ chỗ" detail="Chọn phòng và nhập thông tin người giữ chỗ." />
-      <OnboardingStepper
-        steps={holdingSteps}
-        current={step}
-        completed={holdingSteps.slice(0, step).map((item) => item.key)}
-      />
+      <View style={{ gap: 4 }}>
+        {!customHeader && <Text style={styles.screenTitle}>Tạo hợp đồng giữ chỗ</Text>}
+        <Text style={styles.description}>Nhập thông tin để lập hợp đồng giữ chỗ</Text>
+      </View>
+      <HoldingProgress current={step} />
       <Box style={styles.panel}>
         {step === 0 && (
           <>
-            <Heading
-              title="Chọn phòng giữ chỗ"
-              detail="Chọn phòng còn trống và đủ điều kiện giữ chỗ."
-            />
+            <Heading title="Chọn phòng giữ chỗ" detail="Chọn phòng còn trống để bắt đầu." />
             <ChoiceField
               label="Phòng giữ chỗ *"
-              placeholder="Chọn phòng..."
+              placeholder="Chọn phòng còn trống"
+              icon="door-open"
               searchable
               value={values.roomId ?? ''}
               options={roomOptions}
@@ -173,29 +223,66 @@ export function ContractDraftForm({
                 setError('');
               }}
             />
+            {room && !query.loading && (
+              <View style={styles.roomSummary}>
+                <Text style={styles.screenTitle}>{room.label}</Text>
+                <Text style={styles.description}>
+                  {query.data?.locations.find((item) => item.id === room.locationId)?.label}
+                </Text>
+                <Text style={styles.description}>
+                  {roomValid
+                    ? 'Phòng đủ điều kiện · Có thể tiếp tục'
+                    : 'Đang kiểm tra điều kiện giữ chỗ'}
+                </Text>
+              </View>
+            )}
             {query.loading && (
               <ActivityIndicator accessibilityLabel="Đang kiểm tra phòng giữ chỗ" />
             )}
             {!query.loading && !query.error && !roomOptions.length && (
-              <Text>Chưa có phòng trống đủ điều kiện giữ chỗ.</Text>
+              <View style={{ gap: 8 }}>
+                <Text>
+                  {query.data?.blockedRooms.length
+                    ? `Có ${query.data.blockedRooms.length} phòng trống nhưng chưa đủ điều kiện giữ chỗ.`
+                    : 'Chưa có phòng trống đủ điều kiện giữ chỗ.'}
+                </Text>
+                {query.data?.blockedRooms.slice(0, 5).map((item) => (
+                  <Text key={item.id} style={styles.description}>
+                    {item.label}:{' '}
+                    {item.codes.includes('RENT_POLICY_MISSING')
+                      ? 'Chưa cấu hình giá thuê. Owner cần cập nhật giá phòng.'
+                      : 'Owner cần kiểm tra điều kiện giữ chỗ của phòng.'}
+                  </Text>
+                ))}
+                <Button disabled={query.loading} onPress={query.reload}>
+                  Kiểm tra lại phòng
+                </Button>
+              </View>
             )}
           </>
         )}
-        {step === 1 && (
+        {(step === 1 || step === 2) && (
           <>
             <Heading
-              title="Thông tin người giữ chỗ"
-              detail="Nhập thông tin của người đăng ký giữ chỗ."
+              title={step === 1 ? 'Thông tin người giữ chỗ' : 'CCCD của người giữ chỗ'}
+              detail={
+                step === 1
+                  ? 'Nhập thông tin của người đăng ký giữ chỗ.'
+                  : 'Quét CCCD hoặc nhập thủ công, sau đó kiểm tra và xác nhận thông tin.'
+              }
             />
             {!!room && (
               <HoldingNewTenant
-                key={room.id}
+                key={`${room.id}:${step}`}
                 api={api}
                 roomId={room.id}
                 role={role ?? ''}
                 context="holding"
+                stage={step === 1 ? 'details' : 'identity'}
+                disabled={busy || !roomValid || !owner}
+                onContinue={() => setStep(2)}
                 initialResidentId={values.representativeResidentId}
-                initialName={values.tenantName}
+                initialName={values.applicantFullName || values.tenantName}
                 initialEmail={values.tenantEmail}
                 initialConfirmed={!!representative?.verified}
                 onCreated={(id, name, email) => {
@@ -220,54 +307,42 @@ export function ContractDraftForm({
             )}
           </>
         )}
-        {step === 2 && (
+        {step === 3 && (
           <>
-            <Heading
-              title="Xác nhận thông tin giữ chỗ"
-              detail="Kiểm tra thông tin trước khi tạo hợp đồng giữ chỗ."
+            <HoldingConfirmationSummary
+              location={query.data?.locations.find((item) => item.id === room?.locationId)?.label}
+              room={room?.label}
+              name={values.applicantFullName || values.tenantName}
+              email={values.tenantEmail}
+              birthDate={values.applicantDateOfBirth}
+              verified={!!representative?.verified}
+              deposit={configured?.holdingDeposit}
+              startDate={configured?.startDate}
+              endDate={configured?.endDate}
+              terms={configured?.terms}
             />
-            <View style={styles.summary}>
-              <Text variant="titleMedium">Phòng giữ chỗ: {room?.label ?? 'Chưa chọn'}</Text>
-              <Text>
-                Cơ sở:{' '}
-                {query.data?.locations.find((item) => item.id === room?.locationId)?.label ??
-                  'Chưa xác định'}
+            {!datesReady && (
+              <Text accessibilityRole="alert" style={ui.red}>
+                Chưa có thời hạn giữ chỗ từ hệ thống. Chưa thể tạo hợp đồng.
               </Text>
-              <Text>Họ và tên người giữ chỗ: {values.applicantFullName || values.tenantName}</Text>
-              <Text>Email: {values.tenantEmail}</Text>
-              {!!values.applicantDateOfBirth && (
-                <Text>Ngày sinh: {values.applicantDateOfBirth.split('-').reverse().join('/')}</Text>
-              )}
-              {representative?.verified && <Text>Thông tin CCCD: Đã xác minh</Text>}
-              {owner && <Text>Owner ký hợp đồng: {owner.label}</Text>}
-            </View>
-            {[
-              ['startDate', 'Ngày dự kiến bắt đầu thuê (dd/MM/yyyy)'],
-              ['endDate', 'Ngày dự kiến kết thúc thuê (dd/MM/yyyy)'],
-              ['expiryDate', 'Ngày hết hạn giữ chỗ (dd/MM/yyyy)'],
-              ['expiryTime', 'Giờ hết hạn giữ chỗ (HH:mm, giờ Việt Nam)'],
-              ['requiredDeposit', 'Cọc giữ chỗ (VND)'],
-              ['terms', 'Điều khoản đã thống nhất'],
-            ].map(([name, label]) =>
-              ['startDate', 'endDate', 'expiryDate'].includes(name) ? (
-                <ContractDateField
-                  key={name}
-                  label={label}
-                  value={values[name] ?? ''}
-                  disabled={busy}
-                  onChange={(value) => set(name, value)}
-                />
-              ) : (
-                <Input
-                  key={name}
-                  label={label}
-                  value={values[name] ?? ''}
-                  disabled={busy}
-                  money={name === 'requiredDeposit'}
-                  multiline={name === 'terms'}
-                  onChange={(value) => set(name, value)}
-                />
-              ),
+            )}
+            {preparationAvailable && !configured && !defaultsError && (
+              <ActivityIndicator accessibilityLabel="Đang lấy cấu hình giữ chỗ" />
+            )}
+            {!!defaultsError && (
+              <Text accessibilityRole="alert" style={ui.red}>
+                {defaultsError}
+              </Text>
+            )}
+            {(!!defaultsError || (!!configured && !defaultsReady) || !preparationAvailable) && (
+              <>
+                <Text accessibilityRole="alert" style={ui.red}>
+                  Chưa có đủ cấu hình giữ chỗ. Vui lòng kiểm tra cấu hình cơ sở.
+                </Text>
+                <Button disabled={busy} onPress={() => setDefaultsRevision((value) => value + 1)}>
+                  Tải lại cấu hình
+                </Button>
+              </>
             )}
           </>
         )}
@@ -291,28 +366,79 @@ export function ContractDraftForm({
             {error}
           </Text>
         )}
-        {step < 2 ? (
-          <Action disabled={busy || !roomValid || (step === 1 && !owner)} onPress={next}>
-            Tiếp tục
-          </Action>
-        ) : (
-          <Action
-            disabled={busy || query.loading || !!query.error || !owner}
-            onPress={() => void save()}
-          >
-            {busy ? 'Đang tạo…' : 'Tạo hợp đồng giữ chỗ'}
-          </Action>
-        )}
-        {step > 0 && (
-          <Button disabled={busy} onPress={back}>
-            Quay lại
-          </Button>
-        )}
       </Box>
+      {step < 3 && step !== 1 && (
+        <WorkspaceFooter>
+          <View style={styles.footer}>
+            <Button
+              mode="contained"
+              icon="arrow-right"
+              buttonColor={staffColors.navy}
+              style={{ borderRadius: 12 }}
+              contentStyle={{ minHeight: 50, flexDirection: 'row-reverse' }}
+              disabled={busy || !roomValid || (step === 2 && !owner)}
+              onPress={next}
+            >
+              Tiếp tục
+            </Button>
+            {step > 0 && (
+              <Button disabled={busy} onPress={back}>
+                Quay lại
+              </Button>
+            )}
+          </View>
+        </WorkspaceFooter>
+      )}
+      {step === 1 && (
+        <Button disabled={busy} onPress={back}>
+          Quay lại
+        </Button>
+      )}
+      {step === 3 && (
+        <WorkspaceFooter>
+          <View style={styles.footer}>
+            <Button
+              mode="contained"
+              buttonColor={staffColors.navy}
+              loading={busy}
+              disabled={
+                busy || query.loading || !!query.error || !owner || !defaultsReady || !datesReady
+              }
+              onPress={() => void save()}
+              contentStyle={styles.footerButton}
+              labelStyle={styles.buttonLabel}
+              style={{ borderRadius: 10 }}
+            >
+              Tạo hợp đồng giữ chỗ và tiếp tục bước 5
+            </Button>
+            <Button
+              mode="text"
+              disabled={busy}
+              onPress={back}
+              contentStyle={styles.footerButton}
+              labelStyle={styles.buttonLabel}
+            >
+              Quay lại
+            </Button>
+          </View>
+        </WorkspaceFooter>
+      )}
     </>
   );
 }
 const styles = StyleSheet.create({
-  panel: { borderRadius: 16, padding: 16, gap: 16 },
-  summary: { padding: 12, borderRadius: 12, backgroundColor: staffColors.blueSoft, gap: 4 },
+  panel: { borderRadius: 16, padding: 16, gap: 12, marginBottom: 8, backgroundColor: '#FFFFFF' },
+  description: { fontSize: 14, color: '#52647A' },
+  roomSummary: { backgroundColor: '#F5F7FB', borderRadius: 14, padding: 12, gap: 8 },
+  screenTitle: { color: staffColors.navy, fontSize: 18, fontWeight: '600' },
+  footer: {
+    backgroundColor: '#FFFFFF',
+    borderTopColor: '#E2E8F0',
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  footerButton: { minHeight: 48 },
+  buttonLabel: { fontSize: 14, fontWeight: '600' },
 });

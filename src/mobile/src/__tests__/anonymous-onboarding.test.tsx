@@ -129,60 +129,73 @@ it('sets a new password through the same anonymous backend endpoint and waits fo
   });
   expect(new Headers(fetch.mock.calls[0]![1].headers).has('Authorization')).toBe(false);
 });
-it('reads the OTP-gated PDF then submits explicit consent and real drawn points without a login', async () => {
-  const fetch = vi.fn().mockImplementation((path: string) => {
-    if (path.endsWith('/info'))
-      return Promise.resolve(json({ maskedEmail: 's***@example.invalid', accepted: false }));
-    if (path.endsWith('/verify'))
-      return Promise.resolve(
-        json({
-          session: 'B'.repeat(64),
-          documentHash: 'HASH',
-          consentVersion: 'internal-acceptance-v1',
-        }),
-      );
-    if (path.endsWith('/layout'))
-      return Promise.resolve(json({ pages: [{ width: 595, height: 842 }] }));
-    if (path.endsWith('/pages/1'))
-      return Promise.resolve(new Response(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])));
-    return Promise.resolve(new Response(null, { status: 204 }));
-  });
-  vi.stubGlobal('fetch', fetch);
-  render(<AnonymousSigningScreen />);
-  fireEvent.change(screen.getByLabelText('Liên kết lời mời ký'), {
-    target: { value: 'https://web.example.invalid/contract-signing#token=' + token },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Mở lời mời' }));
-  await screen.findByText(/s\*\*\*@example.invalid/);
-  expect(screen.queryByText('Trang hợp đồng 1')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi mã OTP' }));
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Gửi mã OTP' })).not.toHaveProperty('disabled', true),
-  );
-  fireEvent.change(screen.getByLabelText('Mã OTP 6 chữ số'), { target: { value: '123456' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Xác minh và xem hợp đồng' }));
-  await screen.findByText('Trang hợp đồng 1');
-  expect(
-    (screen.getByRole('button', { name: 'Chấp thuận hợp đồng' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
-  fireEvent.pointerDown(screen.getByLabelText('Khung vẽ chữ ký'));
-  fireEvent.pointerMove(screen.getByLabelText('Khung vẽ chữ ký'));
-  fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button', { name: 'Chấp thuận hợp đồng' }));
-  await screen.findByText(/Đã ghi nhận chấp thuận/);
-  const acceptance = fetch.mock.calls.find((c) => c[0].endsWith('/accept'))!;
-  expect(JSON.parse(acceptance[1].body)).toMatchObject({
-    token,
-    documentHash: 'HASH',
-    consent: true,
-    strokes: [
-      [
-        { x: 0.1, y: 20 / 180 },
-        { x: 0.7, y: 70 / 180 },
+it.each([true, false])(
+  'reads the OTP-gated PDF and only shows success when backend acceptance is %s',
+  async (backendAccepted) => {
+    let accepted = false;
+    const fetch = vi.fn().mockImplementation((path: string) => {
+      if (path.endsWith('/info'))
+        return Promise.resolve(json({ maskedEmail: 's***@example.invalid', accepted }));
+      if (path.endsWith('/accept')) accepted = backendAccepted;
+      if (path.endsWith('/verify'))
+        return Promise.resolve(
+          json({
+            session: 'B'.repeat(64),
+            documentHash: 'HASH',
+            consentVersion: 'internal-acceptance-v1',
+          }),
+        );
+      if (path.endsWith('/layout'))
+        return Promise.resolve(json({ pages: [{ width: 595, height: 842 }] }));
+      if (path.endsWith('/pages/1'))
+        return Promise.resolve(new Response(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])));
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+    vi.stubGlobal('fetch', fetch);
+    render(<AnonymousSigningScreen />);
+    fireEvent.change(screen.getByLabelText('Liên kết lời mời ký'), {
+      target: { value: 'https://web.example.invalid/contract-signing#token=' + token },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Mở lời mời' }));
+    await screen.findByText(/s\*\*\*@example.invalid/);
+    expect(screen.queryByText('Trang hợp đồng 1')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi mã OTP' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Gửi mã OTP' })).not.toHaveProperty(
+        'disabled',
+        true,
+      ),
+    );
+    fireEvent.change(screen.getByLabelText('Mã OTP 6 chữ số'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Xác minh và xem hợp đồng' }));
+    await screen.findByText('Trang hợp đồng 1');
+    expect(
+      (screen.getByRole('button', { name: 'Chấp thuận hợp đồng' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.pointerDown(screen.getByLabelText('Khung vẽ chữ ký'));
+    fireEvent.pointerMove(screen.getByLabelText('Khung vẽ chữ ký'));
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp thuận hợp đồng' }));
+    if (backendAccepted) await screen.findByText(/Đã ghi nhận chấp thuận/);
+    else {
+      await screen.findByRole('alert');
+      expect(screen.queryByText(/Đã ghi nhận chấp thuận/)).toBeNull();
+    }
+    expect(fetch.mock.calls.filter((c) => c[0].endsWith('/info'))).toHaveLength(2);
+    const acceptance = fetch.mock.calls.find((c) => c[0].endsWith('/accept'))!;
+    expect(JSON.parse(acceptance[1].body)).toMatchObject({
+      token,
+      documentHash: 'HASH',
+      consent: true,
+      strokes: [
+        [
+          { x: 0.1, y: 20 / 180 },
+          { x: 0.7, y: 70 / 180 },
+        ],
       ],
-    ],
-  });
-});
+    });
+  },
+);
 it('does not treat failed password setup as an activated account', async () => {
   vi.stubGlobal(
     'fetch',

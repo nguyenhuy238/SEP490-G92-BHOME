@@ -211,6 +211,34 @@ export function MainDraftScreen({
     void load();
     return () => controller.abort();
   }, [client, initialId, revision, setError, owner]);
+  useEffect(() => {
+    if (!client || !id || mode !== 'signing' || saved?.status !== 'Draft') return;
+    const controller = new AbortController();
+    let running = false;
+    let finished = false;
+    const timer = setInterval(() => {
+      if (running || finished || lock.current) return;
+      running = true;
+      void client
+        .get(id, controller.signal)
+        .then((latest) => {
+          if (controller.signal.aborted || latest.status === 'Draft') return;
+          finished = true;
+          if (onReleased) onReleased(latest.id);
+          else onList();
+        })
+        .catch((e) => {
+          if (!controller.signal.aborted) setError(message(e));
+        })
+        .finally(() => {
+          running = false;
+        });
+    }, 5000);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [client, id, mode, saved?.status, onReleased, onList, setError]);
   function input(): MainDraftInput | null {
     const errors: Record<string, string> = {};
     let from = '',
@@ -669,10 +697,12 @@ export function MainDraftScreen({
                     {!!preparation.blockers.length && (
                       <View style={styles.notice} accessibilityRole="alert">
                         <Text style={styles.noticeTitle}>Thiếu cấu hình hợp đồng</Text>
-                        <Text style={styles.support}>
-                          Chủ cơ sở cần bổ sung tiền cọc, chính sách thanh toán hoặc thông tin liên
-                          quan trước khi hoàn tất hợp đồng.
-                        </Text>
+                        {preparation.blockers.map((code) => (
+                          <Text key={code} style={styles.support}>
+                            {mainDraftMessages[code] ??
+                              'Cần Owner kiểm tra điều kiện hợp đồng trên hệ thống.'}
+                          </Text>
+                        ))}
                       </View>
                     )}
                     {signingVisited && client && saved && (

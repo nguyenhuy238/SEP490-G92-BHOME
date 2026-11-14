@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { createApiClient } from '../../../../../packages/client-core/src/api';
-import { getApiBaseUrl } from '../../../../../packages/client-core/src/config';
+import { apiBaseUrl } from '../../services/config';
 import {
   contractError,
   type ContractClient,
@@ -29,7 +29,7 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
     () =>
       mainDraftClient(
         createApiClient(
-          getApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.DEV),
+          apiBaseUrl,
           () => client.session?.accessToken,
           client.clear,
           client.refresh,

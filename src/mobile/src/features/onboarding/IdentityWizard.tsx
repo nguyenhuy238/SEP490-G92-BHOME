@@ -9,6 +9,7 @@ import {
   disableAppSwitcherProtectionAsync,
 } from 'expo-screen-capture';
 import { CameraCapture } from '../../components/CameraCapture';
+import { IdentityDateField } from '../../components/IdentityDateField';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { useSession } from '../../lib/SessionProvider';
 import { errorMessage, MobileApiError, type Proposal } from '../../lib/api';
@@ -606,6 +607,44 @@ export function IdentityWizard({
       ) : (
         <Box>
           <Pill tone="amber">Chờ bạn kiểm tra và xác nhận</Pill>
+          {typeof __DEV__ !== 'undefined' && __DEV__ && (
+            <Button
+              mode="outlined"
+              icon="lightning-bolt-outline"
+              disabled={busy}
+              onPress={() => {
+                const samples: IdentityFields = {
+                  citizenIdentityNumber: `999${Date.now().toString().slice(-9)}`,
+                  fullName: 'Nguoi Kiem Thu',
+                  dateOfBirth: '01/01/2000',
+                  gender: 'Nam',
+                  nationality: 'Việt Nam',
+                  placeOfOrigin: 'Hà Nội',
+                  residentialAddress: 'Địa chỉ kiểm thử, Hà Nội',
+                  dateOfIssue: '01/01/2024',
+                  dateOfExpiry: '01/01/2034',
+                };
+                const next = { ...current.current };
+                const nextSources = { ...sources };
+                for (const [key] of identityFields) {
+                  if (next[key].trim()) continue;
+                  next[key] = samples[key];
+                  fieldOrigin.current[key] = 'manual';
+                  nextSources[key] = 'Dữ liệu mẫu kiểm thử';
+                }
+                current.current = next;
+                setFields(next);
+                setSources(nextSources);
+                setChecked(false);
+                statusCallback.current?.('pending');
+                setNotice(
+                  'Đã điền mẫu vào các ô trống. Kiểm tra lại trước khi xác nhận lưu lên hệ thống.',
+                );
+              }}
+            >
+              Điền nhanh dữ liệu test
+            </Button>
+          )}
           <Text variant="bodySmall" style={ui.muted}>
             Kiểm tra số CCCD, họ tên và ngày sinh. Bổ sung phần còn thiếu, tích ô đối chiếu rồi bấm
             Xác nhận thông tin để tiếp tục.
@@ -613,49 +652,67 @@ export function IdentityWizard({
           {[
             ...identityFields.filter(([key]) => key !== 'dateOfIssue'),
             identityFields.find(([key]) => key === 'dateOfIssue')!,
-          ].map(([key, label]) => (
-            <View key={key} style={{ gap: 4 }}>
-              {key === 'citizenIdentityNumber' && <Heading title="Thông tin định danh" />}
-              {key === 'dateOfIssue' && (
-                <Heading title="Thông tin mặt sau" detail="Đối chiếu Ngày cấp trên giấy tờ." />
-              )}
-              <TextInput
-                mode="outlined"
-                accessibilityLabel={label}
-                style={{ minHeight: 50, backgroundColor: c.white }}
-                label={`${key === 'dateOfIssue' ? 'Ngày cấp CCCD (dd/MM/yyyy)' : label}${['citizenIdentityNumber', 'fullName', 'dateOfBirth'].includes(key) ? ' *' : ''}`}
-                value={fields[key]}
-                disabled={busy}
-                error={!!fieldErrors[key] && (scanned || attempted || !!touched[key])}
-                onBlur={() => setTouched((before) => ({ ...before, [key]: true }))}
-                keyboardType={key === 'citizenIdentityNumber' ? 'number-pad' : 'default'}
-                onChangeText={(value) => {
-                  const next = { ...current.current, [key]: value };
-                  current.current = next;
-                  fieldOrigin.current[key] = 'manual';
-                  setFields(next);
-                  statusCallback.current?.('pending');
-                  setChecked(false);
-                  setSources((before) => ({ ...before, [key]: 'Staff nhập / chỉnh sửa' }));
-                }}
-              />
-              <Text
-                accessibilityRole={
-                  fieldErrors[key] && (scanned || attempted || touched[key]) ? 'alert' : undefined
-                }
-                variant="labelSmall"
-                style={
-                  fieldErrors[key] && (scanned || attempted || touched[key]) ? ui.red : ui.muted
-                }
-              >
-                {fieldErrors[key] && (scanned || attempted || touched[key])
-                  ? fieldErrors[key]
-                  : key === 'dateOfIssue' && !fields.dateOfIssue
-                    ? 'Chưa đọc được Ngày cấp. Vui lòng nhập theo giấy tờ.'
-                    : (sources[key] ?? 'Chưa có dữ liệu • Có thể nhập thủ công')}
-              </Text>
-            </View>
-          ))}
+          ].map(([key, label]) => {
+            const onChange = (value: string) => {
+              const next = { ...current.current, [key]: value };
+              current.current = next;
+              fieldOrigin.current[key] = 'manual';
+              setFields(next);
+              statusCallback.current?.('pending');
+              setChecked(false);
+              setSources((before) => ({ ...before, [key]: 'Staff nhập / chỉnh sửa' }));
+            };
+            const onBlur = () => setTouched((before) => ({ ...before, [key]: true }));
+            const error = !!fieldErrors[key] && (scanned || attempted || !!touched[key]);
+            const fieldLabel = `${key === 'dateOfIssue' ? 'Ngày cấp CCCD (dd/MM/yyyy)' : label}${['citizenIdentityNumber', 'fullName', 'dateOfBirth'].includes(key) ? ' *' : ''}`;
+            return (
+              <View key={key} style={{ gap: 4 }}>
+                {key === 'citizenIdentityNumber' && <Heading title="Thông tin định danh" />}
+                {key === 'dateOfIssue' && (
+                  <Heading title="Thông tin mặt sau" detail="Đối chiếu Ngày cấp trên giấy tờ." />
+                )}
+                {key.startsWith('dateOf') ? (
+                  <IdentityDateField
+                    label={fieldLabel}
+                    accessibilityLabel={label}
+                    value={fields[key]}
+                    disabled={busy}
+                    error={error}
+                    onBlur={onBlur}
+                    onChange={onChange}
+                  />
+                ) : (
+                  <TextInput
+                    mode="outlined"
+                    accessibilityLabel={label}
+                    style={{ minHeight: 50, backgroundColor: c.white }}
+                    label={fieldLabel}
+                    value={fields[key]}
+                    disabled={busy}
+                    error={error}
+                    onBlur={onBlur}
+                    keyboardType={key === 'citizenIdentityNumber' ? 'number-pad' : 'default'}
+                    onChangeText={onChange}
+                  />
+                )}
+                <Text
+                  accessibilityRole={
+                    fieldErrors[key] && (scanned || attempted || touched[key]) ? 'alert' : undefined
+                  }
+                  variant="labelSmall"
+                  style={
+                    fieldErrors[key] && (scanned || attempted || touched[key]) ? ui.red : ui.muted
+                  }
+                >
+                  {fieldErrors[key] && (scanned || attempted || touched[key])
+                    ? fieldErrors[key]
+                    : key === 'dateOfIssue' && !fields.dateOfIssue
+                      ? 'Chưa đọc được Ngày cấp. Vui lòng nhập theo giấy tờ.'
+                      : (sources[key] ?? 'Chưa có dữ liệu • Có thể nhập thủ công')}
+                </Text>
+              </View>
+            );
+          })}
           {!!placeOfIssue && (
             <Text variant="bodySmall">
               Nơi cấp đọc từ ảnh: {placeOfIssue} (thông tin tham khảo, chưa lưu vào hồ sơ).

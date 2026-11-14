@@ -11,6 +11,7 @@ import {
   staffContractPage,
   staffContractTone,
   defaultStaffContractListView,
+  isMainOnboardingDraft,
 } from '../features/contracts/staffContractList';
 
 const state = vi.hoisted(() => ({
@@ -180,7 +181,6 @@ async function openList() {
     <StaffContractsList
       api={api}
       onOpen={state.open}
-      onCreate={state.create}
       onCreateHolding={() => state.create('Holding')}
       onInspection={state.inspect}
     />,
@@ -191,6 +191,74 @@ it('opens holding creation from its own staff action', async () => {
   await openList();
   fireEvent.click(screen.getByText('Tạo hợp đồng giữ chỗ'));
   expect(state.create).toHaveBeenCalledWith('Holding');
+});
+it('keeps Holding kind independent from Draft/Signing/Active states and counts every matching record', async () => {
+  all = [
+    ...all,
+    ...['Draft', 'PendingSigning', 'Active'].map((status, index) => ({
+      ...all[index]!,
+      id: `holding-${index}`,
+      roomNumber: `H${index}`,
+      kind: 'Holding',
+      status,
+      monthlyRent: '9999999',
+      requiredDeposit: '500000',
+      holdingExpiresAt: '2099-12-01T00:00:00Z',
+      onboardingDraft: true,
+    })),
+  ];
+  render(
+    <StaffContractsList
+      api={api}
+      onOpen={state.open}
+      onCreateHolding={() => state.create('Holding')}
+      onInspection={state.inspect}
+    />,
+  );
+  await screen.findByText('17 hợp đồng');
+  expect(screen.getByRole('tab', { name: 'Tất cả (17)' })).toBeTruthy();
+  expect(screen.getByRole('tab', { name: 'Giữ chỗ (3)' })).toBeTruthy();
+  expect(screen.getByRole('tab', { name: 'Chính thức (14)' })).toBeTruthy();
+  expect(screen.getByRole('tab', { name: 'Bản nháp (3)' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('tab', { name: 'Giữ chỗ (3)' }));
+  expect(screen.getAllByTestId('staff-contract-card')).toHaveLength(3);
+  for (const card of screen.getAllByTestId('staff-contract-card')) {
+    expect(card.textContent).toContain('Hạn giữ chỗ:');
+    expect(card.textContent).toContain('500.000');
+    expect(card.textContent).not.toContain('9.999.999');
+    expect(card.textContent).not.toContain('/tháng');
+    expect(card.textContent).not.toContain('01/01/2027');
+  }
+  fireEvent.click(screen.getByRole('tab', { name: 'Bản nháp (1)' }));
+  expect(screen.getByText('Hiển thị 1–1 / 1')).toBeTruthy();
+  expect(screen.getByRole('tab', { name: 'Chính thức (2)' })).toBeTruthy();
+  fireEvent.click(screen.getAllByTestId('staff-contract-card')[0]!);
+  expect(state.open).toHaveBeenCalledWith(
+    expect.objectContaining({ id: 'holding-0', kind: 'Holding', status: 'Draft' }),
+  );
+  fireEvent.click(screen.getByRole('tab', { name: 'Tất cả (17)' }));
+  expect(screen.getByText('Hiển thị 1–5 / 17')).toBeTruthy();
+});
+
+it('never sends a Holding draft into Main onboarding even if a previous API flagged draft metadata', () => {
+  expect(isMainOnboardingDraft({ ...all[0]!, kind: 'Holding', onboardingDraft: true })).toBe(false);
+  expect(isMainOnboardingDraft({ ...all[0]!, kind: 'Main', onboardingDraft: true })).toBe(true);
+});
+
+it('retains closed Holding states and uses deposit amounts instead of rental rates for sorting', () => {
+  const holding = ['Expired', 'Converted', 'Cancelled'].map((status, index) => ({
+    ...all[index]!,
+    id: `closed-${index}`,
+    kind: 'Holding',
+    status,
+    requiredDeposit: '500000',
+    monthlyRent: '9999999',
+  }));
+  expect(staffContractPage(holding, '', '', 'newest', 1, 'Holding').total).toBe(3);
+  expect(staffContractPage(holding, 'closed', '', 'newest', 1, 'Holding').total).toBe(3);
+  expect(staffContractPage([all[0]!, holding[0]!], '', '', 'rent-asc', 1).items[0]!.id).toBe(
+    'closed-0',
+  );
 });
 it('shows 14 real records as exactly 5 + 5 + 4 across three pages with correct navigation limits', async () => {
   await openList();
@@ -230,19 +298,20 @@ it('sorts by exact rent and resets pagination before displaying the sorted resul
   await openList();
   fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
   fireEvent.click(screen.getByRole('button', { name: /^Sắp xếp hợp đồng/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Giá thuê tăng dần' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Số tiền tăng dần' }));
   expect(screen.getByText('Trang 1 / 3')).toBeTruthy();
   expect(screen.getAllByTestId('staff-contract-card')[0]!.textContent).toContain('Phòng CT201');
   fireEvent.click(screen.getByRole('button', { name: /^Sắp xếp hợp đồng/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Giá thuê giảm dần' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Số tiền giảm dần' }));
   expect(screen.getAllByTestId('staff-contract-card')[0]!.textContent).toContain('Phòng CT214');
 });
-it('opens the existing detail/create flows using the real selected summary', async () => {
+it('opens the selected detail without exposing the removed creation action', async () => {
   await openList();
   fireEvent.click(screen.getAllByTestId('staff-contract-card')[0]!);
   expect(state.open).toHaveBeenCalledWith(all[13]);
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo mới hợp đồng' }));
-  expect(state.create).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('button', { name: 'Tạo mới hợp đồng' })).toBeNull();
+  expect(screen.queryByText('Tạo mới')).toBeNull();
+  expect(state.create).not.toHaveBeenCalled();
 });
 it('keeps inspection details collapsed and opens the existing assigned contract when expanded', async () => {
   await openList();
@@ -264,14 +333,7 @@ it('handles an empty query and restores the list when clearing filters', async (
 });
 it('does not turn a failed request into an empty result and retries through the header action', async () => {
   state.list.mockRejectedValueOnce(Error('offline'));
-  render(
-    <StaffContractsList
-      api={api}
-      onOpen={state.open}
-      onCreate={state.create}
-      onInspection={state.inspect}
-    />,
-  );
+  render(<StaffContractsList api={api} onOpen={state.open} onInspection={state.inspect} />);
   await screen.findByRole('button', { name: 'Thử tải lại hợp đồng' });
   expect(screen.queryByText('Chưa có hợp đồng')).toBeNull();
   act(() => state.refresh?.());
@@ -300,7 +362,6 @@ it('restores the current filter and page when returning from contract details', 
       <StaffContractsList
         api={api}
         onOpen={state.open}
-        onCreate={state.create}
         onInspection={state.inspect}
         viewState={viewState}
         onViewStateChange={setViewState}
@@ -333,14 +394,7 @@ it('shows loading without stale counts and accepts a genuinely empty backend res
         resolve = done;
       }),
   );
-  render(
-    <StaffContractsList
-      api={api}
-      onOpen={state.open}
-      onCreate={state.create}
-      onInspection={state.inspect}
-    />,
-  );
+  render(<StaffContractsList api={api} onOpen={state.open} onInspection={state.inspect} />);
   await waitFor(() => expect(state.list).toHaveBeenCalled());
   expect(state.refreshDisabled).toBe(true);
   expect(screen.queryAllByTestId('staff-contract-card')).toHaveLength(0);

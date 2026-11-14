@@ -20,6 +20,13 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
 
     [HttpGet("configuration")]
     public Task<ContractWorkflowConfiguration> Configuration(CancellationToken t) => service.ConfigurationAsync(t);
+    [HttpGet("holding-settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
+    public Task<HoldingSettings?> HoldingSettings(Guid locationId, CancellationToken t) => service.HoldingSettingsAsync(locationId, t);
+    [HttpPut("holding-settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
+    public async Task<IActionResult> HoldingSettings(Guid locationId, HoldingSettingsInput input, CancellationToken t)
+    { await service.SetHoldingSettingsAsync(locationId, input, t); return NoContent(); }
+    [HttpGet("holdings/preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
+    public Task<HoldingPreparation> HoldingPreparation(Guid roomId, CancellationToken t) => service.HoldingPreparationAsync(roomId, t);
     [HttpGet("expiry-reminders"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<IReadOnlyList<ContractExpiryNoticeView>> ExpiryReminders(CancellationToken t) => expiry.ListAsync(t);
     [HttpGet("preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]

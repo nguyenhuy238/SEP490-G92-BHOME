@@ -149,13 +149,13 @@ internal static class Compact24Records
         payment.Write["verification_data"] = "jsonb_build_object('schemaVersion',1,'compactState',@state::jsonb)";
         History("PaymentReconciliation", "payments", "TransferId").AppendOnly = true;
         History("BankReferenceClaim", "payments", "AllocationId").AppendOnly = true;
-        var allocation = Root("PaymentAllocation", "payment_allocations", "TransferId:source_payment_id SourceDepositContractId:source_deposit_contract_id InvoiceId:target_invoice_id TargetDepositContractId:target_deposit_contract_id TargetSettlementContractId:target_settlement_contract_id SettlementReceivableId:settlement_receivable_id DepositOffsetApprovalId:deposit_offset_approval_id Amount:amount PaidByUserId:paid_by_user_id VerifiedByUserId:created_by_user_id AllocatedAt:allocated_at");
+        var allocation = Root("PaymentAllocation", "payment_allocations", "TransferId:source_payment_id SourceDepositContractId:source_deposit_contract_id InvoiceId:target_invoice_id TargetDepositContractId:target_deposit_contract_id TargetInitialContractId:target_initial_contract_id TargetSettlementContractId:target_settlement_contract_id SettlementReceivableId:settlement_receivable_id DepositOffsetApprovalId:deposit_offset_approval_id Amount:amount PaidByUserId:paid_by_user_id VerifiedByUserId:created_by_user_id AllocatedAt:allocated_at");
         allocation.CustomFrom = "payment_allocations t LEFT JOIN payments p ON p.id=t.source_payment_id LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(p.history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='PaymentAllocation' AND h->>'recordKey'=t.id::text ORDER BY n DESC LIMIT 1) s ON TRUE";
         allocation.CustomState = "s.data";
         allocation.Read["VerifiedByUserId"] = "COALESCE(t.created_by_user_id,'00000000-0000-0000-0000-000000000000'::uuid)";
         // Include verified bank receipts allocated to a deposit as well as invoice payments
         // and Holding-to-Main transfers; otherwise the Holding ledger cannot see received money.
-        allocation.Where = "t.target_invoice_id IS NOT NULL OR t.target_deposit_contract_id IS NOT NULL OR t.target_settlement_contract_id IS NOT NULL";
+        allocation.Where = "t.target_invoice_id IS NOT NULL OR t.target_deposit_contract_id IS NOT NULL OR t.target_settlement_contract_id IS NOT NULL OR t.target_initial_contract_id IS NOT NULL";
         allocation.Read["CreatedAt"] = "COALESCE((s.data->>'createdAt')::timestamptz,t.allocated_at)";
         allocation.Read["UpdatedAt"] = "COALESCE((s.data->>'updatedAt')::timestamptz,t.allocated_at)";
         allocation.Write["operation_key"] = "@state::jsonb->>'id'"; allocation.Write["line_number"] = "1";

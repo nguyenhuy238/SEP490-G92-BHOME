@@ -232,7 +232,10 @@ export default function AnonymousSigningScreen() {
                   consent,
                   path.current.filter((s) => s.length >= 2),
                 );
-                setDone(true);
+                const latest = await api.info(token);
+                if (!latest.accepted)
+                  throw new Error('Chưa xác nhận kết quả ký. Vui lòng tải lại trạng thái.');
+                setDone(latest.accepted);
                 setUri('');
                 path.current = [];
                 setStrokes([]);

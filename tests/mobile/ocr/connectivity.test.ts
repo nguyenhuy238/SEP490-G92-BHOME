@@ -335,6 +335,7 @@ it('distinguishes empty, populated, failed and malformed contract list responses
               id: 'synthetic',
               roomNumber: '101',
               locationName: 'Synthetic',
+              kind: 'Main',
               status: 'Draft',
               startDate: '2026-10-01',
               endDate: '2027-10-01',

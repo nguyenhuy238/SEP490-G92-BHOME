@@ -94,6 +94,7 @@ const iconMap: Record<string, typeof Building2> = {
   'configuration/assets': Package,
   'configuration/pricing-fees': Tags,
   'configuration/policies': ScrollText,
+  'configuration/holding-contracts': FileText,
 };
 const navGroups = [
   ['Tổng quan', ['dashboard']],
@@ -105,6 +106,7 @@ const navGroups = [
       'configuration/assets',
       'configuration/pricing-fees',
       'configuration/policies',
+      'configuration/holding-contracts',
     ],
   ],
   ['Nhân sự & Vận hành', ['staff', 'staff-assignments', 'operational-tasks']],
@@ -139,6 +141,7 @@ const navLabels: Record<string, string> = {
   'configuration/assets': 'Tài sản dùng chung',
   'configuration/pricing-fees': 'Mẫu giá & biểu phí',
   'configuration/policies': 'Nội quy & chính sách',
+  'configuration/holding-contracts': 'Cấu hình giữ chỗ',
   rooms: 'Phòng',
   'room-types': 'Loại phòng',
   assets: 'Tài sản',
