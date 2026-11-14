@@ -230,7 +230,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         {
             Summary = input.Summary.Trim(),
             Amenities = NormalizeAmenities(input.Amenities),
-            ContactPhone = Clean(input.ContactPhone),
+            ContactPhone = Phone(input.ContactPhone),
             ContactEmail = Clean(input.ContactEmail)
         }, Now, t);
     }
@@ -349,7 +349,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     private static string? Phone(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
-        return LoginIdentifier.NormalizePhone(value) ?? throw OperationsException.Invalid("invalid_phone_number");
+        return ContactPhone.Normalize(value) ?? throw OperationsException.Invalid("invalid_phone_number");
     }
     private static EmploymentWrite Normalize(EmploymentWrite input) => input with
     {

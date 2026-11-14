@@ -7,7 +7,7 @@ namespace BHome.Api.Controllers.PropertyManagement;
 
 [ApiController, Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None), RequestSizeLimit(131072)]
-public sealed class AssetInventoryController(AssetInventoryService service) : ControllerBase
+public sealed class AssetInventoryController(AssetInventoryService service, AssetCountObservationService observations) : ControllerBase
 {
     [HttpGet("api/v1/asset-templates"), Authorize(Roles = Roles.Owner)]
     public Task<IReadOnlyList<SetupDocument>> Templates([FromQuery] Guid locationId, CancellationToken t) => service.ListAsync(locationId, "AssetTemplate", t);
@@ -34,6 +34,10 @@ public sealed class AssetInventoryController(AssetInventoryService service) : Co
     public Task<AssetInventory> Inventory(Guid id, CancellationToken t) => service.InventoryAsync(id, t);
     [HttpPost("api/v1/rooms/{id:guid}/assets/verify")]
     public async Task<object> Verify(Guid id, AssetVerification input, CancellationToken t) => new { assetId = await service.VerifyAsync(id, input, t) };
+    [HttpGet("api/v1/rooms/{id:guid}/asset-count-observations")]
+    public Task<IReadOnlyList<SetupDocument>> CountObservations(Guid id, CancellationToken t) => observations.CurrentAsync(id, t);
+    [HttpPut("api/v1/rooms/{id:guid}/asset-count-observations/{item:guid}")]
+    public Task<SetupDocument> ObserveCount(Guid id, Guid item, AssetCountObservationWrite input, CancellationToken t) => observations.SaveAsync(id, item, input, t);
     [HttpPut("api/v1/assets/{id:guid}/metadata"), Authorize(Roles = Roles.Owner)]
     public Task<SetupDocument> Metadata(Guid id, AssetMetadataWrite input, CancellationToken t) => service.MetadataAsync(id, input, t);
     [HttpGet("api/v1/assets/{id:guid}/metadata"), Authorize(Roles = Roles.Owner)]

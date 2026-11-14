@@ -18,6 +18,12 @@ public sealed class OperationalTasksController(OperationalTaskService service) :
     { var result = await service.CreateAsync(input, Key(), t); return CreatedAtAction(nameof(Get), new { id = result.Id }, result); }
     [HttpGet]
     public Task<TaskPage<TaskView>> List([FromQuery] TaskQuery query, CancellationToken t) => service.ListAsync(query, t);
+    [HttpGet("targets/common-areas"), Authorize(Policy = Permissions.OperationalTasks.Manage)]
+    public Task<IReadOnlyList<string>> CommonAreas(Guid locationId, CancellationToken t) => service.CommonAreasAsync(locationId, t);
+    [HttpGet("targets/assets"), Authorize(Policy = Permissions.OperationalTasks.Manage)]
+    public Task<TaskPage<TaskTargetOption>> Assets(Guid locationId, Guid? roomId, string? commonArea, string? search,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken t = default) =>
+        service.TargetAssetsAsync(locationId, roomId, commonArea, search, page, pageSize, t);
     [HttpGet("{id:guid}")]
     public Task<TaskView> Get(Guid id, CancellationToken t) => service.GetAsync(id, t);
     [HttpPut("{id:guid}"), Authorize(Policy = Permissions.OperationalTasks.Manage)]

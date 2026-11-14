@@ -19,7 +19,7 @@ public sealed record LocationMetadataWrite(string Code, int Floors, string Conta
 public sealed record LocalRoomDefaultsWrite(string Name, string Description, SharedRoomDefaults Defaults,
     Guid? AssetTemplateId, int ExpectedVersion = 0, string Reason = "", string Status = "Recorded");
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SetupAssetRequirement(string Name, string Category, string TrackingMode, int Quantity);
+public sealed record SetupAssetRequirement(string Name, string Category, string TrackingMode, int Quantity, string? Unit = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SetupRoomDefaultsInput(Guid Key, string Name, string Description, int Capacity, decimal Area,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? ReferenceRent, string[] Amenities, SetupAssetRequirement[] Assets, Guid? SourceId = null,
@@ -115,7 +115,9 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
         var code = Text(input.Code, 50);
         if (code.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_')) || input.Floors is < 1 or > 100)
             throw new PropertyException(400, "invalid_location_setup_metadata");
-        _ = Text(input.ContactPhone, 50, false); _ = Text(input.Description, 2000, false);
+        if (!string.IsNullOrWhiteSpace(input.ContactPhone) && ContactPhone.Normalize(input.ContactPhone) is null)
+            throw new PropertyException(400, "invalid_contact_phone");
+        _ = Text(input.Description, 2000, false);
         var email = Text(input.ContactEmail, 200, false);
         if (email.Length > 0 && !new EmailAddressAttribute().IsValid(email)) throw new PropertyException(400, "invalid_location_contact_email");
     }
@@ -127,7 +129,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
         {
             code = input.Code.Trim(),
             input.Floors,
-            contactPhone = input.ContactPhone?.Trim() ?? "",
+            contactPhone = ContactPhone.Normalize(input.ContactPhone) ?? "",
             contactEmail = input.ContactEmail?.Trim() ?? "",
             description = input.Description?.Trim() ?? "",
             setupStatus
@@ -519,6 +521,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 foreach (var asset in type.Assets)
                 {
                     _ = Text(asset.Name, 150); _ = Text(asset.Category, 80);
+                    if (!string.IsNullOrWhiteSpace(asset.Unit)) _ = Text(asset.Unit, 80);
                     if (asset.Quantity is < 1 or > 10000 || asset.TrackingMode is not ("Serialized" or "BulkQuantity")) throw new PropertyException(400, "invalid_template_item");
                 }
             }
@@ -562,7 +565,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 Guid? assetTemplateId = null;
                 if (type.Assets.Length > 0)
                 {
-                    var template = await assets.SaveTemplateAsync(null, new(location.Id, type.Name.Trim(), type.Assets.Select(asset => new AssetTemplateItem(Guid.NewGuid(), asset.Name.Trim(), asset.Category.Trim(), asset.TrackingMode, asset.Quantity)).ToArray(), Scoped: true), t);
+                    var template = await assets.SaveTemplateAsync(null, new(location.Id, type.Name.Trim(), type.Assets.Select(asset => new AssetTemplateItem(Guid.NewGuid(), asset.Name.Trim(), asset.Category.Trim(), asset.TrackingMode, asset.Quantity, string.IsNullOrWhiteSpace(asset.Unit) ? null : asset.Unit.Trim())).ToArray(), Scoped: true), t);
                     await assets.PublishAsync(template.Id, template.Version, t); assetTemplateId = template.Id; created.Add(template.Id);
                 }
                 var data = new JsonObject

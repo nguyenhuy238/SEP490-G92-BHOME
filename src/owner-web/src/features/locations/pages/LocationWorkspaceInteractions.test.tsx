@@ -85,7 +85,17 @@ it('always saves the agreed contract rent source even for a legacy room-price sc
 });
 it('opens utility configuration within pricing and keeps billing policy creation separate', async () => {
   mount(<LocationPricingWorkspace locationId="location" />);
+  expect(screen.queryByRole('tab', { name: 'Lịch & quy tắc hóa đơn' })).toBeNull();
+  expect(screen.getByRole('link', { name: 'Lịch tự động & quy tắc hóa đơn' })).toHaveAttribute(
+    'href',
+    '/billing-automation?locationId=location',
+  );
   fireEvent.click(screen.getByRole('tab', { name: 'Điện & nước' }));
+  expect(screen.getByRole('tab', { name: 'Đơn giá điện trực tiếp' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  fireEvent.click(screen.getByRole('tab', { name: 'Biểu giá nhà cung cấp & công tơ' }));
   expect(await screen.findByRole('tab', { name: 'Công tơ & Chỉ số' })).toBeInTheDocument();
   expect(
     await screen.findByRole('button', { name: 'Thêm biểu giá điện nước' }),
@@ -97,7 +107,7 @@ it('opens utility configuration within pricing and keeps billing policy creation
 
 it('opens the utility section directly for legacy utility navigation', async () => {
   mount(<LocationPricingWorkspace locationId="location" initialTab={3} />);
-  expect(await screen.findByRole('tab', { name: 'Biểu giá' })).toBeInTheDocument();
+  expect(await screen.findByRole('tab', { name: 'Đơn giá điện trực tiếp' })).toBeInTheDocument();
   expect(screen.getByRole('tab', { name: 'Điện & nước' })).toHaveAttribute('aria-selected', 'true');
 });
 it('filters rent, service fees and legacy utility rates at the server before paging', async () => {

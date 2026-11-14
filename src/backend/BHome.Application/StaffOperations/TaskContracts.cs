@@ -12,7 +12,12 @@ public sealed record TaskWrite(
     [Required, StringLength(8000, MinimumLength = 1)] string Requirements,
     [property: JsonConverter(typeof(JsonStringEnumConverter<OperationalTaskPriority>))] OperationalTaskPriority Priority,
     [property: JsonConverter(typeof(TaskOffsetConverter))] DateTimeOffset DueAt,
-    bool EvidenceRequired);
+    bool EvidenceRequired,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TaskTarget? Target = null);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record TaskTarget(Guid? RoomId = null, Guid? AssetId = null, [StringLength(200)] string? CommonArea = null);
+public sealed record TaskTargetView(Guid? RoomId, Guid? AssetId, string? CommonArea, string Label);
+public sealed record TaskTargetOption(Guid Id, string Name, Guid? RoomId, string? CommonArea);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record TaskCreate(Guid LocationId, TaskWrite Work);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -38,7 +43,8 @@ public sealed record TaskView(Guid Id, Guid LocationId, string Kind, string Titl
     string Priority, DateTimeOffset? DueAt, bool EvidenceRequired, string Status, bool IsOverdue,
     Guid? CurrentResponsibleStaffUserId, Guid? RecordedStaffUserId, bool ResponsibilityAvailable,
     string? Result, int Version, Guid? VerifiedByUserId, DateTimeOffset? VerifiedAt,
-    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TaskTargetView? Target = null);
 public sealed record TaskHistoryView(Guid Id, Guid ActorId, string Action, string Note, string ChangesJson,
     Guid? ResponsibleStaffUserId, DateTimeOffset OccurredAt, bool WasOverdue, int TaskVersion);
 public sealed record TaskActorView(Guid UserId, string DisplayName);
@@ -74,6 +80,10 @@ public interface IOperationalTaskRepository
 {
     Task<T> TransactionAsync<T>(Guid locationId, Guid actorId, Guid commandKey, Func<Task<T>> operation, CancellationToken t);
     Task<TaskLocation?> LocationAsync(Guid id, CancellationToken t);
+    Task<string?> TargetRoomNameAsync(Guid locationId, Guid roomId, CancellationToken t);
+    Task<TaskTargetOption?> TargetAssetAsync(Guid locationId, Guid assetId, CancellationToken t);
+    Task<IReadOnlyList<string>> CommonAreasAsync(Guid locationId, CancellationToken t);
+    Task<TaskPage<TaskTargetOption>> TargetAssetsAsync(Guid locationId, Guid? roomId, string? commonArea, string? search, int page, int pageSize, CancellationToken t);
     Task<OperationalTask?> FindAsync(Guid id, CancellationToken t);
     Task<TaskResponsibility?> ResponsibilityAsync(Guid locationId, DateOnly date, CancellationToken t);
     Task<TaskPage<TaskView>> ListAsync(TaskQuery query, Guid? staffId, DateOnly date, DateTimeOffset now, CancellationToken t);

@@ -1094,6 +1094,20 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("TargetAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetCommonArea")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("TargetLabel")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<Guid?>("TargetRoomId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -3205,7 +3219,8 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<int>("ResidentType")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("RoomId")
+                    b.Property<Guid?>("RoomId")
+                        .IsRequired()
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("TenantUserId")

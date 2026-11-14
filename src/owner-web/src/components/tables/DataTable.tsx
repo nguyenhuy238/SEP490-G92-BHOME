@@ -71,17 +71,19 @@ export function DataTable({
       sx={{
         border: 0,
         minHeight: 380,
-        '& .MuiDataGrid-columnHeaders': { bgcolor: '#f2f3ff', fontSize: 11 },
+        '& .MuiDataGrid-columnHeaders': { bgcolor: 'background.default', fontSize: 13 },
         '& .MuiDataGrid-cell': {
-          fontSize: 12,
+          fontSize: 14,
           display: 'flex',
           alignItems: 'center',
           lineHeight: 1.6,
           whiteSpace: 'normal',
           py: 1,
+          borderTop: '1px solid',
+          borderColor: 'divider',
         },
-        '& .MuiDataGrid-row:hover': { bgcolor: '#f5f6ff' },
-        '& .MuiDataGrid-footerContainer': { fontSize: 11 },
+        '& .MuiDataGrid-row:hover': { bgcolor: '#f5f8fc' },
+        '& .MuiDataGrid-footerContainer': { fontSize: 13 },
       }}
     />
   );

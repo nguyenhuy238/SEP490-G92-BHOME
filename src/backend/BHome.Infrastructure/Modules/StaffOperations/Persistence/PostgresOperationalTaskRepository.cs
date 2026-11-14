@@ -1,6 +1,7 @@
 using BHome.Application.StaffOperations;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
+using BHome.Domain.PropertyManagement;
 using BHome.Domain.StaffOperations;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
@@ -30,6 +31,23 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
     }
     public Task<TaskLocation?> LocationAsync(Guid id, CancellationToken t) => db.Locations.AsNoTracking().Where(x => x.Id == id)
         .Select(x => new TaskLocation(x.Id, x.IsActive)).SingleOrDefaultAsync(t);
+    public Task<string?> TargetRoomNameAsync(Guid locationId, Guid roomId, CancellationToken t) => db.Set<Room>().AsNoTracking()
+        .Where(x => x.Id == roomId && x.LocationId == locationId).Select(x => x.RoomNumber).SingleOrDefaultAsync(t);
+    public Task<TaskTargetOption?> TargetAssetAsync(Guid locationId, Guid assetId, CancellationToken t) => db.Set<Asset>().AsNoTracking()
+        .Where(x => x.Id == assetId && x.LocationId == locationId && x.Status != AssetStatus.Retired)
+        .Select(x => new TaskTargetOption(x.Id, x.Name, x.RoomId, x.CommonArea)).SingleOrDefaultAsync(t);
+    public async Task<IReadOnlyList<string>> CommonAreasAsync(Guid locationId, CancellationToken t) => await db.Set<Asset>().AsNoTracking()
+        .Where(x => x.LocationId == locationId && x.RoomId == null && x.CommonArea != null && x.Status != AssetStatus.Retired)
+        .Select(x => x.CommonArea!).Distinct().OrderBy(x => x).ToArrayAsync(t);
+    public async Task<TaskPage<TaskTargetOption>> TargetAssetsAsync(Guid locationId, Guid? roomId, string? commonArea, string? search, int page, int pageSize, CancellationToken t)
+    {
+        var rows = db.Set<Asset>().AsNoTracking().Where(x => x.LocationId == locationId && x.RoomId == roomId && x.CommonArea == commonArea && x.Status != AssetStatus.Retired);
+        if (!string.IsNullOrWhiteSpace(search)) rows = rows.Where(x => EF.Functions.ILike(x.Name, "%" + search.Trim() + "%"));
+        var total = await rows.CountAsync(t);
+        var items = await rows.OrderBy(x => x.Name).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(x => new TaskTargetOption(x.Id, x.Name, x.RoomId, x.CommonArea)).ToArrayAsync(t);
+        return new(items, page, pageSize, total);
+    }
     public Task<OperationalTask?> FindAsync(Guid id, CancellationToken t) => db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, t);
     public Task<TaskResponsibility?> ResponsibilityAsync(Guid locationId, DateOnly date, CancellationToken t) =>
         (from assignment in db.StaffLocationAssignments.AsNoTracking()
@@ -72,7 +90,7 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         return new(items.Select(x => new TaskView(x.Task.Id, x.Task.LocationId, x.Task.Kind.ToString(), x.Task.Title, x.Task.Requirements,
             x.Task.Priority.ToString(), x.Task.DueAt, x.Task.EvidenceRequired, x.Task.Status.ToString(), x.Task.IsOverdue(now), x.Responsible,
             x.Task.AssignedStaffUserId, x.Responsible != null, x.Task.Result, x.Task.Version, x.Task.VerifiedByUserId, x.Task.VerifiedAt,
-            x.Task.CreatedAt, x.Task.UpdatedAt)).ToArray(), query.Page, query.PageSize, count);
+            x.Task.CreatedAt, x.Task.UpdatedAt, OperationalTaskService.TargetView(x.Task))).ToArray(), query.Page, query.PageSize, count);
     }
     public async Task<TaskPage<TaskHistoryView>> HistoryAsync(Guid taskId, int page, int size, CancellationToken t)
     {

@@ -6,6 +6,7 @@ import { invoiceClient, type PolicyInput } from '../../../../../packages/client-
 import { ApiError } from '../../../../../packages/client-core/src/api';
 import { theme } from '../../theme/theme';
 import { BillingConfigurationPage } from './BillingConfigurationPage';
+import { MemoryRouter } from 'react-router';
 
 const state = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('./useInvoiceApi', () => ({
@@ -68,7 +69,9 @@ function mount() {
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
-        <BillingConfigurationPage />
+        <MemoryRouter>
+          <BillingConfigurationPage />
+        </MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
   );

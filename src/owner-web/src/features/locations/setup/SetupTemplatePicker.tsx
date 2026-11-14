@@ -47,32 +47,58 @@ export function SetupTemplatePicker({
   return (
     <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0 }}>
       <Stack spacing={1.5}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-          {title}
-        </Typography>
+        <Stack
+          direction="row"
+          sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, minWidth: 0 }}
+        >
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, minWidth: 0 }}>
+            {title}
+          </Typography>
+          <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
+            <Chip size="small" label={`${visible.length}/${items.length} mẫu`} />
+            {selected && (
+              <Chip
+                size="small"
+                color="primary"
+                variant="outlined"
+                label={`${selected.length} đã chọn`}
+              />
+            )}
+          </Stack>
+        </Stack>
         {libraryActions}
-        <TextField
-          size="small"
-          fullWidth
-          label={`Tìm ${title.toLocaleLowerCase()}`}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          slotProps={{ input: { startAdornment: <Search size={16} style={{ marginRight: 8 }} /> } }}
-        />
-        {selected && (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: selected ? { xs: '1fr', sm: 'minmax(0, 1fr) 148px' } : '1fr',
+            gap: 1,
+          }}
+        >
           <TextField
-            select
             size="small"
             fullWidth
-            label={`Lọc ${title.toLocaleLowerCase('vi')}`}
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-          >
-            <MenuItem value="all">Tất cả</MenuItem>
-            <MenuItem value="available">Chưa chọn</MenuItem>
-            <MenuItem value="selected">Đã chọn</MenuItem>
-          </TextField>
-        )}
+            label={`Tìm ${title.toLocaleLowerCase('vi')}`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            slotProps={{
+              input: { startAdornment: <Search size={16} style={{ marginRight: 8 }} /> },
+            }}
+          />
+          {selected && (
+            <TextField
+              select
+              size="small"
+              fullWidth
+              label={`Lọc ${title.toLocaleLowerCase('vi')}`}
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+            >
+              <MenuItem value="all">Tất cả</MenuItem>
+              <MenuItem value="available">Chưa chọn</MenuItem>
+              <MenuItem value="selected">Đã chọn</MenuItem>
+            </TextField>
+          )}
+        </Box>
         {children}
         <Box sx={{ maxHeight: 360, overflowY: 'auto', overflowX: 'hidden' }}>
           <Stack

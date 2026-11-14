@@ -46,7 +46,10 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
     private static TaskView View(OperationalTask task, TaskResponsibility? responsible) => new(task.Id, task.LocationId,
         task.Kind.ToString(), task.Title, task.Requirements, task.Priority.ToString(), task.DueAt, task.EvidenceRequired,
         task.Status.ToString(), false, responsible?.StaffUserId, task.AssignedStaffUserId, responsible is not null,
-        task.Result, task.Version, task.VerifiedByUserId, task.VerifiedAt, task.CreatedAt, task.UpdatedAt);
+        task.Result, task.Version, task.VerifiedByUserId, task.VerifiedAt, task.CreatedAt, task.UpdatedAt,
+        TargetView(task));
+    public static TaskTargetView? TargetView(OperationalTask task) => task.TargetLabel is null ? null :
+        new(task.TargetRoomId, task.TargetAssetId, task.TargetCommonArea, task.TargetLabel);
     private TaskView CurrentView(OperationalTask task, TaskResponsibility? responsible) => View(task, responsible) with { IsOverdue = task.IsOverdue(Now) };
 
     public async Task<TaskPage<TaskView>> ListAsync(TaskQuery query, CancellationToken t)
@@ -93,7 +96,9 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
                 AssignmentId = responsible.AssignmentId,
                 AssignedAt = Now
             };
-            SetWork(task, input.Work); repository.Add(task);
+            SetWork(task, input.Work);
+            await SetTargetAsync(task, input.Work.Target, t);
+            repository.Add(task);
             await RecordAsync(task, "created", "", new { input.Work, responsible.AssignmentId }, [responsible.StaffUserId], t);
             await repository.FlushAsync(t);
             return CurrentView(task, responsible);
@@ -107,6 +112,51 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
         task.Title = work.Title.Trim(); task.Requirements = work.Requirements.Trim(); task.Priority = work.Priority;
         task.DueAt = work.DueAt.ToUniversalTime(); task.EvidenceRequired = work.EvidenceRequired;
     }
+    private async Task SetTargetAsync(OperationalTask task, TaskTarget? target, CancellationToken t)
+    {
+        // Omitted by older clients: preserve the existing target on update.
+        if (target is null) return;
+        Validate(target);
+        var area = string.IsNullOrWhiteSpace(target.CommonArea) ? null : target.CommonArea.Trim();
+        if (target.RoomId == Guid.Empty || target.AssetId == Guid.Empty || target.RoomId.HasValue && area is not null ||
+            target.AssetId.HasValue && !target.RoomId.HasValue && area is null)
+            throw OperationalTaskException.Invalid("invalid_task_target");
+        string? label = null;
+        if (target.RoomId is { } room)
+        {
+            label = await repository.TargetRoomNameAsync(task.LocationId, room, t);
+            if (string.IsNullOrWhiteSpace(label)) throw OperationalTaskException.Invalid("invalid_task_target");
+        }
+        if (area is not null)
+        {
+            area = (await repository.CommonAreasAsync(task.LocationId, t)).SingleOrDefault(x => string.Equals(x, area, StringComparison.Ordinal))
+                ?? throw OperationalTaskException.Invalid("invalid_task_target");
+            label = area;
+        }
+        if (target.AssetId is { } assetId)
+        {
+            var asset = await repository.TargetAssetAsync(task.LocationId, assetId, t);
+            if (asset is null || asset.RoomId != target.RoomId || !string.Equals(asset.CommonArea, area, StringComparison.Ordinal))
+                throw OperationalTaskException.Invalid("invalid_task_target");
+            label += " · " + asset.Name;
+        }
+        task.TargetRoomId = target.RoomId; task.TargetAssetId = target.AssetId;
+        task.TargetCommonArea = area; task.TargetLabel = label;
+    }
+    public async Task<IReadOnlyList<string>> CommonAreasAsync(Guid location, CancellationToken t)
+    {
+        Permit(Permissions.OperationalTasks.Manage);
+        _ = await repository.LocationAsync(location, t) ?? throw OperationalTaskException.Missing();
+        return await repository.CommonAreasAsync(location, t);
+    }
+    public async Task<TaskPage<TaskTargetOption>> TargetAssetsAsync(Guid location, Guid? room, string? area, string? search, int page, int pageSize, CancellationToken t)
+    {
+        Permit(Permissions.OperationalTasks.Manage); Page(page, pageSize);
+        _ = await repository.LocationAsync(location, t) ?? throw OperationalTaskException.Missing();
+        if (room.HasValue == !string.IsNullOrWhiteSpace(area) || search?.Length > 200 || area?.Length > 200)
+            throw OperationalTaskException.Invalid("invalid_task_target");
+        return await repository.TargetAssetsAsync(location, room, area, search, page, pageSize, t);
+    }
     public Task<TaskView> UpdateAsync(Guid id, TaskUpdate input, Guid key, CancellationToken t)
     {
         Permit(Permissions.OperationalTasks.Manage); Validate(input); Validate(input.Work);
@@ -114,9 +164,10 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
         return MutateAsync(id, input.Version, key, "update", input, async (task, responsible) =>
         {
             if (task.Status is not (MeterTaskStatus.Assigned or MeterTaskStatus.InProgress)) throw OperationalTaskException.Conflict("task_not_editable");
-            var before = new { task.Title, task.Requirements, task.Priority, task.DueAt, task.EvidenceRequired };
+            var before = new { task.Title, task.Requirements, task.Priority, task.DueAt, task.EvidenceRequired, Target = TargetView(task) };
             var wasOverdue = task.IsOverdue(Now);
             SetWork(task, input.Work);
+            await SetTargetAsync(task, input.Work.Target, t);
             await RecordAsync(task, "updated", input.Reason, new { Before = before, After = input.Work }, Recipients(responsible), t, wasOverdue);
         }, t);
     }

@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import {
+  contactPhoneError,
+  normalizeContactPhone,
+} from '../../../../../../packages/client-core/src/contactPhone';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
@@ -62,7 +66,7 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
     Number.isInteger(metadataForm.floors) &&
     metadataForm.floors >= 1 &&
     metadataForm.floors <= 100 &&
-    metadataForm.contactPhone.trim().length <= 50 &&
+    !contactPhoneError(metadataForm.contactPhone) &&
     metadataForm.description.trim().length <= 2000 &&
     (!metadataForm.contactEmail.trim() ||
       (metadataForm.contactEmail.trim().length <= 200 &&
@@ -84,7 +88,7 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
       setup.saveMetadata(location.id, {
         code: metadataForm.code.trim(),
         floors: metadataForm.floors,
-        contactPhone: metadataForm.contactPhone.trim(),
+        contactPhone: normalizeContactPhone(metadataForm.contactPhone) ?? '',
         contactEmail: metadataForm.contactEmail.trim(),
         description: metadataForm.description.trim(),
         expectedVersion: metadataVersion,
@@ -366,10 +370,13 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
                   />
                   <TextField
                     label="Điện thoại liên hệ"
+                    type="tel"
                     value={metadataForm.contactPhone}
+                    error={!!contactPhoneError(metadataForm.contactPhone)}
+                    helperText={contactPhoneError(metadataForm.contactPhone)}
                     onChange={(e) => updateMetadata({ contactPhone: e.target.value })}
                     disabled={saveMetadata.isPending}
-                    slotProps={{ htmlInput: { maxLength: 50 } }}
+                    slotProps={{ htmlInput: { maxLength: 30 } }}
                   />
                   <TextField
                     label="Email liên hệ"

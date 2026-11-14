@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import {
   Alert,
   Button,
@@ -23,7 +24,7 @@ import {
   type Page,
 } from '../../../../../../packages/client-core/src/invoices';
 import { useInvoiceApi } from '../../invoices/useInvoiceApi';
-import { PolicyForm, ScheduleForm } from '../../invoices/BillingConfigurationPage';
+import { PolicyForm } from '../../invoices/BillingConfigurationPage';
 import { ErrorState, LoadingState } from '../../../components/common/PortalUI';
 import { OwnerTable } from '../../../components/common/OwnerWorkspace';
 import { LocationEmpty } from '../components/LocationSection';
@@ -83,8 +84,8 @@ export function LocationPricingWorkspace({
   const api = useInvoiceApi();
   const { session } = useAuth();
   const owner = session?.roles.includes('Owner') ?? false;
-  const [tab, setTab] = useState(initialTab);
-  const [utilityMode, setUtilityMode] = useState('workspace');
+  const [tab, setTab] = useState(initialTab === 2 ? 3 : initialTab);
+  const [utilityMode, setUtilityMode] = useState('electricity');
   const [effectiveOnly, setEffectiveOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -114,11 +115,6 @@ export function LocationPricingWorkspace({
         { signal },
       ),
     enabled: showPolicies,
-  });
-  const schedule = useQuery({
-    queryKey: ['billing-schedule', session?.userId, locationId],
-    queryFn: ({ signal }) => api.schedule(locationId, signal),
-    enabled: tab === 2 && owner,
   });
   const rooms = useQuery({
     queryKey: ['property-setup', 'pricing-rooms', session?.userId, locationId],
@@ -195,11 +191,20 @@ export function LocationPricingWorkspace({
           setEffectiveOnly(false);
         }}
       >
-        <Tab label="Giá thuê" />
-        <Tab label="Phí dịch vụ" />
-        <Tab label="Lịch & quy tắc hóa đơn" />
-        <Tab label="Điện & nước" />
+        <Tab value={0} label="Giá thuê" />
+        <Tab value={1} label="Phí dịch vụ" />
+        <Tab value={3} label="Điện & nước" />
       </Tabs>
+      {owner && (
+        <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+          <Button
+            component={Link}
+            to={`/billing-automation?locationId=${encodeURIComponent(locationId)}`}
+          >
+            Lịch tự động & quy tắc hóa đơn
+          </Button>
+        </Stack>
+      )}
       {tab === 3 && (
         <Tabs
           aria-label="Nhóm điện nước"
@@ -215,30 +220,21 @@ export function LocationPricingWorkspace({
             setEffectiveOnly(false);
           }}
         >
-          <Tab value="workspace" label="Thiết lập & vận hành" />
           <Tab value="electricity" label="Đơn giá điện trực tiếp" />
           <Tab value="water" label="Đơn giá nước trực tiếp" />
+          <Tab value="workspace" label="Biểu giá nhà cung cấp & công tơ" />
         </Tabs>
       )}
       {tab === 3 && utilityMode === 'workspace' ? (
         <UtilityWorkspace locationId={locationId} />
-      ) : tab === 2 ? (
-        !owner ? (
-          <Alert severity="info">Chỉ Owner được quản lý lịch và quy tắc hóa đơn.</Alert>
-        ) : schedule.isPending ? (
-          <LoadingState />
-        ) : schedule.error ? (
-          <ErrorState error={schedule.error} retry={() => void schedule.refetch()} />
-        ) : (
-          <ScheduleForm
-            key={schedule.data?.version ?? 0}
-            location={locationId}
-            current={schedule.data ?? undefined}
-            onSaved={() => void schedule.refetch()}
-          />
-        )
       ) : (
         <>
+          {tab === 3 && (
+            <Typography variant="body2" color="text.secondary">
+              Đơn giá trực tiếp dùng cho thỏa thuận thuê mới; hợp đồng đã chốt giữ nguyên đơn giá.
+              Chọn mục biểu giá nhà cung cấp nếu cần quản lý công tơ, bậc giá hoặc đối soát.
+            </Typography>
+          )}
           <Paper variant="outlined" sx={{ p: 1.5 }}>
             <Stack
               direction={{ xs: 'column', md: 'row' }}
