@@ -124,7 +124,7 @@ public sealed class OtpSigningTests
         var ownerSigned = pdf.Complete(first.PreparedPdf, first.FieldName, first.DocumentDigest, ownerChain,
             ownerKey.SignHash(first.DataToSignDigest, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
         var second = pdf.Prepare(ownerSigned, seal.Chain, DateTimeOffset.UtcNow,
-            new VisibleSignature(1, 0.55, 0.7, 0.35, "Ký điện tử bởi: Người thuê tổng hợp\nXác thực: mã OTP qua email"));
+            new VisibleSignature(1, 0.55, 0.7, 0.35, "Ký điện tử bởi: Người thuê tổng hợp\nNgày ký: 14/11/2026 10:00:00"));
         var result = pdf.Complete(second.PreparedPdf, second.FieldName, second.DocumentDigest, seal.Chain, seal.Sign(second.DataToSignDigest));
 
         using var document = new PdfDocument(new PdfReader(new MemoryStream(result)));
