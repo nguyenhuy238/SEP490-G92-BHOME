@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { Button, Dialog, Icon, Portal, Text, TouchableRipple } from 'react-native-paper';
+import { Button, Dialog, Icon, Text, TouchableRipple } from 'react-native-paper';
+import { ContextPortal } from '../../components/ContextPortal';
 import { useWorkspaceQuery } from '../workspace/useWorkspaceQuery';
 import { queryPolicies } from '../../lib/queryPolicies';
 import type { MobileApi } from '../../lib/api';
@@ -31,7 +32,7 @@ export function IncidentLookupDialog<T>({
 }) {
   const [pages, setPages] = useState(1);
   return (
-    <Portal>
+    <ContextPortal>
       <Dialog visible onDismiss={close} style={s.dialog}>
         <Dialog.Title>{title}</Dialog.Title>
         <Dialog.ScrollArea>
@@ -57,7 +58,7 @@ export function IncidentLookupDialog<T>({
           <Button onPress={close}>Đóng</Button>
         </Dialog.Actions>
       </Dialog>
-    </Portal>
+    </ContextPortal>
   );
 }
 function LookupPage<T>({
