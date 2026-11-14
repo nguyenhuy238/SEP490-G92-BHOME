@@ -29,18 +29,19 @@ const DONE = ['Signed', 'Simulated'];
 const OPEN = (s: Signature) => !['Signed', 'Simulated', 'Failed'].includes(s.status);
 
 /** What GET /contracts/signing-methods offers; null while loading or when the server is older. */
-export function useSigningMethods(api: Api) {
+export function useSigningMethods(api: Api, enabled = true) {
   const signing = useMemo(() => signingClient(api.transport), [api]);
   const [value, setValue] = useState<SigningMethods | null>(null);
   useEffect(() => {
+    if (!enabled) return;
     const controller = new AbortController();
-    signing.methods(controller.signal).then(
+    Promise.resolve(signing.methods(controller.signal)).then(
       (v) => !controller.signal.aborted && setValue(Array.isArray(v?.methods) ? v : null),
       () => !controller.signal.aborted && setValue(null),
     );
     return () => controller.abort();
-  }, [signing]);
-  return value;
+  }, [signing, enabled]);
+  return enabled ? value : null;
 }
 
 // The signer's part of the "Ký" section for the two in-app methods (mockups 3.2.2):
