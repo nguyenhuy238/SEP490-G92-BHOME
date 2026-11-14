@@ -35,6 +35,115 @@ an appropriate operations boundary. Review/pin image digests in the release proc
 No infrastructure container was started during initialization because the local Docker daemon was
 stopped. Compose syntax validation does not prove image build/runtime behavior.
 
+## Cấu hình SMS OTP thật qua eSMS
+
+Phạm vi xác thực và bảo vệ thông tin theo GBR-01/02/13/18, NFR bảo mật và quyết định SMS ngày
+13/11/2026 được ghi trong [SMS_IMPLEMENTATION.md](../../docs/development/SMS_IMPLEMENTATION.md).
+Các thành phần liên quan gồm `SmsGateway`, `EsmsSmsSender`, `SmsPasswordRecovery` và job
+`sms-recovery-delivery`. Kiểm tra chấp nhận gồm cấu hình đủ/thiếu, gửi đúng mẫu SMS-01,
+từ chối của nhà cung cấp, timeout và nhận OTP trên điện thoại.
+
+eSMS yêu cầu tài khoản có quyền gửi, Brandname được kích hoạt và nội dung được đăng ký với nhà mạng.
+Đăng ký mẫu SMS-01 theo nội dung ứng dụng, với mã OTP sáu chữ số và thời hạn là biến của mẫu.
+
+```text
+BHOME: Ma OTP dat lai mat khau la {OTP}. Ma co hieu luc trong {MINUTES} phut. Khong chia se ma nay.
+```
+
+Đối chiếu tên Brandname và mẫu được eSMS duyệt trước khi bật các cờ tương ứng.
+Hướng dẫn của nhà cung cấp có tại [API SMS OTP/CSKH](https://developers.esms.vn/esms-api/ham-gui-tin/tin-nhan-sms-otp-cskh).
+
+### Chạy Development bằng User Secrets
+
+API sử dụng User Secrets ID `bhome-api-development`. Lưu `Sms:ApiKey` và `Sms:SecretKey` trong
+User Secrets qua công cụ quản lý secrets trên máy. Sau khi eSMS duyệt Brandname và mẫu OTP,
+chạy tại repository root, thay `BRANDNAME_DA_DUYET` bằng tên thực tế.
+
+```powershell
+$env:DOTNET_ENVIRONMENT = 'Development'
+dotnet user-secrets set 'Sms:Enabled' 'true' --project src/backend/BHome.Api
+dotnet user-secrets set 'Sms:Mode' 'Production' --project src/backend/BHome.Api
+dotnet user-secrets set 'Sms:ProductionEnabled' 'true' --project src/backend/BHome.Api
+dotnet user-secrets set 'Sms:Brandname' 'BRANDNAME_DA_DUYET' --project src/backend/BHome.Api
+dotnet user-secrets set 'Sms:EnabledTemplates:0' 'SMS-01' --project src/backend/BHome.Api
+dotnet user-secrets set 'Sms:ApprovedTemplates:0' 'SMS-01' --project src/backend/BHome.Api
+dotnet user-secrets set 'SmsRecovery:Enabled' 'true' --project src/backend/BHome.Api
+dotnet user-secrets set 'Jobs:Enabled' 'true' --project src/backend/BHome.Api
+```
+
+Tạo khóa HMAC riêng cho OTP một lần, rồi giữ ổn định qua các lần khởi động. Nếu đã có khóa hợp lệ,
+tiếp tục sử dụng khóa hiện có. Đoạn PowerShell sau đưa khóa qua stdin vào User Secrets.
+
+```powershell
+$smsRecoveryBytes = New-Object byte[] 32
+$smsRecoveryRandom = [Security.Cryptography.RandomNumberGenerator]::Create()
+try {
+    $smsRecoveryRandom.GetBytes($smsRecoveryBytes)
+    @{ 'SmsRecovery:HashKey' = [Convert]::ToBase64String($smsRecoveryBytes) } |
+        ConvertTo-Json -Compress |
+        dotnet user-secrets set --project src/backend/BHome.Api
+} finally {
+    $smsRecoveryRandom.Dispose()
+    [Array]::Clear($smsRecoveryBytes, 0, $smsRecoveryBytes.Length)
+}
+```
+
+Kiểm tra cấu hình bằng lệnh sau. Kết quả hiển thị tên thiết lập cùng `OK` hoặc `MISSING`.
+Exit code 0 nghĩa là cấu hình cục bộ đủ điều kiện, exit code 1 chỉ ra phần cần bổ sung.
+
+```powershell
+dotnet run --project tools/BHome.LocalDevelopment -c Release -- check-sms-configuration
+```
+
+Sau đó khởi động lại API để nhận cấu hình mới. `Sms:Mode=Production` chọn gửi SMS thật và có thể
+phát sinh phí ngay cả khi API chạy môi trường Development. Biến môi trường có độ ưu tiên cao hơn
+User Secrets. CLI SMS đọc User Secrets khi môi trường là Development và đọc biến môi trường ở
+mọi môi trường. Khi cấu hình bằng `.env`, nạp các giá trị đó vào process chạy CLI để đối chiếu.
+
+### Chạy API trong container
+
+Truyền cấu hình ở runtime bằng secret manager hoặc env file riêng có quyền truy cập hạn chế.
+Các khóa tương ứng dùng dấu `__`, ví dụ `Sms__Mode=Production`,
+`Sms__EnabledTemplates__0=SMS-01`, `Sms__ApprovedTemplates__0=SMS-01`,
+`SmsRecovery__HashKey` và `Jobs__Enabled=true`. Có thể dùng `.env.example` làm danh sách thiết lập.
+Docker Compose gốc khởi chạy PostgreSQL và MinIO. Container API cần được truyền cấu hình SMS riêng.
+
+OTP được gửi qua PostgreSQL job queue. `Jobs:Enabled=true` cho phép worker xử lý các handler đã
+đăng ký. Kiểm tra log khởi động có `Background worker started` và khả năng kết nối database.
+Lưu bền vững ASP.NET Core Data Protection key ring qua các lần tạo lại container. Với nhiều API
+instance, dùng chung key ring và cấu hình ứng dụng Data Protection để các instance giải mã được
+job OTP của nhau. Hạ tầng lưu key ring hiện cần được cấu hình khi triển khai.
+
+### Kiểm tra nhận OTP
+
+Để thử riêng mẫu OTP sau khi đã xác nhận số nhận thử, đặt `BHOME_SMS_TEST_PHONE` riêng trong
+process và chạy các lệnh sau. Giữ các cờ live-test trong process thử nghiệm.
+
+```powershell
+$env:Sms__LiveTestEnabled = 'true'
+$env:BHOME_SMS_CONFIRM_LIVE = 'true'
+try {
+    dotnet run --project tools/BHome.LocalDevelopment -c Release -- test-sms-provider --otp
+} finally {
+    Remove-Item Env:Sms__LiveTestEnabled -ErrorAction SilentlyContinue
+    Remove-Item Env:BHOME_SMS_CONFIRM_LIVE -ErrorAction SilentlyContinue
+}
+```
+
+Probe gửi một mã ngẫu nhiên theo SMS-01 để kiểm tra nhận tin. Luồng khôi phục mật khẩu thực tế
+bắt đầu tại màn hình quên mật khẩu qua SMS hoặc `POST /api/v1/auth/sms-recovery/request`.
+Tài khoản cần đang hoạt động, có số di động Việt Nam và `PhoneNumberConfirmed=true` từ việc xác minh
+quyền sở hữu số điện thoại. Repo hiện còn thiếu luồng xác minh quyền sở hữu số điện thoại thật.
+Đánh dấu phone-confirmed cần bằng chứng xác minh phù hợp. Thiếu số đã xác minh sẽ khiến yêu cầu
+trả về thông báo chung và bỏ qua việc gửi OTP để bảo vệ thông tin tài khoản.
+
+Kiểm tra đầy đủ bằng cách yêu cầu mã, nhận trên điện thoại, xác minh, đặt lại mật khẩu và đăng nhập
+bằng mật khẩu mới. Các ca sai mã, hết hạn, gửi lại và dùng lại mã được kiểm tra trong luồng tương ứng.
+eSMS `CodeResult=100` xác nhận tiếp nhận yêu cầu. Xác nhận giao tin qua điện thoại hoặc callback
+cuối cùng. Có thể cấu hình `Sms:CallbackUrl=https://<api-host>/api/v1/sms/esms/callback` khi ingress
+đã giữ đúng IP nguồn theo [hướng dẫn SMS](../../docs/development/SMS_IMPLEMENTATION.md).
+Sandbox dùng `Sandbox=1` để kiểm tra tích hợp và trả trạng thái `SandboxAccepted`.
+
 # Internal OCR CPU smoke
 
 Tải model có pin/checksum bằng `scripts/Get-OcrModels.ps1`, sau đó chạy từ repository root:

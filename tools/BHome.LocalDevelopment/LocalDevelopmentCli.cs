@@ -8,15 +8,25 @@ internal static class LocalDevelopmentCli
 {
     public static async Task<int> Main(string[] args)
     {
-        if (args.SequenceEqual(new[] { "test-sms-provider" }))
+        if (args.SequenceEqual(new[] { "check-sms-configuration" }))
         {
             try
             {
-                var config = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+                var checks = SmsProviderProbe.RecoveryConfigurationChecks(SmsProviderProbe.LoadConfiguration());
+                foreach (var check in checks) Console.WriteLine($"{(check.Value ? "OK" : "MISSING")}: {check.Key}");
+                return checks.Values.All(ready => ready) ? 0 : 1;
+            }
+            catch (Exception error) { Console.Error.WriteLine($"SMS configuration check failed ({error.GetType().Name}); private values suppressed."); return 1; }
+        }
+        if (args.SequenceEqual(new[] { "test-sms-provider" }) || args.SequenceEqual(new[] { "test-sms-provider", "--otp" }))
+        {
+            try
+            {
+                var config = SmsProviderProbe.LoadConfiguration();
                 var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
                 services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? ""));
                 SmsProviderProbe.ConfigureSimulation(services, config); services.AddInfrastructure(config);
-                await using var provider = services.BuildServiceProvider(); await SmsProviderProbe.RunAsync(provider); return 0;
+                await using var provider = services.BuildServiceProvider(); await SmsProviderProbe.RunAsync(provider, args.Length == 2); return 0;
             }
             catch (BHome.Application.Notifications.ChannelDeliveryException error) { Console.Error.WriteLine("SMS probe rejected: " + error.Code); return 1; }
             catch (Exception error) { Console.Error.WriteLine($"SMS probe failed ({error.GetType().Name}); private values suppressed."); return 1; }
