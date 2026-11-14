@@ -692,15 +692,19 @@ function LiveContractDetail({
             )}
         </Box>
       )}
-      {section === 'signing' && !holding && !ownerMain && c.signingMode !== 'INTERNAL_OTP_DRAWN' && (
-        <ContractSigningPanel
-          api={api}
-          contract={c}
-          actorId={actorId}
-          methods={signingMethods}
-          onChanged={detail.reload}
-        />
-      )}
+      {section === 'signing' &&
+        !rental &&
+        !holding &&
+        !ownerMain &&
+        c.signingMode !== 'INTERNAL_OTP_DRAWN' && (
+          <ContractSigningPanel
+            api={api}
+            contract={c}
+            actorId={actorId}
+            methods={signingMethods}
+            onChanged={detail.reload}
+          />
+        )}
       {((section === 'signing' && !rental && !holding && !ownerMain) || section === 'history') && (
         <ContractWorkflowPanel
           api={api}
