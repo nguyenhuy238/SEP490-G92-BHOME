@@ -77,10 +77,10 @@ public sealed partial class ContractLifecycleApiTests
         var ownerSigned = signer.Complete(prepared.PreparedPdf, prepared.FieldName, prepared.DocumentDigest, chain,
             key.SignHash(prepared.DataToSignDigest, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
 
-        // A file that is not the issued PDF plus a signature is refused and changes nothing.
+        // Re-uploading the issued PDF without a new signature is refused and changes nothing.
         var unsigned = await Upload(owner, id, issued);
         Assert.Equal(HttpStatusCode.BadRequest, unsigned.StatusCode);
-        Assert.Contains("signed_pdf_not_from_issued_contract", await unsigned.Content.ReadAsStringAsync());
+        Assert.Contains("signed_pdf_has_no_new_signature", await unsigned.Content.ReadAsStringAsync());
 
         // 3. The signed file is accepted once; the Tenant is invited by email.
         var uploadKey = Guid.NewGuid();
