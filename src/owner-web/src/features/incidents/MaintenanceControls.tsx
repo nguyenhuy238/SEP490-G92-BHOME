@@ -40,6 +40,7 @@ function ProactiveForm({ close }: { close: () => void }) {
   const [description, setDescription] = useState('');
   const [outcome, setOutcome] = useState('');
   const [deadline, setDeadline] = useState('');
+  const [validation, setValidation] = useState('');
   const action = useOwnerAction();
   const assignment = useOwnerQuery<{ staffId: string | null; available: boolean }>(
     ['maintenance-assignment', location],
@@ -47,28 +48,38 @@ function ProactiveForm({ close }: { close: () => void }) {
     !!location,
   );
   async function save() {
-    const saved = await action.run(async () => {
-      if (
-        !location ||
-        description.trim().length < 10 ||
-        description.trim().length > 8000 ||
-        !outcome.trim() ||
-        !deadline ||
-        (!room && !area.trim())
-      )
-        throw new Error(
-          'Chọn cơ sở, phòng hoặc khu vực chung, nhập mô tả 10–8.000 ký tự, kết quả và thời hạn.',
-        );
-      await action.command('/api/v1/work-orders', 'POST', {
+    if (
+      !location ||
+      description.trim().length < 10 ||
+      description.trim().length > 8000 ||
+      !outcome.trim() ||
+      !deadline ||
+      (!room && !area.trim())
+    ) {
+      setValidation(
+        'Chọn cơ sở, phòng hoặc khu vực chung, nhập mô tả 10–8.000 ký tự, kết quả và thời hạn.',
+      );
+      return;
+    }
+    let targetCompletionAt: string;
+    try {
+      targetCompletionAt = vietnamInstant(deadline);
+    } catch (error) {
+      setValidation((error as Error).message);
+      return;
+    }
+    setValidation('');
+    const saved = await action.run(() =>
+      action.command('/api/v1/work-orders', 'POST', {
         locationId: location,
         roomId: room || null,
         commonArea: room ? null : area.trim(),
         assetId: asset || null,
         description: description.trim(),
         expectedOutcome: outcome.trim(),
-        targetCompletionAt: vietnamInstant(deadline),
-      });
-    });
+        targetCompletionAt,
+      }),
+    );
     if (saved) close();
   }
   return (
@@ -141,7 +152,7 @@ function ProactiveForm({ close }: { close: () => void }) {
           />
           <OwnerFeedback
             busy={assignment.isFetching || action.busy}
-            error={assignment.error || action.error}
+            error={validation || assignment.error || action.error}
           />
           {assignment.data && (
             <Alert severity={assignment.data.available ? 'info' : 'warning'}>

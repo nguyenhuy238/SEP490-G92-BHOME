@@ -480,18 +480,20 @@ function WorkDetail({ id }: { id: string }) {
     !preview && !!session && (role === 'Staff' || role === 'Owner') && session.roles.includes(role);
   const query = useIncidentQuery<WorkOrder>(enabled ? `${workOrderRoot}/${id}` : null);
   const work = query.data;
-  const incident = useIncidentQuery<Incident>(work ? `${incidentRoot}/${work.incidentId}` : null);
+  const incident = useIncidentQuery<Incident>(
+    work?.incidentId ? `${incidentRoot}/${work.incidentId}` : null,
+  );
   const [historyPage, setHistoryPage] = useState(1),
     [maintenancePage, setMaintenancePage] = useState(1);
   const history = useIncidentQuery<IncidentPage<IncidentActivity>>(
-    work ? `${incidentRoot}/${work.incidentId}/history?page=${historyPage}&pageSize=20` : null,
+    work ? `${workOrderRoot}/${id}/history?page=${historyPage}&pageSize=20` : null,
   );
   const evidence = useIncidentQuery<IncidentEvidence[]>(
-    work ? `${incidentRoot}/${work.incidentId}/evidence` : null,
+    work ? `${workOrderRoot}/${id}/evidence` : null,
   );
   const maintenance = useIncidentQuery<IncidentPage<MaintenanceHistory>>(
     work
-      ? `${workOrderRoot}/maintenance-history?incidentId=${work.incidentId}&page=${maintenancePage}&pageSize=20`
+      ? `${workOrderRoot}/maintenance-history?workOrderId=${id}&page=${maintenancePage}&pageSize=20`
       : null,
   );
   const { reload: reloadWork } = query,
@@ -527,6 +529,11 @@ function WorkDetail({ id }: { id: string }) {
         <>
           <Box>
             <Heading title="Chi tiết lệnh sửa chữa" detail={incidentText(work.status)} />
+            <Info
+              label="Nguồn công việc"
+              value={work.source === 'Proactive' ? 'Bảo trì chủ động' : 'Sự cố'}
+            />
+            <Info label="Nội dung bảo trì" value={work.description} />
             {work.isOverdue && <Pill tone="red">Quá hạn hoàn thành</Pill>}
             <Info label="Kết quả yêu cầu" value={work.expectedOutcome} />
             {role === 'Owner' ? (
@@ -547,6 +554,13 @@ function WorkDetail({ id }: { id: string }) {
               <Info label="Chi phí dự kiến" value={incidentMoney(work.estimatedCost)} />
             )}
             <Info label="Đơn vị sửa chữa" value={work.vendor} />
+            {!!work.fastRepairPolicyVersion && (
+              <Text>
+                Sửa nhanh theo chính sách phiên bản {work.fastRepairPolicyVersion} ·{' '}
+                {work.fastRepairCategory}. Chi phí 0 VND, không dùng vật tư, chờ Owner nghiệm thu
+                kết quả.
+              </Text>
+            )}
             <Text>
               Phương án: {work.planApproved ? 'Đã được duyệt' : 'Chưa được duyệt'} ·{' '}
               {work.canStart ? 'Được phép bắt đầu' : 'Chưa ở bước bắt đầu'}
@@ -583,7 +597,7 @@ function WorkDetail({ id }: { id: string }) {
               <IncidentPlace report={incident.data} role={role!} />
               <Action
                 secondary
-                onPress={() => go('incident-detail', { incidentId: work.incidentId })}
+                onPress={() => go('incident-detail', { incidentId: work.incidentId! })}
               >
                 Xem sự cố gốc
               </Action>
@@ -597,6 +611,7 @@ function WorkDetail({ id }: { id: string }) {
               )}
             </>
           )}
+          {!work.incidentId && <IncidentActionPanel key={work.version} work={work} role={role!} />}
           <Heading title="Ảnh kiểm tra và kết quả" />
           <QueryState {...evidence} />
           {evidence.data?.filter((image) => image.workOrderId === id).length === 0 && (
@@ -607,19 +622,16 @@ function WorkDetail({ id }: { id: string }) {
             .map((image) => (
               <EvidenceImage key={image.id} incidentId={work.incidentId} evidence={image} />
             ))}
-          <Heading title="Lịch sử hoạt động của sự cố" />
+          <Heading title="Lịch sử hoạt động của lệnh sửa chữa" />
           <QueryState {...history} />
           {history.data && (
             <IncidentTimeline items={history.data.items} owner={role === 'Owner'} tenant={false} />
           )}
           <Pager query={history} page={historyPage} setPage={setHistoryPage} />
           <Heading title="Lịch sử bảo trì và hiện trạng tài sản" />
-          <Text style={ui.muted}>
-            Phân trang theo sự cố; chỉ hiển thị bản ghi của lệnh sửa chữa đang xem.
-          </Text>
           <QueryState {...maintenance} />
           {maintenance.data?.items.filter((item) => item.workOrderId === id).length === 0 && (
-            <Text>Chưa có bản ghi của lệnh này trên trang lịch sử sự cố.</Text>
+            <Text>Chưa có bản ghi bảo trì của lệnh sửa chữa này.</Text>
           )}
           {maintenance.data?.items
             .filter((item) => item.workOrderId === id)
@@ -695,7 +707,8 @@ export function IncidentInbox() {
                   });
                   if (!result) return;
                 }
-                go('incident-detail', { incidentId: item.incidentId });
+                if (item.workOrderId) go('maintenance-detail', { workOrderId: item.workOrderId });
+                else if (item.incidentId) go('incident-detail', { incidentId: item.incidentId });
               })();
             }}
           >

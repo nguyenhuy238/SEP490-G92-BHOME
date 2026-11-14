@@ -5,6 +5,7 @@ import { ChoiceField, Input } from '../../components/WorkflowControls';
 import { QueryState, Pagination } from '../../components/WorkspaceQueryState';
 import { IncidentEvidencePicker } from '../../components/IncidentEvidencePicker';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
+import { IncidentLookupDialog } from './IncidentLookupDialog';
 import { useSession } from '../../lib/SessionProvider';
 import { businessToday } from '../../../../../packages/client-core/src/contracts';
 import { useIncidentMutation, useIncidentQuery } from './useIncidentData';
@@ -19,6 +20,7 @@ import {
   type IncidentCommands,
   type WorkCommands,
   type EmergencyAction,
+  type ReportingAsset,
 } from '../../services/incidents';
 
 const names: Record<string, string> = {
@@ -42,6 +44,10 @@ const names: Record<string, string> = {
   rework: 'Yêu cầu làm lại',
   'cost-decision': 'Quyết định chi phí khẩn cấp',
   'report-photo': 'Bổ sung ảnh báo cáo',
+  'fast-repair-start': 'Thực hiện sửa nhanh 0 VND',
+  'fast-repair-fallback': 'Dừng sửa nhanh và xin duyệt phương án',
+  'asset-proposal': 'Đề xuất tài sản liên quan',
+  'asset-decision': 'Xác nhận tài sản liên quan',
 };
 export function incidentActions(report: Incident, role: string): string[] {
   if (!['Submitted', 'InProgress'].includes(report.status)) return [];
@@ -96,34 +102,42 @@ interface Assignment {
 }
 
 export function IncidentActionPanel({
-  report,
+  report: sourceReport,
   work,
   role,
   emergencyActions = [],
 }: {
-  report: Incident;
+  report?: Incident;
   work?: WorkOrder;
   role: string;
   emergencyActions?: EmergencyAction[];
 }) {
   const { api, session } = useSession();
+  const report = sourceReport ?? work!;
   const allowed =
     role === 'Owner'
       ? work
         ? workActions(work, role, session?.userId ?? '').filter((action) =>
-            ['plan-decision', 'verify', 'rework'].includes(action),
+            ['plan-decision', 'verify', 'rework', 'asset-decision'].includes(action),
           )
         : []
       : work
         ? workActions(work, role, session?.userId ?? '')
-        : incidentActions(report, role);
+        : sourceReport
+          ? incidentActions(sourceReport, role)
+          : [];
   const actions: string[] = allowed;
   const [action, setAction] = useState(''),
     [values, setValues] = useState<Record<string, string>>({});
   const [photos, setPhotos] = useState<IncidentPhoto[]>([]),
     [confirmed, setConfirmed] = useState(false);
   const [confirmDecision, setConfirmDecision] = useState(false);
+  const [assetPicker, setAssetPicker] = useState(false);
+  const [assetLabel, setAssetLabel] = useState('');
   const mutation = useIncidentMutation();
+  const policy = useIncidentQuery<{ version: number; activeCategories: string[] }>(
+    action === 'fast-repair-start' ? '/api/v1/work-orders/fast-repair-policy' : null,
+  );
   const [originalPage, setOriginalPage] = useState(1);
   // Snapshot a report version after this form's own uploads, then retain it on ambiguous retries.
   const versions = useRef(new Map<string, number>());
@@ -166,7 +180,7 @@ export function IncidentActionPanel({
     'report-photo',
   ].includes(action);
   const assetOutcome =
-    !!report.assetId &&
+    !!(work?.assetId ?? report.assetId) &&
     ['verify', 'direct-completion', ...(work ? ['cancel'] : [])].includes(action);
   async function execute() {
     if (!api || !action || !actions.includes(action) || !confirmed) return;
@@ -211,6 +225,43 @@ export function IncidentActionPanel({
         assetStatus: assetOutcome ? Number(required('assetStatus', 'Chọn trạng thái tài sản')) : 0,
       };
       switch (action) {
+        case 'fast-repair-start':
+          input = {
+            version,
+            category: required('fastCategory', 'Nhóm sửa nhanh'),
+            inspectionResult: required('inspection', 'Kết quả kiểm tra'),
+            solution: required('solution', 'Cách xử lý'),
+            estimatedMinutes: integer(required('minutes', 'Thời gian dự kiến'), 'Thời gian')!,
+            estimatedCost: 0,
+            usesMaterials: false,
+          };
+          break;
+        case 'fast-repair-fallback':
+          input = { version, note: required('note', 'Lý do cần phương án thông thường') };
+          break;
+        case 'asset-proposal':
+          input = {
+            version,
+            assetId: values.assetId?.trim() || null,
+            name: values.assetId?.trim() ? null : required('assetName', 'Tên tài sản', 200),
+            category: values.assetId?.trim()
+              ? null
+              : required('assetCategory', 'Loại tài sản', 100),
+            condition: values.assetId?.trim()
+              ? null
+              : required('assetCondition', 'Hiện trạng', 1000),
+            reason: required('reason', 'Lý do đề xuất', 2000),
+          };
+          break;
+        case 'asset-decision':
+          if (!['true', 'false'].includes(values.approve))
+            throw new Error('Chọn xác nhận hoặc từ chối.');
+          input = {
+            version,
+            approve: values.approve === 'true',
+            reason: required('reason', 'Lý do', 2000),
+          };
+          break;
         case 'review':
           input = {
             version,
@@ -244,6 +295,7 @@ export function IncidentActionPanel({
             estimatedMinutes: minutes,
             estimatedCost: integer(values.cost ?? '', 'Chi phí dự kiến', false),
             evidenceIds,
+            ...(values.materials === 'true' ? { usesMaterials: true } : {}),
           };
           break;
         }
@@ -327,13 +379,13 @@ export function IncidentActionPanel({
             ...(action === 'duplicate'
               ? { duplicateOfId: required('duplicateOfId', 'Chọn báo cáo gốc') }
               : {}),
-            ...(work && report.assetId ? outcome : {}),
+            ...(work?.assetId ? outcome : {}),
           };
       }
       for (const [index, photo] of photos.entries()) {
         progress(`Đang tải ảnh ${index + 1}/${photos.length}…`);
         const result = await client.upload(
-          report.id,
+          sourceReport?.id ?? null,
           work?.id ?? null,
           kind,
           photo,
@@ -488,6 +540,101 @@ export function IncidentActionPanel({
           {field('solution', 'Phương án sửa chữa', false, true)}
           {field('minutes', 'Thời gian dự kiến (phút)', true)}
           {field('cost', 'Chi phí dự kiến (VND, tùy chọn)', true)}
+          <ChoiceField
+            label="Sử dụng vật tư"
+            value={values.materials ?? 'false'}
+            onChange={(value) => set('materials', value)}
+            options={[
+              { id: 'false', label: 'Không' },
+              { id: 'true', label: 'Có, kể cả vật tư tồn kho' },
+            ]}
+          />
+        </>
+      )}
+      {action === 'fast-repair-start' && (
+        <>
+          <Text>Chi phí 0 VND, không sử dụng vật tư. Owner sẽ nghiệm thu kết quả.</Text>
+          <QueryState {...policy} />
+          <ChoiceField
+            label="Nhóm sửa nhanh đã kích hoạt"
+            value={values.fastCategory ?? ''}
+            onChange={(value) => set('fastCategory', value)}
+            options={(policy.data?.activeCategories ?? []).map((id) => ({ id, label: id }))}
+          />
+          {policy.data?.activeCategories.length === 0 && (
+            <Text>Owner chưa kích hoạt nhóm sửa nhanh. Gửi phương án sửa chữa để được duyệt.</Text>
+          )}
+          {field('inspection', 'Kết quả kiểm tra', false, true)}
+          {field('solution', 'Cách xử lý không dùng vật tư', false, true)}
+          {field('minutes', 'Thời gian dự kiến (phút)', true)}
+        </>
+      )}
+      {action === 'fast-repair-fallback' &&
+        field('note', 'Lý do cần chi phí hoặc vật tư', false, true)}
+      {action === 'asset-proposal' && (
+        <>
+          <Text>{assetLabel || 'Đề xuất tạo tài sản mới hoặc chọn tài sản đã quản lý.'}</Text>
+          <Button disabled={mutation.busy} onPress={() => setAssetPicker(true)}>
+            Chọn tài sản đã quản lý
+          </Button>
+          {values.assetId && (
+            <Button
+              disabled={mutation.busy}
+              onPress={() => {
+                set('assetId', '');
+                setAssetLabel('');
+              }}
+            >
+              Đề xuất tài sản mới
+            </Button>
+          )}
+          {assetPicker && (
+            <IncidentLookupDialog<ReportingAsset>
+              title="Chọn tài sản đúng phòng hoặc khu vực"
+              prefix={`/api/v1/incidents/reporting-assets?locationId=${report.locationId}${report.roomId ? '&roomId=' + report.roomId : ''}`}
+              load={(client, path, signal) => client.request(path, { signal })}
+              identity={(asset) => asset.assetId}
+              label={(asset) => asset.name}
+              matches={(asset) =>
+                asset.roomId === report.roomId &&
+                (report.roomId !== null || asset.commonArea === report.commonArea) &&
+                asset.status !== 'Retired'
+              }
+              selected={(asset) => asset.assetId === values.assetId}
+              choose={(asset) => {
+                set('assetId', asset.assetId);
+                setAssetLabel(asset.name);
+                setAssetPicker(false);
+              }}
+              close={() => setAssetPicker(false)}
+            />
+          )}
+          {!values.assetId?.trim() && (
+            <>
+              {field('assetName', 'Tên tài sản mới')}
+              {field('assetCategory', 'Loại tài sản')}
+              {field('assetCondition', 'Hiện trạng tài sản', false, true)}
+            </>
+          )}
+          {field('reason', 'Lý do đề xuất', false, true)}
+        </>
+      )}
+      {action === 'asset-decision' && (
+        <>
+          <Text>
+            {work?.proposedAssetName || work?.proposedAssetId} · {work?.proposedAssetCategory} ·{' '}
+            {work?.proposedAssetCondition}
+          </Text>
+          <ChoiceField
+            label="Quyết định tài sản"
+            value={values.approve ?? ''}
+            onChange={(value) => set('approve', value)}
+            options={[
+              { id: 'true', label: 'Xác nhận' },
+              { id: 'false', label: 'Từ chối' },
+            ]}
+          />
+          {field('reason', 'Lý do quyết định', false, true)}
         </>
       )}
       {['plan-decision', 'cost-decision'].includes(action) && (

@@ -53,6 +53,7 @@ export function CompensationPanel({
   const [due, setDue] = useState('');
   const [reason, setReason] = useState('');
   const [images, setImages] = useState<string[]>([]);
+  const [validation, setValidation] = useState('');
   const action = useOwnerAction();
   const row = query.data;
   const history = useOwnerQuery<Compensation[]>(
@@ -61,33 +62,36 @@ export function CompensationPanel({
     !!row,
   );
   async function create() {
-    await action.run(async () => {
-      if (
-        !contract ||
-        !/^[1-9]\d*$/.test(amount) ||
-        !reason.trim() ||
-        images.length === 0 ||
-        (method === 'Invoice' && !due)
-      )
-        throw new Error(
-          'Chọn hợp đồng chịu trách nhiệm, nhập số tiền, lý do, bằng chứng và ngày đến hạn nếu thu hóa đơn.',
-        );
-      await action.command(path, 'POST', {
+    if (
+      !contract ||
+      !/^[1-9]\d*$/.test(amount) ||
+      !reason.trim() ||
+      images.length === 0 ||
+      (method === 'Invoice' && !due)
+    ) {
+      setValidation(
+        'Chọn hợp đồng chịu trách nhiệm, nhập số tiền, lý do, bằng chứng và ngày đến hạn nếu thu hóa đơn.',
+      );
+      return;
+    }
+    setValidation('');
+    await action.run(() =>
+      action.command(path, 'POST', {
         contractId: contract,
         amount,
         collectionMethod: method,
         dueDate: method === 'Invoice' ? due : null,
         reason: reason.trim(),
         evidenceIds: images,
-      });
-    });
+      }),
+    );
   }
   return (
     <Stack spacing={2}>
       <Typography variant="h6">Bồi thường thiệt hại phòng</Typography>
       <OwnerFeedback
         busy={query.isFetching || action.busy}
-        error={query.error || contracts.error || action.error}
+        error={validation || query.error || contracts.error || action.error}
         notice={action.notice}
       />
       {(query.error || contracts.error) && (
@@ -229,6 +233,7 @@ export function CompensationPanel({
                   control={
                     <Checkbox
                       checked={images.includes(e.id)}
+                      disabled={action.busy || (!images.includes(e.id) && images.length >= 5)}
                       onChange={(_, checked) =>
                         setImages((value) =>
                           checked ? [...value, e.id] : value.filter((id) => id !== e.id),
