@@ -26,6 +26,31 @@ public sealed class ContractSigningOptions
     public OtpSigningOptions Otp { get; set; } = new();
     public SigningSealOptions Seal { get; set; } = new();
     public UploadProofOptions UploadProof { get; set; } = new();
+    public SigningInvitationLinkOptions InvitationLink { get; set; } = new();
+}
+
+// The "Bạn có hợp đồng cần ký" email carries a button that opens the BHOME app on the contract's signing page
+// (signing in first when needed). Mail clients such as Gmail often drop non-http links, so when PublicOpenUrl is set the
+// button points to that http(s) page on the API, which forwards to the app; otherwise it points to the app link directly.
+public sealed class SigningInvitationLinkOptions
+{
+    // App deep link; "?contractId=<id>" is appended. Expo Go during development: "exp://<LAN IP>:8081/--/sign-contract".
+    public string MobileAppUrl { get; set; } = "bhome://sign-contract";
+    // Absolute http(s) URL of GET /open/sign-contract on this API as the phone reaches it, e.g. "http://192.168.1.10:5240/open/sign-contract".
+    public string PublicOpenUrl { get; set; } = "";
+
+    public string? AppLink(Guid contractId) => Absolute(MobileAppUrl, http: false) is { } app ? $"{app}?contractId={contractId:D}" : null;
+
+    public string? EmailLink(Guid contractId) =>
+        Absolute(PublicOpenUrl, http: true) is { } open ? $"{open}?contractId={contractId:D}" : AppLink(contractId);
+
+    // Only a plain base URL from configuration is used: no query, fragment or user info; http(s) for the public page,
+    // the app's own scheme (bhome, or exp/exps for Expo Go) for the app.
+    private static string? Absolute(string value, bool http) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) &&
+        string.IsNullOrEmpty(uri.UserInfo) && (http ? uri.Scheme is "http" or "https" : uri.Scheme is "bhome" or "exp" or "exps")
+            ? value.TrimEnd('/')
+            : null;
 }
 
 public sealed class SigningMethodSwitches

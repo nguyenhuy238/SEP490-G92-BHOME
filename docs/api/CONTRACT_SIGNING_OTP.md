@@ -35,6 +35,15 @@ Sau mỗi lượt ký, BHOME **đóng dấu PDF (PAdES) bằng chứng thư củ
 
 Khi `ContractWorkflow:SimulatedSigningEnabled = true` (chế độ demo giả lập), chỉ còn cách ký `SIMULATED`.
 
+**Link trong email mời ký:** email "Bạn có hợp đồng cần ký" có nút **Mở BHOME để ký hợp đồng**. Bấm nút thì app BHOME mở trang ký của đúng hợp đồng đó. Nếu chưa đăng nhập, app hiện màn đăng nhập, đăng nhập xong vào thẳng trang ký (route mobile `sign-contract?contractId=<id>`). Link chỉ chứa mã hợp đồng, không cấp quyền gì: vẫn cần phiên đăng nhập của đúng người ký và mã OTP.
+
+| Khóa | Ý nghĩa |
+|---|---|
+| `InvitationLink.MobileAppUrl` | Link mở app, mặc định `bhome://sign-contract`. Khi dev bằng Expo Go: `exp://<IP LAN>:8081/--/sign-contract` |
+| `InvitationLink.PublicOpenUrl` | Không bắt buộc. URL http(s) của `GET /open/sign-contract` trên API mà điện thoại truy cập được, ví dụ `https://<IP LAN>:7240/open/sign-contract`. Gmail hay bỏ link dạng `bhome://`, nên khi có giá trị này nút trong email trỏ tới trang đó, trang đó chuyển tiếp sang app. Bỏ trống thì nút trỏ thẳng `MobileAppUrl` |
+
+`GET /open/sign-contract?contractId=<id>` (không cần đăng nhập): trả trang HTML tự chuyển sang `MobileAppUrl?contractId=<id>`, kèm nút bấm dự phòng. Mã hợp đồng sai hoặc `MobileAppUrl` không hợp lệ thì 404.
+
 **Gửi email:** dùng kênh có sẵn `NotificationChannels`. Muốn nhận mã thật thì đặt `Mode = "Smtp"` và điền `SmtpHost`, `SmtpPort`, `SmtpUser`, `SmtpPassword`, `FromAddress`. Ví dụ dùng Mailtrap khi dev, hoặc Gmail App Password khi demo. Nếu kênh email chưa cấu hình, bước bắt đầu ký trả 503 `otp_email_unavailable` trước khi lưu gì.
 
 ## API

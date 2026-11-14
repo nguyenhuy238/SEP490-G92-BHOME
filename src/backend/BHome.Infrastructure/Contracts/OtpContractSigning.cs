@@ -275,7 +275,7 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
 // Emails the next party once a signature completes ("Bạn có hợp đồng cần ký"), and both parties once it is fully signed.
 // Best effort: a delivery failure never undoes a verified signature.
 internal sealed class ContractSigningNotifier(SigningPartyDirectory parties, INotificationChannelProvider channel,
-    ILogger<ContractSigningNotifier> logger) : IContractSigningNotifier
+    IOptions<ContractSigningOptions> options, ILogger<ContractSigningNotifier> logger) : IContractSigningNotifier
 {
     public async Task SignatureCompletedAsync(ContractSigningProgress progress, CancellationToken t)
     {
@@ -284,10 +284,17 @@ internal sealed class ContractSigningNotifier(SigningPartyDirectory parties, INo
         var place = string.IsNullOrWhiteSpace(progress.LocationName) ? "" : $" ({progress.LocationName})";
         if (progress.NextSignerUserId is { } next)
         {
+            // The button opens the app on this contract's signing page; the app asks to sign in first when needed.
+            // The link only identifies the contract: it grants nothing without the signer's own session and OTP.
+            var link = options.Value.InvitationLink.EmailLink(progress.ContractId);
+            var how = link is null
+                ? "Mở ứng dụng BHOME, vào mục Hợp đồng để xem và ký.\n"
+                : "Bấm nút \"Mở BHOME để ký hợp đồng\" bên dưới. Nếu bạn chưa đăng nhập, BHOME sẽ yêu cầu đăng nhập " +
+                  "rồi đưa bạn thẳng tới trang ký hợp đồng này.\n";
             await SendAsync(next, $"contract-sign-invite:{progress.ContractId:N}:{next:N}", "CONTRACT_SIGNING_INVITATION",
                 $"[BHOME] Bạn có hợp đồng{room} cần ký",
-                $"Hợp đồng{room}{place} đã được bên kia ký và đang chờ bạn ký.\n\nMở ứng dụng BHOME, vào mục Hợp đồng để xem và ký.\n" +
-                "Email này không chứa mã xác nhận. Mã chỉ được gửi khi bạn bấm Ký trong ứng dụng.", t);
+                $"Hợp đồng{room}{place} đã được bên kia ký và đang chờ bạn ký.\n\n{how}" +
+                "Email này không chứa mã xác nhận. Mã chỉ được gửi khi bạn bấm Ký trong ứng dụng.", t, link);
             return;
         }
         foreach (var party in progress.Parties)
@@ -296,13 +303,14 @@ internal sealed class ContractSigningNotifier(SigningPartyDirectory parties, INo
                 $"Hợp đồng{room}{place} đã có đủ chữ ký của các bên.\n\nBạn có thể tải bản hợp đồng đã ký trong ứng dụng BHOME.", t);
     }
 
-    private async Task SendAsync(Guid userId, string key, string eventType, string title, string body, CancellationToken t)
+    private async Task SendAsync(Guid userId, string key, string eventType, string title, string body, CancellationToken t,
+        string? actionUrl = null)
     {
         try
         {
             var (email, _) = await parties.FindAsync(userId, t);
             if (email is null) return;
-            await channel.SendAsync(new ChannelMessage(key, "EMAIL", email, eventType, title, body), t);
+            await channel.SendAsync(new ChannelMessage(key, "EMAIL", email, eventType, title, body, actionUrl), t);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
