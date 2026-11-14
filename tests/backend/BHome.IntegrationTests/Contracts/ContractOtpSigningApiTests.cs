@@ -40,7 +40,8 @@ public sealed partial class ContractLifecycleApiTests
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ContractPdf:TemplateId"] = ContractPdfRendererTests.TemplateId,
-                ["ContractSigning:Methods:Otp"] = "true"
+                ["ContractSigning:Methods:Otp"] = "true",
+                ["ContractSigning:InvitationLink:PublicOpenUrl"] = "https://bhome.example/open/sign-contract"
             }));
             b.ConfigureTestServices(s =>
             {
@@ -95,7 +96,13 @@ public sealed partial class ContractLifecycleApiTests
         }
 
         // After the Owner signed, the Tenant was invited by email; after both signed, both were told.
-        Assert.Contains(email.Sent, m => m.EventType == "CONTRACT_SIGNING_INVITATION" && m.Destination == EmailOf(tenant));
+        var invitation = Assert.Single(email.Sent, m => m.EventType == "CONTRACT_SIGNING_INVITATION" && m.Destination == EmailOf(tenant));
+        // The invitation button opens the app on this contract's signing page (through the public forwarding page).
+        Assert.Equal($"https://bhome.example/open/sign-contract?contractId={id:D}", invitation.ActionUrl);
+        var open = await host.CreateClient().GetAsync($"/open/sign-contract?contractId={id:D}");
+        Assert.Equal(HttpStatusCode.OK, open.StatusCode);
+        Assert.Contains($"bhome://sign-contract?contractId={id:D}", await open.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.NotFound, (await host.CreateClient().GetAsync("/open/sign-contract?contractId=" + Guid.Empty)).StatusCode);
         Assert.Equal(2, email.Sent.Count(m => m.EventType == "CONTRACT_FULLY_SIGNED"));
         var contract = (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
         Assert.Equal("PendingActivation", contract.Status);
