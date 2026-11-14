@@ -214,5 +214,62 @@ public sealed class SignaturePictureGenerator
         using var png = image.Encode(SKEncodedImageFormat.Png, 100);
         return png.ToArray();
     }
+
+    // A signature drawn with a finger: strokes of [x, y] points on a Width × Height pad. Cropped to the ink, scaled to
+    // 200 px high and drawn in the same ink on a transparent background, so it can be saved as the signer's picture.
+    public byte[] FromStrokes(DrawnSignatureInput drawing)
+    {
+        if (drawing.Width is < 100 or > 4000 || drawing.Height is < 60 or > 4000 || drawing.Strokes is null ||
+            drawing.Strokes.Length is 0 or > 80 || drawing.Strokes.Sum(s => s?.Length ?? 0) > 8000)
+            throw ContractException.Invalid("signature_drawing_invalid");
+        var points = new List<SKPoint[]>();
+        foreach (var stroke in drawing.Strokes)
+        {
+            if (stroke is null || stroke.Length == 0) continue;
+            var line = new SKPoint[stroke.Length];
+            for (var i = 0; i < stroke.Length; i++)
+            {
+                var p = stroke[i];
+                if (p is null || p.Length != 2 || !double.IsFinite(p[0]) || !double.IsFinite(p[1]) ||
+                    p[0] < 0 || p[1] < 0 || p[0] > drawing.Width || p[1] > drawing.Height)
+                    throw ContractException.Invalid("signature_drawing_invalid");
+                line[i] = new SKPoint((float)p[0], (float)p[1]);
+            }
+            points.Add(line);
+        }
+        var all = points.SelectMany(p => p).ToArray();
+        var left = all.Min(p => p.X); var top = all.Min(p => p.Y);
+        var inkWidth = all.Max(p => p.X) - left; var inkHeight = all.Max(p => p.Y) - top;
+        // A tap or a dot is not a signature.
+        if (all.Length < 5 || Math.Max(inkWidth, inkHeight) < 20) throw ContractException.Invalid("signature_drawing_empty");
+        const float pad = 16f, target = 200f;
+        var scale = Math.Min(4f, (target - 2 * pad) / Math.Max(inkHeight, 1f));
+        var width = (int)Math.Ceiling(Math.Max(inkWidth * scale + 2 * pad, 80));
+        var height = (int)target;
+        using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            canvas.Clear(SKColors.Transparent);
+            using var ink = new SKPaint
+            {
+                Color = new SKColor(0x0D, 0x2C, 0x8C), IsAntialias = true, IsStroke = true, StrokeWidth = 5,
+                StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round
+            };
+            var top0 = (height - inkHeight * scale) / 2;
+            SKPoint Map(SKPoint p) => new(pad + (p.X - left) * scale, top0 + (p.Y - top) * scale);
+            foreach (var line in points)
+            {
+                // Round-capped segments join smoothly; a single point becomes a dot.
+                if (line.Length == 1) canvas.DrawLine(Map(line[0]), Map(line[0]) + new SKPoint(0.5f, 0), ink);
+                for (var i = 1; i < line.Length; i++) canvas.DrawLine(Map(line[i - 1]), Map(line[i]), ink);
+            }
+        }
+        using var image = SKImage.FromBitmap(bitmap);
+        using var png = image.Encode(SKEncodedImageFormat.Png, 100);
+        return png.ToArray();
+    }
 }
+
+// Width/Height: the drawing pad in device units; Strokes: one array of [x, y] points per finger stroke.
+public sealed record DrawnSignatureInput(int Width, int Height, double[][][]? Strokes);
 

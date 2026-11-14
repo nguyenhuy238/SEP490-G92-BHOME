@@ -47,6 +47,9 @@ import { DepositReceiptPanel } from './DepositReceiptPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 import { MainDraftDetailPanel } from './MainDraftDetailPanel';
 import { ContractPolicyPanel } from './ContractPolicyPanel';
+import { OwnerSigningPanel } from './OwnerSigningPanel';
+import { useSigningMethods } from './useContractsApi';
+import { signingMethodLabel } from '../../../../../packages/client-core/src/signing';
 import { InternalSigningPanel } from './InternalSigningPanel';
 
 function downloadBlob(blob: Blob, name: string) {
@@ -71,6 +74,7 @@ export function ContractDetailPanel({
   onChanged: (id?: string) => void;
 }) {
   const detail = useContractDetail(api, id, 'Owner');
+  const signingMethods = useSigningMethods(api);
   const cache = useQueryClient();
   const [action, setAction] = useState<ContractAction | null>(null);
   const [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
@@ -114,7 +118,7 @@ export function ContractDetailPanel({
         }}
       />
     );
-  const actions = contractActions(c, m, 'Owner', actorId).filter(
+  const actions = contractActions(c, m, 'Owner', actorId, signingMethods?.methods).filter(
     (a) => !['move-out/settlement', 'move-out/schedule'].includes(a.operation),
   );
   const signer = c.ownerSignerId === actorId;
@@ -374,9 +378,17 @@ export function ContractDetailPanel({
           subtitle={
             c.isDevelopmentDemo
               ? 'Mô phỏng Development — không dùng chứng thư hoặc chữ ký điện tử'
-              : 'Mỗi bên ký bằng chứng thư Viettel MySign của chính mình'
+              : signingMethods && !signingMethods.methods.includes('VIETTEL_MYSIGN')
+                ? 'Chủ trọ ký số MySign (chứng thư qua VNeID) · Người thuê ký điện tử, xác thực OTP email'
+                : 'Mỗi bên ký bằng chứng thư Viettel MySign của chính mình'
           }
-          action={signer && !c.isDevelopmentDemo ? <SigningSetupLink /> : undefined}
+          action={
+            signer &&
+            !c.isDevelopmentDemo &&
+            (!signingMethods || signingMethods.methods.includes('VIETTEL_MYSIGN')) ? (
+              <SigningSetupLink />
+            ) : undefined
+          }
         >
           <Stack divider={<Divider flexItem />} spacing={1}>
             {parties.map((p) => (
@@ -395,14 +407,43 @@ export function ContractDetailPanel({
                 ) : (
                   <Chip size="small" variant="outlined" label="Chưa có yêu cầu ký" />
                 )}
+                {p.signature && !c.isDevelopmentDemo && (
+                  <Typography variant="body2" color="text.secondary">
+                    {signingMethodLabel(p.signature.method)}
+                  </Typography>
+                )}
                 {p.signature?.signedAt && (
                   <Typography variant="body2" color="text.secondary">
                     {formatInstant(p.signature.signedAt)}
                   </Typography>
                 )}
+                {p.signature?.certificateSubject && p.signature.method !== 'OTP' && (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ overflowWrap: 'anywhere' }}
+                  >
+                    {p.signature.certificateSubject}
+                    {p.signature.certificateIssuer ? ` (${p.signature.certificateIssuer})` : ''}
+                  </Typography>
+                )}
               </Stack>
             ))}
           </Stack>
+          {signer && (
+            <Box sx={{ mt: 2 }}>
+              <OwnerSigningPanel
+                api={api}
+                contract={c}
+                actorId={actorId}
+                methods={signingMethods}
+                onChanged={() => {
+                  detail.reload();
+                  onChanged();
+                }}
+              />
+            </Box>
+          )}
           <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
             <Button
               variant="outlined"

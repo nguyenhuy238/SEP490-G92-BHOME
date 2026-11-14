@@ -2,6 +2,9 @@ vi.mock('../../../src/mobile/src/components/IncidentEvidencePicker', () => ({
   IncidentEvidencePicker: () => null,
   incidentPhotoUri: () => '',
 }));
+vi.mock('../../../src/mobile/src/components/ContextPortal', () => ({
+  ContextPortal: ({ children }: { children: unknown }) => children,
+}));
 // @vitest-environment jsdom
 import React, { useEffect } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';

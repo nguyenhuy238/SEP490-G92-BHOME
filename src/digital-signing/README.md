@@ -1,5 +1,14 @@
 # BHome Digital Signing: ký số từ xa qua Viettel MySign
 
+> **Trạng thái (09/11/2026).** Luồng ký chính của BHOME là **ký điện tử bằng OTP qua email**, BHOME đóng dấu PDF
+> (xem `docs/api/CONTRACT_SIGNING_OTP.md`). Viettel MySign vẫn được giữ trong backend dưới dạng provider, **bật/tắt bằng
+> `ContractSigning:Methods:ViettelMySign`**, để dùng lại khi BHOME có tài khoản tích hợp Viettel-CA.
+>
+> BHOME chỉ dùng 4 project lõi của thư mục này: `Domain`, `Application`, `Infrastructure` (ký PDF bằng iText) và
+> `MySign`. Bộ test lõi `tests/BHome.DigitalSigning.UnitTests` đã nằm trong `src/backend/BHome.sln`, nên CI chạy cùng
+> backend. **`BHome.DigitalSigning.Api`, `BHome.DigitalSigning.Sandbox`, `sql/`, `run-sandbox.ps1` và
+> `appsettings.DigitalSigning.example.json` là công cụ thử nghiệm MySign chạy riêng, không thuộc sản phẩm.**
+
 Đây là bản **clone độc lập** chức năng ký số từ xa (Remote Signing) của dự án `kho-so-tai-chinh`
 (Java/Spring), chỉ lấy phần **Viettel MySign**, viết lại bằng .NET 8 theo kiến trúc phân lớp của BHome.
 

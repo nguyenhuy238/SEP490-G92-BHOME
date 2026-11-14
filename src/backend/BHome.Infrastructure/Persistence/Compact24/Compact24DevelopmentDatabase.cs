@@ -82,7 +82,7 @@ public static class Compact24DevelopmentDatabase
             }
             var legacy = tables.Order(StringComparer.Ordinal).SequenceEqual(
                 Compact24MigrationMap.Tables.Keys.Append("__EFMigrationsHistory").Order(StringComparer.Ordinal));
-            if (!legacy) throw new DevelopmentDatabaseException("unrecognized_existing_schema");
+            if (!legacy && !archiveLegacy) throw new DevelopmentDatabaseException("unrecognized_existing_schema");
             if (checkOnly) return new("LEGACY_REQUIRES_RECREATE");
             if (!archiveLegacy) throw new DevelopmentDatabaseException("legacy_requires_explicit_recreate");
             await target.CloseAsync();

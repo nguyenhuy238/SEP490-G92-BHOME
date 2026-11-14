@@ -1,12 +1,19 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Redirect } from 'expo-router';
 import { ActivityIndicator, Button, Text } from 'react-native-paper';
 import { Page } from '../components/Controls';
 import { useSession } from '../lib/SessionProvider';
 import { homeScreen, sessionRole, workspaceTabHref } from '../features/workspace/navigation';
 import { LoginScreen } from '../screens/LoginScreen';
+import { clearPendingLink, peekPendingLink } from '../lib/pendingLink';
 export default function Index() {
   const { session, ready, reconnecting, restoreError, retryRestore } = useSession();
+  const role = session ? sessionRole(session.roles) : null;
+  // A link opened before sign-in (e.g. the contract signing email) continues after sign-in, once.
+  const pending = role ? peekPendingLink() : null;
+  useEffect(() => {
+    if (pending) clearPendingLink();
+  }, [pending]);
   if (!ready)
     return (
       <Page>
@@ -21,12 +28,11 @@ export default function Index() {
       </Page>
     );
   if (!session) return <LoginScreen />;
-  const role = sessionRole(session.roles);
   if (!role)
     return (
       <Page>
         <Text>Tài khoản chưa có vai trò mobile được hỗ trợ.</Text>
       </Page>
     );
-  return <Redirect href={workspaceTabHref(homeScreen[role])} />;
+  return <Redirect href={pending ?? workspaceTabHref(homeScreen[role])} />;
 }

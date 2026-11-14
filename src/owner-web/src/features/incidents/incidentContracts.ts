@@ -57,6 +57,7 @@ export interface IncidentEvidence {
   kind: string;
   workOrderId: string | null;
   activityId: string | null;
+  contentType?: string;
   length: number;
 }
 export const incidentStatuses: Record<string, string> = {

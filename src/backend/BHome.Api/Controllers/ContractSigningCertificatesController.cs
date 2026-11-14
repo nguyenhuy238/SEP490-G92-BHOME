@@ -9,7 +9,7 @@ namespace BHome.Api.Controllers;
 
 [ApiController, Route("api/v1/digital-signing/certificates"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-[RequestSizeLimit(4096)]
+[RequestSizeLimit(4096), ViettelMySignEnabled]
 public sealed class ContractSigningCertificatesController(SigningCertificateService service) : ControllerBase
 {
     [HttpGet] public Task<IReadOnlyList<CertificateView>> Mine(CancellationToken t) => service.MineAsync(t);

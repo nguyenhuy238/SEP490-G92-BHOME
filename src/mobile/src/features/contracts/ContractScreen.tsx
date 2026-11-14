@@ -25,6 +25,7 @@ import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { ContractActionForm, SigningCertificates } from './ContractActionForm';
+import { ContractSigningPanel, signatureLine, useSigningMethods } from './ContractSigningPanel';
 import { ContractDraftForm } from './ContractDraftForm';
 import { MainDraftScreen } from './MainDraftScreen';
 import { MainDraftStart } from './MainDraftStart';
@@ -404,6 +405,7 @@ function LiveContractDetail({
     onBack,
     title: detail.data?.contract.kind === 'Holding' ? 'Hợp đồng giữ chỗ' : 'Hợp đồng',
   });
+  const signingMethods = useSigningMethods(api);
   const [selectedAction, setSelectedAction] = useState('');
   const [section, setSection] = useState<ContractSection>(initialSection);
   const [keys] = useState(() => mutationKeys(randomUUID));
@@ -456,7 +458,7 @@ function LiveContractDetail({
     ['Owner', 'Staff'].includes(role) &&
     ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status);
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
-  const actions = mobileContractActions(c, m, role, actorId).filter(
+  const actions = mobileContractActions(c, m, role, actorId, signingMethods?.methods).filter(
     (item) =>
       (!holding ||
         ![
@@ -663,10 +665,7 @@ function LiveContractDetail({
               {c.signatures
                 .filter((x) => x.signerUserId === s.id)
                 .map((s) => (
-                  <Text key={s.id}>
-                    {text(s.status)}
-                    {s.signedAt ? ` · ${formatInstant(s.signedAt)}` : ''}
-                  </Text>
+                  <Text key={s.id}>{signatureLine(s, text)}</Text>
                 ))}
               {!c.signatures.some((x) => x.signerUserId === s.id) && (
                 <Text>Chưa có yêu cầu ký</Text>
@@ -679,11 +678,25 @@ function LiveContractDetail({
             )}
           {signer &&
             !c.isDevelopmentDemo &&
-            !(role === 'Owner' && c.signingMode === 'INTERNAL_OTP_DRAWN') && (
+            !(role === 'Owner' && c.signingMode === 'INTERNAL_OTP_DRAWN') &&
+            (!signingMethods || signingMethods.methods.includes('VIETTEL_MYSIGN')) && (
               <SigningCertificates api={api} />
             )}
         </Box>
       )}
+      {section === 'signing' &&
+        !rental &&
+        !holding &&
+        !ownerMain &&
+        c.signingMode !== 'INTERNAL_OTP_DRAWN' && (
+          <ContractSigningPanel
+            api={api}
+            contract={c}
+            actorId={actorId}
+            methods={signingMethods}
+            onChanged={detail.reload}
+          />
+        )}
       {((section === 'signing' && !rental && !holding && !ownerMain) || section === 'history') && (
         <ContractWorkflowPanel
           api={api}

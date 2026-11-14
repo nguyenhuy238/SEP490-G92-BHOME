@@ -54,12 +54,15 @@ export function SignaturePlacementField({
   value,
   onChange,
   disabled,
+  caption,
 }: {
   signing: SigningClient;
   contractId: string;
   value: PlacementChoice;
   onChange: (value: PlacementChoice) => void;
   disabled?: boolean;
+  /** The two lines the server writes in the box; MySign wording by default. */
+  caption?: string;
 }) {
   const layout = useLoad<SigningLayout>('layout:' + contractId, async (signal) => {
     const data = await signing.layout(contractId, signal);
@@ -230,8 +233,8 @@ export function SignaturePlacementField({
             />
           )}
           <Text style={{ color: '#c62828', fontSize: 8, lineHeight: 10 }}>
-            Ký bởi: {data.signerName || 'tên trên chứng thư'}
-            {'\n'}Ngày ký: lúc xác nhận trên MySign
+            {caption ??
+              `Ký bởi: ${data.signerName || 'tên trên chứng thư'}\nNgày ký: lúc xác nhận trên MySign`}
           </Text>
         </View>
       </View>
