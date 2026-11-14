@@ -7,14 +7,12 @@ import type { ContractClient } from '../../../../packages/client-core/src/contra
 afterEach(cleanup);
 it('loads Holding as Holding despite legacy draft metadata and never requests Main move-out data', async () => {
   const api = {
-    get: vi
-      .fn()
-      .mockResolvedValue({
-        id: 'holding',
-        kind: 'Holding',
-        status: 'Draft',
-        onboardingDraft: true,
-      }),
+    get: vi.fn().mockResolvedValue({
+      id: 'holding',
+      kind: 'Holding',
+      status: 'Draft',
+      onboardingDraft: true,
+    }),
     moveOut: vi.fn(),
     readiness: vi.fn().mockResolvedValue({ ready: false, blockers: [] }),
     history: vi.fn(),

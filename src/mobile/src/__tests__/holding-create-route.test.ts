@@ -1,5 +1,8 @@
 import { expect, it, vi } from 'vitest';
-import { contractClient, type ContractRequest } from '../../../../packages/client-core/src/contracts';
+import {
+  contractClient,
+  type ContractRequest,
+} from '../../../../packages/client-core/src/contracts';
 
 it('creates Holding through its dedicated endpoint and preserves Main creation and contract actions', async () => {
   const request = vi.fn<ContractRequest>().mockResolvedValue({ id: 'contract-id' });

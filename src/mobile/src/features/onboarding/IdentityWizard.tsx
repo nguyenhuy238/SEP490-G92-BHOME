@@ -536,7 +536,9 @@ export function IdentityWizard({
                 setSources(nextSources);
                 setChecked(false);
                 statusCallback.current?.('pending');
-                setNotice('Đã điền mẫu vào các ô trống. Kiểm tra lại trước khi xác nhận lưu lên hệ thống.');
+                setNotice(
+                  'Đã điền mẫu vào các ô trống. Kiểm tra lại trước khi xác nhận lưu lên hệ thống.',
+                );
               }}
             >
               Điền nhanh dữ liệu test
