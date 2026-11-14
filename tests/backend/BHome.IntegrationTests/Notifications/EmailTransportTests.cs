@@ -47,7 +47,7 @@ public sealed class EmailTransportTests
         using var host = factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
         { ["Email:Enabled"] = "true", ["Email:AppPassword"] = "" })));
         var error = Assert.Throws<OptionsValidationException>(() => host.CreateClient());
-        Assert.Contains("Email:AppPassword", error.Message); Assert.DoesNotContain("bhome.notification@gmail.com", error.Message);
+        Assert.Contains("Email:AppPassword", error.Message); Assert.DoesNotContain("bhomeg4922026@gmail.com", error.Message);
     }
 
     [Fact]

@@ -1,7 +1,7 @@
 # Gmail SMTP cho Notification
 
 EMAIL sử dụng MailKit, `smtp.gmail.com:587`, STARTTLS bắt buộc và Google App Password.
-Sender hiện tại: BHOME / `bhome.notification@gmail.com`. Mật khẩu tài khoản Google không dùng
+Sender hiện tại: BHOME / `bhomeg4922026@gmail.com`. Mật khẩu tài khoản Google không dùng
 cho SMTP. Không commit App Password vào appsettings, `.env.example`, test hoặc tài liệu.
 
 ## Cấu hình
@@ -19,6 +19,24 @@ dotnet user-secrets set 'Email:AppPassword' '<google-app-password>' --project sr
 dotnet user-secrets set 'Email:Enabled' 'true' --project src/backend/BHome.Api
 ```
 
+### Cài đặt cho thành viên nhóm
+
+Cả nhóm dùng chung tài khoản gửi `bhomeg4922026@gmail.com` (đã bật Xác minh 2 bước, App Password
+tên "BHOME SMTP"). Trưởng nhóm gửi App Password qua kênh riêng (tin nhắn riêng/trình quản lý mật
+khẩu), không gửi vào group chat, issue hay commit.
+
+1. Chạy 2 lệnh ở trên tại thư mục gốc repo, thay `<google-app-password>` bằng App Password nhận được
+   (16 ký tự, bỏ khoảng trắng). Username/FromEmail đã có sẵn trong `appsettings.json`.
+2. Xoá các dòng `NotificationChannels__Smtp*`/`Email__*` cũ trong `.env` nếu có (biến môi trường từ
+   `.env` qua `Start-Api.ps1` ưu tiên hơn User Secrets).
+3. Khởi động lại API. Kiểm tra: đăng nhập Owner, chạy API với `Email__TestEnabled=true` và
+   `Email__TestRecipient=<email của bạn>` rồi `POST /api/v1/notifications/email-test`; kết quả
+   `SmtpAccepted` là Gmail đã nhận gửi.
+
+Thu hồi/đổi: khi App Password bị lộ hoặc có người rời nhóm, vào myaccount.google.com/apppasswords
+của tài khoản nhóm, xoá "BHOME SMTP", tạo cái mới và gửi lại cho từng người. Đổi mật khẩu Google của
+tài khoản cũng thu hồi mọi App Password.
+
 Không chạy `user-secrets list` trong log/CI/báo cáo vì lệnh in cả secret. Trong phiên triển khai này
 App Password và sender/test recipient đã được lưu ngoài repository bằng User Secrets.
 Environment `Email__AppPassword` hoặc deployment secret dùng cho container/Production;
@@ -32,8 +50,8 @@ Ví dụ environment triển khai (không chứa secret):
 Email__Enabled=true
 Email__Host=smtp.gmail.com
 Email__Port=587
-Email__Username=bhome.notification@gmail.com
-Email__FromEmail=bhome.notification@gmail.com
+Email__Username=bhomeg4922026@gmail.com
+Email__FromEmail=bhomeg4922026@gmail.com
 Email__FromName=BHOME
 Email__UseStartTls=true
 Email__TestEnabled=false
