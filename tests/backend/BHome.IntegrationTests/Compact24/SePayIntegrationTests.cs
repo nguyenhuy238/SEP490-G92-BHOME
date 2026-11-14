@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using BHome.Application.IdentityAccess;
+using BHome.Application.Contracts;
 using BHome.Application.Jobs;
 using BHome.Application.PaymentsDebt;
 using BHome.Application.PaymentsDebt.SePay;
@@ -28,6 +29,43 @@ namespace BHome.IntegrationTests.Compact24;
 
 public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
+    [CompactPostgresFact]
+    public async Task MainInitialQrUsesOneReceiptForDepositAndRentFeesAndRejectsPartialOrDuplicateEffects()
+    {
+        await using var scenario = await Create();
+        await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+        var room = new Room { LocationId = scenario.Location, RoomNumber = "INITIAL-QR", Capacity = 1, Status = RoomStatus.Available };
+        var person = new Resident { RoomId = room.Id, OwnerUserId = scenario.Owner, TenantUserId = scenario.Tenants[0], DisplayLabel = "SYNTHETIC INITIAL", ContactEmail = "initial@example.invalid", VerificationStatus = IdentityVerificationStatus.Verified };
+        var c = new Contract { RoomId = room.Id, OwnerSignerId = scenario.Owner, TenantUserId = scenario.Tenants[0], RepresentativeResidentId = person.Id, StartDate = today, EndDate = today.AddMonths(6), MonthlyRent = 3000000, RequiredDeposit = 100000, Terms = "SYNTHETIC INITIAL PAYMENT", SigningMode = ContractSigningModes.Internal, Status = ContractStatus.PendingSigning, InitialPaymentRequired = true, IsDevelopmentDemo = true, Residents = [new ContractResident { ResidentId = person.Id, Role = ResidentType.Representative, ResidenceFrom = today }] };
+        c.SnapshotHash = ContractDocumentSnapshot.Hash(new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, Guid.Empty, c.RepresentativeResidentId, [person.Id], c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit, null, 0, c.Terms, "") { IsInternalResidentAcceptance = true });
+        db.AddRange(room, person, c, new BillingPolicy { LocationId = scenario.Location, ChargeCode = "INTERNET", Name = "Synthetic Internet", Category = ChargeCategory.ServiceFee, Method = ChargingMethod.FixedPerRoomPerMonth, Rate = 50000, EffectiveFrom = today }); await db.SaveChangesAsync();
+        using var owner = await scenario.Client(scenario.Owner); var root = $"/api/v1/contracts/{c.Id}/initial-payment";
+        using var anonymous = scenario.Anonymous();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(root)).StatusCode);
+        using var unrelatedTenant = await scenario.Client(scenario.Tenants[1]);
+        Assert.Equal(HttpStatusCode.NotFound, (await unrelatedTenant.GetAsync(root)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await unrelatedTenant.PostAsync(root + "/transfer-instructions", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsync(root + "/transfer-instructions", null)).StatusCode);
+        var source = new InternalAcceptanceEvidence(Guid.NewGuid(), person.Id, c.SnapshotHash, "synthetic-source", "synthetic-stroke", "synthetic-tenant.pdf", "synthetic-tenant-hash", DateTimeOffset.UtcNow, scenario.Owner, DateTimeOffset.UtcNow, "synthetic-final.pdf", "synthetic-final-hash");
+        c.InternalAcceptance = JsonSerializer.Serialize(source); c.Status = ContractStatus.PendingActivation; await db.SaveChangesAsync();
+        var response = await owner.PostAsync(root + "/transfer-instructions", null);
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync()); var quote = (await response.Content.ReadFromJsonAsync<MainInitialPaymentView>())!;
+        Assert.Equal(3150000, quote.OutstandingAmount); Assert.False(quote.Paid); Assert.StartsWith("data:image/png;base64,", quote.QrImageDataUri); Assert.Matches("^BH[0-9]{8}$", quote.TransferReference!);
+        var again = (await (await owner.PostAsync(root + "/transfer-instructions", null)).Content.ReadFromJsonAsync<MainInitialPaymentView>())!; Assert.Equal(quote.TransferReference, again.TransferReference);
+        (await scenario.Send(100, code: quote.TransferReference)).EnsureSuccessStatusCode();
+        (await scenario.Send(3150001, code: quote.TransferReference)).EnsureSuccessStatusCode();
+        Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.TargetInitialContractId == c.Id || a.TargetDepositContractId == c.Id).ToArrayAsync());
+        Assert.False(await scope.ServiceProvider.GetRequiredService<IMainInitialPaymentLedger>().SatisfiedAsync(c.Id, default));
+        var eventId = Guid.NewGuid().ToString(); var reference = "INITIAL-" + Guid.NewGuid().ToString("N");
+        var full = await scenario.Send(3150000, reference, quote.TransferReference, eventId: eventId); Assert.True(full.IsSuccessStatusCode, (await full.Content.ReadAsStringAsync()));
+        (await scenario.Send(3150000, reference, quote.TransferReference, eventId: eventId)).EnsureSuccessStatusCode();
+        db.ChangeTracker.Clear(); var allocations = await db.Set<PaymentAllocation>().Where(a => a.TargetInitialContractId == c.Id || a.TargetDepositContractId == c.Id).ToArrayAsync();
+        Assert.Equal(2, allocations.Length); Assert.Single(allocations.Select(a => a.TransferId).Distinct()); Assert.Equal(100000, allocations.Single(a => a.TargetDepositContractId == c.Id).Amount); Assert.Equal(3050000, allocations.Single(a => a.TargetInitialContractId == c.Id).Amount);
+        Assert.Equal(ContractStatus.PendingActivation, (await db.Set<Contract>().SingleAsync(x => x.Id == c.Id)).Status);
+        var settled = await owner.GetFromJsonAsync<MainInitialPaymentView>(root); Assert.True(settled!.Paid); Assert.Equal(0, settled.OutstandingAmount);
+        Assert.True(await scope.ServiceProvider.GetRequiredService<IMainInitialPaymentLedger>().SatisfiedAsync(c.Id, default));
+    }
     private const string Secret = "synthetic-sepay-integration-secret-at-least-32-bytes";
     private const string Account = "0000001234";
     private sealed class Scenario : IAsyncDisposable

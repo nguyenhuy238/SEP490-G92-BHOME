@@ -287,6 +287,7 @@ public sealed partial class ContractService
                 SigningMode = holding.SigningMode,
                 RepresentativeResidentId = holding.RepresentativeResidentId,
                 HoldingContractId = holding.Id,
+                InitialPaymentRequired = input.RequireInitialPayment,
                 StartDate = holding.StartDate,
                 EndDate = holding.EndDate,
                 MonthlyRent = holding.MonthlyRent,

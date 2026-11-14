@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <EmbeddedResource Include="Persistence/Compact24/Migrations/SePayIntegration.sql" LogicalName="BHome.Compact24.SePayIntegration.sql" />
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/MainInitialPayment.sql" LogicalName="BHome.Compact24.MainInitialPayment.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/LifecycleAlignment.sql" LogicalName="BHome.Compact24.LifecycleAlignment.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/PhysicalResidenceClosure.sql" LogicalName="BHome.Compact24.PhysicalResidenceClosure.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/SettlementReceivableLedger.sql" LogicalName="BHome.Compact24.SettlementReceivableLedger.sql" />

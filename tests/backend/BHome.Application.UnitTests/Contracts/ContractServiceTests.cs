@@ -35,6 +35,7 @@ public sealed class ContractServiceTests
     }
     private sealed class Rig
     {
+        public readonly BHome.Application.PaymentsDebt.IMainInitialPaymentLedger InitialPayments = Substitute.For<BHome.Application.PaymentsDebt.IMainInitialPaymentLedger>();
         public readonly User User = new();
         public readonly IContractRepository Repo = Substitute.For<IContractRepository>();
         public readonly IStaffLocationAccess Staff = Substitute.For<IStaffLocationAccess>();
@@ -54,7 +55,7 @@ public sealed class ContractServiceTests
         public Guid Owner => Contracts[0].OwnerSignerId;
         public Guid Tenant { get; } = Guid.NewGuid();
         public ContractService Service { get; }
-        public Rig()
+        public Rig(bool withInitialPayments = true)
         {
             Room.LocationId = Room.Location.Id; Resident.RoomId = Room.Id;
             Repo.RoomAsync(Room.Id, default).ReturnsForAnyArgs(Room);
@@ -94,7 +95,7 @@ public sealed class ContractServiceTests
             });
             Holdings.ApplyAsync(default, default, default, default, default, default).ReturnsForAnyArgs(Task.FromException<HoldingDepositApplication>(new IntegrationUnavailableException("holding ledger")));
             Positions.ReadAsync(default!, default, default!).ReturnsForAnyArgs(call => (DepositLedgerPosition?)new(Deposits.Where(d => call.Arg<Guid[]>().Contains(d.ContractId)).Sum(d => d.Amount), 0, 0, 0));
-            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock(), depositPositions: Positions);
+            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock(), depositPositions: Positions, initialPayments: withInitialPayments ? InitialPayments : null);
         }
         public ContractDraftInput Draft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id], Today.AddDays(-10), Today.AddDays(30), 3000000, 3000000, "Synthetic approved terms");
         public HoldingDraftInput HoldingDraft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id],
@@ -316,6 +317,31 @@ public sealed class ContractServiceTests
         r.Repo.Received(1).Add(Arg.Is<PropertyChange>(a => a.TargetId == r.Room.Id && a.ActorId == r.User.UserId &&
             a.Before!.Contains("\"Version\":1") && a.After.Contains("\"Version\":2")));
         r.Repo.Received(1).Audit(r.User.UserId!.Value, "ContractActivated", c.Id, Arg.Any<DateTimeOffset>());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task InitialPaymentMustBeConfirmedByBackendBeforeOwnerActivation(bool serviceAvailable, bool settled)
+    {
+        var r = new Rig(serviceAvailable); var c = await r.Ready(); c.InitialPaymentRequired = true;
+        r.InitialPayments.SatisfiedAsync(c.Id, default).Returns(settled);
+        var ready = await r.Service.ReadinessAsync(c.Id, default);
+        if (settled)
+        {
+            Assert.True(ready.Ready);
+            await r.Service.ActivateAsync(c.Id, Guid.NewGuid(), default);
+            Assert.Equal(ContractStatus.Active, c.Status);
+        }
+        else
+        {
+            Assert.Contains("initial_payment_required", ready.Blockers);
+            Assert.Equal(409, (await Assert.ThrowsAsync<ContractException>(() => r.Service.ActivateAsync(c.Id, Guid.NewGuid(), default))).Status);
+            Assert.Equal(ContractStatus.PendingActivation, c.Status);
+            Assert.Equal(RoomStatus.Available, r.Room.Status);
+            r.Repo.DidNotReceive().Audit(Arg.Any<Guid>(), "ContractActivated", c.Id, Arg.Any<DateTimeOffset>());
+        }
     }
     [Fact]
     public async Task ActivationInAlreadyOccupiedRoomDoesNotIncrementRoomVersionOrAddRoomHistory()

@@ -373,6 +373,8 @@ public static class DependencyInjection
             provider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName is "Development" or "Testing"));
         services.AddSingleton<BHome.Application.PaymentsDebt.ITransferQrGenerator, BHome.Infrastructure.PaymentsDebt.VietQrGenerator>();
         services.AddScoped<BHome.Application.PaymentsDebt.TransferInstructionsService>();
+        services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPaymentLedger, BHome.Infrastructure.PaymentsDebt.MainInitialPaymentLedger>();
+        services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPayments, BHome.Infrastructure.PaymentsDebt.MainInitialPayments>();
         services.AddHostedService<MeterEvidenceCleanup>();
         services.AddOptions<IdentityProtectionOptions>().Bind(configuration.GetSection("IdentityProtection"));
         services.AddSingleton<IIdentityProtection, IdentityProtection>();
