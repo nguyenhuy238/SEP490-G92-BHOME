@@ -107,6 +107,16 @@ vi.mock('react-native-paper', () => {
     ),
     Text: ({ children }: C) => <span>{children}</span>,
     Button,
+    Portal: ({ children }: C) => <>{children}</>,
+    Dialog: Object.assign(
+      ({ visible, children }: C & { visible: boolean }) =>
+        visible ? <div role="dialog">{children}</div> : null,
+      {
+        Title: ({ children }: C) => <h3>{children}</h3>,
+        Content: ({ children }: C) => <div>{children}</div>,
+        Actions: ({ children }: C) => <div>{children}</div>,
+      },
+    ),
     IconButton: Button,
     ActivityIndicator: () => <span>Đang tải</span>,
     Checkbox: {
@@ -518,12 +528,52 @@ it.each(['progress', 'blocker', 'submit'])(
   },
 );
 it.each(['PendingApproval', 'PendingVerification'] as const)(
-  'Owner monitors %s and uses Owner Web for plan/cost/verification decisions',
+  'Owner has state-gated mobile quick decisions for %s without Staff execution actions',
   (status) => {
     s.role = 'Owner';
     work.status = status;
     render(<IncidentActionPanel report={report} work={work} role="Owner" />);
-    expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+    expect(screen.getByLabelText('Chọn thao tác')).toBeTruthy();
+    expect(screen.queryByRole('option', { name: 'Đổi nhân viên' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'Bắt đầu sửa chữa' })).toBeNull();
+    expect(
+      screen.getByRole('option', {
+        name: status === 'PendingApproval' ? 'Quyết định phương án' : 'Nghiệm thu hoàn thành',
+      }),
+    ).toBeTruthy();
+    expect(mutations()).toHaveLength(0);
+  },
+);
+
+it('sends one confirmed Owner plan decision with the current version and idempotency key', async () => {
+  s.role = 'Owner';
+  work.status = 'PendingApproval';
+  render(<IncidentActionPanel report={report} work={work} role="Owner" />);
+  choose('Chọn thao tác', 'plan-decision');
+  choose('Quyết định phê duyệt', 'true');
+  confirm();
+  fireEvent.click(screen.getByRole('button', { name: 'Quyết định phương án' }));
+  expect(mutations()).toHaveLength(0);
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận gửi' }));
+  await waitFor(() => expect(mutations()).toHaveLength(1));
+  expect(mutations()[0][0]).toBe(`/api/v1/work-orders/${wid}/plan-decision`);
+  expect(JSON.parse(mutations()[0][1].body)).toEqual({
+    version: 7,
+    approve: true,
+    reason: null,
+    vendor: null,
+  });
+  expect(new Headers(mutations()[0][1].headers).get('Idempotency-Key')).toMatch(/^[a-f\d-]{36}$/i);
+  expect(s.success).toHaveBeenCalledOnce();
+});
+
+it.each(['Assigned', 'InProgress', 'Verified', 'Cancelled'] as const)(
+  'does not expose an Owner quick decision for %s',
+  (status) => {
+    s.role = 'Owner';
+    work.status = status;
+    render(<IncidentActionPanel report={report} work={work} role="Owner" />);
     expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
     expect(mutations()).toHaveLength(0);
   },

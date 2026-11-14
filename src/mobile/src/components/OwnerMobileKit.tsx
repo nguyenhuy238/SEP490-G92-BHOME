@@ -48,6 +48,7 @@ export function OwnerRecordRow({
   urgent = false,
   onPress,
   action = 'Xem chi tiết',
+  children,
 }: {
   title: string;
   detail?: string;
@@ -55,6 +56,7 @@ export function OwnerRecordRow({
   urgent?: boolean;
   onPress: () => void;
   action?: string;
+  children?: React.ReactNode;
 }) {
   return (
     <TouchableRipple
@@ -69,6 +71,7 @@ export function OwnerRecordRow({
           <Text style={[typography.sectionHeading, { color: staffColors.navy }]} numberOfLines={2}>
             {title}
           </Text>
+          {children}
           {!!detail && (
             <Text style={{ color: colors.muted }} numberOfLines={3}>
               {detail}

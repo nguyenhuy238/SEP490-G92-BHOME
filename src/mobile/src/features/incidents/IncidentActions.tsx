@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Checkbox, Text } from 'react-native-paper';
+import { Button, Checkbox, Dialog, Portal, Text } from 'react-native-paper';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
 import { QueryState, Pagination } from '../../components/WorkspaceQueryState';
@@ -109,23 +109,20 @@ export function IncidentActionPanel({
   const { api, session } = useSession();
   const allowed =
     role === 'Owner'
-      ? []
+      ? work
+        ? workActions(work, role, session?.userId ?? '').filter((action) =>
+            ['plan-decision', 'verify', 'rework'].includes(action),
+          )
+        : []
       : work
         ? workActions(work, role, session?.userId ?? '')
         : incidentActions(report, role);
-  const actions = [
-    ...allowed,
-    ...(!work &&
-    role === 'Owner' &&
-    ['Submitted', 'InProgress'].includes(report.status) &&
-    emergencyActions.some((a) => a.requestedCost !== null && a.costApproved === null)
-      ? ['cost-decision']
-      : []),
-  ];
+  const actions: string[] = allowed;
   const [action, setAction] = useState(''),
     [values, setValues] = useState<Record<string, string>>({});
   const [photos, setPhotos] = useState<IncidentPhoto[]>([]),
     [confirmed, setConfirmed] = useState(false);
+  const [confirmDecision, setConfirmDecision] = useState(false);
   const mutation = useIncidentMutation();
   const [originalPage, setOriginalPage] = useState(1);
   // Snapshot a report version after this form's own uploads, then retain it on ambiguous retries.
@@ -384,14 +381,12 @@ export function IncidentActionPanel({
       ? `${incidentRoot}?locationId=${report.locationId}${report.roomId ? '&roomId=' + report.roomId : ''}${report.assetId ? '&assetId=' + report.assetId : ''}&page=${originalPage}&pageSize=20`
       : null,
   );
-  if (role === 'Owner')
-    return (
-      <OwnerWebNotice task="Phân loại, giao việc, duyệt phương án hoặc chi phí và nghiệm thu" />
-    );
+  if (role === 'Owner' && !work)
+    return <OwnerWebNotice task="Phân loại sự cố, giao việc và quản lý chi phí khẩn cấp" />;
   if (!actions.length) return null;
   return (
     <Box>
-      <Heading title="Thao tác theo quyền" />
+      <Heading title={role === 'Owner' ? 'Xem xét kết quả' : 'Cập nhật xử lý'} />
       <ChoiceField
         label="Chọn thao tác"
         value={action}
@@ -571,11 +566,40 @@ export function IncidentActionPanel({
             disabled={mutation.busy}
             onPress={() => setConfirmed(!confirmed)}
           />
-          <Action disabled={!confirmed || mutation.busy} onPress={() => void execute()}>
+          <Action
+            disabled={!confirmed || mutation.busy}
+            onPress={() => (role === 'Owner' ? setConfirmDecision(true) : void execute())}
+          >
             {mutation.busy ? 'Đang xử lý…' : names[action]}
           </Action>
         </>
       )}
+      <Portal>
+        <Dialog
+          visible={confirmDecision}
+          onDismiss={() => !mutation.busy && setConfirmDecision(false)}
+        >
+          <Dialog.Title>{names[action] || 'Xác nhận quyết định'}</Dialog.Title>
+          <Dialog.Content>
+            <Text>Gửi quyết định sau khi đã kiểm tra phương án, kết quả và ảnh minh chứng?</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button disabled={mutation.busy} onPress={() => setConfirmDecision(false)}>
+              Quay lại
+            </Button>
+            <Button
+              disabled={mutation.busy}
+              loading={mutation.busy}
+              onPress={() => {
+                setConfirmDecision(false);
+                void execute();
+              }}
+            >
+              Xác nhận gửi
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
       {!!mutation.progress && <Text accessibilityRole="status">{mutation.progress}</Text>}
       {!!mutation.error && (
         <Text accessibilityRole="alert" style={ui.red}>

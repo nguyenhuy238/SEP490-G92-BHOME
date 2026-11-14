@@ -39,3 +39,9 @@ Results are recorded after commands execute. Native device, live provider and re
 - Phase 2: four live compact KPIs, capped attention preview and three operational records; no refresh-button wall. Reuses session-scoped cache and pull refresh. Attention sources are shared between Overview and the forthcoming Attention list. Tasks are in the server's due-date order; the UI makes no chronological activity-feed claim.
 - Phase 2 checks: mobile typecheck passed; lint on changed files passed; 40 connectivity/cache tests passed. New coverage proves seven shared attention reads, no repeated fetch on immediate remount, invalidation after verified server mutation and no Owner fetches for Staff/Tenant.
 - Dependency install passed with Node 22.23.4/npm 10.9.9. An initial install used the machine's default Node 24 and warned about engine mismatch; installation was repeated successfully under the required Node 22. PowerShell blocks npm.ps1, so commands use npm.cmd.
+
+### Phase 3
+
+- Attention now renders real records in a single paginated queue, with emergency awareness distinct from decisions, nonempty category filters, location/room labels and meaningful date labels. Draft authoring, bank reconciliation and invoice adjustments are excluded.
+- Existing maintenance adapter/forms now permit only plan-decision, verify and rework on the server-supported states. Staff execution, assignment and cancellation are excluded from Owner Mobile quick decisions. Confirmation dialog, busy lock, idempotency key and existing error/success feedback are retained.
+- Passed mobile typecheck, changed-file lint and 54 tests across attention, incident integration and preserved Owner signing flows. Coverage includes real filtered API paths/totals, role isolation, pagination, empty/error recovery, decision state gates and the confirmation-to-versioned-request flow.
