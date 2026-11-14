@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Locations;
 using BHome.Domain.IdentityAccess;
@@ -15,7 +16,16 @@ namespace BHome.Infrastructure.Persistence.Compact24;
 internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProvider clock) : ILocationAssignments, IStaffLocationAccess
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private sealed record Assignment(Guid Id, Guid StaffUserId, Guid ActorId, DateTimeOffset RecordedAt, DateOnly StartDate, DateOnly EndDate);
+    private sealed record Assignment(Guid Id, Guid StaffUserId,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] Guid ActorId,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] DateTimeOffset RecordedAt,
+        DateOnly StartDate, DateOnly EndDate)
+    {
+        // Existing Compact24 records may use createdByUserId/createdAt instead of
+        // actorId/recordedAt. Preserve those and other persisted metadata on edits.
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? AdditionalData { get; init; }
+    }
 
     public async Task<CreateAssignmentResult> CreateAssignmentAsync(Guid actor, Guid locationId, Guid staffId, DateOnly start, DateOnly end, CancellationToken token)
     {
@@ -23,7 +33,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         await using var tx = await db.Database.BeginTransactionAsync(token);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()},0))", token);
         await db.Database.OpenConnectionAsync(token);
-        await using var select = Command("SELECT staff_assignments::text FROM locations WHERE id=@id FOR UPDATE");
+        await using var select = Command("SELECT staff_assignments::text FROM locations WHERE id=@id AND is_active FOR UPDATE");
         select.Parameters.AddWithValue("id", locationId);
         var stored = (string?)await select.ExecuteScalarAsync(token);
         if (stored is null) return new(CreateAssignmentStatus.LocationNotFound);
@@ -43,7 +53,8 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             UPDATE locations SET staff_assignments=staff_assignments||CAST({json} AS jsonb),version=version+1,history=history||CAST({history} AS jsonb) WHERE id={locationId}
             """, token);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
-        if (start <= today && end >= today) await ReassignOpenTasks(locationId, Guid.Empty, entry, actor, entry.RecordedAt, "Location responsibility assigned", token);
+        if (start <= today && end >= today)
+            await ReconcileLocationAsync(locationId, entry, actor, entry.RecordedAt, "Location responsibility assigned", token);
         await tx.CommitAsync(token);
         return new(CreateAssignmentStatus.Created, new(entry.Id, entry.StaffUserId, entry.StartDate, entry.EndDate));
     }
@@ -84,26 +95,37 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         int expectedLocationVersion, string reason, CancellationToken token) =>
         ChangeAsync(actorId, locationId, null, effectiveFrom, expectedLocationVersion, reason, token);
 
-    public async Task<UpdateAssignmentPeriodResult> UpdateAssignmentPeriodAsync(Guid actor, Guid assignmentId,
-        DateOnly start, DateOnly end, int expectedVersion, string reason, CancellationToken token)
+    public Task<UpdateAssignmentPeriodResult> UpdateAssignmentPeriodAsync(Guid actor, Guid assignmentId,
+        DateOnly start, DateOnly end, int expectedVersion, string reason, CancellationToken token) =>
+        AmendAssignmentAsync(actor, assignmentId, start, end, expectedVersion, reason, token);
+
+    public Task<UpdateAssignmentPeriodResult> CancelFutureAssignmentAsync(Guid actor, Guid assignmentId,
+        int expectedVersion, string reason, CancellationToken token) =>
+        AmendAssignmentAsync(actor, assignmentId, null, null, expectedVersion, reason, token);
+
+    private async Task<UpdateAssignmentPeriodResult> AmendAssignmentAsync(Guid actor, Guid assignmentId,
+        DateOnly? start, DateOnly? end, int expectedVersion, string reason, CancellationToken token)
     {
         if (actor == Guid.Empty || assignmentId == Guid.Empty || start > end || expectedVersion < 1 ||
             string.IsNullOrWhiteSpace(reason)) return new(UpdateAssignmentPeriodStatus.Invalid);
         await using var tx = await db.Database.BeginTransactionAsync(token);
         await db.Database.OpenConnectionAsync(token);
         await using var find = Command("""
-            SELECT id,staff_assignments::text,version FROM locations
+            SELECT id FROM locations
             WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(staff_assignments) a WHERE (a->>'id')::uuid=@assignment)
-            FOR UPDATE
             """);
         find.Parameters.AddWithValue("assignment", assignmentId);
-        Guid locationId; string stored; int version;
-        await using (var reader = await find.ExecuteReaderAsync(token))
+        if (await find.ExecuteScalarAsync(token) is not Guid locationId)
+            return new(UpdateAssignmentPeriodStatus.AssignmentNotFound);
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()},0))", token);
+        await using var select = Command("SELECT staff_assignments::text,version,is_active FROM locations WHERE id=@id FOR UPDATE");
+        select.Parameters.AddWithValue("id", locationId);
+        string stored; int version; bool active;
+        await using (var reader = await select.ExecuteReaderAsync(token))
         {
             if (!await reader.ReadAsync(token)) return new(UpdateAssignmentPeriodStatus.AssignmentNotFound);
-            locationId = reader.GetGuid(0); stored = reader.GetString(1); version = reader.GetInt32(2);
+            stored = reader.GetString(0); version = reader.GetInt32(1); active = reader.GetBoolean(2);
         }
-        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()},0))", token);
         if (version != expectedVersion) return new(UpdateAssignmentPeriodStatus.StaleVersion, LocationVersion: version);
         if (!await db.Users.AnyAsync(u => u.Id == actor && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Owner), token))
             throw new UnauthorizedAccessException("Owner authorization is required.");
@@ -113,20 +135,37 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         var old = assignments[index];
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
         var current = old.StartDate <= today && today <= old.EndDate;
-        if (old.EndDate < today || current && (start > today || end < today)) return new(UpdateAssignmentPeriodStatus.Invalid);
-        if (assignments.Any(a => a.Id != assignmentId && a.StartDate <= end && start <= a.EndDate))
-            return new(UpdateAssignmentPeriodStatus.DateRangeOverlaps);
-        assignments[index] = old with { StartDate = start, EndDate = end };
+        var cancelling = start is null;
+        Assignment changed;
+        if (cancelling)
+        {
+            if (old.StartDate <= today) return new(UpdateAssignmentPeriodStatus.Invalid);
+            assignments.RemoveAt(index);
+            changed = old;
+        }
+        else
+        {
+            if (!active || old.EndDate < today || end < today ||
+                current && start != old.StartDate || !current && start < today)
+                return new(UpdateAssignmentPeriodStatus.Invalid);
+            await LockStaffAsync(old.StaffUserId, token);
+            if (!await StaffAvailableAsync(old.StaffUserId, token)) return new(UpdateAssignmentPeriodStatus.StaffUnavailable);
+            if (assignments.Any(a => a.Id != assignmentId && a.StartDate <= end && start <= a.EndDate))
+                return new(UpdateAssignmentPeriodStatus.DateRangeOverlaps);
+            changed = old with { StartDate = start!.Value, EndDate = end!.Value };
+            assignments[index] = changed;
+        }
         var json = JsonSerializer.Serialize(assignments.OrderBy(x => x.StartDate).ThenBy(x => x.Id), Json);
         var now = clock.GetUtcNow();
-        var history = JsonSerializer.Serialize(new[] { new { action = "StaffAssignmentPeriodChanged", actorId = actor,
-            occurredAt = now, assignmentId, before = new { old.StartDate, old.EndDate }, after = new { StartDate = start, EndDate = end }, reason = reason.Trim() } }, Json);
+        var history = JsonSerializer.Serialize(new[] { new { action = cancelling ? "StaffAssignmentCancelled" : "StaffAssignmentPeriodChanged", actorId = actor,
+            occurredAt = now, assignmentId, before = old, after = cancelling ? null : changed, reason = reason.Trim() } }, Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE locations SET staff_assignments=CAST({json} AS jsonb),version=version+1,
               history=history||CAST({history} AS jsonb) WHERE id={locationId}
             """, token);
+        if (!cancelling && changed.StartDate <= today && changed.EndDate >= today)
+            await ReconcileLocationAsync(locationId, changed, actor, now, reason.Trim(), token);
         await tx.CommitAsync(token);
-        var changed = assignments[index];
         return new(UpdateAssignmentPeriodStatus.Changed,
             new(changed.Id, changed.StaffUserId, changed.StartDate, changed.EndDate), version + 1);
     }
@@ -134,22 +173,24 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
     private async Task<ChangeAssignmentResult> ChangeAsync(Guid actor, Guid locationId, Guid? nextStaff,
         DateOnly effectiveFrom, int expectedVersion, string reason, CancellationToken token)
     {
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(),
-            TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
-        if (actor == Guid.Empty || locationId == Guid.Empty || expectedVersion < 1 || effectiveFrom != today ||
+        if (actor == Guid.Empty || locationId == Guid.Empty || expectedVersion < 1 ||
             string.IsNullOrWhiteSpace(reason) || nextStaff == Guid.Empty) return new(ChangeAssignmentStatus.Invalid);
         await using var tx = await db.Database.BeginTransactionAsync(token); await db.Database.OpenConnectionAsync(token);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()},0))", token);
-        await using var select = Command("SELECT staff_assignments::text,version FROM locations WHERE id=@id FOR UPDATE");
-        select.Parameters.AddWithValue("id", locationId); string stored; int version;
+        await using var select = Command("SELECT staff_assignments::text,version,is_active FROM locations WHERE id=@id FOR UPDATE");
+        select.Parameters.AddWithValue("id", locationId); string stored; int version; bool active;
         await using (var reader = await select.ExecuteReaderAsync(token))
         {
             if (!await reader.ReadAsync(token)) return new(ChangeAssignmentStatus.LocationNotFound);
-            stored = reader.GetString(0); version = reader.GetInt32(1);
+            stored = reader.GetString(0); version = reader.GetInt32(1); active = reader.GetBoolean(2);
         }
         if (version != expectedVersion) return new(ChangeAssignmentStatus.StaleVersion, LocationVersion: version);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(),
+            TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+        if (effectiveFrom != today) return new(ChangeAssignmentStatus.Invalid);
         if (!await db.Users.AnyAsync(u => u.Id == actor && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Owner), token))
             throw new UnauthorizedAccessException("Owner authorization is required.");
+        if (nextStaff.HasValue && !active) return new(ChangeAssignmentStatus.Invalid);
         if (nextStaff is { } lockedStaff) await LockStaffAsync(lockedStaff, token);
         if (nextStaff is { } staff && !await db.Users.AnyAsync(u => u.Id == staff && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Staff), token))
             return new(ChangeAssignmentStatus.StaffUnavailable);
@@ -169,27 +210,122 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         var history = JsonSerializer.Serialize(new[] { new
         {
             action = nextStaff.HasValue ? "StaffReplaced" : "StaffUnassigned", actorId = actor, occurredAt = now,
-            previousStaffUserId = current.StaffUserId, staffUserId = nextStaff, reason = reason.Trim()
+            previousStaffUserId = current.StaffUserId, staffUserId = nextStaff, before = current, after = added, reason = reason.Trim()
         } }, Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE locations SET staff_assignments=CAST({json} AS jsonb),version=version+1,
               history=history||CAST({history} AS jsonb) WHERE id={locationId}
             """, token);
-        await ReassignOpenTasks(locationId, current.StaffUserId, added, actor, now, reason.Trim(), token);
-        await NotifyAssignmentChange(locationId, current.StaffUserId, nextStaff, actor, now, token);
+        await ReconcileLocationAsync(locationId, added, actor, now, reason.Trim(), token, current.StaffUserId, blockSpecialists: true);
         await tx.CommitAsync(token);
         return new(ChangeAssignmentStatus.Changed,
             added is null ? null : new(added.Id, added.StaffUserId, added.StartDate, added.EndDate), version + 1);
     }
 
-    private async Task ReassignOpenTasks(Guid locationId, Guid oldStaff, Assignment? next, Guid actor,
-        DateTimeOffset now, string reason, CancellationToken token)
+    // The scheduler and Owner mutations use the same Location lock and reconciliation.
+    // Each Location commits independently so a failed Location can be safely retried.
+    internal async Task ReconcileEffectiveAssignmentsAsync(CancellationToken token)
+    {
+        var locations = await db.Database.SqlQuery<Guid>($"""
+            SELECT id AS "Value" FROM locations WHERE jsonb_array_length(staff_assignments)>0
+                OR EXISTS(SELECT 1 FROM operational_tasks t WHERE t.location_id=locations.id
+                    AND ((t.task_type IN ('GENERAL','METER_READ') AND t.status NOT IN ('2','3'))
+                         OR (t.task_type='WORK_ORDER' AND t.status NOT IN ('Verified','Cancelled'))))
+                OR EXISTS(SELECT 1 FROM contracts c JOIN rooms r ON r.id=c.room_id WHERE r.location_id=locations.id
+                    AND c.move_out->'current'->>'inspectionStaffId' IS NOT NULL
+                    AND c.move_out->'current'->>'inspectedAt' IS NULL
+                    AND COALESCE(c.move_out->'current'->>'status','0')<>'5')
+            ORDER BY id
+            """).ToArrayAsync(token);
+        Exception? failure = null;
+        foreach (var locationId in locations)
+        {
+            try
+            {
+                await ReconcileEffectiveLocationAsync(locationId, token);
+            }
+            catch (Exception ex) when (!token.IsCancellationRequested)
+            {
+                // One broken Location must not prevent other Locations from rolling over.
+                // Report failure to the durable job runner so the failed work is retried.
+                failure ??= ex;
+            }
+            finally
+            {
+                db.ChangeTracker.Clear();
+            }
+        }
+        if (failure is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
+    private async Task ReconcileEffectiveLocationAsync(Guid locationId, CancellationToken token)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(token);
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({locationId.ToString()},0))", token);
+        await db.Database.OpenConnectionAsync(token);
+        await using var select = Command("SELECT staff_assignments::text,is_active FROM locations WHERE id=@id FOR UPDATE");
+        select.Parameters.AddWithValue("id", locationId);
+        Assignment[] assignments;
+        bool active;
+        await using (var reader = await select.ExecuteReaderAsync(token))
+        {
+            if (!await reader.ReadAsync(token)) return;
+            assignments = JsonSerializer.Deserialize<Assignment[]>(reader.GetString(0), Json)
+                ?? throw new InvalidOperationException("Invalid assignment data.");
+            active = reader.GetBoolean(1);
+        }
+        var now = clock.GetUtcNow();
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
+        var next = active ? assignments.SingleOrDefault(a => a.StartDate <= today && today <= a.EndDate) : null;
+        if (next is not null)
+        {
+            await LockStaffAsync(next.StaffUserId, token);
+            if (!await StaffAvailableAsync(next.StaffUserId, token)) next = null;
+        }
+        var previous = assignments.Where(a => a.StartDate <= today && a.Id != next?.Id)
+            .OrderByDescending(a => a.EndDate).FirstOrDefault();
+        await ReconcileLocationAsync(locationId, next, Guid.Empty, now,
+            "Effective Location responsibility changed", token, previous?.StaffUserId);
+        await tx.CommitAsync(token);
+    }
+
+    private sealed record ReconciledResponsibility(Guid? AssignmentId, Guid? StaffUserId, Guid EventId);
+
+    private async Task ReconcileLocationAsync(Guid locationId, Assignment? next, Guid actor,
+        DateTimeOffset now, string reason, CancellationToken token, Guid? previousStaff = null, bool blockSpecialists = false)
     {
         var tasks = await db.Set<OperationalTask>().Where(task => task.LocationId == locationId &&
-            (task.AssignedStaffUserId == oldStaff || task.AssignedStaffUserId == null) && task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled)
-            .Select(task => new { task.Id, task.AssignedStaffUserId, task.Version }).ToArrayAsync(token);
+            task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled)
+            .Select(task => new { task.Id, task.AssignedStaffUserId, task.AssignmentId, task.AssignedAt, task.DueAt, task.Version }).ToArrayAsync(token);
+        var orders = await db.Set<MaintenanceWorkOrder>().Where(w => w.LocationId == locationId &&
+            w.Status != WorkOrderStatus.Verified && w.Status != WorkOrderStatus.Cancelled).ToArrayAsync(token);
+        var inspections = await db.Set<ContractMoveOut>().Where(m => m.InspectionStaffId != null &&
+            m.Status != MoveOutStatus.Completed && m.InspectedAt == null &&
+            db.Set<Contract>().Any(c => c.Id == m.ContractId && c.Room.LocationId == locationId)).ToArrayAsync(token);
+        // Manual removal retains the existing explicit Owner resolution requirement.
+        // A calendar expiry cannot be rejected: keep specialist records intact, alert Owner,
+        // and transfer them when a new eligible responsibility becomes effective.
+        if (next is null && blockSpecialists && (orders.Length > 0 || inspections.Length > 0))
+            throw new BHome.Application.PropertyManagement.PropertyException(409, "staff_specialist_work_unresolved");
+
+        var nextStaff = next?.StaffUserId;
+        var nextAssignment = next?.Id;
         foreach (var task in tasks)
         {
+            if (task.AssignedStaffUserId == nextStaff && task.AssignmentId == nextAssignment) continue;
+            // Compact24 maps both the scalar columns and the state JSON to this row.
+            // Mutate once, then append one typed history record (no second root write).
+            var count = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE operational_tasks SET assigned_user_id={nextStaff},
+                    assigned_at=CASE WHEN {nextStaff}::uuid IS NULL THEN NULL ELSE {now} END,
+                    version=version+1,
+                    task_data=jsonb_set(task_data,ARRAY['state'],COALESCE(task_data->'state',jsonb_build_object())||
+                        jsonb_build_object('assignedStaffUserId',{nextStaff}::uuid,'assignmentId',{nextAssignment}::uuid,
+                            'assignedAt',CASE WHEN {nextStaff}::uuid IS NULL THEN NULL ELSE {now} END,
+                            'updatedAt',{now},'version',version+1),true)
+                WHERE id={task.Id} AND version={task.Version} AND status NOT IN ('2','3')
+                """, token);
+            if (count != 1) throw new DbUpdateConcurrencyException("Operational task changed during responsibility reconciliation.");
             var history = new OperationalTaskHistory
             {
                 TaskId = task.Id,
@@ -197,23 +333,18 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
                 Action = "responsibility_changed",
                 Note = reason,
                 OccurredAt = now,
-                ResponsibleStaffUserId = next?.StaffUserId,
+                WasOverdue = task.DueAt < now,
+                ResponsibleStaffUserId = nextStaff,
                 TaskVersion = task.Version + 1,
-                ChangesJson = JsonSerializer.Serialize(new { previous = task.AssignedStaffUserId, next = next?.StaffUserId }, Json)
+                ChangesJson = JsonSerializer.Serialize(new { previous = task.AssignedStaffUserId, next = nextStaff, previousAssignmentId = task.AssignmentId, previousAssignedAt = task.AssignedAt, assignmentId = nextAssignment }, Json)
             };
             db.Add(history);
             if (next is not null) db.Add(new OperationalTaskNotification { TaskId = task.Id, RecipientUserId = next.StaffUserId, EventId = history.Id, Event = "responsibility_changed" });
         }
-        var orders = await db.Set<MaintenanceWorkOrder>().Where(w => w.LocationId == locationId && w.AssignedStaffId == oldStaff &&
-            w.Status != WorkOrderStatus.Verified && w.Status != WorkOrderStatus.Cancelled).ToArrayAsync(token);
-        var inspections = await db.Set<ContractMoveOut>().Where(m => m.InspectionStaffId == oldStaff &&
-            m.Status != MoveOutStatus.Completed && m.InspectedAt == null &&
-            db.Set<Contract>().Any(c => c.Id == m.ContractId && c.Room.LocationId == locationId)).ToArrayAsync(token);
-        if (next is null && (orders.Length > 0 || inspections.Length > 0))
-            throw new BHome.Application.PropertyManagement.PropertyException(409, "staff_specialist_work_unresolved");
-        foreach (var order in orders)
+        foreach (var order in orders.Where(o => nextStaff.HasValue && o.AssignedStaffId != nextStaff))
         {
-            order.AssignedStaffId = next!.StaffUserId; order.Version++;
+            var oldStaff = order.AssignedStaffId;
+            order.AssignedStaffId = nextStaff!.Value; order.Version++;
             db.Add(new IncidentActivity
             {
                 IncidentId = order.IncidentId,
@@ -222,12 +353,13 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
                 Action = "reassigned",
                 Note = reason,
                 OccurredAt = now,
-                DataJson = JsonSerializer.Serialize(new { previous = oldStaff, assignedStaffId = next.StaffUserId }, Json)
+                DataJson = JsonSerializer.Serialize(new { previous = oldStaff, assignedStaffId = nextStaff }, Json)
             });
         }
-        foreach (var inspection in inspections)
+        foreach (var inspection in inspections.Where(i => nextStaff.HasValue && i.InspectionStaffId != nextStaff))
         {
-            inspection.InspectionStaffId = next!.StaffUserId; inspection.Version++;
+            var oldStaff = inspection.InspectionStaffId;
+            inspection.InspectionStaffId = nextStaff; inspection.Version++;
             db.Add(new ContractMoveOutHistory
             {
                 ContractId = inspection.ContractId,
@@ -235,46 +367,52 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
                 Action = "InspectionResponsibilityChanged",
                 OccurredAt = now,
                 Version = inspection.Version,
-                Snapshot = JsonSerializer.Serialize(new { inspection.InspectionStaffId, inspection.Version }, Json)
+                Snapshot = JsonSerializer.Serialize(new { previous = oldStaff, inspection.InspectionStaffId, inspection.Version, reason }, Json)
             });
         }
-        await using var command = Command("""
-            UPDATE operational_tasks SET assigned_user_id=@next,assigned_at=CASE WHEN @next IS NULL THEN NULL ELSE @now END,
-              version=version+1,
-              task_data=jsonb_set(jsonb_set(jsonb_set(task_data,'{state,assignedStaffUserId}',COALESCE(to_jsonb(@next::uuid),'null'::jsonb),true),
-                '{state,assignmentId}',COALESCE(to_jsonb(@assignment::uuid),'null'::jsonb),true),'{state,updatedAt}',to_jsonb(@now::timestamptz),true),
-              history=history||jsonb_build_array(jsonb_build_object('action','assignment-replaced','actorId',@actor,
-                'occurredAt',@now,'previousStaffUserId',@old,'staffUserId',@next,'reason',@reason))
-            WHERE location_id=@location AND task_type IN ('GENERAL','METER_READ') AND (assigned_user_id=@old OR assigned_user_id IS NULL) AND status NOT IN ('2','3')
-            """);
-        command.Parameters.AddWithValue("location", locationId); command.Parameters.AddWithValue("old", oldStaff);
-        command.Parameters.AddWithValue("actor", actor); command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("reason", reason);
-        command.Parameters.Add(new NpgsqlParameter("next", NpgsqlTypes.NpgsqlDbType.Uuid)
-        { Value = (object?)next?.StaffUserId ?? DBNull.Value });
-        command.Parameters.Add(new NpgsqlParameter("assignment", NpgsqlTypes.NpgsqlDbType.Uuid)
-        { Value = (object?)next?.Id ?? DBNull.Value });
-        await command.ExecuteNonQueryAsync(token);
         await db.SaveChangesAsync(token);
+        await using var marker = Command("""
+            SELECT h::text FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.history) WITH ORDINALITY a(h,n)
+            WHERE l.id=@location AND h->>'action'='StaffResponsibilityReconciled' ORDER BY n DESC LIMIT 1
+            """);
+        marker.Parameters.AddWithValue("location", locationId);
+        var saved = (string?)await marker.ExecuteScalarAsync(token);
+        var previous = saved is null ? null : JsonSerializer.Deserialize<ReconciledResponsibility>(saved, Json);
+        var transition = previous is null || previous.AssignmentId != nextAssignment || previous.StaffUserId != nextStaff;
+        var eventId = transition ? Guid.NewGuid() : previous!.EventId;
+        if (transition)
+        {
+            var history = JsonSerializer.Serialize(new[] { new { action = "StaffResponsibilityReconciled", actorId = actor,
+                occurredAt = now, assignmentId = nextAssignment, staffUserId = nextStaff, eventId, reason } }, Json);
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE locations SET history=history||CAST({history} AS jsonb) WHERE id={locationId}", token);
+            foreach (var recipient in new Guid?[] { previous is null ? previousStaff : previous.StaffUserId, nextStaff }
+                .Where(x => x.HasValue).Select(x => x!.Value).Distinct())
+                await NotifyAsync(locationId, recipient, actor, eventId, "STAFF_ASSIGNMENT_CHANGED", "Staff",
+                    "Phân công cơ sở đã thay đổi", "Trách nhiệm phụ trách cơ sở của bạn đã thay đổi.", now, token);
+        }
+        if (next is null && (tasks.Length > 0 || orders.Length > 0 || inspections.Length > 0))
+        {
+            var owners = await db.Users.Where(u => u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Owner))
+                .Select(u => u.Id).ToArrayAsync(token);
+            foreach (var owner in owners)
+                await NotifyAsync(locationId, owner, actor, eventId, "STAFF_RESPONSIBILITY_UNRESOLVED", "Owner",
+                    "Cơ sở chưa có nhân viên phụ trách",
+                    "Cơ sở có công việc chưa hoàn tất. Hãy phân công nhân viên đủ điều kiện để tiếp tục xử lý.", now, token);
+        }
     }
 
-    private async Task NotifyAssignmentChange(Guid locationId, Guid oldStaff, Guid? nextStaff, Guid actor,
-        DateTimeOffset now, CancellationToken token)
+    private async Task NotifyAsync(Guid locationId, Guid recipient, Guid actor, Guid eventId,
+        string type, string role, string title, string message, DateTimeOffset now, CancellationToken token)
     {
-        foreach (var recipient in new Guid?[] { oldStaff, nextStaff }.Where(x => x.HasValue).Select(x => x!.Value).Distinct())
-        {
-            await using var command = Command("""
-                INSERT INTO notifications(id,record_kind,recipient_user_id,actor_user_id,location_id,event_key,
-                  notification_type,related_entity_type,related_entity_id,title,message,event_data,event_at,delivery_status,delivery_history)
-                VALUES(@id,'INBOX',@recipient,@actor,@location,@key,'STAFF_ASSIGNMENT_CHANGED','Location',@location,
-                  'Location assignment changed','Your Location responsibility has changed.',
-                  jsonb_build_object('category','Task','audienceRole','Staff'),@now,'Unconfigured','[]')
-                ON CONFLICT(recipient_user_id,event_key) WHERE record_kind='INBOX' DO NOTHING
-                """);
-            command.Parameters.AddWithValue("id", Guid.NewGuid()); command.Parameters.AddWithValue("recipient", recipient);
-            command.Parameters.AddWithValue("actor", actor); command.Parameters.AddWithValue("location", locationId);
-            command.Parameters.AddWithValue("key", $"staff-assignment:{locationId:N}:{now.UtcTicks}:{recipient:N}");
-            command.Parameters.AddWithValue("now", now); await command.ExecuteNonQueryAsync(token);
-        }
+        var actorId = actor == Guid.Empty ? (Guid?)null : actor;
+        var key = $"staff-assignment:{eventId:N}:{recipient:N}:{type}";
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO notifications(id,record_kind,recipient_user_id,actor_user_id,location_id,event_key,
+              notification_type,related_entity_type,related_entity_id,title,message,event_data,event_at,delivery_status,delivery_history)
+            VALUES({Guid.NewGuid()},'INBOX',{recipient},{actorId},{locationId},{key},{type},'Location',{locationId},
+              {title},{message},jsonb_build_object('category','Task','audienceRole',{role}),{now},'Unconfigured','[]')
+            ON CONFLICT(recipient_user_id,event_key) WHERE record_kind='INBOX' DO NOTHING
+            """, token);
     }
 
     public async Task<IReadOnlyList<LocationSummary>> ListAssignedLocationsAsync(Guid staffId, DateOnly date, CancellationToken token)
@@ -282,7 +420,8 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         await db.Database.OpenConnectionAsync(token);
         await using var query = Command("""
             SELECT l.id,l.name FROM locations l
-            WHERE EXISTS(SELECT 1 FROM jsonb_array_elements(l.staff_assignments) a WHERE
+            WHERE l.is_active AND EXISTS(SELECT 1 FROM users u WHERE u.id=@staff AND u.is_active AND 'Staff'=ANY(u.roles))
+              AND EXISTS(SELECT 1 FROM jsonb_array_elements(l.staff_assignments) a WHERE
                 (a->>'staffUserId')::uuid=@staff AND (a->>'startDate')::date<=@date AND (a->>'endDate')::date>=@date)
             ORDER BY l.name,l.id
             """);
@@ -298,7 +437,8 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
         await db.Database.OpenConnectionAsync(token);
         await using var query = Command("""
-            SELECT EXISTS(SELECT 1 FROM locations l WHERE l.id=@location AND EXISTS(
+            SELECT EXISTS(SELECT 1 FROM locations l WHERE l.id=@location AND l.is_active
+              AND EXISTS(SELECT 1 FROM users u WHERE u.id=@staff AND u.is_active AND 'Staff'=ANY(u.roles)) AND EXISTS(
               SELECT 1 FROM jsonb_array_elements(l.staff_assignments) a WHERE
               (a->>'staffUserId')::uuid=@staff AND (a->>'startDate')::date<=@date AND (a->>'endDate')::date>=@date))
             """);
@@ -312,4 +452,6 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         await using var command = Command("SELECT id FROM users WHERE id=@id FOR SHARE"); command.Parameters.AddWithValue("id", staff);
         await command.ExecuteScalarAsync(t);
     }
+    private Task<bool> StaffAvailableAsync(Guid staff, CancellationToken token) =>
+        db.Users.AnyAsync(u => u.Id == staff && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Staff), token);
 }

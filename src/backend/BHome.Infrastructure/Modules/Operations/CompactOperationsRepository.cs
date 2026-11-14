@@ -141,7 +141,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         }
         await using (var update = Command("UPDATE users SET full_name=@name WHERE id=@id"))
         { update.Parameters.AddWithValue("name", input.FullName); update.Parameters.AddWithValue("id", user.Id); await update.ExecuteNonQueryAsync(t); }
-        await SaveEmployment(user.Id, null, input.Employment, actorId, now, t);
+        await SaveEmployment(user.Id, null, input.Employment, actorId, now, null, t);
         await Audit(actorId, "StaffCreated", "User", user.Id, now, t); await tx.CommitAsync(t);
         return (await StaffAsync(user.Id, t))!;
     }
@@ -169,7 +169,9 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             WHERE id=@id AND concurrency_stamp=@version AND 'Staff'=ANY(roles)
             """))
         {
-            update.Parameters.AddWithValue("name", input.FullName); update.Parameters.AddWithValue("phone", (object?)input.Phone ?? DBNull.Value);
+            update.Parameters.AddWithValue("name", input.FullName);
+            update.Parameters.Add(new NpgsqlParameter("phone", NpgsqlDbType.Varchar)
+            { Value = (object?)input.Phone ?? DBNull.Value });
             update.Parameters.AddWithValue("email", input.Email); update.Parameters.AddWithValue("normalized", normalized); update.Parameters.AddWithValue("active", input.IsActive);
             update.Parameters.AddWithValue("stamp", Guid.NewGuid().ToString("N")); update.Parameters.AddWithValue("next", next);
             update.Parameters.AddWithValue("actor", actorId); update.Parameters.AddWithValue("now", now); update.Parameters.AddWithValue("reason", input.Reason);
@@ -179,9 +181,111 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         }
         Guid? employmentId; await using (var select = Command("SELECT id FROM staff_employments WHERE staff_user_id=@id ORDER BY start_date DESC,id LIMIT 1"))
         { select.Parameters.AddWithValue("id", userId); var value = await select.ExecuteScalarAsync(t); employmentId = value is Guid id ? id : null; }
-        await SaveEmployment(userId, employmentId, input.Employment, actorId, now, t);
+        await EnsureEmploymentPeriodAvailable(userId, employmentId, input.Employment.StartDate, t);
+        await SaveEmployment(userId, employmentId, input.Employment, actorId, now, input.Reason, t);
         await Audit(actorId, "StaffUpdated", "User", userId, now, t); await tx.CommitAsync(t);
         return (await StaffAsync(userId, t))!;
+    }
+
+    public async Task<IReadOnlyList<EmploymentPeriodView>> StaffEmploymentsAsync(Guid userId, CancellationToken t)
+    {
+        await Open(t);
+        await EnsureStaffExists(userId, t);
+        await using var command = Command("""
+            SELECT id,contract_number,COALESCE(reward_penalty_policy->>'employmentType',''),
+                   start_date,end_date,salary_type,base_rate,status,history::text
+            FROM staff_employments WHERE staff_user_id=@staff ORDER BY start_date DESC,id
+            """);
+        command.Parameters.AddWithValue("staff", userId);
+        var result = new List<EmploymentPeriodView>();
+        await using var reader = await command.ExecuteReaderAsync(t);
+        while (await reader.ReadAsync(t))
+        {
+            result.Add(new(reader.GetGuid(0), reader.IsDBNull(1) ? null : reader.GetString(1),
+                reader.GetString(2), reader.GetFieldValue<DateOnly>(3),
+                reader.IsDBNull(4) ? null : reader.GetFieldValue<DateOnly>(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetDecimal(6),
+                reader.GetString(7), JsonSerializer.Deserialize<List<EmploymentHistoryEntry>>(reader.GetString(8), Json) ?? []));
+        }
+        return result;
+    }
+
+    public async Task<StaffView> CreateEmploymentPeriodAsync(Guid actorId, Guid userId,
+        EmploymentPeriodCreate input, DateTimeOffset now, CancellationToken t)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(t); await Open(t);
+        // Serialize all employment mutations with the existing Staff account update.
+        await using (var locked = Command("SELECT concurrency_stamp FROM users WHERE id=@id AND 'Staff'=ANY(roles) FOR UPDATE"))
+        {
+            locked.Parameters.AddWithValue("id", userId);
+            var version = await locked.ExecuteScalarAsync(t);
+            if (version is null) throw OperationsException.Missing();
+            if (!Equals(version, input.AccountVersion)) throw OperationsException.Conflict("stale_staff_version");
+        }
+        await EnsureEmploymentPeriodAvailable(userId, null, input.Employment.StartDate, t);
+        await SaveEmployment(userId, null, input.Employment, actorId, now, input.Reason, t);
+        await using (var update = Command("UPDATE users SET concurrency_stamp=@version WHERE id=@id"))
+        {
+            update.Parameters.AddWithValue("id", userId);
+            update.Parameters.AddWithValue("version", Guid.NewGuid().ToString("N"));
+            await update.ExecuteNonQueryAsync(t);
+        }
+        await Audit(actorId, "StaffEmploymentPeriodCreated", "User", userId, now, t);
+        await tx.CommitAsync(t);
+        return (await StaffAsync(userId, t))!;
+    }
+
+    public async Task<StaffResponsibilitiesView> StaffResponsibilitiesAsync(Guid userId, DateOnly today, CancellationToken t)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, t);
+        await Open(t);
+        await EnsureStaffExists(userId, t);
+        var assignments = new List<StaffResponsibilityAssignment>();
+        var tasks = new List<StaffResponsibilityTask>();
+        var moveOuts = new List<StaffResponsibilityMoveOut>();
+        await using (var command = Command("""
+            SELECT (a->>'id')::uuid,l.id,l.name,(a->>'startDate')::date,(a->>'endDate')::date
+            FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.staff_assignments) a
+            WHERE
+            """ + " " + ResponsibilityAssignmentPredicate + " ORDER BY l.name,(a->>'startDate')::date,(a->>'id')"))
+        {
+            command.Parameters.AddWithValue("staff", userId);
+            command.Parameters.AddWithValue("today", today);
+            await using var reader = await command.ExecuteReaderAsync(t);
+            while (await reader.ReadAsync(t))
+                assignments.Add(new(reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2),
+                    reader.GetFieldValue<DateOnly>(3), reader.GetFieldValue<DateOnly>(4)));
+        }
+        await using (var command = Command("""
+            SELECT ot.id,l.id,l.name,COALESCE(ot.title,''),ot.task_type,ot.status
+            FROM operational_tasks ot JOIN locations l ON l.id=ot.location_id WHERE
+            """ + " " + ResponsibilityTaskPredicate + " ORDER BY l.name,ot.task_type,ot.id"))
+        {
+            command.Parameters.AddWithValue("staff", userId);
+            await using var reader = await command.ExecuteReaderAsync(t);
+            while (await reader.ReadAsync(t))
+                tasks.Add(new(reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2),
+                    reader.GetString(3), reader.GetString(4), reader.GetString(5)));
+        }
+        await using (var command = Command("""
+            SELECT c.id,l.id,l.name,r.id,r.room_number FROM contracts c
+            JOIN rooms r ON r.id=c.room_id JOIN locations l ON l.id=r.location_id WHERE
+            """ + " " + ResponsibilityMoveOutPredicate + " ORDER BY l.name,r.room_number,c.id"))
+        {
+            command.Parameters.AddWithValue("staff", userId);
+            await using var reader = await command.ExecuteReaderAsync(t);
+            while (await reader.ReadAsync(t))
+                moveOuts.Add(new(reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2), reader.GetGuid(3), reader.GetString(4)));
+        }
+        await tx.CommitAsync(t);
+        return new(assignments.Count == 0 && tasks.Count == 0 && moveOuts.Count == 0, assignments, tasks, moveOuts);
+    }
+
+    private async Task EnsureStaffExists(Guid userId, CancellationToken t)
+    {
+        await using var command = Command("SELECT 1 FROM users WHERE id=@id AND 'Staff'=ANY(roles)");
+        command.Parameters.AddWithValue("id", userId);
+        if (await command.ExecuteScalarAsync(t) is null) throw OperationsException.Missing();
     }
 
     public Task<OperationsPage<ResidenceTaskView>> ResidenceAsync(ResidenceQuery query, Guid? tenantUserId, CancellationToken t) =>
@@ -461,6 +565,7 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
 
     public async Task<int> GenerateDueRecurringTasksAsync(DateTimeOffset now, CancellationToken t)
     {
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
         await Open(t); var locations = new List<Guid>();
         await using (var query = Command("SELECT id FROM locations WHERE is_active AND operating_settings ? 'recurringTaskTemplates' ORDER BY id"))
         await using (var reader = await query.ExecuteReaderAsync(t)) while (await reader.ReadAsync(t)) locations.Add(reader.GetGuid(0));
@@ -472,8 +577,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             for (var i = 0; i < templates.Count; i++)
             {
                 var template = templates[i]; if (!template.IsActive || template.NextRunAt > now) continue;
-                var scheduled = template.NextRunAt; var assignment = await CurrentResponsible(location, DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime), t);
-                if (await InsertRecurringTask(template, scheduled, assignment, now, t)) created++;
+                var scheduled = template.NextRunAt; var assignment = await CurrentResponsible(location, today, t);
+                if (await InsertRecurringTask(template, scheduled, assignment, today, now, t)) created++;
                 do { scheduled = RecurringTaskSchedule.Next(template, scheduled); } while (scheduled <= now);
                 templates[i] = template with { NextRunAt = scheduled, Version = template.Version + 1 }; changed = true;
             }
@@ -615,9 +720,9 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     }
 
     private async Task<bool> InsertRecurringTask(RecurringTaskTemplateView template, DateTimeOffset scheduled, Guid? assignee,
-        DateTimeOffset now, CancellationToken t)
+        DateOnly today, DateTimeOffset now, CancellationToken t)
     {
-        var id = Guid.NewGuid(); var source = $"recurring:{template.Id:N}:{scheduled.UtcTicks}"; var assignment = assignee is null ? null : await AssignmentId(template.LocationId, assignee.Value, DateOnly.FromDateTime(now.UtcDateTime), t);
+        var id = Guid.NewGuid(); var source = $"recurring:{template.Id:N}:{scheduled.UtcTicks}"; var assignment = assignee is null ? null : await AssignmentId(template.LocationId, assignee.Value, today, t);
         var state = new Dictionary<string, object?>
         {
             ["id"] = id,
@@ -645,9 +750,9 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
                 'state',jsonb_build_object('id',@historyId,'taskId',@id,'actorId','00000000-0000-0000-0000-000000000000',
                   'action','generated','note','','changesJson',jsonb_build_object('templateId',@template)::text,
                   'responsibleStaffUserId',@assigned,'occurredAt',@now,'wasOverdue',false,'taskVersion',1,
-                  'createdAt',@now,'updatedAt',@now)))) ON CONFLICT(source_key) DO NOTHING
+                  'createdAt',@now,'updatedAt',@now)))) ON CONFLICT(source_key) WHERE source_key IS NOT NULL DO NOTHING
             """);
-        command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("location", template.LocationId); command.Parameters.AddWithValue("assigned", (object?)assignee ?? DBNull.Value);
+        command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("location", template.LocationId); command.Parameters.AddWithValue("assigned", NpgsqlDbType.Uuid, (object?)assignee ?? DBNull.Value);
         command.Parameters.AddWithValue("source", source); command.Parameters.AddWithValue("title", template.Title); command.Parameters.AddWithValue("description", template.Requirements);
         command.Parameters.AddWithValue("priority", template.Priority == "High" ? "1" : "0"); command.Parameters.AddWithValue("now", now);
         command.Parameters.AddWithValue("due", scheduled.AddHours(template.DueAfterHours)); command.Parameters.AddWithValue("state", JsonSerializer.Serialize(state, Json));
@@ -675,39 +780,79 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         var value = await command.ExecuteScalarAsync(t); return value is Guid id ? id : null;
     }
 
-    private async Task SaveEmployment(Guid staffId, Guid? employmentId, EmploymentWrite input, Guid actor, DateTimeOffset now, CancellationToken t)
+    private async Task EnsureEmploymentPeriodAvailable(Guid staffId, Guid? employmentId, DateOnly start, CancellationToken t)
+    {
+        // Periods are inclusive; the latest period must begin strictly after every earlier period.
+        // An open-ended prior period must be closed explicitly before a new period is recorded.
+        await using var command = Command("""
+            SELECT EXISTS(SELECT 1 FROM staff_employments
+              WHERE staff_user_id=@staff AND (@id IS NULL OR id<>@id)
+                AND (end_date IS NULL OR end_date>=@start))
+            """);
+        command.Parameters.AddWithValue("staff", staffId); AddNullableUuid(command, "id", employmentId);
+        command.Parameters.AddWithValue("start", start);
+        if ((bool)(await command.ExecuteScalarAsync(t))!) throw OperationsException.Conflict("employment_period_overlap");
+    }
+
+    private async Task SaveEmployment(Guid staffId, Guid? employmentId, EmploymentWrite input, Guid actor,
+        DateTimeOffset now, string? reason, CancellationToken t)
     {
         var metadata = JsonSerializer.Serialize(new { employmentType = input.EmploymentType }, Json);
+        var snapshot = JsonSerializer.Serialize(input, Json);
         if (employmentId is null)
         {
             await using var insert = Command("""
                 INSERT INTO staff_employments(id,staff_user_id,contract_number,start_date,end_date,salary_type,base_rate,reward_penalty_policy,status,history)
                 VALUES(@id,@staff,@contract,@start,@end,@salary,@rate,CAST(@metadata AS jsonb),@status,
-                  jsonb_build_array(jsonb_build_object('action','Created','actorId',@actor,'occurredAt',@now)))
-                """); insert.Parameters.AddWithValue("id", Guid.NewGuid()); EmploymentParameters(insert, staffId, input, metadata, actor, now); await insert.ExecuteNonQueryAsync(t);
+                  jsonb_build_array(jsonb_build_object('action','Created','actorId',@actor,'occurredAt',@now,
+                    'reason',@reason,'before',NULL,'after',CAST(@snapshot AS jsonb))))
+                """);
+            insert.Parameters.AddWithValue("id", Guid.NewGuid());
+            EmploymentParameters(insert, staffId, input, metadata, actor, now);
+            insert.Parameters.AddWithValue("reason", NpgsqlDbType.Text, (object?)reason ?? DBNull.Value);
+            insert.Parameters.AddWithValue("snapshot", snapshot);
+            await insert.ExecuteNonQueryAsync(t);
         }
         else
         {
             await using var update = Command("""
                 UPDATE staff_employments SET contract_number=@contract,start_date=@start,end_date=@end,salary_type=@salary,
                   base_rate=@rate,reward_penalty_policy=reward_penalty_policy||CAST(@metadata AS jsonb),status=@status,
-                  history=history||jsonb_build_array(jsonb_build_object('action','Updated','actorId',@actor,'occurredAt',@now))
+                  history=history||jsonb_build_array(jsonb_build_object('action','Updated','actorId',@actor,'occurredAt',@now,
+                    'reason',@reason,'before',jsonb_build_object('contractNumber',contract_number,
+                      'employmentType',COALESCE(reward_penalty_policy->>'employmentType',''),'startDate',start_date,
+                      'endDate',end_date,'salaryType',salary_type,'baseRate',base_rate,'status',status),
+                    'after',CAST(@snapshot AS jsonb)))
                 WHERE id=@id AND staff_user_id=@staff
-                """); update.Parameters.AddWithValue("id", employmentId.Value); EmploymentParameters(update, staffId, input, metadata, actor, now); await update.ExecuteNonQueryAsync(t);
+                """);
+            update.Parameters.AddWithValue("id", employmentId.Value);
+            EmploymentParameters(update, staffId, input, metadata, actor, now);
+            update.Parameters.AddWithValue("reason", NpgsqlDbType.Text, (object?)reason ?? DBNull.Value);
+            update.Parameters.AddWithValue("snapshot", snapshot);
+            await update.ExecuteNonQueryAsync(t);
         }
     }
 
+    private const string ResponsibilityAssignmentPredicate =
+        "(a->>'staffUserId')::uuid=@staff AND (a->>'endDate')::date>=@today";
+    private const string ResponsibilityTaskPredicate =
+        """
+        ot.assigned_user_id=@staff AND
+          ((ot.task_type IN ('GENERAL','METER_READ') AND ot.status NOT IN ('2','3')) OR
+           (ot.task_type='WORK_ORDER' AND ot.status NOT IN ('Verified','Cancelled')))
+        """;
+    private const string ResponsibilityMoveOutPredicate =
+        """
+        c.move_out->'current'->>'inspectionStaffId'=@staff::text
+          AND c.move_out->'current'->>'inspectedAt' IS NULL AND COALESCE(c.move_out->'current'->>'status','0')<>'5'
+        """;
+
     private async Task<bool> HasResponsibilities(Guid staffId, DateOnly today, CancellationToken t)
     {
-        await using var command = Command("""
-            SELECT EXISTS(SELECT 1 FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.staff_assignments) a
-              WHERE (a->>'staffUserId')::uuid=@staff AND (a->>'endDate')::date>=@today)
-              OR EXISTS(SELECT 1 FROM operational_tasks WHERE assigned_user_id=@staff AND
-                ((task_type IN ('GENERAL','METER_READ') AND status NOT IN ('2','3')) OR
-                 (task_type='WORK_ORDER' AND status NOT IN ('Verified','Cancelled'))))
-              OR EXISTS(SELECT 1 FROM contracts WHERE move_out->'current'->>'inspectionStaffId'=@staff::text
-                AND move_out->'current'->>'inspectedAt' IS NULL AND COALESCE(move_out->'current'->>'status','0')<>'5')
-            """); command.Parameters.AddWithValue("staff", staffId); command.Parameters.AddWithValue("today", today); return (bool)(await command.ExecuteScalarAsync(t))!;
+        await using var command = Command("SELECT EXISTS(SELECT 1 FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.staff_assignments) a WHERE "
+            + ResponsibilityAssignmentPredicate + ") OR EXISTS(SELECT 1 FROM operational_tasks ot WHERE "
+            + ResponsibilityTaskPredicate + ") OR EXISTS(SELECT 1 FROM contracts c WHERE " + ResponsibilityMoveOutPredicate + ")");
+        command.Parameters.AddWithValue("staff", staffId); command.Parameters.AddWithValue("today", today); return (bool)(await command.ExecuteScalarAsync(t))!;
     }
 
     private async Task EnsurePhoneAvailable(Guid userId, string? phone, CancellationToken t)
@@ -795,9 +940,9 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     }
     private static void EmploymentParameters(NpgsqlCommand command, Guid staffId, EmploymentWrite input, string metadata, Guid actor, DateTimeOffset now)
     {
-        command.Parameters.AddWithValue("staff", staffId); command.Parameters.AddWithValue("contract", (object?)input.ContractNumber ?? DBNull.Value);
-        command.Parameters.AddWithValue("start", input.StartDate); command.Parameters.AddWithValue("end", (object?)input.EndDate ?? DBNull.Value);
-        command.Parameters.AddWithValue("salary", (object?)input.SalaryType ?? DBNull.Value); command.Parameters.AddWithValue("rate", (object?)input.BaseRate ?? DBNull.Value);
+        command.Parameters.AddWithValue("staff", staffId); command.Parameters.AddWithValue("contract", NpgsqlDbType.Text, (object?)input.ContractNumber ?? DBNull.Value);
+        command.Parameters.AddWithValue("start", input.StartDate); command.Parameters.AddWithValue("end", NpgsqlDbType.Date, (object?)input.EndDate ?? DBNull.Value);
+        command.Parameters.AddWithValue("salary", NpgsqlDbType.Text, (object?)input.SalaryType ?? DBNull.Value); command.Parameters.AddWithValue("rate", NpgsqlDbType.Numeric, (object?)input.BaseRate ?? DBNull.Value);
         command.Parameters.AddWithValue("metadata", metadata); command.Parameters.AddWithValue("status", input.Status); command.Parameters.AddWithValue("actor", actor); command.Parameters.AddWithValue("now", now);
     }
     private static void AddNullableUuid(NpgsqlCommand command, string name, Guid? value) => command.Parameters.Add(new NpgsqlParameter(name, NpgsqlDbType.Uuid) { Value = (object?)value ?? DBNull.Value });

@@ -63,6 +63,7 @@ export function MainDraftScreen({
   onSaved,
   persistRoute = true,
   onReleased,
+  reviewOnly = false,
 }: {
   initialId?: string;
   roomId: string;
@@ -73,6 +74,7 @@ export function MainDraftScreen({
   onSaved?: (id: string) => void;
   persistRoute?: boolean;
   onReleased?: (id: string) => void;
+  reviewOnly?: boolean;
 }) {
   const { api, session } = useSession();
   const owner = !!session?.roles.includes('Owner');
@@ -163,8 +165,8 @@ export function MainDraftScreen({
       setReadyFile('');
       setDocumentBlocker('');
       setReviewRevision((value) => value + 1);
-      setSigningVisited(false);
-      setMode('edit');
+      setSigningVisited(reviewOnly);
+      setMode(reviewOnly ? 'signing' : 'edit');
       setLoading(true);
       setError('');
       try {
@@ -210,7 +212,7 @@ export function MainDraftScreen({
     }
     void load();
     return () => controller.abort();
-  }, [client, initialId, revision, setError, owner]);
+  }, [client, initialId, revision, setError, owner, reviewOnly]);
   useEffect(() => {
     if (!client || !id || mode !== 'signing' || saved?.status !== 'Draft') return;
     const controller = new AbortController();
@@ -410,6 +412,7 @@ export function MainDraftScreen({
       return;
     }
     if (busy) return;
+    if (reviewOnly) return onCancel();
     if (mode !== 'edit') {
       setMode(mode === 'signing' ? 'preview' : 'edit');
       return;
@@ -522,7 +525,7 @@ export function MainDraftScreen({
     }
   }
   useEffect(() => {
-    if (!client || loading || readOnly || !preparation) return;
+    if (!client || loading || readOnly || reviewOnly || !preparation) return;
     let date: string;
     try {
       date = inputDate(start)!;
@@ -545,7 +548,7 @@ export function MainDraftScreen({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [client, loading, readOnly, start, preparation, setError]);
+  }, [client, loading, readOnly, reviewOnly, start, preparation, setError]);
   const edit = (setter: (v: string) => void) => (value: string) => {
     setter(value);
     dirty.current = true;
@@ -565,7 +568,9 @@ export function MainDraftScreen({
               <IconButton
                 icon="arrow-left"
                 iconColor="#FFFFFF"
-                accessibilityLabel="Quay lại tạo hợp đồng"
+                accessibilityLabel={
+                  reviewOnly ? 'Quay lại danh sách hợp đồng' : 'Quay lại tạo hợp đồng'
+                }
                 onPress={back}
               />
               <Text style={styles.title}>
@@ -715,16 +720,20 @@ export function MainDraftScreen({
                           onReleased={(next) => (onReleased ? onReleased(next) : onList())}
                           onOpenPdf={(file) => openFile(true, file, true)}
                           onDownloadPdf={(file) => openFile(true, file)}
-                          onEditDraft={() => {
-                            setDocuments(null);
-                            setReadyFile('');
-                            setSigningVisited(false);
-                            setMode('edit');
-                          }}
+                          onEditDraft={
+                            reviewOnly
+                              ? undefined
+                              : () => {
+                                  setDocuments(null);
+                                  setReadyFile('');
+                                  setSigningVisited(false);
+                                  setMode('edit');
+                                }
+                          }
                           onDraftChanged={(latest) => {
                             setDocuments(null);
                             setReadyFile('');
-                            setSigningVisited(false);
+                            setSigningVisited(reviewOnly);
                             setSaved(latest);
                             setPreparation(latest.preparation);
                             refs.current = latest.input;
@@ -735,7 +744,7 @@ export function MainDraftScreen({
                             setPlace(latest.input.tenantPlaceOfIssue);
                             setNotes(latest.input.notes);
                             dirty.current = false;
-                            setMode('preview');
+                            setMode(reviewOnly ? 'signing' : 'preview');
                           }}
                         />
                       </View>
@@ -833,74 +842,84 @@ export function MainDraftScreen({
                   </>
                 )}
               </KeyboardFormScrollView>
-              <View style={[styles.footer, owner && styles.ownerFooter]}>
-                {busy && <ActivityIndicator />}
-                {mode === 'edit' ? (
-                  <>
-                    <Button
-                      contentStyle={{ minHeight: 48 }}
-                      mode="text"
-                      style={owner ? styles.ownerAction : styles.secondaryAction}
-                      disabled={
-                        busy || readOnly || loading || !preparation || !!preparation.blockers.length
-                      }
-                      onPress={() => void save(false)}
-                    >
-                      Lưu nháp
-                    </Button>
-                    <Button
-                      contentStyle={{ minHeight: 48 }}
-                      mode="contained"
-                      buttonColor={s.blue}
-                      style={owner ? styles.ownerAction : styles.primaryAction}
-                      disabled={
-                        busy || readOnly || loading || !preparation || !!preparation.blockers.length
-                      }
-                      onPress={() => void save(true)}
-                    >
-                      Xem trước hợp đồng
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      style={owner ? styles.ownerAction : styles.primaryAction}
-                      labelStyle={{ fontSize: 12 }}
-                      contentStyle={{ minHeight: 48 }}
-                      disabled={busy || readOnly}
-                      onPress={() => (mode === 'preview' ? setMode('edit') : setMode('preview'))}
-                    >
-                      {mode === 'preview' ? 'Chỉnh sửa thông tin' : 'Xem hợp đồng'}
-                    </Button>
-                    {mode === 'preview' ? (
+              {!reviewOnly && (
+                <View style={[styles.footer, owner && styles.ownerFooter]}>
+                  {busy && <ActivityIndicator />}
+                  {mode === 'edit' ? (
+                    <>
+                      <Button
+                        contentStyle={{ minHeight: 48 }}
+                        mode="text"
+                        style={owner ? styles.ownerAction : styles.secondaryAction}
+                        disabled={
+                          busy ||
+                          readOnly ||
+                          loading ||
+                          !preparation ||
+                          !!preparation.blockers.length
+                        }
+                        onPress={() => void save(false)}
+                      >
+                        Lưu nháp
+                      </Button>
+                      <Button
+                        contentStyle={{ minHeight: 48 }}
+                        mode="contained"
+                        buttonColor={s.blue}
+                        style={owner ? styles.ownerAction : styles.primaryAction}
+                        disabled={
+                          busy ||
+                          readOnly ||
+                          loading ||
+                          !preparation ||
+                          !!preparation.blockers.length
+                        }
+                        onPress={() => void save(true)}
+                      >
+                        Xem trước hợp đồng
+                      </Button>
+                    </>
+                  ) : (
+                    <>
                       <Button
                         style={owner ? styles.ownerAction : styles.primaryAction}
                         labelStyle={{ fontSize: 12 }}
                         contentStyle={{ minHeight: 48 }}
-                        mode="contained"
-                        disabled={
-                          busy ||
-                          readOnly ||
-                          !documents?.pdf ||
-                          (owner && readyFile !== documents.pdf.id)
-                        }
-                        onPress={() => void reviewSaved(true)}
-                      >
-                        {owner ? 'Tiếp tục duyệt hợp đồng' : 'Tiếp tục ký hợp đồng'}
-                      </Button>
-                    ) : !owner ? (
-                      <Button
-                        contentStyle={{ minHeight: 48 }}
-                        mode="contained"
                         disabled={busy || readOnly}
-                        onPress={onList}
+                        onPress={() => (mode === 'preview' ? setMode('edit') : setMode('preview'))}
                       >
-                        Về danh sách hợp đồng
+                        {mode === 'preview' ? 'Chỉnh sửa thông tin' : 'Xem hợp đồng'}
                       </Button>
-                    ) : null}
-                  </>
-                )}
-              </View>
+                      {mode === 'preview' ? (
+                        <Button
+                          style={owner ? styles.ownerAction : styles.primaryAction}
+                          labelStyle={{ fontSize: 12 }}
+                          contentStyle={{ minHeight: 48 }}
+                          mode="contained"
+                          disabled={
+                            busy ||
+                            readOnly ||
+                            !documents?.pdf ||
+                            (owner && readyFile !== documents.pdf.id)
+                          }
+                          onPress={() => void reviewSaved(true)}
+                        >
+                          {owner ? 'Tiếp tục duyệt hợp đồng' : 'Tiếp tục ký hợp đồng'}
+                        </Button>
+                      ) : !owner ? (
+                        <Button
+                          contentStyle={{ minHeight: 48 }}
+                          mode="contained"
+                          disabled={busy || readOnly}
+                          onPress={onList}
+                        >
+                          Về danh sách hợp đồng
+                        </Button>
+                      ) : null}
+                    </>
+                  )}
+                </View>
+              )}
             </KeyboardAvoidingView>
           </SafeAreaView>
           <ToastHost modal />

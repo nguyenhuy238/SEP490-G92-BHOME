@@ -5,13 +5,16 @@ import { useWorkspaceQuery } from '../workspace/useWorkspaceQuery';
 import { showSuccess } from '../../lib/toast';
 import { randomUUID } from '../../lib/randomUUID';
 import { incidentError } from '../../services/incidents';
+import { queryPolicies } from '../../lib/queryPolicies';
 
 const listeners = new Set<() => void>();
 export function refreshIncidents() {
   listeners.forEach((listener) => listener());
 }
 export function useIncidentQuery<T>(path: string | null) {
-  const query = useWorkspaceQuery<T>(path);
+  const { session } = useSession();
+  const owner = !!session?.roles.includes('Owner');
+  const query = useWorkspaceQuery<T>(path, { cache: owner ? queryPolicies.incidents : undefined });
   const reload = query.reload;
   const visited = useRef<string | null>(null);
   useEffect(() => {
@@ -22,9 +25,9 @@ export function useIncidentQuery<T>(path: string | null) {
   }, [reload]);
   useFocusEffect(
     useCallback(() => {
-      if (path && visited.current === path) reload();
+      if (!owner && path && visited.current === path) reload();
       visited.current = path;
-    }, [path, reload]),
+    }, [path, reload, owner]),
   );
   return query;
 }

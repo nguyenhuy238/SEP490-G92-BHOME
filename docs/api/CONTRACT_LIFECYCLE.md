@@ -26,6 +26,19 @@ Các mutation, state, idempotency và giới hạn provider/ledger giữ theo
 
 ## Danh sách phục vụ web/mobile
 
+### Owner Mobile: bản nháp chờ duyệt (14/11/2026)
+
+Truy vết: BF-03/BF-04, UC-15, GBR-01/02/04. Màn hình “Cần xử lý” tải thêm
+`status=Draft` qua API danh sách hiện hữu, cùng các trạng thái chờ ký/chờ kích hoạt.
+Bản Main onboarding đã lưu mở phần xem PDF và duyệt đưa đi ký; không mở form soạn/sửa
+trên Owner Mobile. Tái sử dụng signing-review/release hiện hữu, giữ kiểm tra quyền,
+phiên bản, tài liệu đã xem và xác nhận của Owner ở backend. Không tự phát hành, ký hoặc kích hoạt
+khi mở bản nháp. Khi bản nháp đổi phiên bản, tải lại phần duyệt và yêu cầu xác nhận PDF mới.
+
+Thành phần: `ownerAttention`, `useOwnerAttention`, `ContractScreen`, `MainDraftScreen`.
+Kiểm thử hồi quy: danh sách Draft, điều hướng chế độ chỉ duyệt, chặn phát hành trước xác nhận,
+phân quyền Owner/Staff/Tenant, cache/tải lại và trạng thái lỗi/rỗng.
+
 `GET /api/v1/contracts?page=1&pageSize=20&locationId={uuid}&status=Draft`
 
 - Bearer; Owner/Staff/Tenant. Anonymous 401, sai vai trò 403.

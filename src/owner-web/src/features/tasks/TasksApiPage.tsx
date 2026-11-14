@@ -45,17 +45,38 @@ export function TasksApiPage() {
     [editor, setEditor] = useState<OwnerTask | null | undefined>(),
     [notice, setNotice] = useState('');
   const [filter, setFilter] = useState({
-    location: '',
+    location: params.get('locationId') ?? '',
     status: '',
     priority: '',
-    staff: '',
+    staff: params.get('staffUserId') ?? '',
+    recordedStaff: params.get('recordedStaffUserId') ?? '',
+    responsibility: params.get('hasResponsibility') === 'false' ? 'false' : '',
     overdue: false,
     from: '',
     to: '',
     page: 1,
   });
-  const update = (value: Partial<typeof filter>) =>
+  const update = (value: Partial<typeof filter>) => {
     setFilter((current) => ({ ...current, ...value, page: 1 }));
+    const next = new URLSearchParams(params);
+    if (value.location !== undefined) {
+      if (value.location) next.set('locationId', value.location);
+      else next.delete('locationId');
+    }
+    if (value.staff !== undefined) {
+      if (value.staff) next.set('staffUserId', value.staff);
+      else next.delete('staffUserId');
+    }
+    if (value.recordedStaff !== undefined) {
+      if (value.recordedStaff) next.set('recordedStaffUserId', value.recordedStaff);
+      else next.delete('recordedStaffUserId');
+    }
+    if (value.responsibility !== undefined) {
+      if (value.responsibility) next.set('hasResponsibility', value.responsibility);
+      else next.delete('hasResponsibility');
+    }
+    if (next.toString() !== params.toString()) setParams(next, { replace: true });
+  };
   const select = (id: string) => {
     const next = new URLSearchParams(params);
     if (id) next.set('taskId', id);
@@ -70,6 +91,8 @@ export function TasksApiPage() {
     status: tab === 2 ? '4' : filter.status,
     priority: filter.priority,
     staffUserId: filter.staff,
+    recordedStaffUserId: filter.recordedStaff,
+    hasResponsibility: filter.responsibility,
     isOverdue: filter.overdue || undefined,
     dueFrom: filter.from ? vietnamInstant(filter.from) : '',
     dueTo: filter.to ? vietnamInstant(filter.to) : '',
@@ -200,9 +223,10 @@ export function TasksApiPage() {
               <Stack
                 direction={{ xs: 'column', md: 'row' }}
                 spacing={1.5}
-                sx={{ alignItems: { md: 'center' } }}
+                useFlexGap
+                sx={{ alignItems: { md: 'center' }, flexWrap: 'wrap' }}
               >
-                <Box sx={{ flex: 2, minWidth: 200 }}>
+                <Box sx={{ width: { xs: '100%', md: 220 }, minWidth: 0 }}>
                   <OwnerLocationPicker
                     simple
                     value={filter.location}
@@ -216,7 +240,7 @@ export function TasksApiPage() {
                     label="Trạng thái công việc"
                     value={filter.status}
                     onChange={(e) => update({ status: e.target.value })}
-                    sx={{ flex: 1, minWidth: 180 }}
+                    sx={{ width: { xs: '100%', md: 205 } }}
                   >
                     <MenuItem value="">Tất cả</MenuItem>
                     {[
@@ -238,7 +262,7 @@ export function TasksApiPage() {
                   label="Ưu tiên"
                   value={filter.priority}
                   onChange={(e) => update({ priority: e.target.value })}
-                  sx={{ minWidth: 130 }}
+                  sx={{ width: { xs: '100%', md: 150 }, flex: '0 0 auto' }}
                 >
                   <MenuItem value="">Tất cả</MenuItem>
                   <MenuItem value="0">Bình thường</MenuItem>
@@ -246,6 +270,7 @@ export function TasksApiPage() {
                 </TextField>
                 <FormControlLabel
                   label="Chỉ quá hạn"
+                  sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
                   control={
                     <Checkbox
                       checked={filter.overdue}
@@ -254,18 +279,20 @@ export function TasksApiPage() {
                   }
                 />
               </Stack>
-              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+              <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
                 <Button aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}>
                   Bộ lọc nâng cao
                 </Button>
                 <Button onClick={refresh}>Làm mới</Button>
                 <Button
                   onClick={() =>
-                    setFilter({
+                    update({
                       location: '',
                       status: '',
                       priority: '',
                       staff: '',
+                      recordedStaff: '',
+                      responsibility: '',
                       overdue: false,
                       from: '',
                       to: '',
@@ -276,23 +303,66 @@ export function TasksApiPage() {
                   Xóa bộ lọc
                 </Button>
               </Stack>
-              <Collapse in={advanced}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 1 }}>
+              <Collapse
+                in={advanced || !!filter.staff || !!filter.recordedStaff || !!filter.responsibility}
+              >
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={2}
+                  useFlexGap
+                  sx={{ pt: 1, flexWrap: 'wrap' }}
+                >
                   <TextField
                     size="small"
                     select
-                    label="Staff phụ trách"
+                    label="Người phụ trách cơ sở"
                     value={filter.staff}
                     onChange={(e) => update({ staff: e.target.value })}
-                    sx={{ flex: 1, minWidth: 180 }}
+                    sx={{ width: { xs: '100%', sm: 250 }, minWidth: 0 }}
                   >
-                    <MenuItem value="">Tất cả Staff</MenuItem>
+                    <MenuItem value="">Tất cả nhân viên</MenuItem>
+                    {filter.staff &&
+                      !staff.data?.some((person) => person.userId === filter.staff) && (
+                        <MenuItem value={filter.staff}>Nhân viên đã chọn</MenuItem>
+                      )}
                     {staff.data?.map((person) => (
                       <MenuItem key={person.userId} value={person.userId}>
                         {person.fullName || person.email}
                       </MenuItem>
                     ))}
                   </TextField>
+                  <TextField
+                    size="small"
+                    select
+                    label="Người được giao trong hồ sơ"
+                    value={filter.recordedStaff}
+                    onChange={(e) => update({ recordedStaff: e.target.value })}
+                    sx={{ width: { xs: '100%', sm: 250 }, minWidth: 0 }}
+                  >
+                    <MenuItem value="">Tất cả nhân viên</MenuItem>
+                    {filter.recordedStaff &&
+                      !staff.data?.some((person) => person.userId === filter.recordedStaff) && (
+                        <MenuItem value={filter.recordedStaff}>Nhân viên đã chọn</MenuItem>
+                      )}
+                    {staff.data?.map((person) => (
+                      <MenuItem key={person.userId} value={person.userId}>
+                        {person.fullName || person.email}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    size="small"
+                    select
+                    label="Phân công hiện tại"
+                    value={filter.responsibility}
+                    onChange={(e) => update({ responsibility: e.target.value })}
+                    sx={{ width: { xs: '100%', sm: 210 } }}
+                  >
+                    <MenuItem value="">Tất cả</MenuItem>
+                    <MenuItem value="false">Chưa có người phụ trách</MenuItem>
+                  </TextField>
+                </Stack>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 1 }}>
                   <TextField
                     size="small"
                     type="datetime-local"
@@ -474,9 +544,20 @@ export function TasksApiPage() {
               </TableContainer>
             )}
             {!list.isPending && !list.error && !list.data?.items.length && (
-              <Typography sx={{ p: 3, textAlign: 'center', fontSize: 14 }}>
-                Không có công việc phù hợp.
-              </Typography>
+              <Stack sx={{ p: 4, alignItems: 'center' }} spacing={1.5}>
+                <Typography sx={{ fontSize: 14 }}>
+                  {tab === 2 ? 'Không có công việc chờ nghiệm thu.' : 'Không có công việc phù hợp.'}
+                </Typography>
+                {tab === 0 && total.data?.totalCount === 0 && !total.error && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<Plus size={16} />}
+                    onClick={() => setEditor(null)}
+                  >
+                    Tạo công việc đầu tiên
+                  </Button>
+                )}
+              </Stack>
             )}
             {list.data && (
               <Box sx={{ p: 2 }}>

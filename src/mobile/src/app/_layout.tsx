@@ -64,9 +64,16 @@ function WorkspaceNavigation() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="workspace/[screen]" options={{ headerShown: false }} />
       </Stack.Protected>
-      <Stack.Screen name="meter" options={{ headerShown: false, gestureEnabled: false }} />
-      <Stack.Screen name="ocr-test" options={{ title: 'Th? OCR' }} />
-      <Stack.Screen name="capture" options={{ title: 'Tác nghiệp OCR' }} />
+      <Stack.Protected guard={role !== 'Owner'}>
+        <Stack.Screen name="meter" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="capture" options={{ title: 'Tác nghiệp OCR' }} />
+        <Stack.Screen name="setup" />
+        <Stack.Screen name="resident" />
+        <Stack.Screen name="identity" />
+        <Stack.Protected guard={__DEV__}>
+          <Stack.Screen name="ocr-test" options={{ title: 'Thử OCR' }} />
+        </Stack.Protected>
+      </Stack.Protected>
     </Stack>
   );
 }

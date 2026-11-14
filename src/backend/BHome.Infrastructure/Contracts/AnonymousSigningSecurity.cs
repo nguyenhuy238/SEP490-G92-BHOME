@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using BHome.Application.Contracts;
 using BHome.Application.Notifications;
+using BHome.Infrastructure.Modules.Notifications;
 using Microsoft.Extensions.Options;
 
 namespace BHome.Infrastructure.Contracts;
@@ -12,9 +13,12 @@ public sealed class AnonymousSigningOptions
     public string PublicSigningUrl { get; set; } = "";
 }
 internal sealed class AnonymousSigningSecurity(IOptions<AnonymousSigningOptions> options, INotificationChannelProvider channel,
-    IOptions<NotificationChannelOptions> channelOptions) : IAnonymousSigningSecurity
+    IOptions<NotificationChannelOptions> channelOptions, MailKitEmailSender emailSender) : IAnonymousSigningSecurity
 {
-    public bool EmailConfigured => channelOptions.Value.Mode != "Sandbox" && channel.IsConfigured("EMAIL");
+    // The channel provider sends through configured SMTP before considering the Development sandbox.
+    // A sandbox receipt alone can never deliver an invitation or OTP.
+    public bool EmailConfigured => channel.IsConfigured("EMAIL") &&
+        (emailSender.IsConfigured || channelOptions.Value.Mode != "Sandbox");
     public string? InvitationUrl(string token) => Uri.TryCreate(options.Value.PublicSigningUrl, UriKind.Absolute, out var url) &&
         url.Scheme == "https" && string.IsNullOrEmpty(url.Query) && string.IsNullOrEmpty(url.Fragment)
         ? url.AbsoluteUri + "#token=" + Uri.EscapeDataString(token) : null;

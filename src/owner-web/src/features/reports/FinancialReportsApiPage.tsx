@@ -25,12 +25,13 @@ import { FinancialAmountChart } from './FinancialAmountChart';
 import { useFinanceApi } from '../expenses/useFinanceApi';
 import { downloadFinance, reportCsv } from '../../services/financeExport';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
+import { financeMonthPeriod } from '../finance/monthPeriods';
 
 export function FinancialReportsApiPage() {
   const api = useFinanceApi();
   const { session } = useAuth();
-  const [from, setFrom] = useState(''),
-    [to, setTo] = useState(''),
+  const [from, setFrom] = useState(() => financeMonthPeriod(-1).from),
+    [to, setTo] = useState(() => financeMonthPeriod(-1).to),
     [location, setLocation] = useState('');
   const [filter, setFilter] = useState<ReportFilter | null>(null);
   const [reportScope, setReportScope] = useState('');
@@ -51,6 +52,12 @@ export function FinancialReportsApiPage() {
     queryFn: ({ signal }) => api.rooms(location, signal),
   });
   const value = report.data;
+  const filtersChanged =
+    !!filter &&
+    (filter.from !== from ||
+      filter.to !== to ||
+      (filter.locationId || '') !== location ||
+      (filter.roomId || '') !== room);
   const occupancyReasons: Record<string, string> = {
     LocationRequired: 'Chọn một cơ sở để xem tỷ lệ lấp đầy theo kỳ.',
     RoomFilterUnsupported: 'Bỏ bộ lọc phòng để xem tỷ lệ lấp đầy của cơ sở.',
@@ -69,6 +76,22 @@ export function FinancialReportsApiPage() {
     <>
       <PageHeader title="Báo cáo kinh doanh & Hoàn vốn" />
       <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+        <Stack direction="row" useFlexGap spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+          {([-1, 0] as const).map((offset) => (
+            <Button
+              key={offset}
+              type="button"
+              onClick={() => {
+                const period = financeMonthPeriod(offset);
+                setFrom(period.from);
+                setTo(period.to);
+                setDateError(false);
+              }}
+            >
+              {offset === -1 ? 'Tháng trước' : 'Tháng này'}
+            </Button>
+          ))}
+        </Stack>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -142,6 +165,12 @@ export function FinancialReportsApiPage() {
           </FilterToolbar>
         </form>
       </Paper>
+      {filtersChanged && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Bạn vừa thay đổi phạm vi. Nhấn <strong>Xem báo cáo</strong> để tải kết quả theo bộ lọc
+          mới; số liệu đang hiển thị vẫn thuộc kỳ trước đó.
+        </Alert>
+      )}
       {!filter && !locations.error && (
         <Typography color="text.secondary" variant="body2">
           Chọn kỳ và phạm vi để xem báo cáo từ máy chủ.

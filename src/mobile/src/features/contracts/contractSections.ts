@@ -5,7 +5,12 @@ import {
 
 export function mobileContractActions(...args: Parameters<typeof contractActions>) {
   return contractActions(...args).filter(
-    (action) => !['move-out/inspection', 'move-out/settlement'].includes(action.operation),
+    (action) =>
+      !['move-out/inspection', 'move-out/settlement'].includes(action.operation) &&
+      !(
+        args[2] === 'Owner' &&
+        ['renewals', 'holding-conversion', 'deposit-verifications'].includes(action.operation)
+      ),
   );
 }
 

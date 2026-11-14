@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest';
 import { MobileApi } from '../lib/api';
 import { queryPolicies } from '../lib/queryPolicies';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import { useOwnerAttention } from '../features/owner/useOwnerAttention';
 import { useStaffDashboard } from '../features/workspace/useStaffDashboard';
 import { TenantDashboardScreen } from '../screens/TenantDashboardScreen';
 import { businessToday } from '../../../../packages/client-core/src/contracts';
@@ -81,6 +82,41 @@ function TwinProbe({ cached }: { cached: boolean }) {
   });
   return <output>{JSON.stringify({ first, second })}</output>;
 }
+
+function OwnerAttentionProbe() {
+  const queue = useOwnerAttention();
+  return (
+    <output>
+      {JSON.stringify({ complete: queue.complete, total: queue.totalKnown, error: queue.error })}
+    </output>
+  );
+}
+it('shares the Owner attention reads across dashboard/tab remounts and refreshes after a server mutation', async () => {
+  state.role = 'Owner';
+  const transport = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async () => json({ items: [], totalCount: 12 }));
+  const api = client(transport);
+  const view = render(<OwnerAttentionProbe />);
+  await waitFor(() => expect(screen.getByRole('status').textContent).toContain('"complete":true'));
+  expect(screen.getByRole('status').textContent).toContain('"total":96');
+  expect(transport).toHaveBeenCalledTimes(8);
+  view.unmount();
+  render(<OwnerAttentionProbe />);
+  expect(transport).toHaveBeenCalledTimes(8);
+  await act(async () => {
+    await api.request('/api/v1/operational-tasks/task/verify', { method: 'POST' });
+  });
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(17));
+});
+
+it.each(['Staff', 'Tenant'])('does not fetch Owner attention for %s', (role) => {
+  state.role = role;
+  const transport = vi.fn<typeof fetch>();
+  client(transport);
+  render(<OwnerAttentionProbe />);
+  expect(transport).not.toHaveBeenCalled();
+});
 it('measures uncached control versus shared caching for duplicate consumers and remounts', async () => {
   const transport = vi.fn<typeof fetch>().mockImplementation(async () => json([{ id: 'room' }]));
   client(transport);
