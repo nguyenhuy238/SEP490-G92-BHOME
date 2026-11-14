@@ -12,7 +12,7 @@ vi.mock('../../property-api/propertyApi', async (original) => ({
   ...(await original<typeof import('../../property-api/propertyApi')>()),
   usePropertyApi: () => ({ locations: async () => ({ totalCount: 3 }), request }),
 }));
-vi.mock('../../../services/config', () => ({ isMockMode: false }));
+vi.mock('../../../services/config', () => ({ isMockMode: false, apiBaseUrl: '' }));
 import DashboardPage from './DashboardPage';
 
 const response = (path: string) =>

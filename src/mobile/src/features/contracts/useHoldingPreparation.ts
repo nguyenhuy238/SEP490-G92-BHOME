@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import {
   contractError,
   type ContractClient,
@@ -10,6 +12,7 @@ interface HoldingRooms {
   configuration: ContractConfiguration;
   locations: Preparation['locations'];
   rooms: Preparation['rooms'];
+  blockedRooms: { id: string; label: string; codes: string[] }[];
 }
 
 export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') {
@@ -24,6 +27,13 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
     loading: boolean;
     revision?: number;
   }>({ roomId: '', loading: false });
+  const seenFocus = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (seenFocus.current) setRevision((value) => value + 1);
+      else seenFocus.current = true;
+    }, []),
+  );
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
@@ -58,15 +68,45 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
           if (!result.items.length || loaded >= result.totalCount) break;
         }
         const rooms: Preparation['rooms'] = [];
+        const blockedRooms: HoldingRooms['blockedRooms'] = [];
         for (let offset = 0; offset < candidates.length; offset += 4) {
           const batch = candidates.slice(offset, offset + 4);
           const ready = await Promise.all(
-            batch.map((room) => api.holdingRoomReady(room.id, controller.signal)),
+            batch.map(async (room) => {
+              if (!api.holdingRoomReadiness)
+                return {
+                  ready: await api.holdingRoomReady(room.id, controller.signal),
+                  codes: [],
+                };
+              const result = await api.holdingRoomReadiness(room.id, controller.signal);
+              return {
+                ready:
+                  result.roomId === room.id &&
+                  result.purpose === 'Holding' &&
+                  result.status === 'Ready' &&
+                  result.isReady === true &&
+                  Array.isArray(result.blockers) &&
+                  !result.blockers.length &&
+                  Array.isArray(result.unverifiedConditions) &&
+                  !result.unverifiedConditions.length,
+                codes: [...(result.blockers ?? []), ...(result.unverifiedConditions ?? [])].map(
+                  (finding) => finding.code,
+                ),
+              };
+            }),
           );
           if (!active) return;
-          rooms.push(...batch.filter((_, index) => ready[index]));
+          rooms.push(...batch.filter((_, index) => ready[index]?.ready));
+          batch.forEach((room, index) => {
+            if (!ready[index]?.ready)
+              blockedRooms.push({
+                id: room.id,
+                label: room.label,
+                codes: ready[index]?.codes ?? [],
+              });
+          });
         }
-        if (active) setData({ configuration, locations, rooms });
+        if (active) setData({ configuration, locations, rooms, blockedRooms });
       } catch (e) {
         if (active) {
           setData(null);
@@ -82,6 +122,13 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
       controller.abort();
     };
   }, [api, revision]);
+  // Refresh server eligibility after using Owner Web or returning from the background.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setRevision((value) => value + 1);
+    });
+    return () => subscription.remove();
+  }, []);
   const room = data?.rooms.find((item) => item.id === selectedRoomId);
   const locationId = room?.locationId ?? '';
   useEffect(() => {

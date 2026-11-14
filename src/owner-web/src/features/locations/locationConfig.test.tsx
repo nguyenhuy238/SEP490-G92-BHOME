@@ -17,7 +17,7 @@ import type { HouseRuleItem } from './types/locationConfig';
 import { AuthProvider } from '../../../../../packages/client-core/src/auth';
 import { PortalProvider } from '../../app/PortalProvider';
 
-vi.mock('../../services/config', () => ({ isMockMode: true }));
+vi.mock('../../services/config', () => ({ isMockMode: true, apiBaseUrl: '' }));
 
 describe('BHOME Owner Web - Initial Location Configuration UI/UX (Vietnamese)', () => {
   const db = prepareProperty(createSeed());

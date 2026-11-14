@@ -128,8 +128,15 @@ export function ContractDetailPanel({
   const activated = !!c.activatedAt || ['Active', 'Terminated', 'Superseded'].includes(c.status);
   const depositDone = activated || (!!r && Number(r.remainingDeposit) === 0);
   const steps = [
-    { label: 'Bản nháp', done: c.status !== 'Draft' },
-    { label: `Ký số (${signedCount}/2)`, done: signedCount === 2 || activated },
+    { label: 'Bản nháp', done: c.status !== 'Draft' || (c.kind === 'Holding' && !!c.approvedAt) },
+    {
+      label:
+        c.signingMode === 'INTERNAL_OTP_DRAWN' ? 'Xác nhận hai bên' : `Ký số (${signedCount}/2)`,
+      done:
+        c.signingMode === 'INTERNAL_OTP_DRAWN'
+          ? c.status === 'PendingActivation' || activated
+          : signedCount === 2 || activated,
+    },
     { label: 'Xác minh cọc', done: depositDone },
     { label: 'Kích hoạt', done: activated },
   ];
@@ -246,6 +253,11 @@ export function ContractDetailPanel({
 
       {!!error && <Alert severity="error">{error}</Alert>}
       {!!notice && <Alert severity="success">{notice}</Alert>}
+      {c.kind === 'Holding' && c.signingMode === 'INTERNAL_OTP_DRAWN' && c.isDevelopmentDemo && (
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+          <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
+        </Paper>
+      )}
 
       {/* 2. What to do next: the actions the server allows now, and what still blocks activation */}
       <ChartCard title="Việc cần làm">
@@ -356,58 +368,60 @@ export function ContractDetailPanel({
       ) : null}
 
       {/* 3. Signatures: one line per party, then the signed PDF */}
-      <ChartCard
-        title="Chữ ký số"
-        subtitle={
-          c.isDevelopmentDemo
-            ? 'Mô phỏng Development — không dùng chứng thư hoặc chữ ký điện tử'
-            : 'Mỗi bên ký bằng chứng thư Viettel MySign của chính mình'
-        }
-        action={signer && !c.isDevelopmentDemo ? <SigningSetupLink /> : undefined}
-      >
-        <Stack divider={<Divider flexItem />} spacing={1}>
-          {parties.map((p) => (
-            <Stack
-              key={p.party}
-              direction="row"
-              spacing={1}
-              sx={{ alignItems: 'center', flexWrap: 'wrap' }}
-            >
-              <Typography sx={{ fontWeight: 600, minWidth: 150 }}>
-                {p.party} · {p.role}
-                {p.id === actorId ? ' (bạn)' : ''}
-              </Typography>
-              {p.signature ? (
-                <StatusChip label={text(p.signature.status)} />
-              ) : (
-                <Chip size="small" variant="outlined" label="Chưa có yêu cầu ký" />
-              )}
-              {p.signature?.signedAt && (
-                <Typography variant="body2" color="text.secondary">
-                  {formatInstant(p.signature.signedAt)}
+      {c.signingMode !== 'INTERNAL_OTP_DRAWN' && (
+        <ChartCard
+          title="Chữ ký số"
+          subtitle={
+            c.isDevelopmentDemo
+              ? 'Mô phỏng Development — không dùng chứng thư hoặc chữ ký điện tử'
+              : 'Mỗi bên ký bằng chứng thư Viettel MySign của chính mình'
+          }
+          action={signer && !c.isDevelopmentDemo ? <SigningSetupLink /> : undefined}
+        >
+          <Stack divider={<Divider flexItem />} spacing={1}>
+            {parties.map((p) => (
+              <Stack
+                key={p.party}
+                direction="row"
+                spacing={1}
+                sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+              >
+                <Typography sx={{ fontWeight: 600, minWidth: 150 }}>
+                  {p.party} · {p.role}
+                  {p.id === actorId ? ' (bạn)' : ''}
                 </Typography>
-              )}
-            </Stack>
-          ))}
-        </Stack>
-        <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
-          <Button
-            variant="outlined"
-            disabled={busy || !anySigned}
-            onClick={() => void openSigned()}
-          >
-            Xem hợp đồng đã ký
-          </Button>
-          <Button
-            disabled={busy || !anySigned}
-            onClick={() =>
-              void run(async () => downloadBlob(await api.document(id), 'hop-dong.pdf'))
-            }
-          >
-            Tải tài liệu ký
-          </Button>
-        </Stack>
-      </ChartCard>
+                {p.signature ? (
+                  <StatusChip label={text(p.signature.status)} />
+                ) : (
+                  <Chip size="small" variant="outlined" label="Chưa có yêu cầu ký" />
+                )}
+                {p.signature?.signedAt && (
+                  <Typography variant="body2" color="text.secondary">
+                    {formatInstant(p.signature.signedAt)}
+                  </Typography>
+                )}
+              </Stack>
+            ))}
+          </Stack>
+          <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              disabled={busy || !anySigned}
+              onClick={() => void openSigned()}
+            >
+              Xem hợp đồng đã ký
+            </Button>
+            <Button
+              disabled={busy || !anySigned}
+              onClick={() =>
+                void run(async () => downloadBlob(await api.document(id), 'hop-dong.pdf'))
+              }
+            >
+              Tải tài liệu ký
+            </Button>
+          </Stack>
+        </ChartCard>
+      )}
 
       {/* 4. Reference material, folded away until needed */}
       {['Main', 'Holding'].includes(c.kind) && !c.previousContractId && (
@@ -450,7 +464,7 @@ export function ContractDetailPanel({
           </Box>
         </AccordionDetails>
       </Accordion>
-      {c.signingMode === 'INTERNAL_OTP_DRAWN' && (
+      {c.signingMode === 'INTERNAL_OTP_DRAWN' && !(c.kind === 'Holding' && c.isDevelopmentDemo) && (
         <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
       )}
       <ContractWorkflowPanel api={api} contract={c} />

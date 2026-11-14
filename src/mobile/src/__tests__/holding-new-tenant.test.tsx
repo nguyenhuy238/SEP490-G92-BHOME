@@ -8,9 +8,29 @@ import {
 } from '../../../../packages/client-core/src/contracts';
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  Icon: () => null,
+  Button: ({
+    children,
+    onPress,
+    disabled,
+  }: {
+    children: React.ReactNode;
+    onPress: () => void;
+    disabled?: boolean;
+  }) => (
+    <button onClick={onPress} disabled={disabled}>
+      {children}
+    </button>
+  ),
 }));
+vi.mock('react-native', () => ({
+  StyleSheet: { create: (styles: unknown) => styles },
+  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+vi.mock('../theme/theme', () => ({ staffColors: {} }));
 vi.mock('../components/WorkspaceKit', () => ({
   ui: {},
+  Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Heading: ({ title }: { title: string }) => <h2>{title}</h2>,
   Action: ({
     children,
@@ -53,32 +73,90 @@ vi.mock('../features/onboarding/IdentityWizard', () => ({
     onConfirmed,
     onDismiss,
     onVerifiedSummary,
+    visible = true,
   }: {
     residentId: string;
     mode: string;
     onConfirmed: () => void;
     onDismiss: () => void;
     onVerifiedSummary?: (summary: { fullName: string; dateOfBirth: string | null }) => void;
-  }) => (
-    <div
-      role="dialog"
-      aria-label={mode === 'verify' ? 'Nhập thủ công CCCD' : 'Quét CCCD'}
-      data-resident={residentId}
-    >
-      <button
-        onClick={() => {
-          onVerifiedSummary?.({ fullName: 'Tên đã xác minh', dateOfBirth: '1995-05-20' });
-          onConfirmed();
-        }}
+    visible?: boolean;
+  }) =>
+    visible ? (
+      <div
+        role="dialog"
+        aria-label={mode === 'verify' ? 'Nhập thủ công CCCD' : 'Quét CCCD'}
+        data-resident={residentId}
       >
-        Xác nhận từ quy trình CCCD
-      </button>
-      <button onClick={onDismiss}>Đóng nhập thông tin</button>
-    </div>
-  ),
+        <button
+          onClick={() => {
+            onVerifiedSummary?.({ fullName: 'Tên đã xác minh', dateOfBirth: '1995-05-20' });
+            onConfirmed();
+          }}
+        >
+          Xác nhận từ quy trình CCCD
+        </button>
+        <button onClick={onDismiss}>Đóng nhập thông tin</button>
+      </div>
+    ) : null,
 }));
 import { HoldingNewTenant } from '../features/contracts/HoldingNewTenant';
 afterEach(cleanup);
+it.each([
+  ['Nhập thủ công', 'Nhập thủ công CCCD'],
+  ['Bắt đầu quét CCCD', 'Quét CCCD'],
+])(
+  'separates Holding details from identity and opens %s using the same resident',
+  async (action, dialogName) => {
+    const create = vi.fn().mockResolvedValue({ id: 'holding-applicant' });
+    const props = {
+      api: { createHoldingResident: create } as unknown as ContractClient,
+      roomId: 'room',
+      role: 'Staff',
+      context: 'holding' as const,
+      onCreated: vi.fn(),
+      onConfirmed: vi.fn(),
+      onContinue: vi.fn(),
+    };
+    const view = render(<HoldingNewTenant {...props} key="details" stage="details" />);
+    expect(screen.queryByText('Nhập thông tin CCCD')).toBeNull();
+    expect(screen.queryByText('Bắt đầu quét CCCD')).toBeNull();
+    fireEvent.click(screen.getByText('Tiếp tục'));
+    expect(create).not.toHaveBeenCalled();
+    expect(props.onContinue).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Họ và tên *'), { target: { value: 'Người giữ chỗ' } });
+    fireEvent.change(screen.getByLabelText('Email *'), {
+      target: { value: 'holding@example.test' },
+    });
+    fireEvent.click(screen.getByText('Tiếp tục'));
+    fireEvent.click(screen.getByText('Đang lưu…'));
+    await waitFor(() => expect(props.onContinue).toHaveBeenCalledOnce());
+    expect(create).toHaveBeenCalledExactlyOnceWith('room', 'Người giữ chỗ', 'holding@example.test');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const saved = {
+      initialResidentId: 'holding-applicant',
+      initialName: 'Người giữ chỗ',
+      initialEmail: 'holding@example.test',
+    };
+    view.rerender(<HoldingNewTenant {...props} {...saved} key="identity" stage="identity" />);
+    expect(screen.queryByLabelText('Họ và tên *')).toBeNull();
+    expect(screen.getByText('Chưa xác minh')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByText(action));
+    expect(
+      (await screen.findByRole('dialog', { name: dialogName })).getAttribute('data-resident'),
+    ).toBe('holding-applicant');
+    expect(create).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByText('Xác nhận từ quy trình CCCD'));
+    expect(props.onConfirmed).toHaveBeenCalledOnce();
+    expect(screen.getByText('Đã xác minh')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    view.rerender(<HoldingNewTenant {...props} {...saved} key="details-return" stage="details" />);
+    fireEvent.click(screen.getByText('Tiếp tục'));
+    expect(create).toHaveBeenCalledOnce();
+    expect(props.onContinue).toHaveBeenCalledTimes(2);
+  },
+);
 function setup(role = 'Staff', create = vi.fn().mockResolvedValue({ id: 'new-resident' })) {
   const api = { createHoldingResident: create } as unknown as ContractClient;
   const created = vi.fn(),
