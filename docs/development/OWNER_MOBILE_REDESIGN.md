@@ -32,3 +32,10 @@ Operate mode; preserve actual Staff/Tenant visual vocabulary: WorkspaceShell, Wo
 ## Verification
 
 Results are recorded after commands execute. Native device, live provider and remote CI verification must be distinguished from jsdom tests and Expo exports.
+
+### Phases 1–2
+
+- Phase 1: mobile typecheck/lint passed; navigation suites passed 50 tests. Owner debug shortcut removed; financial administration deep links render Web guidance.
+- Phase 2: four live compact KPIs, capped attention preview and three operational records; no refresh-button wall. Reuses session-scoped cache and pull refresh. Attention sources are shared between Overview and the forthcoming Attention list. Tasks are in the server's due-date order; the UI makes no chronological activity-feed claim.
+- Phase 2 checks: mobile typecheck passed; lint on changed files passed; 40 connectivity/cache tests passed. New coverage proves seven shared attention reads, no repeated fetch on immediate remount, invalidation after verified server mutation and no Owner fetches for Staff/Tenant.
+- Dependency install passed with Node 22.23.4/npm 10.9.9. An initial install used the machine's default Node 24 and warned about engine mismatch; installation was repeated successfully under the required Node 22. PowerShell blocks npm.ps1, so commands use npm.cmd.

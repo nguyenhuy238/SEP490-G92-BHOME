@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 const mocks = vi.hoisted(() => ({
   load: vi.fn(),
   session: {
-    api: { queryCache: null as QueryCache | null },
+    api: { queryCache: null as QueryCache | null, request: vi.fn() },
     baseUrl: 'https://api.test',
     session: { roles: ['Owner'] },
   },
@@ -14,7 +14,13 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('react-native', () => ({
   StyleSheet: { create: (s: unknown) => s },
-  View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  View: ({
+    children,
+    accessibilityLabel,
+  }: {
+    children?: React.ReactNode;
+    accessibilityLabel?: string;
+  }) => <div aria-label={accessibilityLabel}>{children}</div>,
 }));
 vi.mock('expo-router', () => ({
   router: { push: vi.fn() },
@@ -97,6 +103,11 @@ vi.mock('../../../src/mobile/src/features/owner/OwnerApprovalQueue', async (orig
 import { beforeEach } from 'vitest';
 beforeEach(() => {
   mocks.session.api.queryCache = new QueryCache();
+  mocks.session.api.request.mockImplementation(async (path: string) =>
+    path.includes('/debts/summary')
+      ? { outstandingAmount: '90000', overdueInvoiceCount: 2 }
+      : { items: [], totalCount: 0 },
+  );
 });
 import { MobileApiError } from '../../../src/mobile/src/lib/api';
 
@@ -124,18 +135,18 @@ it('shows loading, an explicit failure, and a retry that really reloads the Owne
       contracts: 0,
     });
   render(<OwnerOverviewScreen />);
-  expect(screen.getByText('Đang tải tổng quan')).toBeTruthy();
+  expect(screen.getAllByLabelText('Đang tải dữ liệu').length).toBeGreaterThan(0);
   await waitFor(() => expect(mocks.load).toHaveBeenCalledTimes(1));
   reject(new MobileApiError(500, undefined, '/api/v1/rooms'));
-  await screen.findByText(/Máy chủ gặp lỗi xử lý/);
+  await screen.findByText(/Chưa cập nhật được dữ liệu/);
   expect(screen.queryByText(/HTTP 500|GET \/api\/v1\//)).toBeNull();
-  expect(screen.queryByText('Phòng')).toBeNull();
-  fireEvent.click(screen.getByText('Tải lại dữ liệu'));
-  await screen.findByText('Phòng');
+  expect(screen.getAllByText('Chưa có dữ liệu')).toHaveLength(2);
+  fireEvent.click(screen.getByText('Thử lại'));
+  await screen.findByText('0 cơ sở');
   expect(mocks.load).toHaveBeenCalledTimes(2);
   expect(screen.queryByText(/HTTP 500/)).toBeNull();
-  fireEvent.click(screen.getByText('Hợp đồng & Vòng đời'));
-  expect(mocks.go).toHaveBeenCalledWith('signing');
+  fireEvent.click(screen.getByText('Xem tất cả'));
+  expect(mocks.go).toHaveBeenCalledWith('approvals');
 });
 it('shares the in-flight dashboard read on return and aborts when the session cache closes', async () => {
   mocks.load.mockImplementationOnce(() => new Promise(() => {}));

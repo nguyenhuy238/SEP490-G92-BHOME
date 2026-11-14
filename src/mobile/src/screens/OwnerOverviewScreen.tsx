@@ -1,141 +1,178 @@
 import React, { useCallback } from 'react';
-import { View } from 'react-native';
-import { ActivityIndicator, Text } from 'react-native-paper';
-import { Action, ui } from '../components/WorkspaceKit';
+import { StyleSheet, View } from 'react-native';
+import { Text } from 'react-native-paper';
+import { DashboardCard, DashboardSection, DashboardSummary } from '../components/DashboardKit';
 import {
-  DashboardCard as Box,
-  DashboardSection,
-  DashboardMetric as Metric,
-  DashboardSummary,
-} from '../components/DashboardKit';
+  OwnerEmpty,
+  OwnerFailure,
+  OwnerLoading,
+  OwnerRecordRow,
+} from '../components/OwnerMobileKit';
 import { useSession } from '../lib/SessionProvider';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { loadOwnerOverview } from '../services/ownerOverview';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
-import { ownerQueuePolicy, OwnerApprovalQueue } from '../features/owner/OwnerApprovalQueue';
-import type { MobileApi } from '../lib/api';
-import { OwnerAttentionSummary } from '../features/owner/OwnerAttentionSummary';
+import { ownerQueuePolicy } from '../features/owner/ownerQueryPolicy';
+import { useOwnerAttention } from '../features/owner/useOwnerAttention';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
+import type { MobileApi } from '../lib/api';
+import type { DebtSummary } from '../../../../packages/client-core/src/payments';
+import { formatContractMoney } from '../../../../packages/client-core/src/contracts';
+import { colors, staffColors } from '../theme/theme';
+import { typography } from '../theme/typography';
+import { attentionTitle } from '../services/ownerAttention';
+import { OwnerPlaceLabel } from '../features/owner/OwnerPlaceLabel';
+import type { OperationalTask, TaskPage } from '../services/operationalTasks';
+import { taskStatusLabels } from '../services/operationalTasks';
+
 const loadOverview = (api: MobileApi, _path: string, signal: AbortSignal) =>
   loadOwnerOverview(api, signal);
+
+function Kpi({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <DashboardCard style={styles.kpi}>
+      <Text style={{ color: colors.muted }}>{label}</Text>
+      <Text
+        style={[typography.metric, { color: staffColors.navy }]}
+        adjustsFontSizeToFit
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
+      <Text style={typography.secondary}>{detail}</Text>
+    </DashboardCard>
+  );
+}
 
 export function OwnerOverviewScreen() {
   const { api, session } = useSession();
   const { go } = useWorkspace();
-  const state = useWorkspaceQuery(
-    api && session?.roles.includes('Owner') ? '/owner-mobile/overview' : null,
-    { cache: ownerQueuePolicy, load: loadOverview },
+  const owner = !!api && !!session?.roles.includes('Owner');
+  const state = useWorkspaceQuery(owner ? '/owner-mobile/overview' : null, {
+    cache: ownerQueuePolicy,
+    load: loadOverview,
+  });
+  const debt = useWorkspaceQuery<DebtSummary>(owner ? '/api/v1/debts/summary' : null, {
+    cache: ownerQueuePolicy,
+  });
+  const recent = useWorkspaceQuery<TaskPage<OperationalTask>>(
+    owner ? '/api/v1/operational-tasks?page=1&pageSize=3' : null,
+    { cache: ownerQueuePolicy },
   );
-  const reload = state.reload;
+  const attention = useOwnerAttention();
+  const { reload: reloadState } = state,
+    { reload: reloadDebt } = debt,
+    { reload: reloadAttention } = attention,
+    { reload: reloadRecent } = recent;
   const refresh = useCallback(() => {
-    api?.queryCache.invalidate(ownerQueuePolicy.tags);
-    reload();
-  }, [api, reload]);
-  useWorkspaceHeaderRefresh(refresh, state.fetching, { title: 'Tổng quan' });
-  if (!api || !session?.roles.includes('Owner'))
-    return <Text>Cần đăng nhập Owner để xem tổng quan.</Text>;
+    reloadState();
+    reloadDebt();
+    reloadAttention();
+    reloadRecent();
+  }, [reloadState, reloadDebt, reloadAttention, reloadRecent]);
+  useWorkspaceHeaderRefresh(
+    refresh,
+    state.fetching || debt.fetching || attention.fetching || recent.fetching,
+    { title: 'Tổng quan' },
+  );
+  if (!owner) return <Text>Đăng nhập bằng tài khoản chủ cơ sở để xem tổng quan.</Text>;
   return (
     <>
-      <DashboardSummary
-        title="Tổng quan BHOME"
-        detail="Cơ sở, phòng và hợp đồng trong phạm vi tài khoản"
-      />
-      <DashboardSection title="THAO TÁC NHANH">
-        <View style={ui.wrap}>
-          <View style={ui.half}>
-            <Action onPress={() => go('approvals')}>Phê duyệt</Action>
+      <DashboardSummary title="Tổng quan" detail="Nắm nhanh tình hình các cơ sở của bạn" />
+      {state.loading && <OwnerLoading />}
+      {(state.error || debt.error) && (
+        <OwnerFailure retry={refresh} busy={state.fetching || debt.fetching} />
+      )}
+      <View style={styles.grid}>
+        <Kpi
+          label="Tổng số phòng"
+          value={state.data ? String(state.data.rooms) : '—'}
+          detail={state.data ? `${state.data.locations} cơ sở` : 'Chưa có dữ liệu'}
+        />
+        <Kpi
+          label="Phòng đang ở"
+          value={state.data ? String(state.data.occupiedRooms) : '—'}
+          detail={
+            state.data
+              ? `Lấp đầy ${state.data.operationalOccupancyRate.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`
+              : 'Chưa có dữ liệu'
+          }
+        />
+        <Kpi
+          label="Còn phải thu"
+          value={debt.data ? formatContractMoney(debt.data.outstandingAmount) : '—'}
+          detail={
+            debt.data ? `${debt.data.overdueInvoiceCount} hóa đơn quá hạn` : 'Chưa có dữ liệu'
+          }
+        />
+        <Kpi
+          label="Sự cố khẩn cấp"
+          value={attention.emergencyCount === null ? '—' : String(attention.emergencyCount)}
+          detail="Đang mở, cần theo dõi"
+        />
+      </View>
+      <DashboardSection title="Cần xử lý" action="Xem tất cả" onPress={() => go('approvals')}>
+        <Text style={{ color: colors.muted }}>
+          {attention.complete
+            ? `${attention.totalKnown} mục cần theo dõi hoặc quyết định`
+            : 'Đang tổng hợp các mục cần chú ý'}
+        </Text>
+        {attention.error && <OwnerFailure retry={reloadAttention} busy={attention.fetching} />}
+        {attention.items.slice(0, 3).map(({ item, source }) => (
+          <View key={`${source.path}:${item.id}`} style={{ gap: 6 }}>
+            <OwnerRecordRow
+              title={attentionTitle(item, source)}
+              status={source.status}
+              urgent={source.category === 'emergency'}
+              action={source.action}
+              onPress={() =>
+                go(source.screen, {
+                  [source.parameter]: item.id,
+                  ...(source.screen === 'signing' ? { section: 'signing' } : {}),
+                })
+              }
+            />
+            <OwnerPlaceLabel item={item} />
           </View>
-          <View style={ui.half}>
-            <Action secondary onPress={() => go('operations')}>
-              Vận hành
-            </Action>
-          </View>
-          <View style={ui.half}>
-            <Action secondary onPress={() => go('owner-finance')}>
-              Tài chính
-            </Action>
-          </View>
-        </View>
-      </DashboardSection>
-      <Action secondary disabled={state.fetching} onPress={refresh}>
-        Tải lại dữ liệu
-      </Action>
-      <DashboardSection title="TỔNG QUAN CƠ SỞ">
-        {state.loading && <ActivityIndicator accessibilityLabel="Đang tải tổng quan" />}
-        {!!state.error && (
-          <Text accessibilityRole="alert" style={ui.red}>
-            {state.error}
-          </Text>
-        )}
-        {state.data && (
-          <View style={ui.wrap}>
-            <Metric
-              label="Cơ sở"
-              value={String(state.data.locations)}
-              icon="office-building-outline"
-              detail="Tổng số cơ sở"
-            />
-            <Metric
-              label="Phòng"
-              value={String(state.data.rooms)}
-              icon="door-open"
-              detail="Tổng số phòng"
-            />
-            <Metric
-              label="Phòng đang ở"
-              value={String(state.data.occupiedRooms)}
-              icon="home-account"
-              detail="Phòng hiện đang có người thuê"
-            />
-            <Metric
-              label="Hợp đồng"
-              value={String(state.data.contracts)}
-              icon="file-document-outline"
-              detail="Tất cả trạng thái"
-            />
-            <Metric
-              label="Phòng trống"
-              value={String(state.data.availableRooms)}
-              icon="home-search-outline"
-              detail="Sẵn sàng theo trạng thái phòng"
-            />
-            <Metric
-              label="Tỷ lệ lấp đầy"
-              value={`${state.data.operationalOccupancyRate.toFixed(1)}%`}
-              icon="chart-donut"
-              detail="Phòng đang ở / tổng số phòng"
-              progress={Math.min(1, Math.max(0, state.data.operationalOccupancyRate / 100))}
-            />
-          </View>
+        ))}
+        {attention.loading && !attention.items.length && <OwnerLoading />}
+        {attention.complete && attention.totalKnown === 0 && (
+          <OwnerEmpty
+            title="Bạn đã xem hết việc cần chú ý"
+            detail="Các yêu cầu mới sẽ xuất hiện tại đây."
+          />
         )}
       </DashboardSection>
-      <OwnerAttentionSummary />
-      <DashboardSection title="CẦN XỬ LÝ">
-        <OwnerApprovalQueue compact />
+      <DashboardSection
+        title="Hoạt động vận hành"
+        action="Xem thêm"
+        onPress={() => go('operations')}
+      >
+        {recent.loading && <OwnerLoading />}
+        {!!recent.error && <OwnerFailure retry={reloadRecent} busy={recent.fetching} />}
+        {recent.data?.items.map((task) => (
+          <View key={task.id} style={{ gap: 6 }}>
+            <OwnerRecordRow
+              title={task.title}
+              detail={task.result || task.requirements}
+              status={taskStatusLabels[task.status] || 'Đang theo dõi'}
+              urgent={task.isOverdue}
+              onPress={() => go('task-detail', { taskId: task.id })}
+            />
+            <OwnerPlaceLabel item={task} />
+          </View>
+        ))}
+        {recent.data?.items.length === 0 && (
+          <OwnerEmpty
+            title="Chưa có hoạt động vận hành"
+            detail="Công việc mới sẽ xuất hiện khi được giao trên Owner Web."
+          />
+        )}
       </DashboardSection>
-      <Action icon="tools" onPress={() => go('owner-incidents')}>
-        Sự cố và bảo trì
-      </Action>
-      <Action secondary onPress={() => go('owner-emergencies')}>
-        Sự cố khẩn cấp
-      </Action>
-      <Action secondary onPress={() => go('owner-residence')}>
-        Kết quả tạm trú
-      </Action>
-      <Action icon="file-document-outline" onPress={() => go('signing')}>
-        Hợp đồng & Vòng đời
-      </Action>
-      <Box>
-        <Action secondary onPress={() => go('owner-finance')}>
-          Xem doanh thu, công nợ và chi phí
-        </Action>
-        <Action secondary onPress={() => go('owner-announcements')}>
-          Thông báo đã gửi
-        </Action>
-      </Box>
-      <Action secondary onPress={() => go('profile')}>
-        Tài khoản & Đăng xuất
-      </Action>
     </>
   );
 }
+const styles = StyleSheet.create({
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  kpi: { flexBasis: '45%', flexGrow: 1, minWidth: 130, gap: 6, padding: 14 },
+});
