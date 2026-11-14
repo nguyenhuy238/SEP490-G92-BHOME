@@ -18,8 +18,13 @@ public sealed class SePayHoldingPreviewGuardTests
     [InlineData("Development", "127.0.0.1", "bhome_compact24_dev_ae130000000040008000000000000001", true, "Live")]
     public async Task UnavailableOutsideEnabledTestModeAndDedicatedLoopbackDatabase(string environment, string host, string database, bool enabled, string mode)
     {
-        var options = new SePayOptions { Enabled = enabled, Mode = mode, WebhookSecret = "SYNTHETIC-TEST-SECRET-AT-LEAST-32-CHARACTERS",
-            ReceivingAccounts = [new() { LocationId = Guid.NewGuid(), BankIdentifier = "970422", Gateway = "MBBank", AccountNumber = "0000000001" }] };
+        var options = new SePayOptions
+        {
+            Enabled = enabled,
+            Mode = mode,
+            WebhookSecret = "SYNTHETIC-TEST-SECRET-AT-LEAST-32-CHARACTERS",
+            ReceivingAccounts = [new() { LocationId = Guid.NewGuid(), BankIdentifier = "970422", Gateway = "MBBank", AccountNumber = "0000000001" }]
+        };
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["ConnectionStrings:Database"] = $"Host={host};Database={database}" }).Build();
         // These dependencies must never be accessed before the environment/target guard.
@@ -40,13 +45,21 @@ public sealed class SePayHoldingPreviewGuardTests
     public void NeonTestScopeRequiresExplicitDatabaseLocationAndVerifiedTls(string environment, bool enabled, bool hostMatches, bool locationEnabled, string mode, string ssl, bool expected)
     {
         var location = Guid.NewGuid();
-        var settings = new Dictionary<string, string?> {
+        var settings = new Dictionary<string, string?>
+        {
             ["ConnectionStrings:Database"] = $"Host=test.neon.tech;Database=neondb;SslMode={ssl};ChannelBinding=Require",
-            ["HoldingTesting:Enabled"] = enabled.ToString(), ["HoldingTesting:DatabaseHost"] = hostMatches ? "test.neon.tech" : "other.neon.tech",
-            ["HoldingTesting:DatabaseName"] = "neondb", ["HoldingTesting:LocationIds:0"] = locationEnabled ? location.ToString() : ""
+            ["HoldingTesting:Enabled"] = enabled.ToString(),
+            ["HoldingTesting:DatabaseHost"] = hostMatches ? "test.neon.tech" : "other.neon.tech",
+            ["HoldingTesting:DatabaseName"] = "neondb",
+            ["HoldingTesting:LocationIds:0"] = locationEnabled ? location.ToString() : ""
         };
-        var options = new SePayOptions { Enabled = true, Mode = mode, WebhookSecret = "SYNTHETIC-TEST-SECRET-AT-LEAST-32-CHARACTERS",
-            ReceivingAccounts = [new() { LocationId = location, BankIdentifier = "970422", Gateway = "MBBank", AccountNumber = "0000000001" }] };
+        var options = new SePayOptions
+        {
+            Enabled = true,
+            Mode = mode,
+            WebhookSecret = "SYNTHETIC-TEST-SECRET-AT-LEAST-32-CHARACTERS",
+            ReceivingAccounts = [new() { LocationId = location, BankIdentifier = "970422", Gateway = "MBBank", AccountNumber = "0000000001" }]
+        };
         var scope = new BHome.Infrastructure.Contracts.HoldingTestScope(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(),
             new PreviewEnvironment { EnvironmentName = environment }, options);
         Assert.Equal(expected, scope.AllowsExternalDatabase); Assert.Equal(expected, scope.Allows(location)); Assert.False(scope.Allows(Guid.NewGuid()));

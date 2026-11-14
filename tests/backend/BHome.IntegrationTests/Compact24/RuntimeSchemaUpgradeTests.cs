@@ -68,7 +68,7 @@ public sealed class RuntimeSchemaUpgradeTests
                 foreach (var table in tables)
                 {
                     // Names are this fixed fixture allowlist; no user input enters SQL identifiers.
-                    var sql = $"SELECT COALESCE(jsonb_agg(to_jsonb(t)-ARRAY['contact_email','target_settlement_contract_id','settlement_receivable_id','deposit_offset_approval_id','beneficiary_kind','external_payer_attestation_id'] ORDER BY id),'[]'::jsonb)::text AS \"Value\" FROM {table} t";
+                    var sql = $"SELECT COALESCE(jsonb_agg(to_jsonb(t)-ARRAY['contact_email','target_settlement_contract_id','settlement_receivable_id','deposit_offset_approval_id','beneficiary_kind','external_payer_attestation_id','target_initial_contract_id'] ORDER BY id),'[]'::jsonb)::text AS \"Value\" FROM {table} t";
                     result.Add(await db.Database.SqlQueryRaw<string>(sql).SingleAsync());
                 }
                 return result.ToArray();

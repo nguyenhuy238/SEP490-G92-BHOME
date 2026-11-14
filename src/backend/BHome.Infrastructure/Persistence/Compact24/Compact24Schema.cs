@@ -91,7 +91,8 @@ public static class Compact24Schema
         if (!foreignKeys.Order(StringComparer.Ordinal).SequenceEqual(ExpectedForeignKeys(reference).Order(StringComparer.Ordinal))) return false;
         // Verify the original append-only/invoice/payment/refresh protections, including their bodies.
         var functions = Regex.Matches(reference, @"CREATE(?: OR REPLACE)? FUNCTION ([a-z0-9_]+)\([^$]+?AS \$fn\$([\s\S]*?)\$fn\$;")
-            .Cast<Match>().Where(f => !propertyRefresh || f.Groups[1].Value != "bhome24_work_order_guard").ToArray();
+            .Cast<Match>().Where(f => !propertyRefresh || f.Groups[1].Value != "bhome24_work_order_guard")
+            .GroupBy(f => f.Groups[1].Value, StringComparer.Ordinal).Select(g => g.Last()).ToArray();
         var actualFunctions = new Dictionary<string, string>(StringComparer.Ordinal);
         // Fetch required bodies together: serial remote catalog calls make every readiness probe
         // pay one network round trip per function. Keep the same strict body comparisons.

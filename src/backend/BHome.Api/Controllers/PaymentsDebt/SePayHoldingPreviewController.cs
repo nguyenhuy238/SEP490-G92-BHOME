@@ -99,9 +99,18 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
             var previous = JsonSerializer.Serialize(new { room.Status, room.Version });
             room.Status = RoomStatus.OnHold; room.Version++;
             c.Status = ContractStatus.Active; c.ActivatedAt = now; c.ActivatedByUserId = actor.UserId!.Value;
-            contractRepository.Add(new PropertyChange { ActorId = actor.UserId.Value, LocationId = room.LocationId,
-                TargetId = room.Id, TargetType = nameof(Room), Action = "SandboxHoldingActivated", Reason = "TEST ONLY: simulated signing and verified deposit",
-                Before = previous, After = JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = id }), OccurredAt = now });
+            contractRepository.Add(new PropertyChange
+            {
+                ActorId = actor.UserId.Value,
+                LocationId = room.LocationId,
+                TargetId = room.Id,
+                TargetType = nameof(Room),
+                Action = "SandboxHoldingActivated",
+                Reason = "TEST ONLY: simulated signing and verified deposit",
+                Before = previous,
+                After = JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = id }),
+                OccurredAt = now
+            });
             contractRepository.Audit(actor.UserId.Value, "SandboxHoldingActivatedWithoutLegalSignatures", id, now);
             return await State(c, token);
         }, token);

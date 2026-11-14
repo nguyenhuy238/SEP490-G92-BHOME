@@ -21,8 +21,14 @@ public sealed partial class ContractLifecycleApiTests
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             foreach (var site in new[] { w, outside }) db.Add(new BillingPolicy
             {
-                LocationId = site.Location, RoomId = site.Room, Category = ChargeCategory.Rent, ChargeCode = "RENT",
-                Name = "Synthetic Holding configuration rate", Method = ChargingMethod.FixedPerRoomPerMonth, Rate = site == w ? 3000000 : 4000000, EffectiveFrom = Today
+                LocationId = site.Location,
+                RoomId = site.Room,
+                Category = ChargeCategory.Rent,
+                ChargeCode = "RENT",
+                Name = "Synthetic Holding configuration rate",
+                Method = ChargingMethod.FixedPerRoomPerMonth,
+                Rate = site == w ? 3000000 : 4000000,
+                EffectiveFrom = Today
             });
             await db.SaveChangesAsync();
         }
@@ -56,9 +62,14 @@ public sealed partial class ContractLifecycleApiTests
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             db.Add(new BillingPolicy
             {
-                LocationId = holding.Location, RoomId = holding.Room, Category = ChargeCategory.Rent,
-                ChargeCode = "RENT", Name = "Synthetic Holding rate", Method = ChargingMethod.FixedPerRoomPerMonth,
-                Rate = 3000000, EffectiveFrom = Today
+                LocationId = holding.Location,
+                RoomId = holding.Room,
+                Category = ChargeCategory.Rent,
+                ChargeCode = "RENT",
+                Name = "Synthetic Holding rate",
+                Method = ChargingMethod.FixedPerRoomPerMonth,
+                Rate = 3000000,
+                EffectiveFrom = Today
             });
             await db.SaveChangesAsync();
         }

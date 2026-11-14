@@ -110,8 +110,9 @@ public sealed partial class Compact24DbContext
         await Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", token);
         // Combined Main checkout has two append-only allocations against one verified receipt.
         // Its native guard verifies the immutable order, bank code, bounds and exact total.
-        if(allocation.TargetInitialContractId is not null){
-            if(allocation.TransferId is null || allocation.SourceDepositContractId is not null || allocation.InvoiceId is not null || allocation.TargetDepositContractId is not null || allocation.TargetSettlementContractId is not null || allocation.Amount<=0)throw LedgerConflict();
+        if (allocation.TargetInitialContractId is not null)
+        {
+            if (allocation.TransferId is null || allocation.SourceDepositContractId is not null || allocation.InvoiceId is not null || allocation.TargetDepositContractId is not null || allocation.TargetSettlementContractId is not null || allocation.Amount <= 0) throw LedgerConflict();
             return;
         }
         if (allocation.DepositOffsetApprovalId is not null)

@@ -40,7 +40,7 @@ internal sealed class PaymentCodeRegistry(BHomePersistenceContext db, IPaymentRe
             }
             throw new PaymentException(503, "payment_code_generation_unavailable");
         }
-        return db.Database.CurrentTransaction is not null ? await Issue() : await payments.TransactionAsync<string?>(null,null,Issue,token);
+        return db.Database.CurrentTransaction is not null ? await Issue() : await payments.TransactionAsync<string?>(null, null, Issue, token);
     }
     public async Task<bool> MatchesAsync(string kind, Guid id, string description, CancellationToken token)
     {

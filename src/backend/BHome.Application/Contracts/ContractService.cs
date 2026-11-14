@@ -288,7 +288,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private async Task<ActivationReadiness> Readiness(Contract c, CancellationToken t)
     {
         List<string> blockers = [];
-        if (c.InitialPaymentRequired && (initialPayments is null || !await initialPayments.SatisfiedAsync(c.Id,t))) blockers.Add("initial_payment_required");
+        if (c.InitialPaymentRequired && (initialPayments is null || !await initialPayments.SatisfiedAsync(c.Id, t))) blockers.Add("initial_payment_required");
         if (c.Kind == ContractKind.Addendum)
         {
             var parent = c.ParentContractId is { } amendmentParent ? await repository.FindAsync(amendmentParent, t) : null;
