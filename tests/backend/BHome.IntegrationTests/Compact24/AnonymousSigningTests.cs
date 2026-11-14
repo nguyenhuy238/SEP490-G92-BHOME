@@ -61,6 +61,13 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AnonymousSigning:OtpHmacKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                // Development can keep other notifications in Sandbox while SMTP is configured.
+                // Delivery below is explicitly replaced; these synthetic credentials never leave the test host.
+                ["NotificationChannels:Mode"] = "Sandbox",
+                ["Email:Enabled"] = "true",
+                ["Email:Username"] = "sender@example.invalid",
+                ["Email:FromEmail"] = "sender@example.invalid",
+                ["Email:AppPassword"] = "synthetic-password",
                 ["ContractPdf:TemplateId"] = "main-contract-development-v1"
             }));
             b.ConfigureTestServices(s =>

@@ -50,4 +50,33 @@ strokes là mảng nét; mỗi nét gồm {x,y} hữu hạn trong [0,1]. Backend
 
 AnonymousSigning__OtpHmacKey: Base64 khóa riêng >=32 bytes từ secret local, không commit. AnonymousSigning__PublicSigningUrl: trang HTTPS đã duyệt, không query/fragment; nếu bỏ trống email chỉ dẫn dán mã trong Mobile. NotificationChannels dùng SMTP cấu hình hiện có. Sandbox notification không được coi là kênh nhận OTP thực.
 
+### Khởi tạo Development (14/11/2026)
+
+Sửa nhận diện email: `NotificationChannels:Mode=Sandbox` trong Development không chặn
+SMTP thật khi `Email` đã bật và hợp lệ. `NotificationChannelProvider` ưu tiên SMTP trước sandbox;
+phần ký dùng cùng điều kiện đó. Chỉ có sandbox mà không có SMTP vẫn không được gửi OTP/lời mời.
+`OwnerApprovedLink` nghĩa là chưa thử gửi email; không phải lỗi đăng nhập SMTP.
+Kiểm tra TLS/đăng nhập mà không gửi thư: đặt `BHOME_GMAIL_CONNECTION=1` rồi chạy test
+`GmailConnectionTests` (Development user-secrets hiện có, không in thông tin xác thực).
+
+Kiểm chứng 14/11: `EmailTransportTests` + opt-in `GmailConnectionTests` đạt 21/21;
+STARTTLS và đăng nhập SMTP thật thành công, không gửi thư trong kiểm tra kết nối.
+`AnonymousSigningTests` đạt 2/2 trên PostgreSQL disposable, gồm cấu hình tái hiện
+Sandbox + SMTP, lời mời/OTP, hash PDF, chấp thuận, Owner confirmation, cọc và activation.
+Kênh delivery trong kiểm thử workflow là test double; chưa dùng kết quả này để khẳng định
+thư ký hợp đồng thật đã đến inbox.
+
+UC-15 / GBR-04, quyết định BR nêu đầu tài liệu: nếu màn hình báo
+`signing_otp_key_not_configured`, chạy `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-LocalSigning.ps1`,
+sau đó dừng/chạy lại API trong Visual Studio. Script tạo khóa ngẫu nhiên 32 bytes trong
+Development user-secrets, không in khóa, không đưa vào Git, không thay khóa đang có.
+Khóa hiện hữu sai định dạng bị từ chối để tránh vô tình vô hiệu hóa OTP đã phát hành.
+`Prepare-OcrMobile.ps1` tự gọi bước này; giá trị OTP rỗng trong `.env` không ghi đè khóa riêng.
+Không tự tạo khóa Production; môi trường triển khai phải cấp khóa qua secret manager.
+
+Luồng Owner: đọc PDF → gửi lời mời với hạn trong 24 giờ tới → người đại diện mở trang
+`/contract-signing` (hoặc dán mã lời mời trong Mobile), nhận/xác minh OTP → đọc PDF và chấp thuận
+bằng nét ký → Owner đọc PDF có bằng chứng và xác nhận. Chỉ khi backend xác nhận đủ chữ ký/chấp thuận
+và tiền cọc mới được kích hoạt. SMTP tiếp nhận không chứng minh thư đã tới hộp thư.
+
 Chưa có SMTP, bank, MySign credentials: delivery/provider thật BLOCKED. Integration tests dùng delivery/storage test doubles tường minh; PDF renderer, HMAC, backend, PostgreSQL và Identity token flow chạy thật trong test. Component tests không chứng minh native Android/iOS UI E2E.

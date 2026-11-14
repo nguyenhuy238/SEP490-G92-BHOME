@@ -112,12 +112,10 @@ afterEach(() => {
 
 it('merges actual records, uses server totals, prioritizes emergencies and keeps financial admin out', () => {
   render(<OwnerApprovalQueue />);
-  expect(screen.getByText('119 mục cần theo dõi hoặc quyết định')).toBeTruthy();
-  expect(state.paths.filter(Boolean)).toHaveLength(7);
+  expect(screen.getByText('136 mục cần theo dõi hoặc quyết định')).toBeTruthy();
+  expect(state.paths.filter(Boolean)).toHaveLength(8);
   expect(
-    state.paths.some((path) =>
-      /invoice-adjustments|payment-transactions|status=Draft/.test(path || ''),
-    ),
+    state.paths.some((path) => /invoice-adjustments|payment-transactions/.test(path || '')),
   ).toBe(false);
   expect(screen.getAllByText('Xem cảnh báo')).toHaveLength(2);
   fireEvent.click(screen.getAllByText('Xem tiến độ ký')[0]);
@@ -153,5 +151,16 @@ it('hides empty categories and distinguishes failures from an empty queue', () =
   expect(screen.queryByText('Không còn mục cần xử lý')).toBeNull();
   expect(screen.queryByText('unknown_backend_code')).toBeNull();
   fireEvent.click(screen.getByText('Thử lại'));
-  expect(state.reload).toHaveBeenCalledTimes(7);
+  expect(state.reload).toHaveBeenCalledTimes(8);
+});
+
+it('includes saved drafts and opens Owner review without changing contract state', () => {
+  render(<OwnerApprovalQueue />);
+  expect(state.paths).toContain('/api/v1/contracts?status=Draft&page=1&pageSize=6');
+  expect(screen.getByText('Chờ duyệt để ký')).toBeTruthy();
+  fireEvent.click(screen.getByText('Xem và duyệt hợp đồng'));
+  expect(state.go).toHaveBeenCalledWith('signing', {
+    contractId: 'synthetic-id',
+    section: 'signing',
+  });
 });
