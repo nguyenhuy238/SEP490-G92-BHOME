@@ -12,7 +12,7 @@ namespace BHome.Api.Controllers;
 [Route("api/v1/locations")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [RequestSizeLimit(32768)]
-public sealed class LocationsController(ICurrentUser currentUser, ILocationAssignments locations, PropertyService properties) : ControllerBase
+public sealed class LocationsController(ICurrentUser currentUser, ILocationAssignments locations, PropertyService properties, TimeProvider clock) : ControllerBase
 {
     [HttpPost]
     [Authorize(Policy = Permissions.Locations.Manage)]
@@ -50,8 +50,8 @@ public sealed class LocationsController(ICurrentUser currentUser, ILocationAssig
 
     private Guid UserId => currentUser.UserId ?? throw new InvalidOperationException("Authenticated user is unavailable.");
 
-    private static DateOnly VietnamToday() => DateOnly.FromDateTime(
-        TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow,
+    private DateOnly VietnamToday() => DateOnly.FromDateTime(
+        TimeZoneInfo.ConvertTime(clock.GetUtcNow(),
             TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
 }
 
@@ -130,16 +130,25 @@ public sealed class StaffLocationAssignmentsController(ICurrentUser currentUser,
     {
         var result = await locations.UpdateAssignmentPeriodAsync(UserId, assignmentId, request.StartDate,
             request.EndDate, request.LocationVersion, request.Reason, t);
-        return result.Status switch
+        return PeriodResult(result);
+    }
+
+    [HttpDelete("assignment/{assignmentId:guid}"), Authorize(Policy = Permissions.StaffAssignments.Manage)]
+    public async Task<ActionResult<UpdateAssignmentPeriodResult>> CancelFuture(Guid assignmentId,
+        [FromBody] CancelStaffAssignmentRequest request, CancellationToken t) =>
+        PeriodResult(await locations.CancelFutureAssignmentAsync(UserId, assignmentId, request.LocationVersion, request.Reason, t));
+
+    private ActionResult<UpdateAssignmentPeriodResult> PeriodResult(UpdateAssignmentPeriodResult result) =>
+        result.Status switch
         {
             UpdateAssignmentPeriodStatus.Changed => Ok(result),
             UpdateAssignmentPeriodStatus.Invalid => Problem(statusCode: 400, title: "Invalid assignment period."),
             UpdateAssignmentPeriodStatus.AssignmentNotFound => NotFound(),
             UpdateAssignmentPeriodStatus.StaleVersion => Conflict(new ProblemDetails { Status = 409, Title = "Location version is stale." }),
             UpdateAssignmentPeriodStatus.DateRangeOverlaps => Conflict(new ProblemDetails { Status = 409, Title = "The Location already has a Staff assignment during this date range." }),
+            UpdateAssignmentPeriodStatus.StaffUnavailable => Problem(statusCode: 400, title: "Staff is unavailable."),
             _ => throw new InvalidOperationException("Unsupported assignment period result.")
         };
-    }
 
     [HttpDelete("{locationId:guid}"), Authorize(Policy = Permissions.StaffAssignments.Manage)]
     public async Task<ActionResult<ChangeAssignmentResult>> Remove(Guid locationId,
@@ -167,4 +176,6 @@ public sealed record ChangeStaffAssignmentRequest(Guid StaffUserId, DateOnly Eff
 public sealed record RemoveStaffAssignmentRequest(DateOnly EffectiveFrom,
     [Range(1, int.MaxValue)] int LocationVersion, [Required, StringLength(500)] string Reason);
 public sealed record UpdateStaffAssignmentPeriodRequest(DateOnly StartDate, DateOnly EndDate,
+    [Range(1, int.MaxValue)] int LocationVersion, [Required, StringLength(500)] string Reason);
+public sealed record CancelStaffAssignmentRequest(
     [Range(1, int.MaxValue)] int LocationVersion, [Required, StringLength(500)] string Reason);

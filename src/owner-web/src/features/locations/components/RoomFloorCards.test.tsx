@@ -115,9 +115,7 @@ function mount(children: React.ReactNode) {
 it('shows server occupants and open emergency reports and wires the room view/edit actions', async () => {
   const inspect = vi.fn(),
     edit = vi.fn();
-  mount(
-    <RoomFloorCards locationId="location" rooms={[room]} total={1} inspect={inspect} edit={edit} />,
-  );
+  mount(<RoomFloorCards locationId="location" rooms={[room]} inspect={inspect} edit={edit} />);
   await screen.findByText('2/3');
   await screen.findByText(/Có sự cố khẩn cấp · 1 đang mở/);
   fireEvent.click(screen.getByRole('button', { name: 'Xem phòng P101' }));
@@ -132,7 +130,7 @@ it('shows server occupants and open emergency reports and wires the room view/ed
 });
 it('never represents failed occupancy/incident reads as zero people or no incidents', async () => {
   state.request.mockRejectedValue(new Error('Synthetic failure'));
-  mount(<RoomFloorCards locationId="location" rooms={[room]} total={1} inspect={vi.fn()} />);
+  mount(<RoomFloorCards locationId="location" rooms={[room]} inspect={vi.fn()} />);
   await screen.findByText(/Chưa tải được số người ở/);
   await screen.findByText(/Chưa tải được báo cáo sự cố/);
   expect(screen.getByText('—/3')).toBeInTheDocument();
@@ -146,7 +144,6 @@ it('shows the room template name without exposing its version in routine floor c
     <RoomFloorCards
       locationId="location"
       rooms={[room]}
-      total={1}
       inspect={vi.fn()}
       provenance={provenance}
     />,
@@ -155,24 +152,21 @@ it('shows the room template name without exposing its version in routine floor c
   expect(screen.queryByText(/Studio lưu tại phòng.*v2/)).not.toBeInTheDocument();
   expect(await screen.findByText('2/3')).toBeInTheDocument();
 });
-it('reports floor-filtered page counts without treating unknown room status as unavailable', async () => {
+it('keeps floor-filtered room counts without redundant summary prose or counting unknown status as unavailable', async () => {
   mount(
     <RoomFloorCards
       locationId="location"
       rooms={[room, { ...room, id: 'other', roomNumber: 'P201', floor: '2', status: 99 }]}
-      total={42}
       inspect={vi.fn()}
     />,
   );
-  expect(
-    screen.getByText('2 phòng đang hiển thị · 2 trên trang này / 42 phòng phù hợp'),
-  ).toBeInTheDocument();
+  expect(screen.queryByText(/^\d+ phòng đang hiển thị/)).not.toBeInTheDocument();
+  expect(screen.getAllByText('1 phòng')).toHaveLength(2);
   expect(screen.getAllByText('Chưa xác định').length).toBeGreaterThan(0);
   fireEvent.mouseDown(screen.getByLabelText('Tầng trên trang hiện tại'));
   fireEvent.click(await screen.findByRole('option', { name: 'Tầng 2' }));
-  expect(
-    screen.getByText('1 phòng đang hiển thị · 2 trên trang này / 42 phòng phù hợp'),
-  ).toBeInTheDocument();
+  expect(screen.getAllByText('1 phòng')).toHaveLength(1);
+  expect(screen.queryByText(/^\d+ phòng đang hiển thị/)).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Xem phòng P101' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Xem phòng P201' })).toBeInTheDocument();
   expect(state.request.mock.calls.some(([path]) => path.includes('/prices?'))).toBe(false);

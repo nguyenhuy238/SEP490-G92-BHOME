@@ -51,6 +51,10 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         // Meter-specific actions remain on capture APIs; expose only the UC-10..12 work list here.
         var rows = Visible(staffId, date).Where(x => x.Kind == OperationalTaskKind.AdHoc);
         if (query.LocationId is { } location) rows = rows.Where(x => x.LocationId == location);
+        if (query.RecordedStaffUserId is { } recorded) rows = rows.Where(x => x.AssignedStaffUserId == recorded);
+        if (query.HasResponsibility is { } available) rows = rows.Where(task =>
+            (task.Location.IsActive && db.StaffLocationAssignments.Any(a => a.LocationId == task.LocationId && a.StartDate <= date && a.EndDate >= date &&
+                db.Users.Any(u => u.Id == a.StaffUserId && u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))))) == available);
         if (query.Status is { } status) rows = rows.Where(x => x.Status == status);
         if (query.Priority is { } priority) rows = rows.Where(x => x.Priority == priority);
         if (query.DueFrom is { } from) rows = rows.Where(x => x.DueAt >= from);

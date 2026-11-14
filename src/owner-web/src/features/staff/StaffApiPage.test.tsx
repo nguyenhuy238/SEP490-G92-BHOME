@@ -26,10 +26,13 @@ const staff = {
     status: 'Active',
   },
 };
+const noResponsibilities = { canDeactivate: true, assignments: [], tasks: [], moveOuts: [] };
 beforeEach(() => {
   mocks.request.mockReset();
   mocks.request.mockImplementation(async (path: string) => {
     if (path === '/api/v1/staff/staff') return staff;
+    if (path.endsWith('/responsibilities')) return noResponsibilities;
+    if (path.endsWith('/employments')) return [{ ...staff.employment, history: [] }];
     if (path.startsWith('/api/v1/staff-location-assignments/by-staff')) return [];
     return { items: path.startsWith('/api/v1/staff?') ? [staff] : [], totalCount: 1 };
   });
@@ -173,7 +176,15 @@ it('keeps invitation errors visible and allows a successful retry', async () => 
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Gửi thông tin tài khoản' }));
-  mocks.request.mockRejectedValueOnce(new ApiError(503, { detail: 'Synthetic unavailable' }));
+  const original = mocks.request.getMockImplementation()!;
+  let failInvitation = true;
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/invitation') && init?.method === 'POST' && failInvitation) {
+      failInvitation = false;
+      throw new ApiError(503, { detail: 'Synthetic unavailable' });
+    }
+    return original(path, init);
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
   expect(await screen.findByRole('alert')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
@@ -192,12 +203,22 @@ it('retains edited values after a stale-version error', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa hồ sơ' }));
   fireEvent.change(screen.getByLabelText(/Họ tên/), { target: { value: 'Updated synthetic' } });
   fireEvent.change(screen.getByLabelText(/Lý do cập nhật/), { target: { value: 'Update' } });
-  mocks.request.mockRejectedValueOnce(new ApiError(409, { code: 'stale_staff_version' }));
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/staff/staff' && init?.method === 'PUT')
+      throw new ApiError(409, { code: 'stale_staff_version' });
+    return original(path, init);
+  });
   fireEvent.submit(document.getElementById('staff-editor')!);
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Hồ sơ đã thay đổi');
-  fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
+  const staleDialog = await screen.findByRole('dialog', { name: 'Dữ liệu đã thay đổi' });
+  fireEvent.click(within(staleDialog).getByRole('button', { name: 'Hủy' }));
+  expect(await screen.findByRole('button', { name: 'Tải hồ sơ mới' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled();
   expect(screen.getByLabelText(/Họ tên/)).toHaveValue('Updated synthetic');
+  fireEvent.click(screen.getByRole('button', { name: 'Tải hồ sơ mới' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Đã kiểm tra, tiếp tục chỉnh sửa' }));
+  expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).not.toBeDisabled();
 });
 
 it('creates with the existing DTO, retains input on validation errors, and closes after retry', async () => {
@@ -242,4 +263,80 @@ it('rejects reversed dates before a write request', async () => {
   expect(screen.getByText('Ngày kết thúc không được trước ngày bắt đầu.')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Xác nhận' })).not.toBeInTheDocument();
   expect(mocks.request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+});
+
+it('creates a separate employment period with the latest account version and no account changes', async () => {
+  const base = mocks.request.getMockImplementation()!;
+  const prior = {
+    ...staff,
+    employment: { ...staff.employment, endDate: '2027-12-31', contractNumber: 'OLD-01' },
+  };
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/staff/staff') return prior;
+    if (path.endsWith('/employments') && init?.method !== 'POST')
+      return [{ ...prior.employment, history: [] }];
+    if (path.endsWith('/employments') && init?.method === 'POST') return prior;
+    return base(path, init);
+  });
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
+  const drawer = await screen.findByRole('dialog', { name: 'Chi tiết nhân viên' });
+  const renew = await within(drawer).findByRole('button', { name: 'Tạo kỳ hợp đồng mới' });
+  await waitFor(() => expect(renew).toBeEnabled());
+  fireEvent.click(renew);
+  fireEvent.change(screen.getByLabelText(/Số hợp đồng lao động/), { target: { value: 'NEW-02' } });
+  fireEvent.change(screen.getByLabelText(/Lý do cập nhật/), { target: { value: 'Gia hạn' } });
+  expect(screen.getByLabelText(/Ngày bắt đầu/)).toHaveValue('2028-01-01');
+  fireEvent.submit(document.getElementById('staff-editor')!);
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      '/api/v1/staff/staff/employments',
+      expect.objectContaining({ method: 'POST' }),
+    ),
+  );
+  const [, init] = mocks.request.mock.calls.find(
+    ([path, init]) => path.endsWith('/employments') && init?.method === 'POST',
+  )!;
+  const payload = JSON.parse(init.body);
+  expect(payload).toMatchObject({
+    accountVersion: 'v7',
+    reason: 'Gia hạn',
+    employment: { contractNumber: 'NEW-02', startDate: '2028-01-01' },
+  });
+  expect(payload).not.toHaveProperty('isActive');
+  expect(payload.employment).not.toHaveProperty('id');
+});
+
+it('shows exact unresolved responsibilities and blocks known unsafe deactivation', async () => {
+  const base = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) =>
+    path.endsWith('/responsibilities')
+      ? {
+          canDeactivate: false,
+          assignments: [
+            {
+              id: 'a',
+              locationId: 'loc',
+              locationName: 'Cơ sở test',
+              startDate: '2026-01-01',
+              endDate: '9999-12-31',
+            },
+          ],
+          tasks: [],
+          moveOuts: [],
+        }
+      : base(path, init),
+  );
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Cơ sở đang\/sắp phụ trách/ }));
+  expect(screen.getByRole('link', { name: 'Xử lý' })).toHaveAttribute(
+    'href',
+    '/staff-assignments?staffUserId=staff&locationId=loc',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa hồ sơ' }));
+  fireEvent.click(screen.getByLabelText('Tài khoản hoạt động'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled());
+  expect(mocks.request.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
 });

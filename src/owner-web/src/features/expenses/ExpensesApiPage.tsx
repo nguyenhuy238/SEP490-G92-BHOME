@@ -176,13 +176,24 @@ export function ExpensesApiPage() {
       />
       {routeLocation && (
         <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, mb: 2 }}>
-          <Typography variant="h2" component="h3" sx={{ fontSize: '1.15rem', fontWeight: 800 }}>
-            Tổng hợp vốn & chi phí
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-            Báo cáo đến {today.split('-').reverse().join('/')}. Không phụ thuộc bộ lọc danh sách bên
-            dưới.
-          </Typography>
+          <Stack
+            direction="row"
+            useFlexGap
+            spacing={1}
+            sx={{
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              mb: 2,
+            }}
+          >
+            <Typography variant="h2" component="h3">
+              Tổng hợp vốn & chi phí
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Toàn cơ sở · đến {today.split('-').reverse().join('/')}
+            </Typography>
+          </Stack>
           {report.isPending && <LinearProgress aria-label="Đang tải báo cáo chi phí" />}
           {report.isError && (
             <Alert

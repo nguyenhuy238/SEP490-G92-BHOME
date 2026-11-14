@@ -60,7 +60,7 @@ export const responsibleName = (task: OwnerTask, staff: Staff[]) =>
       'Không tải được tên nhân viên';
 export function taskActions(task: OwnerTask) {
   if (task.kind !== 'AdHoc') return [];
-  if (task.status === 'PendingVerification') return ['verify', 'rework'];
+  if (task.status === 'PendingVerification') return ['verify', 'rework', 'cancel'];
   if (['Assigned', 'InProgress'].includes(task.status))
     return ['edit', 'coordinate', ...(task.responsibilityAvailable ? ['assign'] : []), 'cancel'];
   return [];
