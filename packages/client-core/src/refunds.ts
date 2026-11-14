@@ -49,6 +49,7 @@ export interface Refund {
 export interface RefundSource {
   externalBeneficiary?: { attestationId: string; label: string } | null;
   approvedDepositOffsets?: string;
+  maintenanceDeductions?: string;
   sourcePaymentId: string | null;
   sourceDepositContractId?: string | null;
   verifiedDepositAmount?: string | null;

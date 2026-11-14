@@ -78,6 +78,7 @@ export function invoicePersonMonths(
   }
 }
 export interface Invoice {
+  type?: 'PERIODIC' | 'FINAL' | 'AD_HOC';
   id: string;
   roomId: string;
   locationId: string;

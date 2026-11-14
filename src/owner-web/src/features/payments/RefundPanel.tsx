@@ -56,15 +56,16 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
         source.data.reservedAmount,
         source.data.depositDeductions?.id,
         source.data.approvedDepositOffsets,
+        source.data.maintenanceDeductions,
         source.data.beneficiaries.map((p) => p.id),
         source.data.externalBeneficiary?.attestationId,
         source.data.requests.map((r) => [r.id, r.version, r.executionIntent?.key]),
       ])
     : '';
   const checked = !!signature && reviewedSource === signature;
-  const hasOffsets =
-    !!source.data?.approvedDepositOffsets &&
-    !/^0(?:\.0+)?$/.test(source.data.approvedDepositOffsets);
+  const hasOffsets = [source.data?.approvedDepositOffsets, source.data?.maintenanceDeductions].some(
+    (value) => !!value && !/^0(?:\.0+)?$/.test(value),
+  );
   const depositConfirmed =
     sourceKind === 'Receipt' ||
     (beneficiarySource === signature && zeroDeductionSource === signature);
@@ -302,7 +303,10 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                     }
                     label={
                       hasOffsets
-                        ? `Tôi đã đối chiếu ${formatContractMoney(source.data.approvedDepositOffsets ?? '0')} cấn trừ đã duyệt và chỉ hoàn phần cọc còn lại`
+                        ? source.data.maintenanceDeductions &&
+                          !/^0(?:\.0+)?$/.test(source.data.maintenanceDeductions)
+                          ? 'Tôi đã đối chiếu các khoản cấn trừ và bồi thường đã duyệt, xác nhận chỉ hoàn phần cọc còn lại'
+                          : `Tôi đã đối chiếu ${formatContractMoney(source.data.approvedDepositOffsets ?? '0')} cấn trừ đã duyệt và chỉ hoàn phần cọc còn lại`
                         : source.data.depositDeductions
                           ? 'Tôi đã đọc quyết định khấu trừ đã duyệt và xác nhận chỉ hoàn phần còn lại'
                           : 'Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý'

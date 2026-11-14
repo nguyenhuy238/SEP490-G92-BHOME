@@ -14,6 +14,8 @@ import { downloadOwnerFile } from '../../services/ownerDownloads';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { mutationKeys } from '../../../../../packages/client-core/src/contracts';
 import { todayVietnam, type StaffAssignment, type Staff } from '../staff/staffContracts';
+import { CreateProactiveMaintenance, FastRepairPolicyPanel } from './MaintenanceControls';
+import { CompensationPanel } from './CompensationPanel';
 import { IncidentCommandDialog, type IncidentCommand } from './IncidentCommandDialog';
 import { IncidentEvidencePreview } from './IncidentEvidencePreview';
 import {
@@ -86,6 +88,12 @@ export function IncidentWorkspace({ maintenance = false }: { maintenance?: boole
         </Button>
       )}
       <FilterToolbar>
+        {maintenance && (
+          <>
+            <CreateProactiveMaintenance />
+            <FastRepairPolicyPanel />
+          </>
+        )}
         <OwnerLocationPicker
           value={location}
           change={(id) => {
@@ -158,7 +166,11 @@ export function IncidentWorkspace({ maintenance = false }: { maintenance?: boole
           id={(w) => w.id}
           select={(w) => setSelected(w.id)}
           columns={[
-            { label: 'Kết quả yêu cầu', render: (w) => w.expectedOutcome },
+            { label: 'Công việc', render: (w) => w.description || w.expectedOutcome },
+            {
+              label: 'Nguồn',
+              render: (w) => (w.source === 'Proactive' ? 'Bảo trì chủ động' : 'Sự cố'),
+            },
             { label: 'Trạng thái', render: (w) => <StatusChip label={statusText(w.status)} /> },
             {
               label: 'Duyệt phương án',
@@ -636,8 +648,8 @@ export function WorkOrderDetail({
       verifiedAt: string;
     }>
   >(
-    ['work-maintenance', w?.incidentId, page],
-    `${workRoot}/maintenance-history?incidentId=${w?.incidentId}&page=${page}&pageSize=20`,
+    ['work-maintenance', id, page],
+    `${workRoot}/maintenance-history?workOrderId=${id}&page=${page}&pageSize=20`,
     !!w,
   );
   const assignments = useOwnerQuery<StaffAssignment[]>(
@@ -664,12 +676,17 @@ export function WorkOrderDetail({
       });
   }
   const action = useOwnerAction();
+  const evidence = useOwnerQuery<IncidentEvidence[]>(
+    ['work-evidence', id],
+    `${workRoot}/${id}/evidence`,
+    !!w,
+  );
   return (
     <ChartCard title="Chi tiết lệnh sửa chữa">
       <Stack spacing={2}>
         <OwnerFeedback
           busy={q.isFetching}
-          error={q.error || history.error || assignments.error || action.error}
+          error={q.error || history.error || assignments.error || evidence.error || action.error}
         />
         <Button
           disabled={q.isFetching}
@@ -685,6 +702,16 @@ export function WorkOrderDetail({
               incidentId={w.incidentId}
               staffId={w.assignedStaffId}
             />
+            <Typography>
+              {w.source === 'Proactive' ? 'Bảo trì chủ động' : 'Sửa chữa từ sự cố'} ·{' '}
+              {w.description}
+            </Typography>
+            {w.fastRepairPolicyVersion && (
+              <Alert severity="info">
+                Sửa nhanh theo chính sách phiên bản {w.fastRepairPolicyVersion} ·{' '}
+                {w.fastRepairCategory}. Chi phí 0 VND và không sử dụng vật tư.
+              </Alert>
+            )}
             <Typography>
               {w.expectedOutcome} · {statusText(w.status)} · {w.isOverdue ? 'Quá hạn' : 'Hạn'}{' '}
               {formatInstant(w.targetCompletionAt)}
@@ -707,18 +734,16 @@ export function WorkOrderDetail({
               {w.vendor || 'Chưa có'}
             </Typography>
             <Typography>
-              Người duyệt: {w.approvedById || 'Chưa duyệt'} ·{' '}
-              {w.approvedAt ? formatInstant(w.approvedAt) : ''}
+              Duyệt phương án lúc {w.approvedAt ? formatInstant(w.approvedAt) : ''}
             </Typography>
             <Typography>
               Kết quả: {w.result || 'Chưa có'} · Thực tế:{' '}
               {w.actualCost == null ? 'Chưa xác minh' : formatIncidentMoney(w.actualCost)}
             </Typography>
             <Typography>
-              Xác minh: {w.verifiedById || 'Chưa có'} ·{' '}
-              {w.verifiedAt ? formatInstant(w.verifiedAt) : ''}
+              Xác minh hoàn tất lúc {w.verifiedAt ? formatInstant(w.verifiedAt) : ''}
             </Typography>
-            {!q.isFetching && !q.error && w.status === 'PendingApproval' && (
+            {!q.isFetching && !q.error && w.status === 'PendingApproval' && !w.planApproved && (
               <Stack direction="row">
                 <Button
                   onClick={() =>
@@ -744,6 +769,44 @@ export function WorkOrderDetail({
                 </Button>
               </Stack>
             )}
+            {w.assetProposalPending && (
+              <Stack spacing={1}>
+                <Typography>
+                  Staff đề xuất tài sản {w.proposedAssetName || w.proposedAssetId} ·{' '}
+                  {w.proposedAssetCategory} · {w.proposedAssetCondition}
+                </Typography>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    disabled={q.isFetching || !!q.error}
+                    onClick={() =>
+                      open('asset-decision', 'Xác nhận tài sản liên quan', reason, {
+                        approve: true,
+                      })
+                    }
+                  >
+                    Xác nhận tài sản
+                  </Button>
+                  <Button
+                    disabled={q.isFetching || !!q.error}
+                    onClick={() =>
+                      open('asset-decision', 'Từ chối liên kết tài sản', reason, { approve: false })
+                    }
+                  >
+                    Từ chối tài sản
+                  </Button>
+                </Stack>
+              </Stack>
+            )}
+            <Typography variant="h6">Ảnh kiểm tra và kết quả</Typography>
+            <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
+              {evidence.data?.map((image) => (
+                <IncidentEvidencePreview
+                  key={image.id}
+                  path={`${workRoot}/${id}/evidence/${image.id}`}
+                  alt={image.kind === 'Completion' ? 'Ảnh kết quả sửa chữa' : 'Ảnh kiểm tra'}
+                />
+              ))}
+            </Stack>
             {!q.isFetching && !q.error && w.status === 'PendingVerification' && (
               <Stack direction="row">
                 <Button
@@ -797,16 +860,29 @@ export function WorkOrderDetail({
                 </Button>
               </Stack>
             )}
-            <Typography variant="h6">Lịch sử bảo trì của sự cố</Typography>
+            <Typography variant="h6">Lịch sử bảo trì của lệnh sửa chữa</Typography>
             {history.data?.items.map((h) => (
               <Typography key={h.id}>
-                {formatInstant(h.verifiedAt)} · {h.action} · {h.conditionBefore} →{' '}
-                {h.conditionAfter} · {h.statusBefore} → {h.statusAfter} ·{' '}
-                {formatIncidentMoney(h.actualCost)}
+                {formatInstant(h.verifiedAt)} ·{' '}
+                {h.action === 'verified'
+                  ? 'Đã xác minh'
+                  : h.action === 'work_order_cancelled'
+                    ? 'Đã hủy công việc'
+                    : 'Xử lý trực tiếp'}
+                {h.conditionBefore || h.conditionAfter
+                  ? ` · ${h.conditionBefore ?? 'Chưa ghi nhận'} → ${h.conditionAfter ?? 'Chưa ghi nhận'}`
+                  : ''}
+                {h.statusBefore || h.statusAfter
+                  ? ` · ${h.statusBefore ?? 'Chưa ghi nhận'} → ${h.statusAfter ?? 'Chưa ghi nhận'}`
+                  : ''}{' '}
+                · {formatIncidentMoney(h.actualCost)}
               </Typography>
             ))}
             <OwnerPagination page={page} total={history.data?.totalCount ?? 0} change={setPage} />
-            {showIncident && <IncidentDetail id={w.incidentId} />}
+            {w.status === 'Verified' && w.roomId && (w.actualCost ?? 0) > 0 && (
+              <CompensationPanel work={w} evidence={evidence.data ?? []} />
+            )}
+            {showIncident && w.incidentId && <IncidentDetail id={w.incidentId} />}
           </>
         )}
         {command && (
@@ -828,7 +904,7 @@ function RecordContext({
 }: {
   locationId: string;
   roomId?: string | null;
-  incidentId: string;
+  incidentId: string | null;
   staffId?: string;
 }) {
   const routed = useInRouterContext();
@@ -859,12 +935,22 @@ function RecordContext({
       <OwnerFeedback error={location.error || room.error || staff.error} />
       {routed && (
         <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
-          <Button component={Link} to={`/incidents?incidentId=${encodeURIComponent(incidentId)}`}>
-            Mở sự cố
-          </Button>
-          <Button component={Link} to={`/maintenance?incidentId=${encodeURIComponent(incidentId)}`}>
-            Các lệnh sửa chữa
-          </Button>
+          {incidentId && (
+            <>
+              <Button
+                component={Link}
+                to={`/incidents?incidentId=${encodeURIComponent(incidentId)}`}
+              >
+                Mở sự cố
+              </Button>
+              <Button
+                component={Link}
+                to={`/maintenance?incidentId=${encodeURIComponent(incidentId)}`}
+              >
+                Các lệnh sửa chữa
+              </Button>
+            </>
+          )}
           {roomId && (
             <Button component={Link} to={`/rooms/${encodeURIComponent(roomId)}`}>
               Mở phòng
