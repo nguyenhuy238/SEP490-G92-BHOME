@@ -53,7 +53,12 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
     {
         Permit(Permissions.OperationalTasks.View); Page(query.Page, query.PageSize);
         if (query.Status is { } s && !Enum.IsDefined(s) || query.Priority is { } p && !Enum.IsDefined(p) ||
-            query.LocationId == Guid.Empty || query.DueFrom > query.DueTo) throw OperationalTaskException.Invalid("invalid_task_filter");
+            query.LocationId == Guid.Empty || query.StaffUserId == Guid.Empty ||
+            query.RecordedStaffUserId == Guid.Empty || query.DueFrom > query.DueTo)
+            throw OperationalTaskException.Invalid("invalid_task_filter");
+        // The recorded assignee and unresolved responsibility filters are Owner management views.
+        if (!Owner && (query.RecordedStaffUserId.HasValue || query.HasResponsibility.HasValue))
+            throw OperationalTaskException.Invalid("invalid_task_filter");
         var staffFilter = Owner ? query.StaffUserId : Actor;
         // PostgreSQL timestamptz parameters require UTC; preserve the caller's exact instants.
         query.DueFrom = query.DueFrom?.ToUniversalTime();

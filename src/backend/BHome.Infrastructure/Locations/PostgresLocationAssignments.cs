@@ -20,6 +20,10 @@ internal sealed class PostgresLocationAssignments(BHomeDbContext db) : ILocation
         int expectedLocationVersion, string reason, CancellationToken cancellationToken) =>
         Task.FromResult(new ChangeAssignmentResult(ChangeAssignmentStatus.Invalid));
 
+    public Task<UpdateAssignmentPeriodResult> CancelFutureAssignmentAsync(Guid actorId, Guid assignmentId,
+        int expectedLocationVersion, string reason, CancellationToken cancellationToken) =>
+        Task.FromResult(new UpdateAssignmentPeriodResult(UpdateAssignmentPeriodStatus.Invalid));
+
     public async Task<UpdateAssignmentPeriodResult> UpdateAssignmentPeriodAsync(Guid actorId, Guid assignmentId,
         DateOnly startDate, DateOnly endDate, int expectedLocationVersion, string reason, CancellationToken cancellationToken)
     {

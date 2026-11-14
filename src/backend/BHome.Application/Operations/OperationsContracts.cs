@@ -29,6 +29,30 @@ public sealed record ProfileUpdate(
 public sealed record EmploymentView(Guid Id, string? ContractNumber, string EmploymentType,
     DateOnly StartDate, DateOnly? EndDate, string? SalaryType, decimal? BaseRate, string Status);
 
+public sealed record EmploymentHistoryEntry(string Action, Guid ActorId, DateTimeOffset OccurredAt,
+    string? Reason, EmploymentWrite? Before, EmploymentWrite? After);
+
+public sealed record EmploymentPeriodView(Guid Id, string? ContractNumber, string EmploymentType,
+    DateOnly StartDate, DateOnly? EndDate, string? SalaryType, decimal? BaseRate, string Status,
+    IReadOnlyList<EmploymentHistoryEntry> History);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record EmploymentPeriodCreate(
+    [Required, StringLength(256)] string AccountVersion,
+    [Required] EmploymentWrite Employment,
+    [Required, StringLength(500)] string Reason);
+
+public sealed record StaffResponsibilityAssignment(Guid Id, Guid LocationId, string LocationName,
+    DateOnly StartDate, DateOnly EndDate);
+public sealed record StaffResponsibilityTask(Guid Id, Guid LocationId, string LocationName,
+    string Title, string TaskType, string Status);
+public sealed record StaffResponsibilityMoveOut(Guid ContractId, Guid LocationId, string LocationName,
+    Guid RoomId, string RoomNumber);
+public sealed record StaffResponsibilitiesView(bool CanDeactivate,
+    IReadOnlyList<StaffResponsibilityAssignment> Assignments,
+    IReadOnlyList<StaffResponsibilityTask> Tasks,
+    IReadOnlyList<StaffResponsibilityMoveOut> MoveOuts);
+
 public sealed record StaffView(Guid UserId, string FullName, string? Phone, string Email, bool IsActive,
     string AccountVersion, EmploymentView? Employment);
 
@@ -162,6 +186,10 @@ public interface IOperationsRepository
     Task<StaffView?> StaffAsync(Guid userId, CancellationToken t);
     Task<StaffView> CreateStaffAsync(Guid actorId, StaffCreate input, DateTimeOffset now, CancellationToken t);
     Task<StaffView> UpdateStaffAsync(Guid actorId, Guid userId, StaffUpdate input, DateTimeOffset now, CancellationToken t);
+    Task<IReadOnlyList<EmploymentPeriodView>> StaffEmploymentsAsync(Guid userId, CancellationToken t);
+    Task<StaffView> CreateEmploymentPeriodAsync(Guid actorId, Guid userId, EmploymentPeriodCreate input,
+        DateTimeOffset now, CancellationToken t);
+    Task<StaffResponsibilitiesView> StaffResponsibilitiesAsync(Guid userId, DateOnly today, CancellationToken t);
     Task<OperationsPage<ResidenceTaskView>> ResidenceAsync(ResidenceQuery query, Guid? tenantUserId, CancellationToken t);
     Task<ResidenceTaskView?> ResidenceAsync(Guid contractId, Guid residentId, Guid? tenantUserId, CancellationToken t);
     Task<ResidenceTaskView> UpdateResidenceAsync(Guid actorId, Guid contractId, Guid residentId,

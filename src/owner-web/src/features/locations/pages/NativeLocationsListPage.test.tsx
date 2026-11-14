@@ -4,7 +4,7 @@ import { ThemeProvider } from '@mui/material';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { propertySetupClient } from '../../../../../../packages/client-core/src/propertySetup';
-import { theme } from '../../../theme/theme';
+import { roomStatusColors, theme } from '../../../theme/theme';
 import { NativeLocationsListPage } from './NativeLocationsListPage';
 
 const state = vi.hoisted(() => ({ request: vi.fn(), roles: ['Owner'] }));
@@ -117,4 +117,81 @@ it('keeps Owner-only create, copy, edit and metadata queries unavailable to Staf
   expect(screen.queryByRole('button', { name: 'Sao chép cấu hình' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Thao tác cho Cơ sở A' })).not.toBeInTheDocument();
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/setup-metadata'))).toBe(false);
+});
+
+it('keeps distinct location rows, exact server room counts, and unavailable counts visible only once', async () => {
+  state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/setup-metadata')) return null;
+    if (path.includes('/location-a/occupancy-summary'))
+      return {
+        snapshot: {
+          totalRooms: 12,
+          occupiedRooms: 7,
+          availableRooms: 3,
+          onHoldRooms: 1,
+          unavailableRooms: 1,
+        },
+      };
+    if (path.includes('/location-b/occupancy-summary')) throw new Error('Unavailable');
+    return { items: [first, second], totalCount: 2 };
+  });
+  mount();
+  const table = await screen.findByRole('table', { name: 'Danh sách cơ sở' });
+  const a = within(table).getByRole('row', { name: /Cơ sở A/ });
+  const b = within(table).getByRole('row', { name: /Cơ sở B/ });
+  expect(await within(a).findByRole('link', { name: '12 phòng' })).toHaveAttribute(
+    'href',
+    '/locations/location-a/rooms',
+  );
+  expect(a).toHaveTextContent('7 thuê');
+  expect(a).toHaveTextContent('3 trống');
+  expect(a).toHaveTextContent('1 giữ chỗ');
+  expect(a).toHaveTextContent('1 ngừng KT');
+  expect(within(a).getByText('7 thuê')).toHaveStyle({ color: roomStatusColors.occupied.fill });
+  expect(within(a).getByText('3 trống')).toHaveStyle({ color: roomStatusColors.available.fill });
+  expect(within(a).getByText('1 giữ chỗ')).toHaveStyle({
+    color: roomStatusColors.onHold.foreground,
+  });
+  expect(within(a).getByTitle('ngừng khai thác').parentElement).toHaveStyle({
+    color: roomStatusColors.unavailable.foreground,
+  });
+  expect(within(a).getByTitle('ngừng khai thác')).toHaveTextContent('ngừng KT');
+  expect(within(a).getAllByRole('link', { name: '12 phòng' })).toHaveLength(1);
+  expect(within(a).getByText('Đang hoạt động')).toBeInTheDocument();
+  expect(within(b).getByText('Ngừng hoạt động')).toBeInTheDocument();
+  expect(await within(b).findByText('Chưa tải được số liệu phòng.')).toBeInTheDocument();
+  expect(b).not.toHaveTextContent('0 phòng');
+  expect(within(b).getByRole('link', { name: 'Xem cơ sở' })).toHaveAttribute(
+    'href',
+    '/locations/location-b/overview',
+  );
+});
+
+it('retains all four compact room statuses even when some counts are zero', async () => {
+  state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/setup-metadata')) return null;
+    if (path.endsWith('/occupancy-summary'))
+      return {
+        snapshot: {
+          totalRooms: 17,
+          occupiedRooms: 0,
+          availableRooms: 17,
+          onHoldRooms: 0,
+          unavailableRooms: 0,
+        },
+      };
+    return { items: [first], totalCount: 1 };
+  });
+  mount();
+  const row = await screen.findByRole('row', { name: /Cơ sở A/ });
+  expect(await within(row).findByRole('link', { name: '17 phòng' })).toBeInTheDocument();
+  expect(row).toHaveTextContent('0 thuê');
+  expect(row).toHaveTextContent('17 trống');
+  expect(row).toHaveTextContent('0 giữ chỗ');
+  expect(row).toHaveTextContent('0 ngừng KT');
+  expect(within(row).getByText('0 thuê')).toHaveStyle({ color: roomStatusColors.unavailable.fill });
+  expect(within(row).getByText('17 trống')).toHaveStyle({ color: roomStatusColors.available.fill });
+  expect(within(row).getByText('0 giữ chỗ')).toHaveStyle({
+    color: roomStatusColors.unavailable.fill,
+  });
 });

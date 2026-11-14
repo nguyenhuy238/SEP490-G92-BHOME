@@ -81,4 +81,58 @@ public sealed class OperationsServiceTests
 
         Assert.Equal(403, error.Status);
     }
+
+    [Theory]
+    [InlineData(Roles.Staff)]
+    [InlineData(Roles.Tenant)]
+    public async Task EmploymentLifecycle_RequiresOwner(string role)
+    {
+        var repository = Substitute.For<IOperationsRepository>();
+        var service = Service(repository, new User(Guid.NewGuid(), role));
+        var id = Guid.NewGuid();
+        var request = new EmploymentPeriodCreate("version", Employment(), "renewal");
+
+        Assert.Equal(403, (await Assert.ThrowsAsync<OperationsException>(() => service.StaffEmploymentsAsync(id, default))).Status);
+        Assert.Equal(403, (await Assert.ThrowsAsync<OperationsException>(() => service.CreateEmploymentPeriodAsync(id, request, default))).Status);
+        Assert.Equal(403, (await Assert.ThrowsAsync<OperationsException>(() => service.StaffResponsibilitiesAsync(id, default))).Status);
+        await repository.DidNotReceiveWithAnyArgs().CreateEmploymentPeriodAsync(default, default, default!, default, default);
+    }
+
+    [Fact]
+    public async Task EmploymentLifecycle_ValidatesDatesStatusReasonAndWholeVnd()
+    {
+        var repository = Substitute.For<IOperationsRepository>();
+        var service = Service(repository, new User(Guid.NewGuid(), Roles.Owner));
+        var id = Guid.NewGuid();
+        var employment = Employment();
+        foreach (var request in new EmploymentPeriodCreate[]
+        {
+            new("version", employment with { EndDate = employment.StartDate.AddDays(-1) }, "renewal"),
+            new("version", employment with { Status = "Ended", EndDate = null }, "renewal"),
+            new("version", employment with { BaseRate = 12.5m }, "renewal"),
+            new("version", employment, " "),
+            new("", employment, "renewal")
+        })
+            Assert.Equal(400, (await Assert.ThrowsAsync<OperationsException>(() =>
+                service.CreateEmploymentPeriodAsync(id, request, default))).Status);
+        await repository.DidNotReceiveWithAnyArgs().CreateEmploymentPeriodAsync(default, default, default!, default, default);
+    }
+
+    [Fact]
+    public async Task EmploymentLifecycle_NormalizesInputAndUsesAuthenticatedActor()
+    {
+        var actor = Guid.NewGuid();
+        var staff = Guid.NewGuid();
+        var repository = Substitute.For<IOperationsRepository>();
+        var service = Service(repository, new User(actor, Roles.Owner));
+        var input = new EmploymentPeriodCreate("version", Employment() with { ContractNumber = "  ABC  ", EmploymentType = " FullTime " }, " renewal ");
+        await service.CreateEmploymentPeriodAsync(staff, input, default);
+        await repository.Received(1).CreateEmploymentPeriodAsync(actor, staff,
+            Arg.Is<EmploymentPeriodCreate>(x => x.Employment.ContractNumber == "ABC" &&
+                x.Employment.EmploymentType == "FullTime" && x.Reason == "renewal"),
+            Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+
+    private static EmploymentWrite Employment() =>
+        new("ABC", "FullTime", new DateOnly(2026, 11, 1), new DateOnly(2027, 11, 1), "Monthly", 3000000m, "Active");
 }

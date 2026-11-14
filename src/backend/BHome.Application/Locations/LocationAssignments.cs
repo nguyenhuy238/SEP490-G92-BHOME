@@ -17,7 +17,7 @@ public enum CreateAssignmentStatus
 public sealed record CreateAssignmentResult(CreateAssignmentStatus Status, StaffAssignmentSummary? Assignment = null);
 public enum ChangeAssignmentStatus { Changed, Invalid, LocationNotFound, StaffUnavailable, StaleVersion, NoCurrentAssignment }
 public sealed record ChangeAssignmentResult(ChangeAssignmentStatus Status, StaffAssignmentSummary? Assignment = null, int? LocationVersion = null);
-public enum UpdateAssignmentPeriodStatus { Changed, Invalid, AssignmentNotFound, StaleVersion, DateRangeOverlaps }
+public enum UpdateAssignmentPeriodStatus { Changed, Invalid, AssignmentNotFound, StaleVersion, DateRangeOverlaps, StaffUnavailable }
 public sealed record UpdateAssignmentPeriodResult(UpdateAssignmentPeriodStatus Status,
     StaffAssignmentSummary? Assignment = null, int? LocationVersion = null);
 
@@ -32,6 +32,8 @@ public interface ILocationAssignments
     Task<UpdateAssignmentPeriodResult> UpdateAssignmentPeriodAsync(Guid actorId, Guid assignmentId,
         DateOnly startDate, DateOnly endDate, int expectedLocationVersion, string reason,
         CancellationToken cancellationToken);
+    Task<UpdateAssignmentPeriodResult> CancelFutureAssignmentAsync(Guid actorId, Guid assignmentId,
+        int expectedLocationVersion, string reason, CancellationToken cancellationToken);
     Task<ChangeAssignmentResult> ReplaceAssignmentAsync(Guid actorId, Guid locationId, Guid staffUserId,
         DateOnly effectiveFrom, int expectedLocationVersion, string reason, CancellationToken cancellationToken);
     Task<ChangeAssignmentResult> RemoveAssignmentAsync(Guid actorId, Guid locationId, DateOnly effectiveFrom,

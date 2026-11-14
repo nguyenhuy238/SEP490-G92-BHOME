@@ -30,14 +30,12 @@ const unknownState = { label: 'Chưa xác định', ...roomStatusColors.unavaila
 export function RoomFloorCards({
   rooms,
   locationId,
-  total,
   edit,
   inspect,
   provenance,
 }: {
   rooms: RoomConfiguration[];
   locationId: string;
-  total: number;
   edit?: (room: RoomConfiguration) => void;
   inspect: (id: string) => void;
   provenance?: SetupDocument<RoomProvenanceData>[];
@@ -70,10 +68,6 @@ export function RoomFloorCards({
               Sơ đồ phòng theo tầng
             </Typography>
           </Stack>
-          <Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 14 }}>
-            {visibleRooms.length} phòng đang hiển thị · {rooms.length} trên trang này / {total}{' '}
-            phòng phù hợp
-          </Typography>
         </Box>
         <TextField
           select

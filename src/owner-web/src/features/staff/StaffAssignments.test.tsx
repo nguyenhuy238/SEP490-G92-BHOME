@@ -346,6 +346,23 @@ it('supports sentinel without sending null', async () => {
   const call = mocks.request.mock.calls.find(([, init]) => init?.method === 'POST')!;
   expect(JSON.parse(call[1].body).endDate).toBe('9999-12-31');
 });
+
+it('cancels only a future assignment using its identifier and location version', async () => {
+  const future = { ...assignment, id: 'future', startDate: '2026-12-01', endDate: '2027-01-01' };
+  assignments = [assignment, future];
+  dialog({ mode: 'cancelFuture', locationId: 'location', assignment: future });
+  await ready();
+  fireEvent.change(screen.getByLabelText(/Lý do thay đổi/), { target: { value: 'Đổi lịch' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  expect(mocks.request).toHaveBeenCalledWith(
+    '/api/v1/staff-location-assignments/assignment/future',
+    expect.objectContaining({
+      method: 'DELETE',
+      body: JSON.stringify({ locationVersion: 4, reason: 'Đổi lịch' }),
+    }),
+  );
+});
 it('uses inclusive dates and Vietnamese display without UTC conversion', () => {
   expect(assignmentState({ ...assignment, startDate: '2026-11-12' }, '2026-11-12')).toBe('current');
   expect(assignmentState({ ...assignment, endDate: '2026-11-12' }, '2026-11-12')).toBe('current');

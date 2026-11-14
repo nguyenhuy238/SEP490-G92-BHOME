@@ -29,8 +29,9 @@ import {
 import { assignmentDate, overlaps } from '../useLocationAssignments';
 
 export type AssignmentIntent = {
-  mode: 'create' | 'replace' | 'period' | 'remove';
+  mode: 'create' | 'replace' | 'period' | 'remove' | 'cancelFuture';
   locationId?: string;
+  staffUserId?: string;
   assignment?: StaffAssignment;
 };
 const titles = {
@@ -38,6 +39,7 @@ const titles = {
   replace: 'Thay người phụ trách',
   period: 'Chỉnh thời hạn phân công',
   remove: 'Gỡ người phụ trách',
+  cancelFuture: 'Hủy phân công sắp tới',
 };
 export function ResponsibilityPreview({ preview }: { preview: StaffChangePreview }) {
   const labels: Record<string, string> = {
@@ -46,6 +48,12 @@ export function ResponsibilityPreview({ preview }: { preview: StaffChangePreview
     WORK_ORDER: 'Lệnh sửa chữa',
     MOVE_OUT_INSPECTION: 'Kiểm tra trả phòng',
   };
+  const routes: Record<string, string> = {
+    GENERAL: '/operational-tasks',
+    METER_READ: '/meters',
+    WORK_ORDER: '/maintenance',
+    MOVE_OUT_INSPECTION: '/contracts',
+  };
   return (
     <Alert
       severity={preview.openResponsibilities.some((item) => item.count > 0) ? 'warning' : 'info'}
@@ -53,9 +61,23 @@ export function ResponsibilityPreview({ preview }: { preview: StaffChangePreview
       <Typography sx={{ fontSize: 14 }}>Trách nhiệm đang mở</Typography>
       {preview.openResponsibilities.length
         ? preview.openResponsibilities.map((item) => (
-            <Typography key={item.code} sx={{ fontSize: 13 }}>
-              {labels[item.code] ?? item.code}: {item.count}
-            </Typography>
+            <Stack
+              key={item.code}
+              direction="row"
+              sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
+            >
+              <Typography sx={{ fontSize: 13 }}>
+                {labels[item.code] ?? item.code}: {item.count}
+              </Typography>
+              {routes[item.code] && (
+                <Button
+                  size="small"
+                  href={`${routes[item.code]}?locationId=${encodeURIComponent(preview.locationId)}`}
+                >
+                  Xem
+                </Button>
+              )}
+            </Stack>
           ))
         : 'Không có trách nhiệm đang mở.'}
       {!preview.canRemove && (
@@ -81,7 +103,7 @@ export function AssignmentDialog({
 }) {
   const action = useOwnerAction();
   const [locationId, setLocationId] = useState(intent.locationId ?? '');
-  const [staffId, setStaffId] = useState('');
+  const [staffId, setStaffId] = useState(intent.staffUserId ?? '');
   const [start, setStart] = useState(intent.assignment?.startDate ?? todayVietnam());
   const [end, setEnd] = useState(intent.assignment?.endDate ?? '');
   const [reason, setReason] = useState('');
@@ -128,7 +150,9 @@ export function AssignmentDialog({
     intent.mode === 'period' &&
     (!chosen ||
       chosen.endDate < today ||
-      (chosen.startDate <= today && chosen.endDate >= today && (start > today || end < today)));
+      (chosen.startDate <= today ? start !== chosen.startDate || end < today : start < today));
+  const cancelInvalid = intent.mode === 'cancelFuture' && (!chosen || chosen.startDate <= today);
+  const person = staff.find((item) => item.userId === staffId);
   const busy =
     action.busy ||
     refreshing ||
@@ -144,6 +168,9 @@ export function AssignmentDialog({
     !!assignments.error ||
     !!invalid ||
     periodInvalid ||
+    cancelInvalid ||
+    ((intent.mode === 'create' || intent.mode === 'replace') &&
+      location.data?.isActive === false) ||
     (period && (!start || !end)) ||
     (needsPreview && (!current || !preview.data || !!preview.error)) ||
     (intent.mode !== 'create' && !reason.trim()) ||
@@ -176,10 +203,14 @@ export function AssignmentDialog({
         return await action.command(
           intent.mode === 'create'
             ? base
-            : intent.mode === 'period'
+            : intent.mode === 'period' || intent.mode === 'cancelFuture'
               ? `${base}/assignment/${intent.assignment!.id}`
               : `${base}/${locationId}`,
-          intent.mode === 'create' ? 'POST' : intent.mode === 'remove' ? 'DELETE' : 'PUT',
+          intent.mode === 'create'
+            ? 'POST'
+            : intent.mode === 'remove' || intent.mode === 'cancelFuture'
+              ? 'DELETE'
+              : 'PUT',
           intent.mode === 'create'
             ? { locationId, staffUserId: staffId, startDate: start, endDate: end }
             : intent.mode === 'period'
@@ -189,12 +220,14 @@ export function AssignmentDialog({
                   locationVersion: location.data!.version,
                   reason: reason.trim(),
                 }
-              : {
-                  ...(intent.mode === 'replace' ? { staffUserId: staffId } : {}),
-                  effectiveFrom: today,
-                  locationVersion: location.data!.version,
-                  reason: reason.trim(),
-                },
+              : intent.mode === 'cancelFuture'
+                ? { locationVersion: location.data!.version, reason: reason.trim() }
+                : {
+                    ...(intent.mode === 'replace' ? { staffUserId: staffId } : {}),
+                    effectiveFrom: today,
+                    locationVersion: location.data!.version,
+                    reason: reason.trim(),
+                  },
         );
       } catch (error) {
         conflict = error instanceof ApiError && error.status === 409;
@@ -260,11 +293,13 @@ export function AssignmentDialog({
               value={locationId}
               onChange={(event) => setLocationId(event.target.value)}
             >
-              {locations.map((item) => (
-                <MenuItem key={item.id} value={item.id}>
-                  {item.name}
-                </MenuItem>
-              ))}
+              {locations
+                .filter((item) => item.isActive !== false)
+                .map((item) => (
+                  <MenuItem key={item.id} value={item.id}>
+                    {item.name}
+                  </MenuItem>
+                ))}
             </TextField>
           ) : (
             <Typography sx={{ fontWeight: 600 }}>
@@ -275,10 +310,24 @@ export function AssignmentDialog({
             <Typography>
               Nhân viên:{' '}
               {name(
-                intent.mode === 'period' ? intent.assignment?.staffUserId : current?.staffUserId,
+                intent.mode === 'period' || intent.mode === 'cancelFuture'
+                  ? intent.assignment?.staffUserId
+                  : current?.staffUserId,
               )}
             </Typography>
           )}
+          {(intent.mode === 'create' || intent.mode === 'replace') &&
+            person &&
+            (!person.employment ||
+              person.employment.status === 'Ended' ||
+              person.employment.startDate > (intent.mode === 'create' ? start : today) ||
+              (person.employment.endDate &&
+                person.employment.endDate < (intent.mode === 'create' ? start : today))) && (
+              <Alert severity="warning">
+                Hồ sơ chưa có hợp đồng hoặc kỳ hợp đồng gần nhất không hiệu lực tại ngày phân công.
+                Kiểm tra lịch sử hợp đồng trước khi xác nhận.
+              </Alert>
+            )}
           {(intent.mode === 'create' || intent.mode === 'replace') && (
             <TextField
               select
@@ -315,8 +364,17 @@ export function AssignmentDialog({
                 type="date"
                 label="Ngày bắt đầu"
                 value={start}
+                disabled={intent.mode === 'period' && !!chosen && chosen.startDate <= today}
                 onChange={(event) => setStart(event.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  htmlInput: {
+                    min:
+                      intent.mode === 'period' && chosen && chosen.startDate > today
+                        ? today
+                        : undefined,
+                  },
+                }}
               />
               <FormControlLabel
                 label="Không xác định thời hạn"
@@ -339,13 +397,22 @@ export function AssignmentDialog({
                 helperText={invalid || (end === '9999-12-31' ? 'Không xác định thời hạn' : '')}
               />
             </>
+          ) : intent.mode === 'cancelFuture' ? (
+            <Alert severity="warning">
+              Hủy lịch từ {assignmentDate(intent.assignment!.startDate)} đến{' '}
+              {assignmentDate(intent.assignment!.endDate)}. Phân công đang hiệu lực không thay đổi.
+            </Alert>
           ) : (
             <Typography>Hiệu lực hôm nay: {assignmentDate(today)}</Typography>
           )}
           {periodInvalid && (
             <Alert severity="warning">
-              Không thể sửa lịch sử đã kết thúc hoặc bỏ ngày hôm nay khỏi phân công đang hiệu lực.
+              Không thể sửa lịch sử đã kết thúc. Phân công đang hiệu lực chỉ được đổi ngày kết thúc;
+              phân công sắp tới không được chuyển về quá khứ.
             </Alert>
+          )}
+          {cancelInvalid && (
+            <Alert severity="warning">Chỉ có thể hủy phân công chưa đến ngày hiệu lực.</Alert>
           )}
           {needsPreview && preview.data && <ResponsibilityPreview preview={preview.data} />}
           {intent.mode !== 'create' && (
@@ -375,7 +442,7 @@ export function AssignmentDialog({
         </Button>
         <Button
           variant="contained"
-          color={intent.mode === 'remove' ? 'error' : 'primary'}
+          color={intent.mode === 'remove' || intent.mode === 'cancelFuture' ? 'error' : 'primary'}
           form="assignment-editor"
           type="submit"
           disabled={!!blocked}
