@@ -120,6 +120,7 @@ internal static class Compact24Records
         History("BillingRepresentativeSelection", "rooms", "RoomId", "billing_representatives").AppendOnly = true;
         Technical("BillingAutomationExecution"); History("BillingAutomationAttempt", "operational_tasks", "ExecutionId").AppendOnly = true;
         var invoice = Root("Invoice", "invoices", "LocationId:location_id RoomId:room_id RepresentativeContractId:contract_id RepresentativeTenantUserId:representative_tenant_user_id BillingPeriod:billing_period Total:base_total_amount Status:status ScheduledFinalDate:scheduled_final_date DueDate:due_date FinalizedAt:finalized_at FinalizedByUserId:finalized_by_user_id Version:version");
+        invoice.Map("Type", "invoice_type");
         invoice.Map("MissingInputs", "missing_inputs", write: "@state::jsonb->'missingInputs'");
         invoice.Write["billing_snapshot"] = "jsonb_build_object('schemaVersion',1,'compactState',@state::jsonb)";
         invoice.CustomFrom = "invoices t"; invoice.CustomState = "t.billing_snapshot->'compactState'";
@@ -177,6 +178,7 @@ internal static class Compact24Records
         var workOrder = Root("MaintenanceWorkOrder", "operational_tasks", "IncidentId:incident_report_id LocationId:location_id RoomId:room_id AssetId:asset_id AssignedStaffId:assigned_user_id TargetCompletionAt:due_at EstimatedCost:estimated_cost ApprovedById:cost_approved_by_user_id ApprovedAt:cost_approved_at VerifiedById:verified_by_user_id VerifiedAt:verified_at Version:version");
         workOrder.Where = "t.task_type='WORK_ORDER'";
         workOrder.CustomFrom = "operational_tasks t"; workOrder.CustomState = "t.task_data->'state'";
+        workOrder.Read["Source"] = "COALESCE(t.task_data->'state'->>'source','Incident')";
         workOrder.Map("Status", "status", "CASE t.status WHEN 'Assigned' THEN 0 WHEN 'PendingApproval' THEN 1 WHEN 'InProgress' THEN 2 WHEN 'PendingVerification' THEN 3 WHEN 'Verified' THEN 4 WHEN 'Cancelled' THEN 5 END",
             "(ARRAY['Assigned','PendingApproval','InProgress','PendingVerification','Verified','Cancelled'])[(@state::jsonb->>'status')::int+1]");
         workOrder.Write["task_type"] = "'WORK_ORDER'";
@@ -199,6 +201,7 @@ internal static class Compact24Records
         Technical("IncidentCommand", true).AppendOnly = true;
         Technical("IncidentFileUpload");
         Technical("FastRepairPolicy");
+        History("MaintenanceCompensation", "operational_tasks", "WorkOrderId");
         var incidentNotice = Notification("IncidentNotification");
         incidentNotice.Read["ReadAt"] = "t.read_at";
         incidentNotice.CustomFrom = "notifications t LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(t.delivery_history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='IncidentNotification' ORDER BY n DESC LIMIT 1) s ON TRUE";

@@ -28,7 +28,7 @@ public sealed record InvoiceView(Guid Id, Guid RoomId, Guid LocationId, string R
     DateOnly BillingPeriod, string Status, int Version,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Total,
     IReadOnlyList<string> MissingInputs, DateOnly ScheduledFinalDate, DateOnly DueDate, DateTimeOffset? FinalizedAt,
-    Guid RepresentativeTenantUserId, IReadOnlyList<InvoiceLineView> Lines);
+    Guid RepresentativeTenantUserId, IReadOnlyList<InvoiceLineView> Lines, string Type = "PERIODIC");
 public sealed record InvoiceScope(Guid Actor, bool Owner, bool Tenant);
 public sealed record InvoiceListFilter(Guid? LocationId = null, DateOnly? BillingPeriod = null, InvoiceStatus? Status = null);
 public sealed record BillingOccupancy(Contract Contract, IReadOnlyList<Guid> TenantIds, bool ContactsComplete = true);

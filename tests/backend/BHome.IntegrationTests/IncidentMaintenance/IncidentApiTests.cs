@@ -52,7 +52,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         response.EnsureSuccessStatusCode(); var login = (await response.Content.ReadFromJsonAsync<LoginResult>())!;
         client.DefaultRequestHeaders.Authorization = new("Bearer", login.AccessToken); return new(id, client);
     }
-    private async Task<Workspace> Setup(bool assigned = true)
+    private async Task<Workspace> Setup(bool assigned = true, decimal requiredDeposit = 0)
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
@@ -69,7 +69,7 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
             StartDate = Today.AddDays(-10),
             EndDate = Today.AddDays(100),
             MonthlyRent = 1000000,
-            RequiredDeposit = 0,
+            RequiredDeposit = requiredDeposit,
             Status = ContractStatus.Active,
             ActivatedByUserId = owner.Id,
             ActivatedAt = DateTimeOffset.UtcNow,
@@ -93,11 +93,12 @@ public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFi
         request.Headers.Add("Idempotency-Key", (key ?? Guid.NewGuid()).ToString()); return await actor.Client.SendAsync(request);
     }
     private static async Task<HttpResponseMessage> Submit(Actor actor, Workspace w, bool emergency = false, Guid? key = null,
-        byte[]? photo = null, Guid? room = null, Guid? asset = null, string description = "Synthetic incident description")
+        byte[]? photo = null, Guid? room = null, Guid? asset = null, string description = "Synthetic incident description", bool omitAsset = false)
     {
         using var form = new MultipartFormDataContent();
         form.Add(new StringContent(w.Location.ToString()), "locationId"); form.Add(new StringContent((room ?? w.Room).ToString()), "roomId");
-        form.Add(new StringContent((asset ?? w.Asset).ToString()), "assetId"); form.Add(new StringContent(description), "description");
+        if (!omitAsset) form.Add(new StringContent((asset ?? w.Asset).ToString()), "assetId");
+        form.Add(new StringContent(description), "description");
         form.Add(new StringContent(emergency ? "Emergency" : "Normal"), "severity");
         if (photo is not null)
         { var content = new ByteArrayContent(photo); content.Headers.ContentType = new("image/png"); form.Add(content, "images", "synthetic.png"); }

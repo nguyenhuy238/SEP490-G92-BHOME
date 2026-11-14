@@ -12,6 +12,53 @@ namespace BHome.IntegrationTests.IncidentMaintenance;
 public sealed partial class IncidentApiTests
 {
     [CompactPostgresFact]
+    public async Task TenantWithoutAssetCompletesIncidentAndRepeatReportPreservesVerifiedWork()
+    {
+        var w = await Setup();
+        var incident = (await Ok<IncidentCommandResult>(await Submit(w.Tenant, w, omitAsset: true))).IncidentId!.Value;
+        Assert.Null((await Report(w.Owner, incident))!.AssetId);
+        await Review(w, incident); var work = await Assign(w, incident);
+        await ProposeAndStart(w, work); await Complete(w, incident, work);
+        await Ok<IncidentCommandResult>(await Verify(w, work));
+        Assert.Equal("Resolved", (await Report(w.Tenant, incident))!.Status);
+        var repeated = (await Ok<IncidentCommandResult>(await Submit(w.Tenant, w, omitAsset: true))).IncidentId!.Value;
+        Assert.NotEqual(incident, repeated); Assert.Equal("Submitted", (await Report(w.Tenant, repeated))!.Status);
+        Assert.Equal("Verified", (await Work(w.Owner, work))!.Status);
+        var inbox = await w.Staff.Client.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<BHome.Application.Notifications.NotificationView>>("/api/v1/notifications?category=Incident");
+        Assert.Contains(inbox!.Items, n => n.RelatedObjectId == incident);
+    }
+
+    [CompactPostgresFact]
+    public async Task CoOccupantCanReportOnlyWithinTheContractBoundRoom()
+    {
+        var w = await Setup(); var coTenant = await User(BHome.Domain.IdentityAccess.Roles.Tenant);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var room = await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == w.Room); room.Capacity = 3;
+            var resident = new BHome.Domain.TenantContracts.Resident
+            {
+                RoomId = w.Room,
+                OwnerUserId = w.Owner.Id,
+                TenantUserId = coTenant.Id,
+                DisplayLabel = "Synthetic co-occupant"
+            };
+            db.Add(resident);
+            db.Add(new BHome.Domain.TenantContracts.ContractResident
+            {
+                ContractId = w.Contract,
+                ResidentId = resident.Id,
+                ResidenceFrom = Today.AddDays(-1),
+                Role = BHome.Domain.TenantContracts.ResidentType.CoOccupant
+            });
+            await db.SaveChangesAsync();
+        }
+        var result = await Ok<IncidentCommandResult>(await Submit(coTenant, w, omitAsset: true));
+        Assert.NotNull(await Report(coTenant, result.IncidentId!.Value));
+        var other = await Setup();
+        Assert.Equal(HttpStatusCode.NotFound, (await Submit(coTenant, other, omitAsset: true)).StatusCode);
+    }
+    [CompactPostgresFact]
     public async Task FastRepairPolicyStartsDisabledRequiresOwnerAndSupportsSafeFallback()
     {
         var w = await Setup();

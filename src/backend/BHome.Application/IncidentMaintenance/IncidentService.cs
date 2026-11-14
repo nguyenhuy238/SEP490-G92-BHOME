@@ -609,7 +609,28 @@ public sealed partial class IncidentService(IIncidentRepository repository, ICur
             Event = activity.Action,
             HighPriority = report.Severity == IncidentSeverity.Emergency
         }).ToArray();
-        foreach (var notification in notifications) repository.Add(notification);
+        foreach (var notification in notifications)
+        {
+            repository.Add(notification);
+            var role = await repository.ActiveRoleAsync(notification.RecipientId, Roles.Owner, t) ? Roles.Owner :
+                await repository.ActiveRoleAsync(notification.RecipientId, Roles.Staff, t) ? Roles.Staff : Roles.Tenant;
+            repository.Add(new BHome.Domain.Notifications.UserNotification
+            {
+                RecipientUserId = notification.RecipientId,
+                AudienceRole = role,
+                LocationId = report.LocationId,
+                Category = "Incident",
+                EventKey = "incident:" + notification.Id,
+                EventType = notification.EventType,
+                Priority = notification.HighPriority ? "P0" : "P1",
+                Channels = ["IN_APP", "PUSH"],
+                Title = notification.HighPriority ? "Sự cố khẩn cấp có cập nhật" : "Sự cố và bảo trì có cập nhật",
+                Summary = notification.HighPriority ? "Ưu tiên an toàn và liên hệ cơ quan khẩn cấp phù hợp nếu có nguy hiểm tính mạng. Mở hồ sơ để ghi nhận ứng phó." : "Mở hồ sơ để xem nội dung và thao tác trong phạm vi được phân công.",
+                RelatedObjectType = report.IncidentId.HasValue ? "Incident" : "WorkOrder",
+                RelatedObjectId = report.IncidentId ?? activity.WorkOrderId ?? throw IncidentException.Missing(),
+                CreatedAt = Now
+            });
+        }
         await repository.FlushAsync(t);
         foreach (var notification in notifications)
             await jobs.EnqueueAsync(new("incident.notification", notification.Id.ToString("N"), JsonSerializer.Serialize(new { NotificationId = notification.Id })), t);

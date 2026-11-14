@@ -222,6 +222,17 @@ public sealed class IncidentCommand : AuditableEntity
 
 public sealed class IncidentNotification : AuditableEntity
 {
+    public string EventType => Event switch
+    {
+        "submitted" => HighPriority ? "INCIDENT_EMERGENCY_SUBMITTED" : "INCIDENT_NORMAL_SUBMITTED",
+        "acknowledged" => "EMERGENCY_ACKNOWLEDGED",
+        "assigned" or "reassigned" => "WORK_ORDER_ASSIGNED",
+        "proposal_submitted" => "REPAIR_PROPOSAL_REQUIRES_APPROVAL",
+        "submit" => "WORK_ORDER_VERIFICATION_REQUIRED",
+        "rework" => "WORK_ORDER_REWORK_REQUESTED",
+        "resolved" or "rejected" or "duplicate" => "INCIDENT_CLOSED",
+        _ => "INCIDENT_UPDATED"
+    };
     public Guid? IncidentId { get; set; }
     public Guid? WorkOrderId { get; set; }
     public Guid LocationId { get; set; }

@@ -34,13 +34,13 @@ BEGIN
             AND room_id IS NOT DISTINCT FROM NEW.room_id)) THEN
         RAISE EXCEPTION 'Invalid Work Order scope or state' USING ERRCODE='23514';
     END IF;
-    IF NEW.status IN ('InProgress','PendingVerification','Verified') AND NOT (
+    IF NEW.status IN ('InProgress','PendingVerification','Verified') AND NOT COALESCE((
        (NEW.cost_approved_at IS NOT NULL AND NEW.cost_approved_by_user_id IS NOT NULL AND
         s->>'approvedProposalVersion' IS NOT NULL AND s->>'approvedProposalVersion'=s->>'proposalVersion') OR
        (COALESCE((s->>'fastRepairPolicyVersion')::int,0)>0 AND s->>'fastRepairAuthorizedAt' IS NOT NULL AND
         NULLIF(btrim(s->>'fastRepairCategory'),'') IS NOT NULL AND
         (s->>'estimatedCost')::numeric=0 AND (s->>'usesMaterials')::boolean=FALSE AND
-        (NEW.status<>'Verified' OR (s->>'actualCost')::numeric=0))) THEN
+        (NEW.status<>'Verified' OR (s->>'actualCost')::numeric=0))),FALSE) THEN
         RAISE EXCEPTION 'Work Order requires approved current plan' USING ERRCODE='23514';
     END IF;
     IF NEW.status='Verified' AND (NEW.verified_at IS NULL OR NEW.verified_by_user_id IS NULL OR

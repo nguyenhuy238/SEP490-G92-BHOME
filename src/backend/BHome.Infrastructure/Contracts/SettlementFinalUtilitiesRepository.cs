@@ -66,7 +66,7 @@ internal sealed partial class SettlementReceivablesRepository
                 !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(r.Email))) missing.Add("occupant_account_email_required");
             context = context with { RecipientUserIds = roster.Where(r => r.TenantUserId != null).Select(r => r.TenantUserId!.Value).Distinct().Order().ToArray() };
         }
-        var invoice = await db.Set<Invoice>().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == context.View.RoomId && i.BillingPeriod == period, token);
+        var invoice = await db.PeriodicInvoices().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == context.View.RoomId && i.BillingPeriod == period, token);
         var invoiceSchedule = invoice?.ScheduleSnapshot;
         BillingSchedule? schedule = null;
         if (!string.IsNullOrWhiteSpace(invoiceSchedule))

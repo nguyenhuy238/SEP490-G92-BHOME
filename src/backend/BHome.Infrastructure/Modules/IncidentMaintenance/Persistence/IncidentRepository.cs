@@ -59,7 +59,9 @@ internal sealed class IncidentRepository(BHomePersistenceContext db) : IIncident
     public Task<IncidentRoom?> RoomAsync(Guid id, CancellationToken t) => db.Set<Room>().AsNoTracking().Where(r => r.Id == id)
         .Select(r => new IncidentRoom(r.Id, r.LocationId)).SingleOrDefaultAsync(t);
     public Task<IncidentTenancy?> TenancyAsync(Guid actor, Guid location, Guid? room, DateOnly date, CancellationToken t) =>
-        db.Set<Contract>().AsNoTracking().Where(c => c.TenantUserId == actor && c.Room.LocationId == location &&
+        db.Set<Contract>().AsNoTracking().Where(c => (c.TenantUserId == actor || c.Residents.Any(cr =>
+                cr.ResidenceFrom <= date && (cr.ResidenceTo == null || cr.ResidenceTo >= date) &&
+                db.Set<Resident>().Any(r => r.Id == cr.ResidentId && r.TenantUserId == actor))) && c.Room.LocationId == location &&
             (room == null || c.RoomId == room) && c.Status == ContractStatus.Active && c.StartDate <= date && c.EndDate >= date &&
             (c.ActualEndDate == null || c.ActualEndDate >= date) && c.Residents.Any(r => r.ResidentId == c.RepresentativeResidentId &&
                 r.ResidenceFrom <= date && (r.ResidenceTo == null || r.ResidenceTo >= date)))
@@ -112,7 +114,8 @@ internal sealed class IncidentRepository(BHomePersistenceContext db) : IIncident
         return rows;
     }
     private IQueryable<Contract> ReportingTenancies(IncidentScope scope) => db.Set<Contract>().Where(c =>
-        scope.Tenant && c.TenantUserId == scope.ActorId && c.Status == ContractStatus.Active && c.Room.Location.IsActive &&
+        scope.Tenant && (c.TenantUserId == scope.ActorId || c.Residents.Any(cr => cr.ResidenceFrom <= scope.Today &&
+            (cr.ResidenceTo == null || cr.ResidenceTo >= scope.Today) && db.Set<Resident>().Any(r => r.Id == cr.ResidentId && r.TenantUserId == scope.ActorId))) && c.Status == ContractStatus.Active && c.Room.Location.IsActive &&
         c.StartDate <= scope.Today && c.EndDate >= scope.Today && (c.ActualEndDate == null || c.ActualEndDate >= scope.Today) &&
         c.Residents.Any(r => r.ResidentId == c.RepresentativeResidentId && r.ResidenceFrom <= scope.Today &&
             (r.ResidenceTo == null || r.ResidenceTo >= scope.Today)));

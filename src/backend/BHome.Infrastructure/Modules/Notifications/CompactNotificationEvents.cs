@@ -160,17 +160,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             {
                 if (r.Role == "Staff" && !(await Staff(location, t)).Contains(r.Id))
                 { db.Attach(n); n.DeliveryState = "Suppressed"; continue; }
-                var eventType = n.Event switch
-                {
-                    "submitted" => n.HighPriority ? "INCIDENT_EMERGENCY_SUBMITTED" : "INCIDENT_NORMAL_SUBMITTED",
-                    "acknowledged" => "EMERGENCY_ACKNOWLEDGED",
-                    "assigned" or "reassigned" => "WORK_ORDER_ASSIGNED",
-                    "proposal_submitted" => "REPAIR_PROPOSAL_REQUIRES_APPROVAL",
-                    "submit" => "WORK_ORDER_VERIFICATION_REQUIRED",
-                    "rework" => "WORK_ORDER_REWORK_REQUESTED",
-                    "resolved" or "rejected" or "duplicate" => "INCIDENT_CLOSED",
-                    _ => "INCIDENT_UPDATED"
-                };
+                var eventType = n.EventType;
                 count += await sql.Emit(r.Id, r.Role, location, "incident:" + n.Id, eventType, "Incident",
                     n.HighPriority && n.Event == "submitted" ? "Có sự cố khẩn cấp tại cơ sở" : "Sự cố có cập nhật",
                     "Mở sự cố để xem thông tin và hành động trong phạm vi được phân công. Trường hợp đe dọa tính mạng, gọi cơ quan khẩn cấp phù hợp.",

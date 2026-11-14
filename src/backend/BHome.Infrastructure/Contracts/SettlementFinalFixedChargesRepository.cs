@@ -18,7 +18,7 @@ internal sealed partial class SettlementReceivablesRepository
         var snapshot = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot);
         var end = snapshot?.Date ?? contract.ActualEndDate ?? contract.EndDate;
         var period = new DateOnly(end.Year, end.Month, 1); var through = period.AddMonths(1).AddDays(-1);
-        var invoice = await db.Set<Invoice>().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == contract.RoomId && i.BillingPeriod == period, token);
+        var invoice = await db.PeriodicInvoices().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == contract.RoomId && i.BillingPeriod == period, token);
         BillingSchedule? schedule = null;
         if (!string.IsNullOrWhiteSpace(invoice?.ScheduleSnapshot))
             try { schedule = JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot); } catch (JsonException) { missing.Add("billing_schedule_snapshot_invalid"); }

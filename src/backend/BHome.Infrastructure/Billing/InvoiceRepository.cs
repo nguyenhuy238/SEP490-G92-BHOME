@@ -41,7 +41,11 @@ internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRe
     private IQueryable<Invoice> Visible(InvoiceScope scope) => db.Set<Invoice>().Where(i => scope.Owner || scope.Tenant && i.Recipients.Any(r => r.TenantUserId == scope.Actor));
     private static IQueryable<Invoice> Detail(IQueryable<Invoice> source) => source.Include(i => i.Lines).Include(i => i.Recipients).AsSplitQuery();
     public Task<Invoice?> FindAsync(Guid id, InvoiceScope scope, CancellationToken t) => Detail(Visible(scope)).SingleOrDefaultAsync(i => i.Id == id, t);
-    public Task<Invoice?> ForPeriodAsync(Guid roomId, DateOnly period, CancellationToken t) => Detail(db.Set<Invoice>()).SingleOrDefaultAsync(i => i.RoomId == roomId && i.BillingPeriod == period, t);
+    public Task<Invoice?> ForPeriodAsync(Guid roomId, DateOnly period, CancellationToken t)
+    {
+        var invoices = db.PeriodicInvoices().Where(i => i.RoomId == roomId && i.BillingPeriod == period);
+        return Detail(invoices).SingleOrDefaultAsync(t);
+    }
     public async Task<PagedResult<Invoice>> ListAsync(InvoiceScope scope, int page, int pageSize, Guid? roomId, CancellationToken t, InvoiceListFilter? filter = null)
     {
         var source = Visible(scope).AsNoTracking().Where(i => roomId == null || i.RoomId == roomId);
