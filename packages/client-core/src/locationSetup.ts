@@ -1,9 +1,12 @@
 import type {
+  AssetInventory,
+  LocalAssetItem,
   LocationConfiguration,
   LocalAssetTemplate,
   RoomConfiguration,
   SetupDocument,
 } from './propertySetup';
+import type { Policy } from './invoices';
 import type { RoomTemplateData, SharedResource } from './sharedConfiguration';
 
 export interface LocationSetupInformation {
@@ -27,7 +30,7 @@ export interface SetupRoomDefaults {
   description: string;
   capacity: number;
   area: number;
-  referenceRent: number | null;
+  referenceRent: number | string | null;
   amenities: string[];
   assets: SetupAssetRequirement[];
   sourceId: string | null;
@@ -39,15 +42,15 @@ export interface SetupRoom {
   roomNumber: string;
   floor: string;
   roomTypeKey: string;
-  rent: number;
+  rent: number | string;
 }
 export interface SetupFee {
   roomKey: string | null;
   category: 0 | 1 | 2 | 3;
   chargeCode: string;
   name: string;
-  method: 0 | 1;
-  rate: number;
+  method: 0 | 1 | 2;
+  rate: number | string;
   effectiveFrom: string;
   effectiveTo: string | null;
 }
@@ -119,10 +122,10 @@ export interface LocalRoomDefaultsWrite {
 }
 export interface RoomProvenanceData {
   roomId: string;
-  roomDefaultsId: string;
-  roomDefaultsVersion: number;
+  roomDefaultsId: string | null;
+  roomDefaultsVersion: number | null;
   name: string;
-  area: number | string;
+  area: number | string | null;
   amenities: string[];
   defaultCapacity: number;
   referenceRent: number | string | null;
@@ -132,7 +135,7 @@ export interface ConfiguredRoomInput {
   floor: string | null;
   roomDefaultsId: string;
   expectedVersion: number;
-  rent: number;
+  rent: number | string;
 }
 export interface ConfiguredRoomsInput {
   rooms: ConfiguredRoomInput[];
@@ -141,6 +144,43 @@ export interface ConfiguredRoomsInput {
 export type LocationMetadata = Omit<LocationSetupInformation, 'name' | 'address'> & {
   setupStatus: string;
 };
+
+export interface RoomConfigurationView {
+  room: RoomConfiguration;
+  provenance: SetupDocument<RoomProvenanceData> | null;
+  inventory: AssetInventory;
+  canEdit: boolean;
+  lockReason: string | null;
+  rent: (Policy & { firstUsedAt?: string | null }) | null;
+  scheduledRent: (Policy & { firstUsedAt?: string | null }) | null;
+}
+
+export interface RoomConfigurationWrite {
+  roomNumber: string;
+  floor: string | null;
+  capacity: number;
+  status: number;
+  expectedVersion: number;
+  roomDefaultsId?: string;
+  expectedDefaultsVersion?: number;
+  expectedProvenanceVersion: number;
+  area?: number;
+  amenities?: string[];
+  rent?: {
+    rate: string;
+    effectiveFrom: string;
+    expectedPolicyId?: string;
+    expectedPolicyVersion?: number;
+  };
+  assets?: { items: LocalAssetItem[]; expectedAssignmentVersion: number };
+  reason: string;
+}
+
+export interface RoomDefaultsAssetRequirementsResult {
+  defaults: SetupDocument<LocalRoomDefaultsData>;
+  template: SetupDocument<LocalAssetTemplate> | null;
+  rooms: { roomId: string; status: string }[];
+}
 
 export function locationSetupClient(request: <T>(path: string, init?: RequestInit) => Promise<T>) {
   const route = (location: string, suffix: string) =>
@@ -173,6 +213,31 @@ export function locationSetupClient(request: <T>(path: string, init?: RequestIni
       ),
     roomProvenance: (location: string, signal?: AbortSignal) =>
       request<SetupDocument<RoomProvenanceData>[]>(route(location, 'room-provenance'), { signal }),
+    roomConfiguration: (location: string, roomId: string, signal?: AbortSignal) =>
+      request<RoomConfigurationView>(
+        route(location, `rooms/${encodeURIComponent(roomId)}/configuration`),
+        { signal },
+      ),
+    saveRoomConfiguration: (location: string, roomId: string, input: RoomConfigurationWrite) =>
+      write<RoomConfigurationView>(
+        route(location, `rooms/${encodeURIComponent(roomId)}/configuration`),
+        input,
+        'PUT',
+      ),
+    saveRoomDefaultsAssetRequirements: (
+      location: string,
+      id: string,
+      input: {
+        expectedVersion: number;
+        items: LocalAssetItem[];
+        applyToExistingRooms: boolean;
+        reason: string;
+      },
+    ) =>
+      write<RoomDefaultsAssetRequirementsResult>(
+        route(location, `room-defaults/${encodeURIComponent(id)}/asset-requirements`),
+        input,
+      ),
     createConfiguredRooms: (location: string, input: ConfiguredRoomsInput, key: string) =>
       write<{ rooms: RoomConfiguration[] }>(
         route(location, 'configured-rooms'),

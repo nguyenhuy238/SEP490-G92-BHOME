@@ -25,6 +25,7 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { signingPayload } from '../../../../../packages/client-core/src/signing';
 import { useSigningApi } from './useContractsApi';
+import { MoneyField } from '../../components/common/MoneyField';
 import { SignaturePlacementPicker, type PlacementChoice } from './SignaturePlacementPicker';
 
 export function ContractActionDialog({
@@ -137,6 +138,23 @@ export function ContractActionDialog({
                   </MenuItem>
                 ))}
               </TextField>
+            ) : field.type === 'money' ? (
+              <MoneyField
+                key={field.name}
+                label={field.label}
+                disabled={busy}
+                value={values[field.name] ?? ''}
+                maxRawLength={field.max ?? 18}
+                slotProps={{ inputLabel: { shrink: true } }}
+                onValueChange={(raw) =>
+                  setValues((v) => ({
+                    ...v,
+                    [field.name]: raw,
+                    humanConfirmed:
+                      action.operation === 'holding-cancellation' ? '' : v.humanConfirmed,
+                  }))
+                }
+              />
             ) : (
               <TextField
                 key={field.name}
@@ -155,8 +173,7 @@ export function ContractActionDialog({
                 slotProps={{
                   inputLabel: { shrink: true },
                   htmlInput: {
-                    maxLength: field.max ?? (field.type === 'money' ? 18 : undefined),
-                    inputMode: field.type === 'money' ? 'numeric' : undefined,
+                    maxLength: field.max,
                   },
                 }}
                 onChange={(e) =>

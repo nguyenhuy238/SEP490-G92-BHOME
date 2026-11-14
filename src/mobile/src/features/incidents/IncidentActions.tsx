@@ -153,7 +153,8 @@ export function IncidentActionPanel({
       label={label}
       value={values[key] ?? ''}
       onChange={(value) => set(key, value)}
-      numeric={numeric}
+      numeric={numeric && key !== 'cost'}
+      money={key === 'cost'}
       multiline={multiline}
       disabled={mutation.busy}
     />

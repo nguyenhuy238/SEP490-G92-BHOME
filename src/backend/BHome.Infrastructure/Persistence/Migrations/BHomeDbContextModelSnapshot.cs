@@ -805,6 +805,9 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("RateDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("UtilityCalculationSnapshot")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CorrectionRequestId");
@@ -2288,6 +2291,12 @@ namespace BHome.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly?>("ActualEndDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("AgreedPriceSnapshot")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("{}");
+
                     b.Property<decimal>("AppliedHoldingDeposit")
                         .HasPrecision(18)
                         .HasColumnType("numeric(18,0)");
@@ -2332,6 +2341,13 @@ namespace BHome.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("PreviousContractId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("PriceLockTrigger")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("PriceLockedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("RepresentativeResidentId")
                         .HasColumnType("uuid");

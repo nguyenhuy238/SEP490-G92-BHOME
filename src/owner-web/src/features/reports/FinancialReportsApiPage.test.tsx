@@ -56,6 +56,7 @@ it('displays backend figures and unavailable payback without calculating or subs
   expect(mock.report).not.toHaveBeenCalled();
   request();
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
+  expect(screen.getByText('Phạm vi: Toàn chuỗi')).toBeInTheDocument();
   expect(screen.getByText('Ước tính số tháng còn lại: Chưa xác định')).toBeInTheDocument();
   expect(mock.report).toHaveBeenCalledWith(
     { from: '2026-11-01', to: '2026-11-30', locationId: undefined },
@@ -198,11 +199,14 @@ it('selects a scoped Room by name and clears it when the Location changes', asyn
     expect.objectContaining({ locationId: 'a', roomId: 'room' }),
     expect.any(AbortSignal),
   );
+  expect(screen.getByText('Phạm vi: Cơ sở A · Phòng 101')).toBeInTheDocument();
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Cơ sở' }));
   fireEvent.click(await screen.findByRole('option', { name: 'Cơ sở B' }));
   expect(screen.getByRole('combobox', { name: 'Phòng' })).toHaveValue('');
+  expect(screen.getByText('Phạm vi: Cơ sở A · Phòng 101')).toBeInTheDocument();
   request();
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
+  expect(screen.getByText('Phạm vi: Cơ sở B')).toBeInTheDocument();
   expect(mock.report).toHaveBeenLastCalledWith(
     { from: '2026-11-01', to: '2026-11-30', locationId: 'b' },
     expect.any(AbortSignal),

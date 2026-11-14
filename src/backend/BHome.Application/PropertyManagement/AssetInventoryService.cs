@@ -5,16 +5,28 @@ namespace BHome.Application.PropertyManagement;
 
 public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access) : SetupWorkspaceService(store, user, access)
 {
+    public static bool IsLocationDefault(SetupDocument document) =>
+        document.Status == "Published" && !Read<AssetTemplateWrite>(document).Scoped;
+
+    private static AssetTemplateItem[] ValidateItems(AssetTemplateItem[] items, bool allowEmpty = false)
+    {
+        if (items is null || items.Length > 100 || !allowEmpty && items.Length == 0 ||
+            items.Any(i => i is null) || items.Select(i => i.Id).Distinct().Count() != items.Length)
+            throw new PropertyException(400, "invalid_template_items");
+        return items.Select(item =>
+        {
+            if (item.Id == Guid.Empty || item.Quantity is < 1 or > 10000 ||
+                item.TrackingMode is not ("Serialized" or "BulkQuantity"))
+                throw new PropertyException(400, "invalid_template_item");
+            return item with { Name = Text(item.Name, 150), Category = Text(item.Category, 80) };
+        }).ToArray();
+    }
+
     public Task<SetupDocument> SaveTemplateAsync(Guid? id, AssetTemplateWrite input, CancellationToken t)
     {
         Owner(); Text(input.Name, 150);
-        if (input.Items is null || input.Items.Length is < 1 or > 100 || input.Items.Any(i => i is null) || input.Items.Select(i => i.Id).Distinct().Count() != input.Items.Length)
-            throw new PropertyException(400, "invalid_template_items");
-        foreach (var item in input.Items)
-        {
-            Text(item.Name, 150); Text(item.Category, 80);
-            if (item.Id == Guid.Empty || item.Quantity is < 1 or > 10000 || item.TrackingMode is not ("Serialized" or "BulkQuantity")) throw new PropertyException(400, "invalid_template_item");
-        }
+        input = input with { Items = ValidateItems(input.Items) };
+        if (input.ScopeRoomId is not null) throw new PropertyException(400, "template_scope_invalid");
         return Store.TransactionAsync(input.LocationId, async () =>
         {
             if (id is { } existing && (await Document(existing, "AssetTemplate", true, t)).Status != "Draft") throw new PropertyException(409, "published_template_immutable");
@@ -53,8 +65,8 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
                     var selected = assignment is null ? null : Read<AssetTemplateAssignment>(assignment).TemplateId;
                     // Legacy rooms retain their explicit location-wide default. Configured rooms
                     // must not inherit a different room configuration's most recent template.
-                    if (selected is null && await Store.GetAsync(LocationSetupKeys.RoomProvenance(room), "RoomProvenance", t) is null)
-                        selected = (await Store.ListAsync(doc.LocationId, "AssetTemplate", t)).Where(d => d.Status == "Published").OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault()?.Id;
+                    if (selected is null && assignment?.Status != "None" && await Store.GetAsync(LocationSetupKeys.RoomProvenance(room), "RoomProvenance", t) is null)
+                        selected = (await Store.ListAsync(doc.LocationId, "AssetTemplate", t)).Where(IsLocationDefault).OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault()?.Id;
                     if (selected != doc.Id) return "SkippedOtherTemplate";
                     if (!await Store.EligibleRoomAsync(room, t)) return "SkippedNotEligible";
                     var desiredId = Key($"desired:{room}:{doc.Id}:{doc.Version}");
@@ -90,8 +102,8 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
         var assignment = await Store.GetAsync(Key($"asset-template-assignment:{room}"), "AssetTemplateAssignment", t);
         var selected = assignment is null ? null : Read<AssetTemplateAssignment>(assignment).TemplateId;
         var effectiveTemplate = selected;
-        if (effectiveTemplate is null && await Store.GetAsync(LocationSetupKeys.RoomProvenance(room), "RoomProvenance", t) is null)
-            effectiveTemplate = templates.Values.Where(d => d.Status == "Published").OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault()?.Id;
+        if (effectiveTemplate is null && assignment?.Status != "None" && await Store.GetAsync(LocationSetupKeys.RoomProvenance(room), "RoomProvenance", t) is null)
+            effectiveTemplate = templates.Values.Where(IsLocationDefault).OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault()?.Id;
         var desired = (await Store.ListAsync(location, "DesiredAssets", t)).Where(d => Read<DesiredAssets>(d).RoomId == room)
             .OrderByDescending(d => Read<DesiredAssets>(d).TemplateId == effectiveTemplate).ThenByDescending(d => templates.GetValueOrDefault(Read<DesiredAssets>(d).TemplateId)?.RecordedAt).ThenBy(d => d.Id).ToArray();
         // Retain historical desired inventories, but never verify against an unassigned or superseded template.
@@ -171,22 +183,61 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
     public async Task<SetupDocument> CloneTemplateAsync(Guid id, CancellationToken t)
     {
         var source = await Document(id, "AssetTemplate", true, t);
+        if (Read<AssetTemplateWrite>(source).ScopeRoomId is not null) throw new PropertyException(409, "room_specific_template");
         return await SaveTemplateAsync(null, Read<AssetTemplateWrite>(source) with { ExpectedVersion = 0 }, t);
     }
+
+    // Called within the Location transaction. A revision is an independent immutable
+    // requirements snapshot; it never creates or changes verified physical Assets.
+    internal async Task<SetupDocument?> CreateRequirementsAsync(Guid location, string name, AssetTemplateItem[] items,
+        Guid? roomId, CancellationToken t)
+    {
+        Owner();
+        items = ValidateItems(items, allowEmpty: true);
+        if (items.Length == 0) return null;
+        return await Store.SaveAsync(Guid.NewGuid(), location, "AssetTemplate", "Published",
+            new AssetTemplateWrite(location, Text(name, 150), items, Scoped: true, ScopeRoomId: roomId), 0, Actor, t);
+    }
+
+    internal async Task AssignRequirementsAsync(Guid location, Guid room, SetupDocument? template, int expectedVersion,
+        CancellationToken t)
+    {
+        Owner();
+        if (await Store.RoomLocationAsync(room, t) != location) throw new PropertyException(404, "resource_not_found");
+        if (await Store.RoomConfigurationLockReasonAsync(room, t) is { } reason) throw new PropertyException(409, reason);
+        var assignment = new AssetTemplateAssignment(template?.Id, expectedVersion);
+        await Store.SaveAsync(Key($"asset-template-assignment:{room}"), location, "AssetTemplateAssignment",
+            template is null ? "None" : "Assigned", assignment, expectedVersion, Actor, t);
+        if (template is not null)
+        {
+            var data = Read<AssetTemplateWrite>(template);
+            if (template.LocationId != location || template.Status != "Published" ||
+                data.ScopeRoomId is { } scopedRoom && scopedRoom != room)
+                throw new PropertyException(400, "template_scope_invalid");
+            var desiredId = Key($"desired:{room}:{template.Id}:{template.Version}");
+            if (await Store.GetAsync(desiredId, "DesiredAssets", t) is null)
+                await Store.SaveAsync(desiredId, location, "DesiredAssets", "PendingVerification",
+                    new DesiredAssets(template.Id, template.Version, room, data.Items, "PendingVerification"), 0, Actor, t);
+        }
+    }
+
     public async Task<SetupDocument> AssignTemplateAsync(Guid room, AssetTemplateAssignment input, CancellationToken t)
     {
         var location = await RoomScope(room, true, t);
         return await Store.TransactionAsync(location, async () =>
         {
+            if (await Store.RoomConfigurationLockReasonAsync(room, t) is { } reason) throw new PropertyException(409, reason);
             SetupDocument? template = null;
             if (input.TemplateId is { } id)
             {
                 template = await Document(id, "AssetTemplate", true, t);
-                if (template.LocationId != location || template.Status != "Published") throw new PropertyException(400, "template_scope_invalid");
+                if (template.LocationId != location || template.Status != "Published" ||
+                    Read<AssetTemplateWrite>(template).ScopeRoomId is { } scopedRoom && scopedRoom != room)
+                    throw new PropertyException(400, "template_scope_invalid");
             }
             var doc = await Store.SaveAsync(Key($"asset-template-assignment:{room}"), location, "AssetTemplateAssignment", input.TemplateId is null ? "Default" : "Assigned", input, input.ExpectedVersion, Actor, t);
             if (template is null && await Store.GetAsync(LocationSetupKeys.RoomProvenance(room), "RoomProvenance", t) is null)
-                template = (await Store.ListAsync(location, "AssetTemplate", t)).Where(d => d.Status == "Published").OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault();
+                template = (await Store.ListAsync(location, "AssetTemplate", t)).Where(IsLocationDefault).OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault();
             if (template is not null) await Sync(template, t, room);
             return doc;
         }, t);

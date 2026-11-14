@@ -14,11 +14,13 @@ export function useSmsRecovery(client: SessionClient) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [retryAt, setRetryAt] = useState(0);
-  const [seconds, setSeconds] = useState(0);
+  const [now, setNow] = useState(Date.now);
+  const seconds = Math.max(0, Math.ceil((retryAt - now) / 1000));
   const lock = useRef(false);
   useEffect(() => {
-    const tick = () => setSeconds(Math.max(0, Math.ceil((retryAt - Date.now()) / 1000)));
-    const timer = setInterval(tick, 250);
+    if (!retryAt) return;
+    // Track time, not the previous deadline: a queued tick must not erase a new countdown.
+    const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
   }, [retryAt]);
   async function run(action: () => Promise<void>) {
@@ -52,8 +54,9 @@ export function useSmsRecovery(client: SessionClient) {
     await run(async () => {
       const result = await client.requestSmsRecovery(identifier.trim());
       setChallengeId(result.challengeId);
-      setRetryAt(Date.now() + result.retryAfterSeconds * 1000);
-      setSeconds(result.retryAfterSeconds);
+      const receivedAt = Date.now();
+      setNow(receivedAt);
+      setRetryAt(receivedAt + result.retryAfterSeconds * 1000);
       setOtp('');
       setAuthorization('');
       setStep('verify');

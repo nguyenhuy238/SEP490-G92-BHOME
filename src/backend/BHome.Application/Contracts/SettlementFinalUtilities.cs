@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using BHome.Application.Billing;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
@@ -16,7 +17,8 @@ public sealed record SettlementUtilitySource(Guid MeterId, string UtilityType, D
     string CumulativePricingSnapshot, Guid? PricePolicyId = null, int? PricePolicyVersion = null);
 public sealed record FinalUtilityContext(SettlementChargeContext Context, Guid MeterId, UtilityType UtilityType, DateOnly BillingPeriod,
     BillableMeterPoint? Baseline, BillableMeterPoint? Final, decimal AlreadyBilledQuantity, string? PreviousPricingSnapshot,
-    BillingSchedule? Schedule, Guid? ExistingReceivableId, IReadOnlyList<string> MissingInputs, bool FullyCovered = false);
+    BillingSchedule? Schedule, Guid? ExistingReceivableId, IReadOnlyList<string> MissingInputs, bool FullyCovered = false,
+    IReadOnlyList<PolicyDto>? ContractCharges = null);
 public sealed record FinalUtilityPreview(Guid ContractId, string UtilityType, DateOnly BillingPeriod, string Reference,
     BillableMeterPoint? Baseline, BillableMeterPoint? Final,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal AlreadyBilledQuantity,
@@ -54,45 +56,21 @@ public sealed partial class SettlementReceivablesService
         }
         else if (missing.Count == 0)
         {
-            if (properties is null || utilities is null) throw new ContractException(503, "final_utility_pricing_unavailable");
             try
             {
                 var schedule = source.Schedule!;
-                var rateDate = schedule.RateDate == BillingRateDate.PeriodStart ? source.BillingPeriod : source.BillingPeriod.AddMonths(1).AddDays(-1);
-                var prices = await properties.ResolvePricesAsync(source.Context.View.RoomId, rateDate, token);
                 var category = type == UtilityType.Electricity ? ChargeCategory.Electricity : ChargeCategory.Water;
-                var policies = prices.Charges.Where(p => p.Category == category).ToArray();
+                var policies = (source.ContractCharges ?? []).Where(p => p.Category == category).ToArray();
                 if (policies.Length != 1 || policies[0].Method != ChargingMethod.Metered) missing.Add("settlement_metered_policy_required");
                 else
                 {
                     var policy = policies[0];
                     pricePolicyId = policy.Id; pricePolicyVersion = policy.Version;
-                    var priced = await UtilityIncrementCalculation.CalculateAsync(utilities, source.Context.View.RoomId, type, source.BillingPeriod,
-                        source.AlreadyBilledQuantity, quantity!.Value, source.PreviousPricingSnapshot, token);
-                    if (priced is null)
-                    {
-                        if (source.AlreadyBilledQuantity > 0 && !UtilityIncrementCalculation.FlatPolicyMatches(source.PreviousPricingSnapshot, policy.Id, policy.Version, policy.Rate, schedule.Rounding))
-                            missing.Add("utility_increment_policy_changed");
-                        amount = InvoiceMath.Amount(policy.Rate, quantity.Value, 1, DateTime.DaysInMonth(source.BillingPeriod.Year, source.BillingPeriod.Month),
-                            schedule.PartialMonth, schedule.Rounding, true);
-                        calculation = JsonSerializer.Serialize(new
-                        {
-                            kind = "FlatMeteredIncrement/v1",
-                            policyId = policy.Id,
-                            policyVersion = policy.Version,
-                            rate = policy.Rate,
-                            rateDate,
-                            rounding = schedule.Rounding,
-                            quantity,
-                            amount,
-                            baseline = source.Baseline,
-                            final = source.Final
-                        });
-                    }
-                    else
-                    {
-                        missing.AddRange(priced.MissingInputs); amount = priced.MissingInputs.Count == 0 ? priced.Amount : null; calculation = priced.Snapshot;
-                    }
+                    if (source.AlreadyBilledQuantity > 0 && !UtilityIncrementCalculation.FlatPolicyMatches(source.PreviousPricingSnapshot, policy.Id, policy.Version, policy.Rate, schedule.Rounding))
+                        missing.Add("utility_increment_policy_changed");
+                    amount = InvoiceMath.Amount(policy.Rate, quantity!.Value, 1, DateTime.DaysInMonth(source.BillingPeriod.Year, source.BillingPeriod.Month),
+                        schedule.PartialMonth, schedule.Rounding, true);
+                    calculation = ContractBillingPrices.FlatSnapshot(policy, schedule, quantity.Value, amount.Value);
                 }
             }
             catch (PropertyException error) when (error.Status is 400 or 409) { missing.Add(error.Code); }

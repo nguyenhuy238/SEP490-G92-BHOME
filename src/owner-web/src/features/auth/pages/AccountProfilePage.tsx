@@ -181,7 +181,6 @@ export default function AccountProfilePage() {
       <PageHeader
         title="Hồ sơ tài khoản"
         group="TÀI KHOẢN OWNER"
-        subtitle="Quản lý thông tin liên hệ và bảo mật của tài khoản đang đăng nhập."
         actions={
           <Button
             variant="outlined"
@@ -196,7 +195,8 @@ export default function AccountProfilePage() {
         sx={{
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 2fr) minmax(280px, 1fr)' },
-          gap: 2.5,
+          gap: 2,
+          minWidth: 0,
         }}
       >
         <Paper

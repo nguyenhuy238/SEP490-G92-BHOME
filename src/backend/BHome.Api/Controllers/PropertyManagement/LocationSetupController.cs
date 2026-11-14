@@ -22,6 +22,15 @@ public sealed class LocationSetupController(LocationSetupService service) : Cont
     public Task<IReadOnlyList<SetupDocument>> DefaultsHistory(Guid locationId, Guid id, CancellationToken t) => service.DefaultsHistoryAsync(locationId, id, t);
     [HttpGet("api/v1/locations/{locationId:guid}/room-provenance")]
     public Task<IReadOnlyList<SetupDocument>> RoomProvenance(Guid locationId, CancellationToken t) => service.RoomProvenanceAsync(locationId, t);
+    [HttpGet("api/v1/locations/{locationId:guid}/rooms/{roomId:guid}/configuration")]
+    public Task<RoomConfigurationView> RoomConfiguration(Guid locationId, Guid roomId, CancellationToken t) =>
+        service.RoomConfigurationAsync(locationId, roomId, t);
+    [HttpPut("api/v1/locations/{locationId:guid}/rooms/{roomId:guid}/configuration")]
+    public Task<RoomConfigurationView> UpdateRoomConfiguration(Guid locationId, Guid roomId, RoomConfigurationEdit input, CancellationToken t) =>
+        service.UpdateRoomConfigurationAsync(locationId, roomId, input, t);
+    [HttpPost("api/v1/locations/{locationId:guid}/room-defaults/{id:guid}/asset-requirements")]
+    public Task<RoomAssetRequirementsResult> UpdateRoomAssetRequirements(Guid locationId, Guid id, RoomAssetRequirementsEdit input, CancellationToken t) =>
+        service.UpdateRoomAssetRequirementsAsync(locationId, id, input, t);
     [HttpPost("api/v1/locations/{locationId:guid}/configured-rooms")]
     public Task<BulkRoomResult> CreateRooms(Guid locationId, ConfiguredRoomsInput input, CancellationToken t) => service.CreateConfiguredRoomsAsync(locationId, input, RequestKey(), t);
     [HttpGet("api/v1/locations/{locationId:guid}/setup-metadata")]

@@ -62,6 +62,19 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     public Task<bool> AnyAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken token) where T : class =>
         db.Set<T>().AsNoTracking().AnyAsync(predicate, token);
 
+    public Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token)
+    {
+        var contracts = db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId &&
+            (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal || c.Kind == ContractKind.Holding));
+        // The archived persistence model has no holding approval metadata.
+        return db is Compact24DbContext
+            ? contracts.AnyAsync(c => c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning ||
+                c.Status == ContractStatus.PendingActivation ||
+                c.Kind == ContractKind.Holding && c.Status == ContractStatus.Draft && c.ApprovedAt != null, token)
+            : contracts.AnyAsync(c => c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning ||
+                c.Status == ContractStatus.PendingActivation, token);
+    }
+
     public async Task<PagedResult<TDto>> ListAsync<T, TDto>(Expression<Func<T, bool>> predicate,
         Expression<Func<T, TDto>> projection, PropertyQuery query, Guid? staffId, DateOnly today,
         CancellationToken token) where T : AuditableEntity

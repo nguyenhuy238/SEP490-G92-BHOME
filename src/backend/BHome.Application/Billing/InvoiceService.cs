@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BHome.Application.IdentityAccess;
+using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
@@ -7,8 +8,8 @@ using BHome.Domain.PropertyManagement;
 
 namespace BHome.Application.Billing;
 
-public sealed class InvoiceService(IInvoiceRepository repository, PropertyService properties, ICurrentUser user, TimeProvider clock, IBillingAutomationSchedules? automation = null,
-    IUtilityBilling? utilities = null, IFixedChargeCoverage? fixedCoverage = null)
+public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser user, TimeProvider clock, IBillingAutomationSchedules? automation = null,
+    IFixedChargeCoverage? fixedCoverage = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new InvoiceException(401, "authentication_required");
     private bool Owner => user.IsInRole(Roles.Owner);
@@ -49,7 +50,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
             if ((s?.Version ?? 0) != x.ExpectedVersion) throw new InvoiceException(409, "billing_schedule_changed");
             if (s is null) { s = new BillingSchedule { LocationId = x.LocationId }; repository.Add(s); }
             else s.Version++;
-            s.RateDate = x.RateDate; s.RentSource = x.RentSource; s.PartialMonth = x.PartialMonth; s.Rounding = x.Rounding;
+            s.RateDate = x.RateDate; s.RentSource = BillingRentSource.RepresentativeContract; s.PartialMonth = x.PartialMonth; s.Rounding = x.Rounding;
             s.DraftDay = x.DraftDay; s.DraftMonthOffset = x.DraftMonthOffset;
             s.FinalDay = x.FinalDay; s.FinalMonthOffset = x.FinalMonthOffset;
             s.DueDay = x.DueDay; s.DueMonthOffset = x.DueMonthOffset;
@@ -200,17 +201,15 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
             invoice.Recipients.Add(new InvoiceRecipient { InvoiceId = invoice.Id, TenantUserId = tenantId });
         var occupiedDays = Enumerable.Range(0, end.Day).Count(day => occupants.Any(o => o.Contract.StartDate <= start.AddDays(day) &&
             (o.Contract.ActualEndDate ?? o.Contract.EndDate) >= start.AddDays(day)));
-        var rateDate = schedule.RateDate == BillingRateDate.PeriodStart ? start : end;
-        var prices = await properties.ResolvePricesAsync(invoice.RoomId, rateDate, t);
+        var people = PersonMonthOccupancy.Read(start, occupants.Select(o => o.Contract));
         var missing = new List<string>();
         if (occupants.Any(o => !o.ContactsComplete)) missing.Add("occupant_account_email_required");
-        var used = new List<Guid>();
-        foreach (var category in new[] { ChargeCategory.Rent, ChargeCategory.Electricity, ChargeCategory.Water })
-            if (!(category == ChargeCategory.Rent && schedule.RentSource == BillingRentSource.RepresentativeContract) && !prices.Charges.Any(p => p.Category == category)) missing.Add("rate_" + category);
-        var charges = prices.Charges.Where(p => p.Category != ChargeCategory.Rent || schedule.RentSource == BillingRentSource.RoomPolicy).ToList();
-        if (schedule.RentSource == BillingRentSource.RepresentativeContract)
-            charges.Add(new PolicyDto(Guid.Empty, invoice.LocationId, invoice.RoomId, ChargeCategory.Rent, "RENT", "Tiền thuê theo hợp đồng đại diện", ChargingMethod.FixedPerRoomPerMonth,
-                representative.Contract.MonthlyRent, start, end, 0));
+        var charges = ContractBillingPrices.Read(representative.Contract, invoice.LocationId, missing);
+        foreach (var occupancy in occupants.Where(o => o.Contract.Id != representative.Contract.Id))
+        {
+            var other = ContractBillingPrices.Read(occupancy.Contract, invoice.LocationId, missing);
+            if (!ContractBillingPrices.Equivalent(charges, other)) missing.Add("room_contract_price_conflict");
+        }
         foreach (var policy in charges)
         {
             BillingReading? reading = null;
@@ -223,9 +222,10 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
                 // Do not charge another tenancy's usage or silently skip an intermediate month.
                 if ((reading.BillablePrevious ?? reading.Reading.PreviousValue) is null) { missing.Add("baseline_" + policy.Category); continue; }
             }
-            var quantity = metered ? (reading!.BillableConsumption ?? reading.Reading.Consumption)!.Value : 1m;
+            var perPerson = policy.Method == ChargingMethod.FixedPerPersonPerMonth;
+            var quantity = metered ? (reading!.BillableConsumption ?? reading.Reading.Consumption)!.Value : perPerson ? people.ResidentCount : 1m;
             decimal amount;
-            try { amount = InvoiceMath.Amount(policy.Rate, quantity, occupiedDays, end.Day, schedule.PartialMonth, schedule.Rounding, metered); }
+            try { amount = perPerson ? 0 : InvoiceMath.Amount(policy.Rate, quantity, occupiedDays, end.Day, schedule.PartialMonth, schedule.Rounding, metered); }
             catch (Exception error) when (error is OverflowException or ArgumentOutOfRangeException) { throw new InvoiceException(400, "invoice_amount_out_of_range"); }
             UtilityCalculation? utility = null;
             if (metered && reading!.FullyCovered)
@@ -233,22 +233,21 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
                 amount = 0;
                 utility = new(0, JsonSerializer.Serialize(new { kind = "CoveredBySettlement/v1", coverage = reading.CoverageSnapshot }), []);
             }
-            else if (metered && utilities is not null)
+            else if (metered)
             {
-                var type = policy.Category == ChargeCategory.Electricity ? UtilityType.Electricity : UtilityType.Water;
-                utility = reading!.AlreadyBilledQuantity > 0
-                    ? await UtilityIncrementCalculation.CalculateAsync(utilities, invoice.RoomId, type, start, reading.AlreadyBilledQuantity, quantity, reading.PreviousPricingSnapshot, t)
-                    : await utilities.CalculateAsync(invoice.RoomId, type, start, quantity, t);
-                if (utility is not null) { missing.AddRange(utility.MissingInputs); amount = utility.Amount; }
-                else if (reading.AlreadyBilledQuantity > 0 && !UtilityIncrementCalculation.FlatPolicyMatches(reading.PreviousPricingSnapshot, policy.Id, policy.Version, policy.Rate, schedule.Rounding))
+                if (reading!.AlreadyBilledQuantity > 0 && !UtilityIncrementCalculation.FlatPolicyMatches(reading.PreviousPricingSnapshot, policy.Id, policy.Version, policy.Rate, schedule.Rounding))
                     missing.Add("utility_increment_policy_changed");
+                utility = new(amount, ContractBillingPrices.FlatSnapshot(policy, schedule, quantity, amount), []);
             }
-            else if (!metered && fixedCoverage is not null)
+            else if (!metered && (fixedCoverage is not null || perPerson))
             {
-                var prior = await fixedCoverage.ReadAsync(invoice.RoomId, start, policy.ChargeCode, t);
-                if (prior.Count > 0)
+                if (perPerson && fixedCoverage is null) missing.Add("fixed_charge_coverage_unavailable");
+                var prior = fixedCoverage is null ? [] : await fixedCoverage.ReadAsync(invoice.RoomId, start, policy.ChargeCode, t);
+                if (prior.Count > 0 || perPerson)
                 {
-                    var fixedResult = FixedChargeCalculation.Calculate(start, policy, schedule, representative.Contract.SnapshotHash, occupiedDays, prior);
+                    FixedChargeResult fixedResult;
+                    try { fixedResult = FixedChargeCalculation.Calculate(start, policy, schedule, representative.Contract.SnapshotHash, occupiedDays, prior, people); }
+                    catch (Exception error) when (error is OverflowException or ArgumentOutOfRangeException) { throw new InvoiceException(400, "invoice_amount_out_of_range"); }
                     missing.AddRange(fixedResult.MissingInputs);
                     amount = fixedResult.Amount ?? 0;
                     utility = new(amount, JsonSerializer.Serialize(new { kind = "FixedChargeCoverage/v1", source = fixedResult.Source }), fixedResult.MissingInputs);
@@ -262,7 +261,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
                 Name = policy.Name,
                 PolicyId = policy.Id == Guid.Empty ? null : policy.Id,
                 PolicyVersion = policy.Id == Guid.Empty ? null : policy.Version,
-                RateDate = rateDate,
+                RateDate = policy.EffectiveFrom,
                 Rate = policy.Rate,
                 Quantity = quantity,
                 OccupiedDays = occupiedDays,
@@ -273,7 +272,6 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
                 PreviousReading = reading?.FullyCovered == true ? null : reading?.BillablePrevious ?? reading?.Reading.PreviousValue,
                 ConfirmedReading = reading?.FullyCovered == true ? null : reading?.Reading.ConfirmedValue
             });
-            if (policy.Id != Guid.Empty) used.Add(policy.Id);
         }
         foreach (var correction in (await repository.DraftCorrectionsAsync(correctionsFor ?? invoice.Id, t)).GroupBy(d => d.ChargeCode).Select(g => g.OrderByDescending(d => d.Sequence).First()))
         {
@@ -285,7 +283,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, PropertyServic
         invoice.MissingInputs = missing.Distinct().ToArray();
         invoice.Total = invoice.Lines.Sum(l => l.Amount);
         if (invoice.Total >= 1_000_000_000_000_000_000m) throw new InvoiceException(400, "invoice_amount_out_of_range");
-        await repository.RecordPolicyUsageAsync(used.Distinct().ToArray(), clock.GetUtcNow(), t);
+        await repository.RecordPolicyUsageAsync(charges.Where(c => c.Id != Guid.Empty).Select(c => c.Id).Distinct().ToArray(), clock.GetUtcNow(), t);
     }
 
     internal static InvoiceView View(Invoice i) => new(i.Id, i.RoomId, i.LocationId, i.RoomNumber, i.LocationName,

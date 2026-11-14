@@ -112,7 +112,7 @@ export function ContractPreparation() {
         {form.data.type === 'main' && (
           <Input
             label="Tiền thuê/tháng theo chính sách (đ) *"
-            numeric
+            money
             value={form.data.rent}
             onChange={(value) => form.change('rent', value)}
           />
@@ -123,7 +123,7 @@ export function ContractPreparation() {
               ? 'Tiền cọc giữ chỗ theo chính sách (đ) *'
               : 'Tiền cọc an ninh theo chính sách (đ) *'
           }
-          numeric
+          money
           value={form.data.deposit}
           onChange={(value) => form.change('deposit', value)}
         />
@@ -460,7 +460,7 @@ export function TaskDetail() {
           <>
             <Input
               label="Dự toán chi phí đề xuất (đ) *"
-              numeric
+              money
               value={form.data.cost}
               onChange={(value) => form.change('cost', value)}
             />

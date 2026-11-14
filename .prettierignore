@@ -4,6 +4,8 @@
 **/obj
 .tools
 .tmp
+# Vendored Impeccable development tool; preserve upstream files.
+.codex/skills/impeccable/**
 **/.vs
 **/package-lock.json
 **/Migrations

@@ -33,7 +33,8 @@ internal static class ContractConfiguration
             e.Property(c => c.DraftVersion).HasDefaultValue(1).IsConcurrencyToken();
             e.Ignore(c => c.HoldingExpiryAt); e.Ignore(c => c.ReservedCapacity);
             e.Ignore(c => c.ApprovedByUserId); e.Ignore(c => c.ApprovedAt); e.Ignore(c => c.ApprovalReason);
-            e.Ignore(c => c.AgreedPriceSnapshot); e.Ignore(c => c.PriceLockTrigger); e.Ignore(c => c.PriceLockedAt);
+            e.Property(c => c.AgreedPriceSnapshot).HasColumnType("jsonb").HasDefaultValue("{}");
+            e.Property(c => c.PriceLockTrigger).HasMaxLength(100); e.Property(c => c.PriceLockedAt);
             e.Ignore(c => c.ConvertedMainContractId);
             e.Ignore(c => c.LifecycleActorId); e.Ignore(c => c.LifecycleAt); e.Ignore(c => c.LifecycleReason);
             e.HasIndex(c => c.RoomId).HasFilter("\"Status\" = 3").HasDatabaseName("IX_Contract_ActiveRoom");

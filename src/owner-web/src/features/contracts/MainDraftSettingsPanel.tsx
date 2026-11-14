@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -219,17 +220,13 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
                       setValue((v) => v && { ...v, effectiveTo: e.target.value || null })
                     }
                   />
-                  <TextField
+                  <MoneyField
+                    maxRawLength={18}
                     label="Tiền cọc đảm bảo (VND)"
                     value={value.securityDeposit}
                     disabled={busy}
-                    slotProps={{
-                      htmlInput: { inputMode: 'numeric', pattern: '[0-9]+', maxLength: 18 },
-                    }}
                     required
-                    onChange={(e) =>
-                      setValue((v) => v && { ...v, securityDeposit: e.target.value })
-                    }
+                    onValueChange={(raw) => setValue((v) => v && { ...v, securityDeposit: raw })}
                   />
                   <TextField
                     label="Hình thức / chính sách thanh toán"

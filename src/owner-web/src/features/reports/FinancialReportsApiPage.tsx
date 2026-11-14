@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { Alert, Button, LinearProgress, Paper, Stack, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  LinearProgress,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
@@ -24,6 +33,7 @@ export function FinancialReportsApiPage() {
     [to, setTo] = useState(''),
     [location, setLocation] = useState('');
   const [filter, setFilter] = useState<ReportFilter | null>(null);
+  const [reportScope, setReportScope] = useState('');
   const [room, setRoom] = useState('');
   const [dateError, setDateError] = useState(false);
   const locations = useQuery({
@@ -57,76 +67,86 @@ export function FinancialReportsApiPage() {
   };
   return (
     <>
-      <PageHeader
-        title="Báo cáo kinh doanh & Hoàn vốn"
-        subtitle="Chỉ tiêu quản trị từ hóa đơn, phân bổ tiền đã xác minh và chi phí thực tế trên máy chủ."
-      />
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Đây là chỉ tiêu quản trị nội bộ. Doanh thu phát hành, tiền thực thu và tiền cọc được tách
-        riêng. Nợ và số phòng đang ở phản ánh trạng thái tại lúc tải báo cáo.
-      </Alert>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!from || !to || from > to) {
-            setDateError(true);
-            return;
-          }
-          setDateError(false);
-          setFilter({
-            from,
-            to,
-            locationId: location || undefined,
-            ...(room ? { roomId: room } : {}),
-          });
-        }}
-      >
-        <FilterToolbar>
-          <TextField
-            required
-            label="Từ ngày"
-            type="date"
-            value={from}
-            slotProps={{ inputLabel: { shrink: true } }}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-          <TextField
-            required
-            label="Đến ngày"
-            type="date"
-            value={to}
-            error={dateError}
-            helperText={dateError ? 'Chọn khoảng ngày hợp lệ.' : undefined}
-            slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: from } }}
-            onChange={(e) => setTo(e.target.value)}
-          />
-          <OptionPicker
-            label="Cơ sở"
-            value={location}
-            options={locations.data ?? []}
-            loading={locations.isPending}
-            error={!!locations.error}
-            emptyLabel="Toàn chuỗi"
-            change={(id) => {
-              setLocation(id);
-              setRoom('');
-            }}
-          />
-          <OptionPicker
-            label="Phòng"
-            value={room}
-            options={rooms.data ?? []}
-            disabled={!location}
-            loading={!!location && rooms.isPending}
-            error={!!rooms.error}
-            emptyLabel={location ? 'Tất cả phòng' : 'Chọn cơ sở trước'}
-            change={setRoom}
-          />
-          <Button type="submit" variant="contained" disabled={report.isFetching}>
-            Xem báo cáo
-          </Button>
-        </FilterToolbar>
-      </form>
+      <PageHeader title="Báo cáo kinh doanh & Hoàn vốn" />
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!from || !to || from > to) {
+              setDateError(true);
+              return;
+            }
+            setDateError(false);
+            setReportScope(
+              [
+                location
+                  ? (locations.data?.find((item) => item.id === location)?.label ?? location)
+                  : 'Toàn chuỗi',
+                room ? (rooms.data?.find((item) => item.id === room)?.label ?? room) : '',
+              ]
+                .filter(Boolean)
+                .join(' · '),
+            );
+            setFilter({
+              from,
+              to,
+              locationId: location || undefined,
+              ...(room ? { roomId: room } : {}),
+            });
+          }}
+        >
+          <FilterToolbar>
+            <TextField
+              required
+              label="Từ ngày"
+              type="date"
+              value={from}
+              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+            <TextField
+              required
+              label="Đến ngày"
+              type="date"
+              value={to}
+              error={dateError}
+              helperText={dateError ? 'Chọn khoảng ngày hợp lệ.' : undefined}
+              slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: from } }}
+              onChange={(e) => setTo(e.target.value)}
+            />
+            <OptionPicker
+              label="Cơ sở"
+              value={location}
+              options={locations.data ?? []}
+              loading={locations.isPending}
+              error={!!locations.error}
+              emptyLabel="Toàn chuỗi"
+              change={(id) => {
+                setLocation(id);
+                setRoom('');
+              }}
+            />
+            <OptionPicker
+              label="Phòng"
+              value={room}
+              options={rooms.data ?? []}
+              disabled={!location}
+              loading={!!location && rooms.isPending}
+              error={!!rooms.error}
+              emptyLabel={location ? 'Tất cả phòng' : 'Chọn cơ sở trước'}
+              change={setRoom}
+            />
+            <Button type="submit" variant="contained" disabled={report.isFetching}>
+              Xem báo cáo
+            </Button>
+          </FilterToolbar>
+        </form>
+      </Paper>
+      {!filter && !locations.error && (
+        <Typography color="text.secondary" variant="body2">
+          Chọn kỳ và phạm vi để xem báo cáo từ máy chủ.
+        </Typography>
+      )}
       {(locations.isPending || report.isFetching) && <LinearProgress />}
       {(locations.error || rooms.error || report.error) && (
         <Alert
@@ -148,6 +168,37 @@ export function FinancialReportsApiPage() {
       )}
       {!report.error && value && (
         <Stack spacing={2}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            useFlexGap
+            spacing={1}
+            sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h2" component="h2">
+                Kỳ báo cáo: {filter && displayContractDate(filter.from)} –{' '}
+                {filter && displayContractDate(filter.to)}
+              </Typography>
+              <Typography variant="body2">Phạm vi: {reportScope}</Typography>
+              <Typography color="text.secondary" variant="caption">
+                Ảnh chụp dữ liệu:{' '}
+                {value.snapshotAt ? formatInstant(value.snapshotAt) : 'Chưa có thời điểm'}
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              sx={{ flexShrink: 0 }}
+              onClick={() =>
+                downloadFinance(
+                  reportCsv(value),
+                  'bao-cao-kinh-doanh.csv',
+                  'text/csv;charset=utf-8',
+                )
+              }
+            >
+              Tải CSV số liệu máy chủ
+            </Button>
+          </Stack>
           <KPIGrid
             items={[
               { label: 'Hóa đơn / khoản phải thu', value: formatFinanceMoney(value.total.issued) },
@@ -163,19 +214,10 @@ export function FinancialReportsApiPage() {
             ]}
           />
           <FinancialAmountChart totals={value.total} />
-          <Typography>
-            Ảnh chụp dữ liệu:{' '}
-            {value.snapshotAt ? formatInstant(value.snapshotAt) : 'Chưa có thời điểm'}
-          </Typography>
-          <Button
-            onClick={() =>
-              downloadFinance(reportCsv(value), 'bao-cao-kinh-doanh.csv', 'text/csv;charset=utf-8')
-            }
-          >
-            Tải CSV số liệu máy chủ
-          </Button>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6">Toàn bộ phạm vi đã chọn</Typography>
+          <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0, overflowWrap: 'anywhere' }}>
+            <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
+              Toàn bộ phạm vi đã chọn
+            </Typography>
             <Totals value={value.total} />
             <SettlementSources value={value.settlementSources} />
             <Typography>
@@ -190,82 +232,101 @@ export function FinancialReportsApiPage() {
               cọc làm giảm nợ và được trình bày riêng, không ghi thành tiền chuyển khoản mới.
             </Alert>
           </Paper>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6">Lấp đầy theo kỳ</Typography>
-            {value.historicalOccupancy?.from && value.historicalOccupancy.to && (
-              <Typography>
-                Kỳ lịch sử: {displayContractDate(value.historicalOccupancy.from)} –{' '}
-                {displayContractDate(value.historicalOccupancy.to)}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'repeat(2, minmax(0, 1fr))' },
+              gap: 1.5,
+            }}
+          >
+            <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0, overflowWrap: 'anywhere' }}>
+              <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
+                Lấp đầy theo kỳ
               </Typography>
-            )}
-            {value.historicalOccupancy?.status === 'Complete' ? (
-              <>
+              {value.historicalOccupancy?.from && value.historicalOccupancy.to && (
                 <Typography>
-                  Ngày-phòng có người ở: {value.historicalOccupancy.occupiedRoomDays}
+                  Kỳ lịch sử: {displayContractDate(value.historicalOccupancy.from)} –{' '}
+                  {displayContractDate(value.historicalOccupancy.to)}
                 </Typography>
-                <Typography>
-                  Ngày-phòng có thể cho thuê: {value.historicalOccupancy.rentableRoomDays}
-                </Typography>
-                <Typography>
-                  Tỷ lệ lấp đầy trong kỳ:{' '}
-                  {value.historicalOccupancy.occupancyRate === null
-                    ? 'Chưa xác định (không có ngày-phòng có thể cho thuê)'
-                    : `${value.historicalOccupancy.occupancyRate.toLocaleString('vi-VN')}%`}
-                </Typography>
-              </>
-            ) : (
-              <Alert severity="info">
-                {occupancyReasons[value.historicalOccupancy?.status ?? ''] ??
-                  'Chưa có dữ liệu lấp đầy lịch sử từ máy chủ.'}
-              </Alert>
-            )}
-          </Paper>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6">Vốn & Thu hồi</Typography>
-            <Typography>
-              Đầu tư đến cuối kỳ: {formatFinanceMoney(value.capital.initialInvestment)}
-            </Typography>
-            <Typography>
-              Tiền thu hồi lũy kế:{' '}
-              {value.capital.netRecovery === null
-                ? 'Chưa xác định'
-                : formatFinanceMoney(value.capital.netRecovery)}
-            </Typography>
-            <Typography>
-              Vốn chưa thu hồi:{' '}
-              {value.capital.remainingCapital === null
-                ? 'Chưa xác định'
-                : formatFinanceMoney(value.capital.remainingCapital)}
-            </Typography>
-            <Typography>
-              Tỷ lệ thu hồi:{' '}
-              {value.capital.recoveryPercent === null
-                ? 'Chưa xác định'
-                : `${value.capital.recoveryPercent}%`}
-            </Typography>
-            <Typography>
-              Ước tính số tháng còn lại: {value.capital.estimatedRemainingMonths ?? 'Chưa xác định'}
-            </Typography>
-            {value.capital.unavailableReason && (
-              <Alert severity="info">
-                {reasons[value.capital.unavailableReason] || 'Chưa đủ dữ liệu tính hoàn vốn.'}
-              </Alert>
-            )}
-          </Paper>
+              )}
+              {value.historicalOccupancy?.status === 'Complete' ? (
+                <>
+                  <Typography>
+                    Ngày-phòng có người ở: {value.historicalOccupancy.occupiedRoomDays}
+                  </Typography>
+                  <Typography>
+                    Ngày-phòng có thể cho thuê: {value.historicalOccupancy.rentableRoomDays}
+                  </Typography>
+                  <Typography>
+                    Tỷ lệ lấp đầy trong kỳ:{' '}
+                    {value.historicalOccupancy.occupancyRate === null
+                      ? 'Chưa xác định (không có ngày-phòng có thể cho thuê)'
+                      : `${value.historicalOccupancy.occupancyRate.toLocaleString('vi-VN')}%`}
+                  </Typography>
+                </>
+              ) : (
+                <Alert severity="info">
+                  {occupancyReasons[value.historicalOccupancy?.status ?? ''] ??
+                    'Chưa có dữ liệu lấp đầy lịch sử từ máy chủ.'}
+                </Alert>
+              )}
+            </Paper>
+            <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0, overflowWrap: 'anywhere' }}>
+              <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
+                Vốn & Thu hồi
+              </Typography>
+              <Typography>
+                Đầu tư đến cuối kỳ: {formatFinanceMoney(value.capital.initialInvestment)}
+              </Typography>
+              <Typography>
+                Tiền thu hồi lũy kế:{' '}
+                {value.capital.netRecovery === null
+                  ? 'Chưa xác định'
+                  : formatFinanceMoney(value.capital.netRecovery)}
+              </Typography>
+              <Typography>
+                Vốn chưa thu hồi:{' '}
+                {value.capital.remainingCapital === null
+                  ? 'Chưa xác định'
+                  : formatFinanceMoney(value.capital.remainingCapital)}
+              </Typography>
+              <Typography>
+                Tỷ lệ thu hồi:{' '}
+                {value.capital.recoveryPercent === null
+                  ? 'Chưa xác định'
+                  : `${value.capital.recoveryPercent}%`}
+              </Typography>
+              <Typography>
+                Ước tính số tháng còn lại:{' '}
+                {value.capital.estimatedRemainingMonths ?? 'Chưa xác định'}
+              </Typography>
+              {value.capital.unavailableReason && (
+                <Alert severity="info">
+                  {reasons[value.capital.unavailableReason] || 'Chưa đủ dữ liệu tính hoàn vốn.'}
+                </Alert>
+              )}
+            </Paper>
+          </Box>
           {value.locations.length === 0 && (
             <Alert severity="info">Chưa có cơ sở trong phạm vi.</Alert>
           )}
           {value.locations.map((l) => (
-            <Paper key={l.locationId} sx={{ p: 2 }}>
-              <Typography variant="h6">{l.locationName}</Typography>
+            <Paper
+              key={l.locationId}
+              variant="outlined"
+              sx={{ p: 1.5, minWidth: 0, overflowWrap: 'anywhere' }}
+            >
+              <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
+                {l.locationName}
+              </Typography>
               <Totals value={l.totals} />
               <SettlementSources value={l.settlementSources} />
             </Paper>
           ))}
           <Typography variant="caption">
-            Số liệu theo ảnh chụp nhất quán trên máy chủ. Dòng tiền thu hồi không tính cọc, giao
-            dịch chưa phân bổ hoặc chuyển khoản mô phỏng. Ước tính dùng dòng tiền bình quân các
-            tháng đã chọn và giữ nguyên giả định đó.
+            Chỉ tiêu quản trị nội bộ. Nợ và số phòng đang ở phản ánh trạng thái lúc tải báo cáo.
+            Dòng tiền thu hồi không tính cọc, giao dịch chưa phân bổ hoặc chuyển khoản mô phỏng. Ước
+            tính dùng dòng tiền bình quân các tháng đã chọn và giữ nguyên giả định đó.
           </Typography>
         </Stack>
       )}
@@ -274,7 +335,13 @@ export function FinancialReportsApiPage() {
 }
 function Totals({ value }: { value: FinanceTotals }) {
   return (
-    <Stack spacing={1}>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2,minmax(0,1fr))' },
+        gap: 0.75,
+      }}
+    >
       <Typography>
         Phòng đang ở hiện tại: {value.occupiedRooms}/{value.totalRooms}
       </Typography>
@@ -289,11 +356,14 @@ function Totals({ value }: { value: FinanceTotals }) {
           ['Dòng tiền vận hành', value.netOperatingCashFlow],
         ] as const
       ).map(([label, amount]) => (
-        <Typography key={label}>
+        <Typography
+          key={label}
+          sx={{ fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}
+        >
           {label}: {amount === null ? 'Chưa xác định' : formatFinanceMoney(amount)}
         </Typography>
       ))}
-    </Stack>
+    </Box>
   );
 }
 function SettlementSources({ value }: { value?: SettlementFinanceSources | null }) {

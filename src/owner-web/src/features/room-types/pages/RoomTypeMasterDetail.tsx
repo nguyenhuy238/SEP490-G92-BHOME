@@ -21,14 +21,17 @@ import { formatBillingDecimal } from '../../../../../../packages/client-core/src
 
 export type LocalRoomDefaults = SetupDocument<LocalRoomDefaultsData>;
 
-function defaultsOrigin(data: LocalRoomDefaultsData) {
+function defaultsOrigin(data: LocalRoomDefaultsData, includeVersion = true) {
   if (data.copiedFromId || data.sourceLocationId)
     return (
       'Sao chép từ cơ sở' +
-      (data.copiedFromVersion != null ? ` · bản ${data.copiedFromVersion}` : '')
+      (includeVersion && data.copiedFromVersion != null ? ` · bản ${data.copiedFromVersion}` : '')
     );
   if (data.sourceId)
-    return 'Nạp từ mẫu chung' + (data.sourceVersion != null ? ` · bản ${data.sourceVersion}` : '');
+    return (
+      'Nạp từ mẫu chung' +
+      (includeVersion && data.sourceVersion != null ? ` · bản ${data.sourceVersion}` : '')
+    );
   return 'Tạo tại cơ sở';
 }
 
@@ -110,17 +113,18 @@ export function RoomTypeMasterDetail({
       sx={{
         display: 'grid',
         gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.25fr) minmax(320px, 0.85fr)' },
-        gap: 2.5,
+        gap: 2,
+        minWidth: 0,
         alignItems: 'start',
       }}
     >
       <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
-        <Stack direction="row" spacing={1} sx={{ p: 2.5, alignItems: 'center' }}>
+        <Stack direction="row" spacing={1} sx={{ p: 1.5, alignItems: 'center' }}>
           <Typography sx={{ fontWeight: 750 }}>Danh sách gợi ý tạo phòng</Typography>
           <Chip size="small" label={total} />
         </Stack>
         <TableContainer>
-          <Table aria-label="Danh sách gợi ý tạo phòng">
+          <Table size="small" aria-label="Danh sách gợi ý tạo phòng">
             <TableHead>
               <TableRow>
                 {['Gợi ý', 'Sức chứa', 'Diện tích'].map((title) => (
@@ -133,8 +137,8 @@ export function RoomTypeMasterDetail({
                 <TableRow key={item.id} selected={item.id === selected?.id} hover>
                   <TableCell
                     sx={{
-                      borderLeft: '3px solid',
-                      borderLeftColor: item.id === selected?.id ? 'primary.main' : 'transparent',
+                      minWidth: 0,
+                      overflowWrap: 'anywhere',
                     }}
                   >
                     <Button
@@ -150,7 +154,7 @@ export function RoomTypeMasterDetail({
                       {item.data.name}
                     </Button>
                     <Typography variant="caption" sx={{ display: 'block' }} color="text.secondary">
-                      {defaultsOrigin(item.data)}
+                      {defaultsOrigin(item.data, false)}
                     </Typography>
                   </TableCell>
                   <TableCell>{item.data.defaults.capacity} người</TableCell>
@@ -168,7 +172,7 @@ export function RoomTypeMasterDetail({
           <Stack
             direction="row"
             spacing={2}
-            sx={{ p: 2.5, bgcolor: 'action.hover', alignItems: 'center' }}
+            sx={{ p: 1.5, bgcolor: 'action.hover', alignItems: 'center' }}
           >
             <BedDouble size={26} />
             <Box>
@@ -180,9 +184,9 @@ export function RoomTypeMasterDetail({
               </Typography>
             </Box>
           </Stack>
-          <Stack spacing={2.5} sx={{ p: 2.5 }}>
+          <Stack spacing={2} sx={{ p: 1.5 }}>
             <RoomDefaultsDetails item={selected} />
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
               {canManage && (
                 <Button
                   startIcon={<Pencil size={16} />}

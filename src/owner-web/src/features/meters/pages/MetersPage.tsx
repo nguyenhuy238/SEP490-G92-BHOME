@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   Alert,
+  Box,
   Button,
   LinearProgress,
   MenuItem,
@@ -14,13 +15,17 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
 import { contractError } from '../../../../../../packages/client-core/src/contracts';
-import { PageHeader, FilterToolbar } from '../../../components/common/PortalUI';
+import { PageHeader, FilterToolbar, StatusChip } from '../../../components/common/PortalUI';
+import { formatBillingDecimal } from '../../../../../../packages/client-core/src/invoices';
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { isMockMode } from '../../../services/config';
 import { useMeterApi } from '../useMeterApi';
 import { MeterAssignment } from '../MeterAssignment';
 import { downloadOwnerFile } from '../../../services/ownerDownloads';
 import { OwnerTable } from '../../../components/common/OwnerWorkspace';
+
+const taskStatusLabels = ['Đã giao', 'Đang thực hiện', 'Đã xác nhận', 'Đã hủy', 'Chờ xác minh'];
+const taskStatusLabel = (status: number) => taskStatusLabels[status] ?? 'Trạng thái chưa xác định';
 
 export default function MetersPage() {
   return isMockMode ? <ResourcePage kind="meters" variant="table" /> : <LiveMetersPage />;
@@ -120,13 +125,11 @@ export function LiveMetersPage() {
             }}
           >
             <MenuItem value="">Tất cả trạng thái</MenuItem>
-            {['Đã giao', 'Đang thực hiện', 'Đã xác nhận', 'Đã hủy', 'Chờ xác minh'].map(
-              (label, i) => (
-                <MenuItem key={i} value={String(i)}>
-                  {label}
-                </MenuItem>
-              ),
-            )}
+            {taskStatusLabels.map((label, i) => (
+              <MenuItem key={i} value={String(i)}>
+                {label}
+              </MenuItem>
+            ))}
           </TextField>
           <TextField
             label="Ngày đến hạn"
@@ -157,7 +160,7 @@ export function LiveMetersPage() {
           <Alert severity="info">Chưa có tác vụ ghi chỉ số.</Alert>
         )}
         {!!tasks.data?.length && !tasks.error && (
-          <Paper>
+          <Paper variant="outlined" sx={{ minWidth: 0 }}>
             <OwnerTable
               rows={tasks.data}
               id={(t) => t.id}
@@ -174,11 +177,16 @@ export function LiveMetersPage() {
                   render: (t) =>
                     `${t.billingPeriod?.slice(0, 7) ?? 'Ban đầu / trả phòng'} · ${t.readingDate.split('-').reverse().join('/')}`,
                 },
-                { label: 'Chỉ số trước', render: (t) => t.previousValue ?? 'Thiếu baseline' },
+                {
+                  label: 'Chỉ số trước',
+                  render: (t) =>
+                    t.previousValue == null
+                      ? 'Chưa có chỉ số trước'
+                      : formatBillingDecimal(t.previousValue),
+                },
                 {
                   label: 'Trạng thái',
-                  render: (t) =>
-                    t.status === 2 ? 'Đã xác nhận' : t.status === 3 ? 'Đã hủy' : 'Chờ ghi chỉ số',
+                  render: (t) => <StatusChip label={taskStatusLabel(t.status)} />,
                 },
                 {
                   label: 'Phân công',
@@ -189,7 +197,12 @@ export function LiveMetersPage() {
             />
           </Paper>
         )}
-        <Stack direction="row" spacing={1}>
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+        >
           <Button disabled={page === 1 || tasks.isFetching} onClick={() => setPage(page - 1)}>
             Trang trước
           </Button>
@@ -204,12 +217,17 @@ export function LiveMetersPage() {
             Làm mới
           </Button>
         </Stack>
-        <Stack direction="row" spacing={1}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{ alignItems: { sm: 'center' } }}
+        >
           <TextField
             label="Mã tác vụ cần tra cứu"
             value={taskId}
             onChange={(e) => setTaskId(e.target.value)}
             fullWidth
+            sx={{ maxWidth: { sm: 360 }, minWidth: 0 }}
           />
           <Button
             disabled={!/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(taskId)}
@@ -228,11 +246,17 @@ export function LiveMetersPage() {
           </Alert>
         )}
         {detail.data && (
-          <Paper sx={{ p: 3 }}>
+          <Paper
+            variant="outlined"
+            sx={{ p: { xs: 1.5, sm: 2 }, minWidth: 0, overflowWrap: 'anywhere' }}
+          >
             <Stack spacing={1}>
               <Typography variant="h6">
                 {detail.data.location} · Phòng {detail.data.room}
               </Typography>
+              <Box sx={{ alignSelf: 'flex-start' }}>
+                <StatusChip label={taskStatusLabel(detail.data.status)} />
+              </Box>
               <Typography>
                 {detail.data.meterCode} ·{' '}
                 {detail.data.utilityType === 0 ? 'Điện (kWh)' : 'Nước (m³)'}
@@ -242,7 +266,10 @@ export function LiveMetersPage() {
                 {detail.data.billingPeriod?.slice(0, 7) ?? 'Ban đầu / trả phòng'}
               </Typography>
               <Typography>
-                Chỉ số trước: {detail.data.previousValue ?? 'Chưa có baseline xác nhận'}
+                Chỉ số trước:{' '}
+                {detail.data.previousValue == null
+                  ? 'Chưa có chỉ số đã xác nhận'
+                  : formatBillingDecimal(detail.data.previousValue)}
               </Typography>
               <Typography>
                 Hạn ghi số: {detail.data.dueAt ? formatInstant(detail.data.dueAt) : 'Chưa cấu hình'}
@@ -273,8 +300,15 @@ export function LiveMetersPage() {
               )}
               {reading.data && (
                 <>
-                  <Typography>Chỉ số xác nhận: {reading.data.confirmedValue}</Typography>
-                  <Typography>Tiêu thụ: {reading.data.consumption ?? 'Chỉ số ban đầu'}</Typography>
+                  <Typography>
+                    Chỉ số xác nhận: {formatBillingDecimal(reading.data.confirmedValue)}
+                  </Typography>
+                  <Typography>
+                    Tiêu thụ:{' '}
+                    {reading.data.consumption == null
+                      ? 'Chỉ số ban đầu'
+                      : formatBillingDecimal(reading.data.consumption)}
+                  </Typography>
                   <Typography>Xác nhận lúc: {formatInstant(reading.data.confirmedAt)}</Typography>
                   <Typography variant="caption">Mã chỉ số: {reading.data.id}</Typography>
                   <Button
