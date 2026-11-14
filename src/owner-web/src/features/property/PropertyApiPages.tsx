@@ -498,7 +498,6 @@ export function PropertyApiPage({
             <RoomFloorCards
               locationId={location}
               rooms={query.data.items.filter((row): row is RoomConfiguration => 'capacity' in row)}
-              total={query.data.totalCount}
               provenance={provenance.data}
               inspect={setInspectedRoom}
               edit={canManage ? edit : undefined}

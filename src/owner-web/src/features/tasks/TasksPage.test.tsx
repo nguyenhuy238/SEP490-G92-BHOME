@@ -181,6 +181,48 @@ it('creates an interval template with explicit Vietnam run time', async () => {
   });
 });
 
+it('creates a calendar weekly template with a matching Vietnam weekday', async () => {
+  mount();
+  fireEvent.click(screen.getByRole('tab', { name: 'Lịch công việc định kỳ' }));
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Cơ sở/ }));
+  fireEvent.click(await screen.findByRole('option', { name: location.name }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Tạo lịch định kỳ' }));
+  const dialog = screen.getByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText(/Tên công việc/), {
+    target: { value: 'Kiểm tra tuần' },
+  });
+  fireEvent.change(within(dialog).getByLabelText(/Yêu cầu/), {
+    target: { value: 'Kiểm tra khu chung' },
+  });
+  fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Chu kỳ' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Hằng tuần' }));
+  fireEvent.change(within(dialog).getByLabelText(/Thời điểm sinh việc/), {
+    target: { value: '2099-02-01T08:00' },
+  });
+  expect(within(dialog).getByRole('button', { name: 'Lưu mẫu' })).toBeDisabled();
+  // 2099-02-02 is Monday (ISO day 1).
+  fireEvent.change(within(dialog).getByLabelText(/Thời điểm sinh việc/), {
+    target: { value: '2099-02-02T08:00' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu mẫu' }));
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      '/api/v1/operational-task-templates',
+      expect.objectContaining({ method: 'POST' }),
+    ),
+  );
+  const [, init] = mocks.request.mock.calls.find(
+    ([path, init]) => path === '/api/v1/operational-task-templates' && init?.method === 'POST',
+  )!;
+  expect(JSON.parse(init.body)).toMatchObject({
+    scheduleType: 'Weekly',
+    intervalDays: 7,
+    dayOfWeek: 1,
+    dayOfMonth: null,
+    nextRunAt: '2099-02-02T01:00:00.000Z',
+  });
+});
+
 it('uses server counts for summary and status=4 for verification, preserving other filters', async () => {
   const base = mocks.request.getMockImplementation()!;
   mocks.request.mockImplementation((path: string, init?: RequestInit) =>
@@ -491,7 +533,7 @@ it('rework removes a task from the pending list without deleting evidence', asyn
     expect(screen.queryByRole('button', { name: 'Xác nhận' })).not.toBeInTheDocument(),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết' }));
-  expect(await screen.findByText('Không có công việc phù hợp.')).toBeInTheDocument();
+  expect(await screen.findByText('Không có công việc chờ nghiệm thu.')).toBeInTheDocument();
   expect(
     mocks.request.mock.calls.some(
       ([path, init]) => path.includes('/evidence') && init?.method === 'DELETE',

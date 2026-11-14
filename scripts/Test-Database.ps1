@@ -22,7 +22,15 @@ $previous = [Environment]::GetEnvironmentVariable('ConnectionStrings__Database',
 try {
     [Environment]::SetEnvironmentVariable('ConnectionStrings__Database', $connection, 'Process')
     Push-Location $repositoryRoot
-    try { dotnet run --project tools/BHome.DatabaseCheck; $result = $LASTEXITCODE }
+    try {
+        # Visual Studio may be running the API's Debug binaries. Build and execute
+        # the probe in isolation, using this checkout's current schema reference.
+        $artifacts = Join-Path $repositoryRoot '.tools/database-check'
+        dotnet build tools/BHome.DatabaseCheck -c Release --artifacts-path $artifacts --verbosity quiet
+        if ($LASTEXITCODE -ne 0) { throw 'Read-only database probe build failed.' }
+        dotnet (Join-Path $artifacts 'bin/BHome.DatabaseCheck/release/BHome.DatabaseCheck.dll')
+        $result = $LASTEXITCODE
+    }
     finally { Pop-Location }
 }
 finally { [Environment]::SetEnvironmentVariable('ConnectionStrings__Database', $previous, 'Process') }

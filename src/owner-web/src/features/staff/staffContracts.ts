@@ -17,6 +17,43 @@ export interface Staff {
   accountVersion: string;
   employment: Employment | null;
 }
+export interface EmploymentHistoryEntry {
+  action: string;
+  actorId: string;
+  occurredAt: string;
+  reason: string | null;
+  before: Employment | null;
+  after: Employment | null;
+}
+export interface EmploymentPeriod extends Employment {
+  id: string;
+  history: EmploymentHistoryEntry[];
+}
+export interface StaffResponsibilities {
+  canDeactivate: boolean;
+  assignments: Array<{
+    id: string;
+    locationId: string;
+    locationName: string;
+    startDate: string;
+    endDate: string;
+  }>;
+  tasks: Array<{
+    id: string;
+    locationId: string;
+    locationName: string;
+    title: string;
+    taskType: string;
+    status: string;
+  }>;
+  moveOuts: Array<{
+    contractId: string;
+    locationId: string;
+    locationName: string;
+    roomId: string;
+    roomNumber: string;
+  }>;
+}
 export interface StaffAssignment {
   id: string;
   staffUserId: string;

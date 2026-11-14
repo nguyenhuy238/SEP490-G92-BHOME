@@ -62,6 +62,17 @@ function dateLabel(date: string | null | undefined) {
   return date?.split('-').reverse().join('/') ?? 'Không thời hạn';
 }
 
+function policySearch(search: string, category: number) {
+  const value = search.trim();
+  if (category !== 0) return value;
+  // The server stores generated room names as "Rent <number>" and searches
+  // the stored name/code. Searching the Vietnamese display label must still
+  // find these records before server-side pagination.
+  const match = /^giá thuê(?:\s+(.*))?$/iu.exec(value);
+  if (!match) return value;
+  return !match[1] || match[1].toLocaleLowerCase('vi') === 'phòng' ? 'RENT' : match[1];
+}
+
 export function LocationPricingWorkspace({
   locationId,
   initialTab = 0,
@@ -85,6 +96,7 @@ export function LocationPricingWorkspace({
   const today = todayVietnam();
   const showPolicies = tab === 0 || tab === 1 || (tab === 3 && utilityMode !== 'workspace');
   const category = tab === 0 ? 0 : tab === 1 ? 3 : utilityMode === 'water' ? 2 : 1;
+  const searchValue = policySearch(search, category);
   const policies = useQuery({
     queryKey: [
       'billing-policies',
@@ -98,7 +110,7 @@ export function LocationPricingWorkspace({
     ],
     queryFn: ({ signal }) =>
       api.request<Page<ScopedPolicy>>(
-        `/api/v1/billing-policies?${new URLSearchParams({ locationId, page: String(page + 1), pageSize: '20', chargeCategory: String(category), ...(search.trim() ? { search: search.trim() } : {}), ...(effectiveOnly ? { effectiveOn: today } : {}) })}`,
+        `/api/v1/billing-policies?${new URLSearchParams({ locationId, page: String(page + 1), pageSize: '20', chargeCategory: String(category), ...(searchValue ? { search: searchValue } : {}), ...(effectiveOnly ? { effectiveOn: today } : {}) })}`,
         { signal },
       ),
     enabled: showPolicies,
@@ -122,6 +134,19 @@ export function LocationPricingWorkspace({
       return rooms.data?.find((room) => room.id === policy.roomId)?.label ?? 'Phòng riêng';
     if (policy.roomTypeId) return 'Loại phòng (cấu hình cũ)';
     return 'Toàn cơ sở';
+  }
+  function listPolicyName(policy: ScopedPolicy) {
+    // Translate the exact generated room-rent label only. Keep custom names and
+    // the persisted name used by the editor, including historical room labels.
+    const roomLabel = policy.roomId && rooms.data?.find((room) => room.id === policy.roomId)?.label;
+    if (
+      policy.category === 0 &&
+      policy.chargeCode === 'RENT' &&
+      roomLabel &&
+      policy.name === `Rent ${roomLabel}`
+    )
+      return `Giá thuê ${roomLabel}`;
+    return policyName(policy);
   }
   return (
     <Stack spacing={2} sx={{ minWidth: 0 }}>
@@ -276,7 +301,19 @@ export function LocationPricingWorkspace({
           ) : policies.error ? (
             <ErrorState error={policies.error} retry={() => void policies.refetch()} />
           ) : (
-            <Paper variant="outlined">
+            <Paper
+              variant="outlined"
+              sx={{
+                '& .MuiTableBody-root .MuiTableCell-root': {
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                  py: 1.25,
+                },
+                '& .MuiTableBody-root > .MuiTableRow-root:last-child .MuiTableCell-root': {
+                  borderBottom: 0,
+                },
+              }}
+            >
               {!policies.data.items.length ? (
                 <LocationEmpty
                   title="Chưa có khoản thu phù hợp"
@@ -295,34 +332,20 @@ export function LocationPricingWorkspace({
                     {
                       label: 'Khoản thu',
                       render: (policy) => (
-                        <>
-                          <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-                            {policyName(policy)}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {policy.chargeCode}
-                          </Typography>
-                        </>
+                        <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
+                          {listPolicyName(policy)}
+                        </Typography>
                       ),
                     },
                     {
                       label: 'Phạm vi',
                       render: (policy) => (
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          label={scopeLabel(policy)}
-                          sx={{
-                            fontWeight: 600,
-                            maxWidth: '100%',
-                            height: 'auto',
-                            '& .MuiChip-label': {
-                              whiteSpace: 'normal',
-                              overflowWrap: 'anywhere',
-                              py: 0.25,
-                            },
-                          }}
-                        />
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}
+                        >
+                          {scopeLabel(policy)}
+                        </Typography>
                       ),
                     },
                     {

@@ -291,7 +291,7 @@ export default function FinanceHomePage() {
             }}
           >
             {billingSteps.map((step, index) => (
-            <TaskCard task={step} number={index + 1} prominent={index === 2} key={step.to} />
+              <TaskCard task={step} number={index + 1} prominent={index === 2} key={step.to} />
             ))}
           </Box>
         </Box>

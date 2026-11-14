@@ -298,6 +298,61 @@ it('repairs only the known malformed RENT display across the list, detail, edito
   expect(state.request.mock.calls.some(([, init]) => init?.method)).toBe(false);
 });
 
+it('localizes only the exact generated rent name, hides redundant codes and preserves the stored policy', async () => {
+  const rent = {
+    id: 'generated-rent',
+    locationId: 'location',
+    roomId: 'room',
+    category: 0,
+    chargeCode: 'RENT',
+    name: 'Rent P.101',
+    method: 0,
+    rate: '2200000',
+    effectiveFrom: '2099-01-01',
+    effectiveTo: null,
+    version: 1,
+  };
+  const custom = { ...rent, id: 'custom-rent', name: 'Rent P.101 ưu đãi' };
+  state.request.mockImplementation(async (path: string) =>
+    path.endsWith('/rooms')
+      ? [{ id: 'room', label: 'P.101' }]
+      : { items: [rent, custom], totalCount: 2 },
+  );
+  mount(<LocationPricingWorkspace locationId="location" />);
+  const row = await screen.findByRole('row', { name: /Giá thuê P\.101/ });
+  expect(within(row).getByText('2.200.000 đ')).toBeInTheDocument();
+  expect(within(row).getByText('P.101')).toBeInTheDocument();
+  expect(within(row).queryByText('RENT', { exact: true })).not.toBeInTheDocument();
+  expect(screen.getByText(custom.name)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Tìm khoản thu'), { target: { value: 'Giá thuê P.101' } });
+  await waitFor(() =>
+    expect(
+      state.request.mock.calls.some(
+        ([path]) => new URLSearchParams(path.split('?')[1]).get('search') === 'P.101',
+      ),
+    ).toBe(true),
+  );
+  fireEvent.click(
+    within(await screen.findByRole('row', { name: /Giá thuê P\.101/ })).getByRole('button', {
+      name: 'Chi tiết',
+    }),
+  );
+  const detail = within(await screen.findByRole('dialog'));
+  expect(detail.getByText('Mã khoản thu: RENT')).toBeInTheDocument();
+  expect(detail.getByRole('heading', { name: rent.name })).toBeInTheDocument();
+  fireEvent.click(detail.getByRole('button', { name: 'Đóng' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(
+    within(await screen.findByRole('row', { name: /Giá thuê P\.101/ })).getByRole('button', {
+      name: 'Tạo giá kế tiếp',
+    }),
+  );
+  expect(within(await screen.findByRole('dialog')).getByLabelText(/Tên khoản thu/)).toHaveValue(
+    rent.name,
+  );
+  expect(state.request.mock.calls.some(([, init]) => init?.method)).toBe(false);
+});
+
 it('keeps a service fee name untouched and shows the exact per-person monthly unit', async () => {
   state.request.mockImplementation(async (path: string) =>
     path.endsWith('/rooms')
@@ -322,10 +377,11 @@ it('keeps a service fee name untouched and shows the exact per-person monthly un
         },
   );
   mount(<LocationPricingWorkspace locationId="location" initialTab={1} />);
-  const row = await screen.findByRole('row', { name: /PERSON_FEE/ });
+  const row = await screen.findByRole('row', { name: /Gi\? thu\? ph\?ng/ });
   expect(within(row).getByText('Gi? thu? ph?ng')).toBeInTheDocument();
   expect(within(row).getByText('120.000,1251 đ')).toBeInTheDocument();
   expect(within(row).getByText('/người/tháng')).toBeInTheDocument();
+  expect(within(row).queryByText('PERSON_FEE')).not.toBeInTheDocument();
   fireEvent.click(within(row).getByRole('button', { name: 'Tạo giá kế tiếp' }));
   const dialog = within(await screen.findByRole('dialog'));
   expect(dialog.getByLabelText(/Tên khoản thu/)).toHaveValue('Gi? thu? ph?ng');

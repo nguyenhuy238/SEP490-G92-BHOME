@@ -34,7 +34,13 @@ export function StaffAssignments() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const staffId = params.get('staffUserId') ?? '';
-  const [selected, setSelected] = useState('');
+  const selected = params.get('locationId') ?? '';
+  const setSelected = (id: string) => {
+    const next = new URLSearchParams(params);
+    if (id) next.set('locationId', id);
+    else next.delete('locationId');
+    setParams(next, { replace: true });
+  };
   const [intent, setIntent] = useState<AssignmentIntent>();
   const [notice, setNotice] = useState('');
   const today = todayVietnam();
@@ -80,7 +86,7 @@ export function StaffAssignments() {
             variant="contained"
             startIcon={<Plus size={18} />}
             disabled={!complete || !directory.data || !!directory.error}
-            onClick={() => setIntent({ mode: 'create' })}
+            onClick={() => setIntent({ mode: 'create', staffUserId: staffId || undefined })}
           >
             Tạo phân công
           </Button>
@@ -113,7 +119,7 @@ export function StaffAssignments() {
             placeholder="Tìm tên cơ sở hoặc nhân viên..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            sx={{ flex: 2 }}
+            sx={{ width: { xs: '100%', md: 360 }, minWidth: 0 }}
           />
           <TextField
             size="small"
@@ -121,7 +127,7 @@ export function StaffAssignments() {
             label="Trạng thái"
             value={status}
             onChange={(event) => setStatus(event.target.value)}
-            sx={{ flex: 1, minWidth: 200 }}
+            sx={{ width: { xs: '100%', md: 225 }, minWidth: 0 }}
           >
             <MenuItem value="">Tất cả cơ sở</MenuItem>
             <MenuItem value="current">Đang có người phụ trách</MenuItem>
@@ -139,7 +145,7 @@ export function StaffAssignments() {
               else next.delete('staffUserId');
               setParams(next, { replace: true });
             }}
-            sx={{ flex: 1, minWidth: 180 }}
+            sx={{ width: { xs: '100%', md: 200 }, minWidth: 0 }}
           >
             <MenuItem value="">Tất cả nhân viên</MenuItem>
             {staffId && !staff.some((item) => item.userId === staffId) && (
@@ -304,7 +310,12 @@ export function StaffAssignments() {
                           event.stopPropagation();
                           if (row.error) void retryLocation(row.location.id);
                           else if (current) setSelected(row.location.id);
-                          else setIntent({ mode: 'create', locationId: row.location.id });
+                          else
+                            setIntent({
+                              mode: 'create',
+                              locationId: row.location.id,
+                              staffUserId: staffId || undefined,
+                            });
                         }}
                       >
                         {row.error ? 'Thử lại' : current ? 'Chi tiết' : 'Phân công'}

@@ -38,6 +38,8 @@ export function Details({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const { session } = useSession();
+  if (session?.roles.includes('Owner')) return null;
   return (
     <View style={{ gap: 6 }}>
       <Button onPress={() => setOpen(!open)}>

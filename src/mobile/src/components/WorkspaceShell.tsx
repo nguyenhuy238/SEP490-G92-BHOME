@@ -11,7 +11,7 @@ import {
 import { Badge, Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { router, useNavigation } from 'expo-router';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { colors as c, staffColors as s } from '../theme/theme';
 import { WorkspaceTabBar } from './WorkspaceTabBar';
 import { WorkspaceTabsContext } from '../features/workspace/WorkspaceTabsContext';
@@ -84,6 +84,13 @@ export function WorkspaceShell({
   const { role, preview, go, leavePreview, scrollRevision, requestNavigation } = useWorkspace();
   const insideTabs = useContext(WorkspaceTabsContext);
   const navigation = useNavigation();
+  const [focused, setFocused] = useState(() => navigation.isFocused());
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, []),
+  );
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [workflowFooter, setWorkflowFooter] = useState<{
     screen: WorkspaceScreen;
@@ -106,6 +113,7 @@ export function WorkspaceShell({
   }, [screen, scrollRevision, contentRevision, navigation]);
   if (!role) return null;
   const staff = role === 'Staff';
+  const owner = role === 'Owner' && !preview;
   const tenantFeatures = role === 'Tenant' && screen === 'tenant-features';
   const tenantHomeLayout = role === 'Tenant' && ['tenant-home', 'tenant-features'].includes(screen);
   const compactContracts = staff && ['signing', 'contract'].includes(screen) && !preview;
@@ -140,10 +148,14 @@ export function WorkspaceShell({
           ? 'contract'
           : ['security', 'preferences', 'profile-edit'].includes(screen)
             ? 'profile'
-            : staff && screen === 'task-detail'
-              ? 'work-orders'
-              : homeScreen[role!];
-    if (!staff && role !== 'Tenant' && !profileEdit && screen !== 'incident-inbox')
+            : owner && ['incident-detail', 'maintenance-detail', 'task-detail'].includes(screen)
+              ? 'operations'
+              : owner && screen === 'signing'
+                ? 'approvals'
+                : staff && screen === 'task-detail'
+                  ? 'work-orders'
+                  : homeScreen[role!];
+    if (!staff && !owner && role !== 'Tenant' && !profileEdit && screen !== 'incident-inbox')
       return go(fallback);
     requestNavigation(() => {
       if (router.canGoBack()) router.back();
@@ -154,6 +166,8 @@ export function WorkspaceShell({
   }
   return (
     <SafeAreaView
+      aria-hidden={owner ? !focused : undefined}
+      importantForAccessibility={owner && !focused ? 'no-hide-descendants' : 'auto'}
       style={[styles.root, tenantHomeLayout && { backgroundColor: '#173654' }]}
       edges={['top', 'left', 'right']}
     >
@@ -183,7 +197,7 @@ export function WorkspaceShell({
               <Text variant={tenantHomeLayout ? 'titleMedium' : 'titleLarge'} style={ui.white}>
                 {tenantHomeLayout
                   ? 'BHOME'
-                  : `BHOME ${staff ? 'Nhân viên' : role === 'Tenant' ? 'Khách thuê' : role.toUpperCase()}`}
+                  : `BHOME ${staff ? 'Nhân viên' : role === 'Tenant' ? 'Khách thuê' : 'Chủ cơ sở'}`}
               </Text>
               {tenantHomeLayout ? (
                 <Text variant="labelSmall" style={styles.staffSubtitle}>
@@ -208,7 +222,7 @@ export function WorkspaceShell({
               ) : (
                 <Text variant="labelSmall" style={styles.staffSubtitle}>
                   {!preview
-                    ? 'Phạm vi theo tài khoản'
+                    ? 'Theo dõi cơ sở của bạn'
                     : role === 'Owner'
                       ? 'Tất cả cơ sở (5/5)'
                       : staff
@@ -279,6 +293,7 @@ export function WorkspaceShell({
             showsVerticalScrollIndicator={false}
             refreshControl={
               (dashboard ||
+                owner ||
                 tenantRoom ||
                 tenantInvoice ||
                 profile ||
@@ -295,6 +310,7 @@ export function WorkspaceShell({
           >
             {!tenantIncidentForm &&
               (profileEdit ||
+                (owner && !visibleTabs.some((tab) => tab.screen === screen)) ||
                 tenantInvoice ||
                 (staff && !['staff-home', 'profile'].includes(screen)) ||
                 (role === 'Tenant' && !visibleTabs.some((tab) => tab.screen === screen)) ||
@@ -371,7 +387,7 @@ export function WorkspaceShell({
                     )}
                 </View>
               )}
-            {__DEV__ && !preview && (role === 'Owner' || staff) && screen === homeScreen[role] && (
+            {__DEV__ && !preview && staff && screen === homeScreen[role] && (
               <Button
                 mode="contained-tonal"
                 icon="test-tube"
@@ -383,6 +399,7 @@ export function WorkspaceShell({
             <WorkspaceHeaderContext.Provider
               value={
                 dashboard ||
+                owner ||
                 compactContracts ||
                 compactTasks ||
                 tenantRoom ||

@@ -25,6 +25,7 @@ import { formatInstant } from '../../../../../packages/client-core/src/localizat
 import { useFinanceApi } from '../expenses/useFinanceApi';
 import { OwnerTable } from '../../components/common/OwnerWorkspace';
 import { downloadFinance } from '../../services/financeExport';
+import { financeMonthPeriod } from '../finance/monthPeriods';
 
 const initial: ScenarioInput = {
   name: '',
@@ -191,6 +192,17 @@ export function FinancialScenariosApiPage() {
                 }
               />
             </Box>
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                const month = financeMonthPeriod(-1);
+                change({ ...input, baseline: { ...input.baseline, ...month } });
+              }}
+              sx={{ alignSelf: 'flex-start' }}
+            >
+              Dùng tháng trước làm kỳ nền
+            </Button>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <TextField
                 required

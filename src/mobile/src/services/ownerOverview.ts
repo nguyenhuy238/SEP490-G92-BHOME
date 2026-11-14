@@ -4,9 +4,7 @@ export interface OwnerOverview {
   locations: number;
   rooms: number;
   occupiedRooms: number;
-  availableRooms: number;
   operationalOccupancyRate: number;
-  contracts: number;
 }
 
 // Counts come from server-scoped, paginated queries, never from a truncated item list.
@@ -18,8 +16,6 @@ export async function loadOwnerOverview(
     '/api/v1/locations?page=1&pageSize=1',
     '/api/v1/rooms?page=1&pageSize=1',
     '/api/v1/rooms?page=1&pageSize=1&roomStatus=2',
-    '/api/v1/rooms?page=1&pageSize=1&roomStatus=0',
-    '/api/v1/contracts?page=1&pageSize=1',
   ];
   const counts = await Promise.all(
     paths.map(async (path) => {
@@ -38,8 +34,6 @@ export async function loadOwnerOverview(
     locations: counts[0]!,
     rooms: counts[1]!,
     occupiedRooms: counts[2]!,
-    availableRooms: counts[3]!,
     operationalOccupancyRate: counts[1] ? (counts[2]! / counts[1]!) * 100 : 0,
-    contracts: counts[4]!,
   };
 }

@@ -11,10 +11,6 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-24.04
-    env:
-      # Keep the CLI and dotnet format on the same SDK installation.
-      DOTNET_INSTALL_DIR: ${{ runner.temp }}/.dotnet
-      DOTNET_ROOT: ${{ runner.temp }}/.dotnet
     services:
       compact_postgres:
         image: postgres:16-alpine
@@ -32,6 +28,11 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v5
+      - name: Configure isolated .NET SDK installation
+        # Runner paths are available inside steps, not job-level env expressions.
+        run: |
+          echo "DOTNET_INSTALL_DIR=$RUNNER_TEMP/.dotnet" >> "$GITHUB_ENV"
+          echo "DOTNET_ROOT=$RUNNER_TEMP/.dotnet" >> "$GITHUB_ENV"
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
@@ -58,7 +59,7 @@ jobs:
       # GitHub's Linux runner provides Docker for PostgreSQL/MinIO Testcontainers.
       - run: dotnet test src/backend/BHome.sln -c Release --no-build --settings tests/backend/ci.runsettings --logger trx -m:1
         env:
-          BHOME_COMPACT24_TEST_ADMIN: Host=127.0.0.1;Port=${{ job.services.compact_postgres.ports[5432] }};Database=postgres;Username=bhome_ci;Password=synthetic-ci-only
+          BHOME_COMPACT24_TEST_ADMIN: Host=127.0.0.1;Port=${{ job.services.compact_postgres.ports['5432'] }};Database=postgres;Username=bhome_ci;Password=synthetic-ci-only
       - run: dotnet format src/backend/BHome.sln --verify-no-changes --no-restore
       - name: Verify SePay team configuration scripts without private credentials
         shell: pwsh

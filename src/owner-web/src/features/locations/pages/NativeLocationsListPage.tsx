@@ -33,6 +33,7 @@ import type { Page } from '../../../../../../packages/client-core/src/invoices';
 import type { OccupancySummary } from '../../property-api/propertyApi';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
 import { ErrorState, PageHeader } from '../../../components/common/PortalUI';
+import { roomStatusColors } from '../../../theme/theme';
 import { LocationSetupWizard } from '../setup/LocationSetupWizard';
 
 export function NativeLocationsListPage() {
@@ -160,7 +161,7 @@ export function NativeLocationsListPage() {
               role="status"
               sx={{ ml: { sm: 'auto' }, whiteSpace: 'nowrap' }}
             >
-              {locations.data.totalCount} cơ sở phù hợp
+              {locations.data.totalCount} {search || status ? 'cơ sở phù hợp' : 'cơ sở'}
               {locations.isFetching && ' · Đang cập nhật…'}
             </Typography>
           )}
@@ -186,36 +187,72 @@ export function NativeLocationsListPage() {
               <TableContainer>
                 <Table
                   size="small"
+                  role="table"
                   aria-label="Danh sách cơ sở"
                   sx={{
+                    display: { xs: 'block', lg: 'table' },
                     '& .MuiTableCell-root': {
-                      px: { xs: 1.5, md: 1.5 },
-                      py: 0.75,
+                      px: { xs: 2, lg: 2 },
+                      py: { xs: 0, lg: 1.75 },
                       verticalAlign: 'middle',
+                      borderColor: 'divider',
+                      overflowWrap: 'anywhere',
                     },
-                    '& .MuiTableCell-head': { py: 1, fontSize: 13 },
+                    '& .MuiTableCell-head': { py: 1.25, fontSize: 13 },
+                    '& .MuiTableBody-root': { display: { xs: 'block', lg: 'table-row-group' } },
+                    '& .MuiTableBody-root > .MuiTableRow-root': {
+                      display: { xs: 'grid', lg: 'table-row' },
+                      gridTemplateColumns: 'minmax(0, 1fr) auto',
+                      rowGap: 1.5,
+                      py: { xs: 2, lg: 0 },
+                      borderBottomWidth: { xs: '1px', lg: 0 },
+                      borderBottomStyle: 'solid',
+                      borderBottomColor: 'divider',
+                    },
+                    '& .MuiTableBody-root .MuiTableCell-root': {
+                      display: { xs: 'block', lg: 'table-cell' },
+                      minWidth: 0,
+                      borderBottomWidth: { xs: 0, lg: '1px' },
+                      borderBottomStyle: 'solid',
+                      borderBottomColor: 'divider',
+                    },
+                    '& .MuiTableBody-root > .MuiTableRow-root:last-child, & .MuiTableBody-root > .MuiTableRow-root:last-child > .MuiTableCell-root':
+                      {
+                        borderBottomWidth: 0,
+                      },
                   }}
                 >
-                  <TableHead>
-                    <TableRow>
-                      <TableCell scope="col">Cơ sở</TableCell>
-                      <TableCell scope="col" sx={desktopCell}>
+                  <TableHead
+                    role="rowgroup"
+                    sx={{
+                      position: { xs: 'absolute', lg: 'static' },
+                      width: { xs: '1px', lg: 'auto' },
+                      height: { xs: '1px', lg: 'auto' },
+                      clipPath: { xs: 'inset(50%)', lg: 'none' },
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <TableRow role="row">
+                      <TableCell role="columnheader" scope="col">
+                        Cơ sở
+                      </TableCell>
+                      <TableCell role="columnheader" scope="col">
                         Trạng thái
                       </TableCell>
-                      <TableCell scope="col" sx={desktopCell}>
+                      <TableCell role="columnheader" scope="col">
                         Phòng
                       </TableCell>
                       {owner && (
-                        <TableCell scope="col" sx={desktopCell}>
+                        <TableCell role="columnheader" scope="col">
                           Thiết lập
                         </TableCell>
                       )}
-                      <TableCell scope="col" align="right">
+                      <TableCell role="columnheader" scope="col" align="right">
                         Thao tác
                       </TableCell>
                     </TableRow>
                   </TableHead>
-                  <TableBody>
+                  <TableBody role="rowgroup">
                     {locations.data.items.map((location) => (
                       <LocationRow
                         key={location.id}
@@ -237,6 +274,8 @@ export function NativeLocationsListPage() {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
+                borderTop: '1px solid',
+                borderColor: 'divider',
               }}
             >
               <Typography variant="caption" color="text.secondary">
@@ -346,8 +385,7 @@ export function NativeLocationsListPage() {
   );
 }
 
-const desktopCell = { display: { xs: 'none', lg: 'table-cell' } } as const;
-const mobileDetails = { display: { xs: 'block', lg: 'none' } } as const;
+const fullRowCell = { gridColumn: { xs: '1 / -1', lg: 'auto' } } as const;
 
 function LocationRow({
   location,
@@ -380,10 +418,21 @@ function LocationRow({
   const status = (
     <Chip
       size="small"
-      color={location.isActive ? 'success' : 'default'}
-      variant="outlined"
       label={location.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}
-      sx={{ fontSize: 12, height: 24, whiteSpace: 'nowrap' }}
+      sx={{
+        bgcolor: location.isActive
+          ? roomStatusColors.available.surface
+          : roomStatusColors.unavailable.surface,
+        color: location.isActive
+          ? roomStatusColors.available.foreground
+          : roomStatusColors.unavailable.foreground,
+        fontSize: 12,
+        height: 'auto',
+        minHeight: 24,
+        maxWidth: '100%',
+        fontWeight: 600,
+        '& .MuiChip-label': { whiteSpace: 'normal', py: 0.25 },
+      }}
     />
   );
   const roomDetails = occupancy.isError ? (
@@ -396,8 +445,12 @@ function LocationRow({
       </Button>
     </Stack>
   ) : snapshot ? (
-    <Box sx={{ fontVariantNumeric: 'tabular-nums' }}>
-      <Typography variant="body2" component="div" sx={{ fontWeight: 650, lineHeight: 1.5 }}>
+    <Stack spacing={0.5} sx={{ fontVariantNumeric: 'tabular-nums' }}>
+      <Typography
+        variant="body2"
+        component="div"
+        sx={{ fontWeight: 750, lineHeight: 1.4, fontSize: 16 }}
+      >
         <Box
           component={Link}
           to={`/locations/${location.id}/rooms`}
@@ -409,23 +462,55 @@ function LocationRow({
         >
           {snapshot.totalRooms} phòng
         </Box>
-        {' · '}
-        <Box component="span" sx={{ color: 'primary.dark' }}>
-          {snapshot.occupiedRooms} đang thuê
-        </Box>
       </Typography>
-      <Typography variant="caption" color="text.secondary" component="div">
-        <Box component="span" sx={{ color: 'success.dark', fontWeight: 600 }}>
-          {snapshot.availableRooms} trống
-        </Box>
-        {' · '}
-        <Box component="span" sx={{ color: 'warning.dark', fontWeight: 600 }}>
-          {snapshot.onHoldRooms} giữ chỗ
-        </Box>
-        {' · '}
-        {snapshot.unavailableRooms} ngừng khai thác
-      </Typography>
-    </Box>
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          columnGap: 1.5,
+          rowGap: 0.25,
+        }}
+      >
+        {[
+          { count: snapshot.occupiedRooms, label: 'thuê', color: roomStatusColors.occupied.fill },
+          {
+            count: snapshot.availableRooms,
+            label: 'trống',
+            color: roomStatusColors.available.fill,
+          },
+          {
+            count: snapshot.onHoldRooms,
+            label: 'giữ chỗ',
+            color: roomStatusColors.onHold.foreground,
+          },
+          {
+            count: snapshot.unavailableRooms,
+            label: 'ngừng KT',
+            color: roomStatusColors.unavailable.foreground,
+          },
+        ].map(({ count, label, color }) => (
+          <Typography
+            key={label}
+            variant="caption"
+            component="span"
+            sx={{
+              color: count ? color : roomStatusColors.unavailable.fill,
+              whiteSpace: 'nowrap',
+              fontWeight: count ? 650 : 400,
+            }}
+          >
+            {count}{' '}
+            {label === 'ngừng KT' ? (
+              <Box component="abbr" title="ngừng khai thác" sx={{ textDecoration: 'none' }}>
+                {label}
+              </Box>
+            ) : (
+              label
+            )}
+          </Typography>
+        ))}
+      </Box>
+    </Stack>
   ) : (
     <Typography variant="caption" color="text.secondary">
       Đang tải số liệu phòng…
@@ -466,15 +551,22 @@ function LocationRow({
   );
 
   return (
-    <TableRow hover>
-      <TableCell component="th" scope="row" sx={{ width: { lg: '29%' }, minWidth: 0 }}>
+    <TableRow hover role="row">
+      <TableCell
+        component="th"
+        role="rowheader"
+        scope="row"
+        sx={{ width: { lg: '25%' }, minWidth: 0 }}
+      >
         <Typography
           component={Link}
           to={`/locations/${location.id}/overview`}
           variant="body2"
           sx={{
             color: 'primary.dark',
-            fontWeight: 700,
+            fontWeight: 750,
+            fontSize: 16,
+            lineHeight: 1.4,
             textDecoration: 'none',
             overflowWrap: 'anywhere',
             '&:hover': { textDecoration: 'underline' },
@@ -487,32 +579,37 @@ function LocationRow({
           variant="caption"
           color="text.secondary"
           component="div"
-          sx={{ overflowWrap: 'anywhere' }}
+          sx={{ overflowWrap: 'anywhere', mt: 0.5 }}
         >
           {location.address}
         </Typography>
-        <Box sx={{ ...mobileDetails, mt: 1 }}>
-          <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-            {status}
-            {roomDetails}
-            {owner && setupDetails}
-          </Stack>
-        </Box>
       </TableCell>
-      <TableCell sx={desktopCell}>{status}</TableCell>
-      <TableCell sx={{ ...desktopCell, width: { lg: '28%' } }}>{roomDetails}</TableCell>
-      {owner && <TableCell sx={desktopCell}>{setupDetails}</TableCell>}
-      <TableCell align="right">
+      <TableCell role="cell" sx={{ width: { lg: '14%' }, alignSelf: { xs: 'start', lg: 'auto' } }}>
+        {status}
+      </TableCell>
+      <TableCell role="cell" sx={{ ...fullRowCell, width: { lg: '27%' } }}>
+        {roomDetails}
+      </TableCell>
+      {owner && (
+        <TableCell role="cell" sx={{ ...fullRowCell, width: { lg: '18%' } }}>
+          {setupDetails}
+        </TableCell>
+      )}
+      <TableCell role="cell" align="right" sx={{ ...fullRowCell, width: { lg: 168 } }}>
         <Stack
-          direction={{ xs: 'column', sm: 'row' }}
+          direction="row"
           spacing={0.5}
-          sx={{ justifyContent: 'flex-end', alignItems: 'center' }}
+          sx={{
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            flexWrap: { xs: 'wrap', lg: 'nowrap' },
+          }}
         >
           <Button
-            variant="text"
+            variant="outlined"
             component={Link}
             to={`/locations/${location.id}/overview`}
-            sx={{ whiteSpace: 'nowrap', minHeight: { xs: 44, sm: 36 } }}
+            sx={{ whiteSpace: 'nowrap', flexShrink: 0, minHeight: { xs: 44, sm: 36 } }}
           >
             Xem cơ sở
           </Button>
@@ -524,7 +621,11 @@ function LocationRow({
                 aria-controls={menuAnchor ? menuId : undefined}
                 aria-expanded={!!menuAnchor}
                 onClick={(event) => setMenuAnchor(event.currentTarget)}
-                sx={{ minWidth: { xs: 44, sm: 36 }, minHeight: { xs: 44, sm: 36 } }}
+                sx={{
+                  flexShrink: 0,
+                  minWidth: { xs: 44, sm: 36 },
+                  minHeight: { xs: 44, sm: 36 },
+                }}
               >
                 <MoreHorizontal size={18} />
               </IconButton>

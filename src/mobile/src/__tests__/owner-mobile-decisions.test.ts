@@ -88,7 +88,7 @@ it('enables existing Owner contract decisions while keeping Staff approvals unav
   ).toContain('holding-activation');
   expect(
     mobileContractActions(holding('Active'), null, 'Owner', id).map((item) => item.operation),
-  ).toContain('holding-conversion');
+  ).not.toContain('holding-conversion');
   for (const status of ['Draft', 'PendingSigning', 'PendingActivation']) {
     expect(
       mobileContractActions({ ...holding(status), kind: 'Main' }, null, 'Owner', id).map(
@@ -103,7 +103,7 @@ it('enables existing Owner contract decisions while keeping Staff approvals unav
     mobileContractActions({ ...holding('Active'), kind: 'Main' }, null, 'Owner', id).map(
       (item) => item.operation,
     ),
-  ).toContain('renewals');
+  ).not.toContain('renewals');
   for (const status of ['Draft', 'PendingSigning', 'PendingActivation', 'Active', 'Cancelled']) {
     expect(
       mobileContractActions(holding(status), null, 'Staff', id).some((item) =>

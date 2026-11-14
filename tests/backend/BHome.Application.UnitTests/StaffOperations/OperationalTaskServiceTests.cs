@@ -99,6 +99,51 @@ public sealed class OperationalTaskServiceTests
                 q.DueFrom.Value.Offset == TimeSpan.Zero && q.DueTo.Value.Offset == TimeSpan.Zero),
             Arg.Any<Guid?>(), Arg.Any<DateOnly>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task OwnerTaskListForwardsRecordedAssigneeAndResponsibilityFilters(bool available)
+    {
+        var r = new Rig();
+        var recorded = Guid.NewGuid();
+        r.Repo.ListAsync(Arg.Any<TaskQuery>(), Arg.Any<Guid?>(), Arg.Any<DateOnly>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new TaskPage<TaskView>([], 1, 20, 0));
+        await r.Service.ListAsync(new TaskQuery { RecordedStaffUserId = recorded, HasResponsibility = available }, default);
+        await r.Repo.Received(1).ListAsync(
+            Arg.Is<TaskQuery>(q => q.RecordedStaffUserId == recorded && q.HasResponsibility == available),
+            null, new DateOnly(2026, 10, 31), r.Clock.Now, Arg.Any<CancellationToken>());
+    }
+    [Fact]
+    public async Task StaffCannotUseRecordedAssigneeOrEitherResponsibilityFilter()
+    {
+        var r = new Rig();
+        r.AsStaff();
+        foreach (var query in new TaskQuery[]
+        {
+            new() { RecordedStaffUserId = r.Staff },
+            new() { HasResponsibility = false },
+            new() { HasResponsibility = true }
+        })
+        {
+            var error = await Assert.ThrowsAsync<OperationalTaskException>(() => r.Service.ListAsync(query, default));
+            Assert.Equal(400, error.Status);
+            Assert.Equal("invalid_task_filter", error.Code);
+        }
+        await r.Repo.DidNotReceiveWithAnyArgs().ListAsync(default!, default, default, default, default);
+    }
+    [Fact]
+    public async Task OwnerCannotUseEmptyStaffFilterIdentifiers()
+    {
+        var r = new Rig();
+        foreach (var query in new TaskQuery[]
+        {
+            new() { StaffUserId = Guid.Empty },
+            new() { RecordedStaffUserId = Guid.Empty }
+        })
+            Assert.Equal("invalid_task_filter", (await Assert.ThrowsAsync<OperationalTaskException>(
+                () => r.Service.ListAsync(query, default))).Code);
+        await r.Repo.DidNotReceiveWithAnyArgs().ListAsync(default!, default, default, default, default);
+    }
     [Fact]
     public async Task MissingStaffAndInvalidWorkCannotCreateTask()
     {

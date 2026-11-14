@@ -2,7 +2,9 @@ import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import {
   Alert,
+  Box,
   Button,
+  Chip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -19,6 +21,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
+  formatBillingDecimal,
   invoiceError,
   missingBillingInput,
 } from '../../../../../packages/client-core/src/invoices';
@@ -196,7 +199,15 @@ function AutomationLocation({ location, period }: { location: string; period: st
         spacing={1}
         sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}
       >
-        <Button disabled={data.isFetching} onClick={() => void data.refetch()}>
+        <Button
+          disabled={data.isFetching}
+          onClick={() => {
+            void data.refetch();
+            void cache.invalidateQueries({
+              queryKey: ['automation-drafts', session?.userId, location, period],
+            });
+          }}
+        >
           Làm mới lịch và kết quả
         </Button>
         {data.data && !data.error && (
@@ -283,6 +294,7 @@ function AutomationLocation({ location, period }: { location: string; period: st
               </Typography>
             </Stack>
           </Paper>
+          <AutomationDrafts location={location} period={period} />
           <Typography variant="h6">Kết quả & Ngoại lệ</Typography>
           {data.data.executions.length === 0 && (
             <Alert severity="info">Chưa có lần chạy cho cơ sở/kỳ này.</Alert>
@@ -694,6 +706,157 @@ function DeliveryMonitor({ location }: { location: string }) {
               </Button>
             </Stack>
           </>
+        )}
+      </Stack>
+    </Paper>
+  );
+}
+
+function AutomationDrafts({ location, period }: { location: string; period: string }) {
+  const api = useInvoiceApi();
+  const cache = useQueryClient();
+  const { session } = useAuth();
+  const [page, setPage] = useState(1);
+  const [activeId, setActiveId] = useState('');
+  const [feedback, setFeedback] = useState<{ room: string; error?: string }>();
+  const lock = useRef(false);
+  const key = ['automation-drafts', session?.userId, location, period, page];
+  const drafts = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) =>
+      api.list(page, signal, '', { locationId: location, billingPeriod: period, status: 'Draft' }),
+  });
+
+  async function refreshDraft(id: string, version: number, room: string) {
+    if (lock.current) return;
+    lock.current = true;
+    setActiveId(id);
+    setFeedback(undefined);
+    try {
+      const updated = await api.refresh(id, version);
+      await cache.cancelQueries({ queryKey: key, exact: true });
+      cache.setQueryData(
+        key,
+        (previous: typeof drafts.data) =>
+          previous && {
+            ...previous,
+            items: previous.items.map((item) => (item.id === id ? updated : item)),
+          },
+      );
+      setFeedback({ room });
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: ['invoices', session?.userId] }),
+        cache.invalidateQueries({ queryKey: ['invoice', session?.userId, id] }),
+      ]);
+    } catch (e) {
+      setFeedback({ room, error: invoiceError(e) });
+      const result = await drafts.refetch();
+      if (page > 1 && result.data?.items.length === 0) setPage(page - 1);
+    } finally {
+      lock.current = false;
+      setActiveId('');
+    }
+  }
+
+  return (
+    <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
+      <Stack spacing={2}>
+        <Stack
+          direction="row"
+          sx={{ justifyContent: 'space-between', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}
+        >
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Hóa đơn nháp của kỳ
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Cập nhật từng bản nháp để lấy lại số liệu đã xác nhận trước khi phát hành.
+            </Typography>
+          </Box>
+          {drafts.data && (
+            <Chip size="small" variant="outlined" label={`${drafts.data.totalCount} bản nháp`} />
+          )}
+        </Stack>
+        {drafts.isPending && <LinearProgress />}
+        {drafts.error && <Alert severity="error">{invoiceError(drafts.error)}</Alert>}
+        {feedback && (
+          <Alert severity={feedback.error ? 'error' : 'success'}>
+            Phòng {feedback.room} · {feedback.error ?? 'Đã tính lại hóa đơn nháp.'}
+          </Alert>
+        )}
+        {drafts.data?.totalCount === 0 && <Alert severity="info">Chưa có hóa đơn nháp.</Alert>}
+        {drafts.data?.items.map((draft) => (
+          <Paper variant="outlined" key={draft.id} sx={{ p: 1.75, borderRadius: 1.5 }}>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              sx={{ justifyContent: 'space-between', gap: 1.5, alignItems: { md: 'center' } }}
+            >
+              <Stack spacing={0.5} sx={{ minWidth: 0, flex: 1 }}>
+                <Stack direction="row" sx={{ gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontWeight: 700 }}>Phòng {draft.roomNumber}</Typography>
+                  <Chip
+                    size="small"
+                    color={draft.missingInputs.length > 0 ? 'warning' : 'success'}
+                    variant="outlined"
+                    label={draft.missingInputs.length > 0 ? 'Thiếu dữ liệu' : 'Đủ dữ liệu'}
+                  />
+                </Stack>
+                <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                  {formatBillingDecimal(draft.total)} ₫
+                </Typography>
+              </Stack>
+              {draft.missingInputs.length > 0 && (
+                <Alert
+                  severity="warning"
+                  sx={{ flex: 2, width: { xs: '100%', md: 'auto' }, py: 0.25 }}
+                >
+                  {draft.missingInputs.map((code) => (
+                    <Typography key={code} variant="body2">
+                      Thiếu: {missingBillingInput(code)}
+                    </Typography>
+                  ))}
+                </Alert>
+              )}
+              <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
+                <Button size="small" component={Link} to={`/invoices?invoiceId=${draft.id}`}>
+                  Xem hóa đơn
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={!!activeId}
+                  onClick={() => void refreshDraft(draft.id, draft.version, draft.roomNumber)}
+                >
+                  {activeId === draft.id ? 'Đang cập nhật…' : 'Cập nhật Invoice Draft'}
+                </Button>
+              </Stack>
+            </Stack>
+          </Paper>
+        ))}
+        {drafts.data && (page > 1 || drafts.data.totalCount > drafts.data.pageSize) && (
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ justifyContent: 'flex-end', alignItems: 'center' }}
+          >
+            <Button
+              size="small"
+              disabled={page === 1 || !!activeId}
+              onClick={() => setPage(page - 1)}
+            >
+              Trang trước
+            </Button>
+            <Typography variant="body2" color="text.secondary">
+              Trang {page}
+            </Typography>
+            <Button
+              size="small"
+              disabled={page * drafts.data.pageSize >= drafts.data.totalCount || !!activeId}
+              onClick={() => setPage(page + 1)}
+            >
+              Trang sau
+            </Button>
+          </Stack>
         )}
       </Stack>
     </Paper>

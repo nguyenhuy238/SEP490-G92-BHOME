@@ -12,6 +12,34 @@ namespace BHome.IntegrationTests.Notifications;
 
 public sealed class EmailTransportTests
 {
+    private sealed class SigningChannel(bool configured) : INotificationChannelProvider
+    {
+        public bool IsConfigured(string channel) => configured && channel == "EMAIL";
+        public bool SupportsIdempotency(string channel) => false;
+        public Task<string> SendAsync(ChannelMessage message, CancellationToken t) => throw new InvalidOperationException("No email should be sent by configuration tests.");
+    }
+
+    [Theory]
+    [InlineData("Sandbox", true, true, true)]
+    [InlineData("Sandbox", false, true, false)]
+    [InlineData("Sandbox", true, false, false)]
+    [InlineData("Unconfigured", false, true, true)]
+    [InlineData("Unconfigured", false, false, false)]
+    public void SigningUsesConfiguredSmtpEvenInDevelopmentSandboxButRejectsSandboxOnlyDelivery(string mode, bool smtp, bool channel, bool expected)
+    {
+        var email = new MailKitEmailSender(Options.Create(new EmailOptions
+        {
+            Enabled = smtp,
+            Username = "sender@example.invalid",
+            FromEmail = "sender@example.invalid",
+            AppPassword = "synthetic-password"
+        }), NullLogger<MailKitEmailSender>.Instance);
+        var security = new BHome.Infrastructure.Contracts.AnonymousSigningSecurity(
+            Options.Create(new BHome.Infrastructure.Contracts.AnonymousSigningOptions()), new SigningChannel(channel),
+            Options.Create(new NotificationChannelOptions { Mode = mode }), email);
+        Assert.Equal(expected, security.EmailConfigured);
+    }
+
     [Fact]
     public void EnabledEmailWithoutPasswordFailsHostValidationWithSafeConfigurationMessage()
     {

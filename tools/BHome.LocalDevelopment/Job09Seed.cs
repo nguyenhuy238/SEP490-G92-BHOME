@@ -32,9 +32,9 @@ internal static class Job09Seed
         if (mode == "--inspect")
         {
             var assignments = await (from a in db.StaffLocationAssignments.AsNoTracking()
-                join u in db.Users on a.StaffUserId equals u.Id
-                where a.LocationId == Id(10)
-                select new { a.LocationId, a.StaffUserId, u.UserName, u.IsActive, a.StartDate, a.EndDate }).ToArrayAsync();
+                                     join u in db.Users on a.StaffUserId equals u.Id
+                                     where a.LocationId == Id(10)
+                                     select new { a.LocationId, a.StaffUserId, u.UserName, u.IsActive, a.StartDate, a.EndDate }).ToArrayAsync();
             Console.WriteLine("JOB09_STAFF " + System.Text.Json.JsonSerializer.Serialize(assignments));
             var room = await db.Set<Room>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == Id(20));
             var contract = await db.Set<Contract>().AsNoTracking().SingleOrDefaultAsync(c => c.Id == Id(40));

@@ -35,6 +35,8 @@ const staff = {
 beforeEach(() => {
   mocks.request.mockReset();
   mocks.request.mockImplementation(async (path: string) => {
+    if (path.startsWith('/api/v1/locations'))
+      return { items: [{ id: 'location', name: 'Cơ sở A', isActive: true }], totalCount: 1 };
     if (path === '/api/v1/staff?page=1&pageSize=100') return { items: [staff], totalCount: 1 };
     if (path === '/api/v1/operational-tasks/task/actors')
       return [{ userId: 'owner', displayName: 'Owner synthetic' }];
@@ -46,9 +48,9 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
-function mount() {
+function mount(url = '/operational-tasks') {
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[url]}>
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
@@ -100,12 +102,34 @@ it('keeps the same command key on an uncertain verification retry', async () => 
 it('forwards the selected Staff filter to the server', async () => {
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Bộ lọc nâng cao' }));
-  const staffFilter = await screen.findByRole('combobox', { name: 'Staff phụ trách' });
+  const staffFilter = await screen.findByRole('combobox', { name: 'Người phụ trách cơ sở' });
   fireEvent.mouseDown(staffFilter);
   fireEvent.click(await screen.findByRole('option', { name: 'Staff synthetic' }));
   await waitFor(() =>
     expect(mocks.request).toHaveBeenCalledWith(
       expect.stringContaining('staffUserId=staff'),
+      expect.anything(),
+    ),
+  );
+});
+
+it('opens a deep-linked location and recorded Staff responsibility filter on the server', async () => {
+  mount('/operational-tasks?locationId=location&recordedStaffUserId=staff&hasResponsibility=false');
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /locationId=location.*recordedStaffUserId=staff.*hasResponsibility=false/,
+      ),
+      expect.anything(),
+    ),
+  );
+  expect(
+    await screen.findByRole('combobox', { name: 'Người được giao trong hồ sơ' }),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }));
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      '/api/v1/operational-tasks?page=1&pageSize=20',
       expect.anything(),
     ),
   );

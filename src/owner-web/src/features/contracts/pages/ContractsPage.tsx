@@ -63,7 +63,7 @@ function LiveContractsPage() {
   const actorId = session?.userId ?? '';
   const [page, setPage] = useState(1),
     [status, setStatus] = useState(''),
-    [location, setLocation] = useState('');
+    [location, setLocation] = useState(deepParams.get('locationId') ?? '');
   const [selected, setSelected] = useState(deepParams.get('contractId') ?? ''),
     [selectedLocation, setSelectedLocation] = useState('');
   const [mainDraft, setMainDraft] = useState(false);

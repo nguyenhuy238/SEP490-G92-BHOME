@@ -34,9 +34,9 @@ public sealed class PersistenceCompositionTests
         var names = services.GetServices<IBackgroundJobHandler>().Select(h => h.Name).Order().ToArray();
         var shared = new[] { "billing-draft", "billing-final", "billing-meter", "contract-expiry",
             "incident.notification", "notification-publish", "notification-delivery" };
-        var expected = compact ? shared.Concat(["asset-template-sync", "notification-channels", "recurring-operational-tasks", "post-activation-account-invitation", "sepay-poll-test", "sepay-reconcile-test", "sms-recovery-delivery"]) : shared;
+        var expected = compact ? shared.Concat(["asset-template-sync", "notification-channels", "recurring-operational-tasks", "post-activation-account-invitation", "sepay-poll-test", "sepay-reconcile-test", "sms-recovery-delivery", "staff-assignment-reconciliation"]) : shared;
         Assert.Equal(expected.Order(), names);
-        Assert.Equal(compact ? 7 : 3, services.GetServices<IJobScheduleContributor>().Count());
+        Assert.Equal(compact ? 8 : 3, services.GetServices<IJobScheduleContributor>().Count());
         var compactOnlyServices = new[] { typeof(ISharedConfigurationStore), typeof(ISharedDataValidator),
             typeof(SharedConfigurationService), typeof(SharedConfigurationApplicationService), typeof(LocationConfigurationCopyService),
             typeof(IResidentAdministrationRepository), typeof(ResidentAdministrationService),

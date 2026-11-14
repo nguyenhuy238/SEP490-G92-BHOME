@@ -18,30 +18,77 @@ import {
 } from '@mui/material';
 import { ConfirmDialog } from '../../../components/common/PortalUI';
 import { OwnerFeedback } from '../../../components/common/OwnerWorkspace';
-import { useOwnerAction } from '../../../hooks/useOwnerWorkspace';
-import { todayVietnam, type Employment, type Staff } from '../staffContracts';
+import { useOwnerAction, useOwnerQuery } from '../../../hooks/useOwnerWorkspace';
+import {
+  todayVietnam,
+  type Employment,
+  type Staff,
+  type StaffResponsibilities,
+} from '../staffContracts';
+import { StaffResponsibilitiesPanel } from './StaffPresentation';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
-export function StaffEditor({ staff, close }: { staff: Staff | null; close: () => void }) {
+export function StaffEditor({
+  staff,
+  renewal = false,
+  close,
+}: {
+  staff: Staff | null;
+  renewal?: boolean;
+  close: () => void;
+}) {
   const action = useOwnerAction();
   const [name, setName] = useState(staff?.fullName ?? ''),
     [email, setEmail] = useState(staff?.email ?? ''),
     [phone, setPhone] = useState(staff?.phone ?? ''),
     [reason, setReason] = useState(''),
     [active, setActive] = useState(staff?.isActive ?? true);
+  const [baseline, setBaseline] = useState(staff);
+  const previousEnd = baseline?.employment?.endDate;
+  const nextStart =
+    previousEnd && previousEnd >= todayVietnam() && previousEnd !== '9999-12-31'
+      ? new Date(Date.parse(previousEnd) + 86400000).toISOString().slice(0, 10)
+      : todayVietnam();
   const [employment, setEmployment] = useState<Employment>(
-    staff?.employment ?? {
-      contractNumber: null,
-      employmentType: '',
-      startDate: todayVietnam(),
-      endDate: null,
-      salaryType: null,
-      baseRate: null,
-      status: 'Active',
-    },
+    renewal
+      ? {
+          ...staff?.employment,
+          contractNumber: null,
+          employmentType: staff?.employment?.employmentType ?? '',
+          startDate: nextStart,
+          endDate: null,
+          salaryType: staff?.employment?.salaryType ?? null,
+          baseRate: staff?.employment?.baseRate ?? null,
+          status: 'Active',
+        }
+      : (staff?.employment ?? {
+          contractNumber: null,
+          employmentType: '',
+          startDate: todayVietnam(),
+          endDate: null,
+          salaryType: null,
+          baseRate: null,
+          status: 'Active',
+        }),
   );
   const [baseRate, setBaseRate] = useState(String(staff?.employment?.baseRate ?? ''));
   const [confirm, setConfirm] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const responsibilities = useOwnerQuery<StaffResponsibilities>(
+    ['staff-responsibilities', staff?.userId],
+    `/api/v1/staff/${staff?.userId}/responsibilities`,
+    !!staff && !renewal && !active,
+  );
+  const [version, setVersion] = useState(staff?.accountVersion);
+  const [stale, setStale] = useState(false);
+  const [latest, setLatest] = useState<Staff>();
+  const [reloadError, setReloadError] = useState('');
+  const openEnded = renewal && !!baseline?.employment && !baseline.employment.endDate;
+  const renewalOverlap = renewal && !!previousEnd && employment.startDate <= previousEnd;
+  const blocked =
+    !!openEnded ||
+    !!renewalOverlap ||
+    stale ||
+    (!!staff && !renewal && !active && responsibilities.data?.canDeactivate === false);
   const dateError =
     employment.endDate && employment.endDate < employment.startDate
       ? 'Ngày kết thúc không được trước ngày bắt đầu.'
@@ -53,7 +100,7 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
   const set = <K extends keyof Employment>(key: K, value: Employment[K]) =>
     setEmployment((x) => ({ ...x, [key]: value }));
   async function save() {
-    if (dateError) {
+    if (dateError || blocked) {
       setConfirm(false);
       return;
     }
@@ -65,23 +112,33 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
       baseRate: baseRate === '' ? null : baseRate.length <= 14 ? Number(baseRate) : baseRate,
     };
     delete work.id;
-    const body = {
-      fullName: name.trim(),
-      email: email.trim(),
-      phone: phone || null,
-      employment: work,
-      ...(staff ? { accountVersion: staff.accountVersion, isActive: active, reason } : {}),
-    };
+    const body = renewal
+      ? { accountVersion: version, employment: work, reason: reason.trim() }
+      : {
+          fullName: name.trim(),
+          email: email.trim(),
+          phone: phone || null,
+          employment: work,
+          ...(staff ? { accountVersion: version, isActive: active, reason } : {}),
+        };
     if (
       await action.run(async () => {
         try {
           return await action.command(
-            staff ? `/api/v1/staff/${staff.userId}` : '/api/v1/staff',
-            staff ? 'PUT' : 'POST',
+            renewal
+              ? `/api/v1/staff/${staff!.userId}/employments`
+              : staff
+                ? `/api/v1/staff/${staff.userId}`
+                : '/api/v1/staff',
+            staff && !renewal ? 'PUT' : 'POST',
             body,
           );
         } catch (error) {
-          if (error instanceof ApiError)
+          if (error instanceof ApiError) {
+            if (error.problem?.code === 'stale_staff_version') {
+              setStale(true);
+              setLatest(undefined);
+            }
             setFieldErrors(
               Object.fromEntries(
                 Object.entries(error.problem?.errors ?? {}).map(([key, messages]) => [
@@ -90,6 +147,7 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
                 ]),
               ),
             );
+          }
           throw error;
         }
       })
@@ -114,58 +172,140 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
         },
       }}
     >
-      <DialogTitle>{staff ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên'}</DialogTitle>
+      <DialogTitle>
+        {renewal
+          ? 'Tạo kỳ hợp đồng lao động mới'
+          : staff
+            ? 'Chỉnh sửa nhân viên'
+            : 'Thêm nhân viên'}
+      </DialogTitle>
       <DialogContent>
         <form
           id="staff-editor"
           onSubmit={(e) => {
             e.preventDefault();
-            if (dateError) return;
+            if (dateError || blocked) return;
             setConfirm(true);
           }}
         >
           <Stack spacing={2} sx={{ pt: 1 }}>
             <OwnerFeedback {...action} />
-            <Typography sx={{ fontSize: 17, fontWeight: 700 }}>Thông tin tài khoản</Typography>
-            <Box
-              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}
-            >
-              <TextField
-                required
-                label="Họ tên"
-                {...fieldError('fullname')}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                slotProps={{ htmlInput: { minLength: 2, maxLength: 150 } }}
-              />
-              <TextField
-                required
-                type="email"
-                label="Email"
-                {...fieldError('email')}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <TextField
-                label="Số điện thoại"
-                {...fieldError('phone')}
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </Box>
-            {!staff && (
-              <Alert severity="info">
-                Nhân viên tự đặt mật khẩu qua lời mời email. Sau khi tạo, chọn Gửi thông tin tài
-                khoản trong chi tiết nhân viên.
+            {stale && (
+              <Alert severity="warning">
+                Hồ sơ đã thay đổi trên máy chủ. Kiểm tra dữ liệu mới trước khi lưu lại. Nội dung
+                đang nhập được giữ nguyên.
+                {!latest ? (
+                  <Button
+                    onClick={() => {
+                      setReloadError('');
+                      void action
+                        .request<Staff>(`/api/v1/staff/${staff!.userId}`)
+                        .then(setLatest)
+                        .catch(() => setReloadError('Không tải được hồ sơ mới.'));
+                    }}
+                  >
+                    Tải hồ sơ mới
+                  </Button>
+                ) : (
+                  <Box sx={{ mt: 1 }}>
+                    <Typography variant="body2">
+                      {latest.fullName} · {latest.email}
+                    </Typography>
+                    <Typography variant="body2">
+                      {latest.employment?.contractNumber ||
+                        latest.employment?.employmentType ||
+                        'Chưa có hợp đồng'}{' '}
+                      · {latest.employment?.startDate} –{' '}
+                      {latest.employment?.endDate ?? 'Không xác định thời hạn'}
+                    </Typography>
+                    {!renewal && latest.employment?.id !== baseline?.employment?.id ? (
+                      <Typography color="warning.dark" variant="body2">
+                        Kỳ hợp đồng đã thay đổi. Đóng và mở lại hồ sơ để chỉnh sửa đúng kỳ hợp đồng.
+                      </Typography>
+                    ) : (
+                      <Button
+                        onClick={() => {
+                          setBaseline(latest);
+                          setVersion(latest.accountVersion);
+                          setStale(false);
+                        }}
+                      >
+                        Đã kiểm tra, tiếp tục chỉnh sửa
+                      </Button>
+                    )}
+                  </Box>
+                )}
+                {reloadError && <Typography color="error.main">{reloadError}</Typography>}
               </Alert>
             )}
-            {staff && (
-              <FormControlLabel
-                label="Tài khoản hoạt động"
-                control={<Checkbox checked={active} onChange={(_, v) => setActive(v)} />}
-              />
+            {renewal ? (
+              <>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {staff?.fullName || staff?.email}
+                </Typography>
+                <Alert severity={openEnded ? 'warning' : 'info'}>
+                  {openEnded
+                    ? 'Hợp đồng trước chưa có ngày kết thúc. Hãy chỉnh sửa hồ sơ để xác định ngày kết thúc trước khi tạo kỳ mới.'
+                    : 'Tạo kỳ hợp đồng riêng, không ghi đè hợp đồng đã lưu. Trạng thái tài khoản và phân công không thay đổi.'}
+                </Alert>
+              </>
+            ) : (
+              <>
+                <Typography sx={{ fontSize: 17, fontWeight: 700 }}>Thông tin tài khoản</Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                    gap: 2,
+                  }}
+                >
+                  <TextField
+                    required
+                    label="Họ tên"
+                    {...fieldError('fullname')}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    slotProps={{ htmlInput: { minLength: 2, maxLength: 150 } }}
+                  />
+                  <TextField
+                    required
+                    type="email"
+                    label="Email"
+                    {...fieldError('email')}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                  <TextField
+                    label="Số điện thoại"
+                    {...fieldError('phone')}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                </Box>
+                {!staff && (
+                  <Alert severity="info">
+                    Nhân viên tự đặt mật khẩu qua lời mời email. Sau khi tạo, chọn Gửi thông tin tài
+                    khoản trong chi tiết nhân viên.
+                  </Alert>
+                )}
+                {staff && (
+                  <FormControlLabel
+                    label="Tài khoản hoạt động"
+                    control={<Checkbox checked={active} onChange={(_, v) => setActive(v)} />}
+                  />
+                )}
+                {staff && !active && (
+                  <StaffResponsibilitiesPanel
+                    staffId={staff.userId}
+                    data={responsibilities.data}
+                    busy={responsibilities.isFetching}
+                    error={responsibilities.error}
+                    retry={() => void responsibilities.refetch()}
+                  />
+                )}
+                <Divider />
+              </>
             )}
-            <Divider />
             <Typography sx={{ fontSize: 17, fontWeight: 700 }}>Hợp đồng làm việc</Typography>
             <Box
               sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}
@@ -189,7 +329,21 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
                 label="Ngày bắt đầu"
                 {...fieldError('startdate')}
                 value={employment.startDate}
-                slotProps={{ inputLabel: { shrink: true } }}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  htmlInput: {
+                    min:
+                      renewal && previousEnd && previousEnd !== '9999-12-31'
+                        ? new Date(Date.parse(previousEnd) + 86400000).toISOString().slice(0, 10)
+                        : undefined,
+                  },
+                }}
+                error={!!renewalOverlap || !!fieldErrors.startdate}
+                helperText={
+                  renewalOverlap
+                    ? 'Ngày bắt đầu kỳ mới phải sau ngày kết thúc kỳ trước.'
+                    : fieldErrors.startdate
+                }
                 onChange={(e) => set('startDate', e.target.value)}
               />
               <TextField
@@ -250,21 +404,36 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
         <Button disabled={action.busy} onClick={close}>
           Hủy
         </Button>
-        <Button variant="contained" form="staff-editor" type="submit" disabled={action.busy}>
-          {action.busy ? 'Đang lưu…' : staff ? 'Lưu thay đổi' : 'Tạo nhân viên'}
+        <Button
+          variant="contained"
+          form="staff-editor"
+          type="submit"
+          disabled={action.busy || blocked}
+        >
+          {action.busy
+            ? 'Đang lưu…'
+            : renewal
+              ? 'Tạo kỳ hợp đồng'
+              : staff
+                ? 'Lưu thay đổi'
+                : 'Tạo nhân viên'}
         </Button>
       </DialogActions>
       <ConfirmDialog
         error={action.error}
         open={confirm}
-        title="Xác nhận lưu hồ sơ"
+        title={stale ? 'Dữ liệu đã thay đổi' : 'Xác nhận lưu hồ sơ'}
         busy={action.busy}
         onClose={() => setConfirm(false)}
-        onConfirm={() => void save()}
+        onConfirm={() => (stale ? setConfirm(false) : void save())}
       >
-        {active
-          ? 'Lưu thông tin tài khoản và công việc.'
-          : 'Ngừng tài khoản. Máy chủ sẽ từ chối nếu còn trách nhiệm chưa giải quyết.'}
+        {stale
+          ? 'Quay về hồ sơ để kiểm tra dữ liệu mới trước khi lưu lại.'
+          : renewal
+            ? 'Lưu kỳ hợp đồng mới và giữ nguyên lịch sử các kỳ trước.'
+            : active
+              ? 'Lưu thông tin tài khoản và công việc.'
+              : 'Ngừng tài khoản. Máy chủ sẽ từ chối nếu còn trách nhiệm chưa giải quyết.'}
       </ConfirmDialog>
     </Dialog>
   );

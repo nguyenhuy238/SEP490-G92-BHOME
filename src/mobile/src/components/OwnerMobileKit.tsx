@@ -1,16 +1,132 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Icon, Text, TouchableRipple } from 'react-native-paper';
-import { colors as c, staffColors as s } from '../theme/theme';
+import { Button, Icon, Text, TouchableRipple } from 'react-native-paper';
+import { DashboardCard, DashboardStatus } from './DashboardKit';
+import { colors, staffColors } from '../theme/theme';
 import { typography } from '../theme/typography';
+
+// Owner uses the same surfaces, type and touch feedback as Staff/Tenant.
+export function OwnerLoading() {
+  return (
+    <View accessibilityLabel="Đang tải dữ liệu" accessibilityRole="progressbar" style={{ gap: 12 }}>
+      {[0, 1, 2].map((key) => (
+        <View key={key} style={styles.skeleton}>
+          <View style={styles.skeletonLine} />
+          <View style={[styles.skeletonLine, { width: '60%' }]} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function OwnerDataState({
+  loading,
+  error,
+  reload,
+}: {
+  loading: boolean;
+  error: string;
+  reload: () => void;
+}) {
+  return (
+    <>
+      {loading && <OwnerLoading />}
+      {!!error && <OwnerFailure retry={reload} busy={loading} />}
+    </>
+  );
+}
+
+export function OwnerEmpty({ title, detail }: { title: string; detail: string }) {
+  return (
+    <DashboardCard>
+      <Text style={typography.sectionHeading}>{title}</Text>
+      <Text style={{ color: colors.muted }}>{detail}</Text>
+    </DashboardCard>
+  );
+}
+
+export function OwnerFailure({ retry, busy = false }: { retry: () => void; busy?: boolean }) {
+  return (
+    <DashboardCard>
+      <Text accessibilityRole="alert">
+        Chưa cập nhật được dữ liệu. Kiểm tra kết nối và thử lại.
+      </Text>
+      <Button onPress={retry} disabled={busy} contentStyle={{ minHeight: 48 }}>
+        Thử lại
+      </Button>
+    </DashboardCard>
+  );
+}
+
+export function OwnerRecordRow({
+  title,
+  detail,
+  status,
+  urgent = false,
+  onPress,
+  action = 'Xem chi tiết',
+  children,
+}: {
+  title: string;
+  detail?: string;
+  status: string;
+  urgent?: boolean;
+  onPress: () => void;
+  action?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <TouchableRipple
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${action}: ${title}`}
+      style={styles.record}
+    >
+      <View style={styles.recordContent}>
+        <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+          <DashboardStatus
+            tone={urgent ? 'red' : 'blue'}
+            palette={urgent ? { background: colors.redSoft, foreground: colors.red } : undefined}
+          >
+            {status}
+          </DashboardStatus>
+          <Text style={[typography.sectionHeading, { color: staffColors.navy }]} numberOfLines={2}>
+            {title}
+          </Text>
+          {children}
+          {!!detail && (
+            <Text style={{ color: colors.muted }} numberOfLines={3}>
+              {detail}
+            </Text>
+          )}
+          <Text style={[typography.link, { color: colors.blue }]}>{action}</Text>
+        </View>
+        <Icon source="chevron-right" size={22} color={colors.muted} />
+      </View>
+    </TouchableRipple>
+  );
+}
+
+const styles = StyleSheet.create({
+  record: { backgroundColor: colors.white, borderRadius: 18, overflow: 'hidden' },
+  recordContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    minHeight: 64,
+  },
+  skeleton: { backgroundColor: colors.white, borderRadius: 18, padding: 16, gap: 12 },
+  skeletonLine: { backgroundColor: colors.border, borderRadius: 6, width: '85%', height: 16 },
+});
 
 export function OwnerScreenIntro({ title, detail }: { title: string; detail: string }) {
   return (
-    <View style={styles.intro}>
-      <Text accessibilityRole="header" style={styles.title}>
+    <View style={ownerSurfaceStyles.intro}>
+      <Text accessibilityRole="header" style={ownerSurfaceStyles.title}>
         {title}
       </Text>
-      <Text style={styles.secondary}>{detail}</Text>
+      <Text style={ownerSurfaceStyles.secondary}>{detail}</Text>
     </View>
   );
 }
@@ -25,12 +141,12 @@ export function OwnerSection({
   children: React.ReactNode;
 }) {
   return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeading}>
-        <Text accessibilityRole="header" style={styles.sectionTitle}>
+    <View style={ownerSurfaceStyles.section}>
+      <View style={ownerSurfaceStyles.sectionHeading}>
+        <Text accessibilityRole="header" style={ownerSurfaceStyles.sectionTitle}>
           {title}
         </Text>
-        {!!detail && <Text style={styles.secondary}>{detail}</Text>}
+        {!!detail && <Text style={ownerSurfaceStyles.secondary}>{detail}</Text>}
       </View>
       {children}
     </View>
@@ -38,11 +154,11 @@ export function OwnerSection({
 }
 
 export function OwnerSurface({ children }: { children: React.ReactNode }) {
-  return <View style={styles.surface}>{children}</View>;
+  return <View style={ownerSurfaceStyles.surface}>{children}</View>;
 }
 
 export function OwnerDivider() {
-  return <View style={styles.divider} />;
+  return <View style={ownerSurfaceStyles.divider} />;
 }
 
 export function OwnerLinkRow({
@@ -60,40 +176,40 @@ export function OwnerLinkRow({
 }) {
   return (
     <TouchableRipple onPress={onPress} accessibilityRole="button" accessibilityLabel={title}>
-      <View style={styles.link}>
-        <View style={styles.icon}>
-          <Icon source={icon} size={21} color={s.blue} />
+      <View style={ownerSurfaceStyles.link}>
+        <View style={ownerSurfaceStyles.icon}>
+          <Icon source={icon} size={21} color={staffColors.blue} />
         </View>
-        <View style={styles.grow}>
-          <Text style={styles.rowTitle}>{title}</Text>
+        <View style={ownerSurfaceStyles.grow}>
+          <Text style={ownerSurfaceStyles.rowTitle}>{title}</Text>
           {!!detail && (
-            <Text style={styles.secondary} numberOfLines={2}>
+            <Text style={ownerSurfaceStyles.secondary} numberOfLines={2}>
               {detail}
             </Text>
           )}
         </View>
-        {!!value && <Text style={styles.value}>{value}</Text>}
-        <Icon source="chevron-right" size={18} color={c.muted} />
+        {!!value && <Text style={ownerSurfaceStyles.value}>{value}</Text>}
+        <Icon source="chevron-right" size={18} color={colors.muted} />
       </View>
     </TouchableRipple>
   );
 }
 
-const styles = StyleSheet.create({
+const ownerSurfaceStyles = StyleSheet.create({
   intro: { gap: 4, paddingHorizontal: 2 },
   title: { ...typography.screenTitle, color: '#173654' },
-  secondary: { ...typography.secondary, color: c.muted, flexShrink: 1 },
+  secondary: { ...typography.secondary, color: colors.muted, flexShrink: 1 },
   section: { gap: 12 },
   sectionHeading: { gap: 3 },
   sectionTitle: { ...typography.sectionHeading, color: '#173654' },
   surface: {
-    backgroundColor: c.white,
+    backgroundColor: colors.white,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
-  divider: { height: 1, backgroundColor: c.border, marginLeft: 64 },
+  divider: { height: 1, backgroundColor: colors.border, marginLeft: 64 },
   link: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   icon: {
     width: 38,
@@ -101,11 +217,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: s.blueSoft,
+    backgroundColor: staffColors.blueSoft,
   },
   grow: { flex: 1, minWidth: 0, gap: 3 },
   rowTitle: { ...typography.link, color: '#173654' },
-  value: { ...typography.value, color: s.blue, fontVariant: ['tabular-nums'] },
+  value: { ...typography.value, color: staffColors.blue, fontVariant: ['tabular-nums'] },
 });
 
-export const ownerMobileStyles = styles;
+export const ownerMobileStyles = ownerSurfaceStyles;

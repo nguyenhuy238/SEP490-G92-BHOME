@@ -17,8 +17,8 @@ import { Box, Heading, ui } from '../../components/WorkspaceKit';
 import { HoldingProgress } from './HoldingProgress';
 import { HoldingSigningConfirmation } from './HoldingSigningConfirmation';
 
-export function useHoldingSandbox(api: ContractClient, c: ContractView) {
-  const enabled = typeof __DEV__ !== 'undefined' && __DEV__ && c.isDevelopmentDemo;
+export function useHoldingSandbox(api: ContractClient, c: ContractView, allowed = true) {
+  const enabled = allowed && typeof __DEV__ !== 'undefined' && __DEV__ && c.isDevelopmentDemo;
   const [data, setData] = useState<HoldingSandboxState | null>(null);
   const service = useMemo(() => holdingSandboxClient(api.transport, c.id), [api, c.id]);
   useEffect(() => {
