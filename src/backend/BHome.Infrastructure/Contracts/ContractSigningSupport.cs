@@ -252,8 +252,12 @@ public sealed class SignaturePictureGenerator
             canvas.Clear(SKColors.Transparent);
             using var ink = new SKPaint
             {
-                Color = new SKColor(0x0D, 0x2C, 0x8C), IsAntialias = true, IsStroke = true, StrokeWidth = 5,
-                StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round
+                Color = new SKColor(0x0D, 0x2C, 0x8C),
+                IsAntialias = true,
+                IsStroke = true,
+                StrokeWidth = 5,
+                StrokeCap = SKStrokeCap.Round,
+                StrokeJoin = SKStrokeJoin.Round
             };
             var top0 = (height - inkHeight * scale) / 2;
             SKPoint Map(SKPoint p) => new(pad + (p.X - left) * scale, top0 + (p.Y - top) * scale);

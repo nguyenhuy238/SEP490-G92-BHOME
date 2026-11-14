@@ -139,8 +139,13 @@ internal sealed class AccountProvisioningWorld : IAsyncDisposable
         var db = setup.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var user = new ApplicationUser
         {
-            Id = id, UserName = email, Email = email, PhoneNumber = phone,
-            IsActive = active, EmailConfirmed = emailConfirmed, LockoutEnabled = true,
+            Id = id,
+            UserName = email,
+            Email = email,
+            PhoneNumber = phone,
+            IsActive = active,
+            EmailConfirmed = emailConfirmed,
+            LockoutEnabled = true,
         };
         db.PrepareUserRole(user, role);
         var result = await setup.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().CreateAsync(user, password);
