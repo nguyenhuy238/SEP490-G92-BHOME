@@ -183,12 +183,22 @@ internal static class Compact24Records
         workOrder.Write["assigned_at"] = "(@state::jsonb->>'createdAt')::timestamptz";
         workOrder.Write["task_data"] = "jsonb_build_object('schemaVersion',1,'recordType','MaintenanceWorkOrder','state',@state::jsonb)";
         workOrder.Write["approved_cost"] = "CASE WHEN @state::jsonb->>'approvedAt' IS NOT NULL THEN (@state::jsonb->>'estimatedCost')::numeric END";
-        History("IncidentActivity", "incident_reports", "IncidentId").AppendOnly = true;
-        History("IncidentEvidence", "incident_reports", "IncidentId");
+        void MaintenanceRecord(string name, bool appendOnly = false)
+        {
+            var record = History(name, "incident_reports", "IncidentId");
+            record.AppendOnly = appendOnly;
+            record.CustomFrom = "(SELECT history FROM incident_reports UNION ALL SELECT history FROM operational_tasks WHERE task_type='WORK_ORDER') t " +
+                "CROSS JOIN LATERAL (SELECT DISTINCT ON (h.value->>'recordKey') h.value->'state' AS data, h.value->>'deleted' AS deleted " +
+                "FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='" + name + "' ORDER BY h.value->>'recordKey',h.n DESC) s";
+            record.CustomState = "s.data";
+        }
+        MaintenanceRecord("IncidentActivity", true);
+        MaintenanceRecord("IncidentEvidence");
         History("EmergencyAction", "incident_reports", "IncidentId");
-        History("MaintenanceHistory", "incident_reports", "IncidentId").AppendOnly = true;
+        MaintenanceRecord("MaintenanceHistory", true);
         Technical("IncidentCommand", true).AppendOnly = true;
         Technical("IncidentFileUpload");
+        Technical("FastRepairPolicy");
         var incidentNotice = Notification("IncidentNotification");
         incidentNotice.Read["ReadAt"] = "t.read_at";
         incidentNotice.CustomFrom = "notifications t LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(t.delivery_history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='IncidentNotification' ORDER BY n DESC LIMIT 1) s ON TRUE";

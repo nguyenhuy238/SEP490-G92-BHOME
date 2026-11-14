@@ -23,11 +23,13 @@ internal sealed class IncidentNotificationDelivery(BHomePersistenceContext db, I
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"incident-delivery:" + payload.NotificationId}, 0))", t);
         var row = await db.Set<IncidentNotification>().SingleOrDefaultAsync(n => n.Id == payload.NotificationId, t);
         if (row is null || row.DeliveryState is "Delivered" or "Suppressed") return;
-        var report = await repository.IncidentAsync(row.IncidentId, t) ?? throw IncidentException.Missing();
+        var report = row.IncidentId is { } incident ? await repository.IncidentAsync(incident, t) : null;
+        var work = row.WorkOrderId is { } workId ? await repository.WorkOrderAsync(workId, t) : null;
+        var location = report?.LocationId ?? work?.LocationId ?? throw IncidentException.Missing();
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
         var eligible = await repository.ActiveRoleAsync(row.RecipientId, Roles.Owner, t) ||
-            await repository.ActiveRoleAsync(row.RecipientId, Roles.Staff, t) && await repository.StaffAssignedAsync(row.RecipientId, report.LocationId, today, t) ||
-            report.ReporterRole == Roles.Tenant && report.ReporterId == row.RecipientId && await repository.ActiveRoleAsync(row.RecipientId, Roles.Tenant, t);
+            await repository.ActiveRoleAsync(row.RecipientId, Roles.Staff, t) && await repository.StaffAssignedAsync(row.RecipientId, location, today, t) ||
+            report?.ReporterRole == Roles.Tenant && report.ReporterId == row.RecipientId && await repository.ActiveRoleAsync(row.RecipientId, Roles.Tenant, t);
         if (!eligible)
         { row.DeliveryState = "Suppressed"; await db.SaveChangesAsync(t); await tx.CommitAsync(t); return; }
         string deliveryReference;
@@ -36,7 +38,7 @@ internal sealed class IncidentNotificationDelivery(BHomePersistenceContext db, I
             deliveryReference = await provider.DeliverAsync(new(row.Id.ToString("N"), row.RecipientId.ToString("N"),
                 "incident." + row.Event, new Dictionary<string, string>
                 {
-                    ["incidentId"] = row.IncidentId.ToString("N"),
+                    ["resourceId"] = (row.IncidentId ?? row.WorkOrderId!.Value).ToString("N"),
                     ["priority"] = row.HighPriority ? "high" : "normal"
                 }), t);
             if (string.IsNullOrWhiteSpace(deliveryReference) || deliveryReference.Length > 200)

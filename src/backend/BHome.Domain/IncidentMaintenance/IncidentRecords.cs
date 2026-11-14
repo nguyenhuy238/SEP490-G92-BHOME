@@ -37,7 +37,10 @@ public sealed class IncidentReport : AuditableEntity
 
 public sealed class MaintenanceWorkOrder : AuditableEntity
 {
-    public Guid IncidentId { get; set; }
+    public Guid? IncidentId { get; set; }
+    public string Source { get; set; } = "Incident";
+    public string Description { get; set; } = "";
+    public string? CommonArea { get; set; }
     public Guid LocationId { get; set; }
     public Guid? RoomId { get; set; }
     public Guid? AssetId { get; set; }
@@ -50,6 +53,15 @@ public sealed class MaintenanceWorkOrder : AuditableEntity
     public string? Vendor { get; set; }
     public int? EstimatedMinutes { get; set; }
     public decimal? EstimatedCost { get; set; }
+    public bool UsesMaterials { get; set; }
+    public int? FastRepairPolicyVersion { get; set; }
+    public string? FastRepairCategory { get; set; }
+    public DateTimeOffset? FastRepairAuthorizedAt { get; set; }
+    public Guid? ProposedAssetId { get; set; }
+    public string? ProposedAssetName { get; set; }
+    public string? ProposedAssetCategory { get; set; }
+    public string? ProposedAssetCondition { get; set; }
+    public bool AssetProposalPending { get; set; }
     public int ProposalVersion { get; set; }
     public int? ApprovedProposalVersion { get; set; }
     public Guid? ApprovedById { get; set; }
@@ -61,6 +73,7 @@ public sealed class MaintenanceWorkOrder : AuditableEntity
     public DateTimeOffset? VerifiedAt { get; set; }
     public int Version { get; set; } = 1;
     public bool PlanApproved => ApprovedProposalVersion == ProposalVersion && ApprovedAt is not null;
+    public bool ExecutionAuthorized => PlanApproved || FastRepairPolicyVersion > 0 && FastRepairAuthorizedAt is not null && EstimatedCost == 0 && !UsesMaterials;
     public bool IsOpen => Status is not (WorkOrderStatus.Verified or WorkOrderStatus.Cancelled);
 
     public void Propose()
@@ -82,7 +95,7 @@ public sealed class MaintenanceWorkOrder : AuditableEntity
     }
     public void Submit(Guid activity)
     {
-        Require(Status == WorkOrderStatus.InProgress && PlanApproved);
+        Require(Status == WorkOrderStatus.InProgress && ExecutionAuthorized);
         CompletionActivityId = activity; Status = WorkOrderStatus.PendingVerification;
     }
     public void Verify(Guid actor, DateTimeOffset now)
@@ -99,14 +112,37 @@ public sealed class MaintenanceWorkOrder : AuditableEntity
     {
         Require(IsOpen); Status = WorkOrderStatus.Cancelled;
     }
+    public void StartFastRepair(int policyVersion, string category, DateTimeOffset now)
+    {
+        Require(Status == WorkOrderStatus.Assigned && policyVersion > 0 && EstimatedCost == 0 && !UsesMaterials);
+        FastRepairPolicyVersion = policyVersion; FastRepairCategory = category; FastRepairAuthorizedAt = now;
+        Status = WorkOrderStatus.InProgress;
+    }
+    public void RequireNormalApproval()
+    {
+        Require(Status == WorkOrderStatus.InProgress && FastRepairPolicyVersion is not null);
+        FastRepairPolicyVersion = null; FastRepairCategory = null; FastRepairAuthorizedAt = null;
+        ApprovedAt = null; ApprovedById = null; ApprovedProposalVersion = null;
+        Status = WorkOrderStatus.Assigned;
+    }
     private static void Require(bool condition)
     { if (!condition) throw new InvalidOperationException("invalid_work_order_transition"); }
+}
+
+public sealed class FastRepairPolicy : AuditableEntity
+{
+    public static readonly Guid GlobalId = Guid.Parse("ba000000-0000-0000-0000-000000000071");
+    public FastRepairPolicy() { Id = GlobalId; }
+    public int Version { get; set; } = 1;
+    public string CategoriesJson { get; set; } = "[]";
+    public Guid ApprovedById { get; set; }
+    public DateTimeOffset ApprovedAt { get; set; }
 }
 
 // Immutable event payload retains proposal/decision/assignment snapshots; public notes are separate.
 public sealed class IncidentActivity : AuditableEntity
 {
-    public Guid IncidentId { get; set; }
+    public Guid? IncidentId { get; set; }
     public Guid? WorkOrderId { get; set; }
     public Guid ActorId { get; set; }
     public string Action { get; set; } = "";
@@ -118,7 +154,7 @@ public sealed class IncidentActivity : AuditableEntity
 
 public sealed class IncidentEvidence : AuditableEntity
 {
-    public Guid IncidentId { get; set; }
+    public Guid? IncidentId { get; set; }
     public Guid? WorkOrderId { get; set; }
     public Guid? ActivityId { get; set; }
     public Guid UploadedById { get; set; }
@@ -143,7 +179,7 @@ public sealed class EmergencyAction : AuditableEntity
 // SourceId is a WorkOrder ID, direct-completion Activity ID or EmergencyAction ID, never an aggregate total.
 public sealed class MaintenanceExpense : AuditableEntity
 {
-    public Guid IncidentId { get; set; }
+    public Guid? IncidentId { get; set; }
     public Guid LocationId { get; set; }
     public Guid? RoomId { get; set; }
     public Guid? AssetId { get; set; }
@@ -160,7 +196,7 @@ public sealed class MaintenanceExpense : AuditableEntity
 
 public sealed class MaintenanceHistory : AuditableEntity
 {
-    public Guid IncidentId { get; set; }
+    public Guid? IncidentId { get; set; }
     public Guid? WorkOrderId { get; set; }
     public Guid ActivityId { get; set; }
     public Guid LocationId { get; set; }
@@ -179,14 +215,16 @@ public sealed class IncidentCommand : AuditableEntity
 {
     public Guid ActorId { get; set; }
     public Guid Key { get; set; }
-    public Guid IncidentId { get; set; }
+    public Guid? IncidentId { get; set; }
     public string Fingerprint { get; set; } = "";
     public string ResponseJson { get; set; } = "";
 }
 
 public sealed class IncidentNotification : AuditableEntity
 {
-    public Guid IncidentId { get; set; }
+    public Guid? IncidentId { get; set; }
+    public Guid? WorkOrderId { get; set; }
+    public Guid LocationId { get; set; }
     public Guid ActivityId { get; set; }
     public Guid RecipientId { get; set; }
     public string Event { get; set; } = "";

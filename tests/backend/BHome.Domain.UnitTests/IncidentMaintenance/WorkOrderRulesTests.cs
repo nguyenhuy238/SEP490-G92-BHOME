@@ -49,4 +49,37 @@ public sealed class WorkOrderRulesTests
         Assert.True(IncidentReport.CanResolve([WorkOrderStatus.Verified, WorkOrderStatus.Cancelled]));
         Assert.True(IncidentReport.CanResolve([WorkOrderStatus.Verified, WorkOrderStatus.Verified]));
     }
+    [Fact]
+    public void FastRepairUsesPolicyEvidenceAndAlwaysRequiresVerification()
+    {
+        var work = new MaintenanceWorkOrder { EstimatedCost = 0 };
+        work.StartFastRepair(2, "Owner-enabled category", DateTimeOffset.UtcNow);
+        Assert.False(work.PlanApproved); Assert.True(work.ExecutionAuthorized);
+        Assert.Null(work.ApprovedById); Assert.Null(work.ApprovedAt);
+        Assert.Throws<InvalidOperationException>(() => work.Verify(Guid.NewGuid(), DateTimeOffset.UtcNow));
+        work.Submit(Guid.NewGuid()); work.Rework(); work.Submit(Guid.NewGuid());
+        work.Verify(Guid.NewGuid(), DateTimeOffset.UtcNow);
+        Assert.Equal(WorkOrderStatus.Verified, work.Status);
+    }
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(0, true)]
+    public void FastRepairRejectsAnyCostOrMaterials(int cost, bool materials)
+    {
+        var work = new MaintenanceWorkOrder { EstimatedCost = cost, UsesMaterials = materials };
+        Assert.Throws<InvalidOperationException>(() => work.StartFastRepair(1, "Category", DateTimeOffset.UtcNow));
+    }
+    [Fact]
+    public void FallbackStopsExecutionUntilNewProposalApproval()
+    {
+        var work = new MaintenanceWorkOrder { EstimatedCost = 0 };
+        work.StartFastRepair(1, "Category", DateTimeOffset.UtcNow); work.RequireNormalApproval();
+        Assert.Equal(WorkOrderStatus.Assigned, work.Status); Assert.False(work.ExecutionAuthorized);
+        Assert.Null(work.FastRepairPolicyVersion);
+        Assert.Throws<InvalidOperationException>(() => work.Submit(Guid.NewGuid()));
+        work.EstimatedCost = 100000; work.Propose();
+        Assert.Throws<InvalidOperationException>(work.Start);
+        work.DecidePlan(true, Guid.NewGuid(), DateTimeOffset.UtcNow); work.Start();
+        Assert.True(work.ExecutionAuthorized);
+    }
 }

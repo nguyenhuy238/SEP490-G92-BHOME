@@ -38,6 +38,7 @@ internal sealed class IncidentRepository(BHomePersistenceContext db) : IIncident
     public Task<bool> ActiveRoleAsync(Guid actor, string role, CancellationToken t) => db.Users.AsNoTracking().AnyAsync(u =>
         u.Id == actor && u.IsActive && db.UserRoles.Any(ur => ur.UserId == actor && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == role)), t);
     public Task<bool> ActiveLocationAsync(Guid id, CancellationToken t) => db.Locations.AsNoTracking().AnyAsync(l => l.Id == id && l.IsActive, t);
+    public Task<FastRepairPolicy?> FastRepairPolicyAsync(CancellationToken t) => db.Set<FastRepairPolicy>().SingleOrDefaultAsync(p => p.Id == FastRepairPolicy.GlobalId, t);
     private IQueryable<Guid> StaffAt(Guid location, DateOnly today) =>
         from assignment in db.StaffLocationAssignments.AsNoTracking()
         join staff in db.Users.AsNoTracking() on assignment.StaffUserId equals staff.Id
@@ -47,6 +48,8 @@ internal sealed class IncidentRepository(BHomePersistenceContext db) : IIncident
         select staff.Id;
     public Task<bool> StaffAssignedAsync(Guid actor, Guid location, DateOnly today, CancellationToken t) => StaffAt(location, today).AnyAsync(s => s == actor, t);
     public Task<bool> StaffAvailableAsync(Guid location, DateOnly today, CancellationToken t) => StaffAt(location, today).AnyAsync(t);
+    public async Task<Guid?> ResponsibleStaffAsync(Guid location, DateOnly today, CancellationToken t) =>
+        await StaffAt(location, today).Select(id => (Guid?)id).SingleOrDefaultAsync(t);
     public async Task<IReadOnlyList<Guid>> RecipientsAsync(Guid location, DateOnly today, bool includeStaff, CancellationToken t)
     {
         var owners = db.Users.AsNoTracking().Where(u => u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id &&
@@ -77,6 +80,16 @@ internal sealed class IncidentRepository(BHomePersistenceContext db) : IIncident
         .SingleOrDefaultAsync(c => c.ActorId == actor && c.Key == key, t);
     public async Task<IReadOnlyList<IncidentEvidence>> EvidenceAsync(Guid incident, CancellationToken t) =>
         await db.Set<IncidentEvidence>().Where(e => e.IncidentId == incident).OrderBy(e => e.CreatedAt).ThenBy(e => e.Id).ToArrayAsync(t);
+    public async Task<IReadOnlyList<IncidentEvidence>> WorkEvidenceAsync(Guid workOrder, CancellationToken t) =>
+        await db.Set<IncidentEvidence>().Where(e => e.WorkOrderId == workOrder).OrderBy(e => e.CreatedAt).ThenBy(e => e.Id).ToArrayAsync(t);
+    public async Task<IncidentPage<IncidentActivityView>> WorkHistoryAsync(Guid workOrder, IncidentScope scope, int page, int size, CancellationToken t)
+    {
+        var rows = db.Set<IncidentActivity>().AsNoTracking().Where(a => a.WorkOrderId == workOrder);
+        var count = await rows.CountAsync(t);
+        var items = await rows.OrderByDescending(a => a.OccurredAt).ThenBy(a => a.Id).Skip((page - 1) * size).Take(size)
+            .Select(a => new IncidentActivityView(a.Id, a.WorkOrderId, a.Action, a.Note, a.OccurredAt, a.ActorId, scope.Owner ? a.DataJson : null)).ToArrayAsync(t);
+        return new(items, page, size, count);
+    }
     public async Task<IReadOnlyList<EmergencyAction>> EmergencyActionsAsync(Guid incident, CancellationToken t) =>
         await db.Set<EmergencyAction>().Where(e => e.IncidentId == incident).OrderBy(e => e.CreatedAt).ThenBy(e => e.Id).ToArrayAsync(t);
 
@@ -145,7 +158,13 @@ internal sealed class IncidentRepository(BHomePersistenceContext db) : IIncident
     public async Task<IncidentPage<WorkOrderView>> ListWorkOrdersAsync(IncidentScope scope, IncidentQuery query, DateTimeOffset now, CancellationToken t)
     {
         var reports = Filter(Visible(scope), query).Select(r => r.Id);
-        var rows = db.Set<MaintenanceWorkOrder>().AsNoTracking().Where(w => reports.Contains(w.IncidentId));
+        var rows = VisibleWork(scope);
+        if (query.WorkOrderId is { } workOrder) rows = rows.Where(w => w.Id == workOrder);
+        if (query.IncidentId is { } incident) rows = rows.Where(w => w.IncidentId == incident);
+        if (query.LocationId is { } location) rows = rows.Where(w => w.LocationId == location);
+        if (query.RoomId is { } room) rows = rows.Where(w => w.RoomId == room);
+        if (query.AssetId is { } asset) rows = rows.Where(w => w.AssetId == asset);
+        if (query.Status.HasValue || query.Severity.HasValue) rows = rows.Where(w => w.IncidentId != null && reports.Contains(w.IncidentId.Value));
         if (query.WorkOrderStatus is { } status) rows = rows.Where(w => w.Status == status);
         var count = await rows.CountAsync(t);
         var items = await rows.OrderBy(w => w.TargetCompletionAt).ThenBy(w => w.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToArrayAsync(t);
@@ -164,7 +183,13 @@ internal sealed class IncidentRepository(BHomePersistenceContext db) : IIncident
     public async Task<IncidentPage<MaintenanceHistoryView>> MaintenanceAsync(IncidentScope scope, IncidentQuery query, CancellationToken t)
     {
         var reports = Filter(Visible(scope), query).Select(r => r.Id);
-        var rows = db.Set<MaintenanceHistory>().AsNoTracking().Where(h => reports.Contains(h.IncidentId));
+        var works = VisibleWork(scope).Select(w => w.Id);
+        var rows = db.Set<MaintenanceHistory>().AsNoTracking().Where(h => h.IncidentId != null && reports.Contains(h.IncidentId.Value) || h.WorkOrderId != null && works.Contains(h.WorkOrderId.Value));
+        if (query.WorkOrderId is { } workOrder) rows = rows.Where(h => h.WorkOrderId == workOrder);
+        if (query.IncidentId is { } incident) rows = rows.Where(h => h.IncidentId == incident);
+        if (query.LocationId is { } location) rows = rows.Where(h => h.LocationId == location);
+        if (query.RoomId is { } room) rows = rows.Where(h => h.RoomId == room);
+        if (query.AssetId is { } asset) rows = rows.Where(h => h.AssetId == asset);
         // Cost-bearing maintenance history is Owner-only. Staff uses its Work Order progress timeline.
         if (!scope.Owner) rows = rows.Where(h => h.WorkOrderId != null && db.Set<MaintenanceWorkOrder>()
             .Any(w => w.Id == h.WorkOrderId && w.AssignedStaffId == scope.ActorId));
@@ -182,15 +207,20 @@ internal sealed class IncidentRepository(BHomePersistenceContext db) : IIncident
     public async Task<IncidentPage<IncidentNotificationView>> NotificationsAsync(IncidentScope scope, int page, int size, CancellationToken t)
     {
         var reports = Visible(scope).Select(r => r.Id);
-        var rows = db.Set<IncidentNotification>().AsNoTracking().Where(n => n.RecipientId == scope.ActorId && reports.Contains(n.IncidentId));
+        var works = VisibleWork(scope).Select(w => w.Id);
+        var rows = db.Set<IncidentNotification>().AsNoTracking().Where(n => n.RecipientId == scope.ActorId &&
+            (n.IncidentId != null && reports.Contains(n.IncidentId.Value) || n.WorkOrderId != null && works.Contains(n.WorkOrderId.Value)));
         var count = await rows.CountAsync(t);
         var items = await rows.OrderByDescending(n => n.CreatedAt).ThenBy(n => n.Id).Skip((page - 1) * size).Take(size)
-            .Select(n => new IncidentNotificationView(n.Id, n.IncidentId, n.Event, n.HighPriority, n.CreatedAt, n.ReadAt, n.DeliveryState)).ToArrayAsync(t);
+            .Select(n => new IncidentNotificationView(n.Id, n.IncidentId, n.Event, n.HighPriority, n.CreatedAt, n.ReadAt, n.DeliveryState, n.WorkOrderId)).ToArrayAsync(t);
         return new(items, page, size, count);
     }
     public Task<IncidentNotification?> NotificationAsync(Guid id, Guid actor, CancellationToken t) =>
         db.Set<IncidentNotification>().SingleOrDefaultAsync(n => n.Id == id && n.RecipientId == actor, t);
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
+    private IQueryable<MaintenanceWorkOrder> VisibleWork(IncidentScope scope) => db.Set<MaintenanceWorkOrder>().AsNoTracking().Where(w =>
+        scope.Owner || scope.Staff && db.Locations.Any(l => l.Id == w.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a =>
+            a.LocationId == w.LocationId && a.StaffUserId == scope.ActorId && a.StartDate <= scope.Today && a.EndDate >= scope.Today));
     public void Add(object entity) => db.Add(entity);
     public void Audit(Guid actor, string action, Guid activityId, DateTimeOffset now) => db.SecurityAudit.Add(new SecurityAuditRecord
     { UserId = actor, Event = action, TargetType = "IncidentActivity", TargetId = activityId, OccurredAt = now, Succeeded = true });

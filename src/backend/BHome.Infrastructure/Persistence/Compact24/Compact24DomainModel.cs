@@ -15,6 +15,7 @@ internal static class Compact24DomainModel
         // Reuse domain relationship configuration; SQL projections replace every source table.
         model.ConfigureCapture();
         model.ConfigureContracts();
+        model.Entity<BHome.Domain.IncidentMaintenance.FastRepairPolicy>().Property(p => p.Version).IsConcurrencyToken();
         model.ApplyConfigurationsFromAssembly(typeof(Compact24DomainModel).Assembly);
         new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentReportConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.IncidentReport>());
         new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.WorkOrderConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>());
