@@ -43,3 +43,32 @@ trong tác vụ này. Kết quả trên xác nhận sửa lỗi cấu hình; kh�
 pipeline đã xanh trên GitHub. Chưa commit, push hoặc merge. Sau khi commit và push
 bản sửa lên nhánh `member/QHuy` của PR #108, sự kiện `pull_request.synchronize`
 sẽ cho GitHub đánh giá lại workflow; cần kiểm tra kết quả CI thực trước khi merge.
+
+## Cập nhật sau khi người dùng yêu cầu commit và push
+
+Commit `134c4cd1` đã push lên `member/QHuy` và tự kích hoạt
+[run 43563552384](https://github.com/nguyenhuy238/SEP490-G92-BHOME/actions/runs/43563552384).
+Cả hai job được tạo; cấu hình SDK, restore và build backend đã qua trên Ubuntu.
+Frontend qua install/lint/typecheck nhưng `npm test` phát hiện đúng bốn lỗi
+Owner Web đã ghi trong [biên bản merge](MERGE_DEVELOP_2026-11-14.md).
+Log thực tế: Owner Web 536/540 qua, Mobile 1.226/1.226 qua.
+
+Khôi phục các thao tác đã có ở commit `e4f5dcf0`, giữ bố cục hiện tại và các
+assertion hồi quy. Nguồn hành vi: `docs/ux/OWNER_FINANCE_UX.md`, test hiện có
+và client API hiện có; không thêm endpoint, công thức hoặc quyền mới.
+
+| Truy vết                       | Thành phần                | Hành vi khôi phục và kiểm tra chấp nhận                                                                                      |
+| ------------------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| FE-08, UC-31, GBR-01/02        | ExpensesApiPage           | Mở liên kết tùy chọn sau các trường cốt lõi; gửi đúng Room/Asset/Work Order ID; giữ khóa chỉnh sửa nguồn quản lý.            |
+| BF-05, UC-21, JOB-10, GBR-09   | AutomationPage            | Hiển thị Draft theo cơ sở/kỳ; cập nhật qua API với expectedVersion; hiển thị total/missingInputs trả về, không tự phát hành. |
+| FE-08, UC-32/33; UX kỳ báo cáo | FinancialReportsApiPage   | Mặc định tháng trước, lối tắt kỳ; đổi bộ lọc chưa tải phải báo số liệu cũ, không tự gọi report.                              |
+| FE-08, UC-34, GBR-15/16        | FinancialScenariosApiPage | Lối tắt kỳ nền chỉ đổi trường ngày, không tự phân tích/lưu hoặc sửa sổ thực tế.                                              |
+
+Kiểm tra local bổ sung: bốn file test gốc **30/30 PASS**; `npm run lint`,
+`npm run build`, `npm run format:check` PASS. Mechanical detector của Impeccable
+không trả finding trên bốn file giao diện. Chưa kiểm chứng trực quan bằng browser
+trong lượt sửa này. Toàn bộ Owner Web **540/540 PASS**; lượt `npm test` đầu dùng
+Node 24.22.1 có 12 lỗi Mobile startup do runtime tự chuyển sang Node 22 của repo.
+Chạy lại toàn bộ Mobile bằng Node 22.23.4 theo phiên bản CI: **1.226/1.226 PASS**.
+Ánh xạ UC tài chính theo `docs/api/FINANCE.md` (UC-31 chi phí, UC-32/33 báo cáo,
+UC-34 What-if). CI của commit bổ sung được theo dõi tiếp sau push.
