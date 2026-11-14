@@ -7,6 +7,10 @@ import {
 import { Action, Heading, ui } from '../../components/WorkspaceKit';
 import { Input } from '../../components/WorkflowControls';
 import { IdentityWizard } from '../onboarding/IdentityWizard';
+import { IdentityPersonCard } from '../onboarding/IdentityPersonCard';
+import { type CaptureProgress, type IdentityStatus } from '../onboarding/onboarding';
+import { WorkspaceFooter } from '../../components/WorkspaceFooter';
+import { View } from 'react-native';
 
 export function HoldingNewTenant({
   api,
@@ -21,6 +25,9 @@ export function HoldingNewTenant({
   initialConfirmed = false,
   context = 'tenant',
   onVerifiedSummary,
+  stage,
+  onContinue,
+  disabled = false,
 }: {
   api: ContractClient;
   roomId: string;
@@ -34,6 +41,9 @@ export function HoldingNewTenant({
   initialConfirmed?: boolean;
   context?: 'tenant' | 'holding';
   onVerifiedSummary?: (summary: { fullName: string; dateOfBirth: string | null }) => void;
+  stage?: 'details' | 'identity';
+  onContinue?: () => void;
+  disabled?: boolean;
 }) {
   const applicant = context === 'holding';
   const [name, setName] = useState(initialName);
@@ -45,9 +55,11 @@ export function HoldingNewTenant({
   const [uncertain, setUncertain] = useState(false);
   const [confirmed, setConfirmed] = useState(initialConfirmed);
   const [error, setError] = useState('');
+  const [identityStatus, setIdentityStatus] = useState<IdentityStatus>('unscanned');
+  const [captureProgress, setCaptureProgress] = useState<CaptureProgress>();
   const lock = useRef(false);
   async function enter(next: 'capture' | 'verify') {
-    if (lock.current || uncertain || !['Owner', 'Staff'].includes(role)) return;
+    if (lock.current || uncertain || disabled || !['Owner', 'Staff'].includes(role)) return;
     if (!name.trim() || name.trim().length > 150) {
       setError(
         applicant
@@ -63,6 +75,10 @@ export function HoldingNewTenant({
       return;
     }
     if (residentId) {
+      if (stage === 'details') {
+        onContinue?.();
+        return;
+      }
       setMode(next);
       setOpen(role === 'Staff');
       return;
@@ -75,6 +91,10 @@ export function HoldingNewTenant({
       const result = await api.createHoldingResident(roomId, name, email);
       setResidentId(result.id);
       onCreated(result.id, name.trim(), email.trim());
+      if (stage === 'details') {
+        onContinue?.();
+        return;
+      }
       setMode(next);
       setOpen(role === 'Staff');
     } catch (e) {
@@ -91,20 +111,61 @@ export function HoldingNewTenant({
   return (
     <>
       {!applicant && <Heading title="Thông tin người thuê mới" />}
-      <Input
-        label={applicant ? 'Họ và tên *' : 'Tên người thuê'}
-        value={name}
-        onChange={setName}
-        disabled={busy || !!residentId || uncertain}
-      />
-      <Input
-        label={applicant ? 'Email *' : 'Email người thuê'}
-        email
-        value={email}
-        onChange={setEmail}
-        disabled={busy || !!residentId || uncertain}
-      />
-      {role === 'Staff' ? (
+      {stage !== 'identity' && (
+        <>
+          <Input
+            label={applicant ? 'Họ và tên *' : 'Tên người thuê'}
+            value={name}
+            onChange={setName}
+            disabled={busy || !!residentId || uncertain}
+          />
+          <Input
+            label={applicant ? 'Email *' : 'Email người thuê'}
+            email
+            value={email}
+            onChange={setEmail}
+            disabled={busy || !!residentId || uncertain}
+          />
+        </>
+      )}
+      {stage === 'details' ? (
+        <WorkspaceFooter>
+          <View style={{ padding: 12, backgroundColor: '#FFFFFF' }}>
+            <Action disabled={busy || uncertain || disabled} onPress={() => void enter('verify')}>
+              {busy ? 'Đang lưu…' : 'Tiếp tục'}
+            </Action>
+          </View>
+        </WorkspaceFooter>
+      ) : stage === 'identity' && role === 'Staff' ? (
+        <>
+          <IdentityPersonCard
+            person={{
+              key: residentId,
+              residentId,
+              label: name,
+              email,
+              status: confirmed || initialConfirmed ? 'confirmed' : identityStatus,
+              captureProgress,
+            }}
+            label={name}
+            role="Người giữ chỗ"
+            disabled={busy || uncertain || disabled || !residentId}
+            onScan={() =>
+              void enter(
+                captureProgress?.front === 'recognized' && captureProgress?.back === 'recognized'
+                  ? 'verify'
+                  : 'capture',
+              )
+            }
+            onManual={() => void enter('verify')}
+          />
+          {(confirmed || initialConfirmed) && (
+            <Action secondary disabled={disabled} onPress={() => void enter('verify')}>
+              Xem thông tin CCCD
+            </Action>
+          )}
+        </>
+      ) : role === 'Staff' ? (
         <>
           <Action secondary disabled={busy || uncertain} onPress={() => void enter('verify')}>
             {residentId ? 'Mở thông tin CCCD' : 'Nhập thông tin CCCD'}
@@ -137,7 +198,7 @@ export function HoldingNewTenant({
           )}
         </>
       )}
-      {(confirmed || initialConfirmed) && (
+      {stage !== 'details' && (confirmed || initialConfirmed) && (
         <Text>
           {applicant ? 'Đã xác nhận thông tin người giữ chỗ.' : 'Đã xác nhận thông tin người thuê.'}
         </Text>
@@ -148,17 +209,21 @@ export function HoldingNewTenant({
         </Text>
       )}
       {!!error && <Text style={ui.red}>{error}</Text>}
-      {open && residentId && (
+      {(open || (stage === 'identity' && role === 'Staff')) && residentId && (
         <IdentityWizard
           residentId={residentId}
           personLabel={name.trim()}
           modal
+          visible={open}
           mode={mode}
           onModeChange={setMode}
           onConfirmed={() => {
             setConfirmed(true);
+            if (stage === 'identity') setOpen(false);
             onConfirmed();
           }}
+          onStatusChange={setIdentityStatus}
+          onCaptureProgress={setCaptureProgress}
           onVerifiedSummary={(summary) => {
             setName(summary.fullName);
             onVerifiedSummary?.(summary);

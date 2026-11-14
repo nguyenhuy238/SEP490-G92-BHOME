@@ -33,6 +33,15 @@ vi.mock('../components/WorkspaceKit', () => ({
     <button onClick={onPress}>{children}</button>
   ),
 }));
+vi.mock('../components/OwnerMobileKit', () => ({
+  OwnerScreenIntro: ({ title }: { title: string }) => <h1>{title}</h1>,
+  OwnerSection: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
+  OwnerSurface: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
+  OwnerDivider: () => <hr />,
+  OwnerLinkRow: ({ title, onPress }: { title: string; onPress: () => void }) => (
+    <button onClick={onPress}>{title}</button>
+  ),
+}));
 vi.mock('../components/WorkflowControls', () => ({ ChoiceField: () => <input /> }));
 vi.mock('../components/WorkspaceQueryState', () => ({
   QueryState: () => null,

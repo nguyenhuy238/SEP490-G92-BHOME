@@ -23,8 +23,15 @@ export function signerState(
     : 'unsigned';
 }
 export function rentalContractState(contract: ContractView, readiness: Readiness | null) {
-  const owner = signerState(contract.signatures, contract.ownerSignerId);
-  const tenant = signerState(contract.signatures, contract.tenantUserId);
+  const internalComplete =
+    contract.signingMode === 'INTERNAL_OTP_DRAWN' &&
+    ['PendingActivation', 'Active'].includes(contract.status);
+  const owner = internalComplete
+    ? 'signed'
+    : signerState(contract.signatures, contract.ownerSignerId);
+  const tenant = internalComplete
+    ? 'signed'
+    : signerState(contract.signatures, contract.tenantUserId);
   const signed = owner === 'signed' && tenant === 'signed';
   const active = contract.status === 'Active';
   const depositVerified = !!readiness && /^0(?:\.0+)?$/.test(readiness.remainingDeposit);

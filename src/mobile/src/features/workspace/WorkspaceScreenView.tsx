@@ -44,7 +44,6 @@ import {
   Profile,
   Notifications,
   SecuritySettings,
-  NotificationPreferences,
 } from '../../screens/SharedScreens';
 
 import { OnboardingScreen } from '../../screens/OnboardingScreen';
@@ -157,7 +156,7 @@ const screens = {
   notifications: Notifications,
   'send-notification': StaffNotificationScreen,
   security: SecuritySettings,
-  preferences: NotificationPreferences,
+  preferences: () => <UnavailableWorkspaceScreen screen="preferences" />,
 };
 export function WorkspaceScreenView({ screen }: { screen: string }) {
   const { role, preview, go } = useWorkspace();

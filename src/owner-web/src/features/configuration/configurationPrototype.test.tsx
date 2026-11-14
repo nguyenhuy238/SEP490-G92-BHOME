@@ -9,9 +9,7 @@ import { SharedConfigurationProvider } from './SharedConfigurationContext';
 import { ConfigurationLibraryPage } from './pages/ConfigurationLibraryPage';
 import { AuthProvider } from '../../../../../packages/client-core/src/auth';
 
-vi.mock('../../services/config', () => ({ isMockMode: true }));
-
-vi.mock('../../services/config', () => ({ isMockMode: true }));
+vi.mock('../../services/config', () => ({ isMockMode: true, apiBaseUrl: '' }));
 
 function Providers({ children }: { children: React.ReactNode }) {
   return (

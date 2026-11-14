@@ -11,6 +11,10 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-24.04
+    env:
+      # Keep the CLI and dotnet format on the same SDK installation.
+      DOTNET_INSTALL_DIR: ${{ runner.temp }}/.dotnet
+      DOTNET_ROOT: ${{ runner.temp }}/.dotnet
     services:
       compact_postgres:
         image: postgres:16-alpine
@@ -31,6 +35,8 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
+      - name: Verify .NET SDK installation
+        run: dotnet --info
       - run: dotnet restore src/backend/BHome.sln
       - run: dotnet build src/backend/BHome.sln -c Release --no-restore
       # Capture tests use the same source-built MinIO image as local Compose.

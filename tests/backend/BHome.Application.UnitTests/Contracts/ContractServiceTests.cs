@@ -17,6 +17,36 @@ namespace BHome.Application.UnitTests.Contracts;
 public sealed class ContractServiceTests
 {
     [Fact]
+    public async Task HoldingPreparationUsesLocationMonthsAndRentMultiplierWithVietnamMidnightExpiry()
+    {
+        var rig = new Rig();
+        rig.Settings.GetAsync(rig.Room.LocationId, default).ReturnsForAnyArgs(new HoldingSettings(rig.Room.LocationId, 2, 1.5m, "Owner configured terms", 3));
+        var result = await rig.Service.HoldingPreparationAsync(rig.Room.Id, default);
+        Assert.Equal(Today, result.StartDate); Assert.Equal(Today.AddMonths(2), result.EndDate);
+        Assert.Equal(new DateTimeOffset(2026, 12, 28, 17, 0, 0, TimeSpan.Zero), result.ExpiresAt);
+        Assert.Equal(4500000, result.HoldingDeposit); Assert.Equal(3000000, result.MonthlyRent);
+        Assert.Equal(3, result.SettingsVersion);
+    }
+    [Fact]
+    public async Task HoldingPreparationDoesNotInventMissingLocationConfiguration()
+    {
+        var rig = new Rig();
+        var error = await Assert.ThrowsAsync<ContractException>(() => rig.Service.HoldingPreparationAsync(rig.Room.Id, default));
+        Assert.Equal("holding_settings_required", error.Code);
+    }
+    [Fact]
+    public async Task HoldingMetadataDoesNotTurnItsDetailIntoMainOnboarding()
+    {
+        var rig = new Rig();
+        var id = await rig.Service.CreateHoldingAsync(rig.HoldingDraft, Guid.NewGuid(), default);
+        var holding = rig.Contracts.Single();
+        holding.DraftMetadata = "{\"holdingNote\":\"synthetic\"}";
+        var detail = await rig.Service.GetAsync(id.Id, default);
+        Assert.Equal("Holding", detail.Kind);
+        Assert.False(detail.OnboardingDraft);
+        Assert.Equal(rig.HoldingDraft.HoldingDeposit, detail.RequiredDeposit);
+    }
+    [Fact]
     public async Task HoldingReadinessUsesHoldingApprovalInsteadOfMainContractRules()
     {
         var rig = new Rig();
@@ -46,6 +76,7 @@ public sealed class ContractServiceTests
         public readonly IContractSettlementLedger Ledger = Substitute.For<IContractSettlementLedger>();
         public readonly IContractHoldingLedger Holdings = Substitute.For<IContractHoldingLedger>();
         public readonly IContractDepositPosition Positions = Substitute.For<IContractDepositPosition>();
+        public readonly IHoldingSettingsData Settings = Substitute.For<IHoldingSettingsData>();
         public readonly List<Contract> Contracts = [];
         public readonly List<ContractMoveOut> Moves = [];
         public readonly List<ContractOperation> Operations = [];
@@ -95,7 +126,7 @@ public sealed class ContractServiceTests
             });
             Holdings.ApplyAsync(default, default, default, default, default, default).ReturnsForAnyArgs(Task.FromException<HoldingDepositApplication>(new IntegrationUnavailableException("holding ledger")));
             Positions.ReadAsync(default!, default, default!).ReturnsForAnyArgs(call => (DepositLedgerPosition?)new(Deposits.Where(d => call.Arg<Guid[]>().Contains(d.ContractId)).Sum(d => d.Amount), 0, 0, 0));
-            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock(), depositPositions: Positions, initialPayments: withInitialPayments ? InitialPayments : null);
+            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock(), depositPositions: Positions, holdingSettings: Settings, initialPayments: withInitialPayments ? InitialPayments : null);
         }
         public ContractDraftInput Draft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id], Today.AddDays(-10), Today.AddDays(30), 3000000, 3000000, "Synthetic approved terms");
         public HoldingDraftInput HoldingDraft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id],

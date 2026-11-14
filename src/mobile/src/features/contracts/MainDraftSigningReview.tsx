@@ -191,8 +191,8 @@ export function MainDraftSigningReview({
         <Heading title="Chờ Chủ cơ sở duyệt để ký" />
         <Pill tone="amber">Bản nháp đã lưu</Pill>
         <Text>
-          Chủ cơ sở xem PDF, chọn tài khoản người thuê và chuyển hợp đồng sang ký. Staff tiếp tục
-          theo dõi trong danh sách hợp đồng.
+          Chủ cơ sở xem PDF, phê duyệt và chuyển hợp đồng sang ký. Staff tiếp tục theo dõi trong
+          danh sách hợp đồng.
         </Text>
       </Box>
     );

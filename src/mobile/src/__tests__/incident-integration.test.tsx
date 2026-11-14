@@ -763,8 +763,8 @@ it('re-fetches WorkOrder detail after start instead of applying a local completi
   expect(screen.queryByRole('option', { name: 'Bắt đầu sửa chữa' })).toBeNull();
 });
 
-it.each(['Submitted', 'InProgress', 'Resolved'] as const)(
-  'Owner uses Owner Web for incident writes while %s monitoring remains available',
+it.each(['Submitted', 'InProgress'] as const)(
+  'Owner receives guarded incident quick actions while status is %s',
   (status) => {
     s.role = 'Owner';
     report.status = status;
@@ -776,12 +776,20 @@ it.each(['Submitted', 'InProgress', 'Resolved'] as const)(
         emergencyActions={[{ id: eid, activityId: wid, requestedCost: 50000, costApproved: null }]}
       />,
     );
-    expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
-    expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
+    expect(screen.getByLabelText('Chọn thao tác')).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Phân loại sự cố' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Quyết định chi phí khẩn cấp' })).toBeTruthy();
     expect(mutations()).toHaveLength(0);
     expect(s.success).not.toHaveBeenCalled();
   },
 );
+it('does not offer Owner mutations after an Incident is resolved', () => {
+  s.role = 'Owner';
+  report.status = 'Resolved';
+  render(<IncidentActionPanel report={report} role="Owner" />);
+  expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
+  expect(mutations()).toHaveLength(0);
+});
 it('Staff emergency acknowledgement uses its authorized endpoint and current report version', async () => {
   report.severity = 'Emergency';
   render(<IncidentActionPanel report={report} role="Staff" />);

@@ -94,7 +94,12 @@ export default function Home() {
   return (
     <Page>
       <Text variant="headlineMedium">BHOME · {session.roles.join(', ')}</Text>
-      {!!error && <Text style={styles.error}>{error}</Text>}
+      {!!error && (
+        <>
+          <Text style={styles.error}>{error}</Text>
+          <Button onPress={() => void load()}>Thử lại</Button>
+        </>
+      )}
       {session.roles.some((r) => r === 'Owner' || r === 'Staff') && (
         <View style={styles.card}>
           <Text variant="titleLarge">Kiểm tra nhận dạng OCR</Text>
@@ -104,7 +109,6 @@ export default function Home() {
           </Button>
         </View>
       )}
-      <Button onPress={() => void load()}>Tải lại dữ liệu</Button>
       {session.roles.includes('Owner') && (
         <Button mode="contained" onPress={() => router.push('/setup')}>
           Thiết lập cơ sở và phân công

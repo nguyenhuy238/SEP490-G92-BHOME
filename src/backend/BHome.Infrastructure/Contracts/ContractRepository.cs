@@ -24,9 +24,21 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
         var total = await query.CountAsync(t);
         var items = await query.OrderByDescending(c => c.StartDate).ThenBy(c => c.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(c => new ContractSummary(c.Id, c.RoomId, c.Room.LocationId, c.Room.Location.Name, c.Room.RoomNumber,
-                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent, c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft)).ToArrayAsync(t);
-        return new(items, page, pageSize, total);
+            .Select(c => new
+            {
+                Summary = new ContractSummary(c.Id, c.RoomId, c.Room.LocationId, c.Room.Location.Name, c.Room.RoomNumber,
+                c.Kind.ToString(), c.Status.ToString(), c.StartDate, c.EndDate, c.MonthlyRent,
+                c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft,
+                c.RequiredDeposit, c.HoldingExpiryAt),
+                c.AgreedPriceSnapshot
+            }).ToArrayAsync(t);
+        return new(items.Select(row =>
+        {
+            if (row.Summary.Kind != "Holding" || row.Summary.HoldingExpiresAt is not null) return row.Summary;
+            // Legacy contracts retain the original expiry in their immutable price snapshot.
+            try { return row.Summary with { HoldingExpiresAt = JsonSerializer.Deserialize<HoldingPriceSnapshot>(row.AgreedPriceSnapshot)?.HoldingExpiresAt }; }
+            catch (JsonException) { return row.Summary; }
+        }).ToArray(), page, pageSize, total);
     }
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
     public async Task<IReadOnlyList<ContractFinalInspection>> FinalInspectionsAsync(Guid contractId, CancellationToken t) => await db.Set<ContractFinalInspection>().Where(i => i.ContractId == contractId).OrderByDescending(i => i.Version).Take(100).ToArrayAsync(t);
@@ -152,13 +164,20 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
                 c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation);
         return await contracts.ToArrayAsync(t);
     }
-    public Task<bool> HoldingConflictAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, CancellationToken t) =>
-        db.Set<Contract>().AsNoTracking().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.StartDate <= to && c.EndDate >= from &&
-            (c.Status == ContractStatus.Active ||
-             c.Kind != ContractKind.Addendum &&
-             (c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Draft) &&
-             (c.Signatures.Any(s => s.Status != SignatureStatus.Failed) ||
-              db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TargetDepositContractId == c.Id && a.Amount > 0))), t);
+    public Task<bool> HoldingConflictAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, CancellationToken t)
+    {
+        var candidates = db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId && c.Id != exceptId && c.StartDate <= to && c.EndDate >= from);
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            return candidates.AnyAsync(c => c.Status == ContractStatus.Active ||
+                c.Kind != ContractKind.Addendum &&
+                (c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Draft) &&
+                (c.Signatures.Any(s => s.Status != SignatureStatus.Failed) ||
+                 db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Any(a => a.TargetDepositContractId == c.Id && a.Amount > 0)), t);
+        return candidates.AnyAsync(c => c.Status == ContractStatus.Active ||
+            c.Kind != ContractKind.Addendum &&
+            (c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation || c.Status == ContractStatus.Draft) &&
+            (c.Signatures.Any(s => s.Status != SignatureStatus.Failed) || db.Set<DepositVerification>().Any(d => d.ContractId == c.Id && d.Amount > 0)), t);
+    }
     public Task<Contract?> MainForHoldingAsync(Guid holdingId, CancellationToken t) => db.Set<Contract>()
         .Include(c => c.Room).ThenInclude(r => r.Location).Include(c => c.Room).ThenInclude(r => r.RoomType)
         .Include(c => c.Residents).Include(c => c.Signatures).AsSplitQuery()

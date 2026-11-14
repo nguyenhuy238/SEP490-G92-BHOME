@@ -20,6 +20,7 @@ export function ChoiceField({
   disabled = false,
   searchable = false,
   placeholder = 'Chọn…',
+  icon,
 }: {
   label: string;
   value: string;
@@ -28,6 +29,7 @@ export function ChoiceField({
   disabled?: boolean;
   searchable?: boolean;
   placeholder?: string;
+  icon?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -41,7 +43,7 @@ export function ChoiceField({
       <Text variant="labelMedium">{label}</Text>
       <Button
         mode="outlined"
-        icon="chevron-down"
+        icon={icon ?? 'chevron-down'}
         accessibilityLabel={label}
         disabled={disabled}
         onPress={() => {

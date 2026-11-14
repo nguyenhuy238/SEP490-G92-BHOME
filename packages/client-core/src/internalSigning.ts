@@ -7,6 +7,10 @@ export type InternalSigningStatus = {
   tenantAcceptedAt: string | null;
   ownerAcceptedAt: string | null;
   invitations: { id: string; status: string; expiresAt: string }[];
+  maskedEmail?: string | null;
+  tenantSimulated?: boolean;
+  canContinue?: boolean;
+  sandboxAvailable?: boolean;
 };
 export type SigningAccess = { session: string; documentHash: string; consentVersion: string };
 export function internalSigningClient(request: ReturnType<typeof createApiClient>) {
@@ -47,7 +51,7 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
     status: (id: string) =>
       request<InternalSigningStatus>('/api/v1/contracts/' + id + '/internal-signing'),
     invite: (id: string, snapshotHash: string, expiresAt: string) =>
-      post<{ id: string; token: string; status: string; expiresAt: string }>(
+      post<{ id: string; token?: string | null; status: string; expiresAt: string }>(
         '/api/v1/contracts/' + id + '/signing-invitations',
         { snapshotHash, expiresAt },
       ),
@@ -70,6 +74,12 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
   };
 }
 export function signingMessage(error: unknown) {
+  const value = error as { code?: string; problem?: { code?: string } };
+  const code = value?.code ?? value?.problem?.code;
+  if (code === 'signing_otp_key_not_configured')
+    return 'Chưa cấu hình khóa xác minh OTP. Vui lòng liên hệ quản trị viên trước khi tạo lời mời ký.';
+  if (code === 'signing_email_not_configured')
+    return 'Chưa cấu hình dịch vụ gửi email ký hợp đồng. Vui lòng liên hệ quản trị viên.';
   const status = (error as { status?: number }).status;
   if (status === 503) return 'Chưa cấu hình dịch vụ gửi mã hoặc tài liệu. Vui lòng liên hệ Owner.';
   if (status === 429) return 'Bạn đã thử quá nhiều lần. Vui lòng chờ rồi thử lại.';

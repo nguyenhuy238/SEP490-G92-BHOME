@@ -11,7 +11,7 @@ import {
   Typography,
 } from '@mui/material';
 import { createApiClient } from '../../../../../../packages/client-core/src/api';
-import { getApiBaseUrl } from '../../../../../../packages/client-core/src/config';
+import { apiBaseUrl } from '../../../services/config';
 import {
   internalSigningClient,
   signingMessage,
@@ -20,13 +20,7 @@ import {
 } from '../../../../../../packages/client-core/src/internalSigning';
 
 export default function AnonymousSigningPage() {
-  const api = useMemo(
-    () =>
-      internalSigningClient(
-        createApiClient(getApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.DEV)),
-      ),
-    [],
-  );
+  const api = useMemo(() => internalSigningClient(createApiClient(apiBaseUrl)), []);
   const [token] = useState(
     () => new URLSearchParams(window.location.hash.slice(1)).get('token') ?? '',
   );

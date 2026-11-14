@@ -119,3 +119,109 @@ const styles = StyleSheet.create({
   skeleton: { backgroundColor: colors.white, borderRadius: 18, padding: 16, gap: 12 },
   skeletonLine: { backgroundColor: colors.border, borderRadius: 6, width: '85%', height: 16 },
 });
+
+export function OwnerScreenIntro({ title, detail }: { title: string; detail: string }) {
+  return (
+    <View style={ownerSurfaceStyles.intro}>
+      <Text accessibilityRole="header" style={ownerSurfaceStyles.title}>
+        {title}
+      </Text>
+      <Text style={ownerSurfaceStyles.secondary}>{detail}</Text>
+    </View>
+  );
+}
+
+export function OwnerSection({
+  title,
+  detail,
+  children,
+}: {
+  title: string;
+  detail?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={ownerSurfaceStyles.section}>
+      <View style={ownerSurfaceStyles.sectionHeading}>
+        <Text accessibilityRole="header" style={ownerSurfaceStyles.sectionTitle}>
+          {title}
+        </Text>
+        {!!detail && <Text style={ownerSurfaceStyles.secondary}>{detail}</Text>}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+export function OwnerSurface({ children }: { children: React.ReactNode }) {
+  return <View style={ownerSurfaceStyles.surface}>{children}</View>;
+}
+
+export function OwnerDivider() {
+  return <View style={ownerSurfaceStyles.divider} />;
+}
+
+export function OwnerLinkRow({
+  icon,
+  title,
+  detail,
+  value,
+  onPress,
+}: {
+  icon: string;
+  title: string;
+  detail?: string;
+  value?: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableRipple onPress={onPress} accessibilityRole="button" accessibilityLabel={title}>
+      <View style={ownerSurfaceStyles.link}>
+        <View style={ownerSurfaceStyles.icon}>
+          <Icon source={icon} size={21} color={staffColors.blue} />
+        </View>
+        <View style={ownerSurfaceStyles.grow}>
+          <Text style={ownerSurfaceStyles.rowTitle}>{title}</Text>
+          {!!detail && (
+            <Text style={ownerSurfaceStyles.secondary} numberOfLines={2}>
+              {detail}
+            </Text>
+          )}
+        </View>
+        {!!value && <Text style={ownerSurfaceStyles.value}>{value}</Text>}
+        <Icon source="chevron-right" size={18} color={colors.muted} />
+      </View>
+    </TouchableRipple>
+  );
+}
+
+const ownerSurfaceStyles = StyleSheet.create({
+  intro: { gap: 4, paddingHorizontal: 2 },
+  title: { ...typography.screenTitle, color: '#173654' },
+  secondary: { ...typography.secondary, color: colors.muted, flexShrink: 1 },
+  section: { gap: 12 },
+  sectionHeading: { gap: 3 },
+  sectionTitle: { ...typography.sectionHeading, color: '#173654' },
+  surface: {
+    backgroundColor: colors.white,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  divider: { height: 1, backgroundColor: colors.border, marginLeft: 64 },
+  link: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  icon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: staffColors.blueSoft,
+  },
+  grow: { flex: 1, minWidth: 0, gap: 3 },
+  rowTitle: { ...typography.link, color: '#173654' },
+  value: { ...typography.value, color: staffColors.blue, fontVariant: ['tabular-nums'] },
+});
+
+export const ownerMobileStyles = ownerSurfaceStyles;

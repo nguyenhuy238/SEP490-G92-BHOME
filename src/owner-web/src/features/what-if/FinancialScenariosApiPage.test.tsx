@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { FinancialScenariosApiPage } from './FinancialScenariosApiPage';
+import { financeMonthPeriod } from '../finance/monthPeriods';
 const mock = vi.hoisted(() => ({
   locations: vi.fn(),
   scenarios: vi.fn(),
@@ -143,5 +144,14 @@ it('shows negative forecasts and the full baseline period without recalculating 
   expect(
     screen.getByText('Dữ liệu thực tế trong kỳ nền 01/11/2026 – 30/11/2026'),
   ).toBeInTheDocument();
+  expect(mock.saveScenario).not.toHaveBeenCalled();
+});
+it('sets a completed baseline month with one explicit click without analyzing or saving', () => {
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Dùng tháng trước làm kỳ nền' }));
+  const period = financeMonthPeriod(-1);
+  expect(screen.getByLabelText(/Dữ liệu nền từ/)).toHaveValue(period.from);
+  expect(screen.getByLabelText(/Dữ liệu nền đến/)).toHaveValue(period.to);
+  expect(mock.analyzeScenario).not.toHaveBeenCalled();
   expect(mock.saveScenario).not.toHaveBeenCalled();
 });

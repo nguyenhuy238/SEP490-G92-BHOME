@@ -31,6 +31,7 @@ import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { queryPolicies } from '../lib/queryPolicies';
 import type { Named } from '../lib/api';
 import { WorkspaceHeaderContext, type WorkspaceHeaderAction } from './WorkspaceHeaderContext';
+import { WorkspaceFooterContext } from './WorkspaceFooter';
 
 function StaffLocationSubtitle() {
   const locations = useWorkspaceQuery<Named[]>('/api/v1/capture/locations', {
@@ -91,6 +92,17 @@ export function WorkspaceShell({
     }, []),
   );
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const [workflowFooter, setWorkflowFooter] = useState<{
+    screen: WorkspaceScreen;
+    content: React.ReactNode;
+  } | null>(null);
+  const registerWorkflowFooter = useCallback(
+    (content: React.ReactNode) => {
+      setWorkflowFooter({ screen, content });
+      return () => setWorkflowFooter(null);
+    },
+    [screen],
+  );
   const [headerAction, setHeaderAction] = useState<WorkspaceHeaderAction | null>(null);
   const registerHeaderAction = useCallback((action: WorkspaceHeaderAction) => {
     setHeaderAction(action);
@@ -104,7 +116,7 @@ export function WorkspaceShell({
   const owner = role === 'Owner' && !preview;
   const tenantFeatures = role === 'Tenant' && screen === 'tenant-features';
   const tenantHomeLayout = role === 'Tenant' && ['tenant-home', 'tenant-features'].includes(screen);
-  const compactContracts = staff && screen === 'signing' && !preview;
+  const compactContracts = staff && ['signing', 'contract'].includes(screen) && !preview;
   const compactTasks = staff && ['work-orders', 'task-detail'].includes(screen) && !preview;
   const compactTaskDetail = compactTasks && screen === 'task-detail';
   const tenantRoom = role === 'Tenant' && screen === 'tenant-room' && !preview;
@@ -286,6 +298,7 @@ export function WorkspaceShell({
                 tenantInvoice ||
                 profile ||
                 compactTasks ||
+                compactContracts ||
                 tenantResidence) &&
               headerAction ? (
                 <RefreshControl
@@ -309,14 +322,11 @@ export function WorkspaceShell({
                     icon="arrow-left"
                     accessibilityLabel="Quay lại"
                     disabled={backDisabled || (profileEdit && !!headerAction?.disabled)}
-                    onPress={
-                      (tenantInvoice || profileEdit) && headerAction?.onBack
-                        ? headerAction.onBack
-                        : back
-                    }
+                    onPress={headerAction?.onBack ? headerAction.onBack : back}
                   />
                   <Text
                     variant={
+                      !!headerAction?.title ||
                       compactContracts ||
                       compactTasks ||
                       tenantResidence ||
@@ -327,6 +337,7 @@ export function WorkspaceShell({
                         : 'labelSmall'
                     }
                     style={
+                      !!headerAction?.title ||
                       compactContracts ||
                       compactTasks ||
                       tenantResidence ||
@@ -350,8 +361,8 @@ export function WorkspaceShell({
                                 ? 'Chi tiết công việc'
                                 : 'Công việc vận hành'
                               : compactContracts
-                                ? 'Hợp đồng'
-                                : 'Quay lại'}
+                                ? (headerAction?.title ?? 'Hợp đồng')
+                                : (headerAction?.title ?? 'Quay lại')}
                   </Text>
                   {(compactContracts || compactTasks || tenantInvoice || tenantResidence) &&
                     headerAction && (
@@ -400,11 +411,14 @@ export function WorkspaceShell({
                   : null
               }
             >
-              {children}
+              <WorkspaceFooterContext.Provider value={registerWorkflowFooter}>
+                {children}
+              </WorkspaceFooterContext.Provider>
             </WorkspaceHeaderContext.Provider>
           </KeyboardFormScrollView>
         )}
         {(profileEdit || compactTaskDetail) && headerAction?.footer}
+        {workflowFooter?.screen === screen && workflowFooter.content}
       </KeyboardAvoidingView>
       {!insideTabs && <WorkspaceTabBar role={role} screen={screen} active={active} onSelect={go} />}
     </SafeAreaView>

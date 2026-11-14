@@ -63,7 +63,10 @@ function Wait-MobileApi([string]$Address) {
     # can be stale when this launcher reuses a Visual Studio API.
     & node (Join-Path $repo 'scripts/Diagnose-MobileApi.cjs') "https://${Address}:7240" (Join-Path $repo '.tools/mobile-tls/root-ca.cer')
     $logHint = if ($script:ownedApi) { 'Check .tools/mobile-dev-api.stdout.log and .tools/mobile-dev-api.stderr.log.' } else { 'Check the running API/Visual Studio output; .tools/mobile-dev-api logs belong to earlier standalone runs.' }
-    throw "API HTTPS readiness failed. $logHint ECONNREFUSED means no API listener; check startup exceptions or a paused debugger first. For HTTP 503, run the read-only probe with the same profile: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Database.ps1 -EnvironmentFile '$EnvironmentFile'. UnknownCompact24Migrations with an incompatible schema means the database may be ahead of this checkout; review and synchronize the matching application changes, never downgrade or recreate the shared database. For Neon pending migrations, use the reviewed operator upgrade procedure in docs/development/MOBILE_SEPAY_READINESS_FIX_2026-11-12.md. Only for loopback database bhome, use scripts/Update-LocalDatabase.ps1 -Check; PROPERTY_UPGRADE_REQUIRED needs a backup, a stopped API and -UpgradePropertySchema. Preserve populated retired catalog data and resolve its migration explicitly. No TLS checks were bypassed."
+    $connectionHint = if (Get-NetTCPConnection -State Listen -LocalPort 7240 -ErrorAction SilentlyContinue) {
+        'API port 7240 is listening. Check the HTTP status, TLS diagnosis and readiness timeout above.'
+    } else { 'No API HTTPS listener on port 7240 (ECONNREFUSED). Check startup exceptions or a paused debugger.' }
+    throw "API HTTPS readiness failed. $connectionHint $logHint Read-only database check for the selected profile: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Database.ps1 -EnvironmentFile `"$EnvironmentFile`". No TLS checks were bypassed."
 }
 
 function Wait-MobileMetro([string]$Address) {
