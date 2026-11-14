@@ -8,16 +8,16 @@ Các số liệu tài chính và trạng thái nghiệp vụ luôn lấy từ ba
 
 ## Các vấn đề tìm thấy khi đọc giao diện và luồng hiện tại
 
-| Tình huống | Ma sát trước đây | Hướng xử lý |
-| --- | --- | --- |
-| Owner mới vào Tài chính | 9 mục ngang hàng, không có điểm bắt đầu theo nhiệm vụ | Trang `/finance` tổ chức theo chu kỳ và các tình huống thường gặp, đường dẫn có nhãn công việc |
-| Xem hóa đơn | Chọn dòng nhưng chi tiết nằm dưới bảng, dễ tưởng nút không hoạt động | Mở chi tiết sát với thao tác bằng Drawer; giữ danh sách và bộ lọc |
-| Lịch tự động | Nhật ký, hàng đợi, cấu hình và nháp cạnh tranh cùng một màn hình | Ưu tiên bước cần kiểm tra; phần chẩn đoán chỉ hiện khi mở |
-| Thu tiền/công nợ | Nhiều hành động xử lý rủi ro hoặc ngoại lệ xuất hiện cùng lúc | Phân biệt thao tác chính và ngoại lệ, đưa thông tin xác minh lên trước xác nhận |
-| Điều chỉnh | Xem chi tiết ở rất xa danh sách | Drawer để xem và xử lý, đóng để trở lại đúng bộ lọc |
-| Ghi khoản chi | Phòng/tài sản/Work Order được hỏi trước số tiền và nội dung | Trường cốt lõi trước, liên kết bổ sung ở sau |
-| Báo cáo | Người dùng phải tự chọn ngày; bảng phân loại và ghi chú tài chính dày đặc | Phím tắt kỳ tháng, dữ liệu chính trước, đối chiếu chuyên sâu qua vùng mở rộng |
-| What-if | Bảy biến số lẫn lộn, sau khi chạy khó tìm thấy kết quả | Nhóm doanh thu/chi phí, gợi ý kỳ nền đủ tháng, đưa focus/scroll đến kết quả |
+| Tình huống              | Ma sát trước đây                                                          | Hướng xử lý                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Owner mới vào Tài chính | 9 mục ngang hàng, không có điểm bắt đầu theo nhiệm vụ                     | Trang `/finance` tổ chức theo chu kỳ và các tình huống thường gặp, đường dẫn có nhãn công việc |
+| Xem hóa đơn             | Chọn dòng nhưng chi tiết nằm dưới bảng, dễ tưởng nút không hoạt động      | Mở chi tiết sát với thao tác bằng Drawer; giữ danh sách và bộ lọc                              |
+| Lịch tự động            | Nhật ký, hàng đợi, cấu hình và nháp cạnh tranh cùng một màn hình          | Ưu tiên bước cần kiểm tra; phần chẩn đoán chỉ hiện khi mở                                      |
+| Thu tiền/công nợ        | Nhiều hành động xử lý rủi ro hoặc ngoại lệ xuất hiện cùng lúc             | Phân biệt thao tác chính và ngoại lệ, đưa thông tin xác minh lên trước xác nhận                |
+| Điều chỉnh              | Xem chi tiết ở rất xa danh sách                                           | Drawer để xem và xử lý, đóng để trở lại đúng bộ lọc                                            |
+| Ghi khoản chi           | Phòng/tài sản/Work Order được hỏi trước số tiền và nội dung               | Trường cốt lõi trước, liên kết bổ sung ở sau                                                   |
+| Báo cáo                 | Người dùng phải tự chọn ngày; bảng phân loại và ghi chú tài chính dày đặc | Phím tắt kỳ tháng, dữ liệu chính trước, đối chiếu chuyên sâu qua vùng mở rộng                  |
+| What-if                 | Bảy biến số lẫn lộn, sau khi chạy khó tìm thấy kết quả                    | Nhóm doanh thu/chi phí, gợi ý kỳ nền đủ tháng, đưa focus/scroll đến kết quả                    |
 
 ## Mô hình thông tin đề xuất
 

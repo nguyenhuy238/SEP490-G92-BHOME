@@ -292,6 +292,25 @@ it('shows success only after backend confirms Active and OnHold; reads actual tr
   expect(request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 });
 
+it('keeps unmatched Holding deposit allocation on Owner Web without confirming payment on mobile', async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation((path: string, init?: RequestInit) =>
+    path.endsWith('/holding-deposit')
+      ? Promise.resolve({
+          required: '2000000',
+          verified: '0',
+          remaining: '2000000',
+          status: 'Pending',
+        })
+      : original(path, init),
+  );
+  show(contract({ status: 'PendingActivation' }));
+  expect(await screen.findByText('Thực hiện trên Owner Web')).toBeTruthy();
+  expect(screen.queryByText('Đối chiếu giao dịch Owner')).toBeNull();
+  expect(screen.queryByText('Giữ chỗ thành công')).toBeNull();
+  expect(request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+});
+
 it('resumes steps 5 to 8 from changed server props and reloads room state after activation', async () => {
   const view = show(contract(), 'Staff', 'staff');
   expect(screen.getByText(/5\/8/)).toBeTruthy();

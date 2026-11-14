@@ -25,7 +25,7 @@ import { randomUUID } from '../../lib/randomUUID';
 import { mobileContractActions } from './contractSections';
 import { ContractActionForm, SigningCertificates } from './ContractActionForm';
 import { ContractEvidence } from './ContractEvidence';
-import { HoldingDepositAllocation } from './HoldingDepositAllocation';
+import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { HoldingProgress } from './HoldingProgress';
 import { holdingStage, holdingStageLabel } from './holdingStage';
 import { HoldingSandboxFlow, useHoldingSandbox } from './HoldingSandboxFlow';
@@ -88,7 +88,7 @@ export function HoldingContractFlow({
   const owner = role === 'Owner' && c.ownerSignerId === actorId;
   const internal = c.signingMode === 'INTERNAL_OTP_DRAWN';
   const representative = c.occupants?.find((r) => r.representative)?.label;
-  const sandbox = useHoldingSandbox(api, c);
+  const sandbox = useHoldingSandbox(api, c, role !== 'Owner');
   const operations =
     step === 5
       ? ['holding-approval']
@@ -167,7 +167,6 @@ export function HoldingContractFlow({
           role={role}
           owner={owner}
           readiness={readiness}
-          onChanged={onChanged}
           onList={onList}
         />
       )}
@@ -529,7 +528,6 @@ function HoldingPayment({
   role,
   owner,
   readiness,
-  onChanged,
   onList,
 }: {
   api: ContractClient;
@@ -537,7 +535,6 @@ function HoldingPayment({
   role: string;
   owner: boolean;
   readiness: Readiness | null;
-  onChanged: () => void;
   onList: () => void;
 }) {
   const [data, setData] = useState<{ deposit: HoldingDepositStatus; room: number } | null>(null);
@@ -619,7 +616,7 @@ function HoldingPayment({
         readiness &&
         !readiness.blockers.includes('verified_signature_evidence_required') &&
         !/^0(?:\.0+)?$/.test(data.deposit.remaining) && (
-          <HoldingDepositAllocation api={api} contract={c} role={role} onChanged={onChanged} />
+          <OwnerWebNotice task="Đối chiếu và phân bổ tiền cọc giữ chỗ" />
         )}
       {!success && role === 'Staff' && (
         <Text>Owner sẽ đối chiếu tiền cọc và kích hoạt khi đủ điều kiện.</Text>

@@ -249,7 +249,7 @@ it('restricts the feature catalog to Tenant and returns to Home through normal b
   expect(state.replace).not.toHaveBeenCalled();
 });
 afterEach(cleanup);
-it.each(['Owner', 'Staff'])('opens the OCR test directly from the %s development home', (role) => {
+it.each(['Staff'])('opens the OCR test directly from the %s development home', (role) => {
   state.roles = [role];
   render(
     <WorkspaceProvider>
@@ -264,6 +264,7 @@ it.each(['Owner', 'Staff'])('opens the OCR test directly from the %s development
 it.each([
   { development: false, role: 'Staff', home: 'staff-home' as const },
   { development: false, role: 'Owner', home: 'owner-home' as const },
+  { development: true, role: 'Owner', home: 'owner-home' as const },
   { development: true, role: 'Tenant', home: 'tenant-home' as const },
   { development: true, role: 'Staff', home: 'notifications' as const },
 ])(
@@ -566,7 +567,7 @@ it('renders four labeled Staff tabs at 60dp and applies Android bottom inset exa
 });
 
 it.each([
-  ['Owner', 'owner-home', ['Tổng quan', 'Theo dõi duyệt', 'Vận hành', 'Tài khoản']],
+  ['Owner', 'owner-home', ['Tổng quan', 'Cần xử lý', 'Vận hành', 'Tài khoản']],
   ['Staff', 'staff-home', ['Trang chủ', 'Công việc', 'Thông báo', 'Cá nhân']],
   ['Tenant', 'tenant-home', ['Trang chủ', 'Hóa đơn', 'Yêu cầu', 'Cá nhân']],
 ] as const)('keeps %s destinations in the shared Staff shell', (role, home, labels) => {

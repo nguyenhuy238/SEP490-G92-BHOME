@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import React, { useEffect } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  WorkspaceHeaderContext,
+  type WorkspaceHeaderAction,
+} from '../components/WorkspaceHeaderContext';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MobileApiError } from '../lib/api';
 import { QueryCache } from '../lib/queryCache';
@@ -107,6 +111,16 @@ vi.mock('react-native-paper', () => {
     ),
     Text: ({ children }: C) => <span>{children}</span>,
     Button,
+    Portal: ({ children }: C) => <>{children}</>,
+    Dialog: Object.assign(
+      ({ visible, children }: C & { visible: boolean }) =>
+        visible ? <div role="dialog">{children}</div> : null,
+      {
+        Title: ({ children }: C) => <h3>{children}</h3>,
+        Content: ({ children }: C) => <div>{children}</div>,
+        Actions: ({ children }: C) => <div>{children}</div>,
+      },
+    ),
     IconButton: Button,
     ActivityIndicator: () => <span>Đang tải</span>,
     Checkbox: {
@@ -517,17 +531,82 @@ it.each(['progress', 'blocker', 'submit'])(
     expect(JSON.parse(mutations()[1][1].body)).toMatchObject({ version: 7, evidenceIds: [eid] });
   },
 );
-it.each([
-  ['PendingApproval', 'Quyết định phương án'],
-  ['PendingVerification', 'Nghiệm thu hoàn thành'],
-] as const)(
-  'Owner can perform guarded %s WorkOrder decisions on mobile',
-  (status, expectedAction) => {
+it.each(['PendingApproval', 'PendingVerification'] as const)(
+  'Owner has state-gated mobile quick decisions for %s without Staff execution actions',
+  (status) => {
     s.role = 'Owner';
     work.status = status;
     render(<IncidentActionPanel report={report} work={work} role="Owner" />);
     expect(screen.getByLabelText('Chọn thao tác')).toBeTruthy();
-    expect(screen.getByRole('option', { name: expectedAction })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: 'Đổi nhân viên' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'Bắt đầu sửa chữa' })).toBeNull();
+    expect(
+      screen.getByRole('option', {
+        name: status === 'PendingApproval' ? 'Quyết định phương án' : 'Nghiệm thu hoàn thành',
+      }),
+    ).toBeTruthy();
+    expect(mutations()).toHaveLength(0);
+  },
+);
+it('refreshes all Owner maintenance detail sections through the shared pull-to-refresh action', async () => {
+  s.role = 'Owner';
+  s.params = { workOrderId: wid };
+  let action: WorkspaceHeaderAction | undefined;
+  const register = (value: WorkspaceHeaderAction) => {
+    action = value;
+    return () => {};
+  };
+  render(
+    <WorkspaceHeaderContext.Provider value={register}>
+      <MaintenanceDetailScreen />
+    </WorkspaceHeaderContext.Provider>,
+  );
+  await screen.findByText('Chi tiết lệnh sửa chữa');
+  await waitFor(() => expect(action?.disabled).toBe(false));
+  const before = s.request.mock.calls.filter(
+    ([path]) => path === `/api/v1/work-orders/${wid}`,
+  ).length;
+  await act(async () => action?.onRefresh());
+  await waitFor(() =>
+    expect(
+      s.request.mock.calls.filter(([path]) => path === `/api/v1/work-orders/${wid}`).length,
+    ).toBe(before + 1),
+  );
+  expect(
+    s.request.mock.calls.filter(([path]) => path.endsWith('/evidence')).length,
+  ).toBeGreaterThanOrEqual(2);
+});
+
+it('sends one confirmed Owner plan decision with the current version and idempotency key', async () => {
+  s.role = 'Owner';
+  work.status = 'PendingApproval';
+  render(<IncidentActionPanel report={report} work={work} role="Owner" />);
+  choose('Chọn thao tác', 'plan-decision');
+  choose('Quyết định phê duyệt', 'true');
+  confirm();
+  fireEvent.click(screen.getByRole('button', { name: 'Quyết định phương án' }));
+  expect(mutations()).toHaveLength(0);
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận gửi' }));
+  await waitFor(() => expect(mutations()).toHaveLength(1));
+  expect(mutations()[0][0]).toBe(`/api/v1/work-orders/${wid}/plan-decision`);
+  expect(JSON.parse(mutations()[0][1].body)).toEqual({
+    version: 7,
+    approve: true,
+    reason: null,
+    vendor: null,
+  });
+  expect(new Headers(mutations()[0][1].headers).get('Idempotency-Key')).toMatch(/^[a-f\d-]{36}$/i);
+  expect(s.success).toHaveBeenCalledOnce();
+});
+
+it.each(['Assigned', 'InProgress', 'Verified', 'Cancelled'] as const)(
+  'does not expose an Owner quick decision for %s',
+  (status) => {
+    s.role = 'Owner';
+    work.status = status;
+    render(<IncidentActionPanel report={report} work={work} role="Owner" />);
+    expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
     expect(mutations()).toHaveLength(0);
   },
 );
@@ -685,7 +764,7 @@ it('re-fetches WorkOrder detail after start instead of applying a local completi
 });
 
 it.each(['Submitted', 'InProgress'] as const)(
-  'Owner receives guarded incident quick actions while status is %s',
+  'Owner receives Web guidance for incident management while status is %s',
   (status) => {
     s.role = 'Owner';
     report.status = status;
@@ -697,9 +776,10 @@ it.each(['Submitted', 'InProgress'] as const)(
         emergencyActions={[{ id: eid, activityId: wid, requestedCost: 50000, costApproved: null }]}
       />,
     );
-    expect(screen.getByLabelText('Chọn thao tác')).toBeTruthy();
-    expect(screen.getByRole('option', { name: 'Phân loại sự cố' })).toBeTruthy();
-    expect(screen.getByRole('option', { name: 'Quyết định chi phí khẩn cấp' })).toBeTruthy();
+    expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+    expect(screen.queryByLabelText('Chọn thao tác')).toBeNull();
+    expect(screen.queryByRole('option', { name: 'Phân loại sự cố' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'Quyết định chi phí khẩn cấp' })).toBeNull();
     expect(mutations()).toHaveLength(0);
     expect(s.success).not.toHaveBeenCalled();
   },

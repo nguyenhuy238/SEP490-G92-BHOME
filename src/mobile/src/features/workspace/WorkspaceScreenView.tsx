@@ -16,7 +16,13 @@ import { Action, Box, Heading } from '../../components/WorkspaceKit';
 import { RequestHistory } from '../../components/WorkflowControls';
 import { WorkspaceShell } from '../../components/WorkspaceShell';
 import { useWorkspace } from '../../features/workspace/WorkspaceProvider';
-import { canOpenScreen, homeScreen, isWorkspaceScreen } from '../../features/workspace/navigation';
+import {
+  canOpenScreen,
+  homeScreen,
+  isWorkspaceScreen,
+  ownerWebOnlyScreens,
+} from '../../features/workspace/navigation';
+import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { OwnerHome, ApprovalCenter, Operations } from '../../screens/OwnerScreens';
 import { OwnerOverviewScreen } from '../../screens/OwnerOverviewScreen';
 import { OwnerResidenceScreen } from '../../screens/OwnerResidenceScreen';
@@ -34,11 +40,7 @@ import {
   TenantContract,
   MoveInChecklist,
 } from '../../screens/TenantScreens';
-import {
-  Profile,
-  Notifications,
-  SecuritySettings,
-} from '../../screens/SharedScreens';
+import { Profile, Notifications, SecuritySettings } from '../../screens/SharedScreens';
 
 import { OnboardingScreen } from '../../screens/OnboardingScreen';
 import { ContractScreen } from '../../features/contracts/ContractScreen';
@@ -173,6 +175,29 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
       </WorkspaceShell>
     );
   const Screen = screens[screen];
+  if (role === 'Owner' && ownerWebOnlyScreens[screen])
+    return (
+      <WorkspaceShell screen={screen}>
+        <OwnerWebNotice task={ownerWebOnlyScreens[screen]} />
+      </WorkspaceShell>
+    );
+  if (
+    role === 'Owner' &&
+    ['owner-incidents', 'owner-maintenance', 'owner-emergencies'].includes(screen)
+  )
+    return (
+      <WorkspaceShell screen={screen}>
+        <OwnerOperationsScreen
+          initialSection={
+            screen === 'owner-maintenance'
+              ? 'Bảo trì'
+              : screen === 'owner-emergencies'
+                ? 'Khẩn cấp'
+                : 'Sự cố'
+          }
+        />
+      </WorkspaceShell>
+    );
   if (!preview) {
     let content: React.ReactNode;
     if (
