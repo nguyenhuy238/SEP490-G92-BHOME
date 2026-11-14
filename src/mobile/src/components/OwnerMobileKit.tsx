@@ -19,6 +19,23 @@ export function OwnerLoading() {
   );
 }
 
+export function OwnerDataState({
+  loading,
+  error,
+  reload,
+}: {
+  loading: boolean;
+  error: string;
+  reload: () => void;
+}) {
+  return (
+    <>
+      {loading && <OwnerLoading />}
+      {!!error && <OwnerFailure retry={reload} busy={loading} />}
+    </>
+  );
+}
+
 export function OwnerEmpty({ title, detail }: { title: string; detail: string }) {
   return (
     <DashboardCard>

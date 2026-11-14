@@ -21,6 +21,7 @@ import { ContractActionForm, SigningCertificates } from '../contracts/ContractAc
 import { ContractWorkflowPanel } from '../contracts/ContractWorkflowPanel';
 import { randomUUID } from '../../lib/randomUUID';
 import { useSession } from '../../lib/SessionProvider';
+import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 
 import { ownerContractSteps } from './ownerContractSteps';
 const signingStatusPolicy = { ...ownerQueuePolicy, staleTime: 0 };
@@ -61,11 +62,9 @@ export function OwnerMainContractFlow({
   const operations =
     step === 1 && mySign
       ? ['signing', 'signing/sync', 'signing/recover']
-      : step === 2
-        ? ['deposit-verifications']
-        : step === 3
-          ? ['activate']
-          : [];
+      : step === 3
+        ? ['activate']
+        : [];
   const actions = contractActions(contract, null, 'Owner', actorId).filter((action) =>
     operations.includes(action.operation),
   );
@@ -158,8 +157,8 @@ export function OwnerMainContractFlow({
           )}
           <Pill>{server.depositVerified ? 'Đã đối chiếu đủ cọc' : 'Chờ xác minh cọc'}</Pill>
           <Text>
-            API hiện tại chưa cấp QR nộp cọc hợp đồng. Dùng thông tin ngân hàng đã được Owner xác
-            nhận; không dùng QR hóa đơn thay cọc.
+            Tiền cọc được cập nhật sau khi giao dịch được xác minh. Kiểm tra lại trạng thái trước
+            khi kích hoạt.
           </Text>
         </Box>
       )}
@@ -183,6 +182,9 @@ export function OwnerMainContractFlow({
           ))}
           {server.active && <Pill tone="green">Máy chủ đã xác nhận hợp đồng đang hiệu lực</Pill>}
         </Box>
+      )}
+      {step === 2 && !server.depositVerified && (
+        <OwnerWebNotice task="Đối soát và xác minh tiền cọc" />
       )}
       {!action &&
         actions.map((item) => (

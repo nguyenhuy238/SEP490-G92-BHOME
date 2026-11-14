@@ -1,10 +1,14 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
 import { showSuccess } from '../lib/toast';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { randomUUID } from '../lib/randomUUID';
-import { Checkbox, Text } from 'react-native-paper';
+import { Button, Checkbox, Dialog, Portal, Text } from 'react-native-paper';
+import { OwnerDataState } from '../components/OwnerMobileKit';
+import { OwnerPlaceLabel } from '../features/owner/OwnerPlaceLabel';
+import { OwnerStaffName } from '../features/owner/OwnerStaffName';
+import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 import { guid, mutationKeys } from '../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { Action, Box, Heading, Pill, Row, ui } from '../components/WorkspaceKit';
@@ -175,29 +179,42 @@ export function OperationalTaskDetail() {
 function TaskDetail({ id }: { id: string }) {
   const { api, session } = useSession();
   const { role, go } = useWorkspace();
-  const query = useWorkspaceQuery<OperationalTask>(`/api/v1/operational-tasks/${id}`);
+  const query = useWorkspaceQuery<OperationalTask>(`/api/v1/operational-tasks/${id}`, {
+    cache: queryPolicies.tasks,
+  });
   const [historyPage, setHistoryPage] = useState(1);
   const history = useWorkspaceQuery<TaskPage<TaskHistory>>(
     `/api/v1/operational-tasks/${id}/history?page=${historyPage}&pageSize=20`,
+    { cache: queryPolicies.tasks },
   );
-  const evidence = useWorkspaceQuery<TaskEvidence[]>(`/api/v1/operational-tasks/${id}/evidence`);
+  const evidence = useWorkspaceQuery<TaskEvidence[]>(`/api/v1/operational-tasks/${id}/evidence`, {
+    cache: queryPolicies.tasks,
+  });
   const [action, setAction] = useState<TaskAction | ''>('');
   const [note, setNote] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useFeedbackState();
   const [notice, setNotice] = useFeedbackState('success');
-  const [edit, setEdit] = useState(false);
+  const [confirmDecision, setConfirmDecision] = useState(false);
   const lock = useRef(false);
   const [keys] = useState(() => mutationKeys(randomUUID));
   const client = useMemo(() => (api ? operationalTasks(api) : null), [api]);
   const task = query.data;
-  const actions = task ? availableTaskActions(task, role ?? '', session?.userId ?? '') : [];
-  const reload = () => {
-    query.reload();
-    history.reload();
-    evidence.reload();
-  };
+  const actions = task
+    ? availableTaskActions(task, role ?? '', session?.userId ?? '').filter((action) =>
+        ['verify', 'rework', 'coordinate'].includes(action),
+      )
+    : [];
+  const { reload: reloadTask } = query,
+    { reload: reloadHistory } = history,
+    { reload: reloadEvidence } = evidence;
+  const reload = useCallback(() => {
+    reloadTask();
+    reloadHistory();
+    reloadEvidence();
+  }, [reloadTask, reloadHistory, reloadEvidence]);
+  useWorkspaceHeaderRefresh(reload, query.fetching || history.fetching || evidence.fetching);
   async function act() {
     if (!client || !task || !action || lock.current || !actions.includes(action)) return;
     if (!['start', 'verify', 'assign'].includes(action) && !note.trim()) {
@@ -240,23 +257,12 @@ function TaskDetail({ id }: { id: string }) {
       reload();
     }
   }
-  if (edit && task)
-    return (
-      <TaskWorkForm
-        task={task}
-        onCancel={() => setEdit(false)}
-        onSaved={() => {
-          setEdit(false);
-          reload();
-        }}
-      />
-    );
   return (
     <>
       <Action secondary onPress={() => go(role === 'Owner' ? 'operations' : 'work-orders')}>
         Về danh sách công việc
       </Action>
-      <QueryState loading={query.loading} error={query.error} reload={reload} />
+      <OwnerDataState loading={query.loading} error={query.error} reload={reload} />
       {!!error && (
         <Text accessibilityRole="alert" style={ui.red}>
           {error}
@@ -271,6 +277,8 @@ function TaskDetail({ id }: { id: string }) {
         <>
           <Box>
             <Heading title={task.title} />
+            <OwnerPlaceLabel item={task} />
+            <OwnerStaffName staffId={task.currentResponsibleStaffUserId} />
             <Pill>{taskStatusLabels[task.status]}</Pill>
             <Text>{task.requirements}</Text>
             <Text>Ưu tiên: {task.priority === 'High' ? 'Cao' : 'Bình thường'}</Text>
@@ -287,21 +295,14 @@ function TaskDetail({ id }: { id: string }) {
             )}
             {task.result && <Text>Kết quả: {task.result}</Text>}
             {task.verifiedAt && <Text>Owner đã kiểm tra: {formatInstant(task.verifiedAt)}</Text>}
-            {role === 'Owner' &&
-              task.kind === 'AdHoc' &&
-              ['Assigned', 'InProgress'].includes(task.status) && (
-                <Action secondary disabled={busy} onPress={() => setEdit(true)}>
-                  Sửa yêu cầu & thời hạn
-                </Action>
-              )}
           </Box>
-          {task.kind === 'MeterReading' && (
+          {task.kind === 'MeterReading' && role === 'Staff' && (
             <Action onPress={() => go(role === 'Staff' ? 'meter-reading' : 'operations')}>
               Mở tác vụ đồng hồ
             </Action>
           )}
           <Heading title="Ảnh kết quả" />
-          <QueryState {...evidence} />
+          <OwnerDataState {...evidence} />
           {evidence.data?.map((file, index) => (
             <Box key={file.id}>
               <PrivateTaskImage taskId={id} evidence={file} number={index + 1} />
@@ -386,7 +387,7 @@ function TaskDetail({ id }: { id: string }) {
                   evidence.loading ||
                   !actions.includes(action as TaskAction)
                 }
-                onPress={() => void act()}
+                onPress={() => setConfirmDecision(true)}
               >
                 Xác nhận thao tác
               </Action>
@@ -395,17 +396,15 @@ function TaskDetail({ id }: { id: string }) {
         </>
       )}
       <Heading title="Lịch sử công việc" />
-      <QueryState {...history} />
+      <OwnerDataState {...history} />
       {history.data?.items.map((entry) => (
         <Box key={entry.id}>
-          <Pill>{taskActionLabels[entry.action] ?? entry.action}</Pill>
+          <Pill>{taskActionLabels[entry.action] ?? 'Cập nhật công việc'}</Pill>
           <Text>{entry.note}</Text>
-          <Text style={ui.muted}>
-            {formatInstant(entry.occurredAt)} · Phiên bản {entry.taskVersion}
-          </Text>
+          <Text style={ui.muted}>{formatInstant(entry.occurredAt)}</Text>
         </Box>
       ))}
-      {history.data && (
+      {history.data && history.data.totalCount > 20 && (
         <Pagination
           page={historyPage}
           total={history.data.totalCount}
@@ -413,6 +412,29 @@ function TaskDetail({ id }: { id: string }) {
           onChange={setHistoryPage}
         />
       )}
+      <Portal>
+        <Dialog visible={confirmDecision} onDismiss={() => !busy && setConfirmDecision(false)}>
+          <Dialog.Title>{action ? taskActionLabels[action] : 'Xác nhận thao tác'}</Dialog.Title>
+          <Dialog.Content>
+            <Text>{task?.title}. Gửi xác nhận sau khi đã xem kết quả và ảnh minh chứng?</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button disabled={busy} onPress={() => setConfirmDecision(false)}>
+              Quay lại
+            </Button>
+            <Button
+              disabled={busy}
+              loading={busy}
+              onPress={() => {
+                setConfirmDecision(false);
+                void act();
+              }}
+            >
+              Xác nhận gửi
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </>
   );
 }

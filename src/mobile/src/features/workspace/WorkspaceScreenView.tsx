@@ -186,6 +186,23 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
         <OwnerWebNotice task={ownerWebOnlyScreens[screen]} />
       </WorkspaceShell>
     );
+  if (
+    role === 'Owner' &&
+    ['owner-incidents', 'owner-maintenance', 'owner-emergencies'].includes(screen)
+  )
+    return (
+      <WorkspaceShell screen={screen}>
+        <OwnerOperationsScreen
+          initialSection={
+            screen === 'owner-maintenance'
+              ? 'Bảo trì'
+              : screen === 'owner-emergencies'
+                ? 'Khẩn cấp'
+                : 'Sự cố'
+          }
+        />
+      </WorkspaceShell>
+    );
   if (!preview) {
     let content: React.ReactNode;
     if (

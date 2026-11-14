@@ -1,7 +1,6 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
 import { View } from 'react-native';
-import { router } from 'expo-router';
 import { Text } from 'react-native-paper';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import {
@@ -20,8 +19,6 @@ import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
 import { errorMessage, type Named } from '../lib/api';
-import { OperationalTasksScreen } from './OperationalTaskScreens';
-import { MeterTasksScreen } from './MeterTasksScreen';
 import {
   operationalTasks,
   taskActionLabels,
@@ -137,31 +134,7 @@ export function StaffHomeScreen() {
 
 export { MeterTasksScreen } from './MeterTasksScreen';
 
-function OwnerIncidentLinks() {
-  const { go } = useWorkspace();
-  return (
-    <Box>
-      <Action onPress={() => go('owner-incidents')}>Quản lý báo cáo sự cố</Action>
-      <Action onPress={() => go('owner-maintenance')}>Phê duyệt và nghiệm thu bảo trì</Action>
-      <Action onPress={() => go('owner-emergencies')}>Sự cố khẩn cấp</Action>
-    </Box>
-  );
-}
-export function OwnerOperationsScreen() {
-  return (
-    <>
-      <Heading title="Vận hành cơ sở" />
-      <OwnerIncidentLinks />
-      <Box>
-        <Action icon="office-building-outline" onPress={() => router.push('/setup')}>
-          Thiết lập cơ sở, phòng & phân công
-        </Action>
-      </Box>
-      <OperationalTasksScreen />
-      <MeterTasksScreen />
-    </>
-  );
-}
+export { OwnerOperationsScreen } from './OwnerOperationsScreen';
 
 export { TenantDashboardScreen as TenantHomeScreen } from './TenantDashboardScreen';
 

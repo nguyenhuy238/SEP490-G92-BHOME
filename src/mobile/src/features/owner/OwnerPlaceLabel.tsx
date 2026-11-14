@@ -16,7 +16,10 @@ export function OwnerPlaceLabel({ item }: { item: AttentionRecord }) {
     { cache: queryPolicies.rooms },
   );
   const locationName =
-    item.locationName || locations.data?.find((location) => location.id === item.locationId)?.label;
+    item.locationName ||
+    (Array.isArray(locations.data)
+      ? locations.data.find((location) => location.id === item.locationId)?.label
+      : undefined);
   const roomNumber = item.roomNumber || room.data?.roomNumber;
   return (
     <Text style={{ color: colors.muted }}>

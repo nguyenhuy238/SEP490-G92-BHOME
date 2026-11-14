@@ -185,7 +185,7 @@ beforeEach(() => {
   );
 });
 afterEach(cleanup);
-it('uses the Owner route after list navigation and clears a persisted draft when route IDs are emptied', async () => {
+it('preserves an Owner draft deep link as Web guidance and returns to the list when route IDs clear', async () => {
   state.role = 'Owner';
   state.params = {};
   state.request.mockResolvedValue({
@@ -199,7 +199,8 @@ it('uses the Owner route after list navigation and clears a persisted draft when
   expect(router.setParams).toHaveBeenCalledWith({ contractId: id, mainDraftId: id, roomId: '' });
   state.params = { contractId: id, mainDraftId: id };
   view.rerender(<ContractScreen />);
-  expect(screen.getByText(`Draft ${id}`)).toBeTruthy();
+  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+  expect(screen.queryByText(`Draft ${id}`)).toBeNull();
   state.params = { contractId: '', mainDraftId: '', roomId: '' };
   view.rerender(<ContractScreen />);
   await screen.findByText('Hợp đồng & Vòng đời');
@@ -215,12 +216,12 @@ it.each([
   expect(screen.getByText(/Tham chiếu hợp đồng không hợp lệ/)).toBeTruthy();
   expect(screen.queryByText('Action form')).toBeNull();
 });
-it('opens Owner Main preparation explicitly without requiring an existing account or a Web detour', () => {
+it('does not expose full contract creation in the Owner contract list', () => {
   state.role = 'Owner';
   state.params = {};
   render(<ContractScreen />);
-  fireEvent.click(screen.getByText('Tạo hợp đồng thuê'));
-  expect(screen.getByText('Main preparation')).toBeTruthy();
+  expect(screen.queryByText('Tạo hợp đồng thuê')).toBeNull();
+  expect(screen.queryByText('Main preparation')).toBeNull();
 });
 it('allows Owner to approve a Holding draft while Staff cannot approve, verify deposits or activate', () => {
   state.contract.kind = 'Holding';
@@ -266,15 +267,15 @@ it('preserves Staff conversion for an active unexpired Holding contract', () => 
   fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
   expect(screen.getByRole('button', { name: 'Chuyển sang hợp đồng thuê chính' })).toBeTruthy();
 });
-it('lets Owner open holding configuration directly and return to the contract list', () => {
+it('blocks legacy Owner holding-creation routes without opening an authoring form', () => {
   state.role = 'Owner';
-  state.deep = false;
+  state.params = { kind: 'Holding' };
   render(<ContractScreen />);
-  fireEvent.click(screen.getByText('Tạo hợp đồng giữ chỗ'));
-  expect(screen.getByText('Cấu hình giữ chỗ')).toBeTruthy();
-  expect(screen.queryByText('Thực hiện trên Owner Web')).toBeNull();
-  fireEvent.click(screen.getByText('Cấu hình giữ chỗ'));
-  expect(screen.getByText('Hợp đồng & Vòng đời')).toBeTruthy();
+  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+  expect(screen.queryByText('Cấu hình giữ chỗ')).toBeNull();
+  expect(state.request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
+    true,
+  );
 });
 
 it('opens the handover section directly for the selected Tenant contract', () => {
@@ -326,7 +327,7 @@ it('shows Owner contract state and only actions appropriate for an Active contra
   fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
   expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Gia hạn & trả phòng' }));
-  expect(screen.getByRole('button', { name: 'Chuẩn bị gia hạn' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Chuẩn bị gia hạn' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Hoàn tất trả phòng' })).toBeNull();
   expect(screen.queryByText('Action form')).toBeNull();
 });
@@ -347,23 +348,24 @@ it.each([true, false])('gates Owner Main activation on backend readiness=%s', (r
     (screen.getByRole('button', { name: 'Kích hoạt hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(!ready);
 });
-it('opens approved Owner Main preparation without mutations before an explicit save', () => {
+it('keeps full Main preparation on Owner Web even when the prepare flag is supplied', () => {
   state.role = 'Owner';
   state.params = {};
   render(<ContractScreen prepare />);
-  expect(screen.getByText('Main preparation')).toBeTruthy();
-  expect(screen.queryByText('Thực hiện trên Owner Web')).toBeNull();
+  expect(screen.queryByText('Main preparation')).toBeNull();
+  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
   expect(screen.queryByText('Action form')).toBeNull();
   expect(state.request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
     true,
   );
 });
-it('keeps a persisted Owner Draft opened by contractId on that route when saving after reload', () => {
+it('keeps a persisted Owner Draft informational without mounting editing or changing route IDs', () => {
   state.role = 'Owner';
   state.params = { contractId: id };
   state.contract = { ...state.contract, onboardingDraft: true, status: 'Draft' };
   render(<ContractScreen />);
-  expect(screen.getByText(`Draft ${id}`).getAttribute('data-persist-route')).toBe('false');
+  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
+  expect(screen.queryByText(`Draft ${id}`)).toBeNull();
   expect(router.setParams).not.toHaveBeenCalled();
 });
 it('defaults to overview and switches sections without displaying all forms at once', () => {

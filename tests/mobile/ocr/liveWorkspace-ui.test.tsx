@@ -1453,6 +1453,7 @@ it('shows Owner verification only after server data loads and sends the matching
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
     if (String(url).includes('/history')) return json(page([]));
     if (String(url).endsWith('/evidence')) return json([]);
+    if (String(url).includes('/capture/')) return json([]);
     return json({ ...task, status: init?.method === 'POST' ? 'Completed' : 'PendingVerification' });
   });
   setApi(fetcher);
@@ -1460,6 +1461,8 @@ it('shows Owner verification only after server data loads and sends the matching
   await screen.findByText(task.title);
   fireEvent.change(screen.getByLabelText('Thao tác'), { target: { value: 'verify' } });
   fireEvent.click(screen.getByText('Xác nhận thao tác'));
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  fireEvent.click(screen.getByText('Xác nhận gửi'));
   await screen.findByText('Máy chủ đã ghi nhận thao tác.');
   const post = fetcher.mock.calls.find(([, init]) => init?.method === 'POST')!;
   expect(post[0]).toContain('/verify');

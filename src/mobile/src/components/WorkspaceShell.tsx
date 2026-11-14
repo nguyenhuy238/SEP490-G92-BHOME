@@ -129,9 +129,13 @@ export function WorkspaceShell({
           ? 'contract'
           : ['security', 'preferences', 'profile-edit'].includes(screen)
             ? 'profile'
-            : staff && screen === 'task-detail'
-              ? 'work-orders'
-              : homeScreen[role!];
+            : owner && ['incident-detail', 'maintenance-detail', 'task-detail'].includes(screen)
+              ? 'operations'
+              : owner && screen === 'signing'
+                ? 'approvals'
+                : staff && screen === 'task-detail'
+                  ? 'work-orders'
+                  : homeScreen[role!];
     if (!staff && !owner && role !== 'Tenant' && !profileEdit && screen !== 'incident-inbox')
       return go(fallback);
     requestNavigation(() => {

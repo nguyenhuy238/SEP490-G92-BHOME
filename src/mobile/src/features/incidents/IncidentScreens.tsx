@@ -3,7 +3,9 @@ import { useLocalSearchParams } from 'expo-router';
 import { Button, Text } from 'react-native-paper';
 import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
-import { QueryState, Pagination } from '../../components/WorkspaceQueryState';
+import { QueryState as SharedQueryState, Pagination } from '../../components/WorkspaceQueryState';
+import { OwnerDataState } from '../../components/OwnerMobileKit';
+import { OwnerStaffName } from '../owner/OwnerStaffName';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { useSession } from '../../lib/SessionProvider';
 import {
@@ -53,6 +55,11 @@ function Pager({
     />
   ) : null;
 }
+function QueryState(props: React.ComponentProps<typeof SharedQueryState>) {
+  const { role } = useWorkspace();
+  return role === 'Owner' ? <OwnerDataState {...props} /> : <SharedQueryState {...props} />;
+}
+
 export function IncidentListScreen({ emergency = false }: { emergency?: boolean }) {
   const { role, preview, go } = useWorkspace();
   const { session } = useSession();
@@ -474,12 +481,16 @@ function WorkDetail({ id }: { id: string }) {
             <Heading title="Chi tiết lệnh sửa chữa" detail={incidentText(work.status)} />
             {work.isOverdue && <Pill tone="red">Quá hạn hoàn thành</Pill>}
             <Info label="Kết quả yêu cầu" value={work.expectedOutcome} />
-            <Text>
-              Người phụ trách:{' '}
-              {work.assignedStaffId === session?.userId
-                ? 'Bạn'
-                : 'Nhân viên được phân công (xem mã tham chiếu)'}
-            </Text>
+            {role === 'Owner' ? (
+              <OwnerStaffName staffId={work.assignedStaffId} />
+            ) : (
+              <Text>
+                Người phụ trách:{' '}
+                {work.assignedStaffId === session?.userId
+                  ? 'Bạn'
+                  : 'Nhân viên được phân công (xem mã tham chiếu)'}
+              </Text>
+            )}
             <Info label="Hạn hoàn thành" value={incidentDate(work.targetCompletionAt)} />
             <Info label="Kết quả kiểm tra" value={work.inspectionResult} />
             <Info label="Phương án" value={work.proposedSolution} />

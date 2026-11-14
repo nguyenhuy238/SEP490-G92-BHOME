@@ -185,7 +185,8 @@ it('enables activation only from server readiness and does not synthesize a QR',
   mount(contract, readiness(true));
   expect((screen.getByText('Kích hoạt hợp đồng') as HTMLButtonElement).disabled).toBe(false);
   fireEvent.click(screen.getByText('Bước trước'));
-  expect(screen.getByText(/API hiện tại chưa cấp QR nộp cọc hợp đồng/)).toBeTruthy();
+  expect(screen.getByText(/Tiền cọc được cập nhật sau khi giao dịch được xác minh/)).toBeTruthy();
+  expect(screen.queryByText('Xác minh cọc ngân hàng')).toBeNull();
   expect(screen.queryByRole('img')).toBeNull();
 });
 it('keeps activation blocked even when local signature/deposit indicators are complete but backend says no', () => {
