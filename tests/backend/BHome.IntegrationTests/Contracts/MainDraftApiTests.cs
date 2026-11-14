@@ -61,12 +61,12 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         await db.SaveChangesAsync();
         if (settings)
         {
-            var config = new MainContractSettingsInput(owner.Id, Today.AddDays(-1), null, 6200000, "Chuyển khoản theo cấu hình kiểm thử", "Điều khoản kiểm thử tổng hợp", new("OWNER KIỂM THỬ", new(1980, 1, 1), "000000000456", new(2020, 1, 1), "Nơi cấp kiểm thử", "Địa chỉ Owner kiểm thử", "0000000000"), 0);
+            var config = new MainContractSettingsInput(owner.Id, Today.AddDays(-1), null, 6200000, "Chuyển khoản theo cấu hình kiểm thử", "Điều khoản kiểm thử tổng hợp", new("OWNER KIỂM THỬ", new(1980, 1, 1), "000000000456", new(2020, 1, 1), "Nơi cấp kiểm thử", "Địa chỉ Owner kiểm thử", "0900000000"), 0);
             var response = await owner.Client.PutAsJsonAsync($"{Root}/settings/{location.Id}", config); await Success(response);
         }
         return new(owner.Client, staff.Client, outside.Client, owner.Id, room.Id, location.Id, resident.Id);
     }
-    private static MainDraftInput Input(Workspace w) => new(w.Room, w.Resident, [w.Resident], Today, Today.AddYears(1), "Ghi chú kiểm thử", "0000000001", "Nơi cấp kiểm thử");
+    private static MainDraftInput Input(Workspace w) => new(w.Room, w.Resident, [w.Resident], Today, Today.AddYears(1), "Ghi chú kiểm thử", "0900000001", "Nơi cấp kiểm thử");
     private static async Task Success(HttpResponseMessage response) => Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
     private static async Task<MainDraftView> Save(Workspace w, MainDraftInput? input = null, Guid? key = null, Guid? id = null)
     {

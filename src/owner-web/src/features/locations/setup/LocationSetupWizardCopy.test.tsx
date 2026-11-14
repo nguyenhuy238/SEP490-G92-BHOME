@@ -28,8 +28,29 @@ const rentId = '00000000-0000-4000-8000-000000000003';
 const feeId = '00000000-0000-4000-8000-000000000004';
 const packageId = '00000000-0000-4000-8000-000000000005';
 const ruleId = '00000000-0000-4000-8000-000000000006';
+const typeId = '00000000-0000-4000-8000-000000000007';
+const duplicateFeeId = '00000000-0000-4000-8000-000000000008';
 const source: LocationSetupSource = {
-  roomTypes: [],
+  roomTypes: [
+    {
+      id: typeId,
+      locationId: sourceId,
+      kind: 'RoomDefaults',
+      status: 'Published',
+      version: 5,
+      data: {
+        name: 'Synthetic source type',
+        description: 'Linked source room type',
+        defaults: {
+          capacity: 2,
+          area: '25',
+          amenities: ['Balcony'],
+          referenceRent: null,
+        },
+        assetTemplateId: packageId,
+      },
+    },
+  ],
   assetTemplates: [
     {
       id: packageId,
@@ -47,6 +68,7 @@ const source: LocationSetupSource = {
             category: 'Furniture',
             trackingMode: 'BulkQuantity',
             quantity: 2,
+            unit: 'Cái',
           },
         ],
       },
@@ -78,6 +100,19 @@ const source: LocationSetupSource = {
       effectiveFrom: '2020-01-01',
       effectiveTo: null,
       version: 4,
+    },
+    {
+      id: duplicateFeeId,
+      locationId: sourceId,
+      roomId: sourceRoomId,
+      category: 3,
+      chargeCode: 'WIFI',
+      name: 'Synthetic duplicate room fee',
+      method: 0,
+      rate: '50000',
+      effectiveFrom: '2020-01-01',
+      effectiveTo: null,
+      version: 5,
     },
   ],
   policies: [
@@ -115,7 +150,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('copies only selected configuration, requires asset assignment and new-room fee mapping, and submits exact source provenance', async () => {
+it('copies a room type with its linked asset template and keeps rent in the single room-type price step', async () => {
   const complete = vi.fn();
   const result = {
     location: {
@@ -150,9 +185,11 @@ it('copies only selected configuration, requires asset assignment and new-room f
     </ThemeProvider>,
   );
 
-  fireEvent.click(await screen.findByRole('checkbox', { name: /Synthetic rent/ }));
-  fireEvent.click(screen.getByRole('checkbox', { name: /Synthetic package/ }));
+  fireEvent.click(await screen.findByRole('checkbox', { name: /Synthetic source type/ }));
   fireEvent.click(screen.getByRole('checkbox', { name: /Synthetic room fee/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /Synthetic duplicate room fee/ }));
+  expect(screen.queryByRole('checkbox', { name: /Synthetic rent/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('checkbox', { name: /Synthetic package/ })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Nạp cấu hình đã chọn (3)' }));
   expect(
     await screen.findByText(/Một số thư viện chưa tải được: danh mục tài sản/),
@@ -160,27 +197,26 @@ it('copies only selected configuration, requires asset assignment and new-room f
   fill(/Tên cơ sở/, 'Synthetic copy');
   fill(/Mã cơ sở/, 'COPY-1');
   fill(/Địa chỉ/, 'Synthetic address');
+  fill(/Số điện thoại liên hệ/, '0908123456');
   fireEvent.click(screen.getByRole('checkbox', { name: /Kích hoạt cơ sở/ }));
   next();
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm loại phòng' }));
-  const editor = within(screen.getByRole('dialog', { name: 'Thêm loại phòng riêng' }));
-  expect(editor.getByLabelText(/Giá thuê mặc định/)).toHaveValue('2.500.000');
-  fireEvent.change(editor.getByLabelText('Tên loại phòng'), {
-    target: { value: 'Synthetic destination type' },
-  });
-  fireEvent.click(editor.getByRole('button', { name: 'Lưu loại phòng' }));
-  await screen.findByRole('button', { name: /^Tiếp tục \(/ });
+  expect(screen.getByText('Synthetic source type')).toBeVisible();
+  expect(screen.queryByLabelText(/Giá thuê mặc định/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa' }));
+  fill(/Giá thuê mặc định/, '2500000');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu loại phòng' }));
   next();
   fill('Số lượng phòng', '1');
   fireEvent.click(screen.getByRole('button', { name: 'Sinh phòng xem trước' }));
   next();
-  next();
-  expect(screen.getByText(/Hãy gán từng gói tài sản/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Gán cho Synthetic destination type' }));
   expect(
     within(screen.getByRole('list', { name: 'Tài sản đã chọn' })).getByText('Synthetic desk'),
   ).toBeVisible();
+  expect(
+    within(screen.getByRole('list', { name: 'Tài sản đã chọn' })).getByText('Đơn vị: Cái'),
+  ).toBeVisible();
   next();
+  expect(screen.queryByLabelText(/Giá thuê\/tháng/)).not.toBeInTheDocument();
   next();
   expect(
     screen.getByText(/Biểu phí riêng của phòng nguồn cần chọn phòng đích/),
@@ -204,15 +240,22 @@ it('copies only selected configuration, requires asset assignment and new-room f
   const payload: LocationSetupInput = JSON.parse(String(writes[0][1].body));
   expect(payload).toMatchObject({
     activate: false,
+    location: { contactPhone: '+84908123456' },
     sourceLocationId: sourceId,
     sourceState: source.sourceState,
     policy: null,
   });
   expect(payload.roomTypes[0]).toMatchObject({
     referenceRent: 2500000,
-    sourceId: null,
+    sourceId: typeId,
     assets: [
-      { name: 'Synthetic desk', category: 'Furniture', trackingMode: 'BulkQuantity', quantity: 2 },
+      {
+        name: 'Synthetic desk',
+        category: 'Furniture',
+        trackingMode: 'BulkQuantity',
+        quantity: 2,
+        unit: 'Cái',
+      },
     ],
   });
   expect(payload.roomTypes[0].assets[0]).not.toHaveProperty('references');
@@ -224,15 +267,26 @@ it('copies only selected configuration, requires asset assignment and new-room f
       rate: source.fees.find((fee) => fee.id === feeId)?.rate,
     }),
   ]);
+  expect(payload.fees).toHaveLength(1);
   expect(payload.fees[0]).not.toHaveProperty('sourceRoomId');
   expect(payload.fees[0]).not.toHaveProperty('reference');
   expect(JSON.stringify(payload)).not.toContain(sourceRoomId);
   expect(payload.sourceReferences).toHaveLength(3);
   expect(payload.sourceReferences).toEqual(
     expect.arrayContaining([
-      { id: rentId, version: 2, kind: 'BillingPolicy' },
+      { id: typeId, version: 5, kind: 'RoomDefaults' },
       { id: feeId, version: 4, kind: 'BillingPolicy' },
       { id: packageId, version: 3, kind: 'AssetTemplate' },
     ]),
   );
+  expect(payload.sourceReferences).not.toContainEqual({
+    id: duplicateFeeId,
+    version: 5,
+    kind: 'BillingPolicy',
+  });
+  expect(payload.sourceReferences).not.toContainEqual({
+    id: rentId,
+    version: 2,
+    kind: 'BillingPolicy',
+  });
 }, 30000);

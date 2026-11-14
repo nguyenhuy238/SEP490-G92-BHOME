@@ -390,7 +390,9 @@ export function TasksApiPage() {
                     <Stack spacing={1}>
                       <Typography sx={{ fontSize: 16, fontWeight: 600 }}>{task.title}</Typography>
                       <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-                        {locationName(task.locationId)} · {responsibleName(task, staff.data ?? [])}
+                        {locationName(task.locationId)}
+                        {task.target ? ` · ${task.target.label}` : ''} ·{' '}
+                        {responsibleName(task, staff.data ?? [])}
                       </Typography>
                       <TaskStatus task={task} />
                       <Typography sx={{ fontSize: 13 }}>
@@ -497,6 +499,11 @@ export function TasksApiPage() {
                           </Typography>
                           <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
                             {locationName(task.locationId)}
+                            {task.target && (
+                              <Typography variant="caption" sx={{ display: 'block' }}>
+                                {task.target.label}
+                              </Typography>
+                            )}
                           </Typography>
                           {compact && (
                             <Stack

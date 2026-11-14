@@ -87,7 +87,10 @@ export function LiveAutomationPage() {
       <PageHeader
         title="Lịch tự động & Thông báo"
         actions={
-          <Button component={Link} to="/pricing">
+          <Button
+            component={Link}
+            to={location ? `/pricing?locationId=${encodeURIComponent(location)}` : '/pricing'}
+          >
             Cấu hình giá và lịch hóa đơn
           </Button>
         }

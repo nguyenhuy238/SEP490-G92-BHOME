@@ -36,6 +36,11 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { Building2, ChevronDown, Copy, Package, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
+import { ASSET_UNITS } from '../../../../../../packages/client-core/src/assetUnits';
+import {
+  contactPhoneError,
+  normalizeContactPhone,
+} from '../../../../../../packages/client-core/src/contactPhone';
 import {
   locationSetupClient,
   type LocationSetupInput,
@@ -90,6 +95,31 @@ const uid = () => crypto.randomUUID();
 const today = () => todayVietnam();
 const validMoney = (value: number | string | null): boolean =>
   value !== null && /^\d{1,14}(?:\.\d{1,4})?$/.test(String(value));
+const feeOverlaps = (
+  a: Pick<
+    DraftFee,
+    'roomKey' | 'requiresRoom' | 'sourceRoomId' | 'chargeCode' | 'effectiveFrom' | 'effectiveTo'
+  >,
+  b: Pick<
+    DraftFee,
+    'roomKey' | 'requiresRoom' | 'sourceRoomId' | 'chargeCode' | 'effectiveFrom' | 'effectiveTo'
+  >,
+) => {
+  const sameScope =
+    a.requiresRoom || b.requiresRoom
+      ? a.requiresRoom &&
+        b.requiresRoom &&
+        (a.roomKey && b.roomKey
+          ? a.roomKey === b.roomKey
+          : !a.roomKey && !b.roomKey && !!a.sourceRoomId && a.sourceRoomId === b.sourceRoomId)
+      : a.roomKey === b.roomKey;
+  return (
+    sameScope &&
+    a.chargeCode.trim().toUpperCase() === b.chargeCode.trim().toUpperCase() &&
+    a.effectiveFrom <= (b.effectiveTo ?? '9999-12-31') &&
+    b.effectiveFrom <= (a.effectiveTo ?? '9999-12-31')
+  );
+};
 const exactRent = (value: string | number): string | number =>
   /^\d{1,14}$/.test(String(value)) ? Number(value) : value;
 const categories = ['Tiền thuê', 'Điện', 'Nước', 'Dịch vụ'];
@@ -103,7 +133,8 @@ type DraftRoom = {
 type DraftAsset = SetupAssetRequirement & { references?: SetupSourceReference[] };
 type DraftType = Omit<SetupRoomDefaults, 'assets'> & {
   assets: DraftAsset[];
-  rentSource?: SetupSourceReference;
+  assetTemplateSourceName?: string;
+  assetTemplateSourceVersion?: number;
 };
 type DraftFee = Omit<SetupFee, 'rate'> & {
   rate: number | string;
@@ -111,6 +142,7 @@ type DraftFee = Omit<SetupFee, 'rate'> & {
   sourceId?: string;
   reference?: SetupSourceReference;
   requiresRoom?: boolean;
+  sourceRoomId?: string;
 };
 type RuleSection = {
   key: string;
@@ -118,15 +150,6 @@ type RuleSection = {
   content: string;
   sourceId?: string;
   reference?: SetupSourceReference;
-};
-type ImportedPackage = {
-  id: string;
-  name: string;
-  items: SetupAssetRequirement[];
-  reference?: SetupSourceReference;
-  assignedTypeKeys?: string[];
-  discarded?: boolean;
-  suggestedTypeNames?: string[];
 };
 type Draft = {
   key: string;
@@ -143,10 +166,7 @@ type Draft = {
   rules: RuleSection[];
   policyTitle: string;
   policyDate: string;
-  packages: ImportedPackage[];
   rentEffectiveFrom: string;
-  sourceRent: number | string | null;
-  sourceRentReference?: SetupSourceReference;
   submittedPayload?: string;
   submittedKey?: string;
 };
@@ -160,7 +180,9 @@ const uniqueReferences = (references: SetupSourceReference[]) => [
 
 const matchesCatalog = (asset: DraftAsset, doc: SharedDocument) =>
   norm(asset.name) === norm(doc.name) &&
-  norm(asset.category) === norm((doc.data as AssetCatalogData).category);
+  (!asset.unit ||
+    !(doc.data as AssetCatalogData).unit ||
+    norm(asset.unit) === norm((doc.data as AssetCatalogData).unit));
 
 function mergeCatalogAssets(assets: DraftAsset[], documents: SharedDocument[]): DraftAsset[] {
   const merged = [...assets];
@@ -179,7 +201,8 @@ function mergeCatalogAssets(assets: DraftAsset[], documents: SharedDocument[]): 
         name: doc.name,
         category: (doc.data as AssetCatalogData).category,
         quantity: 1,
-        trackingMode: 'BulkQuantity',
+        trackingMode: 'Serialized',
+        unit: (doc.data as AssetCatalogData).unit,
         references: [imported],
       });
     }
@@ -187,34 +210,13 @@ function mergeCatalogAssets(assets: DraftAsset[], documents: SharedDocument[]): 
   return merged;
 }
 
-function restoreCatalogSelections(draft: Draft): Draft {
-  // Do not change a previously submitted request: an uncertain response must be retryable
-  // with its original payload and idempotency key. Imported asset-package quantities also
-  // have independent provenance and must not be reset.
-  if (draft.submittedPayload) return draft;
-  return {
-    ...draft,
-    roomTypes: draft.roomTypes.map((type) => ({
-      ...type,
-      assets: type.assets.map((asset) =>
-        asset.references?.length && asset.references.every((ref) => ref.kind === 'asset-catalog')
-          ? { ...asset, quantity: 1 }
-          : asset,
-      ),
-    })),
-  };
-}
-const newType = (
-  referenceRent: number | string | null = null,
-  rentSource?: SetupSourceReference,
-): DraftType => ({
+const newType = (): DraftType => ({
   key: uid(),
   name: '',
   description: '',
   capacity: 2,
   area: 20,
-  referenceRent,
-  rentSource,
+  referenceRent: null,
   amenities: [],
   assets: [],
   sourceId: null,
@@ -244,9 +246,7 @@ const newDraft = (source?: string): Draft => ({
   rules: [],
   policyTitle: 'Nội quy cơ sở',
   policyDate: today(),
-  packages: [],
   rentEffectiveFrom: today(),
-  sourceRent: null,
 });
 const categoryNumber = (value: string | number): SetupFee['category'] => {
   if (typeof value === 'number' && value >= 0 && value <= 3) return value as SetupFee['category'];
@@ -275,6 +275,19 @@ const sourceType = (document: SharedDocument): DraftType => {
     area: Number(data.area),
     referenceRent: data.referenceRent === null ? null : exactRent(data.referenceRent),
     amenities: [...data.amenities],
+    assets: (data.assetItems ?? []).flatMap((item) =>
+      item.catalog
+        ? [
+            {
+              name: item.catalog.name,
+              category: item.catalog.category,
+              unit: item.catalog.unit,
+              quantity: item.quantity,
+              trackingMode: item.trackingMode,
+            },
+          ]
+        : [],
+    ),
     sourceId: document.id,
     sourceVersion: document.version,
     sourceKind: 'SharedTemplate',
@@ -297,11 +310,13 @@ function validateSetupStep(draft: Draft, step: number): string | null {
     if (!/^[A-Za-z0-9_-]{1,50}$/.test(info.code.trim()))
       return 'Mã cơ sở chỉ gồm chữ cái không dấu, chữ số, dấu - hoặc _, tối đa 50 ký tự.';
     if (
-      info.contactPhone.trim().length > 50 ||
+      !!contactPhoneError(info.contactPhone) ||
       info.contactEmail.trim().length > 200 ||
       info.description.trim().length > 2000
     )
-      return 'Thông tin liên hệ hoặc mô tả vượt độ dài cho phép.';
+      return (
+        contactPhoneError(info.contactPhone) || 'Thông tin liên hệ hoặc mô tả vượt độ dài cho phép.'
+      );
     if (info.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(info.contactEmail.trim()))
       return 'Email liên hệ không hợp lệ.';
     if (draft.mode === 'copy' && !draft.appliedSource)
@@ -318,15 +333,18 @@ function validateSetupStep(draft: Draft, step: number): string | null {
           type.capacity > 32767 ||
           !Number.isFinite(type.area) ||
           type.area <= 0 ||
-          type.area > 1000000 ||
-          !validMoney(type.referenceRent),
+          type.area > 1000000,
       )
     )
-      return 'Mỗi loại phòng cần tên, diện tích, sức chứa và giá thuê mặc định hợp lệ.';
+      return 'Mỗi loại phòng cần tên, diện tích và sức chứa hợp lệ.';
     if (new Set(draft.roomTypes.map((type) => norm(type.name))).size !== draft.roomTypes.length)
       return 'Tên loại phòng không được trùng trong cơ sở.';
+    if (draft.roomTypes.some((type) => !validMoney(type.referenceRent)))
+      return 'Nhập giá thuê mặc định hợp lệ cho từng loại phòng.';
   }
   if (step === 2) {
+    if (!draft.rentEffectiveFrom || draft.rentEffectiveFrom < today())
+      return 'Chọn ngày hiệu lực giá thuê từ hôm nay trở đi.';
     if (!draft.rooms.length) return 'Tạo ít nhất một phòng trước khi tiếp tục.';
     if (
       draft.rooms.some(
@@ -350,26 +368,14 @@ function validateSetupStep(draft: Draft, step: number): string | null {
       type.assets.some(
         (asset) =>
           !asset.name.trim() ||
-          !asset.category.trim() ||
           !Number.isInteger(asset.quantity) ||
           asset.quantity < 1 ||
           asset.quantity > 10000,
       ),
     )
   )
-    return 'Kiểm tra tài sản chưa có tên hoặc nhóm; có thể bỏ mục không hợp lệ rồi chọn lại từ thư viện.';
-  if (
-    step === 3 &&
-    draft.packages.some(
-      (item) =>
-        !item.discarded &&
-        !item.assignedTypeKeys?.some((key) => draft.roomTypes.some((type) => type.key === key)),
-    )
-  )
-    return 'Hãy gán từng gói tài sản đã sao chép cho loại phòng hoặc xác nhận bỏ gói.';
+    return 'Kiểm tra tên và số lượng tài sản; mỗi số lượng phải từ 1 đến 10.000.';
   if (step === 4) {
-    if (!draft.rentEffectiveFrom || draft.rentEffectiveFrom < today())
-      return 'Chọn ngày hiệu lực giá thuê từ hôm nay trở đi.';
     if (draft.fees.some((fee) => fee.requiresRoom && !fee.roomKey))
       return 'Biểu phí riêng của phòng nguồn cần chọn phòng đích hoặc bỏ khoản phí.';
     if (
@@ -392,19 +398,7 @@ function validateSetupStep(draft: Draft, step: number): string | null {
       )
     )
       return 'Kiểm tra tên, mã khoản thu, phương thức, ngày hiệu lực và phạm vi từng biểu phí.';
-    if (
-      draft.fees.some((a, i) =>
-        draft.fees
-          .slice(i + 1)
-          .some(
-            (b) =>
-              a.roomKey === b.roomKey &&
-              a.chargeCode === b.chargeCode &&
-              a.effectiveFrom <= (b.effectiveTo ?? '9999-12-31') &&
-              b.effectiveFrom <= (a.effectiveTo ?? '9999-12-31'),
-          ),
-      )
-    )
+    if (draft.fees.some((a, i) => draft.fees.slice(i + 1).some((b) => feeOverlaps(a, b))))
       return 'Có biểu phí trùng mã và khoảng hiệu lực trong cùng phạm vi.';
   }
   if (step === 5 && draft.rules.length) {
@@ -432,18 +426,10 @@ function toLocationSetupInput(draft: Draft): LocationSetupInput {
             ),
           ]
         : []),
-      ...(type.rentSource ? [type.rentSource] : []),
       ...type.assets.flatMap((asset) => asset.references ?? []),
     ]),
     ...draft.fees.flatMap((fee) => (fee.reference ? [fee.reference] : [])),
     ...draft.rules.flatMap((rule) => (rule.reference ? [rule.reference] : [])),
-    ...draft.packages.flatMap((item) =>
-      item.reference &&
-      !item.discarded &&
-      item.assignedTypeKeys?.some((key) => draft.roomTypes.some((type) => type.key === key))
-        ? [item.reference]
-        : [],
-    ),
   ]);
   return {
     location: {
@@ -451,7 +437,7 @@ function toLocationSetupInput(draft: Draft): LocationSetupInput {
       name: draft.location.name.trim(),
       address: draft.location.address.trim(),
       code: draft.location.code.trim(),
-      contactPhone: draft.location.contactPhone.trim(),
+      contactPhone: normalizeContactPhone(draft.location.contactPhone) ?? '',
       contactEmail: draft.location.contactEmail.trim(),
       description: draft.location.description.trim(),
     },
@@ -468,6 +454,7 @@ function toLocationSetupInput(draft: Draft): LocationSetupInput {
         category: asset.category.trim(),
         quantity: asset.quantity,
         trackingMode: asset.trackingMode,
+        unit: asset.unit ?? null,
       })),
       sourceId: type.sourceId,
       sourceVersion: type.sourceVersion,
@@ -538,7 +525,7 @@ export function LocationSetupWizard({
           Array.isArray(restored.rooms) &&
           (!initialSource || restored.sourceLocationId === initialSource)
         )
-          return restoreCatalogSelections({ ...newDraft(initialSource), ...restored });
+          return { ...newDraft(initialSource), ...restored };
       }
     } catch {
       /* old draft unavailable */
@@ -556,7 +543,6 @@ export function LocationSetupWizard({
   const [prefix, setPrefix] = useState('P.');
   const [quantity, setQuantity] = useState('4');
   const [assetTypeKey, setAssetTypeKey] = useState('');
-  const [rentTypeKey, setRentTypeKey] = useState('');
   const [confirmSave, setConfirmSave] = useState(false);
   const [editingType, setEditingType] = useState<DraftType | null>(null);
   const [editingFeeKey, setEditingFeeKey] = useState('');
@@ -672,7 +658,6 @@ export function LocationSetupWizard({
   ) : null;
   const currentType = draft.roomTypes.find((type) => type.key === typeKey) ?? draft.roomTypes[0];
   const assetType = draft.roomTypes.find((type) => type.key === assetTypeKey) ?? draft.roomTypes[0];
-  const rentType = draft.roomTypes.find((type) => type.key === rentTypeKey) ?? draft.roomTypes[0];
   const updateType = (key: string, change: Partial<DraftType>) =>
     setDraft((previous) => ({
       ...previous,
@@ -716,10 +701,6 @@ export function LocationSetupWizard({
       return;
     }
     const type = sourceType(template);
-    if (type.referenceRent === null) {
-      type.referenceRent = draft.sourceRent;
-      type.rentSource = draft.sourceRentReference;
-    }
     setDraft((previous) => ({ ...previous, roomTypes: [...previous.roomTypes, type] }));
     setNotice(`Đã nạp ${type.name} thành bản cấu hình độc lập.`);
     setError('');
@@ -732,10 +713,9 @@ export function LocationSetupWizard({
       editingType.capacity < 1 ||
       editingType.capacity > 32767 ||
       !Number.isFinite(editingType.area) ||
-      editingType.area <= 0 ||
-      !validMoney(editingType.referenceRent)
+      editingType.area <= 0
     ) {
-      setError('Nhập tên, diện tích, sức chứa và giá thuê hợp lệ.');
+      setError('Nhập tên, diện tích và sức chứa hợp lệ.');
       return;
     }
     if (
@@ -761,13 +741,7 @@ export function LocationSetupWizard({
       setError('Hãy chuyển hoặc xóa các phòng đang sử dụng loại phòng này trước.');
       return;
     }
-    patch({
-      roomTypes: draft.roomTypes.filter((type) => type.key !== key),
-      packages: draft.packages.map((item) => ({
-        ...item,
-        assignedTypeKeys: item.assignedTypeKeys?.filter((value) => value !== key),
-      })),
-    });
+    patch({ roomTypes: draft.roomTypes.filter((type) => type.key !== key) });
   };
   const generate = () => {
     const count = Number(quantity),
@@ -829,38 +803,6 @@ export function LocationSetupWizard({
     .filter((doc) => assetType?.assets.some((asset) => matchesCatalog(asset, doc)))
     .map((doc) => doc.id);
   const remainingCatalog = catalogAssets.filter((doc) => !selectedCatalogIds.includes(doc.id));
-  const applyPackageTo = (selected: ImportedPackage) => {
-    if (!assetType || selected.discarded) return;
-    const merged = [...assetType.assets];
-    selected.items.forEach((item) => {
-      const index = merged.findIndex(
-        (asset) =>
-          norm(asset.name) === norm(item.name) && norm(asset.category) === norm(item.category),
-      );
-      const refs = selected.reference ? [selected.reference] : [];
-      if (index < 0) merged.push({ ...item, references: refs });
-      else
-        merged[index] = {
-          ...merged[index],
-          references: uniqueReferences([...(merged[index].references ?? []), ...refs]),
-        };
-    });
-    patch({
-      roomTypes: draft.roomTypes.map((type) =>
-        type.key === assetType.key ? { ...type, assets: merged } : type,
-      ),
-      packages: draft.packages.map((item) =>
-        item.id === selected.id
-          ? {
-              ...item,
-              discarded: false,
-              assignedTypeKeys: [...new Set([...(item.assignedTypeKeys ?? []), assetType.key])],
-            }
-          : item,
-      ),
-    });
-    setNotice(`Đã nạp gói ${selected.name}; các mục đã có được giữ nguyên.`);
-  };
   const newFee = (): DraftFee => ({
     key: uid(),
     roomKey: null,
@@ -878,42 +820,34 @@ export function LocationSetupWizard({
     const data = item.data as FeeTemplateData;
     const category = categoryNumber(data.category);
     if (category === 0) {
-      if (!rentType) {
-        setError('Chọn loại phòng để áp dụng mẫu giá thuê.');
-        return;
-      }
-      updateType(rentType.key, {
-        referenceRent: exactRent(data.referenceRate),
-        rentSource: reference('fee-templates', item),
-      });
-      setNotice(
-        `Đã nạp giá tham khảo ${item.name} vào ${rentType.name}; giá phòng riêng vẫn được giữ.`,
-      );
+      setError('Giá thuê được thiết lập một lần theo từng loại phòng ở bảng bên cạnh.');
       return;
     }
-    if (draft.fees.some((fee) => fee.sourceId === id)) {
-      setError('Mẫu biểu phí đã được nạp.');
+    const candidate: DraftFee = {
+      ...newFee(),
+      sourceId: id,
+      reference: reference('fee-templates', item),
+      category,
+      name: item.name,
+      chargeCode: data.chargeCode.toUpperCase(),
+      method: methodNumber(data.method),
+      rate: data.referenceRate,
+      roomKey: data.scope === 'Room' ? '' : null,
+      requiresRoom: data.scope === 'Room',
+      effectiveFrom: feeDate(data.effectiveFrom),
+      effectiveTo: data.effectiveTo && data.effectiveTo >= today() ? data.effectiveTo : null,
+    };
+    if (
+      draft.fees.some(
+        (fee) =>
+          fee.sourceId === id ||
+          (!candidate.requiresRoom && !fee.requiresRoom && feeOverlaps(fee, candidate)),
+      )
+    ) {
+      setError('Khoản phí cùng mã và thời gian hiệu lực đã có trong cấu hình.');
       return;
     }
-    patch({
-      fees: [
-        ...draft.fees,
-        {
-          ...newFee(),
-          sourceId: id,
-          reference: reference('fee-templates', item),
-          category,
-          name: item.name,
-          chargeCode: data.chargeCode.toUpperCase(),
-          method: methodNumber(data.method),
-          rate: data.referenceRate,
-          roomKey: data.scope === 'Room' ? '' : null,
-          requiresRoom: data.scope === 'Room',
-          effectiveFrom: feeDate(data.effectiveFrom),
-          effectiveTo: data.effectiveTo && data.effectiveTo >= today() ? data.effectiveTo : null,
-        },
-      ],
-    });
+    patch({ fees: [...draft.fees, candidate] });
   };
   const addRule = (id: string) => {
     const item = all('policy-templates').find((document) => document.id === id);
@@ -935,43 +869,21 @@ export function LocationSetupWizard({
 
   const copyGroups = (data: LocationSetupSource) => [
     {
-      label: 'Loại phòng & giá mặc định',
+      label: 'Loại phòng và tài sản đi kèm',
       kind: 'type',
       items: data.roomTypes
         .filter((doc) => doc.status !== 'Archived')
-        .map((doc) => ({
-          id: doc.id,
-          name: doc.data.name,
-          detail: `${doc.data.defaults.capacity} người · ${doc.data.defaults.area ?? 'Chưa khai báo'} m² · ${money(doc.data.defaults.referenceRent === null ? null : exactRent(doc.data.defaults.referenceRent))}/tháng`,
-        })),
-    },
-    {
-      label: 'Giá thuê tham khảo cấp cơ sở',
-      kind: 'rent',
-      items: data.fees
-        .filter(
-          (fee) =>
-            categoryNumber(fee.category) === 0 &&
-            !fee.roomId &&
-            fee.effectiveFrom <= today() &&
-            (!fee.effectiveTo || fee.effectiveTo >= today()),
-        )
-        .map((fee) => ({
-          id: fee.id,
-          name: fee.name,
-          detail: `${money(fee.rate)}/tháng · chỉ dùng làm tham khảo`,
-        })),
-    },
-    {
-      label: 'Gói tài sản (định mức)',
-      kind: 'asset',
-      items: data.assetTemplates
-        .filter((doc) => doc.status !== 'Archived')
-        .map((doc) => ({
-          id: doc.id,
-          name: doc.data.name,
-          detail: `${doc.data.items.length} mục`,
-        })),
+        .map((doc) => {
+          const linked = data.assetTemplates.find(
+            (template) =>
+              template.id === doc.data.assetTemplateId && template.status === 'Published',
+          );
+          return {
+            id: doc.id,
+            name: doc.data.name,
+            detail: `${doc.data.defaults.capacity} người · ${doc.data.defaults.area ?? 'Chưa khai báo'} m² · ${linked ? `${linked.data.items.length} loại tài sản đi kèm` : 'Chưa gắn mẫu tài sản'}`,
+          };
+        }),
     },
     {
       label: 'Biểu phí dịch vụ',
@@ -1026,58 +938,66 @@ export function LocationSetupWizard({
       return;
     }
     const selected = (kind: string, id: string) => copySelection.includes(`${kind}:${id}`);
-    const rents = data.fees.filter((fee) => selected('rent', fee.id));
-    if (rents.length > 1) {
-      setError('Chỉ chọn một giá thuê tham khảo cấp cơ sở.');
+    const selectedTypes = data.roomTypes.filter((doc) => selected('type', doc.id));
+    const missingLinkedTemplate = selectedTypes.find(
+      (doc) =>
+        doc.data.assetTemplateId &&
+        !data.assetTemplates.some(
+          (template) => template.id === doc.data.assetTemplateId && template.status === 'Published',
+        ),
+    );
+    if (missingLinkedTemplate) {
+      setError(
+        `Loại phòng ${missingLinkedTemplate.data.name} đang tham chiếu đến mẫu tài sản không còn công bố. Hãy cập nhật cấu hình nguồn trước khi sao chép.`,
+      );
       return;
     }
-    const sourceRent = rents.length ? exactRent(rents[0].rate) : draft.sourceRent;
-    const sourceRentReference = rents.length
-      ? reference('BillingPolicy', rents[0])
-      : draft.sourceRentReference;
-    const selectedPackages = data.assetTemplates
-      .filter((doc) => selected('asset', doc.id))
-      .map((doc) => ({
-        id: doc.id,
-        name: doc.data.name,
-        reference: reference('AssetTemplate', doc),
-        items: doc.data.items.map((item) => ({
-          name: item.name,
-          category: item.category,
-          quantity: item.quantity,
-          trackingMode: item.trackingMode,
-        })),
-        suggestedTypeNames: data.roomTypes
-          .filter((type) => type.data.assetTemplateId === doc.id)
-          .map((type) => type.data.name),
-      }));
-    const newTypes = data.roomTypes
+    const newTypes = selectedTypes
       .filter(
         (doc) =>
-          selected('type', doc.id) &&
           !draft.roomTypes.some(
             (type) => type.sourceId === doc.id || norm(type.name) === norm(doc.data.name),
           ),
       )
-      .map((doc) => ({
-        ...newType(),
-        name: doc.data.name,
-        description: doc.data.description ?? '',
-        capacity: doc.data.defaults.capacity,
-        area: Number(doc.data.defaults.area),
-        referenceRent:
-          doc.data.defaults.referenceRent === null
-            ? sourceRent
-            : exactRent(doc.data.defaults.referenceRent),
-        rentSource: doc.data.defaults.referenceRent === null ? sourceRentReference : undefined,
-        amenities: [...doc.data.defaults.amenities],
-        sourceId: doc.id,
-        sourceVersion: doc.version,
-        sourceKind: 'RoomDefaults',
-      }));
-    const newFees = data.fees
+      .map((doc) => {
+        const linked = data.assetTemplates.find(
+          (template) => template.id === doc.data.assetTemplateId && template.status === 'Published',
+        );
+        const assetReference = linked ? reference('AssetTemplate', linked) : null;
+        return {
+          ...newType(),
+          name: doc.data.name,
+          description: doc.data.description ?? '',
+          capacity: doc.data.defaults.capacity,
+          area: Number(doc.data.defaults.area),
+          referenceRent:
+            doc.data.defaults.referenceRent === null
+              ? null
+              : exactRent(doc.data.defaults.referenceRent),
+          amenities: [...doc.data.defaults.amenities],
+          assets:
+            linked?.data.items.map((item) => ({
+              name: item.name,
+              category: item.category,
+              quantity: item.quantity,
+              trackingMode: item.trackingMode,
+              unit: item.unit ?? null,
+              references: assetReference ? [assetReference] : [],
+            })) ?? [],
+          assetTemplateSourceName: linked?.data.name,
+          assetTemplateSourceVersion: linked?.version,
+          sourceId: doc.id,
+          sourceVersion: doc.version,
+          sourceKind: 'RoomDefaults' as const,
+        };
+      });
+    const feeCandidates = data.fees
       .filter(
-        (fee) => selected('fee', fee.id) && !draft.fees.some((item) => item.sourceId === fee.id),
+        (fee) =>
+          selected('fee', fee.id) &&
+          categoryNumber(fee.category) !== 0 &&
+          fee.effectiveFrom <= today() &&
+          (!fee.effectiveTo || fee.effectiveTo >= today()),
       )
       .map((fee) => ({
         ...newFee(),
@@ -1090,9 +1010,26 @@ export function LocationSetupWizard({
         rate: fee.rate,
         roomKey: fee.roomId ? '' : null,
         requiresRoom: !!fee.roomId,
+        sourceRoomId: fee.roomId ?? undefined,
         effectiveFrom: today(),
         effectiveTo: fee.effectiveTo && fee.effectiveTo >= today() ? fee.effectiveTo : null,
       }));
+    const newFees: DraftFee[] = [];
+    for (const candidate of feeCandidates) {
+      const duplicate = [...draft.fees, ...newFees].some(
+        (existing) =>
+          existing.sourceId === candidate.sourceId ||
+          (!candidate.requiresRoom && !existing.requiresRoom && feeOverlaps(existing, candidate)) ||
+          (!!candidate.requiresRoom &&
+            !!existing.requiresRoom &&
+            existing.sourceRoomId === candidate.sourceRoomId &&
+            existing.chargeCode.trim().toUpperCase() ===
+              candidate.chargeCode.trim().toUpperCase() &&
+            existing.effectiveFrom <= (candidate.effectiveTo ?? '9999-12-31') &&
+            candidate.effectiveFrom <= (existing.effectiveTo ?? '9999-12-31')),
+      );
+      if (!duplicate) newFees.push(candidate);
+    }
     const newRules = data.policies
       .filter(
         (doc) => selected('rule', doc.id) && !draft.rules.some((rule) => rule.sourceId === doc.id),
@@ -1107,25 +1044,13 @@ export function LocationSetupWizard({
     patch({
       appliedSource: draft.sourceLocationId,
       sourceState: data.sourceState,
-      sourceRent,
-      sourceRentReference,
-      roomTypes: [
-        ...draft.roomTypes.map((type) =>
-          type.referenceRent === null
-            ? { ...type, referenceRent: sourceRent, rentSource: sourceRentReference }
-            : type,
-        ),
-        ...newTypes,
-      ],
+      roomTypes: [...draft.roomTypes, ...newTypes],
       fees: [...draft.fees, ...newFees],
       rules: [...draft.rules, ...newRules],
-      packages: [
-        ...draft.packages,
-        ...selectedPackages.filter((item) => !draft.packages.some((p) => p.id === item.id)),
-      ],
     });
+    const copiedAssets = newTypes.reduce((total, type) => total + type.assets.length, 0);
     setNotice(
-      `Đã nạp ${newTypes.length} loại phòng, ${selectedPackages.length} gói tài sản, ${newFees.length} biểu phí, ${newRules.length} nội quy. Kiểm tra và sửa ở các bước tiếp theo.`,
+      `Đã nạp ${newTypes.length} loại phòng kèm ${copiedAssets} loại tài sản, ${newFees.length} biểu phí và ${newRules.length} nội quy. Giá thuê được xác nhận theo từng loại phòng ở bước tiếp theo.`,
     );
   };
   const finish = async () => {
@@ -1573,7 +1498,10 @@ export function LocationSetupWizard({
                     <TextField
                       fullWidth
                       label="Số điện thoại liên hệ"
+                      type="tel"
                       value={draft.location.contactPhone}
+                      error={!!contactPhoneError(draft.location.contactPhone)}
+                      helperText={contactPhoneError(draft.location.contactPhone)}
                       onChange={(e) => info({ contactPhone: e.target.value })}
                     />
                   </Grid>
@@ -1619,19 +1547,11 @@ export function LocationSetupWizard({
                     gap: 1,
                   }}
                 >
-                  {draft.sourceRent !== null && (
-                    <Typography variant="caption">
-                      Giá thuê tham khảo từ cơ sở nguồn: {money(draft.sourceRent)}/tháng. Kiểm tra
-                      và xác nhận cho từng loại phòng.
-                    </Typography>
-                  )}
                   <Button
                     sx={{ ml: 'auto' }}
                     variant="contained"
                     startIcon={<Plus size={16} />}
-                    onClick={() =>
-                      setEditingType(newType(draft.sourceRent, draft.sourceRentReference))
-                    }
+                    onClick={() => setEditingType(newType())}
                   >
                     Thêm loại phòng
                   </Button>
@@ -1647,7 +1567,7 @@ export function LocationSetupWizard({
                         return {
                           id: doc.id,
                           name: doc.name,
-                          detail: `${data.area} m² · ${data.capacity} người · ${money(data.referenceRent === null ? null : exactRent(data.referenceRent))}`,
+                          detail: `${data.area} m² · ${data.capacity} người`,
                         };
                       })}
                       selected={draft.roomTypes.flatMap((type) =>
@@ -1681,8 +1601,11 @@ export function LocationSetupWizard({
                                 />
                               </Stack>
                               <Typography variant="body2">
-                                {type.area} m² · {type.capacity} người · {money(type.referenceRent)}
-                                /tháng
+                                {type.area} m² · {type.capacity} người · {type.assets.length} loại
+                                tài sản ·{' '}
+                                {type.referenceRent == null
+                                  ? 'Chưa đặt giá thuê'
+                                  : `${money(type.referenceRent)}/tháng`}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
                                 {type.description || type.amenities.join(' · ') || 'Chưa có mô tả'}
@@ -1795,6 +1718,13 @@ export function LocationSetupWizard({
                     </Grid>
                   </Grid>
                 </Paper>
+                <TextField
+                  type="date"
+                  label="Ngày hiệu lực giá thuê"
+                  value={draft.rentEffectiveFrom}
+                  onChange={(e) => patch({ rentEffectiveFrom: e.target.value })}
+                  slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: today() } }}
+                />{' '}
                 <Typography sx={{ fontWeight: 700 }}>
                   Danh sách phòng nháp ({draft.rooms.length})
                 </Typography>
@@ -1905,60 +1835,6 @@ export function LocationSetupWizard({
                     </MenuItem>
                   ))}
                 </TextField>
-                {draft.packages.length > 0 && (
-                  <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Stack spacing={1}>
-                      <Typography sx={{ fontWeight: 700 }}>Tài sản từ cơ sở nguồn</Typography>
-                      {draft.packages.map((item) => (
-                        <Stack
-                          key={item.id}
-                          direction={{ xs: 'column', md: 'row' }}
-                          spacing={1}
-                          sx={{ alignItems: { md: 'center' } }}
-                        >
-                          <Box sx={{ flex: 1 }}>
-                            <Typography>
-                              {item.name} · {item.items.length} mục
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {item.discarded
-                                ? 'Đã xác nhận bỏ gói'
-                                : item.assignedTypeKeys?.length
-                                  ? 'Đã nạp vào: ' +
-                                    draft.roomTypes
-                                      .filter((type) => item.assignedTypeKeys?.includes(type.key))
-                                      .map((type) => type.name)
-                                      .join(', ')
-                                  : 'Chưa gán'}
-                              {item.suggestedTypeNames?.length
-                                ? ' · Liên kết tại nguồn: ' + item.suggestedTypeNames.join(', ')
-                                : ''}
-                            </Typography>
-                          </Box>
-                          <Button
-                            disabled={!assetType || item.discarded}
-                            onClick={() => applyPackageTo(item)}
-                          >
-                            Gán cho {assetType?.name ?? 'loại phòng'}
-                          </Button>
-                          <Button
-                            color="secondary"
-                            disabled={!!item.assignedTypeKeys?.length}
-                            onClick={() =>
-                              patch({
-                                packages: draft.packages.map((p) =>
-                                  p.id === item.id ? { ...p, discarded: !p.discarded } : p,
-                                ),
-                              })
-                            }
-                          >
-                            {item.discarded ? 'Khôi phục gói' : 'Không sử dụng gói'}
-                          </Button>
-                        </Stack>
-                      ))}
-                    </Stack>
-                  </Paper>
-                )}
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, md: 5 }}>
                     <SetupTemplatePicker
@@ -1970,7 +1846,7 @@ export function LocationSetupWizard({
                       items={catalogAssets.map((doc) => ({
                         id: doc.id,
                         name: doc.name,
-                        detail: (doc.data as AssetCatalogData).category,
+                        detail: `Đơn vị ${(doc.data as AssetCatalogData).unit} · ${money((doc.data as AssetCatalogData).referencePrice)}`,
                       }))}
                     >
                       <Button
@@ -2014,6 +1890,16 @@ export function LocationSetupWizard({
                             </Typography>
                           </Box>
                         </Stack>
+                        {assetType?.assetTemplateSourceName && (
+                          <Alert severity="info" variant="outlined">
+                            Định mức được sao chép cùng loại phòng từ mẫu{' '}
+                            <strong>{assetType.assetTemplateSourceName}</strong>
+                            {assetType.assetTemplateSourceVersion
+                              ? ` · phiên bản ${assetType.assetTemplateSourceVersion}`
+                              : ''}
+                            . Bạn có thể điều chỉnh số lượng và đơn vị tại đây.
+                          </Alert>
+                        )}
                         <Box
                           role="list"
                           aria-label="Tài sản đã chọn"
@@ -2023,10 +1909,10 @@ export function LocationSetupWizard({
                             <Stack
                               role="listitem"
                               key={index}
-                              direction="row"
+                              direction={{ xs: 'column', sm: 'row' }}
                               spacing={1.5}
                               sx={{
-                                alignItems: 'center',
+                                alignItems: { sm: 'center' },
                                 py: 1.25,
                                 minWidth: 0,
                                 borderBottom: '1px solid',
@@ -2040,14 +1926,56 @@ export function LocationSetupWizard({
                                 <Typography sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>
                                   {asset.name || 'Tài sản chưa đặt tên'}
                                 </Typography>
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                  sx={{ overflowWrap: 'anywhere' }}
-                                >
-                                  {asset.category || 'Chưa có nhóm tài sản'}
+                                <Typography variant="caption" color="text.secondary">
+                                  {asset.unit ? `Đơn vị: ${asset.unit}` : 'Chưa đặt đơn vị'}
                                 </Typography>
                               </Box>
+                              <TextField
+                                size="small"
+                                type="number"
+                                label="Số lượng"
+                                value={asset.quantity}
+                                slotProps={{ htmlInput: { min: 1, max: 10000, step: 1 } }}
+                                sx={{ width: { xs: '100%', sm: 112 }, flexShrink: 0 }}
+                                onChange={(event) =>
+                                  updateType(assetType.key, {
+                                    assets: assetType.assets.map((item, i) =>
+                                      i === index
+                                        ? { ...item, quantity: Number(event.target.value) }
+                                        : item,
+                                    ),
+                                  })
+                                }
+                              />
+                              <TextField
+                                select
+                                size="small"
+                                label="Đơn vị"
+                                value={asset.unit ?? ''}
+                                sx={{ width: { xs: '100%', sm: 132 }, flexShrink: 0 }}
+                                onChange={(event) =>
+                                  updateType(assetType.key, {
+                                    assets: assetType.assets.map((item, i) =>
+                                      i === index
+                                        ? { ...item, unit: event.target.value || null }
+                                        : item,
+                                    ),
+                                  })
+                                }
+                              >
+                                <MenuItem value="">Chưa đặt</MenuItem>
+                                {asset.unit &&
+                                  !ASSET_UNITS.includes(
+                                    asset.unit as (typeof ASSET_UNITS)[number],
+                                  ) && (
+                                    <MenuItem value={asset.unit}>{asset.unit} · hiện tại</MenuItem>
+                                  )}
+                                {ASSET_UNITS.map((unit) => (
+                                  <MenuItem key={unit} value={unit}>
+                                    {unit}
+                                  </MenuItem>
+                                ))}
+                              </TextField>
                               <Button
                                 color="error"
                                 aria-label={`Bỏ ${asset.name || 'tài sản chưa đặt tên'}`}
@@ -2056,7 +1984,11 @@ export function LocationSetupWizard({
                                     assets: assetType.assets.filter((_, i) => i !== index),
                                   })
                                 }
-                                sx={{ flexShrink: 0, minWidth: 44 }}
+                                sx={{
+                                  flexShrink: 0,
+                                  minWidth: 44,
+                                  alignSelf: { xs: 'flex-end', sm: 'center' },
+                                }}
                               >
                                 <Trash2 size={16} />
                               </Button>
@@ -2101,98 +2033,29 @@ export function LocationSetupWizard({
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, md: 4 }}>
                     <SetupTemplatePicker
-                      title="Mẫu giá & biểu phí"
+                      title="Mẫu biểu phí"
                       libraryActions={libraryActions}
                       kind="fee"
                       add={addFee}
-                      selected={[
-                        ...draft.fees.flatMap((fee) => (fee.sourceId ? [fee.sourceId] : [])),
-                        ...(rentType?.rentSource?.kind === 'fee-templates'
-                          ? [rentType.rentSource.id]
-                          : []),
-                      ]}
-                      items={all('fee-templates').map((doc) => {
-                        const data = doc.data as FeeTemplateData;
-                        return {
-                          id: doc.id,
-                          name: doc.name,
-                          detail: `${money(data.referenceRate)}/${feeUnitLabel(categoryNumber(data.category), methodNumber(data.method))} · ${data.scope === 'Room' ? 'Theo phòng' : 'Toàn cơ sở'}`,
-                        };
-                      })}
-                    >
-                      <TextField
-                        select
-                        size="small"
-                        label="Loại phòng nhận mẫu giá thuê"
-                        value={rentType?.key ?? ''}
-                        onChange={(e) => setRentTypeKey(e.target.value)}
-                      >
-                        {draft.roomTypes.map((type) => (
-                          <MenuItem key={type.key} value={type.key}>
-                            {type.name}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    </SetupTemplatePicker>
+                      selected={draft.fees.flatMap((fee) => (fee.sourceId ? [fee.sourceId] : []))}
+                      items={all('fee-templates')
+                        .filter(
+                          (doc) => categoryNumber((doc.data as FeeTemplateData).category) !== 0,
+                        )
+                        .map((doc) => {
+                          const data = doc.data as FeeTemplateData;
+                          return {
+                            id: doc.id,
+                            name: doc.name,
+                            detail: `${money(data.referenceRate)}/${feeUnitLabel(categoryNumber(data.category), methodNumber(data.method))} · ${data.scope === 'Room' ? 'Theo phòng' : 'Toàn cơ sở'}`,
+                          };
+                        })}
+                      empty="Chưa có mẫu phí dịch vụ, điện hoặc nước. Giá thuê được xác nhận tại bước Tạo phòng."
+                    />
                   </Grid>
                   <Grid size={{ xs: 12, md: 8 }}>
                     <SetupDropZone kind="fee" add={addFee}>
                       <Stack spacing={1.5}>
-                        <Typography sx={{ fontWeight: 700 }}>
-                          Giá mặc định theo loại phòng
-                        </Typography>
-                        <TextField
-                          type="date"
-                          label="Ngày hiệu lực giá thuê"
-                          value={draft.rentEffectiveFrom}
-                          onChange={(e) => patch({ rentEffectiveFrom: e.target.value })}
-                          slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: today() } }}
-                        />
-                        <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
-                          {draft.roomTypes.map((type) => (
-                            <Box
-                              key={type.key}
-                              sx={{
-                                display: 'grid',
-                                gridTemplateColumns: {
-                                  xs: 'minmax(0,1fr)',
-                                  sm: 'minmax(0,1fr) minmax(160px,220px)',
-                                },
-                                gap: 1.5,
-                                alignItems: 'center',
-                                py: 1.25,
-                                borderBottom: '1px solid',
-                                borderColor: 'divider',
-                              }}
-                            >
-                              <Box sx={{ minWidth: 0 }}>
-                                <Typography sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>
-                                  {type.name}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {
-                                    draft.rooms.filter((room) => room.roomTypeKey === type.key)
-                                      .length
-                                  }{' '}
-                                  phòng · {type.capacity} người/phòng
-                                </Typography>
-                              </Box>
-                              <MoneyField
-                                fullWidth
-                                size="small"
-                                label="Giá thuê/tháng"
-                                allowDecimal
-                                value={type.referenceRent ?? ''}
-                                onValueChange={(raw) =>
-                                  updateType(type.key, {
-                                    referenceRent: raw === '' ? null : exactRent(raw),
-                                  })
-                                }
-                              />
-                            </Box>
-                          ))}
-                        </Box>
-                        <Divider />
                         <Stack
                           direction="row"
                           sx={{
@@ -2743,8 +2606,8 @@ export function LocationSetupWizard({
                         <TableCell>Loại phòng</TableCell>
                         <TableCell>Sức chứa / diện tích</TableCell>
                         <TableCell>Giá mặc định</TableCell>
-                        <TableCell>Phòng</TableCell>
-                        <TableCell>Định mức</TableCell>
+                        <TableCell>Số lượng phòng</TableCell>
+                        <TableCell>Các loại tài sản</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -2759,9 +2622,28 @@ export function LocationSetupWizard({
                             {draft.rooms.filter((room) => room.roomTypeKey === type.key).length}
                           </TableCell>
                           <TableCell>
-                            {type.assets
-                              .map((asset) => `${asset.name} × ${asset.quantity}`)
-                              .join(', ') || 'Không có'}
+                            <Stack spacing={0.25}>
+                              {type.assets.length ? (
+                                type.assets.map((asset, index) => (
+                                  <Typography key={`${asset.name}-${index}`} variant="body2">
+                                    {asset.name} × {asset.quantity}
+                                    {asset.unit ? ` ${asset.unit}` : ''}
+                                  </Typography>
+                                ))
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">
+                                  Không có
+                                </Typography>
+                              )}
+                              {type.assetTemplateSourceName && (
+                                <Typography variant="caption" color="text.secondary">
+                                  Nguồn: {type.assetTemplateSourceName}
+                                  {type.assetTemplateSourceVersion
+                                    ? ` · phiên bản ${type.assetTemplateSourceVersion}`
+                                    : ''}
+                                </Typography>
+                              )}
+                            </Stack>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -2807,22 +2689,6 @@ export function LocationSetupWizard({
                     </TableBody>
                   </Table>
                 </TableContainer>
-                {draft.packages.length > 0 && (
-                  <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Typography sx={{ fontWeight: 700 }}>Đối chiếu gói tài sản đã nạp</Typography>
-                    {draft.packages.map((item) => (
-                      <Typography key={item.id} variant="body2">
-                        {item.name}:{' '}
-                        {item.discarded
-                          ? 'Không sử dụng'
-                          : draft.roomTypes
-                              .filter((type) => item.assignedTypeKeys?.includes(type.key))
-                              .map((type) => type.name)
-                              .join(', ') || 'Chưa gán'}
-                      </Typography>
-                    ))}
-                  </Paper>
-                )}
                 {draft.fees.length > 0 && (
                   <Paper variant="outlined" sx={{ p: 2 }}>
                     <Typography sx={{ fontWeight: 700 }}>Biểu phí xác nhận</Typography>
@@ -2970,7 +2836,7 @@ export function LocationSetupWizard({
                     }
                   />
                   <MoneyField
-                    label="Giá thuê mặc định (VND/tháng)"
+                    label="Giá thuê mặc định (đ/tháng)"
                     allowDecimal
                     value={editingType.referenceRent ?? ''}
                     onValueChange={(raw) =>
@@ -2979,9 +2845,9 @@ export function LocationSetupWizard({
                         referenceRent: raw === '' ? null : exactRent(raw),
                       })
                     }
-                  />
+                  />{' '}
                   <TextField
-                    label="Tiện nghi (phân tách bằng dấu phẩy)"
+                    label="Đặc điểm phòng (không bắt buộc)"
                     value={editingType.amenities.join(',')}
                     onChange={(e) =>
                       setEditingType({ ...editingType, amenities: e.target.value.split(',') })

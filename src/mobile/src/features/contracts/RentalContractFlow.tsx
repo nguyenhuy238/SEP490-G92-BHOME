@@ -15,6 +15,7 @@ import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
 import { colors as c } from '../../theme/theme';
 import { randomUUID } from '../../lib/randomUUID';
 import { ContractActionForm, SigningCertificates } from './ContractActionForm';
+import { ContractSigningPanel, useSigningMethods } from './ContractSigningPanel';
 import { ContractEvidence } from './ContractEvidence';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { RentalContractStepper } from './RentalContractStepper';
@@ -48,7 +49,23 @@ export function RentalContractFlow({
   const initialPaid = initialPaidFor === contract.id;
   const markInitialPaid = useCallback(() => setInitialPaidFor(contract.id), [contract.id]);
   const [keys] = useState(() => mutationKeys(randomUUID));
-  const actions = contractActions(contract, null, role, actorId);
+  const signingMethods = useSigningMethods(
+    api,
+    role === 'Tenant' &&
+      step === 1 &&
+      !contract.isDevelopmentDemo &&
+      contract.signingMode !== 'INTERNAL_OTP_DRAWN',
+  );
+  // Tenant signs in-app with OTP + drawn signature when the server offers OTP (non-internal contracts);
+  // the MySign certificate request is then hidden so the tenant is not sent down a path they cannot finish.
+  const otpSigning =
+    role === 'Tenant' &&
+    !contract.isDevelopmentDemo &&
+    contract.signingMode !== 'INTERNAL_OTP_DRAWN' &&
+    !!signingMethods?.methods.includes('OTP');
+  const actions = contractActions(contract, null, role, actorId, signingMethods?.methods).filter(
+    (item) => !otpSigning || !item.operation.startsWith('signing'),
+  );
   const action = actions.find((item) => item.operation === selected);
   const signingFinished =
     state.signed ||
@@ -192,12 +209,23 @@ export function RentalContractFlow({
                     Staff theo dõi hồ sơ; Chủ cơ sở và Người thuê thực hiện ký.
                   </Text>
                 )}
-                {signer && !contract.isDevelopmentDemo && <SigningCertificates api={api} />}
+                {signer && !contract.isDevelopmentDemo && !otpSigning && (
+                  <SigningCertificates api={api} />
+                )}
                 {signer &&
                   contract.signatures.some((signature) =>
                     ['Signed', 'Simulated'].includes(signature.status),
                   ) && <ContractEvidence api={api} contractId={contract.id} pdf />}
               </Box>
+              {otpSigning && (
+                <ContractSigningPanel
+                  api={api}
+                  contract={contract}
+                  actorId={actorId}
+                  methods={signingMethods}
+                  onChanged={onChanged}
+                />
+              )}
             </>
           )}
           {step === 2 && contract.initialPaymentRequired && signingFinished && (

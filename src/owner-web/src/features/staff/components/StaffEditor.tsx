@@ -1,4 +1,8 @@
 import { MoneyField } from '../../../components/common/MoneyField';
+import {
+  contactPhoneError,
+  normalizeContactPhone,
+} from '../../../../../../packages/client-core/src/contactPhone';
 import { useState } from 'react';
 import {
   Alert,
@@ -85,6 +89,7 @@ export function StaffEditor({
   const openEnded = renewal && !!baseline?.employment && !baseline.employment.endDate;
   const renewalOverlap = renewal && !!previousEnd && employment.startDate <= previousEnd;
   const blocked =
+    (!renewal && !!contactPhoneError(phone)) ||
     !!openEnded ||
     !!renewalOverlap ||
     stale ||
@@ -117,7 +122,7 @@ export function StaffEditor({
       : {
           fullName: name.trim(),
           email: email.trim(),
-          phone: phone || null,
+          phone: normalizeContactPhone(phone) ?? null,
           employment: work,
           ...(staff ? { accountVersion: version, isActive: active, reason } : {}),
         };
@@ -277,7 +282,10 @@ export function StaffEditor({
                   />
                   <TextField
                     label="Số điện thoại"
+                    type="tel"
                     {...fieldError('phone')}
+                    error={!!fieldErrors.phone || !!contactPhoneError(phone)}
+                    helperText={fieldErrors.phone || contactPhoneError(phone)}
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                   />

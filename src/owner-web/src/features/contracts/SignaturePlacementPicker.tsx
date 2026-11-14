@@ -35,12 +35,15 @@ export function SignaturePlacementPicker({
   value,
   onChange,
   disabled,
+  caption,
 }: {
   signing: SigningClient;
   contractId: string;
   value: PlacementChoice;
   onChange: (value: PlacementChoice) => void;
   disabled?: boolean;
+  /** The lines the server writes in the box; MySign wording by default. */
+  caption?: string;
 }) {
   const layout = useQuery({
     staleTime: 0,
@@ -251,11 +254,20 @@ export function SignaturePlacementPicker({
           )}
           <Typography
             component="span"
-            sx={{ color: 'error.main', fontSize: 'clamp(6px, 1.4vw, 11px)', lineHeight: 1.15 }}
+            sx={{
+              color: 'error.main',
+              fontSize: 'clamp(6px, 1.4vw, 11px)',
+              lineHeight: 1.15,
+              whiteSpace: 'pre-line',
+            }}
           >
-            Ký bởi: {layout.data.signerName || 'tên trên chứng thư'}
-            <br />
-            Ngày ký: lúc xác nhận trên MySign
+            {caption ?? (
+              <>
+                Ký bởi: {layout.data.signerName || 'tên trên chứng thư'}
+                <br />
+                Ngày ký: lúc xác nhận trên MySign
+              </>
+            )}
           </Typography>
         </Box>
       </Box>

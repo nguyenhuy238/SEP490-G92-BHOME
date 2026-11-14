@@ -204,6 +204,33 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/rooms/{w.Room}/asset-template", new AssetTemplateAssignment(doc.Id, pinned.AssignmentVersion))).StatusCode);
     }
     [CompactPostgresFact]
+    public async Task AssetCountObservationsRecordShortageAndExcessWithoutChangingPhysicalInventory()
+    {
+        var w = await Seed(); using var host = Host(); using var owner = await Client(w.Owner, host); using var staff = await Client(w.Staff, host);
+        var item = new AssetTemplateItem(Guid.NewGuid(), "Synthetic lamp", "Electrical", "BulkQuantity", 4);
+        var template = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/asset-templates", new AssetTemplateWrite(w.Location, "Synthetic observations", [item])));
+        await Read<AssetSyncRun>(await owner.PostAsJsonAsync($"/api/v1/asset-templates/{template.Id}/publish", new TemplatePublish(template.Version)));
+        var inventory = (await staff.GetFromJsonAsync<AssetInventory>($"/api/v1/rooms/{w.Room}/asset-inventory"))!;
+        var desired = inventory.Desired.Single(d => d.Id == inventory.CurrentDesiredId);
+        string evidence;
+        await using (var scope = host.Services.CreateAsyncScope()) evidence = await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [1, 2, 3], "image/png", w.Staff.Id, default);
+        var root = $"/api/v1/rooms/{w.Room}/asset-count-observations";
+        var input = new AssetCountObservationWrite(desired.Id, desired.Version, 0, evidence, "None observed", 0);
+        Assert.Equal(HttpStatusCode.BadRequest, (await staff.PutAsJsonAsync($"{root}/{item.Id}", input with { Quantity = -1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await staff.PutAsJsonAsync($"{root}/{item.Id}", input with { DesiredVersion = desired.Version + 1 })).StatusCode);
+        var missing = await Read<SetupDocument>(await staff.PutAsJsonAsync($"{root}/{item.Id}", input));
+        var replay = await Read<SetupDocument>(await staff.PutAsJsonAsync($"{root}/{item.Id}", input));
+        Assert.Equal(missing.Id, replay.Id); Assert.Equal(missing.Version, replay.Version);
+        var excess = await Read<SetupDocument>(await staff.PutAsJsonAsync($"{root}/{item.Id}", input with { Quantity = 6, ExpectedVersion = missing.Version, Note = "Six observed" }));
+        Assert.Equal(2, excess.Version);
+        Assert.Equal(6, Assert.Single((await staff.GetFromJsonAsync<SetupDocument[]>(root))!).Data.GetProperty("quantity").GetInt32());
+        Assert.Equal(HttpStatusCode.Conflict, (await staff.PutAsJsonAsync($"{root}/{item.Id}", input)).StatusCode);
+        inventory = (await owner.GetFromJsonAsync<AssetInventory>($"/api/v1/rooms/{w.Room}/asset-inventory"))!;
+        Assert.Empty(inventory.Physical); Assert.Equal("PendingVerification", inventory.Desired.Single(d => d.Id == desired.Id).Status);
+        await using var check = host.Services.CreateAsyncScope();
+        Assert.Equal(2, (await check.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().HistoryAsync(excess.Id, excess.Kind, default)).Count);
+    }
+    [CompactPostgresFact]
     public async Task TariffComputesProgressiveChargeQuotaAndScopeIsOwnerOnly()
     {
         var w = await Seed(); using var owner = await Client(w.Owner); using var staff = await Client(w.Staff); var period = new DateOnly(Today.Year, Today.Month, 1);

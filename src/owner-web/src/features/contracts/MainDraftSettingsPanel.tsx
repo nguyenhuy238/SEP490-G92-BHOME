@@ -1,4 +1,8 @@
 import { MoneyField } from '../../components/common/MoneyField';
+import {
+  contactPhoneError,
+  normalizeContactPhone,
+} from '../../../../../packages/client-core/src/contactPhone';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -97,6 +101,11 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
   }, [location, open, request, session]);
   async function save() {
     if (!value || lock.current) return;
+    const phoneError = contactPhoneError(value.owner.phone, true);
+    if (phoneError) {
+      setError(phoneError);
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError('');
@@ -104,6 +113,7 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
     try {
       await request.setSettings(location, {
         ...value,
+        owner: { ...value.owner, phone: normalizeContactPhone(value.owner.phone)! },
         ownerSignerId: session!.userId,
         expectedVersion: value.version,
       });
@@ -195,6 +205,10 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
                       value={value.owner[key]}
                       disabled={busy}
                       required
+                      error={key === 'phone' && !!contactPhoneError(value.owner.phone, true)}
+                      helperText={
+                        key === 'phone' ? contactPhoneError(value.owner.phone, true) : undefined
+                      }
                       slotProps={{ inputLabel: { shrink: true } }}
                       onChange={(e) =>
                         setValue((v) => v && { ...v, owner: { ...v.owner, [key]: e.target.value } })

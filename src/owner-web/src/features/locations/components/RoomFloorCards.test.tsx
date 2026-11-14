@@ -161,6 +161,11 @@ it('keeps floor-filtered room counts without redundant summary prose or counting
     />,
   );
   expect(screen.queryByText(/^\d+ phòng đang hiển thị/)).not.toBeInTheDocument();
+  expect(screen.queryByText('Trạng thái các phòng đang hiển thị')).not.toBeInTheDocument();
+  expect(screen.queryByText('Sơ đồ phòng theo tầng')).not.toBeInTheDocument();
+  expect(
+    screen.getByRole('group', { name: 'Trạng thái các phòng đang hiển thị' }),
+  ).toBeInTheDocument();
   expect(screen.getAllByText('1 phòng')).toHaveLength(2);
   expect(screen.getAllByText('Chưa xác định').length).toBeGreaterThan(0);
   fireEvent.mouseDown(screen.getByLabelText('Tầng trên trang hiện tại'));
@@ -170,6 +175,21 @@ it('keeps floor-filtered room counts without redundant summary prose or counting
   expect(screen.queryByRole('button', { name: 'Xem phòng P101' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Xem phòng P201' })).toBeInTheDocument();
   expect(state.request.mock.calls.some(([path]) => path.includes('/prices?'))).toBe(false);
+});
+it('omits the repeated no-incident sentence only after the incident data is complete', async () => {
+  state.request.mockImplementation(async (path: string) => {
+    if (path.includes('/occupancy?'))
+      return {
+        items: [{ roomId: room.id, locationId: room.locationId, occupants }],
+        totalCount: 1,
+      };
+    return { items: [], totalCount: 0 };
+  });
+  mount(<RoomFloorCards locationId="location" rooms={[room]} inspect={vi.fn()} />);
+  await screen.findByText('2/3');
+  await waitFor(() => expect(screen.queryByText('Chưa đủ dữ liệu báo cáo sự cố')).toBeNull());
+  expect(screen.queryByText('Không có báo cáo sự cố đang mở')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Xem phòng P101' })).toBeInTheDocument();
 });
 it('follows server pagination for operation data and marks bounded results incomplete', async () => {
   const request = vi.fn().mockResolvedValue({

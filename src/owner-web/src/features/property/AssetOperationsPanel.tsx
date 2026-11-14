@@ -1,4 +1,5 @@
 import { MoneyField } from '../../components/common/MoneyField';
+import { ASSET_UNITS } from '../../../../../packages/client-core/src/assetUnits';
 import { useState } from 'react';
 import {
   Alert,
@@ -66,7 +67,7 @@ export function AssetOperationsPanel({
               }
             />
             <Typography variant="body2" color="text.secondary">
-              {asset.code || 'Chưa có mã'} · {asset.category} · Phiên bản {asset.version}
+              {asset.code || 'Chưa có mã'} · Phiên bản {asset.version}
             </Typography>
           </Stack>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
@@ -139,7 +140,8 @@ function MetadataEditor({
 }) {
   const api = usePropertySetupApi();
   const action = useSetupAction();
-  const [tracking, setTracking] = useState(document.data.trackingMode);
+  const tracking = document.data.trackingMode;
+  const [unit, setUnit] = useState(document.data.unit ?? '');
   const [quantity, setQuantity] = useState(String(document.data.quantity));
   const [cost, setCost] = useState(String(document.data.purchaseCost ?? ''));
   const [date, setDate] = useState(document.data.purchaseDate ?? '');
@@ -163,6 +165,7 @@ function MetadataEditor({
                 {
                   trackingMode: tracking,
                   quantity: Number(quantity),
+                  ...(unit || document.data.unit !== undefined ? { unit: unit || null } : {}),
                   purchaseCost: cost || null,
                   purchaseDate: date || null,
                   usefulLifeMonths: life ? Number(life) : null,
@@ -176,26 +179,34 @@ function MetadataEditor({
       >
         <Divider />
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-          Thông tin mua và theo dõi
+          Thông tin mua và số lượng
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Thông tin của tài sản đã ghi nhận. Phiên bản dữ liệu theo dõi: {document.version}.
+          Thông tin của tài sản đã ghi nhận. Phiên bản dữ liệu: {document.version}.
         </Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
           <TextField
             select
-            label="Cách theo dõi"
-            value={tracking}
-            onChange={(event) => setTracking(event.target.value as AssetMetadata['trackingMode'])}
+            label="Đơn vị"
+            value={unit}
+            onChange={(event) => setUnit(event.target.value)}
           >
-            <MenuItem value="Serialized">Theo từng mã</MenuItem>
-            <MenuItem value="BulkQuantity">Theo số lượng</MenuItem>
+            <MenuItem value="">Chưa ghi nhận</MenuItem>
+            {unit && !ASSET_UNITS.some((option) => option === unit) && (
+              <MenuItem value={unit}>{unit}</MenuItem>
+            )}
+            {ASSET_UNITS.map((option) => (
+              <MenuItem key={option} value={option}>
+                {option}
+              </MenuItem>
+            ))}
           </TextField>
           <TextField
             required
             type="number"
             label="Số lượng vật lý"
             value={quantity}
+            disabled={tracking === 'Serialized'}
             slotProps={{ htmlInput: { min: 1, step: 1 } }}
             onChange={(event) => setQuantity(event.target.value)}
           />

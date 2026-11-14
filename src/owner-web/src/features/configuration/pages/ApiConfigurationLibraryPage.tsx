@@ -95,7 +95,7 @@ const resourceColumns: Record<SharedResource, { label: string; numeric?: boolean
     { label: 'Sức chứa', numeric: true },
     { label: 'Giá thuê tham khảo', numeric: true },
   ],
-  'asset-catalog': [{ label: 'Danh mục' }, { label: 'Giá tham khảo', numeric: true }],
+  'asset-catalog': [{ label: 'Đơn vị' }, { label: 'Giá tham khảo', numeric: true }],
   'asset-templates': [{ label: 'Loại tài sản', numeric: true }],
   'fee-templates': [
     { label: 'Loại phí' },
@@ -131,7 +131,7 @@ function documentValues(document: SharedDocument): string[] {
     ];
   }
   if ('referencePrice' in data) {
-    return [data.category, `${formatBillingDecimal(data.referencePrice)} đ/${data.unit}`];
+    return [data.unit, `${formatBillingDecimal(data.referencePrice)} đ/${data.unit}`];
   }
   if ('items' in data) return [String(data.items.length)];
   if ('referenceRate' in data) {
@@ -336,7 +336,7 @@ function SharedLibrary({
                 tableLayout: { xs: 'fixed', lg: 'auto' },
                 '& .MuiTableCell-root': {
                   px: { xs: 1, lg: 1.5 },
-                  py: { xs: 1, lg: 0.5 },
+                  py: 1,
                 },
                 '& .MuiTableCell-head': { py: 1, whiteSpace: 'nowrap' },
                 '& .MuiTableCell-body': { height: 44 },

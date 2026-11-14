@@ -33,9 +33,17 @@ public sealed class RemoteSigningServiceTests : IDisposable
             .Returns("vt-42");
         store.Certificates.Add(certificateId, new SigningCertificate
         {
-            Id = certificateId, OwnerUserId = Signer, Provider = SigningProviders.ViettelMySign,
-            ProviderUserId = "079000000001", CredentialId = "cred-1", SerialNumber = "01AB", Subject = "CN=A",
-            Issuer = "CN=A", ValidFrom = clock.Now.AddDays(-1), ValidTo = clock.Now.AddYears(1), CreatedAt = clock.Now
+            Id = certificateId,
+            OwnerUserId = Signer,
+            Provider = SigningProviders.ViettelMySign,
+            ProviderUserId = "079000000001",
+            CredentialId = "cred-1",
+            SerialNumber = "01AB",
+            Subject = "CN=A",
+            Issuer = "CN=A",
+            ValidFrom = clock.Now.AddDays(-1),
+            ValidTo = clock.Now.AddYears(1),
+            CreatedAt = clock.Now
         });
     }
 
