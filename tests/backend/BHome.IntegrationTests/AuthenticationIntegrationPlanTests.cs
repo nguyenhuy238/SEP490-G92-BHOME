@@ -227,7 +227,7 @@ public sealed class AuthenticationIntegrationPlanTests(AuthenticationDatabaseFix
         await WithDb(db => db.Users.Where(x => x.Id == user.Id).ExecuteUpdateAsync(u => u
             .SetProperty(x => x.PhoneNumber, phone).SetProperty(x => x.PhoneNumberConfirmed, true)));
         using var client = fixture.Factory.CreateClient();
-        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { phoneNumber = phone, password = Password });
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { phone, password = Password });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var session = (await response.Content.ReadFromJsonAsync<LoginResult>())!;
