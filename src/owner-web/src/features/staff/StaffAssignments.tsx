@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
-  Box,
   Button,
   MenuItem,
   Paper,
-  Skeleton,
   Stack,
   Table,
   TableBody,
@@ -15,9 +13,11 @@ import {
   TableRow,
   TextField,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
 import { Plus, RefreshCw } from 'lucide-react';
 import { OwnerFeedback } from '../../components/common/OwnerWorkspace';
+import { KPIGrid, PageHeader } from '../../components/common/PortalUI';
 import { todayVietnam } from './staffContracts';
 import { assignmentDate, assignmentState, useLocationAssignments } from './useLocationAssignments';
 import {
@@ -28,6 +28,7 @@ import {
 import { AssignmentDialog, type AssignmentIntent } from './components/AssignmentDialog';
 
 export function StaffAssignments() {
+  const compact = useMediaQuery('(max-width:599px)');
   const { data, directory, refresh, retryLocation } = useLocationAssignments();
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState('');
@@ -71,51 +72,34 @@ export function StaffAssignments() {
     setParams(next, { replace: true });
   };
   return (
-    <Stack
-      spacing={2.5}
-      sx={{
-        minWidth: 0,
-        '& .MuiPaper-root': { borderRadius: '12px', boxShadow: 'none' },
-        '& .MuiButton-root': { minHeight: 40, borderRadius: '8px', fontSize: 14 },
-        '& .MuiInputBase-root, & .MuiInputLabel-root, & .MuiTableCell-root': { fontSize: 14 },
-      }}
-    >
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={2}
-        sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}
-      >
-        <Box>
-          <Typography component="h1" sx={{ fontSize: 24, fontWeight: 700 }}>
-            Phân công nhân viên
-          </Typography>
-          <Typography sx={{ fontSize: 14, color: 'text.secondary', mt: 0.5 }}>
-            Quản lý nhân viên phụ trách và thời gian phân công tại từng cơ sở.
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<Plus size={18} />}
-          disabled={!complete || !directory.data || !!directory.error}
-          onClick={() => setIntent({ mode: 'create' })}
-        >
-          Tạo phân công
-        </Button>
-      </Stack>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        {[
-          ['Tổng cơ sở', rows.length],
-          ['Đã có người phụ trách', assigned],
-          ['Chưa có người phụ trách', rows.length - assigned],
-        ].map(([label, count]) => (
-          <Paper key={label} variant="outlined" sx={{ p: 2, flex: 1, minHeight: 88 }}>
-            <Typography sx={{ fontSize: 27, fontWeight: 700 }}>
-              {data.isPending ? <Skeleton width={60} /> : complete ? count : '—'}
-            </Typography>
-            <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>{label}</Typography>
-          </Paper>
-        ))}
-      </Stack>
+    <Stack spacing={2} sx={{ minWidth: 0 }}>
+      <PageHeader
+        title="Phân công nhân viên"
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<Plus size={18} />}
+            disabled={!complete || !directory.data || !!directory.error}
+            onClick={() => setIntent({ mode: 'create' })}
+          >
+            Tạo phân công
+          </Button>
+        }
+      />
+      <KPIGrid
+        items={[
+          { label: 'Tổng cơ sở', value: data.isPending ? '…' : complete ? rows.length : '—' },
+          {
+            label: 'Đã có người phụ trách',
+            value: data.isPending ? '…' : complete ? assigned : '—',
+            tone: 'success',
+          },
+          {
+            label: 'Chưa có người phụ trách',
+            value: data.isPending ? '…' : complete ? rows.length - assigned : '—',
+          },
+        ]}
+      />
       <OwnerFeedback
         busy={data.isFetching || directory.isFetching}
         error={data.error || directory.error}
@@ -181,16 +165,29 @@ export function StaffAssignments() {
           </Button>
         )}
         <TableContainer>
-          <Table aria-label="Phân công theo cơ sở" sx={{ minWidth: 720 }}>
-            <TableHead sx={{ bgcolor: '#f5f8fc' }}>
+          <Table
+            size="small"
+            aria-label="Phân công theo cơ sở"
+            sx={{ minWidth: compact ? 0 : 720, tableLayout: compact ? 'fixed' : 'auto' }}
+          >
+            <TableHead>
               <TableRow>
-                {['Cơ sở', 'Người phụ trách', 'Thời gian hiệu lực', 'Trạng thái', 'Thao tác'].map(
-                  (label) => (
-                    <TableCell key={label} sx={{ fontWeight: 600 }}>
-                      {label}
-                    </TableCell>
-                  ),
-                )}
+                {(compact
+                  ? ['Cơ sở', 'Thao tác']
+                  : ['Cơ sở', 'Người phụ trách', 'Thời gian hiệu lực', 'Trạng thái', 'Thao tác']
+                ).map((label) => (
+                  <TableCell
+                    key={label}
+                    scope="col"
+                    align={label === 'Thao tác' ? 'right' : 'left'}
+                    sx={{
+                      fontWeight: 600,
+                      width: compact && label === 'Thao tác' ? 112 : undefined,
+                    }}
+                  >
+                    {label}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -225,42 +222,82 @@ export function StaffAssignments() {
                   >
                     <TableCell sx={{ fontWeight: 600, maxWidth: 240, overflowWrap: 'anywhere' }}>
                       {row.location.name}
-                    </TableCell>
-                    <TableCell>
-                      {row.error ? (
-                        'Chưa tải được phân công'
-                      ) : current ? (
-                        <AssignedStaff staff={staff} id={current.staffUserId} />
-                      ) : (
-                        <Stack>
-                          <Typography sx={{ fontSize: 14 }}>Chưa có người phụ trách</Typography>
-                          {future && (
-                            <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-                              Sắp nhận việc:{' '}
-                              {staff.find((item) => item.userId === future.staffUserId)?.fullName ||
-                                future.staffUserId}
+                      {compact && (
+                        <Stack
+                          spacing={0.75}
+                          sx={{ mt: 1, alignItems: 'flex-start', fontWeight: 400 }}
+                        >
+                          {row.error ? (
+                            <Typography variant="caption" color="error.main">
+                              Chưa tải được phân công
                             </Typography>
+                          ) : (
+                            <>
+                              <AssignmentStatusChip
+                                state={current ? 'current' : future ? 'future' : 'empty'}
+                              />
+                              {current ? (
+                                <AssignedStaff staff={staff} id={current.staffUserId} />
+                              ) : (
+                                <Typography variant="body2">
+                                  {future
+                                    ? 'Sắp nhận việc: ' +
+                                      (staff.find((item) => item.userId === future.staffUserId)
+                                        ?.fullName || future.staffUserId)
+                                    : 'Chưa có người phụ trách'}
+                                </Typography>
+                              )}
+                              <Typography variant="caption" color="text.secondary">
+                                {current
+                                  ? assignmentDate(current.startDate) +
+                                    ' – ' +
+                                    assignmentDate(current.endDate)
+                                  : '—'}
+                              </Typography>
+                            </>
                           )}
                         </Stack>
                       )}
                     </TableCell>
-                    <TableCell>
-                      {current
-                        ? assignmentDate(current.startDate) +
-                          ' – ' +
-                          assignmentDate(current.endDate)
-                        : '—'}
-                    </TableCell>
-                    <TableCell>
-                      {row.error ? (
-                        'Lỗi tải dữ liệu'
-                      ) : (
-                        <AssignmentStatusChip
-                          state={current ? 'current' : future ? 'future' : 'empty'}
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell>
+                    {!compact && (
+                      <>
+                        <TableCell>
+                          {row.error ? (
+                            'Chưa tải được phân công'
+                          ) : current ? (
+                            <AssignedStaff staff={staff} id={current.staffUserId} />
+                          ) : (
+                            <Stack>
+                              <Typography sx={{ fontSize: 14 }}>Chưa có người phụ trách</Typography>
+                              {future && (
+                                <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                                  Sắp nhận việc:{' '}
+                                  {staff.find((item) => item.userId === future.staffUserId)
+                                    ?.fullName || future.staffUserId}
+                                </Typography>
+                              )}
+                            </Stack>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {current
+                            ? assignmentDate(current.startDate) +
+                              ' – ' +
+                              assignmentDate(current.endDate)
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {row.error ? (
+                            'Lỗi tải dữ liệu'
+                          ) : (
+                            <AssignmentStatusChip
+                              state={current ? 'current' : future ? 'future' : 'empty'}
+                            />
+                          )}
+                        </TableCell>
+                      </>
+                    )}
+                    <TableCell align="right" sx={{ verticalAlign: 'top' }}>
                       <Button
                         disabled={!row.error && (!!directory.error || !directory.data)}
                         onClick={(event) => {

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../../../packages/client-core/src/api';
 import { StaffAssignments } from './StaffAssignments';
 import { AssignmentDialog, type AssignmentIntent } from './components/AssignmentDialog';
@@ -72,6 +72,7 @@ beforeEach(() => {
     return {};
   });
 });
+afterEach(() => vi.unstubAllGlobals());
 function wrap(element: React.ReactNode, url = '/staff-assignments') {
   return render(
     <MemoryRouter initialEntries={[url]}>
@@ -127,6 +128,29 @@ it('opens a location drawer without selecting staff and updates the selected ass
     ),
   );
   expect(mocks.request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+});
+it('keeps staff and the assignment action visible in the compact table', async () => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('max-width:599px'),
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+    onchange: null,
+  }));
+  wrap(<StaffAssignments />);
+  const table = await screen.findByRole('table', { name: 'Phân công theo cơ sở' });
+  const row = await within(table).findByRole('row', { name: /Cơ sở mẫu/ });
+  expect(
+    within(table)
+      .getAllByRole('columnheader')
+      .map((cell) => cell.textContent),
+  ).toEqual(['Cơ sở', 'Thao tác']);
+  expect(within(row).getByText(staff.fullName)).toBeVisible();
+  fireEvent.click(within(row).getByRole('button', { name: 'Chi tiết' }));
+  expect(await screen.findByRole('dialog', { name: 'Chi tiết phân công' })).toBeVisible();
 });
 it('treats future and historical assignments as unassigned today', async () => {
   assignments = [

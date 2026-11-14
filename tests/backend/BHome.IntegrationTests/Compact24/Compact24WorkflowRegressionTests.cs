@@ -84,9 +84,9 @@ public sealed class Compact24InvoiceRegressionTests
     [CompactPostgresFact] public Task Finalization() => Run(t => t.FinalizationRequiresReviewedConfirmedDataIsConcurrentSafeImmutableAndHistoricallyScoped());
     [CompactPostgresFact] public Task Schedule() => Run(t => t.ScheduleRequiresOwnerAndValidDatesAndStaleVersionsConflict());
     [CompactPostgresFact] public Task DraftAdjustment() => Run(t => t.ApprovedDraftCorrectionSurvivesRefreshAndFinalizationWithOriginalSourceTrace());
-    [CompactPostgresFact] public Task ChangedSource() => Run(t => t.SourceChangeMakesDraftCorrectionExplicitlyPendingAndPreventsFinalization());
+    [CompactPostgresFact] public Task ChangedSource() => Run(t => t.RoomPolicyChangeDoesNotInvalidateApprovedDraftCorrection());
     [CompactPostgresFact] public Task DecisionRace() => Run(t => t.OwnerApproveRejectRacePersistsExactlyOneDecisionAndOneResult());
-    [CompactPostgresFact] public Task TieredUtilityInvoice() => Run(t => t.TieredUtilityAndQuotaAreUsedByInvoiceAndMissingQuotaBlocksFinalization());
+    [CompactPostgresFact] public Task BoundChargeSnapshotInvoice() => Run(t => t.BoundChargesIgnoreNewRoomPricesAndRejectMissingSnapshot());
 }
 
 [Trait("Category", "CompactPostgres")]

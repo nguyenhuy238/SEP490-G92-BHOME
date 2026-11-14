@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, MenuItem, Stack, TextField } from '@mui/material';
 import { ConfirmDialog } from '../../components/common/PortalUI';
+import { MoneyField } from '../../components/common/MoneyField';
 import { useOwnerAction } from '../../hooks/useOwnerWorkspace';
 import { guid, vnd } from '../../../../../packages/client-core/src/contracts';
 import { vietnamInstant } from '../tasks/taskContracts';
@@ -75,6 +76,16 @@ export function IncidentCommandDialog({
               disabled={action.busy}
               change={(id) => setValues((v) => ({ ...v, [f.name]: id }))}
             />
+          ) : f.type === 'money' ? (
+            <MoneyField
+              key={f.name}
+              required={!f.optional}
+              label={f.label}
+              value={values[f.name] ?? ''}
+              disabled={action.busy}
+              maxRawLength={18}
+              onValueChange={(raw) => setValues((v) => ({ ...v, [f.name]: raw }))}
+            />
           ) : (
             <TextField
               key={f.name}
@@ -83,12 +94,10 @@ export function IncidentCommandDialog({
               value={values[f.name] ?? ''}
               disabled={action.busy}
               select={f.type === 'asset'}
-              type={
-                f.type === 'instant' ? 'datetime-local' : f.type === 'money' ? 'number' : 'text'
-              }
+              type={f.type === 'instant' ? 'datetime-local' : 'text'}
               slotProps={{
                 inputLabel: { shrink: true },
-                htmlInput: { maxLength: 4000, ...(f.type === 'money' ? { min: 0, step: 1 } : {}) },
+                htmlInput: { maxLength: 4000 },
               }}
               onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
             >

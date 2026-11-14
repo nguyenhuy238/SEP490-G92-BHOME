@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   Alert,
+  Box,
   Button,
   LinearProgress,
   Stack,
@@ -11,6 +12,7 @@ import {
   TableHead,
   TableRow,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
 import { EmptyState, ErrorState, LoadingState } from './PortalUI';
 import { ownerError } from '../../hooks/useOwnerWorkspace';
@@ -55,29 +57,108 @@ export function OwnerTable<T>({
   label?: string;
   selectLabel?: string;
 }) {
-  if (error) return <ErrorState error={new Error(ownerError(error))} retry={retry ?? (() => {})} />;
+  const compact = useMediaQuery('(max-width:599px)');
+  if (error)
+    return retry ? (
+      <ErrorState error={new Error(ownerError(error))} retry={retry} />
+    ) : (
+      <Alert severity="error">{ownerError(error)}</Alert>
+    );
   if (loading && !rows.length) return <LoadingState />;
   if (!rows.length) return <EmptyState />;
+  // A compact record summary keeps the actual data and primary action visible
+  // without requiring a horizontal swipe on a phone. Desktop keeps every column.
+  if (compact && columns.length > 1) {
+    return (
+      <TableContainer aria-busy={loading || undefined} sx={{ maxWidth: '100%' }}>
+        <Table size="small" aria-label={label} sx={{ tableLayout: 'fixed' }}>
+          <TableHead>
+            <TableRow>
+              <TableCell scope="col">{columns[0].label}</TableCell>
+              {select && (
+                <TableCell scope="col" align="right" sx={{ width: 112 }}>
+                  Thao tác
+                </TableCell>
+              )}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={id(row)} hover>
+                <TableCell
+                  component="th"
+                  scope="row"
+                  sx={{ verticalAlign: 'top', minWidth: 0, overflowWrap: 'anywhere', py: 1.25 }}
+                >
+                  <Stack
+                    spacing={0.75}
+                    sx={{ minWidth: 0, '& > *': { minWidth: 0, maxWidth: '100%' } }}
+                  >
+                    <Box sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>
+                      {columns[0].render(row)}
+                    </Box>
+                    {columns.slice(1).map((column) => (
+                      <Box key={column.label} sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                        <Typography variant="caption" component="div" color="text.secondary">
+                          {column.label}
+                        </Typography>
+                        <Box sx={{ fontWeight: 400 }}>{column.render(row)}</Box>
+                      </Box>
+                    ))}
+                  </Stack>
+                </TableCell>
+                {select && (
+                  <TableCell align="right" sx={{ verticalAlign: 'top', px: 1, py: 1.25 }}>
+                    <Button
+                      onClick={() => select(row)}
+                      sx={{
+                        maxWidth: '100%',
+                        minHeight: 44,
+                        lineHeight: 1.4,
+                        whiteSpace: 'normal',
+                      }}
+                    >
+                      {selectLabel}
+                    </Button>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
+  }
   return (
-    <TableContainer aria-busy={loading || undefined}>
+    <TableContainer aria-busy={loading || undefined} sx={{ maxWidth: '100%' }}>
       <Table size="small" aria-label={label}>
         <TableHead>
           <TableRow>
             {columns.map((c) => (
-              <TableCell key={c.label}>{c.label}</TableCell>
+              <TableCell key={c.label} scope="col">
+                {c.label}
+              </TableCell>
             ))}
-            {select && <TableCell>Chi tiết</TableCell>}
+            {select && (
+              <TableCell scope="col" align="right">
+                Thao tác
+              </TableCell>
+            )}
           </TableRow>
         </TableHead>
         <TableBody>
           {rows.map((row) => (
             <TableRow key={id(row)} hover>
               {columns.map((c) => (
-                <TableCell key={c.label}>{c.render(row)}</TableCell>
+                <TableCell key={c.label} sx={{ overflowWrap: 'anywhere' }}>
+                  {c.render(row)}
+                </TableCell>
               ))}
               {select && (
-                <TableCell>
-                  <Button onClick={() => select(row)}>{selectLabel}</Button>
+                <TableCell align="right">
+                  <Button onClick={() => select(row)} sx={{ whiteSpace: 'nowrap' }}>
+                    {selectLabel}
+                  </Button>
                 </TableCell>
               )}
             </TableRow>
@@ -106,13 +187,13 @@ export function OwnerPagination({
       aria-label="Phân trang danh sách"
       direction="row"
       useFlexGap
-      spacing={1.5}
+      spacing={1}
       sx={{ alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}
     >
       <Button disabled={busy || page <= 1} onClick={() => change(page - 1)}>
         Trang trước
       </Button>
-      <Typography variant="body2" aria-live="polite">
+      <Typography variant="body2" aria-live="polite" sx={{ fontVariantNumeric: 'tabular-nums' }}>
         Trang {page} · {total} bản ghi
       </Typography>
       <Button disabled={busy || page * size >= total} onClick={() => change(page + 1)}>

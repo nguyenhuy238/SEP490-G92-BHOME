@@ -79,6 +79,8 @@ export interface LocalAssetTemplate {
   name: string;
   items: LocalAssetItem[];
   expectedVersion?: number;
+  scoped?: boolean;
+  scopeRoomId?: string | null;
 }
 export interface DesiredAssets {
   templateId: string;

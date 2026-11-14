@@ -14,24 +14,29 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { Inbox, TrendingUp } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 export function FilterToolbar({ children }: { children: ReactNode }) {
   return (
     <Stack
       role="group"
       aria-label="Bộ lọc"
-      direction={{ xs: 'column', md: 'row' }}
+      direction={{ xs: 'column', sm: 'row' }}
       useFlexGap
-      spacing={1.5}
+      spacing={1}
       sx={{
         flexWrap: 'wrap',
-        alignItems: { md: 'flex-start' },
+        alignItems: { sm: 'flex-start' },
+        minWidth: 0,
         '& > *': {
-          minWidth: { xs: 0, md: 180 },
-          width: { xs: '100%', md: 'auto' },
-          flex: { md: '1 1 180px' },
+          minWidth: 0,
+          width: { xs: '100%', sm: 'auto' },
+          flex: { sm: '0 1 220px' },
         },
-        '& > .MuiButton-root': { flex: '0 0 auto' },
+        '& > .MuiButton-root': {
+          flex: '0 0 auto',
+          width: 'auto',
+          alignSelf: { xs: 'flex-start', sm: 'center' },
+        },
       }}
     >
       {children}
@@ -39,21 +44,44 @@ export function FilterToolbar({ children }: { children: ReactNode }) {
   );
 }
 export function StatusChip({ label }: { label: string }) {
-  const error = /Khẩn|Hỏng|Quá hạn|Trùng|[Tt]ừ chối/.test(label),
-    success = /Hoàn thành|Đã |Đang hiệu lực|Vận hành tốt|Đang thuê/.test(label),
-    pending = /Chờ|Nháp|nháp/.test(label);
+  // Do not infer success merely from the Vietnamese prefix "Đã". Ended, archived
+  // and cancelled records must never appear as successful active operations.
+  const status = label.toLocaleLowerCase('vi-VN').trim();
+  const tone = /khẩn cấp|hỏng|quá hạn|trùng lặp|từ chối|thất bại|không hợp lệ|lỗi/.test(status)
+    ? 'error'
+    : /ngừng|đã (hủy|huỷ|kết thúc|lưu trữ|trả phòng|nghỉ việc)|tạm đóng|không khai thác|chưa liên kết|chưa xuất bản/.test(
+          status,
+        )
+      ? 'neutral'
+      : /chờ|nháp|cần |sắp |giữ chỗ|chưa xác|chưa duyệt|yêu cầu|hết hạn|tạm ngừng/.test(status)
+        ? 'warning'
+        : /hoàn thành|đã (xác minh|xác nhận|đối soát|duyệt|giải quyết|công bố|xuất bản|phát hành|ký|thanh toán|liên kết|nghiệm thu|ghi nhận|thu)|đang (hiệu lực|hoạt động|vận hành|làm việc|áp dụng)|vận hành tốt|trống khai thác/.test(
+              status,
+            )
+          ? 'success'
+          : /đang (thuê|ở|xử lý|thực hiện)/.test(status)
+            ? 'info'
+            : 'neutral';
+  const colors = {
+    error: { bg: '#ffdad6', fg: '#93000a' },
+    success: { bg: '#e3f4ea', fg: '#006329' },
+    warning: { bg: '#fff1d6', fg: '#845d00' },
+    info: { bg: '#ebf2ff', fg: '#194cbb' },
+    neutral: { bg: '#eef1f5', fg: '#43536a' },
+  }[tone];
   return (
     <Chip
       size="small"
       label={label}
+      data-status-tone={tone}
       sx={{
         height: 'auto',
-        minHeight: 22,
+        minHeight: 26,
         py: 0.25,
-        fontSize: 11,
-        fontWeight: 500,
-        bgcolor: error ? '#ffdad6' : success ? '#e3f4ea' : pending ? '#fff1d6' : '#eaedff',
-        color: error ? '#93000a' : success ? '#006329' : pending ? '#845d00' : '#38485d',
+        fontSize: 12,
+        fontWeight: 600,
+        bgcolor: colors.bg,
+        color: colors.fg,
         '& .MuiChip-label': { whiteSpace: 'normal' },
       }}
     />
@@ -64,46 +92,66 @@ export function PageHeader({
   subtitle,
   group,
   actions,
+  headingLevel = 'h1',
 }: {
   title: string;
   subtitle?: string;
   group?: string | null;
   actions?: ReactNode;
+  headingLevel?: 'h1' | 'h2';
 }) {
   return (
     <Stack
       direction={{ xs: 'column', md: 'row' }}
-      sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, gap: 2, mb: 3 }}
+      sx={{
+        justifyContent: 'space-between',
+        alignItems: { md: 'center' },
+        gap: 1.5,
+        mb: 2,
+        minWidth: 0,
+      }}
     >
-      <Box sx={{ maxWidth: 740 }}>
-        {group !== null && (
-          <Typography
-            variant="overline"
-            sx={{ fontSize: 11, color: 'primary.main', fontWeight: 850, letterSpacing: 1.15 }}
-          >
-            {group || 'BHOME OWNER PORTAL'}
-          </Typography>
-        )}
+      <Box sx={{ maxWidth: 740, minWidth: 0, flex: '1 1 auto' }}>
         <Typography
-          component="h1"
-          variant="h1"
-          sx={{ fontSize: { xs: 22, md: 26 }, lineHeight: 1.3, mt: 0.35 }}
+          component={headingLevel}
+          variant={headingLevel}
+          sx={{
+            fontSize: headingLevel === 'h2' ? 18 : 24,
+            lineHeight: 1.3,
+            overflowWrap: 'anywhere',
+          }}
         >
           {title}
         </Typography>
+        {group && /mô phỏng|demo|sandbox/i.test(group) && (
+          <Typography variant="caption" color="text.secondary" component="div">
+            {group}
+          </Typography>
+        )}
         {subtitle && (
           <Typography
             variant="body2"
             color="text.secondary"
-            sx={{ mt: 0.75, fontSize: 13, lineHeight: 1.6 }}
+            sx={{ mt: 0.5, fontSize: 14, lineHeight: 1.5 }}
           >
             {subtitle}
           </Typography>
         )}
       </Box>
-      <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap', flexShrink: 0 }}>
-        {actions}
-      </Stack>
+      {actions && (
+        <Stack
+          direction="row"
+          sx={{
+            gap: 1,
+            flexWrap: 'wrap',
+            flex: '0 1 auto',
+            minWidth: 0,
+            justifyContent: { md: 'flex-end' },
+          }}
+        >
+          {actions}
+        </Stack>
+      )}
     </Stack>
   );
 }
@@ -120,14 +168,26 @@ export function ChartCard({
 }) {
   return (
     <Paper
-      sx={{ p: { xs: 2, md: 2.5 }, height: '100%', border: '1px solid', borderColor: 'divider' }}
+      sx={{
+        p: { xs: 1.5, md: 2 },
+        height: '100%',
+        minWidth: 0,
+        border: '1px solid',
+        borderColor: 'divider',
+      }}
     >
       <Stack
         direction="row"
-        sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1 }}
+        sx={{
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 1.5,
+          gap: 1,
+          flexWrap: 'wrap',
+        }}
       >
         <Box>
-          <Typography component="h2" sx={{ fontSize: 16, fontWeight: 600 }}>
+          <Typography component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
             {title}
           </Typography>
           {subtitle && (
@@ -154,30 +214,37 @@ export function KPICard({
   danger?: boolean;
 }) {
   return (
-    <Paper sx={{ p: 2.5, border: '1px solid', borderColor: 'divider', minWidth: 0 }}>
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-        <Typography variant="caption" color="text.secondary">
-          {label}
-        </Typography>
-        <Box
-          sx={{
-            bgcolor: danger ? '#ffeded' : '#e2e7ff',
-            color: danger ? 'error.main' : 'primary.main',
-            p: 0.75,
-            borderRadius: 0.5,
-            display: 'flex',
-          }}
-        >
-          <TrendingUp size={18} />
-        </Box>
-      </Stack>
+    <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0 }}>
+      <MetricContent label={label} value={value} hint={hint} danger={danger} />
+    </Paper>
+  );
+}
+function MetricContent({
+  label,
+  value,
+  hint,
+  danger,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  danger?: boolean;
+  tone?: 'primary' | 'success' | 'warning';
+}) {
+  return (
+    <>
+      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+        {label}
+      </Typography>
       <Typography
         sx={{
-          fontSize: { xs: 23, lg: 29 },
+          fontSize: { xs: 22, sm: 26 },
+          fontVariantNumeric: 'tabular-nums',
           letterSpacing: '-0.03em',
           fontWeight: 650,
-          my: 1.5,
-          color: danger ? 'error.main' : 'text.primary',
+          my: 0.5,
+          color: danger ? 'error.dark' : tone ? `${tone}.dark` : 'text.primary',
           overflowWrap: 'anywhere',
         }}
       >
@@ -188,27 +255,42 @@ export function KPICard({
           {hint}
         </Typography>
       )}
-    </Paper>
+    </>
   );
 }
 export function KPIGrid({
   items,
 }: {
-  items: { label: string; value: string | number; hint?: string; danger?: boolean }[];
+  items: {
+    label: string;
+    value: string | number;
+    hint?: string;
+    danger?: boolean;
+    tone?: 'primary' | 'success' | 'warning';
+  }[];
 }) {
   return (
-    <Box
+    <Paper
+      variant="outlined"
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr 1fr', lg: `repeat(${items.length},1fr)` },
-        gap: 2,
-        mb: 3,
+        gridTemplateColumns: {
+          xs: `repeat(${Math.min(2, Math.max(1, items.length))},minmax(0,1fr))`,
+          lg: `repeat(${Math.min(5, Math.max(1, items.length))},minmax(0,1fr))`,
+          xl: `repeat(${Math.min(5, Math.max(1, items.length))},minmax(0,1fr))`,
+        },
+        gap: '1px',
+        bgcolor: 'divider',
+        overflow: 'hidden',
+        mb: 2,
       }}
     >
       {items.map((item) => (
-        <KPICard key={item.label} {...item} />
+        <Box key={item.label} sx={{ bgcolor: 'background.paper', p: 1.5, minWidth: 0 }}>
+          <MetricContent {...item} />
+        </Box>
       ))}
-    </Box>
+    </Paper>
   );
 }
 export function EmptyState({
@@ -219,8 +301,11 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <Stack role="status" sx={{ alignItems: 'center', p: 5, gap: 1.5, textAlign: 'center' }}>
-      <Inbox size={34} color="#737686" />
+    <Stack
+      role="status"
+      sx={{ alignItems: 'center', p: { xs: 2.5, md: 3 }, gap: 1.5, textAlign: 'center' }}
+    >
+      <Inbox size={28} color="#53657f" aria-hidden="true" />
       <Typography color="text.secondary">{message}</Typography>
       {action}
     </Stack>
@@ -229,9 +314,9 @@ export function EmptyState({
 export function LoadingState() {
   return (
     <Box role="status" aria-label="Đang tải dữ liệu">
-      <LinearProgress sx={{ mb: 3 }} />
+      <LinearProgress sx={{ mb: 1.5 }} />
       {[0, 1, 2].map((i) => (
-        <Skeleton key={i} variant="rounded" height={110} sx={{ mb: 2 }} />
+        <Skeleton key={i} variant="rounded" height={44} sx={{ mb: 1 }} />
       ))}
     </Box>
   );

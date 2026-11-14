@@ -19,6 +19,7 @@ import {
 } from '../../../../../packages/client-core/src/finance';
 import { PageHeader } from '../../components/common/PortalUI';
 import { OptionPicker } from '../../components/common/OptionPicker';
+import { MoneyField } from '../../components/common/MoneyField';
 import { displayContractDate } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { useFinanceApi } from '../expenses/useFinanceApi';
@@ -122,14 +123,10 @@ export function FinancialScenariosApiPage() {
   ] as const;
   return (
     <>
-      <PageHeader
-        title="Phân tích tài chính What-if"
-        subtitle="Giả định do Owner nhập; tính toán và lưu kịch bản độc lập với sổ thực tế."
-      />
+      <PageHeader title="Phân tích tài chính What-if" />
       <Alert severity="info" sx={{ mb: 2 }}>
-        Ước tính quản trị, giữ nguyên giả định hàng tháng trong kỳ dự báo. Kịch bản không thay đổi
-        giá, hợp đồng, hóa đơn, thanh toán hoặc chi phí thực tế. Chọn các tháng trọn vẹn cho dữ liệu
-        nền.
+        Ước tính quản trị từ giả định hàng tháng. Kịch bản không thay đổi dữ liệu thực tế. Chọn các
+        tháng trọn vẹn cho dữ liệu nền.
       </Alert>
       {(busy || locations.isPending || saved.isPending) && <LinearProgress />}
       {(error || locations.error || saved.error) && (
@@ -152,37 +149,48 @@ export function FinancialScenariosApiPage() {
         </Alert>
       )}
       {success && <Alert severity="success">{success}</Alert>}
-      <Paper sx={{ p: 2, my: 2 }}>
+      <Paper variant="outlined" sx={{ p: 1.5, my: 2, minWidth: 0 }}>
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void run('analyze');
           }}
         >
-          <Stack spacing={2}>
-            <TextField
-              required
-              label="Tên kịch bản"
-              disabled={busy}
-              value={input.name}
-              slotProps={{ htmlInput: { maxLength: 150 } }}
-              onChange={(e) => change({ ...input, name: e.target.value })}
-            />
-            <OptionPicker
-              label="Cơ sở"
-              disabled={busy}
-              value={input.baseline.locationId || ''}
-              options={locations.data ?? []}
-              loading={locations.isPending}
-              error={!!locations.error}
-              emptyLabel="Toàn chuỗi"
-              change={(id) =>
-                change({
-                  ...input,
-                  baseline: { ...input.baseline, locationId: id || undefined },
-                })
-              }
-            />
+          <Stack spacing={1.5}>
+            <Typography variant="h2" component="h2">
+              Thiết lập kịch bản
+            </Typography>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2,minmax(0,1fr))' },
+                gap: 1.5,
+              }}
+            >
+              <TextField
+                required
+                label="Tên kịch bản"
+                disabled={busy}
+                value={input.name}
+                slotProps={{ htmlInput: { maxLength: 150 } }}
+                onChange={(e) => change({ ...input, name: e.target.value })}
+              />
+              <OptionPicker
+                label="Cơ sở"
+                disabled={busy}
+                value={input.baseline.locationId || ''}
+                options={locations.data ?? []}
+                loading={locations.isPending}
+                error={!!locations.error}
+                emptyLabel="Toàn chuỗi"
+                change={(id) =>
+                  change({
+                    ...input,
+                    baseline: { ...input.baseline, locationId: id || undefined },
+                  })
+                }
+              />
+            </Box>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <TextField
                 required
@@ -221,32 +229,53 @@ export function FinancialScenariosApiPage() {
             </Stack>
             <Typography variant="h6">Giả định hàng tháng</Typography>
             <Box
-              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2,minmax(0,1fr))' },
+                gap: 1.5,
+              }}
             >
-              {fields.map(([field, label]) => (
-                <TextField
-                  key={field}
-                  required
-                  label={label}
-                  disabled={busy}
-                  value={input.assumptions[field]}
-                  slotProps={{
-                    htmlInput: {
-                      inputMode: 'decimal',
-                      pattern: field.endsWith('Percent') ? '[0-9]+([.][0-9]+)?' : '[0-9]+',
-                      maxLength: 24,
-                    },
-                  }}
-                  onChange={(e) =>
-                    change({
-                      ...input,
-                      assumptions: { ...input.assumptions, [field]: e.target.value },
-                    })
-                  }
-                />
-              ))}
+              {fields.map(([field, label]) =>
+                !field.endsWith('Percent') ? (
+                  <MoneyField
+                    key={field}
+                    required
+                    label={label}
+                    disabled={busy}
+                    value={input.assumptions[field]}
+                    maxRawLength={24}
+                    onValueChange={(raw) =>
+                      change({
+                        ...input,
+                        assumptions: { ...input.assumptions, [field]: raw },
+                      })
+                    }
+                  />
+                ) : (
+                  <TextField
+                    key={field}
+                    required
+                    label={label}
+                    disabled={busy}
+                    value={input.assumptions[field]}
+                    slotProps={{
+                      htmlInput: {
+                        inputMode: 'decimal',
+                        pattern: field.endsWith('Percent') ? '[0-9]+([.][0-9]+)?' : '[0-9]+',
+                        maxLength: 24,
+                      },
+                    }}
+                    onChange={(e) =>
+                      change({
+                        ...input,
+                        assumptions: { ...input.assumptions, [field]: e.target.value },
+                      })
+                    }
+                  />
+                ),
+              )}
             </Box>
-            <Stack direction="row" spacing={2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
               <Button type="submit" variant="contained" disabled={busy}>
                 Phân tích
               </Button>
@@ -315,10 +344,10 @@ export function FinancialScenariosApiPage() {
         </>
       )}
       {comparison && (
-        <Paper sx={{ p: 2, my: 2 }}>
+        <Box sx={{ my: 2 }}>
           <Button onClick={() => setComparison(null)}>Bỏ so sánh</Button>
           <Result title={`So sánh: ${comparison.input.name}`} value={comparison} />
-        </Paper>
+        </Box>
       )}
       <Typography variant="h6">Kịch bản đã lưu</Typography>
       {!saved.error && !saved.isPending && saved.data?.length === 0 && (
@@ -326,19 +355,39 @@ export function FinancialScenariosApiPage() {
       )}
       {!saved.error &&
         saved.data?.map((s) => (
-          <Paper key={s.id} sx={{ p: 2, my: 1 }}>
-            <Typography>
-              {s.name} · {s.forecastMonths} tháng
-            </Typography>
-            <Button disabled={busy} onClick={() => void load(s.id)}>
-              Xem {s.name}
-            </Button>
-            <Button disabled={busy || !view} onClick={() => void load(s.id, true)}>
-              So sánh {s.name}
-            </Button>
+          <Paper key={s.id} variant="outlined" sx={{ p: 1.5, my: 1, minWidth: 0 }}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              useFlexGap
+              spacing={1}
+              sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+            >
+              <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                <Typography sx={{ fontWeight: 650 }}>{s.name}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {s.forecastMonths} tháng
+                </Typography>
+              </Box>
+              <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
+                <Button
+                  disabled={busy}
+                  aria-label={`Xem ${s.name}`}
+                  onClick={() => void load(s.id)}
+                >
+                  Xem
+                </Button>
+                <Button
+                  disabled={busy || !view}
+                  aria-label={`So sánh ${s.name}`}
+                  onClick={() => void load(s.id, true)}
+                >
+                  So sánh
+                </Button>
+              </Stack>
+            </Stack>
           </Paper>
         ))}
-      <Stack direction="row" spacing={2}>
+      <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
         <Button disabled={page === 1 || saved.isFetching} onClick={() => setPage((v) => v - 1)}>
           Trang trước
         </Button>
@@ -356,10 +405,15 @@ export function FinancialScenariosApiPage() {
 function Result({ title, value }: { title: string; value: ScenarioView }) {
   const r = value.result;
   return (
-    <Paper sx={{ p: 2, my: 2 }}>
-      <Typography variant="h6">{title}</Typography>
+    <Paper variant="outlined" sx={{ p: 1.5, my: 2, minWidth: 0, overflowWrap: 'anywhere' }}>
+      <Typography variant="h2" component="h2">
+        {title}
+      </Typography>
       {value.baseline.total && (
-        <Stack spacing={0.5} sx={{ my: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+        <Stack
+          spacing={0.5}
+          sx={{ my: 1.5, p: 1.5, bgcolor: 'background.default', borderRadius: 1 }}
+        >
           <Typography variant="subtitle2">
             Dữ liệu thực tế trong kỳ nền {displayContractDate(value.input.baseline.from)} –{' '}
             {displayContractDate(value.input.baseline.to)}
@@ -375,22 +429,33 @@ function Result({ title, value }: { title: string; value: ScenarioView }) {
           </Typography>
         </Stack>
       )}
-      {(
-        [
-          ['Doanh thu dự kiến / tháng', r.monthlyRevenue],
-          ['Tiền thu dự kiến / tháng', r.monthlyCollections],
-          ['OPEX / tháng', r.monthlyOperatingExpenses],
-          ['Lợi nhuận / tháng', r.monthlyProfit],
-          ['Dòng tiền / tháng', r.monthlyNetCashFlow],
-          ['Dòng tiền cả kỳ dự báo', r.forecastNetCashFlow],
-          ['Vốn chưa thu hồi cuối dự báo', r.remainingCapitalAtEnd],
-          ['Chênh lệch lợi nhuận tháng so với nền', r.monthlyProfitDifference],
-        ] as const
-      ).map(([label, amount]) => (
-        <Typography key={label}>
-          {label}: {amount === null ? 'Chưa xác định' : formatFinanceMoney(amount)}
-        </Typography>
-      ))}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2,minmax(0,1fr))' },
+          gap: 1,
+        }}
+      >
+        {(
+          [
+            ['Doanh thu dự kiến / tháng', r.monthlyRevenue],
+            ['Tiền thu dự kiến / tháng', r.monthlyCollections],
+            ['OPEX / tháng', r.monthlyOperatingExpenses],
+            ['Lợi nhuận / tháng', r.monthlyProfit],
+            ['Dòng tiền / tháng', r.monthlyNetCashFlow],
+            ['Dòng tiền cả kỳ dự báo', r.forecastNetCashFlow],
+            ['Vốn chưa thu hồi cuối dự báo', r.remainingCapitalAtEnd],
+            ['Chênh lệch lợi nhuận tháng so với nền', r.monthlyProfitDifference],
+          ] as const
+        ).map(([label, amount]) => (
+          <Typography
+            key={label}
+            sx={{ fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}
+          >
+            {label}: {amount === null ? 'Chưa xác định' : formatFinanceMoney(amount)}
+          </Typography>
+        ))}
+      </Box>
       <Typography>
         Ước tính số tháng hoàn vốn còn lại: {r.estimatedRemainingMonths ?? 'Chưa xác định'}
       </Typography>

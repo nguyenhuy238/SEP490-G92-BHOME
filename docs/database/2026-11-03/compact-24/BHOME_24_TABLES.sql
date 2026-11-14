@@ -372,7 +372,12 @@ CREATE TABLE billing_policies (
     version integer NOT NULL DEFAULT 1 CHECK (version>0),
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array'),
     FOREIGN KEY(room_id,location_id) REFERENCES rooms(id,location_id),
-    CHECK (effective_to IS NULL OR effective_to>=effective_from)
+    CHECK (effective_to IS NULL OR effective_to>=effective_from),
+    CONSTRAINT ck_billing_policy_calculation_method CHECK (
+      (category = 0 AND calculation_method = 'FIXED_PER_ROOM_PER_MONTH') OR
+      (category IN (1, 2) AND calculation_method = 'METERED') OR
+      (category = 3 AND calculation_method IN ('FIXED_PER_ROOM_PER_MONTH', 'FIXED_PER_PERSON_PER_MONTH'))
+    )
 );
 CREATE INDEX ix_policy_effective ON billing_policies(location_id,charge_code,effective_from);
 

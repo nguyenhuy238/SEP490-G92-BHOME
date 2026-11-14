@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -19,7 +20,7 @@ import {
   type Policy,
   type PolicyInput,
 } from '../../../../../packages/client-core/src/invoices';
-import { PageHeader } from '../../components/common/PortalUI';
+import { PageHeader, FilterToolbar } from '../../components/common/PortalUI';
 import { useInvoiceApi } from './useInvoiceApi';
 import { ConflictReload } from '../locations/components/ConflictReload';
 
@@ -38,10 +39,7 @@ export function BillingConfigurationPage({
   });
   return (
     <>
-      <PageHeader
-        title="Giá thuê & Chính sách phí"
-        subtitle="Cấu hình giá theo ngày hiệu lực và các quy tắc lập hóa đơn của cơ sở."
-      />
+      <PageHeader title="Giá thuê & Chính sách phí" />
       <Stack spacing={2}>
         {locations.isPending && <LinearProgress />}
         {locations.error && (
@@ -53,20 +51,22 @@ export function BillingConfigurationPage({
           </Alert>
         )}
         {locations.data?.length === 0 && <Alert severity="info">Chưa có cơ sở.</Alert>}
-        <TextField
-          select
-          label="Cơ sở cấu hình"
-          value={location}
-          disabled={!!initialLocationId}
-          onChange={(e) => setLocation(e.target.value)}
-        >
-          <MenuItem value="">Chọn cơ sở</MenuItem>
-          {locations.data?.map((l) => (
-            <MenuItem value={l.id} key={l.id}>
-              {l.label}
-            </MenuItem>
-          ))}
-        </TextField>
+        <FilterToolbar>
+          <TextField
+            select
+            label="Cơ sở cấu hình"
+            value={location}
+            disabled={!!initialLocationId}
+            onChange={(e) => setLocation(e.target.value)}
+          >
+            <MenuItem value="">Chọn cơ sở</MenuItem>
+            {locations.data?.map((l) => (
+              <MenuItem value={l.id} key={l.id}>
+                {l.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        </FilterToolbar>
         {location && <LocationBilling key={location + actor} location={location} />}
       </Stack>
     </>
@@ -105,7 +105,7 @@ function LocationBilling({ location }: { location: string }) {
           onSaved={() => void schedule.refetch()}
         />
       )}
-      <Paper sx={{ p: 2 }}>
+      <Paper variant="outlined" sx={{ p: 1.5 }}>
         <Stack spacing={2}>
           <Typography variant="h6">Biểu giá đã lưu</Typography>
           {policies.isPending && <LinearProgress />}
@@ -122,19 +122,41 @@ function LocationBilling({ location }: { location: string }) {
               Chưa có biểu giá. Thêm giá thuê, điện và nước để lập hóa đơn.
             </Alert>
           )}
-          {policies.data?.items.map((p) => (
-            <Stack
-              key={p.id}
-              direction="row"
-              sx={{ gap: 2, flexWrap: 'wrap', alignItems: 'center' }}
-            >
-              <Typography>
-                {p.name} · {formatBillingDecimal(p.rate)} đ · {p.effectiveFrom} →{' '}
-                {p.effectiveTo ?? 'Không hạn'} · {p.roomId ? 'Phòng' : 'Cơ sở'}
-              </Typography>
-              <Button onClick={() => setReplacing(p)}>Tạo giá kế tiếp</Button>
-            </Stack>
-          ))}
+          {!policies.error &&
+            policies.data?.items.map((p) => (
+              <Stack
+                key={p.id}
+                direction={{ xs: 'column', sm: 'row' }}
+                sx={{
+                  gap: 1,
+                  alignItems: { sm: 'center' },
+                  justifyContent: 'space-between',
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                  pt: 1,
+                }}
+              >
+                <Stack spacing={0.25} sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                  <Typography sx={{ fontWeight: 650 }}>{p.name}</Typography>
+                  <Typography sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {formatBillingDecimal(p.rate)} đ/
+                    {p.category === 1
+                      ? 'kWh'
+                      : p.category === 2
+                        ? 'm³'
+                        : p.method === 2
+                          ? 'người/tháng'
+                          : 'phòng/tháng'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {p.effectiveFrom.split('-').reverse().join('/')} –{' '}
+                    {p.effectiveTo?.split('-').reverse().join('/') ?? 'Không hạn'} ·{' '}
+                    {p.roomId ? 'Phòng' : 'Cơ sở'}
+                  </Typography>
+                </Stack>
+                <Button onClick={() => setReplacing(p)}>Tạo giá kế tiếp</Button>
+              </Stack>
+            ))}
           <Stack direction="row">
             <Button disabled={page === 1} onClick={() => setPage(page - 1)}>
               Trang trước
@@ -184,7 +206,10 @@ export function ScheduleForm({
         'finalMonthOffset',
         'dueDay',
         'dueMonthOffset',
-      ].map((key) => [key, current ? String(current[key as keyof BillingSchedule]) : '']),
+      ].map((key) => [
+        key,
+        key === 'rentSource' ? '1' : current ? String(current[key as keyof BillingSchedule]) : '',
+      ]),
     ),
   );
   const [error, setError] = useState(''),
@@ -244,11 +269,15 @@ export function ScheduleForm({
         {!current && (
           <Alert severity="info">Chọn đầy đủ các quy tắc trước khi lập hóa đơn đầu tiên.</Alert>
         )}
-        {choice('rentSource', 'Nguồn tiền thuê cả phòng', [
-          'Biểu giá của phòng / cơ sở',
-          'Tiền thuê của hợp đồng đại diện',
+        <TextField label="Nguồn tiền thuê cả phòng" value="Giá đã chốt trong hợp đồng" disabled />
+        <Alert severity="info">
+          Tiền thuê, đơn giá điện nước và các khoản dịch vụ của hợp đồng được giữ cố định. Lịch hóa
+          đơn chỉ điều khiển kỳ tính tiền, ngày chốt và cách làm tròn.
+        </Alert>
+        {choice('rateDate', 'Mốc tham chiếu kỳ (không thay đổi giá hợp đồng)', [
+          'Ngày đầu tháng',
+          'Ngày cuối tháng',
         ])}
-        {choice('rateDate', 'Mốc áp dụng giá trong kỳ', ['Ngày đầu tháng', 'Ngày cuối tháng'])}
         {choice('partialMonth', 'Phí cố định khi ở không đủ tháng', [
           'Thu cả tháng',
           'Theo số ngày phòng có khách / số ngày tháng',
@@ -325,6 +354,7 @@ export function PolicyForm({
     [code, setCode] = useState(previous?.chargeCode ?? ''),
     [reason, setReason] = useState('');
   const [roomId, setRoomId] = useState(previous?.roomId ?? '');
+  const [serviceMethod, setServiceMethod] = useState(previous?.method === 2 ? '2' : '0');
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const [rawError, setRawError] = useState<unknown>(null);
@@ -338,9 +368,7 @@ export function PolicyForm({
           event.preventDefault();
           if (lock.current) return;
           if (!/^\d{1,14}(\.\d{1,4})?$/.test(rate)) {
-            setError(
-              'Nhập giá không âm, tối đa 4 chữ số thập phân, không có dấu phân cách hàng nghìn.',
-            );
+            setError('Nhập giá không âm, tối đa 14 chữ số phần nguyên và 4 chữ số thập phân.');
             return;
           }
           lock.current = true;
@@ -353,7 +381,7 @@ export function PolicyForm({
             category: cat,
             chargeCode: cat === 3 ? code : ['RENT', 'ELECTRICITY', 'WATER'][cat],
             name,
-            method: cat === 1 || cat === 2 ? 1 : 0,
+            method: cat === 1 || cat === 2 ? 1 : cat === 3 ? Number(serviceMethod) : 0,
             rate,
             effectiveFrom: date,
             effectiveTo: endDate || null,
@@ -412,7 +440,11 @@ export function PolicyForm({
           label="Khoản thu"
           value={category}
           disabled={!!previous}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setServiceMethod('0');
+            setRate('');
+          }}
         >
           {['Tiền thuê', 'Điện / kWh', 'Nước / m³', 'Phí dịch vụ / tháng'].map((text, i) => (
             <MenuItem key={text} value={String(i)}>
@@ -428,17 +460,32 @@ export function PolicyForm({
         />
         {category === '3' && (
           <TextField
+            select
+            label="Cách tính phí dịch vụ"
+            value={serviceMethod}
+            onChange={(e) => {
+              setServiceMethod(e.target.value);
+              setRate('');
+            }}
+          >
+            <MenuItem value="0">Cố định/phòng/tháng</MenuItem>
+            <MenuItem value="2">Cố định/người/tháng</MenuItem>
+          </TextField>
+        )}
+        {category === '3' && (
+          <TextField
             required
             label="Mã phí dịch vụ"
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
           />
         )}
-        <TextField
+        <MoneyField
+          allowDecimal
           required
           label="Đơn giá VND"
           value={rate}
-          onChange={(e) => setRate(e.target.value)}
+          onValueChange={(raw) => setRate(raw)}
           slotProps={{ htmlInput: { inputMode: 'decimal' } }}
         />
         <TextField

@@ -56,6 +56,10 @@ public sealed partial class MainDraftApiTests
         Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, input with { TenantUserId = outside.Id }, key)).StatusCode);
         var contract = (await owner.GetFromJsonAsync<ContractView>($"/api/v1/contracts/{draft.Id}"))!;
         Assert.False(contract.OnboardingDraft); Assert.Equal("PendingSigning", contract.Status); Assert.Equal(tenant.Id, contract.TenantUserId);
+        Assert.NotNull(contract.PriceLockedAt);
+        Assert.Contains(contract.AgreedCharges!, c => c.ChargeCode == "RENT" && c.Rate == contract.MonthlyRent);
+        Assert.Contains(contract.AgreedCharges!, c => c.ChargeCode == "ELECTRICITY");
+        Assert.Contains(contract.AgreedCharges!, c => c.ChargeCode == "WATER");
         var previews = (await signer.GetFromJsonAsync<ContractDocumentView[]>($"/api/v1/contracts/{draft.Id}/previews"))!; var preview = Assert.Single(previews);
         Assert.Equal(reviewedBytes, await signer.GetByteArrayAsync($"/api/v1/contracts/{draft.Id}/previews/{preview.Id}"));
         Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync($"/api/v1/contracts/{draft.Id}/previews/{preview.Id}")).StatusCode);

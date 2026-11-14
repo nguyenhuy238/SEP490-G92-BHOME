@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TasksApiPage } from './TasksApiPage';
 import { ApiError } from '../../../../../packages/client-core/src/api';
 const mocks = vi.hoisted(() => ({ request: vi.fn() }));
@@ -45,6 +45,7 @@ beforeEach(() => {
         : { items: path.startsWith('/api/v1/operational-tasks?') ? [task] : [], totalCount: 1 };
   });
 });
+afterEach(() => vi.unstubAllGlobals());
 function mount() {
   render(
     <MemoryRouter>
@@ -108,4 +109,28 @@ it('forwards the selected Staff filter to the server', async () => {
       expect.anything(),
     ),
   );
+});
+
+it('keeps task status, due date and review action visible in the compact table', async () => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('max-width:599px'),
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+    onchange: null,
+  }));
+  mount();
+  const table = await screen.findByRole('table', { name: 'Danh sách công việc' });
+  const row = await within(table).findByRole('row', { name: /Synthetic task/ });
+  expect(
+    within(table)
+      .getAllByRole('columnheader')
+      .map((cell) => cell.textContent),
+  ).toEqual(['Công việc', 'Thao tác']);
+  expect(within(row).getByText(/Hạn:/)).toBeVisible();
+  fireEvent.click(within(row).getByRole('button', { name: 'Xem chi tiết' }));
+  expect(await screen.findByRole('button', { name: 'Nghiệm thu' })).toBeVisible();
 });

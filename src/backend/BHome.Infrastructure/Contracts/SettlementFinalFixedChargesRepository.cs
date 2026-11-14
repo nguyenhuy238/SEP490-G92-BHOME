@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BHome.Application.Contracts;
+using BHome.Application.Billing;
 using BHome.Domain.Billing;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Billing;
@@ -12,7 +13,7 @@ internal sealed partial class SettlementReceivablesRepository
     public async Task<FinalFixedChargeContext> FinalFixedAsync(Guid id, CancellationToken token)
     {
         var context = await ContextAsync(id, token); var missing = new List<string>();
-        var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).SingleAsync(c => c.Id == id, token);
+        var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).Include(c => c.Residents).SingleAsync(c => c.Id == id, token);
         var inspection = await db.Set<ContractFinalInspection>().AsNoTracking().Where(i => i.ContractId == id).OrderByDescending(i => i.Version).FirstOrDefaultAsync(token);
         var snapshot = inspection is null ? null : JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot);
         var end = snapshot?.Date ?? contract.ActualEndDate ?? contract.EndDate;
@@ -26,7 +27,7 @@ internal sealed partial class SettlementReceivablesRepository
             !Enum.IsDefined(schedule.RentSource) || !Enum.IsDefined(schedule.RateDate) || !Enum.IsDefined(schedule.PartialMonth) || !Enum.IsDefined(schedule.Rounding)))
         { schedule = null; missing.Add("billing_schedule_snapshot_invalid"); }
         var pricingContract = invoice?.RepresentativeContractId is { } representative ?
-            await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == representative, token) : contract;
+            await db.Set<Contract>().AsNoTracking().Include(c => c.Residents).SingleAsync(c => c.Id == representative, token) : contract;
         if (string.IsNullOrWhiteSpace(pricingContract.SnapshotHash)) missing.Add("signed_contract_snapshot_required");
         var occupancies = await new InvoiceRepository(db).OccupanciesAsync(contract.RoomId, period, through, token);
         foreach (var occupancy in occupancies.Where(o => o.Contract.Id == id)) occupancy.Contract.ActualEndDate = end;
@@ -39,7 +40,14 @@ internal sealed partial class SettlementReceivablesRepository
             (o.Contract.ActualEndDate ?? o.Contract.EndDate) >= period.AddDays(day)));
         if (occupiedDays == 0) missing.Add("fixed_charge_occupancy_required");
         var recipients = occupancies.SelectMany(o => o.TenantIds).Distinct().Order().ToArray();
+        var charges = ContractBillingPrices.Read(pricingContract, contract.Room.LocationId, missing);
+        foreach (var occupancy in occupancies.Where(o => o.Contract.Id != pricingContract.Id))
+        {
+            var other = ContractBillingPrices.Read(occupancy.Contract, contract.Room.LocationId, missing);
+            if (!ContractBillingPrices.Equivalent(charges, other)) missing.Add("room_contract_price_conflict");
+        }
         return new(context, contract.Room.LocationId, period, end, schedule, pricingContract.MonthlyRent, pricingContract.SnapshotHash,
-            occupiedDays, recipients, missing.Distinct().ToArray());
+            occupiedDays, recipients, missing.Distinct().ToArray(), charges,
+            PersonMonthOccupancy.Read(period, occupancies.Select(o => o.Contract)));
     }
 }
