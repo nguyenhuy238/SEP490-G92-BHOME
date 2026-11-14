@@ -23,6 +23,7 @@ export const portalRoutes = [
   '/handovers',
   '/temporary-residence',
   '/meters',
+  '/finance',
   '/invoices',
   '/invoice-adjustments',
   '/payments',

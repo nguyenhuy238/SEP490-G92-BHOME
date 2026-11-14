@@ -63,7 +63,10 @@ function Wait-MobileApi([string]$Address) {
     # can be stale when this launcher reuses a Visual Studio API.
     & node (Join-Path $repo 'scripts/Diagnose-MobileApi.cjs') "https://${Address}:7240" (Join-Path $repo '.tools/mobile-tls/root-ca.cer')
     $logHint = if ($script:ownedApi) { 'Check .tools/mobile-dev-api.stdout.log and .tools/mobile-dev-api.stderr.log.' } else { 'Check the running API/Visual Studio output; .tools/mobile-dev-api logs belong to earlier standalone runs.' }
-    throw "API HTTPS readiness failed. $logHint ECONNREFUSED means no API listener; check startup exceptions or a paused debugger first. Run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Update-LocalDatabase.ps1 -Check. For PROPERTY_UPGRADE_REQUIRED, back up the database, stop the API, then use -UpgradePropertySchema and restart. If the upgrade refuses populated retired catalog fields, preserve the data and resolve their migration explicitly; do not recreate the database to bypass it. Use no switch only for MISSING/EMPTY initialization, and -RecreateDatabase only for an explicitly approved legacy archive. Also check local database/storage and Development settings. No TLS checks were bypassed."
+    $connectionHint = if (Get-NetTCPConnection -State Listen -LocalPort 7240 -ErrorAction SilentlyContinue) {
+        'API port 7240 is listening. Check the HTTP status, TLS diagnosis and readiness timeout above.'
+    } else { 'No API HTTPS listener on port 7240 (ECONNREFUSED). Check startup exceptions or a paused debugger.' }
+    throw "API HTTPS readiness failed. $connectionHint $logHint Read-only database check for the selected profile: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Database.ps1 -EnvironmentFile `"$EnvironmentFile`". No TLS checks were bypassed."
 }
 
 function Wait-MobileMetro([string]$Address) {

@@ -201,6 +201,7 @@ it('selects real Room/Asset/Work Order references and submits the exact source I
     expect(screen.getByRole('button', { name: 'Ghi khoản chi' })).not.toBeDisabled(),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
+  fireEvent.click(screen.getByRole('button', { name: /Liên kết bổ sung/ }));
   await waitFor(() =>
     expect(screen.getByRole('combobox', { name: 'Phòng ghi nhận' })).not.toHaveAttribute(
       'aria-disabled',

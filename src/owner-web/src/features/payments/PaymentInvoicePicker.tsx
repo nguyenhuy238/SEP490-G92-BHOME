@@ -1,13 +1,18 @@
 import { useState } from 'react';
 import {
+  Alert,
+  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  LinearProgress,
   MenuItem,
+  Paper,
   Stack,
   TextField,
+  Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
@@ -35,6 +40,14 @@ export function PaymentInvoicePicker({
     [period, setPeriod] = useState(''),
     [paymentStatus, setPaymentStatus] = useState('Unpaid'),
     [page, setPage] = useState(1);
+  const hasFilters = Boolean(location || room || period || paymentStatus !== 'Unpaid');
+  const resetFilters = () => {
+    setLocation('');
+    setRoom('');
+    setPeriod('');
+    setPaymentStatus('Unpaid');
+    setPage(1);
+  };
   const locations = useQuery({
     queryKey: ['payment-locations', session?.userId],
     enabled: open,
@@ -77,17 +90,46 @@ export function PaymentInvoicePicker({
     <Dialog
       open={open}
       onClose={close}
-      maxWidth="lg"
+      maxWidth="md"
       fullWidth
       aria-labelledby="payment-invoice-picker-title"
+      sx={{
+        '& .MuiDialog-paper': {
+          '@media (max-width:600px)': {
+            m: 0,
+            width: '100%',
+            maxWidth: '100%',
+            height: '100%',
+            maxHeight: '100%',
+            borderRadius: 0,
+          },
+        },
+      }}
     >
       <DialogTitle id="payment-invoice-picker-title">Chọn hóa đơn cần phân bổ</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Lọc theo cơ sở, phòng hoặc kỳ thanh toán rồi chọn đúng hóa đơn để tiếp tục đối soát.
+          </Typography>
+          <Stack
+            direction="row"
+            sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              Tìm theo hóa đơn
+            </Typography>
+            {hasFilters && (
+              <Button size="small" onClick={resetFilters}>
+                Xóa bộ lọc
+              </Button>
+            )}
+          </Stack>
           <FilterToolbar>
             <TextField
+              size="small"
               select
-              label="Tình trạng tiền hóa đơn đối chiếu"
+              label="Trạng thái thanh toán"
               value={paymentStatus}
               onChange={(e) => {
                 setPaymentStatus(e.target.value);
@@ -99,8 +141,9 @@ export function PaymentInvoicePicker({
               {!unpaidOnly && <MenuItem value="">Tất cả hóa đơn</MenuItem>}
             </TextField>
             <TextField
+              size="small"
               select
-              label="Cơ sở hóa đơn"
+              label="Cơ sở"
               value={location}
               onChange={(e) => {
                 setLocation(e.target.value);
@@ -116,8 +159,9 @@ export function PaymentInvoicePicker({
               ))}
             </TextField>
             <TextField
+              size="small"
               select
-              label="Phòng hóa đơn"
+              label="Phòng"
               value={room}
               disabled={!location}
               onChange={(e) => {
@@ -133,7 +177,8 @@ export function PaymentInvoicePicker({
               ))}
             </TextField>
             <TextField
-              label="Kỳ cần đối soát"
+              size="small"
+              label="Kỳ hóa đơn"
               type="month"
               value={period}
               slotProps={{ inputLabel: { shrink: true } }}
@@ -144,22 +189,102 @@ export function PaymentInvoicePicker({
             />
           </FilterToolbar>
           <OwnerFeedback error={locations.error || rooms.error} />
-          <OwnerTable
-            rows={list.data?.items ?? []}
-            id={(i) => i.invoiceId}
-            select={choose}
-            loading={list.isFetching}
-            error={list.error}
-            retry={() => void list.refetch()}
-            label="Hóa đơn còn dư nợ"
-            selectLabel="Chọn hóa đơn"
-            columns={[
-              { label: 'Cơ sở / Phòng', render: (i) => `${i.locationName} · ${i.roomNumber}` },
-              { label: 'Kỳ', render: (i) => i.billingPeriod.slice(0, 7) },
-              { label: 'Dư nợ', render: (i) => formatContractMoney(i.outstandingAmount) },
-              { label: 'Hạn thanh toán', render: (i) => i.dueDate.split('-').reverse().join('/') },
-            ]}
-          />
+          <Typography variant="caption" color="text.secondary">
+            {list.data
+              ? `${list.data.totalCount} hóa đơn phù hợp · Chọn đúng phòng và kỳ thu tiền`
+              : 'Đang tìm hóa đơn phù hợp'}
+          </Typography>
+          {!list.error && !list.isFetching && !list.data?.items.length && (
+            <Alert
+              severity="info"
+              action={hasFilters ? <Button onClick={resetFilters}>Bỏ bộ lọc</Button> : undefined}
+            >
+              Chưa tìm thấy hóa đơn phù hợp. Kiểm tra lại cơ sở, phòng hoặc kỳ thanh toán.
+            </Alert>
+          )}
+          <Stack
+            spacing={1.25}
+            role="list"
+            aria-label="Danh sách hóa đơn đối soát trên màn hình nhỏ"
+            sx={{ display: { xs: 'flex', sm: 'none' } }}
+          >
+            {list.isFetching && <LinearProgress aria-label="Đang tải hóa đơn" />}
+            {list.error && (
+              <Alert
+                severity="error"
+                action={<Button onClick={() => void list.refetch()}>Thử lại</Button>}
+              >
+                Không thể tải danh sách hóa đơn.
+              </Alert>
+            )}
+            {list.data?.items.map((row) => (
+              <Paper
+                key={row.invoiceId}
+                variant="outlined"
+                role="listitem"
+                sx={{ p: 1.5, borderRadius: 1.5 }}
+              >
+                <Stack spacing={1}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    {row.locationName} · Phòng {row.roomNumber}
+                  </Typography>
+                  <Stack
+                    direction="row"
+                    sx={{ justifyContent: 'space-between', gap: 1, alignItems: 'center' }}
+                  >
+                    <Typography variant="body2" color="text.secondary">
+                      Kỳ {row.billingPeriod.slice(0, 7)}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {formatContractMoney(row.outstandingAmount)}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    Hạn thanh toán: {row.dueDate.split('-').reverse().join('/')}
+                  </Typography>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    aria-label={`Chọn hóa đơn phòng ${row.roomNumber}, kỳ ${row.billingPeriod.slice(0, 7)}`}
+                    onClick={() => choose(row)}
+                  >
+                    Chọn hóa đơn
+                  </Button>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+          {(list.isFetching || !!list.error || !!list.data?.items.length) && (
+            <Box
+              sx={{
+                display: { xs: 'none', sm: 'block' },
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1.5,
+                overflow: 'hidden',
+              }}
+            >
+              <OwnerTable
+                rows={list.data?.items ?? []}
+                id={(i) => i.invoiceId}
+                select={choose}
+                loading={list.isFetching}
+                error={list.error}
+                retry={() => void list.refetch()}
+                label="Danh sách hóa đơn đối soát"
+                selectLabel="Chọn hóa đơn"
+                columns={[
+                  { label: 'Cơ sở / Phòng', render: (i) => `${i.locationName} · ${i.roomNumber}` },
+                  { label: 'Kỳ', render: (i) => i.billingPeriod.slice(0, 7) },
+                  { label: 'Dư nợ', render: (i) => formatContractMoney(i.outstandingAmount) },
+                  {
+                    label: 'Hạn thanh toán',
+                    render: (i) => i.dueDate.split('-').reverse().join('/'),
+                  },
+                ]}
+              />
+            </Box>
+          )}
           <OwnerPagination
             page={page}
             total={list.data?.totalCount ?? 0}

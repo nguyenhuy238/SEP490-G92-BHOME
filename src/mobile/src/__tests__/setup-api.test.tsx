@@ -137,7 +137,7 @@ it('keeps Locations visible when Staff loading fails and supports retry', async 
   await screen.findByRole('option', { name: 'Cơ sở mẫu' });
   await screen.findByText(/không được phép/i);
   state.request.mockResolvedValue([]);
-  fireEvent.click(screen.getByRole('button', { name: 'Tải lại cấu hình' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
   await screen.findByText(/Chưa có cơ sở/);
 });
 
