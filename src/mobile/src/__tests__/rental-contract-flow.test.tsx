@@ -326,3 +326,35 @@ it('shows Staff handoff without requesting accounts, signing-review or release',
   expect(screen.getByText('Chờ Chủ cơ sở duyệt để ký')).toBeTruthy();
   expect(state.request).not.toHaveBeenCalled();
 });
+it('allows Owner to release a reviewed Main draft without a Tenant account for email OTP signing', async () => {
+  state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/accounts')) return [];
+    if (path.endsWith('/signing-review')) return { id: 'review-new', developmentOnly: true };
+    if (path.endsWith('/release')) return { id: 'draft-new' };
+    throw new Error('Unexpected test request');
+  });
+  const released = vi.fn();
+  render(
+    <MainDraftSigningReview
+      client={mainDraftClient(state.request)}
+      draft={{ id: 'draft-new', version: 2 } as MainDraftView}
+      onReleased={released}
+      onOpenPdf={vi.fn()}
+    />,
+  );
+  await screen.findByText(
+    'Chưa có tài khoản Tenant. Người ở mới ký qua email và OTP; tài khoản chỉ được cấp sau khi hợp đồng kích hoạt.',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo PDF đưa đi ký' }));
+  await screen.findByText('Private PDF review-new');
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chuyển sang ký' }));
+  await waitFor(() => expect(released).toHaveBeenCalledWith('draft-new'));
+  const call = state.request.mock.calls.find(([path]) => path.endsWith('/release'));
+  expect(JSON.parse(call![1].body)).toEqual({
+    tenantUserId: null,
+    expectedVersion: 2,
+    reviewedFileId: 'review-new',
+    humanReviewed: true,
+  });
+});

@@ -28,7 +28,7 @@ export function holdingSandboxClient(request: ContractRequest, id: string) {
   return {
     status: (signal?: AbortSignal) =>
       request<HoldingSandboxState>(`${root}/simulation`, { signal }),
-    simulate: (participant: 'Owner' | 'Tenant') =>
+    simulate: (participant: 'Tenant') =>
       request<HoldingSandboxState>(`${root}/simulation/signatures`, {
         method: 'POST',
         body: JSON.stringify({ participant, simulationOnly: true }),

@@ -73,7 +73,7 @@ public sealed record DebtInvoiceView(Guid InvoiceId, Guid LocationId, Guid RoomI
 public sealed record PaymentHistoryEntry(Guid Id, Guid InvoiceId, Guid LocationId, Guid RoomId, string LocationName, string RoomNumber, DateOnly BillingPeriod,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Amount,
     DateTimeOffset PaidAt, string PaidBy, string VerificationSource, string? BankReference, Guid? VerifiedByUserId);
-public sealed class PaymentException(int status, string code) : Exception("Payment operation rejected.")
+public sealed class PaymentException(int status, string code, Exception? inner = null) : Exception("Payment operation rejected.", inner)
 {
     public int Status { get; } = status;
     public string Code { get; } = code;

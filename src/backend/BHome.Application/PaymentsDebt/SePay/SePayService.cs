@@ -9,7 +9,7 @@ using BHome.Domain.TenantContracts;
 namespace BHome.Application.PaymentsDebt.SePay;
 
 public sealed class SePayService(ISePayRepository repository, IPaymentRepository payments, SePayOptions options,
-    ContractService contracts, TimeProvider clock)
+    ContractService contracts, TimeProvider clock, IMainInitialPaymentLedger? initialPayments = null)
 {
     public async Task ReceiveAsync(SePayTransaction transaction, CancellationToken token)
     {
@@ -78,6 +78,14 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         if (binding is null || account is null || !account.Enabled || account.BankIdentifier != binding.BankIdentifier ||
             account.AccountNumber != tx.AccountNumber || account.IsDevelopmentDemo != receipt.IsDevelopmentDemo ||
             !await payments.ActiveLocationAsync(target.LocationId, token)) return await Review("receiving_account_mismatch");
+        if (target.Kind == "MainInitial")
+        {
+            if(initialPayments is null)return await Review("initial_payment_workflow_unavailable");
+            try { await initialPayments.AllocateAsync(target.ObligationId,receipt,token); }
+            catch(PaymentException e) when(e.Status==409){return await Review(e.Code);}
+            payments.Add(new PaymentReconciliation{TransferId=receipt.Id,DepositContractId=target.ObligationId,Decision="Allocated",Reason="verified_main_initial_payment",OccurredAt=receipt.VerifiedAt});
+            return await Finish("Completed","verified_main_initial_payment",receipt.Id);
+        }
         decimal outstanding;
         Invoice? invoice = null;
         if (target.Kind == "Invoice")

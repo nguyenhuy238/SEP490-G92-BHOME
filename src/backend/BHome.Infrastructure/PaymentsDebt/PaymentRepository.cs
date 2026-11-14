@@ -48,7 +48,7 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
             var result = await work(); await db.SaveChangesAsync(t); await transaction.CommitAsync(t); return result;
         }
         catch (DbUpdateException error) when (error.InnerException is PostgresException { SqlState: "23505" or "23514" })
-        { throw new PaymentException(409, "payment_concurrent_or_duplicate_effect"); }
+        { throw new PaymentException(409, "payment_concurrent_or_duplicate_effect", error); }
         catch (PostgresException error) when (error.SqlState is "23505" or "23514" or "40001" or "40P01")
         { throw new PaymentException(409, "payment_concurrent_or_duplicate_effect"); }
     }

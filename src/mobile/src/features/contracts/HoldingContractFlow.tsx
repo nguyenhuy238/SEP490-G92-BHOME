@@ -29,6 +29,7 @@ import { HoldingDepositAllocation } from './HoldingDepositAllocation';
 import { HoldingProgress } from './HoldingProgress';
 import { holdingStage, holdingStageLabel } from './holdingStage';
 import { HoldingSandboxFlow, useHoldingSandbox } from './HoldingSandboxFlow';
+import { HoldingSigningConfirmation } from './HoldingSigningConfirmation';
 
 const signed = (c: ContractView) => ['PendingActivation', 'Active'].includes(c.status);
 // Invitation creation has no backend idempotency key. Retain ambiguous attempts across
@@ -89,11 +90,11 @@ export function HoldingContractFlow({
   const representative = c.occupants?.find((r) => r.representative)?.label;
   const sandbox = useHoldingSandbox(api, c);
   const operations =
-    step === 6
+    step === 5
       ? ['holding-approval']
-      : step === 7 && !internal
+      : step === 6 && !internal
         ? ['signing', 'signing/sync', 'signing/recover']
-        : step === 8 && signed(c)
+        : step >= 7 && signed(c)
           ? [
               'holding-activation',
               ...(c.approvedAt &&
@@ -105,7 +106,14 @@ export function HoldingContractFlow({
           : [];
   if (sandbox.data)
     return (
-      <HoldingSandboxFlow contract={c} sandbox={sandbox} onChanged={onChanged} onList={onList} />
+      <HoldingSandboxFlow
+        key={`${c.id}:${c.snapshotHash}`}
+        api={api}
+        contract={c}
+        sandbox={sandbox}
+        onChanged={onChanged}
+        onList={onList}
+      />
     );
   return (
     <>
@@ -123,9 +131,18 @@ export function HoldingContractFlow({
       {c.isDevelopmentDemo && (
         <Text style={ui.red}>Hợp đồng minh họa · Không dùng để ký hoặc thanh toán thực tế.</Text>
       )}
-      {step <= 6 && owner && <HoldingDraftDocument api={api} contract={c} role={role} />}
-      {step === 6 && !owner && <Text style={ui.muted}>Đang chờ Owner phê duyệt hợp đồng.</Text>}
-      {step === 7 && internal && (
+      {step === 5 && owner && <HoldingDraftDocument api={api} contract={c} role={role} />}
+      {step === 5 && !owner && <Text style={ui.muted}>Đang chờ Owner phê duyệt hợp đồng.</Text>}
+      {step === 6 && internal && role === 'Staff' && (
+        <HoldingSigningConfirmation
+          key={`${c.id}:${c.snapshotHash}`}
+          api={api}
+          contract={c}
+          onChanged={onChanged}
+          onContinue={onChanged}
+        />
+      )}
+      {step === 6 && internal && owner && (
         <HoldingInternalSigning
           key={`${c.id}:${c.snapshotHash}`}
           api={api}
@@ -134,7 +151,7 @@ export function HoldingContractFlow({
           onChanged={onChanged}
         />
       )}
-      {step === 7 && !internal && (
+      {step === 6 && !internal && (
         <>
           <Box>
             <Text>Hợp đồng sử dụng phương thức ký số đã cấu hình.</Text>
@@ -143,7 +160,7 @@ export function HoldingContractFlow({
           {owner && <ContractEvidence api={api} contractId={c.id} pdf />}
         </>
       )}
-      {step === 8 && signed(c) && (
+      {step >= 7 && signed(c) && (
         <HoldingPayment
           api={api}
           contract={c}

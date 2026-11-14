@@ -197,9 +197,11 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             });
         });
         await Compact24SampleSeed.RunAsync(host.Services, "Development", WorkflowTestUsers.Password);
-        using var owner = host.CreateClient(); using var guest = host.CreateClient();
+        using var owner = host.CreateClient(); using var guest = host.CreateClient(); using var assignedStaff = host.CreateClient();
         var login = await Result<LoginResult>(await owner.PostAsJsonAsync("/api/v1/auth/login", new { email = "owner.sample@example.invalid", password = WorkflowTestUsers.Password }));
         owner.DefaultRequestHeaders.Authorization = new("Bearer", login.AccessToken);
+        var staffLogin = await Result<LoginResult>(await assignedStaff.PostAsJsonAsync("/api/v1/auth/login", new { email = "staff.sample@example.invalid", password = WorkflowTestUsers.Password }));
+        assignedStaff.DefaultRequestHeaders.Authorization = new("Bearer", staffLogin.AccessToken);
         Guid residentId; int usersBefore;
         await using (var scope = host.Services.CreateAsyncScope())
         {
@@ -223,10 +225,28 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         {
             var view = await owner.GetFromJsonAsync<ContractView>(path);
             var invite = await Result<SigningInvitationResult>(await Post(owner, path + "/signing-invitations", new SigningInvitationInput(DateTimeOffset.UtcNow.AddHours(1), view!.SnapshotHash)));
-            (await Post(guest, "/api/v1/contract-signing/otp", new AnonymousSigningToken(invite.Token!))).EnsureSuccessStatusCode();
+            var inviteToken = invite.Token!;
+            if (path == root)
+            {
+                (await owner.DeleteAsync(path + "/signing-invitations/" + invite.Id)).EnsureSuccessStatusCode();
+                var sent = await Result<SigningInvitationResult>(await Post(assignedStaff, path + "/signing-invitations", new SigningInvitationInput(DateTimeOffset.UtcNow.AddHours(1), view.SnapshotHash)));
+                Assert.Null(sent.Token); Assert.Equal("InvitationAcceptedByProvider", sent.Status);
+                inviteToken = Regex.Match(delivery.Messages.Last().Body, @"\b[A-F0-9]{64}\b").Value;
+                Assert.Equal(64, inviteToken.Length);
+                var staffStatus = await assignedStaff.GetFromJsonAsync<InternalSigningStatus>(path + "/internal-signing");
+                Assert.Null(staffStatus!.DocumentHash); Assert.Contains("***", staffStatus.MaskedEmail!); Assert.False(staffStatus.CanContinue);
+                Assert.Equal(HttpStatusCode.Conflict, (await Post(assignedStaff, path + "/signing-invitations", new SigningInvitationInput(DateTimeOffset.UtcNow.AddHours(1), view.SnapshotHash))).StatusCode);
+            }
+            (await Post(guest, "/api/v1/contract-signing/otp", new AnonymousSigningToken(inviteToken))).EnsureSuccessStatusCode();
             var otp = Regex.Match(delivery.Messages.Last().Body, @"\b[0-9]{6}\b").Value;
-            var access = await Result<AnonymousSigningAccess>(await Post(guest, "/api/v1/contract-signing/verify", new AnonymousOtpInput(invite.Token!, otp)));
-            (await Post(guest, "/api/v1/contract-signing/accept", new AnonymousAcceptanceInput(invite.Token!, access.Session, access.DocumentHash, access.ConsentVersion, true, [[new(.1, .2), new(.7, .6)]]))).EnsureSuccessStatusCode();
+            var access = await Result<AnonymousSigningAccess>(await Post(guest, "/api/v1/contract-signing/verify", new AnonymousOtpInput(inviteToken, otp)));
+            if (path == root)
+            {
+                var otpOnly = await assignedStaff.GetFromJsonAsync<InternalSigningStatus>(path + "/internal-signing");
+                Assert.Null(otpOnly!.TenantAcceptedAt); Assert.False(otpOnly.CanContinue);
+                Assert.Equal(HttpStatusCode.Forbidden, (await Post(assignedStaff, path + "/internal-signing/owner-confirmation", new InternalOwnerAcceptance(access.DocumentHash, access.ConsentVersion, true))).StatusCode);
+            }
+            (await Post(guest, "/api/v1/contract-signing/accept", new AnonymousAcceptanceInput(inviteToken, access.Session, access.DocumentHash, access.ConsentVersion, true, [[new(.1, .2), new(.7, .6)]]))).EnsureSuccessStatusCode();
             (await Post(owner, path + "/internal-signing/owner-confirmation", new InternalOwnerAcceptance(access.DocumentHash, access.ConsentVersion, true))).EnsureSuccessStatusCode();
         }
         // Payment before signing must not mark the room held or create a login.

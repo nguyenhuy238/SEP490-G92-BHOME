@@ -240,7 +240,24 @@ export function ContractDraftForm({
               <ActivityIndicator accessibilityLabel="Đang kiểm tra phòng giữ chỗ" />
             )}
             {!query.loading && !query.error && !roomOptions.length && (
-              <Text>Chưa có phòng trống đủ điều kiện giữ chỗ.</Text>
+              <View style={{ gap: 8 }}>
+                <Text>
+                  {query.data?.blockedRooms.length
+                    ? `Có ${query.data.blockedRooms.length} phòng trống nhưng chưa đủ điều kiện giữ chỗ.`
+                    : 'Chưa có phòng trống đủ điều kiện giữ chỗ.'}
+                </Text>
+                {query.data?.blockedRooms.slice(0, 5).map((item) => (
+                  <Text key={item.id} style={styles.description}>
+                    {item.label}:{' '}
+                    {item.codes.includes('RENT_POLICY_MISSING')
+                      ? 'Chưa cấu hình giá thuê. Owner cần cập nhật giá phòng.'
+                      : 'Owner cần kiểm tra điều kiện giữ chỗ của phòng.'}
+                  </Text>
+                ))}
+                <Button disabled={query.loading} onPress={query.reload}>
+                  Kiểm tra lại phòng
+                </Button>
+              </View>
             )}
           </>
         )}

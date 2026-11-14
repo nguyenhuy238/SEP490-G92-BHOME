@@ -65,6 +65,7 @@ export interface ContractView {
   holdingContractId: string | null;
   appliedHoldingDeposit: string;
   isDevelopmentDemo?: boolean;
+  initialPaymentRequired?: boolean;
   roomNumber?: string;
   locationName?: string;
   occupants?: { id: string; label: string; representative: boolean }[] | null;
@@ -539,7 +540,20 @@ export type ContractRequest = <T>(
 const root = '/api/v1/contracts';
 const certificates = '/api/v1/digital-signing/certificates';
 export function contractClient(request: ContractRequest) {
+  const holdingRoomReadiness = (id: string, signal?: AbortSignal, effectiveOn?: string) =>
+    request<{
+      roomId: string;
+      purpose: string;
+      status: string;
+      isReady: boolean;
+      blockers: { code: string; message: string }[];
+      unverifiedConditions: { code: string; message: string }[];
+    }>(
+      `/api/v1/rooms/${encodeURIComponent(id)}/readiness?purpose=Holding${effectiveOn ? '&effectiveOn=' + encodeURIComponent(effectiveOn) : ''}`,
+      { signal },
+    );
   return {
+    holdingRoomReadiness,
     createHoldingResident: (roomId: string, displayLabel: string, email: string) =>
       request<{ id: string }>('/api/v1/capture/residents', {
         method: 'POST',
@@ -556,17 +570,7 @@ export function contractClient(request: ContractRequest) {
         { signal },
       ),
     holdingRoomReady: async (id: string, signal?: AbortSignal, effectiveOn?: string) => {
-      const result = await request<{
-        roomId: string;
-        purpose: string;
-        status: string;
-        isReady: boolean;
-        blockers: unknown[];
-        unverifiedConditions: unknown[];
-      }>(
-        `/api/v1/rooms/${encodeURIComponent(id)}/readiness?purpose=Holding${effectiveOn ? '&effectiveOn=' + encodeURIComponent(effectiveOn) : ''}`,
-        { signal },
-      );
+      const result = await holdingRoomReadiness(id, signal, effectiveOn);
       return (
         result?.roomId === id &&
         result.purpose === 'Holding' &&
@@ -854,11 +858,14 @@ export function contractClient(request: ContractRequest) {
     meterTasks: (signal?: AbortSignal) =>
       request<FinalMeterTask[]>('/api/v1/capture/meter-tasks', { signal }),
     mutate: <T>(id: string | null, operation: string, body: unknown, key: string) =>
-      request<T>(root + (id ? `/${id}/${operation}` : operation === 'holdings' ? '/holdings' : ''), {
-        method: 'POST',
-        headers: { 'Idempotency-Key': key },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      }),
+      request<T>(
+        root + (id ? `/${id}/${operation}` : operation === 'holdings' ? '/holdings' : ''),
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        },
+      ),
     document: (id: string, signal?: AbortSignal) =>
       request<Blob>(
         `${root}/${id}/document`,

@@ -99,7 +99,7 @@ public sealed partial class ContractService
                 MonthlyRent = decimal.Truncate(rent.Rate),
                 RequiredDeposit = decimal.Truncate(input.HoldingDeposit),
                 Terms = input.Terms.Trim(),
-                IsDevelopmentDemo = DemoEnabled
+                IsDevelopmentDemo = DemoEnabled || holdingTestScope?.Allows(room.LocationId) == true
             };
             c.Residents = residents.Select(r => new ContractResident
             {
@@ -295,6 +295,7 @@ public sealed partial class ContractService
                 SigningMode = holding.SigningMode,
                 RepresentativeResidentId = holding.RepresentativeResidentId,
                 HoldingContractId = holding.Id,
+                InitialPaymentRequired = input.RequireInitialPayment,
                 StartDate = holding.StartDate,
                 EndDate = holding.EndDate,
                 MonthlyRent = holding.MonthlyRent,

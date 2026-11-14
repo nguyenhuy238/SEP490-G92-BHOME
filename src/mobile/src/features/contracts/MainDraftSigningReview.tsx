@@ -74,7 +74,7 @@ export function MainDraftSigningReview({
     return () => controller.abort();
   }, [owner, api, revision]);
   async function run(release: boolean) {
-    if (lock.current || !owner || (release && (!file || !reviewed || !tenant))) return;
+    if (lock.current || !owner || (release && (!file || !reviewed))) return;
     lock.current = true;
     setBusy(true);
     onBusyChange?.(true);
@@ -82,7 +82,7 @@ export function MainDraftSigningReview({
     try {
       if (release) {
         const input = {
-          tenantUserId: tenant,
+          tenantUserId: tenant || null,
           expectedVersion: draft.version,
           reviewedFileId: file!.id,
           humanReviewed: true,
@@ -113,8 +113,8 @@ export function MainDraftSigningReview({
         <Heading title="Chờ Chủ cơ sở duyệt để ký" />
         <Pill tone="amber">Bản nháp đã lưu</Pill>
         <Text>
-          Chủ cơ sở xem PDF, chọn tài khoản người thuê và chuyển hợp đồng sang ký. Staff tiếp tục
-          theo dõi trong danh sách hợp đồng.
+          Chủ cơ sở xem PDF, phê duyệt và chuyển hợp đồng sang ký. Staff tiếp tục theo dõi trong
+          danh sách hợp đồng.
         </Text>
       </Box>
     );
@@ -124,18 +124,21 @@ export function MainDraftSigningReview({
         <Heading title="Duyệt hợp đồng đưa đi ký" />
         <ChoiceField
           label="Tài khoản Tenant đại diện"
-          value={tenant}
-          options={accounts}
+          value={tenant || 'new'}
+          options={[
+            { id: 'new', label: 'Người ở mới · Ký OTP, cấp tài khoản sau kích hoạt' },
+            ...accounts,
+          ]}
           disabled={busy || loading}
           onChange={(value) => {
-            setTenant(value);
+            setTenant(value === 'new' ? '' : value);
             setReviewed(false);
           }}
         />
         {!loading && !accounts.length && (
           <Text>
-            Chưa có tài khoản Tenant đang hoạt động. Chủ cơ sở cần hoàn tất tài khoản trước khi
-            chuyển sang ký.
+            Chưa có tài khoản Tenant. Người ở mới ký qua email và OTP; tài khoản chỉ được cấp sau
+            khi hợp đồng kích hoạt.
           </Text>
         )}
         {!!feedback && (
@@ -168,15 +171,12 @@ export function MainDraftSigningReview({
       )}
       <Box>
         <Checkbox.Item
-          label="Tôi đã xem PDF và xác nhận tài khoản Tenant đại diện"
+          label="Tôi đã xem đúng PDF và xác nhận người đại diện"
           status={reviewed ? 'checked' : 'unchecked'}
-          disabled={!file || !tenant || busy}
+          disabled={!file || busy}
           onPress={() => setReviewed((v) => !v)}
         />
-        <Action
-          disabled={!file || !tenant || !reviewed || busy || loading}
-          onPress={() => void run(true)}
-        >
+        <Action disabled={!file || !reviewed || busy || loading} onPress={() => void run(true)}>
           Xác nhận chuyển sang ký
         </Action>
       </Box>

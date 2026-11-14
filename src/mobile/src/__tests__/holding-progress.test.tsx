@@ -28,9 +28,9 @@ it('shows only current and next steps until the process is expanded', () => {
   expect(screen.queryByText('6. Phê duyệt')).toBeNull();
   expect((screen.getByRole('progressbar') as HTMLProgressElement).value).toBe(0.125);
   fireEvent.click(screen.getByText('Xem quy trình giữ chỗ'));
-  expect(screen.getByText(/8\. Cọc & giữ chỗ/)).toBeTruthy();
+  expect(screen.getByText(/8\. Giữ chỗ/)).toBeTruthy();
   fireEvent.click(screen.getByText('Xem quy trình giữ chỗ'));
-  expect(screen.queryByText(/8\. Cọc & giữ chỗ/)).toBeNull();
+  expect(screen.queryByText(/8\. Giữ chỗ/)).toBeNull();
   view.rerender(<HoldingProgress current={7} />);
   expect((screen.getByRole('progressbar') as HTMLProgressElement).value).toBe(1);
 });

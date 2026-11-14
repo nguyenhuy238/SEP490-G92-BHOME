@@ -70,7 +70,11 @@ vi.mock('../features/contracts/HoldingNewTenant', () => ({
 }));
 vi.mock('../lib/randomUUID', () => ({ randomUUID: () => '00000000-0000-4000-8000-000000000099' }));
 vi.mock('../theme/theme', () => ({ staffColors: {}, colors: {} }));
+vi.mock('expo-router', () => ({
+  useFocusEffect: (callback: () => void | (() => void)) => React.useEffect(callback, [callback]),
+}));
 vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => {} }) },
   StyleSheet: { create: (styles: unknown) => styles },
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));

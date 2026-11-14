@@ -7,6 +7,10 @@ export type InternalSigningStatus = {
   tenantAcceptedAt: string | null;
   ownerAcceptedAt: string | null;
   invitations: { id: string; status: string; expiresAt: string }[];
+  maskedEmail?: string | null;
+  tenantSimulated?: boolean;
+  canContinue?: boolean;
+  sandboxAvailable?: boolean;
 };
 export type SigningAccess = { session: string; documentHash: string; consentVersion: string };
 export function internalSigningClient(request: ReturnType<typeof createApiClient>) {
@@ -47,7 +51,7 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
     status: (id: string) =>
       request<InternalSigningStatus>('/api/v1/contracts/' + id + '/internal-signing'),
     invite: (id: string, snapshotHash: string, expiresAt: string) =>
-      post<{ id: string; token: string; status: string; expiresAt: string }>(
+      post<{ id: string; token?: string | null; status: string; expiresAt: string }>(
         '/api/v1/contracts/' + id + '/signing-invitations',
         { snapshotHash, expiresAt },
       ),

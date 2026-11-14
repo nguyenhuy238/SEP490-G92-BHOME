@@ -41,6 +41,7 @@ import { HoldingSandboxFlow, useHoldingSandbox } from '../features/contracts/Hol
 const request = vi.fn();
 const api = contractClient(request as ContractRequest);
 const c = {
+  snapshotHash: 'snapshot',
   id: 'contract',
   roomNumber: 'TEST',
   isDevelopmentDemo: true,
@@ -51,10 +52,12 @@ const c = {
 } as ContractView;
 const changed = vi.fn();
 let state: HoldingSandboxState;
+let ownerConfirmed = true;
 function Harness({ contract = c }: { contract?: ContractView }) {
   const sandbox = useHoldingSandbox(api, contract);
   return sandbox.data ? (
     <HoldingSandboxFlow
+      api={api}
       contract={contract}
       sandbox={sandbox}
       onChanged={changed}
@@ -67,6 +70,7 @@ function Harness({ contract = c }: { contract?: ContractView }) {
 beforeEach(() => {
   vi.stubGlobal('__DEV__', true);
   vi.clearAllMocks();
+  ownerConfirmed = true;
   state = {
     mode: 'Test',
     contractId: 'contract',
@@ -80,11 +84,23 @@ beforeEach(() => {
     contractStatus: 'Draft',
   };
   request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/internal-signing'))
+      return {
+        mode: 'INTERNAL_OTP_DRAWN',
+        state: 'AwaitingAcceptance',
+        documentHash: null,
+        tenantAcceptedAt: null,
+        ownerAcceptedAt: ownerConfirmed ? '2026-11-13T00:00:00Z' : null,
+        invitations: [],
+        tenantSimulated: state.tenantSimulated,
+        canContinue: ownerConfirmed && state.tenantSimulated,
+        maskedEmail: 't***@example.invalid',
+      };
     if (path.endsWith('/simulation/signatures')) {
       const { participant } = JSON.parse(init!.body as string);
-      if (participant === 'Owner') state.ownerSimulated = true;
-      else state.tenantSimulated = true;
-      state.canShowQr = state.ownerSimulated && state.tenantSimulated;
+      if (participant !== 'Tenant') throw { status: 403 };
+      state.tenantSimulated = true;
+      state.canShowQr = ownerConfirmed && state.tenantSimulated;
     } else if (path.endsWith('/transfer-instructions'))
       return {
         mode: 'Test',
@@ -111,11 +127,13 @@ afterEach(() => {
 });
 it('requires both server simulation results before QR and verified deposit before OnHold', async () => {
   render(<Harness />);
-  await screen.findByText('Mô phỏng Owner đã ký');
-  expect((screen.getByText('Tiếp tục: tạo QR') as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(screen.getByText('Mô phỏng Owner đã ký'));
-  await screen.findByText('✓ Owner đã ký (mô phỏng)');
-  expect((screen.getByText('Tiếp tục: tạo QR') as HTMLButtonElement).disabled).toBe(true);
+  await screen.findByText('X\u00e1c nh\u1eadn k\u00fd h\u1ee3p \u0111\u1ed3ng');
+  expect(screen.queryByText('M\u00f4 ph\u1ecfng Owner \u0111\u00e3 k\u00fd')).toBeNull();
+  await waitFor(() =>
+    expect((screen.getByText('Mô phỏng người giữ chỗ đã ký') as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
   fireEvent.click(screen.getByText('Mô phỏng người giữ chỗ đã ký'));
   await screen.findByText('✓ Người giữ chỗ đã ký (mô phỏng)');
   expect(request.mock.calls.some(([path]) => path.endsWith('/transfer-instructions'))).toBe(false);
@@ -131,7 +149,7 @@ it('requires both server simulation results before QR and verified deposit befor
   await screen.findByText('Backend đã xác minh đủ tiền cọc.');
   fireEvent.click(screen.getByText('Hoàn tất giữ chỗ (Test Mode)'));
   await screen.findByText('Giữ chỗ thành công · Test Mode');
-  expect(changed).toHaveBeenCalledOnce();
+  expect(changed).toHaveBeenCalledTimes(2);
   expect(
     request.mock.calls.some(
       ([path]) => path.includes('/owner-confirmation') || path.includes('/signing-invitations'),
@@ -161,10 +179,95 @@ it('does not advance when the backend rejects a simulation', async () => {
       : original(path, init),
   );
   render(<Harness />);
-  fireEvent.click(await screen.findByText('Mô phỏng Owner đã ký'));
+  fireEvent.click(await screen.findByText('Mô phỏng người giữ chỗ đã ký'));
   await waitFor(() =>
-    expect((screen.getByText('Mô phỏng Owner đã ký') as HTMLButtonElement).disabled).toBe(false),
+    expect((screen.getByText('Mô phỏng người giữ chỗ đã ký') as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
   );
   expect((screen.getByText('Tiếp tục: tạo QR') as HTMLButtonElement).disabled).toBe(true);
-  expect(state.ownerSimulated).toBe(false);
+  expect(state.tenantSimulated).toBe(false);
+});
+it('Tenant simulation cannot enable QR until the actual Owner confirmation comes from backend', async () => {
+  ownerConfirmed = false;
+  render(<Harness />);
+  await waitFor(() =>
+    expect((screen.getByText('Mô phỏng người giữ chỗ đã ký') as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByText('Mô phỏng người giữ chỗ đã ký'));
+  await screen.findByText('✓ Người giữ chỗ đã ký (mô phỏng)');
+  expect((screen.getByText('Tiếp tục: tạo QR') as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    request.mock.calls.some(
+      ([path]) => path.endsWith('/transfer-instructions') || path.endsWith('/owner-confirmation'),
+    ),
+  ).toBe(false);
+});
+it('OTP verification alone remains waiting for Tenant signature', async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation((path: string, init?: RequestInit) =>
+    path.endsWith('/internal-signing')
+      ? Promise.resolve({
+          invitations: [{ id: 'invite', status: 'OtpVerified', expiresAt: '2099-01-01' }],
+          tenantAcceptedAt: null,
+          ownerAcceptedAt: null,
+          canContinue: false,
+        })
+      : original(path, init),
+  );
+  render(<Harness />);
+  await screen.findByText('Đã xác minh OTP. Người giữ chỗ cần đọc và ký hợp đồng để hoàn tất.');
+  expect((screen.getByText('Tiếp tục: tạo QR') as HTMLButtonElement).disabled).toBe(true);
+});
+it('sends the real invitation endpoint once and reports provider acceptance without exposing a link', async () => {
+  const original = request.getMockImplementation()!;
+  let sent = false;
+  request.mockImplementation((path: string, init?: RequestInit) => {
+    if (path.endsWith('/signing-invitations')) {
+      sent = true;
+      return Promise.resolve({ id: 'invite', status: 'InvitationAcceptedByProvider' });
+    }
+    if (path.endsWith('/internal-signing'))
+      return Promise.resolve({
+        invitations: sent
+          ? [{ id: 'invite', status: 'InvitationAcceptedByProvider', expiresAt: '2099-01-01' }]
+          : [],
+        tenantAcceptedAt: null,
+        ownerAcceptedAt: null,
+        canContinue: false,
+      });
+    return original(path, init);
+  });
+  render(<Harness />);
+  await waitFor(() =>
+    expect((screen.getByText('Gửi thông báo ký hợp đồng') as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByText('Gửi thông báo ký hợp đồng'));
+  await screen.findByText('Dịch vụ email đã tiếp nhận lời mời ký.');
+  expect((screen.getByText('Gửi thông báo ký hợp đồng') as HTMLButtonElement).disabled).toBe(true);
+  expect(request.mock.calls.filter(([path]) => path.endsWith('/signing-invitations'))).toHaveLength(
+    1,
+  );
+  expect((screen.getByText('Tiếp tục: tạo QR') as HTMLButtonElement).disabled).toBe(true);
+});
+it('reports email delivery failure without claiming it was sent', async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation((path: string, init?: RequestInit) =>
+    path.endsWith('/signing-invitations')
+      ? Promise.resolve({ id: 'invite', status: 'InvitationPendingManualDelivery' })
+      : original(path, init),
+  );
+  render(<Harness />);
+  await waitFor(() =>
+    expect((screen.getByText('Gửi thông báo ký hợp đồng') as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByText('Gửi thông báo ký hợp đồng'));
+  await screen.findByText('Chưa gửi được email. Nhờ Owner kiểm tra cấu hình và lời mời trên Web.');
+  expect(screen.queryByText('Dịch vụ email đã tiếp nhận lời mời ký.')).toBeNull();
 });

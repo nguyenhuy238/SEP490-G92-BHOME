@@ -27,7 +27,7 @@ public static class DevelopmentEnvironmentFile
             var at = line.IndexOf('='); if (at <= 0 || line.StartsWith('#')) continue;
             var name = line[..at].Trim();
             if (!System.Text.RegularExpressions.Regex.IsMatch(name,
-                "^((ConnectionStrings|Jwt|Sessions|AuthRateLimit|AuthWeb|AuthenticationEmail|Sms|SmsRecovery|ObjectStorage|Jobs|Email|Cors|BankIntegration|SePay|NotificationIntegration|NotificationChannels|OwnerSetup|ElectronicContractIntegration|Ocr|IdentityProtection|Capture|Kestrel|MobileDevelopment|Api|MainDraft|DevelopmentDatabase|DigitalSigning|AnonymousSigning)__[^=]+|AllowedHosts)$")) continue;
+                "^((ConnectionStrings|Jwt|Sessions|AuthRateLimit|AuthWeb|AuthenticationEmail|Sms|SmsRecovery|ObjectStorage|Jobs|Email|Cors|BankIntegration|SePay|NotificationIntegration|NotificationChannels|OwnerSetup|ElectronicContractIntegration|Ocr|IdentityProtection|Capture|Kestrel|MobileDevelopment|Api|MainDraft|DevelopmentDatabase|DigitalSigning|AnonymousSigning|HoldingTesting)__[^=]+|AllowedHosts)$")) continue;
             values[name.Replace("__", ":", StringComparison.Ordinal)] = line[(at + 1)..].Trim().Trim('\'', '"');
         }
         var afterAppSettings = 0;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
 import {
@@ -19,6 +19,7 @@ import { ContractEvidence } from './ContractEvidence';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { RentalContractStepper } from './RentalContractStepper';
 import { rentalContractState } from './rentalContractState';
+import { MainInitialPaymentCard } from './MainInitialPaymentCard';
 
 export function RentalContractFlow({
   api,
@@ -43,6 +44,9 @@ export function RentalContractFlow({
   const [step, setStep] = useState(initialStep ?? state.current);
   const [selected, setSelected] = useState('');
   const [details, setDetails] = useState(false);
+  const [initialPaidFor, setInitialPaidFor] = useState<string | null>(null);
+  const initialPaid = initialPaidFor === contract.id;
+  const markInitialPaid = useCallback(() => setInitialPaidFor(contract.id), [contract.id]);
   const [keys] = useState(() => mutationKeys(randomUUID));
   const actions = contractActions(contract, null, role, actorId);
   const action = actions.find((item) => item.operation === selected);
@@ -196,7 +200,15 @@ export function RentalContractFlow({
               </Box>
             </>
           )}
-          {step === 2 && (
+          {step === 2 && contract.initialPaymentRequired && signingFinished && (
+            <MainInitialPaymentCard
+              key={contract.id}
+              api={api}
+              contractId={contract.id}
+              onPaid={markInitialPaid}
+            />
+          )}
+          {step === 2 && !contract.initialPaymentRequired && (
             <>
               <Box>
                 <Heading title="Tiền cọc hợp đồng" />
@@ -296,7 +308,11 @@ export function RentalContractFlow({
                 style={ui.grow}
                 mode="contained"
                 buttonColor={c.blue}
-                disabled={!!action || (step === 1 && !signingFinished)}
+                disabled={
+                  !!action ||
+                  (step === 1 && !signingFinished) ||
+                  (step === 2 && !!contract.initialPaymentRequired && !initialPaid)
+                }
                 contentStyle={{ minHeight: 48 }}
                 onPress={() => navigate(step + 1)}
               >

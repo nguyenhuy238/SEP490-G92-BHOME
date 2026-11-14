@@ -1,17 +1,21 @@
 # Holding: Staff simulation → QR → verified deposit → OnHold (SePay Test Mode)
 
+Cập nhật mới nhất: [Bước 6 Owner xác nhận thật và Tenant ký qua email](HOLDING_STEP6_REAL_OWNER_TENANT_EMAIL.md) thay thế cơ chế hai bên mô phỏng mô tả dưới đây.
+
 ## Scope
+
+Update: see [Holding approval auto-sync](HOLDING_APPROVAL_AUTO_SYNC_2026-11-13.md) for the current step order and explicit Neon test-location opt-in. The local setup below records the earlier sandbox run, not the current Mobile target.
 
 User explicitly requested temporary Staff buttons to simulate Owner/Tenant signing, then QR, verified deposit and OnHold. This feature is restricted to Development/Testing + valid enabled SePay Test Mode + an isolated loopback sandbox database. Every affected contract and receiving account must be development demo data. Real signatures, real Neon data and normal Owner signing/activation permissions are unchanged.
 
-Staff must have an active assignment to the contract location. Existing ContractService.GetAsync enforces this before any sandbox data read or mutation. Tenant/anonymous cannot use these routes. Remote databases, Neon, Production, Live Mode, disabled SePay, ordinary working databases and non-demo contracts are rejected.
+Staff must have an active assignment to the contract location. Existing ContractService.GetAsync enforces this before any sandbox data read or mutation. Tenant/anonymous cannot use these routes. Production, Live Mode, disabled SePay and non-demo contracts are rejected. Neon additionally requires the explicit host/database/location and TLS guards described in the update.
 
 ## API
 
 Base: `/api/v1/integrations/sepay/testing/holdings/{id}`; JWT Owner or assigned Staff.
 
 - `GET /simulation`: persisted simulation flags and verified ledger amount, current contract/room completion state.
-- `POST /simulation/signatures`: `{ "participant": "Owner" | "Tenant", "simulationOnly": true }`. Requires actual Owner approval first. Idempotently records simulation timestamps bound to snapshotHash in Holding draft metadata, with audit identifying the Staff who clicked. Does not create ContractSignature, InternalAcceptance or any legal signing evidence; contract stays Draft.
+- `POST /simulation/signatures`: `{ "participant": "Owner" | "Tenant", "simulationOnly": true }`. Requires actual Owner approval first. Idempotently records simulation timestamps bound to snapshotHash in Holding draft metadata, with audit identifying the Staff who clicked. Does not create ContractSignature, InternalAcceptance or any legal signing evidence. After both confirmations, the demo contract becomes PendingActivation with metadata SigningState Simulated.
 - `GET /transfer-instructions`: QR from the backend BH registry and receiving account bound to Location, using existing VietQrGenerator. Staff must complete both simulation flags first; Owner retains the previously added pre-signing preview capability. Amount is the verified-ledger remainder.
 - `POST /simulation/activate`: explicit demo fixture completion. Requires both simulation flags, actual Owner approval, unexpired Holding, active/available room, no conflicting contract and exact full verified deposit from the existing payment ledger. Under existing ledger/location/room transaction locks, updates only the demo contract to Active and demo room to OnHold, records Staff actor and explicit Sandbox audit/property history. Repeat is idempotent. No fake payment or signature is generated. Normal `/holding-activation` still rejects absent legal signature evidence.
 

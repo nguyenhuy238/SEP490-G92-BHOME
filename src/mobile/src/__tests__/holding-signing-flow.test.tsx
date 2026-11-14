@@ -168,7 +168,7 @@ beforeEach(() => {
 afterEach(cleanup);
 it('opens persisted draft without recreating it or sending invitations; Staff never requests Owner PDF', async () => {
   show(contract(), 'Staff', 'staff');
-  expect(screen.getByText(/6\/8/)).toBeTruthy();
+  expect(screen.getByText(/5\/8/)).toBeTruthy();
   expect(screen.getByText('Chờ Owner phê duyệt')).toBeTruthy();
   expect(screen.queryByText('Tiếp tục')).toBeNull();
   expect(screen.queryByText('Làm mới trạng thái')).toBeNull();
@@ -181,11 +181,11 @@ it('blocks progression past approval while backend approval is missing', async (
   expect(screen.queryByText('Tiếp tục')).toBeNull();
   expect(screen.getByText(/Đang chờ Owner phê duyệt hợp đồng/)).toBeTruthy();
 });
-it('Staff resumes approval-confirmed step without querying internal Owner-only status', () => {
+it('Staff resumes approval-confirmed step with scoped read-only signing status', () => {
   show(contract({ approvedAt: '2026-11-12T00:00:00Z' }), 'Staff', 'staff');
-  expect(screen.getByText(/7\/8/)).toBeTruthy();
+  expect(screen.getByText(/6\/8/)).toBeTruthy();
   expect(screen.queryByText('Tạo lời mời ký')).toBeNull();
-  expect(request).not.toHaveBeenCalled();
+  expect(request).toHaveBeenCalledWith('/api/v1/contracts/synthetic-contract/internal-signing');
 });
 it('requires PDF consent, preflights and prevents duplicate invitations; never exposes token or invents URL/QR', async () => {
   const view = show(contract({ approvedAt: '2026-11-12T00:00:00Z' }));
@@ -294,7 +294,7 @@ it('shows success only after backend confirms Active and OnHold; reads actual tr
 
 it('resumes steps 5 to 8 from changed server props and reloads room state after activation', async () => {
   const view = show(contract(), 'Staff', 'staff');
-  expect(screen.getByText(/6\/8/)).toBeTruthy();
+  expect(screen.getByText(/5\/8/)).toBeTruthy();
   function update(status: string, approvedAt: string | null = '2026-11-12T00:00:00Z') {
     view.rerender(
       <HoldingContractFlow
@@ -309,10 +309,10 @@ it('resumes steps 5 to 8 from changed server props and reloads room state after 
     );
   }
   update('PendingSigning');
-  expect(screen.getByText(/7\/8/)).toBeTruthy();
+  expect(screen.getByText(/6\/8/)).toBeTruthy();
   update('PendingActivation');
   await screen.findByText('Tiền cọc đã được xác minh');
-  expect(screen.getByText(/8\/8/)).toBeTruthy();
+  expect(screen.getByText(/7\/8/)).toBeTruthy();
   expect(screen.queryByText('Giữ chỗ thành công')).toBeNull();
   room = 1;
   update('Active');

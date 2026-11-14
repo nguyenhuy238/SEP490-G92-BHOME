@@ -20,8 +20,8 @@ internal sealed class PaymentCodeRegistry(BHomePersistenceContext db, IPaymentRe
     {
         if (db is not Compact24DbContext) return null;
         if (!options.Enabled) return await GetAsync(kind, id, token);
-        if (kind is not ("Invoice" or "Deposit") || id == Guid.Empty) throw new PaymentException(400, "invalid_payment_obligation");
-        return await payments.TransactionAsync<string?>(null, null, async () =>
+        if (kind is not ("Invoice" or "Deposit" or "MainInitial") || id == Guid.Empty) throw new PaymentException(400, "invalid_payment_obligation");
+        async Task<string?> Issue()
         {
             if (await GetAsync(kind, id, token) is { } existing) return existing;
             var account = await payments.ReceivingAccountAsync(locationId, token);
@@ -39,7 +39,8 @@ internal sealed class PaymentCodeRegistry(BHomePersistenceContext db, IPaymentRe
                 if (inserted == 1) return code;
             }
             throw new PaymentException(503, "payment_code_generation_unavailable");
-        }, token);
+        }
+        return db.Database.CurrentTransaction is not null ? await Issue() : await payments.TransactionAsync<string?>(null,null,Issue,token);
     }
     public async Task<bool> MatchesAsync(string kind, Guid id, string description, CancellationToken token)
     {

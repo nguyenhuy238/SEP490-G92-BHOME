@@ -18,14 +18,16 @@ namespace BHome.Api.Controllers.PaymentsDebt;
 [Authorize(Roles = Roles.Owner + "," + Roles.Staff), ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class SePayHoldingPreviewController(IPaymentRepository repository, ITransferQrGenerator qr, SePayOptions options,
     IConfiguration configuration, IHostEnvironment environment, TimeProvider clock,
-    ContractService contracts, IContractRepository contractRepository, ICurrentUser actor, IPaymentCodeRegistry codes) : ControllerBase
+    ContractService contracts, IContractRepository contractRepository, ICurrentUser actor, IPaymentCodeRegistry codes,
+    IHoldingTestScope? testScope = null) : ControllerBase
 {
     private bool Available()
     {
         if (!options.TestingAvailable(environment.EnvironmentName) || !options.Valid(environment.EnvironmentName)) return false;
         var target = new NpgsqlConnectionStringBuilder(configuration.GetConnectionString("Database") ?? "");
         var pattern = environment.IsEnvironment("Testing") ? "^bhome_compact24_(?:dev_)?[a-f0-9]{32}$" : "^bhome_compact24_dev_[a-f0-9]{32}$";
-        return target.Host is "localhost" or "127.0.0.1" or "::1" && Regex.IsMatch(target.Database ?? "", pattern);
+        return (target.Host is "localhost" or "127.0.0.1" or "::1" && Regex.IsMatch(target.Database ?? "", pattern)) ||
+            testScope?.AllowsExternalDatabase == true;
     }
     private async Task<Contract> Scoped(Guid id, CancellationToken token)
     {
@@ -33,24 +35,20 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
         await contracts.GetAsync(id, token); // Existing role/location authorization, including Staff assignment.
         var c = await contractRepository.FindAsync(id, token);
         if (c is null || c.Kind != ContractKind.Holding || !c.IsDevelopmentDemo) throw new PaymentException(404, "contract_not_found");
+        var target = new NpgsqlConnectionStringBuilder(configuration.GetConnectionString("Database") ?? "");
+        if (target.Host is not ("localhost" or "127.0.0.1" or "::1") && testScope?.Allows(c.Room.LocationId) != true)
+            throw new PaymentException(404, "contract_not_found");
         return c;
-    }
-    private static SandboxSignatures Read(Contract c)
-    {
-        try
-        {
-            var stored = JsonSerializer.Deserialize<SandboxSignatures>(c.DraftMetadata);
-            if (stored?.SandboxOnly == true && stored.SnapshotHash == c.SnapshotHash) return stored;
-        }
-        catch (JsonException) { }
-        return new(true, c.SnapshotHash, null, null);
     }
     private async Task<HoldingSandboxState> State(Contract c, CancellationToken token)
     {
-        var signs = Read(c);
+        var signs = SandboxSignatures.Read(c);
+        var evidence = AnonymousContractSigningService.AcceptedEvidence(c);
+        var ownerConfirmed = AnonymousContractSigningService.Complete(c) || signs.OwnerConfirmed(c);
+        var tenantAccepted = evidence?.SnapshotHash == c.SnapshotHash || signs.TenantAt is not null;
         var verified = await contractRepository.DepositTotalAsync(c.Id, token);
-        return new("Test", c.Id, signs.OwnerAt is not null, signs.TenantAt is not null,
-            signs.OwnerAt is not null && signs.TenantAt is not null, c.RequiredDeposit > 0 && verified == c.RequiredDeposit,
+        return new("Test", c.Id, false, signs.TenantAt is not null,
+            ownerConfirmed && tenantAccepted && c.ApprovedAt is not null, c.RequiredDeposit > 0 && verified == c.RequiredDeposit,
             c.RequiredDeposit.ToString("0", System.Globalization.CultureInfo.InvariantCulture), verified.ToString("0", System.Globalization.CultureInfo.InvariantCulture),
             c.Status == ContractStatus.Active && c.Room.Status == RoomStatus.OnHold, c.Status.ToString());
     }
@@ -64,16 +62,20 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
     public async Task<HoldingSandboxState> Simulate(Guid id, SandboxSignatureInput input, CancellationToken token)
     {
         var before = await Scoped(id, token);
-        if (!input.SimulationOnly || input.Participant is not ("Owner" or "Tenant")) throw new PaymentException(400, "sandbox_simulation_input_required");
+        if (input.Participant == "Owner") throw new PaymentException(403, "owner_confirmation_required");
+        if (!input.SimulationOnly || input.Participant != "Tenant") throw new PaymentException(400, "sandbox_simulation_input_required");
         return await contractRepository.InTransactionAsync(before.RoomId, async () =>
         {
             var c = await Scoped(id, token);
-            if (c.ApprovedAt is null || c.HoldingExpiryAt <= clock.GetUtcNow() || c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning))
+            if (c.ApprovedAt is null || c.HoldingExpiryAt <= clock.GetUtcNow() || c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation))
                 throw new PaymentException(409, "sandbox_holding_not_ready");
-            var signs = Read(c); var now = clock.GetUtcNow();
-            var changed = input.Participant == "Owner" ? signs.OwnerAt is null : signs.TenantAt is null;
-            signs = input.Participant == "Owner" ? signs with { OwnerAt = signs.OwnerAt ?? now } : signs with { TenantAt = signs.TenantAt ?? now };
+            if (c.Signatures.Count > 0 || c.InternalAcceptance != "{}")
+                throw new PaymentException(409, "sandbox_existing_signing_evidence");
+            var signs = SandboxSignatures.Read(c); var now = clock.GetUtcNow();
+            var changed = signs.TenantAt is null;
+            signs = signs with { TenantAt = signs.TenantAt ?? now };
             c.DraftMetadata = JsonSerializer.Serialize(signs);
+            if (signs.OwnerConfirmed(c)) c.Status = ContractStatus.PendingActivation;
             if (changed) contractRepository.Audit(actor.UserId!.Value, "Sandbox" + input.Participant + "SigningSimulated", id, now);
             // Deliberately not ContractSignature or InternalAcceptance: no real signing evidence is created.
             return await State(c, token);
@@ -138,6 +140,5 @@ public sealed record HoldingTestTransferInstructions(Guid ContractId, Guid Locat
     string OutstandingAmount, string TransferReference, string? QrPayload, string? QrImageDataUri);
 
 public sealed record SandboxSignatureInput(string Participant, bool SimulationOnly);
-public sealed record SandboxSignatures(bool SandboxOnly, string SnapshotHash, DateTimeOffset? OwnerAt, DateTimeOffset? TenantAt);
 public sealed record HoldingSandboxState(string Mode, Guid ContractId, bool OwnerSimulated, bool TenantSimulated,
     bool CanShowQr, bool DepositVerified, string Required, string Verified, bool OnHold, string ContractStatus);

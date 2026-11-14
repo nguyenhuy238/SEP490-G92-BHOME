@@ -160,7 +160,7 @@ export const mainDraftMessages: Record<string, string> = {
   main_draft_signing_template_not_approved:
     'Mẫu này chỉ được phép kiểm thử. Chưa có mẫu hợp đồng được duyệt cho production.',
   main_draft_release_confirmation_required:
-    'Owner cần chọn tài khoản Tenant và xác nhận đã xem đúng PDF trước khi chuyển sang ký.',
+    'Owner cần xác nhận đã xem đúng PDF và người đại diện trước khi chuyển sang ký. Người ở mới không cần tài khoản để ký qua OTP.',
   individual_representatives_require_separate_contracts:
     'Chọn đúng người đại diện và thành viên gia đình. Các người thuê đại diện độc lập cần lập hợp đồng riêng.',
   draft_template_changed_save_again: 'Mẫu hợp đồng đã đổi. Lưu lại bản nháp rồi tạo tài liệu mới.',

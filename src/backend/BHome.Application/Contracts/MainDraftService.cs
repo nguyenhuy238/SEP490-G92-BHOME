@@ -140,6 +140,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                     OwnerSignerId = settings.OwnerSignerId,
                     RepresentativeResidentId = x.RepresentativeResidentId,
                     Status = ContractStatus.Draft,
+                    InitialPaymentRequired = true,
                     IsDevelopmentDemo = workflowMode?.SimulatedSigningEnabled == true
                 };
                 var representative = (await repository.ResidentsAsync(x.RoomId, [x.RepresentativeResidentId], t)).Single();

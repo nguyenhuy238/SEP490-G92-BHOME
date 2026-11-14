@@ -352,7 +352,7 @@ function LiveContractDetail({
   onBack: () => void;
   initialSection?: ContractSection;
 }) {
-  const detail = useContractDetail(api, id, role);
+  const detail = useContractDetail(api, id, role, 5000);
   useWorkspaceHeaderRefresh(detail.reload, detail.loading, {
     onBack,
     title: detail.data?.contract.kind === 'Holding' ? 'Hợp đồng giữ chỗ' : 'Hợp đồng',
@@ -438,6 +438,9 @@ function LiveContractDetail({
       )}
       {!holding && <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>}
       {role === 'Owner' && c.kind !== 'Holding' && <OwnerWebNotice />}
+      {!!detail.refreshError && (
+        <Text style={ui.red}>Ch?a c?p nh?t ???c tr?ng th?i m?i. {detail.refreshError}</Text>
+      )}
       {c.kind === 'Holding' ? (
         <View style={{ flexDirection: 'row', gap: 4 }}>
           {(

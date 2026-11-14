@@ -190,6 +190,50 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it('observes Owner release while Staff waits without saving another draft', async () => {
+  const original = state.request.getMockImplementation()!;
+  let releasedByOwner = false;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/documents'))
+      return { docx: { id: 'docx' }, pdf: { id: 'pdf' }, previewError: null };
+    const result = await original(path, init);
+    return path.endsWith('/draft-id') && !init?.method
+      ? { ...result, status: releasedByOwner ? 'PendingSigning' : 'Draft' }
+      : result;
+  });
+  const released = vi.fn();
+  render(
+    <MainDraftScreen
+      roomId="room"
+      representativeResidentId="resident"
+      residentIds={['resident']}
+      onCancel={vi.fn()}
+      onList={vi.fn()}
+      onReleased={released}
+    />,
+  );
+  await screen.findByText('CCCD: ********0123');
+  fill();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
+  await screen.findByText('Bản hợp đồng PDF');
+  vi.useFakeTimers();
+  try {
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục ký hợp đồng' })),
+    );
+    expect(screen.getByText('Chờ Chủ cơ sở duyệt để ký')).toBeTruthy();
+    releasedByOwner = true;
+    await act(async () => vi.advanceTimersByTimeAsync(5000));
+    expect(released).toHaveBeenCalledWith('draft-id');
+    expect(
+      state.request.mock.calls.filter(
+        ([path, init]) => path === '/api/v1/contracts/main-drafts' && init?.method === 'POST',
+      ),
+    ).toHaveLength(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
 function setup(initialId?: string) {
   return render(
     <MainDraftScreen
@@ -247,7 +291,12 @@ it('shows one configuration notice and blocks save/preview when the server requi
   );
   setup();
   await screen.findByText('Thiếu cấu hình hợp đồng');
-  expect(screen.getAllByText(/Chủ cơ sở cần bổ sung/)).toHaveLength(1);
+  expect(
+    screen.getByText(
+      'Owner cần cấu hình thông tin bên cho thuê, tiền cọc và chính sách thanh toán tại cơ sở.',
+    ),
+  ).toBeTruthy();
+  expect(screen.getByText('Chưa có giá nước hiệu lực tại ngày bắt đầu.')).toBeTruthy();
   expect((screen.getByRole('button', { name: 'Lưu nháp' }) as HTMLButtonElement).disabled).toBe(
     true,
   );

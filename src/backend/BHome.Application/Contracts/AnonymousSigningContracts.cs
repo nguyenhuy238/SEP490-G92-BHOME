@@ -23,7 +23,25 @@ public sealed record InternalAcceptanceEvidence(Guid InvitationId, Guid Resident
     string SignatureHash, string TenantDocumentKey, string TenantDocumentHash, DateTimeOffset AcceptedAt,
     Guid? OwnerId = null, DateTimeOffset? OwnerAcceptedAt = null, string? FinalDocumentKey = null, string? FinalDocumentHash = null);
 public sealed record InternalSigningStatus(string Mode, string State, string? DocumentHash, DateTimeOffset? TenantAcceptedAt,
-    DateTimeOffset? OwnerAcceptedAt, IReadOnlyList<SigningInvitationResult> Invitations);
+    DateTimeOffset? OwnerAcceptedAt, IReadOnlyList<SigningInvitationResult> Invitations,
+    string? MaskedEmail = null, bool TenantSimulated = false, bool CanContinue = false, bool SandboxAvailable = false);
+// Test acceptance is kept separate from legal signing evidence. Legacy OwnerAt is never trusted.
+public sealed record SandboxSignatures(bool SandboxOnly, string SnapshotHash, DateTimeOffset? OwnerAt, DateTimeOffset? TenantAt,
+    Guid? OwnerConfirmedBy = null, DateTimeOffset? OwnerConfirmedAt = null)
+{
+    public string SigningState => OwnerConfirmedAt is not null && TenantAt is not null ? "TenantSimulatedOwnerConfirmed" : "PendingSimulation";
+    public static SandboxSignatures Read(Contract c)
+    {
+        try
+        {
+            var value = System.Text.Json.JsonSerializer.Deserialize<SandboxSignatures>(c.DraftMetadata);
+            if (value?.SandboxOnly == true && value.SnapshotHash == c.SnapshotHash) return value;
+        }
+        catch (System.Text.Json.JsonException) { }
+        return new(true, c.SnapshotHash, null, null);
+    }
+    public bool OwnerConfirmed(Contract c) => OwnerConfirmedBy == c.OwnerSignerId && OwnerConfirmedAt is not null;
+}
 public sealed record InternalAcceptedDocument(byte[] SignaturePng, byte[] Pdf);
 public interface IAnonymousSigningRepository
 {
