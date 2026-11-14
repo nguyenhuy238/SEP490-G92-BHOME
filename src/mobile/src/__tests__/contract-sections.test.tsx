@@ -120,10 +120,16 @@ vi.mock('../features/contracts/MainDraftScreen', () => ({
   MainDraftScreen: ({
     initialId,
     persistRoute = true,
+    reviewOnly = false,
   }: {
     initialId?: string;
     persistRoute?: boolean;
-  }) => <span data-persist-route={String(persistRoute)}>Draft {initialId}</span>,
+    reviewOnly?: boolean;
+  }) => (
+    <span data-persist-route={String(persistRoute)} data-review-only={String(reviewOnly)}>
+      Draft {initialId}
+    </span>
+  ),
 }));
 vi.mock('../features/contracts/MainDraftStart', () => ({
   MainDraftStart: () => <span>Main preparation</span>,
@@ -217,7 +223,7 @@ it('opens a Holding draft with metadata in the Holding flow without Main handove
   expect(screen.queryByRole('button', { name: 'Gia hạn & trả phòng' })).toBeNull();
   expect(screen.queryByText('Chữ ký số qua MySign')).toBeNull();
 });
-it('preserves an Owner draft deep link as Web guidance and returns to the list when route IDs clear', async () => {
+it('opens an Owner draft for review and returns to the list when route IDs clear', async () => {
   state.role = 'Owner';
   state.params = {};
   state.request.mockResolvedValue({
@@ -228,11 +234,11 @@ it('preserves an Owner draft deep link as Web guidance and returns to the list w
   });
   const view = render(<ContractScreen />);
   fireEvent.click(await screen.findByText('Xem hợp đồng'));
-  expect(router.setParams).toHaveBeenCalledWith({ contractId: id, mainDraftId: id, roomId: '' });
-  state.params = { contractId: id, mainDraftId: id };
+  expect(router.setParams).toHaveBeenCalledWith({ contractId: id, mainDraftId: '', roomId: '' });
+  state.params = { contractId: id };
+  state.contract = { ...state.contract, onboardingDraft: true, status: 'Draft' };
   view.rerender(<ContractScreen />);
-  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
-  expect(screen.queryByText(`Draft ${id}`)).toBeNull();
+  expect(screen.getByText(`Draft ${id}`).getAttribute('data-review-only')).toBe('true');
   state.params = { contractId: '', mainDraftId: '', roomId: '' };
   view.rerender(<ContractScreen />);
   await screen.findByText('Hợp đồng & Vòng đời');
@@ -404,13 +410,12 @@ it('keeps full Main preparation on Owner Web even when the prepare flag is suppl
     true,
   );
 });
-it('keeps a persisted Owner Draft informational without mounting editing or changing route IDs', () => {
+it('opens a persisted Owner Draft for review without changing route IDs', () => {
   state.role = 'Owner';
   state.params = { contractId: id };
   state.contract = { ...state.contract, onboardingDraft: true, status: 'Draft' };
   render(<ContractScreen />);
-  expect(screen.getByText('Thực hiện trên Owner Web')).toBeTruthy();
-  expect(screen.queryByText(`Draft ${id}`)).toBeNull();
+  expect(screen.getByText(`Draft ${id}`).getAttribute('data-review-only')).toBe('true');
   expect(router.setParams).not.toHaveBeenCalled();
 });
 it('defaults to overview and switches sections without displaying all forms at once', () => {

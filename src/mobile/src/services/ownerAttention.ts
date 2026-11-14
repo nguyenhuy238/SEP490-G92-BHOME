@@ -60,6 +60,15 @@ export const attentionSources: readonly AttentionSource[] = [
   },
   {
     category: 'contract',
+    path: '/contracts?status=Draft',
+    status: 'Chờ duyệt để ký',
+    title: 'Hợp đồng nháp',
+    screen: 'signing',
+    parameter: 'contractId',
+    action: 'Xem và duyệt hợp đồng',
+  },
+  {
+    category: 'contract',
     path: '/contracts?status=PendingSigning',
     status: 'Đang hoàn tất chữ ký',
     title: 'Hợp đồng',

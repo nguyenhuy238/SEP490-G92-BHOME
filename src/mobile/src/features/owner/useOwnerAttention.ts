@@ -27,13 +27,15 @@ export function useOwnerAttention(page = 1) {
   const e = useSource(4, page);
   const f = useSource(5, page);
   const g = useSource(6, page);
+  const h = useSource(7, page);
   const { reload: ra } = a,
     { reload: rb } = b,
     { reload: rc } = c,
     { reload: rd } = d,
     { reload: re } = e,
     { reload: rf } = f,
-    { reload: rg } = g;
+    { reload: rg } = g,
+    { reload: rh } = h;
   const reload = useCallback(() => {
     ra();
     rb();
@@ -42,8 +44,9 @@ export function useOwnerAttention(page = 1) {
     re();
     rf();
     rg();
-  }, [ra, rb, rc, rd, re, rf, rg]);
-  const queries = [a, b, c, d, e, f, g];
+    rh();
+  }, [ra, rb, rc, rd, re, rf, rg, rh]);
+  const queries = [a, b, c, d, e, f, g, h];
   const totalKnown = queries.reduce((total, query) => total + (query.data?.totalCount ?? 0), 0);
   return {
     buckets: queries.map((query, index) => ({ query, source: attentionSources[index] })),

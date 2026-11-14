@@ -124,7 +124,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       setSelected('');
       router.setParams({
         contractId: contract.id,
-        mainDraftId: isMainOnboardingDraft(contract) ? contract.id : '',
+        mainDraftId: '',
         roomId: '',
       });
     } else if (isMainOnboardingDraft(contract)) setMainDraftId(contract.id);
@@ -423,11 +423,10 @@ function LiveContractDetail({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
-  if (isMainOnboardingDraft(c) && role === 'Owner')
-    return <OwnerWebNotice task="Chuẩn bị và phát hành hồ sơ hợp đồng nháp" />;
-  if (isMainOnboardingDraft(c) && role === 'Staff')
+  if (isMainOnboardingDraft(c) && ['Owner', 'Staff'].includes(role))
     return (
       <MainDraftScreen
+        reviewOnly={role === 'Owner'}
         persistRoute
         initialId={c.id}
         onReleased={(next) => {
