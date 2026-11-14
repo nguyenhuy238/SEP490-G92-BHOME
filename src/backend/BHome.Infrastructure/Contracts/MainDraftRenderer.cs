@@ -65,7 +65,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 else if (original.Contains('…') || original.Contains("....") || original.Contains("{{")) throw new ContractException(503, "contract_template_slots_changed");
                 if (original == "TRÁCH NHIỆM CỦA CÁC BÊN")
                 {
-                    var extra = charges.Where(c => c.ChargeCode is not ("RENT" or "ELECTRICITY" or "WATER")).Select(c => $"{c.Name}: {Money(c.Rate)} đ/phòng/tháng.");
+                    var extra = charges.Where(c => c.ChargeCode is not ("RENT" or "ELECTRICITY" or "WATER")).Select(c => $"{c.Name}: {Money(c.Rate)} đ/{(c.Method == BHome.Domain.PropertyManagement.ChargingMethod.FixedPerPersonPerMonth ? "người" : "phòng")}/tháng.");
                     var occupants = data.Occupants is { Length: > 0 } ? "Thành viên cùng ở: " + string.Join(", ", data.Occupants) : "";
                     var text = string.Join("\n", extra.Append(occupants).Append(data.Contract.Terms).Where(x => !string.IsNullOrWhiteSpace(x)));
                     if (text.Length > 0)

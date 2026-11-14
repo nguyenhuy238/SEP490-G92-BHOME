@@ -60,7 +60,7 @@ public interface ISettlementReceivablesRepository
 
 public sealed partial class SettlementReceivablesService(ISettlementReceivablesRepository repository,
     IDepositDeductionEvidence evidence, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null, IPaymentRepository? payments = null,
-    ITransferQrGenerator? qr = null, PropertyService? properties = null, IUtilityBilling? utilities = null, ISettlementChargeEvidence? chargeEvidence = null,
+    ITransferQrGenerator? qr = null, ISettlementChargeEvidence? chargeEvidence = null,
     BHome.Application.Billing.IFixedChargeCoverage? fixedCoverage = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");

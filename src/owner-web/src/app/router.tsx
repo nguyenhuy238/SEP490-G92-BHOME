@@ -69,6 +69,11 @@ const PolicyTemplatesPage = lazy(() =>
 );
 const ResetPasswordPage = lazy(() => import('../features/auth/pages/ResetPasswordPage'));
 const HoldingSettingsPage = lazy(() => import('../features/contracts/pages/HoldingSettingsPage'));
+const SmsRecoveryPage = lazy(() => import('../features/auth/pages/SmsRecoveryPage'));
+const DemoSmsInboxPage =
+  import.meta.env.DEV && import.meta.env.VITE_SMS_DEMO_ENABLED === 'true'
+    ? lazy(() => import('../features/notifications/pages/DemoSmsInboxPage'))
+    : null;
 const ConfirmEmailPage = lazy(() => import('../features/auth/pages/ConfirmEmailPage'));
 const AcceptInvitationPage = lazy(() => import('../features/auth/pages/AcceptInvitationPage'));
 const AnonymousSigningPage = lazy(() => import('../features/contracts/pages/AnonymousSigningPage'));
@@ -80,6 +85,7 @@ export function AppRouter() {
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/forgot-password" element={<SmsRecoveryPage />} />
           <Route path="/confirm-email" element={<ConfirmEmailPage />} />
           <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
           <Route path="/contract-signing" element={<AnonymousSigningPage />} />
@@ -87,6 +93,7 @@ export function AppRouter() {
             <Route element={<AppShell />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/notifications" element={<NotificationsPage />} />
+              {DemoSmsInboxPage && <Route path="/demo/sms" element={<DemoSmsInboxPage />} />}
               <Route path="/account/profile" element={<AccountProfilePage />} />
               <Route path="/locations" element={<LocationsPage />} />
               <Route path="/configuration/room-types" element={<RoomTypeTemplatesPage />} />

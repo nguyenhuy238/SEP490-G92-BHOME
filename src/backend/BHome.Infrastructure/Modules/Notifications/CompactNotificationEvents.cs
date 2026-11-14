@@ -53,7 +53,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             SELECT n.id,n.notification_type,COALESCE(n.related_entity_id,(n.event_data->'state'->>'targetId')::uuid,(n.event_data->'state'->>'targetUserId')::uuid),n.event_at
             FROM notifications n WHERE n.record_kind='AUDIT' AND COALESCE((n.event_data->'state'->>'succeeded')::boolean,(n.event_data->>'succeeded')::boolean,(n.event_data->>'Succeeded')::boolean,true)
             AND n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated','InvoiceDraftGenerated',
-              'ContractSigningInitiated','ContractSigningPrepared','ContractActivated','ContractRenewalPrepared','OperatingPolicyAmendmentCancelled','OperatingPolicyAmendmentApplied')
+              'ContractSigningInitiated','ContractSigningPrepared','ContractSigningRequested','InternalSigningInvitationApproved','ContractActivated','ContractRenewalPrepared','OperatingPolicyAmendmentCancelled','OperatingPolicyAmendmentApplied')
             AND (NOT @authenticationOnly OR n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated'))
             AND NOT EXISTS(SELECT 1 FROM notifications p WHERE p.record_kind='OUTBOX' AND p.event_data->>'recordType'='NotificationPublication'
               AND p.event_data->'state'->>'eventKey'='extended-audit:'||n.id::text) ORDER BY n.event_at,n.id LIMIT 50
@@ -79,6 +79,28 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                 foreach (var r in await Roles([e.Target], t)) count += await sql.Emit(r.Id, r.Role, null, key,
                     eventType, "Account", title, $"{title}.\nThời điểm: {at:HH:mm dd/MM/yyyy} (giờ Việt Nam).\nNếu không phải bạn hoặc không được thông báo về thay đổi này, hãy liên hệ Owner ngay để kiểm tra tài khoản.",
                     "Account", r.Id, t, channels: e.Event == "StaffCreated" ? ["IN_APP"] : ["IN_APP", "EMAIL"]);
+            }
+            else if (e.Event == "ContractSigningRequested")
+            {
+                var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).SingleOrDefaultAsync(c => c.Id == e.Target && c.Status == ContractStatus.PendingSigning, t);
+                if (contract is not null)
+                    foreach (var signature in await db.Set<ContractSignature>().AsNoTracking().Where(s => s.ContractId == contract.Id && s.Status == SignatureStatus.Pending && s.ProviderReference != null).ToArrayAsync(t))
+                        foreach (var r in await Roles([signature.SignerUserId], t))
+                            count += await sql.Emit(r.Id, r.Role, contract.Room.LocationId, $"signing-request:{signature.Id}", "CONTRACT_SIGNING_INVITATION", "Contract",
+                                "Có lời mời ký hợp đồng", "Kiểm tra lời mời qua email hoặc ứng dụng BHOME.", "Contract", contract.Id, t);
+            }
+            else if (e.Event == "InternalSigningInvitationApproved")
+            {
+                var invitations = await db.Set<ContractSigningInvitation>().AsNoTracking().Where(i => i.ContractId == e.Target && i.RevokedAt == null && i.ExpiresAt > sql.Now).ToArrayAsync(t);
+                var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).SingleOrDefaultAsync(c => c.Id == e.Target && c.Status == ContractStatus.PendingSigning, t);
+                if (contract is not null)
+                    foreach (var invitation in invitations)
+                    {
+                        var signer = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.IsActive && u.EmailConfirmed && u.Email == invitation.RecipientEmail, t);
+                        if (signer is not null && (await Roles([signer.Id], t)).Any(r => r.Role == "Tenant"))
+                            count += await sql.Emit(signer.Id, "Tenant", contract.Room.LocationId, $"signing-invitation:{invitation.Id}", "CONTRACT_SIGNING_INVITATION", "Contract",
+                                "Có lời mời ký hợp đồng", "Kiểm tra lời mời qua email hoặc ứng dụng BHOME.", "Contract", contract.Id, t);
+                    }
             }
             else if (e.Event == "InvoiceDraftGenerated")
             {

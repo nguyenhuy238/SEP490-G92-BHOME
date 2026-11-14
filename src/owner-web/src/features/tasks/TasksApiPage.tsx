@@ -21,6 +21,7 @@ import {
   TableRow,
   TextField,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
 import { Plus } from 'lucide-react';
 import { OwnerFeedback, OwnerPagination } from '../../components/common/OwnerWorkspace';
@@ -32,8 +33,10 @@ import { taskRoot, useTaskDirectory, responsibleName } from './useOperationalTas
 import { TaskDetailDrawer, TaskStatus } from './components/TaskDetailDrawer';
 import { TaskEditorDialog } from './components/TaskEditorDialog';
 import { RecurringTasks } from './components/RecurringTasks';
+import { KPIGrid, PageHeader } from '../../components/common/PortalUI';
 
 export function TasksApiPage() {
+  const compact = useMediaQuery('(max-width:599px)');
   const [params, setParams] = useSearchParams();
   const id = params.get('taskId') ?? '';
   const [initialOperation, setInitialOperation] = useState('');
@@ -120,44 +123,30 @@ export function TasksApiPage() {
     ]);
   };
   return (
-    <Stack
-      spacing={2.5}
-      sx={{
-        minWidth: 0,
-        '& .MuiPaper-root': { borderRadius: '12px', boxShadow: 'none' },
-        '& .MuiButton-root': { borderRadius: '8px', fontSize: 14, minHeight: 40 },
-        '& .MuiTableCell-root, & .MuiInputBase-root, & .MuiInputLabel-root': { fontSize: 14 },
-      }}
-    >
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={2}
-        sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}
-      >
-        <Box>
-          <Typography component="h1" sx={{ fontSize: 24, fontWeight: 700 }}>
-            Công việc vận hành
-          </Typography>
-          <Typography sx={{ fontSize: 14, color: 'text.secondary', mt: 0.5 }}>
-            Quản lý, theo dõi và nghiệm thu công việc tại các cơ sở.
-          </Typography>
-        </Box>
-        <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setEditor(null)}>
-          Tạo công việc
-        </Button>
-      </Stack>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        {[
-          ['Tổng công việc', total.error ? '—' : (total.data?.totalCount ?? '…')],
-          ['Chưa hoàn thành', incomplete ?? '—'],
-          ['Quá hạn', overdue.error ? '—' : (overdue.data?.totalCount ?? '…')],
-        ].map(([label, value]) => (
-          <Paper key={label} variant="outlined" sx={{ p: 2, flex: 1, minHeight: 86 }}>
-            <Typography sx={{ fontSize: 27, fontWeight: 700 }}>{value}</Typography>
-            <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>{label}</Typography>
-          </Paper>
-        ))}
-      </Stack>
+    <Stack spacing={2} sx={{ minWidth: 0 }}>
+      <PageHeader
+        title="Công việc vận hành"
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<Plus size={18} />}
+            onClick={() => setEditor(null)}
+          >
+            Tạo công việc
+          </Button>
+        }
+      />
+      <KPIGrid
+        items={[
+          { label: 'Tổng công việc', value: total.error ? '—' : (total.data?.totalCount ?? '…') },
+          { label: 'Chưa hoàn thành', value: incomplete ?? '—' },
+          {
+            label: 'Quá hạn',
+            value: overdue.error ? '—' : (overdue.data?.totalCount ?? '…'),
+            danger: !overdue.error && (overdue.data?.totalCount ?? 0) > 0,
+          },
+        ]}
+      />
       <OwnerFeedback
         error={
           total.error ||
@@ -374,16 +363,35 @@ export function TasksApiPage() {
               </Stack>
             ) : (
               <TableContainer>
-                <Table aria-label="Danh sách công việc" sx={{ minWidth: 700 }}>
-                  <TableHead sx={{ bgcolor: '#f5f8fc' }}>
+                <Table
+                  size="small"
+                  aria-label="Danh sách công việc"
+                  sx={{ minWidth: compact ? 0 : 700, tableLayout: compact ? 'fixed' : 'auto' }}
+                >
+                  <TableHead>
                     <TableRow>
-                      {['Công việc', 'Trạng thái', 'Deadline', 'Người phụ trách', 'Thao tác'].map(
-                        (label) => (
-                          <TableCell key={label} sx={{ fontWeight: 600 }}>
-                            {label}
-                          </TableCell>
-                        ),
-                      )}
+                      {(compact
+                        ? ['Công việc', 'Thao tác']
+                        : [
+                            'Công việc',
+                            'Trạng thái',
+                            'Hạn hoàn thành',
+                            'Người phụ trách',
+                            'Thao tác',
+                          ]
+                      ).map((label) => (
+                        <TableCell
+                          key={label}
+                          scope="col"
+                          align={label === 'Thao tác' ? 'right' : 'left'}
+                          sx={{
+                            fontWeight: 600,
+                            width: compact && label === 'Thao tác' ? 112 : undefined,
+                          }}
+                        >
+                          {label}
+                        </TableCell>
+                      ))}
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -420,15 +428,36 @@ export function TasksApiPage() {
                           <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
                             {locationName(task.locationId)}
                           </Typography>
+                          {compact && (
+                            <Stack
+                              spacing={0.75}
+                              sx={{ mt: 1, alignItems: 'flex-start', overflowWrap: 'anywhere' }}
+                            >
+                              <TaskStatus task={task} />
+                              <Typography
+                                variant="caption"
+                                color={task.isOverdue ? 'error.main' : 'text.secondary'}
+                              >
+                                Hạn: {task.dueAt ? formatInstant(task.dueAt) : 'Chưa có hạn'}
+                              </Typography>
+                              <Typography variant="body2">
+                                {responsibleName(task, staff.data ?? [])}
+                              </Typography>
+                            </Stack>
+                          )}
                         </TableCell>
-                        <TableCell>
-                          <TaskStatus task={task} />
-                        </TableCell>
-                        <TableCell sx={{ color: task.isOverdue ? 'error.main' : undefined }}>
-                          {task.dueAt ? formatInstant(task.dueAt) : 'Chưa có hạn'}
-                        </TableCell>
-                        <TableCell>{responsibleName(task, staff.data ?? [])}</TableCell>
-                        <TableCell>
+                        {!compact && (
+                          <>
+                            <TableCell>
+                              <TaskStatus task={task} />
+                            </TableCell>
+                            <TableCell sx={{ color: task.isOverdue ? 'error.main' : undefined }}>
+                              {task.dueAt ? formatInstant(task.dueAt) : 'Chưa có hạn'}
+                            </TableCell>
+                            <TableCell>{responsibleName(task, staff.data ?? [])}</TableCell>
+                          </>
+                        )}
+                        <TableCell align="right" sx={{ verticalAlign: 'top' }}>
                           <Button
                             onClick={(event) => {
                               event.stopPropagation();

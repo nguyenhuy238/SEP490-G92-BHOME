@@ -79,10 +79,13 @@ public sealed class RuntimeSchemaUpgradeTests
                 $"SELECT contact_email AS \"Value\" FROM residents LIMIT 0").ToArrayAsync());
             Assert.Equal("42703", missing.SqlState);
             using var diagnostics = new StringWriter();
+            var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
             Assert.Equal(2, await DatabaseProbe.RunAsync(target.ConnectionString, diagnostics));
-            Assert.Contains("applied=1; pending=8; unknown=0", diagnostics.ToString());
+            Assert.Contains($"applied=1; pending={pending.Length}; unknown=0", diagnostics.ToString());
+            Assert.Contains($"PendingCompact24Migrations={string.Join(',', pending)}", diagnostics.ToString());
             Assert.Contains("20261110000100_LifecycleAlignment", diagnostics.ToString());
             Assert.Contains("20261111080000_DepositReceiptAllocation", diagnostics.ToString());
+            Assert.Contains("20261113000100_PersonMonthlyServiceFees", diagnostics.ToString());
             var upgrade = db.GetService<IMigrator>().GenerateScript("20261108112733_InitialCompact24", null, MigrationsSqlGenerationOptions.NoTransactions);
             await using (var transaction = await db.Database.BeginTransactionAsync())
             {

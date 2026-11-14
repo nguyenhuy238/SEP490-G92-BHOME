@@ -31,7 +31,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
     }
     private static void Intact(Contract c)
     {
-        if (c.SigningMode != ContractSigningModes.Internal || c.SnapshotHash != ContractDocumentSnapshot.Hash(ContractService.Document(c)))
+        if (c.SigningMode != ContractSigningModes.Internal || !ContractChargeSnapshot.IsIntact(c))
             throw ContractException.Conflict("signed_terms_changed");
         if (c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation))
             throw ContractException.Conflict("contract_not_open_for_signing");
@@ -59,6 +59,12 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             if (c.Kind == ContractKind.Holding && (c.ApprovedAt is null || c.HoldingExpiryAt <= Now))
                 throw ContractException.Conflict("holding_owner_approval_required");
             if (c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft) throw ContractException.Conflict("main_draft_review_required");
+            if (c.Kind is ContractKind.Main or ContractKind.Renewal or ContractKind.Holding)
+            {
+                await ContractChargeSnapshot.ValidateBindingAsync(contracts, c, t,
+                    checkProfile: c.Status == ContractStatus.Draft && c.Kind != ContractKind.Holding && !c.PriceLockedAt.HasValue);
+                if (c.Status == ContractStatus.Draft) ContractChargeSnapshot.MarkMainBound(c, Now);
+            }
             var people = await contracts.ResidentsAsync(c.RoomId, c.Residents.Select(r => r.ResidentId).ToArray(), t);
             if (people.Count != c.Residents.Count || people.Any(r => r.VerificationStatus != IdentityVerificationStatus.Verified ||
                 string.IsNullOrWhiteSpace(r.ContactEmail) || !MailAddress.TryCreate(r.ContactEmail, out _)) ||

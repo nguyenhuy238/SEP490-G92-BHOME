@@ -1,3 +1,4 @@
+import { MoneyField } from '../../../components/common/MoneyField';
 import { useState } from 'react';
 import { isMockMode } from '../../../services/config';
 import { ApiConfigurationLibraryPage } from './ApiConfigurationLibraryPage';
@@ -512,7 +513,15 @@ function TemplateEditor({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Khác');
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(() =>
+    String(
+      kind === 'room'
+        ? ((item as RoomTemplate | undefined)?.area ?? '')
+        : kind === 'fee'
+          ? ((item as FeeTemplate | undefined)?.price ?? '')
+          : ((item as AssetCatalogEntry | undefined)?.referencePrice ?? ''),
+    ),
+  );
   const initialName = item?.name ?? '';
   const initialDescription =
     item && 'description' in item
@@ -638,23 +647,19 @@ function TemplateEditor({
               onChange={(event) => setCategory(event.target.value)}
             />
           )}
-          {kind !== 'policy' && !assetPackageMode && (
+          {kind !== 'policy' && !assetPackageMode && kind !== 'room' && (
+            <MoneyField
+              allowDecimal
+              label={kind === 'fee' ? 'Đơn giá tham khảo (VND)' : 'Giá tham khảo (VND)'}
+              value={value}
+              onValueChange={setValue}
+            />
+          )}
+          {kind === 'room' && !assetPackageMode && (
             <TextField
               type="number"
-              label={
-                kind === 'room'
-                  ? 'Diện tích tiêu chuẩn (m²)'
-                  : kind === 'fee'
-                    ? 'Đơn giá tham khảo (VND)'
-                    : 'Giá tham khảo (VND)'
-              }
-              defaultValue={
-                kind === 'room'
-                  ? (item as RoomTemplate | undefined)?.area
-                  : kind === 'fee'
-                    ? (item as FeeTemplate | undefined)?.price
-                    : (item as AssetCatalogEntry | undefined)?.referencePrice
-              }
+              label="Diện tích tiêu chuẩn (m²)"
+              value={value}
               onChange={(event) => setValue(event.target.value)}
             />
           )}

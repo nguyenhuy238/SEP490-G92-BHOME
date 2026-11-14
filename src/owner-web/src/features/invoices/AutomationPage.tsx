@@ -30,7 +30,7 @@ import {
   type AutomationExecution,
   type AutomationAttempt,
 } from '../../../../../packages/client-core/src/billingAutomation';
-import { PageHeader } from '../../components/common/PortalUI';
+import { PageHeader, FilterToolbar, StatusChip } from '../../components/common/PortalUI';
 import { isMockMode } from '../../services/config';
 import { useInvoiceApi } from './useInvoiceApi';
 
@@ -83,12 +83,13 @@ export function LiveAutomationPage() {
     <>
       <PageHeader
         title="Lịch tự động & Thông báo"
-        subtitle="Lịch theo cơ sở và kỳ, múi giờ Asia/Ho_Chi_Minh."
+        actions={
+          <Button component={Link} to="/pricing">
+            Cấu hình giá và lịch hóa đơn
+          </Button>
+        }
       />
       <Stack spacing={2}>
-        <Button component={Link} to="/pricing">
-          Cấu hình giá, lịch Draft / Final / hạn thanh toán
-        </Button>
         {locations.isPending && <LinearProgress />}
         {locations.error && (
           <Alert severity="error">
@@ -97,26 +98,28 @@ export function LiveAutomationPage() {
           </Alert>
         )}
         {locations.data?.length === 0 && <Alert severity="info">Chưa có cơ sở.</Alert>}
-        <TextField
-          select
-          label="Cơ sở tự động"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-        >
-          <MenuItem value="">Chọn cơ sở</MenuItem>
-          {locations.data?.map((l) => (
-            <MenuItem key={l.id} value={l.id}>
-              {l.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          type="month"
-          label="Kỳ hóa đơn"
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
+        <FilterToolbar>
+          <TextField
+            select
+            label="Cơ sở tự động"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+          >
+            <MenuItem value="">Chọn cơ sở</MenuItem>
+            {locations.data?.map((l) => (
+              <MenuItem key={l.id} value={l.id}>
+                {l.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            type="month"
+            label="Kỳ hóa đơn"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        </FilterToolbar>
         {location && /^\d{4}-\d{2}$/.test(period) && (
           <AutomationLocation
             key={location + period + session?.userId}
@@ -187,14 +190,27 @@ function AutomationLocation({ location, period }: { location: string; period: st
   }
   return (
     <Stack spacing={2}>
-      <Button onClick={() => void data.refetch()}>Làm mới lịch và kết quả</Button>
+      <Stack
+        direction="row"
+        useFlexGap
+        spacing={1}
+        sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}
+      >
+        <Button disabled={data.isFetching} onClick={() => void data.refetch()}>
+          Làm mới lịch và kết quả
+        </Button>
+        {data.data && !data.error && (
+          <Button variant="outlined" onClick={() => setSettings(true)}>
+            Cấu hình lịch hóa đơn
+          </Button>
+        )}
+      </Stack>
       {data.isPending && <LinearProgress />}
       {data.error && <Alert severity="error">{invoiceError(data.error)}</Alert>}
       {error && <Alert severity="error">{error}</Alert>}
       {notice && <Alert severity="info">{notice}</Alert>}
-      {data.data && (
+      {data.data && !data.error && (
         <>
-          <Button onClick={() => setSettings(true)}>Cấu hình lịch hóa đơn</Button>
           <Dialog
             open={settings}
             onClose={() => setSettings(false)}
@@ -221,9 +237,11 @@ function AutomationLocation({ location, period }: { location: string; period: st
               <Button onClick={() => setSettings(false)}>Đóng cấu hình lịch</Button>
             </DialogActions>
           </Dialog>
-          <Paper sx={{ p: 2 }}>
-            <Stack spacing={2}>
-              <Typography variant="h6">Lịch kỳ đang xem</Typography>
+          <Paper variant="outlined" sx={{ p: 1.5 }}>
+            <Stack spacing={1.5}>
+              <Typography variant="h2" component="h2">
+                Lịch kỳ đang xem
+              </Typography>
               <Alert severity={data.data.preview.workerEnabled ? 'info' : 'warning'}>
                 {data.data.preview.workerEnabled
                   ? 'Worker tự động đang bật trên máy chủ này.'
@@ -243,11 +261,15 @@ function AutomationLocation({ location, period }: { location: string; period: st
                   sx={{ flexWrap: 'wrap', alignItems: 'center' }}
                 >
                   <Typography>
-                    {phaseLabel[p.phase]} · {p.scheduledDate} ·{' '}
-                    {p.eligible
-                      ? 'Đến lịch, cần kiểm tra dữ liệu'
-                      : 'Chưa đến lịch hoặc chưa bật quyền'}
+                    {phaseLabel[p.phase]} · {p.scheduledDate.split('-').reverse().join('/')}
                   </Typography>
+                  <StatusChip
+                    label={
+                      p.eligible
+                        ? 'Đến lịch, cần kiểm tra dữ liệu'
+                        : 'Chưa đến lịch hoặc chưa bật quyền'
+                    }
+                  />
                   {data.data.preview.developerActionsEnabled && (
                     <Button disabled={!p.eligible || busy} onClick={() => void run(p.phase)}>
                       Chạy ngay: {phaseLabel[p.phase]}
@@ -266,7 +288,7 @@ function AutomationLocation({ location, period }: { location: string; period: st
             <Alert severity="info">Chưa có lần chạy cho cơ sở/kỳ này.</Alert>
           )}
           {data.data.executions.map((e) => (
-            <Paper key={e.id} sx={{ p: 2 }}>
+            <Paper key={e.id} variant="outlined" sx={{ p: 1.5, overflowWrap: 'anywhere' }}>
               <Stack spacing={1}>
                 <Typography variant="h6">
                   {phaseLabel[e.phase]} · {e.status}
@@ -297,6 +319,9 @@ function AutomationLocation({ location, period }: { location: string; period: st
             </Paper>
           ))}
           <Typography variant="h6">Lịch sử xử lý (tối đa 100 lần gần nhất)</Typography>
+          {data.data.attempts.length === 0 && (
+            <Typography color="text.secondary">Chưa có lịch sử xử lý.</Typography>
+          )}
           {data.data.attempts.map((a) => (
             <Typography key={a.id}>
               Lần {a.sequence} · {a.status} · {date(a.startedAt)} → {date(a.finishedAt)}
@@ -307,7 +332,7 @@ function AutomationLocation({ location, period }: { location: string; period: st
             <Typography>Chưa có lượt chạy được scheduler đưa vào hàng đợi.</Typography>
           )}
           {data.data.queue.map((j) => (
-            <Paper key={j.id} sx={{ p: 2 }}>
+            <Paper key={j.id} variant="outlined" sx={{ p: 1.5, overflowWrap: 'anywhere' }}>
               <Typography>
                 {j.name} · {j.state} · Lần {j.attempts}/4
               </Typography>

@@ -3,7 +3,6 @@ import {
   Avatar,
   Badge,
   Box,
-  Breadcrumbs,
   Divider,
   Drawer,
   IconButton,
@@ -14,6 +13,7 @@ import {
   ListItemText,
   MenuItem,
   Paper,
+  Popover,
   Stack,
   TextField,
   Tooltip,
@@ -33,6 +33,8 @@ import {
   KeyRound,
   LayoutDashboard,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Package,
   Receipt,
   RotateCcw,
@@ -45,7 +47,6 @@ import {
   ChartColumn,
   Coins,
   Contact,
-  House,
   ShieldCheck,
   Tags,
   ScrollText,
@@ -99,7 +100,7 @@ const navGroups = [
   ['Tổng quan', ['dashboard']],
   ['Cơ sở & Phòng', ['locations']],
   [
-    'THƯ VIỆN CẤU HÌNH DÙNG CHUNG',
+    'Thư viện cấu hình dùng chung',
     [
       'configuration/room-types',
       'configuration/assets',
@@ -137,7 +138,7 @@ const navLabels: Record<string, string> = {
   notifications: 'Thông báo',
   locations: 'Cơ sở',
   'configuration/room-types': 'Mẫu loại phòng',
-  'configuration/assets': 'Danh mục tài sản',
+  'configuration/assets': 'Tài sản dùng chung',
   'configuration/pricing-fees': 'Mẫu giá & biểu phí',
   'configuration/policies': 'Nội quy & chính sách',
   'configuration/holding-contracts': 'Cấu hình giữ chỗ',
@@ -168,90 +169,152 @@ const navLabels: Record<string, string> = {
   'what-if': 'Phân tích What-if',
   'public-content': 'Nội dung công khai',
 };
+const sidebarPreference = 'bhome.owner.sidebar-collapsed';
+const headerHeight = 64;
+
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false),
     [resetOpen, setResetOpen] = useState(false);
-  const { data } = usePortalData();
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(sidebarPreference) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [searchAnchor, setSearchAnchor] = useState<HTMLElement | null>(null);
+  const { data, isError } = usePortalData();
   const portal = usePortal();
   const action = usePortalAction();
   const navigate = useNavigate();
   const location = useLocation();
-  const current = location.pathname.split('/')[1] || 'dashboard';
   const workspaceParts = location.pathname.split('/');
+  const current = workspaceParts[1] || 'dashboard';
+  const currentKey = current === 'configuration' ? workspaceParts.slice(1, 3).join('/') : current;
   const inLocationWorkspace = workspaceParts[1] === 'locations' && Boolean(workspaceParts[2]);
-  const selectedLocation = data?.records.locations.find((row) => row.id === workspaceParts[2]);
-  const nav = (
+  const locations = data?.records.locations ?? [];
+  const locationValue = inLocationWorkspace ? workspaceParts[2] : portal.locationId;
+  const locationUnavailableLabel = isError ? 'Không tải được danh sách cơ sở' : 'Đang tải cơ sở…';
+  const missingLocation =
+    locationValue !== 'all' && !locations.some((row) => row.id === locationValue);
+  const showLocationSelector = isMockMode || inLocationWorkspace;
+  const sidebarWidth = collapsed ? 72 : 248;
+  const toggleSidebar = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      localStorage.setItem(sidebarPreference, String(next));
+    } catch {
+      // The navigation remains usable when browser storage is unavailable.
+    }
+  };
+  const nav = (compact: boolean) => (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'white' }}>
       <Stack
         direction="row"
         sx={{
-          height: 76,
-          px: 2.25,
+          height: headerHeight,
+          flexShrink: 0,
+          px: compact ? 1 : 2,
           alignItems: 'center',
+          justifyContent: compact ? 'center' : 'flex-start',
           gap: 1.2,
           borderBottom: '1px solid',
           borderColor: 'divider',
         }}
       >
-        <Avatar variant="rounded" sx={{ bgcolor: '#255dde', width: 37, height: 37, fontSize: 21 }}>
+        <Avatar
+          variant="rounded"
+          sx={{ bgcolor: 'primary.main', width: 36, height: 36, fontSize: 21 }}
+        >
           B
         </Avatar>
-        <Box>
-          <Typography sx={{ fontWeight: 850, fontSize: 17 }}>BHOME</Typography>
-          <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>Owner Portal</Typography>
-        </Box>
+        {!compact && (
+          <Box>
+            <Typography sx={{ fontWeight: 850, fontSize: 17 }}>BHOME</Typography>
+            <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Owner Portal</Typography>
+          </Box>
+        )}
       </Stack>
       <Box
         component="nav"
         aria-label="Điều hướng chính"
-        sx={{ overflowY: 'auto', flex: 1, py: 1.5 }}
+        sx={{ overflowY: 'auto', overflowX: 'hidden', minHeight: 0, flex: 1, py: 1 }}
       >
         {navGroups.map(([group, items]) => (
-          <Box key={group} sx={{ mb: 1 }}>
-            <Typography
-              sx={{
-                px: 2.25,
-                pt: 1.5,
-                pb: 0.5,
-                fontSize: 10,
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                color: 'text.secondary',
-              }}
-            >
-              {group}
-            </Typography>
+          <Box key={group} sx={{ mb: compact ? 0.5 : 0.75 }}>
+            {compact ? (
+              <Divider sx={{ mx: 2, my: 1 }} />
+            ) : (
+              <Typography
+                sx={{
+                  px: 2,
+                  pt: 0.75,
+                  pb: 0.5,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  lineHeight: 1.4,
+                  letterSpacing: 0.4,
+                  textTransform: 'uppercase',
+                  color: 'text.secondary',
+                }}
+              >
+                {group}
+              </Typography>
+            )}
             <List dense disablePadding>
               {items.map((key) => {
                 const Icon = iconMap[key];
                 return (
-                  <ListItemButton
-                    component={NavLink}
-                    to={`/${key}`}
+                  <Tooltip
                     key={key}
-                    onClick={() => {
-                      setMobileOpen(false);
-                      portal.setSearch('');
-                    }}
-                    sx={{
-                      mx: 1.25,
-                      my: 0.25,
-                      borderRadius: 1.25,
-                      minHeight: 41,
-                      py: 0.75,
-                      color: '#53657f',
-                      '&:hover': { bgcolor: '#f4f7fc' },
-                      '&.active': { bgcolor: '#ebf2ff', color: 'primary.main', fontWeight: 800 },
-                    }}
+                    title={compact ? navLabels[key] : ''}
+                    placement="right"
+                    disableInteractive
                   >
-                    <ListItemIcon sx={{ minWidth: 28, color: 'inherit' }}>
-                      <Icon size={17} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={navLabels[key]}
-                      slotProps={{ primary: { sx: { fontSize: 12 } } }}
-                    />
-                  </ListItemButton>
+                    <ListItemButton
+                      component={NavLink}
+                      to={`/${key}`}
+                      aria-label={navLabels[key]}
+                      onClick={() => {
+                        setMobileOpen(false);
+                        portal.setSearch('');
+                      }}
+                      sx={{
+                        mx: 1,
+                        my: 0.25,
+                        borderRadius: 1.25,
+                        minHeight: { xs: 44, lg: 36 },
+                        '@media (pointer:coarse)': { minHeight: 44 },
+                        px: compact ? 1 : 1.25,
+                        justifyContent: compact ? 'center' : 'flex-start',
+                        py: 0.375,
+                        color: '#53657f',
+                        '&:hover': { bgcolor: '#f4f7fc' },
+                        '&.active': {
+                          bgcolor: 'primary.light',
+                          color: 'primary.dark',
+                          '& .MuiListItemText-primary': { fontWeight: 700 },
+                        },
+                        '&.Mui-focusVisible': {
+                          outline: '2px solid',
+                          outlineColor: 'primary.main',
+                          outlineOffset: -2,
+                        },
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: compact ? 0 : 30, color: 'inherit' }}>
+                        <Icon size={18} aria-hidden="true" />
+                      </ListItemIcon>
+                      {!compact && (
+                        <ListItemText
+                          primary={navLabels[key]}
+                          sx={{ my: 0 }}
+                          slotProps={{ primary: { sx: { fontSize: 14, lineHeight: 1.35 } } }}
+                        />
+                      )}
+                    </ListItemButton>
+                  </Tooltip>
                 );
               })}
             </List>
@@ -259,9 +322,31 @@ export function AppShell() {
         ))}
       </Box>
       <Divider />
-      <Typography variant="caption" sx={{ p: 2, color: 'text.secondary' }}>
-        BHOME • Owner Workspace
-      </Typography>
+      {isMockMode && !compact && (
+        <ListItemButton
+          onClick={() => {
+            setMobileOpen(false);
+            setResetOpen(true);
+          }}
+          sx={{
+            display: { xs: 'flex', sm: 'none' },
+            mx: 1,
+            my: 0.5,
+            borderRadius: 1,
+            minHeight: 44,
+          }}
+        >
+          <ListItemIcon sx={{ minWidth: 30 }}>
+            <RotateCcw size={18} />
+          </ListItemIcon>
+          <ListItemText primary="Khôi phục dữ liệu demo" />
+        </ListItemButton>
+      )}
+      {!compact && (
+        <Typography variant="caption" sx={{ px: 2, py: 1, color: 'text.secondary' }}>
+          BHOME • Owner Workspace
+        </Typography>
+      )}
     </Box>
   );
   return (
@@ -274,7 +359,7 @@ export function AppShell() {
         sx={{
           display: { xs: 'none', lg: 'block' },
           position: 'fixed',
-          width: 258,
+          width: sidebarWidth,
           top: 0,
           bottom: 0,
           borderRight: '1px solid',
@@ -282,29 +367,29 @@ export function AppShell() {
           zIndex: 1200,
         }}
       >
-        {nav}
+        {nav(collapsed)}
       </Box>
       <Drawer
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
-        sx={{ '& .MuiDrawer-paper': { width: 258 } }}
+        sx={{ display: { lg: 'none' }, '& .MuiDrawer-paper': { width: 280, maxWidth: '90vw' } }}
       >
-        {nav}
+        {nav(false)}
       </Drawer>
-      <Box sx={{ ml: { lg: '258px' } }}>
+      <Box sx={{ ml: { lg: `${sidebarWidth}px` }, minWidth: 0 }}>
         <Paper
           component="header"
           square
           elevation={0}
           sx={{
-            height: { xs: 'auto', sm: 75 },
-            minHeight: 75,
-            py: { xs: 1, sm: 0 },
+            height: headerHeight,
+            minHeight: headerHeight,
             display: 'flex',
             alignItems: 'center',
-            px: { xs: 1.5, md: 3.75 },
-            gap: { xs: 1, sm: 2 },
-            flexWrap: { xs: 'wrap', md: 'nowrap' },
+            px: { xs: 1, sm: 2, lg: 3 },
+            gap: { xs: 0.5, sm: 1.25 },
+            minWidth: 0,
+            flexWrap: 'nowrap',
             borderBottom: '1px solid',
             borderColor: 'divider',
             position: 'sticky',
@@ -314,26 +399,44 @@ export function AppShell() {
         >
           <IconButton
             aria-label="Mở điều hướng"
-            sx={{ display: { lg: 'none' } }}
+            aria-expanded={mobileOpen}
+            sx={{ display: { lg: 'none' }, flexShrink: 0 }}
             onClick={() => setMobileOpen(true)}
           >
             <Menu size={20} />
           </IconButton>
-          <Breadcrumbs sx={{ display: { xs: 'none', md: 'flex' }, fontSize: 11, flexShrink: 0 }}>
-            <House size={13} />
-            <Typography sx={{ fontSize: 11, fontWeight: 750, color: 'text.primary' }}>
-              {inLocationWorkspace && selectedLocation
-                ? `Cơ sở / ${selectedLocation.name}`
-                : 'BHOME Portal'}
-            </Typography>
-          </Breadcrumbs>
+          <Tooltip title={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}>
+            <IconButton
+              aria-label={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
+              aria-expanded={!collapsed}
+              onClick={toggleSidebar}
+              sx={{ display: { xs: 'none', lg: 'inline-flex' }, flexShrink: 0 }}
+            >
+              {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+            </IconButton>
+          </Tooltip>
+          <Typography
+            noWrap
+            sx={{
+              fontSize: 14,
+              fontWeight: 700,
+              minWidth: 0,
+              display: { xs: showLocationSelector ? 'none' : 'block', md: 'block' },
+            }}
+          >
+            {inLocationWorkspace
+              ? 'Cơ sở'
+              : navLabels[currentKey] ||
+                featureDefinitions.find((f) => f.kind === (current as ResourceKind))?.title ||
+                'BHOME Portal'}
+          </Typography>
           {isMockMode && !inLocationWorkspace && (
             <TextField
               size="small"
               placeholder="Tìm kiếm phòng, khách, hợp đồng..."
               value={portal.search}
               onChange={(e) => portal.setSearch(e.target.value)}
-              sx={{ maxWidth: 340, flex: 1, minWidth: 130 }}
+              sx={{ display: { xs: 'none', md: 'flex' }, maxWidth: 340, flex: 1, minWidth: 130 }}
               slotProps={{
                 htmlInput: { 'aria-label': 'Tìm kiếm toàn trang' },
                 input: {
@@ -346,18 +449,54 @@ export function AppShell() {
               }}
             />
           )}
-          <Box sx={{ flex: 1, display: { xs: isMockMode ? 'none' : 'block', md: 'block' } }} />
+          {isMockMode && !inLocationWorkspace && (
+            <>
+              <Tooltip title="Tìm kiếm toàn trang">
+                <IconButton
+                  aria-label="Mở tìm kiếm toàn trang"
+                  aria-expanded={Boolean(searchAnchor)}
+                  onClick={(event) => setSearchAnchor(event.currentTarget)}
+                  sx={{ display: { xs: 'inline-flex', md: 'none' }, flexShrink: 0 }}
+                >
+                  <Search size={19} />
+                </IconButton>
+              </Tooltip>
+              <Popover
+                open={Boolean(searchAnchor)}
+                anchorEl={searchAnchor}
+                onClose={() => setSearchAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+              >
+                <Box sx={{ p: 2, width: 300, maxWidth: 'calc(100vw - 32px)' }}>
+                  <TextField
+                    autoFocus
+                    placeholder="Tìm kiếm phòng, khách, hợp đồng..."
+                    value={portal.search}
+                    onChange={(event) => portal.setSearch(event.target.value)}
+                    slotProps={{ htmlInput: { 'aria-label': 'Tìm kiếm toàn trang' } }}
+                  />
+                </Box>
+              </Popover>
+            </>
+          )}
+          <Box
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              display: { xs: showLocationSelector ? 'none' : 'block', md: 'block' },
+            }}
+          />
           {isMockMode && (
             <Box
               sx={{
-                display: { xs: 'none', md: 'block' },
+                display: { xs: 'none', lg: 'block' },
                 px: 1.25,
                 py: 0.65,
                 borderRadius: 10,
                 bgcolor: '#fffae8',
                 border: '1px solid #f0e4ae',
-                color: '#99732e',
-                fontSize: 10,
+                color: '#845d00',
+                fontSize: 11,
                 fontWeight: 800,
                 whiteSpace: 'nowrap',
               }}
@@ -365,12 +504,13 @@ export function AppShell() {
               DEMO · KHÔNG GỬI API
             </Box>
           )}
-          {(isMockMode || inLocationWorkspace) && (
+          {showLocationSelector && (
             <TextField
               select
               size="small"
-              aria-label="Chọn cơ sở"
-              value={portal.locationId}
+              disabled={!data}
+              value={locationValue}
+              slotProps={{ select: { SelectDisplayProps: { 'aria-label': 'Chọn cơ sở' } } }}
               onChange={(e) => {
                 const nextLocationId = e.target.value;
                 portal.setLocationId(nextLocationId);
@@ -380,12 +520,33 @@ export function AppShell() {
                   else navigate(`/locations/${nextLocationId}/${workspaceParts[3] || 'overview'}`);
                 }
               }}
-              sx={{ minWidth: { xs: 115, sm: 180 }, maxWidth: 240 }}
+              sx={{
+                flex: { xs: '1 1 0', md: '0 1 260px' },
+                minWidth: 0,
+                maxWidth: 260,
+                '& .MuiSelect-select': {
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                },
+              }}
             >
-              <MenuItem value="all">Tất cả cơ sở ({data?.records.locations.length || 0})</MenuItem>
-              {data?.records.locations.map((row) => (
+              <MenuItem value="all">
+                {data
+                  ? isMockMode
+                    ? `Tất cả cơ sở (${locations.length})`
+                    : 'Tất cả cơ sở'
+                  : locationUnavailableLabel}
+              </MenuItem>
+              {missingLocation && (
+                <MenuItem value={locationValue} disabled>
+                  {data ? 'Cơ sở hiện tại' : locationUnavailableLabel}
+                </MenuItem>
+              )}
+              {locations.map((row) => (
                 <MenuItem key={row.id} value={row.id}>
-                  {row.code} • {row.name}
+                  {isMockMode ? `${row.code} • ` : ''}
+                  {row.name}
                 </MenuItem>
               ))}
             </TextField>
@@ -406,7 +567,11 @@ export function AppShell() {
           )}
           {isMockMode && (
             <Tooltip title="Khôi phục dữ liệu demo">
-              <IconButton aria-label="Khôi phục demo" onClick={() => setResetOpen(true)}>
+              <IconButton
+                aria-label="Khôi phục demo"
+                onClick={() => setResetOpen(true)}
+                sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
+              >
                 <RotateCcw size={17} />
               </IconButton>
             </Tooltip>
@@ -415,7 +580,7 @@ export function AppShell() {
             <IconButton
               aria-label="Mở quản lý tài khoản"
               onClick={() => navigate('/account/profile')}
-              sx={{ p: 0.5 }}
+              sx={{ flexShrink: 0 }}
             >
               <Avatar
                 sx={{
@@ -434,15 +599,14 @@ export function AppShell() {
           component="main"
           id="owner-main"
           tabIndex={-1}
-          sx={{ px: { xs: 2, md: 3 }, py: 3, maxWidth: 1680, mx: 'auto', minWidth: 0 }}
+          sx={{
+            px: { xs: 1.5, md: 2.5, xl: 3 },
+            py: { xs: 1.5, md: 2 },
+            minWidth: 0,
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
         >
-          <Breadcrumbs sx={{ fontSize: 10, mb: 1 }}>
-            <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>Hệ thống</Typography>
-            <Typography sx={{ fontSize: 10, color: 'primary.main' }}>
-              {navLabels[current] ||
-                featureDefinitions.find((f) => f.kind === (current as ResourceKind))?.title}
-            </Typography>
-          </Breadcrumbs>
           <Outlet />
         </Box>
       </Box>

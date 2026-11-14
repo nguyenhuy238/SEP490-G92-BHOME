@@ -13,11 +13,12 @@ namespace BHome.Infrastructure.Modules.Notifications;
 // One durable OUTBOX delivery per inbox/channel; retries never recreate the inbox.
 internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNotificationWriter sql, INotificationRepository inbox,
     INotificationChannelProvider provider, IOptions<NotificationChannelOptions> options, IBackgroundJobQueue queue,
-    NotificationEmailContent content, BHome.Infrastructure.IdentityAccess.AuthenticationEmailDelivery authenticationEmail) : IBackgroundJobHandler, IJobScheduleContributor
+    NotificationEmailContent content, BHome.Infrastructure.IdentityAccess.AuthenticationEmailDelivery authenticationEmail,
+    ISmsSender sms, SmsNotificationContent smsContent, IOptions<SmsOptions> smsOptions) : IBackgroundJobHandler, IJobScheduleContributor
 {
     public string Name => "notification-channels";
     private sealed record Work(Guid Id, int Sequence);
-    private sealed record Claim(Guid Id, Guid Lease, Guid Notice, Guid Recipient, string Role, string Channel, string EventType, int Attempt, string? ProtectedAuthenticationEmail);
+    private sealed record Claim(Guid Id, Guid Lease, Guid Notice, Guid Recipient, string Role, string Channel, string EventType, int Attempt, string? ProtectedAuthenticationEmail, DateTimeOffset CreatedAt);
     public async Task EnqueueDueAsync(CancellationToken t)
     {
         foreach (var work in await DueAsync(t)) await queue.EnqueueAsync(new(Name, $"channel/{work.Id}/{work.Sequence}/{sql.Now:yyyyMMddHHmm}", JsonSerializer.Serialize(work.Id)), t);
@@ -38,6 +39,23 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
               AND (NOT @authenticationOnly OR n.event_data->>'category'='Account')
             ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
             """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly));
+        if (!authenticationOnly && smsOptions.Value.Enabled)
+            await sql.Execute("""
+                INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
+                SELECT gen_random_uuid(),'OUTBOX','sms:'||md5(n.event_key||':'||p.phone),'CHANNEL_DELIVERY',
+                  jsonb_build_object('schemaVersion',1,'recordType','ChannelDelivery','notificationId',n.id,'recipient',n.recipient_user_id,
+                    'notificationIds',jsonb_agg(n.id::text) OVER(PARTITION BY n.event_key,p.phone),
+                    'role',n.event_data->>'audienceRole','channel','SMS','eventType',n.event_data->'state'->>'eventType'),@now,'Pending',@now
+                FROM notifications n JOIN users u ON u.id=n.recipient_user_id
+                CROSS JOIN LATERAL (SELECT regexp_replace(u.phone,'[ .()+-]','','g') AS digits) d
+                CROSS JOIN LATERAL (SELECT CASE WHEN d.digits LIKE '0%' THEN '84'||substring(d.digits FROM 2) ELSE d.digits END AS phone) p
+                WHERE n.record_kind='INBOX' AND n.event_data->'state'->'channels' ? 'SMS'
+                  AND u.is_active AND u.phone_confirmed AND p.phone ~ '^84[35789][0-9]{8}$'
+                  AND NOT EXISTS(SELECT 1 FROM notifications d WHERE d.record_kind='OUTBOX' AND d.event_data->>'channel'='SMS'
+                    AND (d.event_data->>'notificationId'=n.id::text OR d.event_data->'notificationIds' ? n.id::text))
+                ORDER BY n.event_at,n.id
+                ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
+                """, t, ("now", sql.Now));
         var due = new List<Work>();
         await using (var cmd = await sql.Command("""
             SELECT id,(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1 FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'recordType'='ChannelDelivery'
@@ -59,7 +77,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         {
             await using var cmd = await sql.Command("""
                 SELECT (event_data->>'notificationId')::uuid,(event_data->>'recipient')::uuid,event_data->>'role',event_data->>'channel',
-                  COALESCE(event_data->>'eventType',''),(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1,delivery_status,event_data->>'protectedAuthenticationEmail'
+                  COALESCE(event_data->>'eventType',''),(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1,delivery_status,event_data->>'protectedAuthenticationEmail',event_at
                 FROM notifications WHERE id=@id AND event_data->>'recordType'='ChannelDelivery' AND
                  ((delivery_status='Pending' AND next_delivery_at<=@now) OR (delivery_status='Processing' AND locked_until<=@now)) FOR UPDATE SKIP LOCKED
                 """, t, ("id", id), ("now", sql.Now));
@@ -67,11 +85,12 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
             await using (var reader = await cmd.ExecuteReaderAsync(t))
             {
                 if (!await reader.ReadAsync(t)) return;
-                claim = new(id, Guid.NewGuid(), reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetInt32(5), reader.IsDBNull(7) ? null : reader.GetString(7)); previous = reader.GetString(6);
+                claim = new(id, Guid.NewGuid(), reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetInt32(5), reader.IsDBNull(7) ? null : reader.GetString(7), reader.GetFieldValue<DateTimeOffset>(8)); previous = reader.GetString(6);
             }
             if (!provider.IsConfigured(claim.Channel)) return;
             if (previous == "Processing" && !provider.SupportsIdempotency(claim.Channel))
                 terminalState = "PendingReview";
+            else if (claim.Channel == "SMS" && sql.Now >= claim.CreatedAt.AddHours(23)) terminalState = "PendingReview";
             else if (claim.Attempt > options.Value.MaxAttempts) terminalState = "PermanentlyFailed";
             var started = JsonSerializer.Serialize(new { recordType = terminalState is null ? "ChannelClaim" : "ChannelRecovery", sequence = claim.Attempt, at = sql.Now }, CompactNotificationWriter.Json);
             await sql.Execute("UPDATE notifications SET delivery_status='Processing',lease_token=@lease,locked_until=@until,delivery_history=delivery_history||jsonb_build_array(@started::jsonb) WHERE id=@id", t,
@@ -90,6 +109,25 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                 var eligible = await sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM users WHERE id=@id AND @role=ANY(roles) AND (is_active OR @security))", t,
                     ("id", claim.Recipient), ("role", claim.Role), ("security", notice?.Category == "Account"));
                 if (!eligible || notice is null || await inbox.TargetAsync(scope, claim.Notice, t) is null || !await Relevant(notice, t)) state = "Suppressed";
+                else if (claim.Channel == "SMS")
+                {
+                    var template = SmsNotificationPolicy.Template(notice.EventType, claim.Role);
+                    var variables = await smsContent.BuildAsync(notice, claim.Recipient, t);
+                    var phone = VietnameseSmsPhone.Normalize(await sql.Scalar<string>("SELECT phone FROM users WHERE id=@id AND is_active AND phone_confirmed", t, ("id", claim.Recipient)));
+                    if (template is null || !smsOptions.Value.EnabledTemplates.Contains(template) || variables is null || phone is null ||
+                        !await sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM notifications d JOIN notifications n ON n.id=@notice WHERE d.id=@id AND d.event_key='sms:'||md5(n.event_key||':'||@phone))", t,
+                            ("id", claim.Id), ("notice", claim.Notice), ("phone", phone))) state = "Suppressed";
+                    else
+                    {
+                        // RequestId is stable across retries and independent of provider acceptance.
+                        var key = $"channel/{claim.Id}/sms";
+                        var submitted = JsonSerializer.Serialize(new { recordType = "SmsSubmission", requestId = SmsGateway.RequestId(key), at = sql.Now }, CompactNotificationWriter.Json);
+                        await sql.Execute("UPDATE notifications SET delivery_history=delivery_history||jsonb_build_array(@history::jsonb) WHERE id=@id AND lease_token=@lease", t,
+                            ("history", submitted), ("id", claim.Id), ("lease", claim.Lease));
+                        var receipt = await sms.SendAsync(new(claim.Recipient, phone, template, variables, key), t);
+                        state = receipt.Status; providerReference = receipt.ProviderReference;
+                    }
+                }
                 else
                 {
                     var auth = claim.ProtectedAuthenticationEmail is null ? null : await authenticationEmail.ResolveAsync(claim.Recipient, claim.ProtectedAuthenticationEmail, t);
@@ -142,14 +180,16 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         var updated = await sql.Execute("""
             UPDATE notifications SET delivery_status=@state,delivery_history=delivery_history||jsonb_build_array(@history::jsonb),locked_until=NULL,lease_token=NULL,
               next_delivery_at=CASE WHEN @state='Pending' THEN @next ELSE NULL END
-            WHERE id=@id AND lease_token=@lease
+            WHERE id=@id AND lease_token=@lease AND delivery_status='Processing'
             """, t, ("id", claim.Id), ("lease", claim.Lease), ("state", state), ("history", history),
             ("next", sql.Now.Add(options.Value.RetryDelay(claim.Attempt))));
         if (updated == 1)
         {
             var aggregate = await sql.Scalar<string>("""
                 SELECT CASE WHEN bool_and(delivery_status='Suppressed') THEN 'Suppressed'
-                  WHEN bool_and(delivery_status IN ('Sent','Suppressed')) THEN 'Delivered'
+                  WHEN bool_and(delivery_status IN ('Sent','Delivered','Suppressed')) THEN 'Delivered'
+                  WHEN bool_and(delivery_status IN ('Sent','Simulated','Suppressed')) THEN 'Simulated'
+                  WHEN bool_and(delivery_status IN ('Sent','SandboxAccepted','Suppressed')) THEN 'SandboxAccepted'
                   WHEN bool_or(delivery_status='PendingReview') THEN 'PendingReview'
                   WHEN bool_or(delivery_status='PermanentlyFailed') THEN 'Failed' ELSE 'Pending' END
                 FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'recordType'='ChannelDelivery' AND event_data->>'notificationId'=@notice::text

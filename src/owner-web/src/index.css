@@ -4,6 +4,16 @@ html {
 body {
   margin: 0;
 }
+
+::selection {
+  background: #dbe7ff;
+  color: #15243e;
+}
+
+input,
+textarea {
+  caret-color: #194cbb;
+}
 #root {
   min-height: 100svh;
 }

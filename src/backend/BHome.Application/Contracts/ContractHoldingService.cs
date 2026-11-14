@@ -24,18 +24,16 @@ public sealed partial class ContractService
         if (!HoldingSigned(c) || await repository.DepositTotalAsync(c.Id, token) + incomingAmount != c.RequiredDeposit) return;
         if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, token))
             throw ContractException.Conflict("room_contract_conflict");
-        var approved = c.AgreedPriceSnapshot == "{}" ? null : JsonSerializer.Deserialize<HoldingPriceSnapshot>(c.AgreedPriceSnapshot);
-        var prices = approved is null ? await repository.ResolvePricesAsync(c.RoomId, c.StartDate, token) : null;
-        var charges = approved?.Charges ?? prices!.Charges.Select(x => new HoldingPriceCharge(
-            x.Id, x.ChargeCode, (int)x.Category, (int)x.Method, x.Rate, x.EffectiveFrom, x.EffectiveTo, x.Version)).ToArray();
+        var approved = ContractChargeSnapshot.Read(c);
+        var charges = approved.Charges;
         if (charges.SingleOrDefault(x => x.ChargeCode == "RENT")?.Rate != c.MonthlyRent)
             throw ContractException.Conflict("holding_approved_price_changed");
         var signedAt = c.SigningMode == ContractSigningModes.Internal ? AnonymousContractSigningService.AcceptedEvidence(c)!.OwnerAcceptedAt!.Value :
             c.Signatures.Where(s => CompleteSignature(s, c)).Max(s => s.SignedAt)!.Value;
         var instant = (at > signedAt ? at : signedAt).ToUniversalTime();
         trigger = "SigningAndDepositCompleted";
-        var snapshot = new HoldingPriceSnapshot(c.MonthlyRent, c.RequiredDeposit, c.StartDate, c.EndDate,
-            c.HoldingExpiryAt!.Value, trigger, instant, charges);
+        // Only the lock metadata changes. The signed charge list remains identical.
+        var snapshot = approved with { Trigger = trigger, LockedAt = instant };
         c.AgreedPriceSnapshot = JsonSerializer.Serialize(snapshot);
         c.PriceLockTrigger = trigger;
         c.PriceLockedAt = instant;
@@ -110,6 +108,8 @@ public sealed partial class ContractService
                 Role = r.Id == input.RepresentativeResidentId ? ResidentType.Representative : ResidentType.CoOccupant,
                 ResidenceFrom = c.StartDate
             }).ToList();
+            await ContractChargeSnapshot.RejectUtilityProfileAsync(repository, c, token);
+            ContractChargeSnapshot.Store(c, ContractChargeSnapshot.FromPolicies(c, prices.Charges), "HoldingDraft", now);
             if (operatingPolicies is not null) await operatingPolicies.BindDraftAsync(c, token);
             Seal(c); repository.Add(c); Audit("HoldingDraftCreated", c.Id);
             Remember(key, "holding-draft", input, c.Id); return new ContractId(c.Id);
@@ -127,14 +127,18 @@ public sealed partial class ContractService
             if (c.ApprovedAt.HasValue) throw ContractException.Conflict("holding_already_approved");
             if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, token))
                 throw ContractException.Conflict("room_contract_conflict");
-            c.ApprovedByUserId = Actor; c.ApprovedAt = clock.GetUtcNow(); c.ApprovalReason = input.Reason.Trim();
             var prices = await repository.ResolvePricesAsync(c.RoomId, c.StartDate, token);
             if (prices.Charges.SingleOrDefault(x => x.ChargeCode == "RENT")?.Rate != c.MonthlyRent)
                 throw ContractException.Conflict("holding_approved_price_changed");
-            c.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(c.MonthlyRent, c.RequiredDeposit,
-                c.StartDate, c.EndDate, c.HoldingExpiryAt!.Value, "OwnerApproved", c.ApprovedAt.Value,
-                prices.Charges.Select(x => new HoldingPriceCharge(x.Id, x.ChargeCode, (int)x.Category, (int)x.Method,
-                    x.Rate, x.EffectiveFrom, x.EffectiveTo, x.Version)).ToArray()));
+            var charges = ContractChargeSnapshot.FromPolicies(c, prices.Charges);
+            if (!string.IsNullOrWhiteSpace(c.AgreedPriceSnapshot) && c.AgreedPriceSnapshot != "{}" &&
+                !ContractChargeSnapshot.Read(c).Charges.SequenceEqual(charges))
+                throw ContractException.Conflict("holding_approved_price_changed");
+            var approvedAt = clock.GetUtcNow();
+            ContractChargeSnapshot.Store(c, charges, "OwnerApproved", approvedAt);
+            await ContractChargeSnapshot.ValidateBindingAsync(repository, c, token);
+            c.ApprovedByUserId = Actor; c.ApprovedAt = approvedAt; c.ApprovalReason = input.Reason.Trim();
+            Seal(c);
             Audit("HoldingApproved", id); Remember(key, "holding-approve", new { id, input }, id); return View(c);
         }, token);
     }
@@ -205,6 +209,8 @@ public sealed partial class ContractService
         if (deposit < c.RequiredDeposit) blockers.Add("holding_deposit_insufficient");
         if (deposit > c.RequiredDeposit) blockers.Add("holding_deposit_excess_requires_review");
         if (!c.PriceLockedAt.HasValue || c.AgreedPriceSnapshot == "{}") blockers.Add("holding_price_not_locked");
+        try { await ContractChargeSnapshot.ValidateBindingAsync(repository, c, token, checkProfile: false); }
+        catch (ContractException ex) { blockers.Add(ex.Code); }
         if (await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, token)) blockers.Add("room_contract_conflict");
         return new(blockers.Count == 0, deposit, Math.Max(0, c.RequiredDeposit - deposit), blockers.Distinct().ToArray());
     }
@@ -297,6 +303,11 @@ public sealed partial class ContractService
                 IsDevelopmentDemo = holding.IsDevelopmentDemo
             };
             main.OperatingPolicySnapshot = holding.OperatingPolicySnapshot;
+            var holdingPrices = ContractChargeSnapshot.Read(holding);
+            ContractChargeSnapshot.Store(main, holdingPrices.Charges, "HoldingConverted", clock.GetUtcNow());
+            await ContractChargeSnapshot.ValidateBindingAsync(repository, main, token, checkProfile: false);
+            // The holding agreement is already binding; no new property lookup on conversion.
+            ContractChargeSnapshot.MarkMainBound(main, holding.PriceLockedAt.Value);
             var application = await holdings.ApplyAsync(id, main.Id, main.RoomId, main.TenantUserId, main.RequiredDeposit, token);
             if (application.HoldingContractId != id || application.RoomId != main.RoomId || application.TenantUserId != main.TenantUserId ||
                 application.AppliedAmount < 0 || application.AppliedAmount > main.RequiredDeposit || string.IsNullOrWhiteSpace(application.AllocationReference))

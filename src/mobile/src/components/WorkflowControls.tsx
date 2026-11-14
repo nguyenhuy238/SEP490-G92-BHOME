@@ -4,6 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { Button, Dialog, Icon, Portal, RadioButton, Text, TextInput } from 'react-native-paper';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { CameraCapture } from './CameraCapture';
+import { MoneyTextInput } from './MoneyTextInput';
 import { Action, Box, Heading, Pill, Row, ui } from './WorkspaceKit';
 import { colors as c } from '../theme/theme';
 
@@ -105,6 +106,7 @@ export function Input({
   value,
   onChange,
   numeric = false,
+  money = false,
   multiline = false,
   disabled = false,
   email = false,
@@ -113,10 +115,24 @@ export function Input({
   value: string;
   onChange: (value: string) => void;
   numeric?: boolean;
+  money?: boolean;
   multiline?: boolean;
   disabled?: boolean;
   email?: boolean;
 }) {
+  if (money)
+    return (
+      <MoneyTextInput
+        mode="outlined"
+        label={label}
+        accessibilityLabel={label}
+        value={value}
+        onChangeText={onChange}
+        disabled={disabled}
+        autoCapitalize="none"
+        style={{ backgroundColor: c.white }}
+      />
+    );
   return (
     <TextInput
       mode="outlined"

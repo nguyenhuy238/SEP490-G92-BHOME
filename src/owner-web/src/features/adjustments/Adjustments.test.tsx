@@ -59,6 +59,16 @@ function mount(element: React.ReactNode) {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(window.matchMedia).mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
   mocks.api.get.mockResolvedValue(value);
   mocks.api.request.mockResolvedValue([]);
   mocks.api.list.mockResolvedValue({ items: [], totalCount: 0 });
@@ -133,7 +143,7 @@ it('keeps a failed decision reviewable and explains a stale financial revision',
   fireEvent.click(screen.getByText('Phê duyệt điều chỉnh'));
   fireEvent.click(within(screen.getByRole('dialog')).getByText('Xác nhận quyết định'));
   await screen.findByText('Hóa đơn hoặc số dư đã thay đổi. Tải lại, kiểm tra và xác nhận lại.');
-  expect(screen.getByLabelText('Giá trị sau điều chỉnh (VND)')).toHaveValue('90000');
+  expect(screen.getByLabelText('Giá trị sau điều chỉnh (VND)')).toHaveValue('90.000');
 });
 it('retries the real list and displays an explicit empty state', async () => {
   mocks.api.list.mockRejectedValue({ status: 503 });
@@ -142,4 +152,26 @@ it('retries the real list and displays an explicit empty state', async () => {
   mocks.api.list.mockResolvedValue({ items: [], totalCount: 0 });
   fireEvent.click(retry);
   await screen.findByText('Không có yêu cầu phù hợp.');
+});
+it('keeps the mobile request action alongside the original amount and request state', async () => {
+  vi.mocked(window.matchMedia).mockImplementation((query) => ({
+    matches: query.includes('max-width:599px'),
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+  mocks.api.list.mockResolvedValue({ items: [value], totalCount: 1 });
+  mount(<OwnerAdjustmentList />);
+  const table = await screen.findByRole('table', { name: 'Danh sách yêu cầu điều chỉnh' });
+  expect(within(table).getAllByRole('columnheader')).toHaveLength(2);
+  const identity = within(table).getByRole('rowheader');
+  expect(within(identity).getByText('100.000 ₫')).toBeVisible();
+  expect(within(identity).getByText('Đã phát hành')).toBeVisible();
+  fireEvent.click(within(table).getByRole('button', { name: 'Xem yêu cầu điều chỉnh' }));
+  expect(await screen.findByText('Phê duyệt điều chỉnh')).toBeDisabled();
+  expect(mocks.api.decide).not.toHaveBeenCalled();
 });

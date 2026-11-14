@@ -16,10 +16,7 @@ import { isMockMode } from '../../../services/config';
 export default function DigitalSigningPage() {
   return (
     <Stack spacing={2}>
-      <PageHeader
-        title="Ký số hợp đồng (Viettel MySign)"
-        subtitle="Theo dõi hồ sơ cần ký, kiểm tra chữ ký và tài liệu trước khi kích hoạt hợp đồng."
-      />
+      <PageHeader title="Ký số hợp đồng (Viettel MySign)" />
       {isMockMode ? (
         <Alert severity="info">Ký số chỉ hoạt động ở chế độ API.</Alert>
       ) : (
@@ -47,6 +44,8 @@ function LiveDigitalSigningPage() {
       <Tabs
         value={tab}
         onChange={(_, value) => setTab(value)}
+        variant="scrollable"
+        allowScrollButtonsMobile
         aria-label="Tác nghiệp và cấu hình ký số"
       >
         <Tab id="signing-work-tab" aria-controls="signing-work-panel" label="Hồ sơ ký hợp đồng" />
@@ -83,11 +82,7 @@ function LiveDigitalSigningPage() {
               Làm mới hồ sơ ký
             </Button>
           </FilterToolbar>
-          <Alert severity="info">
-            Chọn hồ sơ để xem tiến độ Owner/Tenant, tài liệu và lỗi ký. Xác nhận ký được thực hiện
-            qua MySign; trạng thái do máy chủ xác minh.
-          </Alert>
-          <Paper>
+          <Paper variant="outlined" sx={{ minWidth: 0 }}>
             <OwnerTable
               rows={list.data?.items ?? []}
               loading={list.isFetching}
@@ -95,6 +90,7 @@ function LiveDigitalSigningPage() {
               retry={() => void list.refetch()}
               label="Hồ sơ ký hợp đồng"
               id={(c) => c.id}
+              selectLabel="Mở hồ sơ ký"
               select={(c) => setSelected(c.id)}
               columns={[
                 {
@@ -119,10 +115,16 @@ function LiveDigitalSigningPage() {
           />
           {selected && (
             <>
-              <Button onClick={() => setSelected('')}>Đóng hồ sơ ký</Button>
-              <Button component={Link} to={`/contracts?contractId=${selected}`}>
-                Mở trong quản lý hợp đồng
-              </Button>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                sx={{ justifyContent: 'flex-end' }}
+              >
+                <Button onClick={() => setSelected('')}>Đóng hồ sơ ký</Button>
+                <Button component={Link} to={`/contracts?contractId=${selected}`}>
+                  Mở trong quản lý hợp đồng
+                </Button>
+              </Stack>
               <ContractDetailPanel
                 key={selected}
                 api={api}

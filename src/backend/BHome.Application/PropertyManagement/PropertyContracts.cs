@@ -108,6 +108,7 @@ public interface IPropertyRepository
 {
     Task<T?> FindAsync<T>(Guid id, CancellationToken token) where T : AuditableEntity;
     Task<bool> AnyAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken token) where T : class;
+    Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token);
     Task<PagedResult<TDto>> ListAsync<T, TDto>(Expression<Func<T, bool>> predicate,
         Expression<Func<T, TDto>> projection, PropertyQuery query, Guid? staffId, DateOnly today,
         CancellationToken token) where T : AuditableEntity;

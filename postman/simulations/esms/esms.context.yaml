@@ -1,0 +1,23 @@
+purpose:
+  stands_in_for: eSMS Vietnam Sandbox SMS submission only
+  unblocks: Real HttpClientFactory gateway serialization and contract validation without provider access
+assumptions:
+  - id: sandbox-acceptance-is-not-delivery
+    status: supported
+    claim: A documented Sandbox request can be accepted without physical SMS delivery.
+    reason: Official documentation distinguishes Sandbox validation from sending to a handset.
+    verification: Official contract inspected and live Sandbox request returned CodeResult 100 on 2026-11-13. Local simulation verification is recorded in SMS_IMPLEMENTATION.md.
+    source: https://developers.esms.vn/esms-api/moi-truong-test-sandbox
+    updated_at: '2026-11-13'
+  - id: exact-request-contract
+    status: supported
+    claim: The local handler models only the documented Sandbox request used by this gateway.
+    reason: It does not model provider availability, production approval, account balance or mobile-network delivery.
+    verification: On 2026-11-13 the real LocalDevelopment provider probe used HttpClientFactory through the loopback simulation; the simulation logged a POST and returned 200, and the adapter reported SandboxAccepted. Owning workspace search was skipped because Postman CLI is signed out. This establishes caller serialization against this stand-in only.
+    source: postman/mocks/esms/default.cjs
+    updated_at: '2026-11-13'
+fingerprints:
+  - id: initial
+    date: '2026-11-13'
+    commit: 9eeb913
+    cli: '1.80.0'

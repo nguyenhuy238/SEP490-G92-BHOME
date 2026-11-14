@@ -7,6 +7,7 @@ import { propertySetupClient } from '../../../../../packages/client-core/src/pro
 import {
   sharedConfigurationClient,
   type SharedDocument,
+  type SharedResource,
 } from '../../../../../packages/client-core/src/sharedConfiguration';
 import type { LocationSetupInput } from '../../../../../packages/client-core/src/locationSetup';
 import { createSeed } from '../../services/mock/seed';
@@ -181,7 +182,8 @@ function finishSteps() {
   next();
   next();
   next();
-  expect(screen.getByText('7. Xem lại và hoàn tất')).toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: /Tôi xác nhận giá thuê/ })).toBeInTheDocument();
+  expect(screen.queryByText('7. Xem lại và hoàn tất')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('checkbox', { name: /Tôi xác nhận giá thuê/ }));
 }
 const writes = () => state.request.mock.calls.filter(([, init]) => init?.method === 'POST');
@@ -192,6 +194,16 @@ const payload = ([, init]: SetupRequestCall): LocationSetupInput => {
 const key = ([, init]: SetupRequestCall) => new Headers(init?.headers).get('Idempotency-Key');
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
   sessionStorage.clear();
   state.db = createSeed();
   state.roles = ['Owner'];
@@ -199,7 +211,214 @@ beforeEach(() => {
     init?.method === 'POST' && path === '/api/v1/location-setup' ? response : mockReads(path),
   );
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+it('refreshes newly published templates without losing the current setup draft', async () => {
+  let published = false;
+  state.request.mockImplementation(async (path: string) => {
+    if (path.startsWith('/api/v1/shared-configuration/room-type-templates?')) {
+      const item = {
+        ...template,
+        name: 'New room template',
+        status: published ? 'Published' : 'Draft',
+      };
+      return { items: [item], total: 1, page: 1, pageSize: 100 };
+    }
+    return mockReads(path);
+  });
+  mount(<LocationSetupWizard locations={[]} onClose={vi.fn()} onComplete={vi.fn()} />);
+  enterInfo();
+  expect(await screen.findByText('New room template · Bản nháp, cần công bố')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Thêm New room template' })).not.toBeInTheDocument();
+  published = true;
+  fireEvent.click(button('Làm mới mẫu'));
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm New room template' }));
+  expect(screen.getByText('Cấu hình riêng (1)')).toBeInTheDocument();
+  expect(JSON.parse(sessionStorage.getItem(draftKey)!).location.name).toBe(
+    'Synthetic native setup',
+  );
+});
+
+it('resumes the draft, reads the four selectable libraries and loads the whole asset catalog once', async () => {
+  let published = false;
+  const catalog = {
+    ...template,
+    id: 'new-catalog',
+    resource: 'asset-catalog' as const,
+    name: 'Bàn học',
+    data: { category: 'Nội thất', unit: 'cái', referencePrice: 500000 },
+  };
+  const docs: SharedDocument[] = [
+    { ...template, name: 'Phòng mới' },
+    catalog,
+    {
+      ...catalog,
+      id: 'second-catalog',
+      name: 'Giường đôi',
+    },
+    {
+      ...template,
+      id: 'new-fee',
+      resource: 'fee-templates',
+      name: 'Phí vệ sinh',
+      data: {
+        category: 'ServiceFee',
+        chargeCode: 'CLEANING',
+        method: 'FixedPerPersonPerMonth',
+        referenceRate: '30000',
+        unit: 'VND/person/month',
+        scope: 'Location',
+        effectiveFrom: '2026-01-01',
+        effectiveTo: null,
+      },
+    },
+    {
+      ...template,
+      id: 'new-policy',
+      resource: 'policy-templates',
+      name: 'Giờ yên tĩnh',
+      data: { content: 'Giữ yên tĩnh sau 22 giờ.', effectiveFrom: '2026-01-01' },
+    },
+  ];
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/location-setup' && init?.method === 'POST') return response;
+    if (path.startsWith('/api/v1/shared-configuration/')) {
+      const resource = path.split('/').pop()?.split('?')[0] as SharedResource;
+      const items = docs
+        .filter((doc) => doc.resource === resource)
+        .map((doc) => ({ ...doc, status: published ? 'Published' : 'Draft' }));
+      return { items, total: items.length, page: 1, pageSize: 100 };
+    }
+    return mockReads(path);
+  });
+  const complete = vi.fn();
+  const wizard = () => (
+    <LocationSetupWizard locations={[]} onClose={vi.fn()} onComplete={complete} />
+  );
+  const first = mount(wizard());
+  enterInfo();
+  await screen.findByText('Phòng mới · Bản nháp, cần công bố');
+  expect(writes()).toHaveLength(0);
+  first.unmount();
+  published = true;
+  const resumed = mount(wizard());
+  expect(screen.getByText('Synthetic native setup · Bản nháp')).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm Phòng mới' }));
+  const pickerFilter = screen.getByRole('combobox', { name: 'Lọc mẫu loại phòng' });
+  fireEvent.mouseDown(pickerFilter);
+  fireEvent.click(screen.getByRole('option', { name: 'Chưa chọn' }));
+  expect(screen.getByText('Không tìm thấy mẫu phù hợp với bộ lọc.')).toBeInTheDocument();
+  fireEvent.mouseDown(pickerFilter);
+  fireEvent.click(screen.getByRole('option', { name: 'Đã chọn' }));
+  expect(screen.getByText('Đã chọn', { selector: '.MuiChip-label' })).toBeInTheDocument();
+  next();
+  generate('1');
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm Bàn học' }));
+  // A draft from before duplicate selections were idempotent contains an inflated quantity.
+  resumed.unmount();
+  const legacyDraft = JSON.parse(sessionStorage.getItem(draftKey)!);
+  legacyDraft.roomTypes[0].assets[0].quantity = 4;
+  sessionStorage.setItem(draftKey, JSON.stringify(legacyDraft));
+  mount(wizard());
+  await screen.findByText('Bàn học', { selector: '[role="listitem"] .MuiTypography-root' });
+  expect(JSON.parse(sessionStorage.getItem(draftKey)!).roomTypes[0].assets[0].quantity).toBe(1);
+  expect(screen.queryByRole('combobox', { name: 'Gói tài sản' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/\d+ mẫu đã công bố/)).not.toBeInTheDocument();
+  expect(
+    screen.queryByText('Chọn tài sản dự kiến cho từng loại phòng.', { exact: false }),
+  ).not.toBeInTheDocument();
+  fill('Tìm danh mục tài sản', 'Bàn');
+  await waitFor(() => expect(button('Nạp toàn bộ danh mục')).toBeEnabled());
+  fireEvent.click(button('Nạp toàn bộ danh mục'));
+  const selectedAssets = within(screen.getByRole('list', { name: 'Tài sản đã chọn' }));
+  expect(selectedAssets.getByText('Bàn học')).toBeVisible();
+  expect(selectedAssets.getByText('Giường đôi')).toBeVisible();
+  expect(selectedAssets.getAllByRole('listitem')).toHaveLength(2);
+  expect(button('Nạp toàn bộ danh mục')).toBeDisabled();
+  expect(screen.queryByLabelText('Số lượng', { exact: true })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Theo dõi', { exact: true })).not.toBeInTheDocument();
+  next();
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm Phí vệ sinh' }));
+  const preview = within(
+    screen.getByRole('region', { name: 'Mô phỏng chi phí hàng tháng của phòng' }),
+  );
+  expect(preview.getByText('3.030.000 đ')).toBeVisible();
+  fireEvent.change(preview.getByLabelText('Số người ở giả định'), { target: { value: '2' } });
+  expect(preview.getByText('3.060.000 đ')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa Phí vệ sinh' }));
+  expect(screen.getByLabelText('Đơn giá (VND/người/tháng)')).toHaveValue('30.000');
+  next();
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm Giờ yên tĩnh' }));
+  expect(
+    within(screen.getByRole('list', { name: 'Điều khoản nội quy' })).getByText(
+      'Giữ yên tĩnh sau 22 giờ.',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByLabelText('Nội dung điều khoản')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa Giờ yên tĩnh' }));
+  expect(screen.getByLabelText('Nội dung điều khoản')).toHaveValue('Giữ yên tĩnh sau 22 giờ.');
+  next();
+  expect(screen.getByRole('table', { name: 'Giá thuê từng phòng' })).toBeInTheDocument();
+  expect(screen.getByText('Giữ yên tĩnh sau 22 giờ.')).toBeInTheDocument();
+  expect(writes()).toHaveLength(0);
+  expect(button('Xác nhận hoàn tất thiết lập')).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: /Tôi xác nhận giá thuê/ }));
+  fireEvent.click(button('Xác nhận hoàn tất thiết lập'));
+  await waitFor(() => expect(complete).toHaveBeenCalledWith(response));
+  expect(writes()).toHaveLength(1);
+  expect(payload(writes()[0]).sourceReferences).toEqual(
+    expect.arrayContaining(
+      docs.map((doc) => ({ id: doc.id, kind: doc.resource, version: doc.version })),
+    ),
+  );
+  expect(payload(writes()[0]).fees[0]).toMatchObject({ method: 2, rate: '30000' });
+  expect(payload(writes()[0]).roomTypes[0].assets).toEqual([
+    expect.objectContaining({ name: 'Bàn học', quantity: 1, trackingMode: 'BulkQuantity' }),
+    expect.objectContaining({ name: 'Giường đôi', quantity: 1, trackingMode: 'BulkQuantity' }),
+  ]);
+}, 30000);
+
+it('uses compact step navigation on mobile and preserves validation when jumping ahead', () => {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
+  try {
+    mount(<LocationSetupWizard locations={[]} onClose={vi.fn()} onComplete={vi.fn()} />);
+    const progress = screen.getByRole('navigation', { name: 'Tiến độ thiết lập cơ sở' });
+    expect(within(progress).getByText('Bước 1/7')).toBeInTheDocument();
+    expect(within(progress).queryByRole('button', { name: 'Loại phòng' })).not.toBeInTheDocument();
+    fireEvent.mouseDown(within(progress).getByRole('combobox', { name: 'Đi đến bước' }));
+    fireEvent.click(screen.getByRole('option', { name: '7. Xem lại & hoàn tất' }));
+    expect(screen.getByText(/Nhập tên,.*địa chỉ.*số tầng hợp lệ/)).toBeInTheDocument();
+    enterInfo();
+    expect(within(progress).getByText('Bước 2/7')).toBeInTheDocument();
+    expect(writes()).toHaveLength(0);
+  } finally {
+    cleanup();
+    vi.unstubAllGlobals();
+  }
+});
+
+it('does not read or create setup data for Staff even when the wizard is mounted directly', () => {
+  state.roles = ['Staff'];
+  mount(<LocationSetupWizard locations={[]} onClose={vi.fn()} onComplete={vi.fn()} />);
+  expect(screen.getByText('Chỉ Owner được thiết lập cơ sở mới.')).toBeInTheDocument();
+  expect(state.request).not.toHaveBeenCalled();
+  expect(sessionStorage.getItem(draftKey)).toBeNull();
+});
 
 it('reads versioned local RoomDefaults from the location-scoped endpoint', async () => {
   defaultsPage();
@@ -278,6 +497,31 @@ it('loads only Published templates, saves provenance, and retries an uncertain r
       if (++attempts === 1) throw new Error('Synthetic connection failure');
       return response;
     }
+    if (path.startsWith('/api/v1/shared-configuration/fee-templates?')) {
+      return {
+        items: [
+          {
+            ...template,
+            id: 'synthetic-person-fee',
+            resource: 'fee-templates',
+            name: 'Synthetic person service',
+            data: {
+              category: 'ServiceFee',
+              chargeCode: 'CLEANING',
+              method: 'FixedPerPersonPerMonth',
+              unit: 'VND/person/month',
+              scope: 'Location',
+              referenceRate: '30000.1234',
+              effectiveFrom: '2026-01-01',
+              effectiveTo: null,
+            },
+          },
+        ],
+        total: 1,
+        page: 1,
+        pageSize: 100,
+      };
+    }
     return mockReads(path);
   });
   mount(
@@ -294,7 +538,12 @@ it('loads only Published templates, saves provenance, and retries an uncertain r
   ).not.toBeInTheDocument();
   next();
   generate('2');
-  finishSteps();
+  next();
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm Synthetic person service' }));
+  next();
+  next();
+  expect(screen.getByRole('checkbox', { name: /Tôi xác nhận giá thuê/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox', { name: /Tôi xác nhận giá thuê/ }));
   fireEvent.click(button('Xác nhận hoàn tất thiết lập'));
   expect(await screen.findByText('Synthetic connection failure')).toBeInTheDocument();
   expect(completed).not.toHaveBeenCalled();
@@ -307,6 +556,9 @@ it('loads only Published templates, saves provenance, and retries an uncertain r
     capacity: 2,
     referenceRent: 3000000,
   });
+  expect(payload(writes()[0]).fees).toEqual([
+    expect.objectContaining({ category: 3, method: 2, chargeCode: 'CLEANING', rate: '30000.1234' }),
+  ]);
   fireEvent.click(button('Xác nhận hoàn tất thiết lập'));
   await waitFor(() => expect(completed).toHaveBeenCalledWith(response));
   expect(writes()).toHaveLength(2);

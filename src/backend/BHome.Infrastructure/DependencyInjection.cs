@@ -109,6 +109,11 @@ public static class DependencyInjection
         services.AddScoped<IIdentityPersistence, CompactIdentityPersistence>();
         services.AddScoped<IAuthenticationSessions, IdentitySessionService>();
         services.AddScoped<IPasswordService, IdentityPasswordService>();
+        services.AddOptions<SmsRecoveryOptions>().BindConfiguration("SmsRecovery")
+            .Validate(o => o.Valid(), "Invalid SMS recovery limits or missing base64 secret key (at least 32 random bytes).").ValidateOnStart();
+        services.AddScoped<SmsPasswordRecovery>();
+        services.AddScoped<ISmsPasswordRecovery>(p => p.GetRequiredService<SmsPasswordRecovery>());
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<SmsPasswordRecovery>());
         services.AddScoped<ISecurityAudit, IdentitySecurityAudit>();
         services.AddOptions<AuthenticationEmailOptions>().BindConfiguration("AuthenticationEmail")
             .Validate(o => o.ResendCooldownSeconds is >= 30 and <= 3600, "Authentication email cooldown must be 30-3600 seconds.").ValidateOnStart();
@@ -117,6 +122,18 @@ public static class DependencyInjection
         services.AddScoped<IPasswordResetDelivery>(p => p.GetRequiredService<AuthenticationEmailDelivery>());
         services.AddScoped<IAccountInvitations, AccountInvitations>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter>();
+        services.AddOptions<BHome.Application.Notifications.SmsOptions>().BindConfiguration("Sms")
+            .Validate(o => o.Valid(), "Invalid SMS configuration; check mode, provider, endpoint, templates and credentials in secrets.").ValidateOnStart();
+        services.AddSingleton<BHome.Infrastructure.Modules.Notifications.DemoSmsInbox>();
+        services.AddScoped<BHome.Application.Notifications.IDemoSmsInbox, BHome.Infrastructure.Modules.Notifications.DemoSmsAccess>();
+        services.AddHostedService<BHome.Infrastructure.Modules.Notifications.DemoSmsCleanup>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.MockSmsSender>();
+        services.AddHttpClient<BHome.Infrastructure.Modules.Notifications.EsmsSmsSender>()
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<BHome.Application.Notifications.ISmsSender, BHome.Infrastructure.Modules.Notifications.SmsGateway>();
+        services.AddScoped<BHome.Infrastructure.Modules.Notifications.SmsNotificationContent>();
+        services.AddScoped(p => new BHome.Infrastructure.Modules.Notifications.EsmsDeliveryCallback(
+            p.GetRequiredService<BHome.Infrastructure.Modules.Notifications.CompactNotificationWriter>(), p.GetRequiredService<IOptions<BHome.Application.Notifications.SmsOptions>>()));
         services.AddScoped<BHome.Application.Notifications.INotificationWorkspace, BHome.Infrastructure.Modules.Notifications.CompactNotificationWorkspace>();
         services.AddScoped<BHome.Application.Notifications.NotificationWorkspaceService>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.CompactNotificationEvents>();

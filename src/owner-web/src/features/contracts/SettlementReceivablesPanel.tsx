@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -185,12 +186,12 @@ export function SettlementReceivablesPanel({
                     </MenuItem>
                   ))}
                 </TextField>
-                <TextField
+                <MoneyField
                   label="Số tiền phải thu thiệt hại (VND)"
                   value={amount}
                   disabled={busy}
-                  onChange={(e) => {
-                    setAmount(e.target.value);
+                  onValueChange={(raw) => {
+                    setAmount(raw);
                     setChecked(false);
                   }}
                 />
@@ -266,12 +267,12 @@ export function SettlementReceivablesPanel({
                   </MenuItem>
                 ))}
             </TextField>
-            <TextField
+            <MoneyField
               label="Số tiền cấn trừ (VND)"
               value={offsetAmount}
               disabled={busy}
-              onChange={(e) => {
-                setOffsetAmount(e.target.value);
+              onValueChange={(raw) => {
+                setOffsetAmount(raw);
                 setOffsetChecked(false);
               }}
             />

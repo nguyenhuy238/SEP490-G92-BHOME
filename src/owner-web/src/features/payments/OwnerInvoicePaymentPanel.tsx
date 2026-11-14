@@ -1,3 +1,4 @@
+import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -36,6 +37,7 @@ import { RefundPanel } from './RefundPanel';
 import { ReceiptExcessPanel } from './ReceiptExcessPanel';
 import { ExternalPaymentPayerPanel } from './ExternalPaymentPayerPanel';
 import { PaymentInvoicePicker } from './PaymentInvoicePicker';
+import { StatusChip } from '../../components/common/PortalUI';
 
 export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
   const api = usePaymentApi();
@@ -51,9 +53,11 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
     queryFn: ({ signal }) => api.instructions(invoiceId, signal),
   });
   return (
-    <Paper sx={{ p: 2 }}>
-      <Stack spacing={2}>
-        <Typography variant="h6">Thanh toán & Đối soát</Typography>
+    <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0, overflowWrap: 'anywhere' }}>
+      <Stack spacing={1.5}>
+        <Typography variant="h2" component="h2">
+          Thanh toán & Đối soát
+        </Typography>
         {state.isPending && <LinearProgress />}
         {state.error && (
           <Alert
@@ -63,12 +67,20 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
             {paymentError(state.error)}
           </Alert>
         )}
-        {state.data && (
+        {state.data && !state.error && (
           <>
-            <Typography>
-              {paymentText(state.data.paymentStatus)} · Còn phải trả:{' '}
-              {formatContractMoney(state.data.outstandingAmount)}
-            </Typography>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+            >
+              <Box sx={{ alignSelf: 'flex-start' }}>
+                <StatusChip label={paymentText(state.data.paymentStatus)} />
+              </Box>
+              <Typography sx={{ fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>
+                Còn phải trả: {formatContractMoney(state.data.outstandingAmount)}
+              </Typography>
+            </Stack>
             <Typography>
               Đã ghi nhận: {formatContractMoney(state.data.paidAmount)} · Quá hạn:{' '}
               {state.data.overdueDays} ngày
@@ -120,7 +132,7 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
           </>
         )}
         {instructions.error && <Alert severity="error">{paymentError(instructions.error)}</Alert>}
-        {instructions.data?.accountNumber && (
+        {!instructions.error && instructions.data?.accountNumber && (
           <>
             {instructions.data.isDevelopmentDemo && (
               <Alert severity="warning">Tài khoản tổng hợp demo. Không chuyển tiền thật.</Alert>
@@ -139,7 +151,7 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
             )}
           </>
         )}
-        {instructions.data && !instructions.data.accountNumber && (
+        {!instructions.error && instructions.data && !instructions.data.accountNumber && (
           <Alert severity="info">
             {paymentText(
               instructions.data.availability === 'NotIssued'
@@ -268,12 +280,12 @@ export function RecordTransferForm({
           changed();
         }}
       />
-      <TextField
+      <MoneyField
         required
         label="Số tiền thực nhận VND"
         value={amount}
-        onChange={(e) => {
-          setAmount(e.target.value);
+        onValueChange={(raw) => {
+          setAmount(raw);
           changed();
         }}
       />

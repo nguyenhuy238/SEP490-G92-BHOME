@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react';
 import {
   Alert,
+  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   MenuItem,
   Paper,
   Stack,
@@ -19,6 +21,7 @@ import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { locationSetupClient } from '../../../../../../packages/client-core/src/locationSetup';
 import { usePortal } from '../../../app/PortalProvider';
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
+import { MoneyField } from '../../../components/common/MoneyField';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
 import { invoiceError } from '../../../../../../packages/client-core/src/invoices';
 import { ConflictReload } from '../../locations/components/ConflictReload';
@@ -44,10 +47,18 @@ export function RoomTypesApiPage() {
   const { locationId: routeLocation = '' } = useParams();
   const portal = usePortal();
   const locationId = routeLocation || (portal.locationId === 'all' ? '' : portal.locationId);
-  return <RoomDefaultsWorkspace key={locationId} locationId={locationId} />;
+  return (
+    <RoomDefaultsWorkspace key={locationId} locationId={locationId} embedded={!!routeLocation} />
+  );
 }
 
-function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
+function RoomDefaultsWorkspace({
+  locationId,
+  embedded,
+}: {
+  locationId: string;
+  embedded: boolean;
+}) {
   const api = usePropertySetupApi();
   const setup = locationSetupClient(api.request);
   const lock = useRef(false);
@@ -57,6 +68,7 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
   const [editing, setEditing] = useState<LocalRoomDefaults | null>(null);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
   const [page, setPage] = useState(0);
   const [inspecting, setInspecting] = useState<LocalRoomDefaults | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -81,9 +93,15 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
     queryFn: ({ signal }) => setup.localRoomDefaultsHistory(locationId, inspecting!.id, signal),
     enabled: canManage && !!inspecting,
   });
-  const filtered = (query.data ?? []).filter((item) =>
-    item.data.name.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi')),
+  const filtered = (query.data ?? []).filter(
+    (item) =>
+      (!status ||
+        (status === 'Archived' ? item.status === 'Archived' : item.status !== 'Archived')) &&
+      [item.data.name, item.data.description ?? '', ...item.data.defaults.amenities].some((value) =>
+        value.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi')),
+      ),
   );
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 20) - 1));
   const valid =
     form.name.trim().length >= 2 &&
     Number.isInteger(Number(form.capacity)) &&
@@ -111,7 +129,7 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
                 .filter(Boolean),
             ),
           ],
-          referenceRent: form.referenceRent.trim() ? Number(form.referenceRent) : null,
+          referenceRent: form.referenceRent.trim() ? form.referenceRent : null,
         },
         assetTemplateId: form.assetTemplateId || null,
         expectedVersion: editing?.version ?? 0,
@@ -162,20 +180,34 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
     <Stack spacing={2}>
       <PageHeader
         group={null}
+        headingLevel={embedded ? 'h2' : 'h1'}
         title="Gợi ý tạo phòng"
-        subtitle="Cấu hình riêng của cơ sở dùng để tạo phòng nhanh. Có thể sửa độc lập sau khi nạp từ thư viện hoặc sao chép."
+        subtitle="Thông số tham khảo cho phòng tạo mới, không thay đổi phòng đang sử dụng."
         actions={
           canManage ? (
-            <Button variant="contained" disabled={!locationId} onClick={() => edit(null)}>
-              Thêm gợi ý tạo phòng
-            </Button>
+            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+              {locationId && (
+                <Button component={Link} to={`/locations/${locationId}/rooms`}>
+                  Đi đến danh sách phòng
+                </Button>
+              )}
+              <Button variant="contained" disabled={!locationId} onClick={() => edit(null)}>
+                Thêm gợi ý tạo phòng
+              </Button>
+            </Stack>
           ) : undefined
         }
       />
       <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={1.5}
+          sx={{ alignItems: { md: 'center' } }}
+        >
           <TextField
             fullWidth
+            size="small"
+            sx={{ maxWidth: { md: 360 }, flex: { md: '0 1 360px' } }}
             label="Tìm gợi ý tạo phòng"
             value={search}
             onChange={(e) => {
@@ -183,12 +215,38 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
               setPage(0);
             }}
           />
+          <TextField
+            select
+            size="small"
+            label="Trạng thái"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(0);
+            }}
+            sx={{ minWidth: { md: 190 } }}
+          >
+            <MenuItem value="">Tất cả trạng thái</MenuItem>
+            <MenuItem value="Recorded">Đang sử dụng</MenuItem>
+            <MenuItem value="Archived">Ngừng sử dụng</MenuItem>
+          </TextField>
           <Button
             disabled={query.isFetching || !canManage || !locationId}
             onClick={() => void query.refetch()}
           >
             Làm mới
           </Button>
+          {(search || status) && (
+            <Button
+              onClick={() => {
+                setSearch('');
+                setStatus('');
+                setPage(0);
+              }}
+            >
+              Xóa bộ lọc
+            </Button>
+          )}
         </Stack>
       </Paper>
       {!canManage ? (
@@ -201,13 +259,13 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
         <ErrorState error={query.error} retry={() => void query.refetch()} />
       ) : !filtered.length ? (
         <Alert severity="info">
-          {search
+          {search || status
             ? 'Không tìm thấy gợi ý phù hợp.'
             : 'Cơ sở chưa có gợi ý tạo phòng. Bạn có thể tạo mới hoặc nạp từ thư viện mẫu chung.'}
         </Alert>
       ) : (
         <RoomTypeMasterDetail
-          items={filtered.slice(page * 20, page * 20 + 20)}
+          items={filtered.slice(currentPage * 20, currentPage * 20 + 20)}
           total={filtered.length}
           canManage={canManage}
           edit={edit}
@@ -218,21 +276,13 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
         <TablePagination
           component="div"
           count={filtered.length}
-          page={page}
+          page={currentPage}
           rowsPerPage={20}
           rowsPerPageOptions={[20]}
           onPageChange={(_, value) => setPage(value)}
           labelRowsPerPage="Số dòng"
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} / ${count} gợi ý`}
         />
-      )}
-      {canManage && locationId && (
-        <Button
-          component={Link}
-          to={`/locations/${locationId}/rooms`}
-          sx={{ alignSelf: 'flex-start' }}
-        >
-          Đi đến danh sách phòng
-        </Button>
       )}
       <Dialog open={!!inspecting} onClose={() => setInspecting(null)} fullWidth maxWidth="sm">
         <DialogTitle>{inspecting?.data.name}</DialogTitle>
@@ -299,31 +349,51 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
           </DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
+              {editing && (
+                <Typography variant="body2" color="text.secondary">
+                  Phiên bản hiện tại: {editing.version}. Các thay đổi áp dụng cho lần tạo phòng mới.
+                </Typography>
+              )}
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                Thông tin gợi ý
+              </Typography>
               {field('name', 'Tên gợi ý', { required: true })}
               {field('description', 'Mô tả', { multiline: true })}
-              {field('capacity', 'Sức chứa mặc định', {
-                type: 'number',
-                required: true,
-                slotProps: { htmlInput: { min: 1, max: 32767, step: 1 } },
-              })}
-              {field('area', 'Diện tích (m²)', {
-                type: 'number',
-                required: true,
-                slotProps: { htmlInput: { min: 0.01, max: 999999.99, step: 0.01 } },
-              })}
+              <Box
+                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}
+              >
+                {field('capacity', 'Sức chứa mặc định', {
+                  type: 'number',
+                  required: true,
+                  slotProps: { htmlInput: { min: 1, max: 32767, step: 1 } },
+                })}
+                {field('area', 'Diện tích (m²)', {
+                  type: 'number',
+                  required: true,
+                  slotProps: { htmlInput: { min: 0.01, max: 999999.99, step: 0.01 } },
+                })}
+              </Box>
               {field('amenities', 'Tiện nghi, phân cách bằng dấu phẩy', {
                 helperText: 'Ví dụ: Điều hòa, Ban công, Bếp riêng',
               })}
-              {field('referenceRent', 'Giá thuê tham khảo (VND)', {
-                type: 'number',
-                slotProps: { htmlInput: { min: 0, step: 1 } },
-              })}
+              <Divider />
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                Giá và trang bị tham khảo
+              </Typography>
+              <MoneyField
+                label="Giá thuê tham khảo (VND)"
+                allowDecimal
+                value={form.referenceRent}
+                helperText="Owner xác nhận giá và ngày hiệu lực khi tạo phòng."
+                onValueChange={(raw) => setForm((old) => ({ ...old, referenceRent: raw }))}
+              />
               {templates.error && (
                 <ErrorState error={templates.error} retry={() => void templates.refetch()} />
               )}
               <TextField
                 select
                 label="Bộ mẫu trang bị tại cơ sở"
+                disabled={templates.isPending || save.isPending}
                 value={form.assetTemplateId}
                 onChange={(e) => setForm((old) => ({ ...old, assetTemplateId: e.target.value }))}
               >
@@ -339,25 +409,37 @@ function RoomDefaultsWorkspace({ locationId }: { locationId: string }) {
                 ))}
               </TextField>
               {editing && (
-                <TextField
-                  select
-                  label="Trạng thái gợi ý"
-                  value={form.status}
-                  onChange={(e) =>
-                    setForm((old) => ({
-                      ...old,
-                      status: e.target.value as 'Recorded' | 'Archived',
-                    }))
-                  }
-                >
-                  <MenuItem value="Recorded">Đang sử dụng</MenuItem>
-                  <MenuItem value="Archived">Ngừng sử dụng</MenuItem>
-                </TextField>
+                <>
+                  <Divider />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    Trạng thái và lịch sử
+                  </Typography>
+                  <TextField
+                    select
+                    label="Trạng thái gợi ý"
+                    value={form.status}
+                    onChange={(e) =>
+                      setForm((old) => ({
+                        ...old,
+                        status: e.target.value as 'Recorded' | 'Archived',
+                      }))
+                    }
+                  >
+                    <MenuItem value="Recorded">Đang sử dụng</MenuItem>
+                    <MenuItem value="Archived">Ngừng sử dụng</MenuItem>
+                  </TextField>
+                  {form.status === 'Archived' && (
+                    <Alert severity="warning">
+                      Gợi ý sẽ không còn được chọn khi tạo phòng. Các phòng và giá đã lưu vẫn giữ
+                      nguyên.
+                    </Alert>
+                  )}
+                </>
               )}
               {field('reason', 'Lý do / ghi chú', { required: !!editing })}
               <Alert severity="info">
-                Lưu gợi ý riêng tại cơ sở. Giá tham khảo không tự tạo biểu phí; bộ trang bị không
-                phải tài sản đã lắp đặt.
+                Lưu phiên bản gợi ý riêng tại cơ sở. Giá tham khảo không tự tạo biểu phí; bộ trang
+                bị là định mức, chưa xác nhận lắp đặt. Giá và hợp đồng đã chốt không thay đổi.
               </Alert>
               {save.error && <Alert severity="error">{invoiceError(save.error)}</Alert>}
               {editing && (

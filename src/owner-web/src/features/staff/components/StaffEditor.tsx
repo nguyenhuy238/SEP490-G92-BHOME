@@ -1,3 +1,4 @@
+import { MoneyField } from '../../../components/common/MoneyField';
 import { useState } from 'react';
 import {
   Alert,
@@ -38,6 +39,7 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
       status: 'Active',
     },
   );
+  const [baseRate, setBaseRate] = useState(String(staff?.employment?.baseRate ?? ''));
   const [confirm, setConfirm] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const dateError =
@@ -56,7 +58,12 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
       return;
     }
     setFieldErrors({});
-    const work = { ...employment };
+    const work = {
+      ...employment,
+      // ASP.NET's web JSON options accept decimal strings. Preserve large VND inputs
+      // exactly while retaining the existing numeric payload for ordinary salaries.
+      baseRate: baseRate === '' ? null : baseRate.length <= 14 ? Number(baseRate) : baseRate,
+    };
     delete work.id;
     const body = {
       fullName: name.trim(),
@@ -206,15 +213,12 @@ export function StaffEditor({ staff, close }: { staff: Staff | null; close: () =
                 value={employment.salaryType ?? ''}
                 onChange={(e) => set('salaryType', e.target.value || null)}
               />
-              <TextField
-                type="number"
+              <MoneyField
                 label="Mức lương thỏa thuận (VND)"
                 {...fieldError('baserate')}
-                value={employment.baseRate ?? ''}
-                slotProps={{ htmlInput: { min: 0, step: 1 } }}
-                onChange={(e) =>
-                  set('baseRate', e.target.value === '' ? null : Number(e.target.value))
-                }
+                value={baseRate}
+                maxRawLength={18}
+                onValueChange={setBaseRate}
               />
               <TextField
                 select

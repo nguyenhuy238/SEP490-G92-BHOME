@@ -23,7 +23,7 @@ public sealed partial class Compact24OwnerSetupTests
         return new(new("Synthetic setup " + id, "Synthetic address", "TEST-" + id.ToString("N"), 2,
             "0900000000", "synthetic@example.invalid", "Synthetic metadata"), [type, empty],
             [new(Guid.NewGuid(), "101", "1", type.Key, 2700000m), new(Guid.NewGuid(), "201", "2", empty.Key, 2000000m)],
-            [new(null, ChargeCategory.ServiceFee, "WIFI", "Internet", ChargingMethod.FixedPerRoomPerMonth, 50000m, Today, null)],
+            [new(null, ChargeCategory.ServiceFee, "WIFI", "Internet", ChargingMethod.FixedPerPersonPerMonth, 50000m, Today, null)],
             new("Synthetic rules", "Owner reviewed rules", Today), active, Today.AddDays(2));
     }
 
@@ -45,6 +45,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(3, fees.Length); Assert.Equal(2700000m, fees.Single(p => p.RoomId == rooms[0].Id).Rate);
         Assert.All(fees.Where(p => p.RoomId != null), p => Assert.Equal(draft.RentEffectiveFrom, p.EffectiveFrom));
         Assert.Equal(50000m, fees.Single(p => p.RoomId == null).Rate);
+        Assert.Equal(ChargingMethod.FixedPerPersonPerMonth, fees.Single(p => p.RoomId == null).Method);
         var beforeRent = (await owner.GetFromJsonAsync<ResolvedPrices>($"/api/v1/rooms/{rooms[0].Id}/prices?effectiveOn={Today:yyyy-MM-dd}"))!;
         Assert.DoesNotContain(beforeRent.Charges, p => p.Category == ChargeCategory.Rent);
         var onRent = (await owner.GetFromJsonAsync<ResolvedPrices>($"/api/v1/rooms/{rooms[0].Id}/prices?effectiveOn={draft.RentEffectiveFrom:yyyy-MM-dd}"))!;

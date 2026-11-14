@@ -80,6 +80,16 @@ function mount(element: React.ReactNode) {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(window.matchMedia).mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
   mocks.api.request.mockResolvedValue([]);
   mocks.api.list.mockResolvedValue({ items: [invoice], page: 1, pageSize: 20, totalCount: 1 });
   mocks.api.get.mockResolvedValue(invoice);
@@ -184,6 +194,67 @@ it('keeps incomplete drafts visible and disables finalization', async () => {
   fireEvent.click(await screen.findByText('Xem chi tiết'));
   await screen.findByText(/Chỉ số nước hợp lệ đã xác nhận/);
   expect(screen.getByText('Phát hành hóa đơn')).toBeDisabled();
+});
+it('keeps the amount, incomplete state and detail action in the mobile invoice row', async () => {
+  vi.mocked(window.matchMedia).mockImplementation((query) => ({
+    matches: query.includes('max-width:599px'),
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+  const incomplete = { ...invoice, missingInputs: ['WaterReading'], total: '9007199254740993' };
+  mocks.api.list.mockResolvedValue({ items: [incomplete], page: 1, pageSize: 20, totalCount: 1 });
+  mocks.api.get.mockResolvedValue(incomplete);
+  mount(<LiveInvoicesPage />);
+  const table = await screen.findByRole('table', { name: 'Danh sách hóa đơn' });
+  expect(within(table).getAllByRole('columnheader')).toHaveLength(2);
+  const identity = within(table).getByRole('rowheader');
+  expect(within(identity).getByText('Bản nháp')).toBeVisible();
+  expect(within(identity).getByText('Thiếu dữ liệu')).toBeVisible();
+  expect(within(identity).getByText('9.007.199.254.740.993 ₫')).toBeVisible();
+  expect(within(identity).getByText('Tạm tính')).toBeVisible();
+  fireEvent.click(within(table).getByRole('button', { name: 'Xem chi tiết' }));
+  expect(await screen.findByRole('button', { name: 'Phát hành hóa đơn' })).toBeDisabled();
+  expect(mocks.api.finalize).not.toHaveBeenCalled();
+});
+it('shows the signed per-person fee and actual person-days without claiming prior settlement', async () => {
+  mocks.api.get.mockResolvedValue({
+    ...invoice,
+    lines: [
+      {
+        ...invoice.lines[0],
+        category: 'ServiceFee',
+        chargeCode: 'CLEANING',
+        name: 'Vệ sinh theo người',
+        rate: '30000',
+        quantity: '2',
+        amount: '45000',
+        meterReadingId: null,
+        previousReading: null,
+        confirmedReading: null,
+        utilityCalculationSnapshot: JSON.stringify({
+          kind: 'FixedChargeCoverage/v1',
+          source: {
+            ResidentCount: 2,
+            PersonDays: 45,
+            PeriodDays: 30,
+            PartialMonth: 1,
+            AlreadyPricedAmount: 0,
+          },
+        }),
+      },
+    ],
+  });
+  mount(<LiveInvoicesPage />);
+  fireEvent.click(await screen.findByText('Xem chi tiết'));
+  await screen.findByText('Vệ sinh theo người');
+  expect(screen.getByText('30.000 đ/người/tháng')).toBeInTheDocument();
+  expect(screen.getByText('45 người-ngày')).toBeInTheDocument();
+  expect(screen.queryByText(/Đã ghi nhận trong quyết toán/)).not.toBeInTheDocument();
 });
 it('shows an empty list and a retryable failure without inventing financial values', async () => {
   mocks.api.list.mockRejectedValue({ status: 403 });
