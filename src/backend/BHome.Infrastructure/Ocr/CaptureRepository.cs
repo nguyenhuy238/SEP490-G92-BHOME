@@ -189,7 +189,8 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                 ? db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => r.PreviousValue).FirstOrDefault()
                 : db.Set<MeterReading>().Where(r => r.MeterId == x.MeterId &&
                     db.Set<OperationalTask>().Any(previous => previous.Id == r.TaskId &&
-                        (previous.ReadingDate < x.ReadingDate || (x.Purpose == ReadingPurpose.Final && previous.ReadingDate == x.ReadingDate &&
+                        (previous.ReadingDate < x.ReadingDate || (x.Purpose == ReadingPurpose.Periodic && previous.Purpose == ReadingPurpose.Initial && previous.ReadingDate == x.ReadingDate) ||
+                        (x.Purpose == ReadingPurpose.Final && previous.ReadingDate == x.ReadingDate &&
                             (previous.Purpose != ReadingPurpose.Final || previous.ContractId != x.ContractId)))))
                     .OrderByDescending(r => r.ConfirmedAt).ThenBy(r => r.Id).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault(),
             x.ContractId, db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => (Guid?)r.Id).FirstOrDefault(), x.DueAt, x.AssignedStaffUserId, x.AutomationPlanId, x.Version, x.LocationId, x.Meter.RoomId));
@@ -277,7 +278,14 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             // latest confirmed value; they never create another financial effect.
             var finalOnSameDay = task.Purpose == ReadingPurpose.Final && task.ReadingDate == previousTask.ReadingDate &&
                 (previousTask.Purpose != ReadingPurpose.Final || previousTask.ContractId != task.ContractId);
-            if ((!finalOnSameDay && task.ReadingDate <= previousTask.ReadingDate) || (previousTask.BillingPeriod is not null && task.BillingPeriod <= previousTask.BillingPeriod)) throw new CaptureConflictException("reading_period_out_of_order");
+            // An initial baseline confirmed earlier today is valid for a later periodic
+            // reading on the same calendar date. Other same-day periodic readings
+            // remain out of order; the meter still must not roll backwards.
+            var periodicAfterInitialOnSameDay = task.Purpose == ReadingPurpose.Periodic && previousTask.Purpose == ReadingPurpose.Initial &&
+                task.ReadingDate == previousTask.ReadingDate;
+            if ((!finalOnSameDay && !periodicAfterInitialOnSameDay && task.ReadingDate <= previousTask.ReadingDate) ||
+                (previousTask.BillingPeriod is not null && task.BillingPeriod <= previousTask.BillingPeriod))
+                throw new CaptureConflictException("reading_period_out_of_order");
             if (x.ConfirmedValue < previous.ConfirmedValue) throw new CaptureConflictException("meter_reset_or_rollover_requires_review");
         }
         // Verify the private object still exists before committing its reference.

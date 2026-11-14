@@ -20,6 +20,7 @@ import { ResourcePage } from '../../../components/common/ResourcePage';
 import { isMockMode } from '../../../services/config';
 import { useMeterApi } from '../useMeterApi';
 import { MeterAssignment } from '../MeterAssignment';
+import { InitialMeterTask } from '../InitialMeterTask';
 import { downloadOwnerFile } from '../../../services/ownerDownloads';
 import { OwnerTable } from '../../../components/common/OwnerWorkspace';
 
@@ -169,6 +170,19 @@ export function LiveMetersPage() {
             />
           </FilterToolbar>
         </Paper>
+        {session?.roles?.includes('Owner') && (
+          <InitialMeterTask
+            key={location + room}
+            location={location}
+            room={room}
+            created={(id) => {
+              setSelected(id);
+              setStatus('');
+              setDueDate('');
+              setPage(1);
+            }}
+          />
+        )}
         {(locations.error || rooms.error || evidenceError) && (
           <Alert severity="error">
             {evidenceError || contractError(locations.error || rooms.error)}

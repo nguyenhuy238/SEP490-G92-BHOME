@@ -125,7 +125,13 @@ public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
         await ConfirmUtilities(w);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(draft.Version))).StatusCode);
         var ready = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(draft.Version)));
+        Assert.Equal(draft.Id, ready.Id);
+        Assert.Equal("Draft", ready.Status);
+        Assert.Null(ready.FinalizedAt);
+        Assert.Equal(draft.Version + 1, ready.Version);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(draft.Version))).StatusCode);
         Assert.Empty(ready.MissingInputs); Assert.Equal(3119250m, ready.Total);
         Assert.Equal(25.5m, ready.Lines.Single(l => l.Category == "Electricity").Quantity);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);

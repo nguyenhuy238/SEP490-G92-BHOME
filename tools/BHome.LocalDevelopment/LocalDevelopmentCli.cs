@@ -8,6 +8,19 @@ internal static class LocalDevelopmentCli
 {
     public static async Task<int> Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "seed-job09" && args[1] is "--inspect" or "--seed")
+        {
+            try
+            {
+                var config = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+                var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
+                services.AddInfrastructure(config);
+                await using var provider = services.BuildServiceProvider();
+                await Job09Seed.RunAsync(provider, args[1]);
+                return 0;
+            }
+            catch (Exception error) { Console.Error.WriteLine(error is LocalTestAccountException ? error.Message : $"JOB09_FAILED {error.GetType().Name}; credentials suppressed."); if(error is Npgsql.PostgresException pg) Console.Error.WriteLine($"code={pg.SqlState}; constraint={pg.ConstraintName}; message={pg.MessageText}"); return 1; }
+        }
         if (args.Length == 3 && args[0] == "seed-tenant-mobile-demo" && args[2] is "--inspect" or "--seed" or "--verify")
         {
             try

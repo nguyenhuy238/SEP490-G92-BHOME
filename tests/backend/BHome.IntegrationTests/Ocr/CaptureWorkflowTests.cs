@@ -467,6 +467,43 @@ public sealed class CaptureWorkflowTests : IClassFixture<CaptureFixture>
         }
     }
     [Fact]
+    public async Task PeriodicReadingOnBaselineDateUsesConfirmedInitialValueWithoutAllowingMeterDecrease()
+    {
+        var w = await Workspace();
+        var initial = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Initial, Today, null));
+        var initialEvidence = await Evidence(w.Staff, initial);
+        var baselineResponse = await w.Staff.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{initial}/confirm", new MeterConfirmation(true, 100m, initialEvidence));
+        baselineResponse.EnsureSuccessStatusCode();
+        var baseline = (await baselineResponse.Content.ReadFromJsonAsync<ConfirmedReading>())!;
+        Assert.Null(baseline.PreviousValue);
+        Assert.Null(baseline.Consumption);
+
+        var period = new DateOnly(Today.Year, Today.Month, 1);
+        var periodic = await Create(w.Owner, "meter-tasks", new MeterTaskInput(w.Meter, ReadingPurpose.Periodic, Today, period));
+        var pending = await w.Staff.GetFromJsonAsync<MeterTaskSummary>($"/api/v1/capture/meter-tasks/{periodic}");
+        Assert.Equal(100m, pending!.PreviousValue);
+
+        var evidence = await Evidence(w.Staff, periodic);
+        var route = $"/api/v1/capture/meter-tasks/{periodic}/confirm";
+        var decreased = await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 99m, evidence));
+        Assert.Equal(HttpStatusCode.Conflict, decreased.StatusCode);
+        Assert.Contains("meter_reset_or_rollover_requires_review", await decreased.Content.ReadAsStringAsync());
+
+        var confirmed = await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 125.5m, evidence));
+        confirmed.EnsureSuccessStatusCode();
+        var saved = (await confirmed.Content.ReadFromJsonAsync<ConfirmedReading>())!;
+        Assert.Equal(100m, saved.PreviousValue);
+        Assert.Equal(125.5m, saved.ConfirmedValue);
+        Assert.Equal(25.5m, saved.Consumption);
+        var replay = await w.Staff.PostAsJsonAsync(route, new MeterConfirmation(true, 125.5m, evidence));
+        replay.EnsureSuccessStatusCode();
+        Assert.Equal(saved.Id, (await replay.Content.ReadFromJsonAsync<ConfirmedReading>())!.Id);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        Assert.Equal(1, await db.Set<MeterReading>().CountAsync(r => r.TaskId == periodic));
+        Assert.Equal(MeterTaskStatus.Completed, (await db.Set<OperationalTask>().SingleAsync(t => t.Id == periodic)).Status);
+    }
+    [Fact]
     public async Task MissingBaselineWrongEvidenceAndUnconfirmedOrNegativeReadingCannotCompleteTask()
     {
         var w = await Workspace();
