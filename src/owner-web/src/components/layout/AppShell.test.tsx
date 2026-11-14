@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   setLocationId: vi.fn(),
   setSearch: vi.fn(),
 }));
-vi.mock('../../services/config', () => ({ isMockMode: false }));
+vi.mock('../../services/config', () => ({ isMockMode: false, apiBaseUrl: '' }));
 vi.mock('../../app/PortalProvider', () => ({
   usePortal: () => ({
     locationId: 'all',

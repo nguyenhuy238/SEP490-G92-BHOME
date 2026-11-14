@@ -22,9 +22,21 @@ import {
   contractError,
   formatContractMoney,
 } from '../../../../../../packages/client-core/src/contracts';
-import { apiBaseUrl } from '../../../services/config';
+import { apiBaseUrl, isMockMode } from '../../../services/config';
+import { PageHeader } from '../../../components/common/PortalUI';
 
 export default function HoldingSettingsPage() {
+  return isMockMode ? (
+    <Stack spacing={3}>
+      <PageHeader title="Cấu hình hợp đồng giữ chỗ" />
+      <Alert severity="info">Cấu hình giữ chỗ theo cơ sở chỉ hoạt động ở chế độ API.</Alert>
+    </Stack>
+  ) : (
+    <LiveHoldingSettingsPage />
+  );
+}
+
+function LiveHoldingSettingsPage() {
   const { client } = useAuth();
   const request = useMemo(
     () =>
@@ -149,7 +161,7 @@ export default function HoldingSettingsPage() {
   return (
     <Stack spacing={3}>
       <Box>
-        <Typography variant="h4">Cấu hình hợp đồng giữ chỗ</Typography>
+        <PageHeader title="Cấu hình hợp đồng giữ chỗ" />
         <Typography color="text.secondary">
           Thiết lập riêng cho từng cơ sở. Tiền giữ chỗ được tính từ giá thuê hiện hành của từng
           phòng.

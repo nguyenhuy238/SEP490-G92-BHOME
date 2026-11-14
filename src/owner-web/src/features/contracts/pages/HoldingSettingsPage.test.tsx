@@ -11,7 +11,7 @@ vi.mock('../../../../../../packages/client-core/src/auth', () => ({
 vi.mock('../../../../../../packages/client-core/src/api', () => ({
   createApiClient: () => state.request,
 }));
-vi.mock('../../../services/config', () => ({ apiBaseUrl: '' }));
+vi.mock('../../../services/config', () => ({ apiBaseUrl: '', isMockMode: false }));
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
