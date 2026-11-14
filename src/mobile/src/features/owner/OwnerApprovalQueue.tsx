@@ -20,6 +20,7 @@ import {
   type AttentionCategory,
 } from '../../services/ownerAttention';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
+import { formatContractMoney } from '../../../../../packages/client-core/src/contracts';
 export { ownerQueuePolicy } from './ownerQueryPolicy';
 
 const labels: Record<AttentionCategory, string> = {
@@ -65,6 +66,7 @@ export function OwnerApprovalQueue({ compact = false }: { compact?: boolean }) {
       {queue.error && <OwnerFailure retry={queue.reload} busy={queue.fetching} />}
       {!compact && available.length > 1 && (
         <Filters
+          minTouchSize={48}
           options={['Tất cả', ...available.map(([, label]) => label)]}
           selected={selected}
           onChange={(value) => {
@@ -82,11 +84,18 @@ export function OwnerApprovalQueue({ compact = false }: { compact?: boolean }) {
             title={attentionTitle(item, source)}
             status={source.status}
             urgent={source.category === 'emergency' || item.isOverdue}
-            detail={
+            detail={[
               date
                 ? `${item.dueAt || item.targetCompletionAt ? 'Hạn' : 'Ghi nhận'}: ${formatInstant(date)}`
-                : undefined
-            }
+                : '',
+              item.estimatedCost !== null &&
+              item.estimatedCost !== undefined &&
+              Number.isSafeInteger(item.estimatedCost)
+                ? `Dự kiến: ${formatContractMoney(String(item.estimatedCost))}`
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
             action={source.action}
             onPress={() =>
               go(source.screen, {
@@ -114,6 +123,7 @@ export function OwnerApprovalQueue({ compact = false }: { compact?: boolean }) {
       {!compact && (pages > 1 || page > 1) && (
         <Row spread>
           <Button
+            contentStyle={{ minHeight: 48, minWidth: 48 }}
             disabled={queue.fetching || page === 1}
             onPress={() => setPage((value) => value - 1)}
           >
@@ -123,6 +133,7 @@ export function OwnerApprovalQueue({ compact = false }: { compact?: boolean }) {
             Trang {page}/{pages}
           </Text>
           <Button
+            contentStyle={{ minHeight: 48, minWidth: 48 }}
             disabled={queue.fetching || page >= pages}
             onPress={() => setPage((value) => value + 1)}
           >

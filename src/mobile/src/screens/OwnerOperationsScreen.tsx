@@ -19,7 +19,7 @@ import { OwnerPlaceLabel } from '../features/owner/OwnerPlaceLabel';
 import { OwnerStaffName } from '../features/owner/OwnerStaffName';
 import { queryPolicies } from '../lib/queryPolicies';
 import type { Named } from '../lib/api';
-import type { AttentionRecord } from '../services/ownerAttention';
+import { loadOwnerPage, type AttentionRecord } from '../services/ownerAttention';
 import { incidentLabels } from '../services/incidents';
 import { taskStatusLabels } from '../services/operationalTasks';
 import { text as contractText } from '../../../../packages/client-core/src/contracts';
@@ -85,7 +85,7 @@ export function OwnerOperationsScreen({ initialSection = 'Sự cố' }: { initia
   if (locationId) params.set('locationId', locationId);
   const query = useWorkspaceQuery<{ items: RecordItem[]; totalCount: number }>(
     owner ? `/api/v1/${root}?${params}` : null,
-    { cache: ownerQueuePolicy },
+    { cache: ownerQueuePolicy, load: loadOwnerPage },
   );
   const { reload: reloadQuery } = query,
     { reload: reloadLocations } = locations;
@@ -99,6 +99,7 @@ export function OwnerOperationsScreen({ initialSection = 'Sự cố' }: { initia
     <>
       <DashboardSummary title="Vận hành" detail="Theo dõi tiến độ và kiểm tra kết quả tại cơ sở" />
       <Filters
+        minTouchSize={48}
         options={sections}
         selected={section}
         onChange={(value) => {
@@ -145,8 +146,7 @@ export function OwnerOperationsScreen({ initialSection = 'Sự cố' }: { initia
             status={
               item.isOverdue
                 ? 'Quá hạn'
-                : states[section].find((state) => state.id === item.status)?.label ||
-                  'Đang theo dõi'
+                : `${item.severity === 'Emergency' ? 'Khẩn cấp · ' : ''}${states[section].find((state) => state.id === item.status)?.label || 'Đang theo dõi'}`
             }
             urgent={
               item.isOverdue ||

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { Button, Text } from 'react-native-paper';
-import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
+import { Action as SharedAction, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
+import { useWorkspaceHeaderRefresh } from '../../components/WorkspaceHeaderContext';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { QueryState as SharedQueryState, Pagination } from '../../components/WorkspaceQueryState';
 import { OwnerDataState } from '../../components/OwnerMobileKit';
@@ -37,6 +38,10 @@ import {
 import { IncidentActionPanel } from './IncidentActions';
 
 const idPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
+function Action(props: React.ComponentProps<typeof SharedAction>) {
+  const { role } = useWorkspace();
+  return <SharedAction {...props} minHeight={role === 'Owner' ? 48 : 44} />;
+}
 function Pager({
   query,
   page,
@@ -207,6 +212,29 @@ function IncidentDetail({ id }: { id: string }) {
   );
   const expenses = useIncidentQuery<IncidentExpense[]>(
     loaded && role === 'Owner' ? `${incidentRoot}/${id}/expenses` : null,
+  );
+  const { reload: reloadReport } = query,
+    { reload: reloadHistory } = history,
+    { reload: reloadEvidence } = evidence,
+    { reload: reloadWork } = work,
+    { reload: reloadEmergency } = emergency,
+    { reload: reloadExpenses } = expenses;
+  const refresh = useCallback(() => {
+    reloadReport();
+    reloadHistory();
+    reloadEvidence();
+    reloadWork();
+    reloadEmergency();
+    reloadExpenses();
+  }, [reloadReport, reloadHistory, reloadEvidence, reloadWork, reloadEmergency, reloadExpenses]);
+  useWorkspaceHeaderRefresh(
+    refresh,
+    query.fetching ||
+      history.fetching ||
+      evidence.fetching ||
+      work.fetching ||
+      emergency.fetching ||
+      expenses.fetching,
   );
   return (
     <>
@@ -465,6 +493,26 @@ function WorkDetail({ id }: { id: string }) {
     work
       ? `${workOrderRoot}/maintenance-history?incidentId=${work.incidentId}&page=${maintenancePage}&pageSize=20`
       : null,
+  );
+  const { reload: reloadWork } = query,
+    { reload: reloadIncident } = incident,
+    { reload: reloadHistory } = history,
+    { reload: reloadEvidence } = evidence,
+    { reload: reloadMaintenance } = maintenance;
+  const refresh = useCallback(() => {
+    reloadWork();
+    reloadIncident();
+    reloadHistory();
+    reloadEvidence();
+    reloadMaintenance();
+  }, [reloadWork, reloadIncident, reloadHistory, reloadEvidence, reloadMaintenance]);
+  useWorkspaceHeaderRefresh(
+    refresh,
+    query.fetching ||
+      incident.fetching ||
+      history.fetching ||
+      evidence.fetching ||
+      maintenance.fetching,
   );
   return (
     <>

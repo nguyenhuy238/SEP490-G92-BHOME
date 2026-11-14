@@ -33,11 +33,13 @@ function Kpi({ label, value, detail }: { label: string; value: string; detail: s
     <DashboardCard style={styles.kpi}>
       <Text style={{ color: colors.muted }}>{label}</Text>
       <Text
-        style={[typography.metric, { color: staffColors.navy }]}
-        adjustsFontSizeToFit
-        numberOfLines={1}
+        style={[
+          typography.metric,
+          { color: staffColors.navy },
+          value.length > 9 && { fontSize: 18, lineHeight: 26 },
+        ]}
       >
-        {value}
+        {value.replace(/\u00a0/g, ' ')}
       </Text>
       <Text style={typography.secondary}>{detail}</Text>
     </DashboardCard>
@@ -111,7 +113,12 @@ export function OwnerOverviewScreen() {
           detail="Đang mở, cần theo dõi"
         />
       </View>
-      <DashboardSection title="Cần xử lý" action="Xem tất cả" onPress={() => go('approvals')}>
+      <DashboardSection
+        title="Cần xử lý"
+        action="Xem tất cả"
+        minActionHeight={48}
+        onPress={() => go('approvals')}
+      >
         <Text style={{ color: colors.muted }}>
           {attention.complete
             ? `${attention.totalKnown} mục cần theo dõi hoặc quyết định`
@@ -131,8 +138,9 @@ export function OwnerOverviewScreen() {
                   ...(source.screen === 'signing' ? { section: 'signing' } : {}),
                 })
               }
-            />
-            <OwnerPlaceLabel item={item} />
+            >
+              <OwnerPlaceLabel item={item} />
+            </OwnerRecordRow>
           </View>
         ))}
         {attention.loading && !attention.items.length && <OwnerLoading />}
@@ -145,6 +153,7 @@ export function OwnerOverviewScreen() {
       </DashboardSection>
       <DashboardSection
         title="Hoạt động vận hành"
+        minActionHeight={48}
         action="Xem thêm"
         onPress={() => go('operations')}
       >
@@ -158,8 +167,9 @@ export function OwnerOverviewScreen() {
               status={taskStatusLabels[task.status] || 'Đang theo dõi'}
               urgent={task.isOverdue}
               onPress={() => go('task-detail', { taskId: task.id })}
-            />
-            <OwnerPlaceLabel item={task} />
+            >
+              <OwnerPlaceLabel item={task} />
+            </OwnerRecordRow>
           </View>
         ))}
         {recent.data?.items.length === 0 && (

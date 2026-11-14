@@ -1,4 +1,5 @@
 import type { WorkspaceScreen } from '../features/workspace/navigation';
+import { MobileApiError, type MobileApi } from '../lib/api';
 
 export type AttentionCategory = 'emergency' | 'maintenance' | 'task' | 'contract';
 export interface AttentionSource {
@@ -89,10 +90,28 @@ export interface AttentionRecord {
   targetCompletionAt?: string;
   createdAt?: string;
   isOverdue?: boolean;
+  estimatedCost?: number | null;
 }
 export interface AttentionPage {
   items: AttentionRecord[];
   totalCount: number;
+}
+
+export async function loadOwnerPage<T extends AttentionRecord>(
+  api: MobileApi,
+  path: string,
+  signal: AbortSignal,
+): Promise<{ items: T[]; totalCount: number }> {
+  const page = await api.request<{ items: T[]; totalCount: number }>(path, { signal });
+  if (
+    !page ||
+    !Array.isArray(page.items) ||
+    !Number.isSafeInteger(page.totalCount) ||
+    page.totalCount < page.items.length ||
+    !page.items.every((item) => item && typeof item.id === 'string' && !!item.id)
+  )
+    throw new MobileApiError(502, 'invalid_response', path);
+  return page;
 }
 export const attentionPageSize = 6;
 export function attentionTitle(item: AttentionRecord, source: AttentionSource) {

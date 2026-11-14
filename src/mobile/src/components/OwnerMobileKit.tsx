@@ -84,7 +84,12 @@ export function OwnerRecordRow({
     >
       <View style={styles.recordContent}>
         <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
-          <DashboardStatus tone={urgent ? 'red' : 'blue'}>{status}</DashboardStatus>
+          <DashboardStatus
+            tone={urgent ? 'red' : 'blue'}
+            palette={urgent ? { background: colors.redSoft, foreground: colors.red } : undefined}
+          >
+            {status}
+          </DashboardStatus>
           <Text style={[typography.sectionHeading, { color: staffColors.navy }]} numberOfLines={2}>
             {title}
           </Text>

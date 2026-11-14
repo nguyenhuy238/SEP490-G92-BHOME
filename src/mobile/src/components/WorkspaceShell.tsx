@@ -11,7 +11,7 @@ import {
 import { Badge, Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { router, useNavigation } from 'expo-router';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { colors as c, staffColors as s } from '../theme/theme';
 import { WorkspaceTabBar } from './WorkspaceTabBar';
 import { WorkspaceTabsContext } from '../features/workspace/WorkspaceTabsContext';
@@ -83,6 +83,13 @@ export function WorkspaceShell({
   const { role, preview, go, leavePreview, scrollRevision, requestNavigation } = useWorkspace();
   const insideTabs = useContext(WorkspaceTabsContext);
   const navigation = useNavigation();
+  const [focused, setFocused] = useState(() => navigation.isFocused());
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, []),
+  );
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [headerAction, setHeaderAction] = useState<WorkspaceHeaderAction | null>(null);
   const registerHeaderAction = useCallback((action: WorkspaceHeaderAction) => {
@@ -147,6 +154,8 @@ export function WorkspaceShell({
   }
   return (
     <SafeAreaView
+      aria-hidden={owner ? !focused : undefined}
+      importantForAccessibility={owner && !focused ? 'no-hide-descendants' : 'auto'}
       style={[styles.root, tenantHomeLayout && { backgroundColor: '#173654' }]}
       edges={['top', 'left', 'right']}
     >

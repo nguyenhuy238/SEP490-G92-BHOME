@@ -259,7 +259,11 @@ function TaskDetail({ id }: { id: string }) {
   }
   return (
     <>
-      <Action secondary onPress={() => go(role === 'Owner' ? 'operations' : 'work-orders')}>
+      <Action
+        minHeight={48}
+        secondary
+        onPress={() => go(role === 'Owner' ? 'operations' : 'work-orders')}
+      >
         Về danh sách công việc
       </Action>
       <OwnerDataState loading={query.loading} error={query.error} reload={reload} />
@@ -297,7 +301,10 @@ function TaskDetail({ id }: { id: string }) {
             {task.verifiedAt && <Text>Owner đã kiểm tra: {formatInstant(task.verifiedAt)}</Text>}
           </Box>
           {task.kind === 'MeterReading' && role === 'Staff' && (
-            <Action onPress={() => go(role === 'Staff' ? 'meter-reading' : 'operations')}>
+            <Action
+              minHeight={48}
+              onPress={() => go(role === 'Staff' ? 'meter-reading' : 'operations')}
+            >
               Mở tác vụ đồng hồ
             </Action>
           )}
@@ -381,6 +388,7 @@ function TaskDetail({ id }: { id: string }) {
                 <Text>Hủy công việc và giữ lại lịch sử. Cần ghi rõ lý do.</Text>
               )}
               <Action
+                minHeight={48}
                 disabled={
                   busy ||
                   query.loading ||
@@ -419,10 +427,15 @@ function TaskDetail({ id }: { id: string }) {
             <Text>{task?.title}. Gửi xác nhận sau khi đã xem kết quả và ảnh minh chứng?</Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button disabled={busy} onPress={() => setConfirmDecision(false)}>
+            <Button
+              contentStyle={{ minHeight: 48 }}
+              disabled={busy}
+              onPress={() => setConfirmDecision(false)}
+            >
               Quay lại
             </Button>
             <Button
+              contentStyle={{ minHeight: 48 }}
               disabled={busy}
               loading={busy}
               onPress={() => {

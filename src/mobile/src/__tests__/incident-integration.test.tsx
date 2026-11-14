@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import React, { useEffect } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  WorkspaceHeaderContext,
+  type WorkspaceHeaderAction,
+} from '../components/WorkspaceHeaderContext';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MobileApiError } from '../lib/api';
 import { QueryCache } from '../lib/queryCache';
@@ -544,6 +548,34 @@ it.each(['PendingApproval', 'PendingVerification'] as const)(
     expect(mutations()).toHaveLength(0);
   },
 );
+it('refreshes all Owner maintenance detail sections through the shared pull-to-refresh action', async () => {
+  s.role = 'Owner';
+  s.params = { workOrderId: wid };
+  let action: WorkspaceHeaderAction | undefined;
+  const register = (value: WorkspaceHeaderAction) => {
+    action = value;
+    return () => {};
+  };
+  render(
+    <WorkspaceHeaderContext.Provider value={register}>
+      <MaintenanceDetailScreen />
+    </WorkspaceHeaderContext.Provider>,
+  );
+  await screen.findByText('Chi tiết lệnh sửa chữa');
+  await waitFor(() => expect(action?.disabled).toBe(false));
+  const before = s.request.mock.calls.filter(
+    ([path]) => path === `/api/v1/work-orders/${wid}`,
+  ).length;
+  await act(async () => action?.onRefresh());
+  await waitFor(() =>
+    expect(
+      s.request.mock.calls.filter(([path]) => path === `/api/v1/work-orders/${wid}`).length,
+    ).toBe(before + 1),
+  );
+  expect(
+    s.request.mock.calls.filter(([path]) => path.endsWith('/evidence')).length,
+  ).toBeGreaterThanOrEqual(2);
+});
 
 it('sends one confirmed Owner plan decision with the current version and idempotency key', async () => {
   s.role = 'Owner';

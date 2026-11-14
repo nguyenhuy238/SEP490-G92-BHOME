@@ -5,6 +5,7 @@ import {
   attentionSources,
   attentionPageSize,
   type AttentionPage,
+  loadOwnerPage,
 } from '../../services/ownerAttention';
 import { ownerQueuePolicy } from './ownerQueryPolicy';
 
@@ -14,7 +15,7 @@ function useSource(index: number, page: number) {
     api && session?.roles.includes('Owner')
       ? `/api/v1${attentionSources[index].path}&page=${page}&pageSize=${attentionPageSize}`
       : null,
-    { cache: ownerQueuePolicy },
+    { cache: ownerQueuePolicy, load: loadOwnerPage },
   );
 }
 

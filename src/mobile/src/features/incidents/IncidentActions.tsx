@@ -567,6 +567,7 @@ export function IncidentActionPanel({
             onPress={() => setConfirmed(!confirmed)}
           />
           <Action
+            minHeight={role === 'Owner' ? 48 : 44}
             disabled={!confirmed || mutation.busy}
             onPress={() => (role === 'Owner' ? setConfirmDecision(true) : void execute())}
           >
@@ -584,10 +585,15 @@ export function IncidentActionPanel({
             <Text>Gửi quyết định sau khi đã kiểm tra phương án, kết quả và ảnh minh chứng?</Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button disabled={mutation.busy} onPress={() => setConfirmDecision(false)}>
+            <Button
+              contentStyle={{ minHeight: 48 }}
+              disabled={mutation.busy}
+              onPress={() => setConfirmDecision(false)}
+            >
               Quay lại
             </Button>
             <Button
+              contentStyle={{ minHeight: 48 }}
               disabled={mutation.busy}
               loading={mutation.busy}
               onPress={() => {
