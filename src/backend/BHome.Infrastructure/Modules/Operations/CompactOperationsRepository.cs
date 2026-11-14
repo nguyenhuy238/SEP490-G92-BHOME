@@ -169,7 +169,9 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             WHERE id=@id AND concurrency_stamp=@version AND 'Staff'=ANY(roles)
             """))
         {
-            update.Parameters.AddWithValue("name", input.FullName); update.Parameters.AddWithValue("phone", (object?)input.Phone ?? DBNull.Value);
+            update.Parameters.AddWithValue("name", input.FullName);
+            update.Parameters.Add(new NpgsqlParameter("phone", NpgsqlDbType.Varchar)
+            { Value = (object?)input.Phone ?? DBNull.Value });
             update.Parameters.AddWithValue("email", input.Email); update.Parameters.AddWithValue("normalized", normalized); update.Parameters.AddWithValue("active", input.IsActive);
             update.Parameters.AddWithValue("stamp", Guid.NewGuid().ToString("N")); update.Parameters.AddWithValue("next", next);
             update.Parameters.AddWithValue("actor", actorId); update.Parameters.AddWithValue("now", now); update.Parameters.AddWithValue("reason", input.Reason);

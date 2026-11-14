@@ -119,10 +119,19 @@ public sealed partial class Compact24NotificationMvpTests
             INSERT INTO incident_reports(id,location_id,room_id,reporter_user_id,severity,summary,description,status,reported_at)
             VALUES ({incident},{w.Location},{w.Room},{w.Tenants[0].Id},'NORMAL','Synthetic incident','Synthetic description','InProgress',{DateTimeOffset.UtcNow})
             """);
+        var verifiedAt = DateTimeOffset.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO operational_tasks(id,task_type,location_id,room_id,assigned_user_id,incident_report_id,title,status)
-            VALUES ({workOrder},'WORK_ORDER',{w.Location},{w.Room},{w.Staff.Id},{incident},'Synthetic work order','PendingVerification'),
-                   ({verifiedWorkOrder},'WORK_ORDER',{w.Location},{w.Room},{w.Staff.Id},{incident},'Synthetic verified work order','Verified')
+            INSERT INTO operational_tasks(id,task_type,location_id,room_id,assigned_user_id,incident_report_id,title,status,
+              task_data,cost_approved_by_user_id,cost_approved_at,verified_by_user_id,verified_at)
+            VALUES
+              ({workOrder},'WORK_ORDER',{w.Location},{w.Room},{w.Staff.Id},{incident},'Synthetic work order','Assigned',
+                jsonb_build_object('schemaVersion',1,'recordType','MaintenanceWorkOrder','state',
+                  jsonb_build_object('incidentId',{incident},'assignedStaffId',{w.Staff.Id})),NULL,NULL,NULL,NULL),
+              ({verifiedWorkOrder},'WORK_ORDER',{w.Location},{w.Room},{w.Staff.Id},{incident},'Synthetic verified work order','Verified',
+                jsonb_build_object('schemaVersion',1,'recordType','MaintenanceWorkOrder','state',
+                  jsonb_build_object('incidentId',{incident},'assignedStaffId',{w.Staff.Id},'proposalVersion',1,
+                    'approvedProposalVersion',1,'actualCost',500000,'completionActivityId',{Guid.NewGuid()})),
+                {w.Owner.Id},{verifiedAt},{w.Owner.Id},{verifiedAt})
             """);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE contracts SET move_out=jsonb_build_object('current',jsonb_build_object('inspectionStaffId',{w.Staff.Id},'status',1))
@@ -143,7 +152,7 @@ public sealed partial class Compact24NotificationMvpTests
 
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE locations SET staff_assignments='[]' WHERE id IN ({w.Location},{future})");
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE operational_tasks SET status='2' WHERE id IN ({openTask},{meterTask})");
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE operational_tasks SET status='Verified' WHERE id={workOrder}");
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE operational_tasks SET status='Cancelled' WHERE id={workOrder}");
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET move_out='{{}}' WHERE id={moveOut}");
         summary = (await owner.GetFromJsonAsync<StaffResponsibilitiesView>(route + "/responsibilities"))!;
         Assert.True(summary.CanDeactivate);
