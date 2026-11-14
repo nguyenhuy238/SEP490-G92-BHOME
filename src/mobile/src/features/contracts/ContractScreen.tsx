@@ -43,7 +43,8 @@ import {
 import { StaffContractsList } from './StaffContractsList';
 import { defaultStaffContractListView } from './staffContractList';
 import { mobileContractActions } from './contractSections';
-import { OwnerWebNotice } from '../../components/OwnerWebNotice';
+import { OwnerHoldingSigning } from '../owner/OwnerHoldingSigning';
+import { OwnerMainContractFlow } from '../owner/OwnerMainContractFlow';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -102,7 +103,31 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       /* Do not send untrusted route text to an API path. */
     }
   }
-  const id = selected || deepId;
+  const id = role === 'Owner' ? deepId : selected || deepId;
+  const draftReference =
+    role === 'Owner' ? params.mainDraftId || '' : mainDraftId || params.mainDraftId || '';
+  let invalidOwnerRoute = role === 'Owner' && !!params.contractId && !deepId;
+  if (role === 'Owner' && params.mainDraftId) {
+    try {
+      const draft = guid(params.mainDraftId);
+      if (deepId && draft !== deepId) invalidOwnerRoute = true;
+    } catch {
+      invalidOwnerRoute = true;
+    }
+  }
+  function openContract(contract: { id: string; onboardingDraft?: boolean }) {
+    if (role === 'Owner') {
+      setCreate(false);
+      setMainDraftId('');
+      setSelected('');
+      router.setParams({
+        contractId: contract.id,
+        mainDraftId: contract.onboardingDraft ? contract.id : '',
+        roomId: '',
+      });
+    } else if (contract.onboardingDraft) setMainDraftId(contract.id);
+    else setSelected(contract.id);
+  }
   function released(next: string) {
     setCreate(false);
     setMainDraftId('');
@@ -111,26 +136,8 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     router.setParams({ mainDraftId: '', roomId: '', contractId: next });
   }
   if (!client || !session || !role) return <Text>Cần đăng nhập để xem hợp đồng.</Text>;
-  if (
-    role === 'Owner' &&
-    !createHolding &&
-    (create || createHolding || mainDraftId || params.mainDraftId || params.roomId)
-  )
-    return (
-      <>
-        <OwnerWebNotice task="Chuẩn bị và quyết định hợp đồng" />
-        <Action
-          onPress={() => {
-            setCreate(false);
-            setCreateHolding(false);
-            setMainDraftId('');
-            router.setParams({ mainDraftId: '', roomId: '', kind: '' });
-          }}
-        >
-          Về danh sách hợp đồng
-        </Action>
-      </>
-    );
+  if (invalidOwnerRoute)
+    return <Text>Tham chiếu hợp đồng không hợp lệ. Hãy mở lại từ danh sách hợp đồng.</Text>;
   if (createHolding && ['Owner', 'Staff'].includes(role))
     return (
       <ContractDraftForm
@@ -149,7 +156,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       />
     );
   if (
-    (mainDraftId || params.mainDraftId || (create && params.roomId)) &&
+    (draftReference || ((create || role === 'Owner') && params.roomId)) &&
     ['Owner', 'Staff'].includes(role)
   ) {
     let references: {
@@ -159,7 +166,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       residentIds: string[];
     } | null = null;
     try {
-      const existing = mainDraftId || params.mainDraftId;
+      const existing = draftReference;
       const residents: unknown = JSON.parse(params.residentIds ?? '[]');
       if (!Array.isArray(residents)) throw new Error('invalid');
       references = {
@@ -170,6 +177,15 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
           : '',
         residentIds: residents.map((value) => guid(String(value))),
       };
+      if (
+        role === 'Owner' &&
+        !existing &&
+        (!references.roomId ||
+          !references.representativeResidentId ||
+          !references.residentIds.includes(references.representativeResidentId) ||
+          new Set(references.residentIds).size !== references.residentIds.length)
+      )
+        throw new Error('invalid');
     } catch {
       /* Invalid route references do not reach the API. */
     }
@@ -184,27 +200,51 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         onCancel={() => {
           setCreate(false);
           setMainDraftId('');
-          router.setParams({ mainDraftId: '', roomId: '' });
+          router.setParams({
+            mainDraftId: '',
+            roomId: '',
+            ...(role === 'Owner' ? { contractId: '' } : {}),
+          });
         }}
         onList={() => {
           setCreate(false);
           setMainDraftId('');
           setRevision((v) => v + 1);
-          router.setParams({ mainDraftId: '', roomId: '' });
+          router.setParams({
+            mainDraftId: '',
+            roomId: '',
+            ...(role === 'Owner' ? { contractId: '' } : {}),
+          });
         }}
       />
     );
   }
-  if (create && ['Staff', 'Owner'].includes(role))
+  if (
+    create &&
+    ['Staff', 'Owner'].includes(role) &&
+    (role !== 'Owner' || (!mainDraftId && !deepId) || mainDraftId === deepId)
+  )
     return (
       <MainDraftStart
+        owner={role === 'Owner'}
+        onSaved={role === 'Owner' ? setMainDraftId : undefined}
         onReleased={released}
         api={client}
-        onCancel={() => setCreate(false)}
+        onCancel={() => {
+          setCreate(false);
+          if (role === 'Owner') {
+            setMainDraftId('');
+            router.setParams({ contractId: '', mainDraftId: '', roomId: '' });
+          }
+        }}
         onList={() => {
           setCreate(false);
           setRevision((v) => v + 1);
-          router.setParams({ mainDraftId: '', roomId: '' });
+          router.setParams({
+            mainDraftId: '',
+            roomId: '',
+            ...(role === 'Owner' ? { contractId: '' } : {}),
+          });
         }}
       />
     );
@@ -229,11 +269,19 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
           role={role}
           actorId={session.userId}
           initialSection={
-            role === 'Tenant' && contractSections.some((item) => item.id === params.section)
+            ['Tenant', 'Owner'].includes(role) &&
+            contractSections.some((item) => item.id === params.section)
               ? (params.section as ContractSection)
               : 'overview'
           }
-          onNext={setSelected}
+          onNext={(next) => {
+            setSelected(next);
+            if (role === 'Owner') {
+              setCreate(false);
+              setMainDraftId('');
+              router.setParams({ contractId: next, mainDraftId: '', roomId: '' });
+            }
+          }}
           onList={() => {
             setSelected('');
             router.setParams({ contractId: '' });
@@ -263,7 +311,19 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         detail="Theo dõi hợp đồng trong phạm vi tài khoản của bạn."
       />
       {role === 'Owner' && (
-        <Action onPress={() => setCreateHolding(true)}>Tạo hợp đồng giữ chỗ</Action>
+        <>
+          <Action
+            onPress={() => {
+              setMainDraftId('');
+              setSelected('');
+              setCreate(true);
+              router.setParams({ contractId: '', mainDraftId: '', roomId: '' });
+            }}
+          >
+            Tạo hợp đồng thuê
+          </Action>
+          <Action onPress={() => setCreateHolding(true)}>Tạo hợp đồng giữ chỗ</Action>
+        </>
       )}
       {['Owner', 'Tenant'].includes(role) && (
         <ContractExpiryPanel api={client} onOpen={setSelected} />
@@ -304,11 +364,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
                 {displayContractDate(c.endDate)}
               </Text>
               <Text style={ui.money}>{formatContractMoney(c.monthlyRent)} / tháng</Text>
-              <Action
-                onPress={() => (c.onboardingDraft ? setMainDraftId(c.id) : setSelected(c.id))}
-              >
-                Xem hợp đồng
-              </Action>
+              <Action onPress={() => openContract(c)}>Xem hợp đồng</Action>
             </Box>
           ))}
         </View>
@@ -370,9 +426,10 @@ function LiveContractDetail({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
-  if (c.onboardingDraft && role === 'Staff')
+  if (c.onboardingDraft && ['Staff', 'Owner'].includes(role))
     return (
       <MainDraftScreen
+        persistRoute={role !== 'Owner'}
         initialId={c.id}
         onReleased={(next) => {
           router.setParams({ mainDraftId: '', roomId: '', contractId: next });
@@ -393,6 +450,7 @@ function LiveContractDetail({
       />
     );
   const rental =
+    role !== 'Owner' &&
     c.kind === 'Main' &&
     ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status);
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
@@ -406,9 +464,15 @@ function LiveContractDetail({
   const signer =
     (role === 'Tenant' && c.tenantUserId === actorId) ||
     (c.kind === 'Holding' && role === 'Owner' && c.ownerSignerId === actorId);
+  const ownerMain =
+    role === 'Owner' &&
+    c.kind === 'Main' &&
+    !c.onboardingDraft &&
+    ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status) &&
+    ['overview', 'signing'].includes(section);
   return (
     <>
-      {!rental && (
+      {!rental && !ownerMain && (
         <Heading
           title={`Phòng ${c.roomNumber || c.roomId}`}
           detail={`${text(c.kind)} · ${c.locationName ?? ''}`}
@@ -418,7 +482,6 @@ function LiveContractDetail({
         <Text style={ui.red}>HỢP ĐỒNG DEMO · Dữ liệu minh họa, không dùng làm hợp đồng thật.</Text>
       )}
       <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>
-      {role === 'Owner' && c.kind !== 'Holding' && <OwnerWebNotice />}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -454,7 +517,18 @@ function LiveContractDetail({
           onList={onList}
         />
       )}
-      {section === 'overview' && !rental && <ContractProgress contract={c} readiness={r} />}
+      {ownerMain && (
+        <OwnerMainContractFlow
+          api={api}
+          contract={c}
+          readiness={r}
+          actorId={actorId}
+          onChanged={detail.reload}
+        />
+      )}
+      {section === 'overview' && !rental && !ownerMain && (
+        <ContractProgress contract={c} readiness={r} />
+      )}
       <Button
         disabled={uploading}
         onPress={() => {
@@ -465,7 +539,7 @@ function LiveContractDetail({
         Tải lại trạng thái
       </Button>
       {!!notice && <Text style={ui.blue}>{notice}</Text>}
-      {section === 'overview' && !rental && (
+      {section === 'overview' && !rental && !ownerMain && (
         <>
           <Box>
             <Heading title="Kỳ thuê & Người ở" />
@@ -509,7 +583,7 @@ function LiveContractDetail({
           </Box>
         </>
       )}
-      {section === 'signing' && !rental && (
+      {section === 'signing' && !rental && !ownerMain && (
         <Box>
           <Heading title="Chữ ký và bằng chứng" />
           {[
@@ -538,10 +612,17 @@ function LiveContractDetail({
             c.signatures.some((s) => ['Signed', 'Simulated'].includes(s.status)) && (
               <ContractEvidence api={api} contractId={id} pdf />
             )}
-          {signer && !c.isDevelopmentDemo && <SigningCertificates api={api} />}
+          {signer &&
+            !c.isDevelopmentDemo &&
+            !(role === 'Owner' && c.signingMode === 'INTERNAL_OTP_DRAWN') && (
+              <SigningCertificates api={api} />
+            )}
         </Box>
       )}
-      {((section === 'signing' && !rental) || section === 'history') && (
+      {section === 'signing' && role === 'Owner' && !ownerMain && (
+        <OwnerHoldingSigning api={api} contract={c} onChanged={detail.reload} />
+      )}
+      {((section === 'signing' && !rental && !ownerMain) || section === 'history') && (
         <ContractWorkflowPanel
           api={api}
           contract={c}
@@ -566,7 +647,7 @@ function LiveContractDetail({
           hoạt.
         </Text>
       )}
-      {section === 'signing' && !rental && r && (
+      {section === 'signing' && !rental && !ownerMain && r && (
         <Box>
           <Heading title="Điều kiện kích hoạt" />
           <Text>Cọc đã xác minh: {formatContractMoney(r.verifiedDeposit)}</Text>
@@ -696,7 +777,8 @@ function LiveContractDetail({
           }}
         />
       )}
-      {!(rental && section === 'signing') &&
+      {!ownerMain &&
+        !(rental && section === 'signing') &&
         actions.some((a) => contractActionSection(a.operation) === section) && (
           <Box>
             <Heading title="Thao tác theo trạng thái" />

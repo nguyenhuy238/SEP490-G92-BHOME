@@ -10,11 +10,13 @@ export function ContractPreviewSummary({
   status,
   start,
   end,
+  showSigner = true,
 }: {
   preparation: MainDraftPreparation;
   status: string;
   start: string;
   end: string;
+  showSigner?: boolean;
 }) {
   const representative = preparation.residents.find((person) => person.representative);
   return (
@@ -34,22 +36,28 @@ export function ContractPreviewSummary({
           {start} → {end}
         </Text>
       </View>
-      <View style={styles.divider} />
-      <View style={styles.values}>
-        <Text style={styles.label}>Đại diện</Text>
-        <Text style={styles.value}>{representative?.fullName ?? 'Chưa có dữ liệu'}</Text>
-      </View>
-      <View style={styles.values}>
-        <Text style={styles.label}>CCCD</Text>
-        <Text style={styles.value}>{representative?.maskedCitizenNumber ?? 'Chưa có dữ liệu'}</Text>
-      </View>
-      <View style={styles.row}>
-        <Text style={styles.label}>{preparation.residents.length} người ở</Text>
-        <View style={styles.verified}>
-          <Icon source="check-decagram" size={16} color={c.green} />
-          <Text style={styles.verifiedText}>Đã xác minh danh tính</Text>
-        </View>
-      </View>
+      {showSigner && (
+        <>
+          <View style={styles.divider} />
+          <View style={styles.values}>
+            <Text style={styles.label}>Đại diện</Text>
+            <Text style={styles.value}>{representative?.fullName ?? 'Chưa có dữ liệu'}</Text>
+          </View>
+          <View style={styles.values}>
+            <Text style={styles.label}>CCCD</Text>
+            <Text style={styles.value}>
+              {representative?.maskedCitizenNumber ?? 'Chưa có dữ liệu'}
+            </Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>{preparation.residents.length} người ở</Text>
+            <View style={styles.verified}>
+              <Icon source="check-decagram" size={16} color={c.green} />
+              <Text style={styles.verifiedText}>Đã xác minh danh tính</Text>
+            </View>
+          </View>
+        </>
+      )}
     </View>
   );
 }

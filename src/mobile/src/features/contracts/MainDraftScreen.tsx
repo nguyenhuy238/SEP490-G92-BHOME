@@ -5,7 +5,7 @@ import { ContractPdfPreview } from './ContractPdfPreview';
 import { ContractPreviewSummary } from './ContractPreviewSummary';
 import { KeyboardFormScrollView } from '../../components/KeyboardFormScrollView';
 import { useFeedbackState } from '../../lib/useFeedbackState';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, IconButton, Portal, Text, TextInput } from 'react-native-paper';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -36,11 +36,17 @@ import { staffColors as s, colors as c } from '../../theme/theme';
 import { ContractDateField } from '../../components/ContractDateField';
 import { ToastHost } from '../../components/ToastHost';
 import { showSuccess } from '../../lib/toast';
+import { previewErrorCode, requiresNewDocument } from './pdfPreview';
+import { deliverWebDocument, openPdfWindow } from './webContractDocument';
+import { ownerContractSteps } from '../owner/ownerContractSteps';
 
 const iso = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 function message(error: unknown) {
-  const code = (error as { code?: string }).code;
+  const code = previewErrorCode(error);
+  if (code === 'pdf_popup_blocked')
+    return 'Trình duyệt chặn cửa sổ PDF. Cho phép cửa sổ bật lên hoặc chọn Tải PDF.';
+  if (code === 'pdf_window_closed') return 'Cửa sổ PDF đã đóng. Chọn Xem PDF để mở lại.';
   if ((error as { status?: number })?.status === 503 && !mainDraftMessages[code ?? ''])
     return 'Máy chủ chưa xử lý được hợp đồng. Hãy thử lại sau.';
   if (error instanceof Error && error.message === 'Thiết bị chưa có trình mở tài liệu.')
@@ -68,7 +74,8 @@ export function MainDraftScreen({
   persistRoute?: boolean;
   onReleased?: (id: string) => void;
 }) {
-  const { api } = useSession();
+  const { api, session } = useSession();
+  const owner = !!session?.roles.includes('Owner');
   const client = useMemo(
     () => (api ? mainDraftClient((path, init, type) => api.request(path, init, type)) : null),
     [api],
@@ -86,6 +93,9 @@ export function MainDraftScreen({
   const [mode, setMode] = useState<'edit' | 'preview' | 'signing'>('edit');
   const [signingVisited, setSigningVisited] = useState(false);
   const [documents, setDocuments] = useState<MainDraftFiles | null>(null);
+  const [reviewRevision, setReviewRevision] = useState(0);
+  const [readyFile, setReadyFile] = useState(''),
+    [documentBlocker, setDocumentBlocker] = useState('');
   const [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(true),
     [error, setError] = useFeedbackState('error', false);
@@ -96,9 +106,31 @@ export function MainDraftScreen({
     alive = useRef(true),
     dirty = useRef(false);
   const operation = useRef<AbortController | null>(null);
+  const formScroll = useRef<React.ComponentRef<typeof KeyboardFormScrollView>>(null);
+  useEffect(() => {
+    if (owner) formScroll.current?.scrollTo({ y: 0, animated: false });
+  }, [mode, owner]);
+  const currentOperation = (controller: AbortController) =>
+    alive.current && operation.current === controller && !controller.signal.aborted;
   const calendarClose = useRef<(() => void) | null>(null);
   const routePromotion = useRef<{ id: string; client: typeof client } | null>(null);
   const refs = useRef({ roomId, representativeResidentId, residentIds });
+  const releasedHandler = useRef(onReleased);
+  useEffect(() => {
+    releasedHandler.current = onReleased;
+  }, [onReleased]);
+  const invalidateDocument = useCallback(
+    (error: unknown) => {
+      setReadyFile('');
+      if (!requiresNewDocument(error)) return;
+      setDocuments(null);
+      setReviewRevision((value) => value + 1);
+      setReadyFile('');
+      setDocumentBlocker(previewErrorCode(error));
+      setError(message(error));
+    },
+    [setError],
+  );
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -119,12 +151,30 @@ export function MainDraftScreen({
         setLoading(false);
         return;
       }
+      // A route may reuse this component. Retire the previous resource and any generation
+      // still in flight before adopting the new draft (including an explicit reload).
+      operation.current?.abort();
+      operation.current = null;
+      lock.current = false;
+      setBusy(false);
+      setId(initialId ?? '');
+      setSaved(null);
+      setDocuments(null);
+      setReadyFile('');
+      setDocumentBlocker('');
+      setReviewRevision((value) => value + 1);
+      setSigningVisited(false);
+      setMode('edit');
       setLoading(true);
       setError('');
       try {
         if (initialId) {
           const draft = await client!.get(initialId, controller.signal);
           if (controller.signal.aborted) return;
+          if (owner && draft.status !== 'Draft') {
+            releasedHandler.current?.(draft.id);
+            return;
+          }
           setId(draft.id);
           setSaved(draft);
           setPreparation(draft.preparation);
@@ -160,7 +210,7 @@ export function MainDraftScreen({
     }
     void load();
     return () => controller.abort();
-  }, [client, initialId, revision, setError]);
+  }, [client, initialId, revision, setError, owner]);
   function input(): MainDraftInput | null {
     const errors: Record<string, string> = {};
     let from = '',
@@ -195,6 +245,12 @@ export function MainDraftScreen({
   }
   async function save(preview: boolean) {
     if (!client || lock.current || readOnly) return;
+    // Reading an unchanged Owner draft must not increment its version and retire the
+    // PDF another viewer/reviewer is using. Generation already validates current state.
+    if (preview && owner && saved && !dirty.current) {
+      await reviewSaved(false);
+      return;
+    }
     const body = input();
     if (!body) return;
     lock.current = true;
@@ -204,7 +260,7 @@ export function MainDraftScreen({
     operation.current = controller;
     try {
       const prep = await client.prepare(body, controller.signal);
-      if (!alive.current) return;
+      if (!currentOperation(controller)) return;
       setPreparation(prep);
       if (prep.blockers.length) {
         return;
@@ -216,8 +272,12 @@ export function MainDraftScreen({
         controller.signal,
       );
       keys.confirmed('main-draft', body);
-      if (!alive.current) return;
+      if (!currentOperation(controller)) return;
       setId(result.id);
+      setReadyFile('');
+      setDocumentBlocker('');
+      setDocuments(null);
+      setReviewRevision((value) => value + 1);
       setSaved(result);
       setPhone(result.input.tenantPhone);
       setEmail(result.input.tenantEmail ?? email.trim());
@@ -233,19 +293,24 @@ export function MainDraftScreen({
         setDocuments(null);
         setMode('preview');
         const resultFiles = await client.generate(result.id, controller.signal);
-        if (alive.current) {
+        if (currentOperation(controller)) {
+          setDocumentBlocker('');
           setDocuments(resultFiles);
         }
       } else setMode('edit');
     } catch (e) {
+      if (!currentOperation(controller)) return;
+      invalidateDocument(e);
       workflowFailure('main-draft', e);
       if (alive.current && !controller.signal.aborted) setError(message(e));
     } finally {
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
-  async function openFile(pdf: boolean, override?: PreviewDocument) {
+  async function openFile(pdf: boolean, override?: PreviewDocument, view = false) {
     const document = override ?? (pdf ? documents?.pdf : documents?.docx);
     if (!client || !document || lock.current) return;
     lock.current = true;
@@ -254,9 +319,15 @@ export function MainDraftScreen({
     let file: File | null = null;
     const controller = new AbortController();
     operation.current = controller;
+    let tab: Window | null = null;
     try {
+      if (pdf && view && Platform.OS === 'web') tab = openPdfWindow();
       const bytes = await client.file(id, document.id, controller.signal);
       try {
+        if (!currentOperation(controller)) {
+          tab?.close();
+          return;
+        }
         const signature = pdf ? [37, 80, 68, 70, 45] : [80, 75, 3, 4];
         if (
           bytes.length < signature.length ||
@@ -267,12 +338,12 @@ export function MainDraftScreen({
           ? 'application/pdf'
           : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         if (Platform.OS === 'web') {
-          const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-          const a = window.document.createElement('a');
-          a.href = url;
-          a.download = `hop-dong-nhap.${pdf ? 'pdf' : 'docx'}`;
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          deliverWebDocument(
+            bytes,
+            pdf,
+            `hop-dong-phong-${preparation?.roomNumber ?? 'thue'}-${document.id.slice(0, 8)}.${pdf ? 'pdf' : 'docx'}`,
+            tab,
+          );
         } else {
           if (!(await Sharing.isAvailableAsync()))
             throw new Error('Thiết bị chưa có trình mở tài liệu.');
@@ -286,16 +357,22 @@ export function MainDraftScreen({
             dialogTitle: pdf ? 'Xem hợp đồng PDF' : 'Mở hợp đồng DOCX',
           });
         }
+        return true;
       } finally {
         bytes.fill(0);
       }
     } catch (e) {
+      tab?.close();
+      if (!currentOperation(controller)) return;
+      invalidateDocument(e);
       workflowFailure('main-draft', e);
       if (alive.current) setError(message(e));
     } finally {
       if (file?.exists) file.delete();
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
   function back() {
@@ -318,6 +395,11 @@ export function MainDraftScreen({
   }
   async function reviewSaved(confirm: boolean) {
     if (!client || !saved || lock.current) return;
+    if (confirm && owner && (!documents?.pdf || readyFile !== documents.pdf.id)) return;
+    if (!confirm && documentBlocker.includes('save_again')) {
+      setMode('edit');
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError('');
@@ -325,26 +407,60 @@ export function MainDraftScreen({
     operation.current = controller;
     try {
       const current = await client.get(id, controller.signal);
-      if (current.version !== saved.version || current.status !== 'Draft')
+      if (!currentOperation(controller)) return;
+      if (current.status !== 'Draft') {
+        setDocuments(null);
+        setReadyFile('');
+        setSaved(current);
+        setReviewRevision((value) => value + 1);
+        if (owner) {
+          if (releasedHandler.current) releasedHandler.current(current.id);
+          else onList();
+          return;
+        }
         throw { code: 'draft_version_or_status_changed' };
+      }
+      if (current.version !== saved.version) {
+        setSaved(current);
+        setDocuments(null);
+        setReviewRevision((value) => value + 1);
+        setPreparation(current.preparation);
+        refs.current = current.input;
+        setStart(displayContractDate(current.input.startDate));
+        setEnd(displayContractDate(current.input.endDate));
+        setPhone(current.input.tenantPhone);
+        setPlace(current.input.tenantPlaceOfIssue);
+        setEmail(current.input.tenantEmail ?? '');
+        setNotes(current.input.notes);
+        dirty.current = false;
+        if (confirm) throw { code: 'draft_version_or_status_changed' };
+      }
       if (confirm) {
         if (alive.current) {
           setSigningVisited(true);
           setMode('signing');
         }
       } else {
+        setDocuments(null);
+        setReviewRevision((value) => value + 1);
         const result = await client.generate(id, controller.signal);
-        if (alive.current) {
+        if (currentOperation(controller)) {
+          setDocumentBlocker('');
+          setError('');
           setDocuments(result);
           setMode('preview');
         }
       }
     } catch (e) {
+      if (!currentOperation(controller)) return;
+      invalidateDocument(e);
       workflowFailure('main-draft', e);
       if (alive.current && !controller.signal.aborted) setError(message(e));
     } finally {
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
   async function refreshPrices() {
@@ -366,13 +482,15 @@ export function MainDraftScreen({
     operation.current = controller;
     try {
       const result = await client.prepare({ ...refs.current, startDate: date }, controller.signal);
-      if (alive.current) setPreparation(result);
+      if (currentOperation(controller)) setPreparation(result);
     } catch (e) {
       workflowFailure('main-draft', e);
       if (alive.current && !controller.signal.aborted) setError(message(e));
     } finally {
-      lock.current = false;
-      if (alive.current) setBusy(false);
+      if (operation.current === controller) {
+        lock.current = false;
+        if (alive.current) setBusy(false);
+      }
     }
   }
   useEffect(() => {
@@ -403,6 +521,7 @@ export function MainDraftScreen({
   const edit = (setter: (v: string) => void) => (value: string) => {
     setter(value);
     dirty.current = true;
+    setReadyFile('');
     setDocuments(null);
   };
   const representative = preparation?.residents.find((r) => r.representative);
@@ -425,7 +544,9 @@ export function MainDraftScreen({
                 {mode === 'preview'
                   ? 'Xem trước hợp đồng'
                   : mode === 'signing'
-                    ? 'Ký hợp đồng'
+                    ? owner
+                      ? 'Duyệt & ký hợp đồng'
+                      : 'Ký hợp đồng'
                     : 'Tạo hợp đồng thuê'}
               </Text>
             </View>
@@ -434,13 +555,17 @@ export function MainDraftScreen({
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
               <KeyboardFormScrollView
+                ref={formScroll}
                 style={styles.grow}
                 contentContainerStyle={styles.content}
                 keyboardShouldPersistTaps="handled"
               >
-                <RentalContractStepper current={mode === 'signing' ? 1 : 0} />
+                <RentalContractStepper
+                  current={mode === 'signing' ? 1 : 0}
+                  steps={owner ? ownerContractSteps : undefined}
+                />
                 {loading && <ActivityIndicator accessibilityLabel="Đang tải dữ liệu hợp đồng" />}
-                {!!error && (
+                {!!error && !(owner && mode === 'preview' && documentBlocker) && (
                   <Text accessibilityRole="alert" style={styles.error}>
                     {error}
                   </Text>
@@ -460,7 +585,11 @@ export function MainDraftScreen({
                         {id && (
                           <Box>
                             <Pill>{labels[saved?.status ?? 'Draft'] ?? saved?.status}</Pill>
-                            <Text selectable>Mã hợp đồng: {id}</Text>
+                            {owner ? (
+                              <Text>Hồ sơ nháp đã lưu</Text>
+                            ) : (
+                              <Text selectable>Mã hợp đồng: {id}</Text>
+                            )}
                           </Box>
                         )}
                         <Box>
@@ -530,6 +659,7 @@ export function MainDraftScreen({
                       </>
                     ) : (
                       <ContractPreviewSummary
+                        showSigner={!(owner && mode === 'signing')}
                         preparation={preparation}
                         status={saved?.status ?? 'Draft'}
                         start={start}
@@ -548,12 +678,35 @@ export function MainDraftScreen({
                     {signingVisited && client && saved && (
                       <View style={mode === 'signing' ? undefined : { display: 'none' }}>
                         <MainDraftSigningReview
-                          key={`${id}:${saved.version}`}
+                          key={`${id}:${saved.version}:${reviewRevision}`}
                           client={client}
                           draft={saved}
                           onBusyChange={setBusy}
                           onReleased={(next) => (onReleased ? onReleased(next) : onList())}
-                          onOpenPdf={(file) => void openFile(true, file)}
+                          onOpenPdf={(file) => openFile(true, file, true)}
+                          onDownloadPdf={(file) => openFile(true, file)}
+                          onEditDraft={() => {
+                            setDocuments(null);
+                            setReadyFile('');
+                            setSigningVisited(false);
+                            setMode('edit');
+                          }}
+                          onDraftChanged={(latest) => {
+                            setDocuments(null);
+                            setReadyFile('');
+                            setSigningVisited(false);
+                            setSaved(latest);
+                            setPreparation(latest.preparation);
+                            refs.current = latest.input;
+                            setStart(displayContractDate(latest.input.startDate));
+                            setEnd(displayContractDate(latest.input.endDate));
+                            setPhone(latest.input.tenantPhone);
+                            setEmail(latest.input.tenantEmail ?? '');
+                            setPlace(latest.input.tenantPlaceOfIssue);
+                            setNotes(latest.input.notes);
+                            dirty.current = false;
+                            setMode('preview');
+                          }}
                         />
                       </View>
                     )}
@@ -635,25 +788,29 @@ export function MainDraftScreen({
                         client={client}
                         contractId={id}
                         document={documents?.pdf ?? null}
+                        hideUnavailableActions={owner}
                         busy={busy}
-                        previewErrorCode={documents?.previewError ?? null}
+                        previewErrorCode={documentBlocker || documents?.previewError || null}
                         hasDocx={!!documents?.docx}
                         onRegenerate={() => void reviewSaved(false)}
-                        onOpenPdf={() => void openFile(true)}
+                        onOpenPdf={() => openFile(true, undefined, true)}
+                        onDownloadPdf={() => void openFile(true)}
+                        onDocumentError={invalidateDocument}
+                        onReady={setReadyFile}
                         onOpenDocx={() => void openFile(false)}
                       />
                     ) : null}
                   </>
                 )}
               </KeyboardFormScrollView>
-              <View style={styles.footer}>
+              <View style={[styles.footer, owner && styles.ownerFooter]}>
                 {busy && <ActivityIndicator />}
                 {mode === 'edit' ? (
                   <>
                     <Button
                       contentStyle={{ minHeight: 48 }}
                       mode="text"
-                      style={styles.secondaryAction}
+                      style={owner ? styles.ownerAction : styles.secondaryAction}
                       disabled={
                         busy || readOnly || loading || !preparation || !!preparation.blockers.length
                       }
@@ -665,7 +822,7 @@ export function MainDraftScreen({
                       contentStyle={{ minHeight: 48 }}
                       mode="contained"
                       buttonColor={s.blue}
-                      style={styles.primaryAction}
+                      style={owner ? styles.ownerAction : styles.primaryAction}
                       disabled={
                         busy || readOnly || loading || !preparation || !!preparation.blockers.length
                       }
@@ -677,7 +834,7 @@ export function MainDraftScreen({
                 ) : (
                   <>
                     <Button
-                      style={styles.primaryAction}
+                      style={owner ? styles.ownerAction : styles.primaryAction}
                       labelStyle={{ fontSize: 12 }}
                       contentStyle={{ minHeight: 48 }}
                       disabled={busy || readOnly}
@@ -687,16 +844,21 @@ export function MainDraftScreen({
                     </Button>
                     {mode === 'preview' ? (
                       <Button
-                        style={styles.primaryAction}
+                        style={owner ? styles.ownerAction : styles.primaryAction}
                         labelStyle={{ fontSize: 12 }}
                         contentStyle={{ minHeight: 48 }}
                         mode="contained"
-                        disabled={busy || readOnly || !documents?.pdf}
+                        disabled={
+                          busy ||
+                          readOnly ||
+                          !documents?.pdf ||
+                          (owner && readyFile !== documents.pdf.id)
+                        }
                         onPress={() => void reviewSaved(true)}
                       >
-                        Tiếp tục ký hợp đồng
+                        {owner ? 'Tiếp tục duyệt hợp đồng' : 'Tiếp tục ký hợp đồng'}
                       </Button>
-                    ) : (
+                    ) : !owner ? (
                       <Button
                         contentStyle={{ minHeight: 48 }}
                         mode="contained"
@@ -705,7 +867,7 @@ export function MainDraftScreen({
                       >
                         Về danh sách hợp đồng
                       </Button>
-                    )}
+                    ) : null}
                   </>
                 )}
               </View>
@@ -734,6 +896,8 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
   },
   primaryAction: { flex: 1, minWidth: 0 },
+  ownerFooter: { flexDirection: 'column', alignItems: 'stretch' },
+  ownerAction: { minWidth: 0, width: '100%', maxWidth: 696, alignSelf: 'center' },
   secondaryAction: { flexShrink: 0 },
   personName: { flex: 1, color: s.navy, fontWeight: '600', fontSize: 16 },
   roomName: { color: s.navy, fontWeight: '600', fontSize: 16 },

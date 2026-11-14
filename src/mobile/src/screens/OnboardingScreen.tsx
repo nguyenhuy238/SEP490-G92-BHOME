@@ -79,6 +79,11 @@ function NewResidentOnboarding() {
   const [identityOpen, setIdentityOpen] = useState(false);
   const [identityMode, setIdentityMode] = useState<'capture' | 'verify'>('capture');
   const [busy, setBusy] = useState(false);
+  const [emailConflict, setEmailConflict] = useState<{
+    personKey: string;
+    locationId: string;
+    residentId?: string;
+  } | null>(null);
   const [error, setError] = useFeedbackState('error', false);
   const [finished, setFinished] = useState(false);
   const [discarded, setDiscarded] = useState(false);
@@ -122,10 +127,13 @@ function NewResidentOnboarding() {
     setPeople((before) => before.map((p) => (p.key === key ? { ...p, ...changes } : p)));
   const changeStatus = (key: string, status: IdentityStatus) =>
     setPeople((before) =>
-      before.map((p) => (p.key === key && p.status !== status ? { ...p, status } : p)),
+      before.map((p) =>
+        p.key === key && p.status !== 'confirmed' && p.status !== status ? { ...p, status } : p,
+      ),
     );
   const move = (next: number) => {
     setError('');
+    setEmailConflict(null);
     setStep(next);
     resetScroll();
   };
@@ -141,6 +149,41 @@ function NewResidentOnboarding() {
   const created = people.some((p) => !!p.residentId);
   const confirmedCount = people.filter((p) => p.status === 'confirmed').length;
   const recognizing = people.some((p) => p.status === 'recognizing');
+  const checkSavedIdentities = async () => {
+    if (!api || preview || lock.current || recognizing || !scope.location) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const residents = await captureService(api).residents(scope.location);
+      if (!alive.current) return;
+      const verified = new Set(
+        residents
+          .filter((r) => r.roomId === scope.room && r.verificationStatus === 1)
+          .map((r) => r.id),
+      );
+      setPeople((before) =>
+        before.map((p) =>
+          p.residentId && verified.has(p.residentId)
+            ? { ...p, status: 'confirmed', verificationError: '' }
+            : p,
+        ),
+      );
+      if (
+        people.some(
+          (p) => p.status !== 'confirmed' && (!p.residentId || !verified.has(p.residentId)),
+        )
+      )
+        setError(
+          'Còn hồ sơ chưa được máy chủ xác nhận. Mở Nhập thủ công, kiểm tra thông tin và bấm Xác nhận thông tin; nếu có lỗi, xem thông báo trên hồ sơ.',
+        );
+    } catch (e) {
+      if (alive.current) setError(errorMessage(e));
+    } finally {
+      lock.current = false;
+      if (alive.current) setBusy(false);
+    }
+  };
   const openIdentity = async (
     person: OnboardingPerson,
     entryMode: 'capture' | 'verify' = person.status === 'pending' ? 'verify' : 'capture',
@@ -159,6 +202,7 @@ function NewResidentOnboarding() {
     lock.current = true;
     setBusy(true);
     setError('');
+    setEmailConflict(null);
     try {
       const id = preview
         ? `sample-${person.key}`
@@ -184,6 +228,31 @@ function NewResidentOnboarding() {
           setError(
             'Chưa xác định hồ sơ đã được tạo hay chưa. Kiểm tra danh sách người ở trước khi tạo tiếp.',
           );
+        } else if (
+          e instanceof MobileApiError &&
+          e.status === 409 &&
+          e.code === 'resident_email_already_associated'
+        ) {
+          setError(errorMessage(e));
+          const conflict = { personKey: person.key, locationId: scope.location };
+          setEmailConflict(conflict);
+          try {
+            // Only inspect the existing scoped summary API. Never resolve a global email
+            // or attach an identity to the new draft based on an email match.
+            const residents = await captureService(api!).residents(scope.location);
+            const matches = residents.filter(
+              (resident) =>
+                resident.roomId === scope.room &&
+                resident.email?.trim().toLowerCase() === person.email?.trim().toLowerCase(),
+            );
+            if (alive.current && matches.length === 1)
+              setEmailConflict({ ...conflict, residentId: matches[0].id });
+          } catch {
+            if (alive.current)
+              setError(
+                `${errorMessage(e)} Chưa tải được danh sách hồ sơ; hãy kiểm tra lại từ danh sách người ở.`,
+              );
+          }
         } else setError(errorMessage(e));
       }
     } finally {
@@ -349,6 +418,8 @@ function NewResidentOnboarding() {
             <IdentityWizard
               key={person.key}
               residentId={person.residentId!}
+              locationId={scope.location}
+              roomId={scope.room}
               preview={preview}
               active={step === 2 && identityKey === person.key}
               modal
@@ -359,8 +430,9 @@ function NewResidentOnboarding() {
               onDismiss={() => setIdentityOpen(false)}
               onStatusChange={(status) => changeStatus(person.key, status)}
               onCaptureProgress={(captureProgress) => patch(person.key, { captureProgress })}
+              onSaveError={(verificationError) => patch(person.key, { verificationError })}
               onConfirmed={() => {
-                changeStatus(person.key, 'confirmed');
+                patch(person.key, { status: 'confirmed', verificationError: '' });
                 setIdentityOpen(false);
                 resetScroll();
               }}
@@ -376,6 +448,11 @@ function NewResidentOnboarding() {
           <Text variant="bodySmall" style={ui.muted}>
             Xác nhận thông tin của từng người ở trước khi hoàn tất tiếp nhận.
           </Text>
+        )}
+        {created && !allConfirmed && !preview && (
+          <Button disabled={busy || recognizing} onPress={() => void checkSavedIdentities()}>
+            Kiểm tra trạng thái đã lưu
+          </Button>
         )}
         {mode === 'individual' && people.length > 1 && (
           <ChoiceField
@@ -409,6 +486,41 @@ function NewResidentOnboarding() {
         <Text accessibilityRole="alert" style={ui.red}>
           {error}
         </Text>
+      )}
+      {step === 2 && emailConflict && (
+        <Box>
+          <Heading title="Kiểm tra hồ sơ đã có" />
+          <Text>
+            Hồ sơ có thể đã được tạo ở lần tiếp nhận trước. Kiểm tra đúng người và phòng trước khi
+            tiếp tục xác minh; hồ sơ trong phiên này chưa được xác nhận.
+          </Text>
+          {emailConflict.residentId ? (
+            <Button
+              disabled={busy}
+              onPress={() =>
+                go('onboarding', {
+                  residentId: emailConflict.residentId!,
+                  locationId: emailConflict.locationId,
+                })
+              }
+            >
+              Mở hồ sơ đã có tại phòng này
+            </Button>
+          ) : (
+            <Button disabled={busy} onPress={() => go('rooms')}>
+              Kiểm tra danh sách người ở
+            </Button>
+          )}
+          <Button
+            disabled={busy}
+            onPress={() => {
+              setEditing(emailConflict.personKey);
+              move(1);
+            }}
+          >
+            Sửa email người ở
+          </Button>
+        </Box>
       )}
       {people.some((person) => person.creationUncertain) && (
         <Button onPress={() => go('rooms')}>Kiểm tra danh sách người ở</Button>

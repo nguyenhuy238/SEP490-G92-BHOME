@@ -11,7 +11,8 @@ import {
 import { CameraCapture } from '../../components/CameraCapture';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { useSession } from '../../lib/SessionProvider';
-import { errorMessage, type Proposal } from '../../lib/api';
+import { errorMessage, MobileApiError, type Proposal } from '../../lib/api';
+import { captureService } from '../../services/captureService';
 import {
   confirmedIdentity,
   emptyIdentity,
@@ -34,6 +35,8 @@ import { useWorkspace } from '../workspace/WorkspaceProvider';
 
 interface Props {
   residentId: string;
+  locationId?: string;
+  roomId?: string;
   preview?: boolean;
   active?: boolean;
   modal?: boolean;
@@ -44,13 +47,20 @@ interface Props {
   onDismiss?: () => void;
   onComplete: () => void;
   onConfirmed?: () => void;
+  onSaveError?: (message: string) => void;
   onVerifiedSummary?: (summary: { fullName: string; dateOfBirth: string | null }) => void;
   onStatusChange?: (status: IdentityStatus) => void;
   onCaptureProgress?: (progress: CaptureProgress) => void;
   onCancel: () => void;
 }
+function IdentityScreenCaptureProtection({ residentId }: { residentId: string }) {
+  usePreventScreenCapture(`identity-wizard-${residentId}`);
+  return null;
+}
 export function IdentityWizard({
   residentId,
+  locationId,
+  roomId,
   preview = false,
   active = true,
   modal = false,
@@ -62,6 +72,7 @@ export function IdentityWizard({
   onComplete,
   onCancel,
   onConfirmed,
+  onSaveError,
   onVerifiedSummary,
   onStatusChange,
   onCaptureProgress,
@@ -91,6 +102,7 @@ export function IdentityWizard({
   const fieldOrigin = useRef<Partial<Record<keyof IdentityFields, IdentitySide | 'manual'>>>({});
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [alreadyConfirmed, setAlreadyConfirmed] = useState(false);
   const [error, setError] = useFeedbackState('error', false);
   const [notice, setNotice] = useFeedbackState('info', false);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -126,7 +138,6 @@ export function IdentityWizard({
     }
     wasVisible.current = shown;
   }, [modal, visible, active]);
-  usePreventScreenCapture(`identity-wizard-${residentId}`);
   useEffect(() => {
     if (Platform.OS === 'ios') void enableAppSwitcherProtectionAsync().catch(() => {});
     const clear = () => {
@@ -258,14 +269,62 @@ export function IdentityWizard({
       }
     }
   };
+  const finishVerification = (summary?: { fullName: string; dateOfBirth: string | null }) => {
+    confirmed.current = true;
+    onSaveError?.('');
+    statusCallback.current?.('confirmed');
+    if (summary) onVerifiedSummary?.(summary);
+    current.current = emptyIdentity();
+    setFields(emptyIdentity());
+    setSources({});
+    setChecked(false);
+    setPlaceOfIssue('');
+    setWarnings([]);
+    setStep('done');
+    resetScroll();
+    onConfirmed?.();
+  };
+  const restoreVerifiedIdentity = async () => {
+    if (!api || !locationId || !roomId || lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    const epoch = generation.current;
+    try {
+      const residents = await captureService(api).residents(locationId);
+      if (epoch !== generation.current) return;
+      if (
+        !residents.some(
+          (r) => r.id === residentId && r.roomId === roomId && r.verificationStatus === 1,
+        )
+      )
+        throw new MobileApiError(404);
+      finishVerification();
+      showSuccess(
+        'Đã dùng hồ sơ được máy chủ xác nhận trước đó. Dữ liệu nhập lại không được ghi đè.',
+      );
+    } catch (e) {
+      if (epoch === generation.current) {
+        const message = errorMessage(e);
+        setError(message);
+        onSaveError?.(message);
+      }
+    } finally {
+      if (epoch === generation.current) {
+        lock.current = false;
+        setBusy(false);
+      }
+    }
+  };
   const save = async () => {
-    if (lock.current || confirmed.current || !checked) return;
+    if (lock.current || confirmed.current || alreadyConfirmed || !checked) return;
     setAttempted(true);
     let input: ReturnType<typeof confirmedIdentity>;
     try {
       input = confirmedIdentity(current.current);
     } catch {
-      setError('Vui lòng kiểm tra các trường được đánh dấu.');
+      const message = 'Vui lòng kiểm tra các trường được đánh dấu.';
+      setError(message);
+      onSaveError?.(message);
       return;
     }
     if (!preview && (!api || !session?.roles.includes('Staff'))) {
@@ -275,6 +334,7 @@ export function IdentityWizard({
     setBusy(true);
     lock.current = true;
     setError('');
+    onSaveError?.('');
     const epoch = generation.current;
     const controller = new AbortController();
     abort.current = controller;
@@ -290,22 +350,23 @@ export function IdentityWizard({
           throw new Error('Chưa nhận được xác nhận lưu hồ sơ. Vui lòng kiểm tra lại.');
       }
       if (epoch !== generation.current) return;
-      confirmed.current = true;
       if (!preview) showSuccess('Đã xác nhận và lưu thông tin CCCD.');
-      statusCallback.current?.('confirmed');
-      onVerifiedSummary?.({ fullName: input.fullName, dateOfBirth: input.dateOfBirth });
-      current.current = emptyIdentity();
-      setFields(emptyIdentity());
-      setSources({});
-      setChecked(false);
-      setPlaceOfIssue('');
-      setWarnings([]);
-      setStep('done');
-      resetScroll();
-      onConfirmed?.();
+      finishVerification({ fullName: input.fullName, dateOfBirth: input.dateOfBirth });
     } catch (e) {
       workflowFailure('identity', e);
-      if (epoch === generation.current) setError(errorMessage(e));
+      if (epoch === generation.current) {
+        const message = errorMessage(e);
+        if (
+          e instanceof MobileApiError &&
+          e.status === 409 &&
+          e.code === 'identity_already_confirmed' &&
+          locationId &&
+          roomId
+        )
+          setAlreadyConfirmed(true);
+        setError(message);
+        onSaveError?.(message);
+      }
     } finally {
       clearTimeout(timeout);
       if (epoch === generation.current) {
@@ -327,6 +388,37 @@ export function IdentityWizard({
     if (onDismiss) onDismiss();
     else onCancel();
   };
+  const confirmationActions = (
+    <>
+      {!!error && (
+        <Text accessibilityRole="alert" style={ui.red}>
+          {error}
+        </Text>
+      )}
+      <Checkbox.Item
+        label="Tôi đã đối chiếu giấy tờ gốc và xác nhận toàn bộ thông tin"
+        status={checked ? 'checked' : 'unchecked'}
+        onPress={() => setChecked(!checked)}
+        disabled={busy || alreadyConfirmed}
+      />
+      <Action
+        icon="shield-check-outline"
+        disabled={!checked || busy || alreadyConfirmed}
+        onPress={() => void save()}
+      >
+        {busy
+          ? 'Đang lưu thông tin…'
+          : preview
+            ? 'Xác nhận bản mẫu (không lưu máy chủ)'
+            : 'Xác nhận thông tin'}
+      </Action>
+      {alreadyConfirmed && !!locationId && !!roomId && (
+        <Button mode="contained" disabled={busy} onPress={() => void restoreVerifiedIdentity()}>
+          Dùng hồ sơ đã xác nhận
+        </Button>
+      )}
+    </>
+  );
   const wrap = (children: React.ReactNode) => (
     <IdentityFlowFrame
       modal={modal}
@@ -341,7 +433,16 @@ export function IdentityWizard({
       }
       personLabel={personLabel}
       onClose={closeFlow}
+      footer={
+        modal &&
+        Platform.OS === 'web' &&
+        step === 'verify' &&
+        (preview || session?.roles.includes('Staff'))
+          ? confirmationActions
+          : undefined
+      }
     >
+      {Platform.OS !== 'web' && <IdentityScreenCaptureProtection residentId={residentId} />}
       {children}
     </IdentityFlowFrame>
   );
@@ -560,19 +661,7 @@ export function IdentityWizard({
               Nơi cấp đọc từ ảnh: {placeOfIssue} (thông tin tham khảo, chưa lưu vào hồ sơ).
             </Text>
           )}
-          <Checkbox.Item
-            label="Tôi đã đối chiếu giấy tờ gốc và xác nhận toàn bộ thông tin"
-            status={checked ? 'checked' : 'unchecked'}
-            onPress={() => setChecked(!checked)}
-            disabled={busy}
-          />
-          <Action
-            icon="shield-check-outline"
-            disabled={!checked || busy}
-            onPress={() => void save()}
-          >
-            {preview ? 'Xác nhận bản mẫu (không lưu máy chủ)' : 'Xác nhận thông tin'}
-          </Action>
+          {(!modal || Platform.OS !== 'web') && confirmationActions}
           {(['front', 'back'] as const).map((face) => (
             <Button
               key={face}
@@ -606,7 +695,7 @@ export function IdentityWizard({
           {notice}
         </Text>
       )}
-      {!!error && (
+      {!!error && step !== 'verify' && (
         <Text accessibilityRole="alert" style={ui.red}>
           {error}
         </Text>

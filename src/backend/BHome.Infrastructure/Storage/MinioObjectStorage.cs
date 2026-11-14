@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Minio;
 using Minio.DataModel.Args;
+using Minio.Exceptions;
 
 namespace BHome.Infrastructure.Storage;
 
@@ -25,15 +26,34 @@ internal sealed class MinioObjectStorage(IOptions<ObjectStorageOptions> options,
     public async Task PutAsync(string key, Stream content, long length, string contentType, CancellationToken cancellationToken)
     {
         using var client = CreateClient();
-        await client.PutObjectAsync(new PutObjectArgs().WithBucket(options.Value.Bucket).WithObject(key)
-            .WithStreamData(content).WithObjectSize(length).WithContentType(contentType), cancellationToken);
+        try
+        {
+            var response = await client.PutObjectAsync(new PutObjectArgs().WithBucket(options.Value.Bucket).WithObject(key)
+                .WithStreamData(content).WithObjectSize(length).WithContentType(contentType), cancellationToken);
+            // SDK 6 can return without throwing after a transport failure. A completed
+            // Task alone is not evidence that the private object was persisted.
+            if (response is null || string.IsNullOrWhiteSpace(response.Etag) || response.Size != length)
+                throw new IntegrationUnavailableException("object storage");
+        }
+        catch (MinioException) { throw new IntegrationUnavailableException("object storage"); }
     }
 
     public async Task CopyToAsync(string key, Stream destination, CancellationToken cancellationToken)
     {
         using var client = CreateClient();
-        await client.GetObjectAsync(new GetObjectArgs().WithBucket(options.Value.Bucket).WithObject(key)
-            .WithCallbackStream((stream, token) => stream.CopyToAsync(destination, token)), cancellationToken);
+        var copied = false;
+        try
+        {
+            var response = await client.GetObjectAsync(new GetObjectArgs().WithBucket(options.Value.Bucket).WithObject(key)
+                .WithCallbackStream(async (stream, token) =>
+                {
+                    await stream.CopyToAsync(destination, token);
+                    copied = true;
+                }), cancellationToken);
+            if (response is null || !copied) throw new IntegrationUnavailableException("object storage");
+        }
+        catch (ObjectNotFoundException) { throw new FileNotFoundException("Private object is unavailable."); }
+        catch (MinioException) { throw new IntegrationUnavailableException("object storage"); }
     }
 
     public async Task DeleteAsync(string key, CancellationToken cancellationToken)
