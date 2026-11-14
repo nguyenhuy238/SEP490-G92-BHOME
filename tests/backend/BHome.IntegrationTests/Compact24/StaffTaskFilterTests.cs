@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using BHome.Application.Operations;
 using BHome.Application.StaffOperations;
 using BHome.Domain.Billing;
+using BHome.Domain.PropertyManagement;
+using BHome.Domain.StaffOperations;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +13,58 @@ namespace BHome.IntegrationTests.Compact24;
 
 public sealed partial class Compact24NotificationMvpTests
 {
+    [CompactPostgresFact]
+    public async Task OwnerTaskTargetsPersistAndRejectAssetsOutsideSelectedPosition()
+    {
+        var first = await Seed();
+        var other = await Seed();
+        using var owner = await Client(first.Owner);
+        using var staff = await Client(first.Staff);
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var roomAsset = new Asset { LocationId = first.Location, RoomId = first.Room, Name = "Synthetic bed", Category = "Furniture", Condition = "Good" };
+        var commonAsset = new Asset { LocationId = first.Location, CommonArea = "Synthetic hallway", Name = "Synthetic lamp", Category = "Equipment", Condition = "Good" };
+        db.AddRange(roomAsset, commonAsset);
+        await db.SaveChangesAsync();
+        const string route = "/api/v1/operational-tasks";
+        var work = new TaskWrite("Synthetic target", "Inspect", OperationalTaskPriority.Normal, DateTimeOffset.UtcNow.AddDays(1), false);
+        async Task<HttpResponseMessage> Send(HttpMethod method, string path, object body)
+        {
+            using var request = new HttpRequestMessage(method, path) { Content = JsonContent.Create(body) };
+            request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            return await owner.SendAsync(request);
+        }
+        var areas = await owner.GetFromJsonAsync<string[]>($"{route}/targets/common-areas?locationId={first.Location}");
+        Assert.Contains("Synthetic hallway", areas!);
+        var assets = await owner.GetFromJsonAsync<TaskPage<TaskTargetOption>>($"{route}/targets/assets?locationId={first.Location}&roomId={first.Room}");
+        Assert.Equal(roomAsset.Id, Assert.Single(assets!.Items).Id);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync($"{route}/targets/common-areas?locationId={first.Location}")).StatusCode);
+        using var invalid = await Send(HttpMethod.Post, route, new TaskCreate(first.Location, work with { Target = new(other.Room, roomAsset.Id) }));
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        using var invalidPosition = await Send(HttpMethod.Post, route, new TaskCreate(first.Location, work with { Target = new(first.Room, commonAsset.Id) }));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidPosition.StatusCode);
+        using var created = await Send(HttpMethod.Post, route, new TaskCreate(first.Location, work with { Target = new(first.Room, roomAsset.Id) }));
+        created.EnsureSuccessStatusCode();
+        var task = (await created.Content.ReadFromJsonAsync<TaskView>())!;
+        Assert.Equal(roomAsset.Id, task.Target!.AssetId);
+        Assert.Equal(first.Staff.Id, task.CurrentResponsibleStaffUserId);
+        var persisted = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == task.Id);
+        Assert.Equal(roomAsset.Id, persisted.TargetAssetId);
+        Assert.Equal(first.Room, persisted.TargetRoomId);
+        var staffView = await staff.GetFromJsonAsync<TaskView>($"{route}/{task.Id}");
+        Assert.Equal(task.Target, staffView!.Target);
+        using var edited = await Send(HttpMethod.Put, $"{route}/{task.Id}", new TaskUpdate(task.Version, work, "Legacy client edit"));
+        edited.EnsureSuccessStatusCode();
+        task = (await edited.Content.ReadFromJsonAsync<TaskView>())!;
+        Assert.Equal(roomAsset.Id, task.Target!.AssetId);
+        using var relocated = await Send(HttpMethod.Put, $"{route}/{task.Id}", new TaskUpdate(task.Version, work with { Target = new(AssetId: commonAsset.Id, CommonArea: "Synthetic hallway") }, "Move inspection target"));
+        relocated.EnsureSuccessStatusCode();
+        task = (await relocated.Content.ReadFromJsonAsync<TaskView>())!;
+        Assert.Equal(commonAsset.Id, task.Target!.AssetId);
+        Assert.Equal("Synthetic hallway", task.Target.CommonArea);
+        Assert.Null(task.Target.RoomId);
+    }
+
     [CompactPostgresFact]
     public async Task OwnerTaskFiltersDistinguishRecordedAssigneeAndCurrentResponsibilityBeforePaging()
     {

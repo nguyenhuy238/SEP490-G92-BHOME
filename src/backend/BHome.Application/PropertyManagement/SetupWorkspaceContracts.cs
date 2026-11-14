@@ -34,7 +34,7 @@ public interface ISetupWorkspaceStore
     Task<IReadOnlyList<UtilityRoomUsage>> UtilityUsageAsync(Guid locationId, UtilityType type, DateOnly period, CancellationToken t);
     Task<(Guid LocationId, UtilityType Type)?> MeterScopeAsync(Guid meterId, CancellationToken t);
 }
-public sealed record AssetTemplateItem(Guid Id, string Name, string Category, string TrackingMode, int Quantity);
+public sealed record AssetTemplateItem(Guid Id, string Name, string Category, string TrackingMode, int Quantity, string? Unit = null);
 public sealed record AssetTemplateWrite(Guid LocationId, string Name, AssetTemplateItem[] Items, int ExpectedVersion = 0,
     bool Scoped = false, Guid? ScopeRoomId = null);
 public sealed record TemplatePublish(int ExpectedVersion);
@@ -46,12 +46,14 @@ public sealed record AssetHistoryEntry(Guid Id, string Action, string Reason, Da
 public sealed record AssetVerification(Guid TemplateId, Guid ItemId, string Code, int Quantity, string Condition, string EvidenceObjectKey, int ExpectedVersion, Guid? ExistingAssetId = null);
 public sealed record AssetMetadata(string TrackingMode, int Quantity,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal? PurchaseCost,
-    DateOnly? PurchaseDate, int? UsefulLifeMonths);
+    DateOnly? PurchaseDate, int? UsefulLifeMonths, string? Unit = null);
 public sealed record AssetMetadataWrite(AssetMetadata Metadata, int ExpectedVersion, string Reason);
 public sealed record AssetReplacement(string Code, string Condition, string Reason, int ExpectedVersion);
 public sealed record AssetDiscrepancy(Guid AssetId, string Action);
+public sealed record AssetRequirementProgress(Guid ItemId, int VerifiedQuantity);
 public sealed record AssetInventory(IReadOnlyList<Asset> Physical, IReadOnlyList<SetupDocument> Desired, IReadOnlyDictionary<Guid, AssetMetadata>? Metadata = null,
-    Guid? CurrentDesiredId = null, IReadOnlyList<AssetDiscrepancy>? Discrepancies = null, int AssignmentVersion = 0, Guid? AssignedTemplateId = null);
+    Guid? CurrentDesiredId = null, IReadOnlyList<AssetDiscrepancy>? Discrepancies = null, int AssignmentVersion = 0, Guid? AssignedTemplateId = null,
+    IReadOnlyList<AssetRequirementProgress>? Progress = null);
 
 public sealed record UtilityTier(decimal? Through, decimal Rate);
 public sealed record UtilityTariffWrite(Guid LocationId, [property: JsonRequired] UtilityType UtilityType, DateOnly EffectiveFrom, DateOnly? EffectiveTo,

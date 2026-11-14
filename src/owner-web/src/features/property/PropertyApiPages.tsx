@@ -26,6 +26,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
+import { ASSET_UNITS } from '../../../../../packages/client-core/src/assetUnits';
 import { invoiceError, type Page } from '../../../../../packages/client-core/src/invoices';
 import type {
   LocationConfiguration,
@@ -85,6 +86,7 @@ export function PropertyApiPage({
   );
   const location = params.locationId ?? selectedLocation;
   const [search, setSearch] = useState('');
+  const [assetScope, setAssetScope] = useState('');
   const [localStatusFilter, setLocalStatusFilter] = useState('');
   const scopedRooms = kind === 'rooms' && !!params.locationId;
   const urlStatus = urlParams.get('roomStatus') ?? '';
@@ -94,7 +96,7 @@ export function PropertyApiPage({
       : ''
     : localStatusFilter;
   // Reset pagination before the next query runs, including URL-driven navigation.
-  const pageScope = JSON.stringify([kind, location, statusFilter, search]);
+  const pageScope = JSON.stringify([kind, location, statusFilter, search, assetScope]);
   const [pagination, setPagination] = useState({ scope: pageScope, page: 0 });
   if (pagination.scope !== pageScope) {
     setPagination({ scope: pageScope, page: 0 });
@@ -125,6 +127,7 @@ export function PropertyApiPage({
   const [inspectedAsset, setInspectedAsset] = useState('');
   const [editing, setEditing] = useState<Row | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
+  const [newCommonArea, setNewCommonArea] = useState('');
   const [notice, setNotice] = useState('');
   const createIntent = scopedRooms && urlParams.get('action') === 'create' ? routeKey : null;
   const [handledIntent, setHandledIntent] = useState<string | null>(null);
@@ -167,13 +170,31 @@ export function PropertyApiPage({
     queryFn: ({ signal }) => api.roomOptions(location, signal),
     enabled: kind === 'assets' && !!location,
   });
+  const commonAreas = useQuery({
+    queryKey: ['property-setup', 'common-area-options', session?.userId, location],
+    queryFn: ({ signal }) =>
+      api.request<string[]>(
+        `/api/v1/operational-tasks/targets/common-areas?${new URLSearchParams({ locationId: location })}`,
+        { signal },
+      ),
+    enabled: kind === 'assets' && canManage && !!location,
+  });
   const query = useQuery({
-    queryKey: ['property-setup', kind, session?.userId, location, page, search, statusFilter],
+    queryKey: [
+      'property-setup',
+      kind,
+      session?.userId,
+      location,
+      page,
+      search,
+      statusFilter,
+      assetScope,
+    ],
     queryFn: async ({ signal }): Promise<Page<Row>> =>
       kind === 'locations'
         ? api.locations(page + 1, search, signal)
         : api.request<Page<Row>>(
-            `/api/v1/${kind}?${new URLSearchParams({ locationId: location, page: String(page + 1), pageSize: '20', ...(search ? { search } : {}), ...(statusFilter ? { [kind === 'rooms' ? 'roomStatus' : 'assetStatus']: statusFilter } : {}) })}`,
+            `/api/v1/${kind}?${new URLSearchParams({ locationId: location, page: String(page + 1), pageSize: '20', ...(search ? { search } : {}), ...(statusFilter ? { [kind === 'rooms' ? 'roomStatus' : 'assetStatus']: statusFilter } : {}), ...(kind === 'assets' && assetScope ? (assetScope === 'common' ? { commonAreaOnly: 'true' } : { roomId: assetScope }) : {}) })}`,
             { signal },
           ),
     enabled: kind === 'locations' || !!location,
@@ -237,17 +258,25 @@ export function PropertyApiPage({
           version,
           reason,
         });
+      const commonArea = values.roomId
+        ? null
+        : values.commonArea === '__new__'
+          ? newCommonArea.trim() || null
+          : values.commonArea?.trim() || null;
+      if (!values.roomId && !commonArea)
+        throw new Error('Chọn khu vực chung hoặc nhập tên khu vực mới.');
       return api.saveAsset(editing?.id ?? null, {
         locationId: location,
         roomId: values.roomId || null,
-        commonArea: values.roomId ? null : values.commonArea?.trim() || null,
+        commonArea,
         code: values.code?.trim() || null,
         name: values.name?.trim() ?? '',
-        category: values.category?.trim() ?? '',
+        category: values.category?.trim() || 'Khác',
         condition: values.condition?.trim() ?? '',
         status: Number(values.status ?? 0),
         version,
         reason,
+        ...(!editing ? { initialUnit: values.unit || 'Cái' } : {}),
       });
     },
     onSuccess: async () => {
@@ -266,12 +295,19 @@ export function PropertyApiPage({
     save.reset();
     setEditing(row);
     setNotice('');
+    setNewCommonArea('');
+    const nextValues = row
+      ? Object.fromEntries(
+          Object.entries(row).map(([key, value]) => [key, value == null ? '' : String(value)]),
+        )
+      : {};
     setValues(
-      row
-        ? Object.fromEntries(
-            Object.entries(row).map(([key, value]) => [key, value == null ? '' : String(value)]),
-          )
-        : {},
+      kind === 'assets'
+        ? {
+            ...nextValues,
+            commonArea: nextValues.commonArea || (nextValues.roomId ? '' : '__new__'),
+          }
+        : nextValues,
     );
     setOpen(true);
   };
@@ -316,12 +352,6 @@ export function PropertyApiPage({
       slotProps={type === 'number' ? { htmlInput: { min: 1, max: 32767, step: 1 } } : undefined}
     />
   );
-  const subtitle =
-    kind === 'rooms'
-      ? 'Tìm phòng, xem sức chứa và quản lý trạng thái khai thác.'
-      : kind === 'assets'
-        ? 'Theo dõi thiết bị thực tế tại phòng và khu chung, kiểm tra tình trạng và lịch sử.'
-        : 'Quản lý thông tin và cấu hình các cơ sở.';
   const actions = canManage ? (
     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
       {kind === 'locations' && <ApiConfigurationCopy />}
@@ -349,20 +379,12 @@ export function PropertyApiPage({
   return (
     <Stack spacing={2} sx={{ minWidth: 0 }}>
       {embedded ? (
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          useFlexGap
-          spacing={1.5}
-          sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', flexWrap: 'wrap' }}
-        >
-          <Box sx={{ ml: { sm: 'auto' } }}>{actions}</Box>
-        </Stack>
+        actions && <Box sx={{ alignSelf: { sm: 'flex-end' } }}>{actions}</Box>
       ) : (
         <PageHeader
           group={null}
           headingLevel={params.locationId ? 'h2' : 'h1'}
           title={titles[kind]}
-          subtitle={params.locationId ? undefined : subtitle}
           actions={actions}
         />
       )}
@@ -374,6 +396,7 @@ export function PropertyApiPage({
           value={selectedLocation}
           onChange={(event) => {
             setSelectedLocation(event.target.value);
+            setAssetScope('');
             setPage(0);
           }}
         >
@@ -424,6 +447,24 @@ export function PropertyApiPage({
               ))}
             </TextField>
           )}
+          {kind === 'assets' && (
+            <TextField
+              select
+              size="small"
+              label="Vị trí tài sản"
+              value={assetScope}
+              onChange={(event) => setAssetScope(event.target.value)}
+              sx={{ minWidth: 180 }}
+            >
+              <MenuItem value="">Tất cả vị trí</MenuItem>
+              <MenuItem value="common">Khu vực chung</MenuItem>
+              {rooms.data?.map((room) => (
+                <MenuItem key={room.id} value={room.id}>
+                  {room.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
           <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, flexShrink: 0 }}>
             <Button
               disabled={query.isFetching || (kind !== 'locations' && !location)}
@@ -431,10 +472,11 @@ export function PropertyApiPage({
             >
               Tải lại
             </Button>
-            {(search || statusFilter) && (
+            {(search || statusFilter || assetScope) && (
               <Button
                 onClick={() => {
                   setSearch('');
+                  setAssetScope('');
                   setStatusFilter('');
                   setPage(0);
                 }}
@@ -479,7 +521,7 @@ export function PropertyApiPage({
             <Box sx={{ p: 3, textAlign: 'center' }}>
               <EmptyState
                 message={
-                  search || statusFilter
+                  search || statusFilter || assetScope
                     ? 'Không có dữ liệu phù hợp. Thử đổi từ khóa hoặc trạng thái.'
                     : kind === 'assets'
                       ? 'Chưa có tài sản thực tế. Thêm tài sản đầu tiên để bắt đầu quản lý.'
@@ -635,9 +677,7 @@ export function PropertyApiPage({
                                 'Phòng (chưa tải được tên)')
                               : row.commonArea || 'Chưa ghi nhận khu vực'}
                           </TableCell>
-                          <TableCell>
-                            {row.category} · {row.condition}
-                          </TableCell>
+                          <TableCell>{row.condition}</TableCell>
                         </>
                       )}
                       <TableCell>
@@ -881,7 +921,22 @@ export function PropertyApiPage({
                 <>
                   {field('name', 'Tên tài sản')}
                   {field('code', 'Mã tài sản', false)}
-                  {field('category', 'Nhóm tài sản')}
+                  {!editing && (
+                    <TextField
+                      select
+                      label="Đơn vị"
+                      value={values.unit || 'Cái'}
+                      onChange={(event) =>
+                        setValues((old) => ({ ...old, unit: event.target.value }))
+                      }
+                    >
+                      {ASSET_UNITS.map((unit) => (
+                        <MenuItem key={unit} value={unit}>
+                          {unit}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
                   {field('condition', 'Tình trạng')}
                   <TextField
                     select
@@ -899,7 +954,55 @@ export function PropertyApiPage({
                       </MenuItem>
                     ))}
                   </TextField>
-                  {!values.roomId && field('commonArea', 'Tên khu vực chung')}
+                  {!values.roomId && (
+                    <>
+                      <TextField
+                        select
+                        label="Khu vực chung"
+                        value={values.commonArea || '__new__'}
+                        onChange={(event) => {
+                          const selected = event.target.value;
+                          setValues((old) => ({ ...old, commonArea: selected }));
+                          if (selected === '__new__') setNewCommonArea('');
+                        }}
+                        helperText={
+                          commonAreas.isPending
+                            ? 'Đang tải khu vực đã ghi nhận tại cơ sở…'
+                            : values.commonArea === '__new__'
+                              ? 'Khu vực mới được ghi nhận khi lưu tài sản đầu tiên.'
+                              : 'Chọn khu vực đã có hoặc tạo tên khu vực mới.'
+                        }
+                      >
+                        <MenuItem value="__new__">+ Tạo khu vực mới</MenuItem>
+                        {commonAreas.data?.map((area) => (
+                          <MenuItem key={area} value={area}>
+                            {area}
+                          </MenuItem>
+                        ))}
+                        {values.commonArea &&
+                          values.commonArea !== '__new__' &&
+                          !commonAreas.data?.includes(values.commonArea) && (
+                            <MenuItem value={values.commonArea}>
+                              {values.commonArea} · hiện tại
+                            </MenuItem>
+                          )}
+                      </TextField>
+                      {values.commonArea === '__new__' && (
+                        <TextField
+                          required
+                          label="Tên khu vực mới"
+                          value={newCommonArea}
+                          onChange={(event) => setNewCommonArea(event.target.value)}
+                          slotProps={{ htmlInput: { maxLength: 120 } }}
+                        />
+                      )}
+                      {commonAreas.isError && (
+                        <Alert severity="warning">
+                          Chưa tải được danh sách khu vực đã có. Bạn vẫn có thể tạo khu vực mới.
+                        </Alert>
+                      )}
+                    </>
+                  )}
                 </>
               )}
               {kind !== 'locations' && !(kind === 'rooms' && !editing && values.roomDefaultsId) && (

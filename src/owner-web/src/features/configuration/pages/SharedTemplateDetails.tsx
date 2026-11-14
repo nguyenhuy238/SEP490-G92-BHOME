@@ -572,7 +572,6 @@ function SharedDataSummary({ document }: { document: SharedDocument }) {
                   <TableCell>Tài sản</TableCell>
                   <TableCell align="right">Số lượng</TableCell>
                   <TableCell>Yêu cầu</TableCell>
-                  <TableCell>Theo dõi</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -592,9 +591,6 @@ function SharedDataSummary({ document }: { document: SharedDocument }) {
                       {item.quantity} {item.catalog?.unit}
                     </TableCell>
                     <TableCell>{item.required ? 'Bắt buộc' : 'Tùy chọn'}</TableCell>
-                    <TableCell>
-                      {item.trackingMode === 'Serialized' ? 'Từng tài sản' : 'Theo số lượng'}
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -619,9 +615,22 @@ function SharedDataSummary({ document }: { document: SharedDocument }) {
                 : `${formatBillingDecimal(data.referenceRent)} đ/tháng`,
           },
           {
-            label: 'Tiện ích',
+            label: 'Đặc điểm phòng',
             value: data.amenities.length ? data.amenities.join(', ') : 'Chưa đặt',
           },
+          ...(data.assetItems?.length
+            ? [
+                {
+                  label: 'Tài sản định mức',
+                  value: data.assetItems
+                    .map(
+                      (item) =>
+                        `${item.catalog?.name ?? 'Tài sản'} × ${item.quantity} ${item.catalog?.unit ?? ''}`,
+                    )
+                    .join(', '),
+                },
+              ]
+            : []),
         ]}
       />
     );
@@ -676,7 +685,7 @@ function SharedDataSummary({ document }: { document: SharedDocument }) {
   return (
     <SummaryFields
       fields={[
-        { label: 'Nhóm tài sản', value: data.category },
+        { label: 'Đơn vị', value: data.unit },
         {
           label: 'Giá tham khảo',
           value: `${formatBillingDecimal(data.referencePrice)} đ/${data.unit}`,

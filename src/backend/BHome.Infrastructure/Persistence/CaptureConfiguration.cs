@@ -45,6 +45,8 @@ internal static class CaptureConfiguration
             e.Property(x => x.Title).HasMaxLength(200);
             e.Property(x => x.Requirements).HasMaxLength(8000);
             e.Property(x => x.Result).HasMaxLength(8000);
+            e.Property(x => x.TargetCommonArea).HasMaxLength(200);
+            e.Property(x => x.TargetLabel).HasMaxLength(400);
             e.Property(x => x.Version).IsConcurrencyToken();
             e.HasIndex(x => new { x.LocationId, x.Status, x.DueAt });
             e.ToTable("OperationalTasks", t =>

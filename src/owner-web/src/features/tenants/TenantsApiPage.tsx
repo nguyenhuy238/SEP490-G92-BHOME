@@ -77,7 +77,6 @@ export function TenantsApiPage() {
     <Stack spacing={2}>
       <PageHeader
         title="Khách thuê và người ở"
-        subtitle="Hồ sơ người ở, trạng thái xác minh và tài khoản liên kết."
         actions={
           <Button onClick={() => setCreate(true)} variant="contained">
             Thêm người ở

@@ -190,11 +190,7 @@ export default function FinanceHomePage() {
   const [activeArea, setActiveArea] = useState<'billing' | 'issues' | 'management'>('billing');
   return (
     <>
-      <PageHeader
-        group="KHÔNG GIAN LÀM VIỆC"
-        title="Tài chính & Hóa đơn"
-        subtitle="Bạn muốn thực hiện công việc nào? Chọn việc cần làm bên dưới thay vì tìm từng chức năng trong menu."
-      />
+      <PageHeader group="KHÔNG GIAN LÀM VIỆC" title="Tài chính & Hóa đơn" />
       <Paper
         sx={{
           p: { xs: 2, md: 3 },

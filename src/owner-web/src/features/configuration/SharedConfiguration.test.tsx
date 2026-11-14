@@ -428,7 +428,7 @@ it('displays fee units and does not offer apply directly on catalog entries', as
   unmount();
   mount(<ApiConfigurationLibraryPage kind="asset" />);
   const catalog = await screen.findByRole('table', { name: 'Danh mục tài sản' });
-  expect(within(catalog).getByText('Furniture')).toBeVisible();
+  expect(within(catalog).getByText('item')).toBeVisible();
   expect(within(catalog).queryByRole('button', { name: 'Áp dụng' })).toBeNull();
 });
 it('keeps room prices and status without version clutter, with accessible actions at 390px', async () => {
@@ -494,7 +494,7 @@ it('keeps each resource summary and its allowed actions visible on a 390px viewp
   fee.unmount();
   const assets = mount(<ApiConfigurationLibraryPage kind="asset" />);
   const catalog = await screen.findByRole('table', { name: 'Danh mục tài sản' });
-  expect(within(catalog).getByText('Furniture')).toBeVisible();
+  expect(within(catalog).getByText('item')).toBeVisible();
   expect(within(catalog).getByText('Giá tham khảo: 123,0001 đ/item')).toBeVisible();
   expect(within(catalog).queryByRole('button', { name: 'Áp dụng' })).toBeNull();
   expect(within(catalog).getByRole('button', { name: `Thao tác cho ${doc.name}` })).toBeVisible();
@@ -508,7 +508,7 @@ it('keeps each resource summary and its allowed actions visible on a 390px viewp
   expect(within(policy).getByText('Hiệu lực từ: 01/12/2026')).toBeVisible();
   expect(within(policy).getByRole('button', { name: 'Áp dụng' })).toBeVisible();
 });
-it('selects real catalog versions and submits optional and tracking flags', async () => {
+it('selects real catalog versions and submits optional flags with internal tracking', async () => {
   mount(<ApiConfigurationLibraryPage kind="asset" />);
   fireEvent.click(screen.getByRole('tab', { name: 'Gói tài sản' }));
   fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu' }));
@@ -520,10 +520,10 @@ it('selects real catalog versions and submits optional and tracking flags', asyn
     ),
   );
   await select('Tài sản trong danh mục', doc.name + ' · phiên bản 2');
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm vào gói' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm vào mẫu' }));
   fill('Số lượng mục 1', '3');
   fireEvent.click(screen.getByLabelText('Bắt buộc'));
-  await select('Theo dõi mục 1', 'Theo số lượng');
+  expect(screen.queryByLabelText('Theo dõi mục 1')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
   await waitFor(() =>
     expect(
@@ -540,7 +540,7 @@ it('selects real catalog versions and submits optional and tracking flags', asyn
     catalogVersion: 7,
     quantity: 3,
     required: false,
-    trackingMode: 'BulkQuantity',
+    trackingMode: 'Serialized',
   });
 });
 it('copies only after confirmed server preview and displays conflicts without execution', async () => {

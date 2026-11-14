@@ -28,7 +28,7 @@ const settings: MainContractSettings = {
     dateOfIssue: '2020-01-01',
     placeOfIssue: 'Cơ quan tổng hợp',
     address: 'Địa chỉ tổng hợp',
-    phone: '0000000000',
+    phone: '+84900000000',
   },
 };
 beforeEach(() => {

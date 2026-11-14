@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@mui/material';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -48,6 +48,7 @@ const policy = {
   },
 };
 function reads(path: string) {
+  if (path.endsWith('/asset-count-observations')) return [];
   if (path.endsWith('/configuration')) return { canEdit: true };
   if (path.endsWith('/room-defaults')) return [];
   if (path.endsWith('/rooms')) return [{ id: 'room', label: 'A101' }];
@@ -245,6 +246,39 @@ it('hides template management from Staff while keeping the scoped inventory entr
   await screen.findByLabelText('Phòng kiểm kê');
   expect(screen.queryByRole('button', { name: 'Tạo bộ mẫu trang bị' })).toBeNull();
   expect(state.request.mock.calls.some(([path]) => path.includes('asset-templates'))).toBe(false);
+});
+it('records a physical shortage without creating or retiring physical assets', async () => {
+  mount(<LocalAssetSetup locationId="location" mode="inventory" />);
+  await room();
+  fireEvent.click(await screen.findByRole('button', { name: /^Kiểm đếm$/ }));
+  const dialog = await screen.findByRole('dialog', { name: /Ghi nhận số lượng/ });
+  fireEvent.change(within(dialog).getByLabelText(/Số lượng đếm được/), { target: { value: '0' } });
+  expect(within(dialog).getByText(/Thiếu 2/)).toBeVisible();
+  fireEvent.change(within(dialog).getByLabelText('Ảnh bằng chứng'), {
+    target: { files: [new File(['synthetic'], 'synthetic.png', { type: 'image/png' })] },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu kết quả kiểm đếm' }));
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      '/api/v1/rooms/room/asset-count-observations/item',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          desiredId: 'desired',
+          desiredVersion: 4,
+          quantity: 0,
+          evidenceObjectKey: 'setup/location/evidence/synthetic',
+          note: '',
+          expectedVersion: 0,
+        }),
+      }),
+    ),
+  );
+  expect(
+    state.request.mock.calls.some(
+      ([path, init]) => init?.method && (path === '/api/v1/assets' || path.endsWith('/verify')),
+    ),
+  ).toBe(false);
 });
 it('publishes OperatingPolicy without overwriting a Contract and requests policy-specific history', async () => {
   mount(<OperatingPoliciesPanel locationId="location" />);

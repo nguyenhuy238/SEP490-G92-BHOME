@@ -67,13 +67,13 @@ public sealed class MainDraftReleaseBeforeAccountsTests(Compact24Fixture fixture
             db.Add(person); await db.SaveChangesAsync(); resident = person.Id;
         }
         var root = "/api/v1/contracts/main-drafts";
-        var settings = new MainContractSettingsInput(ownerId, today, null, 3000000, "Synthetic monthly payment terms", "Synthetic terms", new("SYNTHETIC OWNER", new(1980, 1, 1), "000000000456", new(2020, 1, 1), "Synthetic issuer", "Synthetic address", "0000000000"), 0);
+        var settings = new MainContractSettingsInput(ownerId, today, null, 3000000, "Synthetic monthly payment terms", "Synthetic terms", new("SYNTHETIC OWNER", new(1980, 1, 1), "000000000456", new(2020, 1, 1), "Synthetic issuer", "Synthetic address", "0900000000"), 0);
         (await owner.PutAsJsonAsync(root + "/settings/" + location, settings)).EnsureSuccessStatusCode();
         async Task<HttpResponseMessage> Post(HttpClient c, string path, object body, Guid key)
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) }; request.Headers.Add("Idempotency-Key", key.ToString()); return await c.SendAsync(request);
         }
-        var created = await Post(staff, root, new MainDraftInput(room, resident, [resident], today, today.AddMonths(6), "Synthetic notes", "0000000001", "Synthetic issuer"), Guid.NewGuid());
+        var created = await Post(staff, root, new MainDraftInput(room, resident, [resident], today, today.AddMonths(6), "Synthetic notes", "0900000001", "Synthetic issuer"), Guid.NewGuid());
         Assert.True(created.IsSuccessStatusCode, await created.Content.ReadAsStringAsync()); var draft = (await created.Content.ReadFromJsonAsync<MainDraftView>())!;
         var response = await staff.PostAsync($"{root}/{draft.Id}/signing-review", null); response.EnsureSuccessStatusCode(); var review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;
         var input = new MainDraftReleaseInput(null, draft.Version, review.Id, true); var key = Guid.NewGuid();

@@ -4,7 +4,8 @@ using System.Text.Json.Serialization;
 namespace BHome.Application.PropertyManagement;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SharedRoomDefaults([property: JsonRequired] int Capacity, [property: JsonRequired] decimal Area, string[] Amenities, decimal? ReferenceRent);
+public sealed record SharedRoomDefaults([property: JsonRequired] int Capacity, [property: JsonRequired] decimal Area, string[] Amenities, decimal? ReferenceRent,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SharedAssetItem[]? AssetItems = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SharedCatalogData(string Category, string Unit, [property: JsonRequired] decimal ReferencePrice);
 
@@ -23,7 +24,7 @@ public sealed partial class SharedDataValidator(ISharedConfigurationStore store)
     {
         object value = resource switch
         {
-            "room-type-templates" => Room(Read<SharedRoomDefaults>(data)),
+            "room-type-templates" => await RoomAsync(Read<SharedRoomDefaults>(data), t),
             "asset-catalog" => Catalog(Read<SharedCatalogData>(data)),
             "asset-templates" => await AssetsAsync(Read<SharedAssetData>(data), t),
             "fee-templates" => Fee(Read<SharedFeeData>(data)),
@@ -32,12 +33,13 @@ public sealed partial class SharedDataValidator(ISharedConfigurationStore store)
         };
         return JsonSerializer.SerializeToElement(value, Json);
     }
-    private static SharedRoomDefaults Room(SharedRoomDefaults input)
+    private async Task<SharedRoomDefaults> RoomAsync(SharedRoomDefaults input, CancellationToken t)
     {
         if (input.Capacity is < 1 or > 32767 || input.Area is <= 0 or > 1000000 || decimal.Round(input.Area, 4) != input.Area || input.Amenities is null || input.Amenities.Length > 100) throw new PropertyException(400, "invalid_room_defaults");
         var amenities = input.Amenities.Select(x => Text(x, 200)).ToArray();
         if (amenities.Distinct(StringComparer.OrdinalIgnoreCase).Count() != amenities.Length) throw new PropertyException(400, "duplicate_amenity");
-        return input with { Amenities = amenities, ReferenceRent = input.ReferenceRent.HasValue ? Money(input.ReferenceRent.Value) : null };
+        var assets = input.AssetItems is { Length: > 0 } items ? (await AssetsAsync(new(items), t)).Items : null;
+        return input with { Amenities = amenities, ReferenceRent = input.ReferenceRent.HasValue ? Money(input.ReferenceRent.Value) : null, AssetItems = assets };
     }
     private static SharedCatalogData Catalog(SharedCatalogData input) => new(Text(input.Category, 80), Text(input.Unit, 80), Money(input.ReferencePrice));
 }

@@ -39,6 +39,11 @@ public sealed class OperationalTask : AuditableEntity
     public Guid? VerifiedByUserId { get; set; }
     public DateTimeOffset? VerifiedAt { get; set; }
     public int Version { get; set; } = 1;
+    // Optional Owner-defined work target. These are independent of meter/contract fields.
+    public Guid? TargetRoomId { get; set; }
+    public Guid? TargetAssetId { get; set; }
+    public string? TargetCommonArea { get; set; }
+    public string? TargetLabel { get; set; }
     // Meter details remain in the existing table to preserve reading/evidence FKs and API IDs.
     // Kind and database constraints distinguish these from Owner-verified operational work.
     public Guid? ContractId { get; set; }

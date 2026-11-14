@@ -337,8 +337,8 @@ function RoomConfigurationForm({
             <TextField
               multiline
               minRows={2}
-              label="Tiện nghi"
-              helperText="Mỗi dòng một tiện nghi"
+              label="Đặc điểm phòng (không bắt buộc)"
+              helperText="Ví dụ: ban công, cửa sổ, có gác. Tài sản được quản lý bên dưới."
               disabled={disabled}
               value={amenities}
               onChange={(e) => setAmenities(e.target.value)}

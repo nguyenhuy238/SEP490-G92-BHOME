@@ -1,6 +1,7 @@
 import { Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { Plus, Trash2 } from 'lucide-react';
 import type { LocalAssetItem } from '../../../../../packages/client-core/src/propertySetup';
+import { ASSET_UNITS } from '../../../../../packages/client-core/src/assetUnits';
 
 export function AssetRequirementFields({
   items,
@@ -27,7 +28,7 @@ export function AssetRequirementFields({
             display: 'grid',
             gridTemplateColumns: {
               xs: '1fr 1fr',
-              md: 'minmax(0, 1.4fr) minmax(0, 1fr) 100px minmax(0, 1fr) auto',
+              md: 'minmax(0, 1.5fr) minmax(100px, 1fr) 100px auto',
             },
             gap: 1,
             alignItems: 'center',
@@ -46,13 +47,23 @@ export function AssetRequirementFields({
             sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }}
           />
           <TextField
-            required
+            select
             disabled={disabled}
             size="small"
-            label={`Nhóm tài sản ${index + 1}`}
-            value={item.category}
-            onChange={(event) => update(item.id, { category: event.target.value })}
-          />
+            label={`Đơn vị ${index + 1}`}
+            value={item.unit ?? ''}
+            onChange={(event) => update(item.id, { unit: event.target.value || null })}
+          >
+            <MenuItem value="">Chưa ghi nhận</MenuItem>
+            {item.unit && !ASSET_UNITS.some((unit) => unit === item.unit) && (
+              <MenuItem value={item.unit}>{item.unit}</MenuItem>
+            )}
+            {ASSET_UNITS.map((unit) => (
+              <MenuItem key={unit} value={unit}>
+                {unit}
+              </MenuItem>
+            ))}
+          </TextField>
           <TextField
             required
             disabled={disabled}
@@ -63,21 +74,6 @@ export function AssetRequirementFields({
             slotProps={{ htmlInput: { min: 1, max: 10000, step: 1 } }}
             onChange={(event) => update(item.id, { quantity: Number(event.target.value) })}
           />
-          <TextField
-            select
-            disabled={disabled}
-            size="small"
-            label={`Theo dõi ${index + 1}`}
-            value={item.trackingMode}
-            onChange={(event) =>
-              update(item.id, {
-                trackingMode: event.target.value as LocalAssetItem['trackingMode'],
-              })
-            }
-          >
-            <MenuItem value="Serialized">Theo từng mã</MenuItem>
-            <MenuItem value="BulkQuantity">Theo số lượng</MenuItem>
-          </TextField>
           <Button
             disabled={disabled}
             color="error"
@@ -100,7 +96,8 @@ export function AssetRequirementFields({
             {
               id: crypto.randomUUID(),
               name: '',
-              category: '',
+              category: 'Khác',
+              unit: 'Cái',
               trackingMode: 'Serialized',
               quantity: 1,
             },

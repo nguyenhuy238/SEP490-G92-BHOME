@@ -11,6 +11,7 @@ export interface RoomTemplateData {
   area: DecimalValue;
   amenities: string[];
   referenceRent: DecimalValue | null;
+  assetItems?: SharedAssetItem[] | null;
 }
 export interface AssetCatalogData {
   category: string;

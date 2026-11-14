@@ -167,6 +167,7 @@ export function TaskDetailDrawer({
           <>
             <Box sx={{ '& p': { fontSize: 14, mb: 1 } }}>
               <Typography>Cơ sở: {locationName(task.locationId)}</Typography>
+              <Typography>Vị trí: {task.target?.label ?? 'Toàn cơ sở'}</Typography>
               <Typography>Người phụ trách hiện tại: {responsibleName(task, staff)}</Typography>
               {task.recordedStaffUserId &&
                 task.recordedStaffUserId !== task.currentResponsibleStaffUserId && (

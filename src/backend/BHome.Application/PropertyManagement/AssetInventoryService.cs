@@ -18,7 +18,12 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             if (item.Id == Guid.Empty || item.Quantity is < 1 or > 10000 ||
                 item.TrackingMode is not ("Serialized" or "BulkQuantity"))
                 throw new PropertyException(400, "invalid_template_item");
-            return item with { Name = Text(item.Name, 150), Category = Text(item.Category, 80) };
+            return item with
+            {
+                Name = Text(item.Name, 150),
+                Category = Text(item.Category, 80),
+                Unit = string.IsNullOrWhiteSpace(item.Unit) ? null : Text(item.Unit, 80)
+            };
         }).ToArray();
     }
 
@@ -111,9 +116,20 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             ? desired.FirstOrDefault(d => Read<DesiredAssets>(d).TemplateId == effectiveId && Read<DesiredAssets>(d).TemplateVersion == effective.Version)
             : null;
         var discrepancies = new List<AssetDiscrepancy>();
+        var progress = new List<AssetRequirementProgress>();
         if (current is not null)
         {
             var target = Read<DesiredAssets>(current); var verifications = await Store.ListAsync(location, "AssetVerification", t);
+            var activeAssetIds = assets.Where(a => a.Status != AssetStatus.Retired).Select(a => a.Id).ToHashSet();
+            foreach (var item in target.Items)
+            {
+                var verified = verifications.Where(v => v.Data.GetProperty("roomId").GetGuid() == room &&
+                    v.Data.GetProperty("templateId").GetGuid() == target.TemplateId &&
+                    v.Data.GetProperty("itemId").GetGuid() == item.Id && activeAssetIds.Contains(v.Data.GetProperty("assetId").GetGuid()))
+                    .GroupBy(v => v.Data.GetProperty("assetId").GetGuid())
+                    .Sum(g => Math.Min(g.Max(v => v.Data.GetProperty("quantity").GetInt32()), metadata.GetValueOrDefault(g.Key)?.Quantity ?? 0));
+                progress.Add(new(item.Id, verified));
+            }
             foreach (var asset in assets.Where(a => a.Status != AssetStatus.Retired))
             {
                 var mappings = verifications.Where(v => v.Data.GetProperty("assetId").GetGuid() == asset.Id).ToArray();
@@ -121,7 +137,7 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
                 else if (!mappings.Any(v => target.Items.Any(i => i.Id == v.Data.GetProperty("itemId").GetGuid()))) discrepancies.Add(new(asset.Id, "PendingRemovalReview"));
             }
         }
-        return new(assets, desired, metadata, current?.Id, discrepancies, assignment?.Version ?? 0, selected);
+        return new(assets, desired, metadata, current?.Id, discrepancies, assignment?.Version ?? 0, selected, progress);
     }
     public async Task<Guid> VerifyAsync(Guid room, AssetVerification input, CancellationToken t)
     {
@@ -142,7 +158,8 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             if ((await InventoryAsync(room, t)).CurrentDesiredId != desired.Id) throw new PropertyException(409, "desired_template_changed");
             if (desired.Version != input.ExpectedVersion || input.Quantity < 1 || item.TrackingMode == "Serialized" && input.Quantity != 1)
                 throw new PropertyException(409, "invalid_verification_quantity_or_version");
-            var verified = (await Store.ListAsync(location, "AssetVerification", t)).Where(v => v.Data.GetProperty("roomId").GetGuid() == room &&
+            var verifications = await Store.ListAsync(location, "AssetVerification", t);
+            var verified = verifications.Where(v => v.Data.GetProperty("roomId").GetGuid() == room &&
                 v.Data.GetProperty("templateId").GetGuid() == template.Id && v.Data.GetProperty("itemId").GetGuid() == item.Id)
                 .Sum(v => v.Data.GetProperty("quantity").GetInt32());
             if (verified + input.Quantity > item.Quantity) throw new PropertyException(409, "desired_quantity_exceeded");
@@ -152,11 +169,15 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             {
                 var existingMetadata = (await Store.AssetMetadataAsync([asset.Id], t))[asset.Id];
                 if (asset.LocationId != location || asset.RoomId != room || asset.Status == AssetStatus.Retired || !string.Equals(asset.Code, input.Code.Trim(), StringComparison.OrdinalIgnoreCase) ||
-                    asset.Condition != input.Condition.Trim() || existingMetadata.Quantity != input.Quantity || existingMetadata.TrackingMode != item.TrackingMode)
+                    asset.Condition != input.Condition.Trim() || existingMetadata.Quantity != input.Quantity || existingMetadata.TrackingMode != item.TrackingMode ||
+                    (existingMetadata.Unit is not null && item.Unit is not null && !string.Equals(existingMetadata.Unit, item.Unit, StringComparison.OrdinalIgnoreCase)))
                     throw new PropertyException(409, "existing_asset_verification_mismatch");
+                if (verifications.Any(v => v.Data.GetProperty("roomId").GetGuid() == room &&
+                    v.Data.GetProperty("templateId").GetGuid() == template.Id && v.Data.GetProperty("assetId").GetGuid() == asset.Id))
+                    throw new PropertyException(409, "asset_already_verified");
             }
             await Store.SaveAssetAsync(asset, Actor, "Physical inventory verified", t);
-            if (input.ExistingAssetId is null) await Store.SaveAssetMetadataAsync(asset.Id, new(item.TrackingMode, input.Quantity, null, null, null), t);
+            if (input.ExistingAssetId is null) await Store.SaveAssetMetadataAsync(asset.Id, new(item.TrackingMode, input.Quantity, null, null, null, item.Unit), t);
             await Store.SaveAsync(id, location, "AssetVerification", "Verified", new
             {
                 assetId = asset.Id,
@@ -167,6 +188,7 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
                 input.Code,
                 input.Condition,
                 trackingMode = item.TrackingMode,
+                unit = item.Unit,
                 input.EvidenceObjectKey,
                 fingerprint = Hash(input),
                 verifiedBy = Actor
@@ -251,9 +273,11 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             m.PurchaseCost < 0 || m.UsefulLifeMonths < 1) throw new PropertyException(400, "invalid_asset_metadata");
         return await Store.TransactionAsync(asset.LocationId, async () =>
         {
+            var previous = (await Store.AssetMetadataAsync([id], t))[id];
+            m = m with { Unit = string.IsNullOrWhiteSpace(m.Unit) ? previous.Unit : Text(m.Unit, 80) };
             await Store.SaveAssetMetadataAsync(id, m, t);
             asset.Version++; await Store.SaveAssetAsync(asset, Actor, input.Reason, t);
-            return await Store.SaveAsync(id, asset.LocationId, "AssetMetadata", "Recorded", new { m.TrackingMode, m.Quantity, m.PurchaseCost, m.PurchaseDate, m.UsefulLifeMonths, input.Reason }, input.ExpectedVersion, Actor, t);
+            return await Store.SaveAsync(id, asset.LocationId, "AssetMetadata", "Recorded", new { m.TrackingMode, m.Quantity, m.PurchaseCost, m.PurchaseDate, m.UsefulLifeMonths, m.Unit, input.Reason }, input.ExpectedVersion, Actor, t);
         }, t);
     }
     public async Task<SetupDocument> ReadMetadataAsync(Guid id, CancellationToken t)
@@ -282,6 +306,8 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
                 Condition = input.Condition.Trim()
             };
             await Store.SaveAssetAsync(next, Actor, input.Reason, t);
+            var metadata = (await Store.AssetMetadataAsync([id], t))[id];
+            await Store.SaveAssetMetadataAsync(next.Id, metadata with { PurchaseCost = null, PurchaseDate = null, UsefulLifeMonths = null }, t);
             await Store.SaveAsync(next.Id, asset.LocationId, "AssetReplacement", "Recorded", new { previousAssetId = id, replacementAssetId = next.Id, input.Reason }, 0, Actor, t);
             return next.Id;
         }, t);

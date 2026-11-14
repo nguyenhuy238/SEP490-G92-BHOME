@@ -207,6 +207,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PropertyManagement.LocationConfigurationCopyService>();
         services.AddScoped<BHome.Application.PropertyManagement.LocationSetupService>();
         services.AddScoped<BHome.Application.PropertyManagement.AssetInventoryService>();
+        services.AddScoped<BHome.Application.PropertyManagement.AssetCountObservationService>();
         services.AddScoped<BHome.Application.PropertyManagement.SetupEvidenceService>();
         services.AddScoped<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();
         services.AddHostedService<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateAutomationWorker>();

@@ -61,11 +61,11 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
            !System.Text.RegularExpressions.Regex.IsMatch(p.CitizenNumber ?? "", "^[0-9]{12}$") ||
            p.DateOfBirth == default || p.DateOfIssue == default || p.DateOfBirth > input.EffectiveFrom || p.DateOfIssue > input.EffectiveFrom ||
            string.IsNullOrWhiteSpace(p.Address) || p.Address.Length > 1000 || string.IsNullOrWhiteSpace(p.PlaceOfIssue) || p.PlaceOfIssue.Length > 200 ||
-           string.IsNullOrWhiteSpace(p.Phone) || p.Phone.Length > 30 || input.EffectiveFrom == default || input.EffectiveTo < input.EffectiveFrom ||
+           ContactPhone.Normalize(p.Phone) is null || input.EffectiveFrom == default || input.EffectiveTo < input.EffectiveFrom ||
            input.SecurityDeposit < 0 || input.SecurityDeposit >= 1_000_000_000_000_000_000m || decimal.Truncate(input.SecurityDeposit) != input.SecurityDeposit ||
            string.IsNullOrWhiteSpace(input.PaymentTerms) || input.PaymentTerms.Length > 1000 || input.AdditionalTerms is null || input.AdditionalTerms.Length > 4000)
             throw ContractException.Invalid("invalid_contract_settings");
-        return data.SetSettingsAsync(locationId, input, Actor, t);
+        return data.SetSettingsAsync(locationId, input with { Owner = p with { Phone = ContactPhone.Normalize(p.Phone)! } }, Actor, t);
     }
     public async Task<MainDraftPreparation> PrepareAsync(Guid roomId, Guid representative, Guid[] ids, DateOnly on, CancellationToken t)
     {
@@ -107,6 +107,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         await Room(x.RoomId, t);
         var existingPhone = await data.PhoneAsync(x.RoomId, x.RepresentativeResidentId, t);
         if (!string.IsNullOrWhiteSpace(existingPhone)) x = x with { TenantPhone = existingPhone };
+        else if (ContactPhone.Normalize(x.TenantPhone) is { } phone) x = x with { TenantPhone = phone };
+        else throw ContractException.Invalid("invalid_phone_number");
         // Contact for this draft only. This never changes an account email or issues an invitation.
         if (x.TenantEmail is not null) x = x with { TenantEmail = x.TenantEmail.Trim() };
         Validate(x);

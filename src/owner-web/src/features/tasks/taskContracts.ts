@@ -16,6 +16,12 @@ export interface OwnerTask {
   version: number;
   verifiedByUserId: string | null;
   verifiedAt: string | null;
+  target?: TaskTarget & { label: string };
+}
+export interface TaskTarget {
+  roomId?: string | null;
+  assetId?: string | null;
+  commonArea?: string | null;
 }
 export interface TaskWork {
   title: string;
@@ -23,6 +29,7 @@ export interface TaskWork {
   priority: string;
   dueAt: string;
   evidenceRequired: boolean;
+  target?: TaskTarget;
 }
 export interface TaskHistory {
   id: string;
