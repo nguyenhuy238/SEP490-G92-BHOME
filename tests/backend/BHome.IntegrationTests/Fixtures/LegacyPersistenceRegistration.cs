@@ -51,6 +51,7 @@ internal static class LegacyPersistenceRegistration
         services.RemoveAll<LocationConfigurationCopyService>();
         services.RemoveAll<LocationSetupService>();
         services.RemoveAll<AssetInventoryService>();
+        services.RemoveAll<RoomInventoryReviewService>();
         services.RemoveAll<AssetCountObservationService>();
         services.RemoveAll<SetupEvidenceService>();
         services.RemoveAll<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();
