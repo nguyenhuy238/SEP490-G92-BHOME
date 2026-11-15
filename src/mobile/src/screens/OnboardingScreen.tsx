@@ -5,7 +5,8 @@ import { useFocusEffect, useLocalSearchParams, usePreventRemove } from 'expo-rou
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import { Action, Box, Heading, ui } from '../components/WorkspaceKit';
 import { ChoiceField } from '../components/WorkflowControls';
-import { OnboardingStepper } from '../components/OnboardingStepper';
+import { MainContractProgress } from '../features/contracts/MainContractProgress';
+import { MainDraftScreen } from '../features/contracts/MainDraftScreen';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useSession } from '../lib/SessionProvider';
 import { captureService } from '../services/captureService';
@@ -17,7 +18,6 @@ import { ResidentProfile } from '../features/onboarding/ResidentProfile';
 import { OnboardingPeopleStep } from '../features/onboarding/OnboardingPeopleStep';
 import {
   allIdentitiesConfirmed,
-  onboardingSteps,
   peopleReady,
   residentType,
   type HouseholdMode,
@@ -86,6 +86,12 @@ function NewResidentOnboarding() {
   } | null>(null);
   const [error, setError] = useFeedbackState('error', false);
   const [finished, setFinished] = useState(false);
+  const [contractInput, setContractInput] = useState<{
+    roomId: string;
+    representativeResidentId: string;
+    residentIds: string[];
+  } | null>(null);
+  const [contractOpen, setContractOpen] = useState(false);
   const [discarded, setDiscarded] = useState(false);
   const serial = useRef(1);
   const lock = useRef(false);
@@ -143,7 +149,7 @@ function NewResidentOnboarding() {
     !scope.loading &&
     !scope.error &&
     scope.locations.some((l) => l.id === scope.location) &&
-    selectableRooms.some((r) => r.id === scope.room);
+    selectableRooms.some((r) => r.id === scope.room && r.remainingCapacity !== 0);
   const peopleValid = peopleReady(people, representative);
   const allConfirmed = allIdentitiesConfirmed(people);
   const created = people.some((p) => !!p.residentId);
@@ -212,7 +218,6 @@ function NewResidentOnboarding() {
                 scope.room,
                 person.label.trim(),
                 residentType(mode, person.key, representative),
-                person.email!.trim(),
               )
             ).id
           : null;
@@ -267,28 +272,17 @@ function NewResidentOnboarding() {
         <Action onPress={() => go('rooms')}>Xem người ở</Action>
       </Box>
     );
-  const completed = [
-    ...(roomValid ? ['room'] : []),
-    ...(step >= 2 && peopleValid ? ['people'] : []),
-    ...(allConfirmed ? ['identity'] : []),
-  ];
   return (
     <>
       <Heading
         title={step === 1 ? 'Thông tin người ở' : 'Tiếp nhận khách thuê'}
         detail={
           step === 1
-            ? 'Bước 2/3 · Người ở'
+            ? 'Bước 2/8 · Người ở'
             : 'Chuẩn bị hồ sơ người ở, kiểm tra và xác nhận thông tin.'
         }
       />
-      <OnboardingStepper
-        steps={onboardingSteps}
-        current={step}
-        completed={completed}
-        comfortable={step === 1}
-        showCaption={step !== 1}
-      />
+      <MainContractProgress current={step} />
       {step === 0 && (
         <Box style={styles.panel}>
           <Heading title="Chọn nơi ở" detail="Chọn phòng tại cơ sở bạn đang phụ trách." />
@@ -309,10 +303,21 @@ function NewResidentOnboarding() {
           <ChoiceField
             label="Phòng *"
             value={scope.room}
-            options={selectableRooms}
+            options={selectableRooms.map((room) => ({
+              ...room,
+              label:
+                room.remainingCapacity == null
+                  ? room.label
+                  : `${room.label} · ${room.remainingCapacity === 0 ? 'Đã đủ người' : `Còn ${room.remainingCapacity} chỗ`}`,
+            }))}
             disabled={created || !scope.location || scope.loading}
             onChange={scope.setRoom}
           />
+          {scope.rooms.find((room) => room.id === scope.room)?.remainingCapacity === 0 && (
+            <Text accessibilityRole="alert" style={{ color: '#B42318' }}>
+              Phòng đã đủ người theo hợp đồng đang hiệu lực hôm nay. Hãy chọn phòng còn chỗ.
+            </Text>
+          )}
           {scope.loading && <ActivityIndicator accessibilityLabel="Đang tải danh sách phòng" />}
           {!!scope.error && (
             <>
@@ -466,17 +471,15 @@ function NewResidentOnboarding() {
         <Action
           disabled={!allConfirmed || busy || recognizing || preview}
           onPress={() => {
-            dirtyRef.current = false;
-            setFinished(true);
-            go('prepare-contract', {
+            setContractInput({
               roomId: scope.room,
               representativeResidentId: people.find((p) => p.key === representative)!.residentId!,
-              residentIds: JSON.stringify(
+              residentIds:
                 mode === 'individual'
                   ? [people.find((p) => p.key === representative)!.residentId!]
                   : people.map((p) => p.residentId!),
-              ),
             });
+            setContractOpen(true);
           }}
         >
           Tiếp tục tạo hợp đồng
@@ -524,6 +527,29 @@ function NewResidentOnboarding() {
       )}
       {people.some((person) => person.creationUncertain) && (
         <Button onPress={() => go('rooms')}>Kiểm tra danh sách người ở</Button>
+      )}
+      {contractInput && (
+        <MainDraftScreen
+          key={`${contractInput.roomId}:${contractInput.representativeResidentId}:${contractInput.residentIds.join(',')}`}
+          {...contractInput}
+          visible={contractOpen}
+          persistRoute={false}
+          onPrevious={() => {
+            setContractOpen(false);
+            move(2);
+          }}
+          onCancel={() => setContractOpen(false)}
+          onList={() => {
+            dirtyRef.current = false;
+            setFinished(true);
+            go('signing');
+          }}
+          onReleased={(id) => {
+            dirtyRef.current = false;
+            setFinished(true);
+            go('signing', { contractId: id });
+          }}
+        />
       )}
       {step > 0 && step !== 1 && !finished && (
         <Button disabled={busy || recognizing} icon="arrow-left" onPress={() => move(step - 1)}>

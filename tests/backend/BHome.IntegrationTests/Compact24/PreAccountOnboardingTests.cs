@@ -41,20 +41,26 @@ public sealed class PreAccountOnboardingTests(Compact24Fixture fixture) : IClass
         }
         var email = $"new-{Guid.NewGuid():N}@example.invalid";
         var input = new ResidentInput(Compact24SampleSeed.Id(40), "Synthetic new occupant", ResidentType.Representative, email);
-        Assert.Equal(HttpStatusCode.BadRequest, (await staff.PostAsJsonAsync("/api/v1/capture/residents", input with { Email = null })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await staff.PostAsJsonAsync("/api/v1/capture/residents", input with { Email = "invalid" })).StatusCode);
+        foreach (var contact in new[] { null, email.ToUpperInvariant() })
+        {
+            var deferred = await staff.PostAsJsonAsync("/api/v1/capture/residents", input with { Email = contact });
+            deferred.EnsureSuccessStatusCode();
+            var deferredId = (await deferred.Content.ReadFromJsonAsync<IdResult>())!.Id;
+            await using var check = factory.Services.CreateAsyncScope();
+            Assert.Null((await check.ServiceProvider.GetRequiredService<Compact24DbContext>().Set<Resident>().AsNoTracking().SingleAsync(r => r.Id == deferredId)).ContactEmail);
+        }
         Assert.Equal(HttpStatusCode.NotFound, (await staff.PostAsJsonAsync("/api/v1/capture/residents", input with { RoomId = otherRoom })).StatusCode);
         var created = await staff.PostAsJsonAsync("/api/v1/capture/residents", input);
         created.EnsureSuccessStatusCode();
         var id = (await created.Content.ReadFromJsonAsync<IdResult>())!.Id;
-        Assert.Equal(HttpStatusCode.Conflict, (await staff.PostAsJsonAsync("/api/v1/capture/residents", input with { Email = email.ToUpperInvariant() })).StatusCode);
         var confirmed = await staff.PostAsJsonAsync($"/api/v1/capture/residents/{id}/confirm",
             new IdentityConfirmation(true, "000000000001", "SYNTHETIC PERSON", new(2000, 1, 1), "Synthetic address", null, null, null, new(2020, 1, 1), null));
         confirmed.EnsureSuccessStatusCode();
         await using var read = factory.Services.CreateAsyncScope();
         var context = read.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var resident = await context.Set<Resident>().AsNoTracking().SingleAsync(r => r.Id == id);
-        Assert.Equal(email, resident.ContactEmail);
+        Assert.Null(resident.ContactEmail);
         Assert.Equal(IdentityVerificationStatus.Verified, resident.VerificationStatus);
         Assert.Null(resident.TenantUserId);
         Assert.DoesNotContain("SYNTHETIC PERSON", resident.IdentityData);

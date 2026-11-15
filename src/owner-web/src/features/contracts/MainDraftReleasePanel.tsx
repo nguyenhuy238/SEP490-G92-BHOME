@@ -1,15 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Alert,
-  Button,
-  Checkbox,
-  FormControlLabel,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Button, Checkbox, FormControlLabel, Stack, Typography } from '@mui/material';
 import {
   contractError,
   mutationKeys,
@@ -34,12 +25,26 @@ export function MainDraftReleasePanel({
   const api = useMainDraftApi(),
     contracts = useContractsApi();
   const { session } = useAuth();
-  const accounts = useQuery({
-    queryKey: ['contract-tenant-accounts', session?.userId],
-    queryFn: ({ signal }) => contracts.tenantAccounts(signal),
+  const representative = useQuery({
+    queryKey: ['main-draft-representative', session?.userId, draft.input?.representativeResidentId],
+    enabled: !!draft.input?.representativeResidentId,
+    queryFn: ({ signal }) =>
+      contracts.transport<{
+        id: string;
+        roomId: string | null;
+        verificationStatus: string;
+        residentType: string;
+        tenantUserId: string | null;
+      }>('/api/v1/residents/' + draft.input.representativeResidentId, { signal }),
   });
-  const [tenant, setTenant] = useState(''),
-    [file, setFile] = useState<PreviewDocument | null>(null),
+  const signer = representative.data;
+  const validSigner =
+    !!signer &&
+    signer.id === draft.input?.representativeResidentId &&
+    signer.roomId === draft.input?.roomId &&
+    signer.verificationStatus === 'Verified' &&
+    signer.residentType === 'Representative';
+  const [file, setFile] = useState<PreviewDocument | null>(null),
     [url, setUrl] = useState('');
   const [reviewed, setReviewed] = useState(false),
     [busy, setBusy] = useState(false),
@@ -86,12 +91,12 @@ export function MainDraftReleasePanel({
     }
   }
   async function release() {
-    if (lock.current || disabled || !file || !reviewed) return;
+    if (lock.current || disabled || !file || !reviewed || !validSigner) return;
     lock.current = true;
     setBusy(true);
     setError('');
     const input = {
-      tenantUserId: tenant || null,
+      tenantUserId: signer?.tenantUserId ?? null,
       expectedVersion: draft.version,
       reviewedFileId: file.id,
       humanReviewed: true,
@@ -118,30 +123,21 @@ export function MainDraftReleasePanel({
       {disabled && (
         <Alert severity="info">Lưu thay đổi bản nháp trước khi tạo tài liệu đưa đi ký.</Alert>
       )}
-      {(error || accounts.error) && (
-        <Alert severity="error">{error || message(accounts.error)}</Alert>
+      {(error || representative.error) && (
+        <Alert severity="error">{error || message(representative.error)}</Alert>
       )}
-      <TextField
-        select
-        label="Tài khoản Tenant đại diện"
-        value={tenant}
-        disabled={busy || disabled || accounts.isPending}
-        onChange={(e) => {
-          setTenant(e.target.value);
-          setReviewed(false);
-        }}
-      >
-        <MenuItem value="">Người ở mới — ký bằng OTP, tạo tài khoản sau kích hoạt</MenuItem>
-        {accounts.data?.map((a) => (
-          <MenuItem key={a.id} value={a.id}>
-            {a.label}
-          </MenuItem>
-        ))}
-      </TextField>
-      {accounts.data?.length === 0 && (
+      <Typography>
+        Người đại diện:{' '}
+        {draft.preparation?.residents.find(
+          (person) => person.id === draft.input?.representativeResidentId,
+        )?.fullName ?? 'Theo hồ sơ đã xác minh'}
+      </Typography>
+      {representative.isPending && (
+        <Alert severity="info">Đang kiểm tra hồ sơ người đại diện…</Alert>
+      )}
+      {!representative.isPending && !validSigner && !representative.error && (
         <Alert severity="warning">
-          Tài khoản cho từng người ở được tạo sau khi Main Active; không cần tài khoản để ký bằng
-          OTP.
+          Chưa xác minh được đúng người đại diện của phòng. Tải lại hồ sơ trước khi chuyển sang ký.
         </Alert>
       )}
       <Button disabled={busy || disabled} onClick={() => void preview()}>
@@ -172,7 +168,7 @@ export function MainDraftReleasePanel({
       />
       <Button
         variant="contained"
-        disabled={!reviewed || !file || busy || disabled}
+        disabled={!reviewed || !file || busy || disabled || !validSigner}
         onClick={() => void release()}
       >
         Xác nhận chuyển sang ký

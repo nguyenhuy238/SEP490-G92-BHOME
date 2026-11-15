@@ -14,6 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { PasswordField } from './PasswordField';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
 
@@ -108,6 +109,7 @@ export function ChangePasswordDialog({
         size="small"
         disabled={busy}
         aria-label={`${visible ? 'Ẩn' : 'Hiện'} ${label}`}
+        onMouseDown={(event) => event.preventDefault()}
         onClick={toggle}
       >
         {visible ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
@@ -161,16 +163,14 @@ export function ChangePasswordDialog({
               },
             }}
           />
-          <TextField
+          <PasswordField
             label="Xác nhận mật khẩu mới"
             required
             autoComplete="new-password"
-            type={showNew ? 'text' : 'password'}
             value={confirmation}
             disabled={busy}
             error={Boolean(confirmation) && confirmation !== newPassword}
             onChange={(event) => setConfirmation(event.target.value)}
-            slotProps={{ htmlInput: { minLength: 12, maxLength: 1024 } }}
           />
           <Typography variant="caption" color="text.secondary">
             Tối thiểu 12 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Các phiên cũ sẽ bị thu

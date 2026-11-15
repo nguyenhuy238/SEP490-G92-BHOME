@@ -22,6 +22,7 @@ export interface Named {
   parentId?: string;
   status?: string | null;
   capacity?: number | null;
+  remainingCapacity?: number | null;
 }
 export interface Resident {
   id: string;

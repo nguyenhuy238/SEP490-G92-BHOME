@@ -10,7 +10,8 @@ import {
   type InternalSigningStatus,
 } from '../../../../../packages/client-core/src/internalSigning';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
-import { Box, Heading, ui } from '../../components/WorkspaceKit';
+import { ui } from '../../components/WorkspaceKit';
+import { HoldingInfoRow, HoldingSectionCard, HoldingStatusBadge } from './HoldingUi';
 
 export function HoldingSigningConfirmation({
   api,
@@ -121,21 +122,41 @@ export function HoldingSigningConfirmation({
           ? 'Chờ ký'
           : 'Chưa gửi lời mời';
   return (
-    <Box>
-      <Heading title="Xác nhận ký hợp đồng" />
-      {!status && !error && <Text>Đang tải trạng thái ký…</Text>}
-      <Text style={{ fontWeight: '700' }}>Chủ nhà (Owner)</Text>
-      <Text style={status?.ownerAcceptedAt ? ui.green : ui.muted}>
-        {status?.ownerAcceptedAt ? '✓ Đã xác nhận' : '○ Chờ ký'}
-      </Text>
-      {!!status?.ownerAcceptedAt && <Text>{formatInstant(status.ownerAcceptedAt)}</Text>}
+    <HoldingSectionCard title="Xác nhận ký hợp đồng">
+      {!status && !error && <Text style={ui.muted}>Đang tải trạng thái ký…</Text>}
+      <HoldingInfoRow
+        label="Chủ nhà (Owner)"
+        value={
+          <HoldingStatusBadge
+            label={status?.ownerAcceptedAt ? 'Đã xác nhận' : 'Chờ xác nhận'}
+            tone={status?.ownerAcceptedAt ? 'success' : 'warning'}
+          />
+        }
+      />
+      {!!status?.ownerAcceptedAt && (
+        <HoldingInfoRow
+          label="Thời gian Owner xác nhận"
+          value={formatInstant(status.ownerAcceptedAt)}
+        />
+      )}
       {!status?.ownerAcceptedAt && (
         <Text style={ui.muted}>Owner xác nhận trên Owner Web. Staff không ký thay Owner.</Text>
       )}
-      <Text style={{ fontWeight: '700', marginTop: 12 }}>Người giữ chỗ</Text>
-      <Text style={tenantSigned ? ui.green : ui.blue}>{tenantLabel}</Text>
-      {!!status?.maskedEmail && <Text>{status.maskedEmail}</Text>}
-      {!!status?.tenantAcceptedAt && <Text>{formatInstant(status.tenantAcceptedAt)}</Text>}
+      <HoldingInfoRow
+        label="Người giữ chỗ"
+        value={
+          <HoldingStatusBadge
+            label={tenantLabel}
+            tone={tenantSigned ? 'success' : tenantSimulated ? 'neutral' : 'warning'}
+          />
+        }
+      />
+      {!!status?.maskedEmail && (
+        <HoldingInfoRow label="Email nhận lời mời" value={status.maskedEmail} />
+      )}
+      {!!status?.tenantAcceptedAt && (
+        <HoldingInfoRow label="Thời gian ký" value={formatInstant(status.tenantAcceptedAt)} />
+      )}
       {invitation?.status === 'OtpVerified' && (
         <Text>Đã xác minh OTP. Người giữ chỗ cần đọc và ký hợp đồng để hoàn tất.</Text>
       )}
@@ -154,6 +175,7 @@ export function HoldingSigningConfirmation({
         <Button
           icon="email-outline"
           mode={canInvite ? 'contained' : 'text'}
+          contentStyle={{ minHeight: 44 }}
           loading={busy === 'invite'}
           disabled={!!busy || !canInvite || !c.snapshotHash}
           onPress={() => void run('invite')}
@@ -163,9 +185,11 @@ export function HoldingSigningConfirmation({
       )}
       {simulation && !tenantSigned && (
         <>
-          <Text style={ui.muted}>Chỉ dùng cho kiểm thử Sandbox · Không phải chữ ký thật.</Text>
+          <HoldingStatusBadge label="Chỉ dùng kiểm thử Sandbox" tone="warning" />
+          <Text style={ui.muted}>Mô phỏng chỉ để kiểm thử, không tạo chữ ký thật.</Text>
           <Button
             mode="outlined"
+            contentStyle={{ minHeight: 44 }}
             loading={busy === 'simulate'}
             disabled={!!busy || !status || !c.approvedAt || tenantSimulated}
             onPress={() => void run('simulate')}
@@ -183,6 +207,7 @@ export function HoldingSigningConfirmation({
         <Button
           mode={canContinue ? 'contained' : 'text'}
           icon="arrow-right"
+          contentStyle={{ minHeight: 44 }}
           disabled={!!busy || !canContinue}
           onPress={onContinue}
         >
@@ -195,6 +220,6 @@ export function HoldingSigningConfirmation({
           {error}
         </Text>
       )}
-    </Box>
+    </HoldingSectionCard>
   );
 }

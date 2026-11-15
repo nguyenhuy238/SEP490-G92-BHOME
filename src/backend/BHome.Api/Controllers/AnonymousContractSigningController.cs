@@ -12,6 +12,10 @@ public sealed class AnonymousContractSigningController(AnonymousContractSigningS
 {
     [HttpGet("api/v1/contracts/{id:guid}/internal-signing"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<InternalSigningStatus> Status(Guid id, CancellationToken t) => service.StatusAsync(id, t);
+    [HttpPost("api/v1/contracts/{id:guid}/internal-signing/tenant-simulation"), Authorize(Roles = Roles.Staff)]
+    public Task<InternalSigningStatus> SimulateTenant(Guid id, CancellationToken t) => service.SimulateMainTenantAsync(id, t);
+    [HttpPost("api/v1/contracts/{id:guid}/internal-signing/owner-simulation"), Authorize(Roles = Roles.Staff)]
+    public Task<InternalSigningStatus> SimulateOwner(Guid id, InternalOwnerAcceptance input, CancellationToken t) => service.SimulateMainOwnerAsync(id, input, t);
     [HttpPost("api/v1/contracts/{id:guid}/signing-invitations"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<SigningInvitationResult> Invite(Guid id, SigningInvitationInput input, CancellationToken t) => service.InviteAsync(id, input, t);
     [HttpDelete("api/v1/contracts/{id:guid}/signing-invitations/{invitationId:guid}"), Authorize(Roles = Roles.Owner)]

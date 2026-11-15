@@ -13,10 +13,31 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => state.params,
-  router: { replace: state.replace, push: state.push },
+  router: { replace: state.replace, push: state.push, setParams: vi.fn() },
 }));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ baseUrl: 'https://api.example.invalid' }),
+}));
+vi.mock('../components/PasswordField', () => ({
+  PasswordField: ({
+    label,
+    value,
+    onChangeText,
+    disabled,
+  }: {
+    label: string;
+    value: string;
+    onChangeText: (value: string) => void;
+    disabled?: boolean;
+  }) => (
+    <input
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      type="password"
+      onChange={(e) => onChangeText(e.target.value)}
+    />
+  ),
 }));
 vi.mock('react-native', () => ({
   ScrollView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -69,10 +90,20 @@ afterEach(() => {
 
 it('opens a native invitation and submits its token only after password setup confirmation', async () => {
   state.params = { userName: 'staff@example.invalid', token: 'synthetic-invitation-link' };
-  const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+  const fetch = vi
+    .fn()
+    .mockImplementation(async (url: string) =>
+      url.endsWith('/validate')
+        ? Response.json({ status: 'Valid', email: 'verified@example.invalid' })
+        : new Response(null, { status: 204 }),
+    );
   vi.stubGlobal('fetch', fetch);
   render(<AcceptInvitationScreen />);
-  expect(fetch).not.toHaveBeenCalled();
+  await screen.findByLabelText('Mật khẩu mới');
+  expect((screen.getByLabelText('Email nhận lời mời') as HTMLInputElement).value).toBe(
+    'verified@example.invalid',
+  );
+  expect(screen.queryByLabelText('Mã lời mời trong email')).toBeNull();
   fireEvent.change(screen.getByLabelText('Mật khẩu mới'), {
     target: { value: 'Synthetic!Invited-725' },
   });
@@ -80,8 +111,11 @@ it('opens a native invitation and submits its token only after password setup co
     target: { value: 'Synthetic!Invited-725' },
   });
   fireEvent.click(screen.getByText('Thiết lập mật khẩu'));
-  await screen.findByText(/Đã thiết lập mật khẩu/);
-  expect(JSON.parse(fetch.mock.calls[0][1].body).token).toBe('synthetic-invitation-link');
+  await waitFor(() => expect(state.replace).toHaveBeenCalledWith('/'));
+  expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({
+    token: 'synthetic-invitation-link',
+    newPassword: 'Synthetic!Invited-725',
+  });
 });
 
 it('makes email verification reachable even after the generic recovery response', async () => {

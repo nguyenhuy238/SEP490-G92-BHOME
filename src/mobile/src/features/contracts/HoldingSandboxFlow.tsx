@@ -13,13 +13,20 @@ import {
   type ContractClient,
   type ContractView,
 } from '../../../../../packages/client-core/src/contracts';
-import { Box, Heading, ui } from '../../components/WorkspaceKit';
+import { Heading, ui } from '../../components/WorkspaceKit';
 import { HoldingProgress } from './HoldingProgress';
 import { HoldingSigningConfirmation } from './HoldingSigningConfirmation';
+import {
+  HoldingChecklistRow,
+  HoldingInfoRow,
+  HoldingSectionCard,
+  HoldingStatusBadge,
+} from './HoldingUi';
 
 export function useHoldingSandbox(api: ContractClient, c: ContractView, allowed = true) {
   const enabled = allowed && typeof __DEV__ !== 'undefined' && __DEV__ && c.isDevelopmentDemo;
   const [data, setData] = useState<HoldingSandboxState | null>(null);
+  const [latestContract, setLatestContract] = useState<ContractView | null>(null);
   const service = useMemo(() => holdingSandboxClient(api.transport, c.id), [api, c.id]);
   useEffect(() => {
     if (!enabled) return;
@@ -27,7 +34,12 @@ export function useHoldingSandbox(api: ContractClient, c: ContractView, allowed 
     const load = () =>
       service
         .status(controller.signal)
-        .then((result) => {
+        .then(async (result) => {
+          const latest = await api.get(c.id, controller.signal);
+          if (!controller.signal.aborted && latest?.id === c.id && latest.kind === 'Holding')
+            setLatestContract((previous) =>
+              JSON.stringify(previous) === JSON.stringify(latest) ? previous : latest,
+            );
           if (!controller.signal.aborted)
             setData((previous) =>
               result.mode !== 'Test'
@@ -41,18 +53,24 @@ export function useHoldingSandbox(api: ContractClient, c: ContractView, allowed 
           if (!controller.signal.aborted) setData(null);
         });
     void load();
-    const timer = setInterval(() => void load(), 5000);
+    const timer = setInterval(() => void load(), 10000);
     return () => {
       controller.abort();
       clearInterval(timer);
     };
-  }, [enabled, service, c.status, c.approvedAt]);
-  return { data: enabled ? data : null, setData, service };
+  }, [enabled, service, api, c.id, c.status, c.approvedAt]);
+  return {
+    data: enabled ? data : null,
+    setData,
+    service,
+    latestContract: latestContract?.id === c.id ? latestContract : null,
+    setLatestContract,
+  };
 }
 
 export function HoldingSandboxFlow({
   api,
-  contract: c,
+  contract,
   sandbox,
   onChanged,
   onList,
@@ -63,6 +81,7 @@ export function HoldingSandboxFlow({
   onChanged: () => void;
   onList: () => void;
 }) {
+  const c = sandbox.latestContract ?? contract;
   const state = sandbox.data!;
   const [requestedQr, setShowQr] = useState(state.canShowQr);
   const showQr = requestedQr && state.canShowQr;
@@ -83,19 +102,27 @@ export function HoldingSandboxFlow({
       });
     return () => controller.abort();
   }, [sandbox.service, showQr, state.canShowQr, state.onHold]);
-  async function run(action: 'Tenant' | 'refresh' | 'activate') {
+  async function run(action: 'Tenant' | 'refresh' | 'activate' | 'skip-preview') {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
     setError('');
     try {
       const latest =
-        action === 'refresh'
-          ? await sandbox.service.status()
-          : action === 'activate'
-            ? await sandbox.service.activate()
-            : await sandbox.service.simulate(action);
+        action === 'skip-preview'
+          ? await sandbox.service.skipSigningPreview()
+          : action === 'refresh'
+            ? await sandbox.service.status()
+            : action === 'activate'
+              ? await sandbox.service.activate()
+              : await sandbox.service.simulate(action);
       sandbox.setData(latest);
+      if (action === 'skip-preview' && latest.canShowQr) setShowQr(true);
+      if (action === 'refresh') {
+        const fresh = await api.get(c.id);
+        if (fresh?.id === c.id && fresh.kind === 'Holding') sandbox.setLatestContract(fresh);
+        onChanged();
+      }
       if (action === 'activate') onChanged();
     } catch (e) {
       setError(contractError(e));
@@ -107,20 +134,54 @@ export function HoldingSandboxFlow({
   }
   return (
     <>
-      <Box>
-        <Heading title={`Phòng ${c.roomNumber || '—'}`} detail={c.locationName} />
-        <Text>SePay Test Mode · Owner xác nhận trên Web, Tenant có chế độ kiểm thử.</Text>
-        <Text>
-          {displayContractDate(c.startDate)} – {displayContractDate(c.endDate)}
-        </Text>
-        <Text>Tiền giữ chỗ: {formatContractMoney(state.required)}</Text>
-      </Box>
       <HoldingProgress current={state.onHold ? 7 : showQr ? 6 : c.approvedAt ? 5 : 4} />
+      <HoldingSectionCard title="Thông tin giữ chỗ">
+        <Heading title={`Phòng ${c.roomNumber || '—'}`} detail={c.locationName} />
+        <HoldingStatusBadge label="SePay Test Mode · Chỉ dùng kiểm thử" tone="warning" />
+        <HoldingInfoRow
+          label="Người giữ chỗ"
+          value={c.occupants?.find((r) => r.representative)?.label}
+        />
+        <HoldingInfoRow
+          label="Thời hạn giữ chỗ"
+          value={`${displayContractDate(c.startDate)} – ${displayContractDate(c.endDate)}`}
+        />
+        <HoldingInfoRow label="Tiền giữ chỗ" value={formatContractMoney(state.required)} />
+      </HoldingSectionCard>
       {!c.approvedAt && !state.onHold && (
-        <Box>
-          <Heading title="Chờ Owner phê duyệt" />
-          <Text>Owner cần kiểm tra và phê duyệt hợp đồng trên Web trước khi gửi lời mời ký.</Text>
-        </Box>
+        <HoldingSectionCard title="Chờ Owner phê duyệt">
+          <HoldingStatusBadge label="Bản nháp đang chờ phê duyệt" tone="warning" />
+          <Text style={ui.muted}>
+            Owner cần xem và phê duyệt hợp đồng trên Web trước khi gửi lời mời ký.
+          </Text>
+          <Button
+            mode="contained"
+            contentStyle={{ minHeight: 44 }}
+            disabled={busy}
+            onPress={() => void run('skip-preview').catch(() => {})}
+          >
+            Bỏ qua ký: xem QR kiểm thử
+          </Button>
+          <Text style={ui.muted}>
+            Chỉ Sandbox: xem thử QR, không ghi nhận chữ ký, phê duyệt hay kích hoạt thật.
+          </Text>
+          <Button
+            mode="outlined"
+            contentStyle={{ minHeight: 44 }}
+            loading={busy === true}
+            disabled={busy}
+            onPress={() => void run('refresh').catch(() => {})}
+          >
+            Tải lại trạng thái
+          </Button>
+          <Text style={ui.muted}>Trạng thái cũng tự cập nhật mỗi 10 giây.</Text>
+          <Button mode="outlined" disabled>
+            Mô phỏng người giữ chỗ đã ký
+          </Button>
+          <Text style={ui.muted}>
+            Nút mô phỏng Tenant sẽ bật sau khi Owner phê duyệt. Kết quả được lưu qua API Sandbox.
+          </Text>
+        </HoldingSectionCard>
       )}
       {!!c.approvedAt && !showQr && !state.onHold && (
         <HoldingSigningConfirmation
@@ -139,11 +200,12 @@ export function HoldingSandboxFlow({
         />
       )}
       {showQr && !state.onHold && (
-        <Box>
+        <HoldingSectionCard>
           <Heading
             title="QR chuyển khoản · Test Mode"
-            detail="Chỉ kiểm thử trên SePay Test Mode, không chuyển tiền thật."
+            detail="Mã QR thử nghiệm của SePay. Không chuyển tiền thật."
           />
+          <HoldingStatusBadge label="Chỉ dùng kiểm thử" tone="warning" />
           {!qr && !error && <Text>Đang tạo mã QR…</Text>}
           {qr && (
             <>
@@ -155,40 +217,67 @@ export function HoldingSandboxFlow({
                   style={{ width: 240, height: 240, maxWidth: '100%', alignSelf: 'center' }}
                 />
               )}
-              <Text>Ngân hàng (BIN): {qr.bankIdentifier}</Text>
-              <Text>Tài khoản: {qr.accountNumber}</Text>
-              <Text>Chủ tài khoản: {qr.accountHolder}</Text>
-              <Text>Còn thiếu: {formatContractMoney(qr.outstandingAmount)}</Text>
-              <Text selectable>Nội dung: {qr.transferReference}</Text>
+              {!qr.qrImageDataUri && (
+                <Text style={ui.muted}>
+                  Dịch vụ kiểm thử chưa cung cấp hình QR. Dùng thông tin chuyển khoản bên dưới để
+                  đối chiếu.
+                </Text>
+              )}
+              <HoldingInfoRow label="Ngân hàng (BIN)" value={qr.bankIdentifier} />
+              <HoldingInfoRow label="Số tài khoản" value={qr.accountNumber} />
+              <HoldingInfoRow label="Chủ tài khoản" value={qr.accountHolder} />
+              <HoldingInfoRow label="Còn thiếu" value={formatContractMoney(qr.outstandingAmount)} />
+              <Text selectable>Nội dung chuyển khoản: {qr.transferReference}</Text>
             </>
           )}
-          <Text>Đã xác minh: {formatContractMoney(state.verified)}</Text>
+        </HoldingSectionCard>
+      )}
+      {showQr && !state.onHold && (
+        <HoldingSectionCard title="Trạng thái thanh toán">
+          <HoldingInfoRow label="Đã xác minh" value={formatContractMoney(state.verified)} />
+          <HoldingStatusBadge
+            label={state.depositVerified ? 'Đã xác minh đủ tiền cọc' : 'Chờ xác minh giao dịch'}
+            tone={state.depositVerified ? 'success' : 'warning'}
+          />
           <Text style={state.depositVerified ? ui.green : ui.muted}>
             {state.depositVerified
               ? 'Backend đã xác minh đủ tiền cọc.'
               : 'Chờ SePay xác minh giao dịch. Bấm kiểm tra không ghi nhận tiền.'}
           </Text>
-          <Button disabled={busy} onPress={() => void run('refresh').catch(() => {})}>
+          <Button
+            mode="outlined"
+            contentStyle={{ minHeight: 44 }}
+            disabled={busy}
+            onPress={() => void run('refresh').catch(() => {})}
+          >
             Kiểm tra thanh toán
           </Button>
           <Button
             mode="contained"
+            contentStyle={{ minHeight: 44 }}
             disabled={busy || !state.depositVerified}
             onPress={() => void run('activate').catch(() => {})}
           >
             Hoàn tất giữ chỗ (Test Mode)
           </Button>
-        </Box>
+        </HoldingSectionCard>
       )}
       {state.onHold && (
-        <Box>
+        <HoldingSectionCard>
           <Heading title="Giữ chỗ thành công · Test Mode" />
+          <HoldingStatusBadge label="Đã hoàn tất giữ chỗ kiểm thử" tone="success" />
           <Text style={ui.green}>Backend sandbox: hợp đồng Active, phòng OnHold.</Text>
-          <Text>Chỉ là dữ liệu thử nghiệm, không có chữ ký pháp lý.</Text>
-          <Button mode="contained" onPress={onList}>
+          <HoldingChecklistRow
+            label="Hợp đồng Active (Sandbox)"
+            complete={state.contractStatus === 'Active'}
+          />
+          <HoldingChecklistRow label="Phòng OnHold (Sandbox)" complete={state.onHold} />
+          <HoldingChecklistRow label="Đủ tiền cọc đã xác minh" complete={state.depositVerified} />
+          <Text style={ui.muted}>Chỉ là dữ liệu thử nghiệm, không có chữ ký pháp lý.</Text>
+          <Button mode="contained" contentStyle={{ minHeight: 44 }} onPress={onList}>
             Hoàn tất
           </Button>
-        </Box>
+        </HoldingSectionCard>
       )}
       {!!error && (
         <Text accessibilityRole="alert" style={ui.red}>

@@ -99,7 +99,8 @@ public sealed partial class ContractService
                 MonthlyRent = decimal.Truncate(rent.Rate),
                 RequiredDeposit = decimal.Truncate(input.HoldingDeposit),
                 Terms = input.Terms.Trim(),
-                IsDevelopmentDemo = DemoEnabled || holdingTestScope?.Allows(room.LocationId) == true
+                IsDevelopmentDemo = DemoEnabled,
+                PaymentMode = ConfiguredPaymentMode(room.LocationId)
             };
             c.Residents = residents.Select(r => new ContractResident
             {
@@ -218,7 +219,13 @@ public sealed partial class ContractService
     public Task<ContractView> ActivateHoldingAsync(Guid id, Guid key, CancellationToken token) => Mutate(id, [Roles.Owner], async c =>
     {
         if (await Replay(key, "holding-activate", id, token) is not null) return View(c);
-        await LockHoldingPriceAsync(c, "SigningAndDepositCompleted", clock.GetUtcNow(), token);
+        return await ActivateHoldingReadyAsync(c, key, false, token);
+    }, token);
+
+    private async Task<ContractView> ActivateHoldingReadyAsync(Contract c, Guid? key, bool automatic, CancellationToken token)
+    {
+        var id = c.Id;
+        await LockHoldingPriceAsync(c, "SigningAndDepositCompleted", clock.GetUtcNow(), token, providerVerified: automatic);
         if (!(await HoldingReadiness(c, token)).Ready) throw ContractException.Conflict("holding_not_ready_for_activation");
         if (c.SigningMode == ContractSigningModes.Internal)
         {
@@ -231,10 +238,13 @@ public sealed partial class ContractService
             using var bytes = new MemoryStream(); await storage.CopyToAsync(signature.SignedObjectKey!, bytes, token);
             if (FileHash(bytes.ToArray()) != signature.SignedHash) throw ContractException.Conflict("signing_evidence_integrity_failed");
         }
-        ChangeRoomStatus(c, RoomStatus.OnHold, RoomTransitionSource.HoldingActivation);
-        c.Status = ContractStatus.Active; c.ActivatedByUserId = Actor; c.ActivatedAt = clock.GetUtcNow();
-        Audit("HoldingActivated", id); Remember(key, "holding-activate", id, id); return View(c);
-    }, token);
+        ChangeRoomStatus(c, RoomStatus.OnHold, RoomTransitionSource.HoldingActivation, approvedOwner: automatic ? c.OwnerSignerId : null);
+        c.Status = ContractStatus.Active; c.ActivatedByUserId = automatic ? c.OwnerSignerId : Actor; c.ActivatedAt = clock.GetUtcNow();
+        if (automatic) repository.AuditAnonymous("Automatic:HoldingActivated", id, clock.GetUtcNow());
+        else Audit("HoldingActivated", id);
+        if (key is { } operationKey) Remember(operationKey, "holding-activate", id, id);
+        return View(c);
+    }
 
     public Task<ContractView> CancelHoldingAsync(Guid id, HoldingCancellationInput input, Guid key, CancellationToken token)
     {
@@ -301,7 +311,8 @@ public sealed partial class ContractService
                 MonthlyRent = holding.MonthlyRent,
                 RequiredDeposit = input.RequiredSecurityDeposit,
                 Terms = holding.Terms,
-                IsDevelopmentDemo = holding.IsDevelopmentDemo
+                IsDevelopmentDemo = holding.IsDevelopmentDemo,
+                PaymentMode = holding.PaymentMode
             };
             main.OperatingPolicySnapshot = holding.OperatingPolicySnapshot;
             var holdingPrices = ContractChargeSnapshot.Read(holding);

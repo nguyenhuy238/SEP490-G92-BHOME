@@ -7,16 +7,27 @@ const mock = vi.hoisted(() => ({
   signingReview: vi.fn(),
   file: vi.fn(),
   release: vi.fn(),
-  tenantAccounts: vi.fn(),
+  transport: vi.fn(),
 }));
 vi.mock('./useContractsApi', () => ({ useMainDraftApi: () => mock, useContractsApi: () => mock }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner' } }),
 }));
-const draft = { id: 'draft', status: 'Draft', version: 3 } as MainDraftView;
+const draft = {
+  id: 'draft',
+  status: 'Draft',
+  version: 3,
+  input: { representativeResidentId: 'resident', roomId: 'room' },
+} as MainDraftView;
 beforeEach(() => {
   vi.resetAllMocks();
-  mock.tenantAccounts.mockResolvedValue([{ id: 'tenant', label: 'Tenant tổng hợp' }]);
+  mock.transport.mockResolvedValue({
+    id: 'resident',
+    roomId: 'room',
+    verificationStatus: 'Verified',
+    residentType: 'Representative',
+    tenantUserId: null,
+  });
   mock.signingReview.mockResolvedValue({ id: 'review', developmentOnly: true });
   mock.file.mockResolvedValue(new Uint8Array([37, 80, 68, 70, 45]));
   vi.stubGlobal(
@@ -39,11 +50,7 @@ function mount(disabled = false, onReleased = vi.fn()) {
   return onReleased;
 }
 async function review() {
-  await waitFor(() =>
-    expect(screen.getByRole('combobox', { name: 'Tài khoản Tenant đại diện' })).not.toBeDisabled(),
-  );
-  fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Tài khoản Tenant đại diện' }));
-  fireEvent.click(await screen.findByRole('option', { name: 'Tenant tổng hợp' }));
+  await waitFor(() => expect(mock.transport).toHaveBeenCalled());
   fireEvent.click(screen.getByRole('button', { name: 'Tạo và xem PDF đưa đi ký' }));
   await screen.findByTitle('PDF được chọn để đưa đi ký');
   fireEvent.click(screen.getByRole('checkbox'));
@@ -57,6 +64,7 @@ it('requires the saved PDF and human review, submits its exact version and block
       }),
   );
   const onReleased = mount();
+  expect(screen.queryByRole('combobox')).toBeNull();
   expect(screen.getByRole('button', { name: 'Xác nhận chuyển sang ký' })).toBeDisabled();
   await review();
   expect(mock.file).toHaveBeenCalledWith('draft', 'review');
@@ -66,7 +74,7 @@ it('requires the saved PDF and human review, submits its exact version and block
   expect(mock.release).toHaveBeenCalledTimes(1);
   expect(mock.release).toHaveBeenCalledWith(
     'draft',
-    { tenantUserId: 'tenant', expectedVersion: 3, reviewedFileId: 'review', humanReviewed: true },
+    { tenantUserId: null, expectedVersion: 3, reviewedFileId: 'review', humanReviewed: true },
     expect.any(String),
   );
   expect(onReleased).not.toHaveBeenCalled();
@@ -93,7 +101,6 @@ it('blocks unsaved inputs', async () => {
   expect(mounted).not.toHaveBeenCalled();
 });
 it('releases a reviewed PDF for a new resident without creating or requiring an account', async () => {
-  mock.tenantAccounts.mockResolvedValue([]);
   mock.release.mockResolvedValue({ id: 'draft' });
   const done = mount();
   fireEvent.click(screen.getByRole('button', { name: 'Tạo và xem PDF đưa đi ký' }));

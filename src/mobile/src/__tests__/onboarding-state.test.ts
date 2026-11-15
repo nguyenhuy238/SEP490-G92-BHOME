@@ -16,11 +16,11 @@ it('requires a representative, nonempty labels and explicit confirmation for eve
   expect(peopleReady([person], 'unknown')).toBe(false);
   expect(peopleReady([{ ...person, label: ' ' }], 'p1')).toBe(false);
   expect(peopleReady([person], 'p1')).toBe(true);
-  expect(peopleReady([{ ...person, email: '' }], 'p1')).toBe(false);
-  expect(peopleReady([{ ...person, email: 'invalid' }], 'p1')).toBe(false);
+  expect(peopleReady([{ ...person, email: '' }], 'p1')).toBe(true);
+  expect(peopleReady([{ ...person, email: 'invalid' }], 'p1')).toBe(true); // Old local email is ignored until signing.
   expect(
     peopleReady([person, { ...person, key: 'p2', email: 'OCCUPANT@example.invalid' }], 'p1'),
-  ).toBe(false);
+  ).toBe(true);
   expect(allIdentitiesConfirmed([])).toBe(false);
   expect(allIdentitiesConfirmed([{ ...person, status: 'confirmed' }])).toBe(false);
   expect(allIdentitiesConfirmed([{ ...person, residentId: 'r1', status: 'pending' }])).toBe(false);

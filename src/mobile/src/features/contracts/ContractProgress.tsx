@@ -2,16 +2,12 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 import type { ContractView, Readiness } from '../../../../../packages/client-core/src/contracts';
-import { OnboardingStepper } from '../../components/OnboardingStepper';
+import { MainContractProgress } from './MainContractProgress';
 import { Box, Heading, ui } from '../../components/WorkspaceKit';
 import { staffColors as s } from '../../theme/theme';
 
 export { signerState } from './rentalContractState';
-import {
-  rentalContractState,
-  rentalContractSteps as steps,
-  type SignerState,
-} from './rentalContractState';
+import { rentalContractState, type SignerState } from './rentalContractState';
 const labels: Record<SignerState, string> = {
   unsigned: 'Chưa ký',
   waiting: 'Đang chờ ký',
@@ -31,7 +27,6 @@ export function ContractProgress({
     active,
     depositVerified,
     current,
-    completed,
   } = rentalContractState(contract, readiness);
   const message = active
     ? 'Hợp đồng đã được kích hoạt.'
@@ -48,7 +43,7 @@ export function ContractProgress({
       {['Cancelled', 'Terminated', 'Superseded'].includes(contract.status) ? (
         <Text>Quy trình hợp đồng này đã kết thúc.</Text>
       ) : (
-        <OnboardingStepper steps={steps} current={current} completed={completed} />
+        <MainContractProgress current={current + 4} />
       )}
       <Text style={styles.message}>{message}</Text>
       <View style={styles.signers}>

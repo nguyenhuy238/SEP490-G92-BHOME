@@ -37,8 +37,10 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db) : IMa
     {
         var order = await ReadAsync(id, token) ?? throw new PaymentException(409, "initial_payment_order_required");
         var c = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == id, token);
+        if (MainSandboxAcceptance.Read(c) is not null && !AnonymousContractSigningService.Complete(c))
+            throw new PaymentException(409, "initial_payment_signatures_required");
         if (c.Kind != ContractKind.Main || c.PreviousContractId is not null || c.Status != ContractStatus.PendingActivation ||
-            c.SnapshotHash != order.SnapshotHash || c.IsDevelopmentDemo != receipt.IsDevelopmentDemo)
+            c.SnapshotHash != order.SnapshotHash || ContractPaymentModes.IsTest(c) != receipt.IsDevelopmentDemo)
             throw new PaymentException(409, "initial_contract_not_payable");
         var deposit = Math.Max(0, order.RequiredDeposit - await DepositAsync(id, token));
         var rent = Math.Max(0, order.MonthlyRent + order.Charges.Sum(f => f.Amount) - await RentalAsync(id, token));
@@ -48,5 +50,6 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db) : IMa
         if (await db.Set<PaymentAllocation>().AnyAsync(a => a.TransferId == receipt.Id, token)) throw new PaymentException(409, "receipt_already_allocated");
         if (deposit > 0) db.Add(new PaymentAllocation { TransferId = receipt.Id, TargetDepositContractId = id, Amount = deposit, AllocatedAt = receipt.VerifiedAt });
         if (rent > 0) db.Add(new PaymentAllocation { TransferId = receipt.Id, TargetInitialContractId = id, Amount = rent, AllocatedAt = receipt.VerifiedAt });
+        // The common scheduler enqueues only after signatures, payment and effective-date checks pass.
     }
 }

@@ -42,8 +42,8 @@ it('keeps the prepared representative and co-occupants without inferring a house
   expect(verifiedDraftSigner(family, resident).id).toBe('a');
   expect(() => verifiedDraftSigner(family, { ...resident, id: 'b' })).toThrow();
 });
-it('rejects missing confirmed contact for internal acceptance and an inactive linked account', () => {
-  expect(() => verifiedDraftSigner(draft, { ...resident, contactEmail: null })).toThrow();
+it('defers contact email until invitation and rejects an inactive linked account', () => {
+  expect(verifiedDraftSigner(draft, { ...resident, contactEmail: null }).contactEmail).toBeNull();
   expect(() =>
     verifiedDraftSigner(draft, {
       ...resident,

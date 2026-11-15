@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ContractView, Readiness } from '../../../../packages/client-core/src/contracts';
+import { contractClient } from '../../../../packages/client-core/src/contracts';
 import type { MainDraftView } from '../../../../packages/client-core/src/mainDrafts';
 const state = vi.hoisted(() => ({
   request: vi.fn(),
@@ -92,6 +93,15 @@ vi.mock('../components/WorkspaceKit', () => ({
   ),
 }));
 vi.mock('../components/WorkflowControls', () => ({
+  Input: ({
+    label,
+    value,
+    onChange,
+  }: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+  }) => <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
   ChoiceField: ({
     label,
     value,
@@ -248,6 +258,125 @@ beforeEach(() => {
   state.signer.id = 'resident';
 });
 afterEach(cleanup);
+it.each([true, false])(
+  'Main navigates from real Step 6 to existing Step 7 after fresh backend verification, invitation=%s',
+  async (internal) => {
+    const pending = {
+      ...contract(),
+      signingMode: internal ? 'INTERNAL_OTP_DRAWN' : '',
+      tenantUserId: internal ? null : 'tenant',
+    };
+    const latest = {
+      ...pending,
+      status: 'PendingActivation',
+      signatures: ['owner', ...(internal ? [] : ['tenant'])].map((signerUserId, n) => ({
+        id: String(n),
+        signerUserId,
+        status: 'Signed',
+        signedAt: null,
+      })),
+    };
+    const api = contractClient(state.request);
+    state.request.mockImplementation(async (path: string) => {
+      if (path.endsWith('/internal-signing'))
+        return {
+          invitations: [],
+          tenantAcceptedAt: '2026-11-15T00:00:00Z',
+          ownerAcceptedAt: '2026-11-15T00:00:00Z',
+          canContinue: true,
+        };
+      if (path.endsWith('/signing-methods')) return { methods: [], default: null };
+      if (path.endsWith('/contract')) return latest;
+      throw new Error(path);
+    });
+    function Wizard() {
+      const [c, setContract] = useState(pending);
+      return (
+        <RentalContractFlow
+          api={api}
+          contract={c}
+          role="Owner"
+          actorId="owner"
+          readiness={null}
+          initialStep={1}
+          onChanged={() => setContract(latest)}
+          onList={() => {}}
+        />
+      );
+    }
+    render(<Wizard />);
+    const next = await screen.findByRole('button', { name: 'Tiếp tục thanh toán' });
+    await waitFor(() => expect(next).toHaveProperty('disabled', false));
+    fireEvent.click(next);
+    await screen.findByText('Bước 7/8');
+    expect(screen.getByText('Tiền cọc hợp đồng')).toBeTruthy();
+  },
+);
+it('offers Staff Owner simulation only after backend enables Sandbox and waits for persisted state', async () => {
+  const c = {
+    ...contract(),
+    kind: 'Main',
+    status: 'PendingSigning',
+    signingMode: 'INTERNAL_OTP_DRAWN',
+    isDevelopmentDemo: true,
+    snapshotHash: 'snapshot',
+  };
+  state.request.mockImplementation(async (path: string) =>
+    path.endsWith('/internal-signing') ? { sandboxAvailable: true } : { canContinue: false },
+  );
+  const { reload } = flow(c, 'Staff');
+  const ownerButton = await screen.findByRole('button', { name: 'Mô phỏng Owner ký' });
+  await waitFor(() => expect(ownerButton).toHaveProperty('disabled', false));
+  expect(screen.getByRole('button', { name: 'Mô phỏng Tenant ký' })).toHaveProperty(
+    'disabled',
+    true,
+  );
+  fireEvent.click(ownerButton);
+  await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+  expect(state.request).toHaveBeenCalledWith(
+    '/api/v1/contracts/contract/internal-signing/owner-simulation',
+    expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        documentHash: 'snapshot',
+        consent: true,
+        consentVersion: 'internal-acceptance-v1',
+      }),
+    }),
+  );
+  expect(screen.getByRole('button', { name: 'Tiếp tục' })).toHaveProperty('disabled', true);
+});
+it('blocks QR after Owner-only confirmation until Staff simulation is persisted and the contract is reloaded', async () => {
+  const c = {
+    ...contract(),
+    status: 'PendingActivation',
+    isDevelopmentDemo: true,
+    signingMode: 'INTERNAL_OTP_DRAWN',
+    ownerOnlySandboxConfirmed: true,
+    sandboxTenantSimulated: false,
+  };
+  let finish!: (value: unknown) => void;
+  state.request.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const { reload } = flow(c, 'Staff');
+  expect(screen.getByText('Bước 6/8')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Tiếp tục' })).toHaveProperty('disabled', true);
+  const simulate = screen.getByRole('button', { name: 'Mô phỏng Tenant ký' });
+  fireEvent.click(simulate);
+  expect(state.request).toHaveBeenCalledWith(
+    '/api/v1/contracts/contract/internal-signing/tenant-simulation',
+    expect.objectContaining({ method: 'POST' }),
+  );
+  expect(reload).not.toHaveBeenCalled();
+  await act(async () => finish({ canContinue: true, tenantSimulated: true }));
+  expect(reload).toHaveBeenCalledOnce();
+  expect(screen.getByRole('button', { name: 'Tiếp tục' })).toHaveProperty('disabled', true);
+  expect(screen.queryByText('Thanh toán ban đầu')).toBeNull();
+});
 it('labels completed Development signing as simulated while allowing inspection of the remaining conditions', () => {
   const c = contract();
   c.isDevelopmentDemo = true;
@@ -276,10 +405,10 @@ it('keeps one-sided and simulated signatures at signing, without marking payment
     completed: ['preview'],
   });
   flow(c);
-  expect(screen.getByText('Bước 2/4 · Ký hợp đồng')).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
+  expect(screen.getByText('Bước 6/8')).toBeTruthy();
+  expect(
+    (screen.getByRole('button', { name: 'Tiếp tục thanh toán' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
 });
 it('shows a missing QR honestly and never invents transfer references or marks a payment paid', () => {
   const c = contract();
@@ -297,7 +426,7 @@ it('shows a missing QR honestly and never invents transfer references or marks a
     verifiedDeposit: '0',
     blockers: ['security_deposit_insufficient'],
   });
-  expect(screen.getByText('Bước 3/4 · Tạo mã QR')).toBeTruthy();
+  expect(screen.getByText('Bước 7/8')).toBeTruthy();
   expect(screen.getByText('Chưa có QR tiền cọc')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Tôi đã thanh toán' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra kích hoạt' }));
@@ -314,9 +443,7 @@ it('keeps activation blocked for Owner when backend readiness is false', () => {
     signedAt: null,
   }));
   flow(c, 'Owner', { ...ready, ready: false, blockers: ['effective_date_not_reached'] });
-  expect(
-    (screen.getByRole('button', { name: 'Kích hoạt hợp đồng' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
+  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
   expect(screen.queryByText('Hợp đồng đã được kích hoạt')).toBeNull();
 });
 it('renders success only from Active and returns to the existing list', () => {
