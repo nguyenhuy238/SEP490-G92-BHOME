@@ -61,6 +61,19 @@ public sealed class Compact24DigitalSigningTests(Compact24Fixture fixture) : ICl
         var png = await tenant.GetByteArrayAsync(Image + "/content");
         Assert.True(png.AsSpan(1, 3).SequenceEqual("PNG"u8));
 
+        // Online profile metadata can outlive the workstation's object storage.
+        // Missing optional artwork must be reported as absent, not HTTP 500.
+        var me = (await tenant.GetFromJsonAsync<SessionIdentity>("/api/v1/auth/me"))!;
+        await using (var missingImageScope = host.Services.CreateAsyncScope())
+        {
+            var context = missingImageScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var objectKey = await context.Database.SqlQuery<string>(
+                $"SELECT business_profile->'signatureImage'->>'objectKey' AS \"Value\" FROM users WHERE id={me.UserId}").SingleAsync();
+            await storage.DeleteAsync(objectKey, default);
+        }
+        Assert.False((await tenant.GetFromJsonAsync<SignatureImageView>(Image))!.Present);
+        Assert.Equal(HttpStatusCode.NotFound, (await tenant.GetAsync(Image + "/content")).StatusCode);
+
         // An opaque picture (colour type 2, no tRNS) would hide the page text under it.
         var opaque = new byte[64]; new SignaturePictureGenerator().FromName("Tên Thử").AsSpan(0, 33).CopyTo(opaque); opaque[25] = 2;
         var refused = await tenant.PutAsync(Image, new ByteArrayContent(opaque) { Headers = { ContentType = new MediaTypeHeaderValue("image/png") } });

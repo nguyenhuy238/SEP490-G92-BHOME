@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   type ContractClient,
@@ -20,6 +20,7 @@ const state = vi.hoisted(() => ({
   linked: false,
   go: vi.fn(),
   residentId: '00000000-0000-4000-8000-000000000003',
+  foreground: null as null | ((state: string) => void),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => ({ role: state.role, go: state.go }),
@@ -56,6 +57,7 @@ vi.mock('../features/contracts/HoldingNewTenant', () => ({
         </button>
       ) : (
         <button
+          disabled={disabled}
           onClick={() => {
             state.verified = true;
             onVerifiedSummary({ fullName: 'Họ tên đã xác minh', dateOfBirth: '1995-05-20' });
@@ -74,7 +76,12 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void | (() => void)) => React.useEffect(callback, [callback]),
 }));
 vi.mock('react-native', () => ({
-  AppState: { addEventListener: () => ({ remove: () => {} }) },
+  AppState: {
+    addEventListener: (_event: string, callback: (value: string) => void) => {
+      state.foreground = callback;
+      return { remove: () => {} };
+    },
+  },
   StyleSheet: { create: (styles: unknown) => styles },
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -182,6 +189,7 @@ afterEach(() => {
   state.role = 'Staff';
   state.verified = false;
   state.linked = false;
+  state.foreground = null;
 });
 function makeApi(mutate = vi.fn().mockResolvedValue({ id: ids[0] })) {
   return {
@@ -304,6 +312,38 @@ it('requires the new applicant to be verified before continuing, but does not re
   expect(screen.getByText('Thông tin phòng')).toBeTruthy();
   expect(api.linkTenant).not.toHaveBeenCalled();
 });
+it('does not rescan the room catalog when creating and verifying the applicant', async () => {
+  const { api } = mount();
+  await confirmApplicant();
+  expect(api.holdingRooms).toHaveBeenCalledOnce();
+  expect(api.configuration).toHaveBeenCalledOnce();
+  expect(api.locations).toHaveBeenCalledOnce();
+  expect(api.preparation).toHaveBeenCalledOnce();
+});
+it('keeps identity actions available while the selected profile is refreshing', async () => {
+  const { api } = mount();
+  await chooseRoom();
+  fireEvent.click(continueButton());
+  const loadPreparation = vi.mocked(api.preparation).getMockImplementation()!;
+  let resolvePreparation!: (value: Awaited<ReturnType<typeof api.preparation>>) => void;
+  vi.mocked(api.preparation).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolvePreparation = resolve;
+      }),
+  );
+  act(() => state.foreground?.('active'));
+  const identity = screen.getByText('Xác nhận CCCD từ backend');
+  expect(identity).toHaveProperty('disabled', false);
+  fireEvent.click(identity);
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Đang cập nhật…' })).toHaveProperty('disabled', true),
+  );
+  expect(screen.getByText('Xác nhận CCCD từ backend')).toHaveProperty('disabled', false);
+  expect(api.holdingRooms).toHaveBeenCalledOnce();
+  resolvePreparation(await loadPreparation(ids[0]));
+  await waitFor(() => expect(continueButton()).toHaveProperty('disabled', false));
+});
 it('reviews verified applicant data and keeps confirmation entirely read-only', async () => {
   const { api, prepare } = mount();
   await confirmApplicant();
@@ -352,6 +392,7 @@ it('uses the room location Holding quote for dates, deposit and configuration ve
   const { prepare } = mount(api);
   await confirmApplicant();
   await waitFor(() => expect((submit() as HTMLButtonElement).disabled).toBe(false));
+  expect(api.holdingPreparation).toHaveBeenCalledOnce();
   fireEvent.click(submit());
   await waitFor(() =>
     expect(api.mutate).toHaveBeenCalledWith(

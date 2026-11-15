@@ -26,6 +26,7 @@ export default function AnonymousSigningPage() {
   );
   const [otp, setOtp] = useState(''),
     [info, setInfo] = useState(''),
+    [otpRequested, setOtpRequested] = useState(false),
     [access, setAccess] = useState<SigningAccess | null>(null),
     [url, setUrl] = useState('');
   const [error, setError] = useState(''),
@@ -45,7 +46,7 @@ export default function AnonymousSigningPage() {
       .info(token)
       .then((i) => {
         if (active) {
-          setInfo('Mã được gửi đến ' + i.maskedEmail);
+          setInfo('Email nhận OTP: ' + i.maskedEmail);
           setDone(i.accepted);
         }
       })
@@ -93,7 +94,7 @@ export default function AnonymousSigningPage() {
           {error && <Alert severity="error">{error}</Alert>}
           {done ? (
             <Alert severity="success">
-              Đã ghi nhận chấp thuận. Owner tiếp tục xác nhận, kiểm tra cọc và kích hoạt. Bạn sẽ
+              Đã ghi nhận chấp thuận. Hệ thống tự động kích hoạt khi đủ chữ ký và thanh toán. Bạn sẽ
               nhận lời mời thiết lập tài khoản sau khi Main Active.
             </Alert>
           ) : (
@@ -101,16 +102,27 @@ export default function AnonymousSigningPage() {
               {!access ? (
                 <>
                   <Typography>{info}</Typography>
+                  {otpRequested ? (
+                    <Alert severity="success" role="status">
+                      Đã yêu cầu gửi mã xác nhận. Kiểm tra email, cả mục Spam/Thư rác, rồi nhập mã
+                      bên dưới.
+                    </Alert>
+                  ) : (
+                    <Typography color="text.secondary">
+                      Nhập mã OTP 6 chữ số trong email mời ký. Mã có hiệu lực 5 phút; nếu hết hạn
+                      hoặc email cũ chưa có mã, bấm Gửi lại mã OTP.
+                    </Typography>
+                  )}
                   <Button
                     disabled={busy || !info}
                     onClick={() =>
                       void run(async () => {
                         await api.otp(token);
-                        setInfo('Đã yêu cầu gửi mã xác nhận. Kiểm tra email của bạn.');
+                        setOtpRequested(true);
                       })
                     }
                   >
-                    Gửi mã OTP
+                    Gửi lại mã OTP
                   </Button>
                   <TextField
                     label="Mã OTP 6 chữ số"

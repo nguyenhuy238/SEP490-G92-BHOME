@@ -110,6 +110,9 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.False(options.Trusted("https://owner.example.invalid/reset-password?next=https://attacker.invalid", false));
         Assert.False(options.Trusted("http://localhost:5173/reset-password", false));
         Assert.True(options.Trusted("http://localhost:5173/reset-password", true));
+        options.TrustedOrigins = [.. options.TrustedOrigins, "https://localhost:5173"];
+        Assert.False(options.Trusted("https://localhost:5173/accept-invitation", false));
+        Assert.True(options.Trusted("https://localhost:5173/accept-invitation", true));
         Assert.True(options.Trusted("bhome://reset-password", false));
         Assert.False(options.Trusted("javascript:alert(1)", true));
     }
@@ -163,8 +166,21 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Contains("bhome://accept-invitation?", mail.Body);
         var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));
         var accept = new AcceptInvitationRequest(query["userName"].ToString(), query["token"].ToString(), "Synthetic!Invited-725");
+        const string validationUrl = "/api/v1/auth/accept-invitation/validate";
+        async Task<InvitationValidationResult> Validate(string token) =>
+            (await (await anonymous.PostAsJsonAsync(validationUrl, new InvitationValidationRequest(token))).Content.ReadFromJsonAsync<InvitationValidationResult>())!;
+        var validated = await Validate(accept.Token); Assert.Equal("Valid", validated.Status); Assert.Equal(email, validated.Email);
+        await pendingDb.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET is_active=false WHERE id={staff.UserId}");
+        Assert.Equal("Revoked", (await Validate(accept.Token)).Status);
+        await pendingDb.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET is_active=true WHERE id={staff.UserId}");
+        Assert.Equal("Invalid", (await Validate("tampered")).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept with { UserName = "another@example.invalid" })).StatusCode);
+        // Failed password validation rolls back the reset and does not consume the invitation.
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept with { NewPassword = "lowercaseonlylong" })).StatusCode);
+        Assert.Equal("Valid", (await Validate(accept.Token)).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept with { Token = "invalid" })).StatusCode);
         await pendingDb.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={staff.UserId}");
+        Assert.Equal("Expired", (await Validate(accept.Token)).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
         (await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null)).EnsureSuccessStatusCode();
         await SendEmail(host, await AuthenticationDelivery(host, staff.UserId));
@@ -173,8 +189,12 @@ public sealed partial class Compact24NotificationMvpTests
         var oldAccept = accept;
         accept = accept with { Token = fresh["token"].ToString() };
         Assert.NotEqual(oldAccept.Token, accept.Token);
+        Assert.Equal("Invalid", (await Validate(oldAccept.Token)).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", oldAccept)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
+        var concurrent = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", new { token = accept.Token, newPassword = accept.NewPassword, role = "Owner", locationId = Guid.NewGuid() })));
+        Assert.Single(concurrent, r => r.StatusCode == HttpStatusCode.NoContent);
+        Assert.Single(concurrent, r => r.StatusCode == HttpStatusCode.BadRequest);
+        Assert.Equal("AlreadyActivated", (await Validate(accept.Token)).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
         var login = await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password = accept.NewPassword });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
@@ -217,9 +237,37 @@ public sealed partial class Compact24NotificationMvpTests
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={invited.UserId}");
         using var anonymous = host.CreateClient();
         var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));
+        var revoked = await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation/validate", new InvitationValidationRequest(q["token"].ToString()));
+        Assert.Equal("Expired", (await revoked.Content.ReadFromJsonAsync<InvitationValidationResult>())!.Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", new AcceptInvitationRequest(q["userName"].ToString(), q["token"].ToString(), "Synthetic!Invited-725"))).StatusCode);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE notifications SET next_delivery_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={delivery}");
         await SendEmail(host, delivery); Assert.Single(probe.Messages);
+    }
+
+    [CompactPostgresFact]
+    public async Task AuthenticationTenantInvitationTokenAloneSetsPasswordAndPreservesTenantRole()
+    {
+        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
+        var email = "invited-" + Guid.NewGuid().ToString("N") + "@example.invalid";
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET user_id=NULL,contact_email={email} WHERE id={w.Residents[0]}");
+        using var owner = await Client(w.Owner, host); using var anonymous = host.CreateClient();
+        var created = await owner.PostAsJsonAsync($"/api/v1/residents/{w.Residents[0]}/invitation", new TenantInvitationRequest(email));
+        created.EnsureSuccessStatusCode(); var invited = (await created.Content.ReadFromJsonAsync<TenantInvitationResult>())!;
+        await SendEmail(host, await AuthenticationDelivery(host, invited.UserId));
+        var mail = Assert.Single(probe.Messages);
+        var token = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'))["token"].ToString();
+        var preview = await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation/validate", new { token });
+        var details = (await preview.Content.ReadFromJsonAsync<InvitationValidationResult>())!;
+        Assert.Equal("Valid", details.Status); Assert.Equal(email, details.Email);
+        const string password = "Synthetic!TenantSetup725";
+        Assert.Equal(HttpStatusCode.NoContent, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", new { token, newPassword = password, role = "Owner", locationId = Guid.NewGuid() })).StatusCode);
+        var login = await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password });
+        login.EnsureSuccessStatusCode(); var session = await TestAuthResponse.ReadAsync(login.Content);
+        Assert.Equal(invited.UserId, session.UserId); Assert.Equal(new[] { "Tenant" }, session.Roles);
+        Assert.Equal(invited.UserId, await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == w.Residents[0]).Select(r => r.TenantUserId).SingleAsync());
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", new { token, newPassword = password })).StatusCode);
     }
 
     [CompactPostgresFact]

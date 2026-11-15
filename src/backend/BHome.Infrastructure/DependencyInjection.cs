@@ -227,6 +227,7 @@ public static class DependencyInjection
         services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
         services.AddHostedService<BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFileCleanup>();
         services.AddScoped<UnconfiguredBankProvider>();
+        services.AddScoped<BHome.Application.PaymentsDebt.ContractDepositInstructionsService>();
         services.AddScoped<IBankTransactionProvider>(p => p.GetRequiredService<BHome.Application.PaymentsDebt.SePay.SePayOptions>().Enabled
             ? p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.SePayApiClient>() : p.GetRequiredService<UnconfiguredBankProvider>());
         services.AddOptions<BHome.Application.PaymentsDebt.SePay.SePayOptions>()
@@ -395,6 +396,9 @@ public static class DependencyInjection
         services.AddSingleton<BHome.Application.PaymentsDebt.ITransferQrGenerator, BHome.Infrastructure.PaymentsDebt.VietQrGenerator>();
         services.AddScoped<BHome.Application.PaymentsDebt.TransferInstructionsService>();
         services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPaymentLedger, BHome.Infrastructure.PaymentsDebt.MainInitialPaymentLedger>();
+        services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.MainContractActivationJob>();
+        services.AddScoped<BHome.Infrastructure.PaymentsDebt.MainContractActivationScheduling>();
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.MainContractActivationScheduling>());
         services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPayments, BHome.Infrastructure.PaymentsDebt.MainInitialPayments>();
         services.AddSingleton<BHome.Application.Contracts.IHoldingTestScope, BHome.Infrastructure.Contracts.HoldingTestScope>();
         services.AddHostedService<MeterEvidenceCleanup>();

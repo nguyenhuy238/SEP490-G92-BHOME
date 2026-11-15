@@ -29,6 +29,13 @@ const rooms = vi.fn(async () => ({
 const api = {
   configuration: vi.fn(async () => ({})),
   locations: vi.fn(async () => [{ id: 'location', label: 'BHOME JOB09 TEST' }]),
+  holdingRoomReady: vi.fn(async () => ready),
+  preparation: vi.fn(async () => ({
+    rooms: [{ id: 'room', locationId: 'location', label: 'J09-102', status: 'Available' }],
+    residents: [],
+    ownerSigners: [],
+    locations: [],
+  })),
   holdingRooms: rooms,
   holdingRoomReadiness: vi.fn(async (id: string) => ({
     roomId: id,
@@ -39,8 +46,8 @@ const api = {
     unverifiedConditions: [],
   })),
 } as unknown as ContractClient;
-function Harness() {
-  const q = useHoldingPreparation(api);
+function Harness({ selectedRoom = '' }: { selectedRoom?: string }) {
+  const q = useHoldingPreparation(api, selectedRoom);
   return (
     <>
       <span>
@@ -84,4 +91,17 @@ it('refreshes on navigation focus and removes the foreground listener on unmount
   await waitFor(() => expect(rooms).toHaveBeenCalledTimes(2));
   view.unmount();
   expect(events.remove).toHaveBeenCalledOnce();
+});
+it('refreshes only the selected room when returning from the camera, keeping the catalog cached', async () => {
+  ready = true;
+  render(<Harness selectedRoom="room" />);
+  await screen.findByText('J09-102');
+  expect(rooms).toHaveBeenCalledOnce();
+  expect(api.preparation).toHaveBeenCalledOnce();
+  act(() => events.listener?.('background'));
+  act(() => events.listener?.('active'));
+  await waitFor(() => expect(api.preparation).toHaveBeenCalledTimes(2));
+  await screen.findByText('J09-102');
+  expect(rooms).toHaveBeenCalledOnce();
+  expect(api.holdingRoomReadiness).toHaveBeenCalledOnce();
 });

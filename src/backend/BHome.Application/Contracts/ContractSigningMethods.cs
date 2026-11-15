@@ -1,5 +1,12 @@
 namespace BHome.Application.Contracts;
 
+public static class ContractPaymentModes
+{
+    public static string Of(BHome.Domain.TenantContracts.Contract contract) =>
+        contract.PaymentMode ?? (contract.IsDevelopmentDemo ? "Test" : "Live");
+    public static bool IsTest(BHome.Domain.TenantContracts.Contract contract) => Of(contract) == "Test";
+}
+
 // The ways a contract party can sign. OTP is the in-app electronic signature (drawn or uploaded picture, a one-time
 // code sent by email, BHOME seals the PDF); VIETTEL_MYSIGN is remote digital signing with the signer's own certificate;
 // SIMULATED is the labelled Development/Testing simulation. SRS v1.3 keeps certified digital signature outside the
@@ -7,6 +14,8 @@ namespace BHome.Application.Contracts;
 public static class SigningMethods
 {
     public const string Otp = "OTP";
+    // Explicit Owner consent authenticated by the current account session, with the BHOME system seal.
+    public const string OwnerSession = "OWNER_SESSION";
     public const string ViettelMySign = "VIETTEL_MYSIGN";
     public const string Simulated = "SIMULATED";
     // The Owner signs the issued PDF outside BHOME with their own certificate (e.g. Viettel MySign registered through
@@ -14,6 +23,7 @@ public static class SigningMethods
     public const string UploadProof = "UPLOAD_PROOF";
 
     public static bool IsOtp(string? method) => string.Equals(method?.Trim(), Otp, StringComparison.OrdinalIgnoreCase);
+    public static bool IsOwnerSession(string? method) => string.Equals(method?.Trim(), OwnerSession, StringComparison.OrdinalIgnoreCase);
     public static bool IsUploadProof(string? method) => string.Equals(method?.Trim(), UploadProof, StringComparison.OrdinalIgnoreCase);
 }
 

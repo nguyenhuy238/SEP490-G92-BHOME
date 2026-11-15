@@ -74,6 +74,28 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         Assert.True(await scope.ServiceProvider.GetRequiredService<IMainInitialPaymentLedger>().SatisfiedAsync(c.Id, default));
     }
     private const string Secret = "synthetic-sepay-integration-secret-at-least-32-bytes";
+    [CompactPostgresFact]
+    public async Task SandboxQrPreviewSkipsSigningWithoutManufacturingApprovalOrActivation()
+    {
+        await using var scenario = await Create();
+        await using var scope = scenario.Host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+        var room = new Room { LocationId = scenario.Location, RoomNumber = "PREVIEW-ONLY", Capacity = 1, Status = RoomStatus.Available };
+        var resident = new Resident { RoomId = room.Id, OwnerUserId = scenario.Owner, DisplayLabel = "Synthetic preview", VerificationStatus = IdentityVerificationStatus.Verified };
+        var c = new Contract { Kind = ContractKind.Holding, RoomId = room.Id, OwnerSignerId = scenario.Owner, RepresentativeResidentId = resident.Id, StartDate = today, EndDate = today.AddMonths(1), HoldingExpiryAt = DateTimeOffset.UtcNow.AddDays(2), RequiredDeposit = 100000, MonthlyRent = 100000, IsDevelopmentDemo = true, Status = ContractStatus.Draft, SigningMode = ContractSigningModes.Internal, SnapshotHash = new string('A', 64) };
+        db.AddRange(room, resident, c); await db.SaveChangesAsync();
+        using var owner = await scenario.Client(scenario.Owner);
+        var root = $"/api/v1/integrations/sepay/testing/holdings/{c.Id}";
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(root + "/simulation/skip-signing-preview", new { previewOnly = false })).StatusCode);
+        var skipped = await owner.PostAsJsonAsync(root + "/simulation/skip-signing-preview", new { previewOnly = true });
+        skipped.EnsureSuccessStatusCode();
+        Assert.True((await skipped.Content.ReadFromJsonAsync<BHome.Api.Controllers.PaymentsDebt.HoldingSandboxState>())!.CanShowQr);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsync(root + "/simulation/activate", null)).StatusCode);
+        db.ChangeTracker.Clear(); var saved = await db.Set<Contract>().SingleAsync(x => x.Id == c.Id);
+        Assert.Equal(ContractStatus.Draft, saved.Status); Assert.Null(saved.ApprovedAt); Assert.Null(saved.ActivatedAt);
+        Assert.Equal("{}", saved.InternalAcceptance); Assert.Empty(await db.Set<ContractSignature>().Where(s => s.ContractId == c.Id).ToArrayAsync());
+    }
     private const string Account = "0000001234";
     private sealed class Scenario : IAsyncDisposable
     {
@@ -225,6 +247,33 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(path)).StatusCode);
         options.Enabled = true; options.Mode = "Live";
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(path)).StatusCode);
+    }
+
+    [CompactPostgresFact]
+    public async Task ExplicitPaymentEnvironmentRecoversOriginalReceiptWithoutChangingSigningModeOrDoubleCredit()
+    {
+        await using var scenario = await Create();
+        await using var scope = scenario.Host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var contract = await db.Set<Contract>().SingleAsync(c => c.Id == scenario.Contract);
+        contract.IsDevelopmentDemo = false; contract.PaymentMode = null;
+        await db.SaveChangesAsync();
+        var eventId = Guid.NewGuid().ToString();
+        (await scenario.Send(100000, reference: "SYN-ENV-RECOVERY", eventId: eventId)).EnsureSuccessStatusCode();
+        Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).ToArrayAsync());
+        var events = await scope.ServiceProvider.GetRequiredService<ISePayRepository>().EventsAsync(1, 100, default);
+        var pending = Assert.Single(events.Items, e => e.Reason == "sepay_environment_mismatch");
+        contract.PaymentMode = "Test"; await db.SaveChangesAsync();
+        var service = scope.ServiceProvider.GetRequiredService<SePayService>();
+        await service.ReconcileAsync(pending.Id, default);
+        await service.ReconcileAsync(pending.Id, default);
+        (await scenario.Send(100000, reference: "SYN-ENV-RECOVERY", eventId: eventId)).EnsureSuccessStatusCode();
+        (await scenario.Send(100000, reference: "SYN-ENV-RECOVERY")).EnsureSuccessStatusCode();
+        var allocation = Assert.Single(await db.Set<PaymentAllocation>().Where(a => a.InvoiceId == scenario.Invoice).ToArrayAsync());
+        Assert.Equal(100000m, allocation.Amount);
+        Assert.False((await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == contract.Id)).IsDevelopmentDemo);
+        var completed = await scope.ServiceProvider.GetRequiredService<ISePayRepository>().EventAsync(pending.Id, default);
+        Assert.Equal("Completed", completed.Status); Assert.Equal(pending.TransferId, completed.TransferId);
     }
 
     [CompactPostgresFact]
@@ -492,7 +541,7 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         unchanged.HoldingExpiryAt = DateTimeOffset.UtcNow.AddMinutes(-1); await db.SaveChangesAsync();
         Assert.Equal(HttpStatusCode.Conflict, (await owner.GetAsync(path)).StatusCode);
         unchanged.HoldingExpiryAt = DateTimeOffset.UtcNow.AddDays(1); unchanged.IsDevelopmentDemo = false; await db.SaveChangesAsync();
-        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.GetAsync(path)).StatusCode); // Real unsigned contracts cannot show even a sandbox QR.
     }
 
     [CompactPostgresFact]

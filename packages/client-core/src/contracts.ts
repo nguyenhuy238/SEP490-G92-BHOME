@@ -71,6 +71,9 @@ export interface ContractView {
   appliedHoldingDeposit: string;
   isDevelopmentDemo?: boolean;
   initialPaymentRequired?: boolean;
+  paymentMode?: 'Test' | 'Live' | null;
+  ownerOnlySandboxConfirmed?: boolean;
+  sandboxTenantSimulated?: boolean;
   roomNumber?: string;
   locationName?: string;
   occupants?: { id: string; label: string; representative: boolean }[] | null;
@@ -559,16 +562,18 @@ export function contractClient(request: ContractRequest) {
     );
   return {
     holdingRoomReadiness,
-    createHoldingResident: (roomId: string, displayLabel: string, email: string) =>
-      request<{ id: string }>('/api/v1/capture/residents', {
+    createHoldingResident: (roomId: string, displayLabel: string, email?: string) => {
+      // Preserve older callers without reserving an email before the signing invitation.
+      void email;
+      return request<{ id: string }>('/api/v1/capture/residents', {
         method: 'POST',
         body: JSON.stringify({
           roomId,
           displayLabel: displayLabel.trim(),
           residentType: 0,
-          email: email.trim(),
         }),
-      }),
+      });
+    },
     holdingRooms: (page = 1, signal?: AbortSignal) =>
       request<Page<RoomConfiguration>>(
         `/api/v1/rooms?roomStatus=Available&page=${page}&pageSize=100`,
@@ -947,6 +952,8 @@ export const labels: Record<string, string> = {
   HoldingDraftCreated: 'Lập bản nháp giữ chỗ',
   HoldingApproved: 'Owner phê duyệt giữ chỗ',
   HoldingActivated: 'Kích hoạt giữ chỗ',
+  'Automatic:HoldingActivated': 'Hệ thống tự động kích hoạt giữ chỗ',
+  'Automatic:ContractActivated': 'Hệ thống tự động kích hoạt hợp đồng',
   HoldingCancelled: 'Hủy giữ chỗ',
   HoldingConverted: 'Chuyển sang hợp đồng thuê chính',
   Active: 'Đang hiệu lực',
@@ -1034,6 +1041,10 @@ export const labels: Record<string, string> = {
   internal_acceptance_evidence_required:
     'Cần chấp thuận đúng PDF bằng OTP của người đại diện và xác nhận của Owner.',
   resident_email_required: 'Mỗi người ở cần có email riêng trước khi kích hoạt.',
+  signing_contacts_required:
+    'Nhập email hợp lệ, riêng biệt cho từng người ở trước khi gửi lời mời ký.',
+  signing_contacts_invalid:
+    'Danh sách email không khớp người ở trong hợp đồng. Hãy tải lại và kiểm tra.',
   verified_residents_with_email_required:
     'Cần xác minh hồ sơ và email riêng hợp lệ cho tất cả người ở.',
   internal_signing_flow_required: 'Hợp đồng này dùng lời mời ký nội bộ qua OTP.',
@@ -1265,7 +1276,7 @@ export function contractActions(
   const result: ContractAction[] = [];
   if (
     signer &&
-    c.signingMode !== 'INTERNAL_OTP_DRAWN' &&
+    (c.signingMode !== 'INTERNAL_OTP_DRAWN' || (owner && !c.isDevelopmentDemo)) &&
     (c.kind !== 'Holding' || !!c.approvedAt) &&
     ['Draft', 'PendingSigning'].includes(c.status) &&
     !mine.some((s) => s.status !== 'Failed') &&
@@ -1301,7 +1312,7 @@ export function contractActions(
         'Chỉ nhập mã đã đối chiếu với nhà cung cấp. Sau khôi phục vẫn phải kiểm tra kết quả ký.',
       ),
     );
-  if (owner && waiting && c.kind !== 'Holding')
+  if (owner && waiting && !['Main', 'Holding'].includes(c.kind))
     result.push(
       action(
         'activate',
@@ -1342,15 +1353,6 @@ export function contractActions(
           'Phê duyệt hợp đồng giữ chỗ',
           [{ name: 'reason', label: 'Căn cứ phê duyệt', type: 'multiline', max: 2000 }],
           'Kiểm tra phòng, thời hạn, giá và tiền giữ chỗ trước khi phê duyệt. Phê duyệt chưa đồng nghĩa phòng đã được giữ.',
-        ),
-      );
-    if (owner && waiting && c.approvedAt && !expired)
-      result.push(
-        action(
-          'holding-activation',
-          'Kích hoạt giữ chỗ',
-          [],
-          'Chỉ kích hoạt sau khi máy chủ xác nhận đủ phê duyệt, chữ ký, tiền giữ chỗ và phòng hợp lệ.',
         ),
       );
     if (owner && ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status))

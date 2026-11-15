@@ -13,6 +13,23 @@ export type InternalSigningStatus = {
   sandboxAvailable?: boolean;
 };
 export type SigningAccess = { session: string; documentHash: string; consentVersion: string };
+export function signingInvitationLabel(status: string) {
+  return (
+    (
+      {
+        OwnerApprovedLink: 'Đã tạo lời mời · Chưa xác nhận gửi email',
+        InvitationAcceptedByProvider: 'Đã gửi email · Chờ ký',
+        InvitationPendingManualDelivery: 'Chưa gửi được email · Owner cần kiểm tra',
+        OtpPendingDelivery: 'Đang gửi mã OTP',
+        OtpAcceptedByProvider: 'Đã gửi mã OTP',
+        OtpVerified: 'Đã xác minh OTP · Cần hoàn tất chữ ký',
+        Accepted: 'Đã ký',
+        Expired: 'Lời mời đã hết hạn',
+        Revoked: 'Lời mời đã thu hồi',
+      } as Record<string, string>
+    )[status] ?? 'Chưa xác định trạng thái gửi lời mời'
+  );
+}
 export function internalSigningClient(request: ReturnType<typeof createApiClient>) {
   function post<T>(path: string, body: unknown) {
     return request<T>(path, { method: 'POST', body: JSON.stringify(body) });
@@ -50,10 +67,21 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
       ),
     status: (id: string) =>
       request<InternalSigningStatus>('/api/v1/contracts/' + id + '/internal-signing'),
-    invite: (id: string, snapshotHash: string, expiresAt: string) =>
+    invite: (
+      id: string,
+      snapshotHash: string,
+      expiresAt: string,
+      recipientEmail?: string,
+      contacts?: { residentId: string; email: string }[],
+    ) =>
       post<{ id: string; token?: string | null; status: string; expiresAt: string }>(
         '/api/v1/contracts/' + id + '/signing-invitations',
-        { snapshotHash, expiresAt },
+        {
+          snapshotHash,
+          expiresAt,
+          ...(recipientEmail?.trim() ? { recipientEmail: recipientEmail.trim() } : {}),
+          ...(contacts?.length ? { contacts } : {}),
+        },
       ),
     revoke: (id: string, invitationId: string) =>
       request<void>('/api/v1/contracts/' + id + '/signing-invitations/' + invitationId, {
@@ -65,9 +93,23 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
         consent: true,
         consentVersion: 'internal-acceptance-v1',
       }),
-    acceptAccount: (userName: string, token: string, newPassword: string) =>
+    simulateTenant: (id: string) =>
+      post<InternalSigningStatus>(
+        '/api/v1/contracts/' + id + '/internal-signing/tenant-simulation',
+        {},
+      ),
+    simulateOwner: (id: string, documentHash: string) =>
+      post<InternalSigningStatus>(
+        '/api/v1/contracts/' + id + '/internal-signing/owner-simulation',
+        { documentHash, consent: true, consentVersion: 'internal-acceptance-v1' },
+      ),
+    validateAccountInvitation: (token: string) =>
+      post<{ status: string; email?: string | null }>('/api/v1/auth/accept-invitation/validate', {
+        token,
+      }),
+    acceptAccount: (userName: string | null, token: string, newPassword: string) =>
       post<void>('/api/v1/auth/accept-invitation', {
-        userName: userName.trim(),
+        userName: userName?.trim(),
         token: token.trim(),
         newPassword,
       }),
@@ -76,6 +118,14 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
 export function signingMessage(error: unknown) {
   const value = error as { code?: string; problem?: { code?: string } };
   const code = value?.code ?? value?.problem?.code;
+  if (code === 'signing_contacts_required')
+    return 'Nhập email hợp lệ, riêng biệt cho từng người ở trước khi gửi lời mời ký.';
+  if (code === 'signing_contacts_invalid')
+    return 'Danh sách email không khớp người ở trong hợp đồng. Hãy tải lại và kiểm tra.';
+  if (code === 'holding_owner_approval_required')
+    return 'Owner chưa phê duyệt hợp đồng giữ chỗ. Hãy phê duyệt trên Web trước khi ký.';
+  if (code === 'exact_document_consent_required')
+    return 'Xác nhận ký không khớp phiên bản tài liệu hiện tại. Tải lại hợp đồng và xác nhận lại.';
   if (code === 'signing_otp_key_not_configured')
     return 'Chưa cấu hình khóa xác minh OTP. Vui lòng liên hệ quản trị viên trước khi tạo lời mời ký.';
   if (code === 'signing_email_not_configured')

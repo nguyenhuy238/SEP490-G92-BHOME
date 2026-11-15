@@ -13,7 +13,8 @@ namespace BHome.Application.Contracts;
 public sealed class MainDraftService(IContractRepository repository, IMainDraftData data, ICurrentUser user,
     ResourceAccess access, PropertyService prices, IMainDraftRenderer renderer, IContractFileStore files,
     IObjectStorage storage, TimeProvider clock, IMainDraftPreviewRenderer preview, IContractWorkflowMode? workflowMode = null,
-    IOperatingPolicyWorkflow? operatingPolicies = null)
+    IOperatingPolicyWorkflow? operatingPolicies = null, BHome.Application.PaymentsDebt.SePay.SePayOptions? paymentOptions = null,
+    IHoldingTestScope? paymentScope = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private void Role() { _ = Actor; if (!user.IsInRole(Roles.Staff) && !user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden"); }
@@ -109,8 +110,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         if (!string.IsNullOrWhiteSpace(existingPhone)) x = x with { TenantPhone = existingPhone };
         else if (ContactPhone.Normalize(x.TenantPhone) is { } phone) x = x with { TenantPhone = phone };
         else throw ContractException.Invalid("invalid_phone_number");
-        // Contact for this draft only. This never changes an account email or issues an invitation.
-        if (x.TenantEmail is not null) x = x with { TenantEmail = x.TenantEmail.Trim() };
+        // Collect delivery email only when sending the signing invitation, never while saving a draft.
+        x = x with { TenantEmail = null };
         Validate(x);
         return await repository.InTransactionAsync(x.RoomId, async () =>
         {
@@ -143,7 +144,9 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                     RepresentativeResidentId = x.RepresentativeResidentId,
                     Status = ContractStatus.Draft,
                     InitialPaymentRequired = true,
-                    IsDevelopmentDemo = workflowMode?.SimulatedSigningEnabled == true
+                    IsDevelopmentDemo = workflowMode?.SimulatedSigningEnabled == true,
+                    PaymentMode = paymentOptions?.Enabled == true && paymentOptions.ReceivingAccounts.Any(a => a.LocationId == room.LocationId) &&
+                        (paymentOptions.Mode == "Live" || paymentScope?.Allows(room.LocationId) == true || paymentScope?.AllowsExternalDatabase == true) ? paymentOptions.Mode : null
                 };
                 var representative = (await repository.ResidentsAsync(x.RoomId, [x.RepresentativeResidentId], t)).Single();
                 c.TenantUserId = representative.TenantUserId;

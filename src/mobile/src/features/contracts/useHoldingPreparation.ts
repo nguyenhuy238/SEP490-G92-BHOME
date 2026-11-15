@@ -20,18 +20,26 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
+  const [selectionRevision, setSelectionRevision] = useState(0);
+  const selectedRoom = useRef(selectedRoomId);
+  useEffect(() => {
+    selectedRoom.current = selectedRoomId;
+  }, [selectedRoomId]);
   const [selection, setSelection] = useState<{
     roomId: string;
     preparation?: Preparation;
     error?: string;
     loading: boolean;
     revision?: number;
+    selectionRevision?: number;
   }>({ roomId: '', loading: false });
   const seenFocus = useRef(false);
   useFocusEffect(
     useCallback(() => {
-      if (seenFocus.current) setRevision((value) => value + 1);
-      else seenFocus.current = true;
+      if (seenFocus.current) {
+        if (selectedRoom.current) setSelectionRevision((value) => value + 1);
+        else setRevision((value) => value + 1);
+      } else seenFocus.current = true;
     }, []),
   );
   useEffect(() => {
@@ -109,7 +117,8 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
         if (active) setData({ configuration, locations, rooms, blockedRooms });
       } catch (e) {
         if (active) {
-          setData(null);
+          // Keep the current wizard mounted on a failed background refresh.
+          // The error still prevents submitting until the server can be checked.
           setError(contractError(e));
         }
       } finally {
@@ -125,7 +134,10 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
   // Refresh server eligibility after using Owner Web or returning from the background.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') setRevision((value) => value + 1);
+      if (state === 'active') {
+        if (selectedRoom.current) setSelectionRevision((value) => value + 1);
+        else setRevision((value) => value + 1);
+      }
     });
     return () => subscription.remove();
   }, []);
@@ -149,12 +161,13 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
         );
         setSelection(
           ready && validRoom
-            ? { roomId: selectedRoomId, preparation, loading: false, revision }
+            ? { roomId: selectedRoomId, preparation, loading: false, revision, selectionRevision }
             : {
                 roomId: selectedRoomId,
                 error: 'Phòng không còn đủ điều kiện giữ chỗ. Vui lòng chọn lại phòng.',
                 loading: false,
                 revision,
+                selectionRevision,
               },
         );
       })
@@ -165,15 +178,20 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
             error: contractError(e),
             loading: false,
             revision,
+            selectionRevision,
           });
       });
     return () => {
       active = false;
       controller.abort();
     };
-  }, [api, selectedRoomId, locationId, loading, revision]);
+  }, [api, selectedRoomId, locationId, loading, revision, selectionRevision]);
   const current =
-    selection.roomId === selectedRoomId && selection.revision === revision ? selection : null;
+    selection.roomId === selectedRoomId &&
+    selection.revision === revision &&
+    selection.selectionRevision === selectionRevision
+      ? selection
+      : null;
   const byLocation: Record<string, Preparation> =
     current?.preparation && locationId ? { [locationId]: current.preparation } : {};
   return {

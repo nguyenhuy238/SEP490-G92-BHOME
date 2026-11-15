@@ -22,7 +22,32 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
             ?? throw ContractException.Conflict("signing_source_document_required");
         if (file.DevelopmentOnly && !(environment.IsDevelopment() || environment.IsEnvironment("Testing")))
             throw new ContractException(503, "main_draft_signing_template_not_approved");
-        using var buffer = new MemoryStream(); await storage.CopyToAsync(file.ObjectKey, buffer, t); var bytes = buffer.ToArray();
+        byte[] bytes;
+        try
+        {
+            using var buffer = new MemoryStream(); await storage.CopyToAsync(file.ObjectKey, buffer, t); bytes = buffer.ToArray();
+        }
+        catch (FileNotFoundException)
+        {
+            // Invitations preserve copies of the reviewed bytes. Never render a replacement
+            // or accept a different document under the original consent hash.
+            var copies = await db.Set<ContractSigningInvitation>().AsNoTracking()
+                .Where(i => i.ContractId == contract.Id && i.SnapshotHash == document.SnapshotHash && i.DocumentHash == file.FileHash)
+                .Select(i => i.DocumentObjectKey).Distinct().ToArrayAsync(t);
+            byte[]? recovered = null;
+            foreach (var key in copies)
+            {
+                try
+                {
+                    using var copy = new MemoryStream(); await storage.CopyToAsync(key, copy, t);
+                    var candidate = copy.ToArray();
+                    if (candidate.Length == file.Length && Convert.ToHexString(SHA256.HashData(candidate)) == file.FileHash)
+                    { recovered = candidate; break; }
+                }
+                catch (FileNotFoundException) { }
+            }
+            bytes = recovered ?? throw ContractException.Conflict("signing_source_document_required");
+        }
         if (bytes.Length != file.Length || bytes.Length < 5 || bytes.Length > 10 * 1024 * 1024 || !bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8) || Convert.ToHexString(SHA256.HashData(bytes)) != file.FileHash)
             throw ContractException.Conflict("contract_document_integrity_failed");
         return bytes;

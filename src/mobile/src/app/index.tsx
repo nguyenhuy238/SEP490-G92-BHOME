@@ -7,7 +7,7 @@ import { homeScreen, sessionRole, workspaceTabHref } from '../features/workspace
 import { LoginScreen } from '../screens/LoginScreen';
 import { clearPendingLink, peekPendingLink } from '../lib/pendingLink';
 export default function Index() {
-  const { session, ready, reconnecting, restoreError, retryRestore } = useSession();
+  const { session, ready, reconnecting, restoreError, retryRestore, logout } = useSession();
   const role = session ? sessionRole(session.roles) : null;
   // A link opened before sign-in (e.g. the contract signing email) continues after sign-in, once.
   const pending = role ? peekPendingLink() : null;
@@ -25,6 +25,9 @@ export default function Index() {
       <Page>
         <Text>{restoreError}</Text>
         <Button onPress={() => void retryRestore()}>Thử khôi phục phiên</Button>
+        <Button onPress={() => void logout().catch(() => {})}>
+          Về đăng nhập để đổi địa chỉ API
+        </Button>
       </Page>
     );
   if (!session) return <LoginScreen />;

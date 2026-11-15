@@ -5,6 +5,26 @@ import { useContractDetail } from '../../../../packages/client-core/src/useContr
 import type { ContractClient } from '../../../../packages/client-core/src/contracts';
 
 afterEach(cleanup);
+it('loads backend deposit readiness for Staff without loading financial history', async () => {
+  const readiness = {
+    ready: true,
+    verifiedDeposit: '3000000',
+    remainingDeposit: '0',
+    blockers: [],
+  };
+  const api = {
+    get: vi.fn().mockResolvedValue({ kind: 'Main', status: 'PendingActivation' }),
+    moveOut: vi.fn().mockResolvedValue(null),
+    readiness: vi.fn().mockResolvedValue(readiness),
+    history: vi.fn(),
+  };
+  const { result } = renderHook(() =>
+    useContractDetail(api as unknown as ContractClient, 'main', 'Staff'),
+  );
+  await waitFor(() => expect(result.current.data?.readiness).toEqual(readiness));
+  expect(api.readiness).toHaveBeenCalledWith('main', expect.any(AbortSignal));
+  expect(api.history).not.toHaveBeenCalled();
+});
 it('loads Holding as Holding despite legacy draft metadata and never requests Main move-out data', async () => {
   const api = {
     get: vi.fn().mockResolvedValue({

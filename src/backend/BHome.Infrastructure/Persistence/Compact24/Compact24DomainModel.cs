@@ -46,6 +46,7 @@ internal static class Compact24DomainModel
         contract.Property(x => x.SigningMode);
         contract.Property(x => x.InternalAcceptance);
         contract.Property(x => x.InitialPaymentRequired);
+        contract.Property(x => x.PaymentMode);
         model.Entity<ContractSigningInvitation>().HasKey(x => x.Id);
         model.Entity<BHome.Domain.Billing.InvoiceLine>().Property(x => x.UtilityCalculationSnapshot);
         contract.Property(x => x.ParentContractId); contract.Property(x => x.OperatingPolicySnapshot);

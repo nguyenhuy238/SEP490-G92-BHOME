@@ -125,18 +125,14 @@ it.each([
     expect(create).not.toHaveBeenCalled();
     expect(props.onContinue).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText('Họ và tên *'), { target: { value: 'Người giữ chỗ' } });
-    fireEvent.change(screen.getByLabelText('Email *'), {
-      target: { value: 'holding@example.test' },
-    });
     fireEvent.click(screen.getByText('Tiếp tục'));
-    fireEvent.click(screen.getByText('Đang lưu…'));
     await waitFor(() => expect(props.onContinue).toHaveBeenCalledOnce());
-    expect(create).toHaveBeenCalledExactlyOnceWith('room', 'Người giữ chỗ', 'holding@example.test');
+    expect(create).not.toHaveBeenCalled();
+    expect(props.onCreated).toHaveBeenCalledWith('', 'Người giữ chỗ', '');
     expect(screen.queryByRole('dialog')).toBeNull();
     const saved = {
-      initialResidentId: 'holding-applicant',
+      initialResidentId: '',
       initialName: 'Người giữ chỗ',
-      initialEmail: 'holding@example.test',
     };
     view.rerender(<HoldingNewTenant {...props} {...saved} key="identity" stage="identity" />);
     expect(screen.queryByLabelText('Họ và tên *')).toBeNull();
@@ -147,11 +143,20 @@ it.each([
       (await screen.findByRole('dialog', { name: dialogName })).getAttribute('data-resident'),
     ).toBe('holding-applicant');
     expect(create).toHaveBeenCalledOnce();
+    expect(create).toHaveBeenCalledWith('room', 'Người giữ chỗ');
     fireEvent.click(screen.getByText('Xác nhận từ quy trình CCCD'));
     expect(props.onConfirmed).toHaveBeenCalledOnce();
     expect(screen.getByText('Đã xác minh')).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
-    view.rerender(<HoldingNewTenant {...props} {...saved} key="details-return" stage="details" />);
+    view.rerender(
+      <HoldingNewTenant
+        {...props}
+        {...saved}
+        initialResidentId="holding-applicant"
+        key="details-return"
+        stage="details"
+      />,
+    );
     fireEvent.click(screen.getByText('Tiếp tục'));
     expect(create).toHaveBeenCalledOnce();
     expect(props.onContinue).toHaveBeenCalledTimes(2);
@@ -178,9 +183,6 @@ function fill() {
   fireEvent.change(screen.getByLabelText('Tên người thuê'), {
     target: { value: 'Người thuê mới' },
   });
-  fireEvent.change(screen.getByLabelText('Email người thuê'), {
-    target: { value: 'new@example.test' },
-  });
 }
 it('creates one real resident before opening manual identity entry and reuses that profile on reopen', async () => {
   const { create, created, confirmed, busy } = setup();
@@ -189,8 +191,8 @@ it('creates one real resident before opening manual identity entry and reuses th
   fireEvent.click(screen.getByText('Nhập thông tin CCCD'));
   const dialog = await screen.findByRole('dialog', { name: 'Nhập thủ công CCCD' });
   expect(dialog.getAttribute('data-resident')).toBe('new-resident');
-  expect(create).toHaveBeenCalledExactlyOnceWith('room', 'Người thuê mới', 'new@example.test');
-  expect(created).toHaveBeenCalledWith('new-resident', 'Người thuê mới', 'new@example.test');
+  expect(create).toHaveBeenCalledExactlyOnceWith('room', 'Người thuê mới');
+  expect(created).toHaveBeenCalledWith('new-resident', 'Người thuê mới', '');
   expect(confirmed).not.toHaveBeenCalled();
   expect(busy).toHaveBeenCalledWith(true);
   expect(busy).toHaveBeenLastCalledWith(false);
@@ -244,13 +246,11 @@ it('creates basic information for Owner while keeping Staff-only identity confir
   expect(confirmed).not.toHaveBeenCalled();
   expect(screen.queryByRole('dialog')).toBeNull();
 });
-it('validates name and email before creating a record', () => {
+it('validates name and leaves email for signing', () => {
   const { create } = setup();
   fireEvent.click(screen.getByText('Nhập thông tin CCCD'));
   expect(screen.getByText('Nhập tên người thuê, tối đa 150 ký tự.')).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Tên người thuê'), { target: { value: 'Tên mới' } });
-  fireEvent.click(screen.getByText('Nhập thông tin CCCD'));
-  expect(screen.getByText('Nhập email hợp lệ của người thuê.')).toBeTruthy();
+  expect(screen.queryByLabelText('Email người thuê')).toBeNull();
   expect(create).not.toHaveBeenCalled();
 });
 it('blocks creating again after an ambiguous network result', async () => {
@@ -290,7 +290,6 @@ it('maps new tenant fields to the existing ResidentInput without changing the ba
       roomId: 'room',
       displayLabel: 'Tên mới',
       residentType: 0,
-      email: 'new@example.test',
     }),
   });
 });
@@ -314,9 +313,6 @@ it('uses Holding applicant labels and returns only verified name/date for confir
   expect(screen.queryByLabelText('Tên người thuê')).toBeNull();
   expect(screen.queryByRole('combobox')).toBeNull();
   fireEvent.change(screen.getByLabelText('Họ và tên *'), { target: { value: 'Tên đăng ký' } });
-  fireEvent.change(screen.getByLabelText('Email *'), {
-    target: { value: 'applicant@example.test' },
-  });
   fireEvent.click(screen.getByText('Nhập thông tin CCCD'));
   await screen.findByRole('dialog', { name: 'Nhập thủ công CCCD' });
   fireEvent.click(screen.getByText('Xác nhận từ quy trình CCCD'));

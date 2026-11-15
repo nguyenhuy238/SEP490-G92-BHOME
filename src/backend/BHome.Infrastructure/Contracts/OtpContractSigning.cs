@@ -183,9 +183,12 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         SigningAppearance appearance, CancellationToken t)
     {
         // Fail before anything is stored: without an email channel or an address the code could never arrive.
-        if (!channel.IsConfigured("EMAIL")) throw new ContractException(503, "otp_email_unavailable");
+        var session = SigningMethods.IsOwnerSession(appearance.Method);
+        if (session && (!user.IsInRole(BHome.Domain.IdentityAccess.Roles.Owner) || document.OwnerSignerId != Actor))
+            throw new ContractException(403, "owner_session_signing_owner_only");
+        if (!session && !channel.IsConfigured("EMAIL")) throw new ContractException(503, "otp_email_unavailable");
         var (email, name) = await parties.FindAsync(Actor, t);
-        if (email is null) throw ContractException.Conflict("signer_email_required");
+        if (!session && email is null) throw ContractException.Conflict("signer_email_required");
         var reviewed = await documents.ReadAsync(document, t);
         if (reviewed is null) await renderer.ValidateAsync(document, t);
         var source = previousPdf ?? reviewed ?? await renderer.RenderAsync(document, t);
@@ -204,7 +207,8 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         try { prepared = pdf.Prepare(source, seal.Chain, now, visible); }
         catch (ArgumentException) { throw ContractException.Invalid("signature_placement_invalid"); }
         return new(source, prepared.PreparedPdf, prepared.FieldName, Convert.ToBase64String(prepared.DocumentDigest),
-            Convert.ToBase64String(prepared.DataToSignDigest), seal.EncodedChain, Actor.ToString(), ContractSigningRouter.OtpCredential);
+            Convert.ToBase64String(prepared.DataToSignDigest), seal.EncodedChain, Actor.ToString(),
+            session ? ContractSigningRouter.OwnerSessionCredential : ContractSigningRouter.OtpCredential);
     }
 
     public async Task<string> RequestAsync(ContractSignature signature, CancellationToken t)
@@ -215,7 +219,15 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
 
     // The code only arrives by email; until it is typed the signature stays Pending. Too many wrong codes fail it.
     public async Task<SigningOutcome> PollAsync(ContractSignature signature, byte[] preparedPdf, CancellationToken t)
-        => (await challenges.ReadAsync(signature.Id, t)) is { Locked: true } ? new("Failed") : new("Pending");
+    {
+        if (signature.CredentialId == ContractSigningRouter.OwnerSessionCredential)
+        {
+            if (signature.SignerUserId != Actor || !user.IsInRole(BHome.Domain.IdentityAccess.Roles.Owner))
+                throw new ContractException(403, "owner_session_signing_owner_only");
+            return Seal(signature, preparedPdf);
+        }
+        return (await challenges.ReadAsync(signature.Id, t)) is { Locked: true } ? new("Failed") : new("Pending");
+    }
 
     public async Task<SigningOutcome> ConfirmAsync(ContractSignature signature, byte[] preparedPdf, string code, CancellationToken t)
     {
@@ -228,6 +240,11 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
             case SigningOtpChallenges.Check.Expired or SigningOtpChallenges.Check.Missing: throw ContractException.Conflict("otp_expired");
             case SigningOtpChallenges.Check.Locked: return new("Failed");
         }
+        return Seal(signature, preparedPdf);
+    }
+
+    private SigningOutcome Seal(ContractSignature signature, byte[] preparedPdf)
+    {
         var raw = seal.Sign(Convert.FromBase64String(signature.DataToSignDigest));
         try
         {

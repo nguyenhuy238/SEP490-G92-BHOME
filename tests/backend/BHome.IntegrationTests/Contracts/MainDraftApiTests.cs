@@ -126,7 +126,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         var input = Input(w) with { TenantEmail = "  synthetic.contact@example.invalid  ", TenantPlaceOfIssue = "" };
         var key = Guid.NewGuid();
         var draft = await Save(w, input, key);
-        Assert.Equal("synthetic.contact@example.invalid", draft.Input.TenantEmail);
+        Assert.Null(draft.Input.TenantEmail);
         Assert.Equal(draft.Id, (await Save(w, input, key)).Id);
         var reopened = await w.Staff.GetFromJsonAsync<MainDraftView>($"{Root}/{draft.Id}");
         Assert.Equal(draft.Input.TenantEmail, reopened!.Input.TenantEmail);
@@ -140,6 +140,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         using var invalid = new HttpRequestMessage(HttpMethod.Put, $"{Root}/{draft.Id}")
         { Content = JsonContent.Create(input with { TenantEmail = "invalid email", ExpectedVersion = draft.Version }) };
         invalid.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        // Optional legacy input still has API-level syntax validation; valid contacts are not persisted.
         Assert.Equal(HttpStatusCode.BadRequest, (await w.Staff.SendAsync(invalid)).StatusCode);
         // Adding an optional contact must not change serialization/snapshots of older drafts.
         Assert.DoesNotContain("TenantEmail", JsonSerializer.Serialize(Input(w)));
