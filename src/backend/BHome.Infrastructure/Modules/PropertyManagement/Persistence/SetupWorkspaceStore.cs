@@ -85,6 +85,65 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
             throw new PropertyException(409, "stale_version");
         return doc;
     }
+    public async Task<IReadOnlyList<SetupDocument>> SaveBatchAsync(Guid locationId, IReadOnlyList<SetupDocumentWrite> documents, Guid actor, CancellationToken t)
+    {
+        if (documents.Count == 0) return [];
+        if (documents.Count > 5000 || documents.Any(d => d.Id == Guid.Empty || d.ExpectedVersion < 0) ||
+            documents.Select(d => d.Id).Distinct().Count() != documents.Count)
+            throw new PropertyException(400, "invalid_setup_document_batch");
+        var now = sql.Now;
+        var savedDocuments = new List<SetupDocument>(documents.Count);
+        var prepared = documents.Select(write =>
+        {
+            var payload = JsonSerializer.SerializeToNode(write.Data, Json) as System.Text.Json.Nodes.JsonObject
+                ?? throw new PropertyException(400, "invalid_setup_document");
+            payload.Remove("expectedVersion");
+            var document = new SetupDocument(write.Id, locationId, write.Kind, write.Status, write.ExpectedVersion + 1,
+                JsonSerializer.SerializeToElement(payload, Json), now, actor);
+            savedDocuments.Add(document);
+            return new
+            {
+                id = write.Id,
+                location_id = locationId,
+                source_key = $"setup:{write.Kind}:{write.Id:N}",
+                title = write.Kind,
+                status = write.Status,
+                version = document.Version,
+                expected_version = write.ExpectedVersion,
+                task_data = JsonSerializer.SerializeToElement(new { recordType = "Setup" + write.Kind, document }, Json),
+                history = JsonSerializer.SerializeToElement(new[] { new { actorId = actor, occurredAt = now, action = write.Status, document } }, Json)
+            };
+        }).ToArray();
+        var payloadJson = JsonSerializer.Serialize(prepared, Json);
+        var count = await sql.Scalar<int>("""
+            WITH input AS (
+                SELECT * FROM jsonb_to_recordset(@documents::jsonb) AS d(
+                    id uuid, location_id uuid, source_key text, title text, status text,
+                    version integer, expected_version integer, task_data jsonb, history jsonb)
+            ), written AS (
+                INSERT INTO operational_tasks(id,task_type,location_id,source_key,title,status,task_data,history,version)
+                SELECT id,'SYSTEM_JOB',location_id,source_key,title,status,task_data,history,version
+                FROM input
+                WHERE expected_version=0 OR EXISTS (
+                    SELECT 1 FROM operational_tasks existing WHERE existing.id=input.id
+                )
+                ON CONFLICT(id) DO UPDATE SET
+                    task_data=EXCLUDED.task_data,
+                    history=operational_tasks.history||EXCLUDED.history,
+                    status=EXCLUDED.status,
+                    version=operational_tasks.version+1
+                WHERE (SELECT expected_version FROM input WHERE id=EXCLUDED.id)>0
+                  AND operational_tasks.version=(SELECT expected_version FROM input WHERE id=EXCLUDED.id)
+                  AND operational_tasks.location_id=EXCLUDED.location_id
+                  AND operational_tasks.task_type='SYSTEM_JOB'
+                  AND operational_tasks.task_data->>'recordType'=EXCLUDED.task_data->>'recordType'
+                RETURNING id
+            )
+            SELECT count(*)::integer FROM written
+            """, t, ("documents", payloadJson));
+        if (count != documents.Count) throw new PropertyException(409, "stale_version");
+        return savedDocuments;
+    }
     public Task<Guid?> RoomLocationAsync(Guid roomId, CancellationToken t) => db.Set<Room>().Where(r => r.Id == roomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t);
     public async Task<(Guid LocationId, BHome.Domain.Billing.UtilityType Type)?> MeterScopeAsync(Guid meterId, CancellationToken t)
     {
@@ -105,6 +164,82 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         return list;
     }
     public async Task<IReadOnlyList<Guid>> RoomsAsync(Guid locationId, CancellationToken t) => await db.Set<Room>().Where(r => r.LocationId == locationId).OrderBy(r => r.Id).Select(r => r.Id).ToArrayAsync(t);
+    public async Task<IReadOnlyList<Room>> ReviewRoomsAsync(Guid locationId, CancellationToken t) =>
+        await db.Set<Room>().AsNoTracking().Where(r => r.LocationId == locationId).OrderBy(r => r.RoomNumber).ThenBy(r => r.Id).ToArrayAsync(t);
+    public async Task<IReadOnlyList<RoomInventoryPhysicalAsset>> ReviewRoomAssetsAsync(Guid locationId, CancellationToken t)
+    {
+        var rows = await db.Set<Asset>().AsNoTracking()
+            .Where(a => a.LocationId == locationId && a.RoomId != null && a.Status != AssetStatus.Retired)
+            .OrderBy(a => a.Id)
+            .Select(a => new { Asset = a, PurchaseInfo = EF.Property<string>(a, "PurchaseInfo") })
+            .ToArrayAsync(t);
+        return rows.Select(row =>
+        {
+            using var data = JsonDocument.Parse(row.PurchaseInfo ?? "{}");
+            var metadata = data.RootElement.TryGetProperty("trackingMode", out _)
+                ? data.RootElement.Deserialize<AssetMetadata>(Json)!
+                : new AssetMetadata("Serialized", 1, null, null, null);
+            return new RoomInventoryPhysicalAsset(row.Asset, metadata);
+        }).ToArray();
+    }
+    public async Task<IReadOnlyList<SetupDocument>> ReviewDocumentsAsync(Guid locationId, Guid[] activeAssetIds, CancellationToken t)
+    {
+        string[] kinds = ["SetupAssetTemplate", "SetupAssetTemplateAssignment", "SetupRoomProvenance", "SetupDesiredAssets", "SetupRoomInventoryChecklistReview"];
+        await using var cmd = await sql.Command("""
+            SELECT task_data->'document' FROM operational_tasks WHERE location_id=@location AND task_type='SYSTEM_JOB'
+                AND (task_data->>'recordType'=ANY(@kinds) OR
+                    (task_data->>'recordType'='SetupAssetVerification' AND
+                     (task_data->'document'->'data'->>'assetId')::uuid=ANY(@assets)))
+            ORDER BY id
+            """, t, ("location", locationId), ("kinds", kinds), ("assets", activeAssetIds));
+        await using var reader = await cmd.ExecuteReaderAsync(t);
+        var documents = new List<SetupDocument>();
+        while (await reader.ReadAsync(t)) documents.Add(JsonSerializer.Deserialize<SetupDocument>(reader.GetString(0), Json)!);
+        return documents;
+    }
+    public async Task<IReadOnlyList<SetupDocument>> EvidenceDocumentsAsync(Guid locationId, Guid[] evidenceIds, CancellationToken t)
+    {
+        if (evidenceIds.Length == 0) return [];
+        await using var cmd = await sql.Command("""
+            SELECT task_data->'document' FROM operational_tasks
+            WHERE location_id=@location AND task_type='SYSTEM_JOB' AND task_data->>'recordType'='SetupEvidence'
+              AND id=ANY(@ids)
+            ORDER BY id
+            """, t, ("location", locationId), ("ids", evidenceIds));
+        await using var reader = await cmd.ExecuteReaderAsync(t);
+        var documents = new List<SetupDocument>();
+        while (await reader.ReadAsync(t)) documents.Add(JsonSerializer.Deserialize<SetupDocument>(reader.GetString(0), Json)!);
+        return documents;
+    }
+    public async Task SaveInventoryAssetsAsync(Guid locationId, IReadOnlyList<AssetInventoryCreation> assets, Guid actor, CancellationToken t)
+    {
+        if (assets.Count == 0) return;
+        if (assets.Count > 1000 || assets.Any(x => x.Asset.LocationId != locationId || x.Asset.RoomId is null ||
+            x.Asset.Status == AssetStatus.Retired || x.Metadata.Quantity < 1 || string.IsNullOrWhiteSpace(x.Asset.Code)) ||
+            assets.Select(x => x.Asset.Id).Distinct().Count() != assets.Count ||
+            assets.Select(x => x.Asset.Code!.Trim().ToUpperInvariant()).Distinct().Count() != assets.Count)
+            throw new PropertyException(400, "invalid_inventory_asset_batch");
+        var codes = assets.Select(x => x.Asset.Code!.Trim().ToUpper()).ToArray();
+        if (await db.Set<Asset>().AnyAsync(a => a.LocationId == locationId && a.Code != null && codes.Contains(a.Code.Trim().ToUpper()), t))
+            throw new PropertyException(409, "duplicate_asset_code");
+        foreach (var entry in assets)
+        {
+            db.Add(entry.Asset);
+            db.Entry(entry.Asset).Property<string>("PurchaseInfo").CurrentValue = JsonSerializer.Serialize(entry.Metadata, Json);
+            db.Add(new PropertyChange
+            {
+                ActorId = actor,
+                LocationId = locationId,
+                TargetId = entry.Asset.Id,
+                TargetType = nameof(Asset),
+                Action = "InventoryChanged",
+                Reason = entry.Reason,
+                After = JsonSerializer.Serialize(entry.Asset, Json),
+                OccurredAt = sql.Now
+            });
+        }
+        await db.SaveChangesAsync(t);
+    }
     public async Task<string?> RoomConfigurationLockReasonAsync(Guid roomId, CancellationToken t)
     {
         var room = await db.Set<Room>().AsNoTracking().Where(r => r.Id == roomId)
@@ -126,7 +261,20 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         if (await RoomConfigurationLockReasonAsync(roomId, t) is not null) return false;
         return (await new PropertyLifecycleChecks(db).RoomBlockersAsync(roomId, t)).Count == 0;
     }
-    public Task<Asset?> AssetAsync(Guid id, CancellationToken t) => db.Set<Asset>().SingleOrDefaultAsync(a => a.Id == id, t);
+    public async Task<Asset?> AssetAsync(Guid id, CancellationToken t)
+    {
+        var tracked = db.ChangeTracker.Entries<Asset>().SingleOrDefault(entry => entry.Entity.Id == id);
+        if (tracked is not null)
+        {
+            await tracked.ReloadAsync(t);
+            return tracked.State == EntityState.Detached ? null : tracked.Entity;
+        }
+        return await db.Set<Asset>().SingleOrDefaultAsync(a => a.Id == id, t);
+    }
+    public Task<bool> HasOpenAssetWorkAsync(Guid id, CancellationToken t) =>
+        db.Set<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>().AnyAsync(w => w.AssetId == id &&
+            w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Verified &&
+            w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Cancelled, t);
     public async Task<IReadOnlyList<AssetHistoryEntry>> AssetHistoryAsync(Guid assetId, CancellationToken t) => await db.Set<PropertyChange>().AsNoTracking()
         .Where(a => a.TargetId == assetId && a.TargetType == nameof(Asset)).OrderByDescending(a => a.OccurredAt).ThenBy(a => a.Id)
         .Select(a => new AssetHistoryEntry(a.Id, a.Action, a.Reason, a.OccurredAt, a.ActorId, a.After)).Take(1000).ToArrayAsync(t);
@@ -148,8 +296,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     {
         if (!string.IsNullOrWhiteSpace(asset.Code) && await db.Set<Asset>().AnyAsync(a => a.LocationId == asset.LocationId && a.Id != asset.Id && a.Code != null && a.Code.Trim().ToUpper() == asset.Code.Trim().ToUpper(), t))
             throw new PropertyException(409, "duplicate_asset_code");
-        if (asset.Status == AssetStatus.Retired && await db.Set<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>().AnyAsync(w => w.AssetId == asset.Id &&
-            w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Verified && w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Cancelled, t))
+        if (asset.Status == AssetStatus.Retired && await HasOpenAssetWorkAsync(asset.Id, t))
             throw new PropertyException(409, "asset_workflow_controlled");
         if (db.Entry(asset).State == EntityState.Detached) db.Add(asset);
         db.Add(new PropertyChange
@@ -199,7 +346,14 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         using var bytes = new MemoryStream(); await storage.CopyToAsync(objectKey, bytes, t);
         return Convert.ToHexString(SHA256.HashData(bytes.ToArray())) == hash ? hash : null;
     }
-    public async Task<string> UploadEvidenceAsync(Guid locationId, byte[] bytes, string contentType, Guid actor, CancellationToken t)
+    public Task<Guid?> EvidenceIdAsync(Guid locationId, string objectKey, CancellationToken t) =>
+        sql.Scalar<Guid?>("""
+            SELECT id FROM operational_tasks
+            WHERE location_id=@location AND task_type='SYSTEM_JOB'
+              AND task_data->>'recordType'='SetupEvidence'
+              AND task_data->'document'->'data'->>'objectKey'=@key
+            """, t, ("location", locationId), ("key", objectKey));
+    public async Task<SetupEvidenceUpload> UploadEvidenceAsync(Guid locationId, byte[] bytes, string contentType, Guid actor, CancellationToken t)
     {
         var id = Guid.NewGuid(); var key = $"setup/{locationId:N}/evidence/{id:N}";
         using var stream = new MemoryStream(bytes); await storage.PutAsync(key, stream, bytes.Length, contentType, t);
@@ -209,6 +363,6 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
             new { objectKey = key, hash = Convert.ToHexString(SHA256.HashData(bytes)), contentType, length = bytes.Length }, 0, actor, t), t);
         }
         catch { await storage.DeleteAsync(key, CancellationToken.None); throw; }
-        return key;
+        return new(id, key);
     }
 }

@@ -44,7 +44,12 @@ public sealed class SharedConfigurationApplicationService(ISharedConfigurationSt
             if (input.RoomId.HasValue) conflicts.Add("Thao tác này tạo cấu hình theo cơ sở, không chọn phòng.");
             var records = await local.ListAsync(input.LocationId, kind, t);
             if (records.Any(d => d.Data.TryGetProperty("name", out var name) && string.Equals(name.GetString(), source.Name, StringComparison.OrdinalIgnoreCase) || d.Data.TryGetProperty("title", out var title) && string.Equals(title.GetString(), source.Name, StringComparison.OrdinalIgnoreCase))) conflicts.Add("Cơ sở đích đã có cấu hình cùng tên.");
-            if (resource == "asset-templates" && !Data<SharedAssetData>(source).Items.Any(i => i.Required || input.IncludeOptionalItems)) conflicts.Add("Gói đã chọn không còn mục nào để áp dụng.");
+            if (resource == "asset-templates")
+            {
+                var items = Data<SharedAssetData>(source).Items.Where(i => i.Required || input.IncludeOptionalItems).ToArray();
+                if (items.Length == 0) conflicts.Add("Gói đã chọn không còn mục nào để áp dụng.");
+                if (items.Any(i => i.Catalog?.Scope == "Location")) conflicts.Add("Gói có tài sản chung của cơ sở; hãy thiết lập trong mục tài sản chung của cơ sở.");
+            }
         }
         return new(id, input.LocationId, Hash(state), conflicts.Count == 0, [$"Tạo cấu hình độc lập: {source.Name} · phiên bản {source.Edition}."], conflicts.ToArray(), []);
     }

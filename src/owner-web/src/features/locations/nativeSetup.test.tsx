@@ -8,6 +8,7 @@ import {
   sharedConfigurationClient,
   type SharedDocument,
   type SharedResource,
+  type SharedWrite,
 } from '../../../../../packages/client-core/src/sharedConfiguration';
 import type { LocationSetupInput } from '../../../../../packages/client-core/src/locationSetup';
 import { createSeed } from '../../services/mock/seed';
@@ -146,7 +147,11 @@ function mockReads(path: string) {
 function button(name: string | RegExp, scope = screen) {
   return scope.getByRole('button', { name });
 }
-function fill(label: string | RegExp, value: string, scope = screen) {
+function fill(
+  label: string | RegExp,
+  value: string,
+  scope: Pick<typeof screen, 'getByLabelText'> = screen,
+) {
   fireEvent.change(scope.getByLabelText(label), { target: { value } });
 }
 function next() {
@@ -216,31 +221,106 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('refreshes newly published templates without losing the current setup draft', async () => {
-  let published = false;
-  state.request.mockImplementation(async (path: string) => {
-    if (path.startsWith('/api/v1/shared-configuration/room-type-templates?')) {
-      const item = {
-        ...template,
-        name: 'New room template',
-        status: published ? 'Published' : 'Draft',
-      };
-      return { items: [item], total: 1, page: 1, pageSize: 100 };
+it('creates, publishes and selects all four kinds of shared templates without leaving the setup draft', async () => {
+  const documents: SharedDocument[] = [];
+  let failAssetPublish = true;
+  const prefix = '/api/v1/shared-configuration/';
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (!path.startsWith(prefix)) return mockReads(path);
+    const [resource, id, action] = path.slice(prefix.length).split('?')[0].split('/');
+    const current = documents.find((doc) => doc.id === id);
+    if (action === 'publish' && current) {
+      if (resource === 'asset-catalog' && failAssetPublish) {
+        failAssetPublish = false;
+        throw new Error('Synthetic publish failure');
+      }
+      expect(JSON.parse(String(init?.body)).expectedVersion).toBe(current.version);
+      current.status = 'Published';
+      current.version += 1;
+      return { ...current };
     }
-    return mockReads(path);
+    if (init?.method === 'POST' || init?.method === 'PUT') {
+      const input = JSON.parse(String(init.body)) as SharedWrite;
+      const doc: SharedDocument = {
+        ...template,
+        ...input,
+        resource: resource as SharedResource,
+        id: current?.id ?? resource + '-created',
+        familyId: current?.familyId ?? resource + '-family',
+        version: (current?.version ?? 0) + 1,
+        status: 'Draft',
+      };
+      expect(input.expectedVersion).toBe(current?.version ?? 0);
+      if (current) documents.splice(documents.indexOf(current), 1, doc);
+      else documents.push(doc);
+      return { ...doc };
+    }
+    if (current) return { ...current };
+    const items = documents.filter((doc) => doc.resource === resource).map((doc) => ({ ...doc }));
+    return { items, total: items.length, page: 1, pageSize: 100 };
   });
   mount(<LocationSetupWizard locations={[]} onClose={vi.fn()} onComplete={vi.fn()} />);
   enterInfo();
-  expect(await screen.findByText('New room template · Bản nháp, cần công bố')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Thêm New room template' })).not.toBeInTheDocument();
-  published = true;
-  fireEvent.click(button('Làm mới mẫu'));
+  const open = async (action: string, title: string) => {
+    const trigger = await screen.findByRole('button', { name: action });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.click(trigger);
+    return within(await screen.findByRole('dialog', { name: title }));
+  };
+  const publish = (dialog: ReturnType<typeof within>) =>
+    fireEvent.click(dialog.getByRole('button', { name: 'Lưu và công bố' }));
+  const room = await open('Thêm mẫu loại phòng', 'Tạo mẫu loại phòng');
+  expect(screen.queryByRole('button', { name: 'Làm mới mẫu' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Mở thư viện mẫu' })).not.toBeInTheDocument();
+  fill(/Tên mẫu/, 'New room template', room);
+  fill(/Sức chứa/, '2', room);
+  fill(/Diện tích/, '25', room);
+  fill(/Giá thuê tham khảo/, '3000000', room);
+  publish(room);
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm New room template' }));
   expect(screen.getByText('Cấu hình riêng (1)')).toBeInTheDocument();
-  expect(JSON.parse(sessionStorage.getItem(draftKey)!).location.name).toBe(
-    'Synthetic native setup',
-  );
-});
+  next();
+  generate();
+  const asset = await open('Thêm loại tài sản mới', 'Tạo loại tài sản');
+  fill(/Tên mẫu/, 'New desk', asset);
+  fill(/Giá tham khảo/, '300000', asset);
+  publish(asset);
+  expect(await screen.findByText(/Bản nháp đã được lưu/)).toBeInTheDocument();
+  expect(documents.filter((doc) => doc.resource === 'asset-catalog')).toHaveLength(1);
+  publish(within(screen.getByRole('dialog', { name: 'Sửa loại tài sản' })));
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm New desk' }));
+  expect(
+    within(screen.getByRole('list', { name: 'Tài sản đã chọn' })).getByText('New desk'),
+  ).toBeVisible();
+  next();
+  const fee = await open('Thêm mẫu biểu phí', 'Tạo mẫu giá & biểu phí');
+  fill(/Tên mẫu/, 'New wifi', fee);
+  fill(/Mã khoản thu/, 'WIFI', fee);
+  fill(/Đơn giá tham khảo/, '30000', fee);
+  const effectiveFrom = JSON.parse(sessionStorage.getItem(draftKey)!).rentEffectiveFrom;
+  fill(/Hiệu lực từ/, effectiveFrom, fee);
+  publish(fee);
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm New wifi' }));
+  next();
+  const rule = await open('Thêm mẫu nội quy', 'Tạo mẫu chính sách');
+  fill(/Tên mẫu/, 'New rule', rule);
+  fill(/Nội dung nội quy/, 'Giữ yên tĩnh.', rule);
+  fill(/Hiệu lực từ/, effectiveFrom, rule);
+  publish(rule);
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm New rule' }));
+  expect(documents).toHaveLength(4);
+  expect(documents.every((doc) => doc.status === 'Published')).toBe(true);
+  expect(
+    state.request.mock.calls.filter(
+      ([path, init]) => path === prefix + 'asset-catalog' && init?.method === 'POST',
+    ),
+  ).toHaveLength(1);
+  const draft = JSON.parse(sessionStorage.getItem(draftKey)!);
+  expect(draft.location.name).toBe('Synthetic native setup');
+  expect(draft.roomTypes[0].assets[0].name).toBe('New desk');
+  expect(draft.fees[0].sourceId).toBe('fee-templates-created');
+  expect(draft.rules[0].sourceId).toBe('policy-templates-created');
+}, 30000);
 
 it('resumes the draft, reads the four selectable libraries and loads the whole asset catalog once', async () => {
   let published = false;
@@ -258,6 +338,13 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
       ...catalog,
       id: 'second-catalog',
       name: 'Giường đôi',
+      data: { ...catalog.data, scope: 'Room' },
+    },
+    {
+      ...catalog,
+      id: 'common-catalog',
+      name: 'Camera hành lang',
+      data: { ...catalog.data, scope: 'Location', unit: 'Bộ' },
     },
     {
       ...template,
@@ -340,6 +427,20 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   expect(button('Nạp toàn bộ danh mục')).toBeDisabled();
   expect(selectedAssets.getAllByLabelText('Số lượng', { exact: true })).toHaveLength(2);
   expect(screen.queryByLabelText('Theo dõi', { exact: true })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Thêm Camera hành lang' })).not.toBeInTheDocument();
+  fireEvent.click(button('Tài sản chung cơ sở'));
+  expect(screen.queryByLabelText('Cách quản lý')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Thêm Giường đôi' })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm Camera hành lang' }));
+  expect(screen.getByText('Đơn vị: Bộ')).toBeVisible();
+  fill(/Khu vực sử dụng/, 'Hành lang tầng 1');
+  fill('Số lượng', '3');
+  fireEvent.click(button('Tài sản theo phòng'));
+  expect(
+    within(screen.getByRole('list', { name: 'Tài sản đã chọn' })).getAllByRole('listitem'),
+  ).toHaveLength(2);
+  fireEvent.click(button('Tài sản chung cơ sở'));
+  expect(screen.getByLabelText(/Khu vực sử dụng/)).toHaveValue('Hành lang tầng 1');
   next();
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm Phí vệ sinh' }));
   const preview = within(
@@ -376,8 +477,19 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   );
   expect(payload(writes()[0]).fees[0]).toMatchObject({ method: 2, rate: '30000' });
   expect(payload(writes()[0]).roomTypes[0].assets).toEqual([
-    expect.objectContaining({ name: 'Bàn học', quantity: 4, trackingMode: 'Serialized' }),
-    expect.objectContaining({ name: 'Giường đôi', quantity: 1, trackingMode: 'Serialized' }),
+    expect.objectContaining({ name: 'Bàn học', quantity: 4, trackingMode: 'BulkQuantity' }),
+    expect.objectContaining({ name: 'Giường đôi', quantity: 1, trackingMode: 'BulkQuantity' }),
+  ]);
+  expect(payload(writes()[0]).commonAssets).toEqual([
+    {
+      id: expect.any(String),
+      name: 'Camera hành lang',
+      category: 'Nội thất',
+      quantity: 3,
+      trackingMode: 'BulkQuantity',
+      unit: 'Bộ',
+      commonArea: 'Hành lang tầng 1',
+    },
   ]);
 }, 30000);
 

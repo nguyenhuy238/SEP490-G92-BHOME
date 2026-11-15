@@ -347,7 +347,7 @@ function RoomConfigurationForm({
           </Box>
           {typeChanged && (
             <Typography variant="caption" color="text.secondary">
-              Định mức trang bị vẫn giữ nguyên nếu không chỉnh sửa phần tài sản.
+              Tài sản được cấu hình vẫn giữ nguyên nếu không chỉnh sửa phần tài sản.
             </Typography>
           )}
           {!!defaultsError && (
@@ -402,10 +402,10 @@ function RoomConfigurationForm({
           <Divider />
           <Stack spacing={0.5}>
             <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
-              Định mức trang bị của phòng
+              Tài sản được cấu hình cho phòng
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Thay đổi chỉ áp dụng cho phòng này. Tài sản vật lý đã ghi nhận (
+              Thay đổi chỉ áp dụng cho phòng này. Tài sản thực tế đã ghi nhận (
               {initial.inventory.physical.length} bản ghi) được giữ nguyên để kiểm kê.
             </Typography>
           </Stack>
@@ -417,7 +417,9 @@ function RoomConfigurationForm({
               </Typography>
               {initial.inventory.physical.map((asset) => (
                 <Typography key={asset.id} variant="body2" color="text.secondary">
-                  {asset.name} · {asset.code || 'Chưa có mã'} · {asset.condition}
+                  {asset.name} ·{' '}
+                  {initial.inventory.metadata?.[asset.id]?.quantity ?? '—'}{' '}
+                  {initial.inventory.metadata?.[asset.id]?.unit ?? ''} · {asset.condition}
                 </Typography>
               ))}
             </Box>

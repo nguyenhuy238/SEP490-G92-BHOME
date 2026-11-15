@@ -17,6 +17,10 @@ export interface AssetCatalogData {
   category: string;
   unit: string;
   referencePrice: DecimalValue;
+  scope?: 'Room' | 'Location' | 'Both';
+}
+export function assetCatalogSupportsScope(data: AssetCatalogData, scope: 'Room' | 'Location') {
+  return !data.scope || data.scope === 'Both' || data.scope === scope;
 }
 export interface SharedAssetItem {
   catalogId: string;

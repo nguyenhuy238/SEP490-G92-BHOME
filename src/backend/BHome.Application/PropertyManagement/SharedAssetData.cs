@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace BHome.Application.PropertyManagement;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SharedCatalogSnapshot(Guid FamilyId, int Edition, string Name, string Category, string Unit, decimal ReferencePrice);
+public sealed record SharedCatalogSnapshot(Guid FamilyId, int Edition, string Name, string Category, string Unit, decimal ReferencePrice, string? Scope = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SharedAssetItem(Guid CatalogId, int CatalogVersion, [property: JsonRequired] int Quantity,
     [property: JsonRequired] bool Required, string TrackingMode, SharedCatalogSnapshot? Catalog = null);
@@ -12,7 +12,7 @@ public sealed record SharedAssetData(SharedAssetItem[] Items);
 
 public sealed partial class SharedDataValidator
 {
-    private async Task<SharedAssetData> AssetsAsync(SharedAssetData input, CancellationToken t)
+    private async Task<SharedAssetData> AssetsAsync(SharedAssetData input, CancellationToken t, bool roomOnly = false)
     {
         if (input.Items is null || input.Items.Length is < 1 or > 100) throw new PropertyException(400, "invalid_shared_asset_items");
         var items = new List<SharedAssetItem>(); var families = new HashSet<Guid>();
@@ -23,7 +23,8 @@ public sealed partial class SharedDataValidator
             if (catalog.Status != "Published" || catalog.Version != item.CatalogVersion) throw new PropertyException(409, "shared_catalog_stale_or_unpublished");
             if (!families.Add(catalog.FamilyId)) throw new PropertyException(400, "duplicate_shared_catalog_item");
             var data = Read<SharedCatalogData>(catalog.Data);
-            items.Add(item with { Catalog = new(catalog.FamilyId, catalog.Edition, catalog.Name, data.Category, data.Unit, data.ReferencePrice) });
+            if (roomOnly && data.Scope == "Location") throw new PropertyException(400, "asset_catalog_room_scope_required");
+            items.Add(item with { Catalog = new(catalog.FamilyId, catalog.Edition, catalog.Name, data.Category, data.Unit, data.ReferencePrice, data.Scope ?? "Both") });
         }
         return new(items.ToArray());
     }

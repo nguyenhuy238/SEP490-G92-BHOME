@@ -21,19 +21,17 @@ export function SetupBillingPreview({
   rentDate: string;
 }) {
   const [roomKey, setRoomKey] = useState('');
-  const [date, setDate] = useState('');
   const [people, setPeople] = useState('1');
   const [kwh, setKwh] = useState('100');
   const [water, setWater] = useState('10');
   const room = rooms.find((item) => item.key === roomKey) ?? rooms[0];
   const roomType = roomTypes.find((item) => item.key === room?.roomTypeKey);
-  const previewDate = date || rentDate;
   const result = calculateSetupPreview({
     room,
     roomType,
     fees,
     rentDate,
-    date: previewDate,
+    date: rentDate,
     people,
     kwh,
     water,
@@ -51,7 +49,8 @@ export function SetupBillingPreview({
             Mô phỏng chi phí hàng tháng của phòng
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Dự kiến theo giá đang thiết lập và mức sử dụng giả định; không tạo hóa đơn.
+            Dự kiến theo biểu phí có hiệu lực tại ngày bắt đầu giá thuê và mức sử dụng giả định;
+            không tạo hóa đơn.
           </Typography>
         </Box>
         <Box
@@ -85,13 +84,6 @@ export function SetupBillingPreview({
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              type="date"
-              label="Ngày tính mô phỏng"
-              value={previewDate}
-              onChange={(e) => setDate(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: rentDate } }}
-            />
             <Box
               sx={{
                 display: 'grid',

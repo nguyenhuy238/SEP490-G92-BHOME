@@ -36,6 +36,7 @@ public sealed class PropertyQuery
     public RoomStatus? RoomStatus { get; set; }
     public AssetStatus? AssetStatus { get; set; }
     public bool CommonAreaOnly { get; set; }
+    public bool RoomAssetsOnly { get; set; }
     public ChargeCategory? ChargeCategory { get; set; }
     public DateOnly? EffectiveOn { get; set; }
 }
@@ -68,7 +69,8 @@ public sealed record AssetWrite(Guid LocationId, Guid? RoomId, [StringLength(200
     [StringLength(80)] string? Code, [Required, StringLength(150)] string Name,
     [Required, StringLength(80)] string Category, [Required, StringLength(1000)] string Condition,
     AssetStatus Status = AssetStatus.Active, int Version = 0, [StringLength(500)] string Reason = "",
-    [StringLength(80)] string? InitialUnit = null);
+    [StringLength(80)] string? InitialUnit = null,
+    string? InitialTrackingMode = null, int? InitialQuantity = null);
 [System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
 public sealed record AssetConditionUpdate([Required, StringLength(1000)] string Condition,
     [Range(1, int.MaxValue)] int Version, [Required, StringLength(500)] string Reason);
@@ -92,7 +94,8 @@ public sealed record RoomTypeDto(Guid Id, Guid LocationId, string Name, string? 
     int DefaultCapacity, decimal? AreaM2, string[] Amenities, bool IsActive, int Version);
 public sealed record BulkRoomResult(IReadOnlyList<RoomDto> Rooms);
 public sealed record AssetDto(Guid Id, Guid LocationId, Guid? RoomId, string? CommonArea,
-    string? Code, string Name, string Category, string Condition, AssetStatus Status, int Version);
+    string? Code, string Name, string Category, string Condition, AssetStatus Status, int Version,
+    string TrackingMode = "Serialized", int Quantity = 1, string? Unit = null);
 public sealed record PolicyDto(Guid Id, Guid LocationId, Guid? RoomId,
     ChargeCategory Category, string ChargeCode, string Name, ChargingMethod Method,
     [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.WriteAsString | System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString)] decimal Rate,

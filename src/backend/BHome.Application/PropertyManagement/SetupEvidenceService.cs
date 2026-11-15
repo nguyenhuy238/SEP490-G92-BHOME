@@ -7,7 +7,7 @@ namespace BHome.Application.PropertyManagement;
 public sealed class SetupEvidenceService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access,
     IContractImageValidator images, IObjectStorage storage) : SetupWorkspaceService(store, user, access)
 {
-    public async Task<string> UploadAsync(Guid location, Stream content, CancellationToken t)
+    public async Task<SetupEvidenceUpload> UploadAsync(Guid location, Stream content, CancellationToken t)
     {
         await Scope(location, false, t);
         using var buffer = new MemoryStream(); var chunk = new byte[81920];

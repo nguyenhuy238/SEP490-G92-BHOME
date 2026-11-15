@@ -65,6 +65,27 @@ public sealed partial class IncidentApiTests
     }
 
     [CompactPostgresFact]
+    public async Task OwnerAssetHistoryIncludesIncidentLinkedLaterThroughWorkOrderWithoutChangingOriginalReport()
+    {
+        var w = await Setup();
+        var incident = (await Ok<IncidentCommandResult>(await Submit(w.Tenant, w, omitAsset: true))).IncidentId!.Value;
+        await Review(w, incident);
+        var id = await Assign(w, incident);
+        await Ok<IncidentCommandResult>(await Send(w.Staff, $"{Orders}/{id}/asset-proposal", new AssetLinkProposal(1, w.Asset, null, null, null, "Identified during inspection")));
+        var work = (await Work(w.Owner, id))!;
+        await Ok<IncidentCommandResult>(await Send(w.Owner, $"{Orders}/{id}/asset-decision", new AssetLinkDecision(work.Version, true, "Confirmed managed asset")));
+        var reports = await w.Owner.Client.GetFromJsonAsync<IncidentPage<IncidentView>>($"{Base}?locationId={w.Location}&assetId={w.Asset}&pageSize=1");
+        Assert.Equal(1, reports!.TotalCount);
+        Assert.Equal(incident, Assert.Single(reports.Items).Id);
+        Assert.Null((await Report(w.Tenant, incident))!.AssetId);
+        var orders = await w.Owner.Client.GetFromJsonAsync<IncidentPage<WorkOrderView>>($"{Orders}?locationId={w.Location}&assetId={w.Asset}");
+        Assert.Equal(id, Assert.Single(orders!.Items).Id);
+        var other = await Setup();
+        var unrelated = await w.Owner.Client.GetFromJsonAsync<IncidentPage<IncidentView>>($"{Base}?locationId={other.Location}&assetId={w.Asset}");
+        Assert.Empty(unrelated!.Items);
+    }
+
+    [CompactPostgresFact]
     public async Task CoOccupantCanReportOnlyWithinTheContractBoundRoom()
     {
         var w = await Setup(); var coTenant = await User(BHome.Domain.IdentityAccess.Roles.Tenant);

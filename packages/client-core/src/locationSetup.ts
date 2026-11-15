@@ -25,6 +25,13 @@ export interface SetupAssetRequirement {
   quantity: number;
   unit?: string | null;
 }
+export interface SetupCommonAssetRequirement extends SetupAssetRequirement {
+  id: string;
+  commonArea: string;
+}
+export interface CommonAssetRequirementsData {
+  items: SetupCommonAssetRequirement[];
+}
 export interface SetupRoomDefaults {
   key: string;
   name: string;
@@ -63,7 +70,13 @@ export interface SetupPolicy {
 export interface SetupSourceReference {
   id: string;
   version: number;
-  kind: SharedResource | 'RoomDefaults' | 'AssetTemplate' | 'BillingPolicy' | 'OperatingPolicy';
+  kind:
+    | SharedResource
+    | 'RoomDefaults'
+    | 'AssetTemplate'
+    | 'BillingPolicy'
+    | 'OperatingPolicy'
+    | 'CommonAssetRequirements';
 }
 export interface LocationSetupInput {
   location: LocationSetupInformation;
@@ -76,6 +89,7 @@ export interface LocationSetupInput {
   sourceLocationId: string | null;
   sourceState: string | null;
   sourceReferences?: SetupSourceReference[];
+  commonAssets?: SetupCommonAssetRequirement[];
 }
 export interface LocalRoomDefaultsData {
   name: string;
@@ -107,6 +121,7 @@ export interface LocationSetupSource {
   fees: SetupSourceFee[];
   policies: SetupDocument<SetupPolicy>[];
   sourceState: string;
+  commonAssets?: SetupDocument<CommonAssetRequirementsData> | null;
 }
 export interface LocationSetupResult {
   location: LocationConfiguration;
@@ -201,6 +216,20 @@ export function locationSetupClient(request: <T>(path: string, init?: RequestIni
       write<LocationSetupResult>('/api/v1/location-setup', input, 'POST', key),
     localRoomDefaults: (location: string, signal?: AbortSignal) =>
       request<SetupDocument<LocalRoomDefaultsData>[]>(route(location, 'room-defaults'), { signal }),
+    commonAssetRequirements: (location: string, signal?: AbortSignal) =>
+      request<SetupDocument<CommonAssetRequirementsData> | null>(
+        route(location, 'common-asset-requirements'),
+        { signal },
+      ),
+    saveCommonAssetRequirements: (
+      location: string,
+      input: CommonAssetRequirementsData & { expectedVersion: number },
+    ) =>
+      write<SetupDocument<CommonAssetRequirementsData>>(
+        route(location, 'common-asset-requirements'),
+        input,
+        'PUT',
+      ),
     saveLocalRoomDefaults: (location: string, id: string | null, input: LocalRoomDefaultsWrite) =>
       write<SetupDocument<LocalRoomDefaultsData>>(
         route(location, `room-defaults${id ? '/' + encodeURIComponent(id) : ''}`),

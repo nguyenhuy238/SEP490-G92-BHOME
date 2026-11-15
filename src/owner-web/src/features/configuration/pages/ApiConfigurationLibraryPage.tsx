@@ -31,6 +31,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { MoreHorizontal, Plus, Search } from 'lucide-react';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
+import { assetCatalogSupportsScope } from '../../../../../../packages/client-core/src/sharedConfiguration';
 import type {
   SharedDocument,
   SharedResource,
@@ -61,14 +62,14 @@ const libraryMeta: Record<
     search: 'Tìm kiếm mẫu loại phòng...',
   },
   'asset-catalog': {
-    title: 'Danh mục tài sản',
-    subtitle: 'Danh mục dùng chung, không phải tài sản thực tế tại cơ sở.',
+    title: 'Tài sản mẫu',
+    subtitle: 'Mẫu tài sản theo phòng hoặc dùng chung tại cơ sở.',
     action: 'Thêm loại tài sản',
     search: 'Tìm kiếm danh mục tài sản...',
   },
   'asset-templates': {
-    title: 'Mẫu tài sản',
-    subtitle: 'Định mức trang bị dùng chung.',
+    title: 'Gói tài sản theo phòng',
+    subtitle: 'Nhóm tài sản để chọn cho loại phòng.',
     action: 'Tạo mẫu',
     search: 'Tìm kiếm mẫu tài sản...',
   },
@@ -95,7 +96,11 @@ const resourceColumns: Record<SharedResource, { label: string; numeric?: boolean
     { label: 'Sức chứa', numeric: true },
     { label: 'Giá thuê tham khảo', numeric: true },
   ],
-  'asset-catalog': [{ label: 'Đơn vị' }, { label: 'Giá tham khảo', numeric: true }],
+  'asset-catalog': [
+    { label: 'Đơn vị' },
+    { label: 'Phạm vi' },
+    { label: 'Giá tham khảo', numeric: true },
+  ],
   'asset-templates': [{ label: 'Loại tài sản', numeric: true }],
   'fee-templates': [
     { label: 'Loại phí' },
@@ -131,7 +136,11 @@ function documentValues(document: SharedDocument): string[] {
     ];
   }
   if ('referencePrice' in data) {
-    return [data.unit, `${formatBillingDecimal(data.referencePrice)} đ/${data.unit}`];
+    return [
+      data.unit,
+      data.scope === 'Room' ? 'Theo phòng' : data.scope === 'Location' ? 'Chung cơ sở' : 'Cả hai',
+      `${formatBillingDecimal(data.referencePrice)} đ/${data.unit}`,
+    ];
   }
   if ('items' in data) return [String(data.items.length)];
   if ('referenceRate' in data) {
@@ -156,7 +165,7 @@ function compactDocumentSummary(resource: SharedResource, values: string[]): str
     case 'room-type-templates':
       return [`${values[0]} · ${values[1]}`, `Giá thuê tham khảo: ${values[2]}`];
     case 'asset-catalog':
-      return [values[0], `Giá tham khảo: ${values[1]}`];
+      return [`${values[0]} · ${values[1]}`, `Giá tham khảo: ${values[2]}`];
     case 'asset-templates':
       return [`${values[0]} loại tài sản`];
     case 'fee-templates':
@@ -196,8 +205,8 @@ export function ApiConfigurationLibraryPage({ kind }: { kind: LibraryKind }) {
               '& .MuiTab-root': { minHeight: { xs: 44, sm: 36 } },
             }}
           >
-            <Tab label="Danh mục tài sản" />
-            <Tab label="Gói tài sản" />
+            <Tab label="Tài sản mẫu" />
+            <Tab label="Gói tài sản theo phòng" />
           </Tabs>
         ) : null
       }
@@ -222,6 +231,7 @@ function SharedLibrary({
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [scope, setScope] = useState<'' | 'Room' | 'Location'>('');
   const [editor, setEditor] = useState<{ document: SharedDocument | null } | null>(null);
   const [details, setDetails] = useState('');
   const [archive, setArchive] = useState<SharedDocument | null>(null);
@@ -233,8 +243,43 @@ function SharedLibrary({
     document: SharedDocument;
   } | null>(null);
   const query = useQuery({
-    queryKey: ['property-setup', 'shared', session?.userId, resource, search, status, page],
-    queryFn: ({ signal }) => api.list(resource, search, status, page + 1, 20, signal),
+    queryKey: [
+      'property-setup',
+      'shared',
+      session?.userId,
+      resource,
+      search,
+      status,
+      scope ? null : page,
+      scope,
+    ],
+    queryFn: async ({ signal }) => {
+      if (resource !== 'asset-catalog' || !scope)
+        return api.list(resource, search, status, page + 1, 20, signal);
+      const items: SharedDocument[] = [];
+      let scanned = 0;
+      for (let index = 1; ; index++) {
+        const result = await api.list(resource, search, status, index, 100, signal);
+        scanned += result.items.length;
+        items.push(
+          ...result.items.filter(
+            (doc) => 'referencePrice' in doc.data && assetCatalogSupportsScope(doc.data, scope),
+          ),
+        );
+        if (scanned >= result.total) break;
+        if (!result.items.length) throw new Error('Danh mục đã thay đổi. Vui lòng tải lại.');
+      }
+      return {
+        items,
+        total: items.length,
+        page: page + 1,
+        pageSize: 20,
+      };
+    },
+    select: (data) =>
+      scope
+        ? { ...data, items: data.items.slice(page * 20, page * 20 + 20), page: page + 1 }
+        : data,
     enabled: canManage,
   });
   if (!canManage)
@@ -315,6 +360,23 @@ function SharedLibrary({
             <MenuItem value="Published">Đã công bố</MenuItem>
             <MenuItem value="Archived">Đã lưu trữ</MenuItem>
           </TextField>
+          {resource === 'asset-catalog' && (
+            <TextField
+              size="small"
+              select
+              label="Phạm vi tài sản"
+              value={scope}
+              sx={{ width: { xs: '100%', sm: 200 }, flexShrink: 0 }}
+              onChange={(event) => {
+                setScope(event.target.value as typeof scope);
+                setPage(0);
+              }}
+            >
+              <MenuItem value="">Tất cả phạm vi</MenuItem>
+              <MenuItem value="Room">Theo phòng</MenuItem>
+              <MenuItem value="Location">Chung cơ sở</MenuItem>
+            </TextField>
+          )}
           {query.data && (
             <Typography variant="body2" color="text.secondary" sx={{ ml: { sm: 'auto' } }}>
               {query.data.total.toLocaleString('vi-VN')} kết quả
@@ -597,6 +659,7 @@ function SharedLibrary({
           key={editor.document?.id ?? 'new'}
           resource={resource}
           document={editor.document}
+          assetScope={scope || 'Room'}
           busy={action.busy}
           error={action.error}
           close={() => setEditor(null)}

@@ -104,12 +104,15 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
             db.Locations.Any(l => l.Id == r.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a =>
                 a.LocationId == r.LocationId && a.StaffUserId == scope.ActorId && a.StartDate <= scope.Today && a.EndDate >= scope.Today));
     }
-    private static IQueryable<IncidentReport> Filter(IQueryable<IncidentReport> rows, IncidentQuery q)
+    private IQueryable<IncidentReport> Filter(IQueryable<IncidentReport> rows, IncidentQuery q, bool includeWorkOrderAssets = false)
     {
         if (q.LocationId is { } location) rows = rows.Where(r => r.LocationId == location);
         if (q.IncidentId is { } incident) rows = rows.Where(r => r.Id == incident);
         if (q.RoomId is { } room) rows = rows.Where(r => r.RoomId == room);
-        if (q.AssetId is { } asset) rows = rows.Where(r => r.AssetId == asset);
+        if (q.AssetId is { } asset)
+            rows = includeWorkOrderAssets
+                ? rows.Where(r => r.AssetId == asset || db.Set<MaintenanceWorkOrder>().Any(w => w.IncidentId == r.Id && w.AssetId == asset))
+                : rows.Where(r => r.AssetId == asset);
         if (q.Status is { } status) rows = rows.Where(r => r.Status == status);
         if (q.Severity is { } severity) rows = rows.Where(r => r.Severity == severity);
         return rows;
@@ -136,7 +139,7 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
     public async Task<IncidentPage<IncidentReportingAsset>> ReportingAssetsAsync(IncidentScope scope, IncidentLookupQuery query, CancellationToken t)
     {
         var tenancies = ReportingTenancies(scope); var staffLocations = ReportingStaffLocations(scope);
-        var rows = db.Set<Asset>().AsNoTracking().Where(a => db.Locations.Any(l => l.Id == a.LocationId && l.IsActive) &&
+        var rows = db.Set<Asset>().AsNoTracking().Where(a => a.Status != AssetStatus.Retired && db.Locations.Any(l => l.Id == a.LocationId && l.IsActive) &&
             (staffLocations.Contains(a.LocationId) || tenancies.Any(c => a.RoomId != null ? c.RoomId == a.RoomId : c.Room.LocationId == a.LocationId)));
         if (query.LocationId is { } location) rows = rows.Where(a => a.LocationId == location);
         if (query.RoomId is { } room) rows = rows.Where(a => a.RoomId == room);
@@ -147,7 +150,7 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
     }
     public async Task<IncidentPage<IncidentView>> ListAsync(IncidentScope scope, IncidentQuery query, CancellationToken t)
     {
-        var rows = Filter(Visible(scope), query); var count = await rows.CountAsync(t);
+        var rows = Filter(Visible(scope), query, includeWorkOrderAssets: scope.Owner); var count = await rows.CountAsync(t);
         var items = await rows.OrderByDescending(r => r.CreatedAt).ThenBy(r => r.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(r => new
             {

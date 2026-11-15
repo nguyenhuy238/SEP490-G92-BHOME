@@ -61,7 +61,7 @@ export function SetupTemplatePicker({
                 size="small"
                 color="primary"
                 variant="outlined"
-                label={`${selected.length} đã chọn`}
+                label={`${items.filter((item) => selected.includes(item.id)).length} đã chọn`}
               />
             )}
           </Stack>
@@ -114,6 +114,10 @@ export function SetupTemplatePicker({
                   key={item.id}
                   draggable={!used}
                   onDragStart={(e) => {
+                    if (used) {
+                      e.preventDefault();
+                      return;
+                    }
                     e.dataTransfer.setData(setupDragMime, JSON.stringify({ kind, id: item.id }));
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
@@ -172,7 +176,7 @@ export function SetupTemplatePicker({
               <Typography color="text.secondary" variant="body2">
                 {items.length
                   ? 'Không tìm thấy mẫu phù hợp với bộ lọc.'
-                  : (empty ?? 'Chưa có mẫu đã công bố. Mở thư viện để tạo hoặc công bố mẫu.')}
+                  : (empty ?? 'Chưa có mẫu đã công bố. Thêm mới để sử dụng tại đây.')}
               </Typography>
             )}
           </Stack>
