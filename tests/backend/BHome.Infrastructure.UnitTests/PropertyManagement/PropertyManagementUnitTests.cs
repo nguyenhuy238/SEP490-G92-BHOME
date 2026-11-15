@@ -615,8 +615,12 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         var room105 = await AddRoomAsync(Sample1Id, "105");
         var asset = new Asset
         {
-            LocationId = Sample1Id, RoomId = room105, Name = "Aircon Daikin 1HP", Category = "Air conditioner",
-            Condition = "Good", Status = AssetStatus.Active,
+            LocationId = Sample1Id,
+            RoomId = room105,
+            Name = "Aircon Daikin 1HP",
+            Category = "Air conditioner",
+            Condition = "Good",
+            Status = AssetStatus.Active,
         };
 
         await SetupStore.SaveAssetAsync(asset, OwnerId, "New air conditioner installed", default);
