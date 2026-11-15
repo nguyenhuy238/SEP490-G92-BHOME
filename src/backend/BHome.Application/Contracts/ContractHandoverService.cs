@@ -29,6 +29,13 @@ public sealed partial class ContractService
     public async Task<HandoverChoices> HandoverChoicesAsync(Guid id, CancellationToken t)
     {
         var c = await Load(id, [Roles.Staff], t); HandoverActive(c);
+        if (handoverInventory is not null)
+        {
+            var inventory = await handoverInventory.PrepareAsync(c.RoomId, t);
+            return new(inventory.Groups, await Handovers.ReadingsAsync(c.RoomId, c.StartDate, t),
+                (await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Select(DocumentView).ToArray(),
+                inventory.StateToken, inventory.State, inventory.NoAssetsConfirmed);
+        }
         return new((await Handovers.AssetsAsync(c.RoomId, t)).Select(a => new HandoverAsset(a.Id, a.Name, a.Condition, "")).ToArray(),
             await Handovers.ReadingsAsync(c.RoomId, c.StartDate, t), (await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Select(DocumentView).ToArray());
     }
@@ -42,7 +49,7 @@ public sealed partial class ContractService
             using var image = new MemoryStream(); await storage.CopyToAsync(current.EvidenceObjectKey, image, t);
             if (FileHash(image.ToArray()) != current.EvidenceHash) throw ContractException.Conflict("handover_evidence_integrity_failed");
         }
-        foreach (var evidenceId in snapshot.EvidenceIds)
+        foreach (var evidenceId in snapshot.EvidenceIds.Concat(snapshot.Assets.SelectMany(a => a.EvidenceIds ?? [])).Distinct())
         {
             var f = await Workflow.FileAsync(c.Id, evidenceId, t) ?? throw ContractException.Invalid("invalid_handover_evidence");
             if (f.Kind != ContractFileKind.HandoverEvidence) throw ContractException.Invalid("invalid_handover_evidence");
@@ -57,22 +64,46 @@ public sealed partial class ContractService
         if (h?.Status == ContractHandoverStatus.Confirmed) throw ContractException.Conflict("handover_already_confirmed");
         if (x.Version != (h?.Version ?? 0)) throw ContractException.Conflict("handover_version_changed");
         if (x.Date < c.StartDate || x.Date > Today || x.Date > c.EndDate || x.Assets is null || x.Assets.Length > 200 || x.Assets.Any(a => a is null) || x.EvidenceIds is null ||
-            x.EvidenceIds.Length is < 1 or > 5 || x.EvidenceIds.Distinct().Count() != x.EvidenceIds.Length || x.Assets.Select(a => a.Id).Distinct().Count() != x.Assets.Length)
+            x.EvidenceIds.Length is < 1 or > 10 || x.EvidenceIds.Distinct().Count() != x.EvidenceIds.Length || x.Assets.Select(a => a.Id).Distinct().Count() != x.Assets.Length)
             throw ContractException.Invalid("invalid_handover_input");
-        var assets = await Handovers.AssetsAsync(c.RoomId, t);
-        if (assets.Count != x.Assets.Length || assets.Any(a => !x.Assets.Any(i => i.Id == a.Id))) throw ContractException.Invalid("handover_asset_inventory_changed");
+        var inventory = handoverInventory is null ? null : await handoverInventory.PrepareAsync(c.RoomId, t);
+        if (inventory is not null && inventory.StateToken != x.InventoryToken) throw ContractException.Conflict("handover_asset_inventory_changed");
+        if (inventory is { Groups.Length: 0, NoAssetsConfirmed: false }) throw ContractException.Conflict("owner_no_assets_confirmation_required");
+        var assets = inventory?.Groups ?? (await Handovers.AssetsAsync(c.RoomId, t)).Select(a => new HandoverAsset(a.Id, a.Name, a.Condition, "")).ToArray();
+        var inspected = HandoverChecklist.Inspect(assets, x.Assets, inventory is not null);
         var readings = await Handovers.ReadingsAsync(c.RoomId, c.StartDate, t);
         var electricity = readings.SingleOrDefault(r => r.Id == x.ElectricityReadingId && r.UtilityType == 0 && r.Date == x.Date);
         var water = readings.SingleOrDefault(r => r.Id == x.WaterReadingId && r.UtilityType == 1 && r.Date == x.Date);
         if (electricity is null || water is null) throw ContractException.Invalid("confirmed_handover_readings_required");
         var snapshot = new HandoverSnapshot(x.Date, c.Room.RoomNumber, HandoverText(x.RoomCondition, 2000), HandoverText(x.KeysAndAccess, 2000), HandoverText(x.Notes, 4000, false),
-            assets.Select(a => new HandoverAsset(a.Id, a.Name, a.Condition, HandoverText(x.Assets.Single(i => i.Id == a.Id).Condition, 1000))).ToArray(), electricity, water, x.EvidenceIds);
+            inspected, electricity, water, x.EvidenceIds, inventory?.StateToken, inventory?.State, inventory?.NoAssetsConfirmed ?? false);
         await ValidateHandoverEvidence(c, snapshot, t);
         if (h is null) { h = new ContractHandover { ContractId = id }; repository.Add(h); } else h.Version++;
         h.Snapshot = JsonSerializer.Serialize(snapshot); h.Status = ContractHandoverStatus.Draft;
         h.ElectricityReadingId = electricity.Id; h.WaterReadingId = water.Id;
         h.TenantConfirmedVersion = null; h.TenantConfirmedAt = null; h.TenantConfirmedBy = null;
-        HandoverEvent(h, "Recorded"); Remember(key, "handover-save", new { id, x }, id); return HandoverView(h);
+        if (handoverInventory is not null && inspected.Any(HandoverChecklist.Problem))
+            await handoverInventory.MarkForReviewAsync(c.RoomId, id, h.Version, Actor, t);
+        HandoverEvent(h, "Recorded");
+        await Handovers.NotifyAsync(c, "HandoverAwaitingTenant", Actor, h.Version, t);
+        Remember(key, "handover-save", new { id, x }, id); return HandoverView(h);
+    }, t);
+    public Task<HandoverView> ReviewHandoverAsync(Guid id, HandoverOwnerReview x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
+    {
+        HandoverActive(c); var h = await Handovers.GetAsync(id, t) ?? throw ContractException.Missing();
+        if (await Replay(key, "handover-owner-review", new { id, x }, t) is not null) return HandoverView(h);
+        if (h.Version != x.Version || h.Status == ContractHandoverStatus.Confirmed) throw ContractException.Conflict("handover_version_changed");
+        var reason = HandoverText(x.Reason, 2000); var plan = HandoverText(x.HandlingPlan, 2000);
+        var snapshot = Snapshot(h);
+        if (handoverInventory is not null && (await handoverInventory.PrepareAsync(c.RoomId, t)).StateToken != snapshot.InventoryToken)
+            throw ContractException.Conflict("handover_asset_inventory_changed");
+        h.Version++;
+        h.Snapshot = JsonSerializer.Serialize(snapshot with { OwnerAcceptance = x.Accepted ? new(h.Version, Actor, clock.GetUtcNow(), reason, plan) : null });
+        h.Status = x.Accepted ? ContractHandoverStatus.Draft : ContractHandoverStatus.Disputed;
+        h.TenantConfirmedVersion = null; h.TenantConfirmedAt = null; h.TenantConfirmedBy = null;
+        HandoverEvent(h, x.Accepted ? "OwnerExceptionApproved" : "OwnerReinspectionRequested", reason + "\n" + plan);
+        await Handovers.NotifyAsync(c, "HandoverOwnerReviewed", Actor, h.Version, t);
+        Remember(key, "handover-owner-review", new { id, x }, id); return HandoverView(h);
     }, t);
     public Task<HandoverView> DecideHandoverAsync(Guid id, HandoverDecision x, Guid key, bool dispute, bool staff, CancellationToken t) => Mutate(id, staff ? [Roles.Staff] : [Roles.Tenant], async c =>
     {
@@ -85,8 +116,18 @@ public sealed partial class ContractService
         if (staff)
         {
             if (h.TenantConfirmedVersion != h.Version || h.Status != ContractHandoverStatus.Draft) throw ContractException.Conflict("tenant_handover_confirmation_required");
-            await ValidateHandoverEvidence(c, Snapshot(h), t);
+            var snapshot = Snapshot(h);
+            if (handoverInventory is not null)
+            {
+                if ((await handoverInventory.PrepareAsync(c.RoomId, t)).StateToken != snapshot.InventoryToken) throw ContractException.Conflict("handover_asset_inventory_changed");
+                if (snapshot.Assets.Any(a => !a.Checked)) throw ContractException.Conflict("handover_checklist_incomplete");
+                if (HandoverChecklist.RequiresOwner(snapshot) && snapshot.OwnerAcceptance?.Version != h.Version)
+                    throw ContractException.Conflict("owner_handover_exception_required");
+            }
+            await ValidateHandoverEvidence(c, snapshot, t);
             h.StaffConfirmedBy = Actor; h.StaffConfirmedAt = clock.GetUtcNow(); h.Status = ContractHandoverStatus.Confirmed;
+            await Handovers.CompleteMoveInTaskAsync(id, Actor, clock.GetUtcNow(), t);
+            if (handoverDocuments is not null) await PersistHandoverDocument(c, h, t);
         }
         else
         {
@@ -95,7 +136,9 @@ public sealed partial class ContractService
             h.TenantConfirmedVersion = dispute ? null : h.Version; h.TenantConfirmedAt = dispute ? null : clock.GetUtcNow(); h.TenantConfirmedBy = dispute ? null : Actor;
             h.Status = dispute ? ContractHandoverStatus.Disputed : ContractHandoverStatus.Draft;
         }
-        HandoverEvent(h, staff ? "Completed" : dispute ? "Disputed" : "TenantConfirmed", note); Remember(key, operation, new { id, x }, id); return HandoverView(h);
+        HandoverEvent(h, staff ? "Completed" : dispute ? "Disputed" : "TenantConfirmed", note);
+        await Handovers.NotifyAsync(c, staff ? "HandoverCompleted" : dispute ? "HandoverDisputed" : "HandoverTenantConfirmed", Actor, h.Version, t);
+        Remember(key, operation, new { id, x }, id); return HandoverView(h);
     }, t);
     public async Task<ContractId> UploadHandoverEvidenceAsync(Guid id, Stream input, CancellationToken t)
     {

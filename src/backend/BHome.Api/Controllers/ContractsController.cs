@@ -137,6 +137,15 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<HandoverChoices> HandoverChoices(Guid id, CancellationToken t) => service.HandoverChoicesAsync(id, t);
     [HttpPost("{id:guid}/handover"), Authorize(Roles = Roles.Staff)]
     public Task<HandoverView> SaveHandover(Guid id, HandoverInput x, CancellationToken t) => service.SaveHandoverAsync(id, x, Key(), t);
+    [HttpPost("{id:guid}/handover/owner-review"), Authorize(Roles = Roles.Owner)]
+    public Task<HandoverView> ReviewHandover(Guid id, HandoverOwnerReview x, CancellationToken t) => service.ReviewHandoverAsync(id, x, Key(), t);
+    [HttpGet("{id:guid}/handover/documents")]
+    public Task<IReadOnlyList<ContractDocumentView>> HandoverDocuments(Guid id, CancellationToken t) => service.HandoverDocumentsAsync(id, t);
+    [HttpPost("{id:guid}/handover/documents/retry"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
+    public Task<ContractDocumentView> RetryHandoverDocument(Guid id, CancellationToken t) => service.RetryMoveInDocumentAsync(id, Key(), t);
+    [HttpGet("{id:guid}/handover/documents/{documentId:guid}")]
+    public async Task<IActionResult> HandoverDocument(Guid id, Guid documentId, CancellationToken t)
+    { var buffer = new MemoryStream(); await service.CopyHandoverDocumentAsync(id, documentId, buffer, t); buffer.Position = 0; return File(buffer, "application/pdf", "bien-ban-ban-giao.pdf"); }
     [HttpPost("{id:guid}/handover/tenant-confirmation"), Authorize(Roles = Roles.Tenant)]
     public Task<HandoverView> TenantHandover(Guid id, HandoverDecision x, CancellationToken t) => service.DecideHandoverAsync(id, x, Key(), false, false, t);
     [HttpPost("{id:guid}/handover/disputes"), Authorize(Roles = Roles.Tenant)]

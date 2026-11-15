@@ -16,4 +16,20 @@ public sealed class RoomInventoryReviewController(RoomInventoryReviewService ser
     [HttpPost("confirm")]
     public Task<RoomInventoryReviewView> Confirm(Guid locationId, RoomInventoryReviewConfirm input, CancellationToken t) =>
         service.ConfirmAsync(locationId, input, t);
+
+    [HttpGet("{roomId:guid}/handover-preparation")]
+    public async Task<BHome.Application.Contracts.HandoverInventory> Handover(Guid locationId, Guid roomId, CancellationToken t)
+    {
+        var rooms = await service.GetAsync(locationId, t);
+        if (!rooms.Rooms.Any(r => r.RoomId == roomId)) throw new PropertyException(404, "resource_not_found");
+        return await service.PrepareAsync(roomId, t);
+    }
+
+    [HttpPost("{roomId:guid}/no-assets")]
+    public async Task<BHome.Application.Contracts.HandoverInventory> NoAssets(Guid locationId, Guid roomId, RoomNoAssetsConfirmation input, CancellationToken t)
+    {
+        var rooms = await service.GetAsync(locationId, t);
+        if (!rooms.Rooms.Any(r => r.RoomId == roomId)) throw new PropertyException(404, "resource_not_found");
+        return await service.ConfirmNoAssetsAsync(roomId, input, t);
+    }
 }

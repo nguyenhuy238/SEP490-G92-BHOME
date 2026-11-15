@@ -24,7 +24,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IHoldingTestScope? holdingTestScope = null, BHome.Application.PaymentsDebt.IMainInitialPaymentLedger? initialPayments = null,
     IContractSigningMethods? signingMethods = null, IContractSigningNotifier? signingNotifier = null,
     IAnonymousSigningRepository? signingInvitations = null,
-    BHome.Application.PaymentsDebt.SePay.SePayOptions? paymentOptions = null) : IAdministrativeContractReadiness
+    BHome.Application.PaymentsDebt.SePay.SePayOptions? paymentOptions = null,
+    IHandoverInventory? handoverInventory = null, IHandoverDocumentRenderer? handoverDocuments = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
@@ -485,6 +486,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         ContractChargeSnapshot.MarkMainBound(c, clock.GetUtcNow());
         c.Status = ContractStatus.Active; c.ActivatedByUserId = approvedOwner; c.ActivatedAt = clock.GetUtcNow();
         if (provisioning is not null) await provisioning.ProvisionAsync(c, approvedOwner, t);
+        if (handoverRepository is not null && c.PreviousContractId is null)
+            await handoverRepository.EnsureMoveInTaskAsync(c, approvedOwner, clock.GetUtcNow(), t);
         if (c.HoldingContractId is { } acceptedHolding && c.SigningMode == ContractSigningModes.Internal)
         {
             var linked = await repository.FindAsync(acceptedHolding, t) ?? throw ContractException.Missing();

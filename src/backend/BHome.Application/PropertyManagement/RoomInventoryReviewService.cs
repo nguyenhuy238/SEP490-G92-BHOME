@@ -27,7 +27,7 @@ public sealed record RoomInventoryReviewConfirm(Guid RequestId, RoomInventoryRev
 /// Owner attestation that each configured asset group was physically checked and found sufficient.
 /// The configured quantity remains authoritative; only checked groups create/link one physical Asset.
 /// </summary>
-public sealed class RoomInventoryReviewService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access,
+public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access,
     PropertyService properties, ILogger<RoomInventoryReviewService> logger) : SetupWorkspaceService(store, user, access)
 {
     private const string ReviewKind = "RoomInventoryChecklistReview";
@@ -225,7 +225,9 @@ public sealed class RoomInventoryReviewService(ISetupWorkspaceStore store, ICurr
             var physicalIssues = unlinked.Length > 0 || items.Any(i => i.Ambiguous ||
                 i.Linked.Length == 1 && i.Linked[0].Metadata.Quantity != i.Requirement.Quantity ||
                 i.Linked.Any(a => a.Asset.Status != AssetStatus.Active));
-            var state = invalid || physicalIssues ? "NeedsReview" :
+            var flagged = documents.Any(d => d.Kind == "HandoverInventoryDiscrepancy" && d.Status == "NeedsReview" &&
+                d.Data.GetProperty("roomId").GetGuid() == room.Id && (previous?.RecordedAt is null || d.RecordedAt >= previous.RecordedAt));
+            var state = invalid || physicalIssues || flagged ? "NeedsReview" :
                 configuration is null ? "NotChecked" :
                 itemViews.Length > 0 && checkedCount == itemViews.Length ? "Matched" :
                 checkedCount > 0 || matchingReview ? "PartiallyChecked" : "NotChecked";
