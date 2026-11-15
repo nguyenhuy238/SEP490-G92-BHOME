@@ -158,7 +158,7 @@ internal sealed class SigningPartyDirectory(BHomePersistenceContext db)
 }
 
 // In-app electronic signature (SRS v1.3: "electronically sign"; Law on Electronic Transactions 2023 Art. 23(1)).
-// Prepare draws the signer's picture and "Ký điện tử bởi / Ngày ký / Xác thực" in their box, Request emails a one-time
+// Prepare draws the signer's picture and "Ký điện tử bởi / Ngày ký" in their box, Request emails a one-time
 // code, Confirm checks it and seals the PDF with the BHOME seal as an incremental revision, so the other party's earlier
 // signature stays valid.
 internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pdf, IContractDocumentRenderer renderer, TimeProvider clock,
@@ -196,7 +196,7 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         VisibleSignature? visible = null;
         if (placement is not null)
         {
-            var text = $"Ký điện tử bởi: {name}\nNgày ký: {now.ToOffset(VietnamOffset):dd/MM/yyyy HH:mm:ss}\nXác thực: mã OTP qua email";
+            var text = $"Ký điện tử bởi: {name}\nNgày ký: {now.ToOffset(VietnamOffset):dd/MM/yyyy HH:mm:ss}";
             var picture = appearance.UsePicture && pictures is not null ? await pictures.FindAsync(Actor, t) : null;
             visible = new VisibleSignature(placement.Page, placement.X, placement.Y, placement.Width, text, picture?.Content, CaptionUnderImage: true);
         }
