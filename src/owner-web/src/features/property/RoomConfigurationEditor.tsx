@@ -417,8 +417,7 @@ function RoomConfigurationForm({
               </Typography>
               {initial.inventory.physical.map((asset) => (
                 <Typography key={asset.id} variant="body2" color="text.secondary">
-                  {asset.name} ·{' '}
-                  {initial.inventory.metadata?.[asset.id]?.quantity ?? '—'}{' '}
+                  {asset.name} · {initial.inventory.metadata?.[asset.id]?.quantity ?? '—'}{' '}
                   {initial.inventory.metadata?.[asset.id]?.unit ?? ''} · {asset.condition}
                 </Typography>
               ))}

@@ -429,7 +429,10 @@ it('requests server-side physical asset filtering for rooms and shared areas', a
     if (path === '/api/v1/capture/locations')
       return [{ id: 'location', label: 'Synthetic Location' }];
     if (path.endsWith('/rooms'))
-      return [{ id: 'room-a', label: 'A101' }, { id: 'room-b', label: 'A102' }];
+      return [
+        { id: 'room-a', label: 'A101' },
+        { id: 'room-b', label: 'A102' },
+      ];
     if (path.endsWith('/common-asset-requirements')) return null;
     if (path.includes('/common-areas?')) return [];
     return { items: [], totalCount: 0 };
