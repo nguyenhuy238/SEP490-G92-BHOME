@@ -2,6 +2,7 @@ import React from 'react';
 import { OnboardingStepper } from '../../components/OnboardingStepper';
 import { Box } from '../../components/WorkspaceKit';
 import { rentalContractSteps } from './rentalContractState';
+import { MainContractProgress } from './MainContractProgress';
 
 export function RentalContractStepper({
   current,
@@ -14,7 +15,11 @@ export function RentalContractStepper({
 }) {
   return (
     <Box>
-      <OnboardingStepper steps={steps} current={current} completed={completed} />
+      {steps === rentalContractSteps ? (
+        <MainContractProgress current={current + 4} />
+      ) : (
+        <OnboardingStepper steps={steps} current={current} completed={completed} />
+      )}
     </Box>
   );
 }

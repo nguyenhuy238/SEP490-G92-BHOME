@@ -1,4 +1,5 @@
 import { RentalContractStepper } from './RentalContractStepper';
+import { MainContractProgress } from './MainContractProgress';
 import { MainDraftSigningReview } from './MainDraftSigningReview';
 import { workflowFailure } from '../../lib/workflowFailure';
 import { ContractPdfPreview } from './ContractPdfPreview';
@@ -64,6 +65,8 @@ export function MainDraftScreen({
   persistRoute = true,
   onReleased,
   reviewOnly = false,
+  visible = true,
+  onPrevious,
 }: {
   initialId?: string;
   roomId: string;
@@ -75,6 +78,8 @@ export function MainDraftScreen({
   persistRoute?: boolean;
   onReleased?: (id: string) => void;
   reviewOnly?: boolean;
+  visible?: boolean;
+  onPrevious?: () => void;
 }) {
   const { api, session } = useSession();
   const owner = !!session?.roles.includes('Owner');
@@ -118,9 +123,11 @@ export function MainDraftScreen({
   const routePromotion = useRef<{ id: string; client: typeof client } | null>(null);
   const refs = useRef({ roomId, representativeResidentId, residentIds });
   const releasedHandler = useRef(onReleased);
+  const listHandler = useRef(onList);
   useEffect(() => {
     releasedHandler.current = onReleased;
-  }, [onReleased]);
+    listHandler.current = onList;
+  }, [onReleased, onList]);
   const invalidateDocument = useCallback(
     (error: unknown) => {
       setReadyFile('');
@@ -173,8 +180,9 @@ export function MainDraftScreen({
         if (initialId) {
           const draft = await client!.get(initialId, controller.signal);
           if (controller.signal.aborted) return;
-          if (owner && draft.status !== 'Draft') {
-            releasedHandler.current?.(draft.id);
+          if (draft.status !== 'Draft') {
+            if (releasedHandler.current) releasedHandler.current(draft.id);
+            else listHandler.current();
             return;
           }
           setId(draft.id);
@@ -218,7 +226,7 @@ export function MainDraftScreen({
     const controller = new AbortController();
     let running = false;
     let finished = false;
-    const timer = setInterval(() => {
+    const refresh = () => {
       if (running || finished || lock.current) return;
       running = true;
       void client
@@ -226,8 +234,8 @@ export function MainDraftScreen({
         .then((latest) => {
           if (controller.signal.aborted || latest.status === 'Draft') return;
           finished = true;
-          if (onReleased) onReleased(latest.id);
-          else onList();
+          if (releasedHandler.current) releasedHandler.current(latest.id);
+          else listHandler.current();
         })
         .catch((e) => {
           if (!controller.signal.aborted) setError(message(e));
@@ -235,12 +243,14 @@ export function MainDraftScreen({
         .finally(() => {
           running = false;
         });
-    }, 5000);
+    };
+    refresh();
+    const timer = setInterval(refresh, 5000);
     return () => {
       controller.abort();
       clearInterval(timer);
     };
-  }, [client, id, mode, saved?.status, onReleased, onList, setError]);
+  }, [client, id, mode, saved?.status, setError]);
   function input(): MainDraftInput | null {
     const errors: Record<string, string> = {};
     let from = '',
@@ -257,8 +267,6 @@ export function MainDraftScreen({
     }
     if (from && to && to <= from) errors.end = 'Ngày kết thúc phải sau ngày bắt đầu.';
     if (!phone.trim()) errors.phone = 'Bổ sung số điện thoại người thuê.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || email.trim().length > 256)
-      errors.email = 'Nhập email người thuê hợp lệ.';
     setFieldErrors(errors);
     return Object.keys(errors).length
       ? null
@@ -269,7 +277,7 @@ export function MainDraftScreen({
           notes,
           tenantPhone: phone.trim(),
           tenantPlaceOfIssue: place.trim(),
-          tenantEmail: email.trim(),
+          tenantEmail: null,
           expectedVersion: saved?.version ?? 0,
         };
   }
@@ -417,6 +425,10 @@ export function MainDraftScreen({
       setMode(mode === 'signing' ? 'preview' : 'edit');
       return;
     }
+    if (onPrevious) {
+      onPrevious();
+      return;
+    }
     if (dirty.current)
       Alert.alert('Rời tạo hợp đồng?', 'Các thay đổi chưa lưu sẽ mất.', [
         { text: 'Tiếp tục nhập', style: 'cancel' },
@@ -560,7 +572,12 @@ export function MainDraftScreen({
   // the opening animation as a full-height bottom inset and collapse the scroll area.
   const ModalSafeArea = Platform.OS === 'web' ? React.Fragment : SafeAreaProvider;
   return (
-    <Modal visible presentationStyle="fullScreen" onRequestClose={back} animationType="slide">
+    <Modal
+      visible={visible}
+      presentationStyle="fullScreen"
+      onRequestClose={back}
+      animationType="slide"
+    >
       <ModalSafeArea>
         <Portal.Host>
           <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.root}>
@@ -593,10 +610,18 @@ export function MainDraftScreen({
                 contentContainerStyle={styles.content}
                 keyboardShouldPersistTaps="handled"
               >
-                <RentalContractStepper
-                  current={mode === 'signing' ? 1 : 0}
-                  steps={owner ? ownerContractSteps : undefined}
-                />
+                {owner ? (
+                  <RentalContractStepper
+                    current={mode === 'signing' ? 1 : 0}
+                    steps={owner ? ownerContractSteps : undefined}
+                  />
+                ) : (
+                  <Box>
+                    <MainContractProgress
+                      current={mode === 'edit' ? 3 : mode === 'preview' ? 4 : 5}
+                    />
+                  </Box>
+                )}
                 {loading && <ActivityIndicator accessibilityLabel="Đang tải dữ liệu hợp đồng" />}
                 {!!error && !(owner && mode === 'preview' && documentBlocker) && (
                   <Text accessibilityRole="alert" style={styles.error}>
@@ -653,27 +678,7 @@ export function MainDraftScreen({
                           {!!representative?.maskedCitizenNumber && (
                             <Text>CCCD: {representative.maskedCitizenNumber}</Text>
                           )}
-                          <TextInput
-                            label="Email người thuê *"
-                            accessibilityLabel="Email người thuê *"
-                            placeholder="Nhập email người thuê"
-                            value={email}
-                            onChangeText={edit(setEmail)}
-                            onBlur={() => setEmail((v) => v.trim())}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            maxLength={256}
-                            mode="outlined"
-                            disabled={busy || readOnly}
-                            error={!!fieldErrors.email}
-                          />
-                          {!!fieldErrors.email && (
-                            <Text style={styles.error}>{fieldErrors.email}</Text>
-                          )}
-                          <Text style={styles.support}>
-                            Email liên hệ, chưa tạo tài khoản Tenant.
-                          </Text>
+                          <Text style={styles.support}>Email sẽ được nhập khi gửi lời mời ký.</Text>
                           <TextInput
                             label="Số điện thoại người thuê"
                             accessibilityLabel="Số điện thoại người thuê"
@@ -843,8 +848,24 @@ export function MainDraftScreen({
                 )}
               </KeyboardFormScrollView>
               {!reviewOnly && (
-                <View style={[styles.footer, owner && styles.ownerFooter]}>
+                <View
+                  style={[
+                    styles.footer,
+                    onPrevious && { flexWrap: 'wrap' },
+                    owner && styles.ownerFooter,
+                  ]}
+                >
                   {busy && <ActivityIndicator />}
+                  {onPrevious && mode === 'edit' && (
+                    <Button
+                      style={{ width: '100%' }}
+                      icon="arrow-left"
+                      disabled={busy || readOnly}
+                      onPress={back}
+                    >
+                      {'Quay l\u1ea1i: CCCD'}
+                    </Button>
+                  )}
                   {mode === 'edit' ? (
                     <>
                       <Button

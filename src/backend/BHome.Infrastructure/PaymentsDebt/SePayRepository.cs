@@ -65,7 +65,7 @@ internal sealed class SePayRepository(BHomePersistenceContext db, IPaymentReposi
         (from i in db.Set<Invoice>()
          join c in db.Set<BHome.Domain.TenantContracts.Contract>() on i.RepresentativeContractId equals c.Id
          where i.Id == id
-         select c.IsDevelopmentDemo).SingleAsync(token);
+         select c.PaymentMode == "Test" || c.PaymentMode == null && c.IsDevelopmentDemo).SingleAsync(token);
     public async Task AddReceiptAsync(SePayEvent received, PaymentTransfer receipt, CancellationToken token)
     {
         receipt.Stamp(clock.GetUtcNow(), true);

@@ -10,6 +10,9 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using BHome.Domain.Billing;
+using BHome.Domain.PropertyManagement;
+using BHome.Infrastructure.Persistence;
 
 namespace BHome.IntegrationTests.Contracts;
 
@@ -17,6 +20,37 @@ namespace BHome.IntegrationTests.Contracts;
 // "Owner and Tenant electronically sign", DBR-03 signing status and evidence; decisions D1/D2/D6).
 public sealed partial class ContractLifecycleApiTests
 {
+    private async Task<bool> RunHoldingSigningOnNativeSchemaAsync(bool holding, Func<ContractLifecycleApiTests, Task> scenario)
+    {
+        if (!holding || fixture.Factory.Services.GetService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>() is not null) return false;
+        // The source-schema adapter does not persist Holding approval/expiry metadata. Keep both
+        // theory cases, but exercise Holding evidence on the production Compact24 schema.
+        var native = new BHome.IntegrationTests.Compact24.PropertyContractDockerFixture();
+        try
+        {
+            await native.InitializeAsync();
+            await scenario(new ContractLifecycleApiTests(native.Contracts));
+        }
+        finally { await native.DisposeAsync(); }
+        return true;
+    }
+    private async Task PrepareHoldingSigningRate(Guid room, Guid location)
+    {
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        db.Add(new BillingPolicy
+        {
+            LocationId = location,
+            RoomId = room,
+            Category = ChargeCategory.Rent,
+            ChargeCode = "RENT",
+            Name = "Synthetic signing test rate",
+            Method = ChargingMethod.FixedPerRoomPerMonth,
+            Rate = 3000000,
+            EffectiveFrom = Today
+        });
+        await db.SaveChangesAsync();
+    }
     private sealed class CapturedEmail : INotificationChannelProvider
     {
         public ConcurrentQueue<ChannelMessage> Sent { get; } = new();
@@ -29,11 +63,23 @@ public sealed partial class ContractLifecycleApiTests
         }
     }
 
-    [Fact]
-    public async Task OwnerThenTenantSignWithEmailedOtpAndTheSealedPdfKeepsBothSignatures()
+    [Theory, InlineData(false), InlineData(true)]
+    public async Task OwnerThenTenantSignWithEmailedOtpAndTheSealedPdfKeepsBothSignatures(bool holding = false)
+        => await SignOwnerThenTenant(holding, false);
+
+    [Theory, InlineData(false), InlineData(true)]
+    public async Task OwnerSessionThenTenantOtpKeepsBothSignatures(bool holding = false)
+        => await SignOwnerThenTenant(holding, true);
+
+    private async Task SignOwnerThenTenant(bool holding, bool ownerSession)
     {
+        if (await RunHoldingSigningOnNativeSchemaAsync(holding, tests => tests.SignOwnerThenTenant(true, ownerSession))) return;
         var w = await Setup();
-        var id = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts", Input(w)))).Id;
+        if (holding) await PrepareHoldingSigningRate(w.Room, w.Location);
+        var id = holding
+            ? (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], Today, Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(2), 1000000, "Synthetic Holding signing terms", 1)))).Id
+            : (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts", Input(w)))).Id;
+        if (holding) await Success<ContractView>(await Post(w.Owner, Path(id, "holding-approval"), new HoldingDecisionInput("Owner reviewed")));
         var email = new CapturedEmail();
         await using var host = fixture.Factory.WithWebHostBuilder(b =>
         {
@@ -62,12 +108,41 @@ public sealed partial class ContractLifecycleApiTests
 
         // OTP is offered to both parties; it is the Tenant's default (the Owner's default is their certificate method).
         var methods = (await owner.Client.GetFromJsonAsync<SigningMethodsView>("/api/v1/contracts/signing-methods"))!;
-        Assert.Contains(SigningMethods.Otp, methods.Methods);
+        Assert.Contains(SigningMethods.OwnerSession, methods.Methods);
+        Assert.DoesNotContain(SigningMethods.Otp, methods.Methods);
+        Assert.Equal(SigningMethods.OwnerSession, methods.Default);
         Assert.Equal(SigningMethods.Otp, (await tenant.Client.GetFromJsonAsync<SigningMethodsView>("/api/v1/contracts/signing-methods"))!.Default);
+        Assert.DoesNotContain(SigningMethods.OwnerSession, (await tenant.Client.GetFromJsonAsync<SigningMethodsView>("/api/v1/contracts/signing-methods"))!.Methods);
+        if (ownerSession)
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, (await Post(tenant, Path(id, "signing"), new SigningInput(Guid.Empty, Method: SigningMethods.OwnerSession, Consent: true))).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, Path(id, "signing"), new SigningInput(Guid.Empty, Method: SigningMethods.OwnerSession))).StatusCode);
+        }
 
         static string EmailOf(Actor actor) => actor.Id.ToString("N") + "@example.invalid";
         foreach (var (signer, account) in new[] { (owner, EmailOf(owner)), (tenant, EmailOf(tenant)) })
         {
+            if (ownerSession && signer.Id == owner.Id)
+            {
+                var input = new SigningInput(Guid.Empty, Method: SigningMethods.OwnerSession, Consent: true);
+                var sessionKey = Guid.NewGuid();
+                var immediate = await Success<SignatureView>(await Post(signer, Path(id, "signing"), input, sessionKey));
+                Assert.Equal("Signed", immediate.Status); Assert.Equal(SigningMethods.OwnerSession, immediate.Method);
+                var sessionReplay = await Success<SignatureView>(await Post(signer, Path(id, "signing"), input, sessionKey));
+                Assert.Equal(immediate.Id, sessionReplay.Id);
+                Assert.DoesNotContain(email.Sent, m => m.EventType == "CONTRACT_SIGNING_OTP");
+                Assert.Equal("PendingSigning", (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
+                await using (var scope = host.Services.CreateAsyncScope())
+                    Assert.False(await scope.ServiceProvider.GetRequiredService<ContractService>().AutomaticActivationReadyAsync(id, default));
+                await Deposit(w, id, holding ? 1000000 : 3000000);
+                await using (var scope = host.Services.CreateAsyncScope())
+                {
+                    var service = scope.ServiceProvider.GetRequiredService<ContractService>();
+                    Assert.False(await service.AutomaticActivationReadyAsync(id, default));
+                    await Assert.ThrowsAsync<ContractException>(() => service.AutoActivatePaidMainAsync(id, default));
+                }
+                continue;
+            }
             // Bấm Ký: the PDF is prepared and a one-time code goes to the signer's email only.
             var requested = await Success<SignatureView>(await Post(signer, Path(id, "signing"),
                 new SigningInput(Guid.Empty, Method: SigningMethods.Otp), Guid.NewGuid()));
@@ -107,8 +182,20 @@ public sealed partial class ContractLifecycleApiTests
         var contract = (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
         Assert.Equal("PendingActivation", contract.Status);
 
-        await Deposit(w, id);
-        await Success<ContractView>(await Post(w.Owner, Path(id, "activate")));
+        if (!ownerSession)
+        {
+            await using (var scope = host.Services.CreateAsyncScope())
+                Assert.False(await scope.ServiceProvider.GetRequiredService<ContractService>().AutomaticActivationReadyAsync(id, default));
+            await Deposit(w, id, holding ? 1000000 : 3000000);
+        }
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<ContractService>();
+            Assert.True(await service.AutomaticActivationReadyAsync(id, default));
+            await service.AutoActivatePaidMainAsync(id, default);
+            await service.AutoActivatePaidMainAsync(id, default);
+        }
+        Assert.Equal("Active", (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
         var document = await tenant.Client.GetAsync(Path(id, "document"));
         document.EnsureSuccessStatusCode();
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(await document.Content.ReadAsByteArrayAsync())));

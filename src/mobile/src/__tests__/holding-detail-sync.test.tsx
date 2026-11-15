@@ -52,3 +52,48 @@ it('keeps persisted data visible and reports a background refresh error', async 
   expect(view.result.current.error).toBe('');
   expect(view.result.current.refreshError).not.toBe('');
 });
+it('keeps the current detail mounted during an explicit reload and on a temporary failure', async () => {
+  const draft = { id: 'holding', kind: 'Holding', status: 'Draft' };
+  const get = vi.fn().mockResolvedValue(draft);
+  const api = { get } as unknown as ContractClient;
+  const view = renderHook(() => useContractDetail(api, 'holding', 'Staff'));
+  await act(async () => {});
+  const before = view.result.current.data;
+  let reject!: (error: unknown) => void;
+  get.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, r) => {
+        reject = r;
+      }),
+  );
+  await act(async () => view.result.current.reload());
+  expect(view.result.current.loading).toBe(false);
+  expect(view.result.current.data).toBe(before);
+  await act(async () => reject({ status: 503 }));
+  expect(view.result.current.data).toBe(before);
+  expect(view.result.current.refreshError).not.toBe('');
+});
+it('clears the retained contract when a refresh confirms access was revoked', async () => {
+  const get = vi.fn().mockResolvedValue({ id: 'holding', kind: 'Holding', status: 'Draft' });
+  const api = { get } as unknown as ContractClient;
+  const view = renderHook(() => useContractDetail(api, 'holding', 'Staff'));
+  await act(async () => {});
+  get.mockRejectedValueOnce({ status: 403 });
+  await act(async () => view.result.current.reload());
+  expect(view.result.current.data).toBeNull();
+  expect(view.result.current.error).not.toBe('');
+});
+it('does not reuse cached data for another client with the same contract id', async () => {
+  const first = {
+    get: vi.fn().mockResolvedValue({ id: 'holding', kind: 'Holding', status: 'Draft' }),
+  } as unknown as ContractClient;
+  const second = { get: vi.fn(() => new Promise(() => {})) } as unknown as ContractClient;
+  const view = renderHook(({ client }) => useContractDetail(client, 'holding', 'Staff'), {
+    initialProps: { client: first },
+  });
+  await act(async () => {});
+  expect(view.result.current.data).not.toBeNull();
+  view.rerender({ client: second });
+  expect(view.result.current.data).toBeNull();
+  expect(view.result.current.loading).toBe(true);
+});

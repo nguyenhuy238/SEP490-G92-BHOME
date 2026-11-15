@@ -22,7 +22,11 @@ import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { randomUUID } from '../../lib/randomUUID';
 import { SignaturePad } from './SignaturePad';
-import { SignaturePlacementField, type PlacementChoice } from './SigningSetup';
+import {
+  SignatureImageSection,
+  SignaturePlacementField,
+  type PlacementChoice,
+} from './SigningSetup';
 
 type Api = ReturnType<typeof contractClient>;
 const DONE = ['Signed', 'Simulated'];
@@ -68,21 +72,28 @@ export function ContractSigningPanel({
   const current = [...mine].reverse().find((s) => s.status !== 'Failed') ?? null;
   const otherOpen = c.signatures.some((s) => s.signerUserId !== actorId && OPEN(s));
   const inApp = (methods?.methods ?? []).filter(
-    (m) => m === 'OTP' || (owner && m === 'UPLOAD_PROOF'),
+    (m) => m === 'OTP' || (owner && (m === 'UPLOAD_PROOF' || m === 'OWNER_SESSION')),
   );
-  const preferred = inApp.includes(methods?.default ?? '') ? methods!.default! : inApp[0];
+  const preferred =
+    owner && inApp.includes('OWNER_SESSION')
+      ? 'OWNER_SESSION'
+      : inApp.includes(methods?.default ?? '')
+        ? methods!.default!
+        : inApp[0];
   const [method, setMethod] = useState<string | undefined>(undefined);
   const chosen = method ?? preferred;
   if (!signer || c.isDevelopmentDemo || !methods) return null;
 
   if (current && DONE.includes(current.status)) return <Signed c={c} owner={owner} />;
-  if (current?.method === 'OTP' && OPEN(current))
+  const replacesOtp =
+    owner && current?.method === 'OTP' && OPEN(current) && inApp.includes('OWNER_SESSION');
+  if (current?.method === 'OTP' && OPEN(current) && !replacesOtp)
     return <OtpStep signing={signing} contractId={c.id} onDone={onChanged} />;
   if (current?.method === 'UPLOAD_PROOF' && OPEN(current))
     return (
       <UploadStep signing={signing} contractId={c.id} signature={current} onDone={onChanged} />
     );
-  if (current || !['Draft', 'PendingSigning'].includes(c.status)) return null;
+  if ((current && !replacesOtp) || !['Draft', 'PendingSigning'].includes(c.status)) return null;
   if (otherOpen)
     return (
       <Box>
@@ -102,9 +113,11 @@ export function ContractSigningPanel({
             options={inApp.map((m) => ({
               id: m,
               label:
-                m === 'UPLOAD_PROOF'
-                  ? 'Tải về & ký MySign (khuyến nghị)'
-                  : 'Ký điện tử bằng mã OTP',
+                m === 'OWNER_SESSION'
+                  ? 'Ký trực tiếp'
+                  : m === 'UPLOAD_PROOF'
+                    ? 'Tải về & ký số bên ngoài'
+                    : 'Ký điện tử bằng mã OTP',
             }))}
           />
         </Box>
@@ -112,7 +125,13 @@ export function ContractSigningPanel({
       {chosen === 'UPLOAD_PROOF' ? (
         <UploadStart signing={signing} contractId={c.id} onStarted={onChanged} />
       ) : (
-        <OtpStart signing={signing} contract={c} owner={owner} onStarted={onChanged} />
+        <OtpStart
+          signing={signing}
+          contract={c}
+          owner={owner}
+          session={chosen === 'OWNER_SESSION'}
+          onStarted={onChanged}
+        />
       )}
     </>
   );
@@ -120,7 +139,10 @@ export function ContractSigningPanel({
 
 function Signed({ c, owner }: { c: ContractView; owner: boolean }) {
   const otherId = owner ? c.tenantUserId : c.ownerSignerId;
-  const otherDone = c.signatures.some((s) => s.signerUserId === otherId && DONE.includes(s.status));
+  const otherDone =
+    (c.signingMode === 'INTERNAL_OTP_DRAWN' &&
+      ['PendingActivation', 'Active'].includes(c.status)) ||
+    c.signatures.some((s) => s.signerUserId === otherId && DONE.includes(s.status));
   return (
     <Box>
       <Heading title={otherDone ? 'Hợp đồng đã được ký đủ' : 'Bạn đã ký hợp đồng'} />
@@ -141,11 +163,13 @@ function OtpStart({
   contract: c,
   owner,
   onStarted,
+  session = false,
 }: {
   signing: SigningClient;
   contract: ContractView;
   owner: boolean;
   onStarted: () => void;
+  session?: boolean;
 }) {
   const [choice, setChoice] = useState<PlacementChoice>({ placement: null, usePicture: true });
   const [drawing, setDrawing] = useState<DrawnSignature | null>(null);
@@ -163,7 +187,13 @@ function OtpStart({
         await signing.drawImage(drawing);
         setPictureRevision((r) => r + 1);
       }
-      await signing.start(c.id, 'OTP', key, choice.placement, choice.usePicture);
+      await signing.start(
+        c.id,
+        session ? 'OWNER_SESSION' : 'OTP',
+        key,
+        choice.placement,
+        choice.usePicture,
+      );
       onStarted();
     } catch (e) {
       setError(signingError(e));
@@ -173,7 +203,14 @@ function OtpStart({
   }
   return (
     <Box>
-      <Heading title="Ký hợp đồng" detail="Ký điện tử · xác thực bằng mã OTP qua email" />
+      <Heading
+        title="Ký hợp đồng"
+        detail={
+          session
+            ? 'Ký điện tử · xác thực bằng phiên đăng nhập Owner'
+            : 'Ký điện tử · xác thực bằng mã OTP qua email'
+        }
+      />
       <SignaturePlacementField
         key={pictureRevision}
         signing={signing}
@@ -181,10 +218,17 @@ function OtpStart({
         value={choice}
         onChange={setChoice}
         disabled={busy}
-        caption={`Ký điện tử bởi: ${owner ? 'Chủ trọ' : 'Khách thuê'}\nXác thực: mã OTP qua email`}
+        caption={`Ký điện tử bởi: ${owner ? 'Chủ trọ' : 'Khách thuê'}`}
       />
       <Text variant="titleSmall">Chữ ký của bạn</Text>
       <SignaturePad onChange={setDrawing} disabled={busy} />
+      <SignatureImageSection
+        signing={signing}
+        onChanged={() => {
+          setDrawing(null);
+          setPictureRevision((r) => r + 1);
+        }}
+      />
       <Text variant="bodySmall">
         Bỏ trống nếu muốn dùng ảnh chữ ký đã lưu. Chữ ký sẽ đặt vào ô của bạn trên hợp đồng.
       </Text>
@@ -199,9 +243,13 @@ function OtpStart({
       />
       {!!error && <Text style={ui.red}>{error}</Text>}
       <Action disabled={busy || !agreed} onPress={() => void sign()}>
-        {busy ? 'Đang gửi mã…' : 'Ký hợp đồng'}
+        {busy ? (session ? 'Đang ký…' : 'Đang gửi mã…') : 'Ký hợp đồng'}
       </Action>
-      <Text style={ui.muted}>Bấm "Ký hợp đồng", BHOME gửi mã xác nhận 6 số tới email của bạn.</Text>
+      <Text style={ui.muted}>
+        {session
+          ? 'Bấm Ký hợp đồng để áp dụng chữ ký bằng phiên đăng nhập Owner. Đây là ký điện tử với dấu BHOME, không phải chữ ký số cá nhân được CA chứng thực.'
+          : 'Bấm Ký hợp đồng, BHOME gửi mã xác nhận 6 số tới email của bạn.'}
+      </Text>
     </Box>
   );
 }
@@ -538,6 +586,10 @@ function UploadStep({
         </View>
       )}
       {!!error && <Text style={ui.red}>{error}</Text>}
+      <Text style={ui.muted}>
+        Kiểm tra PDF và tên bên cấp chứng thư chưa bao gồm xác minh đầy đủ chuỗi tin cậy CA hoặc
+        trạng thái thu hồi.
+      </Text>
       <Action disabled={busy || !file} onPress={() => void upload()}>
         {busy ? 'Đang kiểm tra…' : 'Gửi bản đã ký'}
       </Action>

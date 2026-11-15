@@ -182,6 +182,12 @@ public sealed class Compact24PropertyRegressionTests
 [Trait("Category", "CompactPostgres")]
 public sealed class Compact24ContractRegressionTests(Compact24WorkflowFixture fixture) : IClassFixture<Compact24WorkflowFixture>
 {
+    [CompactPostgresFact] public Task RealOtpSigning() => Run(t => t.OwnerThenTenantSignWithEmailedOtpAndTheSealedPdfKeepsBothSignatures());
+    [CompactPostgresFact] public Task RealUploadSigning() => Run(t => t.OwnerUploadsAMySignSignedPdfThenTenantSignsWithOtpAndBothSignaturesStayValid());
+    [CompactPostgresFact] public Task RealHoldingOtpSigning() => Run(t => t.OwnerThenTenantSignWithEmailedOtpAndTheSealedPdfKeepsBothSignatures(true));
+    [CompactPostgresFact] public Task RealOwnerSessionSigning() => Run(t => t.OwnerSessionThenTenantOtpKeepsBothSignatures());
+    [CompactPostgresFact] public Task RealHoldingOwnerSessionSigning() => Run(t => t.OwnerSessionThenTenantOtpKeepsBothSignatures(true));
+    [CompactPostgresFact] public Task RealHoldingUploadSigning() => Run(t => t.OwnerUploadsAMySignSignedPdfThenTenantSignsWithOtpAndBothSignaturesStayValid(true));
     private async Task Run(Func<ContractLifecycleApiTests, Task> scenario)
     {
         await using var contract = new ContractFixture(fixture.Capture);

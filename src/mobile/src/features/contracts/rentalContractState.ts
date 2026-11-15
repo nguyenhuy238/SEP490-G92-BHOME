@@ -25,10 +25,12 @@ export function signerState(
 export function rentalContractState(contract: ContractView, readiness: Readiness | null) {
   const internalComplete =
     contract.signingMode === 'INTERNAL_OTP_DRAWN' &&
-    ['PendingActivation', 'Active'].includes(contract.status);
-  const owner = internalComplete
-    ? 'signed'
-    : signerState(contract.signatures, contract.ownerSignerId);
+    ['PendingActivation', 'Active'].includes(contract.status) &&
+    (!contract.ownerOnlySandboxConfirmed || !!contract.sandboxTenantSimulated);
+  const owner =
+    internalComplete || contract.ownerOnlySandboxConfirmed
+      ? 'signed'
+      : signerState(contract.signatures, contract.ownerSignerId);
   const tenant = internalComplete
     ? 'signed'
     : signerState(contract.signatures, contract.tenantUserId);

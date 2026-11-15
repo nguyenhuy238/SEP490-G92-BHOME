@@ -158,22 +158,7 @@ export function OnboardingPeopleStep(props: Props) {
               </Text>
               <Text style={styles.counter}>{person.label.length}/150</Text>
             </View>
-            <TextInput
-              mode="outlined"
-              label="Email người ở *"
-              accessibilityLabel="Email người ở"
-              value={person.email ?? ''}
-              maxLength={256}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              disabled={!!person.residentId}
-              style={styles.input}
-              onChangeText={(email) => props.onEmailChange(person.key, email)}
-            />
-            <Text style={styles.helper}>
-              Mỗi người ở cần email riêng. Tài khoản chỉ được cấp sau khi hợp đồng thuê được kích
-              hoạt.
-            </Text>
+            <Text style={styles.helper}>Email sẽ được nhập khi gửi lời mời ký hợp đồng.</Text>
           </>
         )}
         <Text style={styles.note}>

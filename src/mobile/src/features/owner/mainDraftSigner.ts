@@ -30,7 +30,5 @@ export function verifiedDraftSigner(draft: MainDraftView, resident: MainDraftSig
     throw { code: 'verified_contract_signer_required' };
   if (resident.tenantUserId && resident.account?.isActive === false)
     throw { code: 'verified_tenant_account_required' };
-  if (!resident.tenantUserId && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resident.contactEmail ?? ''))
-    throw { code: 'verified_residents_with_email_required' };
   return resident;
 }

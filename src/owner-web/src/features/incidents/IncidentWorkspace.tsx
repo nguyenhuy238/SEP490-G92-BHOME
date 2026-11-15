@@ -18,6 +18,7 @@ import { todayVietnam, type StaffAssignment, type Staff } from '../staff/staffCo
 import { CreateProactiveMaintenance, FastRepairPolicyPanel } from './MaintenanceControls';
 import { CompensationPanel } from './CompensationPanel';
 import { IncidentCommandDialog, type IncidentCommand } from './IncidentCommandDialog';
+import { IncidentEvidencePreview } from './IncidentEvidencePreview';
 import {
   incidentStatuses,
   workStatuses,

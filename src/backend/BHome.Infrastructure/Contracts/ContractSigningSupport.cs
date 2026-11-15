@@ -106,7 +106,13 @@ internal sealed class CompactSignatureImageStore(BHomePersistenceContext db, IOb
         var entry = await EntryAsync(ownerUserId, t);
         if (entry is null) return null;
         using var buffer = new MemoryStream();
-        await storage.CopyToAsync(entry.ObjectKey, buffer, t);
+        try { await storage.CopyToAsync(entry.ObjectKey, buffer, t); }
+        catch (FileNotFoundException)
+        {
+            // A profile picture can be uploaded again. Missing optional artwork must
+            // not prevent reviewing the contract; signed PDF evidence is read elsewhere.
+            return null;
+        }
         return new SignatureImage(buffer.ToArray(), entry.Width, entry.Height, entry.Sha256, entry.UpdatedAt);
     }
 

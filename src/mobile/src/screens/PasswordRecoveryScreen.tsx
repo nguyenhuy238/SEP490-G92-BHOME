@@ -6,6 +6,7 @@ import { ApiError } from '../../../../packages/client-core/src/api';
 import { SessionClient } from '../../../../packages/client-core/src/sessionClient';
 import { authenticationLinkValues } from '../../../../packages/client-core/src/authLinks';
 import { useSession } from '../lib/SessionProvider';
+import { PasswordField } from '../components/PasswordField';
 
 export default function PasswordRecoveryScreen({ reset = false }: { reset?: boolean }) {
   const { baseUrl } = useSession();
@@ -90,20 +91,18 @@ export default function PasswordRecoveryScreen({ reset = false }: { reset?: bool
                 secureTextEntry
                 disabled={busy}
               />
-              <TextInput
+              <PasswordField
                 label="Mật khẩu mới"
                 value={password}
                 onChangeText={setPassword}
                 autoCapitalize="none"
-                secureTextEntry
                 disabled={busy}
               />
-              <TextInput
+              <PasswordField
                 label="Xác nhận mật khẩu"
                 value={repeat}
                 onChangeText={setRepeat}
                 autoCapitalize="none"
-                secureTextEntry
                 disabled={busy}
               />
             </>

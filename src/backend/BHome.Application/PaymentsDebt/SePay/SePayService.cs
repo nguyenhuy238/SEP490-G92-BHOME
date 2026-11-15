@@ -21,7 +21,8 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
     public Task ReconcileAsync(Guid id, CancellationToken token) => repository.TransactionAsync(async () =>
     {
         var received = await repository.EventAsync(id, token);
-        if (received.Status != "Pending") return true;
+        var retryEnvironment = received.Status == "ManualReview" && received.Reason == "sepay_environment_mismatch";
+        if (received.Status != "Pending" && !retryEnvironment) return true;
         if (!options.Enabled || received.Mode != options.Mode) return true;
         var tx = received.Transaction;
         async Task<bool> Finish(string status, string reason, Guid? receipt = null)
@@ -35,13 +36,17 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
         {
             if (prior.Amount != tx.TransferAmount || prior.OccurredAt != PaymentRules.Timestamp(tx.OccurredAt) || prior.TransferDescription != tx.Content)
                 throw new PaymentException(409, "sepay_transaction_identity_conflict");
-            return await Finish("Duplicate", "bank_transaction_already_received", prior.Id);
+            if (!retryEnvironment || received.TransferId != prior.Id)
+                return await Finish("Duplicate", "bank_transaction_already_received", prior.Id);
+            if (await payments.AllocationAsync(prior.Id, token) is not null)
+                return await Finish("Duplicate", "bank_transaction_already_received", prior.Id);
+            if (prior.IsDevelopmentDemo != (received.Mode == "Test")) throw new PaymentException(409, "sepay_transaction_identity_conflict");
         }
         if (await payments.ManualReferenceReceivedAsync(PaymentRules.NormalizeReference(tx.ReferenceCode), token))
             return await Finish("ManualReview", "legacy_bank_reference_requires_manual_review");
         var code = ResolveCode(tx);
         var target = code is null ? null : await repository.ResolveAsync(code, token);
-        var receipt = new PaymentTransfer
+        var receipt = prior ?? new PaymentTransfer
         {
             ProviderIdentity = "SEPAY:" + received.Mode.ToUpperInvariant(),
             BankReference = reference,
@@ -57,10 +62,10 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             ProposedInvoiceId = target?.Kind == "Invoice" ? target.ObligationId : null,
             ProposedDepositContractId = target?.Kind == "Deposit" ? target.ObligationId : null
         };
-        await repository.AddReceiptAsync(received, receipt, token);
+        if (prior is null) await repository.AddReceiptAsync(received, receipt, token);
         async Task<bool> Review(string reason)
         {
-            payments.Add(new PaymentReconciliation
+            if (received.Reason != reason || received.TransferId != receipt.Id) payments.Add(new PaymentReconciliation
             {
                 TransferId = receipt.Id,
                 InvoiceId = receipt.ProposedInvoiceId,
@@ -101,7 +106,7 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             if (contract is null || contract.Kind is not (ContractKind.Main or ContractKind.Holding) || contract.PreviousContractId is not null ||
                 contract.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Active))
                 return await Review("deposit_not_payable");
-            if (contract.IsDevelopmentDemo != receipt.IsDevelopmentDemo) return await Review("sepay_environment_mismatch");
+            if (ContractPaymentModes.IsTest(contract) != receipt.IsDevelopmentDemo) return await Review("sepay_environment_mismatch");
             outstanding = Math.Max(0, contract.RequiredDeposit - await payments.DepositAllocatedAsync(contract.Id, token));
             if (contract.Kind == ContractKind.Holding)
             {

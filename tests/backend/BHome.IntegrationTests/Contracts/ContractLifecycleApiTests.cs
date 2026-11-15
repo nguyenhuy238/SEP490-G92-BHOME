@@ -65,6 +65,15 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id, resident.Id);
     }
     private static string Path(Guid id, string operation = "") => $"/api/v1/contracts/{id}" + (operation.Length == 0 ? "" : "/" + operation);
+    [Fact]
+    public async Task AssignedStaffReadsReadinessButCannotActivateOrReadOtherLocations()
+    {
+        var a = await Setup(); var b = await Setup(); var id = await Draft(a);
+        var readiness = await Success<ActivationReadiness>(await a.Staff.Client.GetAsync(Path(id, "activation-readiness")));
+        Assert.False(readiness.Ready);
+        Assert.Equal(HttpStatusCode.NotFound, (await b.Staff.Client.GetAsync(Path(id, "activation-readiness"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(a.Staff, Path(id, "activate"))).StatusCode);
+    }
     private static async Task<HttpResponseMessage> Post(Actor actor, string path, object? input = null, Guid? key = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(input ?? new { }) };
@@ -86,6 +95,22 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await Success<ContractId>(await Post(w.Owner, Path(id, "deposit-verifications"), new DepositInput("SYNTHETIC-" + Guid.NewGuid(), amount, "Verified synthetic bank statement")));
     private async Task<Guid> Active(Workspace w)
     { var id = await Draft(w); await Signed(w, id); await Deposit(w, id); await Success<ContractView>(await Post(w.Owner, Path(id, "activate"))); return id; }
+
+    [Fact]
+    public async Task CaptureRoomsReportsRemainingCapacityFromActiveContracts()
+    {
+        var w = await Setup();
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var room = await db.Set<Room>().SingleAsync(r => r.Id == w.Room); room.Capacity = 2; await db.SaveChangesAsync();
+        }
+        var before = await w.Staff.Client.GetFromJsonAsync<BHome.Application.Ocr.NamedResource[]>($"/api/v1/capture/locations/{w.Location}/rooms");
+        Assert.Equal(2, before!.Single(r => r.Id == w.Room).RemainingCapacity);
+        await Active(w);
+        var after = await w.Staff.Client.GetFromJsonAsync<BHome.Application.Ocr.NamedResource[]>($"/api/v1/capture/locations/{w.Location}/rooms");
+        Assert.Equal(1, after!.Single(r => r.Id == w.Room).RemainingCapacity);
+    }
 
     [Fact]
     public async Task DevelopmentWorkflowUsesPrivateRealPdfAndDistinctSimulationEvidenceBeforeActivation()
@@ -565,8 +590,12 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal("Active", activeHolding.Status);
         Assert.Equal("SigningAndDepositCompleted", activeHolding.PriceLockTrigger);
         var conversionKey = Guid.NewGuid();
-        var main = (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id;
-        Assert.Equal(main, (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id);
+        Assert.True(new HoldingConversionInput(3000000).RequireInitialPayment);
+        // This regression isolates legacy deposit-credit allocation. Full initial rent/fee collection
+        // and automatic activation are exercised by AnonymousSigningTests' complete Sandbox chain.
+        var conversion = new HoldingConversionInput(3000000, RequireInitialPayment: false);
+        var main = (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), conversion, conversionKey))).Id;
+        Assert.Equal(main, (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), conversion, conversionKey))).Id);
         Assert.Equal("Active", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(holding)))!.Status);
         await Signed(w, main); await Deposit(w, main, 2000000); await Success<ContractView>(await Post(w.Owner, Path(main, "activate")));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
