@@ -24,6 +24,8 @@ vi.mock('../features/contracts/MainDraftScreen', () => ({
     roomId: string;
     residentIds: string[];
     onPrevious: () => void;
+    onReleased: (id: string) => void;
+    onList: () => void;
   }) =>
     props.visible ? (
       <div role="dialog" aria-label="Contract preparation">
@@ -31,6 +33,8 @@ vi.mock('../features/contracts/MainDraftScreen', () => ({
           Room: {props.roomId}; Residents: {props.residentIds.join(',')}
         </span>
         <button onClick={props.onPrevious}>Previous identity step</button>
+        <button onClick={() => props.onReleased('released-contract')}>Web released contract</button>
+        <button onClick={props.onList}>Contract list</button>
       </div>
     ) : null,
 }));
@@ -575,6 +579,23 @@ it('does not blindly create another Resident after a timeout with an unknown sav
   fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu quét CCCD' }));
   expect(state.json).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('dialog')).toBeNull();
+});
+it.each(['Web released contract', 'Contract list'])('keeps Staff on authorized contract routes after %s', async (action) => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  namePerson('Synthetic contract applicant');
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+  await openIdentity();
+  manualIdentity();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
+  await screen.findByText('Đã xác nhận 1/1 người ở');
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
+  fireEvent.click(screen.getByRole('button', { name: action }));
+  if (action === 'Web released contract')
+    expect(state.go).toHaveBeenCalledWith('signing', { contractId: 'released-contract' });
+  else expect(state.go).toHaveBeenCalledWith('signing');
+  expect(state.go.mock.calls.some(([destination]) => destination === 'contract')).toBe(false);
 });
 async function submitAlreadyConfirmed() {
   render(<OnboardingScreen />);

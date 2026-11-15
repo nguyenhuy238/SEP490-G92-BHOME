@@ -238,11 +238,18 @@ it.each([true, false])(
     const next = await screen.findByRole('button', { name: 'Tiếp tục thanh toán' });
     await waitFor(() => expect(next).toHaveProperty('disabled', false));
     fireEvent.click(next);
-    await screen.findByText('Bước 7/8');
+    await screen.findByText('Bước 8/8');
     await screen.findByText('Tiền cọc đã được xác minh');
     expect(request.mock.calls.some(([path]) => path.endsWith('/holding-activation'))).toBe(false);
   },
 );
+it('resumes at activation after verified deposit without activating the contract for Staff', async () => {
+  show(contract({ status: 'PendingActivation', isDevelopmentDemo: false }), 'Staff', 'staff');
+  await screen.findByText('Bước 8/8');
+  expect(screen.getByText('Đã xác minh tiền cọc · Đang tự động kích hoạt')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Hoàn tất' })).toBeNull();
+  expect(request.mock.calls.some(([path]) => path.endsWith('/holding-activation'))).toBe(false);
+});
 it('opens persisted draft without recreating it or sending invitations; Staff never requests Owner PDF', async () => {
   show(contract(), 'Staff', 'staff');
   expect(screen.getByText(/5\/8/)).toBeTruthy();
@@ -408,7 +415,7 @@ it('resumes steps 5 to 8 from changed server props and reloads room state after 
   expect(screen.getByText(/6\/8/)).toBeTruthy();
   update('PendingActivation');
   await screen.findByText('Tiền cọc đã được xác minh');
-  expect(screen.getByText(/7\/8/)).toBeTruthy();
+  expect(screen.getByText(/8\/8/)).toBeTruthy();
   expect(screen.queryByText('Giữ chỗ thành công')).toBeNull();
   room = 1;
   update('Active');

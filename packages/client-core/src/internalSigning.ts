@@ -67,11 +67,21 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
       ),
     status: (id: string) =>
       request<InternalSigningStatus>('/api/v1/contracts/' + id + '/internal-signing'),
-    invite: (id: string, snapshotHash: string, expiresAt: string, recipientEmail?: string,
-      contacts?: { residentId: string; email: string }[]) =>
+    invite: (
+      id: string,
+      snapshotHash: string,
+      expiresAt: string,
+      recipientEmail?: string,
+      contacts?: { residentId: string; email: string }[],
+    ) =>
       post<{ id: string; token?: string | null; status: string; expiresAt: string }>(
         '/api/v1/contracts/' + id + '/signing-invitations',
-        { snapshotHash, expiresAt, ...(recipientEmail?.trim() ? { recipientEmail: recipientEmail.trim() } : {}), ...(contacts?.length ? { contacts } : {}) },
+        {
+          snapshotHash,
+          expiresAt,
+          ...(recipientEmail?.trim() ? { recipientEmail: recipientEmail.trim() } : {}),
+          ...(contacts?.length ? { contacts } : {}),
+        },
       ),
     revoke: (id: string, invitationId: string) =>
       request<void>('/api/v1/contracts/' + id + '/signing-invitations/' + invitationId, {
@@ -93,9 +103,13 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
         '/api/v1/contracts/' + id + '/internal-signing/owner-simulation',
         { documentHash, consent: true, consentVersion: 'internal-acceptance-v1' },
       ),
-    acceptAccount: (userName: string, token: string, newPassword: string) =>
+    validateAccountInvitation: (token: string) =>
+      post<{ status: string; email?: string | null }>('/api/v1/auth/accept-invitation/validate', {
+        token,
+      }),
+    acceptAccount: (userName: string | null, token: string, newPassword: string) =>
       post<void>('/api/v1/auth/accept-invitation', {
-        userName: userName.trim(),
+        userName: userName?.trim(),
         token: token.trim(),
         newPassword,
       }),
@@ -104,8 +118,10 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
 export function signingMessage(error: unknown) {
   const value = error as { code?: string; problem?: { code?: string } };
   const code = value?.code ?? value?.problem?.code;
-  if (code === 'signing_contacts_required') return 'Nhập email hợp lệ, riêng biệt cho từng người ở trước khi gửi lời mời ký.';
-  if (code === 'signing_contacts_invalid') return 'Danh sách email không khớp người ở trong hợp đồng. Hãy tải lại và kiểm tra.';
+  if (code === 'signing_contacts_required')
+    return 'Nhập email hợp lệ, riêng biệt cho từng người ở trước khi gửi lời mời ký.';
+  if (code === 'signing_contacts_invalid')
+    return 'Danh sách email không khớp người ở trong hợp đồng. Hãy tải lại và kiểm tra.';
   if (code === 'holding_owner_approval_required')
     return 'Owner chưa phê duyệt hợp đồng giữ chỗ. Hãy phê duyệt trên Web trước khi ký.';
   if (code === 'exact_document_consent_required')

@@ -147,7 +147,9 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
     }
     public async Task<bool> AcceptAsync(AcceptInvitationRequest request, CancellationToken t)
     {
-        var candidate = await users.FindByNameAsync(request.UserName); if (candidate is null) return false;
+        var candidate = await InvitationUserAsync(request.Token, t); if (candidate is null) return false;
+        // Legacy clients may still send UserName. It can reject a mismatch, never select another account.
+        if (!string.IsNullOrEmpty(request.UserName) && !string.Equals(candidate.UserName, request.UserName, StringComparison.OrdinalIgnoreCase)) return false;
         string token; try { token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Token)); } catch (FormatException) { return false; }
         await using var tx = await identity.BeginTransactionAsync(t);
         var user = await security.LockUserAsync(candidate.Id, t); var grant = await identity.ResetGrantAsync(candidate.Id, t);
@@ -158,6 +160,31 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         user.EmailConfirmed = true; if (!(await users.UpdateAsync(user)).Succeeded) return false;
         grant.ConsumedAt = sql.Now; await security.RevokeAllAsync(user.Id, "InvitationAccepted", t); security.Audit("AccountInvitationAccepted", true, user.Id);
         await identity.SaveChangesAsync(t); await tx.CommitAsync(t); return true;
+    }
+
+    private Task<ApplicationUser?> InvitationUserAsync(string token, CancellationToken t)
+    {
+        var hash = IdentitySecurityStore.Hash(token);
+        return db.Users.AsNoTracking().SingleOrDefaultAsync(u => EF.Property<string>(u, "reset_token_hash") == hash, t);
+    }
+
+    public async Task<InvitationValidationResult> ValidateAsync(InvitationValidationRequest request, CancellationToken t)
+    {
+        var candidate = await InvitationUserAsync(request.Token, t);
+        if (candidate is null) return new("Invalid");
+        await using var tx = await identity.BeginTransactionAsync(t);
+        var user = await security.LockUserAsync(candidate.Id, t);
+        var grant = await identity.ResetGrantAsync(candidate.Id, t);
+        if (user is null || grant is null || grant.TokenHash != IdentitySecurityStore.Hash(request.Token)) return new("Invalid");
+        if (!user.IsActive) return new("Revoked");
+        if (grant.ConsumedAt is not null) return new(user.EmailConfirmed ? "AlreadyActivated" : "Used");
+        if (grant.ExpiresAt <= sql.Now) return new("Expired");
+        string token;
+        try { token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Token)); }
+        catch (FormatException) { return new("Invalid"); }
+        if (!await users.VerifyUserTokenAsync(user, TokenOptions.DefaultProvider, "AccountInvitation", token)) return new("Revoked");
+        if (user.EmailConfirmed) return new("AlreadyActivated");
+        return new("Valid", user.Email);
     }
 
     private bool CoolingDown(PasswordResetGrant? grant) => grant is { ConsumedAt: null } && grant.ExpiresAt > sql.Now &&

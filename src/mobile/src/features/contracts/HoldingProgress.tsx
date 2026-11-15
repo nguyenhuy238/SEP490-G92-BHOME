@@ -22,7 +22,7 @@ export function HoldingProgress({ current }: { current: number }) {
       />
       <View style={styles.row}>
         {current < holdingSteps.length - 1 && (
-          <Text style={styles.next}>Tiếp theo: {holdingSteps[current + 1]?.label}</Text>
+          <Text style={styles.next} numberOfLines={1}>Tiếp theo: {holdingSteps[current + 1]?.label}</Text>
         )}
       </View>
       <Button
@@ -30,8 +30,8 @@ export function HoldingProgress({ current }: { current: number }) {
         icon="information-outline"
         onPress={() => setExpanded((value) => !value)}
         accessibilityState={{ expanded }}
-        contentStyle={{ minHeight: 36 }}
-        style={{ alignSelf: 'flex-start', marginLeft: -8 }}
+        contentStyle={{ minHeight: 44 }}
+        style={styles.infoButton}
         labelStyle={styles.info}
       >
         Xem quy trình giữ chỗ
@@ -54,12 +54,13 @@ export function HoldingProgress({ current }: { current: number }) {
   );
 }
 const styles = StyleSheet.create({
-  root: { gap: 6, paddingVertical: 4 },
+  root: { gap: 6, paddingVertical: 6 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  count: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  count: { fontSize: 13, fontWeight: '600', color: '#526581' },
   title: { fontSize: 14, fontWeight: '700', color: '#193653', flexShrink: 1, textAlign: 'right' },
-  next: { fontSize: 12, color: '#64748B', flexShrink: 1 },
+  next: { fontSize: 12, color: '#526581', flexShrink: 1 },
   bar: { height: 5, borderRadius: 8, backgroundColor: '#E2E8F0' },
   info: { fontSize: 12, color: '#193653' },
+  infoButton: { alignSelf: 'flex-start', marginLeft: -8 },
   details: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, gap: 6, borderWidth: 1, borderColor: '#E2E8F0' },
 });

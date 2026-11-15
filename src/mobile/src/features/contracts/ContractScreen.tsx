@@ -634,8 +634,8 @@ function LiveContractDetail({
                 </Text>
                 <Text>Owner: {c.approvedAt ? 'Đã duyệt' : 'Chờ duyệt'}</Text>
                 <Text>
-                  Giá thuê được máy chủ xác định theo chính sách phòng. Phòng chỉ được giữ sau khi
-                  Owner kích hoạt.
+                  Giá thuê được máy chủ xác định theo chính sách phòng. Hệ thống tự động giữ phòng
+                  khi đủ chữ ký, thanh toán và các điều kiện hợp đồng.
                 </Text>
               </>
             )}

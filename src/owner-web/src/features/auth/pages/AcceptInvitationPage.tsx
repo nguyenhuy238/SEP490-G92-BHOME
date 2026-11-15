@@ -1,161 +1,198 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { readAuthenticationFragment } from '../../../../../../packages/client-core/src/authLinks';
 import { createApiClient } from '../../../../../../packages/client-core/src/api';
+import { internalSigningClient } from '../../../../../../packages/client-core/src/internalSigning';
 import { apiBaseUrl } from '../../../services/config';
-import {
-  internalSigningClient,
-  signingMessage,
-} from '../../../../../../packages/client-core/src/internalSigning';
+import { PasswordField } from '../components/PasswordField';
+
+const invitationMessages: Record<string, string> = {
+  Invalid: 'Liên kết lời mời không hợp lệ. Vui lòng mở lại liên kết trong email.',
+  Expired: 'Lời mời đã hết hạn. Vui lòng liên hệ người quản lý để được gửi lại lời mời.',
+  Used: 'Lời mời đã được sử dụng. Vui lòng đăng nhập hoặc liên hệ người quản lý.',
+  AlreadyActivated: 'Tài khoản của bạn đã được kích hoạt. Vui lòng đăng nhập.',
+  Revoked: 'Lời mời đã bị thu hồi. Vui lòng liên hệ người quản lý để được gửi lại lời mời.',
+};
+const passwordHelp = 'Ít nhất 12 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.';
 
 export default function AcceptInvitationPage() {
   const location = useLocation(),
     navigate = useNavigate();
-  const [link] = useState(() => readAuthenticationFragment(location.hash));
+  // Capture once before scrubbing; router replacement must not discard the token.
+  const [link, setLink] = useState(() =>
+    readAuthenticationFragment(location.hash || location.search),
+  );
   useEffect(() => {
-    if (location.hash) void navigate(location.pathname, { replace: true });
-  }, [location.hash, location.pathname, navigate]);
+    if (location.hash || location.search) void navigate(location.pathname, { replace: true });
+  }, [location.hash, location.search, location.pathname, navigate]);
   const api = useMemo(() => internalSigningClient(createApiClient(apiBaseUrl)), []);
-  const [email, setEmail] = useState(link.userName),
-    [token, setToken] = useState(link.token),
-    [password, setPassword] = useState(''),
+  const [invitation, setInvitation] = useState<{ status: string; email?: string | null }>({
+    status: link.token ? 'Loading' : 'Invalid',
+  });
+  const [revision, setRevision] = useState(0);
+  const [password, setPassword] = useState(''),
     [repeat, setRepeat] = useState('');
+  const [validation, setValidation] = useState({ password: '', repeat: '' });
   const [busy, setBusy] = useState(false),
-    [done, setDone] = useState(false),
     [error, setError] = useState('');
   const lock = useRef(false);
-  const [recognized, setRecognized] = useState(Boolean(link.userName && link.token));
-  function updateInvitation(value: string) {
-    try {
-      const url = new URL(value.trim());
-      const parsed = readAuthenticationFragment(url.hash || url.search);
-      if (parsed.userName && parsed.token) {
-        setEmail(parsed.userName);
-        setToken(parsed.token);
-        setRecognized(true);
-        setError('');
-        return;
-      }
-    } catch {
-      /* A raw invitation token is also supported. */
-    }
-    setToken(value);
-  }
+  useEffect(() => {
+    if (!link.token) return;
+    let active = true;
+    void api
+      .validateAccountInvitation(link.token)
+      .then((result) => {
+        if (active)
+          setInvitation(
+            result.status === 'Valid' && !result.email ? { status: 'Invalid' } : result,
+          );
+      })
+      .catch(() => {
+        if (active) setInvitation({ status: 'Unavailable' });
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, link.token, revision]);
+  const valid = invitation.status === 'Valid' && Boolean(invitation.email);
   return (
-    <Box component="main" sx={{ p: 3, maxWidth: 520, mx: 'auto' }}>
-      <Paper sx={{ p: 3 }}>
-        <Stack
-          component="form"
-          spacing={2}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (lock.current) return;
-            if (!token.trim() || token.includes('@')) {
-              setError(
-                'Ô mã lời mời không nhận địa chỉ email. Hãy mở link thiết lập tài khoản trong email BHOME mới nhất hoặc dán toàn bộ link vào ô này.',
-              );
-              return;
-            }
-            if (
-              password !== repeat ||
-              password.length < 12 ||
-              !/[A-Z]/.test(password) ||
-              !/[a-z]/.test(password) ||
-              !/[0-9]/.test(password) ||
-              !/[^a-zA-Z0-9]/.test(password)
-            ) {
-              setError(
-                'Mật khẩu cần ít nhất 12 ký tự, gồm chữ hoa, chữ thường, số, ký tự đặc biệt và khớp xác nhận.',
-              );
-              return;
-            }
-            lock.current = true;
-            setBusy(true);
-            setError('');
-            void api
-              .acceptAccount(email, token, password)
-              .then(() => {
-                setDone(true);
-                setPassword('');
-                setRepeat('');
-                setToken('');
-              })
-              .catch((e) =>
-                setError(
-                  (e as { status?: number }).status === 400
-                    ? 'Liên kết chưa hợp lệ, đã hết hạn hoặc đã sử dụng. Hãy mở link trong email BHOME mới nhất; nếu vẫn lỗi, liên hệ quản lý để gửi lại email thiết lập tài khoản.'
-                    : signingMessage(e),
-                ),
-              )
-              .finally(() => {
-                lock.current = false;
-                setBusy(false);
-              });
-          }}
-        >
+    <Box component="main" sx={{ p: { xs: 2, sm: 3 }, maxWidth: 520, mx: 'auto' }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+        <Stack spacing={2}>
           <Typography component="h1" variant="h5">
             Thiết lập tài khoản BHOME
           </Typography>
-          {error && <Alert severity="error">{error}</Alert>}
-          {done ? (
-            <Alert severity="success">
-              Đã thiết lập mật khẩu. Bạn có thể đăng nhập ứng dụng BHOME bằng email và mật khẩu mới.
-            </Alert>
-          ) : (
-            <>
+          {invitation.status === 'Loading' ? (
+            <Stack direction="row" spacing={1} role="status">
+              <CircularProgress size={20} />
+              <Typography>Đang kiểm tra lời mời…</Typography>
+            </Stack>
+          ) : valid ? (
+            <Stack
+              component="form"
+              spacing={2}
+              noValidate
+              aria-busy={busy}
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (lock.current || !valid) return;
+                const fields = {
+                  password:
+                    password.length < 12 ||
+                    password.length > 1024 ||
+                    !/[A-Z]/.test(password) ||
+                    !/[a-z]/.test(password) ||
+                    !/[0-9]/.test(password) ||
+                    !/[^a-zA-Z0-9]/.test(password)
+                      ? passwordHelp
+                      : '',
+                  repeat:
+                    repeat !== password
+                      ? 'Hai mật khẩu không khớp.'
+                      : !repeat
+                        ? 'Vui lòng xác nhận mật khẩu.'
+                        : '',
+                };
+                setValidation(fields);
+                if (fields.password || fields.repeat) return;
+                lock.current = true;
+                setBusy(true);
+                setError('');
+                void api
+                  .acceptAccount(null, link.token, password)
+                  .then(() => {
+                    setPassword('');
+                    setRepeat('');
+                    setLink({ userName: '', token: '' });
+                    void navigate('/login', { replace: true, state: { invitationAccepted: true } });
+                  })
+                  .catch(async (failure: unknown) => {
+                    if ((failure as { status?: number }).status === 400) {
+                      try {
+                        const result = await api.validateAccountInvitation(link.token);
+                        setInvitation(result);
+                        if (result.status === 'Valid')
+                          setValidation((value) => ({
+                            ...value,
+                            password: 'Mật khẩu chưa đáp ứng yêu cầu bảo mật. ' + passwordHelp,
+                          }));
+                      } catch {
+                        setError('Không thể kiểm tra lời mời. Vui lòng thử lại sau.');
+                      }
+                    } else
+                      setError(
+                        'Không thể thiết lập tài khoản. Vui lòng kiểm tra kết nối rồi thử lại.',
+                      );
+                  })
+                  .finally(() => {
+                    lock.current = false;
+                    setBusy(false);
+                  });
+              }}
+            >
+              <Typography>Tạo mật khẩu để kích hoạt tài khoản của bạn.</Typography>
               <TextField
-                required
                 label="Email nhận lời mời"
-                type="text"
+                value={invitation.email}
                 autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                slotProps={{ input: { readOnly: recognized } }}
-                disabled={busy}
+                slotProps={{ input: { readOnly: true } }}
               />
-              {recognized ? (
-                <Alert severity="info">Đã nhận diện liên kết lời mời.</Alert>
-              ) : (
-                <>
-                  <Typography>
-                    BHOME tự gửi email thiết lập tài khoản sau khi hợp đồng được kích hoạt. Mở link
-                    trong email để điền sẵn thông tin; mã lời mời không phải email hay mật khẩu.
-                  </Typography>
-                  <TextField
-                    required
-                    label="Mã lời mời hoặc liên kết trong email"
-                    helperText="Dán toàn bộ link thiết lập tài khoản từ email BHOME mới nhất. Không nhập địa chỉ email vào đây."
-                    autoComplete="off"
-                    name="bhome-invitation-link"
-                    value={token}
-                    onChange={(e) => updateInvitation(e.target.value)}
-                    disabled={busy}
-                  />
-                </>
-              )}
-              <TextField
+              {error && <Alert severity="error">{error}</Alert>}
+              <PasswordField
                 required
                 label="Mật khẩu mới"
-                type="password"
                 autoComplete="new-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(event) => setPassword(event.target.value)}
                 disabled={busy}
-                helperText="Ít nhất 12 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt."
+                error={Boolean(validation.password)}
+                helperText={validation.password || passwordHelp}
               />
-              <TextField
+              <PasswordField
                 required
                 label="Xác nhận mật khẩu"
-                type="password"
                 autoComplete="new-password"
                 value={repeat}
-                onChange={(e) => setRepeat(e.target.value)}
+                onChange={(event) => setRepeat(event.target.value)}
                 disabled={busy}
+                error={Boolean(validation.repeat)}
+                helperText={validation.repeat}
               />
-              <Button type="submit" variant="contained" disabled={busy}>
-                Thiết lập mật khẩu
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={busy}
+                startIcon={busy ? <CircularProgress size={18} /> : undefined}
+              >
+                {busy ? 'Đang thiết lập…' : 'Thiết lập mật khẩu'}
               </Button>
+            </Stack>
+          ) : (
+            <>
+              <Alert severity="warning">
+                {invitationMessages[invitation.status] ||
+                  'Không thể kết nối để kiểm tra lời mời. Vui lòng thử lại.'}
+              </Alert>
+              {invitation.status === 'Unavailable' && (
+                <Button
+                  onClick={() => {
+                    setInvitation({ status: 'Loading' });
+                    setRevision((value) => value + 1);
+                  }}
+                >
+                  Thử lại
+                </Button>
+              )}
             </>
           )}
           <Button component={Link} to="/login">

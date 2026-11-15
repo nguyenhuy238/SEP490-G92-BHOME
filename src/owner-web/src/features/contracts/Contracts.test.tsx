@@ -100,7 +100,7 @@ it('keeps Holding actions separate from Main activation, renewal and move-out', 
     holdingExpiresAt: '2099-01-01T00:00:00Z',
   };
   const operations = contractActions(holding, null, 'Owner', owner).map((x) => x.operation);
-  expect(operations).toContain('holding-activation');
+  expect(operations).not.toContain('holding-activation');
   expect(operations).not.toContain('activate');
   expect(operations).not.toContain('renewals');
   expect(
@@ -268,30 +268,20 @@ it('shows backend blockers and exact VND, and keeps activation disabled for insu
     <ContractDetailPanel api={api} id={id} actorId={owner} locationId={id} onChanged={vi.fn()} />,
   );
   expect(await screen.findByText('Tiền cọc đã xác minh chưa đủ.')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).not.toBeInTheDocument();
   expect(screen.getByText('999.999.999.999.999.999 ₫')).toBeInTheDocument();
   expect(request.mock.calls.every(([, init]) => init?.method !== 'POST')).toBe(true);
 });
-it('requires confirmation and sends one activation mutation only after the server reports readiness', async () => {
+it('shows automatic activation readiness without a manual mutation', async () => {
   const { api, request } = setup(draft, true);
   const changed = vi.fn();
   api.mutate = vi.fn().mockResolvedValue({ ...draft, status: 'Active' });
   mount(
     <ContractDetailPanel api={api} id={id} actorId={owner} locationId={id} onChanged={changed} />,
   );
-  const activate = await screen.findByRole('button', { name: 'Kích hoạt hợp đồng' });
-  expect(activate).toBeEnabled();
-  fireEvent.click(activate);
+  await screen.findByText('Đủ điều kiện. Hệ thống đang tự động cập nhật trạng thái hợp đồng.');
+  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).not.toBeInTheDocument();
   expect(api.mutate).not.toHaveBeenCalled();
-  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
-  await waitFor(() => expect(api.mutate).toHaveBeenCalledTimes(1));
-  expect(api.mutate).toHaveBeenCalledWith(
-    id,
-    'activate',
-    undefined,
-    expect.stringMatching(/^[0-9a-f-]{36}$/),
-  );
-  await waitFor(() => expect(changed).toHaveBeenCalled());
   expect(request).toHaveBeenCalled();
 });
 it('requires an explicit Holding cancellation cause and confirmation before sending a financial decision', async () => {

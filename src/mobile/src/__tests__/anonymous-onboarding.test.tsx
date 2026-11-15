@@ -102,32 +102,13 @@ const token = 'A'.repeat(64);
 function json(value: unknown) {
   return new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } });
 }
-it('sets a new password through the same anonymous backend endpoint and waits for confirmation', async () => {
+it('blocks password setup without an invitation link instead of asking for a manual token', () => {
   const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
   vi.stubGlobal('fetch', fetch);
   render(<AcceptInvitationScreen />);
-  fireEvent.change(screen.getByLabelText('Email nhận lời mời'), {
-    target: { value: 'synthetic@example.invalid' },
-  });
-  fireEvent.change(screen.getByLabelText('Mã lời mời trong email'), {
-    target: { value: 'synthetic-account-token' },
-  });
-  fireEvent.change(screen.getByLabelText('Mật khẩu mới'), {
-    target: { value: 'Synthetic!Password493' },
-  });
-  fireEvent.change(screen.getByLabelText('Xác nhận mật khẩu'), {
-    target: { value: 'Synthetic!Password493' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Thiết lập mật khẩu' }));
-  expect(await screen.findByText(/Đã thiết lập mật khẩu/)).toBeTruthy();
-  expect(fetch).toHaveBeenCalledOnce();
-  expect(fetch.mock.calls[0]![0]).toBe('https://api.example.invalid/api/v1/auth/accept-invitation');
-  expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual({
-    userName: 'synthetic@example.invalid',
-    token: 'synthetic-account-token',
-    newPassword: 'Synthetic!Password493',
-  });
-  expect(new Headers(fetch.mock.calls[0]![1].headers).has('Authorization')).toBe(false);
+  expect(screen.getByRole('alert').textContent).toContain('không hợp lệ');
+  expect(screen.queryByLabelText('Mật khẩu mới')).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
 });
 it.each([true, false])(
   'reads the OTP-gated PDF and only shows success when backend acceptance is %s',
@@ -206,13 +187,6 @@ it('does not treat failed password setup as an activated account', async () => {
       ),
   );
   render(<AcceptInvitationScreen />);
-  fireEvent.change(screen.getByLabelText('Mật khẩu mới'), {
-    target: { value: 'Synthetic!Password493' },
-  });
-  fireEvent.change(screen.getByLabelText('Xác nhận mật khẩu'), {
-    target: { value: 'Synthetic!Password493' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Thiết lập mật khẩu' }));
   expect(await screen.findByRole('alert')).toBeTruthy();
   expect(screen.queryByText(/Đã thiết lập mật khẩu/)).toBeNull();
 });

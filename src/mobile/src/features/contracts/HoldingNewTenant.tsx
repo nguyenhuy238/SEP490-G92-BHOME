@@ -114,7 +114,7 @@ export function HoldingNewTenant({
             onChange={setName}
             disabled={busy || !!residentId || uncertain}
           />
-          <Text>Email sẽ được nhập ở bước gửi lời mời ký, chưa gắn với tài khoản Tenant.</Text>
+          <Text style={styles.helper}>Email nhận lời mời ký sẽ được nhập ở bước ký hợp đồng.</Text>
         </>
       )}
       {stage === 'details' ? (
@@ -263,6 +263,7 @@ const styles = StyleSheet.create({
   footerButton: { borderRadius: 12 },
   primaryContent: { minHeight: 50, flexDirection: 'row-reverse' },
   secondaryContent: { minHeight: 44 },
+  helper: { fontSize: 13, lineHeight: 19, color: '#526581' },
   success: { fontSize: 13, color: staffColors.green },
   warning: { fontSize: 13, lineHeight: 20, color: '#9A5D0A' },
 });

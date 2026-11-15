@@ -259,7 +259,10 @@ export function ContractDraftForm({
               </View>
             )}
             {query.loading && (
-              <ActivityIndicator accessibilityLabel="Đang kiểm tra phòng giữ chỗ" />
+              <View style={styles.refreshStatus}>
+                <ActivityIndicator size="small" accessibilityLabel="Đang kiểm tra phòng giữ chỗ" />
+                <Text style={styles.description}>Đang tải các phòng có thể giữ chỗ…</Text>
+              </View>
             )}
             {!query.loading && !query.error && !roomOptions.length && (
               <View style={styles.emptyRooms}>
@@ -398,7 +401,7 @@ export function ContractDraftForm({
         )}
         {!!error && (
           <Text accessibilityRole="alert" style={ui.red}>
-            {error}
+            {conciseMessage(error)}
           </Text>
         )}
       </View>
@@ -461,7 +464,7 @@ const styles = StyleSheet.create({
   refreshStatus: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   refreshDescription: { flex: 1 },
   intro: { gap: 4 },
-  panel: { gap: 12, marginBottom: 8 },
+  panel: { gap: 12, marginBottom: 12 },
   description: { fontSize: 13, lineHeight: 20, color: '#64748B' },
   sectionTitle: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: staffColors.navy },
   formCard: {

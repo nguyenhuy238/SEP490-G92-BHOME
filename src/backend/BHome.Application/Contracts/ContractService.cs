@@ -414,11 +414,25 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         {
             var c = await repository.FindAsync(id, t) ?? throw ContractException.Missing();
             if (c.Status == ContractStatus.Active) return true;
-            if (c.Kind != ContractKind.Main || !c.InitialPaymentRequired || c.PreviousContractId is not null)
+            if (c.Kind == ContractKind.Holding)
+            {
+                await ActivateHoldingReadyAsync(c, null, true, t);
+                return true;
+            }
+            if (c.Kind != ContractKind.Main || c.PreviousContractId is not null)
                 throw ContractException.Conflict("initial_main_contract_required");
             await ActivateReadyAsync(c, c.OwnerSignerId, null, true, t);
             return true;
         }, t);
+    }
+
+    // Trusted scheduler probe; activation rechecks every condition under the Room transaction lock.
+    public async Task<bool> AutomaticActivationReadyAsync(Guid id, CancellationToken t)
+    {
+        var c = await repository.FindAsync(id, t);
+        if (c is null || c.Status != ContractStatus.PendingActivation || c.PreviousContractId is not null) return false;
+        return c.Kind == ContractKind.Holding ? (await HoldingReadiness(c, t)).Ready :
+            c.Kind == ContractKind.Main && (await Readiness(c, t)).Ready;
     }
 
     private async Task<ContractView> ActivateReadyAsync(Contract c, Guid approvedOwner, Guid? key, bool automatic, CancellationToken t)

@@ -419,14 +419,14 @@ export function RentalContractFlow({
                 <Pill tone="green">
                   {contract.initialPaymentRequired
                     ? 'Đủ điều kiện kích hoạt tự động'
-                    : 'Đủ điều kiện để Chủ cơ sở kích hoạt'}
+                    : 'Đủ điều kiện kích hoạt tự động'}
                 </Pill>
               )}
               {role !== 'Owner' && (
                 <Text style={ui.muted}>
                   {contract.initialPaymentRequired
                     ? 'Hệ thống tự kích hoạt sau khi xác nhận đủ chữ ký và thanh toán, sau đó gửi email thiết lập tài khoản Tenant.'
-                    : 'Chủ cơ sở kiểm tra và kích hoạt hợp đồng.'}
+                    : 'Hệ thống tự động kích hoạt khi đủ chữ ký, thanh toán và các điều kiện hợp đồng.'}
                 </Text>
               )}
             </Box>

@@ -542,12 +542,12 @@ function NewResidentOnboarding() {
           onList={() => {
             dirtyRef.current = false;
             setFinished(true);
-            go('contract');
+            go('signing');
           }}
           onReleased={(id) => {
             dirtyRef.current = false;
             setFinished(true);
-            go('contract', { contractId: id });
+            go('signing', { contractId: id });
           }}
         />
       )}

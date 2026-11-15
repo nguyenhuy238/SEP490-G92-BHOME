@@ -109,6 +109,15 @@ public sealed partial class ContractLifecycleApiTests
                 Assert.Equal(immediate.Id, sessionReplay.Id);
                 Assert.DoesNotContain(email.Sent, m => m.EventType == "CONTRACT_SIGNING_OTP");
                 Assert.Equal("PendingSigning", (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
+                await using (var scope = host.Services.CreateAsyncScope())
+                    Assert.False(await scope.ServiceProvider.GetRequiredService<ContractService>().AutomaticActivationReadyAsync(id, default));
+                await Deposit(w, id, holding ? 1000000 : 3000000);
+                await using (var scope = host.Services.CreateAsyncScope())
+                {
+                    var service = scope.ServiceProvider.GetRequiredService<ContractService>();
+                    Assert.False(await service.AutomaticActivationReadyAsync(id, default));
+                    await Assert.ThrowsAsync<ContractException>(() => service.AutoActivatePaidMainAsync(id, default));
+                }
                 continue;
             }
             // Bấm Ký: the PDF is prepared and a one-time code goes to the signer's email only.
@@ -150,11 +159,20 @@ public sealed partial class ContractLifecycleApiTests
         var contract = (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
         Assert.Equal("PendingActivation", contract.Status);
 
-        if (!holding)
+        if (!ownerSession)
         {
-            await Deposit(w, id);
-            await Success<ContractView>(await Post(w.Owner, Path(id, "activate")));
+            await using (var scope = host.Services.CreateAsyncScope())
+                Assert.False(await scope.ServiceProvider.GetRequiredService<ContractService>().AutomaticActivationReadyAsync(id, default));
+            await Deposit(w, id, holding ? 1000000 : 3000000);
         }
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<ContractService>();
+            Assert.True(await service.AutomaticActivationReadyAsync(id, default));
+            await service.AutoActivatePaidMainAsync(id, default);
+            await service.AutoActivatePaidMainAsync(id, default);
+        }
+        Assert.Equal("Active", (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
         var document = await tenant.Client.GetAsync(Path(id, "document"));
         document.EnsureSuccessStatusCode();
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(await document.Content.ReadAsByteArrayAsync())));

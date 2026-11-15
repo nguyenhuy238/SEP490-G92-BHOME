@@ -185,39 +185,45 @@ export function ContractSigningStep({
     <>
       <Box>
         <Heading title="Bước 6 · Ký hợp đồng" />
-        <Text>
-          {c.kind === 'Holding' ? 'Hợp đồng giữ chỗ' : 'Hợp đồng thuê'} · {c.locationName} · Phòng{' '}
-          {c.roomNumber}
-        </Text>
-        <Text>
-          Đại diện: {c.occupants?.find((p) => p.representative)?.label ?? 'Theo hồ sơ hợp đồng'}
+        {c.kind !== 'Holding' && (
+          <Text style={ui.muted}>
+            Phòng {c.roomNumber} · {c.locationName} · Đại diện: {c.occupants?.find((p) => p.representative)?.label ?? 'Theo hồ sơ hợp đồng'}
+          </Text>
+        )}
+        <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: '700', color: '#193653' }}>
+          Tiến độ chữ ký
         </Text>
         {[
           { id: c.ownerSignerId, label: 'Chủ nhà (Owner)', at: status?.ownerAcceptedAt },
-          { id: c.tenantUserId, label: 'Đại diện người thuê', at: status?.tenantAcceptedAt },
+          { id: c.tenantUserId, label: representativeLabel, at: status?.tenantAcceptedAt },
         ].map((p) => {
           const signature = c.signatures.find(
             (s) => s.signerUserId === p.id && s.status === 'Signed',
           );
           const at = signature?.signedAt ?? p.at;
           return (
-            <Text key={p.label}>
-              {p.label}:{' '}
-              {at
-                ? `Đã ký · ${formatInstant(at)} · ${signature?.method ? signingMethodLabel(signature.method) : 'OTP qua lời mời'}`
-                : 'Chờ ký'}
-            </Text>
+            <React.Fragment key={p.label}>
+              <Text style={{ fontSize: 13, lineHeight: 20, fontWeight: '600', color: at ? '#16804A' : '#193653' }}>
+                {p.label}: {at ? 'Đã ký' : 'Chờ ký'}
+              </Text>
+              {!!at && (
+                <Text style={{ fontSize: 12, lineHeight: 18, color: '#526581' }}>
+                  {formatInstant(at)} · {signature?.method ? signingMethodLabel(signature.method) : 'OTP qua lời mời'}
+                </Text>
+              )}
+            </React.Fragment>
           );
         })}
-        <Text style={ui.muted}>
-          OTP và chữ ký vẽ là chữ ký điện tử; dấu PDF BHOME không phải chứng thư số cá nhân của
-          người ký.
+        <Text style={{ backgroundColor: '#F2F6FB', padding: 12, borderRadius: 10, fontSize: 13, lineHeight: 19, color: '#193653' }}>
+          {complete ? 'Đã hoàn tất ký. ' : 'Thao tác tiếp theo: '}{nextSignerMessage}
         </Text>
-        <Text>{nextSignerMessage}</Text>
+        <Text style={{ fontSize: 12, lineHeight: 18, color: '#526581' }}>
+          OTP và chữ ký vẽ là chữ ký điện tử; dấu PDF BHOME không phải chứng thư số cá nhân của người ký.
+        </Text>
         {internal && !status?.tenantAcceptedAt && (
           <>
             {currentInvitation && (
-              <Text>
+              <Text style={ui.muted}>
                 {signingInvitationLabel(currentInvitation.status)} · {status?.maskedEmail}
               </Text>
             )}
@@ -242,7 +248,7 @@ export function ContractSigningStep({
                 <Input key={person.id} label={`Email nhận lời mời · ${person.label}`} email value={emails[person.id] ?? ''}
                   onChange={(email) => setEmails((before) => ({ ...before, [person.id]: email }))} disabled={busy} />
               ))}
-              <Text>Email chỉ dùng cho phiên ký này. Tài khoản Tenant được tạo sau khi kích hoạt hợp đồng chính thức.</Text>
+              <Text style={ui.muted}>Email dùng cho lời mời ký, không tự tạo tài khoản Tenant.</Text>
               <Action
                 disabled={
                   busy ||

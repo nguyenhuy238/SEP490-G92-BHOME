@@ -437,8 +437,8 @@ it('keeps activation blocked for Owner when backend readiness is false', () => {
   }));
   flow(c, 'Owner', { ...ready, ready: false, blockers: ['effective_date_not_reached'] });
   expect(
-    (screen.getByRole('button', { name: 'Kích hoạt hợp đồng' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
+    screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' }),
+  ).toBeNull();
   expect(screen.queryByText('Hợp đồng đã được kích hoạt')).toBeNull();
 });
 it('renders success only from Active and returns to the existing list', () => {

@@ -398,6 +398,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPaymentLedger, BHome.Infrastructure.PaymentsDebt.MainInitialPaymentLedger>();
         services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.PaymentsDebt.MainContractActivationJob>();
         services.AddScoped<BHome.Infrastructure.PaymentsDebt.MainContractActivationScheduling>();
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.PaymentsDebt.MainContractActivationScheduling>());
         services.AddScoped<BHome.Application.PaymentsDebt.IMainInitialPayments, BHome.Infrastructure.PaymentsDebt.MainInitialPayments>();
         services.AddSingleton<BHome.Application.Contracts.IHoldingTestScope, BHome.Infrastructure.Contracts.HoldingTestScope>();
         services.AddHostedService<MeterEvidenceCleanup>();

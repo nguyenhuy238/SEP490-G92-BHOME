@@ -74,7 +74,7 @@ export function ContractDetailPanel({
   locationId: string;
   onChanged: (id?: string) => void;
 }) {
-  const detail = useContractDetail(api, id, 'Owner');
+  const detail = useContractDetail(api, id, 'Owner', 5000);
   const signingMethods = useSigningMethods(api);
   const cache = useQueryClient();
   const [action, setAction] = useState<ContractAction | null>(null);
@@ -272,7 +272,9 @@ export function ContractDetailPanel({
           {r && !activated && (
             <Box>
               {r.ready ? (
-                <Alert severity="success">Đủ điều kiện để Owner xác nhận kích hoạt.</Alert>
+                <Alert severity="success">{['Main', 'Holding'].includes(c.kind)
+                  ? 'Đủ điều kiện. Hệ thống đang tự động cập nhật trạng thái hợp đồng.'
+                  : 'Đủ điều kiện để Owner xác nhận kích hoạt.'}</Alert>
               ) : (
                 <>
                   <Typography variant="body2" color="text.secondary">

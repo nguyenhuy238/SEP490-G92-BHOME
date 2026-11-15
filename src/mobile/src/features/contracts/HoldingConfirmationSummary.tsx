@@ -48,7 +48,7 @@ export function HoldingConfirmationSummary({
       </HoldingSectionCard>
       <HoldingSectionCard title="Người giữ chỗ">
         <HoldingInfoRow label="Họ và tên" value={name || missing} />
-        <HoldingInfoRow label="Email" value={email || missing} />
+        <HoldingInfoRow label="Email nhận lời mời ký" value={email || missing} />
         {!!birthDate && <HoldingInfoRow label="Ngày sinh" value={dateText(birthDate)} />}
         <HoldingInfoRow
           label="CCCD"

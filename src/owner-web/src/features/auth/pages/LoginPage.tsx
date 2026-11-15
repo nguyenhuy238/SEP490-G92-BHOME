@@ -23,6 +23,9 @@ import { useOwnerLogin } from '../hooks/useOwnerLogin';
 export function LoginPage() {
   const auth = useOwnerLogin();
   const location = useLocation();
+  const invitationAccepted = Boolean(
+    (location.state as { invitationAccepted?: boolean } | null)?.invitationAccepted,
+  );
   const passwordChanged = Boolean(
     (location.state as { passwordChanged?: boolean } | null)?.passwordChanged,
   );
@@ -117,6 +120,11 @@ export function LoginPage() {
             </Stack>
           ) : (
             <Stack spacing={2}>
+              {invitationAccepted && (
+                <Alert severity="success">
+                  Đã thiết lập tài khoản. Bạn có thể đăng nhập BHOME bằng mật khẩu mới.
+                </Alert>
+              )}
               {passwordChanged && (
                 <Alert severity="success">
                   Đổi mật khẩu thành công. Tất cả phiên đã được đăng xuất; vui lòng đăng nhập lại.

@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.PaymentsDebt;
 
-internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, BHome.Application.Jobs.IBackgroundJobQueue jobs) : IMainInitialPaymentLedger
+internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db) : IMainInitialPaymentLedger
 {
     internal const string Kind = "MainInitialPaymentV1";
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -50,6 +50,6 @@ internal sealed class MainInitialPaymentLedger(BHomePersistenceContext db, BHome
         if (await db.Set<PaymentAllocation>().AnyAsync(a => a.TransferId == receipt.Id, token)) throw new PaymentException(409, "receipt_already_allocated");
         if (deposit > 0) db.Add(new PaymentAllocation { TransferId = receipt.Id, TargetDepositContractId = id, Amount = deposit, AllocatedAt = receipt.VerifiedAt });
         if (rent > 0) db.Add(new PaymentAllocation { TransferId = receipt.Id, TargetInitialContractId = id, Amount = rent, AllocatedAt = receipt.VerifiedAt });
-        await jobs.EnqueueAsync(MainContractActivationJob.Submission(id), token);
+        // The common scheduler enqueues only after signatures, payment and effective-date checks pass.
     }
 }

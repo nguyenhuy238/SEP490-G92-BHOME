@@ -949,6 +949,8 @@ export const labels: Record<string, string> = {
   HoldingDraftCreated: 'Lập bản nháp giữ chỗ',
   HoldingApproved: 'Owner phê duyệt giữ chỗ',
   HoldingActivated: 'Kích hoạt giữ chỗ',
+  'Automatic:HoldingActivated': 'Hệ thống tự động kích hoạt giữ chỗ',
+  'Automatic:ContractActivated': 'Hệ thống tự động kích hoạt hợp đồng',
   HoldingCancelled: 'Hủy giữ chỗ',
   HoldingConverted: 'Chuyển sang hợp đồng thuê chính',
   Active: 'Đang hiệu lực',
@@ -1305,7 +1307,7 @@ export function contractActions(
         'Chỉ nhập mã đã đối chiếu với nhà cung cấp. Sau khôi phục vẫn phải kiểm tra kết quả ký.',
       ),
     );
-  if (owner && waiting && c.kind !== 'Holding')
+  if (owner && waiting && !['Main', 'Holding'].includes(c.kind))
     result.push(
       action(
         'activate',
@@ -1346,15 +1348,6 @@ export function contractActions(
           'Phê duyệt hợp đồng giữ chỗ',
           [{ name: 'reason', label: 'Căn cứ phê duyệt', type: 'multiline', max: 2000 }],
           'Kiểm tra phòng, thời hạn, giá và tiền giữ chỗ trước khi phê duyệt. Phê duyệt chưa đồng nghĩa phòng đã được giữ.',
-        ),
-      );
-    if (owner && waiting && c.approvedAt && !expired)
-      result.push(
-        action(
-          'holding-activation',
-          'Kích hoạt giữ chỗ',
-          [],
-          'Chỉ kích hoạt sau khi máy chủ xác nhận đủ phê duyệt, chữ ký, tiền giữ chỗ và phòng hợp lệ.',
         ),
       );
     if (owner && ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status))

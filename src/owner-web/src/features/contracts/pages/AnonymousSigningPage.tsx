@@ -94,7 +94,7 @@ export default function AnonymousSigningPage() {
           {error && <Alert severity="error">{error}</Alert>}
           {done ? (
             <Alert severity="success">
-              Đã ghi nhận chấp thuận. Owner tiếp tục xác nhận, kiểm tra cọc và kích hoạt. Bạn sẽ
+              Đã ghi nhận chấp thuận. Hệ thống tự động kích hoạt khi đủ chữ ký và thanh toán. Bạn sẽ
               nhận lời mời thiết lập tài khoản sau khi Main Active.
             </Alert>
           ) : (

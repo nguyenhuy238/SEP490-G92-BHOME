@@ -428,6 +428,27 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         });
         await Compact24SampleSeed.RunAsync(host.Services, "Development", WorkflowTestUsers.Password);
         using var owner = host.CreateClient(); using var guest = host.CreateClient(); using var assignedStaff = host.CreateClient();
+        async Task RunAutomaticActivation(Guid id)
+        {
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                Assert.True(await scope.ServiceProvider.GetRequiredService<ContractService>().AutomaticActivationReadyAsync(id, default));
+                var scheduling = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.PaymentsDebt.MainContractActivationScheduling>();
+                await scheduling.EnqueueDueAsync(default);
+                await scheduling.EnqueueDueAsync(default);
+            }
+            await host.Services.GetRequiredService<BHome.Infrastructure.Jobs.PostgresJobWorker>().ProcessAllowedAsync(default, ["activate-paid-main-contract"]);
+            await using var retry = host.Services.CreateAsyncScope();
+            var service = retry.ServiceProvider.GetRequiredService<ContractService>();
+            await service.AutoActivatePaidMainAsync(id, default);
+            var db = retry.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var contract = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == id);
+            var activatedAt = contract.ActivatedAt;
+            var roomVersion = (await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().SingleAsync(r => r.Id == contract.RoomId)).Version;
+            await service.AutoActivatePaidMainAsync(id, default);
+            Assert.Equal(activatedAt, (await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == id)).ActivatedAt);
+            Assert.Equal(roomVersion, (await db.Set<BHome.Domain.PropertyManagement.Room>().AsNoTracking().SingleAsync(r => r.Id == contract.RoomId)).Version);
+        }
         async Task<HttpResponseMessage> SendSandbox(string code, decimal amount)
         {
             var eventId = new Guid(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(code))[..16]).ToString();
@@ -526,6 +547,12 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         }
         // Payment before signing must not mark the room held or create a login.
         if (!qrPreview) (await Post(owner, root + "/deposit-verifications", new DepositInput("HOLD-SYNTHETIC-" + Guid.NewGuid(), 100000, "Synthetic statement verified"))).EnsureSuccessStatusCode();
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<ContractService>();
+            Assert.False(await service.AutomaticActivationReadyAsync(holding.Id, default));
+            await Assert.ThrowsAsync<ContractException>(() => service.AutoActivatePaidMainAsync(holding.Id, default));
+        }
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, root + "/holding-activation", new { })).StatusCode);
         await Sign(root);
         if (qrPreview)
@@ -541,12 +568,14 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal("PendingActivation", (await owner.GetFromJsonAsync<ContractView>(root))!.Status);
             var unpaid = (await owner.GetFromJsonAsync<HoldingDepositStatus>(root + "/holding-deposit"))!;
             Assert.Equal(0m, unpaid.Verified);
+            await using (var scope = host.Services.CreateAsyncScope())
+                Assert.False(await scope.ServiceProvider.GetRequiredService<ContractService>().AutomaticActivationReadyAsync(holding.Id, default));
             (await SendSandbox(qr.TransferReference, 100000)).EnsureSuccessStatusCode();
             (await SendSandbox(qr.TransferReference, 100000)).EnsureSuccessStatusCode();
             Assert.Equal(100000m, (await owner.GetFromJsonAsync<HoldingDepositStatus>(root + "/holding-deposit"))!.Verified);
         }
         var ready = await owner.GetFromJsonAsync<ActivationReadiness>(root + "/activation-readiness"); Assert.True(ready!.Ready);
-        await Result<ContractView>(await Post(owner, root + "/holding-activation", new { }));
+        await RunAutomaticActivation(holding.Id);
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
@@ -640,7 +669,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             (await SendSandbox(quote.TransferReference!, quote.OutstandingAmount)).EnsureSuccessStatusCode();
             var paid = (await owner.GetFromJsonAsync<BHome.Application.PaymentsDebt.MainInitialPaymentView>(mainRoot + "/initial-payment"))!;
             Assert.True(paid.Paid); Assert.Equal(0m, paid.OutstandingAmount);
-            await host.Services.GetRequiredService<BHome.Infrastructure.Jobs.PostgresJobWorker>().ProcessAllowedAsync(default, ["activate-paid-main-contract"]);
+            await RunAutomaticActivation(main.Id);
             var activated = (await owner.GetFromJsonAsync<ContractView>(mainRoot))!;
             Assert.Equal("Active", activated.Status);
             await using var scope = host.Services.CreateAsyncScope();
