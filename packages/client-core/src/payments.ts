@@ -41,6 +41,18 @@ export interface TransferInstructions {
   isDevelopmentDemo: boolean;
   receivingAccountVersion: number | null;
 }
+export interface ContractDepositInstructions {
+  contractId: string;
+  mode: 'Test' | 'Live';
+  availability: string;
+  bankIdentifier: string | null;
+  accountNumber: string | null;
+  accountHolder: string | null;
+  outstandingAmount: string;
+  transferReference: string;
+  qrImageDataUri: string | null;
+  previewOnly?: boolean;
+}
 export interface BankAccount {
   id?: string;
   locationId: string;
@@ -329,6 +341,8 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
         `${root}/${encodeURIComponent(id)}/deposit-context?contractId=${encodeURIComponent(contractId)}`,
         { signal },
       ),
+    depositInstructions: (contractId: string, signal?: AbortSignal) =>
+      request<ContractDepositInstructions>(`/api/v1/contracts/${encodeURIComponent(contractId)}/deposit-payment/transfer-instructions`, { signal }),
     depositPosition: (contractId: string, signal?: AbortSignal) =>
       request<{
         contractId: string;

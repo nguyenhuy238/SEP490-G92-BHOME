@@ -7,6 +7,22 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+it('rejects an email pasted as the invitation token before calling the backend', () => {
+  const fetch = vi.fn();
+  vi.stubGlobal('fetch', fetch);
+  render(
+    <MemoryRouter>
+      <AcceptInvitationPage />
+    </MemoryRouter>,
+  );
+  fill();
+  fireEvent.change(screen.getByLabelText(/Mã lời mời/), {
+    target: { value: 'synthetic@example.invalid' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Thiết lập mật khẩu' }));
+  expect(fetch).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert')).toHaveTextContent('không nhận địa chỉ email');
+});
 function fill(repeat = 'Synthetic!NewPassword493') {
   fireEvent.change(screen.getByLabelText(/Email nhận/), {
     target: { value: 'synthetic@example.invalid' },

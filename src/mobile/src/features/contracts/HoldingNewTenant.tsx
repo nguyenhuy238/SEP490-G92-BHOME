@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { Text } from 'react-native-paper';
+import { StyleSheet, View } from 'react-native';
+import { Button, Text } from 'react-native-paper';
 import {
   contractError,
   type ContractClient,
@@ -10,7 +11,7 @@ import { IdentityWizard } from '../onboarding/IdentityWizard';
 import { IdentityPersonCard } from '../onboarding/IdentityPersonCard';
 import { type CaptureProgress, type IdentityStatus } from '../onboarding/onboarding';
 import { WorkspaceFooter } from '../../components/WorkspaceFooter';
-import { View } from 'react-native';
+import { staffColors } from '../../theme/theme';
 
 export function HoldingNewTenant({
   api,
@@ -27,6 +28,7 @@ export function HoldingNewTenant({
   onVerifiedSummary,
   stage,
   onContinue,
+  onBack,
   disabled = false,
 }: {
   api: ContractClient;
@@ -43,11 +45,12 @@ export function HoldingNewTenant({
   onVerifiedSummary?: (summary: { fullName: string; dateOfBirth: string | null }) => void;
   stage?: 'details' | 'identity';
   onContinue?: () => void;
+  onBack?: () => void;
   disabled?: boolean;
 }) {
   const applicant = context === 'holding';
   const [name, setName] = useState(initialName);
-  const [email, setEmail] = useState(initialEmail);
+  const [email] = useState(initialEmail);
   const [residentId, setResidentId] = useState(initialResidentId);
   const [mode, setMode] = useState<'capture' | 'verify'>('verify');
   const [open, setOpen] = useState(false);
@@ -68,17 +71,13 @@ export function HoldingNewTenant({
       );
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || email.trim().length > 256) {
-      setError(
-        applicant ? 'Nhập email hợp lệ của người giữ chỗ.' : 'Nhập email hợp lệ của người thuê.',
-      );
+    if (stage === 'details') {
+      // Step 2 is local form state. Create the identity record only when opening Step 3.
+      onCreated(residentId, name.trim(), email.trim());
+      onContinue?.();
       return;
     }
     if (residentId) {
-      if (stage === 'details') {
-        onContinue?.();
-        return;
-      }
       setMode(next);
       setOpen(role === 'Staff');
       return;
@@ -88,13 +87,9 @@ export function HoldingNewTenant({
     onBusyChange?.(true);
     setError('');
     try {
-      const result = await api.createHoldingResident(roomId, name, email);
+      const result = await api.createHoldingResident(roomId, name);
       setResidentId(result.id);
       onCreated(result.id, name.trim(), email.trim());
-      if (stage === 'details') {
-        onContinue?.();
-        return;
-      }
       setMode(next);
       setOpen(role === 'Staff');
     } catch (e) {
@@ -119,21 +114,34 @@ export function HoldingNewTenant({
             onChange={setName}
             disabled={busy || !!residentId || uncertain}
           />
-          <Input
-            label={applicant ? 'Email *' : 'Email người thuê'}
-            email
-            value={email}
-            onChange={setEmail}
-            disabled={busy || !!residentId || uncertain}
-          />
+          <Text>Email sẽ được nhập ở bước gửi lời mời ký, chưa gắn với tài khoản Tenant.</Text>
         </>
       )}
       {stage === 'details' ? (
         <WorkspaceFooter>
-          <View style={{ padding: 12, backgroundColor: '#FFFFFF' }}>
-            <Action disabled={busy || uncertain || disabled} onPress={() => void enter('verify')}>
+          <View style={styles.footer}>
+            <Button
+              mode="contained"
+              icon="arrow-right"
+              buttonColor={staffColors.navy}
+              contentStyle={styles.primaryContent}
+              style={styles.footerButton}
+              disabled={busy || uncertain || disabled}
+              loading={busy}
+              onPress={() => void enter('verify')}
+            >
               {busy ? 'Đang lưu…' : 'Tiếp tục'}
-            </Action>
+            </Button>
+            {!!onBack && (
+              <Button
+                mode="text"
+                contentStyle={styles.secondaryContent}
+                disabled={busy}
+                onPress={onBack}
+              >
+                Quay lại
+              </Button>
+            )}
           </View>
         </WorkspaceFooter>
       ) : stage === 'identity' && role === 'Staff' ? (
@@ -149,7 +157,7 @@ export function HoldingNewTenant({
             }}
             label={name}
             role="Người giữ chỗ"
-            disabled={busy || uncertain || disabled || !residentId}
+            disabled={busy || uncertain || disabled}
             onScan={() =>
               void enter(
                 captureProgress?.front === 'recognized' && captureProgress?.back === 'recognized'
@@ -160,9 +168,15 @@ export function HoldingNewTenant({
             onManual={() => void enter('verify')}
           />
           {(confirmed || initialConfirmed) && (
-            <Action secondary disabled={disabled} onPress={() => void enter('verify')}>
+            <Button
+              mode="text"
+              icon="file-document-outline"
+              disabled={disabled}
+              contentStyle={styles.secondaryContent}
+              onPress={() => void enter('verify')}
+            >
               Xem thông tin CCCD
-            </Action>
+            </Button>
           )}
         </>
       ) : role === 'Staff' ? (
@@ -198,17 +212,17 @@ export function HoldingNewTenant({
           )}
         </>
       )}
-      {stage !== 'details' && (confirmed || initialConfirmed) && (
-        <Text>
+      {stage !== 'details' && !(stage === 'identity' && role === 'Staff') && (confirmed || initialConfirmed) && (
+        <Text style={styles.success}>
           {applicant ? 'Đã xác nhận thông tin người giữ chỗ.' : 'Đã xác nhận thông tin người thuê.'}
         </Text>
       )}
       {uncertain && (
-        <Text>
+        <Text accessibilityRole="alert" style={styles.warning}>
           Chưa xác định hồ sơ đã được lưu hay chưa. Kiểm tra danh sách người ở trước khi tạo lại.
         </Text>
       )}
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <Text accessibilityRole="alert" style={ui.red}>{error}</Text>}
       {(open || (stage === 'identity' && role === 'Staff')) && residentId && (
         <IdentityWizard
           residentId={residentId}
@@ -236,3 +250,19 @@ export function HoldingNewTenant({
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  footer: {
+    backgroundColor: '#FFFFFF',
+    borderTopColor: '#E2E8F0',
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  footerButton: { borderRadius: 12 },
+  primaryContent: { minHeight: 50, flexDirection: 'row-reverse' },
+  secondaryContent: { minHeight: 44 },
+  success: { fontSize: 13, color: staffColors.green },
+  warning: { fontSize: 13, lineHeight: 20, color: '#9A5D0A' },
+});

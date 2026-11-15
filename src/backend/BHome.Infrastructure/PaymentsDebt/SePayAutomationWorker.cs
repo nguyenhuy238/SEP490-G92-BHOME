@@ -19,7 +19,8 @@ internal sealed class SePayAutomationWorker(IServiceScopeFactory scopes, SePayOp
             {
                 await using var scope = scopes.CreateAsyncScope();
                 await scope.ServiceProvider.GetRequiredService<SePayScheduling>().EnqueueDueAsync(stoppingToken);
-                if (!jobs.Value.Enabled && await worker.ProcessAllowedAsync(stoppingToken, ["sepay-reconcile-" + options.Mode.ToLowerInvariant(), "sepay-poll-" + options.Mode.ToLowerInvariant()])) continue;
+                await scope.ServiceProvider.GetRequiredService<MainContractActivationScheduling>().EnqueueDueAsync(stoppingToken);
+                if (!jobs.Value.Enabled && await worker.ProcessAllowedAsync(stoppingToken, ["sepay-reconcile-" + options.Mode.ToLowerInvariant(), "sepay-poll-" + options.Mode.ToLowerInvariant(), MainContractActivationJob.JobName])) continue;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception error) { logger.LogWarning("SePay automation deferred with {ErrorCode}", error.GetType().Name); }

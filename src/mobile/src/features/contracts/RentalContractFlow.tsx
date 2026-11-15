@@ -1,8 +1,9 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
 import {
   contractActions,
+  contractError,
   displayContractDate,
   formatContractMoney,
   mutationKeys,
@@ -20,7 +21,9 @@ import { ContractEvidence } from './ContractEvidence';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { RentalContractStepper } from './RentalContractStepper';
 import { rentalContractState } from './rentalContractState';
+import { internalSigningClient } from '../../../../../packages/client-core/src/internalSigning';
 import { MainInitialPaymentCard } from './MainInitialPaymentCard';
+import { ContractSigningStep } from './ContractSigningStep';
 
 export function RentalContractFlow({
   api,
@@ -42,7 +45,39 @@ export function RentalContractFlow({
   initialStep?: number;
 }) {
   const state = rentalContractState(contract, readiness);
-  const [step, setStep] = useState(initialStep ?? state.current);
+  const [selectedStep, setStep] = useState(initialStep ?? state.current);
+  const awaitingTenant = !!contract.ownerOnlySandboxConfirmed && !contract.sandboxTenantSimulated;
+  const step = awaitingTenant ? 1 : selectedStep;
+  const [simulating, setSimulating] = useState(false);
+  const [simulationError, setSimulationError] = useState('');
+  const simulationLock = useRef(false);
+  const [sandboxFor, setSandboxFor] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    if (
+      role === 'Staff' &&
+      contract.kind === 'Main' &&
+      contract.signingMode === 'INTERNAL_OTP_DRAWN' &&
+      !state.active
+    ) {
+      const refresh = () =>
+        void Promise.resolve(internalSigningClient(api.transport).status(contract.id))
+          .then((value) => {
+            if (active) setSandboxFor(value?.sandboxAvailable ? contract.id : null);
+          })
+          .catch(() => {
+            if (active) setSandboxFor(null);
+          });
+      refresh();
+      timer = setInterval(refresh, 5000);
+    }
+    return () => {
+      active = false;
+      if (timer) clearInterval(timer);
+    };
+  }, [api, contract.id, contract.kind, contract.signingMode, role, state.active]);
+
   const [selected, setSelected] = useState('');
   const [details, setDetails] = useState(false);
   const [initialPaidFor, setInitialPaidFor] = useState<string | null>(null);
@@ -64,7 +99,9 @@ export function RentalContractFlow({
     contract.signingMode !== 'INTERNAL_OTP_DRAWN' &&
     !!signingMethods?.methods.includes('OTP');
   const actions = contractActions(contract, null, role, actorId, signingMethods?.methods).filter(
-    (item) => !otpSigning || !item.operation.startsWith('signing'),
+    (item) =>
+      !(step === 1 && !contract.isDevelopmentDemo) &&
+      (!otpSigning || !item.operation.startsWith('signing')),
   );
   const action = actions.find((item) => item.operation === selected);
   const signingFinished =
@@ -158,7 +195,83 @@ export function RentalContractFlow({
               />
             </>
           )}
-          {step === 1 && (
+          {step === 1 &&
+            contract.isDevelopmentDemo &&
+            role === 'Staff' &&
+            (sandboxFor === contract.id || contract.isDevelopmentDemo) &&
+            contract.signingMode === 'INTERNAL_OTP_DRAWN' && (
+              <Box>
+                <Heading title="Xác nhận ký hợp đồng · Sandbox" />
+                <Text>
+                  {
+                    'Ch\u1ec9 d\u00f9ng cho ki\u1ec3m th\u1eed; kh\u00f4ng ph\u1ea3i ch\u1eef k\u00fd Tenant th\u1eadt.'
+                  }
+                </Text>
+                <Button
+                  mode="outlined"
+                  disabled={
+                    simulating || !!contract.ownerOnlySandboxConfirmed || sandboxFor !== contract.id
+                  }
+                  onPress={() => {
+                    if (simulationLock.current) return;
+                    simulationLock.current = true;
+                    setSimulating(true);
+                    setSimulationError('');
+                    void internalSigningClient(api.transport)
+                      .simulateOwner(contract.id, contract.snapshotHash!)
+                      .then(() => onChanged())
+                      .catch((error) => setSimulationError(contractError(error)))
+                      .finally(() => {
+                        simulationLock.current = false;
+                        setSimulating(false);
+                      });
+                  }}
+                >
+                  {contract.ownerOnlySandboxConfirmed
+                    ? 'Owner đã mô phỏng ký'
+                    : 'Mô phỏng Owner ký'}
+                </Button>
+                {!!simulationError && <Text accessibilityRole="alert">{simulationError}</Text>}
+                <Button
+                  mode="contained"
+                  disabled={
+                    simulating ||
+                    !contract.ownerOnlySandboxConfirmed ||
+                    !!contract.sandboxTenantSimulated
+                  }
+                  onPress={() => {
+                    if (simulationLock.current) return;
+                    simulationLock.current = true;
+                    setSimulating(true);
+                    setSimulationError('');
+                    void internalSigningClient(api.transport)
+                      .simulateTenant(contract.id)
+                      .then(() => onChanged())
+                      .catch((error) => setSimulationError(contractError(error)))
+                      .finally(() => {
+                        simulationLock.current = false;
+                        setSimulating(false);
+                      });
+                  }}
+                >
+                  {simulating
+                    ? '\u0110ang x\u00e1c nh\u1eadn...'
+                    : 'M\u00f4 ph\u1ecfng Tenant k\u00fd'}
+                </Button>
+              </Box>
+            )}
+          {step === 1 && !contract.isDevelopmentDemo && (
+            <ContractSigningStep
+              key={`${contract.id}:${contract.snapshotHash}`}
+              api={api}
+              contract={contract}
+              role={role}
+              actorId={actorId}
+              onChanged={onChanged}
+              onContinue={() => navigate(2)}
+            />
+          )}
+          {step === 1 && contract.isDevelopmentDemo && (
             <>
               <Box>
                 <Heading
@@ -178,26 +291,36 @@ export function RentalContractFlow({
                   <View key={person.key} style={styles.signer}>
                     <Text style={styles.signerLabel}>{person.label}</Text>
                     <Pill tone={person.value === 'signed' ? 'green' : 'amber'}>
-                      {person.value === 'signed'
-                        ? 'Đã ký'
-                        : person.value === 'waiting'
-                          ? 'Đang chờ ký'
-                          : contract.isDevelopmentDemo &&
-                              contract.signatures.some(
-                                (signature) =>
-                                  signature.signerUserId === person.key &&
-                                  signature.status === 'Simulated',
-                              )
-                            ? 'Đã mô phỏng'
-                            : 'Chờ ký'}
+                      {contract.ownerOnlySandboxConfirmed
+                        ? person.key === contract.ownerSignerId
+                          ? 'Owner x\u00e1c nh\u1eadn test'
+                          : contract.sandboxTenantSimulated
+                            ? 'M\u00f4 ph\u1ecfng Sandbox'
+                            : 'Ch\u1edd m\u00f4 ph\u1ecfng Tenant'
+                        : person.value === 'signed'
+                          ? 'Đã ký'
+                          : person.value === 'waiting'
+                            ? 'Đang chờ ký'
+                            : contract.isDevelopmentDemo &&
+                                contract.signatures.some(
+                                  (signature) =>
+                                    signature.signerUserId === person.key &&
+                                    signature.status === 'Simulated',
+                                )
+                              ? 'Đã mô phỏng'
+                              : 'Chờ ký'}
                     </Pill>
                   </View>
                 ))}
                 <Text style={ui.muted}>
                   {contract.isDevelopmentDemo
-                    ? signingFinished
-                      ? 'Hai bên đã mô phỏng ký. Tiếp tục kiểm tra điều kiện thử nghiệm.'
-                      : 'Ký mô phỏng trong môi trường Development.'
+                    ? contract.ownerOnlySandboxConfirmed
+                      ? contract.sandboxTenantSimulated
+                        ? 'Owner x\u00e1c nh\u1eadn test, Staff m\u00f4 ph\u1ecfng Tenant. Backend cho ph\u00e9p ti\u1ebfp t\u1ee5c QR.'
+                        : 'Owner x\u00e1c nh\u1eadn test; ch\u1edd Staff m\u00f4 ph\u1ecfng Tenant k\u00fd.'
+                      : signingFinished
+                        ? 'Hai bên đã mô phỏng ký. Tiếp tục kiểm tra điều kiện thử nghiệm.'
+                        : 'Ký mô phỏng trong môi trường Development.'
                     : state.signed
                       ? 'Hai bên đã ký. Tiếp tục kiểm tra tiền cọc.'
                       : state.owner === 'signed' || state.tenant === 'signed'
@@ -206,7 +329,9 @@ export function RentalContractFlow({
                 </Text>
                 {role === 'Staff' && (
                   <Text style={ui.muted}>
-                    Staff theo dõi hồ sơ; Chủ cơ sở và Người thuê thực hiện ký.
+                    {sandboxFor === contract.id
+                      ? 'Chỉ dùng cho kiểm thử: Staff mô phỏng ký, backend lưu kết quả.'
+                      : 'Staff theo dõi hồ sơ; Chủ cơ sở và Người thuê thực hiện ký.'}
                   </Text>
                 )}
                 {signer && !contract.isDevelopmentDemo && !otpSigning && (
@@ -290,9 +415,19 @@ export function RentalContractFlow({
               {readiness?.blockers.map((blocker) => (
                 <Check key={blocker} label={text(blocker)} done={false} />
               ))}
-              {readiness?.ready && <Pill tone="green">Đủ điều kiện để Chủ cơ sở kích hoạt</Pill>}
+              {readiness?.ready && (
+                <Pill tone="green">
+                  {contract.initialPaymentRequired
+                    ? 'Đủ điều kiện kích hoạt tự động'
+                    : 'Đủ điều kiện để Chủ cơ sở kích hoạt'}
+                </Pill>
+              )}
               {role !== 'Owner' && (
-                <Text style={ui.muted}>Chủ cơ sở kiểm tra và kích hoạt hợp đồng.</Text>
+                <Text style={ui.muted}>
+                  {contract.initialPaymentRequired
+                    ? 'Hệ thống tự kích hoạt sau khi xác nhận đủ chữ ký và thanh toán, sau đó gửi email thiết lập tài khoản Tenant.'
+                    : 'Chủ cơ sở kiểm tra và kích hoạt hợp đồng.'}
+                </Text>
               )}
             </Box>
           )}
@@ -331,7 +466,7 @@ export function RentalContractFlow({
                 Quay lại
               </Button>
             )}
-            {step < 3 && (
+            {step < 3 && (step !== 1 || contract.isDevelopmentDemo) && (
               <Button
                 style={ui.grow}
                 mode="contained"

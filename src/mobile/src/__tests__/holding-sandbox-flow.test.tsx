@@ -9,11 +9,14 @@ import {
 } from '../../../../packages/client-core/src/contracts';
 import type { HoldingSandboxState } from '../../../../packages/client-core/src/holdingSandbox';
 vi.mock('react-native', () => ({
+  StyleSheet: { create: (value: unknown) => value },
+  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Image: ({ accessibilityLabel }: { accessibilityLabel: string }) => (
     <span>{accessibilityLabel}</span>
   ),
 }));
 vi.mock('react-native-paper', () => ({
+  Icon: () => null,
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({
     children,
@@ -96,7 +99,9 @@ beforeEach(() => {
         canContinue: ownerConfirmed && state.tenantSimulated,
         maskedEmail: 't***@example.invalid',
       };
-    if (path.endsWith('/simulation/signatures')) {
+    if (path.endsWith('/simulation/skip-signing-preview')) {
+      state.canShowQr = true;
+    } else if (path.endsWith('/simulation/signatures')) {
       const { participant } = JSON.parse(init!.body as string);
       if (participant !== 'Tenant') throw { status: 403 };
       state.tenantSimulated = true;
@@ -124,6 +129,39 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+it('opens the QR preview through the Sandbox API without simulating a signature', async () => {
+  render(<Harness contract={{ ...c, approvedAt: null }} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Bỏ qua ký: xem QR kiểm thử' }));
+  await screen.findByText('QR chuyển khoản · Test Mode');
+  expect(request).toHaveBeenCalledWith(
+    '/api/v1/integrations/sepay/testing/holdings/contract/simulation/skip-signing-preview',
+    expect.objectContaining({ method: 'POST', body: JSON.stringify({ previewOnly: true }) }),
+  );
+  expect(request.mock.calls.some(([path]) => path.endsWith('/simulation/signatures'))).toBe(false);
+});
+it('shows Tenant simulation before approval but prevents calling the API until approval', async () => {
+  render(<Harness contract={{ ...c, approvedAt: null }} />);
+  const button = await screen.findByRole('button', { name: 'Mô phỏng người giữ chỗ đã ký' });
+  expect(button).toHaveProperty('disabled', true);
+  fireEvent.click(button);
+  expect(request.mock.calls.some(([path]) => path.endsWith('/simulation/signatures'))).toBe(false);
+});
+it('reloads the contract approval and reveals Tenant signing without reopening the screen', async () => {
+  let approved = false;
+  const previous = request.getMockImplementation()!;
+  request.mockImplementation((path, ...args) =>
+    path === '/api/v1/contracts/contract'
+      ? Promise.resolve({ ...c, kind: 'Holding', approvedAt: approved ? c.approvedAt : null })
+      : previous(path, ...args),
+  );
+  render(<Harness contract={{ ...c, approvedAt: null }} />);
+  const reload = await screen.findByRole('button', { name: 'Tải lại trạng thái' });
+  approved = true;
+  fireEvent.click(reload);
+  await screen.findByText('Xác nhận ký hợp đồng');
+  expect(screen.queryByText('Chờ Owner phê duyệt')).toBeNull();
+  expect(request).toHaveBeenCalledWith('/api/v1/contracts/contract', expect.anything());
 });
 it('does not load sandbox capabilities when the mobile role excludes test tools', () => {
   render(<Harness allowed={false} />);
@@ -154,7 +192,7 @@ it('requires both server simulation results before QR and verified deposit befor
   await screen.findByText('Backend đã xác minh đủ tiền cọc.');
   fireEvent.click(screen.getByText('Hoàn tất giữ chỗ (Test Mode)'));
   await screen.findByText('Giữ chỗ thành công · Test Mode');
-  expect(changed).toHaveBeenCalledTimes(2);
+  expect(changed).toHaveBeenCalledTimes(3);
   expect(
     request.mock.calls.some(
       ([path]) => path.includes('/owner-confirmation') || path.includes('/signing-invitations'),

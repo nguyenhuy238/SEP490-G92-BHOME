@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   readiness: null as Readiness | null,
   back: vi.fn(),
   headerBack: undefined as (() => void) | undefined,
+  viewedId: '',
   params: null as Record<string, string | undefined> | null,
 }));
 const id = 'bc050000-0000-4000-8000-000000004003';
@@ -48,12 +49,26 @@ vi.mock('../lib/randomUUID', () => ({ randomUUID: () => '00000000-0000-4000-8000
 vi.mock('../lib/useFeedbackState', () => ({ useFeedbackState: () => useState('') }));
 vi.mock('../lib/toast', () => ({ conciseMessage: (s: string) => s, showError: vi.fn() }));
 vi.mock('../../../../packages/client-core/src/useContractDetail', () => ({
-  useContractDetail: () => ({
-    loading: false,
-    error: '',
-    reload: vi.fn(),
-    data: { contract: state.contract, moveOut: null, readiness: state.readiness, history: [] },
-  }),
+  useContractDetail: (_client: unknown, contractId: string) => {
+    state.viewedId = contractId;
+    return {
+      loading: false,
+      error: '',
+      reload: vi.fn(),
+      data: { contract: state.contract, moveOut: null, readiness: state.readiness, history: [] },
+    };
+  },
+}));
+vi.mock('../features/contracts/StaffContractsList', () => ({
+  StaffContractsList: ({
+    onOpen,
+  }: {
+    onOpen: (contract: { id: string; kind: string }) => void;
+  }) => (
+    <button onClick={() => onOpen({ id: 'bc050000-0000-4000-8000-000000004001', kind: 'Holding' })}>
+      Open previous Holding
+    </button>
+  ),
 }));
 vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles },
@@ -149,6 +164,17 @@ vi.mock('../features/contracts/ContractLifecyclePanel', () => ({
 vi.mock('../features/contracts/ContractExpiryPanel', () => ({ ContractExpiryPanel: () => null }));
 import { ContractScreen } from '../features/contracts/ContractScreen';
 import { router } from 'expo-router';
+it('opens the routed Main contract instead of a previously selected Holding', () => {
+  state.role = 'Staff';
+  state.params = {};
+  const page = render(<ContractScreen />);
+  fireEvent.click(screen.getByText('Open previous Holding'));
+  expect(state.viewedId).toBe('bc050000-0000-4000-8000-000000004001');
+  state.params = { contractId: id, mainDraftId: '', kind: '' };
+  state.contract = { ...state.contract, id, kind: 'Main' };
+  page.rerender(<ContractScreen />);
+  expect(state.viewedId).toBe(id);
+});
 
 function summary(status: string, kind = 'Main', name = status): ContractSummary {
   return {
@@ -434,7 +460,7 @@ it('keeps Staff restrictions in the signing section', () => {
   state.contract.status = 'PendingSigning';
   render(<ContractScreen />);
   fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
-  expect(screen.getByText('Bước 2/4 · Ký hợp đồng')).toBeTruthy();
+  expect(screen.getByText('Bước 6/8')).toBeTruthy();
   expect(screen.queryByText('Signed PDF')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
   expect(screen.getByText(/Staff theo dõi hồ sơ/)).toBeTruthy();

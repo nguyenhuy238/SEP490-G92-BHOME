@@ -51,6 +51,12 @@ export default function AcceptInvitationPage() {
           onSubmit={(e) => {
             e.preventDefault();
             if (lock.current) return;
+            if (!token.trim() || token.includes('@')) {
+              setError(
+                'Ô mã lời mời không nhận địa chỉ email. Hãy mở link thiết lập tài khoản trong email BHOME mới nhất hoặc dán toàn bộ link vào ô này.',
+              );
+              return;
+            }
             if (
               password !== repeat ||
               password.length < 12 ||
@@ -78,7 +84,7 @@ export default function AcceptInvitationPage() {
               .catch((e) =>
                 setError(
                   (e as { status?: number }).status === 400
-                    ? 'Liên kết chưa hợp lệ, đã hết hạn hoặc đã sử dụng. Vui lòng yêu cầu Owner gửi lời mời mới.'
+                    ? 'Liên kết chưa hợp lệ, đã hết hạn hoặc đã sử dụng. Hãy mở link trong email BHOME mới nhất; nếu vẫn lỗi, liên hệ quản lý để gửi lại email thiết lập tài khoản.'
                     : signingMessage(e),
                 ),
               )
@@ -94,8 +100,7 @@ export default function AcceptInvitationPage() {
           {error && <Alert severity="error">{error}</Alert>}
           {done ? (
             <Alert severity="success">
-              Đã thiết lập mật khẩu. Nhân viên có thể đăng nhập trên ứng dụng BHOME dành cho Staff
-              bằng email và mật khẩu mới.
+              Đã thiết lập mật khẩu. Bạn có thể đăng nhập ứng dụng BHOME bằng email và mật khẩu mới.
             </Alert>
           ) : (
             <>
@@ -112,14 +117,22 @@ export default function AcceptInvitationPage() {
               {recognized ? (
                 <Alert severity="info">Đã nhận diện liên kết lời mời.</Alert>
               ) : (
-                <TextField
-                  required
-                  label="Mã lời mời hoặc liên kết trong email"
-                  helperText="Dán toàn bộ liên kết từ email hoặc nhập mã lời mời."
-                  value={token}
-                  onChange={(e) => updateInvitation(e.target.value)}
-                  disabled={busy}
-                />
+                <>
+                  <Typography>
+                    BHOME tự gửi email thiết lập tài khoản sau khi hợp đồng được kích hoạt. Mở link
+                    trong email để điền sẵn thông tin; mã lời mời không phải email hay mật khẩu.
+                  </Typography>
+                  <TextField
+                    required
+                    label="Mã lời mời hoặc liên kết trong email"
+                    helperText="Dán toàn bộ link thiết lập tài khoản từ email BHOME mới nhất. Không nhập địa chỉ email vào đây."
+                    autoComplete="off"
+                    name="bhome-invitation-link"
+                    value={token}
+                    onChange={(e) => updateInvitation(e.target.value)}
+                    disabled={busy}
+                  />
+                </>
               )}
               <TextField
                 required

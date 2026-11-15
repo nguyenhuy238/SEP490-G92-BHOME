@@ -13,6 +13,8 @@ public sealed class ContractSigningInvitation : AuditableEntity
     public string DocumentObjectKey { get; set; } = "";
     public string DocumentHash { get; set; } = "";
     public string RecipientEmail { get; set; } = "";
+    // Contract-scoped delivery contacts, promoted to resident/account only during Main activation.
+    public string? ContactEmails { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public string? OtpHash { get; set; }

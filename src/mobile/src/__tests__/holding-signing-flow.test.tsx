@@ -1,14 +1,23 @@
 // @vitest-environment jsdom
-import React from 'react';
+import React, { useState } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { contractClient, type ContractView } from '../../../../packages/client-core/src/contracts';
 import { ApiError } from '../../../../packages/client-core/src/api';
 import { type InternalSigningStatus } from '../../../../packages/client-core/src/internalSigning';
+vi.mock('../features/contracts/ContractSigningPanel', () => ({ ContractSigningPanel: () => null }));
+vi.mock('../features/contracts/SigningSetup', () => ({ SignaturePlacementField: () => null }));
+vi.mock('../components/WorkflowControls', () => ({
+  Input: ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) =>
+    <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
+}));
 vi.mock('react-native', () => ({
+  Image: ({ accessibilityLabel, source }: { accessibilityLabel: string; source: { uri: string } }) => <img alt={accessibilityLabel} src={source.uri} />,
+  StyleSheet: { create: (value: unknown) => value },
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('react-native-paper', () => ({
+  Icon: () => null,
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({
     children,
@@ -114,6 +123,9 @@ function contract(overrides: Partial<ContractView> = {}): ContractView {
     activatedAt: null,
     occupants: [{ id: 'synthetic-resident', label: 'Người kiểm thử', representative: true }],
     signingMode: 'INTERNAL_OTP_DRAWN',
+    // Legacy consent UI is retained for demo records only. Real signing and payment
+    // navigation are covered by contract-signing-step.test.tsx and backend API tests.
+    isDevelopmentDemo: true,
     snapshotHash: 'synthetic-snapshot',
     holdingExpiresAt: '2099-11-12T00:00:00Z',
     ...overrides,
@@ -162,10 +174,75 @@ beforeEach(() => {
       return { required: '2000000', verified: '2000000', remaining: '0', status: 'Verified' };
     if (path.includes('/rooms/')) return { status: room };
     if (path.endsWith('/deposit-payment')) return { transferReference: 'BACKEND-REFERENCE' };
+    if (path.endsWith('/transfer-instructions')) return { mode: 'Test', previewOnly: true, bankIdentifier: '970416', accountNumber: '12345678', accountHolder: 'SYNTHETIC TEST', outstandingAmount: '2000000', transferReference: 'BH12345678', qrImageDataUri: 'data:image/png;base64,c3ludGhldGlj' };
     throw new Error(`Unexpected endpoint ${path} ${init?.method || 'GET'}`);
   });
 });
 afterEach(cleanup);
+it('loads sandbox QR for Staff at Step 7 and never activates or claims a real deposit', async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation((path: string, init?: RequestInit) => path.endsWith('/holding-deposit')
+    ? Promise.resolve({ required: '2000000', verified: '0', remaining: '2000000', status: 'Unpaid' })
+    : original(path, init));
+  show(contract({ isDevelopmentDemo: false, status: 'PendingActivation', approvedAt: '2026-11-15T00:00:00Z' }), 'Staff', 'staff');
+  await screen.findByAltText('QR chuyển khoản sandbox');
+  expect(screen.getByText('SePay Test · QR sandbox')).toBeTruthy();
+  expect(screen.getByText(/Giao dịch Test không được tính thành tiền cọc thật/)).toBeTruthy();
+  expect(request.mock.calls.some(([path]) => path.endsWith('/transfer-instructions'))).toBe(true);
+  expect(request.mock.calls.some(([path]) => path.endsWith('/simulation/activate') || path.endsWith('/holding-activation'))).toBe(false);
+});
+it.each([true, false])(
+  'Holding real Step 6 opens the existing Step 7 without activation, invitation=%s',
+  async (internalMode) => {
+    const pending = contract({
+      isDevelopmentDemo: false,
+      status: 'PendingSigning',
+      approvedAt: '2026-11-15T00:00:00Z',
+      signingMode: internalMode ? 'INTERNAL_OTP_DRAWN' : '',
+      tenantUserId: internalMode ? null : 'tenant',
+    });
+    const latest = {
+      ...pending,
+      status: 'PendingActivation',
+      signatures: ['owner', ...(internalMode ? [] : ['tenant'])].map((signerUserId, n) => ({
+        id: String(n),
+        signerUserId,
+        status: 'Signed',
+        signedAt: null,
+      })),
+    };
+    internal.tenantAcceptedAt = '2026-11-15T00:00:00Z';
+    internal.ownerAcceptedAt = '2026-11-15T00:00:00Z';
+    internal.canContinue = true;
+    const original = request.getMockImplementation()!;
+    request.mockImplementation((path: string, init?: RequestInit) => {
+      if (path.endsWith('/signing-methods')) return Promise.resolve({ methods: [], default: null });
+      if (path === '/api/v1/contracts/' + pending.id) return Promise.resolve(latest);
+      return original(path, init);
+    });
+    function Wizard() {
+      const [c, setContract] = useState(pending);
+      return (
+        <HoldingContractFlow
+          api={api}
+          contract={c}
+          role="Owner"
+          actorId="owner"
+          readiness={null}
+          onChanged={() => setContract(latest)}
+          onList={() => {}}
+        />
+      );
+    }
+    render(<Wizard />);
+    const next = await screen.findByRole('button', { name: 'Tiếp tục thanh toán' });
+    await waitFor(() => expect(next).toHaveProperty('disabled', false));
+    fireEvent.click(next);
+    await screen.findByText('Bước 7/8');
+    await screen.findByText('Tiền cọc đã được xác minh');
+    expect(request.mock.calls.some(([path]) => path.endsWith('/holding-activation'))).toBe(false);
+  },
+);
 it('opens persisted draft without recreating it or sending invitations; Staff never requests Owner PDF', async () => {
   show(contract(), 'Staff', 'staff');
   expect(screen.getByText(/5\/8/)).toBeTruthy();

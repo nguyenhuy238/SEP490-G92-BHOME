@@ -8,8 +8,21 @@ public static class ContractSigningModes
     public const string Internal = "INTERNAL_OTP_DRAWN";
     public const string InternalConsent = "internal-acceptance-v1";
 }
-public sealed record SigningInvitationInput(DateTimeOffset ExpiresAt, [Required] string SnapshotHash);
+public sealed record SigningResidentEmail(Guid ResidentId, [Required, EmailAddress, StringLength(256)] string Email);
+public sealed record SigningInvitationInput(DateTimeOffset ExpiresAt, [Required] string SnapshotHash,
+    [EmailAddress, StringLength(256)] string? RecipientEmail = null, IReadOnlyList<SigningResidentEmail>? Contacts = null);
 public sealed record SigningInvitationResult(Guid Id, string Status, DateTimeOffset ExpiresAt, string? Token = null);
+public static class SigningContacts
+{
+    public static IReadOnlyDictionary<Guid, string> Read(ContractSigningInvitation? invitation)
+    {
+        var result = string.IsNullOrWhiteSpace(invitation?.ContactEmails)
+            ? new Dictionary<Guid, string>()
+            : System.Text.Json.JsonSerializer.Deserialize<Dictionary<Guid, string>>(invitation.ContactEmails) ?? [];
+        if (invitation is not null) result[invitation.ResidentId] = invitation.RecipientEmail;
+        return result;
+    }
+}
 public sealed record AnonymousSigningToken([Required, StringLength(128, MinimumLength = 40)] string Token);
 public sealed record AnonymousOtpInput([Required] string Token, [Required, RegularExpression("^[0-9]{6}$")] string Otp);
 public sealed record AnonymousSigningSession([Required] string Token, [Required] string Session);

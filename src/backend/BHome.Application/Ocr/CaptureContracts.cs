@@ -15,7 +15,7 @@ public sealed record StaffInput([Required, StringLength(100)] string UserName, [
     public override string ToString() => "Staff input (credentials omitted)";
 }
 public sealed record ResidentInput(Guid RoomId, [Required, StringLength(150)] string DisplayLabel, ResidentType ResidentType,
-    [Required, EmailAddress, StringLength(256)] string? Email = null);
+    [EmailAddress, StringLength(256)] string? Email = null);
 public sealed record MeterInput(Guid RoomId, [Required, StringLength(80)] string Code,
     UtilityType UtilityType, MeterDisplay Display, [Range(0, 4)] int DecimalPlaces, DateOnly InstalledOn);
 public sealed record MeterTaskInput(Guid MeterId, ReadingPurpose Purpose, DateOnly ReadingDate, DateOnly? BillingPeriod, Guid? ContractId = null);
@@ -38,7 +38,7 @@ public sealed record IdentityConfirmation(
 }
 public sealed record MeterConfirmation(bool HumanConfirmed, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal ConfirmedValue, Guid EvidenceId);
 public sealed record IdResult(Guid Id);
-public sealed record NamedResource(Guid Id, string Label, Guid? ParentId = null, string? Status = null, int? Capacity = null);
+public sealed record NamedResource(Guid Id, string Label, Guid? ParentId = null, string? Status = null, int? Capacity = null, int? RemainingCapacity = null);
 public sealed record ResidentSummary(Guid Id, Guid RoomId, string DisplayLabel, ResidentType ResidentType,
     IdentityVerificationStatus VerificationStatus, DateTimeOffset? ConfirmedAt, string? Email = null);
 public sealed record IdentityConfirmationResult(Guid Id, IdentityVerificationStatus VerificationStatus, DateTimeOffset? ConfirmedAt);

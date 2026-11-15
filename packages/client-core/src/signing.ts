@@ -136,7 +136,7 @@ export function signingClient(request: ContractRequest) {
     /** Starts OTP (in-app) or UPLOAD_PROOF (Owner signs the PDF with MySign outside BHOME) signing. */
     start: (
       contractId: string,
-      method: 'OTP' | 'UPLOAD_PROOF',
+      method: 'OTP' | 'UPLOAD_PROOF' | 'OWNER_SESSION',
       key: string,
       placement: SignaturePlacement | null = null,
       usePicture = true,
@@ -147,6 +147,7 @@ export function signingClient(request: ContractRequest) {
         body: JSON.stringify({
           certificateId: NO_CERTIFICATE,
           method,
+          ...(method === 'OWNER_SESSION' ? { consent: true } : {}),
           ...(placement ? { placement: roundPlacement(placement) } : {}),
           usePicture,
         }),
@@ -199,6 +200,9 @@ export function signingClient(request: ContractRequest) {
 export type SigningClient = ReturnType<typeof signingClient>;
 
 const codes: Record<string, string> = {
+  signing_consent_required: 'Hãy xác nhận đã đọc và đồng ý ký hợp đồng.',
+  owner_session_signing_owner_only: 'Chỉ Owner của hợp đồng mới được ký bằng phiên đăng nhập.',
+  owner_session_signing_failed: 'Chưa ký được PDF. Hãy tải lại hợp đồng rồi thử lại.',
   signature_placement_invalid:
     'Ô chữ ký nằm ngoài trang hoặc quá nhỏ/quá lớn. Kéo ô vào trong trang rồi thử lại.',
   signing_page_invalid: 'Trang cần xem không có trong hợp đồng.',
@@ -238,7 +242,7 @@ const codes: Record<string, string> = {
 export const UPLOAD_CHECKS = [
   'Đúng bản hợp đồng đã phát',
   'Có chữ ký số mới, nguyên vẹn, phủ toàn bộ file',
-  'Chứng thư do Viettel-CA cấp, còn hiệu lực lúc ký',
+  'Tên bên cấp chứng thư khớp cấu hình, còn hiệu lực lúc ký',
   'Nội dung các trang không thay đổi',
 ] as const;
 /** Error code of a failed signing call, if the server sent one. */
@@ -272,6 +276,8 @@ export function signingMethodLabel(method: string | undefined) {
   switch (method) {
     case 'OTP':
       return 'Ký điện tử · OTP email';
+    case 'OWNER_SESSION':
+      return 'Ký điện tử · phiên đăng nhập Owner';
     case 'UPLOAD_PROOF':
       return 'Ký số MySign (tải lên)';
     case 'SIMULATED':

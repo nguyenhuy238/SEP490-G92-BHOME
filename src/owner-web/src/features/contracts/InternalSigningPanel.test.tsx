@@ -7,7 +7,60 @@ import {
   type ContractView,
 } from '../../../../../packages/client-core/src/contracts';
 import { InternalSigningPanel } from './InternalSigningPanel';
+vi.mock('./SignaturePlacementPicker', () => ({
+  SignaturePlacementPicker: () => <div>PDF thực từ API ký</div>,
+}));
 afterEach(cleanup);
+
+it.each(['Holding', 'Main'])(
+  'real %s signs immediately with Owner session after invitation acceptance',
+  async (kind) => {
+    const c = {
+      ...contract,
+      id: '11111111-1111-4111-8111-111111111111',
+      kind,
+      isDevelopmentDemo: false,
+      ownerSignerId: '22222222-2222-4222-8222-222222222222',
+      tenantUserId: null,
+      signatures: [],
+    } as ContractView;
+    const changed = vi.fn();
+    const request = vi.fn(async (path: string, _init?: RequestInit) => {
+      if (path.endsWith('/internal-signing'))
+        return {
+          invitations: [],
+          tenantAcceptedAt: '2026-11-15T00:00:00Z',
+          ownerAcceptedAt: null,
+          canContinue: false,
+        };
+      if (path.endsWith('/signing-methods')) return { methods: ['OWNER_SESSION'], default: 'OWNER_SESSION' };
+      if (path.endsWith('/signing')) return { id: 'signature', status: 'Signed' };
+      if (path.endsWith(c.id)) return c;
+      throw new Error(path);
+    });
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <InternalSigningPanel
+          api={contractClient(request as ContractRequest)}
+          contract={c}
+          onChanged={changed}
+        />
+      </QueryClientProvider>,
+    );
+    const button = await screen.findByRole('button', { name: 'Ký hợp đồng' });
+    expect(button).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(button);
+    await waitFor(() => expect(changed).toHaveBeenCalledOnce());
+    const start = request.mock.calls.find(([path]) => path.endsWith('/signing'));
+    expect(start).toBeTruthy();
+    expect(JSON.parse(start![1]!.body as string)).toMatchObject({ method: 'OWNER_SESSION', consent: true });
+    expect(request.mock.calls.some(([path]) => path.includes('/signing/otp'))).toBe(false);
+    expect(request.mock.calls.some(([path]) => path.endsWith('/owner-confirmation'))).toBe(false);
+  },
+);
 const contract = {
   id: 'holding',
   kind: 'Holding',
@@ -16,7 +69,7 @@ const contract = {
   snapshotHash: 'snapshot',
   isDevelopmentDemo: true,
 } as ContractView;
-function show(sandboxAvailable = true, reject = false) {
+function show(sandboxAvailable = true, reject = false, kind = 'Holding') {
   let confirmed = false;
   const request = vi.fn(async (path: string) => {
     if (path.endsWith('/owner-confirmation')) {
@@ -28,7 +81,7 @@ function show(sandboxAvailable = true, reject = false) {
       invitations: [],
       tenantAcceptedAt: null,
       ownerAcceptedAt: confirmed ? '2026-11-13T01:00:00Z' : null,
-      documentHash: 'snapshot',
+      documentHash: kind === 'Holding' ? 'outdated-before-approval' : 'snapshot',
       sandboxAvailable,
       canContinue: false,
     };
@@ -40,13 +93,27 @@ function show(sandboxAvailable = true, reject = false) {
     >
       <InternalSigningPanel
         api={contractClient(request as ContractRequest)}
-        contract={contract}
+        contract={{ ...contract, kind }}
         onChanged={changed}
       />
     </QueryClientProvider>,
   );
   return { request, changed };
 }
+it('lets the Owner confirm Main Sandbox without selecting an account or requiring Tenant OTP', async () => {
+  const { request, changed } = show(true, false, 'Main');
+  const button = await screen.findByRole('button', { name: 'Owner xác nhận ký (Sandbox)' });
+  expect(button).toBeDisabled();
+  expect(screen.queryByRole('combobox')).toBeNull();
+  fireEvent.click(screen.getByLabelText('Tôi là Owner, đã xem nội dung và xác nhận ký test'));
+  fireEvent.click(button);
+  await screen.findByText(/Owner đã xác nhận test/);
+  expect(changed).toHaveBeenCalledOnce();
+  expect(request.mock.calls.filter(([path]) => path.endsWith('/owner-confirmation'))).toHaveLength(
+    1,
+  );
+  expect(screen.queryByText('Ký nội bộ qua OTP')).toBeNull();
+});
 it('requires explicit Owner checkbox and persists confirmation before Tenant simulation without declaring QR ready', async () => {
   const { request, changed } = show();
   const button = await screen.findByRole('button', { name: 'Xác nhận chữ ký Owner (Sandbox)' });

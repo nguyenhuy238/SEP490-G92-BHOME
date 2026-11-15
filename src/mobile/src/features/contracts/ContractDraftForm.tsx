@@ -2,7 +2,7 @@ import { conciseMessage } from '../../lib/toast';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
 import {
   contractError,
@@ -12,7 +12,7 @@ import {
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
 import { useHoldingPreparation } from './useHoldingPreparation';
-import { Box, Heading, ui } from '../../components/WorkspaceKit';
+import { ui } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { mainDraftClient } from '../../../../../packages/client-core/src/mainDrafts';
 import type { HoldingPreparation } from '../../../../../packages/client-core/src/holdingSettings';
@@ -24,6 +24,7 @@ import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { HoldingNewTenant } from './HoldingNewTenant';
 import { HoldingProgress } from './HoldingProgress';
 import { staffColors } from '../../theme/theme';
+import { HoldingSectionCard, HoldingStatusBadge } from './HoldingUi';
 
 export function ContractDraftForm({
   api,
@@ -45,6 +46,7 @@ export function ContractDraftForm({
     error?: string;
   }>({ key: '' });
   const [defaultsRevision, setDefaultsRevision] = useState(0);
+  const [confirmedApplicantId, setConfirmedApplicantId] = useState('');
   const [step, setStep] = useState(0),
     [busy, setBusy] = useState(false),
     [error, setError] = useFeedbackState();
@@ -56,7 +58,19 @@ export function ContractDraftForm({
   const eligible = (p?.residents ?? []).filter(
     (r) => r.roomId === room?.id && r.verified && r.residentType !== 'CoOccupant',
   );
-  const representative = eligible.find((r) => r.id === values.representativeResidentId);
+  // IdentityWizard calls onConfirmed only after the backend confirms this exact
+  // resident. Reuse that acknowledgement instead of fetching the entire wizard again.
+  const representative =
+    eligible.find((r) => r.id === values.representativeResidentId) ??
+    (room && confirmedApplicantId && confirmedApplicantId === values.representativeResidentId
+      ? {
+          id: confirmedApplicantId,
+          roomId: room.id,
+          label: values.applicantFullName || values.tenantName,
+          verified: true,
+          tenantUserId: null,
+        }
+      : undefined);
   const owners = p?.ownerSigners ?? [];
   // Preparation exposes eligible Owners, without a separate designation field.
   // Resolve only a unique result; never guess among multiple accounts.
@@ -73,7 +87,9 @@ export function ContractDraftForm({
   const preparationAvailable = typeof api.holdingPreparation === 'function';
   const defaultsKey = `${values.roomId}:${defaultsRevision}`;
   useEffect(() => {
-    if (step !== 3 || !values.roomId || !api.holdingPreparation) return;
+    // Fetch the quote while the applicant fills their profile, instead of making
+    // them wait again when they reach confirmation. The server checks its version on save.
+    if (!values.roomId || !room?.locationId || !api.holdingPreparation) return;
     const controller = new AbortController();
     let active = true;
     void api
@@ -91,9 +107,10 @@ export function ContractDraftForm({
       active = false;
       controller.abort();
     };
-  }, [step, values.roomId, room?.locationId, api, defaultsKey]);
+  }, [values.roomId, room?.locationId, api, defaultsKey]);
   const configured = defaults.key === defaultsKey ? defaults.data : undefined;
   const defaultsError = defaults.key === defaultsKey ? defaults.error : undefined;
+  const defaultsLoading = preparationAvailable && !configured && !defaultsError && !!room;
   const defaultsReady =
     !!configured && /^(0|[1-9]\d*)$/.test(configured.holdingDeposit) && !!configured.terms?.trim();
   let datesReady = false;
@@ -180,7 +197,6 @@ export function ContractDraftForm({
       if (!roomValid) throw new Error('Chọn phòng giữ chỗ hợp lệ.');
       if (step === 2) {
         validateSelection();
-        setDefaults({ key: '' });
       }
       setError('');
       setStep((value) => value + 1);
@@ -194,15 +210,17 @@ export function ContractDraftForm({
   });
   return (
     <>
-      <View style={{ gap: 4 }}>
+      <View style={styles.intro}>
         {!customHeader && <Text style={styles.screenTitle}>Tạo hợp đồng giữ chỗ</Text>}
-        <Text style={styles.description}>Nhập thông tin để lập hợp đồng giữ chỗ</Text>
+        {!customHeader && (
+          <Text style={styles.description}>Hoàn tất thông tin theo từng bước.</Text>
+        )}
       </View>
       <HoldingProgress current={step} />
-      <Box style={styles.panel}>
+      <View style={styles.panel}>
         {step === 0 && (
-          <>
-            <Heading title="Chọn phòng giữ chỗ" detail="Chọn phòng còn trống để bắt đầu." />
+          <HoldingSectionCard title="Chọn phòng giữ chỗ">
+            <Text style={styles.description}>Chọn phòng còn trống để bắt đầu.</Text>
             <ChoiceField
               label="Phòng giữ chỗ *"
               placeholder="Chọn phòng còn trống"
@@ -225,23 +243,27 @@ export function ContractDraftForm({
             />
             {room && !query.loading && (
               <View style={styles.roomSummary}>
-                <Text style={styles.screenTitle}>{room.label}</Text>
-                <Text style={styles.description}>
-                  {query.data?.locations.find((item) => item.id === room.locationId)?.label}
-                </Text>
-                <Text style={styles.description}>
-                  {roomValid
-                    ? 'Phòng đủ điều kiện · Có thể tiếp tục'
-                    : 'Đang kiểm tra điều kiện giữ chỗ'}
-                </Text>
+                <View style={styles.roomIcon}>
+                  <Icon source="door-open" size={22} color={staffColors.navy} />
+                </View>
+                <View style={styles.roomInfo}>
+                  <Text style={styles.roomTitle}>{room.label}</Text>
+                  <Text style={styles.description}>
+                    {query.data?.locations.find((item) => item.id === room.locationId)?.label}
+                  </Text>
+                </View>
+                <HoldingStatusBadge
+                  label={roomValid ? 'Đủ điều kiện' : 'Đang kiểm tra'}
+                  tone={roomValid ? 'success' : 'warning'}
+                />
               </View>
             )}
             {query.loading && (
               <ActivityIndicator accessibilityLabel="Đang kiểm tra phòng giữ chỗ" />
             )}
             {!query.loading && !query.error && !roomOptions.length && (
-              <View style={{ gap: 8 }}>
-                <Text>
+              <View style={styles.emptyRooms}>
+                <Text style={styles.description}>
                   {query.data?.blockedRooms.length
                     ? `Có ${query.data.blockedRooms.length} phòng trống nhưng chưa đủ điều kiện giữ chỗ.`
                     : 'Chưa có phòng trống đủ điều kiện giữ chỗ.'}
@@ -259,18 +281,18 @@ export function ContractDraftForm({
                 </Button>
               </View>
             )}
-          </>
+          </HoldingSectionCard>
         )}
         {(step === 1 || step === 2) && (
-          <>
-            <Heading
-              title={step === 1 ? 'Thông tin người giữ chỗ' : 'CCCD của người giữ chỗ'}
-              detail={
-                step === 1
-                  ? 'Nhập thông tin của người đăng ký giữ chỗ.'
-                  : 'Quét CCCD hoặc nhập thủ công, sau đó kiểm tra và xác nhận thông tin.'
-              }
-            />
+          <View style={step === 1 ? styles.formCard : styles.identityStage}>
+            <Text style={styles.sectionTitle}>
+              {step === 1 ? 'Thông tin người giữ chỗ' : 'CCCD của người giữ chỗ'}
+            </Text>
+            <Text style={styles.description}>
+              {step === 1
+                ? 'Nhập thông tin của người đăng ký giữ chỗ.'
+                : 'Quét CCCD hoặc nhập thủ công, sau đó xác nhận thông tin.'}
+            </Text>
             {!!room && (
               <HoldingNewTenant
                 key={`${room.id}:${step}`}
@@ -279,8 +301,9 @@ export function ContractDraftForm({
                 role={role ?? ''}
                 context="holding"
                 stage={step === 1 ? 'details' : 'identity'}
-                disabled={busy || !roomValid || !owner}
+                disabled={busy || (step === 1 && (!roomValid || !owner))}
                 onContinue={() => setStep(2)}
+                onBack={back}
                 initialResidentId={values.representativeResidentId}
                 initialName={values.applicantFullName || values.tenantName}
                 initialEmail={values.tenantEmail}
@@ -292,7 +315,6 @@ export function ContractDraftForm({
                     tenantName: name,
                     tenantEmail: email,
                   }));
-                  query.reload();
                 }}
                 onVerifiedSummary={(summary) =>
                   setValues((before) => ({
@@ -301,11 +323,11 @@ export function ContractDraftForm({
                     applicantDateOfBirth: summary.dateOfBirth ?? '',
                   }))
                 }
-                onConfirmed={query.reload}
+                onConfirmed={() => setConfirmedApplicantId(values.representativeResidentId)}
                 onBusyChange={setBusy}
               />
             )}
-          </>
+          </View>
         )}
         {step === 3 && (
           <>
@@ -321,7 +343,7 @@ export function ContractDraftForm({
               endDate={configured?.endDate}
               terms={configured?.terms}
             />
-            {!datesReady && (
+            {!datesReady && !defaultsLoading && (
               <Text accessibilityRole="alert" style={ui.red}>
                 Chưa có thời hạn giữ chỗ từ hệ thống. Chưa thể tạo hợp đồng.
               </Text>
@@ -351,6 +373,19 @@ export function ContractDraftForm({
             {ownerError}
           </Text>
         )}
+        {step > 0 && query.loading && (
+          <View style={styles.refreshStatus}>
+            <ActivityIndicator
+              size="small"
+              accessibilityLabel="Đang cập nhật thông tin phòng đã chọn"
+            />
+            <Text style={[styles.description, styles.refreshDescription]}>
+              {step === 2 && role === 'Staff'
+                ? 'Đang cập nhật thông tin phòng. Bạn vẫn có thể quét hoặc nhập CCCD.'
+                : 'Đang cập nhật thông tin phòng đã chọn…'}
+            </Text>
+          </View>
+        )}
         {!!query.error && (
           <Text accessibilityRole="alert" style={ui.red}>
             {conciseMessage(query.error)}
@@ -366,7 +401,7 @@ export function ContractDraftForm({
             {error}
           </Text>
         )}
-      </Box>
+      </View>
       {step < 3 && step !== 1 && (
         <WorkspaceFooter>
           <View style={styles.footer}>
@@ -374,25 +409,21 @@ export function ContractDraftForm({
               mode="contained"
               icon="arrow-right"
               buttonColor={staffColors.navy}
-              style={{ borderRadius: 12 }}
-              contentStyle={{ minHeight: 50, flexDirection: 'row-reverse' }}
+              style={styles.footerPrimary}
+              contentStyle={styles.footerPrimaryContent}
               disabled={busy || !roomValid || (step === 2 && !owner)}
+              loading={busy || query.loading}
               onPress={next}
             >
-              Tiếp tục
+              {query.loading ? 'Đang cập nhật…' : 'Tiếp tục'}
             </Button>
             {step > 0 && (
-              <Button disabled={busy} onPress={back}>
+              <Button disabled={busy} onPress={back} mode="text" contentStyle={styles.footerButton}>
                 Quay lại
               </Button>
             )}
           </View>
         </WorkspaceFooter>
-      )}
-      {step === 1 && (
-        <Button disabled={busy} onPress={back}>
-          Quay lại
-        </Button>
       )}
       {step === 3 && (
         <WorkspaceFooter>
@@ -407,7 +438,7 @@ export function ContractDraftForm({
               onPress={() => void save()}
               contentStyle={styles.footerButton}
               labelStyle={styles.buttonLabel}
-              style={{ borderRadius: 10 }}
+              style={styles.footerPrimary}
             >
               Tạo hợp đồng giữ chỗ và tiếp tục bước 5
             </Button>
@@ -427,10 +458,41 @@ export function ContractDraftForm({
   );
 }
 const styles = StyleSheet.create({
-  panel: { borderRadius: 16, padding: 16, gap: 12, marginBottom: 8, backgroundColor: '#FFFFFF' },
-  description: { fontSize: 14, color: '#52647A' },
-  roomSummary: { backgroundColor: '#F5F7FB', borderRadius: 14, padding: 12, gap: 8 },
-  screenTitle: { color: staffColors.navy, fontSize: 18, fontWeight: '600' },
+  refreshStatus: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  refreshDescription: { flex: 1 },
+  intro: { gap: 4 },
+  panel: { gap: 12, marginBottom: 8 },
+  description: { fontSize: 13, lineHeight: 20, color: '#64748B' },
+  sectionTitle: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: staffColors.navy },
+  formCard: {
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    gap: 12,
+  },
+  identityStage: { gap: 10 },
+  roomSummary: {
+    backgroundColor: '#F5F7FB',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  roomIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8F0FE',
+  },
+  roomInfo: { flex: 1, minWidth: 0, gap: 2 },
+  roomTitle: { color: staffColors.navy, fontSize: 15, fontWeight: '700' },
+  emptyRooms: { gap: 8 },
+  screenTitle: { color: staffColors.navy, fontSize: 18, lineHeight: 24, fontWeight: '700' },
   footer: {
     backgroundColor: '#FFFFFF',
     borderTopColor: '#E2E8F0',
@@ -440,5 +502,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   footerButton: { minHeight: 48 },
+  footerPrimary: { borderRadius: 12 },
+  footerPrimaryContent: { minHeight: 50, flexDirection: 'row-reverse' },
   buttonLabel: { fontSize: 14, fontWeight: '600' },
 });

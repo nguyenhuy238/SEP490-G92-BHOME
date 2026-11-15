@@ -16,16 +16,14 @@ export function HoldingProgress({ current }: { current: number }) {
       </View>
       <ProgressBar
         progress={(current + 1) / holdingSteps.length}
-        color="#2563EB"
+        color="#193653"
         style={styles.bar}
         accessibilityLabel={`Tiến độ giữ chỗ: bước ${current + 1} trên ${holdingSteps.length}`}
       />
       <View style={styles.row}>
-        <Text style={styles.next}>
-          {current < holdingSteps.length - 1
-            ? `Tiếp theo: ${holdingSteps[current + 1]?.label}`
-            : 'Đối chiếu tiền cọc và xác nhận giữ chỗ'}
-        </Text>
+        {current < holdingSteps.length - 1 && (
+          <Text style={styles.next}>Tiếp theo: {holdingSteps[current + 1]?.label}</Text>
+        )}
       </View>
       <Button
         compact
@@ -56,12 +54,12 @@ export function HoldingProgress({ current }: { current: number }) {
   );
 }
 const styles = StyleSheet.create({
-  root: { gap: 8, paddingVertical: 8 },
+  root: { gap: 6, paddingVertical: 4 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  count: { fontSize: 14, fontWeight: '600', color: '#52647A' },
-  title: { fontSize: 15, fontWeight: '700', color: '#173654', flexShrink: 1 },
-  next: { fontSize: 13, color: '#52647A', flexShrink: 1 },
-  bar: { height: 6, borderRadius: 8, backgroundColor: '#E2E8F0' },
-  info: { fontSize: 13, color: '#315984' },
-  details: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12, gap: 8 },
+  count: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  title: { fontSize: 14, fontWeight: '700', color: '#193653', flexShrink: 1, textAlign: 'right' },
+  next: { fontSize: 12, color: '#64748B', flexShrink: 1 },
+  bar: { height: 5, borderRadius: 8, backgroundColor: '#E2E8F0' },
+  info: { fontSize: 12, color: '#193653' },
+  details: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, gap: 6, borderWidth: 1, borderColor: '#E2E8F0' },
 });

@@ -4,7 +4,7 @@ import { conciseMessage, showError } from '../../lib/toast';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Checkbox, Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
 import {
@@ -106,9 +106,8 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       /* Do not send untrusted route text to an API path. */
     }
   }
-  const id = role === 'Owner' ? deepId : selected || deepId;
-  const draftReference =
-    role === 'Owner' ? params.mainDraftId || '' : mainDraftId || params.mainDraftId || '';
+  const id = deepId || (role === 'Owner' ? '' : selected);
+  const draftReference = params.mainDraftId || (role !== 'Owner' && !deepId ? mainDraftId : '');
   let invalidOwnerRoute = role === 'Owner' && !!params.contractId && !deepId;
   if (role === 'Owner' && params.mainDraftId) {
     try {
@@ -128,8 +127,15 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         mainDraftId: '',
         roomId: '',
       });
-    } else if (isMainOnboardingDraft(contract)) setMainDraftId(contract.id);
-    else setSelected(contract.id);
+    } else if (isMainOnboardingDraft(contract)) {
+      setSelected('');
+      setMainDraftId(contract.id);
+      router.setParams({ contractId: '', mainDraftId: contract.id, roomId: '', kind: '' });
+    } else {
+      setMainDraftId('');
+      setSelected(contract.id);
+      router.setParams({ contractId: contract.id, mainDraftId: '', roomId: '', kind: '' });
+    }
   }
   const previousContracts = useRef<string[]>([]);
   const returnToList = useCallback(() => {
@@ -142,12 +148,12 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const backFromContract = useCallback(() => {
     const previous = previousContracts.current.pop();
     if (previous) {
-      if (role === 'Owner') router.setParams({ contractId: previous, mainDraftId: '', roomId: '' });
+      router.setParams({ contractId: previous, mainDraftId: '', roomId: '' });
       return setSelected(previous === deepId ? '' : previous);
     }
     if (deepId && !selected && router.canGoBack()) return router.back();
     returnToList();
-  }, [deepId, selected, returnToList, role]);
+  }, [deepId, selected, returnToList]);
   function released(next: string) {
     setCreateHolding(false);
     setCreate(false);
@@ -164,7 +170,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
     (prepare || params.kind === 'Holding' || params.roomId || params.mainDraftId)
   )
     return <OwnerWebNotice task="Soạn và chuẩn bị hồ sơ hợp đồng" />;
-  if (createHolding && ['Owner', 'Staff'].includes(role))
+  if (createHolding && !deepId && !draftReference && ['Owner', 'Staff'].includes(role))
     return (
       <ContractDraftForm
         api={client}
@@ -246,6 +252,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   }
   if (
     create &&
+    !deepId &&
     ['Staff', 'Owner'].includes(role) &&
     (role !== 'Owner' || (!mainDraftId && !deepId) || mainDraftId === deepId)
   )
@@ -496,10 +503,10 @@ function LiveContractDetail({
       )}
       {!holding && <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>}
       {!!detail.refreshError && (
-        <Text style={ui.red}>Ch?a c?p nh?t ???c tr?ng th?i m?i. {detail.refreshError}</Text>
+        <Text accessibilityRole="alert" style={ui.red}>Chưa cập nhật được trạng thái mới. Nội dung trước đó vẫn được giữ lại. {detail.refreshError}</Text>
       )}
       {c.kind === 'Holding' ? (
-        <View style={{ flexDirection: 'row', gap: 4 }}>
+        <View style={holdingTabs.styles.container}>
           {(
             [
               ['overview', 'Tổng quan'],
@@ -510,10 +517,10 @@ function LiveContractDetail({
             <Button
               key={key}
               compact
-              style={{ flex: 1, minWidth: 0 }}
-              labelStyle={{ fontSize: 12, marginHorizontal: 2 }}
-              contentStyle={{ minHeight: 44 }}
-              mode={section === key ? 'contained' : 'outlined'}
+              style={[holdingTabs.styles.tab, section === key && holdingTabs.styles.activeTab]}
+              labelStyle={[holdingTabs.styles.label, section === key && holdingTabs.styles.activeLabel]}
+              contentStyle={{ minHeight: 42 }}
+              mode="text"
               accessibilityState={{ selected: section === key }}
               onPress={() => {
                 setSection(key);
@@ -900,3 +907,19 @@ function LiveContractDetail({
     </>
   );
 }
+
+const holdingTabs = {
+  styles: StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      gap: 4,
+      backgroundColor: '#E9EFF6',
+      borderRadius: 12,
+      padding: 4,
+    },
+    tab: { flex: 1, minWidth: 0, borderRadius: 9 },
+    activeTab: { backgroundColor: '#17345C' },
+    label: { fontSize: 12, marginHorizontal: 0, color: '#64748B' },
+    activeLabel: { color: '#FFFFFF' },
+  }),
+};

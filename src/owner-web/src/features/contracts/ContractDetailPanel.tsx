@@ -119,7 +119,9 @@ export function ContractDetailPanel({
       />
     );
   const actions = contractActions(c, m, 'Owner', actorId, signingMethods?.methods).filter(
-    (a) => !['move-out/settlement', 'move-out/schedule'].includes(a.operation),
+    (a) =>
+      !['move-out/settlement', 'move-out/schedule'].includes(a.operation) &&
+      !(c.signingMode === 'INTERNAL_OTP_DRAWN' && a.operation.startsWith('signing')),
   );
   const signer = c.ownerSignerId === actorId;
   const done = (status: string) => ['Signed', 'Simulated'].includes(status);

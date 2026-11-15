@@ -37,7 +37,11 @@ const methods = { methods: ['UPLOAD_PROOF', 'OTP'], default: 'UPLOAD_PROOF' };
 const problem = (code: string) =>
   Object.assign(new Error(code), { name: 'ApiError', status: 422, problem: { code } });
 
-function renderPanel(contract: ContractView, transport: ReturnType<typeof vi.fn>) {
+vi.mock('./SignaturePlacementPicker', () => ({
+  SignaturePlacementPicker: () => <div>Reviewed PDF</div>,
+}));
+
+function renderPanel(contract: ContractView, transport: ReturnType<typeof vi.fn>, offered = methods) {
   const onChanged = vi.fn();
   render(
     <QueryClientProvider
@@ -47,7 +51,7 @@ function renderPanel(contract: ContractView, transport: ReturnType<typeof vi.fn>
         api={contractClient(transport as unknown as Parameters<typeof contractClient>[0])}
         contract={contract}
         actorId={owner}
-        methods={methods}
+        methods={offered}
         onChanged={onChanged}
       />
     </QueryClientProvider>,
@@ -55,10 +59,27 @@ function renderPanel(contract: ContractView, transport: ReturnType<typeof vi.fn>
   return onChanged;
 }
 
+it.each(['Holding', 'Main'])('replaces a pending Owner OTP on %s with explicit session consent', async (kind) => {
+  const transport = vi.fn().mockResolvedValue({ id: signatureId, status: 'Signed', method: 'OWNER_SESSION' });
+  const changed = renderPanel({ ...pending, kind, signatures: [{
+    id: signatureId, signerUserId: owner, status: 'Pending', signedAt: null, method: 'OTP',
+  }] }, transport, { methods: ['OWNER_SESSION', 'UPLOAD_PROOF'], default: 'OWNER_SESSION' });
+  const button = screen.getByRole('button', { name: 'Ký hợp đồng' });
+  expect(button).toBeDisabled();
+  expect(screen.queryByLabelText('Mã xác nhận')).toBeNull();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(button);
+  await waitFor(() => expect(changed).toHaveBeenCalledOnce());
+  const [path, init] = transport.mock.calls[0];
+  expect(path).toBe(`/api/v1/contracts/${id}/signing`);
+  expect(JSON.parse(init.body)).toMatchObject({ method: 'OWNER_SESSION', consent: true });
+  expect(transport.mock.calls.some(([url]) => url.includes('/otp'))).toBe(false);
+});
+
 it('starts UPLOAD_PROOF signing with an idempotency key and no certificate', async () => {
   const transport = vi.fn().mockResolvedValue({ id: signatureId });
   const onChanged = renderPanel(pending, transport);
-  expect(screen.getByRole('button', { name: /Tải về & ký MySign/ })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Tải về & ký số bên ngoài/ })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu ký' }));
   await waitFor(() => expect(onChanged).toHaveBeenCalled());
   const [path, init] = transport.mock.calls[0];
@@ -92,7 +113,7 @@ it('uploads the signed PDF and marks the failed check when BHOME refuses it', as
   await screen.findByText(/hop-dong-da-ky\.pdf/);
   fireEvent.click(screen.getByRole('button', { name: 'Gửi bản đã ký' }));
   await screen.findByText('Chứng thư không do Viettel-CA cấp.');
-  expect(screen.getByText(/✕ Chứng thư do Viettel-CA cấp/)).toBeTruthy();
+  expect(screen.getByText(/✕ Tên bên cấp chứng thư khớp cấu hình/)).toBeTruthy();
   expect(screen.getByText(/✓ Đúng bản hợp đồng đã phát/)).toBeTruthy();
   const [path, init] = transport.mock.calls[0];
   expect(path).toBe(`/api/v1/contracts/${id}/signing/upload`);

@@ -6,13 +6,26 @@ namespace BHome.Application.Contracts;
 public sealed partial class ContractService
 {
     private bool DemoEnabled => workflowMode?.SimulatedSigningEnabled == true;
+    private string? ConfiguredPaymentMode(Guid locationId) => paymentOptions?.Enabled == true &&
+        paymentOptions.ReceivingAccounts.Any(a => a.LocationId == locationId) &&
+        (paymentOptions.Mode == "Live" || holdingTestScope?.Allows(locationId) == true || holdingTestScope?.AllowsExternalDatabase == true)
+        ? paymentOptions.Mode : null;
     private IContractWorkflowRepository Workflow => workflowRepository ?? throw new ContractException(503, "contract_workflow_unavailable");
     private IContractDocumentRenderer Renderer => renderer ?? throw new ContractException(503, "contract_template_not_configured");
     private bool CompleteSignature(ContractSignature signature, Contract contract) => contract.IsDevelopmentDemo
         ? DemoEnabled && signature.Status == SignatureStatus.Simulated : signature.Status == SignatureStatus.Signed;
     private void RequireSigningMode(Contract contract)
     {
-        if (contract.SigningMode == ContractSigningModes.Internal) throw ContractException.Conflict("internal_signing_flow_required");
+        if (contract.SigningMode == ContractSigningModes.Internal)
+        {
+            if (Actor != contract.OwnerSignerId || !user.IsInRole(Roles.Owner))
+                throw new ContractException(403, "contract_signer_required");
+            if (contract.IsDevelopmentDemo || MainSandboxAcceptance.Read(contract) is not null)
+                throw ContractException.Conflict("signing_mode_mismatch");
+            if (AnonymousContractSigningService.AcceptedEvidence(contract) is null)
+                throw ContractException.Conflict("tenant_acceptance_required");
+            return;
+        }
         if (contract.IsDevelopmentDemo != DemoEnabled) throw ContractException.Conflict("signing_mode_mismatch");
     }
 

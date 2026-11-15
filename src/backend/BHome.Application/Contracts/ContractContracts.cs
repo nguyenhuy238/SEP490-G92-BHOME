@@ -18,7 +18,7 @@ public sealed record HoldingDraftInput(Guid RoomId, Guid OwnerSignerId, Guid? Te
     [Required, StringLength(12000, MinimumLength = 1)] string Terms, short? ReservedCapacity = null, int? SettingsVersion = null);
 public sealed record HoldingDecisionInput([Required, StringLength(2000, MinimumLength = 1)] string Reason);
 public sealed record HoldingConversionInput(
-    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredSecurityDeposit, bool RequireInitialPayment = false);
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredSecurityDeposit, bool RequireInitialPayment = true);
 public sealed record HoldingPriceCharge(Guid PolicyId, string ChargeCode, int Category, int Method,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Rate,
     DateOnly EffectiveFrom, DateOnly? EffectiveTo, int Version)
@@ -56,7 +56,7 @@ public sealed record ContractListScope(Guid ActorId, bool Owner, bool Staff, boo
 // shows the signer's saved signature picture (when there is one) above "Ký bởi / Ngày ký"; false shows the text only.
 // Method: OTP (in-app electronic signature) or null for the certificate-based provider of the deployment.
 public sealed record SigningInput(Guid CertificateId, SignaturePlacementInput? Placement = null, bool? UsePicture = null,
-    [System.ComponentModel.DataAnnotations.StringLength(20)] string? Method = null);
+    [System.ComponentModel.DataAnnotations.StringLength(20)] string? Method = null, bool Consent = false);
 // Page is 1-based; X, Y and Width are fractions of the page measured from its top-left corner.
 public sealed record SignaturePlacementInput(int Page, double X, double Y, double Width)
 {
@@ -103,7 +103,8 @@ public sealed record ContractView(Guid Id, Guid RoomId, string Kind, string Stat
     Guid LocationId = default, bool IsDevelopmentDemo = false, string RoomNumber = "", string LocationName = "", IReadOnlyList<ContractOccupantView>? Occupants = null, DateOnly? ActualEndDate = null, bool OnboardingDraft = false,
     DateTimeOffset? HoldingExpiresAt = null, short? ReservedCapacity = null, DateTimeOffset? ApprovedAt = null,
     DateTimeOffset? PriceLockedAt = null, string? PriceLockTrigger = null, Guid? ConvertedMainContractId = null,
-    string SigningMode = "", string SnapshotHash = "", IReadOnlyList<HoldingPriceCharge>? AgreedCharges = null, bool InitialPaymentRequired = false);
+    string SigningMode = "", string SnapshotHash = "", IReadOnlyList<HoldingPriceCharge>? AgreedCharges = null, bool InitialPaymentRequired = false,
+    bool OwnerOnlySandboxConfirmed = false, bool SandboxTenantSimulated = false, string? PaymentMode = null);
 public sealed record ActivationReadiness(bool Ready, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal VerifiedDeposit, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RemainingDeposit,
     IReadOnlyList<string> Blockers);
 public interface IAdministrativeContractReadiness

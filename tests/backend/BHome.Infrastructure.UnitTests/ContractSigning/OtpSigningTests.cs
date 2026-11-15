@@ -142,8 +142,8 @@ public sealed class OtpSigningTests
         var both = new ContractSigningMethods(Options.Create(new ContractSigningOptions { Methods = { Otp = true, ViettelMySign = true } }), mode);
         var otpOnly = new ContractSigningMethods(Options.Create(new ContractSigningOptions { Methods = { Otp = true, ViettelMySign = false } }), mode);
 
-        Assert.Equal([SigningMethods.Otp, SigningMethods.ViettelMySign], both.Enabled);
-        Assert.Equal([SigningMethods.Otp], otpOnly.Enabled);
+        Assert.Equal([SigningMethods.OwnerSession, SigningMethods.Otp, SigningMethods.ViettelMySign], both.Enabled);
+        Assert.Equal([SigningMethods.OwnerSession, SigningMethods.Otp], otpOnly.Enabled);
         Assert.False(otpOnly.IsEnabled(SigningMethods.ViettelMySign));
 
         mode.SimulatedSigningEnabled.Returns(true);

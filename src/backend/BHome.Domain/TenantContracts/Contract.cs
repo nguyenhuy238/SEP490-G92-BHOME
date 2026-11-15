@@ -49,6 +49,8 @@ public sealed class Contract : AuditableEntity
     public string Terms { get; set; } = "";
     public string SnapshotHash { get; set; } = "";
     public bool IsDevelopmentDemo { get; set; }
+    // Payment data environment is independent of genuine versus simulated signatures.
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string? PaymentMode { get; set; }
     public List<ContractResident> Residents { get; set; } = [];
     public List<ContractSignature> Signatures { get; set; } = [];
     public Guid? ActivatedByUserId { get; set; }

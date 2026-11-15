@@ -22,7 +22,9 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IOperatingPolicyWorkflow? operatingPolicies = null, IPostActivationTenantProvisioning? provisioning = null,
     IContractDepositPosition? depositPositions = null, IHoldingSettingsData? holdingSettings = null,
     IHoldingTestScope? holdingTestScope = null, BHome.Application.PaymentsDebt.IMainInitialPaymentLedger? initialPayments = null,
-    IContractSigningMethods? signingMethods = null, IContractSigningNotifier? signingNotifier = null) : IAdministrativeContractReadiness
+    IContractSigningMethods? signingMethods = null, IContractSigningNotifier? signingNotifier = null,
+    IAnonymousSigningRepository? signingInvitations = null,
+    BHome.Application.PaymentsDebt.SePay.SePayOptions? paymentOptions = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
@@ -68,7 +70,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private void Remember(Guid key, string operation, object input, Guid result)
         => repository.Add(new ContractOperation { ActorId = Actor, Key = key, Operation = operation, Fingerprint = Hash(input), ResultId = result, CreatedAt = clock.GetUtcNow() });
     private void Audit(string action, Guid id) => repository.Audit(Actor, action, id, clock.GetUtcNow());
-    private void ChangeRoomStatus(Contract contract, RoomStatus requested, RoomTransitionSource source, bool otherActive = false)
+    private void ChangeRoomStatus(Contract contract, RoomStatus requested, RoomTransitionSource source, bool otherActive = false, Guid? approvedOwner = null)
     {
         var room = contract.Room;
         if (!PropertyRules.CanChangeRoomStatus(room.Status, requested, source, hasOtherActiveContracts: otherActive))
@@ -79,12 +81,12 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         room.Version++;
         repository.Add(new PropertyChange
         {
-            ActorId = Actor,
+            ActorId = approvedOwner ?? Actor,
             LocationId = room.LocationId,
             TargetId = room.Id,
             TargetType = nameof(Room),
             Action = source.ToString(),
-            Reason = source.ToString(),
+            Reason = approvedOwner is null ? source.ToString() : "AutomaticMainActivationAfterVerifiedPayment",
             Before = before,
             After = JsonSerializer.Serialize(new { room.Status, room.Version, ContractId = contract.Id }),
             OccurredAt = clock.GetUtcNow()
@@ -118,13 +120,14 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit, c.Room.LocationId, c.IsDevelopmentDemo, c.Room.RoomNumber, c.Room.Location?.Name ?? "", ActualEndDate: c.ActualEndDate, OnboardingDraft: c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft,
         HoldingExpiresAt: c.HoldingExpiryAt, ReservedCapacity: c.ReservedCapacity, ApprovedAt: c.ApprovedAt,
         PriceLockedAt: c.PriceLockedAt, PriceLockTrigger: c.PriceLockTrigger, ConvertedMainContractId: c.ConvertedMainContractId,
-        SigningMode: c.SigningMode, SnapshotHash: c.SnapshotHash, AgreedCharges: ContractChargeSnapshot.ViewCharges(c), InitialPaymentRequired: c.InitialPaymentRequired);
+        SigningMode: c.SigningMode, SnapshotHash: c.SnapshotHash, AgreedCharges: ContractChargeSnapshot.ViewCharges(c), InitialPaymentRequired: c.InitialPaymentRequired, OwnerOnlySandboxConfirmed: MainSandboxAcceptance.Read(c) is not null, SandboxTenantSimulated: MainSandboxAcceptance.Read(c)?.TenantSimulatedAt is not null, PaymentMode: ContractPaymentModes.Of(c));
     // What a signing screen shows: the method (from the provider credential), the deadline and the signing certificate.
     private static SignatureView SignatureOf(ContractSignature s)
     {
         var method = s.CredentialId switch
         {
             OtpCredential => SigningMethods.Otp,
+            OwnerSessionCredential => SigningMethods.OwnerSession,
             UploadCredential => SigningMethods.UploadProof,
             "SIMULATED-NO-CERTIFICATE" => SigningMethods.Simulated,
             _ => SigningMethods.ViettelMySign
@@ -212,6 +215,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 MonthlyRent = x.MonthlyRent,
                 RequiredDeposit = x.RequiredDeposit,
                 IsDevelopmentDemo = DemoEnabled,
+                PaymentMode = ConfiguredPaymentMode((await repository.RoomAsync(x.RoomId, t))!.LocationId),
                 Terms = x.Terms.Trim()
             };
             c.Residents = residents.Select(r => new ContractResident
@@ -247,6 +251,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 RepresentativeResidentId = c.RepresentativeResidentId,
                 Kind = ContractKind.Renewal,
                 IsDevelopmentDemo = c.IsDevelopmentDemo,
+                PaymentMode = c.PaymentMode,
                 PreviousContractId = c.Id,
                 StartDate = c.EndDate.AddDays(1),
                 EndDate = x.EndDate,
@@ -325,7 +330,9 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         }
         if (lifecycle is not null) blockers.AddRange(await lifecycle.RoomBlockersAsync(c.RoomId, t));
         if (c.Kind == ContractKind.Holding) blockers.Add("main_contract_required");
-        if (c.IsDevelopmentDemo && !DemoEnabled) blockers.Add("development_demo_disabled");
+        if (c.IsDevelopmentDemo && !DemoEnabled &&
+            !(MainSandboxAcceptance.Read(c) is not null && holdingTestScope?.Allows(c.Room.LocationId) == true))
+            blockers.Add("development_demo_disabled");
         if (c.Status != ContractStatus.PendingActivation) blockers.Add("contract_not_pending_activation");
         if (!c.Room.Location.IsActive) blockers.Add("location_not_active");
         if (!PropertyRules.CanChangeRoomStatus(c.Room.Status, RoomStatus.Occupied, RoomTransitionSource.ContractActivation) ||
@@ -352,6 +359,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         }
         if (c.SigningMode == ContractSigningModes.Internal)
         {
+            if (MainSandboxAcceptance.Read(c) is not null &&
+                holdingTestScope?.Allows(c.Room.LocationId) != true) blockers.Add("sandbox_signing_not_available");
             if (!AnonymousContractSigningService.Complete(c)) blockers.Add("internal_acceptance_evidence_required");
         }
         else foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId })
@@ -363,7 +372,16 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             !c.Residents.Any(r => r.ResidentId == c.RepresentativeResidentId && r.Role == ResidentType.Representative)) blockers.Add("verified_residents_required");
         if (!await repository.ActiveUserInRoleAsync(c.OwnerSignerId, Roles.Owner, t) ||
             c.SigningMode != ContractSigningModes.Internal && !await repository.ActiveUserInRoleAsync(RequireTenant(c), Roles.Tenant, t)) blockers.Add("invalid_contract_signers");
-        if (c.SigningMode == ContractSigningModes.Internal && residents.Any(r => string.IsNullOrWhiteSpace(r.ContactEmail))) blockers.Add("resident_email_required");
+        if (c.SigningMode == ContractSigningModes.Internal)
+        {
+            var evidence = AnonymousContractSigningService.AcceptedEvidence(c);
+            var invitation = evidence is not null && signingInvitations is not null
+                ? await signingInvitations.FindAsync(evidence.InvitationId, t) : null;
+            var contacts = SigningContacts.Read(invitation);
+            if (residents.Any(r => string.IsNullOrWhiteSpace(r.ContactEmail) &&
+                (!contacts.TryGetValue(r.Id, out var email) || string.IsNullOrWhiteSpace(email))))
+                blockers.Add("resident_email_required");
+        }
         var root = c;
         while (root.PreviousContractId is { } previous) root = await repository.FindAsync(previous, t) ?? throw ContractException.Missing();
         var deposit = root.AppliedHoldingDeposit + await repository.DepositTotalAsync(root.Id, t);
@@ -373,7 +391,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     }
     public async Task<ActivationReadiness> ReadinessAsync(Guid id, CancellationToken t)
     {
-        var contract = await Load(id, [Roles.Owner, Roles.Tenant], t);
+        var contract = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
         return contract.Kind == ContractKind.Holding ? await HoldingReadiness(contract, t) : await Readiness(contract, t);
     }
     public async Task<IReadOnlyList<string>> BlockersAsync(Guid contractId, Guid roomId, CancellationToken token)
@@ -385,12 +403,39 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     public Task<ContractView> ActivateAsync(Guid id, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
     {
         if (await Replay(key, "activate", id, t) is not null) return View(c);
+        return await ActivateReadyAsync(c, Actor, key, false, t);
+    }, t);
+
+    // Called only by the durable payment-completion worker, never exposed as an HTTP command.
+    public async Task AutoActivatePaidMainAsync(Guid id, CancellationToken t)
+    {
+        var before = await repository.FindAsync(id, t) ?? throw ContractException.Missing();
+        await repository.InTransactionAsync(before.RoomId, async () =>
+        {
+            var c = await repository.FindAsync(id, t) ?? throw ContractException.Missing();
+            if (c.Status == ContractStatus.Active) return true;
+            if (c.Kind != ContractKind.Main || !c.InitialPaymentRequired || c.PreviousContractId is not null)
+                throw ContractException.Conflict("initial_main_contract_required");
+            await ActivateReadyAsync(c, c.OwnerSignerId, null, true, t);
+            return true;
+        }, t);
+    }
+
+    private async Task<ContractView> ActivateReadyAsync(Contract c, Guid approvedOwner, Guid? key, bool automatic, CancellationToken t)
+    {
+        var id = c.Id;
+        void Audit(string action, Guid target)
+        {
+            if (automatic) repository.AuditAnonymous("Automatic:" + action, target, clock.GetUtcNow());
+            else repository.Audit(approvedOwner, action, target, clock.GetUtcNow());
+        }
         if (!(await Readiness(c, t)).Ready) throw ContractException.Conflict("contract_not_ready_for_activation");
         if (c.SigningMode == ContractSigningModes.Internal)
         {
-            var e = AnonymousContractSigningService.AcceptedEvidence(c)!;
-            using var accepted = new MemoryStream(); await storage.CopyToAsync(e.FinalDocumentKey!, accepted, t);
-            if (FileHash(accepted.ToArray()) != e.FinalDocumentHash) throw ContractException.Conflict("signing_evidence_integrity_failed");
+            var sandbox = MainSandboxAcceptance.Read(c);
+            var e = AnonymousContractSigningService.AcceptedEvidence(c);
+            using var accepted = new MemoryStream(); await storage.CopyToAsync(sandbox?.DocumentKey ?? e!.FinalDocumentKey!, accepted, t);
+            if (FileHash(accepted.ToArray()) != (sandbox?.DocumentHash ?? e!.FinalDocumentHash)) throw ContractException.Conflict("signing_evidence_integrity_failed");
         }
         // Verify stored evidence still exists and matches the exact bytes accepted from the PDF verifier.
         foreach (var s in c.Signatures.Where(s => CompleteSignature(s, c)))
@@ -401,8 +446,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         if (c.Kind == ContractKind.Addendum)
         {
             await (operatingPolicies ?? throw ContractException.Conflict("operating_policy_workflow_unavailable")).ApplyAmendmentAsync(c, t);
-            c.Status = ContractStatus.Applied; c.ActivatedAt = clock.GetUtcNow(); c.ActivatedByUserId = Actor;
-            Audit("OperatingPolicyAmendmentApplied", id); Remember(key, "activate", id, id); return View(c);
+            c.Status = ContractStatus.Applied; c.ActivatedAt = clock.GetUtcNow(); c.ActivatedByUserId = approvedOwner;
+            Audit("OperatingPolicyAmendmentApplied", id); if (key is { } amendmentKey) Remember(amendmentKey, "activate", id, id); return View(c);
         }
         if (c.PreviousContractId is { } previous)
         {
@@ -419,21 +464,21 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (holding.Kind != ContractKind.Holding || holding.Status != ContractStatus.Active || holding.ConvertedMainContractId is not null ||
                 holding.HoldingExpiryAt <= clock.GetUtcNow()) throw ContractException.Conflict("source_holding_not_convertible");
             holding.Status = ContractStatus.Converted; holding.ConvertedMainContractId = c.Id; holding.ActualEndDate = Today;
-            holding.LifecycleActorId = Actor; holding.LifecycleAt = clock.GetUtcNow(); holding.LifecycleReason = "MainContractActivated";
+            holding.LifecycleActorId = approvedOwner; holding.LifecycleAt = clock.GetUtcNow(); holding.LifecycleReason = "MainContractActivated";
             Audit("HoldingConverted", holding.Id);
         }
-        ChangeRoomStatus(c, RoomStatus.Occupied, RoomTransitionSource.ContractActivation);
+        ChangeRoomStatus(c, RoomStatus.Occupied, RoomTransitionSource.ContractActivation, approvedOwner: automatic ? approvedOwner : null);
         ContractChargeSnapshot.MarkMainBound(c, clock.GetUtcNow());
-        c.Status = ContractStatus.Active; c.ActivatedByUserId = Actor; c.ActivatedAt = clock.GetUtcNow();
-        if (provisioning is not null) await provisioning.ProvisionAsync(c, Actor, t);
+        c.Status = ContractStatus.Active; c.ActivatedByUserId = approvedOwner; c.ActivatedAt = clock.GetUtcNow();
+        if (provisioning is not null) await provisioning.ProvisionAsync(c, approvedOwner, t);
         if (c.HoldingContractId is { } acceptedHolding && c.SigningMode == ContractSigningModes.Internal)
         {
             var linked = await repository.FindAsync(acceptedHolding, t) ?? throw ContractException.Missing();
             linked.TenantUserId = c.TenantUserId;
             Audit("HoldingAccountLinkedAfterMainActivation", linked.Id);
         }
-        Audit("ContractActivated", id); Remember(key, "activate", id, id); return View(c);
-    }, t);
+        Audit("ContractActivated", id); if (key is { } operationKey) Remember(operationKey, "activate", id, id); return View(c);
+    }
 
     public Task<ContractView> CancelPolicyAmendmentAsync(Guid id, PolicyAmendmentCancellation input, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
     {
@@ -448,17 +493,23 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     public async Task<SignatureView> RequestSigningAsync(Guid id, SigningInput x, Guid key, CancellationToken t)
     {
         var otp = SigningMethods.IsOtp(x.Method);
+        var session = SigningMethods.IsOwnerSession(x.Method);
+        if (session && !user.IsInRole(Roles.Owner)) throw new ContractException(403, "owner_session_signing_owner_only");
+        if (session && !x.Consent) throw ContractException.Invalid("signing_consent_required");
+        if (session && signingMethods?.IsEnabled(SigningMethods.OwnerSession) != true) throw new ContractException(503, "signing_method_disabled");
+        var completed = false;
         var upload = SigningMethods.IsUploadProof(x.Method);
-        if (x.Method is { } method && !otp && !upload && !string.Equals(method, SigningMethods.ViettelMySign, StringComparison.OrdinalIgnoreCase) &&
+        if (x.Method is { } method && !session && !otp && !upload && !string.Equals(method, SigningMethods.ViettelMySign, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(method, SigningMethods.Simulated, StringComparison.OrdinalIgnoreCase)) throw ContractException.Invalid("signing_method_invalid");
         if (otp && signingMethods?.IsEnabled(SigningMethods.Otp) != true) throw new ContractException(503, "signing_method_disabled");
         if (upload && signingMethods?.IsEnabled(SigningMethods.UploadProof) != true) throw new ContractException(503, "signing_method_disabled");
-        if (!otp && !upload && x.CertificateId == Guid.Empty && !DemoEnabled) throw ContractException.Invalid("certificate_required");
+        if (!session && !otp && !upload && x.CertificateId == Guid.Empty && !DemoEnabled) throw ContractException.Invalid("certificate_required");
         if (x.Placement is { IsValid: false }) throw ContractException.Invalid("signature_placement_invalid");
         await Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
         {
             RequireSigningMode(c);
             if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
+            if (session && Actor != c.OwnerSignerId) throw new ContractException(403, "owner_session_signing_owner_only");
             if (await Replay(key, "sign", new { id, x }, t) is not null) return true;
             if (c.Kind == ContractKind.Holding && c.ApprovedAt is null) throw ContractException.Conflict("holding_owner_approval_required");
             if (c.Kind == ContractKind.Holding && await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
@@ -466,6 +517,13 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (c.Kind is ContractKind.Main or ContractKind.Renewal or ContractKind.Holding)
                 await ContractChargeSnapshot.ValidateBindingAsync(repository, c, t,
                     checkProfile: c.Status == ContractStatus.Draft && c.Kind != ContractKind.Holding && !c.PriceLockedAt.HasValue);
+            if (session)
+                foreach (var old in c.Signatures.Where(s => s.SignerUserId == Actor && s.CredentialId == OtpCredential &&
+                    s.Status is SignatureStatus.Prepared or SignatureStatus.Pending or SignatureStatus.Dispatching or SignatureStatus.ManualReview))
+                {
+                    old.Status = SignatureStatus.Failed;
+                    Audit("OwnerOtpSigningSupersededBySessionConsent", id);
+                }
             if (c.Status == ContractStatus.Draft)
             {
                 if (c.Kind is ContractKind.Main or ContractKind.Renewal)
@@ -480,6 +538,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         {
             RequireSigningMode(c);
             if (Actor != c.OwnerSignerId && Actor != c.TenantUserId) throw new ContractException(403, "contract_signer_required");
+            if (session && Actor != c.OwnerSignerId) throw new ContractException(403, "owner_session_signing_owner_only");
             if (await Replay(key, "sign", new { id, x }, t) is { } prior) return prior;
             if (c.Kind == ContractKind.Holding && c.ApprovedAt is null) throw ContractException.Conflict("holding_owner_approval_required");
             if (c.Kind == ContractKind.Holding && await repository.HoldingConflictAsync(c.RoomId, c.Id, c.StartDate, c.EndDate, t)) throw ContractException.Conflict("room_contract_conflict");
@@ -489,15 +548,15 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             // The Owner signs outside BHOME with their own certificate; the Tenant signs in the app (OTP).
             if (upload && Actor != c.OwnerSignerId) throw new ContractException(403, "upload_proof_owner_only");
             var previous = await PreviousSignedPdfAsync(c, t);
-            var prepared = !otp && !upload && x.Placement is null && x.UsePicture is null or true
+            var prepared = !session && !otp && !upload && x.Placement is null && x.UsePicture is null or true
                 ? await signing.PrepareAsync(Document(c), x.CertificateId, previous, t)
                 : await signing.PrepareAsync(Document(c), x.CertificateId, previous,
-                    new SigningAppearance(x.Placement, x.UsePicture ?? true, otp ? SigningMethods.Otp : upload ? SigningMethods.UploadProof : null), t);
+                    new SigningAppearance(x.Placement, x.UsePicture ?? true, session ? SigningMethods.OwnerSession : otp ? SigningMethods.Otp : upload ? SigningMethods.UploadProof : null), t);
             var s = new ContractSignature
             {
                 ContractId = id,
                 SignerUserId = Actor,
-                CertificateId = otp || upload ? Guid.Empty : x.CertificateId,
+                CertificateId = session || otp || upload ? Guid.Empty : x.CertificateId,
                 SnapshotHash = c.SnapshotHash,
                 SourceHash = FileHash(prepared.SourcePdf),
                 FieldName = prepared.FieldName,
@@ -513,6 +572,13 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             s.PreparedObjectKey = $"contracts/{id:N}/signatures/{s.Id:N}/prepared.pdf";
             await files.PutAsync(c.RoomId, s.PreparedObjectKey, prepared.PreparedPdf, "application/pdf", t);
             repository.Add(s); c.Status = ContractStatus.PendingSigning; Audit("ContractSigningPrepared", id);
+            if (session)
+            {
+                s.ProviderReference = "owner-session:" + s.Id.ToString("N");
+                completed = await ApplyOutcomeAsync(c, s, await signing.PollAsync(s, prepared.PreparedPdf, t), t);
+                if (!completed) throw ContractException.Conflict("owner_session_signing_failed");
+                Audit("OwnerSessionSigningConsentRecorded", id);
+            }
             Remember(key, "sign", new { id, x }, s.Id); return s.Id;
         }, t);
         var dispatch = await Mutate(id, [Roles.Owner, Roles.Tenant], c =>
@@ -543,6 +609,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         }
         var updated = await Load(id, [Roles.Owner, Roles.Tenant], t);
         var result = updated.Signatures.Single(s => s.Id == signatureId);
+        if (completed) await NotifySignatureCompletedAsync(id, t);
         return SignatureOf(result);
     }
 
@@ -656,9 +723,10 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         IReadOnlyList<string> enabled = signingMethods?.Enabled ?? (DemoEnabled ? [SigningMethods.Simulated] : [SigningMethods.ViettelMySign]);
         // UPLOAD_PROOF is the Owner's way to sign with their own certificate; a Tenant signs in the app.
         var owner = user.IsInRole(Roles.Owner);
-        var mine = owner ? enabled : enabled.Where(m => m != SigningMethods.UploadProof).ToArray();
+        var mine = owner ? enabled.Where(m => m != SigningMethods.Otp).ToArray()
+            : enabled.Where(m => m != SigningMethods.UploadProof && m != SigningMethods.OwnerSession).ToArray();
         string[] preference = owner
-            ? [SigningMethods.UploadProof, SigningMethods.ViettelMySign, SigningMethods.Otp, SigningMethods.Simulated]
+            ? [SigningMethods.OwnerSession, SigningMethods.UploadProof, SigningMethods.ViettelMySign, SigningMethods.Simulated]
             : [SigningMethods.Otp, SigningMethods.ViettelMySign, SigningMethods.Simulated];
         return new(mine, preference.FirstOrDefault(mine.Contains));
     }
@@ -669,6 +737,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
 
     // Marks an OTP signature (ContractSigningRouter.OtpCredential in Infrastructure).
     private const string OtpCredential = "BHOME-OTP";
+    private const string OwnerSessionCredential = "BHOME-OWNER-SESSION";
 
     private async Task<byte[]> PreparedPdfAsync(Contract c, ContractSignature s, CancellationToken t)
     {
@@ -688,6 +757,24 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             await files.PutAsync(c.RoomId, s.SignedObjectKey, pdf, "application/pdf", t);
             s.SignedHash = FileHash(pdf); s.Status = c.IsDevelopmentDemo ? SignatureStatus.Simulated : SignatureStatus.Signed; s.SignedAt = clock.GetUtcNow();
             if (!string.IsNullOrEmpty(answer.CertificateChain)) s.CertificateChain = answer.CertificateChain;
+            if (c.SigningMode == ContractSigningModes.Internal)
+            {
+                var evidence = AnonymousContractSigningService.AcceptedEvidence(c)
+                    ?? throw ContractException.Conflict("tenant_acceptance_required");
+                if (s.SignerUserId != c.OwnerSignerId || s.Status != SignatureStatus.Signed ||
+                    evidence.SnapshotHash != c.SnapshotHash || s.SourceHash != evidence.TenantDocumentHash)
+                    throw ContractException.Conflict("signing_evidence_integrity_failed");
+                c.InternalAcceptance = System.Text.Json.JsonSerializer.Serialize(evidence with
+                {
+                    OwnerId = c.OwnerSignerId, OwnerAcceptedAt = s.SignedAt,
+                    FinalDocumentKey = s.SignedObjectKey, FinalDocumentHash = s.SignedHash
+                });
+                c.Status = ContractStatus.PendingActivation;
+                if (c.Kind == ContractKind.Holding)
+                    await CompleteInternalHoldingSigningAsync(c, t);
+                Audit("ContractSignatureVerified", c.Id);
+                return true;
+            }
             if (new[] { c.OwnerSignerId, c.TenantUserId }.All(signer => c.Signatures.Any(a => a.SignerUserId == signer && CompleteSignature(a, c))))
             {
                 c.Status = ContractStatus.PendingActivation;
@@ -732,7 +819,18 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     private async Task<byte[]?> PreviousSignedPdfAsync(Contract c, CancellationToken t)
     {
         var last = c.Signatures.Where(s => CompleteSignature(s, c)).OrderBy(s => s.SignedAt).LastOrDefault();
-        if (last is null) return null;
+        if (last is null)
+        {
+            if (c.SigningMode != ContractSigningModes.Internal) return null;
+            var evidence = AnonymousContractSigningService.AcceptedEvidence(c);
+            if (evidence is null) return null;
+            if (evidence.SnapshotHash != c.SnapshotHash) throw ContractException.Conflict("signed_terms_changed");
+            using var accepted = new MemoryStream();
+            await storage.CopyToAsync(evidence.TenantDocumentKey, accepted, t);
+            var bytes = accepted.ToArray();
+            if (FileHash(bytes) != evidence.TenantDocumentHash) throw ContractException.Conflict("signing_evidence_integrity_failed");
+            return bytes;
+        }
         using var stream = new MemoryStream(); await storage.CopyToAsync(last.SignedObjectKey!, stream, t);
         var previous = stream.ToArray();
         if (FileHash(previous) != last.SignedHash) throw ContractException.Conflict("signing_evidence_integrity_failed");

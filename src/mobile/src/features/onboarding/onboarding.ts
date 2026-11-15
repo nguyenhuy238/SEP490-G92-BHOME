@@ -34,11 +34,8 @@ export function peopleReady(people: readonly OnboardingPerson[], representative:
     people.every(
       (p) =>
         p.label.trim().length > 0 &&
-        p.label.trim().length <= 150 &&
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email?.trim() ?? '') &&
-        (p.email?.trim().length ?? 0) <= 256,
-    ) &&
-    new Set(people.map((p) => p.email?.trim().toLowerCase())).size === people.length
+        p.label.trim().length <= 150,
+    )
   );
 }
 export function allIdentitiesConfirmed(people: readonly OnboardingPerson[]): boolean {

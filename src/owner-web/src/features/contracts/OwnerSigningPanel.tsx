@@ -69,18 +69,19 @@ export function OwnerSigningPanel({
   const mine = c.signatures.filter((s) => s.signerUserId === actorId);
   const current = [...mine].reverse().find((s) => s.status !== 'Failed') ?? null;
   const inApp = (methods?.methods ?? []).filter(
-    (m): m is 'OTP' | 'UPLOAD_PROOF' => m === 'UPLOAD_PROOF' || m === 'OTP',
+    (m): m is 'OTP' | 'UPLOAD_PROOF' | 'OWNER_SESSION' => m === 'UPLOAD_PROOF' || m === 'OTP' || m === 'OWNER_SESSION',
   );
   if (c.ownerSignerId !== actorId || c.isDevelopmentDemo || !methods) return null;
   if (current && DONE.includes(current.status)) return null;
-  if (current?.method === 'OTP' && OPEN(current))
+  const replacesOtp = current?.method === 'OTP' && OPEN(current) && inApp.includes('OWNER_SESSION');
+  if (current?.method === 'OTP' && OPEN(current) && !replacesOtp)
     return <OtpStep signing={signing} contractId={c.id} onDone={onChanged} />;
   if (current?.method === 'UPLOAD_PROOF' && OPEN(current))
     return (
       <UploadStep signing={signing} contractId={c.id} signature={current} onDone={onChanged} />
     );
-  if (current || !['Draft', 'PendingSigning'].includes(c.status) || !inApp.length) return null;
-  const preferred = inApp.find((m) => m === methods.default) ?? inApp[0];
+  if ((current && !replacesOtp) || !['Draft', 'PendingSigning'].includes(c.status) || !inApp.length) return null;
+  const preferred = inApp.includes('OWNER_SESSION') ? 'OWNER_SESSION' : inApp.find((m) => m === methods.default) ?? inApp[0];
   const chosen = inApp.find((m) => m === method) ?? preferred;
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
@@ -98,7 +99,7 @@ export function OwnerSigningPanel({
           >
             {inApp.map((m) => (
               <ToggleButton key={m} value={m}>
-                {m === 'UPLOAD_PROOF' ? 'Tải về & ký MySign (khuyến nghị)' : 'Ký điện tử bằng OTP'}
+                {m === 'OWNER_SESSION' ? 'Ký trực tiếp' : m === 'UPLOAD_PROOF' ? 'Tải về & ký số bên ngoài' : 'Ký điện tử bằng OTP'}
               </ToggleButton>
             ))}
           </ToggleButtonGroup>
@@ -106,7 +107,7 @@ export function OwnerSigningPanel({
         {chosen === 'UPLOAD_PROOF' ? (
           <UploadStart signing={signing} contractId={c.id} onStarted={onChanged} />
         ) : (
-          <OtpStart signing={signing} contractId={c.id} onStarted={onChanged} />
+          <OtpStart signing={signing} contractId={c.id} onStarted={onChanged} session={chosen === 'OWNER_SESSION'} />
         )}
       </Stack>
     </Paper>
@@ -305,6 +306,10 @@ function UploadStep({
             }}
           />
         </Box>
+        <Alert severity="info">
+          Kiểm tra tên bên cấp và tính toàn vẹn PDF chưa bao gồm xác minh đầy đủ chuỗi tin cậy CA
+          hoặc trạng thái thu hồi chứng thư.
+        </Alert>
         {(file || failed >= 0) && (
           <Box>
             <Typography variant="subtitle2">BHOME kiểm tra khi bạn gửi</Typography>
@@ -338,10 +343,12 @@ function OtpStart({
   signing,
   contractId,
   onStarted,
+  session = false,
 }: {
   signing: SigningClient;
   contractId: string;
   onStarted: () => void;
+  session?: boolean;
 }) {
   const [choice, setChoice] = useState<PlacementChoice>({ placement: null, usePicture: true });
   const [drawing, setDrawing] = useState<DrawnSignature | null>(null);
@@ -359,7 +366,7 @@ function OtpStart({
         await signing.drawImage(drawing);
         setRevision((r) => r + 1);
       }
-      await signing.start(contractId, 'OTP', key, choice.placement, choice.usePicture);
+      await signing.start(contractId, session ? 'OWNER_SESSION' : 'OTP', key, choice.placement, choice.usePicture);
       onStarted();
     } catch (e) {
       setError(signingError(e));
@@ -376,10 +383,33 @@ function OtpStart({
         value={choice}
         onChange={setChoice}
         disabled={busy}
-        caption={'Ký điện tử bởi: Chủ trọ\nXác thực: mã OTP qua email'}
+        caption={`Ký điện tử bởi: Chủ trọ\nXác thực: ${session ? 'phiên đăng nhập Owner' : 'mã OTP qua email'}`}
       />
       <Typography variant="subtitle2">Chữ ký của bạn</Typography>
       <DrawPad onChange={setDrawing} disabled={busy} />
+      <Button component="label" disabled={busy}>
+        Tải ảnh chữ ký PNG
+        <input
+          hidden
+          type="file"
+          accept="image/png"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            setBusy(true);
+            setError('');
+            void signing
+              .uploadImage(file)
+              .then(() => {
+                setDrawing(null);
+                setRevision((r) => r + 1);
+              })
+              .catch((e) => setError(signingError(e)))
+              .finally(() => setBusy(false));
+          }}
+        />
+      </Button>
       <Typography variant="caption" color="text.secondary">
         Bỏ trống nếu muốn dùng ảnh chữ ký đã lưu.
       </Typography>
@@ -396,11 +426,13 @@ function OtpStart({
       {!!error && <Alert severity="error">{error}</Alert>}
       <Box>
         <Button variant="contained" disabled={busy || !agreed} onClick={() => void sign()}>
-          {busy ? 'Đang gửi mã…' : 'Ký hợp đồng'}
+          {busy ? (session ? 'Đang ký…' : 'Đang gửi mã…') : 'Ký hợp đồng'}
         </Button>
       </Box>
       <Typography variant="caption" color="text.secondary">
-        Bấm &quot;Ký hợp đồng&quot;, BHOME gửi mã xác nhận 6 số tới email của bạn.
+        {session
+          ? 'Bấm Ký hợp đồng để áp dụng chữ ký bằng phiên đăng nhập Owner. Đây là ký điện tử với dấu BHOME, không phải chữ ký số cá nhân được CA chứng thực.'
+          : 'Bấm Ký hợp đồng, BHOME gửi mã xác nhận 6 số tới email của bạn.'}
       </Typography>
     </Stack>
   );
