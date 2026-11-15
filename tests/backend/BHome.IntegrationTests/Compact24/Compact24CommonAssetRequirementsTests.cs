@@ -87,7 +87,11 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync($"/api/v1/assets/{created.Id}", input with { Version = created.Version })).StatusCode);
         var changed = await Read<AssetDto>(await owner.PutAsJsonAsync($"/api/v1/assets/{created.Id}", input with
         {
-            Version = created.Version, InitialTrackingMode = null, InitialQuantity = null, InitialUnit = null, Name = "Edited chair"
+            Version = created.Version,
+            InitialTrackingMode = null,
+            InitialQuantity = null,
+            InitialUnit = null,
+            Name = "Edited chair"
         }));
         Assert.Equal(4, changed.Quantity); Assert.Equal("item", changed.Unit);
     }

@@ -58,7 +58,10 @@ type ReviewDialog = {
   attested: boolean;
   itemDrafts: ItemDraft[];
 };
-const states: Record<string, { label: string; color: 'default' | 'success' | 'warning' | 'error' }> = {
+const states: Record<
+  string,
+  { label: string; color: 'default' | 'success' | 'warning' | 'error' }
+> = {
   NotChecked: { label: 'Chưa kiểm kê', color: 'default' },
   PartiallyChecked: { label: 'Kiểm kê chưa đủ', color: 'error' },
   Matched: { label: 'Đã kiểm kê đủ', color: 'success' },
