@@ -562,15 +562,18 @@ export function contractClient(request: ContractRequest) {
     );
   return {
     holdingRoomReadiness,
-    createHoldingResident: (roomId: string, displayLabel: string, _email?: string) =>
-      request<{ id: string }>('/api/v1/capture/residents', {
+    createHoldingResident: (roomId: string, displayLabel: string, email?: string) => {
+      // Preserve older callers without reserving an email before the signing invitation.
+      void email;
+      return request<{ id: string }>('/api/v1/capture/residents', {
         method: 'POST',
         body: JSON.stringify({
           roomId,
           displayLabel: displayLabel.trim(),
           residentType: 0,
         }),
-      }),
+      });
+    },
     holdingRooms: (page = 1, signal?: AbortSignal) =>
       request<Page<RoomConfiguration>>(
         `/api/v1/rooms?roomStatus=Available&page=${page}&pageSize=100`,
@@ -1038,8 +1041,10 @@ export const labels: Record<string, string> = {
   internal_acceptance_evidence_required:
     'Cần chấp thuận đúng PDF bằng OTP của người đại diện và xác nhận của Owner.',
   resident_email_required: 'Mỗi người ở cần có email riêng trước khi kích hoạt.',
-  signing_contacts_required: 'Nhập email hợp lệ, riêng biệt cho từng người ở trước khi gửi lời mời ký.',
-  signing_contacts_invalid: 'Danh sách email không khớp người ở trong hợp đồng. Hãy tải lại và kiểm tra.',
+  signing_contacts_required:
+    'Nhập email hợp lệ, riêng biệt cho từng người ở trước khi gửi lời mời ký.',
+  signing_contacts_invalid:
+    'Danh sách email không khớp người ở trong hợp đồng. Hãy tải lại và kiểm tra.',
   verified_residents_with_email_required:
     'Cần xác minh hồ sơ và email riêng hợp lệ cho tất cả người ở.',
   internal_signing_flow_required: 'Hợp đồng này dùng lời mời ký nội bộ qua OTP.',

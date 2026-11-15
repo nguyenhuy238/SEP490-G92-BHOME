@@ -26,6 +26,7 @@ it.each(['Holding', 'Main'])(
     } as ContractView;
     const changed = vi.fn();
     const request = vi.fn(async (path: string, _init?: RequestInit) => {
+      void _init; // Retain the request argument in the mock call tuple for assertions below.
       if (path.endsWith('/internal-signing'))
         return {
           invitations: [],
@@ -33,7 +34,8 @@ it.each(['Holding', 'Main'])(
           ownerAcceptedAt: null,
           canContinue: false,
         };
-      if (path.endsWith('/signing-methods')) return { methods: ['OWNER_SESSION'], default: 'OWNER_SESSION' };
+      if (path.endsWith('/signing-methods'))
+        return { methods: ['OWNER_SESSION'], default: 'OWNER_SESSION' };
       if (path.endsWith('/signing')) return { id: 'signature', status: 'Signed' };
       if (path.endsWith(c.id)) return c;
       throw new Error(path);
@@ -56,7 +58,10 @@ it.each(['Holding', 'Main'])(
     await waitFor(() => expect(changed).toHaveBeenCalledOnce());
     const start = request.mock.calls.find(([path]) => path.endsWith('/signing'));
     expect(start).toBeTruthy();
-    expect(JSON.parse(start![1]!.body as string)).toMatchObject({ method: 'OWNER_SESSION', consent: true });
+    expect(JSON.parse(start![1]!.body as string)).toMatchObject({
+      method: 'OWNER_SESSION',
+      consent: true,
+    });
     expect(request.mock.calls.some(([path]) => path.includes('/signing/otp'))).toBe(false);
     expect(request.mock.calls.some(([path]) => path.endsWith('/owner-confirmation'))).toBe(false);
   },
