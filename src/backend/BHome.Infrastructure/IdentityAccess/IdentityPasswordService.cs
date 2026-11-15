@@ -40,23 +40,27 @@ internal sealed class IdentityPasswordService(IIdentityPersistence db, IdentityS
     public async Task RequestResetAsync(string userName, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        // Check availability before account lookup: all names have the same unavailable response.
-        if (!delivery.IsAvailable) throw new IntegrationUnavailableException("Password reset delivery is not configured.");
+        // Validate durable acceptance before lookup, independently of SMTP and invitation callbacks.
+        // Invalid reset configuration must produce the same unavailable response for every identifier.
+        if (!delivery.IsAvailableFor("PasswordReset")) throw new IntegrationUnavailableException("Password reset delivery is not configured.");
         if (string.IsNullOrWhiteSpace(userName) || userName.Length > LoginService.MaxUserNameLength) return;
-        var candidate = await users.FindByEmailAsync(userName.Trim()) ?? await users.FindByNameAsync(userName);
-        if (candidate is null) return;
+        Guid userId;
         string? token = null;
         string? destination = null;
         await using (var transaction = await db.BeginTransactionAsync(cancellationToken))
         {
+            await delivery.EnsureQueueWritableAsync(cancellationToken);
+            var candidate = await users.FindByEmailAsync(userName.Trim()) ?? await users.FindByNameAsync(userName.Trim());
+            if (candidate is null) return;
             var user = await security.LockUserAsync(candidate.Id, cancellationToken);
             if (user is null || !user.IsActive || !user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email)) return;
-            token = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await users.GeneratePasswordResetTokenAsync(user)));
-            destination = user.Email;
+            userId = user.Id;
             var grant = await db.ResetGrantAsync(user.Id, cancellationToken);
             var now = clock.GetUtcNow();
             if (grant is { ConsumedAt: null } && grant.ExpiresAt > now &&
                 grant.ExpiresAt.AddMinutes(-options.Value.PasswordResetMinutes).AddSeconds(emailOptions.Value.ResendCooldownSeconds) > now) return;
+            token = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await users.GeneratePasswordResetTokenAsync(user)));
+            destination = user.Email;
             if (grant is null) { grant = new PasswordResetGrant { UserId = user.Id }; db.AddResetGrant(grant); }
             grant.TokenHash = IdentitySecurityStore.Hash(token);
             grant.ExpiresAt = clock.GetUtcNow().AddMinutes(options.Value.PasswordResetMinutes);
@@ -68,7 +72,7 @@ internal sealed class IdentityPasswordService(IIdentityPersistence db, IdentityS
         }
         if (!delivery.IsDurable)
         {
-            try { await delivery.SendAsync(candidate.Id, destination, token, cancellationToken); }
+            try { await delivery.SendAsync(userId, destination, token, cancellationToken); }
             catch (Exception e) when (e is not OperationCanceledException) { /* Generic response also on synchronous adapter failure. */ }
         }
     }

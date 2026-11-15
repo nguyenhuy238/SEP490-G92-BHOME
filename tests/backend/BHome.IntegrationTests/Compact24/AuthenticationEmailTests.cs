@@ -118,7 +118,7 @@ public sealed partial class Compact24NotificationMvpTests
     public async Task AuthenticationOnlyWorkerDeliversRecoveryWithoutPublishingBusinessBacklog()
     {
         var w = await Seed(); var probe = new SmtpProbe();
-        using var configured = AuthenticationHost(probe);
+        using var configured = RecoveryHost(probe);
         using var host = configured.WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
