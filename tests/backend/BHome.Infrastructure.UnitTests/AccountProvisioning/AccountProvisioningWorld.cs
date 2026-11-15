@@ -43,12 +43,14 @@ internal sealed class AccountProvisioningWorld : IAsyncDisposable
     private AsyncServiceScope scope;
     public FakeCurrentUser CurrentUser { get; } = new();
     public FakeEmailDelivery Email { get; } = new();
-    public FakeTimeProvider Clock { get; } = new(new DateTimeOffset(2026, 11, 13, 3, 0, 0, TimeSpan.Zero));
+    public FakeTimeProvider Clock { get; private set; } = new(new DateTimeOffset(2026, 11, 13, 3, 0, 0, TimeSpan.Zero));
     public string Connection { get; private set; } = "";
 
-    public static async Task<AccountProvisioningWorld> CreateAsync(PostgresContainerFixture postgres)
+    // startTime: the "now" written on the sheet (the test clock cannot move backwards once created).
+    public static async Task<AccountProvisioningWorld> CreateAsync(PostgresContainerFixture postgres, DateTimeOffset? startTime = null)
     {
         var world = new AccountProvisioningWorld();
+        if (startTime is { } start) world.Clock = new FakeTimeProvider(start.ToUniversalTime());
         var settings = new NpgsqlConnectionStringBuilder(postgres.AdminConnection);
         var name = "bhome_ut_" + Guid.NewGuid().ToString("N");
         await using (var admin = new NpgsqlConnection(settings.ConnectionString))
@@ -157,6 +159,9 @@ internal sealed class AccountProvisioningWorld : IAsyncDisposable
     {
         await scope.DisposeAsync();
         if (root is not null) await root.DisposeAsync();
+        // Every test uses its own database, so its pooled connections are useless afterwards; release them
+        // to stay below the container's max_connections when a whole sheet runs.
+        NpgsqlConnection.ClearAllPools();
     }
 }
 
