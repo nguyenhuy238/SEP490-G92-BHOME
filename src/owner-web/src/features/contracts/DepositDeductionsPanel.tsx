@@ -1,12 +1,23 @@
 import { Alert, Paper, Stack, Typography } from '@mui/material';
 import {
+  contractError,
   formatContractMoney,
+  type ContractClient,
   type SettlementSummary,
 } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
+import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
 
 // Historical plans remain visible for reconciliation/refund; new liabilities use receivables + offsets.
-export function DepositDeductionsPanel({ summary }: { summary: SettlementSummary }) {
+export function DepositDeductionsPanel({
+  summary,
+  api,
+  contractId,
+}: {
+  summary: SettlementSummary;
+  api?: ContractClient;
+  contractId?: string;
+}) {
   const plan = summary.depositDeductions;
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
@@ -25,10 +36,23 @@ export function DepositDeductionsPanel({ summary }: { summary: SettlementSummary
             </Typography>
             <Typography>{plan.reason}</Typography>
             {plan.items.map((item, index) => (
-              <Typography key={index}>
-                {item.description} · {formatContractMoney(item.amount)} · {item.evidenceIds.length}{' '}
-                ảnh biên bản
-              </Typography>
+              <Stack key={index} spacing={0.75}>
+                <Typography>
+                  {item.description} · {formatContractMoney(item.amount)} ·{' '}
+                  {item.evidenceIds.length} ảnh biên bản
+                </Typography>
+                {api &&
+                  contractId &&
+                  item.evidenceIds.map((fileId, evidenceIndex) => (
+                    <PrivateEvidenceViewer
+                      key={fileId}
+                      label={`Ảnh biên bản ${index + 1}.${evidenceIndex + 1}`}
+                      filename={`bien-ban-khau-tru-${index + 1}-${evidenceIndex + 1}.jpg`}
+                      fetchBlob={(signal) => api.evidence(contractId, fileId, signal)}
+                      errorMessage={contractError}
+                    />
+                  ))}
+              </Stack>
             ))}
           </>
         ) : (

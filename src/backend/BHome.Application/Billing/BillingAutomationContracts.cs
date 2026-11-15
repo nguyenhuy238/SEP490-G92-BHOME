@@ -8,7 +8,13 @@ namespace BHome.Application.Billing;
 public sealed record BillingAutomationWrite([property: JsonRequired] Guid LocationId, [property: JsonRequired] DateOnly EffectiveFrom,
     [property: JsonRequired] bool Enabled, [property: JsonRequired] bool AuthorizeAutomaticFinalization,
     [property: JsonRequired] int MeterDay, [property: JsonRequired] int MeterDueDay, [property: JsonRequired] int MeterDueMonthOffset,
-    [property: JsonRequired] string TimeZone, [property: JsonRequired] int ExpectedVersion, [property: JsonRequired] int ExpectedBillingScheduleVersion);
+    [property: JsonRequired] string TimeZone, [property: JsonRequired] int ExpectedVersion, [property: JsonRequired] int ExpectedBillingScheduleVersion,
+    int? DraftDay = null, int? DraftMonthOffset = null, int? FinalDay = null, int? FinalMonthOffset = null,
+    int? DueDay = null, int? DueMonthOffset = null,
+    BillingAutomationInitialSchedule? InitialSchedule = null);
+// Required for first setup; on subsequent saves the supplied values are the
+// Owner's desired calculation rules and are versioned only when changed.
+public sealed record BillingAutomationInitialSchedule(BillingRateDate RateDate, PartialMonthRule PartialMonth, VndRounding Rounding);
 public interface IBillingAutomationSchedules
 {
     Task<BillingAutomationPlan?> ForPeriodAsync(Guid locationId, DateOnly period, CancellationToken t);
@@ -34,7 +40,10 @@ public sealed class BillingAutomationService(IBillingAutomationSchedules schedul
     public async Task<BillingAutomationPlan> SaveAsync(BillingAutomationWrite x, CancellationToken t)
     {
         var actor = await Owner(x.LocationId, t); ValidatePeriod(x.EffectiveFrom);
-        if (x.LocationId == Guid.Empty || x.TimeZone != "Asia/Ho_Chi_Minh" || x.MeterDay is < 1 or > 31 || x.MeterDueDay is < 1 or > 31 || x.MeterDueMonthOffset is < 0 or > 2 || x.ExpectedVersion < 0 || x.ExpectedBillingScheduleVersion < 1 || !x.Enabled && x.AuthorizeAutomaticFinalization)
+        if (x.LocationId == Guid.Empty || x.TimeZone != "Asia/Ho_Chi_Minh" || x.MeterDay is < 1 or > 31 || x.MeterDueDay is < 1 or > 31 || x.MeterDueMonthOffset is < 0 or > 2 || x.ExpectedVersion < 0 || x.ExpectedBillingScheduleVersion < 0 || !x.Enabled && x.AuthorizeAutomaticFinalization ||
+            x.DraftDay is < 1 or > 31 || x.FinalDay is < 1 or > 31 || x.DueDay is < 1 or > 31 ||
+            x.DraftMonthOffset is < 0 or > 2 || x.FinalMonthOffset is < 0 or > 2 || x.DueMonthOffset is < 0 or > 2 ||
+            (x.InitialSchedule is { } initial && (!Enum.IsDefined(initial.RateDate) || !Enum.IsDefined(initial.PartialMonth) || !Enum.IsDefined(initial.Rounding))))
             throw new InvoiceException(400, "invalid_billing_automation");
         foreach (var period in new[] { new DateOnly(2027, 2, 1), new DateOnly(2028, 2, 1), new DateOnly(2026, 12, 1) })
             if (InvoiceMath.CalendarDate(period, x.MeterDay, 0) > InvoiceMath.CalendarDate(period, x.MeterDueDay, x.MeterDueMonthOffset)) throw new InvoiceException(400, "invalid_meter_calendar_order");

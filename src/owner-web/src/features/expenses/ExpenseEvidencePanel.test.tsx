@@ -73,13 +73,15 @@ it('locks duplicate uploads, preserves retry key and reports success only after 
   api.expenseEvidence.mockResolvedValue([evidence]);
   await act(async () => finish(evidence));
   await screen.findByText('Đã lưu chứng từ riêng tư.');
-  await screen.findByRole('button', { name: 'Tải chứng từ 1' });
+  await screen.findByRole('button', { name: 'Xem chứng từ 1' });
+  expect(screen.getByRole('button', { name: 'Tải xuống chứng từ 1' })).toBeEnabled();
 });
 it('recovers a persisted PendingUpload using its key after reopening and rejects invalid file types', async () => {
   api.expenseEvidence.mockResolvedValue([{ ...evidence, status: 'PendingUpload' }]);
   api.uploadExpenseEvidence.mockResolvedValue(evidence);
   await mount();
-  expect(screen.queryByRole('button', { name: 'Tải chứng từ 1' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Xem chứng từ 1' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Tải xuống chứng từ 1' })).toBeNull();
   fireEvent.change(screen.getByLabelText('Chọn ảnh chứng từ khoản chi'), {
     target: { files: [file('text/html')] },
   });
@@ -105,7 +107,32 @@ it('does not download when the server rejects private evidence access or integri
   const create = vi.fn();
   vi.stubGlobal('URL', { createObjectURL: create, revokeObjectURL: vi.fn() });
   await mount();
-  fireEvent.click(await screen.findByRole('button', { name: 'Tải chứng từ 1' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Xem chứng từ 1' }));
   await screen.findByText(/Dữ liệu hoặc yêu cầu đã thay đổi/);
   expect(create).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  fireEvent.click(screen.getByRole('button', { name: 'Tải xuống chứng từ 1' }));
+  await screen.findByText(/Dữ liệu hoặc yêu cầu đã thay đổi/);
+  expect(create).not.toHaveBeenCalled();
+});
+
+it('previews a verified uploaded expense image without changing evidence write/idempotency operations', async () => {
+  const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
+  api.expenseEvidence.mockResolvedValue([{ ...evidence, length: image.length }]);
+  api.expenseEvidenceFile.mockResolvedValue(new Blob([image], { type: 'image/png' }));
+  const create = vi.fn(() => 'blob:expense-evidence');
+  const revoke = vi.fn();
+  vi.stubGlobal('URL', { createObjectURL: create, revokeObjectURL: revoke });
+  await mount();
+  expect(api.expenseEvidenceFile).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem chứng từ 1' }));
+  expect(await screen.findByRole('img', { name: 'chứng từ 1' })).toHaveAttribute(
+    'src',
+    'blob:expense-evidence',
+  );
+  expect(api.expenseEvidenceFile).toHaveBeenCalledWith('expense', 'file', expect.any(AbortSignal));
+  expect(api.uploadExpenseEvidence).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  expect(revoke).toHaveBeenCalledWith('blob:expense-evidence');
 });

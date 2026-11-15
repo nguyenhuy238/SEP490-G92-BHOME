@@ -107,6 +107,13 @@ it('uses registered server instructions and only links to the external simulator
   expect(mocks.api.register).not.toHaveBeenCalled();
   expect(mocks.api.request.mock.calls[0][0]).toBe('/api/v1/integrations/sepay/testing-context');
 });
+it('offers the persisted BH instructions even when the parallel payment read still has a legacy reference', async () => {
+  mocks.api.payment.mockResolvedValue({ ...state, transferReference: 'INV-LEGACY' });
+  mount();
+  await chooseInvoice();
+  await screen.findByRole('link', { name: 'Mở trình mô phỏng SePay' });
+  expect(screen.getByText('Nội dung: BH12345678')).toBeTruthy();
+});
 it('hides the workspace when the backend denies the testing context', async () => {
   mocks.api.request.mockRejectedValue(new Error('Synthetic denied'));
   mount();
@@ -118,6 +125,8 @@ it.each([
   { ...transfer, isDevelopmentDemo: false },
   { ...transfer, outstandingAmount: '2500000' },
   { ...transfer, transferReference: 'UNREGISTERED' },
+  { ...transfer, transferDescription: 'RANDOM-MEMO' },
+  { ...transfer, invoiceId: 'other-invoice' },
 ])('never offers a simulator for unsafe or stale instructions: %j', async (instructions) => {
   mocks.api.instructions.mockResolvedValue(instructions);
   mount();

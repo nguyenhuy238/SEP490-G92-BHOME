@@ -76,6 +76,9 @@ function mount() {
 async function fillForm(room = false) {
   fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
   fireEvent.click(await screen.findByRole('option', { name: 'Synthetic Location' }));
+  expect(screen.queryByLabelText(/Tên khoản thu/)).not.toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: 'Thêm biểu giá' })).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm biểu giá' }));
   await screen.findByLabelText(/Tên khoản thu/);
   if (room) {
     fireEvent.mouseDown(screen.getByLabelText('Phạm vi biểu giá'));

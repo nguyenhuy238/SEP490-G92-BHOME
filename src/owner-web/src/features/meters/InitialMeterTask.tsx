@@ -27,10 +27,12 @@ export function InitialMeterTask({
   location,
   room,
   created,
+  compact = false,
 }: {
   location: string;
   room: string;
   created: (id: string) => void;
+  compact?: boolean;
 }) {
   const api = useMeterApi();
   const cache = useQueryClient();
@@ -103,7 +105,7 @@ export function InitialMeterTask({
   }
 
   return (
-    <Stack spacing={1}>
+    <Stack spacing={compact ? 0.5 : 1} sx={{ flexShrink: 0 }}>
       <Button
         variant="contained"
         disabled={!location || !room}
@@ -115,9 +117,9 @@ export function InitialMeterTask({
           setOpen(true);
         }}
       >
-        Giao nhiệm vụ ghi chỉ số ban đầu
+        {compact ? 'Giao nhiệm vụ' : 'Giao nhiệm vụ ghi chỉ số ban đầu'}
       </Button>
-      {(!location || !room) && (
+      {!compact && (!location || !room) && (
         <Typography variant="body2">Chọn cơ sở và phòng để giao nhiệm vụ ban đầu.</Typography>
       )}
       {notice && <Alert severity="success">{notice}</Alert>}

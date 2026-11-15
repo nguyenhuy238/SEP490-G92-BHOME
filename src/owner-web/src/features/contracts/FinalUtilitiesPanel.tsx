@@ -12,6 +12,7 @@ import {
   formatBillingDecimal,
   missingBillingInput,
 } from '../../../../../packages/client-core/src/invoices';
+import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
 
 const sourceLabels: Record<string, string> = {
   FinalInvoice: 'Hóa đơn đã phát hành',
@@ -106,6 +107,22 @@ export function FinalUtilitiesPanel({
                   ? `${formatBillingDecimal(row.final.value)} · ${displayContractDate(row.final.date)}`
                   : 'Chưa xác nhận'}
               </Typography>
+              {row.baseline?.readingId && row.baseline.evidenceId && (
+                <PrivateEvidenceViewer
+                  label={`Ảnh mốc ${name.toLowerCase()}`}
+                  filename={`moc-${row.utilityType.toLowerCase()}.jpg`}
+                  fetchBlob={(signal) => api.readingEvidence(row.baseline!.readingId!, signal)}
+                  errorMessage={contractError}
+                />
+              )}
+              {row.final?.readingId && row.final.evidenceId && (
+                <PrivateEvidenceViewer
+                  label={`Ảnh chốt ${name.toLowerCase()}`}
+                  filename={`chot-${row.utilityType.toLowerCase()}.jpg`}
+                  fetchBlob={(signal) => api.readingEvidence(row.final!.readingId!, signal)}
+                  errorMessage={contractError}
+                />
+              )}
               <Typography>
                 Đã ghi nhận trong kỳ: {formatBillingDecimal(row.alreadyBilledQuantity)} · Phần tăng
                 thêm: {row.quantity == null ? 'Chờ đối chiếu' : formatBillingDecimal(row.quantity)}

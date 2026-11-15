@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { Alert, Box, Button, Chip, Stack, Tab, Tabs, Typography } from '@mui/material';
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Alert,
+  Button,
+  Chip,
+  Stack,
+  Tab,
+  Tabs,
+  Typography,
+} from '@mui/material';
+import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router';
 import { usePortal } from '../../app/PortalProvider';
 import { KPIGrid, PageHeader } from '../../components/common/PortalUI';
@@ -10,12 +22,24 @@ import { DataList, EditDrawer, Panel, PropertyBoundary, Select } from './Propert
 import { currency, dateLabel, matches } from './propertyUtils';
 import { usePropertyMutation } from './usePropertyMutation';
 import { isMockMode } from '../../services/config';
-import { BillingConfigurationPage } from '../invoices/BillingConfigurationPage';
+import {
+  BillingConfigurationPage,
+  DemoBillingConfigurationGuide,
+} from '../invoices/BillingConfigurationPage';
 import { ExpensesApiPage } from '../expenses/ExpensesApiPage';
 
 export function Pricing() {
   if (!isMockMode) return <BillingConfigurationPage />;
-  return <PropertyBoundary>{(db) => <PricingContent db={db} />}</PropertyBoundary>;
+  return (
+    <PropertyBoundary>
+      {(db) => (
+        <>
+          <DemoBillingConfigurationGuide />
+          <PricingContent db={db} />
+        </>
+      )}
+    </PropertyBoundary>
+  );
 }
 function PricingContent({ db }: { db: DemoDatabase }) {
   const portal = usePortal(),
@@ -299,7 +323,7 @@ export function Investments() {
 function InvestmentContent({ db }: { db: DemoDatabase }) {
   const portal = usePortal(),
     save = usePropertyMutation();
-  const [tab, setTab] = useState(0),
+  const [tab, setTab] = useState(2),
     [adding, setAdding] = useState(false),
     [location, setLocation] = useState(
       portal.locationId === 'all' ? db.records.locations[0]?.id || '' : portal.locationId,
@@ -330,30 +354,47 @@ function InvestmentContent({ db }: { db: DemoDatabase }) {
           </>
         }
       />
-      <KPIGrid
-        items={[
-          { label: 'Tổng đầu tư ban đầu', value: currency(summary.total) },
-          { label: 'Đầu tư tài sản', value: currency(summary.assetValue) },
-          { label: 'Đầu tư khác', value: currency(summary.other) },
-        ]}
-      />
-      <KPIGrid
-        items={[
-          { label: 'Tài sản cấp cho phòng', value: currency(summary.roomValue) },
-          { label: 'Tài sản khu vực chung', value: currency(summary.commonValue) },
-          { label: 'Giá trị chưa phân bổ', value: currency(summary.unallocated) },
-        ]}
-      />
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Giá trị phân bổ là nguyên giá, không phải giá trị còn lại sau khấu hao. Tổng vốn = mua tài
-        sản + đầu tư khác; không cộng lại giá trị đã cấp phát. Bảo trì là một phần của chi phí vận
-        hành.
-      </Alert>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-        <Tab label="Theo cơ sở" />
-        <Tab label="Giá trị theo phòng" />
-        <Tab label="Đầu tư khác & Chi phí" />
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        aria-label="Xem đầu tư và chi phí minh họa"
+        sx={{
+          mb: 1,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          '& .MuiTab-root': { minHeight: 44 },
+        }}
+      >
+        <Tab label="Vốn theo cơ sở" />
+        <Tab label="Phân bổ theo phòng" />
+        <Tab label="Danh sách khoản chi" />
       </Tabs>
+      <Accordion variant="outlined" disableGutters sx={{ mb: 1.5 }}>
+        <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
+            Tổng quan vốn đầu tư (dữ liệu minh họa)
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <KPIGrid
+            items={[
+              { label: 'Tổng đầu tư ban đầu', value: currency(summary.total) },
+              { label: 'Đầu tư tài sản', value: currency(summary.assetValue) },
+              { label: 'Đầu tư khác', value: currency(summary.other) },
+              { label: 'Tài sản cấp cho phòng', value: currency(summary.roomValue) },
+              { label: 'Tài sản khu vực chung', value: currency(summary.commonValue) },
+              { label: 'Giá trị chưa phân bổ', value: currency(summary.unallocated) },
+            ]}
+          />
+          <Typography variant="caption" color="text.secondary">
+            Giá trị phân bổ là nguyên giá, không cộng thêm vào vốn ban đầu. Bảo trì nằm trong chi
+            phí vận hành.
+          </Typography>
+        </AccordionDetails>
+      </Accordion>
       {tab === 0 && (
         <Panel title="Vốn & Chi phí theo cơ sở">
           <DataList
@@ -440,14 +481,6 @@ function InvestmentContent({ db }: { db: DemoDatabase }) {
           />
         </Panel>
       )}
-      <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-        <Button component={Link} to="/reports" variant="outlined">
-          Báo cáo kinh doanh
-        </Button>
-        <Button component={Link} to="/what-if" variant="outlined">
-          Phân tích What-if
-        </Button>
-      </Box>
       {adding && (
         <Panel title="Chọn cơ sở ghi nhận">
           <Stack direction="row" sx={{ gap: 2 }}>

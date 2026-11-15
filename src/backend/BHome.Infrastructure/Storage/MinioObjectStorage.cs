@@ -52,7 +52,7 @@ internal sealed class MinioObjectStorage(IOptions<ObjectStorageOptions> options,
                 }), cancellationToken);
             if (response is null || !copied) throw new IntegrationUnavailableException("object storage");
         }
-        catch (ObjectNotFoundException) { throw new FileNotFoundException("Private object is unavailable."); }
+        catch (ObjectNotFoundException) { throw new PrivateObjectNotFoundException(); }
         catch (MinioException) { throw new IntegrationUnavailableException("object storage"); }
     }
 

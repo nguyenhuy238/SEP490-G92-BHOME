@@ -19,6 +19,8 @@ public sealed class BillingAutomationController(BillingAutomationService service
     public Task<IReadOnlyList<BillingAutomationExecution>> Executions([FromQuery] Guid locationId, [FromQuery] DateOnly period, CancellationToken t) => operations.ListAsync(locationId, period, t);
     [HttpPost("run-now")]
     public Task<BillingAutomationExecution?> Run(BillingRunInput x, CancellationToken t) => operations.RunAsync(x, t);
+    [HttpPost("manual-meter-tasks"), RequestSizeLimit(16384)]
+    public Task<BHome.Application.Ocr.IdResult> ManualMeterTask(BillingManualMeterTaskInput x, CancellationToken t) => operations.CreateManualMeterTaskAsync(x, t);
     [HttpGet("preview")]
     public Task<BillingAutomationPreview> Preview([FromQuery] Guid locationId, [FromQuery] DateOnly period, CancellationToken t) => operations.PreviewAsync(locationId, period, t);
     [HttpGet("attempts")]

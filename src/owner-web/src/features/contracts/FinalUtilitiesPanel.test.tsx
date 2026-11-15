@@ -96,3 +96,13 @@ it('does not present a missing quota as a zero payable charge', async () => {
   expect(screen.getByRole('button', { name: 'Duyệt khoản chốt Điện' })).toBeDisabled();
   expect(request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 });
+it('offers private view and download for the initial and final meter evidence', async () => {
+  const request = mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Xem Ảnh mốc điện' }));
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith(
+      '/api/v1/capture/readings/baseline/evidence',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    ),
+  );
+});

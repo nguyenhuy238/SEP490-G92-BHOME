@@ -1,3 +1,4 @@
+using BHome.Application.Billing;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Jobs;
 using BHome.Application.Locations;
@@ -59,9 +60,9 @@ internal static class LegacyPersistenceRegistration
         foreach (var worker in services.Where(s => s.ServiceType == typeof(IHostedService) &&
             s.ImplementationType == typeof(BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateAutomationWorker)).ToArray()) services.Remove(worker);
         services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
-        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter", "Meter", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
-        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft", "Draft", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
-        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-final", "Final", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>()));
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-meter", "Meter", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BillingAutomationRuntime>().WorkerEnabled));
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-draft", "Draft", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BillingAutomationRuntime>().WorkerEnabled));
+        services.AddScoped<IBackgroundJobHandler>(p => new BHome.Application.Billing.BillingAutomationJobHandler("billing-final", "Final", p.GetRequiredService<BHome.Application.Billing.IBillingAutomationEngine>(), p.GetRequiredService<BillingAutomationRuntime>().WorkerEnabled));
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<NotificationEventPublisher>());
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<NotificationDeliveryService>());
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Contracts.ContractExpiryProcessor>());

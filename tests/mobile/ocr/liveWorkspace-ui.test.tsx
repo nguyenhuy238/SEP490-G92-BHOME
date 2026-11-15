@@ -645,7 +645,7 @@ it('shows real transfer instructions, copies exact amount and removes QR when th
     bankIdentifier: '970415',
     accountHolder: 'BHOME SYNTHETIC DEMO',
     outstandingAmount: '100000',
-    transferDescription: 'SYNTHETICREF',
+    transferDescription: 'BH00000001',
     qrImageDataUri: 'data:image/png;base64,AA==',
     isDevelopmentDemo: true,
   };

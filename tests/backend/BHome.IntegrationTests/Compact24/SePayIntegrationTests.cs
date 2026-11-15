@@ -251,6 +251,33 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
     }
 
     [CompactPostgresFact]
+    public async Task InvoiceInstructionsUseRegisteredBhMemoAndFailClosedWhenSePayAccountDrifts()
+    {
+        await using var scenario = await Create();
+        using var tenant = await scenario.Client(scenario.Tenants[0]);
+        var path = $"/api/v1/invoices/{scenario.Invoice}/transfer-instructions";
+        var instructions = (await tenant.GetFromJsonAsync<TransferInstructions>(path))!;
+        Assert.Equal("Available", instructions.Availability);
+        Assert.Equal(scenario.Code, instructions.TransferReference);
+        Assert.Equal(scenario.Code, instructions.TransferDescription);
+        Assert.Contains("0810" + scenario.Code, instructions.QrPayload);
+        Assert.NotNull(instructions.QrImageDataUri);
+
+        await using (var scope = scenario.Host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var account = await db.Set<ReceivingBankAccount>().SingleAsync(a => a.LocationId == scenario.Location);
+            account.AccountNumber = "0000004321";
+            await db.SaveChangesAsync();
+        }
+        var unavailable = (await tenant.GetFromJsonAsync<TransferInstructions>(path))!;
+        Assert.Equal("PaymentCodeUnavailable", unavailable.Availability);
+        Assert.Null(unavailable.AccountNumber);
+        Assert.Null(unavailable.QrPayload);
+        Assert.Null(unavailable.QrImageDataUri);
+    }
+
+    [CompactPostgresFact]
     public async Task ExactPartialAndExcessUseCanonicalLedgerAndSharedTenantStatus()
     {
         await using var scenario = await Create();

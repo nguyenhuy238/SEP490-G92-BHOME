@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
@@ -74,6 +74,31 @@ it('posts the reviewed incident version once and preserves fields and retry key 
   });
   expect(writes[0][1].headers['Idempotency-Key']).toBe(writes[1][1].headers['Idempotency-Key']);
   expect(screen.queryByRole('button', { name: 'Tiếp nhận khẩn cấp' })).toBeNull();
+});
+
+it('shows both private evidence actions and never bypasses the authorized incident request', async () => {
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit, type?: string) => {
+    if (path === '/api/v1/incidents/incident/evidence')
+      return [{ id: 'proof', kind: 'Direct', workOrderId: null, activityId: null, length: 200 }];
+    if (path === '/api/v1/incidents/incident/evidence/proof' && type === 'blob')
+      throw { status: 403 };
+    return original(path, init);
+  });
+  mount(<IncidentDetail id="incident" />);
+  const label = /Direct · 200 byte · Sự cố/;
+  expect(
+    await screen.findByRole('button', { name: new RegExp(`Tải xuống ${label.source}`) }),
+  ).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: new RegExp(`Xem ${label.source}`) }));
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      '/api/v1/incidents/incident/evidence/proof',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      'blob',
+    ),
+  );
 });
 it('offers Owner approval but no Staff execution for a proposed work order', async () => {
   const original = mocks.request.getMockImplementation()!;

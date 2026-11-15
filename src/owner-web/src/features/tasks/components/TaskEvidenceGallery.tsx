@@ -75,13 +75,28 @@ function EvidenceImage({
             component="img"
             src={url}
             alt={`Bằng chứng ${index + 1}`}
-            sx={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: '8px' }}
+            sx={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: '12px' }}
           />
         </Button>
       )}
-      <Typography sx={{ fontSize: 12, mt: 0.5 }}>
-        {evidence.submissionId ? 'Đã chọn khi nộp kết quả' : 'Ảnh tiến độ / chưa chọn nộp'}
-      </Typography>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+        <Button
+          size="small"
+          disabled={!url || !!error}
+          onClick={() => {
+            if (!url) return;
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `bang-chung-nhiem-vu-${index + 1}.${evidence.contentType === 'image/png' ? 'png' : 'jpg'}`;
+            link.click();
+          }}
+        >
+          Tải xuống ảnh {index + 1}
+        </Button>
+        <Typography sx={{ fontSize: 12 }} color="text.secondary">
+          {evidence.submissionId ? 'Đã nộp kết quả' : 'Ảnh tiến độ'}
+        </Typography>
+      </Stack>
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md">
         <DialogTitle>
           Ảnh bằng chứng {index + 1}

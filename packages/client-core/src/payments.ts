@@ -416,6 +416,10 @@ const labels: Record<string, string> = {
   unmatched_bank_transfer: 'Chưa xác định hóa đơn nhận tiền.',
   verified_full_payment: 'Đã xác minh đủ số dư phải trả.',
   ReceivingAccountUnavailable: 'Chưa có tài khoản nhận tiền được bật. Vui lòng liên hệ Owner.',
+  PaymentCodeUnavailable:
+    'Chưa cấp được mã BH hợp lệ để đối soát tự động. Owner cần kiểm tra tài khoản nhận tiền và cấu hình SePay trước khi chuyển khoản.',
+  invoice_payment_code_unavailable:
+    'Chưa thể phát hành hóa đơn vì chưa cấp được mã BH hợp lệ. Kiểm tra tài khoản nhận tiền và cấu hình SePay của cơ sở.',
   Settled: 'Hóa đơn đã đủ tiền, không cấp thêm QR chuyển khoản.',
   NotIssuedInstructions: 'Chỉ cung cấp hướng dẫn khi hóa đơn được phát hành.',
 };

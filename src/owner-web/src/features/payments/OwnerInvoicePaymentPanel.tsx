@@ -1,10 +1,12 @@
-import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import {
   Alert,
   Box,
   Button,
   Checkbox,
+  Collapse,
+  Divider,
   Dialog,
   DialogActions,
   DialogContent,
@@ -17,6 +19,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { CheckCircle2, FileCheck2, Landmark, ReceiptText } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
@@ -38,26 +41,46 @@ import { ReceiptExcessPanel } from './ReceiptExcessPanel';
 import { ExternalPaymentPayerPanel } from './ExternalPaymentPayerPanel';
 import { PaymentInvoicePicker } from './PaymentInvoicePicker';
 import { StatusChip } from '../../components/common/PortalUI';
+import { MoneyField } from '../../components/common/MoneyField';
 
 export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
   const api = usePaymentApi();
+  const navigate = useNavigate();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
   const [record, setRecord] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [instructionsExpanded, setInstructionsExpanded] = useState(false);
   const state = useQuery({
     queryKey: ['invoice-payment', actor, invoiceId],
     queryFn: ({ signal }) => api.payment(invoiceId, signal),
+    // SePay allocates in the backend; refresh the visible invoice without an
+    // Owner button click while the invoice still has an outstanding balance.
+    refetchInterval: (query) => (query.state.data?.paymentStatus === 'Unpaid' ? 20_000 : false),
+    refetchOnWindowFocus: 'always',
   });
   const instructions = useQuery({
     queryKey: ['transfer-instructions', actor, invoiceId],
     queryFn: ({ signal }) => api.instructions(invoiceId, signal),
   });
+  // Only a persisted BH code can be matched by SePay. The older invoice
+  // reference is an internal/manual-payment reference, not a SePay memo.
+  const bhCode = [instructions.data?.transferReference, state.data?.transferReference].find(
+    (value) => typeof value === 'string' && /^BH\d{8}$/.test(value),
+  );
+  const legacyInstructions = Boolean(
+    instructions.data?.accountNumber &&
+    !/^BH\d{8}$/.test(instructions.data.transferDescription ?? ''),
+  );
   return (
-    <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0, overflowWrap: 'anywhere' }}>
-      <Stack spacing={1.5}>
-        <Typography variant="h2" component="h2">
-          Thanh toán & Đối soát
-        </Typography>
+    <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 2 }}>
+      <Stack spacing={2.25}>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+          <ReceiptText size={19} />
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            Tình trạng thanh toán
+          </Typography>
+        </Stack>
         {state.isPending && <LinearProgress />}
         {state.error && (
           <Alert
@@ -69,30 +92,50 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
         )}
         {state.data && !state.error && (
           <>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1}
-              sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
-            >
-              <Box sx={{ alignSelf: 'flex-start' }}>
-                <StatusChip label={paymentText(state.data.paymentStatus)} />
+            <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover' }}>
+              <StatusChip label={paymentText(state.data.paymentStatus)} />
+              <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.75 }}>
+                Còn phải trả:
+              </Typography>
+              <Typography
+                sx={{
+                  fontWeight: 750,
+                  fontSize: { xs: 25, sm: 29 },
+                  letterSpacing: '-0.04em',
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {formatContractMoney(state.data.outstandingAmount)}
+              </Typography>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 1.5,
+                  mt: 1.5,
+                }}
+              >
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Đã ghi nhận
+                  </Typography>
+                  <Typography sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>
+                    {formatContractMoney(state.data.paidAmount)}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Quá hạn
+                  </Typography>
+                  <Typography
+                    sx={{ fontWeight: 650 }}
+                    color={state.data.overdueDays > 0 ? 'error.main' : 'text.primary'}
+                  >
+                    {state.data.overdueDays} ngày
+                  </Typography>
+                </Box>
               </Box>
-              <Typography sx={{ fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>
-                Còn phải trả: {formatContractMoney(state.data.outstandingAmount)}
-              </Typography>
-            </Stack>
-            <Typography>
-              Đã ghi nhận: {formatContractMoney(state.data.paidAmount)} · Quá hạn:{' '}
-              {state.data.overdueDays} ngày
-            </Typography>
-            <Typography>Nội dung chuyển khoản: {state.data.transferReference}</Typography>
-            {state.data.originalIssuedAmount !== undefined && (
-              <Typography>
-                Tiền gốc: {formatContractMoney(state.data.originalIssuedAmount)} · Điều chỉnh:{' '}
-                {signedVnd(state.data.approvedAdjustmentTotal ?? '0')} · Nghĩa vụ hiện hành:{' '}
-                {formatContractMoney(state.data.payableAmount)}
-              </Typography>
-            )}
+            </Box>
             {state.data.reviewStatus === 'PendingReview' && (
               <Alert severity="warning">
                 Tiền thừa chờ xem xét:{' '}
@@ -105,54 +148,214 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
                 Có giao dịch đang chờ đối soát. Số dư chỉ thay đổi sau phân bổ được xác minh.
               </Alert>
             )}
-            {state.data.history.map((item) => (
-              <Typography key={item.id}>
-                {formatInstant(item.paidAt)} · {formatContractMoney(item.amount)} · Người trả:{' '}
-                {item.paidBy} ·{' '}
-                {item.verificationSource === 'SePayTest'
-                  ? 'SePay thử nghiệm xác minh'
-                  : item.verificationSource === 'SePayLive'
-                    ? 'SePay xác minh'
-                    : item.verificationSource === 'OwnerBankStatement'
-                      ? 'Owner xác minh sao kê'
-                      : 'Nguồn xác minh khác'}
-              </Typography>
-            ))}
+            {state.data.paymentStatus === 'NotIssued' && (
+              <Alert severity="info">
+                Hóa đơn chưa phát hành nên chưa có thao tác ghi nhận tiền cho hóa đơn này.
+              </Alert>
+            )}
             {state.data.paymentStatus !== 'NotIssued' && (
-              <Button onClick={() => setRecord(true)}>Ghi nhận giao dịch từ sao kê</Button>
+              <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
+                <Button
+                  variant="outlined"
+                  aria-expanded={record}
+                  aria-controls="invoice-bank-statement-form"
+                  onClick={() => setRecord((value) => !value)}
+                >
+                  {record ? 'Đóng biểu mẫu sao kê' : 'Ghi nhận giao dịch từ sao kê'}
+                </Button>
+              </Stack>
             )}
             {record && (
-              <RecordTransferForm
-                key={invoiceId}
-                invoiceId={invoiceId}
-                state={state.data}
-                onClose={() => setRecord(false)}
-              />
+              <Box
+                id="invoice-bank-statement-form"
+                sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}
+              >
+                <RecordTransferForm
+                  key={invoiceId}
+                  invoiceId={invoiceId}
+                  state={state.data}
+                  onClose={() => setRecord(false)}
+                />
+              </Box>
+            )}
+            {(state.data.history.length > 0 ||
+              state.data.originalIssuedAmount !== undefined ||
+              Boolean(bhCode)) && (
+              <Stack spacing={1}>
+                <Button
+                  variant="text"
+                  size="small"
+                  aria-expanded={historyExpanded}
+                  aria-controls="invoice-verified-history"
+                  onClick={() => setHistoryExpanded((value) => !value)}
+                  sx={{ alignSelf: 'flex-start' }}
+                >
+                  {historyExpanded ? 'Ẩn' : 'Xem'} chi tiết hóa đơn
+                </Button>
+                <Collapse in={historyExpanded}>
+                  <Stack id="invoice-verified-history" spacing={1.5} sx={{ pt: 0.5 }}>
+                    {state.data.originalIssuedAmount !== undefined && (
+                      <Stack direction="row" useFlexGap sx={{ gap: 1.5, flexWrap: 'wrap' }}>
+                        {[
+                          ['Tiền gốc', formatContractMoney(state.data.originalIssuedAmount)],
+                          ['Điều chỉnh', signedVnd(state.data.approvedAdjustmentTotal ?? '0')],
+                          ['Nghĩa vụ hiện hành', formatContractMoney(state.data.payableAmount)],
+                        ].map(([label, value]) => (
+                          <Box key={label} sx={{ minWidth: 0, flex: '1 1 120px' }}>
+                            <Typography variant="caption" color="text.secondary">
+                              {label}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}
+                            >
+                              {value}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    )}
+                    {bhCode && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Nội dung chuyển khoản SePay
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}
+                        >
+                          {bhCode}
+                        </Typography>
+                      </Box>
+                    )}
+                    {state.data.history.length > 0 && (
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                        Đã ghi nhận · {state.data.history.length} khoản
+                      </Typography>
+                    )}
+                    {state.data.history.map((item) => (
+                      <Box
+                        key={item.id}
+                        sx={{
+                          py: 1,
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                        }}
+                      >
+                        <Stack
+                          direction="row"
+                          sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            {formatInstant(item.paidAt)}
+                          </Typography>
+                          <Typography color="success.main" sx={{ fontWeight: 700 }}>
+                            {formatContractMoney(item.amount)}
+                          </Typography>
+                        </Stack>
+                        <Typography variant="body2">Người trả: {item.paidBy}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.verificationSource === 'SePayTest'
+                            ? 'SePay thử nghiệm xác minh'
+                            : item.verificationSource === 'SePayLive'
+                              ? 'SePay xác minh'
+                              : item.verificationSource === 'OwnerBankStatement'
+                                ? 'Owner xác minh sao kê'
+                                : 'Nguồn xác minh khác'}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Collapse>
+              </Stack>
             )}
           </>
         )}
-        {instructions.error && <Alert severity="error">{paymentError(instructions.error)}</Alert>}
+        {instructions.isPending && <LinearProgress aria-label="Đang tải tài khoản nhận tiền" />}
+        {instructions.error && (
+          <Alert
+            severity="error"
+            action={<Button onClick={() => void instructions.refetch()}>Thử lại</Button>}
+          >
+            Không tải được thông tin nhận chuyển khoản: {paymentError(instructions.error)}
+          </Alert>
+        )}
+        {!instructions.isPending &&
+          !instructions.error &&
+          state.data?.paymentStatus === 'Unpaid' &&
+          !bhCode && (
+            <Alert severity="warning">
+              Chưa có mã BH hợp lệ cho hóa đơn này. Mã tham chiếu hóa đơn cũ không dùng để tự đối
+              soát SePay. Owner cần bật SePay đúng môi trường và cấu hình tài khoản nhận tiền khớp
+              Location trước khi cung cấp QR.
+            </Alert>
+          )}
+        {legacyInstructions && (
+          <Alert severity="warning">
+            Tài khoản đã có nhưng QR hiện tại không chứa mã BH đã đăng ký. Chưa thể dùng QR này để
+            tự đối soát SePay.
+          </Alert>
+        )}
         {!instructions.error && instructions.data?.accountNumber && (
           <>
-            {instructions.data.isDevelopmentDemo && (
-              <Alert severity="warning">Tài khoản tổng hợp demo. Không chuyển tiền thật.</Alert>
-            )}
-            <Typography>
-              Ngân hàng BIN {instructions.data.bankIdentifier} · {instructions.data.accountHolder} ·{' '}
-              {instructions.data.accountNumber}
-            </Typography>
-            {instructions.data.qrImageDataUri && (
-              <Box
-                component="img"
-                src={instructions.data.qrImageDataUri}
-                alt="QR chuyển khoản hóa đơn"
-                sx={{ width: 240, maxWidth: '100%', bgcolor: 'white' }}
-              />
-            )}
+            <Divider />
+            <Button
+              variant="text"
+              size="small"
+              startIcon={<Landmark size={17} />}
+              aria-expanded={instructionsExpanded}
+              aria-controls="invoice-receiving-account"
+              onClick={() => setInstructionsExpanded((value) => !value)}
+              sx={{ alignSelf: 'flex-start' }}
+            >
+              {instructionsExpanded
+                ? 'Ẩn thông tin nhận chuyển khoản'
+                : 'Xem thông tin nhận chuyển khoản'}
+            </Button>
+            <Collapse in={instructionsExpanded}>
+              <Stack id="invoice-receiving-account" spacing={1.5}>
+                {instructions.data.isDevelopmentDemo && (
+                  <Alert severity="warning">Tài khoản tổng hợp demo. Không chuyển tiền thật.</Alert>
+                )}
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  sx={{ gap: 2, alignItems: { sm: 'center' } }}
+                >
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Ngân hàng BIN {instructions.data.bankIdentifier}
+                    </Typography>
+                    <Typography sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>
+                      {instructions.data.accountHolder}
+                    </Typography>
+                    <Typography sx={{ fontWeight: 750, overflowWrap: 'anywhere' }}>
+                      {instructions.data.accountNumber}
+                    </Typography>
+                  </Box>
+                  {!legacyInstructions && instructions.data.qrImageDataUri && (
+                    <Box
+                      component="img"
+                      src={instructions.data.qrImageDataUri}
+                      alt="QR chuyển khoản hóa đơn"
+                      sx={{ width: 180, maxWidth: '100%', bgcolor: 'white', borderRadius: 1 }}
+                    />
+                  )}
+                </Stack>
+              </Stack>
+            </Collapse>
           </>
         )}
         {!instructions.error && instructions.data && !instructions.data.accountNumber && (
-          <Alert severity="info">
+          <Alert
+            severity="info"
+            action={
+              instructions.data.availability === 'ReceivingAccountUnavailable' ? (
+                <Button size="small" onClick={() => navigate('/payments?setupAccount=1')}>
+                  Thiết lập tài khoản nhận tiền
+                </Button>
+              ) : undefined
+            }
+          >
             {paymentText(
               instructions.data.availability === 'NotIssued'
                 ? 'NotIssuedInstructions'
@@ -195,6 +398,7 @@ export function RecordTransferForm({
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const [saved, setSaved] = useState<BankTransfer | null>(null);
+  const [proofExpanded, setProofExpanded] = useState(false);
   const changed = () => {
     key.current = crypto.randomUUID();
     setChecked(false);
@@ -202,7 +406,10 @@ export function RecordTransferForm({
   if (saved)
     return (
       <>
-        <Alert severity="success">Đã lưu giao dịch đã đối chiếu sao kê.</Alert>
+        <Alert severity="success">
+          Đã lưu giao dịch từ sao kê. Tiền chưa tự phân bổ vào hóa đơn; kiểm tra và xác nhận giao
+          dịch bên dưới.
+        </Alert>
         {onRecorded ? (
           <Button onClick={() => onRecorded(saved.id)}>Đối chiếu receipt cọc vừa lưu</Button>
         ) : (
@@ -214,7 +421,8 @@ export function RecordTransferForm({
   return (
     <Stack
       component="form"
-      spacing={2}
+      spacing={2.25}
+      sx={{ minWidth: 0 }}
       onSubmit={(event) => {
         event.preventDefault();
         if (lock.current) return;
@@ -260,95 +468,148 @@ export function RecordTransferForm({
           });
       }}
     >
-      <Typography variant="subtitle1">Đối chiếu sao kê ngân hàng</Typography>
-      <TextField
-        required
-        label="Ngân hàng / nguồn sao kê"
-        value={provider}
-        onChange={(e) => {
-          setProvider(e.target.value.toUpperCase());
-          changed();
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+        <FileCheck2 size={19} />
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          Đối chiếu sao kê ngân hàng
+        </Typography>
+      </Stack>
+      <Typography variant="body2" color="text.secondary">
+        Bước 1/2 · Nhập giao dịch thực nhận từ sao kê. Sau khi đối chiếu bằng chứng, Owner mới lưu
+        để phân bổ vào hóa đơn.
+      </Typography>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+          gap: 2,
+          '& .MuiTextField-root': { minWidth: 0 },
         }}
-        helperText="Mã định danh nguồn sao kê, không nhập thông tin đăng nhập ngân hàng."
-      />
-      <TextField
-        required
-        label="Mã giao dịch ngân hàng"
-        value={reference}
-        onChange={(e) => {
-          setReference(e.target.value);
-          changed();
-        }}
-      />
-      <MoneyField
-        required
-        label="Số tiền thực nhận VND"
-        value={amount}
-        onValueChange={(raw) => {
-          setAmount(raw);
-          changed();
-        }}
-      />
-      <TextField
-        required
-        type="datetime-local"
-        label="Thời gian giao dịch (giờ Việt Nam)"
-        value={occurred}
-        onChange={(e) => {
-          setOccurred(e.target.value);
-          changed();
-        }}
-        slotProps={{ inputLabel: { shrink: true } }}
-      />
-      <TextField
-        label="Nội dung chuyển khoản trên sao kê"
-        value={description}
-        onChange={(e) => {
-          setDescription(e.target.value);
-          changed();
-        }}
-      />
-      <TextField
-        required
-        label="Tham chiếu bằng chứng sao kê"
-        value={statement}
-        onChange={(e) => {
-          setStatement(e.target.value);
-          changed();
-        }}
-      />
-      <TextField
-        required
-        label="Căn cứ xác minh"
-        value={reason}
-        onChange={(e) => {
-          setReason(e.target.value);
-          changed();
-        }}
-      />
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={demo}
+      >
+        <TextField
+          size="small"
+          required
+          label="Ngân hàng / nguồn sao kê"
+          value={provider}
+          onChange={(e) => {
+            setProvider(e.target.value.toUpperCase());
+            changed();
+          }}
+          helperText="Mã định danh nguồn sao kê, không nhập thông tin đăng nhập ngân hàng."
+        />
+        <TextField
+          size="small"
+          required
+          label="Mã giao dịch ngân hàng"
+          value={reference}
+          onChange={(e) => {
+            setReference(e.target.value);
+            changed();
+          }}
+        />
+        <MoneyField
+          size="small"
+          required
+          label="Số tiền thực nhận VND"
+          value={amount}
+          onValueChange={(raw) => {
+            setAmount(raw);
+            changed();
+          }}
+        />
+        <TextField
+          size="small"
+          required
+          type="datetime-local"
+          label="Thời gian giao dịch (giờ Việt Nam)"
+          value={occurred}
+          onChange={(e) => {
+            setOccurred(e.target.value);
+            changed();
+          }}
+          slotProps={{ inputLabel: { shrink: true } }}
+        />
+        <TextField
+          size="small"
+          label="Nội dung chuyển khoản trên sao kê"
+          value={description}
+          onChange={(e) => {
+            setDescription(e.target.value);
+            changed();
+          }}
+        />
+      </Box>
+      <Button
+        type="button"
+        variant={proofExpanded ? 'text' : 'outlined'}
+        aria-expanded={proofExpanded}
+        onClick={() => setProofExpanded((value) => !value)}
+        sx={{ alignSelf: 'flex-start' }}
+      >
+        {proofExpanded ? 'Thu gọn phần xác minh' : 'Tiếp tục: kiểm tra bằng chứng & xác nhận'}
+      </Button>
+      <Collapse in={proofExpanded} timeout="auto">
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+            Bước 2/2 · Bằng chứng đối chiếu
+          </Typography>
+          <TextField
+            size="small"
+            required
+            label="Tham chiếu bằng chứng sao kê"
+            value={statement}
             onChange={(e) => {
-              setDemo(e.target.checked);
+              setStatement(e.target.value);
               changed();
             }}
           />
-        }
-        label="Dữ liệu tổng hợp Development/Testing"
-      />
-      <FormControlLabel
-        control={<Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)} />}
-        label="Tôi đã đối chiếu sao kê và xác minh tiền thực nhận"
-      />
+          <TextField
+            size="small"
+            required
+            label="Căn cứ xác minh"
+            value={reason}
+            onChange={(e) => {
+              setReason(e.target.value);
+              changed();
+            }}
+            helperText="Ghi ngắn gọn căn cứ xác minh, không nhập thông tin nhạy cảm không cần thiết."
+          />
+          <Box sx={{ border: '1px solid', borderColor: 'divider', p: 1.5, borderRadius: 1.5 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={demo}
+                  onChange={(e) => {
+                    setDemo(e.target.checked);
+                    changed();
+                  }}
+                />
+              }
+              label="Dữ liệu tổng hợp Development/Testing"
+            />
+            <Divider sx={{ my: 1 }} />
+            <FormControlLabel
+              control={
+                <Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+              }
+              label="Tôi đã đối chiếu sao kê và xác minh tiền thực nhận"
+            />
+          </Box>
+          <Typography variant="caption" color="text.secondary">
+            Lưu giao dịch chỉ ghi nhận bằng chứng thực nhận. Số dư hóa đơn sẽ cập nhật sau khi đối
+            soát và phân bổ thành công.
+          </Typography>
+        </Stack>
+      </Collapse>
       {error && <Alert severity="error">{error}</Alert>}
-      <Button type="submit" disabled={busy || !checked} variant="contained">
-        Lưu giao dịch đã đối chiếu
-      </Button>
-      <Button disabled={busy} onClick={onClose}>
-        Hủy nhập
-      </Button>
+      <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ gap: 1, justifyContent: 'flex-end' }}>
+        <Button disabled={busy} onClick={onClose} variant="outlined">
+          Hủy nhập
+        </Button>
+        <Button type="submit" disabled={busy || !checked} variant="contained">
+          Lưu giao dịch đã đối chiếu
+        </Button>
+      </Stack>
     </Stack>
   );
 }
@@ -389,7 +650,10 @@ export function ReconcileTransfer({
   const [refundsOpen, setRefundsOpen] = useState(false);
   const [choosing, setChoosing] = useState(false),
     [invoiceLabel, setInvoiceLabel] = useState('');
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [excessOpen, setExcessOpen] = useState(false);
   const data = latest.data ?? transfer;
+  const hasInvoice = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(invoiceId);
   async function perform(rejection = false) {
     if (lock.current) return;
     lock.current = true;
@@ -424,45 +688,82 @@ export function ReconcileTransfer({
     }
   }
   return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
+    <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 2 }}>
       <Stack spacing={2}>
-        <Typography>
-          {data.bankReference} · {formatContractMoney(data.amount)} · {paymentText(data.status)}
-        </Typography>
-        <Typography variant="body2">
-          Ngày giao dịch: {formatInstant(data.occurredAt)} · Nguồn {data.providerIdentity}
-        </Typography>
-        <Typography variant="body2">
-          Nội dung: {data.transferDescription || 'Không có nội dung'} · Sao kê:{' '}
-          {data.statementReference}
-        </Typography>
-        <Typography>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' }, gap: 1 }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 750, overflowWrap: 'anywhere' }}>
+              {data.bankReference}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {formatInstant(data.occurredAt)} · Nguồn {data.providerIdentity}
+            </Typography>
+          </Box>
+          <Stack sx={{ alignItems: { xs: 'flex-start', sm: 'flex-end' } }} spacing={0.5}>
+            <Typography variant="h6" sx={{ fontWeight: 750, overflowWrap: 'anywhere' }}>
+              {formatContractMoney(data.amount)}
+            </Typography>
+            <StatusChip label={paymentText(data.status)} />
+          </Stack>
+        </Stack>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            gap: 1.5,
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary">
+              Nội dung chuyển khoản
+            </Typography>
+            <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+              {data.transferDescription || 'Không có nội dung'}
+            </Typography>
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary">
+              Tham chiếu sao kê
+            </Typography>
+            <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+              {data.statementReference}
+            </Typography>
+          </Box>
+        </Box>
+        <Typography variant="body2" color="text.secondary">
           {data.reason === 'verified_excess_payment_pending_review'
             ? 'Đã phân bổ đủ hóa đơn từ giao dịch có tiền thừa. Xem trạng thái xử lý tại mục hoàn tiền.'
             : paymentText(data.reason)}
         </Typography>
         {data.allocatedAmount !== undefined && (
-          <Typography>
+          <Typography variant="body2" sx={{ fontWeight: 650 }}>
             Đã phân bổ: {formatContractMoney(data.allocatedAmount)} · Chưa phân bổ:{' '}
             {formatContractMoney(data.unallocatedAmount ?? '0')}
           </Typography>
         )}
+        <Typography variant="caption" color="text.secondary">
+          Trạng thái và số tiền phân bổ được xác nhận từ máy chủ. Việc chọn hóa đơn ở đây chưa ghi
+          nhận thanh toán.
+        </Typography>
         {notice && <Alert severity="info">{notice}</Alert>}
-        <ExternalPaymentPayerPanel transferId={transfer.id} />
+        {data.status === 'PendingReview' && (
+          <Alert severity="info">
+            Cần Owner đối chiếu hóa đơn và người thực trả trước khi ghi nhận số tiền phân bổ.
+          </Alert>
+        )}
         {data.status === 'Allocated' &&
           data.unallocatedAmount !== undefined &&
           /^0*(?:\.0+)?$/.test(data.unallocatedAmount) === false && (
-            <Button onClick={() => setRefundsOpen(true)}>Xử lý hoàn tiền thừa</Button>
+            <Button variant="outlined" onClick={() => setRefundsOpen(true)}>
+              Xử lý hoàn tiền thừa
+            </Button>
           )}
         {refundsOpen && <RefundPanel key={transfer.id} sourceId={transfer.id} />}
-        {(data.status === 'ExcessRefundPending' ||
-          data.status === 'ExcessRefundCompleted' ||
-          (data.status === 'PendingReview' && invoiceId)) && (
-          <ReceiptExcessPanel
-            key={`${transfer.id}:${invoiceId}`}
-            transferId={transfer.id}
-            target={data.status === 'PendingReview' ? { invoiceId } : undefined}
-          />
+        {(data.status === 'ExcessRefundPending' || data.status === 'ExcessRefundCompleted') && (
+          <ReceiptExcessPanel key={`${transfer.id}:${invoiceId}`} transferId={transfer.id} />
         )}
         {(latest.error || history.error) && (
           <Alert
@@ -482,83 +783,199 @@ export function ReconcileTransfer({
           </Alert>
         )}
         {data.status === 'PendingReview' && (
-          <>
-            <Typography>
-              {invoiceLabel ||
-                (invoiceId
-                  ? 'Đang xem hóa đơn gợi ý từ giao dịch. Kiểm tra trước khi phân bổ.'
-                  : 'Chưa chọn hóa đơn để phân bổ.')}
-            </Typography>
-            <Button disabled={busy} onClick={() => setChoosing(true)}>
-              Chọn hóa đơn cần phân bổ
-            </Button>
-            {choosing && (
-              <PaymentInvoicePicker
-                open
-                close={() => setChoosing(false)}
-                choose={(i) => {
-                  setInvoiceId(i.invoiceId);
-                  setInvoiceLabel(
-                    `${i.locationName} · Phòng ${i.roomNumber} · ${i.billingPeriod.slice(0, 7)}`,
-                  );
-                  setPayer('');
-                  setChecked(false);
-                  setChoosing(false);
-                  key.current = crypto.randomUUID();
-                }}
-              />
-            )}
-            <TextField
-              select
-              label="Người thực trả đã xác minh"
-              value={payer}
-              onChange={(e) => {
-                setPayer(e.target.value);
-                setChecked(false);
-                key.current = crypto.randomUUID();
-              }}
-            >
-              <MenuItem value="">Chưa xác định người trả</MenuItem>
-              {payers.data?.map((p) => (
-                <MenuItem key={p.userId} value={p.userId}>
-                  {p.displayLabel}
-                </MenuItem>
-              ))}
-            </TextField>
-            {payers.error && <Alert severity="error">{paymentError(payers.error)}</Alert>}
-            <FormControlLabel
-              control={
-                <Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)} />
-              }
-              label="Tôi xác nhận đúng hóa đơn và người thực trả theo bằng chứng"
-            />
-            <Button
-              variant="contained"
-              disabled={busy || !checked || !payers.data}
-              onClick={() => setConfirm(true)}
-            >
-              Xác nhận phân bổ tiền
-            </Button>
-            <TextField
-              label="Lý do không phân bổ"
-              value={reject}
-              onChange={(e) => {
-                setReject(e.target.value);
-                key.current = crypto.randomUUID();
-              }}
-            />
-            <Button disabled={busy || !reject.trim()} onClick={() => void perform(true)}>
-              Không phân bổ giao dịch
-            </Button>
-          </>
+          <Box
+            sx={{
+              bgcolor: 'action.hover',
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 2,
+              p: { xs: 1.5, sm: 2 },
+            }}
+          >
+            <Stack spacing={2}>
+              <Stack direction="row" sx={{ gap: 1, alignItems: 'center' }}>
+                <CheckCircle2 size={18} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  Xác minh và phân bổ giao dịch
+                </Typography>
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                Bước 1/2 · Chọn hóa đơn cần nhận tiền theo nội dung sao kê.
+              </Typography>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                sx={{ gap: 1.5, alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+              >
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Hóa đơn đối soát
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                    {invoiceLabel ||
+                      (invoiceId
+                        ? 'Đang xem hóa đơn gợi ý từ giao dịch. Kiểm tra trước khi phân bổ.'
+                        : 'Chưa chọn hóa đơn để phân bổ.')}
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={busy}
+                  onClick={() => setChoosing(true)}
+                >
+                  Chọn hóa đơn cần phân bổ
+                </Button>
+              </Stack>
+              {choosing && (
+                <PaymentInvoicePicker
+                  open
+                  close={() => setChoosing(false)}
+                  choose={(i) => {
+                    setInvoiceId(i.invoiceId);
+                    setInvoiceLabel(
+                      `${i.locationName} · Phòng ${i.roomNumber} · ${i.billingPeriod.slice(0, 7)}`,
+                    );
+                    setPayer('');
+                    setChecked(false);
+                    setChoosing(false);
+                    key.current = crypto.randomUUID();
+                  }}
+                />
+              )}
+              {hasInvoice ? (
+                <Stack spacing={1.5}>
+                  <Typography variant="caption" color="text.secondary">
+                    Bước 2/2 · Kiểm tra người trả rồi xác nhận theo bằng chứng sao kê.
+                  </Typography>
+                  <TextField
+                    size="small"
+                    select
+                    fullWidth
+                    label="Người thực trả đã xác minh"
+                    value={payer}
+                    onChange={(e) => {
+                      setPayer(e.target.value);
+                      setChecked(false);
+                      key.current = crypto.randomUUID();
+                    }}
+                  >
+                    <MenuItem value="">Chưa xác định người trả</MenuItem>
+                    {payers.data?.map((p) => (
+                      <MenuItem key={p.userId} value={p.userId}>
+                        {p.displayLabel}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  {payers.isPending && (
+                    <LinearProgress aria-label="Đang tải người trả có thể chọn" />
+                  )}
+                  {payers.error && (
+                    <Alert
+                      severity="error"
+                      action={<Button onClick={() => void payers.refetch()}>Thử lại</Button>}
+                    >
+                      {paymentError(payers.error)}
+                    </Alert>
+                  )}
+                  <FormControlLabel
+                    control={
+                      <Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+                    }
+                    label="Tôi xác nhận đúng hóa đơn và người thực trả theo bằng chứng"
+                  />
+                  <Button
+                    variant="contained"
+                    disabled={busy || !!latest.error || !checked || !payers.data}
+                    onClick={() => setConfirm(true)}
+                    sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
+                  >
+                    Xác nhận phân bổ tiền
+                  </Button>
+                </Stack>
+              ) : (
+                <Alert severity="info">
+                  Chọn hóa đơn trước khi xác nhận người trả và phân bổ tiền.
+                </Alert>
+              )}
+              <Divider />
+              <Button
+                type="button"
+                size="small"
+                aria-expanded={rejectOpen}
+                onClick={() => setRejectOpen((value) => !value)}
+                sx={{ alignSelf: 'flex-start' }}
+              >
+                {rejectOpen ? 'Thu gọn lý do không phân bổ' : 'Không tìm được hóa đơn phù hợp?'}
+              </Button>
+              <Collapse in={rejectOpen} timeout="auto">
+                <Stack spacing={1.5}>
+                  <Typography variant="caption" color="text.secondary">
+                    Chỉ chọn không phân bổ khi Owner đã kiểm tra bằng chứng và có lý do cụ thể.
+                  </Typography>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label="Lý do không phân bổ"
+                    value={reject}
+                    onChange={(e) => {
+                      setReject(e.target.value);
+                      key.current = crypto.randomUUID();
+                    }}
+                  />
+                  <Button
+                    color="error"
+                    variant="outlined"
+                    disabled={busy || !!latest.error || !reject.trim()}
+                    onClick={() => void perform(true)}
+                    sx={{ alignSelf: 'flex-start' }}
+                  >
+                    Không phân bổ giao dịch
+                  </Button>
+                </Stack>
+              </Collapse>
+            </Stack>
+          </Box>
         )}
-        {error && <Alert severity="error">{error}</Alert>}
-        {history.data?.items.map((item) => (
-          <Typography key={item.sequence} variant="body2">
-            {formatInstant(item.occurredAt)} · {paymentText(item.decision)} ·{' '}
-            {item.decision === 'Rejected' ? item.reason : paymentText(item.reason)}
+        <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+            Trường hợp cần xử lý bổ sung
           </Typography>
-        ))}
+          <Typography variant="caption" color="text.secondary">
+            Chỉ sử dụng khi người trả không có hồ sơ trong hệ thống hoặc khi có vấn đề về tiền thừa.
+          </Typography>
+          <ExternalPaymentPayerPanel transferId={transfer.id} />
+          {data.status === 'PendingReview' && hasInvoice && (
+            <>
+              <Button
+                size="small"
+                aria-expanded={excessOpen}
+                onClick={() => setExcessOpen((value) => !value)}
+                sx={{ mt: 1 }}
+              >
+                {excessOpen ? 'Ẩn xử lý tiền thừa' : 'Kiểm tra trường hợp phải hoàn toàn bộ tiền'}
+              </Button>
+              <Collapse in={excessOpen} timeout="auto" unmountOnExit>
+                <ReceiptExcessPanel
+                  key={`${transfer.id}:${invoiceId}`}
+                  transferId={transfer.id}
+                  target={{ invoiceId }}
+                />
+              </Collapse>
+            </>
+          )}
+        </Box>
+        {error && <Alert severity="error">{error}</Alert>}
+        {!!history.data?.items.length && (
+          <Stack spacing={1} sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
+            <Typography variant="subtitle2">Lịch sử xử lý giao dịch</Typography>
+            {history.data.items.map((item) => (
+              <Typography key={item.sequence} variant="body2" color="text.secondary">
+                {formatInstant(item.occurredAt)} · {paymentText(item.decision)} ·{' '}
+                {item.decision === 'Rejected' ? item.reason : paymentText(item.reason)}
+              </Typography>
+            ))}
+          </Stack>
+        )}
         <Dialog open={confirm} onClose={() => !busy && setConfirm(false)}>
           <DialogTitle>Xác nhận đối soát giao dịch?</DialogTitle>
           <DialogContent>

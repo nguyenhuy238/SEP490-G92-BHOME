@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using BHome.Application.Billing;
 using BHome.Application.Jobs;
 using BHome.Application.Ocr;
+using BHome.Application.PaymentsDebt.SePay;
+using BHome.Domain.IdentityAccess;
 using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
 using BHome.Infrastructure.Persistence;
@@ -11,6 +13,32 @@ using Microsoft.Extensions.DependencyInjection;
 namespace BHome.IntegrationTests.PaymentsDebt;
 public sealed partial class PaymentLedgerTests
 {
+    private sealed class UnavailableInvoicePaymentCode : IPaymentCodeRegistry
+    {
+        public Task<string?> GetAsync(string kind, Guid id, CancellationToken token) => Task.FromResult<string?>(null);
+        public Task<string?> IssueAsync(string kind, Guid id, Guid locationId, CancellationToken token) => Task.FromResult<string?>(null);
+        public Task<bool> MatchesAsync(string kind, Guid id, string description, CancellationToken token) => Task.FromResult(false);
+    }
+
+    [Fact]
+    public async Task SePayEnabledInvoiceCannotBePublishedWithoutARegisteredPaymentMemo()
+    {
+        var (w, _, draft) = await FinalWorkspace();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var service = new InvoiceService(
+            scope.ServiceProvider.GetRequiredService<IInvoiceRepository>(),
+            new User(w.Owner, Roles.Owner), TimeProvider.System,
+            scope.ServiceProvider.GetRequiredService<IBillingAutomationSchedules>(),
+            scope.ServiceProvider.GetRequiredService<IFixedChargeCoverage>(),
+            new UnavailableInvoicePaymentCode(), new SePayOptions { Enabled = true });
+        var error = await Assert.ThrowsAsync<InvoiceException>(() => service.FinalizeAsync(draft.Id, draft.Version, default));
+        Assert.Equal("invoice_payment_code_unavailable", error.Code);
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        db.ChangeTracker.Clear();
+        Assert.Equal(InvoiceStatus.Draft, (await db.Set<Invoice>().SingleAsync(i => i.Id == draft.Id)).Status);
+        Assert.False(await db.Set<InvoiceIssuedEvent>().AnyAsync(e => e.InvoiceId == draft.Id));
+    }
+
     private async Task<(Workspace W, BillingAutomationPlan Plan, InvoiceView Draft)> FinalWorkspace(bool readings = true, bool authorize = true)
     {
         var (w, _, _) = await MeterWorkspace(); await AddAutomationRates(w); using var owner = await Client(w.Owner);

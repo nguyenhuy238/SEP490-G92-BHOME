@@ -1,48 +1,73 @@
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { expect, it } from 'vitest';
 import FinanceHomePage from './FinanceHomePage';
 
-it('provides a task-first route to every finance workflow without requiring user IDs or input', () => {
+function renderFinanceHome() {
   render(
     <MemoryRouter>
       <FinanceHomePage />
     </MemoryRouter>,
   );
+}
+
+it('shows three visible work areas with direct links to each core finance task', () => {
+  renderFinanceHome();
 
   expect(
     screen.getByRole('heading', { name: 'Tài chính & Hóa đơn', level: 1 }),
   ).toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: 'Chu kỳ hóa đơn' })).toBeInTheDocument();
-  expect(screen.queryByRole('heading', { name: 'Có vấn đề cần xử lý?' })).not.toBeInTheDocument();
 
-  const billingDestinations = [
-    ['Xem chỉ số', '/meters'],
-    ['Xem hóa đơn', '/invoices'],
-    ['Xem lịch tự động', '/billing-automation'],
-    ['Đến thanh toán', '/payments'],
+  const destinations = [
+    {
+      area: 'Lập hóa đơn',
+      links: [
+        ['Mở hóa đơn', '/invoices'],
+        ['Chỉ số điện nước', '/meters'],
+        ['Lịch lập hóa đơn', '/billing-automation'],
+        ['Giá & biểu phí', '/pricing'],
+        ['Điều chỉnh hóa đơn', '/invoice-adjustments'],
+      ],
+    },
+    {
+      area: 'Thu tiền & công nợ',
+      links: [
+        ['Đối soát thanh toán', '/payments'],
+        ['Công nợ', '/debts'],
+      ],
+    },
+    {
+      area: 'Chi phí & báo cáo',
+      links: [
+        ['Xem báo cáo', '/reports'],
+        ['Chi phí & đầu tư', '/expenses'],
+        ['Kịch bản What-if', '/what-if'],
+      ],
+    },
   ] as const;
-  for (const [label, href] of billingDestinations) {
-    expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', href);
+
+  for (const group of destinations) {
+    const area = screen.getByRole('region', { name: group.area });
+    expect(within(area).getByRole('heading', { name: group.area, level: 2 })).toBeVisible();
+    for (const [label, href] of group.links) {
+      expect(within(area).getByRole('link', { name: new RegExp(label) })).toHaveAttribute(
+        'href',
+        href,
+      );
+    }
   }
-  fireEvent.click(screen.getByRole('tab', { name: 'Xử lý phát sinh' }));
-  expect(screen.getByRole('heading', { name: 'Có vấn đề cần xử lý?' })).toBeInTheDocument();
-  const issueDestinations = [
-    ['Xem công nợ', '/debts'],
-    ['Xem yêu cầu', '/invoice-adjustments'],
-    ['Xem biểu phí', '/pricing'],
-  ] as const;
-  for (const [label, href] of issueDestinations) {
-    expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', href);
-  }
-  fireEvent.click(screen.getByRole('tab', { name: 'Quản lý & báo cáo' }));
-  const managementDestinations = [
-    ['Quản lý khoản chi', '/expenses'],
-    ['Mở báo cáo', '/reports'],
-    ['Phân tích kịch bản', '/what-if'],
-  ] as const;
-  for (const [label, href] of managementDestinations) {
-    expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', href);
-  }
+
+  expect(screen.getAllByRole('link')).toHaveLength(10);
+});
+
+it('keeps all destinations visible without speculative progress, figures or hidden tabs', () => {
+  renderFinanceHome();
+
+  expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+  expect(screen.queryByText('Hôm nay bạn cần làm gì?')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Bước [1-9]/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/đang chờ xử lý hôm nay/i)).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /Đối soát thanh toán/i })).toBeVisible();
+  expect(screen.getByRole('link', { name: /Xem báo cáo/i })).toBeVisible();
 });

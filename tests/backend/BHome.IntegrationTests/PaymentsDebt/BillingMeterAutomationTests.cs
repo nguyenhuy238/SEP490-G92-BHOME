@@ -82,4 +82,24 @@ public sealed partial class PaymentLedgerTests
         var next = await owner.PutAsJsonAsync("/api/v1/billing-automation", Plan(w) with { ExpectedVersion = 1, EffectiveFrom = CurrentPeriod().AddMonths(1) }); next.EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsJsonAsync("/api/v1/billing-automation/run-now", new BillingRunInput(w.Location, CurrentPeriod().AddMonths(1), "Meter"))).StatusCode);
     }
+    [Fact]
+    public async Task ManualInitialAndPeriodicMeterButtonsCannotCreateDuplicatesOnConcurrentClicks()
+    {
+        var (w, _, meters) = await MeterWorkspace(water: false);
+        using var first = await Client(w.Owner); using var second = await Client(w.Owner);
+        foreach (var purpose in new[] { ReadingPurpose.Initial, ReadingPurpose.Periodic })
+        {
+            var input = new MeterTaskInput(meters[0], purpose, CurrentPeriod(),
+                purpose == ReadingPurpose.Periodic ? CurrentPeriod() : null);
+            var calls = await Task.WhenAll(
+                first.PostAsJsonAsync("/api/v1/capture/meter-tasks", input),
+                second.PostAsJsonAsync("/api/v1/capture/meter-tasks", input));
+            Assert.Single(calls, response => response.StatusCode == HttpStatusCode.OK);
+            Assert.Single(calls, response => response.StatusCode == HttpStatusCode.Conflict);
+        }
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(task => task.MeterId == meters[0] && task.Purpose == ReadingPurpose.Initial));
+        Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(task => task.MeterId == meters[0] && task.Purpose == ReadingPurpose.Periodic && task.BillingPeriod == CurrentPeriod()));
+    }
 }

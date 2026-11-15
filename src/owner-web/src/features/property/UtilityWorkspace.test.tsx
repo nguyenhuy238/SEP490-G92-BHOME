@@ -93,6 +93,74 @@ function fill(label: string, value: string) {
   fireEvent.change(screen.getByLabelText(new RegExp(label)), { target: { value } });
 }
 
+it('lets Owner create a room meter before any source meter or room meter exists', async () => {
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.includes('utility-source-meters?')) return [];
+    return init?.method ? { id: 'new-room-meter' } : reads(path);
+  });
+  mount();
+  fireEvent.click(screen.getByRole('tab', { name: 'Công tơ & Chỉ số' }));
+  const add = await screen.findByRole('button', { name: 'Thêm đồng hồ cho phòng' });
+  expect(add).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Liên kết đồng hồ phòng' })).toBeDisabled();
+  fireEvent.click(add);
+  await select('Phòng gắn đồng hồ', 'A101');
+  fill('Mã đồng hồ phòng', 'D-101');
+  fill('Ngày lắp đặt', '2026-11-14');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu đồng hồ phòng' }));
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith('/api/v1/capture/meters', {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: 'room',
+        code: 'D-101',
+        utilityType: 0,
+        display: 0,
+        decimalPlaces: 0,
+        installedOn: '2026-11-14',
+      }),
+    }),
+  );
+  expect(await screen.findByText(/Đã tạo đồng hồ phòng/)).toBeInTheDocument();
+});
+it('shows existing room meters even when they have not been linked to a source meter', async () => {
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.includes('utility-source-meters?')) return [];
+    if (path.endsWith('/meters'))
+      return [{ id: 'meter-room-1', label: 'A101 · DIEN-101', parentId: 'room' }];
+    return init?.method ? { id: 'created' } : reads(path);
+  });
+  mount();
+  fireEvent.click(screen.getByRole('tab', { name: 'Công tơ & Chỉ số' }));
+  const list = await screen.findByLabelText('Danh sách đồng hồ phòng');
+  expect(list).toHaveTextContent('Đồng hồ từng phòng (1)');
+  expect(list).toHaveTextContent('A101 · DIEN-101');
+  expect(list).toHaveTextContent('Phòng: A101');
+  expect(list).toHaveTextContent('Chưa liên kết công tơ tổng');
+  expect(screen.getByRole('button', { name: 'Liên kết đồng hồ phòng' })).toBeDisabled();
+});
+it('refreshes the room meter listing after a successful creation', async () => {
+  let created = false;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/capture/meters' && init?.method === 'POST') {
+      created = true;
+      return { id: 'new-room-meter' };
+    }
+    if (path.endsWith('/meters'))
+      return created ? [{ id: 'new-room-meter', label: 'A101 · D-101', parentId: 'room' }] : [];
+    return init?.method ? { id: 'created' } : reads(path);
+  });
+  mount();
+  fireEvent.click(screen.getByRole('tab', { name: 'Công tơ & Chỉ số' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm đồng hồ cho phòng' }));
+  await select('Phòng gắn đồng hồ', 'A101');
+  fill('Mã đồng hồ phòng', 'D-101');
+  fill('Ngày lắp đặt', '2026-11-14');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu đồng hồ phòng' }));
+  const list = screen.getByLabelText('Danh sách đồng hồ phòng');
+  await waitFor(() => expect(list).toHaveTextContent('A101 · D-101'));
+});
+
 it('creates an exact tiered tariff without browser charge calculation', async () => {
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm biểu giá điện nước' }));

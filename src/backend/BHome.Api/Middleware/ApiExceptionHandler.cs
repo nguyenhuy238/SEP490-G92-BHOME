@@ -3,6 +3,7 @@ using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
 using BHome.DigitalSigning.Application;
 using BHome.Application.Ocr;
+using BHome.Application.Storage;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -39,6 +40,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
                 _ => 500
             },
             IntegrationUnavailableException => StatusCodes.Status503ServiceUnavailable,
+            PrivateObjectNotFoundException => StatusCodes.Status404NotFound,
             OcrAccessException => StatusCodes.Status404NotFound,
             CaptureConflictException or OcrWorkflowStateException => StatusCodes.Status409Conflict,
             CaptureValidationException => StatusCodes.Status400BadRequest,
@@ -73,6 +75,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             CaptureConflictException conflict => conflict.Code,
             CaptureValidationException validation => validation.Code,
             OcrInputException input => input.Code,
+            PrivateObjectNotFoundException => "private_evidence_file_missing",
             _ => null
         };
         var problem = new ProblemDetailsContext

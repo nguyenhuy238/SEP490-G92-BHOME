@@ -70,6 +70,7 @@ public interface ICaptureRepository
     Task<IReadOnlyList<ResidentSummary>> ResidentsAsync(Guid locationId, CancellationToken token);
     Task<IdentityConfirmationResult> ConfirmIdentityAsync(Guid residentId, IdentityConfirmation input, CancellationToken token);
     Task<IdResult> CreateMeterAsync(MeterInput input, CancellationToken token);
+    Task<Guid?> ActiveMeterLocationAsync(Guid meterId, CancellationToken token);
     Task<IReadOnlyList<NamedResource>> MetersAsync(Guid locationId, CancellationToken token);
     Task<IdResult> CreateTaskAsync(MeterTaskInput input, CancellationToken token);
     Task<IReadOnlyList<MeterTaskSummary>> TasksAsync(CancellationToken token, MeterTaskQuery? query = null);
