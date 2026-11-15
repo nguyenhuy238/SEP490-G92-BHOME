@@ -24,6 +24,7 @@ public sealed partial class ContractLifecycleApiTests
     [Theory, InlineData(false), InlineData(true)]
     public async Task OwnerUploadsAMySignSignedPdfThenTenantSignsWithOtpAndBothSignaturesStayValid(bool holding = false)
     {
+        if (await RunHoldingSigningOnNativeSchemaAsync(holding, tests => tests.OwnerUploadsAMySignSignedPdfThenTenantSignsWithOtpAndBothSignaturesStayValid(true))) return;
         var w = await Setup();
         if (holding) await PrepareHoldingSigningRate(w.Room, w.Location);
         var id = holding

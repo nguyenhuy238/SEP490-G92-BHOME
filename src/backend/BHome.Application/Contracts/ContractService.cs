@@ -780,8 +780,10 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                     throw ContractException.Conflict("signing_evidence_integrity_failed");
                 c.InternalAcceptance = System.Text.Json.JsonSerializer.Serialize(evidence with
                 {
-                    OwnerId = c.OwnerSignerId, OwnerAcceptedAt = s.SignedAt,
-                    FinalDocumentKey = s.SignedObjectKey, FinalDocumentHash = s.SignedHash
+                    OwnerId = c.OwnerSignerId,
+                    OwnerAcceptedAt = s.SignedAt,
+                    FinalDocumentKey = s.SignedObjectKey,
+                    FinalDocumentHash = s.SignedHash
                 });
                 c.Status = ContractStatus.PendingActivation;
                 if (c.Kind == ContractKind.Holding)

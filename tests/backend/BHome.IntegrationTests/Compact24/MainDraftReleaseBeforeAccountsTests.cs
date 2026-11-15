@@ -55,7 +55,8 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ContractWorkflow:SimulatedSigningEnabled"] = "false",
+                // Only the explicitly synthetic scenario may exercise legacy simulation commands.
+                ["ContractWorkflow:SimulatedSigningEnabled"] = sandbox ? "true" : "false",
                 ["ContractPdf:TemplateId"] = "main-contract-development-v1",
                 ["IdentityProtection:ActiveEncryptionVersion"] = "test",
                 ["IdentityProtection:ActiveHmacVersion"] = "test",
@@ -117,7 +118,7 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync(signingRoot + "/owner-confirmation", confirmation)).StatusCode);
         if (!sandbox)
         {
-            Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync(signingRoot + "/owner-simulation", confirmation)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await staff.PostAsJsonAsync(signingRoot + "/owner-simulation", confirmation)).StatusCode);
             Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(signingRoot + "/owner-confirmation", confirmation)).StatusCode);
             return;
         }
@@ -204,6 +205,8 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         // Disabled Sandbox must still reject activation even after money is verified.
         await using (var disabledScope = disabledHost.Services.CreateAsyncScope())
             await Assert.ThrowsAsync<ContractException>(() => disabledScope.ServiceProvider.GetRequiredService<ContractService>().AutoActivatePaidMainAsync(c.Id, default));
+        await using (var scheduling = host.Services.CreateAsyncScope())
+            await scheduling.ServiceProvider.GetRequiredService<BHome.Infrastructure.PaymentsDebt.MainContractActivationScheduling>().EnqueueDueAsync(default);
         Assert.True(await host.Services.GetRequiredService<BHome.Infrastructure.Jobs.PostgresJobWorker>()
             .ProcessAllowedAsync(default, ["activate-paid-main-contract"]));
         await automatic.AutoActivatePaidMainAsync(c.Id, default);

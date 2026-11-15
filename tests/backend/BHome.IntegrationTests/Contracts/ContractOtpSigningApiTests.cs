@@ -20,13 +20,35 @@ namespace BHome.IntegrationTests.Contracts;
 // "Owner and Tenant electronically sign", DBR-03 signing status and evidence; decisions D1/D2/D6).
 public sealed partial class ContractLifecycleApiTests
 {
+    private async Task<bool> RunHoldingSigningOnNativeSchemaAsync(bool holding, Func<ContractLifecycleApiTests, Task> scenario)
+    {
+        if (!holding || fixture.Factory.Services.GetService<BHome.Infrastructure.Persistence.Compact24.Compact24DbContext>() is not null) return false;
+        // The source-schema adapter does not persist Holding approval/expiry metadata. Keep both
+        // theory cases, but exercise Holding evidence on the production Compact24 schema.
+        var native = new BHome.IntegrationTests.Compact24.PropertyContractDockerFixture();
+        try
+        {
+            await native.InitializeAsync();
+            await scenario(new ContractLifecycleApiTests(native.Contracts));
+        }
+        finally { await native.DisposeAsync(); }
+        return true;
+    }
     private async Task PrepareHoldingSigningRate(Guid room, Guid location)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-        db.Add(new BillingPolicy { LocationId = location, RoomId = room, Category = ChargeCategory.Rent,
-            ChargeCode = "RENT", Name = "Synthetic signing test rate", Method = ChargingMethod.FixedPerRoomPerMonth,
-            Rate = 3000000, EffectiveFrom = Today });
+        db.Add(new BillingPolicy
+        {
+            LocationId = location,
+            RoomId = room,
+            Category = ChargeCategory.Rent,
+            ChargeCode = "RENT",
+            Name = "Synthetic signing test rate",
+            Method = ChargingMethod.FixedPerRoomPerMonth,
+            Rate = 3000000,
+            EffectiveFrom = Today
+        });
         await db.SaveChangesAsync();
     }
     private sealed class CapturedEmail : INotificationChannelProvider
@@ -51,6 +73,7 @@ public sealed partial class ContractLifecycleApiTests
 
     private async Task SignOwnerThenTenant(bool holding, bool ownerSession)
     {
+        if (await RunHoldingSigningOnNativeSchemaAsync(holding, tests => tests.SignOwnerThenTenant(true, ownerSession))) return;
         var w = await Setup();
         if (holding) await PrepareHoldingSigningRate(w.Room, w.Location);
         var id = holding

@@ -404,7 +404,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         {
             if (qrPreview) b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["SePay:Enabled"] = "false", ["SePay:Mode"] = "Test",
+                ["SePay:Enabled"] = "false",
+                ["SePay:Mode"] = "Test",
                 ["SePay:WebhookSecret"] = sandboxSecret,
                 ["SePay:ReceivingAccounts:0:LocationId"] = Compact24SampleSeed.Id(10).ToString(),
                 ["SePay:ReceivingAccounts:0:BankIdentifier"] = "970416",
@@ -452,8 +453,21 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         async Task<HttpResponseMessage> SendSandbox(string code, decimal amount)
         {
             var eventId = new Guid(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(code))[..16]).ToString();
-            var body = JsonSerializer.Serialize(new { id = eventId, gateway = "ACB", transactionDate = sandboxDate, accountNumber = "12345678", subAccount = "", code,
-                content = "Synthetic transfer " + code, transferType = "in", transferAmount = amount, referenceCode = "SYN-" + code, description = "Synthetic transfer", accumulated = amount });
+            var body = JsonSerializer.Serialize(new
+            {
+                id = eventId,
+                gateway = "ACB",
+                transactionDate = sandboxDate,
+                accountNumber = "12345678",
+                subAccount = "",
+                code,
+                content = "Synthetic transfer " + code,
+                transferType = "in",
+                transferAmount = amount,
+                referenceCode = "SYN-" + code,
+                description = "Synthetic transfer",
+                accumulated = amount
+            });
             var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
             using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/integrations/sepay/webhook") { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
             request.Headers.Add("X-SePay-Timestamp", timestamp);

@@ -590,8 +590,12 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal("Active", activeHolding.Status);
         Assert.Equal("SigningAndDepositCompleted", activeHolding.PriceLockTrigger);
         var conversionKey = Guid.NewGuid();
-        var main = (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id;
-        Assert.Equal(main, (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), new HoldingConversionInput(3000000), conversionKey))).Id);
+        Assert.True(new HoldingConversionInput(3000000).RequireInitialPayment);
+        // This regression isolates legacy deposit-credit allocation. Full initial rent/fee collection
+        // and automatic activation are exercised by AnonymousSigningTests' complete Sandbox chain.
+        var conversion = new HoldingConversionInput(3000000, RequireInitialPayment: false);
+        var main = (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), conversion, conversionKey))).Id;
+        Assert.Equal(main, (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), conversion, conversionKey))).Id);
         Assert.Equal("Active", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(holding)))!.Status);
         await Signed(w, main); await Deposit(w, main, 2000000); await Success<ContractView>(await Post(w.Owner, Path(main, "activate")));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
