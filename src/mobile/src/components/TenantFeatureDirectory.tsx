@@ -92,6 +92,12 @@ export const tenantFeatureGroups: {
         icon: 'clipboard-text-outline',
         screen: 'tenant-requests',
       },
+      {
+        title: 'Hoàn tiền',
+        detail: 'Gửi yêu cầu & xem chứng từ',
+        icon: 'cash-refund',
+        screen: 'refund-requests',
+      },
     ],
   },
 ];

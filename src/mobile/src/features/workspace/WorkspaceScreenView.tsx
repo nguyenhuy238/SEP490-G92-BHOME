@@ -10,6 +10,7 @@ import { Redirect } from 'expo-router';
 import { TenantInvoicesScreen } from '../../screens/TenantInvoicesScreen';
 import { NotificationsScreen } from '../../screens/NotificationsScreen';
 import { TenantPaymentHistoryScreen } from '../../screens/TenantPaymentHistoryScreen';
+import { TenantRefundRequestsScreen } from '../../screens/TenantRefundRequestsScreen';
 import { TenantFeaturesScreen } from '../../screens/TenantFeaturesScreen';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading } from '../../components/WorkspaceKit';
@@ -110,6 +111,7 @@ const screens = {
   'tenant-room': TenantRoomScreen,
   'tenant-features': TenantFeaturesScreen,
   'tenant-requests': TenantRequestsScreen,
+  'refund-requests': TenantRefundRequestsScreen,
   'tenant-meters': TenantMeterHistoryScreen,
   'staff-assets': StaffAssets,
   'staff-maintenance': StaffMaintenanceScreen,
@@ -234,6 +236,9 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
           break;
         case 'billing-history':
           content = <TenantPaymentHistoryScreen />;
+          break;
+        case 'refund-requests':
+          content = <TenantRefundRequestsScreen />;
           break;
         case 'owner-home':
           content = <OwnerOverviewScreen />;

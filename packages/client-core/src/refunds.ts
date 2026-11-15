@@ -78,6 +78,90 @@ export interface RefundExecution {
   reason: string;
   humanConfirmed: boolean;
 }
+
+// Tenant-submitted petitions are independent of the classified, source-backed
+// refunds above. Payment/Contract IDs are optional contextual references only.
+export interface TenantRefundPetition {
+  id: string;
+  amount: string;
+  reason: string;
+  status: 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
+  sourcePaymentId: string | null;
+  sourceContractId: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+  decisionReason: string | null;
+  executedAt: string | null;
+  externalReference: string | null;
+  hasEvidence: boolean;
+  version: number;
+  tenantLabel?: string | null;
+  executionIntent?: {
+    key: string;
+    contentType: string;
+    length: number;
+    sha256: string;
+    executedAt: string;
+    externalReference: string;
+    reason: string;
+  } | null;
+}
+export interface TenantRefundPetitionInput {
+  amount: string;
+  reason: string;
+  sourcePaymentId?: string | null;
+  sourceContractId?: string | null;
+}
+export interface TenantRefundPetitionSources {
+  payments: { id: string; label: string }[];
+  contracts: { id: string; label: string }[];
+}
+export function refundPetitionClient(request: ContractRequest) {
+  const tenantRoot = '/api/v1/tenant/refund-requests';
+  const ownerRoot = '/api/v1/owner/tenant-refund-requests';
+  return {
+    tenantList: (page = 1, pageSize = 20, signal?: AbortSignal) =>
+      request<Page<TenantRefundPetition>>(`${tenantRoot}?page=${page}&pageSize=${pageSize}`, {
+        signal,
+      }),
+    sources: (signal?: AbortSignal) =>
+      request<TenantRefundPetitionSources>(`${tenantRoot}/sources`, { signal }),
+    create: (body: TenantRefundPetitionInput, key: string) =>
+      request<TenantRefundPetition>(tenantRoot, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
+    tenantEvidence: (id: string, signal?: AbortSignal) =>
+      request<Blob>(`${tenantRoot}/${id}/evidence`, { signal }, 'blob'),
+    ownerList: (page = 1, pageSize = 20, signal?: AbortSignal) =>
+      request<Page<TenantRefundPetition>>(`${ownerRoot}?page=${page}&pageSize=${pageSize}`, {
+        signal,
+      }),
+    decide: (
+      id: string,
+      body: { expectedVersion: number; approve: boolean; reason: string; humanConfirmed: boolean },
+      key: string,
+    ) =>
+      request<TenantRefundPetition>(`${ownerRoot}/${id}/decision`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify(body),
+      }),
+    execute: (id: string, input: RefundExecution, file: Blob, key: string) => {
+      const body = new FormData();
+      Object.entries(input).forEach(([name, value]) => body.append(name, String(value)));
+      body.append('evidence', file, 'chung-tu-hoan');
+      return request<TenantRefundPetition>(`${ownerRoot}/${id}/execution`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body,
+      });
+    },
+    ownerEvidence: (id: string, signal?: AbortSignal) =>
+      request<Blob>(`${ownerRoot}/${id}/evidence`, { signal }, 'blob'),
+  };
+}
 export function refundClient(request: ContractRequest) {
   return {
     own: (page = 1, pageSize = 20, signal?: AbortSignal) =>

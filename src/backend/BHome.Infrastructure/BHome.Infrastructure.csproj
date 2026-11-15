@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <EmbeddedResource Include="Persistence/Compact24/Migrations/TenantRefundPetitions.sql" LogicalName="BHome.Compact24.TenantRefundPetitions.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/ProactiveMaintenance.sql" LogicalName="BHome.Compact24.ProactiveMaintenance.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/MaintenanceCompensation.sql" LogicalName="BHome.Compact24.MaintenanceCompensation.sql" />
     <EmbeddedResource Include="Persistence/Compact24/Migrations/SePayIntegration.sql" LogicalName="BHome.Compact24.SePayIntegration.sql" />

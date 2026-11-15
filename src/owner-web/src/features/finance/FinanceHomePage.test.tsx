@@ -35,6 +35,7 @@ it('shows three visible work areas with direct links to each core finance task',
       links: [
         ['Đối soát thanh toán', '/payments'],
         ['Công nợ', '/debts'],
+        ['Yêu cầu hoàn tiền', '/tenant-refund-requests'],
       ],
     },
     {
@@ -58,7 +59,7 @@ it('shows three visible work areas with direct links to each core finance task',
     }
   }
 
-  expect(screen.getAllByRole('link')).toHaveLength(10);
+  expect(screen.getAllByRole('link')).toHaveLength(11);
 });
 
 it('keeps all destinations visible without speculative progress, figures or hidden tabs', () => {

@@ -72,6 +72,12 @@ const workAreas: FinanceWorkArea[] = [
         description: 'Tìm hóa đơn chưa thanh toán hoặc quá hạn',
         to: '/debts',
       },
+      {
+        label: 'Yêu cầu hoàn tiền',
+        description:
+          'Xem đơn khách thuê gửi, duyệt hoặc từ chối và ghi nhận chứng từ chuyển khoản hoàn',
+        to: '/tenant-refund-requests',
+      },
     ],
   },
   {

@@ -16,6 +16,9 @@ public sealed partial class FinancialReportRepository
           LEFT JOIN LATERAL (SELECT h->'state' state FROM jsonb_array_elements(r.history) WITH ORDINALITY e(h,n)
             WHERE h->>'recordType' IN ('ExcessReceiptRefundV1','SecurityDepositRefundV1','HoldingDepositRefundV1') ORDER BY n DESC LIMIT 1) latest ON true
           WHERE r.status='COMPLETED' AND (r.executed_at IS NULL OR r.executed_at<{end})
+            -- Petition confirmations do not become verified source-ledger refunds.
+            AND NOT (r.source_payment_id IS NULL AND r.source_deposit_contract_id IS NULL
+              AND r.history @> jsonb_build_array(jsonb_build_object('recordType','TenantRefundPetitionV1')))
         ), classified AS (
           SELECT r.*,CASE WHEN r.executed_at IS NOT NULL
             AND r.state->'upload'->>'objectKey'=r.execution_evidence_key

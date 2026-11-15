@@ -17,6 +17,7 @@ const financeWorkspaces = [
     label: 'Thu tiền & công nợ',
     tabs: [
       { path: '/payments', label: 'Thanh toán & đối soát' },
+      { path: '/tenant-refund-requests', label: 'Yêu cầu hoàn tiền' },
       { path: '/debts', label: 'Công nợ' },
     ],
   },
@@ -67,6 +68,13 @@ const guidance: Record<string, { purpose: string; next: string; nextPath: string
       note: 'Chỉ ghi nhận từ sao kê thủ công nếu ngân hàng đã nhận tiền nhưng BHOME chưa có giao dịch.',
       next: 'Theo dõi công nợ',
       nextPath: '/debts',
+    },
+    '/tenant-refund-requests': {
+      purpose:
+        'Xem yêu cầu Tenant gửi và đối chiếu nguồn tiền, hợp đồng liên quan trước khi quyết định.',
+      note: 'Sau khi chuyển khoản thật, Owner tải chứng từ và ghi nhận. BHOME không tự chuyển khoản.',
+      next: 'Đối soát giao dịch',
+      nextPath: '/payments',
     },
     '/debts': {
       purpose: 'Tìm hóa đơn còn phải thu, quá hạn và xem lịch sử thu tiền.',

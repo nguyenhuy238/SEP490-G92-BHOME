@@ -375,7 +375,10 @@ import {
 import { NotificationsScreen } from '../../../src/mobile/src/screens/NotificationsScreen';
 import { TenantDashboard } from '../../../src/mobile/src/screens/TenantDashboard';
 import { TenantFeaturesScreen } from '../../../src/mobile/src/screens/TenantFeaturesScreen';
-import { TenantFeatureDirectory } from '../../../src/mobile/src/components/TenantFeatureDirectory';
+import {
+  TenantFeatureDirectory,
+  tenantFeatureGroups,
+} from '../../../src/mobile/src/components/TenantFeatureDirectory';
 import { AccountSecurityScreen } from '../../../src/mobile/src/screens/AccountSecurityScreen';
 import { TenantInvoicesScreen } from '../../../src/mobile/src/screens/TenantInvoicesScreen';
 import { TenantPaymentPanel } from '../../../src/mobile/src/screens/TenantPaymentPanel';
@@ -3138,7 +3141,9 @@ it('keeps Home compact with four shortcuts and navigates to the catalog without 
 it('reuses the feature registry and exact contract intent on the dedicated catalog', () => {
   mocks.role = 'Tenant';
   render(<TenantFeatureDirectory all contractId={id} />);
-  expect(screen.getAllByRole('button')).toHaveLength(11);
+  expect(screen.getAllByRole('button')).toHaveLength(
+    tenantFeatureGroups.reduce((total, group) => total + group.items.length, 0),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Hợp đồng' }));
   expect(mocks.go).toHaveBeenLastCalledWith('contract', { contractId: id });
   fireEvent.click(screen.getByRole('button', { name: 'Bàn giao / Trả phòng' }));
@@ -3147,6 +3152,8 @@ it('reuses the feature registry and exact contract intent on the dedicated catal
   expect(mocks.go).toHaveBeenLastCalledWith('invoice', { focus: 'payment' });
   fireEvent.click(screen.getByRole('button', { name: 'Điều chỉnh hóa đơn' }));
   expect(mocks.go).toHaveBeenLastCalledWith('invoice', { focus: 'adjustment' });
+  fireEvent.click(screen.getByRole('button', { name: 'Hoàn tiền' }));
+  expect(mocks.go).toHaveBeenLastCalledWith('refund-requests');
   expect(
     screen.queryByText(/Chưa hỗ trợ gửi|Chưa lưu được kết quả|Chưa có dữ liệu máy chủ/),
   ).toBeNull();
