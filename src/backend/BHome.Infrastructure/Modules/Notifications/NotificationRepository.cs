@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.Modules.Notifications;
 internal sealed class NotificationRepository(BHomePersistenceContext db) : INotificationRepository
 {
     private IQueryable<UserNotification> Visible(NotificationScope s) => db.Set<UserNotification>().Where(n => n.RecipientUserId == s.Actor &&
-        (s.Owner && n.AudienceRole == Roles.Owner || s.Tenant && n.AudienceRole == Roles.Tenant || s.Staff && n.AudienceRole == Roles.Staff && n.Category == "Task" && n.LocationId != null &&
+        (s.Owner && n.AudienceRole == Roles.Owner || s.Tenant && n.AudienceRole == Roles.Tenant || s.Staff && n.AudienceRole == Roles.Staff && (n.Category == "Task" || n.Category == "Incident") && n.LocationId != null &&
          db.Locations.Any(l => l.Id == n.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a => a.LocationId == n.LocationId && a.StaffUserId == s.Actor && a.StartDate <= s.Today && a.EndDate >= s.Today)));
     private IQueryable<UserNotification> Unread(IQueryable<UserNotification> rows) => rows.Where(n => n.ReadAt == null && (n.SourceTaskNotificationId == null || !db.Set<OperationalTaskNotification>().Any(old => old.Id == n.SourceTaskNotificationId && old.ReadAt != null)));
     public Task<int> UnreadAsync(NotificationScope s, CancellationToken t) => Unread(Visible(s)).CountAsync(t);
@@ -43,6 +43,13 @@ internal sealed class NotificationRepository(BHomePersistenceContext db) : INoti
             "Contract" => await db.Set<Contract>().AnyAsync(c => c.Id == n.RelatedObjectId && (s.Owner || s.Tenant && c.TenantUserId == s.Actor), t),
             "MeterTask" => await db.Set<OperationalTask>().AnyAsync(task => task.Id == n.RelatedObjectId && task.Kind == OperationalTaskKind.MeterReading && (s.Owner || s.Staff && task.Meter.Room.Location.IsActive && (task.AutomationPlanId == null || task.AssignedStaffUserId == s.Actor) && db.StaffLocationAssignments.Any(a => a.LocationId == task.Meter.Room.LocationId && a.StaffUserId == s.Actor && a.StartDate <= s.Today && a.EndDate >= s.Today)), t),
             "OperationalTask" => await db.Set<OperationalTask>().AnyAsync(task => task.Id == n.RelatedObjectId && task.Kind == OperationalTaskKind.AdHoc && (s.Owner || s.Staff && task.Location.IsActive && db.StaffLocationAssignments.Any(a => a.LocationId == task.LocationId && a.StaffUserId == s.Actor && a.StartDate <= s.Today && a.EndDate >= s.Today)), t),
+            "Incident" => await db.Set<BHome.Domain.IncidentMaintenance.IncidentReport>().AnyAsync(r => r.Id == n.RelatedObjectId &&
+                (s.Owner || s.Tenant && r.ReporterRole == "Tenant" && r.ReporterId == s.Actor || s.Staff &&
+                    db.Locations.Any(l => l.Id == r.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a =>
+                        a.LocationId == r.LocationId && a.StaffUserId == s.Actor && a.StartDate <= s.Today && a.EndDate >= s.Today)), t),
+            "WorkOrder" => await db.Set<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>().AnyAsync(w => w.Id == n.RelatedObjectId &&
+                (s.Owner || s.Staff && db.Locations.Any(l => l.Id == w.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a =>
+                    a.LocationId == w.LocationId && a.StaffUserId == s.Actor && a.StartDate <= s.Today && a.EndDate >= s.Today)), t),
             "AutomationExecution" => s.Owner && await db.Set<BillingAutomationExecution>().AnyAsync(e => e.Id == n.RelatedObjectId, t),
             _ => false
         };

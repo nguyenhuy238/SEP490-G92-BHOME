@@ -9,7 +9,7 @@ using BHome.Domain.PropertyManagement;
 
 namespace BHome.Application.IncidentMaintenance;
 
-public sealed class IncidentService(IIncidentRepository repository, ICurrentUser user, PermissionAccess permissions,
+public sealed partial class IncidentService(IIncidentRepository repository, ICurrentUser user, PermissionAccess permissions,
     IIncidentFiles files, IBackgroundJobQueue jobs, TimeProvider clock)
 {
     public const int MaximumImageBytes = 5_000_000;
@@ -41,7 +41,7 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
         if (scope.Tenant && report.ReporterRole == Roles.Tenant && report.ReporterId == Actor) return scope with { Staff = false };
         throw IncidentException.Missing();
     }
-    private async Task RequireExecutionAsync(IncidentReport report, MaintenanceWorkOrder work, CancellationToken t)
+    private async Task RequireExecutionAsync(MaintenanceContext report, MaintenanceWorkOrder work, CancellationToken t)
     {
         await PermitAsync(Permissions.WorkOrders.Execute, t);
         if (work.AssignedStaffId != Actor || !await repository.StaffAssignedAsync(Actor, report.LocationId, Today, t))
@@ -109,8 +109,8 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
     {
         await PermitAsync(Permissions.WorkOrders.View, t);
         var work = await repository.WorkOrderAsync(id, t) ?? throw IncidentException.Missing();
-        var report = await repository.IncidentAsync(work.IncidentId, t) ?? throw IncidentException.Missing();
-        var scope = await AccessAsync(report, t);
+        var report = await ContextAsync(work, t);
+        var scope = await WorkAccessAsync(report, t);
         if (!scope.Owner && !scope.Staff) throw IncidentException.Missing();
         return IncidentProjection.Work(work, Now, scope.Owner || work.AssignedStaffId == Actor);
     }
@@ -303,7 +303,9 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
                 IncidentId = id,
                 LocationId = report.LocationId,
                 RoomId = report.RoomId,
+                CommonArea = report.CommonArea,
                 AssetId = report.AssetId,
+                Description = report.Description,
                 AssignedStaffId = input.StaffId,
                 ExpectedOutcome = Text(input.ExpectedOutcome, 1, 4000),
                 TargetCompletionAt = input.TargetCompletionAt.ToUniversalTime()
@@ -364,26 +366,29 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
         }, t);
 
     private async Task<IncidentCommandResult> WorkMutationAsync(Guid id, int version, Guid key, string operation, object input,
-        string permission, bool execute, Func<IncidentReport, MaintenanceWorkOrder, Task<IncidentCommandResult>> work, CancellationToken t)
+        string permission, bool execute, Func<MaintenanceContext, MaintenanceWorkOrder, Task<IncidentCommandResult>> work, CancellationToken t)
     {
         await PermitAsync(permission, t);
         var initial = await repository.WorkOrderAsync(id, t) ?? throw IncidentException.Missing();
-        var report = await repository.IncidentAsync(initial.IncidentId, t) ?? throw IncidentException.Missing();
-        await AccessAsync(report, t);
+        var report = await ContextAsync(initial, t);
+        await WorkAccessAsync(report, t);
         if (execute) await RequireExecutionAsync(report, initial, t);
         return await CommandAsync(report.LocationId, report.RoomId, key, operation + ":" + id, input, async () =>
         {
             await PermitAsync(permission, t);
             var current = await repository.WorkOrderAsync(id, t) ?? throw IncidentException.Missing();
-            var source = await repository.IncidentAsync(current.IncidentId, t) ?? throw IncidentException.Missing();
-            await AccessAsync(source, t);
+            var source = await ContextAsync(current, t);
+            await WorkAccessAsync(source, t);
             if (execute) await RequireExecutionAsync(source, current, t);
         }, async () =>
         {
             var current = await repository.WorkOrderAsync(id, t) ?? throw IncidentException.Missing();
-            var source = await repository.IncidentAsync(current.IncidentId, t) ?? throw IncidentException.Missing();
-            Version(version, current.Version); Open(source);
-            var result = await work(source, current); current.Version++; source.Version++; return result;
+            var source = await ContextAsync(current, t);
+            Version(version, current.Version);
+            if (source.Report is { } incident) Open(incident);
+            var result = await work(source, current); current.Version++;
+            if (source.Report is { } changed) changed.Version++;
+            return result;
         }, t);
     }
 
@@ -394,7 +399,7 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
             if (!await repository.StaffAssignedAsync(input.StaffId, report.LocationId, Today, t)) throw IncidentException.Conflict("staff_unavailable");
             var previous = order.AssignedStaffId; order.AssignedStaffId = input.StaffId;
             var activity = Activity(report, order, "reassigned", Text(input.Reason, 1, 2000), false, new { Previous = previous, order.AssignedStaffId });
-            await NotifyAsync(report, activity, [order.AssignedStaffId], t); return new(report.Id, id);
+            await NotifyAsync(report, activity, [order.AssignedStaffId], t); return new(report.IncidentId, id);
         }, t);
 
     public Task<IncidentCommandResult> ProposeAsync(Guid id, RepairProposal input, Guid key, CancellationToken t) =>
@@ -406,8 +411,9 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
             var evidence = await SelectEvidenceAsync(report, order, IncidentEvidenceKind.Inspection, input.EvidenceIds, t);
             Transition(order.Propose); order.InspectionResult = inspection; order.ProposedSolution = solution;
             order.EstimatedCost = input.EstimatedCost; order.EstimatedMinutes = input.EstimatedMinutes;
+            order.UsesMaterials = input.UsesMaterials;
             var activity = Activity(report, order, "proposal_submitted", "", false, new { input, order.ProposalVersion }); Link(evidence, activity.Id);
-            await NotifyAsync(report, activity, await repository.RecipientsAsync(report.LocationId, Today, false, t), t); return new(report.Id, id);
+            await NotifyAsync(report, activity, await repository.RecipientsAsync(report.LocationId, Today, false, t), t); return new(report.IncidentId, id);
         }, t);
 
     public Task<IncidentCommandResult> PlanAsync(Guid id, PlanDecision input, Guid key, CancellationToken t) =>
@@ -419,7 +425,7 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
             Transition(() => order.DecidePlan(input.Approve.Value, Actor, Now));
             var activity = Activity(report, order, input.Approve.Value ? "plan_approved" : "plan_rejected", input.Reason?.Trim() ?? "", false,
                 new { order.ProposalVersion, input.Approve, order.Vendor });
-            await NotifyAsync(report, activity, [order.AssignedStaffId], t); return new(report.Id, id);
+            await NotifyAsync(report, activity, [order.AssignedStaffId], t); return new(report.IncidentId, id);
         }, t);
 
     public Task<IncidentCommandResult> ActAsync(Guid id, string action, WorkOrderAction input, Guid key, CancellationToken t) =>
@@ -449,15 +455,18 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
             if (action == "submit") { order.Result = note; Transition(() => order.Submit(activity.Id)); }
             Link(evidence, activity.Id);
             var recipients = action is "submit" or "blocker" ? await repository.RecipientsAsync(report.LocationId, Today, false, t) : [order.AssignedStaffId];
-            await NotifyAsync(report, activity, recipients, t); return new(report.Id, id);
+            await NotifyAsync(report, activity, recipients, t); return new(report.IncidentId, id);
         }, t);
 
     public Task<IncidentCommandResult> VerifyAsync(Guid id, MaintenanceVerification input, Guid key, CancellationToken t) =>
         WorkMutationAsync(id, input.Version, key, "verify", input, Permissions.WorkOrders.Verify, false, async (report, order) =>
         {
             Money(input.ActualCost, true); var result = Text(input.Result);
+            if (order.AssetProposalPending) throw IncidentException.Conflict("asset_proposal_pending");
+            if (order.FastRepairPolicyVersion is not null && (input.ActualCost != 0 || order.UsesMaterials))
+                throw IncidentException.Conflict("fast_repair_requires_normal_approval");
             if (order.EstimatedCost != input.ActualCost) _ = Text(input.CostVarianceReason, 1, 2000);
-            var evidence = (await repository.EvidenceAsync(report.Id, t)).Where(e => e.WorkOrderId == id && e.Kind == IncidentEvidenceKind.Completion &&
+            var evidence = (await repository.WorkEvidenceAsync(id, t)).Where(e => e.Kind == IncidentEvidenceKind.Completion &&
                 e.ActivityId != null && e.ActivityId == order.CompletionActivityId).ToArray();
             if (evidence.Length == 0) throw IncidentException.Conflict("completion_evidence_required");
             foreach (var image in evidence) await files.CopyAsync(image.ObjectKey, Stream.Null, t);
@@ -466,7 +475,7 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
             await CompleteAssetAsync(report, order, activity, input.AssetCondition, input.AssetStatus, input.ActualCost!.Value, t);
             Expense(report, order, null, "WorkOrder", id, input.ActualCost.Value);
             await TryResolveAsync(report, activity, t);
-            await NotifyAsync(report, activity, [order.AssignedStaffId], t); return new(report.Id, id);
+            await NotifyAsync(report, activity, [order.AssignedStaffId], t); return new(report.IncidentId, id);
         }, t);
 
     public Task<IncidentCommandResult> CancelWorkOrderAsync(Guid id, IncidentDecision input, Guid key, CancellationToken t) =>
@@ -480,7 +489,7 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
                 await CompleteAssetAsync(report, order, activity, input.AssetCondition, input.AssetStatus.Value, 0, t);
             }
             await TryResolveAsync(report, activity, t);
-            await NotifyAsync(report, activity, [order.AssignedStaffId], t); return new(report.Id, id);
+            await NotifyAsync(report, activity, [order.AssignedStaffId], t); return new(report.IncidentId, id);
         }, t);
 
     public Task<IncidentCommandResult> DirectAsync(Guid id, DirectCompletion input, Guid key, CancellationToken t) =>
@@ -505,8 +514,9 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
         if ((await repository.EmergencyActionsAsync(report.Id, t)).Any(e => e.RequestedCost.HasValue && e.CostApproved is null))
             throw IncidentException.Conflict("emergency_cost_decision_required");
     }
-    private async Task TryResolveAsync(IncidentReport report, IncidentActivity cause, CancellationToken t)
+    private async Task TryResolveAsync(MaintenanceContext context, IncidentActivity cause, CancellationToken t)
     {
+        if (context.Report is not { } report) return;
         // Queries include current tracked changes; concurrent writes share the Location transaction lock.
         var orders = await repository.WorkOrdersAsync(report.Id, t);
         if (!IncidentReport.CanResolve(orders.Select(w => w.Status).ToArray()) ||
@@ -515,7 +525,7 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
         var activity = Activity(report, null, "resolved", report.ResolutionNote, true, new { CauseActivityId = cause.Id });
         await NotifyAsync(report, activity, [report.ReporterId], t);
     }
-    private async Task CompleteAssetAsync(IncidentReport report, MaintenanceWorkOrder? order, IncidentActivity activity,
+    private async Task CompleteAssetAsync(MaintenanceContext report, MaintenanceWorkOrder? order, IncidentActivity activity,
         string? condition, AssetStatus outcome, decimal actualCost, CancellationToken t)
     {
         if (outcome is not (AssetStatus.Active or AssetStatus.NeedsRepair or AssetStatus.Retired)) throw IncidentException.Invalid("invalid_asset_outcome");
@@ -535,7 +545,7 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
         }
         repository.Add(new MaintenanceHistory
         {
-            IncidentId = report.Id,
+            IncidentId = report.IncidentId,
             WorkOrderId = order?.Id,
             ActivityId = activity.Id,
             LocationId = report.LocationId,
@@ -550,12 +560,12 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
             VerifiedAt = Now
         });
     }
-    private void Expense(IncidentReport report, MaintenanceWorkOrder? order, Guid? emergency, string sourceType, Guid source, decimal amount)
+    private void Expense(MaintenanceContext report, MaintenanceWorkOrder? order, Guid? emergency, string sourceType, Guid source, decimal amount)
     {
         if (amount == 0) return;
         repository.Add(new MaintenanceExpense
         {
-            IncidentId = report.Id,
+            IncidentId = report.IncidentId,
             LocationId = report.LocationId,
             RoomId = report.RoomId,
             AssetId = report.AssetId,
@@ -569,11 +579,11 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
             ConfirmedAt = Now
         });
     }
-    private IncidentActivity Activity(IncidentReport report, MaintenanceWorkOrder? work, string action, string note, bool tenantVisible, object data)
+    private IncidentActivity Activity(MaintenanceContext report, MaintenanceWorkOrder? work, string action, string note, bool tenantVisible, object data)
     {
         var activity = new IncidentActivity
         {
-            IncidentId = report.Id,
+            IncidentId = report.IncidentId,
             WorkOrderId = work?.Id,
             ActorId = Actor,
             Action = action,
@@ -587,27 +597,52 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
             repository.Audit(Actor, "Incident_" + action, activity.Id, Now);
         return activity;
     }
-    private async Task NotifyAsync(IncidentReport report, IncidentActivity activity, IReadOnlyList<Guid> recipients, CancellationToken t)
+    private async Task NotifyAsync(MaintenanceContext report, IncidentActivity activity, IReadOnlyList<Guid> recipients, CancellationToken t)
     {
         var notifications = recipients.Distinct().Select(recipient => new IncidentNotification
         {
-            IncidentId = report.Id,
+            IncidentId = report.IncidentId,
+            WorkOrderId = activity.WorkOrderId,
+            LocationId = report.LocationId,
             ActivityId = activity.Id,
             RecipientId = recipient,
             Event = activity.Action,
             HighPriority = report.Severity == IncidentSeverity.Emergency
         }).ToArray();
-        foreach (var notification in notifications) repository.Add(notification);
+        foreach (var notification in notifications)
+        {
+            repository.Add(notification);
+            var role = await repository.ActiveRoleAsync(notification.RecipientId, Roles.Owner, t) ? Roles.Owner :
+                await repository.ActiveRoleAsync(notification.RecipientId, Roles.Staff, t) ? Roles.Staff : Roles.Tenant;
+            repository.Add(new BHome.Domain.Notifications.UserNotification
+            {
+                RecipientUserId = notification.RecipientId,
+                AudienceRole = role,
+                LocationId = report.LocationId,
+                Category = "Incident",
+                EventKey = "incident:" + notification.Id,
+                EventType = notification.EventType,
+                Priority = notification.HighPriority ? "P0" : "P1",
+                Channels = BHome.Application.Notifications.NotificationEmailPolicy.Channels(notification.EventType, role, ["IN_APP", "PUSH"]),
+                Title = notification.HighPriority ? "Sự cố khẩn cấp có cập nhật" : "Sự cố và bảo trì có cập nhật",
+                Summary = notification.HighPriority ? "Ưu tiên an toàn và liên hệ cơ quan khẩn cấp phù hợp nếu có nguy hiểm tính mạng. Mở hồ sơ để ghi nhận ứng phó." : "Mở hồ sơ để xem nội dung và thao tác trong phạm vi được phân công.",
+                RelatedObjectType = report.IncidentId.HasValue ? "Incident" : "WorkOrder",
+                RelatedObjectId = report.IncidentId ?? activity.WorkOrderId ?? throw IncidentException.Missing(),
+                CreatedAt = Now
+            });
+        }
         await repository.FlushAsync(t);
         foreach (var notification in notifications)
             await jobs.EnqueueAsync(new("incident.notification", notification.Id.ToString("N"), JsonSerializer.Serialize(new { NotificationId = notification.Id })), t);
     }
 
-    private async Task<IReadOnlyList<IncidentEvidence>> SelectEvidenceAsync(IncidentReport report, MaintenanceWorkOrder? order,
+    private async Task<IReadOnlyList<IncidentEvidence>> SelectEvidenceAsync(MaintenanceContext report, MaintenanceWorkOrder? order,
         IncidentEvidenceKind kind, Guid[]? ids, CancellationToken t)
     {
         if (ids is null || ids.Length > MaximumImages || ids.Distinct().Count() != ids.Length) throw IncidentException.Invalid("invalid_incident_evidence");
-        var rows = (await repository.EvidenceAsync(report.Id, t)).Where(e => ids.Contains(e.Id)).ToArray();
+        var available = order is not null ? await repository.WorkEvidenceAsync(order.Id, t) :
+            await repository.EvidenceAsync(report.IncidentId ?? throw IncidentException.Missing(), t);
+        var rows = available.Where(e => ids.Contains(e.Id)).ToArray();
         if (rows.Length != ids.Length || rows.Any(e => e.WorkOrderId != order?.Id || e.Kind != kind || e.UploadedById != Actor || e.ActivityId is not null))
             throw IncidentException.Invalid("invalid_incident_evidence");
         foreach (var row in rows) await files.CopyAsync(row.ObjectKey, Stream.Null, t);
@@ -615,12 +650,12 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
     }
     private static void Link(IEnumerable<IncidentEvidence> rows, Guid activity)
     { foreach (var row in rows) row.ActivityId = activity; }
-    private async Task<IncidentEvidence> StoreAsync(IncidentReport report, Guid? work, IncidentEvidenceKind kind, Guid? activity,
+    private async Task<IncidentEvidence> StoreAsync(MaintenanceContext report, Guid? work, IncidentEvidenceKind kind, Guid? activity,
         byte[] bytes, string type, string hash, CancellationToken t)
     {
         var evidence = new IncidentEvidence
         {
-            IncidentId = report.Id,
+            IncidentId = report.IncidentId,
             WorkOrderId = work,
             Kind = kind,
             ActivityId = activity,
@@ -628,7 +663,7 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
             Length = bytes.Length,
             ContentType = type,
             Sha256 = hash,
-            ObjectKey = "incident-evidence/" + report.Id.ToString("N") + "/" + Guid.NewGuid().ToString("N")
+            ObjectKey = "incident-evidence/" + (report.IncidentId ?? work ?? throw IncidentException.Missing()).ToString("N") + "/" + Guid.NewGuid().ToString("N")
         };
         await files.PutAsync(report.LocationId, evidence.ObjectKey, bytes, type, t); repository.Add(evidence); return evidence;
     }
@@ -727,7 +762,9 @@ public sealed class IncidentService(IIncidentRepository repository, ICurrentUser
     {
         await PermitAsync(Permissions.Incidents.View, t);
         var row = await repository.NotificationAsync(id, Actor, t) ?? throw IncidentException.Missing();
-        await GetAsync(row.IncidentId, t); row.ReadAt ??= Now; await repository.FlushAsync(t);
+        if (row.IncidentId is { } incident) await GetAsync(incident, t);
+        else await WorkOrderAsync(row.WorkOrderId ?? throw IncidentException.Missing(), t);
+        row.ReadAt ??= Now; await repository.FlushAsync(t);
     }
 }
 
@@ -740,5 +777,7 @@ public static class IncidentProjection
         w.LocationId, w.RoomId, w.AssetId, w.AssignedStaffId, w.ExpectedOutcome, w.TargetCompletionAt, w.IsOpen && w.TargetCompletionAt < now,
         w.Status.ToString(), w.InspectionResult, w.ProposedSolution, w.EstimatedMinutes, financial ? w.EstimatedCost : null,
         financial ? w.Vendor : null, w.ProposalVersion, w.PlanApproved, w.Status == WorkOrderStatus.PendingApproval && w.PlanApproved,
-        w.ApprovedById, w.ApprovedAt, w.Result, financial ? w.ActualCost : null, w.VerifiedById, w.VerifiedAt, w.Version);
+        w.ApprovedById, w.ApprovedAt, w.Result, financial ? w.ActualCost : null, w.VerifiedById, w.VerifiedAt, w.Version,
+        w.Source, w.Description, w.CommonArea, w.UsesMaterials, w.FastRepairPolicyVersion, w.FastRepairCategory,
+        w.AssetProposalPending, w.ProposedAssetId, w.ProposedAssetName, w.ProposedAssetCategory, w.ProposedAssetCondition);
 }

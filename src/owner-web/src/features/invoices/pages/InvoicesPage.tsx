@@ -942,7 +942,11 @@ export function LiveInvoicesPage() {
                     </>
                   ),
                 },
-                { label: 'Kỳ hóa đơn', render: (item) => item.billingPeriod.slice(0, 7) },
+                {
+                  label: 'Kỳ hóa đơn',
+                  render: (item) =>
+                    item.type === 'AD_HOC' ? 'Hóa đơn riêng' : item.billingPeriod.slice(0, 7),
+                },
                 {
                   label: 'Trạng thái',
                   render: (item) => (

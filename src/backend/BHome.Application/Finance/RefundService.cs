@@ -84,12 +84,13 @@ public sealed record RefundSource(Guid? SourcePaymentId,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal? VerifiedDepositAmount = null,
     DepositDeductionPlan? DepositDeductions = null,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal ApprovedDepositOffsets = 0,
-    RefundExternalBeneficiary? ExternalBeneficiary = null);
+    RefundExternalBeneficiary? ExternalBeneficiary = null,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal MaintenanceDeductions = 0);
 public sealed record RefundSourceData(decimal Excess, bool IsDevelopmentDemo, IReadOnlyList<RefundPerson> Beneficiaries,
     IReadOnlyList<RefundRecord> Requests, Guid? DepositContractId = null, string? FinancialReference = null,
     IReadOnlyList<string>? Blockers = null, decimal? AvailableDeposit = null, decimal? VerifiedDeposit = null,
     DepositDeductionPlan? DepositDeductions = null, decimal ApprovedDepositOffsets = 0, string? DepositClassification = null,
-    Guid? ReceiptExcessDispositionId = null, RefundExternalBeneficiary? ExternalBeneficiary = null);
+    Guid? ReceiptExcessDispositionId = null, RefundExternalBeneficiary? ExternalBeneficiary = null, decimal MaintenanceDeductions = 0);
 public interface IRefundRepository
 {
     Task<BHome.Application.PropertyManagement.PagedResult<TenantRefundView>> TenantListAsync(Guid tenant, int page, int pageSize, CancellationToken t);
@@ -146,7 +147,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 deposit ? source.AvailableDeposit : Math.Max(0, source.Excess - paid - held),
                 source.IsDevelopmentDemo, source.Beneficiaries, source.Requests.Select(View).ToArray(),
                 source.DepositContractId, source.FinancialReference, source.Blockers,
-                deposit ? source.VerifiedDeposit ?? source.Excess : null, source.DepositDeductions, source.ApprovedDepositOffsets, source.ExternalBeneficiary);
+                deposit ? source.VerifiedDeposit ?? source.Excess : null, source.DepositDeductions, source.ApprovedDepositOffsets, source.ExternalBeneficiary, source.MaintenanceDeductions);
         }, t);
     }
     public Task<RefundView> CreateAsync(Guid sourceId, RefundInput input, Guid key, CancellationToken t)
@@ -201,7 +202,7 @@ public sealed class RefundService(IRefundRepository repository, IObjectStorage s
                 throw new FinanceException(409, "refund_source_changed");
             if (deposit is not null && (source.DepositDeductions is { } plan
                 ? deposit.ExpectedDeductionPlanId != plan.Id || !deposit.DeductionsConfirmed || deposit.NoDeductionsConfirmed
-                : source.ApprovedDepositOffsets > 0
+                : source.ApprovedDepositOffsets + source.MaintenanceDeductions > 0
                     ? !deposit.DeductionsConfirmed || deposit.NoDeductionsConfirmed || deposit.ExpectedDeductionPlanId is not null
                     : !deposit.NoDeductionsConfirmed || deposit.ExpectedDeductionPlanId is not null || deposit.DeductionsConfirmed))
                 throw new FinanceException(409, "deposit_deduction_review_required");

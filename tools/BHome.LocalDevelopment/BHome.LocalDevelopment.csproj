@@ -7,6 +7,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="BHome.IntegrationTests" />
     <ProjectReference Include="../../src/backend/BHome.Infrastructure/BHome.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

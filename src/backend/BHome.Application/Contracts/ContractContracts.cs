@@ -199,7 +199,8 @@ public sealed record ContractSettlementSummary(Guid ContractId, Guid DepositCont
     string TransferVerificationStatus = "PendingReview", SettlementCalculation? Calculation = null, string FinancialReference = "",
     DepositDeductionPlan? DepositDeductions = null, string ObligationReference = "",
     IReadOnlyList<SettlementReceivableBalance>? Receivables = null, SettlementChargeReview? ChargeReview = null,
-    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal ApprovedDepositOffsets = 0);
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal ApprovedDepositOffsets = 0,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal MaintenanceDeductions = 0);
 public interface IContractSettlementDetails
 {
     Task<ContractSettlementSummary> SummaryAsync(Guid contractId, CancellationToken t);

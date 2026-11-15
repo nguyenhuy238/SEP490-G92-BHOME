@@ -1,5 +1,72 @@
 # Incident và Maintenance API
 
+## Cập nhật được phê duyệt ngày 15/11/2026
+
+Phần cập nhật này áp dụng yêu cầu BF-07 mới của người dùng. Runtime hiện hành dùng Compact24,
+với `operational_tasks.task_type='WORK_ORDER'`, lịch sử JSONB và 24 bảng public.
+Các mô tả migration 10 bảng bên dưới thuộc triển khai legacy.
+
+Work Order trả `incidentId` nullable, `source` là `Incident` hoặc `Proactive`, cùng `description`,
+`commonArea`, `usesMaterials`, `fastRepairPolicyVersion`, `fastRepairCategory` và trạng thái đề xuất Asset.
+Record lịch sử cũ thiếu source được đọc thành `Incident`. `workOrderId` lọc chính xác danh sách và lịch sử bảo trì.
+
+| Phương thức và route trong `/api/v1/work-orders`     | Quyền và hành vi                                                                                                                                                              |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET `/assignment?locationId={id}`                    | Owner, trả `staffId` nullable và `available` theo phân công hôm nay                                                                                                           |
+| POST `/`                                             | Owner tạo proactive bằng `locationId`, một trong `roomId/commonArea`, `assetId` tùy chọn, `description`, `expectedOutcome`, `targetCompletionAt` có offset. Server chọn Staff |
+| GET `/{id}/history`                                  | Owner/Staff đúng Location, phân trang; Staff không nhận internal JSON                                                                                                         |
+| GET `/{id}/evidence`, GET `/{id}/evidence/{imageId}` | Metadata và ảnh private cho Owner/Staff đúng scope                                                                                                                            |
+| PUT `/{id}/evidence?kind=2\|3`                       | Staff được giao và còn phụ trách Location, binary PNG/JPEG, tối đa 5.000.000 byte                                                                                             |
+| GET `/fast-repair-policy`                            | Owner/Staff, version 0 và danh sách rỗng khi chưa cấu hình                                                                                                                    |
+| POST `/fast-repair-policy`                           | Owner, `version`, `activeCategories`; toàn hệ thống, không tự bật gợi ý                                                                                                       |
+| POST `/{id}/fast-repair-start`                       | Assigned Staff, `version`, `category`, `inspectionResult`, `solution`, `estimatedMinutes`, `estimatedCost:0`, `usesMaterials:false`                                           |
+| POST `/{id}/fast-repair-fallback`                    | Assigned Staff, `version`, `note`; trở về Assigned và phải gửi phương án thường                                                                                               |
+| POST `/{id}/asset-proposal`                          | Assigned Staff, `version`, `assetId` hiện có hoặc `name/category/condition` mới, `reason`                                                                                     |
+| POST `/{id}/asset-decision`                          | Owner, `version`, `approve`, `reason`; xác nhận đúng scope trước khi liên kết/tạo Asset                                                                                       |
+
+Mọi POST/PUT mutation cần UUID `Idempotency-Key`. Tạo proactive và quyết định chính sách trả
+`IncidentCommandResult` với `incidentId:null`. Fast Repair giữ căn cứ phiên bản chính sách,
+không ghi Owner approval cho từng phương án, vẫn cần ảnh hoàn tất và Owner verification.
+Chi phí hoặc vật tư phát sinh phải chuyển về luồng duyệt thường. Verify Fast Repair chỉ chấp nhận 0 VND.
+Staff có thể khai báo `usesMaterials` trong phương án thường. Không tạo OPEX 0 VND.
+
+### Bồi thường
+
+Các route dưới `/{workOrderId}/compensation` chỉ cho Owner còn hoạt động.
+
+| Phương thức và route | Hành vi                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| GET `/`              | Quyết định hiện hành hoặc JSON `null` HTTP 200                                                                                 |
+| GET `/contracts`     | Tối đa 100 Contract thực sự thuộc Room, gồm các tenancy đã được kích hoạt trong lịch sử                                        |
+| GET `/history`       | Tối đa 100 phiên bản quyết định mới nhất, giữ nguyên số tiền, lý do, actor và timestamp từng lần                               |
+| POST `/`             | `contractId`, `amount` chuỗi/số nguyên VND, `collectionMethod` Invoice/Deposit, `dueDate` cho Invoice, `reason`, `evidenceIds` |
+| POST `/deduct`       | `version`, `reason`; chỉ DepositPending, sau Owner duyệt trả phòng và xác nhận inspection, recheck đủ toàn bộ cọc              |
+| POST `/cancel`       | `version`, `reason`; hủy DepositPending, giữ lịch sử và giải phóng phần đang chờ                                               |
+
+Chỉ Work Order Verified trong Room có actual cost mới tạo được nghĩa vụ, với số tiền dương
+không vượt actual cost và bằng chứng đã linked thuộc công việc. Một quyết định cho mỗi Work Order,
+và đúng một phương thức thu. Invoice được tạo Draft, thêm line rồi Final trong cùng transaction,
+`invoice_type='AD_HOC'`, không sửa periodic invoice. InvoiceRecipient chốt quyền theo Contract
+được chọn, sử dụng Payment/QR/đối soát và payer history hiện hữu. Tiền bồi thường trả dạng chuỗi decimal.
+
+DepositPending chưa khấu trừ. Settlement/refund bị chặn khi còn quyết định chờ xử lý.
+Sau khấu trừ, summary bổ sung `maintenanceDeductions`; chỉ hoàn phần cọc còn lại theo workflow cũ.
+Database guard ngăn dùng lại phần cọc cho allocation/refund. Thiếu cọc trả conflict, không tách khoản thu.
+Đã phát hành Invoice hoặc đã khấu trừ thì API bồi thường chặn sửa/hủy bằng
+`compensation_collected_or_invoice_adjustment_required`. Quy trình đảo tiền sau thu vẫn cần quyết định nghiệp vụ.
+
+API Incident reporting nhận cả representative và co-occupant có account gắn Resident trong
+Contract còn hiệu lực. Quyền không suy ra từ Room ID đơn thuần. Notification in-app được ghi cùng
+transaction, có target Incident/WorkOrder được authorize lại. External delivery giữ trạng thái thực của provider.
+
+### Triển khai Compact24
+
+Áp EF migrations `20261115000100_ProactiveMaintenance`, `20261115000200_MaintenanceCompensation`
+và `20261115000300_MaintenanceExecutionProjection` theo quy trình migration hiện có.
+Migration đầu mở source proactive và guard Fast Repair. Migration hai bổ sung guard bồi thường/cọc.
+Migration ba đồng bộ EF snapshot của các projection. Không thêm bảng nghiệp vụ.
+SQL bootstrap hiện hành và công cụ property upgrade đã được đồng bộ guard.
+
 BF-07 / FE-06 / UC-26–30; GBR-01–03,11–14,18; DBR-09/10/13. Nguồn: SRS local §2.7, §4.1–4.5, FE-06 §6; Report 4 §6; [quyết định D1–D8 A](INCIDENT_CORE_API_PROPOSAL.md) được người dùng chốt ngày 30/10/2026.
 
 Chỉ Backend. Owner toàn hệ thống, Staff theo phân công Location hiện hành; Tenant theo `Contract.TenantUserId` và kỳ cư trú của representative trong Active Contract. Không dùng `Resident.OwnerUserId` để xác định Tenant. Co-occupant chưa có account mapping không được tự cấp quyền.

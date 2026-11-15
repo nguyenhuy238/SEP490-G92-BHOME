@@ -313,5 +313,5 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
         i.BillingPeriod, i.Status.ToString(), i.Version, i.Total, i.MissingInputs, i.ScheduledFinalDate, i.DueDate, i.FinalizedAt,
         i.RepresentativeTenantUserId, i.Lines.OrderBy(l => l.ChargeCode).Select(l => new InvoiceLineView(l.Id, l.Category.ToString(),
             l.ChargeCode, l.Name, l.PolicyId, l.PolicyVersion, l.RateDate, l.Rate, l.Quantity, l.OccupiedDays, l.PeriodDays,
-            l.Amount, l.MeterReadingId, l.PreviousReading, l.ConfirmedReading, l.CalculatedAmount, l.CorrectionRequestId, l.UtilityCalculationSnapshot)).ToArray());
+            l.Amount, l.MeterReadingId, l.PreviousReading, l.ConfirmedReading, l.CalculatedAmount, l.CorrectionRequestId, l.UtilityCalculationSnapshot)).ToArray(), i.Type);
 }

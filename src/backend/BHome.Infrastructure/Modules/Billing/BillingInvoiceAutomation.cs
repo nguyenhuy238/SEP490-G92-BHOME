@@ -1,3 +1,4 @@
+using BHome.Infrastructure.Billing;
 using BHome.Application.Billing;
 using BHome.Application.IdentityAccess;
 using BHome.Application.PropertyManagement;
@@ -9,7 +10,7 @@ internal sealed partial class BillingAutomationEngine
 {
     private async Task<int> FinalizeDraft(BillingAutomationPlan p, DateOnly period, Guid room, List<object> errors, CancellationToken t)
     {
-        db.ChangeTracker.Clear(); var invoice = await db.Set<Invoice>().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
+        db.ChangeTracker.Clear(); var invoice = await db.PeriodicInvoices().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
         if (invoice is null) { errors.Add(new { roomId = room, code = "draft_invoice_required" }); return 0; }
         if (invoice.Status == InvoiceStatus.Final) return 1;
         try
@@ -31,7 +32,7 @@ internal sealed partial class BillingAutomationEngine
     }
     private async Task<int> GenerateDraft(BillingAutomationPlan p, DateOnly period, Guid room, List<object> errors, CancellationToken t)
     {
-        db.ChangeTracker.Clear(); var existing = await db.Set<Invoice>().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
+        db.ChangeTracker.Clear(); var existing = await db.PeriodicInvoices().AsNoTracking().SingleOrDefaultAsync(i => i.RoomId == room && i.BillingPeriod == period, t);
         try
         {
             InvoiceView invoice;

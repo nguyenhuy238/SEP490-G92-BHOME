@@ -13,9 +13,9 @@ assumptions:
     status: supported
     claim: The local handler models only the documented Sandbox request used by this gateway.
     reason: It does not model provider availability, production approval, account balance or mobile-network delivery.
-    verification: On 2026-11-13 the real LocalDevelopment provider probe used HttpClientFactory through the loopback simulation; the simulation logged a POST and returned 200, and the adapter reported SandboxAccepted. Owning workspace search was skipped because Postman CLI is signed out. This establishes caller serialization against this stand-in only.
+    verification: On 2026-11-13 the real LocalDevelopment provider probe used HttpClientFactory through the loopback simulation. The simulation logged a POST and returned 200, and the adapter reported SandboxAccepted. Owning workspace search was skipped because Postman CLI is signed out. On 2026-11-15 the SMS-01 probe option used synthetic credentials against the same simulation, which logged POST HTTP 200. The adapter reported Template=SMS-01 and SandboxAccepted. The unavailable simulation injected HTTP 503 and the caller exited 1 with sms_http_rejected. These runs establish caller serialization and rejection handling against the local stand-ins.
     source: postman/mocks/esms/default.cjs
-    updated_at: '2026-11-13'
+    updated_at: '2026-11-15'
 fingerprints:
   - id: initial
     date: '2026-11-13'

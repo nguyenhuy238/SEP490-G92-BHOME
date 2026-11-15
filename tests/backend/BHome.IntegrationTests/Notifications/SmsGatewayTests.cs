@@ -77,6 +77,32 @@ public sealed class SmsGatewayTests
         Assert.False(body.TryGetProperty("CallbackUrl", out _));
     }
 
+    [Fact]
+    public async Task ProductionOtpUsesApprovedBrandnameAndRecoveryContent()
+    {
+        var config = Config("Production");
+        config.ProductionEnabled = true;
+        config.Brandname = "BHOME";
+        config.ApprovedTemplates = ["SMS-01"];
+        var message = Message();
+        var content = SmsTemplates.Render(message.TemplateId, message.Variables);
+        using var client = new HttpClient(new Handler(async (request, t) =>
+        {
+            Assert.Equal(new Uri(config.BaseUrl), request.RequestUri);
+            using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(t));
+            var body = json.RootElement;
+            Assert.Equal("0", body.GetProperty("Sandbox").GetString());
+            Assert.Equal("BHOME", body.GetProperty("Brandname").GetString());
+            Assert.Equal(content, body.GetProperty("Content").GetString());
+            Assert.Equal("2", body.GetProperty("SmsType").GetString());
+            Assert.Equal("0", body.GetProperty("IsUnicode").GetString());
+            Assert.Equal(message.Phone, body.GetProperty("Phone").GetString());
+            return Reply("{\"CodeResult\":\"100\",\"SMSID\":\"synthetic-production-id\"}");
+        }));
+        var receipt = await new EsmsSmsSender(client, Options.Create(config)).SendAsync(message, content, default);
+        Assert.Equal("ProviderAccepted", receipt.Status);
+    }
+
     [Theory]
     [InlineData("101", false)]
     [InlineData("104", false)]

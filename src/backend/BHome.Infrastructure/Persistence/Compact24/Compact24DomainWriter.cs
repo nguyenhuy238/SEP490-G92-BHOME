@@ -222,10 +222,17 @@ public sealed partial class Compact24DbContext
 
     private async Task WriteEmbeddedAsync(EntityEntry entry, CompactRecordSql spec, string state, string envelope, string key, CancellationToken token)
     {
+        var table = spec.Table;
+        var parentProperty = spec.Parent;
+        if (spec.Name is "IncidentActivity" or "IncidentEvidence" or "MaintenanceHistory" && entry.Property("IncidentId").CurrentValue is null)
+        {
+            table = "operational_tasks";
+            parentProperty = "WorkOrderId";
+        }
         var parent = entry.Property(spec.Parent).CurrentValue;
         string where;
         if (spec.Name == "Chain") where = "'Owner'=ANY(roles)";
-        else where = "id=(@state::jsonb->>'" + CompactRecordSql.Camel(spec.Parent) + "')::uuid";
+        else where = "id=(@state::jsonb->>'" + CompactRecordSql.Camel(parentProperty) + "')::uuid";
         var column = spec.Container;
         var source = "COALESCE(" + column + (spec.Path is null ? "" : "->'" + spec.Path + "'") + "," + (spec.Kind == CompactRecordKind.Object ? "'{}'" : "'[]'") + "::jsonb)";
         var updated = spec.Kind switch
@@ -242,7 +249,7 @@ public sealed partial class Compact24DbContext
             assignments += ",status=CASE WHEN @state::jsonb->>'outcome'='Approved' THEN 'APPROVED' ELSE 'REJECTED' END,approved_delta_amount=(@state::jsonb->>'delta')::numeric,decided_by_user_id=(@state::jsonb->>'ownerId')::uuid,decided_at=(@state::jsonb->>'decidedAt')::timestamptz,decision_reason=@state::jsonb->>'reason'";
         if (column != "history" && spec.Table is not ("users" or "notifications"))
             assignments += ",history=history||jsonb_build_array(@envelope::jsonb)";
-        var count = await CommandAsync($"UPDATE {spec.Table} SET {assignments} WHERE {where}", state, envelope, key, token, entry);
+        var count = await CommandAsync($"UPDATE {table} SET {assignments} WHERE {where}", state, envelope, key, token, entry);
         if (count != 1) throw new DbUpdateConcurrencyException("Compact24 containing record is unavailable.");
         if (entry.Entity is BHome.Domain.IncidentMaintenance.EmergencyAction emergency)
             await ExecuteAsync("UPDATE incident_reports SET emergency_actions=emergency_actions||jsonb_build_array(@envelope::jsonb) WHERE id=@id", token,
@@ -251,10 +258,10 @@ public sealed partial class Compact24DbContext
         {
             // Report photos have their own five-image limit. Inspection/completion
             // evidence belongs to the Work Order and must not consume that limit.
-            var table = evidence.WorkOrderId.HasValue ? "operational_tasks" : "incident_reports";
+            var evidenceTable = evidence.WorkOrderId.HasValue ? "operational_tasks" : "incident_reports";
             if (evidence.WorkOrderId.HasValue || evidence.Kind == BHome.Domain.IncidentMaintenance.IncidentEvidenceKind.Report)
-                await ExecuteAsync($"UPDATE {table} SET evidence=COALESCE((SELECT jsonb_agg(e) FROM jsonb_array_elements(evidence) e WHERE e->>'id'<>@key),'[]'::jsonb)||jsonb_build_array(@state::jsonb||jsonb_build_object('recordType','IncidentEvidence')) WHERE id=@id", token,
-                    ("id", evidence.WorkOrderId ?? evidence.IncidentId), ("key", evidence.Id.ToString()), ("state", state));
+                await ExecuteAsync($"UPDATE {evidenceTable} SET evidence=COALESCE((SELECT jsonb_agg(e) FROM jsonb_array_elements(evidence) e WHERE e->>'id'<>@key),'[]'::jsonb)||jsonb_build_array(@state::jsonb||jsonb_build_object('recordType','IncidentEvidence')) WHERE id=@id", token,
+                    ("id", evidence.WorkOrderId ?? evidence.IncidentId!.Value), ("key", evidence.Id.ToString()), ("state", state));
         }
     }
 

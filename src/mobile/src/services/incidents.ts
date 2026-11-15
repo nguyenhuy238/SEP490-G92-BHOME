@@ -36,7 +36,18 @@ export interface Incident {
 }
 export interface WorkOrder {
   id: string;
-  incidentId: string;
+  incidentId: string | null;
+  source?: 'Incident' | 'Proactive';
+  description?: string;
+  commonArea?: string | null;
+  usesMaterials?: boolean;
+  fastRepairPolicyVersion?: number | null;
+  fastRepairCategory?: string | null;
+  assetProposalPending?: boolean;
+  proposedAssetId?: string | null;
+  proposedAssetName?: string | null;
+  proposedAssetCategory?: string | null;
+  proposedAssetCondition?: string | null;
   locationId: string;
   roomId: string | null;
   assetId: string | null;
@@ -88,7 +99,7 @@ export interface MaintenanceHistory {
   id: string;
   activityId: string;
   action: string;
-  incidentId: string;
+  incidentId: string | null;
   workOrderId: string | null;
   roomId: string | null;
   assetId: string | null;
@@ -102,7 +113,7 @@ export interface MaintenanceHistory {
 }
 export interface IncidentExpense {
   id: string;
-  incidentId: string;
+  incidentId: string | null;
   workOrderId: string | null;
   emergencyActionId: string | null;
   category: string;
@@ -111,7 +122,8 @@ export interface IncidentExpense {
 }
 export interface IncidentNotification {
   id: string;
-  incidentId: string;
+  incidentId: string | null;
+  workOrderId?: string | null;
   event: string;
   highPriority: boolean;
   createdAt: string;
@@ -134,7 +146,7 @@ export interface ReportingAsset {
   commonArea: string | null;
 }
 export interface IncidentResult {
-  incidentId: string;
+  incidentId: string | null;
   workOrderId: string | null;
   resourceId: string | null;
 }
@@ -182,6 +194,25 @@ export interface IncidentDecision {
   assetCondition?: string | null;
 }
 export interface WorkCommands {
+  'fast-repair-start': {
+    version: number;
+    category: string;
+    inspectionResult: string;
+    solution: string;
+    estimatedMinutes: number;
+    estimatedCost: number;
+    usesMaterials: boolean;
+  };
+  'fast-repair-fallback': WorkAction;
+  'asset-proposal': {
+    version: number;
+    assetId: string | null;
+    name: string | null;
+    category: string | null;
+    condition: string | null;
+    reason: string;
+  };
+  'asset-decision': { version: number; approve: boolean; reason: string };
   reassign: { version: number; staffId: string; reason: string };
   proposal: {
     version: number;
@@ -190,6 +221,7 @@ export interface WorkCommands {
     estimatedMinutes: number;
     estimatedCost: number | null;
     evidenceIds: string[];
+    usesMaterials?: boolean;
   };
   'plan-decision': {
     version: number;
@@ -315,14 +347,22 @@ export function incidentClient(api: Pick<MobileApi, 'request'>) {
       api.request<IncidentPage<Incident>>(`${incidentRoot}?${incidentQuery(filter)}`, { signal }),
     get: (id: string, signal?: AbortSignal) =>
       api.request<Incident>(`${incidentRoot}/${id}`, { signal }),
-    submit: (input: IncidentSubmit, photos: IncidentPhoto[], key: string, signal?: AbortSignal) => {
+    submit: async (
+      input: IncidentSubmit,
+      photos: IncidentPhoto[],
+      key: string,
+      signal?: AbortSignal,
+    ) => {
       const { body, contentType } = incidentMultipart(input, photos, key);
-      return api.request<IncidentResult>(incidentRoot, {
+      const result = await api.request<IncidentResult>(incidentRoot, {
         method: 'POST',
         body,
         headers: { 'Content-Type': contentType, 'Idempotency-Key': key },
         signal,
       });
+      if (!result.incidentId)
+        throw new Error('Máy chủ chưa trả mã báo cáo. Tải lại để kiểm tra trước khi gửi lại.');
+      return { ...result, incidentId: result.incidentId };
     },
     command: <K extends keyof IncidentCommands>(
       id: string,
@@ -347,7 +387,7 @@ export function incidentClient(api: Pick<MobileApi, 'request'>) {
     ) =>
       post(`${incidentRoot}/${id}/emergency-actions/${entryId}/cost-decision`, input, key, signal),
     upload: (
-      id: string,
+      id: string | null,
       workOrderId: string | null,
       kind: EvidenceKind,
       photo: IncidentPhoto,
@@ -355,7 +395,9 @@ export function incidentClient(api: Pick<MobileApi, 'request'>) {
       signal?: AbortSignal,
     ) =>
       api.request<IncidentResult>(
-        `${incidentRoot}/${id}/evidence?kind=${evidenceKinds[kind]}${workOrderId ? '&workOrderId=' + workOrderId : ''}`,
+        workOrderId && !id
+          ? `${workOrderRoot}/${workOrderId}/evidence?kind=${evidenceKinds[kind]}`
+          : `${incidentRoot}/${id}/evidence?kind=${evidenceKinds[kind]}${workOrderId ? '&workOrderId=' + workOrderId : ''}`,
         {
           method: 'PUT',
           body: photo.bytes,
@@ -363,9 +405,16 @@ export function incidentClient(api: Pick<MobileApi, 'request'>) {
           signal,
         },
       ),
-    evidence: (id: string, imageId: string, signal?: AbortSignal) =>
+    evidence: (
+      id: string | null,
+      imageId: string,
+      signal?: AbortSignal,
+      workOrderId?: string | null,
+    ) =>
       api.request<Uint8Array<ArrayBuffer>>(
-        `${incidentRoot}/${id}/evidence/${imageId}`,
+        workOrderId
+          ? `${workOrderRoot}/${workOrderId}/evidence/${imageId}`
+          : `${incidentRoot}/${id}/evidence/${imageId}`,
         { signal },
         'bytes',
       ),
@@ -466,6 +515,13 @@ export function incidentError(error: unknown) {
     cost_receipt_required: 'Chi phí khẩn cấp cần ảnh minh chứng.',
     owner_classification_required: 'Owner cần phân loại sự cố trước khi giao hoặc xử lý trực tiếp.',
     staff_unavailable: 'Nhân viên không còn được phân công tại cơ sở này.',
+    fast_repair_category_inactive:
+      'Nhóm sửa nhanh chưa được Owner kích hoạt. Gửi phương án thông thường để được duyệt.',
+    fast_repair_requires_normal_approval:
+      'Công việc cần chi phí hoặc vật tư. Dừng sửa nhanh và gửi phương án để Owner duyệt.',
+    asset_link_unavailable:
+      'Tài sản đã được liên kết hoặc đề xuất chưa sẵn sàng. Tải lại lệnh sửa chữa.',
+    asset_proposal_pending: 'Owner cần quyết định đề xuất tài sản trước khi nghiệm thu.',
     incident_closed: 'Sự cố đã đóng; không thể tiếp tục cập nhật.',
     invalid_work_order_transition: 'Trạng thái không cho phép thao tác này. Hãy tải lại.',
     report_evidence_locked: 'Báo cáo đã được xử lý; không thể thêm ảnh báo cáo.',
@@ -493,9 +549,19 @@ export function workActions(work: WorkOrder, role: string, actor: string): (keyo
         ? (['plan-decision'] as const)
         : []),
       ...(work.status === 'PendingVerification' ? (['verify', 'rework'] as const) : []),
+      ...(work.assetProposalPending ? (['asset-decision'] as const) : []),
     ];
   if (role !== 'Staff' || work.assignedStaffId !== actor) return [];
   return [
+    ...(work.status === 'Assigned' ? (['fast-repair-start'] as const) : []),
+    ...(work.status === 'InProgress' && work.fastRepairPolicyVersion
+      ? (['fast-repair-fallback'] as const)
+      : []),
+    ...(!['Verified', 'Cancelled'].includes(work.status) &&
+    !work.assetId &&
+    !work.assetProposalPending
+      ? (['asset-proposal'] as const)
+      : []),
     ...(['Assigned', 'PendingApproval'].includes(work.status) ? (['proposal'] as const) : []),
     ...(work.canStart ? (['start'] as const) : []),
     ...(work.status === 'InProgress' ? (['progress', 'blocker', 'submit'] as const) : []),
