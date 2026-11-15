@@ -39,6 +39,7 @@ it('pages verified payment history independently of the debt invoice page', asyn
   mocks.api.history.mockResolvedValue({ items: [], totalCount: 41 });
   mocks.api.debts.mockResolvedValue({ items: [], totalCount: 0 });
   mount(<PaymentManagementPage debtOnly />);
+  fireEvent.click(screen.getByRole('button', { name: 'Xem lịch sử thu tiền' }));
   await screen.findByText('Trang lịch sử 1 · 41 thanh toán');
   fireEvent.click(screen.getByRole('button', { name: 'Lịch sử sau' }));
   await screen.findByText('Trang lịch sử 2 · 41 thanh toán');
@@ -108,6 +109,13 @@ it('identifies provider verification without claiming an Owner manually verified
     ],
   });
   mount(<OwnerInvoicePaymentPanel invoiceId={id} />);
+  const historyToggle = await screen.findByRole('button', { name: 'Xem chi tiết hóa đơn' });
+  expect(historyToggle).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(historyToggle);
+  expect(screen.getByRole('button', { name: 'Ẩn chi tiết hóa đơn' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
   expect(await screen.findByText(/SePay thử nghiệm xác minh/)).toBeTruthy();
   expect(screen.queryByText(/Owner xác minh sao kê/)).toBeNull();
 });
@@ -199,6 +207,66 @@ it('shows server-owned balance and explicit missing receiving configuration', as
   expect(screen.getByText(/Chưa có tài khoản nhận tiền/)).toBeInTheDocument();
   expect(screen.queryByAltText('QR chuyển khoản hóa đơn')).toBeNull();
 });
+it('does not present an old invoice reference as a SePay payment memo or expose a non-BH QR', async () => {
+  mocks.api.payment.mockResolvedValue({ ...state, transferReference: '314PSNOORMLSE8XT9DPF32NLU' });
+  mocks.api.instructions.mockResolvedValue({
+    availability: 'Available',
+    bankIdentifier: '970422',
+    accountNumber: '0000000001',
+    accountHolder: 'DEMO OWNER',
+    transferReference: '314PSNOORMLSE8XT9DPF32NLU',
+    transferDescription: '314PSNOORMLSE8XT9DPF32NLU',
+    qrImageDataUri: 'data:image/png;base64,TEST',
+    isDevelopmentDemo: true,
+  });
+  mount(<OwnerInvoicePaymentPanel invoiceId={id} />);
+  expect(await screen.findByText(/Chưa có mã BH hợp lệ/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Xem chi tiết hóa đơn' })).not.toBeInTheDocument();
+  expect(screen.queryByText('314PSNOORMLSE8XT9DPF32NLU')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem thông tin nhận chuyển khoản' }));
+  expect(screen.queryByAltText('QR chuyển khoản hóa đơn')).not.toBeInTheDocument();
+  expect(screen.getByText(/QR hiện tại không chứa mã BH đã đăng ký/)).toBeInTheDocument();
+});
+it('displays the registered BH memo when SePay transfer instructions are available', async () => {
+  mocks.api.payment.mockResolvedValue({ ...state, transferReference: '314PSNOORMLSE8XT9DPF32NLU' });
+  mocks.api.instructions.mockResolvedValue({
+    availability: 'Available',
+    bankIdentifier: '970422',
+    accountNumber: '0000000001',
+    accountHolder: 'DEMO OWNER',
+    transferReference: 'BH12345678',
+    transferDescription: 'BH12345678',
+    qrImageDataUri: 'data:image/png;base64,TEST',
+    isDevelopmentDemo: true,
+  });
+  mount(<OwnerInvoicePaymentPanel invoiceId={id} />);
+  const detail = await screen.findByRole('button', { name: 'Xem chi tiết hóa đơn' });
+  fireEvent.click(detail);
+  expect(screen.getByText('BH12345678')).toBeInTheDocument();
+  expect(screen.queryByText('314PSNOORMLSE8XT9DPF32NLU')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem thông tin nhận chuyển khoản' }));
+  expect(screen.getByAltText('QR chuyển khoản hóa đơn')).toBeInTheDocument();
+});
+it('opens bank instructions only on request and marks demo receiving details clearly', async () => {
+  mocks.api.instructions.mockResolvedValue({
+    availability: 'Available',
+    bankIdentifier: '970418',
+    accountNumber: '000111222',
+    accountHolder: 'DEMO OWNER',
+    isDevelopmentDemo: true,
+  });
+  mount(<OwnerInvoicePaymentPanel invoiceId={id} />);
+  const toggle = await screen.findByRole('button', { name: 'Xem thông tin nhận chuyển khoản' });
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(toggle);
+  expect(screen.getByRole('button', { name: 'Ẩn thông tin nhận chuyển khoản' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  expect(screen.getByText('DEMO OWNER')).toBeInTheDocument();
+  expect(screen.getByText('Tài khoản tổng hợp demo. Không chuyển tiền thật.')).toBeInTheDocument();
+  expect(mocks.api.register).not.toHaveBeenCalled();
+});
 it('requires human allocation review and blocks duplicate confirmation clicks', async () => {
   let resolve!: (value: { status: string; reason: string }) => void;
   mocks.api.allocate.mockImplementation(
@@ -245,10 +313,132 @@ it('retains statement form input after failed registration instead of showing a 
 it('retries an unavailable payment overview and renders the real empty state', async () => {
   mocks.api.invoices.mockRejectedValue({ status: 503 });
   mount(<PaymentManagementPage />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Hóa đơn và số dư' }));
   const retry = await screen.findByText('Thử lại');
   mocks.api.invoices.mockResolvedValue({ items: [], totalCount: 0 });
   fireEvent.click(retry);
   await screen.findByText('Không có hóa đơn phù hợp bộ lọc.');
+});
+it('opens a payment detail drawer with the chosen room and closes without changing payment data', async () => {
+  mocks.api.invoices.mockResolvedValue({
+    items: [
+      {
+        invoiceId: id,
+        locationName: 'Cơ sở tổng hợp',
+        roomNumber: 'P102',
+        billingPeriod: '2026-11-01',
+        dueDate: '2026-11-30',
+        outstandingAmount: '100000',
+        paymentStatus: 'Unpaid',
+        overdueDays: 0,
+      },
+    ],
+    totalCount: 1,
+  });
+  mount(<PaymentManagementPage />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Hóa đơn và số dư' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Xem thanh toán' }));
+  expect(await screen.findByText('Chi tiết thanh toán hóa đơn')).toBeInTheDocument();
+  expect(screen.getByText('Cơ sở tổng hợp · Phòng P102 · Kỳ 2026-11')).toBeInTheDocument();
+  await waitFor(() => expect(mocks.api.payment).toHaveBeenCalledWith(id, expect.any(AbortSignal)));
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết thanh toán' }));
+  await waitFor(() =>
+    expect(screen.queryByText('Chi tiết thanh toán hóa đơn')).not.toBeInTheDocument(),
+  );
+  expect(mocks.api.allocate).not.toHaveBeenCalled();
+  expect(mocks.api.register).not.toHaveBeenCalled();
+});
+it('does not let hidden invoice status or overdue filters alter the verified history tab', async () => {
+  mount(<PaymentManagementPage />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Hóa đơn và số dư' }));
+  fireEvent.click(screen.getByText('Đã đủ tiền'));
+  fireEvent.click(screen.getByText('Quá hạn'));
+  await waitFor(() =>
+    expect(mocks.api.invoices.mock.calls.at(-1)?.[0]).toMatchObject({
+      paymentStatus: 'Paid',
+      overdueOnly: true,
+    }),
+  );
+  fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử đã xác minh' }));
+  await waitFor(() =>
+    expect(mocks.api.history.mock.calls.at(-1)?.[0]).toMatchObject({
+      paymentStatus: '',
+      overdueOnly: false,
+    }),
+  );
+});
+it('opens the review queue immediately, keeps operations in three tabs and settings in a menu', async () => {
+  mount(<PaymentManagementPage />);
+  expect(screen.queryByText('Bắt đầu từ công việc cần xử lý')).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('region', { name: 'Thao tác thanh toán nhanh' }),
+  ).not.toBeInTheDocument();
+  const tabs = screen.getByRole('tablist', { name: 'Nghiệp vụ thanh toán' });
+  expect(within(tabs).getAllByRole('tab')).toHaveLength(3);
+  expect(within(tabs).getByRole('tab', { name: 'Đối soát giao dịch' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await waitFor(() =>
+    expect(mocks.api.transfers.mock.calls.at(-1)?.[0]).toMatchObject({
+      paymentStatus: 'PendingReview',
+      page: 1,
+    }),
+  );
+  expect(mocks.api.invoices).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Tiện ích' }));
+  expect(screen.getByRole('menuitem', { name: 'Tài khoản nhận tiền' })).toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: 'Webhook SePay' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Tài khoản nhận tiền' }));
+  expect(screen.getByRole('button', { name: 'Tài khoản nhận tiền' })).toBeInTheDocument();
+  fireEvent.click(within(tabs).getByRole('tab', { name: 'Hóa đơn và số dư' }));
+  fireEvent.click(screen.getByText('Còn phải trả'));
+  await waitFor(() =>
+    expect(mocks.api.invoices.mock.calls.at(-1)?.[0]).toMatchObject({
+      paymentStatus: 'Unpaid',
+      page: 1,
+    }),
+  );
+  fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử đã xác minh' }));
+  await waitFor(() =>
+    expect(mocks.api.history.mock.calls.at(-1)?.[0]).toMatchObject({
+      paymentStatus: '',
+      overdueOnly: false,
+    }),
+  );
+  expect(mocks.api.allocate).not.toHaveBeenCalled();
+  expect(mocks.api.register).not.toHaveBeenCalled();
+});
+it('provides visible overdue debt action and accessible secondary filters', async () => {
+  mocks.api.debts.mockResolvedValue({ items: [], totalCount: 0 });
+  mount(<PaymentManagementPage debtOnly />);
+  expect(screen.queryByText('Bạn muốn theo dõi khoản nợ nào?')).not.toBeInTheDocument();
+  const quickActions = screen.getByRole('region', { name: 'Lọc nhanh công nợ' });
+  expect(within(quickActions).getAllByRole('button')).toHaveLength(3);
+  expect(screen.queryByText('Lịch sử thanh toán đã xác minh')).not.toBeInTheDocument();
+  fireEvent.click(within(quickActions).getByRole('button', { name: 'Xem hóa đơn quá hạn' }));
+  await waitFor(() =>
+    expect(mocks.api.debts.mock.calls.at(-1)?.[0]).toMatchObject({ overdueOnly: true, page: 1 }),
+  );
+  fireEvent.click(within(quickActions).getByRole('button', { name: 'Xem tất cả công nợ' }));
+  await waitFor(() =>
+    expect(mocks.api.debts.mock.calls.at(-1)?.[0]).toMatchObject({ overdueOnly: false, page: 1 }),
+  );
+  const showFilters = screen.getByRole('button', { name: 'Lọc thêm theo cơ sở / kỳ' });
+  expect(showFilters).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(showFilters);
+  expect(screen.getByRole('button', { name: 'Thu gọn bộ lọc' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  expect(screen.getByLabelText('Kỳ hóa đơn cần lọc')).toBeInTheDocument();
+  const historyToggle = screen.getByRole('button', { name: 'Xem lịch sử thu tiền' });
+  expect(historyToggle).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(historyToggle);
+  expect(screen.getByRole('button', { name: 'Ẩn lịch sử thu tiền' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
 });
 it('refreshes invoice balance and history after successful allocation', async () => {
   const invoice = {
@@ -268,11 +458,16 @@ it('refreshes invoice balance and history after successful allocation', async ()
   mocks.api.transfers.mockResolvedValue({ items: [transfer], totalCount: 1 });
   mocks.api.allocate.mockResolvedValue({ status: 'Allocated', reason: 'verified_full_payment' });
   mount(<PaymentManagementPage />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Hóa đơn và số dư' }));
   await screen.findByText(/Cơ sở tổng hợp · PAY-TEST/);
   await screen.findByRole('cell', { name: /^100\.000\s₫$/ });
   fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử đã xác minh' }));
   await screen.findByText('Trang lịch sử 1 · 0 thanh toán');
   fireEvent.click(screen.getByRole('tab', { name: 'Đối soát giao dịch' }));
+  expect(
+    screen.queryByLabelText('Tôi xác nhận đúng hóa đơn và người thực trả theo bằng chứng'),
+  ).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: 'Kiểm tra & đối soát' }));
   fireEvent.click(
     await screen.findByLabelText('Tôi xác nhận đúng hóa đơn và người thực trả theo bằng chứng'),
   );

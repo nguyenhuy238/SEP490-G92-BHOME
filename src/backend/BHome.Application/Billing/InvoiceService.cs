@@ -2,6 +2,7 @@ using System.Text.Json;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
+using BHome.Application.PaymentsDebt.SePay;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.PropertyManagement;
@@ -9,7 +10,7 @@ using BHome.Domain.PropertyManagement;
 namespace BHome.Application.Billing;
 
 public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser user, TimeProvider clock, IBillingAutomationSchedules? automation = null,
-    IFixedChargeCoverage? fixedCoverage = null)
+    IFixedChargeCoverage? fixedCoverage = null, IPaymentCodeRegistry? paymentCodes = null, SePayOptions? sepay = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new InvoiceException(401, "authentication_required");
     private bool Owner => user.IsInRole(Roles.Owner);
@@ -82,18 +83,34 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
             var existing = await repository.ForPeriodAsync(x.RoomId, x.BillingPeriod, t);
             if (existing is not null)
             {
-                if (existing.RepresentativeContractId != x.RepresentativeContractId) throw new InvoiceException(409, "invoice_period_already_exists");
+                if (x.RepresentativeContractId is { } selected && existing.RepresentativeContractId != selected) throw new InvoiceException(409, "invoice_period_already_exists");
                 return View(existing);
             }
             var room = await repository.RoomAsync(x.RoomId, t) ?? throw new InvoiceException(404, "room_not_found");
             if (!room.Location.IsActive) throw new InvoiceException(409, "billing_location_inactive");
             var plan = automation is null ? null : await automation.ForPeriodAsync(room.LocationId, x.BillingPeriod, t);
+            var representativeId = x.RepresentativeContractId;
+            BillingRepresentativeSelection? selection = null;
+            IReadOnlyList<BillingOccupancy>? eligible = null;
+            if (representativeId is null || expectedAutomationPlanId is not null)
+            {
+                eligible = await repository.OccupanciesAsync(x.RoomId, x.BillingPeriod, x.BillingPeriod.AddMonths(1).AddDays(-1), t);
+                selection = automation is null ? null : await automation.RepresentativeAsync(x.RoomId, x.BillingPeriod, t);
+            }
+            if (representativeId is null)
+            {
+                if (selection is not null)
+                {
+                    if (!eligible!.Any(o => o.Contract.Id == selection.ContractId)) throw new InvoiceException(409, "representative_selection_required");
+                    representativeId = selection.ContractId;
+                }
+                else if (eligible!.Count == 1) representativeId = eligible[0].Contract.Id;
+                else throw new InvoiceException(409, eligible.Count == 0 ? "representative_contract_not_eligible" : "representative_selection_required");
+            }
             if (expectedAutomationPlanId is { } expected)
             {
                 if (plan?.Id != expected || !await automation!.AuthorizedAsync(plan, Actor, x.BillingPeriod, false, t)) throw new InvoiceException(409, "automation_authorization_changed");
-                var selection = await automation.RepresentativeAsync(x.RoomId, x.BillingPeriod, t);
-                var eligible = await repository.OccupanciesAsync(x.RoomId, x.BillingPeriod, x.BillingPeriod.AddMonths(1).AddDays(-1), t);
-                if (selection is null && eligible.Count != 1 || selection is not null && selection.ContractId != x.RepresentativeContractId) throw new InvoiceException(409, "representative_selection_required");
+                if (selection is null && eligible!.Count != 1 || selection is not null && selection.ContractId != representativeId) throw new InvoiceException(409, "representative_selection_required");
             }
             var schedule = plan is null ? await repository.ScheduleAsync(room.LocationId, t) ?? throw new InvoiceException(409, "billing_schedule_required") : BillingAutomationService.Calendar(plan);
             if (Today < InvoiceMath.CalendarDate(x.BillingPeriod, schedule.DraftDay, schedule.DraftMonthOffset))
@@ -105,7 +122,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
                 RoomNumber = room.RoomNumber,
                 LocationName = room.Location.Name,
                 BillingPeriod = x.BillingPeriod,
-                RepresentativeContractId = x.RepresentativeContractId,
+                RepresentativeContractId = representativeId.Value,
                 CreatedByUserId = Actor,
                 AutomationPlanId = expectedAutomationPlanId,
                 ScheduleSnapshot = JsonSerializer.Serialize(schedule),
@@ -180,6 +197,12 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
             if (invoice.MissingInputs.Length > 0 || !Charges(invoice).SequenceEqual(Charges(check)) ||
                 !invoice.Recipients.Select(r => r.TenantUserId).Order().SequenceEqual(check.Recipients.Select(r => r.TenantUserId).Order()))
                 throw new InvoiceException(409, "draft_refresh_and_review_required");
+            // Publish only after a unique, persisted SePay payment memo has been issued.
+            // This runs inside the same location/room transaction as Final, so a failed
+            // registration cannot leave a publicly payable invoice with a legacy memo.
+            if (sepay?.Enabled == true && (paymentCodes is null ||
+                await paymentCodes.IssueAsync("Invoice", invoice.Id, invoice.LocationId, t) is null))
+                throw new InvoiceException(409, "invoice_payment_code_unavailable");
             invoice.Status = InvoiceStatus.Final; invoice.Version++;
             var now = clock.GetUtcNow();
             invoice.FinalizedAt = now.AddTicks(-(now.Ticks % 10)); invoice.FinalizedByUserId = Actor;

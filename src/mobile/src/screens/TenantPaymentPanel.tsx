@@ -119,6 +119,11 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
   const transfer = instructions.data;
   const matches =
     state && transfer && sameAmount(state.outstandingAmount, transfer.outstandingAmount);
+  // A SePay Test QR with a legacy invoice reference cannot be reconciled via
+  // webhook. Do not offer it to the tenant as a payable QR.
+  const unregisteredDemoMemo = Boolean(
+    transfer?.isDevelopmentDemo && !/^BH\d{8}$/.test(transfer.transferDescription ?? ''),
+  );
   const usable =
     !payment.fetching &&
     !instructions.fetching &&
@@ -126,6 +131,7 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
     !instructions.error &&
     matches &&
     transfer &&
+    !unregisteredDemoMemo &&
     ['Available', 'InstructionsOnly'].includes(transfer.availability) &&
     transfer.accountNumber;
   return (
@@ -152,6 +158,12 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
           {transfer?.isDevelopmentDemo && (
             <Text accessibilityRole="alert" style={styles.warning}>
               QR thử nghiệm – Không chuyển tiền thật.
+            </Text>
+          )}
+          {unregisteredDemoMemo && (
+            <Text accessibilityRole="alert" style={styles.warning}>
+              Chưa có mã BH để đối soát SePay Test. Vui lòng liên hệ Owner để cấu hình trước khi
+              chuyển khoản.
             </Text>
           )}
           {transfer && !matches && (
@@ -199,15 +211,20 @@ export function TenantPaymentPanel({ invoiceId }: { invoiceId: string }) {
               />
             </>
           )}
-          {transfer && matches && !usable && !payment.fetching && !instructions.fetching && (
-            <Text style={invoiceUi.secondary}>
-              {paymentText(
-                transfer.availability === 'NotIssued'
-                  ? 'NotIssuedInstructions'
-                  : transfer.availability,
-              )}
-            </Text>
-          )}
+          {transfer &&
+            matches &&
+            !usable &&
+            !unregisteredDemoMemo &&
+            !payment.fetching &&
+            !instructions.fetching && (
+              <Text style={invoiceUi.secondary}>
+                {paymentText(
+                  transfer.availability === 'NotIssued'
+                    ? 'NotIssuedInstructions'
+                    : transfer.availability,
+                )}
+              </Text>
+            )}
         </>
       )}
       {!!notice && <Text accessibilityRole="status">{notice}</Text>}

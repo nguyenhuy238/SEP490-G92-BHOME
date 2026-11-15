@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Alert, Button, LinearProgress, Stack, Typography } from '@mui/material';
 import {
   contractError,
@@ -9,10 +8,10 @@ import {
 import { useContractHandover } from '../../../../../packages/client-core/src/useContractHandover';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { ChartCard } from '../../components/common/PortalUI';
+import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
 
 export function ContractHandoverPanel({ api, id }: { api: ContractClient; id: string }) {
-  const query = useContractHandover(api, id, false),
-    [error, setError] = useState('');
+  const query = useContractHandover(api, id, false);
   const h = query.data?.record;
   return (
     <ChartCard
@@ -55,46 +54,22 @@ export function ContractHandoverPanel({ api, id }: { api: ContractClient; id: st
               · Staff: {h.staffConfirmedAt ? formatInstant(h.staffConfirmedAt) : 'Chưa hoàn tất'}
             </Typography>
             {h.snapshot.evidenceIds.map((fileId, i) => (
-              <Button
+              <PrivateEvidenceViewer
                 key={fileId}
-                onClick={() => {
-                  setError('');
-                  void api
-                    .handoverEvidence(id, fileId)
-                    .then((blob) => {
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `ban-giao-${i + 1}.jpg`;
-                      a.click();
-                      setTimeout(() => URL.revokeObjectURL(url), 1000);
-                    })
-                    .catch((e) => setError(contractError(e)));
-                }}
-              >
-                Tải ảnh bàn giao {i + 1}
-              </Button>
+                label={`Ảnh bàn giao ${i + 1}`}
+                filename={`ban-giao-${i + 1}.jpg`}
+                fetchBlob={(signal) => api.handoverEvidence(id, fileId, signal)}
+                errorMessage={contractError}
+              />
             ))}
             {[h.snapshot.electricity, h.snapshot.water].map((reading, i) => (
-              <Button
+              <PrivateEvidenceViewer
                 key={reading.id}
-                onClick={() => {
-                  setError('');
-                  void api
-                    .handoverMeterEvidence(id, reading.id)
-                    .then((blob) => {
-                      const url = URL.createObjectURL(blob),
-                        a = document.createElement('a');
-                      a.href = url;
-                      a.download = `chi-so-ban-giao-${i + 1}.jpg`;
-                      a.click();
-                      setTimeout(() => URL.revokeObjectURL(url), 1000);
-                    })
-                    .catch((e) => setError(contractError(e)));
-                }}
-              >
-                Tải ảnh chỉ số {i === 0 ? 'điện' : 'nước'}
-              </Button>
+                label={`Ảnh chỉ số ${i === 0 ? 'điện' : 'nước'}`}
+                filename={`chi-so-ban-giao-${i + 1}.jpg`}
+                fetchBlob={(signal) => api.handoverMeterEvidence(id, reading.id, signal)}
+                errorMessage={contractError}
+              />
             ))}
           </>
         )}
@@ -103,7 +78,6 @@ export function ContractHandoverPanel({ api, id }: { api: ContractClient; id: st
             {formatInstant(event.occurredAt)} · v{event.version} · {text(event.action)} {event.note}
           </Typography>
         ))}
-        {!!error && <Alert severity="error">{error}</Alert>}
         <Button onClick={query.reload} disabled={query.loading}>
           Tải lại bàn giao
         </Button>

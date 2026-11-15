@@ -73,6 +73,7 @@ function mount() {
 }
 function fill() {
   fireEvent.change(screen.getByLabelText(/Tên kịch bản/), { target: { value: input.name } });
+  fireEvent.click(screen.getByRole('button', { name: /Kỳ dữ liệu nền/ }));
   fireEvent.change(screen.getByLabelText(/Dữ liệu nền từ/), {
     target: { value: input.baseline.from },
   });
@@ -114,6 +115,7 @@ it('loads saved snapshots for review and comparison without replaying analysis',
   mock.scenarios.mockResolvedValue([{ id: 'saved', name: 'Đã lưu', forecastMonths: 12 }]);
   mock.scenario.mockResolvedValue({ ...result, id: 'saved' });
   mount();
+  fireEvent.click(await screen.findByRole('button', { name: /Kịch bản đã lưu/ }));
   fireEvent.click(await screen.findByRole('button', { name: 'Xem Đã lưu' }));
   await screen.findByText('Tiền thu dự kiến / tháng: 2.160.000 ₫');
   fireEvent.click(screen.getByRole('button', { name: 'So sánh Đã lưu' }));
@@ -137,6 +139,7 @@ it('shows negative forecasts and the full baseline period without recalculating 
   mount();
   fill();
   await screen.findByText('Lợi nhuận / tháng: -200 ₫');
+  fireEvent.click(screen.getByRole('button', { name: 'Xem đầy đủ kết quả và dữ liệu nền' }));
   expect(
     screen.getByText('Chênh lệch lợi nhuận tháng so với nền: -999.999.999.999.999.999 ₫'),
   ).toBeInTheDocument();
@@ -148,7 +151,8 @@ it('shows negative forecasts and the full baseline period without recalculating 
 });
 it('sets a completed baseline month with one explicit click without analyzing or saving', () => {
   mount();
-  fireEvent.click(screen.getByRole('button', { name: 'Dùng tháng trước làm kỳ nền' }));
+  fireEvent.click(screen.getByRole('button', { name: /Kỳ dữ liệu nền/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chọn tháng trước' }));
   const period = financeMonthPeriod(-1);
   expect(screen.getByLabelText(/Dữ liệu nền từ/)).toHaveValue(period.from);
   expect(screen.getByLabelText(/Dữ liệu nền đến/)).toHaveValue(period.to);

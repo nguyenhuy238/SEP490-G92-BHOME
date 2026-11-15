@@ -1,5 +1,8 @@
-import { useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -9,6 +12,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { ChevronDown } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
@@ -29,7 +33,7 @@ import { financeMonthPeriod } from '../finance/monthPeriods';
 
 const initial: ScenarioInput = {
   name: '',
-  baseline: { from: '', to: '' },
+  baseline: financeMonthPeriod(-1),
   forecastMonths: 12,
   assumptions: {
     monthlyRent: '',
@@ -48,6 +52,7 @@ export function FinancialScenariosApiPage() {
   const actor = session?.userId;
   const [input, setInput] = useState(initial),
     [page, setPage] = useState(1);
+  const [baselineOpen, setBaselineOpen] = useState(false);
   const [view, setView] = useState<ScenarioView | null>(null),
     [comparison, setComparison] = useState<ScenarioView | null>(null);
   const [busy, setBusy] = useState(false),
@@ -55,6 +60,12 @@ export function FinancialScenariosApiPage() {
     [success, setSuccess] = useState('');
   const key = useRef(crypto.randomUUID()),
     lock = useRef(false);
+  const resultRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!view || !resultRef.current) return;
+    resultRef.current.focus({ preventScroll: true });
+    resultRef.current.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [view]);
   const locations = useQuery({
     queryKey: ['finance-locations', actor],
     queryFn: ({ signal }) => api.locations(signal),
@@ -124,11 +135,10 @@ export function FinancialScenariosApiPage() {
   ] as const;
   return (
     <>
-      <PageHeader title="Phân tích tài chính What-if" />
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Ước tính quản trị từ giả định hàng tháng. Kịch bản không thay đổi dữ liệu thực tế. Chọn các
-        tháng trọn vẹn cho dữ liệu nền.
-      </Alert>
+      <PageHeader
+        title="Thử kịch bản tài chính"
+        subtitle="Thử các giả định và so sánh dự báo mà không thay đổi sổ tài chính thực tế."
+      />
       {(busy || locations.isPending || saved.isPending) && <LinearProgress />}
       {(error || locations.error || saved.error) && (
         <Alert
@@ -150,7 +160,7 @@ export function FinancialScenariosApiPage() {
         </Alert>
       )}
       {success && <Alert severity="success">{success}</Alert>}
-      <Paper variant="outlined" sx={{ p: 1.5, my: 2, minWidth: 0 }}>
+      <Paper variant="outlined" sx={{ p: 1.5, my: 1.5, minWidth: 0 }}>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -158,13 +168,17 @@ export function FinancialScenariosApiPage() {
           }}
         >
           <Stack spacing={1.5}>
-            <Typography variant="h2" component="h2">
-              Thiết lập kịch bản
+            <Typography variant="h6" component="h2" sx={{ fontWeight: 750 }}>
+              Giả định & kỳ dữ liệu nền
             </Typography>
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2,minmax(0,1fr))' },
+                gridTemplateColumns: {
+                  xs: 'minmax(0,1fr)',
+                  sm: 'repeat(2,minmax(0,1fr))',
+                  lg: 'repeat(3,minmax(0,1fr))',
+                },
                 gap: 1.5,
               }}
             >
@@ -191,44 +205,6 @@ export function FinancialScenariosApiPage() {
                   })
                 }
               />
-            </Box>
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                const month = financeMonthPeriod(-1);
-                change({ ...input, baseline: { ...input.baseline, ...month } });
-              }}
-              sx={{ alignSelf: 'flex-start' }}
-            >
-              Dùng tháng trước làm kỳ nền
-            </Button>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField
-                required
-                type="date"
-                label="Dữ liệu nền từ ngày"
-                disabled={busy}
-                value={input.baseline.from}
-                slotProps={{ inputLabel: { shrink: true } }}
-                onChange={(e) =>
-                  change({ ...input, baseline: { ...input.baseline, from: e.target.value } })
-                }
-              />
-              <TextField
-                required
-                type="date"
-                label="Dữ liệu nền đến ngày"
-                disabled={busy}
-                value={input.baseline.to}
-                slotProps={{
-                  inputLabel: { shrink: true },
-                  htmlInput: { min: input.baseline.from },
-                }}
-                onChange={(e) =>
-                  change({ ...input, baseline: { ...input.baseline, to: e.target.value } })
-                }
-              />
               <TextField
                 required
                 type="number"
@@ -238,54 +214,128 @@ export function FinancialScenariosApiPage() {
                 slotProps={{ htmlInput: { min: 1, max: 32767, step: 1 } }}
                 onChange={(e) => change({ ...input, forecastMonths: Number(e.target.value) })}
               />
-            </Stack>
-            <Typography variant="h6">Giả định hàng tháng</Typography>
+            </Box>
+            <Accordion
+              variant="outlined"
+              disableGutters
+              expanded={baselineOpen}
+              onChange={(_, open) => {
+                if (!open && (!input.baseline.from || !input.baseline.to)) return;
+                setBaselineOpen(open);
+              }}
+            >
+              <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                  Kỳ dữ liệu nền: {displayContractDate(input.baseline.from)} –{' '}
+                  {displayContractDate(input.baseline.to)}
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                  <TextField
+                    required
+                    type="date"
+                    label="Dữ liệu nền từ ngày"
+                    disabled={busy}
+                    value={input.baseline.from}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    onChange={(e) =>
+                      change({ ...input, baseline: { ...input.baseline, from: e.target.value } })
+                    }
+                  />
+                  <TextField
+                    required
+                    type="date"
+                    label="Dữ liệu nền đến ngày"
+                    disabled={busy}
+                    value={input.baseline.to}
+                    slotProps={{
+                      inputLabel: { shrink: true },
+                      htmlInput: { min: input.baseline.from },
+                    }}
+                    onChange={(e) =>
+                      change({ ...input, baseline: { ...input.baseline, to: e.target.value } })
+                    }
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={busy}
+                    onClick={() => {
+                      const month = financeMonthPeriod(-1);
+                      change({ ...input, baseline: { ...input.baseline, ...month } });
+                    }}
+                    sx={{ alignSelf: 'center', minHeight: { xs: 44, sm: 36 } }}
+                  >
+                    Chọn tháng trước
+                  </Button>
+                </Stack>
+              </AccordionDetails>
+            </Accordion>
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2,minmax(0,1fr))' },
+                gridTemplateColumns: {
+                  xs: 'minmax(0,1fr)',
+                  sm: 'repeat(2,minmax(0,1fr))',
+                  lg: 'repeat(3,minmax(0,1fr))',
+                },
                 gap: 1.5,
               }}
             >
-              {fields.map(([field, label]) =>
-                !field.endsWith('Percent') ? (
-                  <MoneyField
-                    key={field}
-                    required
-                    label={label}
-                    disabled={busy}
-                    value={input.assumptions[field]}
-                    maxRawLength={24}
-                    onValueChange={(raw) =>
-                      change({
-                        ...input,
-                        assumptions: { ...input.assumptions, [field]: raw },
-                      })
-                    }
-                  />
-                ) : (
-                  <TextField
-                    key={field}
-                    required
-                    label={label}
-                    disabled={busy}
-                    value={input.assumptions[field]}
-                    slotProps={{
-                      htmlInput: {
-                        inputMode: 'decimal',
-                        pattern: field.endsWith('Percent') ? '[0-9]+([.][0-9]+)?' : '[0-9]+',
-                        maxLength: 24,
-                      },
-                    }}
-                    onChange={(e) =>
-                      change({
-                        ...input,
-                        assumptions: { ...input.assumptions, [field]: e.target.value },
-                      })
-                    }
-                  />
-                ),
-              )}
+              {fields.map(([field, label], index) => (
+                <Fragment key={field}>
+                  {index === 0 && (
+                    <Box sx={{ gridColumn: '1 / -1' }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                        Doanh thu và tỷ lệ thu tiền
+                      </Typography>
+                    </Box>
+                  )}
+                  {index === 3 && (
+                    <Box sx={{ gridColumn: '1 / -1', pt: 1 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                        Chi phí dự kiến
+                      </Typography>
+                    </Box>
+                  )}
+                  {!field.endsWith('Percent') ? (
+                    <MoneyField
+                      required
+                      label={label}
+                      disabled={busy}
+                      value={input.assumptions[field]}
+                      maxRawLength={24}
+                      onValueChange={(raw) =>
+                        change({
+                          ...input,
+                          assumptions: { ...input.assumptions, [field]: raw },
+                        })
+                      }
+                    />
+                  ) : (
+                    <TextField
+                      required
+                      label={label}
+                      disabled={busy}
+                      value={input.assumptions[field]}
+                      slotProps={{
+                        htmlInput: {
+                          inputMode: 'decimal',
+                          pattern: field.endsWith('Percent') ? '[0-9]+([.][0-9]+)?' : '[0-9]+',
+                          maxLength: 24,
+                        },
+                      }}
+                      onChange={(e) =>
+                        change({
+                          ...input,
+                          assumptions: { ...input.assumptions, [field]: e.target.value },
+                        })
+                      }
+                    />
+                  )}
+                </Fragment>
+              ))}
             </Box>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
               <Button type="submit" variant="contained" disabled={busy}>
@@ -298,7 +348,14 @@ export function FinancialScenariosApiPage() {
           </Stack>
         </form>
       </Paper>
-      {view && <Result title={view.input.name} value={view} />}
+      {view && (
+        <Box ref={resultRef} tabIndex={-1} sx={{ mt: 3, scrollMarginTop: 90, outline: 'none' }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            Kết quả dự kiến
+          </Typography>
+          <Result title={view.input.name} value={view} />
+        </Box>
+      )}
       {view && (
         <Button
           onClick={() =>
@@ -361,126 +418,155 @@ export function FinancialScenariosApiPage() {
           <Result title={`So sánh: ${comparison.input.name}`} value={comparison} />
         </Box>
       )}
-      <Typography variant="h6">Kịch bản đã lưu</Typography>
-      {!saved.error && !saved.isPending && saved.data?.length === 0 && (
-        <Alert severity="info">Chưa có kịch bản ở trang này.</Alert>
-      )}
-      {!saved.error &&
-        saved.data?.map((s) => (
-          <Paper key={s.id} variant="outlined" sx={{ p: 1.5, my: 1, minWidth: 0 }}>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              useFlexGap
-              spacing={1}
-              sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+      <Accordion variant="outlined" disableGutters sx={{ mt: 1.5 }}>
+        <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+            Kịch bản đã lưu{saved.data ? ` (${saved.data.length})` : ''}
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          {!saved.error && !saved.isPending && saved.data?.length === 0 && (
+            <Alert severity="info">Chưa có kịch bản ở trang này.</Alert>
+          )}
+          {!saved.error &&
+            saved.data?.map((s) => (
+              <Paper key={s.id} variant="outlined" sx={{ p: 1.5, my: 1, minWidth: 0 }}>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  useFlexGap
+                  spacing={1}
+                  sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+                >
+                  <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                    <Typography sx={{ fontWeight: 650 }}>{s.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {s.forecastMonths} tháng
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
+                    <Button
+                      disabled={busy}
+                      aria-label={`Xem ${s.name}`}
+                      onClick={() => void load(s.id)}
+                    >
+                      Xem
+                    </Button>
+                    <Button
+                      disabled={busy || !view}
+                      aria-label={`So sánh ${s.name}`}
+                      onClick={() => void load(s.id, true)}
+                    >
+                      So sánh
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Paper>
+            ))}
+          <Stack
+            direction="row"
+            useFlexGap
+            spacing={1}
+            sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+          >
+            <Button disabled={page === 1 || saved.isFetching} onClick={() => setPage((v) => v - 1)}>
+              Trang trước
+            </Button>
+            <Typography>Trang {page}</Typography>
+            <Button
+              disabled={!saved.data || saved.data.length < 25 || saved.isFetching}
+              onClick={() => setPage((v) => v + 1)}
             >
-              <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-                <Typography sx={{ fontWeight: 650 }}>{s.name}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {s.forecastMonths} tháng
-                </Typography>
-              </Box>
-              <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
-                <Button
-                  disabled={busy}
-                  aria-label={`Xem ${s.name}`}
-                  onClick={() => void load(s.id)}
-                >
-                  Xem
-                </Button>
-                <Button
-                  disabled={busy || !view}
-                  aria-label={`So sánh ${s.name}`}
-                  onClick={() => void load(s.id, true)}
-                >
-                  So sánh
-                </Button>
-              </Stack>
-            </Stack>
-          </Paper>
-        ))}
-      <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-        <Button disabled={page === 1 || saved.isFetching} onClick={() => setPage((v) => v - 1)}>
-          Trang trước
-        </Button>
-        <Typography>Trang {page}</Typography>
-        <Button
-          disabled={!saved.data || saved.data.length < 25 || saved.isFetching}
-          onClick={() => setPage((v) => v + 1)}
-        >
-          Trang sau
-        </Button>
-      </Stack>
+              Trang sau
+            </Button>
+          </Stack>
+        </AccordionDetails>
+      </Accordion>
     </>
   );
 }
 function Result({ title, value }: { title: string; value: ScenarioView }) {
   const r = value.result;
+  const mainFigures = [
+    ['Tiền thu dự kiến / tháng', r.monthlyCollections],
+    ['Lợi nhuận / tháng', r.monthlyProfit],
+    ['Dòng tiền / tháng', r.monthlyNetCashFlow],
+  ] as const;
+  const otherFigures = [
+    ['Doanh thu dự kiến / tháng', r.monthlyRevenue],
+    ['OPEX / tháng', r.monthlyOperatingExpenses],
+    ['Dòng tiền cả kỳ dự báo', r.forecastNetCashFlow],
+    ['Vốn chưa thu hồi cuối dự báo', r.remainingCapitalAtEnd],
+    ['Chênh lệch lợi nhuận tháng so với nền', r.monthlyProfitDifference],
+  ] as const;
   return (
     <Paper variant="outlined" sx={{ p: 1.5, my: 2, minWidth: 0, overflowWrap: 'anywhere' }}>
       <Typography variant="h2" component="h2">
         {title}
       </Typography>
-      {value.baseline.total && (
-        <Stack
-          spacing={0.5}
-          sx={{ my: 1.5, p: 1.5, bgcolor: 'background.default', borderRadius: 1 }}
-        >
-          <Typography variant="subtitle2">
-            Dữ liệu thực tế trong kỳ nền {displayContractDate(value.input.baseline.from)} –{' '}
-            {displayContractDate(value.input.baseline.to)}
-          </Typography>
-          <Typography>
-            Phát hành kỳ nền: {formatFinanceMoney(value.baseline.total.issued)}
-          </Typography>
-          <Typography>
-            Thu đã xác minh kỳ nền: {formatFinanceMoney(value.baseline.total.verifiedCollections)}
-          </Typography>
-          <Typography>
-            Lợi nhuận kỳ nền: {formatFinanceMoney(value.baseline.total.operatingProfit)}
-          </Typography>
-        </Stack>
-      )}
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: 'minmax(0,1fr)', sm: 'repeat(2,minmax(0,1fr))' },
-          gap: 1,
+          gridTemplateColumns: { xs: 'minmax(0,1fr)', md: 'repeat(3,minmax(0,1fr))' },
+          gap: 1.5,
+          my: 1.5,
         }}
       >
-        {(
-          [
-            ['Doanh thu dự kiến / tháng', r.monthlyRevenue],
-            ['Tiền thu dự kiến / tháng', r.monthlyCollections],
-            ['OPEX / tháng', r.monthlyOperatingExpenses],
-            ['Lợi nhuận / tháng', r.monthlyProfit],
-            ['Dòng tiền / tháng', r.monthlyNetCashFlow],
-            ['Dòng tiền cả kỳ dự báo', r.forecastNetCashFlow],
-            ['Vốn chưa thu hồi cuối dự báo', r.remainingCapitalAtEnd],
-            ['Chênh lệch lợi nhuận tháng so với nền', r.monthlyProfitDifference],
-          ] as const
-        ).map(([label, amount]) => (
+        {mainFigures.map(([label, amount]) => (
           <Typography
             key={label}
-            sx={{ fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' }}
+            sx={{ fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere', fontWeight: 650 }}
           >
             {label}: {amount === null ? 'Chưa xác định' : formatFinanceMoney(amount)}
           </Typography>
         ))}
       </Box>
-      <Typography>
-        Ước tính số tháng hoàn vốn còn lại: {r.estimatedRemainingMonths ?? 'Chưa xác định'}
-      </Typography>
       {r.unavailableReason && (
         <Alert severity="info">
           Chưa đủ căn cứ để ước tính hoàn vốn; xem báo cáo dữ liệu nền về vốn, dòng tiền và khoản
           hoàn tiền.
         </Alert>
       )}
-      <Typography variant="caption">
-        Ảnh chụp dữ liệu nền: {formatInstant(value.baseline.snapshotAt)} · Mô hình{' '}
-        {value.calculationVersion}
-      </Typography>
+      <Accordion variant="outlined" disableGutters sx={{ mt: 1.5 }}>
+        <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+            Xem đầy đủ kết quả và dữ liệu nền
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          {value.baseline.total && (
+            <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+              <Typography variant="subtitle2">
+                Dữ liệu thực tế trong kỳ nền {displayContractDate(value.input.baseline.from)} –{' '}
+                {displayContractDate(value.input.baseline.to)}
+              </Typography>
+              <Typography>
+                Phát hành kỳ nền: {formatFinanceMoney(value.baseline.total.issued)}
+              </Typography>
+              <Typography>
+                Thu đã xác minh kỳ nền:{' '}
+                {formatFinanceMoney(value.baseline.total.verifiedCollections)}
+              </Typography>
+              <Typography>
+                Lợi nhuận kỳ nền: {formatFinanceMoney(value.baseline.total.operatingProfit)}
+              </Typography>
+            </Stack>
+          )}
+          <Stack spacing={0.75}>
+            {otherFigures.map(([label, amount]) => (
+              <Typography key={label} sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                {label}: {amount === null ? 'Chưa xác định' : formatFinanceMoney(amount)}
+              </Typography>
+            ))}
+            <Typography>
+              Ước tính số tháng hoàn vốn còn lại: {r.estimatedRemainingMonths ?? 'Chưa xác định'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Ảnh chụp dữ liệu nền: {formatInstant(value.baseline.snapshotAt)} · Mô hình{' '}
+              {value.calculationVersion}
+            </Typography>
+          </Stack>
+        </AccordionDetails>
+      </Accordion>
     </Paper>
   );
 }

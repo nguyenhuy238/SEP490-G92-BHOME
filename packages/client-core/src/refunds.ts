@@ -131,7 +131,8 @@ export function refundClient(request: ContractRequest) {
         body,
       });
     },
-    evidence: (id: string) => request<Blob>(`/api/v1/refund-requests/${id}/evidence`, {}, 'blob'),
+    evidence: (id: string, signal?: AbortSignal) =>
+      request<Blob>(`/api/v1/refund-requests/${id}/evidence`, { signal }, 'blob'),
   };
 }
 export function refundError(error: unknown): string {

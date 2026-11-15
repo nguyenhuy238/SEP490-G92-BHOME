@@ -23,10 +23,12 @@ internal sealed class PaymentCodeRegistry(BHomePersistenceContext db, IPaymentRe
         if (kind is not ("Invoice" or "Deposit" or "MainInitial") || id == Guid.Empty) throw new PaymentException(400, "invalid_payment_obligation");
         async Task<string?> Issue()
         {
-            if (await GetAsync(kind, id, token) is { } existing) return existing;
             var account = await payments.ReceivingAccountAsync(locationId, token);
             if (account is null || !account.Enabled || account.IsDevelopmentDemo != (options.Mode == "Test") ||
                 !options.ReceivingAccounts.Any(a => a.LocationId == locationId && a.BankIdentifier == account.BankIdentifier && a.AccountNumber == account.AccountNumber)) return null;
+            // Even an existing code is not payable while the receiving account no
+            // longer matches SePay. Retain the registry mapping for later recovery.
+            if (await GetAsync(kind, id, token) is { } existing) return existing;
             for (var attempt = 0; attempt < 32; attempt++)
             {
                 var code = options.PaymentCodePrefix + RandomNumberGenerator.GetInt32(100_000_000).ToString("D8", System.Globalization.CultureInfo.InvariantCulture);

@@ -40,6 +40,57 @@ beforeEach(() => {
   vi.resetAllMocks();
   request.mockResolvedValue(source);
 });
+it('previews and downloads a completed refund receipt with the private authorized endpoint', async () => {
+  const png = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2])], {
+    type: 'image/png',
+  });
+  const signature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2]);
+  Object.defineProperty(png, 'slice', {
+    value: () => ({ arrayBuffer: async () => signature.buffer }),
+  });
+  request.mockImplementation(async (path, _init, type) => {
+    if (path === '/api/v1/refund-requests/refund/evidence') {
+      expect(type).toBe('blob');
+      return png;
+    }
+    return { ...source, requests: [{ ...row, status: 'COMPLETED' }] };
+  });
+  const createUrl = vi.fn(() => 'blob:private-refund');
+  const revokeUrl = vi.fn();
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createUrl });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeUrl });
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  try {
+    mount();
+    const preview = await screen.findByRole('button', { name: 'Xem Chứng từ hoàn tiền' });
+    expect(request.mock.calls.some(([path]) => String(path).endsWith('/evidence'))).toBe(false);
+    fireEvent.click(preview);
+    await screen.findByRole('dialog', { name: 'Xem Chứng từ hoàn tiền' });
+    await screen.findByRole('img', { name: 'Chứng từ hoàn tiền' });
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+    await vi.waitFor(() => expect(revokeUrl).toHaveBeenCalledWith('blob:private-refund'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Tải xuống Chứng từ hoàn tiền' }));
+    await vi.waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+    expect(
+      request.mock.calls.filter(([path]) => path === '/api/v1/refund-requests/refund/evidence'),
+    ).toHaveLength(2);
+  } finally {
+    click.mockRestore();
+  }
+});
+it('does not expose a refund preview when the evidence endpoint denies access', async () => {
+  request.mockImplementation(async (path) => {
+    if (path === '/api/v1/refund-requests/refund/evidence') throw { status: 403 };
+    return { ...source, requests: [{ ...row, status: 'COMPLETED' }] };
+  });
+  const createUrl = vi.fn();
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createUrl });
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Xem Chứng từ hoàn tiền' }));
+  expect(await screen.findByText('Chỉ Owner được xử lý hoàn tiền.')).toBeInTheDocument();
+  expect(createUrl).not.toHaveBeenCalled();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
 it('uses the agreed Security Deposit recipient, requires Owner consent, and resets consent/key when obligations change', async () => {
   let current = {
     ...source,
@@ -318,7 +369,9 @@ it('requires a fresh human decision and does not show Completed after approval f
   );
   fireEvent.click(approve);
   await screen.findByText('Yêu cầu đã thay đổi hoặc chưa ở bước phù hợp. Hãy tải lại.');
-  expect(screen.queryByRole('button', { name: 'Tải chứng từ hoàn tiền' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Tải xuống Chứng từ hoàn tiền' }),
+  ).not.toBeInTheDocument();
 });
 it('hides actions on failed source lookup instead of supplying demo data', async () => {
   request.mockRejectedValue({ status: 403 });
@@ -374,7 +427,7 @@ it('refreshes approval and completion only from the server and sends execution a
   );
   fireEvent.click(execute);
   await screen.findByText('Đã ghi nhận hoàn · 20.000 ₫ · Synthetic actual payer');
-  expect(screen.getByRole('button', { name: 'Tải chứng từ hoàn tiền' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Tải xuống Chứng từ hoàn tiền' })).toBeInTheDocument();
 });
 it('keeps an interrupted execution Approved and displays recovery metadata', async () => {
   request.mockResolvedValue({
@@ -407,7 +460,9 @@ it('keeps an interrupted execution Approved and displays recovery metadata', asy
   expect(
     screen.getByRole('button', { name: 'Ghi nhận giao dịch hoàn đã thực hiện' }),
   ).toBeDisabled();
-  expect(screen.queryByRole('button', { name: 'Tải chứng từ hoàn tiền' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Tải xuống Chứng từ hoàn tiền' }),
+  ).not.toBeInTheDocument();
 });
 it('rebinds consent and pending fields when a server intent arrives without a version change', async () => {
   let pending = false;

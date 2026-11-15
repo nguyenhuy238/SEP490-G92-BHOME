@@ -1,5 +1,7 @@
 using BHome.Application.Ocr;
 using BHome.Application.PropertyManagement;
+using BHome.Application.Common;
+using BHome.Application.Storage;
 using BHome.Domain.IdentityAccess;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +41,18 @@ public sealed class TestProbeController : ControllerBase
     [HttpGet("error")]
     [AllowAnonymous]
     public IActionResult Error() => throw new InvalidOperationException("PRIVATE_TEST_DETAIL");
+
+    [HttpGet("private-object-missing")]
+    [AllowAnonymous]
+    public IActionResult PrivateObjectMissing() => throw new PrivateObjectNotFoundException();
+
+    [HttpGet("unrelated-file-missing")]
+    [AllowAnonymous]
+    public IActionResult UnrelatedFileMissing() => throw new FileNotFoundException("PRIVATE_TEST_DETAIL");
+
+    [HttpGet("private-storage-unavailable")]
+    [AllowAnonymous]
+    public IActionResult PrivateStorageUnavailable() => throw new IntegrationUnavailableException("PRIVATE_TEST_DETAIL");
 
     [HttpGet("schema-error/{state}/{wrapped:bool}")]
     [AllowAnonymous]

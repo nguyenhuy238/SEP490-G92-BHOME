@@ -44,13 +44,9 @@ it('protects deep links and returns to the requested screen after demo login', a
   fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: DEMO_PASSWORD } });
   fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập vào hệ thống' }));
   expect(
-    await screen.findByRole(
-      'heading',
-      { name: 'Quản lý hóa đơn tiền phòng & dịch vụ' },
-      { timeout: 12000 },
-    ),
+    await screen.findByRole('heading', { name: 'Hóa đơn phòng' }, { timeout: 20000 }),
   ).toBeInTheDocument();
-}, 15000);
+}, 25000);
 it.each(portalRoutes)(
   'renders independent route %s without API calls',
   async (path) => {

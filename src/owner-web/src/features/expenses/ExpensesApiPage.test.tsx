@@ -67,8 +67,10 @@ it('keeps the Location Workspace scope when loading and creating expenses', asyn
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  await screen.findByText('Bảo trì');
-  expect(screen.getByText('500.000 ₫')).toBeInTheDocument();
+  await screen.findAllByText('Bảo trì');
+  expect(screen.getAllByText('500.000 ₫').length).toBeGreaterThan(0);
+  expect(mock.report).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem tổng hợp vốn và chi phí' }));
   expect(await screen.findByText('15.000.000 ₫')).toBeInTheDocument();
   expect(screen.getByText('1.200.000 ₫')).toBeInTheDocument();
   expect(screen.getByText(/^Toàn cơ sở · đến \d{2}\/\d{2}\/\d{4}$/)).toBeInTheDocument();
@@ -111,7 +113,7 @@ it('keeps the Location Workspace scope when loading and creating expenses', asyn
 });
 it('filters Initial Investment on the server and uses that type for new records', async () => {
   mount();
-  await screen.findByText('Bảo trì');
+  await screen.findAllByText('Bảo trì');
   fireEvent.click(screen.getByRole('tab', { name: 'Đầu tư ban đầu' }));
   await waitFor(() =>
     expect(mock.expenses).toHaveBeenLastCalledWith(
@@ -124,7 +126,12 @@ it('filters Initial Investment on the server and uses that type for new records'
 });
 it('does not request an invalid date range and can clear the filters', async () => {
   mount();
-  await screen.findByText('Bảo trì');
+  await screen.findAllByText('Bảo trì');
+  expect(screen.getByRole('button', { name: 'Bộ lọc chi tiết' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc chi tiết' }));
   fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-12-01' } });
   fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '2026-11-01' } });
   expect(screen.getByText('Chọn lại khoảng ngày để xem khoản chi.')).toBeInTheDocument();
@@ -134,7 +141,7 @@ it('does not request an invalid date range and can clear the filters', async () 
     ),
   ).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }));
-  await screen.findByText('Bảo trì');
+  await screen.findAllByText('Bảo trì');
   expect(screen.getByLabelText('Từ ngày')).toHaveValue('');
   expect(screen.getByLabelText('Đến ngày')).toHaveValue('');
 });
@@ -143,7 +150,7 @@ it('keeps source-managed expenses read-only even when the editor form is submitt
   mock.expenses.mockResolvedValue({ items: [sourceManaged], total: 1, page: 1, pageSize: 25 });
   mock.expense.mockResolvedValue(sourceManaged);
   mount();
-  fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Xem chi tiết' }))[0]);
   await screen.findByText(/Khoản chi này do nghiệp vụ nguồn quản lý/);
   expect(screen.getByLabelText(/Số tiền/)).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Lưu khoản chi' })).toBeDisabled();
@@ -159,7 +166,7 @@ it('loads real API rows, submits one mutation while busy and reloads the list', 
       }),
   );
   mount();
-  await screen.findByText('Bảo trì');
+  await screen.findAllByText('Bảo trì');
   fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
   fireEvent.change(screen.getByLabelText(/Danh mục khoản chi/), { target: { value: 'Vệ sinh' } });
   fireEvent.change(screen.getByLabelText(/Số tiền/), { target: { value: '200000' } });
@@ -183,7 +190,7 @@ it('loads real API rows, submits one mutation while busy and reloads the list', 
 it('loads detail and submits the server revision and correction reason', async () => {
   mock.updateExpense.mockResolvedValue({ ...expense, version: 2 });
   mount();
-  fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết / chỉnh sửa' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết / chỉnh sửa' }))[0]);
   await screen.findByDisplayValue('500.000');
   fireEvent.change(screen.getByLabelText(/Lý do chỉnh sửa/), {
     target: { value: 'Đối chiếu lại' },

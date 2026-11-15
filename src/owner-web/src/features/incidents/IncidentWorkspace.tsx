@@ -10,14 +10,13 @@ import {
   useOwnerQuery,
   type OwnerPage,
 } from '../../hooks/useOwnerWorkspace';
-import { downloadOwnerFile } from '../../services/ownerDownloads';
+import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { mutationKeys } from '../../../../../packages/client-core/src/contracts';
 import { todayVietnam, type StaffAssignment, type Staff } from '../staff/staffContracts';
 import { CreateProactiveMaintenance, FastRepairPolicyPanel } from './MaintenanceControls';
 import { CompensationPanel } from './CompensationPanel';
 import { IncidentCommandDialog, type IncidentCommand } from './IncidentCommandDialog';
-import { IncidentEvidencePreview } from './IncidentEvidencePreview';
 import {
   incidentStatuses,
   workStatuses,
@@ -420,29 +419,15 @@ export function IncidentDetail({ id }: { id: string }) {
             )}
             <Typography variant="h6">Bằng chứng báo cáo, kiểm tra và hoàn tất</Typography>
             {evidence.data?.map((e) => (
-              <Stack key={e.id} spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-                {e.contentType?.startsWith('image/') && (
-                  <IncidentEvidencePreview
-                    path={`${root}/${id}/evidence/${e.id}`}
-                    alt={`Ảnh bằng chứng ${e.kind}`}
-                  />
-                )}
-                <Button
-                  onClick={() =>
-                    void action.run(
-                      () =>
-                        downloadOwnerFile(
-                          action.request,
-                          `${root}/${id}/evidence/${e.id}`,
-                          `su-co-${e.kind}-${e.id}`,
-                        ),
-                      'Đã tải bằng chứng.',
-                    )
-                  }
-                >
-                  {e.kind} · {e.length} byte · {e.workOrderId ? 'Lệnh sửa chữa' : 'Sự cố'}
-                </Button>
-              </Stack>
+              <PrivateEvidenceViewer
+                key={e.id}
+                label={`${e.kind} · ${e.length} byte · ${e.workOrderId ? 'Lệnh sửa chữa' : 'Sự cố'}`}
+                filename={`su-co-${e.kind}-${e.id}.jpg`}
+                contentType={e.contentType}
+                fetchBlob={(signal) =>
+                  action.request<Blob>(`${root}/${id}/evidence/${e.id}`, { signal }, 'blob')
+                }
+              />
             ))}
             {editable && <DirectEvidenceUpload id={id} />}
             <Typography variant="h6">Ứng phó khẩn cấp và quyết định chi phí</Typography>
