@@ -507,9 +507,7 @@ CREATE TABLE refund_requests (
     operation_key uuid NOT NULL UNIQUE,
     version integer NOT NULL DEFAULT 1 CHECK (version>0),
     history jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(history)='array'),
-    CONSTRAINT ck_refund_source_or_tenant_petition CHECK ((source_payment_id IS NULL)<>(source_deposit_contract_id IS NULL) OR
-           (source_payment_id IS NULL AND source_deposit_contract_id IS NULL
-            AND history @> '[{"recordType":"TenantRefundPetitionV1"}]'::jsonb)),
+    CHECK ((source_payment_id IS NULL)<>(source_deposit_contract_id IS NULL)),
     CHECK (status NOT IN ('APPROVED','REJECTED','COMPLETED') OR (decided_by_user_id IS NOT NULL AND decided_at IS NOT NULL)),
     CHECK (status<>'COMPLETED' OR (executed_at IS NOT NULL AND external_refund_reference IS NOT NULL AND execution_evidence_key IS NOT NULL))
 );

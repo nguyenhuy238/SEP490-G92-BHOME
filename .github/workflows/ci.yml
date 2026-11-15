@@ -57,9 +57,19 @@ jobs:
           docker logs --follow "$COMPACT_POSTGRES" > "$RUNNER_TEMP/bhome-compact24-statements.log" 2>&1 &
           echo "BHOME_COMPACT24_QUERY_LOG=$RUNNER_TEMP/bhome-compact24-statements.log" >> "$GITHUB_ENV"
       # GitHub's Linux runner provides Docker for PostgreSQL/MinIO Testcontainers.
-      - run: dotnet test src/backend/BHome.sln -c Release --no-build --settings tests/backend/ci.runsettings --logger trx -m:1
+      - run: dotnet test src/backend/BHome.sln -c Release --no-build --settings tests/backend/ci.runsettings --logger trx --results-directory "$RUNNER_TEMP/bhome-backend-trx" -m:1
         env:
           BHOME_COMPACT24_TEST_ADMIN: Host=127.0.0.1;Port=${{ job.services.compact_postgres.ports['5432'] }};Database=postgres;Username=bhome_ci;Password=synthetic-ci-only
+      # Preserve concise test outcomes even if verbose Testcontainers logs are
+      # too large for the Actions job-log download endpoint.
+      - name: Upload backend test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-trx-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bhome-backend-trx/*.trx
+          if-no-files-found: warn
+          retention-days: 7
       - run: dotnet format src/backend/BHome.sln --verify-no-changes --no-restore
       - name: Verify SePay team configuration scripts without private credentials
         shell: pwsh
