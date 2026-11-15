@@ -69,7 +69,8 @@ export function OwnerSigningPanel({
   const mine = c.signatures.filter((s) => s.signerUserId === actorId);
   const current = [...mine].reverse().find((s) => s.status !== 'Failed') ?? null;
   const inApp = (methods?.methods ?? []).filter(
-    (m): m is 'OTP' | 'UPLOAD_PROOF' | 'OWNER_SESSION' => m === 'UPLOAD_PROOF' || m === 'OTP' || m === 'OWNER_SESSION',
+    (m): m is 'OTP' | 'UPLOAD_PROOF' | 'OWNER_SESSION' =>
+      m === 'UPLOAD_PROOF' || m === 'OTP' || m === 'OWNER_SESSION',
   );
   if (c.ownerSignerId !== actorId || c.isDevelopmentDemo || !methods) return null;
   if (current && DONE.includes(current.status)) return null;
@@ -80,8 +81,11 @@ export function OwnerSigningPanel({
     return (
       <UploadStep signing={signing} contractId={c.id} signature={current} onDone={onChanged} />
     );
-  if ((current && !replacesOtp) || !['Draft', 'PendingSigning'].includes(c.status) || !inApp.length) return null;
-  const preferred = inApp.includes('OWNER_SESSION') ? 'OWNER_SESSION' : inApp.find((m) => m === methods.default) ?? inApp[0];
+  if ((current && !replacesOtp) || !['Draft', 'PendingSigning'].includes(c.status) || !inApp.length)
+    return null;
+  const preferred = inApp.includes('OWNER_SESSION')
+    ? 'OWNER_SESSION'
+    : (inApp.find((m) => m === methods.default) ?? inApp[0]);
   const chosen = inApp.find((m) => m === method) ?? preferred;
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
@@ -99,7 +103,11 @@ export function OwnerSigningPanel({
           >
             {inApp.map((m) => (
               <ToggleButton key={m} value={m}>
-                {m === 'OWNER_SESSION' ? 'Ký trực tiếp' : m === 'UPLOAD_PROOF' ? 'Tải về & ký số bên ngoài' : 'Ký điện tử bằng OTP'}
+                {m === 'OWNER_SESSION'
+                  ? 'Ký trực tiếp'
+                  : m === 'UPLOAD_PROOF'
+                    ? 'Tải về & ký số bên ngoài'
+                    : 'Ký điện tử bằng OTP'}
               </ToggleButton>
             ))}
           </ToggleButtonGroup>
@@ -107,7 +115,12 @@ export function OwnerSigningPanel({
         {chosen === 'UPLOAD_PROOF' ? (
           <UploadStart signing={signing} contractId={c.id} onStarted={onChanged} />
         ) : (
-          <OtpStart signing={signing} contractId={c.id} onStarted={onChanged} session={chosen === 'OWNER_SESSION'} />
+          <OtpStart
+            signing={signing}
+            contractId={c.id}
+            onStarted={onChanged}
+            session={chosen === 'OWNER_SESSION'}
+          />
         )}
       </Stack>
     </Paper>
@@ -366,7 +379,13 @@ function OtpStart({
         await signing.drawImage(drawing);
         setRevision((r) => r + 1);
       }
-      await signing.start(contractId, session ? 'OWNER_SESSION' : 'OTP', key, choice.placement, choice.usePicture);
+      await signing.start(
+        contractId,
+        session ? 'OWNER_SESSION' : 'OTP',
+        key,
+        choice.placement,
+        choice.usePicture,
+      );
       onStarted();
     } catch (e) {
       setError(signingError(e));

@@ -169,7 +169,9 @@ export function ContractSigningStep({
             Math.min(Date.now() + 3600000, Date.parse(c.holdingExpiresAt ?? '') || Infinity),
           ).toISOString(),
           emails[c.representativeResidentId],
-          Object.entries(emails).filter(([, email]) => email.trim()).map(([residentId, email]) => ({ residentId, email })),
+          Object.entries(emails)
+            .filter(([, email]) => email.trim())
+            .map(([residentId, email]) => ({ residentId, email })),
         );
         setUncertainInvitation(false);
       }
@@ -187,7 +189,8 @@ export function ContractSigningStep({
         <Heading title="Bước 6 · Ký hợp đồng" />
         {c.kind !== 'Holding' && (
           <Text style={ui.muted}>
-            Phòng {c.roomNumber} · {c.locationName} · Đại diện: {c.occupants?.find((p) => p.representative)?.label ?? 'Theo hồ sơ hợp đồng'}
+            Phòng {c.roomNumber} · {c.locationName} · Đại diện:{' '}
+            {c.occupants?.find((p) => p.representative)?.label ?? 'Theo hồ sơ hợp đồng'}
           </Text>
         )}
         <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: '700', color: '#193653' }}>
@@ -203,22 +206,41 @@ export function ContractSigningStep({
           const at = signature?.signedAt ?? p.at;
           return (
             <React.Fragment key={p.label}>
-              <Text style={{ fontSize: 13, lineHeight: 20, fontWeight: '600', color: at ? '#16804A' : '#193653' }}>
+              <Text
+                style={{
+                  fontSize: 13,
+                  lineHeight: 20,
+                  fontWeight: '600',
+                  color: at ? '#16804A' : '#193653',
+                }}
+              >
                 {p.label}: {at ? 'Đã ký' : 'Chờ ký'}
               </Text>
               {!!at && (
                 <Text style={{ fontSize: 12, lineHeight: 18, color: '#526581' }}>
-                  {formatInstant(at)} · {signature?.method ? signingMethodLabel(signature.method) : 'OTP qua lời mời'}
+                  {formatInstant(at)} ·{' '}
+                  {signature?.method ? signingMethodLabel(signature.method) : 'OTP qua lời mời'}
                 </Text>
               )}
             </React.Fragment>
           );
         })}
-        <Text style={{ backgroundColor: '#F2F6FB', padding: 12, borderRadius: 10, fontSize: 13, lineHeight: 19, color: '#193653' }}>
-          {complete ? 'Đã hoàn tất ký. ' : 'Thao tác tiếp theo: '}{nextSignerMessage}
+        <Text
+          style={{
+            backgroundColor: '#F2F6FB',
+            padding: 12,
+            borderRadius: 10,
+            fontSize: 13,
+            lineHeight: 19,
+            color: '#193653',
+          }}
+        >
+          {complete ? 'Đã hoàn tất ký. ' : 'Thao tác tiếp theo: '}
+          {nextSignerMessage}
         </Text>
         <Text style={{ fontSize: 12, lineHeight: 18, color: '#526581' }}>
-          OTP và chữ ký vẽ là chữ ký điện tử; dấu PDF BHOME không phải chứng thư số cá nhân của người ký.
+          OTP và chữ ký vẽ là chữ ký điện tử; dấu PDF BHOME không phải chứng thư số cá nhân của
+          người ký.
         </Text>
         {internal && !status?.tenantAcceptedAt && (
           <>
@@ -244,23 +266,40 @@ export function ContractSigningStep({
             )}
             {['Owner', 'Staff'].includes(role) && !currentInvitation && (
               <>
-              {(c.occupants?.length ? c.occupants : [{ id: c.representativeResidentId, label: representativeLabel, representative: true }]).map((person) => (
-                <Input key={person.id} label={`Email nhận lời mời · ${person.label}`} email value={emails[person.id] ?? ''}
-                  onChange={(email) => setEmails((before) => ({ ...before, [person.id]: email }))} disabled={busy} />
-              ))}
-              <Text style={ui.muted}>Email dùng cho lời mời ký, không tự tạo tài khoản Tenant.</Text>
-              <Action
-                disabled={
-                  busy ||
-                  uncertainInvitation ||
-                  !status ||
-                  !!currentInvitation ||
-                  (c.kind === 'Holding' && !c.approvedAt)
-                }
-                onPress={() => void invite()}
-              >
-                Gửi lời mời ký qua email
-              </Action>
+                {(c.occupants?.length
+                  ? c.occupants
+                  : [
+                      {
+                        id: c.representativeResidentId,
+                        label: representativeLabel,
+                        representative: true,
+                      },
+                    ]
+                ).map((person) => (
+                  <Input
+                    key={person.id}
+                    label={`Email nhận lời mời · ${person.label}`}
+                    email
+                    value={emails[person.id] ?? ''}
+                    onChange={(email) => setEmails((before) => ({ ...before, [person.id]: email }))}
+                    disabled={busy}
+                  />
+                ))}
+                <Text style={ui.muted}>
+                  Email dùng cho lời mời ký, không tự tạo tài khoản Tenant.
+                </Text>
+                <Action
+                  disabled={
+                    busy ||
+                    uncertainInvitation ||
+                    !status ||
+                    !!currentInvitation ||
+                    (c.kind === 'Holding' && !c.approvedAt)
+                  }
+                  onPress={() => void invite()}
+                >
+                  Gửi lời mời ký qua email
+                </Action>
               </>
             )}
             {owner && currentInvitation && (

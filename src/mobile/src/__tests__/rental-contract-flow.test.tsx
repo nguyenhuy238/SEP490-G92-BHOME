@@ -93,8 +93,15 @@ vi.mock('../components/WorkspaceKit', () => ({
   ),
 }));
 vi.mock('../components/WorkflowControls', () => ({
-  Input: ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) =>
-    <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
+  Input: ({
+    label,
+    value,
+    onChange,
+  }: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+  }) => <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
   ChoiceField: ({
     label,
     value,
@@ -436,9 +443,7 @@ it('keeps activation blocked for Owner when backend readiness is false', () => {
     signedAt: null,
   }));
   flow(c, 'Owner', { ...ready, ready: false, blockers: ['effective_date_not_reached'] });
-  expect(
-    screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' }),
-  ).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
   expect(screen.queryByText('Hợp đồng đã được kích hoạt')).toBeNull();
 });
 it('renders success only from Active and returns to the existing list', () => {

@@ -148,7 +148,15 @@ it.each([
     expect(props.onConfirmed).toHaveBeenCalledOnce();
     expect(screen.getByText('Đã xác minh')).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
-    view.rerender(<HoldingNewTenant {...props} {...saved} initialResidentId="holding-applicant" key="details-return" stage="details" />);
+    view.rerender(
+      <HoldingNewTenant
+        {...props}
+        {...saved}
+        initialResidentId="holding-applicant"
+        key="details-return"
+        stage="details"
+      />,
+    );
     fireEvent.click(screen.getByText('Tiếp tục'));
     expect(create).toHaveBeenCalledOnce();
     expect(props.onContinue).toHaveBeenCalledTimes(2);

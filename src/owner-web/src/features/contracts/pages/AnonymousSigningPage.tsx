@@ -104,11 +104,13 @@ export default function AnonymousSigningPage() {
                   <Typography>{info}</Typography>
                   {otpRequested ? (
                     <Alert severity="success" role="status">
-                      Đã yêu cầu gửi mã xác nhận. Kiểm tra email, cả mục Spam/Thư rác, rồi nhập mã bên dưới.
+                      Đã yêu cầu gửi mã xác nhận. Kiểm tra email, cả mục Spam/Thư rác, rồi nhập mã
+                      bên dưới.
                     </Alert>
                   ) : (
                     <Typography color="text.secondary">
-                      Nhập mã OTP 6 chữ số trong email mời ký. Mã có hiệu lực 5 phút; nếu hết hạn hoặc email cũ chưa có mã, bấm Gửi lại mã OTP.
+                      Nhập mã OTP 6 chữ số trong email mời ký. Mã có hiệu lực 5 phút; nếu hết hạn
+                      hoặc email cũ chưa có mã, bấm Gửi lại mã OTP.
                     </Typography>
                   )}
                   <Button

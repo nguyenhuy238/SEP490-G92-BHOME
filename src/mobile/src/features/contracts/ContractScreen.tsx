@@ -503,7 +503,10 @@ function LiveContractDetail({
       )}
       {!holding && <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>}
       {!!detail.refreshError && (
-        <Text accessibilityRole="alert" style={ui.red}>Chưa cập nhật được trạng thái mới. Nội dung trước đó vẫn được giữ lại. {detail.refreshError}</Text>
+        <Text accessibilityRole="alert" style={ui.red}>
+          Chưa cập nhật được trạng thái mới. Nội dung trước đó vẫn được giữ lại.{' '}
+          {detail.refreshError}
+        </Text>
       )}
       {c.kind === 'Holding' ? (
         <View style={holdingTabs.styles.container}>
@@ -518,7 +521,10 @@ function LiveContractDetail({
               key={key}
               compact
               style={[holdingTabs.styles.tab, section === key && holdingTabs.styles.activeTab]}
-              labelStyle={[holdingTabs.styles.label, section === key && holdingTabs.styles.activeLabel]}
+              labelStyle={[
+                holdingTabs.styles.label,
+                section === key && holdingTabs.styles.activeLabel,
+              ]}
               contentStyle={{ minHeight: 42 }}
               mode="text"
               accessibilityState={{ selected: section === key }}

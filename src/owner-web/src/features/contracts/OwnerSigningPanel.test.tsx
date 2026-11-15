@@ -41,7 +41,11 @@ vi.mock('./SignaturePlacementPicker', () => ({
   SignaturePlacementPicker: () => <div>Reviewed PDF</div>,
 }));
 
-function renderPanel(contract: ContractView, transport: ReturnType<typeof vi.fn>, offered = methods) {
+function renderPanel(
+  contract: ContractView,
+  transport: ReturnType<typeof vi.fn>,
+  offered = methods,
+) {
   const onChanged = vi.fn();
   render(
     <QueryClientProvider
@@ -59,22 +63,41 @@ function renderPanel(contract: ContractView, transport: ReturnType<typeof vi.fn>
   return onChanged;
 }
 
-it.each(['Holding', 'Main'])('replaces a pending Owner OTP on %s with explicit session consent', async (kind) => {
-  const transport = vi.fn().mockResolvedValue({ id: signatureId, status: 'Signed', method: 'OWNER_SESSION' });
-  const changed = renderPanel({ ...pending, kind, signatures: [{
-    id: signatureId, signerUserId: owner, status: 'Pending', signedAt: null, method: 'OTP',
-  }] }, transport, { methods: ['OWNER_SESSION', 'UPLOAD_PROOF'], default: 'OWNER_SESSION' });
-  const button = screen.getByRole('button', { name: 'Ký hợp đồng' });
-  expect(button).toBeDisabled();
-  expect(screen.queryByLabelText('Mã xác nhận')).toBeNull();
-  fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(button);
-  await waitFor(() => expect(changed).toHaveBeenCalledOnce());
-  const [path, init] = transport.mock.calls[0];
-  expect(path).toBe(`/api/v1/contracts/${id}/signing`);
-  expect(JSON.parse(init.body)).toMatchObject({ method: 'OWNER_SESSION', consent: true });
-  expect(transport.mock.calls.some(([url]) => url.includes('/otp'))).toBe(false);
-});
+it.each(['Holding', 'Main'])(
+  'replaces a pending Owner OTP on %s with explicit session consent',
+  async (kind) => {
+    const transport = vi
+      .fn()
+      .mockResolvedValue({ id: signatureId, status: 'Signed', method: 'OWNER_SESSION' });
+    const changed = renderPanel(
+      {
+        ...pending,
+        kind,
+        signatures: [
+          {
+            id: signatureId,
+            signerUserId: owner,
+            status: 'Pending',
+            signedAt: null,
+            method: 'OTP',
+          },
+        ],
+      },
+      transport,
+      { methods: ['OWNER_SESSION', 'UPLOAD_PROOF'], default: 'OWNER_SESSION' },
+    );
+    const button = screen.getByRole('button', { name: 'Ký hợp đồng' });
+    expect(button).toBeDisabled();
+    expect(screen.queryByLabelText('Mã xác nhận')).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(button);
+    await waitFor(() => expect(changed).toHaveBeenCalledOnce());
+    const [path, init] = transport.mock.calls[0];
+    expect(path).toBe(`/api/v1/contracts/${id}/signing`);
+    expect(JSON.parse(init.body)).toMatchObject({ method: 'OWNER_SESSION', consent: true });
+    expect(transport.mock.calls.some(([url]) => url.includes('/otp'))).toBe(false);
+  },
+);
 
 it('starts UPLOAD_PROOF signing with an idempotency key and no certificate', async () => {
   const transport = vi.fn().mockResolvedValue({ id: signatureId });

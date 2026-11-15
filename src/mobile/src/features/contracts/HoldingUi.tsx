@@ -22,7 +22,11 @@ export function HoldingSectionCard({
 }) {
   return (
     <View style={[styles.card, style]}>
-      {title && <Text accessibilityRole="header" style={styles.sectionTitle}>{title}</Text>}
+      {title && (
+        <Text accessibilityRole="header" style={styles.sectionTitle}>
+          {title}
+        </Text>
+      )}
       {children}
     </View>
   );
@@ -32,7 +36,15 @@ export function HoldingInfoRow({ label, value }: { label: string; value?: React.
   return (
     <View style={styles.row}>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.value}>{typeof value === 'string' ? <Text style={styles.valueText} selectable>{value || '—'}</Text> : value ?? <Text style={styles.valueText}>—</Text>}</View>
+      <View style={styles.value}>
+        {typeof value === 'string' ? (
+          <Text style={styles.valueText} selectable>
+            {value || '—'}
+          </Text>
+        ) : (
+          (value ?? <Text style={styles.valueText}>—</Text>)
+        )}
+      </View>
     </View>
   );
 }
@@ -57,13 +69,7 @@ export function HoldingStatusBadge({
   );
 }
 
-export function HoldingChecklistRow({
-  label,
-  complete,
-}: {
-  label: string;
-  complete: boolean;
-}) {
+export function HoldingChecklistRow({ label, complete }: { label: string; complete: boolean }) {
   return (
     <View style={styles.checklistRow}>
       <Icon
@@ -89,10 +95,22 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: '#17345C' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'center', minHeight: 28 },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    alignItems: 'center',
+    minHeight: 28,
+  },
   label: { fontSize: 13, lineHeight: 19, color: '#526581', flexShrink: 1, maxWidth: '45%' },
   value: { alignItems: 'flex-end', flex: 1, minWidth: 0 },
-  valueText: { fontSize: 13, lineHeight: 19, color: '#1F2937', fontWeight: '600', textAlign: 'right' },
+  valueText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#1F2937',
+    fontWeight: '600',
+    textAlign: 'right',
+  },
   badge: { borderRadius: 6, paddingHorizontal: 9, paddingVertical: 5, alignSelf: 'flex-start' },
   badgeText: { fontSize: 12, fontWeight: '600' },
   checklistRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },

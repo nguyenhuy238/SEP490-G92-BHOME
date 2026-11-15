@@ -367,7 +367,8 @@ function namePerson(label: string) {
   fireEvent.change(screen.getByLabelText('Tên gọi hồ sơ'), { target: { value: label } });
 }
 it.each(['Nhập thủ công', 'Bắt đầu quét CCCD'] as const)(
-  'creates an identity through %s without collecting email or reserving an account', async (entry) => {
+  'creates an identity through %s without collecting email or reserving an account',
+  async (entry) => {
     render(<OnboardingScreen />);
     selectRoom();
     namePerson('Synthetic deferred occupant');
@@ -377,7 +378,10 @@ it.each(['Nhập thủ công', 'Bắt đầu quét CCCD'] as const)(
     fireEvent.click(screen.getByRole('button', { name: entry }));
     await screen.findByRole('dialog');
     expect(state.json).toHaveBeenCalledOnce();
-    expect(state.json.mock.calls[0][1]).toMatchObject({ roomId: 'room', displayLabel: 'Synthetic deferred occupant' });
+    expect(state.json.mock.calls[0][1]).toMatchObject({
+      roomId: 'room',
+      displayLabel: 'Synthetic deferred occupant',
+    });
     expect(state.json.mock.calls[0][1]).not.toHaveProperty('email');
     expect(state.request.mock.calls.some(([path]) => path.includes('/residents'))).toBe(false);
   },
@@ -580,23 +584,26 @@ it('does not blindly create another Resident after a timeout with an unknown sav
   expect(state.json).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('dialog')).toBeNull();
 });
-it.each(['Web released contract', 'Contract list'])('keeps Staff on authorized contract routes after %s', async (action) => {
-  render(<OnboardingScreen />);
-  selectRoom();
-  namePerson('Synthetic contract applicant');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
-  await openIdentity();
-  manualIdentity();
-  fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-  await screen.findByText('Đã xác nhận 1/1 người ở');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
-  fireEvent.click(screen.getByRole('button', { name: action }));
-  if (action === 'Web released contract')
-    expect(state.go).toHaveBeenCalledWith('signing', { contractId: 'released-contract' });
-  else expect(state.go).toHaveBeenCalledWith('signing');
-  expect(state.go.mock.calls.some(([destination]) => destination === 'contract')).toBe(false);
-});
+it.each(['Web released contract', 'Contract list'])(
+  'keeps Staff on authorized contract routes after %s',
+  async (action) => {
+    render(<OnboardingScreen />);
+    selectRoom();
+    namePerson('Synthetic contract applicant');
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+    await openIdentity();
+    manualIdentity();
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
+    await screen.findByText('Đã xác nhận 1/1 người ở');
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
+    fireEvent.click(screen.getByRole('button', { name: action }));
+    if (action === 'Web released contract')
+      expect(state.go).toHaveBeenCalledWith('signing', { contractId: 'released-contract' });
+    else expect(state.go).toHaveBeenCalledWith('signing');
+    expect(state.go.mock.calls.some(([destination]) => destination === 'contract')).toBe(false);
+  },
+);
 async function submitAlreadyConfirmed() {
   render(<OnboardingScreen />);
   selectRoom();

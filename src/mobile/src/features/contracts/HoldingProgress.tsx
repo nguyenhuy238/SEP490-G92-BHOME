@@ -22,7 +22,9 @@ export function HoldingProgress({ current }: { current: number }) {
       />
       <View style={styles.row}>
         {current < holdingSteps.length - 1 && (
-          <Text style={styles.next} numberOfLines={1}>Tiếp theo: {holdingSteps[current + 1]?.label}</Text>
+          <Text style={styles.next} numberOfLines={1}>
+            Tiếp theo: {holdingSteps[current + 1]?.label}
+          </Text>
         )}
       </View>
       <Button
@@ -62,5 +64,12 @@ const styles = StyleSheet.create({
   bar: { height: 5, borderRadius: 8, backgroundColor: '#E2E8F0' },
   info: { fontSize: 12, color: '#193653' },
   infoButton: { alignSelf: 'flex-start', marginLeft: -8 },
-  details: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, gap: 6, borderWidth: 1, borderColor: '#E2E8F0' },
+  details: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
 });

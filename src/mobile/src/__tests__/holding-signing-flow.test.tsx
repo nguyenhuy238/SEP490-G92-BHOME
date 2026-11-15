@@ -8,11 +8,24 @@ import { type InternalSigningStatus } from '../../../../packages/client-core/src
 vi.mock('../features/contracts/ContractSigningPanel', () => ({ ContractSigningPanel: () => null }));
 vi.mock('../features/contracts/SigningSetup', () => ({ SignaturePlacementField: () => null }));
 vi.mock('../components/WorkflowControls', () => ({
-  Input: ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) =>
-    <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
+  Input: ({
+    label,
+    value,
+    onChange,
+  }: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+  }) => <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
 }));
 vi.mock('react-native', () => ({
-  Image: ({ accessibilityLabel, source }: { accessibilityLabel: string; source: { uri: string } }) => <img alt={accessibilityLabel} src={source.uri} />,
+  Image: ({
+    accessibilityLabel,
+    source,
+  }: {
+    accessibilityLabel: string;
+    source: { uri: string };
+  }) => <img alt={accessibilityLabel} src={source.uri} />,
   StyleSheet: { create: (value: unknown) => value },
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -174,22 +187,51 @@ beforeEach(() => {
       return { required: '2000000', verified: '2000000', remaining: '0', status: 'Verified' };
     if (path.includes('/rooms/')) return { status: room };
     if (path.endsWith('/deposit-payment')) return { transferReference: 'BACKEND-REFERENCE' };
-    if (path.endsWith('/transfer-instructions')) return { mode: 'Test', previewOnly: true, bankIdentifier: '970416', accountNumber: '12345678', accountHolder: 'SYNTHETIC TEST', outstandingAmount: '2000000', transferReference: 'BH12345678', qrImageDataUri: 'data:image/png;base64,c3ludGhldGlj' };
+    if (path.endsWith('/transfer-instructions'))
+      return {
+        mode: 'Test',
+        previewOnly: true,
+        bankIdentifier: '970416',
+        accountNumber: '12345678',
+        accountHolder: 'SYNTHETIC TEST',
+        outstandingAmount: '2000000',
+        transferReference: 'BH12345678',
+        qrImageDataUri: 'data:image/png;base64,c3ludGhldGlj',
+      };
     throw new Error(`Unexpected endpoint ${path} ${init?.method || 'GET'}`);
   });
 });
 afterEach(cleanup);
 it('loads sandbox QR for Staff at Step 7 and never activates or claims a real deposit', async () => {
   const original = request.getMockImplementation()!;
-  request.mockImplementation((path: string, init?: RequestInit) => path.endsWith('/holding-deposit')
-    ? Promise.resolve({ required: '2000000', verified: '0', remaining: '2000000', status: 'Unpaid' })
-    : original(path, init));
-  show(contract({ isDevelopmentDemo: false, status: 'PendingActivation', approvedAt: '2026-11-15T00:00:00Z' }), 'Staff', 'staff');
+  request.mockImplementation((path: string, init?: RequestInit) =>
+    path.endsWith('/holding-deposit')
+      ? Promise.resolve({
+          required: '2000000',
+          verified: '0',
+          remaining: '2000000',
+          status: 'Unpaid',
+        })
+      : original(path, init),
+  );
+  show(
+    contract({
+      isDevelopmentDemo: false,
+      status: 'PendingActivation',
+      approvedAt: '2026-11-15T00:00:00Z',
+    }),
+    'Staff',
+    'staff',
+  );
   await screen.findByAltText('QR chuyển khoản sandbox');
   expect(screen.getByText('SePay Test · QR sandbox')).toBeTruthy();
   expect(screen.getByText(/Giao dịch Test không được tính thành tiền cọc thật/)).toBeTruthy();
   expect(request.mock.calls.some(([path]) => path.endsWith('/transfer-instructions'))).toBe(true);
-  expect(request.mock.calls.some(([path]) => path.endsWith('/simulation/activate') || path.endsWith('/holding-activation'))).toBe(false);
+  expect(
+    request.mock.calls.some(
+      ([path]) => path.endsWith('/simulation/activate') || path.endsWith('/holding-activation'),
+    ),
+  ).toBe(false);
 });
 it.each([true, false])(
   'Holding real Step 6 opens the existing Step 7 without activation, invitation=%s',

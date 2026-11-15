@@ -74,13 +74,19 @@ export function ContractSigningPanel({
   const inApp = (methods?.methods ?? []).filter(
     (m) => m === 'OTP' || (owner && (m === 'UPLOAD_PROOF' || m === 'OWNER_SESSION')),
   );
-  const preferred = owner && inApp.includes('OWNER_SESSION') ? 'OWNER_SESSION' : inApp.includes(methods?.default ?? '') ? methods!.default! : inApp[0];
+  const preferred =
+    owner && inApp.includes('OWNER_SESSION')
+      ? 'OWNER_SESSION'
+      : inApp.includes(methods?.default ?? '')
+        ? methods!.default!
+        : inApp[0];
   const [method, setMethod] = useState<string | undefined>(undefined);
   const chosen = method ?? preferred;
   if (!signer || c.isDevelopmentDemo || !methods) return null;
 
   if (current && DONE.includes(current.status)) return <Signed c={c} owner={owner} />;
-  const replacesOtp = owner && current?.method === 'OTP' && OPEN(current) && inApp.includes('OWNER_SESSION');
+  const replacesOtp =
+    owner && current?.method === 'OTP' && OPEN(current) && inApp.includes('OWNER_SESSION');
   if (current?.method === 'OTP' && OPEN(current) && !replacesOtp)
     return <OtpStep signing={signing} contractId={c.id} onDone={onChanged} />;
   if (current?.method === 'UPLOAD_PROOF' && OPEN(current))
@@ -107,9 +113,11 @@ export function ContractSigningPanel({
             options={inApp.map((m) => ({
               id: m,
               label:
-                m === 'OWNER_SESSION' ? 'Ký trực tiếp' : m === 'UPLOAD_PROOF'
-                  ? 'Tải về & ký số bên ngoài'
-                  : 'Ký điện tử bằng mã OTP',
+                m === 'OWNER_SESSION'
+                  ? 'Ký trực tiếp'
+                  : m === 'UPLOAD_PROOF'
+                    ? 'Tải về & ký số bên ngoài'
+                    : 'Ký điện tử bằng mã OTP',
             }))}
           />
         </Box>
@@ -117,7 +125,13 @@ export function ContractSigningPanel({
       {chosen === 'UPLOAD_PROOF' ? (
         <UploadStart signing={signing} contractId={c.id} onStarted={onChanged} />
       ) : (
-        <OtpStart signing={signing} contract={c} owner={owner} session={chosen === 'OWNER_SESSION'} onStarted={onChanged} />
+        <OtpStart
+          signing={signing}
+          contract={c}
+          owner={owner}
+          session={chosen === 'OWNER_SESSION'}
+          onStarted={onChanged}
+        />
       )}
     </>
   );
@@ -173,7 +187,13 @@ function OtpStart({
         await signing.drawImage(drawing);
         setPictureRevision((r) => r + 1);
       }
-      await signing.start(c.id, session ? 'OWNER_SESSION' : 'OTP', key, choice.placement, choice.usePicture);
+      await signing.start(
+        c.id,
+        session ? 'OWNER_SESSION' : 'OTP',
+        key,
+        choice.placement,
+        choice.usePicture,
+      );
       onStarted();
     } catch (e) {
       setError(signingError(e));
@@ -183,7 +203,14 @@ function OtpStart({
   }
   return (
     <Box>
-      <Heading title="Ký hợp đồng" detail={session ? 'Ký điện tử · xác thực bằng phiên đăng nhập Owner' : 'Ký điện tử · xác thực bằng mã OTP qua email'} />
+      <Heading
+        title="Ký hợp đồng"
+        detail={
+          session
+            ? 'Ký điện tử · xác thực bằng phiên đăng nhập Owner'
+            : 'Ký điện tử · xác thực bằng mã OTP qua email'
+        }
+      />
       <SignaturePlacementField
         key={pictureRevision}
         signing={signing}
@@ -218,9 +245,11 @@ function OtpStart({
       <Action disabled={busy || !agreed} onPress={() => void sign()}>
         {busy ? (session ? 'Đang ký…' : 'Đang gửi mã…') : 'Ký hợp đồng'}
       </Action>
-      <Text style={ui.muted}>{session
-        ? 'Bấm Ký hợp đồng để áp dụng chữ ký bằng phiên đăng nhập Owner. Đây là ký điện tử với dấu BHOME, không phải chữ ký số cá nhân được CA chứng thực.'
-        : 'Bấm Ký hợp đồng, BHOME gửi mã xác nhận 6 số tới email của bạn.'}</Text>
+      <Text style={ui.muted}>
+        {session
+          ? 'Bấm Ký hợp đồng để áp dụng chữ ký bằng phiên đăng nhập Owner. Đây là ký điện tử với dấu BHOME, không phải chữ ký số cá nhân được CA chứng thực.'
+          : 'Bấm Ký hợp đồng, BHOME gửi mã xác nhận 6 số tới email của bạn.'}
+      </Text>
     </Box>
   );
 }

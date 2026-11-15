@@ -18,7 +18,10 @@ import {
   signingMessage,
   type InternalSigningStatus,
 } from '../../../../../packages/client-core/src/internalSigning';
-import { paymentClient, type ContractDepositInstructions } from '../../../../../packages/client-core/src/payments';
+import {
+  paymentClient,
+  type ContractDepositInstructions,
+} from '../../../../../packages/client-core/src/payments';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Heading, ui } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
@@ -88,7 +91,10 @@ export function HoldingContractFlow({
 }) {
   // Reopening always resumes from persisted backend state, never by posting another draft.
   const [verifiedDepositContract, setVerifiedDepositContract] = useState<string | null>(null);
-  const onDepositVerified = useCallback((contractId: string) => setVerifiedDepositContract(contractId), []);
+  const onDepositVerified = useCallback(
+    (contractId: string) => setVerifiedDepositContract(contractId),
+    [],
+  );
   const depositVerified = verifiedDepositContract === c.id;
   const step = c.status === 'PendingActivation' && depositVerified ? 8 : holdingStage(c);
   const [operation, setOperation] = useState('');
@@ -132,11 +138,19 @@ export function HoldingContractFlow({
         <Heading title={`Phòng ${c.roomNumber || '—'}`} detail={c.locationName} />
         <HoldingStatusBadge
           label={
-            step === 5 ? 'Bản nháp đang chờ duyệt' : c.status === 'PendingActivation' && depositVerified
-              ? 'Đã xác minh tiền cọc · Đang tự động kích hoạt'
-              : holdingStageLabel(c) || 'Đang xử lý hợp đồng'
+            step === 5
+              ? 'Bản nháp đang chờ duyệt'
+              : c.status === 'PendingActivation' && depositVerified
+                ? 'Đã xác minh tiền cọc · Đang tự động kích hoạt'
+                : holdingStageLabel(c) || 'Đang xử lý hợp đồng'
           }
-          tone={c.status === 'Active' ? 'success' : step === 5 || depositVerified ? 'warning' : 'neutral'}
+          tone={
+            c.status === 'Active'
+              ? 'success'
+              : step === 5 || depositVerified
+                ? 'warning'
+                : 'neutral'
+          }
         />
         <ReadOnly label="Người giữ chỗ" value={representative} />
         <ReadOnly
@@ -152,7 +166,9 @@ export function HoldingContractFlow({
       {step === 5 && !owner && (
         <HoldingSectionCard title="Bản nháp & phê duyệt">
           <HoldingStatusBadge label="Chờ Owner phê duyệt" tone="warning" />
-          <Text style={ui.muted}>Đang chờ Owner phê duyệt hợp đồng. Sau khi duyệt, Owner sẽ gửi lời mời ký.</Text>
+          <Text style={ui.muted}>
+            Đang chờ Owner phê duyệt hợp đồng. Sau khi duyệt, Owner sẽ gửi lời mời ký.
+          </Text>
         </HoldingSectionCard>
       )}
       {step === 6 && !c.isDevelopmentDemo && (
@@ -624,12 +640,21 @@ function HoldingPayment({
   useEffect(() => {
     const controller = new AbortController();
     if (c.status !== 'Active')
-      void paymentClient(api.transport).depositInstructions(c.id, controller.signal)
-        .then((result) => { if (!controller.signal.aborted) { setQr(result); setQrError(''); } })
+      void paymentClient(api.transport)
+        .depositInstructions(c.id, controller.signal)
+        .then((result) => {
+          if (!controller.signal.aborted) {
+            setQr(result);
+            setQrError('');
+          }
+        })
         .catch((e) => {
-          if (!controller.signal.aborted) setQrError((e as { status?: number }).status === 404
-            ? 'QR chưa khả dụng cho cơ sở này. Owner kiểm tra cấu hình tài khoản nhận tiền.'
-            : contractError(e));
+          if (!controller.signal.aborted)
+            setQrError(
+              (e as { status?: number }).status === 404
+                ? 'QR chưa khả dụng cho cơ sở này. Owner kiểm tra cấu hình tài khoản nhận tiền.'
+                : contractError(e),
+            );
         });
     return () => controller.abort();
   }, [api, c.id, c.status, qrRevision]);
@@ -639,29 +664,35 @@ function HoldingPayment({
     const controller = new AbortController();
     let loading = false;
     const load = () => {
-    if (loading) return;
-    loading = true;
-    void Promise.all([
-      api.transport<HoldingDepositStatus>(`/api/v1/contracts/${c.id}/holding-deposit`, {
-        signal: controller.signal,
-      }),
-      api.transport<{ status: number }>(`/api/v1/rooms/${c.roomId}`, { signal: controller.signal }),
-    ])
-      .then(([deposit, room]) => {
-        if (!controller.signal.aborted) {
-          setData({ deposit, room: room.status }); setError('');
-          if (deposit.status === 'Verified') onDepositVerified(c.id);
-          if (deposit.status === 'Verified' && refreshedPayment.current !== deposit.verified) {
-            refreshedPayment.current = deposit.verified;
-            onChanged();
+      if (loading) return;
+      loading = true;
+      void Promise.all([
+        api.transport<HoldingDepositStatus>(`/api/v1/contracts/${c.id}/holding-deposit`, {
+          signal: controller.signal,
+        }),
+        api.transport<{ status: number }>(`/api/v1/rooms/${c.roomId}`, {
+          signal: controller.signal,
+        }),
+      ])
+        .then(([deposit, room]) => {
+          if (!controller.signal.aborted) {
+            setData({ deposit, room: room.status });
+            setError('');
+            if (deposit.status === 'Verified') onDepositVerified(c.id);
+            if (deposit.status === 'Verified' && refreshedPayment.current !== deposit.verified) {
+              refreshedPayment.current = deposit.verified;
+              onChanged();
+            }
           }
-        }
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) {
-          setError(contractError(e));
-        }
-      }).finally(() => { loading = false; });
+        })
+        .catch((e) => {
+          if (!controller.signal.aborted) {
+            setError(contractError(e));
+          }
+        })
+        .finally(() => {
+          loading = false;
+        });
     };
     load();
     const timer = setInterval(load, 5000);
@@ -677,7 +708,10 @@ function HoldingPayment({
             setError(contractError(e));
           }
         });
-    return () => { controller.abort(); clearInterval(timer); };
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
   }, [api, c.id, c.roomId, c.status, owner, onChanged, onDepositVerified]);
   const success = c.status === 'Active' && data?.room === 1;
   const testPayment = (qr?.mode ?? c.paymentMode) === 'Test';
@@ -719,34 +753,69 @@ function HoldingPayment({
       </HoldingSectionCard>
       {!success && data?.deposit.status !== 'Verified' && (
         <HoldingSectionCard title="Thông tin chuyển khoản">
-          <HoldingStatusBadge label={testPayment ? 'SePay Test · QR sandbox' : 'Chuyển khoản ngân hàng'} tone="warning" />
+          <HoldingStatusBadge
+            label={testPayment ? 'SePay Test · QR sandbox' : 'Chuyển khoản ngân hàng'}
+            tone="warning"
+          />
           {!qr && !qrError && <Text style={ui.muted}>Đang tải mã QR chuyển khoản…</Text>}
-          {qr && <>
-            {qr.qrImageDataUri && (
-              <View style={holdingPaymentStyles.qrFrame}>
-                <Image
-                  accessibilityLabel={testPayment ? 'QR chuyển khoản sandbox' : 'QR chuyển khoản'}
-                  source={{ uri: qr.qrImageDataUri }}
-                  style={holdingPaymentStyles.qrImage}
-                  resizeMode="contain"
-                />
+          {qr && (
+            <>
+              {qr.qrImageDataUri && (
+                <View style={holdingPaymentStyles.qrFrame}>
+                  <Image
+                    accessibilityLabel={testPayment ? 'QR chuyển khoản sandbox' : 'QR chuyển khoản'}
+                    source={{ uri: qr.qrImageDataUri }}
+                    style={holdingPaymentStyles.qrImage}
+                    resizeMode="contain"
+                  />
+                </View>
+              )}
+              <ReadOnly label="Ngân hàng (BIN)" value={qr.bankIdentifier ?? ''} />
+              <ReadOnly
+                label={qr.mode === 'Test' ? 'Số tài khoản Test' : 'Số tài khoản'}
+                value={qr.accountNumber ?? ''}
+              />
+              <ReadOnly label="Chủ tài khoản" value={qr.accountHolder ?? ''} />
+              <ReadOnly
+                label="Số tiền chuyển khoản"
+                value={formatContractMoney(qr.outstandingAmount)}
+              />
+              <View style={holdingPaymentStyles.transferReference}>
+                <Text style={holdingPaymentStyles.referenceLabel}>Nội dung chuyển khoản</Text>
+                <Text selectable style={holdingPaymentStyles.referenceValue}>
+                  {qr.transferReference}
+                </Text>
               </View>
-            )}
-            <ReadOnly label="Ngân hàng (BIN)" value={qr.bankIdentifier ?? ''} />
-            <ReadOnly label={qr.mode === 'Test' ? 'Số tài khoản Test' : 'Số tài khoản'} value={qr.accountNumber ?? ''} />
-            <ReadOnly label="Chủ tài khoản" value={qr.accountHolder ?? ''} />
-            <ReadOnly label="Số tiền chuyển khoản" value={formatContractMoney(qr.outstandingAmount)} />
-            <View style={holdingPaymentStyles.transferReference}>
-              <Text style={holdingPaymentStyles.referenceLabel}>Nội dung chuyển khoản</Text>
-              <Text selectable style={holdingPaymentStyles.referenceValue}>{qr.transferReference}</Text>
-            </View>
-            <Text style={holdingPaymentStyles.paymentNote}>{qr.previewOnly
-              ? 'QR dùng thử sandbox. Giao dịch Test không được tính thành tiền cọc thật và không kích hoạt hợp đồng này.'
-              : qr.mode === 'Test' ? 'SePay Sandbox · Giao dịch Test được đối soát qua cùng luồng thanh toán. Không chuyển tiền thật vào tài khoản Test.' : 'Chuyển đúng số tiền và nội dung bên trên để hệ thống tự đối soát.'}</Text>
-            {!qr.qrImageDataUri && <Text style={ui.muted}>Backend chưa trả ảnh QR. Dùng thông tin Test bên trên hoặc thử lại.</Text>}
-          </>}
-          {!!qrError && <Text accessibilityRole="alert" style={ui.red}>{qrError}</Text>}
-          <Button mode="outlined" contentStyle={{ minHeight: 44 }} onPress={() => { setQr(null); setQrError(''); setQrRevision((value) => value + 1); }}>Tải lại QR chuyển khoản</Button>
+              <Text style={holdingPaymentStyles.paymentNote}>
+                {qr.previewOnly
+                  ? 'QR dùng thử sandbox. Giao dịch Test không được tính thành tiền cọc thật và không kích hoạt hợp đồng này.'
+                  : qr.mode === 'Test'
+                    ? 'SePay Sandbox · Giao dịch Test được đối soát qua cùng luồng thanh toán. Không chuyển tiền thật vào tài khoản Test.'
+                    : 'Chuyển đúng số tiền và nội dung bên trên để hệ thống tự đối soát.'}
+              </Text>
+              {!qr.qrImageDataUri && (
+                <Text style={ui.muted}>
+                  Backend chưa trả ảnh QR. Dùng thông tin Test bên trên hoặc thử lại.
+                </Text>
+              )}
+            </>
+          )}
+          {!!qrError && (
+            <Text accessibilityRole="alert" style={ui.red}>
+              {qrError}
+            </Text>
+          )}
+          <Button
+            mode="outlined"
+            contentStyle={{ minHeight: 44 }}
+            onPress={() => {
+              setQr(null);
+              setQrError('');
+              setQrRevision((value) => value + 1);
+            }}
+          >
+            Tải lại QR chuyển khoản
+          </Button>
         </HoldingSectionCard>
       )}
       {owner &&
@@ -758,9 +827,11 @@ function HoldingPayment({
           <OwnerWebNotice task="Đối chiếu và phân bổ tiền cọc giữ chỗ" />
         )}
       {!success && role === 'Staff' && (
-        <Text style={ui.muted}>{data?.deposit.status === 'Verified'
-          ? 'Đã xác minh đủ tiền cọc. Hệ thống đang tự động kích hoạt và cập nhật trạng thái phòng.'
-          : 'Hệ thống tự động kích hoạt khi đủ chữ ký, thanh toán và các điều kiện hợp đồng.'}</Text>
+        <Text style={ui.muted}>
+          {data?.deposit.status === 'Verified'
+            ? 'Đã xác minh đủ tiền cọc. Hệ thống đang tự động kích hoạt và cập nhật trạng thái phòng.'
+            : 'Hệ thống tự động kích hoạt khi đủ chữ ký, thanh toán và các điều kiện hợp đồng.'}
+        </Text>
       )}
       {owner && readiness && !success && (
         <HoldingSectionCard title="Điều kiện kích hoạt">
@@ -795,7 +866,13 @@ function HoldingPayment({
 }
 
 const holdingPaymentStyles = StyleSheet.create({
-  qrFrame: { alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: '#F5F7FB', borderRadius: 12 },
+  qrFrame: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: '#F5F7FB',
+    borderRadius: 12,
+  },
   qrImage: { width: 240, height: 240, maxWidth: '100%' },
   transferReference: { backgroundColor: '#F2F6FB', borderRadius: 10, padding: 12, gap: 4 },
   referenceLabel: { fontSize: 12, lineHeight: 18, color: '#526581' },

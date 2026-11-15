@@ -134,7 +134,10 @@ export function HoldingSigningConfirmation({
         }
       />
       {!!status?.ownerAcceptedAt && (
-        <HoldingInfoRow label="Thời gian Owner xác nhận" value={formatInstant(status.ownerAcceptedAt)} />
+        <HoldingInfoRow
+          label="Thời gian Owner xác nhận"
+          value={formatInstant(status.ownerAcceptedAt)}
+        />
       )}
       {!status?.ownerAcceptedAt && (
         <Text style={ui.muted}>Owner xác nhận trên Owner Web. Staff không ký thay Owner.</Text>
@@ -148,7 +151,9 @@ export function HoldingSigningConfirmation({
           />
         }
       />
-      {!!status?.maskedEmail && <HoldingInfoRow label="Email nhận lời mời" value={status.maskedEmail} />}
+      {!!status?.maskedEmail && (
+        <HoldingInfoRow label="Email nhận lời mời" value={status.maskedEmail} />
+      )}
       {!!status?.tenantAcceptedAt && (
         <HoldingInfoRow label="Thời gian ký" value={formatInstant(status.tenantAcceptedAt)} />
       )}

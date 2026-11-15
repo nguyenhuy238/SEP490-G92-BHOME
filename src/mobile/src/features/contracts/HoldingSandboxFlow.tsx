@@ -151,7 +151,9 @@ export function HoldingSandboxFlow({
       {!c.approvedAt && !state.onHold && (
         <HoldingSectionCard title="Chờ Owner phê duyệt">
           <HoldingStatusBadge label="Bản nháp đang chờ phê duyệt" tone="warning" />
-          <Text style={ui.muted}>Owner cần xem và phê duyệt hợp đồng trên Web trước khi gửi lời mời ký.</Text>
+          <Text style={ui.muted}>
+            Owner cần xem và phê duyệt hợp đồng trên Web trước khi gửi lời mời ký.
+          </Text>
           <Button
             mode="contained"
             contentStyle={{ minHeight: 44 }}
@@ -216,7 +218,10 @@ export function HoldingSandboxFlow({
                 />
               )}
               {!qr.qrImageDataUri && (
-                <Text style={ui.muted}>Dịch vụ kiểm thử chưa cung cấp hình QR. Dùng thông tin chuyển khoản bên dưới để đối chiếu.</Text>
+                <Text style={ui.muted}>
+                  Dịch vụ kiểm thử chưa cung cấp hình QR. Dùng thông tin chuyển khoản bên dưới để
+                  đối chiếu.
+                </Text>
               )}
               <HoldingInfoRow label="Ngân hàng (BIN)" value={qr.bankIdentifier} />
               <HoldingInfoRow label="Số tài khoản" value={qr.accountNumber} />
@@ -239,7 +244,12 @@ export function HoldingSandboxFlow({
               ? 'Backend đã xác minh đủ tiền cọc.'
               : 'Chờ SePay xác minh giao dịch. Bấm kiểm tra không ghi nhận tiền.'}
           </Text>
-          <Button mode="outlined" contentStyle={{ minHeight: 44 }} disabled={busy} onPress={() => void run('refresh').catch(() => {})}>
+          <Button
+            mode="outlined"
+            contentStyle={{ minHeight: 44 }}
+            disabled={busy}
+            onPress={() => void run('refresh').catch(() => {})}
+          >
             Kiểm tra thanh toán
           </Button>
           <Button
@@ -257,7 +267,10 @@ export function HoldingSandboxFlow({
           <Heading title="Giữ chỗ thành công · Test Mode" />
           <HoldingStatusBadge label="Đã hoàn tất giữ chỗ kiểm thử" tone="success" />
           <Text style={ui.green}>Backend sandbox: hợp đồng Active, phòng OnHold.</Text>
-          <HoldingChecklistRow label="Hợp đồng Active (Sandbox)" complete={state.contractStatus === 'Active'} />
+          <HoldingChecklistRow
+            label="Hợp đồng Active (Sandbox)"
+            complete={state.contractStatus === 'Active'}
+          />
           <HoldingChecklistRow label="Phòng OnHold (Sandbox)" complete={state.onHold} />
           <HoldingChecklistRow label="Đủ tiền cọc đã xác minh" complete={state.depositVerified} />
           <Text style={ui.muted}>Chỉ là dữ liệu thử nghiệm, không có chữ ký pháp lý.</Text>

@@ -31,11 +31,7 @@ export function peopleReady(people: readonly OnboardingPerson[], representative:
   return (
     people.length > 0 &&
     people.some((p) => p.key === representative) &&
-    people.every(
-      (p) =>
-        p.label.trim().length > 0 &&
-        p.label.trim().length <= 150,
-    )
+    people.every((p) => p.label.trim().length > 0 && p.label.trim().length <= 150)
   );
 }
 export function allIdentitiesConfirmed(people: readonly OnboardingPerson[]): boolean {

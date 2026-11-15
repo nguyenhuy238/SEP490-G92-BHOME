@@ -31,6 +31,7 @@ Invalid, expired, consumed, inactive/revoked, already-activated and connection-e
 ## Changed files
 
 Backend:
+
 - `BHome.Application/IdentityAccess/IAccountInvitations.cs`: bounded validation request/result; optional legacy username; validation interface method.
 - `BHome.Infrastructure/IdentityAccess/AccountInvitations.cs`: token-based user resolution, preview validation, retained atomic acceptance.
 - `BHome.Infrastructure/IdentityAccess/AuthenticationEmailOptions.cs`: reject production loopback callbacks.
@@ -39,12 +40,14 @@ Backend:
 Shared client: `packages/client-core/src/internalSigning.ts` adds validation and allows token-only acceptance while retaining old client compatibility.
 
 Owner web:
+
 - `features/auth/pages/AcceptInvitationPage.tsx` and its test: automatic validation, read-only email, error states, password controls and redirect.
 - New `features/auth/components/PasswordField.tsx`; reused in Reset/Change confirmation fields.
 - `LoginForm.tsx`, `ResetPasswordPage.tsx`, `ChangePasswordDialog.tsx`: independent confirmation visibility and preserving mouse focus.
 - `LoginPage.tsx`: successful invitation notice. `index.html`: no-referrer.
 
 Mobile:
+
 - `screens/AcceptInvitationScreen.tsx`: same validation/acceptance API and token scrubbing; no editable email/manual token.
 - New `components/PasswordField.tsx`, reused in `PasswordRecoveryScreen.tsx`; existing login/change screens already had visibility controls. Login gains explicit accessible visibility labels.
 - `password-recovery.test.tsx`, `anonymous-onboarding.test.tsx`, new `password-field.test.tsx`.

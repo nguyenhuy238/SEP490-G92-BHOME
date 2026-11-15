@@ -332,9 +332,7 @@ it.each([true, false])('gates Holding activation on backend readiness=%s', (read
   };
   render(<ContractScreen />);
   fireEvent.click(screen.getByRole('button', { name: 'Ký hợp đồng' }));
-  expect(
-    screen.queryByRole('button', { name: 'Kích hoạt giữ chỗ' }),
-  ).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Kích hoạt giữ chỗ' })).toBeNull();
 });
 it('preserves Staff conversion for an active unexpired Holding contract', () => {
   state.contract.kind = 'Holding';
@@ -421,9 +419,7 @@ it.each([true, false])('gates Owner Main activation on backend readiness=%s', (r
   fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
   fireEvent.click(screen.getByRole('button', { name: 'Xem tiền cọc' }));
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra kích hoạt' }));
-  expect(
-    screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' }),
-  ).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
 });
 it('keeps full Main preparation on Owner Web even when the prepare flag is supplied', () => {
   state.role = 'Owner';

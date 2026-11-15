@@ -342,7 +342,10 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
         { signal },
       ),
     depositInstructions: (contractId: string, signal?: AbortSignal) =>
-      request<ContractDepositInstructions>(`/api/v1/contracts/${encodeURIComponent(contractId)}/deposit-payment/transfer-instructions`, { signal }),
+      request<ContractDepositInstructions>(
+        `/api/v1/contracts/${encodeURIComponent(contractId)}/deposit-payment/transfer-instructions`,
+        { signal },
+      ),
     depositPosition: (contractId: string, signal?: AbortSignal) =>
       request<{
         contractId: string;

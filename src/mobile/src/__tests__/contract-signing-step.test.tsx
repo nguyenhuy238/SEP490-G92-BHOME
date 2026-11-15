@@ -9,8 +9,15 @@ vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 vi.mock('../components/WorkflowControls', () => ({
-  Input: ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) =>
-    <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
+  Input: ({
+    label,
+    value,
+    onChange,
+  }: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+  }) => <input aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
 }));
 vi.mock('../components/WorkspaceKit', () => ({
   ui: {},

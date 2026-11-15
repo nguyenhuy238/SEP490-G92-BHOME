@@ -391,11 +391,28 @@ function RealInternalSigning({
       )}
       {!status?.tenantAcceptedAt && (
         <>
-          {!live && (c.occupants?.length ? c.occupants : [{ id: c.representativeResidentId, label: 'Người đại diện', representative: true }]).map((person) => (
-            <TextField key={person.id} label={`Email nhận lời mời · ${person.label}`} type="email" value={emails[person.id] ?? ''}
-              onChange={(e) => setEmails((before) => ({ ...before, [person.id]: e.target.value }))} disabled={busy} />
-          ))}
-          {!live && <Typography variant="body2">Email chỉ dùng cho phiên ký này; tài khoản Tenant được tạo sau khi kích hoạt hợp đồng chính thức.</Typography>}
+          {!live &&
+            (c.occupants?.length
+              ? c.occupants
+              : [{ id: c.representativeResidentId, label: 'Người đại diện', representative: true }]
+            ).map((person) => (
+              <TextField
+                key={person.id}
+                label={`Email nhận lời mời · ${person.label}`}
+                type="email"
+                value={emails[person.id] ?? ''}
+                onChange={(e) =>
+                  setEmails((before) => ({ ...before, [person.id]: e.target.value }))
+                }
+                disabled={busy}
+              />
+            ))}
+          {!live && (
+            <Typography variant="body2">
+              Email chỉ dùng cho phiên ký này; tài khoản Tenant được tạo sau khi kích hoạt hợp đồng
+              chính thức.
+            </Typography>
+          )}
           <SignaturePlacementPicker
             signing={signing}
             contractId={c.id}
@@ -450,7 +467,9 @@ function RealInternalSigning({
                     ),
                   ).toISOString(),
                   emails[c.representativeResidentId],
-                  Object.entries(emails).filter(([, email]) => email.trim()).map(([residentId, email]) => ({ residentId, email })),
+                  Object.entries(emails)
+                    .filter(([, email]) => email.trim())
+                    .map(([residentId, email]) => ({ residentId, email })),
                 );
                 setUncertainInvitation(false);
               })

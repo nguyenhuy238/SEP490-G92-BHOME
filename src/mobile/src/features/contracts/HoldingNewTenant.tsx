@@ -212,17 +212,25 @@ export function HoldingNewTenant({
           )}
         </>
       )}
-      {stage !== 'details' && !(stage === 'identity' && role === 'Staff') && (confirmed || initialConfirmed) && (
-        <Text style={styles.success}>
-          {applicant ? 'Đã xác nhận thông tin người giữ chỗ.' : 'Đã xác nhận thông tin người thuê.'}
-        </Text>
-      )}
+      {stage !== 'details' &&
+        !(stage === 'identity' && role === 'Staff') &&
+        (confirmed || initialConfirmed) && (
+          <Text style={styles.success}>
+            {applicant
+              ? 'Đã xác nhận thông tin người giữ chỗ.'
+              : 'Đã xác nhận thông tin người thuê.'}
+          </Text>
+        )}
       {uncertain && (
         <Text accessibilityRole="alert" style={styles.warning}>
           Chưa xác định hồ sơ đã được lưu hay chưa. Kiểm tra danh sách người ở trước khi tạo lại.
         </Text>
       )}
-      {!!error && <Text accessibilityRole="alert" style={ui.red}>{error}</Text>}
+      {!!error && (
+        <Text accessibilityRole="alert" style={ui.red}>
+          {error}
+        </Text>
+      )}
       {(open || (stage === 'identity' && role === 'Staff')) && residentId && (
         <IdentityWizard
           residentId={residentId}
