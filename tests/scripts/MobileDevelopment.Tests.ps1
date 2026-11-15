@@ -58,6 +58,8 @@ UNRELATED_SECRET=synthetic-unrelated
 # Jwt__SigningKey=ignored-comment
 Api__PublicBaseUrl=$(throw 'must-not-evaluate')
 '@
+Assert-Equal (Get-MobileBackendSettings "AnonymousSigning__OtpHmacKey=   ").ContainsKey('AnonymousSigning:OtpHmacKey') $false 'blank OTP example never overwrites user-secrets'
+Assert-Equal (Get-MobileBackendSettings "AnonymousSigning__OtpHmacKey=synthetic-key")['AnonymousSigning:OtpHmacKey'] 'synthetic-key' 'explicit OTP configuration preserved'
 Assert-Equal $syntheticSettings['ConnectionStrings:Database'] 'synthetic-db' 'sync local database to Visual Studio'
 Assert-Equal $syntheticSettings['Jwt:SigningKey'] 'synthetic-key' 'sync local JWT settings to Visual Studio'
 Assert-Equal $syntheticSettings['ObjectStorage:Endpoint'] 'synthetic-storage' 'sync local storage settings'

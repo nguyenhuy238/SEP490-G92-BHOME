@@ -690,7 +690,10 @@ export function LiveAutomationPage() {
         title="Cấu hình lịch & chạy thử hóa đơn"
         subtitle="Lưu lịch áp dụng từ kỳ bạn chọn, sau đó chạy thử từng nghiệp vụ thủ công theo phòng và kỳ hóa đơn."
         actions={
-          <Button component={Link} to="/pricing">
+          <Button
+            component={Link}
+            to={location ? `/pricing?locationId=${encodeURIComponent(location)}` : '/pricing'}
+          >
             Giá & biểu phí
           </Button>
         }

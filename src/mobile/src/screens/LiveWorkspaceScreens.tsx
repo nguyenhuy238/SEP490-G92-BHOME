@@ -15,18 +15,10 @@ import {
   ui,
 } from '../components/WorkspaceKit';
 import { Pagination, QueryState } from '../components/WorkspaceQueryState';
-import {
-  OwnerDivider,
-  OwnerLinkRow,
-  OwnerScreenIntro,
-  OwnerSection,
-  OwnerSurface,
-} from '../components/OwnerMobileKit';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
 import { errorMessage, type Named } from '../lib/api';
-import { OperationalTasksScreen } from './OperationalTaskScreens';
 import {
   operationalTasks,
   taskActionLabels,
@@ -142,44 +134,7 @@ export function StaffHomeScreen() {
 
 export { MeterTasksScreen } from './MeterTasksScreen';
 
-export function OwnerOperationsScreen() {
-  const { go } = useWorkspace();
-  return (
-    <>
-      <OwnerScreenIntro
-        title="Vận hành cơ sở"
-        detail="Theo dõi sự cố, bảo trì, công việc và chỉ số theo từng nhóm"
-      />
-      <OwnerSection title="Sự cố & bảo trì">
-        <OwnerSurface>
-          <OwnerLinkRow
-            icon="alert-circle-outline"
-            title="Báo cáo sự cố"
-            detail="Xem và phân loại các báo cáo đang mở"
-            onPress={() => go('owner-incidents')}
-          />
-          <OwnerDivider />
-          <OwnerLinkRow
-            icon="tools"
-            title="Bảo trì"
-            detail="Phê duyệt phương án và nghiệm thu kết quả"
-            onPress={() => go('owner-maintenance')}
-          />
-          <OwnerDivider />
-          <OwnerLinkRow
-            icon="alarm-light-outline"
-            title="Sự cố khẩn cấp"
-            detail="Theo dõi xác nhận và hành động ứng phó"
-            onPress={() => go('owner-emergencies')}
-          />
-        </OwnerSurface>
-      </OwnerSection>
-      <OwnerSection title="Công việc nhân viên" detail="Theo dõi tiến độ và nghiệm thu">
-        <OperationalTasksScreen />
-      </OwnerSection>
-    </>
-  );
-}
+export { OwnerOperationsScreen } from './OwnerOperationsScreen';
 
 export { TenantDashboardScreen as TenantHomeScreen } from './TenantDashboardScreen';
 

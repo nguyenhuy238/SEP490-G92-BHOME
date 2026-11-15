@@ -11,6 +11,7 @@ internal static class EmailTemplate
         "EMAIL_CONFIRMATION_REQUESTED" => "Xác nhận email",
         "PASSWORD_RESET_REQUESTED" => "Đặt lại mật khẩu",
         "ACCOUNT_INVITATION" => "Thiết lập tài khoản",
+        "CONTRACT_SIGNING_INVITATION" => "Mở BHOME để ký hợp đồng",
         _ => "Mở liên kết bảo mật BHOME"
     };
 

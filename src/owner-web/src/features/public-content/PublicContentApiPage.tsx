@@ -1,4 +1,8 @@
 import { MoneyField } from '../../components/common/MoneyField';
+import {
+  contactPhoneError,
+  normalizeContactPhone,
+} from '../../../../../packages/client-core/src/contactPhone';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
 import {
@@ -42,10 +46,7 @@ export function PublicContentApiPage() {
     [room, setRoom] = useState('');
   return (
     <Stack spacing={2}>
-      <PageHeader
-        title="Nội dung website công khai"
-        subtitle="Quản lý thông tin và hình ảnh được phép hiển thị cho khách."
-      />
+      <PageHeader title="Nội dung website công khai" />
       <FilterToolbar>
         <OwnerLocationPicker
           value={location}
@@ -102,12 +103,14 @@ function ContentEditor({ data, path, room }: { data: PublicContent; path: string
     [photoIndex, setPhotoIndex] = useState(-1),
     [preview, setPreview] = useState(false);
   const action = useOwnerAction();
+  const phoneError = room ? '' : contactPhoneError(phone);
   const dirty =
     description !== (room ? (data.description ?? '') : (data.summary ?? '')) ||
     amenities !== data.amenities.join('\n') ||
     (!room && (phone !== (data.contactPhone ?? '') || email !== (data.contactEmail ?? ''))) ||
     (room && price !== (data.indicativePrice == null ? '' : String(data.indicativePrice)));
   async function save() {
+    if (confirm === 'save' && phoneError) return;
     const ok = await action.run(async () => {
       if (confirm === 'save') {
         const base = {
@@ -124,7 +127,7 @@ function ContentEditor({ data, path, room }: { data: PublicContent; path: string
             : {
                 ...base,
                 summary: description,
-                contactPhone: phone.trim() || null,
+                contactPhone: normalizeContactPhone(phone) ?? null,
                 contactEmail: email.trim() || null,
               },
         );
@@ -190,7 +193,10 @@ function ContentEditor({ data, path, room }: { data: PublicContent; path: string
           <>
             <TextField
               label="Số điện thoại liên hệ tĩnh"
+              type="tel"
               value={phone}
+              error={!!phoneError}
+              helperText={phoneError}
               onChange={(e) => setPhone(e.target.value)}
               disabled={action.busy}
             />
@@ -204,7 +210,10 @@ function ContentEditor({ data, path, room }: { data: PublicContent; path: string
           </>
         )}
         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-          <Button disabled={action.busy || !dirty} onClick={() => setConfirm('save')}>
+          <Button
+            disabled={action.busy || !dirty || !!phoneError}
+            onClick={() => setConfirm('save')}
+          >
             Lưu nội dung công khai
           </Button>
           <Button onClick={() => setPreview(!preview)}>

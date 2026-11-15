@@ -58,6 +58,38 @@ public sealed class OperationalTaskServiceTests
         Assert.Equal(new DateOnly(2026, 10, 31), r.Repo.ReceivedCalls().First(c => c.GetMethodInfo().Name == nameof(IOperationalTaskRepository.ResponsibilityAsync)).GetArguments()[1]);
     }
     [Fact]
+    public async Task TargetsAreValidatedAndPersistedWithoutChangingLocationResponsibility()
+    {
+        var r = new Rig(); var room = Guid.NewGuid(); var asset = Guid.NewGuid();
+        r.Repo.TargetRoomNameAsync(r.Location, room, default).Returns("P.101");
+        r.Repo.TargetAssetAsync(r.Location, asset, default).Returns(new TaskTargetOption(asset, "Điều hòa", room, null));
+        var work = r.Work with { Target = new(room, asset) };
+        var created = await r.Service.CreateAsync(new(r.Location, work), Guid.NewGuid(), default);
+        Assert.Equal(new TaskTargetView(room, asset, null, "P.101 · Điều hòa"), created.Target);
+        Assert.Equal(r.Staff, created.CurrentResponsibleStaffUserId);
+        // An older client that edits the work without a target must retain it.
+        var updated = await r.Service.UpdateAsync(created.Id, new(created.Version, r.Work, "Synthetic edit"), Guid.NewGuid(), default);
+        Assert.Equal(created.Target, updated.Target);
+        var cleared = await r.Service.UpdateAsync(created.Id, new(updated.Version, r.Work with { Target = new() }, "Clear target"), Guid.NewGuid(), default);
+        Assert.Null(cleared.Target);
+    }
+    [Fact]
+    public async Task TargetsCannotEscapeTheirLocationOrSelectedPosition()
+    {
+        var r = new Rig(); var room = Guid.NewGuid(); var asset = Guid.NewGuid();
+        r.Repo.TargetRoomNameAsync(r.Location, room, default).Returns("P.101");
+        r.Repo.TargetAssetAsync(r.Location, asset, default).Returns(new TaskTargetOption(asset, "Camera", null, "Sân"));
+        r.Repo.CommonAreasAsync(r.Location, default).Returns(new[] { "Sân" });
+        foreach (var target in new TaskTarget[] { new(Guid.NewGuid()), new(room, asset), new(AssetId: asset), new(room, CommonArea: "Sân"), new(CommonArea: "Other") })
+        {
+            var error = await Assert.ThrowsAsync<OperationalTaskException>(() => r.Service.CreateAsync(new(r.Location, r.Work with { Target = target }), Guid.NewGuid(), default));
+            Assert.Equal("invalid_task_target", error.Code);
+        }
+        Assert.Empty(r.Added);
+        var created = await r.Service.CreateAsync(new(r.Location, r.Work with { Target = new(AssetId: asset, CommonArea: "Sân") }), Guid.NewGuid(), default);
+        Assert.Equal(new TaskTargetView(null, asset, "Sân", "Sân · Camera"), created.Target);
+    }
+    [Fact]
     public async Task OwnerTaskListForwardsStaffFilterWhileStaffScopeRemainsAuthenticated()
     {
         var r = new Rig();
@@ -98,6 +130,51 @@ public sealed class OperationalTaskServiceTests
             Arg.Is<TaskQuery>(q => q.DueFrom == from && q.DueTo == to &&
                 q.DueFrom.Value.Offset == TimeSpan.Zero && q.DueTo.Value.Offset == TimeSpan.Zero),
             Arg.Any<Guid?>(), Arg.Any<DateOnly>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task OwnerTaskListForwardsRecordedAssigneeAndResponsibilityFilters(bool available)
+    {
+        var r = new Rig();
+        var recorded = Guid.NewGuid();
+        r.Repo.ListAsync(Arg.Any<TaskQuery>(), Arg.Any<Guid?>(), Arg.Any<DateOnly>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new TaskPage<TaskView>([], 1, 20, 0));
+        await r.Service.ListAsync(new TaskQuery { RecordedStaffUserId = recorded, HasResponsibility = available }, default);
+        await r.Repo.Received(1).ListAsync(
+            Arg.Is<TaskQuery>(q => q.RecordedStaffUserId == recorded && q.HasResponsibility == available),
+            null, new DateOnly(2026, 10, 31), r.Clock.Now, Arg.Any<CancellationToken>());
+    }
+    [Fact]
+    public async Task StaffCannotUseRecordedAssigneeOrEitherResponsibilityFilter()
+    {
+        var r = new Rig();
+        r.AsStaff();
+        foreach (var query in new TaskQuery[]
+        {
+            new() { RecordedStaffUserId = r.Staff },
+            new() { HasResponsibility = false },
+            new() { HasResponsibility = true }
+        })
+        {
+            var error = await Assert.ThrowsAsync<OperationalTaskException>(() => r.Service.ListAsync(query, default));
+            Assert.Equal(400, error.Status);
+            Assert.Equal("invalid_task_filter", error.Code);
+        }
+        await r.Repo.DidNotReceiveWithAnyArgs().ListAsync(default!, default, default, default, default);
+    }
+    [Fact]
+    public async Task OwnerCannotUseEmptyStaffFilterIdentifiers()
+    {
+        var r = new Rig();
+        foreach (var query in new TaskQuery[]
+        {
+            new() { StaffUserId = Guid.Empty },
+            new() { RecordedStaffUserId = Guid.Empty }
+        })
+            Assert.Equal("invalid_task_filter", (await Assert.ThrowsAsync<OperationalTaskException>(
+                () => r.Service.ListAsync(query, default))).Code);
+        await r.Repo.DidNotReceiveWithAnyArgs().ListAsync(default!, default, default, default, default);
     }
     [Fact]
     public async Task MissingStaffAndInvalidWorkCannotCreateTask()

@@ -35,6 +35,7 @@ internal static class LegacyPersistenceRegistration
         });
         services.RemoveAll<Compact24DbContext>(); services.RemoveAll<DbContextOptions<Compact24DbContext>>();
         services.RemoveAll<CompactJobPersistence>(); services.RemoveAll<CompactLocationAssignments>();
+        services.RemoveAll<AssignmentReconciliationJob>();
         // Compose the source-schema handlers explicitly. Registration order is not a schema boundary:
         // new Compact24 handlers can be inserted before the recurring handler at any time.
         services.RemoveAll<IBackgroundJobHandler>();
@@ -50,6 +51,7 @@ internal static class LegacyPersistenceRegistration
         services.RemoveAll<LocationConfigurationCopyService>();
         services.RemoveAll<LocationSetupService>();
         services.RemoveAll<AssetInventoryService>();
+        services.RemoveAll<AssetCountObservationService>();
         services.RemoveAll<SetupEvidenceService>();
         services.RemoveAll<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();
         services.RemoveAll<UtilityWorkspaceService>();

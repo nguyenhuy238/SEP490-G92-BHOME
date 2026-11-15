@@ -14,6 +14,13 @@ namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 
 internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : IPropertyRepository
 {
+    public async Task SaveInitialAssetMetadataAsync(Guid assetId, AssetMetadata metadata, CancellationToken token)
+    {
+        if (db is not Compact24DbContext) throw new PropertyException(400, "asset_metadata_requires_compact24");
+        await db.SaveChangesAsync(token);
+        var json = System.Text.Json.JsonSerializer.Serialize(metadata, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE assets SET purchase_info=purchase_info||{json}::jsonb WHERE id={assetId}", token);
+    }
     public async Task<Guid?> LegacySystemChainIdAsync(CancellationToken token)
     {
         if (db is Compact24DbContext) return null;
@@ -62,18 +69,21 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     public Task<bool> AnyAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken token) where T : class =>
         db.Set<T>().AsNoTracking().AnyAsync(predicate, token);
 
-    public Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token)
+    private IQueryable<Contract> BindingPriceContracts(Guid roomId)
     {
         var contracts = db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId &&
             (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal || c.Kind == ContractKind.Holding));
         // The archived persistence model has no holding approval metadata.
         return db is Compact24DbContext
-            ? contracts.AnyAsync(c => c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning ||
+            ? contracts.Where(c => c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning ||
                 c.Status == ContractStatus.PendingActivation ||
-                c.Kind == ContractKind.Holding && c.Status == ContractStatus.Draft && c.ApprovedAt != null, token)
-            : contracts.AnyAsync(c => c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning ||
-                c.Status == ContractStatus.PendingActivation, token);
+                c.Kind == ContractKind.Holding && c.Status == ContractStatus.Draft && c.ApprovedAt != null)
+            : contracts.Where(c => c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning ||
+                c.Status == ContractStatus.PendingActivation);
     }
+    public Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token) => BindingPriceContracts(roomId).AnyAsync(token);
+    public async Task<IReadOnlyList<Contract>> BindingPriceContractsAsync(Guid roomId, CancellationToken token) =>
+        await BindingPriceContracts(roomId).Include(c => c.Residents).ToArrayAsync(token);
 
     public async Task<PagedResult<TDto>> ListAsync<T, TDto>(Expression<Func<T, bool>> predicate,
         Expression<Func<T, TDto>> projection, PropertyQuery query, Guid? staffId, DateOnly today,

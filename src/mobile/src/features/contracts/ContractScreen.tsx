@@ -25,6 +25,7 @@ import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { ContractActionForm, SigningCertificates } from './ContractActionForm';
+import { ContractSigningPanel, signatureLine, useSigningMethods } from './ContractSigningPanel';
 import { ContractDraftForm } from './ContractDraftForm';
 import { MainDraftScreen } from './MainDraftScreen';
 import { MainDraftStart } from './MainDraftStart';
@@ -46,6 +47,7 @@ import { defaultStaffContractListView, isMainOnboardingDraft } from './staffCont
 import { useWorkspaceHeaderRefresh } from '../../components/WorkspaceHeaderContext';
 import { mobileContractActions } from './contractSections';
 import { OwnerMainContractFlow } from '../owner/OwnerMainContractFlow';
+import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -116,17 +118,17 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
       invalidOwnerRoute = true;
     }
   }
-  function openContract(contract: { id: string; onboardingDraft?: boolean }) {
+  function openContract(contract: { id: string; kind: string; onboardingDraft?: boolean }) {
     if (role === 'Owner') {
       setCreate(false);
       setMainDraftId('');
       setSelected('');
       router.setParams({
         contractId: contract.id,
-        mainDraftId: contract.onboardingDraft ? contract.id : '',
+        mainDraftId: '',
         roomId: '',
       });
-    } else if (contract.onboardingDraft) setMainDraftId(contract.id);
+    } else if (isMainOnboardingDraft(contract)) setMainDraftId(contract.id);
     else setSelected(contract.id);
   }
   const previousContracts = useRef<string[]>([]);
@@ -157,6 +159,11 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   if (!client || !session || !role) return <Text>Cần đăng nhập để xem hợp đồng.</Text>;
   if (invalidOwnerRoute)
     return <Text>Tham chiếu hợp đồng không hợp lệ. Hãy mở lại từ danh sách hợp đồng.</Text>;
+  if (
+    role === 'Owner' &&
+    (prepare || params.kind === 'Holding' || params.roomId || params.mainDraftId)
+  )
+    return <OwnerWebNotice task="Soạn và chuẩn bị hồ sơ hợp đồng" />;
   if (createHolding && ['Owner', 'Staff'].includes(role))
     return (
       <ContractDraftForm
@@ -310,21 +317,6 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         title="Hợp đồng & Vòng đời"
         detail="Theo dõi hợp đồng trong phạm vi tài khoản của bạn."
       />
-      {role === 'Owner' && (
-        <>
-          <Action
-            onPress={() => {
-              setMainDraftId('');
-              setSelected('');
-              setCreate(true);
-              router.setParams({ contractId: '', mainDraftId: '', roomId: '' });
-            }}
-          >
-            Tạo hợp đồng thuê
-          </Action>
-          <Action onPress={() => setCreateHolding(true)}>Tạo hợp đồng giữ chỗ</Action>
-        </>
-      )}
       {['Owner', 'Tenant'].includes(role) && (
         <ContractExpiryPanel api={client} onOpen={setSelected} />
       )}
@@ -413,6 +405,7 @@ function LiveContractDetail({
     onBack,
     title: detail.data?.contract.kind === 'Holding' ? 'Hợp đồng giữ chỗ' : 'Hợp đồng',
   });
+  const signingMethods = useSigningMethods(api);
   const [selectedAction, setSelectedAction] = useState('');
   const [section, setSection] = useState<ContractSection>(initialSection);
   const [keys] = useState(() => mutationKeys(randomUUID));
@@ -432,10 +425,11 @@ function LiveContractDetail({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
-  if (isMainOnboardingDraft(c) && ['Staff', 'Owner'].includes(role))
+  if (isMainOnboardingDraft(c) && ['Owner', 'Staff'].includes(role))
     return (
       <MainDraftScreen
-        persistRoute={role !== 'Owner'}
+        reviewOnly={role === 'Owner'}
+        persistRoute
         initialId={c.id}
         onReleased={(next) => {
           router.setParams({ mainDraftId: '', roomId: '', contractId: next });
@@ -464,7 +458,7 @@ function LiveContractDetail({
     ['Owner', 'Staff'].includes(role) &&
     ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status);
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
-  const actions = mobileContractActions(c, m, role, actorId).filter(
+  const actions = mobileContractActions(c, m, role, actorId, signingMethods?.methods).filter(
     (item) =>
       (!holding ||
         ![
@@ -671,10 +665,7 @@ function LiveContractDetail({
               {c.signatures
                 .filter((x) => x.signerUserId === s.id)
                 .map((s) => (
-                  <Text key={s.id}>
-                    {text(s.status)}
-                    {s.signedAt ? ` · ${formatInstant(s.signedAt)}` : ''}
-                  </Text>
+                  <Text key={s.id}>{signatureLine(s, text)}</Text>
                 ))}
               {!c.signatures.some((x) => x.signerUserId === s.id) && (
                 <Text>Chưa có yêu cầu ký</Text>
@@ -687,11 +678,25 @@ function LiveContractDetail({
             )}
           {signer &&
             !c.isDevelopmentDemo &&
-            !(role === 'Owner' && c.signingMode === 'INTERNAL_OTP_DRAWN') && (
+            !(role === 'Owner' && c.signingMode === 'INTERNAL_OTP_DRAWN') &&
+            (!signingMethods || signingMethods.methods.includes('VIETTEL_MYSIGN')) && (
               <SigningCertificates api={api} />
             )}
         </Box>
       )}
+      {section === 'signing' &&
+        !rental &&
+        !holding &&
+        !ownerMain &&
+        c.signingMode !== 'INTERNAL_OTP_DRAWN' && (
+          <ContractSigningPanel
+            api={api}
+            contract={c}
+            actorId={actorId}
+            methods={signingMethods}
+            onChanged={detail.reload}
+          />
+        )}
       {((section === 'signing' && !rental && !holding && !ownerMain) || section === 'history') && (
         <ContractWorkflowPanel
           api={api}

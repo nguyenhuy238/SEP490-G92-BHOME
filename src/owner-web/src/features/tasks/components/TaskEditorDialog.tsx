@@ -14,11 +14,17 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { OwnerLocationPicker } from '../../../components/common/OwnerSelectors';
+import { OwnerLocationPicker, OwnerRoomPicker } from '../../../components/common/OwnerSelectors';
 import { OwnerFeedback } from '../../../components/common/OwnerWorkspace';
-import { useOwnerQuery } from '../../../hooks/useOwnerWorkspace';
+import { ownerQuery, useOwnerQuery, type OwnerPage } from '../../../hooks/useOwnerWorkspace';
 import { todayVietnam, type StaffAssignment } from '../../staff/staffContracts';
-import { vietnamDateInput, vietnamInstant, type OwnerTask, type TaskWork } from '../taskContracts';
+import {
+  vietnamDateInput,
+  vietnamInstant,
+  type OwnerTask,
+  type TaskWork,
+  type TaskTarget,
+} from '../taskContracts';
 import { taskActions, taskRoot, useTaskAction, useTaskDirectory } from '../useOperationalTasksApi';
 
 export function TaskWorkFields({
@@ -105,6 +111,27 @@ export function TaskEditorDialog({
   const [reason, setReason] = useState('');
   const [version, setVersion] = useState(task?.version ?? 0);
   const [editable, setEditable] = useState(!task || taskActions(task).includes('edit'));
+  const [scope, setScope] = useState(
+    task?.target?.roomId ? 'room' : task?.target?.commonArea ? 'common' : 'location',
+  );
+  const [target, setTarget] = useState<TaskTarget>(
+    task?.target
+      ? {
+          roomId: task.target.roomId,
+          assetId: task.target.assetId,
+          commonArea: task.target.commonArea,
+        }
+      : {},
+  );
+  const [targetDirty, setTargetDirty] = useState(false);
+  const [assetPage, setAssetPage] = useState(1);
+  const [assetSearch, setAssetSearch] = useState('');
+  const chooseTarget = (value: TaskTarget) => {
+    setTarget(value);
+    setTargetDirty(true);
+    setAssetPage(1);
+    setAssetSearch('');
+  };
   const [work, setWork] = useState<TaskWork>(
     task
       ? {
@@ -123,6 +150,26 @@ export function TaskEditorDialog({
     !!location && !task,
   );
   const latest = useOwnerQuery<OwnerTask>(['task', task?.id], `${taskRoot}/${task?.id}`, !!task);
+  const areas = useOwnerQuery<string[]>(
+    ['task-areas', location],
+    `${taskRoot}/targets/common-areas?${ownerQuery({ locationId: location })}`,
+    !!location && scope === 'common',
+  );
+  const targetReady =
+    scope === 'location' || (scope === 'room' ? !!target.roomId : !!target.commonArea);
+  const assetQuery = ownerQuery({
+    locationId: location,
+    roomId: target.roomId,
+    commonArea: target.commonArea,
+    page: assetPage,
+    pageSize: 20,
+    search: assetSearch,
+  });
+  const assets = useOwnerQuery<OwnerPage<{ id: string; name: string }>>(
+    ['task-target-assets', assetQuery],
+    `${taskRoot}/targets/assets?${assetQuery}`,
+    !!location && scope !== 'location' && targetReady,
+  );
   const { staff } = useTaskDirectory();
   const today = todayVietnam();
   const responsible = assignments.data?.find(
@@ -137,6 +184,7 @@ export function TaskEditorDialog({
     action.conflict ||
     !editable ||
     !location ||
+    !targetReady ||
     !work.title.trim() ||
     !work.requirements.trim() ||
     !dateValid ||
@@ -186,13 +234,18 @@ export function TaskEditorDialog({
                         version,
                         work: {
                           ...work,
+                          ...(targetDirty ? { target } : {}),
                           dueAt: unchangedDate ? task.dueAt : vietnamInstant(work.dueAt),
                         },
                         reason: reason.trim(),
                       }
                     : {
                         locationId: location,
-                        work: { ...work, dueAt: vietnamInstant(work.dueAt) },
+                        work: {
+                          ...work,
+                          ...(scope === 'location' ? {} : { target }),
+                          dueAt: vietnamInstant(work.dueAt),
+                        },
                       },
                 ),
               )
@@ -210,7 +263,16 @@ export function TaskEditorDialog({
           />
           {!task && (
             <>
-              <OwnerLocationPicker required simple value={location} change={setLocation} />
+              <OwnerLocationPicker
+                required
+                simple
+                value={location}
+                change={(value) => {
+                  setLocation(value);
+                  setScope('location');
+                  chooseTarget({});
+                }}
+              />
               {location && (
                 <Alert severity={responsible ? 'info' : 'warning'}>
                   {assignments.isFetching
@@ -223,6 +285,105 @@ export function TaskEditorDialog({
               )}
               {!!assignments.error && (
                 <Button onClick={() => void assignments.refetch()}>Tải lại phân công</Button>
+              )}
+            </>
+          )}
+          <TextField
+            select
+            label="Phạm vi công việc"
+            value={scope}
+            onChange={(event) => {
+              setScope(event.target.value);
+              chooseTarget({});
+            }}
+          >
+            <MenuItem value="location">Toàn cơ sở</MenuItem>
+            <MenuItem value="room">Phòng</MenuItem>
+            <MenuItem value="common">Khu vực chung</MenuItem>
+          </TextField>
+          {scope === 'room' && (
+            <OwnerRoomPicker
+              location={location}
+              value={target.roomId ?? ''}
+              required
+              change={(roomId) => chooseTarget({ roomId })}
+            />
+          )}
+          {scope === 'common' && (
+            <>
+              <OwnerFeedback busy={areas.isFetching} error={areas.error} />
+              <TextField
+                required
+                select
+                label="Khu vực chung"
+                value={target.commonArea ?? ''}
+                onChange={(event) => chooseTarget({ commonArea: event.target.value })}
+              >
+                <MenuItem value="">Chọn khu vực</MenuItem>
+                {target.commonArea && !areas.data?.includes(target.commonArea) && (
+                  <MenuItem value={target.commonArea}>{target.commonArea}</MenuItem>
+                )}
+                {areas.data?.map((area) => (
+                  <MenuItem key={area} value={area}>
+                    {area}
+                  </MenuItem>
+                ))}
+              </TextField>
+              {areas.data?.length === 0 && (
+                <Typography color="text.secondary" variant="body2">
+                  Chưa có khu vực chung. Thiết lập tại mục Tài sản của cơ sở.
+                </Typography>
+              )}
+            </>
+          )}
+          {scope !== 'location' && targetReady && (
+            <>
+              <OwnerFeedback busy={assets.isFetching} error={assets.error} />
+              <TextField
+                size="small"
+                label="Tìm tài sản liên quan"
+                value={assetSearch}
+                onChange={(event) => {
+                  setAssetSearch(event.target.value);
+                  setAssetPage(1);
+                }}
+              />
+              <TextField
+                select
+                label="Tài sản liên quan"
+                value={target.assetId ?? ''}
+                onChange={(event) => {
+                  setTargetDirty(true);
+                  setTarget((old) => ({ ...old, assetId: event.target.value || null }));
+                }}
+              >
+                <MenuItem value="">Không chọn tài sản</MenuItem>
+                {target.assetId &&
+                  !assets.data?.items?.some((asset) => asset.id === target.assetId) && (
+                    <MenuItem value={target.assetId}>
+                      {task?.target?.assetId === target.assetId
+                        ? task.target.label
+                        : 'Tài sản đã chọn'}
+                    </MenuItem>
+                  )}
+                {assets.data?.items?.map((asset) => (
+                  <MenuItem key={asset.id} value={asset.id}>
+                    {asset.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              {!!assets.data && assets.data.totalCount > 20 && (
+                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                  <Button disabled={assetPage === 1} onClick={() => setAssetPage((p) => p - 1)}>
+                    Trang trước
+                  </Button>
+                  <Button
+                    disabled={assetPage * 20 >= assets.data.totalCount}
+                    onClick={() => setAssetPage((p) => p + 1)}
+                  >
+                    Trang sau
+                  </Button>
+                </Stack>
               )}
             </>
           )}

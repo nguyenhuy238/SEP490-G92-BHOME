@@ -193,6 +193,7 @@ export function invoiceClient(request: <T>(path: string, init?: RequestInit) => 
   };
 }
 const messages: Record<string, string> = {
+  invalid_contact_phone: 'Số điện thoại liên hệ không đúng định dạng.',
   invalid_invoice_filter: 'Chọn cơ sở, kỳ tháng và trạng thái hóa đơn hợp lệ.',
   stale_version: 'Cấu hình đã thay đổi. Tải lại và kiểm tra phiên bản trước khi lưu.',
   duplicate_or_overlapping_configuration:
@@ -217,7 +218,16 @@ const messages: Record<string, string> = {
     'Chọn hợp đồng của phòng có hiệu lực trong kỳ cần lập hóa đơn.',
   invoice_period_already_exists: 'Phòng đã có hóa đơn kỳ này với hợp đồng đại diện khác.',
   room_pricing_locked_by_contract:
-    'Phòng đang có hợp đồng ràng buộc giá. Chỉ được đổi biểu giá riêng sau khi hợp đồng hết hiệu lực hoặc bị hủy.',
+    'Phòng đang có hợp đồng ràng buộc giá. Không thể sửa trực tiếp giá này khi hợp đồng còn ràng buộc.',
+  contract_price_snapshot_required_for_successor:
+    'Chưa đủ dữ liệu giá đã chốt của hợp đồng hiện tại. Cần kiểm tra hợp đồng trước khi tạo giá dịch vụ kế tiếp.',
+  billing_policy_overlap:
+    'Khoản thu này đã có biểu giá cùng phạm vi trong thời gian được chọn. Chọn khoảng hiệu lực không chồng lấn.',
+  replacement_date_invalid:
+    'Ngày bắt đầu giá kế tiếp phải sau ngày hiện tại, sau ngày bắt đầu giá cũ và trong thời hạn giá cũ.',
+  replacement_scope_mismatch: 'Giá kế tiếp phải giữ nguyên phạm vi, loại và mã khoản thu.',
+  invalid_asset_observation: 'Kiểm tra số lượng thực tế, bằng chứng và phiên bản định mức.',
+  asset_already_verified: 'Tài sản này đã được liên kết với định mức, không thể xác minh trùng.',
 };
 export function invoiceError(error: unknown): string {
   const value = error as { status?: number; code?: string; problem?: { code?: string } };

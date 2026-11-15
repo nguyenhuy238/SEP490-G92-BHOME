@@ -1,5 +1,39 @@
 # Staff Location assignments
 
+## BF-02 Phase 2 — effective responsibility
+
+UC-09–12 / DBR-01 / GBR-01–03: dates are inclusive in Asia/Ho_Chi_Minh. The Compact24
+backend reconciles current responsibility using the same Location advisory lock for
+Owner changes and the durable `staff-assignment-reconciliation` job. The scheduler
+enqueues a minute-keyed job; replay compares the persisted responsibility and task
+assignment before writing, so retries do not duplicate history or notices. Authorization
+still checks the actual effective date immediately, regardless of job execution.
+
+Open GENERAL and METER_READ tasks retain their IDs, status, evidence and progress;
+the new responsibility and assignment ID replace the old ones, or are cleared during
+a gap. Open WORK_ORDER and unperformed, assigned move-out inspections follow a new
+eligible Staff member. During a gap the specialist record retains the previous assignee
+for history, but that Staff has no Location access; Owner receives a persistent
+`STAFF_RESPONSIBILITY_UNRESOLVED` notification and can assign the next responsible
+Staff. Manual removal still conflicts while specialist work is unresolved. Completed
+or cancelled tasks and performed inspections are not modified.
+
+Owner may cancel an unstarted assignment with
+`DELETE /api/v1/staff-location-assignments/assignment/{assignmentId}` and JSON
+`{ "locationVersion": 2, "reason": "..." }`. The response follows the period-change
+result, including the cancelled assignment and new Location version. Stale version
+returns 409; started/ended cancellation is invalid. The full previous assignment and
+reason remain in Location history; cancellation removes it from the effective schedule.
+For a started assignment, period edits keep its original start and may change its
+end to today or later. Future periods can move to today or later, with active
+Location/Staff and overlap validation. Replacement/removal on the current date retain
+the full previous assignment snapshot, including same-day replacement.
+
+No schema migration or shift/transfer feature is introduced. Regression coverage:
+`Compact24AssignmentTests` (Vietnam midnight, gap, all four responsibility types,
+retry, completed-history preservation, cancellation/version/authorization) and
+`Compact24OwnerSetupTests.ReplacingStaffMovesMeterAndWorkOrderAndFailedRemovalRollsBackResponsibility`.
+
 ## Owner Web update — 12 November 2026
 
 UC-09 / BF-02 presentation now uses Location-first `/staff-assignments`, with a detail Drawer and separate create/replace/period/remove dialog flows. The existing staff profile links with `staffUserId`; clearing filters restores all Locations. No backend, DTO, permission or database change.

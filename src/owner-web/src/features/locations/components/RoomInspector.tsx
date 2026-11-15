@@ -283,10 +283,12 @@ export function RoomInspector({
                           configuration.area === null ? 'Chưa ghi nhận' : `${configuration.area} m²`
                         }
                       />
-                      <RoomFact
-                        label="Tiện nghi"
-                        value={configuration.amenities.join(', ') || 'Chưa thiết lập'}
-                      />
+                      {configuration.amenities.length > 0 && (
+                        <RoomFact
+                          label="Đặc điểm phòng"
+                          value={configuration.amenities.join(', ')}
+                        />
+                      )}
                     </Box>
                   ) : (
                     <Typography variant="body2" color="text.secondary">
@@ -419,11 +421,12 @@ export function RoomInspector({
                           {item.name}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {item.category}
+                          {item.unit || 'Chưa ghi nhận đơn vị'}
                         </Typography>
                       </Box>
                       <Typography sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
                         {item.quantity}
+                        {item.unit ? ` ${item.unit}` : ''}
                       </Typography>
                     </Stack>
                   ))

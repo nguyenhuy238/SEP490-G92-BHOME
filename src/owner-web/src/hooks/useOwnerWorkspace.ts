@@ -46,6 +46,9 @@ export function ownerError(error: unknown) {
         'Nhân viên còn trách nhiệm chưa giải quyết. Hãy thay người phụ trách trước.',
       stale_staff_version: 'Hồ sơ đã thay đổi. Tải lại trước khi sửa tiếp.',
       no_responsible_staff: 'Cơ sở chưa có nhân viên phụ trách đang hoạt động.',
+      invalid_task_target:
+        'Phòng, khu vực hoặc tài sản không thuộc cơ sở/vị trí đã chọn. Vui lòng chọn lại.',
+      invalid_phone_number: 'Số điện thoại không đúng định dạng.',
       staff_specialist_work_unresolved:
         'Còn lệnh sửa chữa hoặc kiểm tra trả phòng chưa được phân công lại.',
       incident_version_changed: 'Sự cố đã đổi phiên bản. Tải lại và xem xét trước khi quyết định.',

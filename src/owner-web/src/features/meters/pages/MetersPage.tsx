@@ -43,7 +43,7 @@ export function LiveMetersPage() {
   const actor = session?.userId ?? '';
   const [selected, setSelected] = useState(deepParams.get('taskId') ?? '');
   const [workView, setWorkView] = useState<'all' | 'attention' | 'active' | 'done'>('all');
-  const [location, setLocation] = useState(''),
+  const [location, setLocation] = useState(deepParams.get('locationId') ?? ''),
     [room, setRoom] = useState(''),
     [status, setStatus] = useState(''),
     [dueDate, setDueDate] = useState(''),

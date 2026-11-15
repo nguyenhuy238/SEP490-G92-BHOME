@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { contactPhoneError } from '../../../../../packages/client-core/src/contactPhone';
 import { Alert, Button, Stack, TextField, Typography } from '@mui/material';
 import { useMainDraftApi } from './useContractsApi';
 import { contractError, mutationKeys } from '../../../../../packages/client-core/src/contracts';
@@ -44,6 +45,10 @@ export function MainDraftDetailPanel({
   }, [api, id]);
   async function save(preview: boolean) {
     if (!draft || lock.current) return;
+    if (contactPhoneError(draft.input.tenantPhone ?? '', true)) {
+      setError(contactPhoneError(draft.input.tenantPhone ?? '', true));
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError('');
@@ -131,7 +136,15 @@ export function MainDraftDetailPanel({
                     notes: 'Ghi chú',
                   }[key]
                 }
-                type={key.endsWith('Date') ? 'date' : 'text'}
+                type={key.endsWith('Date') ? 'date' : key === 'tenantPhone' ? 'tel' : 'text'}
+                error={
+                  key === 'tenantPhone' && !!contactPhoneError(draft.input.tenantPhone ?? '', true)
+                }
+                helperText={
+                  key === 'tenantPhone'
+                    ? contactPhoneError(draft.input.tenantPhone ?? '', true)
+                    : undefined
+                }
                 slotProps={{ inputLabel: { shrink: true } }}
                 value={draft.input[key]}
                 disabled={busy || draft.status !== 'Draft'}

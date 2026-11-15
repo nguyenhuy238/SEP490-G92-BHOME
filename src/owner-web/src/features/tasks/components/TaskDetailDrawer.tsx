@@ -167,6 +167,7 @@ export function TaskDetailDrawer({
           <>
             <Box sx={{ '& p': { fontSize: 14, mb: 1 } }}>
               <Typography>Cơ sở: {locationName(task.locationId)}</Typography>
+              <Typography>Vị trí: {task.target?.label ?? 'Toàn cơ sở'}</Typography>
               <Typography>Người phụ trách hiện tại: {responsibleName(task, staff)}</Typography>
               {task.recordedStaffUserId &&
                 task.recordedStaffUserId !== task.currentResponsibleStaffUserId && (
@@ -358,6 +359,8 @@ function TaskActionDialog({
   const action = useTaskAction();
   const needsNote = !['verify', 'assign'].includes(operation);
   const allowed = taskActions(task).includes(operation);
+  const missingRequiredEvidence =
+    operation === 'verify' && task.evidenceRequired && !evidence?.some((item) => item.submissionId);
   return (
     <Dialog
       open
@@ -381,7 +384,8 @@ function TaskActionDialog({
               !allowed ||
               action.conflict ||
               (needsNote && !note.trim()) ||
-              (operation === 'verify' && !checked)
+              (operation === 'verify' &&
+                (!checked || !evidence || !!evidenceError || missingRequiredEvidence))
             )
               return;
             void action
@@ -411,7 +415,32 @@ function TaskActionDialog({
                 {task.result || 'Chưa có kết quả.'}
               </Typography>
               <OwnerFeedback error={evidenceError} />
-              {evidence && <TaskEvidenceGallery taskId={task.id} evidence={evidence} />}
+              {evidence && (
+                <>
+                  <Typography sx={{ fontWeight: 600 }}>Bằng chứng của lần gửi hiện tại</Typography>
+                  <TaskEvidenceGallery
+                    taskId={task.id}
+                    evidence={evidence.filter((item) => item.submissionId)}
+                  />
+                  {evidence.some((item) => !item.submissionId) && (
+                    <>
+                      <Typography sx={{ fontWeight: 600 }}>
+                        Ảnh tiến độ và bằng chứng khác
+                      </Typography>
+                      <TaskEvidenceGallery
+                        taskId={task.id}
+                        evidence={evidence.filter((item) => !item.submissionId)}
+                      />
+                    </>
+                  )}
+                </>
+              )}
+              {missingRequiredEvidence && (
+                <Alert severity="warning">
+                  Chưa có bằng chứng bắt buộc được đính kèm lần gửi hiện tại. Yêu cầu nhân viên bổ
+                  sung trước khi nghiệm thu.
+                </Alert>
+              )}
             </>
           )}
           {operation === 'cancel' && (
@@ -472,6 +501,7 @@ function TaskActionDialog({
             action.conflict ||
             !allowed ||
             (needsNote && !note.trim()) ||
+            missingRequiredEvidence ||
             (operation === 'verify' && (!evidence || !!evidenceError))
           }
         >

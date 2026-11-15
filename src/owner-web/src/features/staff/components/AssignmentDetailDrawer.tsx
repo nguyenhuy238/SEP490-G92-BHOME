@@ -48,12 +48,14 @@ export function AssignedStaff({ staff, id }: { staff: Staff[]; id: string }) {
           .join('') || '?'}
       </Avatar>
       <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+        <Typography sx={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>
           {person?.fullName || person?.email || id}
         </Typography>
-        <Typography sx={{ fontSize: 12, color: 'text.secondary', overflowWrap: 'anywhere' }}>
-          {person?.email}
-        </Typography>
+        {person?.fullName?.trim() && person.email && (
+          <Typography sx={{ fontSize: 12, color: 'text.secondary', overflowWrap: 'anywhere' }}>
+            {person.email}
+          </Typography>
+        )}
       </Box>
     </Stack>
   );
@@ -72,14 +74,18 @@ export function AssignmentDetailDrawer({
   act: (intent: AssignmentIntent) => void;
 }) {
   const current = row?.assignments?.find((item) => assignmentState(item, today) === 'current');
-  const sorted = [...(row?.assignments ?? [])].sort((a, b) => {
-    const rank = (item: StaffAssignment) =>
-      ({ current: 0, future: 1, past: 2 })[assignmentState(item, today)];
-    return (
-      rank(a) - rank(b) ||
-      (rank(a) === 2 ? b.endDate.localeCompare(a.endDate) : a.startDate.localeCompare(b.startDate))
-    );
-  });
+  const sorted = [...(row?.assignments ?? [])]
+    .filter((item) => item.id !== current?.id)
+    .sort((a, b) => {
+      const rank = (item: StaffAssignment) =>
+        ({ current: 0, future: 1, past: 2 })[assignmentState(item, today)];
+      return (
+        rank(a) - rank(b) ||
+        (rank(a) === 2
+          ? b.endDate.localeCompare(a.endDate)
+          : a.startDate.localeCompare(b.startDate))
+      );
+    });
   return (
     <Drawer
       anchor="right"
@@ -105,7 +111,7 @@ export function AssignmentDetailDrawer({
           <X size={20} />
         </IconButton>
       </Stack>
-      <Stack spacing={2.5} sx={{ p: 2.5, flex: 1, overflowY: 'auto' }}>
+      <Stack spacing={2} sx={{ p: 2.5, flex: 1, overflowY: 'auto' }}>
         <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Người phụ trách hiện tại</Typography>
         {current ? (
           <>
@@ -113,9 +119,30 @@ export function AssignmentDetailDrawer({
             <Typography sx={{ fontSize: 14 }}>
               {assignmentDate(current.startDate)} – {assignmentDate(current.endDate)}
             </Typography>
-            <Box>
+            <Stack
+              direction="row"
+              sx={{
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 1,
+              }}
+            >
               <AssignmentStatusChip state="current" />
-            </Box>
+              <Button
+                onClick={() =>
+                  act({ mode: 'period', locationId: row!.location.id, assignment: current })
+                }
+              >
+                Chỉnh thời hạn
+              </Button>
+            </Stack>
+            <Button
+              href={`/operational-tasks?locationId=${encodeURIComponent(row!.location.id)}`}
+              sx={{ alignSelf: 'flex-start' }}
+            >
+              Xem công việc tại cơ sở
+            </Button>
           </>
         ) : (
           <Alert severity="info">
@@ -123,26 +150,52 @@ export function AssignmentDetailDrawer({
           </Alert>
         )}
         <Divider />
-        <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Lịch phân công</Typography>
-        {sorted.length === 0 && <Typography>Chưa có phân công.</Typography>}
+        <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Phân công sắp tới và lịch sử</Typography>
+        {sorted.length === 0 && (
+          <Typography color="text.secondary" variant="body2">
+            Chưa có phân công khác.
+          </Typography>
+        )}
         {sorted.map((item) => (
-          <Stack key={item.id} spacing={1} sx={{ pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Stack
+            key={item.id}
+            spacing={1}
+            sx={{ pb: 1.5, borderBottom: 1, borderColor: 'divider' }}
+          >
             <AssignedStaff staff={staff} id={item.staffUserId} />
             <Typography sx={{ fontSize: 13 }}>
               {assignmentDate(item.startDate)} – {assignmentDate(item.endDate)}
             </Typography>
-            <Box>
+            <Stack
+              direction="row"
+              sx={{
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 1,
+              }}
+            >
               <AssignmentStatusChip state={assignmentState(item, today)} />
-            </Box>
-            {item.endDate >= today && (
-              <Button
-                onClick={() =>
-                  act({ mode: 'period', locationId: row!.location.id, assignment: item })
-                }
-              >
-                Chỉnh thời hạn
-              </Button>
-            )}
+              {item.endDate >= today && (
+                <Button
+                  onClick={() =>
+                    act({ mode: 'period', locationId: row!.location.id, assignment: item })
+                  }
+                >
+                  Chỉnh thời hạn
+                </Button>
+              )}
+              {item.startDate > today && (
+                <Button
+                  color="error"
+                  onClick={() =>
+                    act({ mode: 'cancelFuture', locationId: row!.location.id, assignment: item })
+                  }
+                >
+                  Hủy lịch
+                </Button>
+              )}
+            </Stack>
           </Stack>
         ))}
       </Stack>
@@ -165,9 +218,10 @@ export function AssignmentDetailDrawer({
         )}
         <Button
           variant={current ? 'outlined' : 'contained'}
+          disabled={row?.location.isActive === false}
           onClick={() => act({ mode: 'create', locationId: row!.location.id })}
         >
-          Tạo phân công
+          {current ? 'Lên lịch phân công' : 'Tạo phân công'}
         </Button>
         {current && (
           <Button

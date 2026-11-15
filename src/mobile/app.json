@@ -44,7 +44,9 @@
           "cameraPermission": "Cho phép BHOME chụp ảnh tác nghiệp và minh chứng sự cố.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-sharing",
+      "expo-status-bar"
     ]
   }
 }

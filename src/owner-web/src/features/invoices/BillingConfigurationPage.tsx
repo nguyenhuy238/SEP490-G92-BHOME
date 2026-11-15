@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
   invoiceError,
@@ -28,6 +28,7 @@ import {
 import { PageHeader, FilterToolbar } from '../../components/common/PortalUI';
 import { useInvoiceApi } from './useInvoiceApi';
 import { ConflictReload } from '../locations/components/ConflictReload';
+import { todayVietnam } from '../staff/staffContracts';
 
 /**
  * Inline, read-only guide for the existing /pricing demo. It deliberately
@@ -59,9 +60,12 @@ export function BillingConfigurationPage({
 }: { initialLocationId?: string } = {}) {
   const api = useInvoiceApi();
   const { locationId: routeLocationId } = useParams();
+  const [params] = useSearchParams();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
-  const [location, setLocation] = useState(routeLocationId ?? initialLocationId);
+  const [location, setLocation] = useState(
+    routeLocationId ?? (initialLocationId || params.get('locationId') || ''),
+  );
   const locations = useQuery({
     queryKey: ['billing-locations', actor],
     queryFn: ({ signal }) =>
@@ -499,6 +503,17 @@ export function PolicyForm({
   defaultCategory?: number;
 }) {
   const api = useInvoiceApi();
+  const nextDay = (value: string) => {
+    const day = new Date(`${value}T00:00:00Z`);
+    day.setUTCDate(day.getUTCDate() + 1);
+    return day.toISOString().slice(0, 10);
+  };
+  const earliest = (policy: Policy | null) => {
+    const today = todayVietnam();
+    if (!policy) return today;
+    if (mode === 'update') return nextDay(today);
+    return nextDay(policy.effectiveFrom > today ? policy.effectiveFrom : today);
+  };
   const [previous, setPrevious] = useState(initialPrevious);
   const cache = useQueryClient();
   const { session } = useAuth();
@@ -512,7 +527,9 @@ export function PolicyForm({
   });
   const [category, setCategory] = useState(String(previous?.category ?? defaultCategory)),
     [rate, setRate] = useState(mode === 'update' ? String(previous?.rate ?? '') : ''),
-    [date, setDate] = useState(mode === 'update' ? (previous?.effectiveFrom ?? '') : ''),
+    [date, setDate] = useState(
+      mode === 'update' ? (previous?.effectiveFrom ?? '') : earliest(previous),
+    ),
     [endDate, setEndDate] = useState(mode === 'update' ? (previous?.effectiveTo ?? '') : '');
   const [name, setName] = useState(previous?.name ?? ''),
     [code, setCode] = useState(previous?.chargeCode ?? ''),
@@ -533,6 +550,17 @@ export function PolicyForm({
           if (lock.current) return;
           if (!/^\d{1,14}(\.\d{1,4})?$/.test(rate)) {
             setError('Nhập giá không âm, tối đa 14 chữ số phần nguyên và 4 chữ số thập phân.');
+            return;
+          }
+          if (
+            !date ||
+            date < earliest(previous) ||
+            (endDate && endDate < date) ||
+            (previous && mode === 'replace' && previous.effectiveTo && date > previous.effectiveTo)
+          ) {
+            setError(
+              'Ngày hiệu lực phải nằm trong khoảng cho phép và sau ngày bắt đầu của giá cũ.',
+            );
             return;
           }
           lock.current = true;
@@ -661,6 +689,7 @@ export function PolicyForm({
               required
               label="Mã phí dịch vụ"
               value={code}
+              disabled={!!previous}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
             />
           )}
@@ -689,7 +718,15 @@ export function PolicyForm({
             label="Hiệu lực từ ngày"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
+            slotProps={{
+              inputLabel: { shrink: true },
+              htmlInput: {
+                min: earliest(previous),
+                ...(previous && mode === 'replace' && previous.effectiveTo
+                  ? { max: previous.effectiveTo }
+                  : {}),
+              },
+            }}
           />
           <TextField
             required
@@ -702,7 +739,10 @@ export function PolicyForm({
             label="Hiệu lực đến ngày (không bắt buộc)"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
+            slotProps={{
+              inputLabel: { shrink: true },
+              htmlInput: { min: date || earliest(previous) },
+            }}
           />
         </Box>
         {error && <Alert severity="error">{error}</Alert>}
@@ -719,8 +759,9 @@ export function PolicyForm({
               setRoomId(latest.roomId ?? '');
               setCategory(String(latest.category));
               setRate(mode === 'update' ? String(latest.rate) : '');
-              setDate(mode === 'update' ? latest.effectiveFrom : '');
+              setDate(mode === 'update' ? latest.effectiveFrom : earliest(latest));
               setEndDate(mode === 'update' ? (latest.effectiveTo ?? '') : '');
+              setServiceMethod(latest.method === 2 ? '2' : '0');
               setReason('');
               setError('');
               setRawError(null);

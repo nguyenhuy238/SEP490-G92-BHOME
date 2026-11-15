@@ -23,6 +23,7 @@ export interface SetupAssetRequirement {
   category: string;
   trackingMode: 'Serialized' | 'BulkQuantity';
   quantity: number;
+  unit?: string | null;
 }
 export interface SetupRoomDefaults {
   key: string;

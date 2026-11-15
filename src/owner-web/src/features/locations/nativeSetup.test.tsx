@@ -317,14 +317,14 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   next();
   generate('1');
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm Bàn học' }));
-  // A draft from before duplicate selections were idempotent contains an inflated quantity.
+  // A manually edited quantity must survive reopening and idempotent catalog selection.
   resumed.unmount();
   const legacyDraft = JSON.parse(sessionStorage.getItem(draftKey)!);
   legacyDraft.roomTypes[0].assets[0].quantity = 4;
   sessionStorage.setItem(draftKey, JSON.stringify(legacyDraft));
   mount(wizard());
   await screen.findByText('Bàn học', { selector: '[role="listitem"] .MuiTypography-root' });
-  expect(JSON.parse(sessionStorage.getItem(draftKey)!).roomTypes[0].assets[0].quantity).toBe(1);
+  expect(JSON.parse(sessionStorage.getItem(draftKey)!).roomTypes[0].assets[0].quantity).toBe(4);
   expect(screen.queryByRole('combobox', { name: 'Gói tài sản' })).not.toBeInTheDocument();
   expect(screen.queryByText(/\d+ mẫu đã công bố/)).not.toBeInTheDocument();
   expect(
@@ -338,7 +338,7 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   expect(selectedAssets.getByText('Giường đôi')).toBeVisible();
   expect(selectedAssets.getAllByRole('listitem')).toHaveLength(2);
   expect(button('Nạp toàn bộ danh mục')).toBeDisabled();
-  expect(screen.queryByLabelText('Số lượng', { exact: true })).not.toBeInTheDocument();
+  expect(selectedAssets.getAllByLabelText('Số lượng', { exact: true })).toHaveLength(2);
   expect(screen.queryByLabelText('Theo dõi', { exact: true })).not.toBeInTheDocument();
   next();
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm Phí vệ sinh' }));
@@ -376,8 +376,8 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   );
   expect(payload(writes()[0]).fees[0]).toMatchObject({ method: 2, rate: '30000' });
   expect(payload(writes()[0]).roomTypes[0].assets).toEqual([
-    expect.objectContaining({ name: 'Bàn học', quantity: 1, trackingMode: 'BulkQuantity' }),
-    expect.objectContaining({ name: 'Giường đôi', quantity: 1, trackingMode: 'BulkQuantity' }),
+    expect.objectContaining({ name: 'Bàn học', quantity: 4, trackingMode: 'Serialized' }),
+    expect.objectContaining({ name: 'Giường đôi', quantity: 1, trackingMode: 'Serialized' }),
   ]);
 }, 30000);
 

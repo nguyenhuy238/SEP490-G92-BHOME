@@ -40,9 +40,11 @@ beforeEach(() => {
   state.request.mockImplementation(async (path: string) =>
     path === '/api/v1/capture/locations'
       ? [{ id: 'location', label: 'Synthetic Location' }]
-      : path.endsWith('/rooms')
-        ? [{ id: 'room', label: 'A101' }]
-        : { items: [location], totalCount: 1, page: 1, pageSize: 20 },
+      : path.startsWith('/api/v1/operational-tasks/targets/common-areas?')
+        ? ['Hall', 'Laundry']
+        : path.endsWith('/rooms')
+          ? [{ id: 'room', label: 'A101' }]
+          : { items: [location], totalCount: 1, page: 1, pageSize: 20 },
   );
 });
 afterEach(cleanup);
@@ -286,6 +288,7 @@ it('keeps the selected room defaults revision until the Owner explicitly reloads
 });
 it('reads physical Asset fields through the scoped native list and pagination', async () => {
   state.request.mockImplementation(async (path: string) => {
+    if (path.includes('/targets/common-areas?')) return ['Hall'];
     if (path === '/api/v1/capture/locations')
       return [{ id: 'location', label: 'Synthetic Location' }];
     if (path.endsWith('/rooms')) return [];
@@ -322,6 +325,56 @@ it('reads physical Asset fields through the scoped native list and pagination', 
       expect.anything(),
     ),
   );
+});
+
+it('offers persisted common areas and saves a new area with the first physical asset', async () => {
+  let submitted: Record<string, unknown> | null = null;
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/capture/locations')
+      return [{ id: 'location', label: 'Synthetic Location' }];
+    if (path.endsWith('/rooms')) return [];
+    if (path.startsWith('/api/v1/operational-tasks/targets/common-areas?'))
+      return ['Hall', 'Laundry'];
+    if (path === '/api/v1/assets' && init?.method === 'POST') {
+      submitted = JSON.parse(String(init.body));
+      return {
+        id: 'new-asset',
+        locationId: 'location',
+        roomId: null,
+        commonArea: 'Rooftop',
+        code: null,
+        name: 'Synthetic chair',
+        category: 'Khác',
+        condition: 'Good',
+        status: 0,
+        version: 1,
+      };
+    }
+    if (path.startsWith('/api/v1/assets?')) return { items: [], totalCount: 0 };
+    throw new Error(`Unexpected request: ${path}`);
+  });
+
+  mount('assets');
+  await chooseLocation();
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm tài sản' }));
+  const dialog = within(screen.getByRole('dialog'));
+  fireEvent.change(dialog.getByLabelText(/Tên tài sản/), { target: { value: 'Synthetic chair' } });
+  fireEvent.change(dialog.getByLabelText(/Tình trạng/), { target: { value: 'Good' } });
+  fireEvent.mouseDown(dialog.getByRole('combobox', { name: 'Khu vực chung' }));
+  expect(await screen.findByRole('option', { name: 'Hall' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('option', { name: /Tạo khu vực mới/ }));
+  expect(dialog.getByLabelText(/Tên khu vực mới/)).toBeVisible();
+  fireEvent.change(dialog.getByLabelText(/Tên khu vực mới/), { target: { value: 'Rooftop' } });
+  fireEvent.click(dialog.getByRole('button', { name: 'Lưu cấu hình' }));
+  await screen.findByText('Máy chủ đã lưu cấu hình.');
+
+  expect(submitted).toMatchObject({
+    locationId: 'location',
+    roomId: null,
+    commonArea: 'Rooftop',
+    name: 'Synthetic chair',
+    initialUnit: 'Cái',
+  });
 });
 
 it('sends room status filtering to the backend instead of filtering a paginated subset', async () => {
@@ -394,6 +447,9 @@ function mountScopedRoom(search: string, totalCount = 0, fromOverview = false) {
 
 it('opens a filtered room list from the overview and clears the URL filter with the control', async () => {
   mountScopedRoom('?roomStatus=0');
+  expect(screen.getByRole('heading', { name: 'Quản lý phòng', level: 2 })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Thêm phòng' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Tạo phòng hàng loạt' })).toBeInTheDocument();
   await waitFor(() =>
     expect(state.request).toHaveBeenCalledWith(
       '/api/v1/rooms?locationId=location&page=1&pageSize=20&roomStatus=0',

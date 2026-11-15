@@ -37,6 +37,8 @@ import { usePropertySetupApi } from './usePropertySetupApi';
 import { useSetupAction } from './useSetupAction';
 import { SetupEvidenceField } from './SetupEvidenceField';
 import { AssetRequirementFields } from './AssetRequirementFields';
+import { AssetCountObservationDialog } from './AssetCountObservation';
+import { useAssetCounts } from './useAssetCounts';
 import {
   locationSetupClient,
   type LocalRoomDefaultsData,
@@ -284,22 +286,16 @@ export function LocalAssetSetup({
                             <TableHead>
                               <TableRow>
                                 <TableCell>Thiết bị</TableCell>
-                                <TableCell>Nhóm</TableCell>
+                                <TableCell>Đơn vị</TableCell>
                                 <TableCell align="right">Định mức</TableCell>
-                                <TableCell>Cách theo dõi</TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
                               {template.data.items.map((item) => (
                                 <TableRow key={item.id}>
                                   <TableCell>{item.name}</TableCell>
-                                  <TableCell>{item.category}</TableCell>
+                                  <TableCell>{item.unit || 'Chưa ghi nhận'}</TableCell>
                                   <TableCell align="right">{item.quantity}</TableCell>
-                                  <TableCell>
-                                    {item.trackingMode === 'Serialized'
-                                      ? 'Theo từng mã'
-                                      : 'Theo số lượng'}
-                                  </TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -585,8 +581,6 @@ function LocalTemplateEditor({
   const action = useSetupAction();
   const [name, setName] = useState(value?.data.name ?? '');
   const [items, setItems] = useState<LocalAssetItem[]>(value?.data.items ?? []);
-  const change = (id: string, changes: Partial<LocalAssetItem>) =>
-    setItems((old) => old.map((item) => (item.id === id ? { ...item, ...changes } : item)));
   return (
     <Box>
       <Stack
@@ -611,77 +605,25 @@ function LocalTemplateEditor({
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
-        {items.map((item, index) => (
-          <Box
-            key={item.id}
-            sx={{
-              p: 2,
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: '12px',
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr 1fr' },
-              gap: 2,
-            }}
-          >
-            <TextField
-              required
-              label={`Tên tài sản ${index + 1}`}
-              value={item.name}
-              onChange={(event) => change(item.id, { name: event.target.value })}
-            />
-            <TextField
-              required
-              label={`Nhóm tài sản ${index + 1}`}
-              value={item.category}
-              onChange={(event) => change(item.id, { category: event.target.value })}
-            />
-            <TextField
-              type="number"
-              required
-              label={`Số lượng ${index + 1}`}
-              value={item.quantity}
-              slotProps={{ htmlInput: { min: 1, max: 10000, step: 1 } }}
-              onChange={(event) => change(item.id, { quantity: Number(event.target.value) })}
-            />
-            <TextField
-              select
-              label={`Theo dõi ${index + 1}`}
-              value={item.trackingMode}
-              onChange={(event) =>
-                change(item.id, {
-                  trackingMode: event.target.value as LocalAssetItem['trackingMode'],
-                })
-              }
-            >
-              <MenuItem value="Serialized">Theo từng mã</MenuItem>
-              <MenuItem value="BulkQuantity">Theo số lượng</MenuItem>
-            </TextField>
-            <Button onClick={() => setItems((old) => old.filter((row) => row.id !== item.id))}>
-              Bỏ tài sản {index + 1}
-            </Button>
-          </Box>
-        ))}
-        <Button
-          disabled={items.length >= 100}
-          onClick={() =>
-            setItems((old) => [
-              ...old,
-              {
-                id: crypto.randomUUID(),
-                name: '',
-                category: '',
-                trackingMode: 'Serialized',
-                quantity: 1,
-              },
-            ])
-          }
-        >
-          Thêm tài sản vào mẫu
-        </Button>
+        <AssetRequirementFields items={items} onChange={setItems} disabled={action.busy} />
         {action.error && <Alert severity="error">{action.error}</Alert>}
         <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
-          <Button disabled={action.busy} type="submit" variant="contained">
+          <Button
+            disabled={
+              action.busy ||
+              !name.trim() ||
+              !items.length ||
+              items.some(
+                (item) =>
+                  !item.name.trim() ||
+                  !Number.isInteger(item.quantity) ||
+                  item.quantity < 1 ||
+                  item.quantity > 10000,
+              )
+            }
+            type="submit"
+            variant="contained"
+          >
             Lưu bộ mẫu nháp
           </Button>
           <Button disabled={action.busy} onClick={onClose}>
@@ -709,6 +651,7 @@ function RoomAssetInventory({
   const owner = session?.roles.includes('Owner') ?? false;
   const action = useSetupAction();
   const [selected, setSelected] = useState<string | undefined>(undefined);
+  const [countItemId, setCountItemId] = useState('');
   const inventory = useQuery({
     queryKey: ['property-setup', 'inventory', session?.userId, roomId],
     queryFn: ({ signal }) => api.inventory(roomId, signal),
@@ -719,6 +662,7 @@ function RoomAssetInventory({
       locationSetupClient(api.request).roomConfiguration(locationId, roomId, signal),
     enabled: owner,
   });
+  const counts = useAssetCounts(roomId, inventory.data?.currentDesiredId ?? undefined);
   if (inventory.isPending) return <LoadingState />;
   if (inventory.error)
     return <ErrorState error={inventory.error} retry={() => void inventory.refetch()} />;
@@ -812,8 +756,8 @@ function RoomAssetInventory({
           Tài sản vật lý đã ghi nhận
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {inventory.data.physical.length} bản ghi thực tế của phòng. Số lượng vật lý chỉ hiển thị
-          khi có dữ liệu theo dõi.
+          {inventory.data.physical.length} bản ghi thực tế của phòng. Số lượng chỉ hiển thị khi đã
+          được ghi nhận; chưa có dữ liệu không đồng nghĩa với không có tài sản.
         </Typography>
         {!inventory.data.physical.length && <Typography>Chưa có tài sản vật lý.</Typography>}
         {!!inventory.data.physical.length && (
@@ -823,7 +767,8 @@ function RoomAssetInventory({
                 <TableRow>
                   <TableCell>Tài sản / mã</TableCell>
                   <TableCell>Tình trạng</TableCell>
-                  <TableCell align="right">Số lượng vật lý</TableCell>
+                  <TableCell align="right">Số lượng thực tế</TableCell>
+                  <TableCell>Đơn vị</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -848,6 +793,9 @@ function RoomAssetInventory({
                     <TableCell align="right">
                       {inventory.data.metadata?.[asset.id]?.quantity ?? '—'}
                     </TableCell>
+                    <TableCell>
+                      {inventory.data.metadata?.[asset.id]?.unit || 'Chưa ghi nhận'}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -868,6 +816,9 @@ function RoomAssetInventory({
         </Typography>
         {current ? (
           <>
+            {counts.error && (
+              <ErrorState error={counts.error} retry={() => void counts.refetch()} />
+            )}
             <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
               <Chip
                 size="small"
@@ -886,25 +837,86 @@ function RoomAssetInventory({
               </Typography>
             </Stack>
             <TableContainer>
-              <Table size="small" aria-label="Định mức mong muốn của phòng">
+              <Table size="small" aria-label="Định mức mong muốn của phòng" sx={{ minWidth: 560 }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Thiết bị</TableCell>
-                    <TableCell>Nhóm</TableCell>
+                    <TableCell>Đơn vị</TableCell>
                     <TableCell align="right">Số lượng yêu cầu</TableCell>
+                    <TableCell align="right">Đã xác minh</TableCell>
+                    <TableCell>Kiểm đếm thực tế</TableCell>
+                    <TableCell align="right">Thao tác</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {current.data.items.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell>{item.category}</TableCell>
-                      <TableCell align="right">{item.quantity}</TableCell>
-                    </TableRow>
-                  ))}
+                  {current.data.items.map((item) => {
+                    const observed = counts.data?.find((row) => row.data.itemId === item.id);
+                    const verified = inventory.data.progress?.find(
+                      (row) => row.itemId === item.id,
+                    )?.verifiedQuantity;
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell>{item.name}</TableCell>
+                        <TableCell>{item.unit || 'Chưa ghi nhận'}</TableCell>
+                        <TableCell align="right">{item.quantity}</TableCell>
+                        <TableCell align="right">{verified ?? '—'}</TableCell>
+                        <TableCell>
+                          {observed ? (
+                            <>
+                              <Typography variant="body2">
+                                {observed.data.quantity} {item.unit ?? ''}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color={
+                                  observed.data.quantity === item.quantity
+                                    ? 'success.main'
+                                    : 'warning.dark'
+                                }
+                              >
+                                {observed.data.quantity === item.quantity
+                                  ? 'Đủ'
+                                  : observed.data.quantity < item.quantity
+                                    ? `Thiếu ${item.quantity - observed.data.quantity}`
+                                    : `Thừa ${observed.data.quantity - item.quantity}`}
+                              </Typography>
+                            </>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              {counts.isPending
+                                ? 'Đang tải…'
+                                : counts.error
+                                  ? 'Không tải được'
+                                  : 'Chưa kiểm đếm'}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Button
+                            size="small"
+                            disabled={counts.isFetching || !!counts.error}
+                            onClick={() => setCountItemId(item.id)}
+                          >
+                            {observed ? 'Cập nhật' : 'Kiểm đếm'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
+            {current.data.items.some((item) => item.id === countItemId) && (
+              <AssetCountObservationDialog
+                key={`${current.id}:${countItemId}`}
+                roomId={roomId}
+                locationId={locationId}
+                desired={current}
+                item={current.data.items.find((item) => item.id === countItemId)!}
+                current={counts.data?.find((row) => row.data.itemId === countItemId)}
+                close={() => setCountItemId('')}
+              />
+            )}
             <AssetVerificationForm
               key={`${current.id}:${current.version}`}
               roomId={roomId}

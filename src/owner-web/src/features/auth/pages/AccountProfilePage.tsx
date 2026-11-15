@@ -22,6 +22,10 @@ import { ErrorState, LoadingState, PageHeader } from '../../../components/common
 import { ChangePasswordDialog } from '../components/ChangePasswordDialog';
 import { useAccountProfileApi, type AccountProfile } from '../hooks/useAccountProfileApi';
 import { normalizeLoginPhone } from '../../../../../../packages/client-core/src/loginValidation';
+import {
+  contactPhoneError,
+  normalizeContactPhone,
+} from '../../../../../../packages/client-core/src/contactPhone';
 
 interface ProfileForm {
   fullName: string;
@@ -69,7 +73,7 @@ export default function AccountProfilePage() {
       return api.update({
         fullName: activeForm.fullName.trim(),
         email: activeForm.email.trim(),
-        phone: normalizeLoginPhone(activeForm.phone) ?? null,
+        phone: normalizeContactPhone(activeForm.phone) ?? null,
         version: current.version,
         ...(contactChanged ? { currentPassword: reauthPassword } : {}),
       });
@@ -150,8 +154,8 @@ export default function AccountProfilePage() {
       setFormError('Họ tên phải có ít nhất 2 ký tự và Email phải đúng định dạng.');
       return;
     }
-    if (activeForm.phone.trim() && !normalizeLoginPhone(activeForm.phone)) {
-      setFormError('Số điện thoại không đúng định dạng.');
+    if (contactPhoneError(activeForm.phone)) {
+      setFormError(contactPhoneError(activeForm.phone));
       return;
     }
     if (contactChanged && !reauthPassword) {
@@ -254,9 +258,14 @@ export default function AccountProfilePage() {
             />
             <TextField
               label="Số điện thoại"
+              type="tel"
               value={activeForm.phone}
               onChange={(event) => setForm({ ...activeForm, phone: event.target.value })}
-              helperText="Số điện thoại mới chưa được xác minh qua SMS."
+              error={!!contactPhoneError(activeForm.phone)}
+              helperText={
+                contactPhoneError(activeForm.phone) ||
+                'Số điện thoại mới chưa được xác minh qua SMS.'
+              }
               slotProps={{ htmlInput: { maxLength: 30 } }}
             />
             {contactChanged && (

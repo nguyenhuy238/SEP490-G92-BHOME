@@ -38,6 +38,8 @@ export function Details({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const { session } = useSession();
+  if (session?.roles.includes('Owner')) return null;
   return (
     <View style={{ gap: 6 }}>
       <Button onPress={() => setOpen(!open)}>
@@ -126,9 +128,11 @@ export function EvidenceImage({
 }) {
   const { api } = useSession();
   const [state, setState] = useState<{ api: typeof api; uri: string } | null>(null);
-  const [attempt, setAttempt] = useState(0),
+  // attempt starts at 1 so the photo loads as soon as the detail opens (same as Owner web);
+  // the button only retries.
+  const [attempt, setAttempt] = useState(1),
     [error, setError] = useState(''),
-    [loading, setLoading] = useState(false);
+    [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!api || attempt === 0) return;

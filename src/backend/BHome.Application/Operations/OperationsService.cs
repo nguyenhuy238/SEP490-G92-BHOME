@@ -100,6 +100,32 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         }, Now, t);
     }
 
+    public async Task<IReadOnlyList<EmploymentPeriodView>> StaffEmploymentsAsync(Guid id, CancellationToken t)
+    {
+        Require(Permissions.StaffAccounts.Manage);
+        return await repository.StaffEmploymentsAsync(id, t);
+    }
+
+    public async Task<StaffView> CreateEmploymentPeriodAsync(Guid id, EmploymentPeriodCreate input, CancellationToken t)
+    {
+        Require(Permissions.StaffAccounts.Manage); Validate(input);
+        if (input.Employment is null) throw OperationsException.Invalid("invalid_employment");
+        Validate(input.Employment);
+        ValidateEmployment(input.Employment);
+        if (string.IsNullOrWhiteSpace(input.Reason)) throw OperationsException.Invalid("reason_required");
+        return await repository.CreateEmploymentPeriodAsync(Actor, id, input with
+        {
+            Employment = Normalize(input.Employment),
+            Reason = input.Reason.Trim()
+        }, Now, t);
+    }
+
+    public async Task<StaffResponsibilitiesView> StaffResponsibilitiesAsync(Guid id, CancellationToken t)
+    {
+        Require(Permissions.StaffAccounts.Manage);
+        return await repository.StaffResponsibilitiesAsync(id, Today, t);
+    }
+
     public async Task<OperationsPage<ResidenceTaskView>> ResidenceAsync(ResidenceQuery query, CancellationToken t)
     {
         Validate(query); Page(query.Page, query.PageSize);
@@ -204,7 +230,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         {
             Summary = input.Summary.Trim(),
             Amenities = NormalizeAmenities(input.Amenities),
-            ContactPhone = Clean(input.ContactPhone),
+            ContactPhone = Phone(input.ContactPhone),
             ContactEmail = Clean(input.ContactEmail)
         }, Now, t);
     }
@@ -323,7 +349,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     private static string? Phone(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
-        return LoginIdentifier.NormalizePhone(value) ?? throw OperationsException.Invalid("invalid_phone_number");
+        return ContactPhone.Normalize(value) ?? throw OperationsException.Invalid("invalid_phone_number");
     }
     private static EmploymentWrite Normalize(EmploymentWrite input) => input with
     {
@@ -335,7 +361,8 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     private static void ValidateEmployment(EmploymentWrite input)
     {
         if (input.StartDate == default || input.EndDate < input.StartDate || string.IsNullOrWhiteSpace(input.EmploymentType) ||
-            input.Status == "Ended" && input.EndDate is null)
+            input.Status == "Ended" && input.EndDate is null ||
+            input.BaseRate is { } rate && decimal.Truncate(rate) != rate)
             throw OperationsException.Invalid("invalid_employment");
     }
     private static string[] NormalizeAmenities(IEnumerable<string> values) => values.Select(x => x.Trim())

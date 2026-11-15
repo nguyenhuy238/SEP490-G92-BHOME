@@ -60,13 +60,21 @@ function WorkspaceNavigation() {
       <Stack.Screen name="confirm-email" options={{ title: 'Xác nhận email' }} />
       <Stack.Screen name="reset-password" options={{ title: 'Đặt lại mật khẩu' }} />
       <Stack.Screen name="contract-signing" options={{ title: 'Chấp thuận hợp đồng' }} />
+      <Stack.Screen name="sign-contract" options={{ title: 'Ký hợp đồng' }} />
       <Stack.Protected guard={!!role}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="workspace/[screen]" options={{ headerShown: false }} />
       </Stack.Protected>
-      <Stack.Screen name="meter" options={{ headerShown: false, gestureEnabled: false }} />
-      <Stack.Screen name="ocr-test" options={{ title: 'Th? OCR' }} />
-      <Stack.Screen name="capture" options={{ title: 'Tác nghiệp OCR' }} />
+      <Stack.Protected guard={role !== 'Owner'}>
+        <Stack.Screen name="meter" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="capture" options={{ title: 'Tác nghiệp OCR' }} />
+        <Stack.Screen name="setup" />
+        <Stack.Screen name="resident" />
+        <Stack.Screen name="identity" />
+        <Stack.Protected guard={__DEV__}>
+          <Stack.Screen name="ocr-test" options={{ title: 'Thử OCR' }} />
+        </Stack.Protected>
+      </Stack.Protected>
     </Stack>
   );
 }

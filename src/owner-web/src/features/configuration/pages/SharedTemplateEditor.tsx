@@ -17,8 +17,10 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
+import { ASSET_UNITS } from '../../../../../../packages/client-core/src/assetUnits';
 import type {
   AssetCatalogData,
+  RoomTemplateData,
   SharedAssetItem,
   SharedDocument,
   SharedResource,
@@ -85,7 +87,9 @@ export function SharedTemplateEditor({
             chargeCode: 'RENT',
             unit: 'VND/month',
           }
-        : {};
+        : resource === 'asset-catalog'
+          ? { category: 'Khác', unit: 'Cái' }
+          : {};
     if (document)
       for (const [key, value] of Object.entries(document.data))
         result[key] = Array.isArray(value) ? value.join('\n') : value == null ? '' : String(value);
@@ -101,7 +105,11 @@ export function SharedTemplateEditor({
     return result;
   });
   const [items, setItems] = useState<SharedAssetItem[]>(
-    document && 'items' in document.data ? document.data.items : [],
+    document && 'items' in document.data
+      ? document.data.items
+      : resource === 'room-type-templates'
+        ? ((document?.data as RoomTemplateData | undefined)?.assetItems ?? [])
+        : [],
   );
   const [catalogId, setCatalogId] = useState('');
   const [validationError, setValidationError] = useState('');
@@ -129,7 +137,7 @@ export function SharedTemplateEditor({
   const catalog = useQuery({
     queryKey: ['property-setup', 'shared-catalog-picker', session?.userId],
     queryFn: ({ signal }) => api.publishedCatalog(signal),
-    enabled: resource === 'asset-templates',
+    enabled: resource === 'asset-templates' || resource === 'room-type-templates',
   });
   const fields: UtilityFieldDefinition[] =
     resource === 'room-type-templates'
@@ -140,8 +148,13 @@ export function SharedTemplateEditor({
         ]
       : resource === 'asset-catalog'
         ? [
-            { name: 'category', label: 'Nhóm tài sản' },
-            { name: 'unit', label: 'Đơn vị' },
+            {
+              name: 'unit',
+              label: 'Đơn vị',
+              options: [...new Set([...ASSET_UNITS, ...(values.unit ? [values.unit] : [])])].map(
+                (unit) => ({ id: unit, label: unit }),
+              ),
+            },
             { name: 'referencePrice', label: 'Giá tham khảo' },
           ]
         : resource === 'fee-templates'
@@ -226,10 +239,11 @@ export function SharedTemplateEditor({
               .map((x) => x.trim())
               .filter(Boolean),
             referenceRent: values.referenceRent || null,
+            ...(items.length ? { assetItems: items } : {}),
           }
         : resource === 'asset-catalog'
           ? {
-              category: values.category ?? '',
+              category: values.category || 'Khác',
               unit: values.unit ?? '',
               referencePrice: values.referencePrice ?? '',
             }
@@ -413,7 +427,7 @@ export function SharedTemplateEditor({
                 onChange={(e) => setValues((old) => ({ ...old, content: e.target.value }))}
               />
             )}
-            {resource === 'asset-templates' && (
+            {(resource === 'asset-templates' || resource === 'room-type-templates') && (
               <>
                 <Typography
                   variant="h2"
@@ -439,11 +453,20 @@ export function SharedTemplateEditor({
                     onChange={(e) => setCatalogId(e.target.value)}
                   >
                     <MenuItem value="">Chọn</MenuItem>
-                    {catalog.data?.map((item) => (
-                      <MenuItem key={item.id} value={item.id}>
-                        {item.name} · phiên bản {item.edition}
-                      </MenuItem>
-                    ))}
+                    {catalog.data
+                      ?.filter(
+                        (item) =>
+                          !items.some(
+                            (selected) =>
+                              selected.catalogId === item.id ||
+                              selected.catalog?.familyId === item.familyId,
+                          ),
+                      )
+                      .map((item) => (
+                        <MenuItem key={item.id} value={item.id}>
+                          {item.name} · phiên bản {item.edition}
+                        </MenuItem>
+                      ))}
                   </TextField>
                   <Button
                     variant="outlined"
@@ -451,7 +474,15 @@ export function SharedTemplateEditor({
                     disabled={!catalogId || busy}
                     onClick={() => {
                       const selected = catalog.data?.find((d) => d.id === catalogId);
-                      if (!selected) return;
+                      if (
+                        !selected ||
+                        items.some(
+                          (item) =>
+                            item.catalogId === selected.id ||
+                            item.catalog?.familyId === selected.familyId,
+                        )
+                      )
+                        return;
                       setItems((old) => [
                         ...old,
                         {
@@ -471,7 +502,7 @@ export function SharedTemplateEditor({
                       setCatalogId('');
                     }}
                   >
-                    Thêm vào gói
+                    Thêm vào mẫu
                   </Button>
                 </Stack>
                 {!items.length && (
@@ -512,26 +543,10 @@ export function SharedTemplateEditor({
                         }
                       />
                       <TextField
-                        select
-                        disabled={busy}
-                        label={`Theo dõi mục ${index + 1}`}
-                        value={item.trackingMode}
-                        onChange={(e) =>
-                          setItems((old) =>
-                            old.map((v, i) =>
-                              i === index
-                                ? {
-                                    ...v,
-                                    trackingMode: e.target.value as SharedAssetItem['trackingMode'],
-                                  }
-                                : v,
-                            ),
-                          )
-                        }
-                      >
-                        <MenuItem value="Serialized">Từng tài sản</MenuItem>
-                        <MenuItem value="BulkQuantity">Theo số lượng</MenuItem>
-                      </TextField>
+                        label="Đơn vị"
+                        value={item.catalog?.unit ?? 'Chưa ghi nhận'}
+                        slotProps={{ input: { readOnly: true } }}
+                      />
                     </Box>
                     <Stack
                       direction="row"

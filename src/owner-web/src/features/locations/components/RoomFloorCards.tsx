@@ -12,7 +12,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { DoorOpen, Layers3, Users, TriangleAlert, Pencil, ArrowUpRight } from 'lucide-react';
+import { DoorOpen, Users, TriangleAlert, Pencil, ArrowUpRight } from 'lucide-react';
 import type { RoomConfiguration } from '../../../../../../packages/client-core/src/propertySetup';
 import type { SetupDocument } from '../../../../../../packages/client-core/src/propertySetup';
 import type { RoomProvenanceData } from '../../../../../../packages/client-core/src/locationSetup';
@@ -30,14 +30,12 @@ const unknownState = { label: 'Chưa xác định', ...roomStatusColors.unavaila
 export function RoomFloorCards({
   rooms,
   locationId,
-  total,
   edit,
   inspect,
   provenance,
 }: {
   rooms: RoomConfiguration[];
   locationId: string;
-  total: number;
   edit?: (room: RoomConfiguration) => void;
   inspect: (id: string) => void;
   provenance?: SetupDocument<RoomProvenanceData>[];
@@ -63,18 +61,26 @@ export function RoomFloorCards({
         spacing={2}
         sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, mb: 2 }}
       >
-        <Box>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Layers3 size={22} color="#255dde" />
-            <Typography component="h2" variant="h2">
-              Sơ đồ phòng theo tầng
-            </Typography>
-          </Stack>
-          <Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 14 }}>
-            {visibleRooms.length} phòng đang hiển thị · {rooms.length} trên trang này / {total}{' '}
-            phòng phù hợp
-          </Typography>
-        </Box>
+        <Stack
+          direction="row"
+          role="group"
+          aria-label="Trạng thái các phòng đang hiển thị"
+          sx={{ flexWrap: 'wrap', gap: 1.5, flex: 1, minWidth: 0 }}
+        >
+          {[...states, ...(unknownCount ? [unknownState] : [])].map(({ label, fill }, index) => (
+            <Box key={label} sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: fill }} />
+              <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>{label}</Typography>
+              <Typography
+                sx={{ fontSize: 14, fontWeight: 750, fontVariantNumeric: 'tabular-nums' }}
+              >
+                {index === states.length
+                  ? unknownCount
+                  : visibleRooms.filter((room) => room.status === index).length}
+              </Typography>
+            </Box>
+          ))}
+        </Stack>
         <TextField
           select
           label="Tầng trên trang hiện tại"
@@ -90,30 +96,6 @@ export function RoomFloorCards({
             </MenuItem>
           ))}
         </TextField>
-      </Stack>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-        Trạng thái các phòng đang hiển thị
-      </Typography>
-      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1.5, mb: 2.5 }}>
-        {[...states, ...(unknownCount ? [unknownState] : [])].map(({ label, fill }, index) => (
-          <Box
-            key={label}
-            sx={{
-              display: 'flex',
-              gap: 1,
-              alignItems: 'center',
-              py: 0.5,
-            }}
-          >
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: fill }} />
-            <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>{label}</Typography>
-            <Typography sx={{ fontSize: 14, fontWeight: 750, fontVariantNumeric: 'tabular-nums' }}>
-              {index === states.length
-                ? unknownCount
-                : visibleRooms.filter((room) => room.status === index).length}
-            </Typography>
-          </Box>
-        ))}
       </Stack>
       {(occupancy.isFetching || incidents.isFetching) && (
         <LinearProgress sx={{ mb: 2 }} aria-label="Đang tải tình trạng vận hành" />
@@ -284,34 +266,34 @@ export function RoomFloorCards({
                             </Typography>
                           </Stack>
                         </Stack>
-                        <Stack
-                          direction="row"
-                          spacing={0.75}
-                          sx={{
-                            alignItems: 'center',
-                            minHeight: 24,
-                            color: emergency
-                              ? 'error.main'
-                              : reports.length
-                                ? 'warning.dark'
-                                : 'text.secondary',
-                          }}
-                        >
-                          {reports.length > 0 && <TriangleAlert size={16} />}
-                          <Typography
+                        {(reports.length > 0 || !incidents.data?.complete) && (
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
                             sx={{
-                              fontSize: 13,
-                              fontWeight: reports.length ? 700 : 400,
-                              overflowWrap: 'anywhere',
+                              alignItems: 'center',
+                              minHeight: 24,
+                              color: emergency
+                                ? 'error.main'
+                                : reports.length
+                                  ? 'warning.dark'
+                                  : 'text.secondary',
                             }}
                           >
-                            {reports.length
-                              ? `${emergency ? 'Có sự cố khẩn cấp' : 'Có báo cáo sự cố'} · ${reports.length} đang mở`
-                              : incidents.data?.complete
-                                ? 'Không có báo cáo sự cố đang mở'
+                            {reports.length > 0 && <TriangleAlert size={16} />}
+                            <Typography
+                              sx={{
+                                fontSize: 13,
+                                fontWeight: reports.length ? 700 : 400,
+                                overflowWrap: 'anywhere',
+                              }}
+                            >
+                              {reports.length
+                                ? `${emergency ? 'Có sự cố khẩn cấp' : 'Có báo cáo sự cố'} · ${reports.length} đang mở`
                                 : 'Chưa đủ dữ liệu báo cáo sự cố'}
-                          </Typography>
-                        </Stack>
+                            </Typography>
+                          </Stack>
+                        )}
                         {!occupied && (
                           <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
                             Chưa có số liệu người ở.

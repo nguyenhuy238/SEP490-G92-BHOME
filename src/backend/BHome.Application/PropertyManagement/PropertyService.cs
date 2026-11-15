@@ -113,6 +113,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                 x.Amenities, x.IsActive, x.Version), q, t);
     public Task<PagedResult<AssetDto>> AssetsAsync(PropertyQuery q, CancellationToken t) =>
         List<Asset, AssetDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
+            (!q.CommonAreaOnly || x.RoomId == null && x.CommonArea != null) &&
             (!q.RoomId.HasValue || x.RoomId == q.RoomId) && (!q.AssetStatus.HasValue || x.Status == q.AssetStatus) &&
             (q.Search == null || x.Name.Contains(q.Search) || x.Code != null && x.Code.Contains(q.Search)),
             x => new(x.Id, x.LocationId, x.RoomId, x.CommonArea, x.Code, x.Name, x.Category, x.Condition, x.Status, x.Version), q, t);
@@ -288,6 +289,8 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
     public async Task<AssetDto> SaveAssetAsync(Guid? id, AssetWrite input, CancellationToken t)
     {
         Require(Permissions.Property.Manage); Validate(input);
+        if (input.InitialUnit is not null && (id.HasValue || string.IsNullOrWhiteSpace(input.InitialUnit)))
+            throw Error(400, "invalid_asset_metadata");
         if (Text(input.Name).Length == 0 || Text(input.Category).Length == 0 || Text(input.Condition).Length == 0 ||
             !Enum.IsDefined(input.Status) || input.RoomId.HasValue == !string.IsNullOrWhiteSpace(input.CommonArea))
             throw Error(400, "invalid_asset");
@@ -317,7 +320,10 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             x.RoomId = input.RoomId; x.CommonArea = Optional(input.CommonArea); x.Code = Optional(input.Code);
             x.Name = Text(input.Name); x.Category = Text(input.Category); x.Condition = Text(input.Condition); x.Status = input.Status;
             if (!id.HasValue) repository.Add(x);
-            Audit(l.Id, x, id.HasValue ? "Updated" : "Created", input.Reason, before); return Map(x);
+            Audit(l.Id, x, id.HasValue ? "Updated" : "Created", input.Reason, before);
+            if (input.InitialUnit is not null)
+                await repository.SaveInitialAssetMetadataAsync(x.Id, new("Serialized", 1, null, null, null, input.InitialUnit.Trim()), t);
+            return Map(x);
         }, t);
     }
 
@@ -342,7 +348,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         }, t);
     }
 
-    private async Task ValidatePolicyAsync(PolicyWrite input, CancellationToken t)
+    private async Task ValidatePolicyAsync(PolicyWrite input, CancellationToken t, bool successor = false)
     {
         Validate(input);
         if (!Enum.IsDefined(input.Category) || !Enum.IsDefined(input.Method) || Text(input.Name).Length == 0 ||
@@ -361,7 +367,18 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         if (input.RoomTypeId is { } roomType && !await repository.AnyAsync<RoomType>(x =>
                 x.Id == roomType && x.LocationId == location.Id && x.IsActive, t))
             throw Error(400, "policy_scope_invalid");
-        await RoomPricingLock.EnsureUnlockedAsync(repository, input.RoomId, t);
+        if (successor && input.Category == ChargeCategory.ServiceFee)
+            await RoomPricingLock.EnsureServiceFeeSuccessorAsync(repository, input.LocationId, input.RoomId, t);
+        else await RoomPricingLock.EnsureUnlockedAsync(repository, input.RoomId, t);
+    }
+    private async Task EnsureNonOverlappingPolicyAsync(PolicyWrite input, Guid? exceptId, CancellationToken t)
+    {
+        var code = PropertyRules.Normalize(input.ChargeCode);
+        if (await repository.AnyAsync<BillingPolicy>(p => p.Id != exceptId && p.LocationId == input.LocationId &&
+            p.RoomId == input.RoomId && p.RoomTypeId == input.RoomTypeId && p.ChargeCode == code &&
+            (p.EffectiveTo == null || p.EffectiveTo >= input.EffectiveFrom) &&
+            (input.EffectiveTo == null || p.EffectiveFrom <= input.EffectiveTo), t))
+            throw Error(409, "billing_policy_overlap");
     }
     private static BillingPolicy NewPolicy(PolicyWrite input) => new()
     {
@@ -381,7 +398,9 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         Require(Permissions.Property.Manage);
         return await repository.WithLocationLockAsync(input.LocationId, async () =>
         {
-            await ValidatePolicyAsync(input, t); var x = NewPolicy(input); repository.Add(x);
+            await ValidatePolicyAsync(input, t);
+            await EnsureNonOverlappingPolicyAsync(input, null, t);
+            var x = NewPolicy(input); repository.Add(x);
             Audit(x.LocationId, x, "Created", input.Reason, null); return Map(x);
         }, t);
     }
@@ -401,6 +420,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                 throw Error(400, "policy_scope_immutable");
             await ValidatePolicyAsync(input, t);
             if (input.EffectiveFrom <= Today) throw Error(400, "future_policy_date_required");
+            await EnsureNonOverlappingPolicyAsync(input, x.Id, t);
             var before = Snapshot(x);
             x.Name = Text(input.Name); x.Rate = input.Rate; x.Method = input.Method;
             x.EffectiveFrom = input.EffectiveFrom; x.EffectiveTo = input.EffectiveTo; x.Version++;
@@ -415,7 +435,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         var input = replacement.Policy;
         return await repository.WithLocationLockAsync(input.LocationId, async () =>
         {
-            await ValidatePolicyAsync(input, t);
+            await ValidatePolicyAsync(input, t, successor: true);
             var old = await repository.FindAsync<BillingPolicy>(id, t) ?? throw Error(404, "resource_not_found");
             CheckVersion(old.Version, replacement.ExpectedVersion);
             if (old.LocationId != input.LocationId || old.RoomTypeId != input.RoomTypeId || old.RoomId != input.RoomId ||
@@ -423,6 +443,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                 throw Error(400, "replacement_scope_mismatch");
             if (input.EffectiveFrom <= Today || input.EffectiveFrom <= old.EffectiveFrom || old.EffectiveTo < input.EffectiveFrom)
                 throw Error(409, "replacement_date_invalid");
+            await EnsureNonOverlappingPolicyAsync(input, old.Id, t);
             var before = Snapshot(old); old.EffectiveTo = input.EffectiveFrom.AddDays(-1); old.Version++;
             Audit(old.LocationId, old, "Superseded", input.Reason, before);
             var next = NewPolicy(input); repository.Add(next); Audit(next.LocationId, next, "Created", input.Reason, null);

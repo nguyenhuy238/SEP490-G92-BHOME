@@ -411,6 +411,7 @@ export function IncidentDetail({ id }: { id: string }) {
                 key={e.id}
                 label={`${e.kind} · ${e.length} byte · ${e.workOrderId ? 'Lệnh sửa chữa' : 'Sự cố'}`}
                 filename={`su-co-${e.kind}-${e.id}.jpg`}
+                contentType={e.contentType}
                 fetchBlob={(signal) =>
                   action.request<Blob>(`${root}/${id}/evidence/${e.id}`, { signal }, 'blob')
                 }

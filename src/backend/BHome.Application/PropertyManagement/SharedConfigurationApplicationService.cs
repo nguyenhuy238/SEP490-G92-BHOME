@@ -67,9 +67,23 @@ public sealed class SharedConfigurationApplicationService(ISharedConfigurationSt
             switch (resource)
             {
                 case "room-type-templates":
-                    created = Guid.NewGuid(); await local.SaveAsync(created, input.LocationId, "RoomDefaults", "Recorded", new { name = source.Name, defaults = source.Data, sourceId = source.Id, sourceVersion = source.Version, sourceEdition = source.Edition }, 0, actor, t); break;
+                    var defaults = Data<SharedRoomDefaults>(source);
+                    Guid? assetTemplateId = null;
+                    if (defaults.AssetItems is { Length: > 0 })
+                    {
+                        var requirements = defaults.AssetItems.Where(i => i.Required || input.IncludeOptionalItems)
+                            .Select(i => new AssetTemplateItem(Guid.NewGuid(), i.Catalog!.Name, i.Catalog.Category, i.TrackingMode, i.Quantity, i.Catalog.Unit)).ToArray();
+                        if (requirements.Length > 0)
+                        {
+                            var template = await local.SaveAsync(Guid.NewGuid(), input.LocationId, "AssetTemplate", "Published",
+                                new AssetTemplateWrite(input.LocationId, source.Name, requirements, Scoped: true), 0, actor, t);
+                            assetTemplateId = template.Id;
+                        }
+                    }
+                    created = Guid.NewGuid();
+                    await local.SaveAsync(created, input.LocationId, "RoomDefaults", "Recorded", new { name = source.Name, defaults = defaults with { AssetItems = null }, assetTemplateId, sourceId = source.Id, sourceVersion = source.Version, sourceEdition = source.Edition }, 0, actor, t); break;
                 case "asset-templates":
-                    var items = Data<SharedAssetData>(source).Items.Where(i => i.Required || input.IncludeOptionalItems).Select(i => new AssetTemplateItem(Guid.NewGuid(), i.Catalog!.Name, i.Catalog.Category, i.TrackingMode, i.Quantity)).ToArray();
+                    var items = Data<SharedAssetData>(source).Items.Where(i => i.Required || input.IncludeOptionalItems).Select(i => new AssetTemplateItem(Guid.NewGuid(), i.Catalog!.Name, i.Catalog.Category, i.TrackingMode, i.Quantity, i.Catalog.Unit)).ToArray();
                     created = (await assets.SaveTemplateAsync(null, new(input.LocationId, source.Name, items), t)).Id; break;
                 case "fee-templates":
                     var fee = Data<SharedFeeData>(source);

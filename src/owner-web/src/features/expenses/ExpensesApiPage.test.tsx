@@ -73,6 +73,8 @@ it('keeps the Location Workspace scope when loading and creating expenses', asyn
   fireEvent.click(screen.getByRole('button', { name: 'Xem tổng hợp vốn và chi phí' }));
   expect(await screen.findByText('15.000.000 ₫')).toBeInTheDocument();
   expect(screen.getByText('1.200.000 ₫')).toBeInTheDocument();
+  expect(screen.getByText(/^Toàn cơ sở · đến \d{2}\/\d{2}\/\d{4}$/)).toBeInTheDocument();
+  expect(screen.queryByText(/Không phụ thuộc bộ lọc/)).not.toBeInTheDocument();
   expect(mock.report).toHaveBeenCalledWith(
     expect.objectContaining({ locationId: 'location' }),
     expect.any(AbortSignal),
@@ -82,6 +84,14 @@ it('keeps the Location Workspace scope when loading and creating expenses', asyn
     expect.any(AbortSignal),
   );
   expect(screen.queryByRole('combobox', { name: 'Cơ sở' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-11-01' } });
+  await waitFor(() =>
+    expect(mock.expenses).toHaveBeenLastCalledWith(
+      expect.objectContaining({ locationId: 'location', from: '2026-11-01' }),
+      expect.any(AbortSignal),
+    ),
+  );
+  expect(mock.report).toHaveBeenCalledTimes(1);
   mock.createExpense.mockResolvedValue(expense);
   fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
   expect(screen.getByRole('combobox', { name: /Cơ sở ghi nhận/ })).toHaveAttribute(

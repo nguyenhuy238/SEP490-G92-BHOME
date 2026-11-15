@@ -11,6 +11,39 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed class RuntimeSchemaUpgradeTests
 {
     [CompactPostgresFact]
+    public async Task ProbeIdentifiesSchemaAheadOfCheckoutWithoutChangingIt()
+    {
+        var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("BHOME_COMPACT24_TEST_ADMIN"));
+        if (admin.Host is not ("localhost" or "127.0.0.1" or "::1") || admin.Database != "postgres")
+            throw new InvalidOperationException("Disposable loopback admin required");
+        var name = "bhome_compact24_" + Guid.NewGuid().ToString("N");
+        await using var connection = new NpgsqlConnection(admin.ConnectionString); await connection.OpenAsync();
+        await using (var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", connection)) await create.ExecuteNonQueryAsync();
+        try
+        {
+            var target = new NpgsqlConnectionStringBuilder(admin.ConnectionString) { Database = name };
+            await using var db = new Compact24DbContext(new DbContextOptionsBuilder<Compact24DbContext>().UseNpgsql(target.ConnectionString).Options);
+            await db.Database.MigrateAsync();
+            Assert.True(await db.IsSchemaReadyAsync());
+            const string futureMigration = "20990101000000_SyntheticFutureSchema";
+            await db.Database.ExecuteSqlRawAsync("ALTER TABLE payment_allocations ADD COLUMN synthetic_future_target uuid");
+            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO bhome_meta.\"__EFMigrationsHistory\" (\"MigrationId\",\"ProductVersion\") VALUES ({futureMigration},'8.0.0')");
+            using var diagnostics = new StringWriter();
+            Assert.Equal(2, await DatabaseProbe.RunAsync(target.ConnectionString, diagnostics));
+            Assert.Contains("pending=0; unknown=1", diagnostics.ToString());
+            Assert.Contains($"UnknownCompact24Migrations={futureMigration}", diagnostics.ToString());
+            Assert.Contains("SchemaAheadOfCheckout=REVIEW_REQUIRED", diagnostics.ToString());
+            Assert.False(await db.IsSchemaReadyAsync());
+            Assert.Contains(futureMigration, await db.Database.GetAppliedMigrationsAsync());
+            Assert.Empty(await db.Database.SqlQuery<Guid?>($"SELECT synthetic_future_target AS \"Value\" FROM payment_allocations LIMIT 0").ToArrayAsync());
+        }
+        finally
+        {
+            await using var drop = new NpgsqlCommand($"DROP DATABASE \"{name}\" WITH (FORCE)", connection); await drop.ExecuteNonQueryAsync();
+        }
+    }
+
+    [CompactPostgresFact]
     public async Task ReadinessStillRejectsModifiedGuardBodyAfterCatalogBatching()
     {
         var fixture = new Compact24Fixture(); await fixture.InitializeAsync();
@@ -68,7 +101,7 @@ public sealed class RuntimeSchemaUpgradeTests
                 foreach (var table in tables)
                 {
                     // Names are this fixed fixture allowlist; no user input enters SQL identifiers.
-                    var sql = $"SELECT COALESCE(jsonb_agg(to_jsonb(t)-ARRAY['contact_email','target_settlement_contract_id','settlement_receivable_id','deposit_offset_approval_id','beneficiary_kind','external_payer_attestation_id','target_initial_contract_id'] ORDER BY id),'[]'::jsonb)::text AS \"Value\" FROM {table} t";
+                    var sql = $"SELECT COALESCE(jsonb_agg(to_jsonb(t)-ARRAY['contact_email','target_settlement_contract_id','target_initial_contract_id','settlement_receivable_id','deposit_offset_approval_id','beneficiary_kind','external_payer_attestation_id'] ORDER BY id),'[]'::jsonb)::text AS \"Value\" FROM {table} t";
                     result.Add(await db.Database.SqlQueryRaw<string>(sql).SingleAsync());
                 }
                 return result.ToArray();

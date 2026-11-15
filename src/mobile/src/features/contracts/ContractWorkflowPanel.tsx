@@ -19,7 +19,7 @@ import { formatInstant } from '../../../../../packages/client-core/src/localizat
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ContractEvidence } from './ContractEvidence';
 import { useWorkspaceQuery } from '../workspace/useWorkspaceQuery';
-import { HoldingDepositAllocation } from './HoldingDepositAllocation';
+import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import type { Readiness } from '../../../../../packages/client-core/src/contracts';
 
 export function ContractWorkflowPanel({
@@ -29,7 +29,6 @@ export function ContractWorkflowPanel({
   section = 'all',
   showDeposits = true,
   readiness,
-  onChanged,
 }: {
   api: ContractClient;
   contract: ContractView;
@@ -164,16 +163,7 @@ export function ContractWorkflowPanel({
             holding.data &&
             !/^0(?:\.0+)?$/.test(holding.data.remaining) &&
             ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status) && (
-              <HoldingDepositAllocation
-                api={api}
-                role={role}
-                contract={contract}
-                onChanged={() => {
-                  holding.reload();
-                  setRevision((value) => value + 1);
-                  onChanged?.();
-                }}
-              />
+              <OwnerWebNotice task="Phân bổ giao dịch và đối soát cọc giữ chỗ" />
             )}
           <Action secondary onPress={holding.reload}>
             Tải lại cọc giữ chỗ

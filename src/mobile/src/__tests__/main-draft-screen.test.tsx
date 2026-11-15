@@ -66,6 +66,7 @@ vi.mock('react-native-paper', () => ({
   configureFonts: () => ({}),
   ActivityIndicator: () => <span>Loading</span>,
   Icon: () => null,
+  Checkbox: { Item: () => null },
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({
     children,
@@ -127,6 +128,20 @@ vi.mock('../components/ContractDateField', () => ({
   ),
 }));
 vi.mock('../components/WorkspaceKit', () => ({
+  ui: {},
+  Action: ({
+    children,
+    onPress,
+    disabled,
+  }: {
+    children: React.ReactNode;
+    onPress: () => void;
+    disabled?: boolean;
+  }) => (
+    <button onClick={onPress} disabled={disabled}>
+      {children}
+    </button>
+  ),
   Box: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
   Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
@@ -260,6 +275,32 @@ function fill() {
   ])
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
+it('opens a saved Owner draft for review without editing or releasing before PDF confirmation', async () => {
+  state.roles = ['Owner'];
+  const cancel = vi.fn();
+  render(
+    <MainDraftScreen
+      initialId="draft-id"
+      reviewOnly
+      roomId="room"
+      representativeResidentId="resident"
+      residentIds={['resident']}
+      onCancel={cancel}
+      onList={vi.fn()}
+    />,
+  );
+  const release = await screen.findByText('Duyệt và chuyển sang chờ ký');
+  expect((release as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByText('Lưu nháp')).toBeNull();
+  expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
+  expect(screen.queryByText('Chỉnh sửa thông tin')).toBeNull();
+  fireEvent.click(screen.getByLabelText('Quay lại danh sách hợp đồng'));
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
+  expect(state.request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
+    true,
+  );
+});
 it('recovers an outdated file using the latest draft version and a new document reference', async () => {
   const original = state.request.getMockImplementation()!;
   let generation = 0;

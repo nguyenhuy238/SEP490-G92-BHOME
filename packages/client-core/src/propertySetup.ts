@@ -56,6 +56,7 @@ export type RoomTypeInput = Omit<RoomTypeConfiguration, 'id' | 'version'> & {
 export type AssetInput = Omit<PhysicalAsset, 'id' | 'version'> & {
   version: number;
   reason: string;
+  initialUnit?: string;
 };
 export type SetupDocument<T> = {
   id: string;
@@ -73,6 +74,7 @@ export interface LocalAssetItem {
   category: string;
   trackingMode: 'Serialized' | 'BulkQuantity';
   quantity: number;
+  unit?: string | null;
 }
 export interface LocalAssetTemplate {
   locationId: string;
@@ -97,6 +99,7 @@ export interface AssetInventory {
   metadata?: Record<string, AssetMetadata>;
   assignmentVersion: number;
   assignedTemplateId: string | null;
+  progress?: { itemId: string; verifiedQuantity: number }[];
 }
 export interface AssetVerificationInput {
   templateId: string;
@@ -212,6 +215,7 @@ export interface Reconciliation {
 export interface AssetMetadata {
   trackingMode: 'Serialized' | 'BulkQuantity';
   quantity: number;
+  unit?: string | null;
   purchaseCost: DecimalValue | null;
   purchaseDate: string | null;
   usefulLifeMonths: number | null;

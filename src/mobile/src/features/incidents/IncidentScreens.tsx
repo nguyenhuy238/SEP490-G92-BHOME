@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { Button, Text } from 'react-native-paper';
-import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
+import { Action as SharedAction, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
+import { useWorkspaceHeaderRefresh } from '../../components/WorkspaceHeaderContext';
 import { ChoiceField } from '../../components/WorkflowControls';
-import { QueryState, Pagination } from '../../components/WorkspaceQueryState';
+import { QueryState as SharedQueryState, Pagination } from '../../components/WorkspaceQueryState';
+import { OwnerDataState } from '../../components/OwnerMobileKit';
+import { OwnerStaffName } from '../owner/OwnerStaffName';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { useSession } from '../../lib/SessionProvider';
 import {
@@ -35,6 +38,10 @@ import {
 import { IncidentActionPanel } from './IncidentActions';
 
 const idPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
+function Action(props: React.ComponentProps<typeof SharedAction>) {
+  const { role } = useWorkspace();
+  return <SharedAction {...props} minHeight={role === 'Owner' ? 48 : 44} />;
+}
 function Pager({
   query,
   page,
@@ -53,6 +60,11 @@ function Pager({
     />
   ) : null;
 }
+function QueryState(props: React.ComponentProps<typeof SharedQueryState>) {
+  const { role } = useWorkspace();
+  return role === 'Owner' ? <OwnerDataState {...props} /> : <SharedQueryState {...props} />;
+}
+
 export function IncidentListScreen({ emergency = false }: { emergency?: boolean }) {
   const { role, preview, go } = useWorkspace();
   const { session } = useSession();
@@ -200,6 +212,29 @@ function IncidentDetail({ id }: { id: string }) {
   );
   const expenses = useIncidentQuery<IncidentExpense[]>(
     loaded && role === 'Owner' ? `${incidentRoot}/${id}/expenses` : null,
+  );
+  const { reload: reloadReport } = query,
+    { reload: reloadHistory } = history,
+    { reload: reloadEvidence } = evidence,
+    { reload: reloadWork } = work,
+    { reload: reloadEmergency } = emergency,
+    { reload: reloadExpenses } = expenses;
+  const refresh = useCallback(() => {
+    reloadReport();
+    reloadHistory();
+    reloadEvidence();
+    reloadWork();
+    reloadEmergency();
+    reloadExpenses();
+  }, [reloadReport, reloadHistory, reloadEvidence, reloadWork, reloadEmergency, reloadExpenses]);
+  useWorkspaceHeaderRefresh(
+    refresh,
+    query.fetching ||
+      history.fetching ||
+      evidence.fetching ||
+      work.fetching ||
+      emergency.fetching ||
+      expenses.fetching,
   );
   return (
     <>
@@ -459,6 +494,26 @@ function WorkDetail({ id }: { id: string }) {
       ? `${workOrderRoot}/maintenance-history?incidentId=${work.incidentId}&page=${maintenancePage}&pageSize=20`
       : null,
   );
+  const { reload: reloadWork } = query,
+    { reload: reloadIncident } = incident,
+    { reload: reloadHistory } = history,
+    { reload: reloadEvidence } = evidence,
+    { reload: reloadMaintenance } = maintenance;
+  const refresh = useCallback(() => {
+    reloadWork();
+    reloadIncident();
+    reloadHistory();
+    reloadEvidence();
+    reloadMaintenance();
+  }, [reloadWork, reloadIncident, reloadHistory, reloadEvidence, reloadMaintenance]);
+  useWorkspaceHeaderRefresh(
+    refresh,
+    query.fetching ||
+      incident.fetching ||
+      history.fetching ||
+      evidence.fetching ||
+      maintenance.fetching,
+  );
   return (
     <>
       <Action
@@ -474,12 +529,16 @@ function WorkDetail({ id }: { id: string }) {
             <Heading title="Chi tiết lệnh sửa chữa" detail={incidentText(work.status)} />
             {work.isOverdue && <Pill tone="red">Quá hạn hoàn thành</Pill>}
             <Info label="Kết quả yêu cầu" value={work.expectedOutcome} />
-            <Text>
-              Người phụ trách:{' '}
-              {work.assignedStaffId === session?.userId
-                ? 'Bạn'
-                : 'Nhân viên được phân công (xem mã tham chiếu)'}
-            </Text>
+            {role === 'Owner' ? (
+              <OwnerStaffName staffId={work.assignedStaffId} />
+            ) : (
+              <Text>
+                Người phụ trách:{' '}
+                {work.assignedStaffId === session?.userId
+                  ? 'Bạn'
+                  : 'Nhân viên được phân công (xem mã tham chiếu)'}
+              </Text>
+            )}
             <Info label="Hạn hoàn thành" value={incidentDate(work.targetCompletionAt)} />
             <Info label="Kết quả kiểm tra" value={work.inspectionResult} />
             <Info label="Phương án" value={work.proposedSolution} />

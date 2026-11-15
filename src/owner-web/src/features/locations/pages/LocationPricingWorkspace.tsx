@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import {
   Alert,
   Button,
@@ -23,7 +24,7 @@ import {
   type Page,
 } from '../../../../../../packages/client-core/src/invoices';
 import { useInvoiceApi } from '../../invoices/useInvoiceApi';
-import { PolicyForm, ScheduleForm } from '../../invoices/BillingConfigurationPage';
+import { PolicyForm } from '../../invoices/BillingConfigurationPage';
 import { ErrorState, LoadingState } from '../../../components/common/PortalUI';
 import { OwnerTable } from '../../../components/common/OwnerWorkspace';
 import { LocationEmpty } from '../components/LocationSection';
@@ -62,6 +63,17 @@ function dateLabel(date: string | null | undefined) {
   return date?.split('-').reverse().join('/') ?? 'Không thời hạn';
 }
 
+function policySearch(search: string, category: number) {
+  const value = search.trim();
+  if (category !== 0) return value;
+  // The server stores generated room names as "Rent <number>" and searches
+  // the stored name/code. Searching the Vietnamese display label must still
+  // find these records before server-side pagination.
+  const match = /^giá thuê(?:\s+(.*))?$/iu.exec(value);
+  if (!match) return value;
+  return !match[1] || match[1].toLocaleLowerCase('vi') === 'phòng' ? 'RENT' : match[1];
+}
+
 export function LocationPricingWorkspace({
   locationId,
   initialTab = 0,
@@ -72,8 +84,8 @@ export function LocationPricingWorkspace({
   const api = useInvoiceApi();
   const { session } = useAuth();
   const owner = session?.roles.includes('Owner') ?? false;
-  const [tab, setTab] = useState(initialTab);
-  const [utilityMode, setUtilityMode] = useState('workspace');
+  const [tab, setTab] = useState(initialTab === 2 ? 3 : initialTab);
+  const [utilityMode, setUtilityMode] = useState('electricity');
   const [effectiveOnly, setEffectiveOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -85,6 +97,7 @@ export function LocationPricingWorkspace({
   const today = todayVietnam();
   const showPolicies = tab === 0 || tab === 1 || (tab === 3 && utilityMode !== 'workspace');
   const category = tab === 0 ? 0 : tab === 1 ? 3 : utilityMode === 'water' ? 2 : 1;
+  const searchValue = policySearch(search, category);
   const policies = useQuery({
     queryKey: [
       'billing-policies',
@@ -98,15 +111,10 @@ export function LocationPricingWorkspace({
     ],
     queryFn: ({ signal }) =>
       api.request<Page<ScopedPolicy>>(
-        `/api/v1/billing-policies?${new URLSearchParams({ locationId, page: String(page + 1), pageSize: '20', chargeCategory: String(category), ...(search.trim() ? { search: search.trim() } : {}), ...(effectiveOnly ? { effectiveOn: today } : {}) })}`,
+        `/api/v1/billing-policies?${new URLSearchParams({ locationId, page: String(page + 1), pageSize: '20', chargeCategory: String(category), ...(searchValue ? { search: searchValue } : {}), ...(effectiveOnly ? { effectiveOn: today } : {}) })}`,
         { signal },
       ),
     enabled: showPolicies,
-  });
-  const schedule = useQuery({
-    queryKey: ['billing-schedule', session?.userId, locationId],
-    queryFn: ({ signal }) => api.schedule(locationId, signal),
-    enabled: tab === 2 && owner,
   });
   const rooms = useQuery({
     queryKey: ['property-setup', 'pricing-rooms', session?.userId, locationId],
@@ -122,6 +130,19 @@ export function LocationPricingWorkspace({
       return rooms.data?.find((room) => room.id === policy.roomId)?.label ?? 'Phòng riêng';
     if (policy.roomTypeId) return 'Loại phòng (cấu hình cũ)';
     return 'Toàn cơ sở';
+  }
+  function listPolicyName(policy: ScopedPolicy) {
+    // Translate the exact generated room-rent label only. Keep custom names and
+    // the persisted name used by the editor, including historical room labels.
+    const roomLabel = policy.roomId && rooms.data?.find((room) => room.id === policy.roomId)?.label;
+    if (
+      policy.category === 0 &&
+      policy.chargeCode === 'RENT' &&
+      roomLabel &&
+      policy.name === `Rent ${roomLabel}`
+    )
+      return `Giá thuê ${roomLabel}`;
+    return policyName(policy);
   }
   return (
     <Stack spacing={2} sx={{ minWidth: 0 }}>
@@ -170,11 +191,20 @@ export function LocationPricingWorkspace({
           setEffectiveOnly(false);
         }}
       >
-        <Tab label="Giá thuê" />
-        <Tab label="Phí dịch vụ" />
-        <Tab label="Lịch & quy tắc hóa đơn" />
-        <Tab label="Điện & nước" />
+        <Tab value={0} label="Giá thuê" />
+        <Tab value={1} label="Phí dịch vụ" />
+        <Tab value={3} label="Điện & nước" />
       </Tabs>
+      {owner && (
+        <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+          <Button
+            component={Link}
+            to={`/billing-automation?locationId=${encodeURIComponent(locationId)}`}
+          >
+            Lịch tự động & quy tắc hóa đơn
+          </Button>
+        </Stack>
+      )}
       {tab === 3 && (
         <Tabs
           aria-label="Nhóm điện nước"
@@ -190,30 +220,21 @@ export function LocationPricingWorkspace({
             setEffectiveOnly(false);
           }}
         >
-          <Tab value="workspace" label="Thiết lập & vận hành" />
           <Tab value="electricity" label="Đơn giá điện trực tiếp" />
           <Tab value="water" label="Đơn giá nước trực tiếp" />
+          <Tab value="workspace" label="Biểu giá nhà cung cấp & công tơ" />
         </Tabs>
       )}
       {tab === 3 && utilityMode === 'workspace' ? (
         <UtilityWorkspace locationId={locationId} />
-      ) : tab === 2 ? (
-        !owner ? (
-          <Alert severity="info">Chỉ Owner được quản lý lịch và quy tắc hóa đơn.</Alert>
-        ) : schedule.isPending ? (
-          <LoadingState />
-        ) : schedule.error ? (
-          <ErrorState error={schedule.error} retry={() => void schedule.refetch()} />
-        ) : (
-          <ScheduleForm
-            key={schedule.data?.version ?? 0}
-            location={locationId}
-            current={schedule.data ?? undefined}
-            onSaved={() => void schedule.refetch()}
-          />
-        )
       ) : (
         <>
+          {tab === 3 && (
+            <Typography variant="body2" color="text.secondary">
+              Đơn giá trực tiếp dùng cho thỏa thuận thuê mới; hợp đồng đã chốt giữ nguyên đơn giá.
+              Chọn mục biểu giá nhà cung cấp nếu cần quản lý công tơ, bậc giá hoặc đối soát.
+            </Typography>
+          )}
           <Paper variant="outlined" sx={{ p: 1.5 }}>
             <Stack
               direction={{ xs: 'column', md: 'row' }}
@@ -276,7 +297,19 @@ export function LocationPricingWorkspace({
           ) : policies.error ? (
             <ErrorState error={policies.error} retry={() => void policies.refetch()} />
           ) : (
-            <Paper variant="outlined">
+            <Paper
+              variant="outlined"
+              sx={{
+                '& .MuiTableBody-root .MuiTableCell-root': {
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                  py: 1.25,
+                },
+                '& .MuiTableBody-root > .MuiTableRow-root:last-child .MuiTableCell-root': {
+                  borderBottom: 0,
+                },
+              }}
+            >
               {!policies.data.items.length ? (
                 <LocationEmpty
                   title="Chưa có khoản thu phù hợp"
@@ -295,34 +328,20 @@ export function LocationPricingWorkspace({
                     {
                       label: 'Khoản thu',
                       render: (policy) => (
-                        <>
-                          <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-                            {policyName(policy)}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {policy.chargeCode}
-                          </Typography>
-                        </>
+                        <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
+                          {listPolicyName(policy)}
+                        </Typography>
                       ),
                     },
                     {
                       label: 'Phạm vi',
                       render: (policy) => (
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          label={scopeLabel(policy)}
-                          sx={{
-                            fontWeight: 600,
-                            maxWidth: '100%',
-                            height: 'auto',
-                            '& .MuiChip-label': {
-                              whiteSpace: 'normal',
-                              overflowWrap: 'anywhere',
-                              py: 0.25,
-                            },
-                          }}
-                        />
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}
+                        >
+                          {scopeLabel(policy)}
+                        </Typography>
                       ),
                     },
                     {

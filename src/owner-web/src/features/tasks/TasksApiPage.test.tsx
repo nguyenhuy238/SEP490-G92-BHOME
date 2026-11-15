@@ -35,6 +35,23 @@ const staff = {
 beforeEach(() => {
   mocks.request.mockReset();
   mocks.request.mockImplementation(async (path: string) => {
+    if (path.startsWith('/api/v1/staff-location-assignments?'))
+      return [
+        {
+          id: 'assignment',
+          locationId: 'location',
+          staffUserId: 'staff',
+          startDate: '2000-01-01',
+          endDate: '2099-12-31',
+        },
+      ];
+    if (path.startsWith('/api/v1/rooms?'))
+      return { items: [{ id: 'room', roomNumber: '101' }], totalCount: 1 };
+    if (path.startsWith('/api/v1/operational-tasks/targets/common-areas?')) return ['Hành lang'];
+    if (path.startsWith('/api/v1/operational-tasks/targets/assets?'))
+      return { items: [{ id: 'asset', name: 'Đèn hành lang' }], totalCount: 1 };
+    if (path.startsWith('/api/v1/locations'))
+      return { items: [{ id: 'location', name: 'Cơ sở A', isActive: true }], totalCount: 1 };
     if (path === '/api/v1/staff?page=1&pageSize=100') return { items: [staff], totalCount: 1 };
     if (path === '/api/v1/operational-tasks/task/actors')
       return [{ userId: 'owner', displayName: 'Owner synthetic' }];
@@ -45,10 +62,52 @@ beforeEach(() => {
         : { items: path.startsWith('/api/v1/operational-tasks?') ? [task] : [], totalCount: 1 };
   });
 });
+
+it('creates work for an asset in a common area and keeps the assigned Staff derived from location', async () => {
+  mount('/operational-tasks?locationId=location');
+  fireEvent.click(await screen.findByRole('button', { name: /^Tạo công việc$/ }));
+  const dialog = await screen.findByRole('dialog', { name: 'Tạo công việc' });
+  await within(dialog).findByText('Staff phụ trách: Staff synthetic');
+  fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Phạm vi công việc' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Khu vực chung' }));
+  fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Khu vực chung' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Hành lang' }));
+  fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Tài sản liên quan' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Đèn hành lang' }));
+  fireEvent.change(within(dialog).getByRole('textbox', { name: /Tên công việc/ }), {
+    target: { value: 'Kiểm tra đèn' },
+  });
+  fireEvent.change(within(dialog).getByRole('textbox', { name: /Yêu cầu/ }), {
+    target: { value: 'Kiểm tra hoạt động' },
+  });
+  fireEvent.change(within(dialog).getByLabelText(/Thời điểm hoàn thành/), {
+    target: { value: '2099-12-31T10:00' },
+  });
+  const submit = within(dialog).getByRole('button', { name: 'Lưu công việc' });
+  await waitFor(() => expect(submit).toBeEnabled());
+  fireEvent.click(submit);
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      '/api/v1/operational-tasks',
+      expect.objectContaining({ method: 'POST', body: expect.any(String) }),
+    ),
+  );
+  const post = mocks.request.mock.calls.find(
+    ([path, init]) => path === '/api/v1/operational-tasks' && init?.method === 'POST',
+  )!;
+  expect(JSON.parse(post[1].body)).toMatchObject({
+    locationId: 'location',
+    work: { target: { commonArea: 'Hành lang', assetId: 'asset' }, title: 'Kiểm tra đèn' },
+  });
+  expect(mocks.request).toHaveBeenCalledWith(
+    expect.stringContaining('commonArea=H%C3%A0nh+lang'),
+    expect.anything(),
+  );
+});
 afterEach(() => vi.unstubAllGlobals());
-function mount() {
+function mount(url = '/operational-tasks') {
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[url]}>
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
@@ -100,12 +159,34 @@ it('keeps the same command key on an uncertain verification retry', async () => 
 it('forwards the selected Staff filter to the server', async () => {
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Bộ lọc nâng cao' }));
-  const staffFilter = await screen.findByRole('combobox', { name: 'Staff phụ trách' });
+  const staffFilter = await screen.findByRole('combobox', { name: 'Người phụ trách cơ sở' });
   fireEvent.mouseDown(staffFilter);
   fireEvent.click(await screen.findByRole('option', { name: 'Staff synthetic' }));
   await waitFor(() =>
     expect(mocks.request).toHaveBeenCalledWith(
       expect.stringContaining('staffUserId=staff'),
+      expect.anything(),
+    ),
+  );
+});
+
+it('opens a deep-linked location and recorded Staff responsibility filter on the server', async () => {
+  mount('/operational-tasks?locationId=location&recordedStaffUserId=staff&hasResponsibility=false');
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /locationId=location.*recordedStaffUserId=staff.*hasResponsibility=false/,
+      ),
+      expect.anything(),
+    ),
+  );
+  expect(
+    await screen.findByRole('combobox', { name: 'Người được giao trong hồ sơ' }),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }));
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      '/api/v1/operational-tasks?page=1&pageSize=20',
       expect.anything(),
     ),
   );

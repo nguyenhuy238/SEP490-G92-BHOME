@@ -58,12 +58,25 @@ export const theme = createTheme(
       MuiTextField: { defaultProps: { size: 'small', fullWidth: true } },
       MuiTableCell: {
         styleOverrides: {
-          root: { padding: '8px 12px', verticalAlign: 'middle', fontSize: 14, lineHeight: 1.5 },
+          root: ({ theme }) => ({
+            padding: '8px 12px',
+            verticalAlign: 'middle',
+            fontSize: 14,
+            lineHeight: 1.5,
+            borderBottom: `1px solid ${theme.palette.divider}`,
+          }),
           head: {
             backgroundColor: '#f6f8fc',
             color: '#53657f',
             fontWeight: 700,
             whiteSpace: 'nowrap',
+          },
+        },
+      },
+      MuiTableRow: {
+        styleOverrides: {
+          root: {
+            '&.MuiTableRow-hover:hover': { backgroundColor: '#f5f8fc' },
           },
         },
       },

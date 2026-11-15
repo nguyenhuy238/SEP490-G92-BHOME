@@ -48,6 +48,8 @@ function Get-MobileBackendSettings([string]$ConfigurationText) {
     $settings = @{}
     foreach ($line in ($ConfigurationText -split '\r?\n')) {
         if ($line -match '^((?:ConnectionStrings|Jwt|Sessions|AuthRateLimit|AuthWeb|AuthenticationEmail|Email|ObjectStorage|Jobs|Cors|BankIntegration|SePay|NotificationIntegration|NotificationChannels|OwnerSetup|ElectronicContractIntegration|Ocr|IdentityProtection|Capture|Kestrel|MobileDevelopment|Api|MainDraft|DevelopmentDatabase|DigitalSigning|AnonymousSigning|HoldingTesting)__[^=]+|AllowedHosts)=(.*)$') {
+            # An empty example value must not erase the workstation's stable OTP key.
+            if ($Matches[1] -eq 'AnonymousSigning__OtpHmacKey' -and [string]::IsNullOrWhiteSpace($Matches[2])) { continue }
             $settings[$Matches[1].Replace('__', ':')] = $Matches[2]
         }
     }

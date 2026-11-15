@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using System.Text.Json.Serialization;
 using BHome.Domain.Common;
 using BHome.Domain.PropertyManagement;
+using BHome.Domain.TenantContracts;
 
 namespace BHome.Application.PropertyManagement;
 
@@ -34,6 +35,7 @@ public sealed class PropertyQuery
     public bool? IsActive { get; set; }
     public RoomStatus? RoomStatus { get; set; }
     public AssetStatus? AssetStatus { get; set; }
+    public bool CommonAreaOnly { get; set; }
     public ChargeCategory? ChargeCategory { get; set; }
     public DateOnly? EffectiveOn { get; set; }
 }
@@ -65,7 +67,8 @@ public sealed record BulkRoomWrite(Guid LocationId, [MinLength(1), MaxLength(200
 public sealed record AssetWrite(Guid LocationId, Guid? RoomId, [StringLength(200)] string? CommonArea,
     [StringLength(80)] string? Code, [Required, StringLength(150)] string Name,
     [Required, StringLength(80)] string Category, [Required, StringLength(1000)] string Condition,
-    AssetStatus Status = AssetStatus.Active, int Version = 0, [StringLength(500)] string Reason = "");
+    AssetStatus Status = AssetStatus.Active, int Version = 0, [StringLength(500)] string Reason = "",
+    [StringLength(80)] string? InitialUnit = null);
 [System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
 public sealed record AssetConditionUpdate([Required, StringLength(1000)] string Condition,
     [Range(1, int.MaxValue)] int Version, [Required, StringLength(500)] string Reason);
@@ -109,6 +112,7 @@ public interface IPropertyRepository
     Task<T?> FindAsync<T>(Guid id, CancellationToken token) where T : AuditableEntity;
     Task<bool> AnyAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken token) where T : class;
     Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token);
+    Task<IReadOnlyList<Contract>> BindingPriceContractsAsync(Guid roomId, CancellationToken token);
     Task<PagedResult<TDto>> ListAsync<T, TDto>(Expression<Func<T, bool>> predicate,
         Expression<Func<T, TDto>> projection, PropertyQuery query, Guid? staffId, DateOnly today,
         CancellationToken token) where T : AuditableEntity;
@@ -120,5 +124,6 @@ public interface IPropertyRepository
     Task<RoomObligations> ObligationsAsync(Guid locationId, Guid? roomId, DateOnly today,
         CancellationToken token);
     void Add<T>(T entity) where T : class;
+    Task SaveInitialAssetMetadataAsync(Guid assetId, AssetMetadata metadata, CancellationToken token);
     void Audit(PropertyChange change);
 }

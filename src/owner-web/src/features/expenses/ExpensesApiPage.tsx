@@ -192,7 +192,7 @@ export function ExpensesApiPage() {
           </AccordionSummary>
           <AccordionDetails>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Dữ liệu đến {today.split('-').reverse().join('/')}, không phụ thuộc bộ lọc danh sách.
+              Toàn cơ sở · đến {today.split('-').reverse().join('/')}
             </Typography>
             {report.isPending && <LinearProgress aria-label="Đang tải báo cáo chi phí" />}
             {report.isError && (
@@ -656,7 +656,11 @@ export function ExpensesApiPage() {
                   )}
                   sx={{ borderRadius: '10px !important', '&:before': { display: 'none' } }}
                 >
-                  <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                  <AccordionSummary
+                    expandIcon={<ChevronDown size={18} />}
+                    aria-controls="expense-reference-details"
+                    id="expense-reference-header"
+                  >
                     <Box>
                       <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
                         3. Liên kết bổ sung (không bắt buộc)
@@ -666,7 +670,7 @@ export function ExpensesApiPage() {
                       </Typography>
                     </Box>
                   </AccordionSummary>
-                  <AccordionDetails>
+                  <AccordionDetails id="expense-reference-details">
                     <Stack spacing={2}>
                       {references.error && (
                         <Alert severity="error">
