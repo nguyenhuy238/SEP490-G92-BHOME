@@ -49,7 +49,10 @@ beforeEach(() => {
     return [];
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 it('renders proactive maintenance with work-owned evidence and no incident request', async () => {
   const original = mocks.request.getMockImplementation()!;
   mocks.request.mockImplementation(async (path: string) =>
@@ -80,6 +83,60 @@ it('renders proactive maintenance with work-owned evidence and no incident reque
     ),
   ).toBe(false);
 });
+it.each([true, false])(
+  'loads work order evidence through the authorized API (allowed=%s)',
+  async (allowed) => {
+    const createUrl = vi.fn(() => 'blob:synthetic-work-evidence');
+    const revokeUrl = vi.fn();
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static createObjectURL = createUrl;
+        static revokeObjectURL = revokeUrl;
+      },
+    );
+    const original = mocks.request.getMockImplementation()!;
+    const blob = new Blob(['synthetic evidence'], { type: 'image/png' });
+    mocks.request.mockImplementation(async (path: string, init?: RequestInit, type?: string) => {
+      if (path === '/api/v1/work-orders/work')
+        return {
+          id: 'work',
+          incidentId: null,
+          locationId: 'location',
+          expectedOutcome: 'Synthetic completed repair',
+          status: 'Verified',
+          targetCompletionAt: '2026-11-15T03:00:00Z',
+          version: 9,
+        };
+      if (path === '/api/v1/work-orders/work/evidence')
+        return [{ id: 'proof', kind: 'Completion', length: 200 }];
+      if (path === '/api/v1/work-orders/work/evidence/proof' && type === 'blob') {
+        if (!allowed) throw { status: 403 };
+        return blob;
+      }
+      return original(path, init);
+    });
+    const view = mount(<WorkOrderDetail id="work" />);
+    if (allowed) {
+      expect(await screen.findByRole('img', { name: 'Ảnh kết quả sửa chữa' })).toHaveAttribute(
+        'src',
+        'blob:synthetic-work-evidence',
+      );
+      expect(createUrl).toHaveBeenCalledWith(blob);
+    } else {
+      expect(await screen.findByText('Không tải được ảnh xem trước.')).toBeVisible();
+      expect(screen.queryByRole('img')).toBeNull();
+      expect(createUrl).not.toHaveBeenCalled();
+    }
+    expect(mocks.request).toHaveBeenCalledWith(
+      '/api/v1/work-orders/work/evidence/proof',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      'blob',
+    );
+    view.unmount();
+    if (allowed) expect(revokeUrl).toHaveBeenCalledWith('blob:synthetic-work-evidence');
+  },
+);
 it('keeps suggested fast repair categories inactive until Owner saves a policy decision', async () => {
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path === '/api/v1/work-orders/fast-repair-policy' && !init?.method)
