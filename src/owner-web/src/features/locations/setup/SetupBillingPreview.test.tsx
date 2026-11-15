@@ -79,6 +79,7 @@ describe('setup billing simulation', () => {
       screen.getByRole('region', { name: 'Mô phỏng chi phí hàng tháng của phòng' }),
     );
     expect(preview.getByText('2.225.000 đ')).toBeVisible();
+    expect(preview.queryByLabelText('Ngày tính mô phỏng')).not.toBeInTheDocument();
     expect(preview.getByText(/Chưa có giá điện và nước hiệu lực/)).toBeVisible();
     fireEvent.change(preview.getByLabelText('Số người ở giả định'), { target: { value: '2' } });
     expect(preview.getByText('2.250.000 đ')).toBeVisible();

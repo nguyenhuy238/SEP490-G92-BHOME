@@ -30,6 +30,9 @@ const packageId = '00000000-0000-4000-8000-000000000005';
 const ruleId = '00000000-0000-4000-8000-000000000006';
 const typeId = '00000000-0000-4000-8000-000000000007';
 const duplicateFeeId = '00000000-0000-4000-8000-000000000008';
+const electricityId = '00000000-0000-4000-8000-000000000009';
+const commonDocumentId = '00000000-0000-4000-8000-000000000010';
+const commonItemId = '00000000-0000-4000-8000-000000000011';
 const source: LocationSetupSource = {
   roomTypes: [
     {
@@ -114,6 +117,19 @@ const source: LocationSetupSource = {
       effectiveTo: null,
       version: 5,
     },
+    {
+      id: electricityId,
+      locationId: sourceId,
+      roomId: null,
+      category: 1,
+      chargeCode: 'ELECTRICITY',
+      name: 'Điện cơ sở nguồn',
+      method: 1,
+      rate: '3500',
+      effectiveFrom: '2020-01-01',
+      effectiveTo: null,
+      version: 1,
+    },
   ],
   policies: [
     {
@@ -126,6 +142,26 @@ const source: LocationSetupSource = {
     },
   ],
   sourceState: 'synthetic-source-state',
+  commonAssets: {
+    id: commonDocumentId,
+    locationId: sourceId,
+    kind: 'CommonAssetRequirements',
+    status: 'Recorded',
+    version: 2,
+    data: {
+      items: [
+        {
+          id: commonItemId,
+          name: 'Synthetic camera',
+          category: 'Security',
+          trackingMode: 'Serialized',
+          quantity: 2,
+          unit: 'Cái',
+          commonArea: 'Hành lang',
+        },
+      ],
+    },
+  },
 };
 
 const next = () => fireEvent.click(screen.getByRole('button', { name: /^Tiếp tục \(/ }));
@@ -166,7 +202,34 @@ it('copies a room type with its linked asset template and keeps rent in the sing
     if (path === '/api/v1/location-setup/source/' + sourceId) return source;
     if (path.startsWith('/api/v1/shared-configuration/')) {
       if (path.includes('/asset-catalog?')) throw new Error('Synthetic library failure');
-      return { items: [], total: 0, page: 1, pageSize: 100 };
+      const items = path.includes('/room-type-templates?')
+        ? [
+            {
+              id: 'shared-room',
+              name: 'Synthetic source type',
+              status: 'Published',
+              data: { capacity: 2, area: 25, referenceRent: 2500000, amenities: [] },
+            },
+          ]
+        : path.includes('/fee-templates?')
+          ? [
+              {
+                id: 'shared-electricity',
+                name: 'Điện thư viện',
+                status: 'Published',
+                data: {
+                  category: 'Electricity',
+                  chargeCode: 'ELECTRICITY',
+                  method: 'Metered',
+                  scope: 'Location',
+                  referenceRate: '3500',
+                  effectiveFrom: '2020-01-01',
+                  effectiveTo: null,
+                },
+              },
+            ]
+          : [];
+      return { items, total: items.length, page: 1, pageSize: 100 };
     }
     if (path === '/api/v1/location-setup' && init?.method === 'POST') return result;
     throw new Error('Unexpected request: ' + path);
@@ -188,9 +251,11 @@ it('copies a room type with its linked asset template and keeps rent in the sing
   fireEvent.click(await screen.findByRole('checkbox', { name: /Synthetic source type/ }));
   fireEvent.click(screen.getByRole('checkbox', { name: /Synthetic room fee/ }));
   fireEvent.click(screen.getByRole('checkbox', { name: /Synthetic duplicate room fee/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /Điện cơ sở nguồn/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /Tài sản chung cơ sở nguồn/ }));
   expect(screen.queryByRole('checkbox', { name: /Synthetic rent/ })).not.toBeInTheDocument();
   expect(screen.queryByRole('checkbox', { name: /Synthetic package/ })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Nạp cấu hình đã chọn (3)' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Nạp cấu hình đã chọn (5)' }));
   expect(
     await screen.findByText(/Một số thư viện chưa tải được: danh mục tài sản/),
   ).toBeInTheDocument();
@@ -200,7 +265,10 @@ it('copies a room type with its linked asset template and keeps rent in the sing
   fill(/Số điện thoại liên hệ/, '0908123456');
   fireEvent.click(screen.getByRole('checkbox', { name: /Kích hoạt cơ sở/ }));
   next();
-  expect(screen.getByText('Synthetic source type')).toBeVisible();
+  expect(screen.getAllByText('Synthetic source type')).toHaveLength(2);
+  expect(
+    screen.queryByRole('button', { name: 'Thêm Synthetic source type' }),
+  ).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/Giá thuê mặc định/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa' }));
   fill(/Giá thuê mặc định/, '2500000');
@@ -215,8 +283,14 @@ it('copies a room type with its linked asset template and keeps rent in the sing
   expect(
     within(screen.getByRole('list', { name: 'Tài sản đã chọn' })).getByText('Đơn vị: Cái'),
   ).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Tài sản chung cơ sở' }));
+  expect(screen.getByText('Synthetic camera')).toBeVisible();
+  expect(screen.getByLabelText(/Khu vực sử dụng/)).toHaveValue('Hành lang');
   next();
   expect(screen.queryByLabelText(/Giá thuê\/tháng/)).not.toBeInTheDocument();
+  expect(screen.getByText('Điện thư viện')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Thêm Điện thư viện' })).not.toBeInTheDocument();
+  expect(screen.getByText('Đã chọn', { selector: '.MuiChip-label' })).toBeVisible();
   next();
   expect(
     screen.getByText(/Biểu phí riêng của phòng nguồn cần chọn phòng đích/),
@@ -260,23 +334,40 @@ it('copies a room type with its linked asset template and keeps rent in the sing
   });
   expect(payload.roomTypes[0].assets[0]).not.toHaveProperty('references');
   expect(payload.rooms[0]).toMatchObject({ roomNumber: 'P.101', rent: 2500000 });
-  expect(payload.fees).toEqual([
-    expect.objectContaining({
-      chargeCode: 'WIFI',
-      roomKey: payload.rooms[0].key,
-      rate: source.fees.find((fee) => fee.id === feeId)?.rate,
-    }),
-  ]);
-  expect(payload.fees).toHaveLength(1);
+  expect(payload.fees).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        chargeCode: 'WIFI',
+        roomKey: payload.rooms[0].key,
+        rate: source.fees.find((fee) => fee.id === feeId)?.rate,
+      }),
+      expect.objectContaining({ chargeCode: 'ELECTRICITY', roomKey: null, rate: '3500' }),
+    ]),
+  );
+  expect(payload.fees).toHaveLength(2);
   expect(payload.fees[0]).not.toHaveProperty('sourceRoomId');
   expect(payload.fees[0]).not.toHaveProperty('reference');
   expect(JSON.stringify(payload)).not.toContain(sourceRoomId);
-  expect(payload.sourceReferences).toHaveLength(3);
+  expect(payload.commonAssets).toEqual([
+    {
+      id: expect.any(String),
+      name: 'Synthetic camera',
+      category: 'Security',
+      trackingMode: 'Serialized',
+      quantity: 2,
+      unit: 'Cái',
+      commonArea: 'Hành lang',
+    },
+  ]);
+  expect(payload.commonAssets?.[0].id).not.toBe(commonItemId);
+  expect(payload.sourceReferences).toHaveLength(5);
   expect(payload.sourceReferences).toEqual(
     expect.arrayContaining([
       { id: typeId, version: 5, kind: 'RoomDefaults' },
       { id: feeId, version: 4, kind: 'BillingPolicy' },
       { id: packageId, version: 3, kind: 'AssetTemplate' },
+      { id: electricityId, version: 1, kind: 'BillingPolicy' },
+      { id: commonDocumentId, version: 2, kind: 'CommonAssetRequirements' },
     ]),
   );
   expect(payload.sourceReferences).not.toContainEqual({

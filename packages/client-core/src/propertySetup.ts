@@ -40,6 +40,9 @@ export interface PhysicalAsset {
   condition: string;
   status: number;
   version: number;
+  quantity?: number;
+  unit?: string | null;
+  trackingMode?: 'Serialized' | 'BulkQuantity';
 }
 export type LocationInput = Omit<LocationConfiguration, 'id' | 'version'> & {
   version: number;
@@ -53,10 +56,15 @@ export type RoomTypeInput = Omit<RoomTypeConfiguration, 'id' | 'version'> & {
   version: number;
   reason: string;
 };
-export type AssetInput = Omit<PhysicalAsset, 'id' | 'version'> & {
+export type AssetInput = Omit<
+  PhysicalAsset,
+  'id' | 'version' | 'quantity' | 'unit' | 'trackingMode'
+> & {
   version: number;
   reason: string;
   initialUnit?: string;
+  initialTrackingMode?: 'Serialized' | 'BulkQuantity';
+  initialQuantity?: number;
 };
 export type SetupDocument<T> = {
   id: string;
@@ -110,6 +118,49 @@ export interface AssetVerificationInput {
   evidenceObjectKey: string;
   expectedVersion: number;
   existingAssetId?: string | null;
+}
+export interface RoomInventoryReviewEvidence {
+  id: string;
+  contentType: string;
+  uploadedAt: string | null;
+  uploadedBy: string | null;
+}
+export interface RoomInventoryReviewItem {
+  id: string;
+  name: string;
+  category: string;
+  unit: string | null;
+  quantity: number;
+  checked: boolean;
+  evidence: RoomInventoryReviewEvidence[];
+}
+export interface RoomInventoryReviewRow {
+  roomId: string;
+  roomNumber: string;
+  desiredId: string | null;
+  desiredVersion: number;
+  stateToken: string;
+  items: RoomInventoryReviewItem[];
+  state: 'NotChecked' | 'PartiallyChecked' | 'Matched' | 'NeedsReview';
+  checkedCount: number;
+  totalCount: number;
+  unlinkedAssetCount: number;
+  blockedReason: string | null;
+  reviewedAt?: string | null;
+}
+export interface RoomInventoryReview {
+  rooms: RoomInventoryReviewRow[];
+}
+export interface RoomInventoryConfirmation {
+  requestId: string;
+  confirmed: true;
+  rooms: {
+    roomId: string;
+    desiredId: string | null;
+    desiredVersion: number;
+    stateToken: string;
+    items: { itemId: string; checked: boolean; evidenceIds: string[] }[];
+  }[];
 }
 export interface OperatingPolicyInput {
   locationId: string;
@@ -267,6 +318,16 @@ export function propertySetupClient(request: SetupRequest) {
         `/api/v1/capture/locations/${encodeURIComponent(locationId)}/rooms`,
         { signal },
       ),
+    roomInventoryReview: (locationId: string, signal?: AbortSignal) =>
+      request<RoomInventoryReview>(
+        `/api/v1/locations/${encodeURIComponent(locationId)}/room-inventory-review`,
+        { signal },
+      ),
+    confirmRoomInventory: (locationId: string, input: RoomInventoryConfirmation) =>
+      write<RoomInventoryReview>(
+        `/api/v1/locations/${encodeURIComponent(locationId)}/room-inventory-review/confirm`,
+        input,
+      ),
     locationOptions: (signal?: AbortSignal) =>
       request<{ id: string; label: string }[]>('/api/v1/capture/locations', { signal }),
     saveLocation: (id: string | null, input: LocationInput) =>
@@ -414,7 +475,7 @@ export function propertySetupClient(request: SetupRequest) {
         key,
       ),
     uploadEvidence: (locationId: string, file: File) =>
-      request<{ objectKey: string }>(
+      request<{ evidenceId: string; objectKey: string }>(
         `/api/v1/locations/${encodeURIComponent(locationId)}/setup-evidence`,
         { method: 'POST', body: file, headers: { 'Content-Type': file.type } },
       ),

@@ -21,6 +21,10 @@ public sealed record LocalRoomDefaultsWrite(string Name, string Description, Sha
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SetupAssetRequirement(string Name, string Category, string TrackingMode, int Quantity, string? Unit = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record SetupCommonAssetRequirement(Guid Id, string Name, string Category, string TrackingMode, int Quantity, string CommonArea, string? Unit = null);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CommonAssetRequirementsWrite(SetupCommonAssetRequirement[] Items, int ExpectedVersion = 0);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SetupRoomDefaultsInput(Guid Key, string Name, string Description, int Capacity, decimal Area,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? ReferenceRent, string[] Amenities, SetupAssetRequirement[] Assets, Guid? SourceId = null,
     int? SourceVersion = null, string? SourceKind = null);
@@ -38,10 +42,11 @@ public sealed record SetupPolicyInput(string Title, string Content, DateOnly Eff
 public sealed record LocationSetupInput(LocationSetupInformation Location, SetupRoomDefaultsInput[] RoomTypes,
     SetupRoomInput[] Rooms, SetupFeeInput[] Fees, SetupPolicyInput? Policy, [property: JsonRequired] bool Activate,
     [property: JsonRequired] DateOnly RentEffectiveFrom,
-    Guid? SourceLocationId = null, string? SourceState = null, ConfigurationSourceReference[]? SourceReferences = null);
+    Guid? SourceLocationId = null, string? SourceState = null, ConfigurationSourceReference[]? SourceReferences = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SetupCommonAssetRequirement[]? CommonAssets = null);
 public sealed record LocationSetupResult(LocationDto Location, Guid[] CreatedReferences);
 public sealed record LocationSetupSource(IReadOnlyList<SetupDocument> RoomTypes, IReadOnlyList<SetupDocument> AssetTemplates,
-    IReadOnlyList<PolicyDto> Fees, IReadOnlyList<SetupDocument> Policies, string SourceState);
+    IReadOnlyList<PolicyDto> Fees, IReadOnlyList<SetupDocument> Policies, string SourceState, SetupDocument? CommonAssets = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ConfiguredRoomInput(string RoomNumber, string? Floor, Guid RoomDefaultsId, int ExpectedVersion,
     [property: JsonRequired, JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal Rent);
@@ -73,6 +78,7 @@ internal static class LocationSetupKeys
     internal static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
     internal static Guid RoomProvenance(Guid room) => Key($"room-provenance:{room}");
     internal static Guid Metadata(Guid location) => Key($"location-metadata:{location}");
+    internal static Guid CommonAssets(Guid location) => Key($"location-common-assets:{location}");
 }
 
 /// <summary>One unit of work for a new location; no writes to legacy RoomType, physical assets, tenancy or ledger.</summary>
@@ -148,6 +154,42 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
             return await SaveMetadata(location, input, actor, t, status);
         }, t, validateActiveLocations: false);
     }
+
+    private static SetupCommonAssetRequirement[] ValidateCommonAssets(SetupCommonAssetRequirement[]? items)
+    {
+        if (items is null || items.Length > 100 || items.Any(item => item is null || item.Id == Guid.Empty ||
+            item.Quantity is < 1 or > 10000 || item.TrackingMode is not ("Serialized" or "BulkQuantity")) ||
+            items.Select(item => item.Id).Distinct().Count() != items.Length)
+            throw new PropertyException(400, "invalid_common_asset_requirements");
+        return items.Select(item => item with
+        {
+            Name = Text(item.Name, 150),
+            Category = Text(item.Category, 80),
+            CommonArea = Text(item.CommonArea, 200),
+            Unit = string.IsNullOrWhiteSpace(item.Unit) ? null : Text(item.Unit, 80)
+        }).ToArray();
+    }
+
+    public async Task<SetupDocument?> CommonAssetsAsync(Guid location, CancellationToken t)
+    {
+        _ = Owner();
+        _ = await properties.GetLocationAsync(location, t);
+        return await local.GetAsync(LocationSetupKeys.CommonAssets(location), "CommonAssetRequirements", t);
+    }
+
+    public Task<SetupDocument> UpdateCommonAssetsAsync(Guid location, CommonAssetRequirementsWrite input, CancellationToken t)
+    {
+        var actor = Owner();
+        return shared.TransactionAsync([location], async () =>
+        {
+            _ = await properties.GetLocationAsync(location, t);
+            return await SaveCommonAssets(location, ValidateCommonAssets(input.Items), input.ExpectedVersion, actor, t);
+        }, t, validateActiveLocations: false);
+    }
+
+    private Task<SetupDocument> SaveCommonAssets(Guid location, SetupCommonAssetRequirement[] items, int expectedVersion, Guid actor, CancellationToken t) =>
+        local.SaveAsync(LocationSetupKeys.CommonAssets(location), location, "CommonAssetRequirements", "Recorded",
+            new { items }, expectedVersion, actor, t);
 
     public Task<SetupDocument> SaveRoomDefaultsAsync(Guid location, Guid? id, LocalRoomDefaultsWrite input, CancellationToken t)
     {
@@ -365,8 +407,11 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
         // Room rent is explicitly confirmed per new room; legacy room-type scopes cannot be copied.
         var fees = (await shared.SetupCopyPoliciesAsync(location, t)).OrderBy(p => p.Id).ToArray();
         var rules = (await local.ListAsync(location, "OperatingPolicy", t)).Where(d => d.Status is "Draft" or "Published").OrderBy(d => d.Id).ToArray();
-        var hash = SharedConfigurationApplicationService.Hash(new { location, defaults, templates, fees, rules });
-        return new(defaults, templates, fees, rules, hash);
+        var commonAssets = await local.GetAsync(LocationSetupKeys.CommonAssets(location), "CommonAssetRequirements", t);
+        var hash = commonAssets is null
+            ? SharedConfigurationApplicationService.Hash(new { location, defaults, templates, fees, rules })
+            : SharedConfigurationApplicationService.Hash(new { location, defaults, templates, fees, rules, commonAssets });
+        return new(defaults, templates, fees, rules, hash, commonAssets);
     }
     public Task<LocationSetupSource> SourceAsync(Guid location, CancellationToken t)
     { _ = Owner(); return shared.TransactionAsync([location], () => Source(location, t), t, validateActiveLocations: false); }
@@ -464,6 +509,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 input.Rooms.Select(room => Text(room.RoomNumber, 50)).Distinct(StringComparer.OrdinalIgnoreCase).Count() != input.Rooms.Length)
                 throw new PropertyException(400, "duplicate_setup_keys_or_names");
             var normalized = new Dictionary<Guid, SharedRoomDefaults>(); var references = new List<ConfigurationSourceReference>();
+            var commonAssets = input.CommonAssets is null ? null : ValidateCommonAssets(input.CommonAssets);
             var roomScopedFeeSources = new List<string>();
             foreach (var reference in (input.SourceReferences ?? []).Distinct())
             {
@@ -487,6 +533,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                         "AssetTemplate" => source?.AssetTemplates.Any(d => d.Id == reference.Id && d.Version == reference.Version),
                         "OperatingPolicy" => source?.Policies.Any(d => d.Id == reference.Id && d.Version == reference.Version),
                         "BillingPolicy" => source?.Fees.Any(d => d.Id == reference.Id && d.Version == reference.Version),
+                        "CommonAssetRequirements" => source?.CommonAssets is { } doc && doc.Id == reference.Id && doc.Version == reference.Version,
                         _ => throw new PropertyException(400, "invalid_setup_source")
                     };
                     if (matches != true) throw new PropertyException(409, "configuration_copy_state_changed");
@@ -559,6 +606,8 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
             var location = await properties.SaveLocationAsync(null, new(info.Name, info.Address, true, Reason: "Owner location setup"), t);
             var created = new List<Guid> { location.Id };
             created.Add((await SaveMetadata(location.Id, metadata, actor, t)).Id);
+            if (commonAssets is not null)
+                created.Add((await SaveCommonAssets(location.Id, commonAssets, 0, actor, t)).Id);
             var types = new Dictionary<Guid, SetupDocument>();
             foreach (var type in input.RoomTypes)
             {

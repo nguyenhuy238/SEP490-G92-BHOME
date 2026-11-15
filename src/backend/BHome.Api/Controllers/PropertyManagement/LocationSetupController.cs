@@ -37,4 +37,8 @@ public sealed class LocationSetupController(LocationSetupService service) : Cont
     public async Task<ActionResult<SetupDocument?>> Metadata(Guid locationId, CancellationToken t) => new JsonResult(await service.MetadataAsync(locationId, t));
     [HttpPut("api/v1/locations/{locationId:guid}/setup-metadata")]
     public Task<SetupDocument> UpdateMetadata(Guid locationId, LocationMetadataWrite input, CancellationToken t) => service.UpdateMetadataAsync(locationId, input, t);
+    [HttpGet("api/v1/locations/{locationId:guid}/common-asset-requirements")]
+    public async Task<ActionResult<SetupDocument?>> CommonAssets(Guid locationId, CancellationToken t) => new JsonResult(await service.CommonAssetsAsync(locationId, t));
+    [HttpPut("api/v1/locations/{locationId:guid}/common-asset-requirements")]
+    public Task<SetupDocument> UpdateCommonAssets(Guid locationId, CommonAssetRequirementsWrite input, CancellationToken t) => service.UpdateCommonAssetsAsync(locationId, input, t);
 }

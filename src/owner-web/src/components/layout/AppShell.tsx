@@ -119,7 +119,7 @@ const navLabels: Record<string, string> = {
   notifications: 'Thông báo',
   locations: 'Cơ sở',
   'configuration/room-types': 'Mẫu loại phòng',
-  'configuration/assets': 'Tài sản dùng chung',
+  'configuration/assets': 'Tài sản mẫu',
   'configuration/pricing-fees': 'Mẫu giá & biểu phí',
   'configuration/policies': 'Nội quy & chính sách',
   'configuration/holding-contracts': 'Cấu hình giữ chỗ',

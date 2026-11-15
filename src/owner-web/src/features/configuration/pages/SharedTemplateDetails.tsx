@@ -687,6 +687,15 @@ function SharedDataSummary({ document }: { document: SharedDocument }) {
       fields={[
         { label: 'Đơn vị', value: data.unit },
         {
+          label: 'Phạm vi',
+          value:
+            data.scope === 'Room'
+              ? 'Theo phòng'
+              : data.scope === 'Location'
+                ? 'Chung cơ sở'
+                : 'Cả hai',
+        },
+        {
           label: 'Giá tham khảo',
           value: `${formatBillingDecimal(data.referencePrice)} đ/${data.unit}`,
         },

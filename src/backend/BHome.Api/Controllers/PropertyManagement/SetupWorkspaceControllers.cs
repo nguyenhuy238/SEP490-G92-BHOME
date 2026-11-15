@@ -111,7 +111,7 @@ public sealed class OperatingPoliciesController(OperatingPolicyService service, 
 public sealed class SetupEvidenceController(SetupEvidenceService service) : ControllerBase
 {
     [HttpPost, Consumes("image/png", "image/jpeg"), RequestSizeLimit(5 * 1024 * 1024)]
-    public async Task<object> Upload(Guid locationId, CancellationToken t) => new { objectKey = await service.UploadAsync(locationId, Request.Body, t) };
+    public Task<SetupEvidenceUpload> Upload(Guid locationId, CancellationToken t) => service.UploadAsync(locationId, Request.Body, t);
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Download(Guid locationId, Guid id, CancellationToken t)
     {

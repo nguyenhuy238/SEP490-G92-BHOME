@@ -1,6 +1,7 @@
 import { MoneyField } from '../../components/common/MoneyField';
 import { ASSET_UNITS } from '../../../../../packages/client-core/src/assetUnits';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import {
   Alert,
   Box,
@@ -18,12 +19,26 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
+import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import type {
   AssetMetadata,
   PhysicalAsset,
   SetupDocument,
 } from '../../../../../packages/client-core/src/propertySetup';
-import { ConfirmDialog, ErrorState, LoadingState } from '../../components/common/PortalUI';
+import {
+  ConfirmDialog,
+  ErrorState,
+  LoadingState,
+  StatusChip,
+} from '../../components/common/PortalUI';
+import { OwnerPagination } from '../../components/common/OwnerWorkspace';
+import { ownerQuery, type OwnerPage } from '../../hooks/useOwnerWorkspace';
+import {
+  incidentStatuses,
+  workStatuses,
+  type Incident,
+  type WorkOrder,
+} from '../incidents/incidentContracts';
 import { usePropertySetupApi } from './usePropertySetupApi';
 import { useSetupAction } from './useSetupAction';
 
@@ -47,7 +62,7 @@ export function AssetOperationsPanel({
     enabled: owner,
   });
   const status =
-    ['Đang sử dụng', 'Hư hỏng', 'Đang sửa chữa', 'Đã ngừng sử dụng'][asset.status] ??
+    ['Đang sử dụng', 'Cần sửa chữa', 'Đang sửa chữa', 'Đã ngừng sử dụng'][asset.status] ??
     'Chưa xác định';
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="md">
@@ -66,16 +81,39 @@ export function AssetOperationsPanel({
                     : 'default'
               }
             />
-            <Typography variant="body2" color="text.secondary">
-              {asset.code || 'Chưa có mã'} · Phiên bản {asset.version}
-            </Typography>
+            {!owner && (
+              <Typography variant="body2" color="text.secondary">
+                {asset.code || 'Chưa có mã nhận diện'}
+              </Typography>
+            )}
           </Stack>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            {!owner && (
+              <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary">
+                  ID tài sản
+                </Typography>
+                <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                  {asset.id}
+                </Typography>
+              </Box>
+            )}
             <Box>
               <Typography variant="caption" color="text.secondary">
                 Tình trạng thực tế
               </Typography>
               <Typography>{asset.condition}</Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                Số lượng đã ghi nhận
+              </Typography>
+              <Typography>
+                {metadata.data?.data.quantity ?? asset.quantity ?? 'Chưa tải được'}
+                {(metadata.data?.data.unit ?? asset.unit)
+                  ? ` ${metadata.data?.data.unit ?? asset.unit}`
+                  : ''}
+              </Typography>
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">
@@ -86,6 +124,7 @@ export function AssetOperationsPanel({
               </Typography>
             </Box>
           </Box>
+          {owner && <AssetRepairHistory key={asset.id} asset={asset} />}
           <Divider />
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             Lịch sử tài sản
@@ -131,6 +170,163 @@ export function AssetOperationsPanel({
   );
 }
 
+const repairPageSize = 10;
+
+function AssetRepairHistory({ asset }: { asset: PhysicalAsset }) {
+  return (
+    <>
+      <Divider />
+      <Box>
+        <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
+          Báo cáo sự cố và sửa chữa
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Báo cáo sự cố đã chọn tài sản này hoặc được liên kết qua lệnh sửa chữa.
+        </Typography>
+      </Box>
+      <AssetRepairList<Incident>
+        asset={asset}
+        resource="incidents"
+        title="Báo cáo sự cố"
+        empty="Chưa có báo cáo sự cố liên kết với tài sản."
+        renderRow={(report) => (
+          <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+            <Stack
+              direction="row"
+              useFlexGap
+              spacing={1}
+              sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                {report.code}
+              </Typography>
+              <StatusChip label={incidentStatuses[report.status] ?? report.status} />
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Ngày báo cáo: {formatInstant(report.createdAt)}
+            </Typography>
+            <Typography variant="body2" sx={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+              {report.description}
+            </Typography>
+            <Button
+              component={Link}
+              to={`/incidents?${ownerQuery({ locationId: asset.locationId, incidentId: report.id })}`}
+              sx={{ alignSelf: 'flex-start', minHeight: { xs: 44, sm: 36 } }}
+            >
+              Xem chi tiết sự cố
+            </Button>
+          </Stack>
+        )}
+      />
+      <AssetRepairList<WorkOrder>
+        asset={asset}
+        resource="work-orders"
+        title="Lệnh sửa chữa"
+        empty="Chưa có lệnh sửa chữa liên kết với tài sản."
+        renderRow={(work) => (
+          <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+            <Stack
+              direction="row"
+              useFlexGap
+              spacing={1}
+              sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                {work.source === 'Proactive' ? 'Bảo trì chủ động' : 'Sửa chữa từ sự cố'}
+              </Typography>
+              <StatusChip label={workStatuses[work.status] ?? work.status} />
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              {work.verifiedAt
+                ? `Ngày xác minh: ${formatInstant(work.verifiedAt)}`
+                : `Hạn hoàn thành: ${formatInstant(work.targetCompletionAt)}`}
+            </Typography>
+            <Typography variant="body2" sx={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+              {work.description?.trim() || work.expectedOutcome}
+            </Typography>
+            <Button
+              component={Link}
+              to={`/maintenance?${ownerQuery({ locationId: asset.locationId, workOrderId: work.id })}`}
+              sx={{ alignSelf: 'flex-start', minHeight: { xs: 44, sm: 36 } }}
+            >
+              Xem chi tiết lệnh sửa chữa
+            </Button>
+          </Stack>
+        )}
+      />
+    </>
+  );
+}
+
+function AssetRepairList<T extends { id: string }>({
+  asset,
+  resource,
+  title,
+  empty,
+  renderRow,
+}: {
+  asset: PhysicalAsset;
+  resource: 'incidents' | 'work-orders';
+  title: string;
+  empty: string;
+  renderRow: (row: T) => ReactNode;
+}) {
+  const { session } = useAuth();
+  const api = usePropertySetupApi();
+  const [page, setPage] = useState(1);
+  const path = `/api/v1/${resource}?${ownerQuery({ locationId: asset.locationId, assetId: asset.id, page, pageSize: repairPageSize })}`;
+  const query = useQuery({
+    queryKey: ['owner-workspace', session?.userId, resource, path],
+    queryFn: ({ signal }) => api.request<OwnerPage<T>>(path, { signal }),
+    enabled: session?.roles.includes('Owner') ?? false,
+  });
+  return (
+    <Stack component="section" aria-label={title} spacing={1} sx={{ minWidth: 0 }}>
+      <Typography component="h4" variant="subtitle2" sx={{ fontWeight: 700 }}>
+        {title}
+        {query.isSuccess ? ` · ${query.data.totalCount}` : ''}
+      </Typography>
+      {query.isPending ? (
+        <LoadingState />
+      ) : query.isError ? (
+        <ErrorState error={query.error} retry={() => void query.refetch()} />
+      ) : (
+        <>
+          {query.data.items.length ? (
+            <Stack
+              component="ul"
+              spacing={1.25}
+              divider={<Divider flexItem />}
+              sx={{ listStyle: 'none', m: 0, p: 0 }}
+            >
+              {query.data.items.map((row) => (
+                <Box component="li" key={row.id} sx={{ minWidth: 0 }}>
+                  {renderRow(row)}
+                </Box>
+              ))}
+            </Stack>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              {query.data.totalCount === 0
+                ? empty
+                : 'Trang này không còn bản ghi. Chọn trang trước để xem lịch sử.'}
+            </Typography>
+          )}
+          {(query.data.totalCount > repairPageSize || page > 1) && (
+            <OwnerPagination
+              page={page}
+              total={query.data.totalCount}
+              size={repairPageSize}
+              change={setPage}
+              busy={query.isFetching}
+            />
+          )}
+        </>
+      )}
+    </Stack>
+  );
+}
+
 function MetadataEditor({
   asset,
   document,
@@ -140,7 +336,6 @@ function MetadataEditor({
 }) {
   const api = usePropertySetupApi();
   const action = useSetupAction();
-  const tracking = document.data.trackingMode;
   const [unit, setUnit] = useState(document.data.unit ?? '');
   const [quantity, setQuantity] = useState(String(document.data.quantity));
   const [cost, setCost] = useState(String(document.data.purchaseCost ?? ''));
@@ -163,7 +358,7 @@ function MetadataEditor({
               api.saveMetadata(
                 asset.id,
                 {
-                  trackingMode: tracking,
+                  trackingMode: Number(quantity) > 1 ? 'BulkQuantity' : document.data.trackingMode,
                   quantity: Number(quantity),
                   ...(unit || document.data.unit !== undefined ? { unit: unit || null } : {}),
                   purchaseCost: cost || null,
@@ -180,9 +375,6 @@ function MetadataEditor({
         <Divider />
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
           Thông tin mua và số lượng
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Thông tin của tài sản đã ghi nhận. Phiên bản dữ liệu: {document.version}.
         </Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
           <TextField
@@ -204,10 +396,10 @@ function MetadataEditor({
           <TextField
             required
             type="number"
-            label="Số lượng vật lý"
+            label="Số lượng thực tế"
             value={quantity}
-            disabled={tracking === 'Serialized'}
-            slotProps={{ htmlInput: { min: 1, step: 1 } }}
+            disabled={asset.status === 2 || asset.status === 3 || action.busy}
+            slotProps={{ htmlInput: { min: 1, max: 10000, step: 1 } }}
             onChange={(event) => setQuantity(event.target.value)}
           />
           <MoneyField
@@ -241,12 +433,18 @@ function MetadataEditor({
           type="submit"
           variant="contained"
           sx={{ alignSelf: 'flex-start' }}
-          disabled={action.busy}
+          disabled={
+            action.busy ||
+            !Number.isInteger(Number(quantity)) ||
+            Number(quantity) < 1 ||
+            Number(quantity) > 10000 ||
+            !reason.trim()
+          }
         >
           Lưu thông tin tài sản
         </Button>
       </Stack>
-      {asset.status !== 3 && (
+      {asset.status !== 3 && asset.status !== 2 && (
         <Stack
           component="form"
           spacing={2}

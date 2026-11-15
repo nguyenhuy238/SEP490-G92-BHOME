@@ -292,6 +292,7 @@ it('reads physical Asset fields through the scoped native list and pagination', 
     if (path === '/api/v1/capture/locations')
       return [{ id: 'location', label: 'Synthetic Location' }];
     if (path.endsWith('/rooms')) return [];
+    if (path.endsWith('/common-asset-requirements')) return null;
     return {
       items: [
         {
@@ -312,19 +313,61 @@ it('reads physical Asset fields through the scoped native list and pagination', 
   });
   mount('assets');
   await chooseLocation();
+  const commonGroup = screen.getByRole('button', { name: 'Tài sản khu vực chung' });
+  expect(commonGroup).toHaveAttribute('aria-expanded', 'false');
+  expect(state.request.mock.calls.some(([path]) => path.startsWith('/api/v1/assets?'))).toBe(false);
+  fireEvent.click(commonGroup);
   await screen.findByText('Synthetic chair');
-  expect(screen.getByText(/CHAIR-01/)).toBeInTheDocument();
+  expect(screen.queryByText(/CHAIR-01/)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Thao tác tài sản Synthetic chair' })).toBeVisible();
   expect(state.request).toHaveBeenCalledWith(
-    '/api/v1/assets?locationId=location&page=1&pageSize=20',
+    '/api/v1/assets?locationId=location&page=1&pageSize=20&commonAreaOnly=true',
     expect.anything(),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Tới trang tiếp theo' }));
   await waitFor(() =>
     expect(state.request).toHaveBeenCalledWith(
-      '/api/v1/assets?locationId=location&page=2&pageSize=20',
+      '/api/v1/assets?locationId=location&page=2&pageSize=20&commonAreaOnly=true',
       expect.anything(),
     ),
   );
+});
+
+it('groups Owner asset edit and retirement actions in an accessible overflow menu', async () => {
+  state.request.mockImplementation(async (path: string) =>
+    path === '/api/v1/capture/locations'
+      ? [{ id: 'location', label: 'Synthetic Location' }]
+      : path.startsWith('/api/v1/operational-tasks/targets/common-areas?')
+        ? ['Hall']
+        : path.endsWith('/common-asset-requirements')
+          ? null
+          : path.endsWith('/rooms')
+            ? []
+            : {
+                items: [
+                  {
+                    id: 'asset',
+                    locationId: 'location',
+                    roomId: null,
+                    commonArea: 'Hall',
+                    code: 'CHAIR-01',
+                    name: 'Synthetic chair',
+                    category: 'Furniture',
+                    condition: 'Good',
+                    status: 0,
+                    version: 1,
+                  },
+                ],
+                totalCount: 1,
+              },
+  );
+  mount('assets');
+  await chooseLocation();
+  fireEvent.click(screen.getByRole('button', { name: 'Tài sản khu vực chung' }));
+  await screen.findByText('Synthetic chair');
+  fireEvent.click(screen.getByRole('button', { name: 'Thao tác tài sản Synthetic chair' }));
+  expect(await screen.findByRole('menuitem', { name: 'Chỉnh sửa' })).toBeVisible();
+  expect(screen.getByRole('menuitem', { name: 'Ngừng sử dụng' })).toBeVisible();
 });
 
 it('offers persisted common areas and saves a new area with the first physical asset', async () => {
@@ -360,6 +403,8 @@ it('offers persisted common areas and saves a new area with the first physical a
   const dialog = within(screen.getByRole('dialog'));
   fireEvent.change(dialog.getByLabelText(/Tên tài sản/), { target: { value: 'Synthetic chair' } });
   fireEvent.change(dialog.getByLabelText(/Tình trạng/), { target: { value: 'Good' } });
+  expect(dialog.queryByLabelText('Cách quản lý')).toBeNull();
+  fireEvent.change(dialog.getByLabelText(/Số lượng/), { target: { value: '4' } });
   fireEvent.mouseDown(dialog.getByRole('combobox', { name: 'Khu vực chung' }));
   expect(await screen.findByRole('option', { name: 'Hall' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('option', { name: /Tạo khu vực mới/ }));
@@ -374,7 +419,79 @@ it('offers persisted common areas and saves a new area with the first physical a
     commonArea: 'Rooftop',
     name: 'Synthetic chair',
     initialUnit: 'Cái',
+    initialTrackingMode: 'BulkQuantity',
+    initialQuantity: 4,
   });
+});
+
+it('requests server-side physical asset filtering for rooms and shared areas', async () => {
+  state.request.mockImplementation(async (path: string) => {
+    if (path === '/api/v1/capture/locations')
+      return [{ id: 'location', label: 'Synthetic Location' }];
+    if (path.endsWith('/rooms'))
+      return [{ id: 'room-a', label: 'A101' }, { id: 'room-b', label: 'A102' }];
+    if (path.endsWith('/common-asset-requirements')) return null;
+    if (path.includes('/common-areas?')) return [];
+    return { items: [], totalCount: 0 };
+  });
+  mount('assets');
+  await chooseLocation();
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Vị trí tài sản' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Tất cả tài sản trong phòng' }));
+  const room = await screen.findByRole('button', { name: 'A101' });
+  expect(room).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.change(screen.getByLabelText('Tìm kiếm'), { target: { value: 'Ghế' } });
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Trạng thái' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Đang sử dụng' }));
+  fireEvent.click(room);
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      '/api/v1/assets?locationId=location&page=1&pageSize=20&search=Gh%E1%BA%BF&assetStatus=0&roomId=room-a',
+      expect.anything(),
+    ),
+  );
+  expect(screen.getByRole('button', { name: 'A102' })).toHaveAttribute('aria-expanded', 'false');
+  expect(state.request.mock.calls.some(([path]) => path.includes('roomId=room-b'))).toBe(false);
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Vị trí tài sản' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Tài sản chung cơ sở' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tài sản khu vực chung' }));
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      '/api/v1/assets?locationId=location&page=1&pageSize=20&search=Gh%E1%BA%BF&assetStatus=0&commonAreaOnly=true',
+      expect.anything(),
+    ),
+  );
+});
+
+it('includes rooms past the room options limit without preloading their assets', async () => {
+  const firstRooms = Array.from({ length: 100 }, (_, index) => ({
+    id: `room-${index}`,
+    label: `Phòng ${index}`,
+  }));
+  state.request.mockImplementation(async (path: string) => {
+    if (path === '/api/v1/capture/locations')
+      return [{ id: 'location', label: 'Synthetic Location' }];
+    if (path.endsWith('/rooms')) return firstRooms;
+    if (path.endsWith('/common-asset-requirements')) return null;
+    if (path.includes('/common-areas?')) return [];
+    if (path.startsWith('/api/v1/rooms?')) {
+      const items = path.includes('page=1&')
+        ? firstRooms.map(({ id, label }) => ({ id, roomNumber: label }))
+        : [{ id: 'room-100', roomNumber: 'Phòng 100' }];
+      return { items, totalCount: 101 };
+    }
+    return { items: [], totalCount: 0 };
+  });
+  mount('assets');
+  await chooseLocation();
+  const lastRoom = await screen.findByRole('button', { name: 'Phòng 100' });
+  expect(state.request.mock.calls.some(([path]) => path.startsWith('/api/v1/assets?'))).toBe(false);
+  fireEvent.click(lastRoom);
+  await screen.findByText('Vị trí này chưa có tài sản thực tế.');
+  expect(state.request).toHaveBeenCalledWith(
+    '/api/v1/assets?locationId=location&page=1&pageSize=20&roomId=room-100',
+    expect.anything(),
+  );
 });
 
 it('sends room status filtering to the backend instead of filtering a paginated subset', async () => {

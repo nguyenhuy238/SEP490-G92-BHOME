@@ -10,6 +10,8 @@ import {
   DialogContent,
   DialogTitle,
   MenuItem,
+  IconButton,
+  Menu,
   Paper,
   Stack,
   Table,
@@ -19,10 +21,12 @@ import {
   TablePagination,
   TableRow,
   TextField,
+  Tooltip,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import { ChevronDown, MoreVertical } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
@@ -58,19 +62,21 @@ type Row = LocationConfiguration | RoomConfiguration | PhysicalAsset;
 const titles: Record<Kind, string> = {
   locations: 'Quản lý cơ sở',
   rooms: 'Quản lý phòng',
-  assets: 'Tài sản vật lý',
+  assets: 'Tài sản thực tế',
 };
 const roomLabels = ['Trống khai thác', 'Đang giữ chỗ', 'Đang có khách thuê', 'Ngừng khai thác'];
-const assetLabels = ['Đang sử dụng', 'Hư hỏng', 'Đang sửa chữa', 'Đã ngừng sử dụng'];
+const assetLabels = ['Đang sử dụng', 'Cần sửa chữa', 'Đang sửa chữa', 'Đã ngừng sử dụng'];
 
 export function PropertyApiPage({
   kind,
   createInitially = false,
   embedded = false,
+  onAssetInventory,
 }: {
   kind: Kind;
   createInitially?: boolean;
   embedded?: boolean;
+  onAssetInventory?: () => void;
 }) {
   const api = usePropertySetupApi();
   const setup = locationSetupClient(api.request);
@@ -87,6 +93,11 @@ export function PropertyApiPage({
   const location = params.locationId ?? selectedLocation;
   const [search, setSearch] = useState('');
   const [assetScope, setAssetScope] = useState('');
+  const [expandedAssetGroup, setExpandedAssetGroup] = useState({ location: '', id: '' });
+  const groupedAssets = kind === 'assets' && canManage;
+  const activeAssetGroup =
+    groupedAssets && expandedAssetGroup.location === location ? expandedAssetGroup.id : '';
+  const assetQueryScope = groupedAssets ? activeAssetGroup : assetScope;
   const [localStatusFilter, setLocalStatusFilter] = useState('');
   const scopedRooms = kind === 'rooms' && !!params.locationId;
   const urlStatus = urlParams.get('roomStatus') ?? '';
@@ -96,7 +107,7 @@ export function PropertyApiPage({
       : ''
     : localStatusFilter;
   // Reset pagination before the next query runs, including URL-driven navigation.
-  const pageScope = JSON.stringify([kind, location, statusFilter, search, assetScope]);
+  const pageScope = JSON.stringify([kind, location, statusFilter, search, assetQueryScope]);
   const [pagination, setPagination] = useState({ scope: pageScope, page: 0 });
   if (pagination.scope !== pageScope) {
     setPagination({ scope: pageScope, page: 0 });
@@ -125,6 +136,12 @@ export function PropertyApiPage({
   const [open, setOpen] = useState(createInitially);
   const [confirmInactive, setConfirmInactive] = useState(false);
   const [inspectedAsset, setInspectedAsset] = useState('');
+  const [assetMenu, setAssetMenu] = useState<{
+    anchor: HTMLElement;
+    asset: PhysicalAsset;
+  } | null>(null);
+  const [retiringAsset, setRetiringAsset] = useState<PhysicalAsset | null>(null);
+  const [retirementReason, setRetirementReason] = useState('');
   const [editing, setEditing] = useState<Row | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [newCommonArea, setNewCommonArea] = useState('');
@@ -166,10 +183,36 @@ export function PropertyApiPage({
     queryFn: ({ signal }) => api.locationOptions(signal),
   });
   const rooms = useQuery({
-    queryKey: ['property-setup', 'room-options', session?.userId, location],
-    queryFn: ({ signal }) => api.roomOptions(location, signal),
+    queryKey: ['property-setup', 'room-options', session?.userId, location, groupedAssets],
+    queryFn: async ({ signal }) => {
+      const options = await api.roomOptions(location, signal);
+      // The capture endpoint caps its room options at 100.
+      if (!groupedAssets || options.length < 100) return options;
+
+      const allRooms: { id: string; label: string }[] = [];
+      const pageSize = 100;
+      for (let page = 1; ; page += 1) {
+        const result = await api.request<Page<RoomConfiguration>>(
+          `/api/v1/rooms?${new URLSearchParams({ locationId: location, page: String(page), pageSize: String(pageSize) })}`,
+          { signal },
+        );
+        allRooms.push(...result.items.map((room) => ({ id: room.id, label: room.roomNumber })));
+        if (!result.items.length || page * pageSize >= result.totalCount) return allRooms;
+      }
+    },
     enabled: kind === 'assets' && !!location,
   });
+  const assetGroups = [
+    ...(assetScope === 'common'
+      ? []
+      : (rooms.data ?? []).filter(
+          (room) => !assetScope || assetScope === 'rooms' || assetScope === room.id,
+        )),
+    ...(!assetScope || assetScope === 'common'
+      ? [{ id: 'common', label: 'Tài sản khu vực chung' }]
+      : []),
+  ];
+  const activeGroupIndex = assetGroups.findIndex((group) => group.id === activeAssetGroup);
   const commonAreas = useQuery({
     queryKey: ['property-setup', 'common-area-options', session?.userId, location],
     queryFn: ({ signal }) =>
@@ -179,6 +222,17 @@ export function PropertyApiPage({
       ),
     enabled: kind === 'assets' && canManage && !!location,
   });
+  const commonRequirements = useQuery({
+    queryKey: ['property-setup', 'common-asset-requirements', session?.userId, location],
+    queryFn: ({ signal }) => setup.commonAssetRequirements(location, signal),
+    enabled: kind === 'assets' && canManage && !!location,
+  });
+  const commonAreaNames = [
+    ...new Set([
+      ...(commonAreas.data ?? []),
+      ...(commonRequirements.data?.data?.items.map((item) => item.commonArea) ?? []),
+    ]),
+  ].sort((a, b) => a.localeCompare(b, 'vi'));
   const query = useQuery({
     queryKey: [
       'property-setup',
@@ -188,17 +242,21 @@ export function PropertyApiPage({
       page,
       search,
       statusFilter,
-      assetScope,
+      assetQueryScope,
     ],
     queryFn: async ({ signal }): Promise<Page<Row>> =>
       kind === 'locations'
         ? api.locations(page + 1, search, signal)
         : api.request<Page<Row>>(
-            `/api/v1/${kind}?${new URLSearchParams({ locationId: location, page: String(page + 1), pageSize: '20', ...(search ? { search } : {}), ...(statusFilter ? { [kind === 'rooms' ? 'roomStatus' : 'assetStatus']: statusFilter } : {}), ...(kind === 'assets' && assetScope ? (assetScope === 'common' ? { commonAreaOnly: 'true' } : { roomId: assetScope }) : {}) })}`,
+            `/api/v1/${kind}?${new URLSearchParams({ locationId: location, page: String(page + 1), pageSize: '20', ...(search ? { search } : {}), ...(statusFilter ? { [kind === 'rooms' ? 'roomStatus' : 'assetStatus']: statusFilter } : {}), ...(kind === 'assets' && assetQueryScope ? (assetQueryScope === 'common' ? { commonAreaOnly: 'true' } : assetQueryScope === 'rooms' ? { roomAssetsOnly: 'true' } : { roomId: assetQueryScope }) : {}) })}`,
             { signal },
           ),
-    enabled: kind === 'locations' || !!location,
+    enabled: kind === 'locations' || (!!location && (!groupedAssets || activeGroupIndex >= 0)),
   });
+  const lastAssetPage = query.data ? Math.max(0, Math.ceil(query.data.totalCount / 20) - 1) : page;
+  if (groupedAssets && page > lastAssetPage) {
+    setPagination({ scope: pageScope, page: lastAssetPage });
+  }
   const tableOperations = useRoomOperations(
     kind === 'rooms' && view === 'table' ? location : '',
     kind === 'rooms' && view === 'table' ? (query.data?.items ?? []).map((row) => row.id) : [],
@@ -265,6 +323,9 @@ export function PropertyApiPage({
           : values.commonArea?.trim() || null;
       if (!values.roomId && !commonArea)
         throw new Error('Chọn khu vực chung hoặc nhập tên khu vực mới.');
+      const quantity = Number(values.quantity);
+      if (!editing && (!Number.isInteger(quantity) || quantity < 1 || quantity > 10000))
+        throw new Error('Số lượng phải là số nguyên từ 1 đến 10.000.');
       return api.saveAsset(editing?.id ?? null, {
         locationId: location,
         roomId: values.roomId || null,
@@ -276,7 +337,13 @@ export function PropertyApiPage({
         status: Number(values.status ?? 0),
         version,
         reason,
-        ...(!editing ? { initialUnit: values.unit || 'Cái' } : {}),
+        ...(!editing
+          ? {
+              initialUnit: values.unit || 'Cái',
+              initialTrackingMode: 'BulkQuantity',
+              initialQuantity: quantity,
+            }
+          : {}),
       });
     },
     onSuccess: async () => {
@@ -284,6 +351,31 @@ export function PropertyApiPage({
       setOpen(false);
       setConfirmInactive(false);
       setNotice('Máy chủ đã lưu cấu hình.');
+    },
+  });
+  const retire = useMutation({
+    mutationFn: async () => {
+      if (!canManage || !retiringAsset || !retirementReason.trim())
+        throw new Error('Nhập lý do ngừng sử dụng tài sản.');
+      const { id, locationId, roomId, commonArea, code, name, category, condition, version } =
+        retiringAsset;
+      return api.saveAsset(id, {
+        locationId,
+        roomId,
+        commonArea,
+        code,
+        name,
+        category,
+        condition,
+        version,
+        status: 3,
+        reason: retirementReason.trim(),
+      });
+    },
+    onSuccess: async () => {
+      await cache.invalidateQueries({ queryKey: ['property-setup'] });
+      setRetiringAsset(null);
+      setNotice('Đã ngừng sử dụng tài sản. Lịch sử được giữ nguyên.');
     },
   });
   const edit = (row: Row | null) => {
@@ -306,6 +398,7 @@ export function PropertyApiPage({
         ? {
             ...nextValues,
             commonArea: nextValues.commonArea || (nextValues.roomId ? '' : '__new__'),
+            ...(!row ? { quantity: '1' } : {}),
           }
         : nextValues,
     );
@@ -376,6 +469,25 @@ export function PropertyApiPage({
       </Button>
     </Stack>
   ) : undefined;
+  const renderAssetGroup = ({ id, label }: { id: string; label: string }) => (
+    <Button
+      key={id}
+      variant="outlined"
+      aria-expanded={activeAssetGroup === id}
+      endIcon={<ChevronDown size={16} />}
+      onClick={() => setExpandedAssetGroup({ location, id: activeAssetGroup === id ? '' : id })}
+      sx={{
+        justifyContent: 'space-between',
+        minHeight: 44,
+        textAlign: 'left',
+        borderColor: 'divider',
+        bgcolor: activeAssetGroup === id ? 'action.selected' : 'background.paper',
+        '&[aria-expanded="true"] .MuiButton-endIcon': { transform: 'rotate(180deg)' },
+      }}
+    >
+      {label}
+    </Button>
+  );
   return (
     <Stack spacing={2} sx={{ minWidth: 0 }}>
       {embedded ? (
@@ -397,6 +509,7 @@ export function PropertyApiPage({
           onChange={(event) => {
             setSelectedLocation(event.target.value);
             setAssetScope('');
+            setExpandedAssetGroup({ location: '', id: '' });
             setPage(0);
           }}
         >
@@ -453,11 +566,15 @@ export function PropertyApiPage({
               size="small"
               label="Vị trí tài sản"
               value={assetScope}
-              onChange={(event) => setAssetScope(event.target.value)}
-              sx={{ minWidth: 180 }}
+              onChange={(event) => {
+                setAssetScope(event.target.value);
+                setExpandedAssetGroup({ location: '', id: '' });
+              }}
+              sx={{ minWidth: { xs: 0, md: 180 }, width: { xs: '100%', md: 'auto' } }}
             >
               <MenuItem value="">Tất cả vị trí</MenuItem>
-              <MenuItem value="common">Khu vực chung</MenuItem>
+              <MenuItem value="rooms">Tất cả tài sản trong phòng</MenuItem>
+              <MenuItem value="common">Tài sản chung cơ sở</MenuItem>
               {rooms.data?.map((room) => (
                 <MenuItem key={room.id} value={room.id}>
                   {room.label}
@@ -467,8 +584,13 @@ export function PropertyApiPage({
           )}
           <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, flexShrink: 0 }}>
             <Button
-              disabled={query.isFetching || (kind !== 'locations' && !location)}
-              onClick={() => void query.refetch()}
+              disabled={
+                (kind !== 'locations' && !location) ||
+                (groupedAssets && activeGroupIndex < 0 ? rooms.isFetching : query.isFetching)
+              }
+              onClick={() =>
+                void (groupedAssets && activeGroupIndex < 0 ? rooms.refetch() : query.refetch())
+              }
             >
               Tải lại
             </Button>
@@ -477,6 +599,7 @@ export function PropertyApiPage({
                 onClick={() => {
                   setSearch('');
                   setAssetScope('');
+                  setExpandedAssetGroup({ location: '', id: '' });
                   setStatusFilter('');
                   setPage(0);
                 }}
@@ -501,9 +624,23 @@ export function PropertyApiPage({
           </Stack>
         </Stack>
       </Paper>
+      {groupedAssets && location && (
+        <>
+          {assetScope !== 'common' && rooms.isPending && <LoadingState />}
+          {assetScope !== 'common' && rooms.error && (
+            <ErrorState error={rooms.error} retry={() => void rooms.refetch()} />
+          )}
+          {assetScope === 'rooms' && rooms.isSuccess && !assetGroups.length && (
+            <EmptyState message="Cơ sở chưa có phòng." />
+          )}
+          {assetGroups
+            .slice(0, activeGroupIndex < 0 ? undefined : activeGroupIndex + 1)
+            .map(renderAssetGroup)}
+        </>
+      )}
       {kind !== 'locations' && !location ? (
         <Alert severity="info">Chọn cơ sở để quản lý cấu hình.</Alert>
-      ) : query.isPending ? (
+      ) : groupedAssets && activeGroupIndex < 0 ? null : query.isPending ? (
         <LoadingState />
       ) : query.error ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
@@ -521,19 +658,29 @@ export function PropertyApiPage({
             <Box sx={{ p: 3, textAlign: 'center' }}>
               <EmptyState
                 message={
-                  search || statusFilter || assetScope
+                  search || statusFilter || (!groupedAssets && assetScope)
                     ? 'Không có dữ liệu phù hợp. Thử đổi từ khóa hoặc trạng thái.'
-                    : kind === 'assets'
-                      ? 'Chưa có tài sản thực tế. Thêm tài sản đầu tiên để bắt đầu quản lý.'
-                      : kind === 'rooms'
-                        ? 'Chưa có phòng. Thêm phòng đầu tiên để bắt đầu quản lý.'
-                        : 'Chưa có bản ghi. Thêm bản ghi đầu tiên để bắt đầu quản lý.'
+                    : groupedAssets
+                      ? 'Vị trí này chưa có tài sản thực tế.'
+                      : kind === 'assets'
+                        ? 'Chưa có tài sản thực tế. Ghi nhận thiết bị đã có hoặc kiểm kê phòng theo cấu hình.'
+                        : kind === 'rooms'
+                          ? 'Chưa có phòng. Thêm phòng đầu tiên để bắt đầu quản lý.'
+                          : 'Chưa có bản ghi. Thêm bản ghi đầu tiên để bắt đầu quản lý.'
                 }
               />
-              {canManage && !search && !statusFilter && (
-                <Button sx={{ mt: 2 }} variant="outlined" onClick={() => edit(null)}>
-                  Thêm mới
-                </Button>
+              {canManage && !search && !statusFilter && !assetScope && (
+                <Stack
+                  direction="row"
+                  sx={{ mt: 2, gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}
+                >
+                  <Button variant="outlined" onClick={() => edit(null)}>
+                    {kind === 'assets' ? 'Ghi nhận tài sản' : 'Thêm mới'}
+                  </Button>
+                  {kind === 'assets' && onAssetInventory && (
+                    <Button onClick={onAssetInventory}>Kiểm kê phòng</Button>
+                  )}
+                </Stack>
               )}
             </Box>
           ) : kind === 'rooms' && view === 'cards' ? (
@@ -577,7 +724,9 @@ export function PropertyApiPage({
               >
                 <TableHead>
                   <TableRow>
-                    <TableCell>{kind === 'rooms' ? 'Số phòng' : 'Tên / mã'}</TableCell>
+                    <TableCell>
+                      {kind === 'rooms' ? 'Số phòng' : kind === 'assets' ? 'Tài sản' : 'Tên cơ sở'}
+                    </TableCell>
                     {kind === 'rooms' ? (
                       <>
                         <TableCell>Gợi ý đã áp dụng</TableCell>
@@ -589,7 +738,8 @@ export function PropertyApiPage({
                     ) : kind === 'assets' ? (
                       <>
                         <TableCell>Vị trí thực tế</TableCell>
-                        <TableCell>Nhóm / tình trạng</TableCell>
+                        <TableCell align="right">Số lượng</TableCell>
+                        <TableCell>Hiện trạng</TableCell>
                       </>
                     ) : (
                       <TableCell>Địa chỉ</TableCell>
@@ -608,7 +758,7 @@ export function PropertyApiPage({
                         >
                           {'roomNumber' in row ? row.roomNumber : row.name}
                         </Typography>
-                        {'code' in row && (
+                        {kind !== 'assets' && 'code' in row && (
                           <Typography variant="caption" color="text.secondary">
                             {row.code || 'Chưa có mã'}
                           </Typography>
@@ -677,6 +827,11 @@ export function PropertyApiPage({
                                 'Phòng (chưa tải được tên)')
                               : row.commonArea || 'Chưa ghi nhận khu vực'}
                           </TableCell>
+                          <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {row.quantity == null
+                              ? '—'
+                              : `${row.quantity}${row.unit ? ` ${row.unit}` : ''}`}
+                          </TableCell>
                           <TableCell>{row.condition}</TableCell>
                         </>
                       )}
@@ -693,7 +848,13 @@ export function PropertyApiPage({
                                   : row.status === 2
                                     ? 'info'
                                     : 'default'
-                              : 'default'
+                              : 'condition' in row && row.status === 0
+                                ? 'success'
+                                : 'condition' in row && row.status === 1
+                                  ? 'warning'
+                                  : 'condition' in row && row.status === 2
+                                    ? 'info'
+                                    : 'default'
                           }
                           label={
                             'isActive' in row
@@ -707,22 +868,97 @@ export function PropertyApiPage({
                         />
                       </TableCell>
                       <TableCell>
-                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                          {'condition' in row && (
-                            <Button onClick={() => setInspectedAsset(row.id)}>
+                        {'condition' in row ? (
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            useFlexGap
+                            sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                          >
+                            <Button
+                              size="small"
+                              onClick={() => setInspectedAsset(row.id)}
+                              sx={{ whiteSpace: 'nowrap' }}
+                            >
                               Thông tin & Lịch sử
                             </Button>
-                          )}
-                          {kind === 'locations' && (
-                            <Button component={Link} to={`/locations/${row.id}/overview`}>
-                              Quản lý cấu hình
-                            </Button>
-                          )}
-                          {kind === 'rooms' && (
-                            <Button onClick={() => setInspectedRoom(row.id)}>Chi tiết</Button>
-                          )}
-                          {canManage && <Button onClick={() => edit(row)}>Chỉnh sửa</Button>}
-                        </Stack>
+                            {canManage && (
+                              <>
+                                <Tooltip title={`Thao tác tài sản ${row.name}`}>
+                                  <IconButton
+                                    size="small"
+                                    aria-label={`Thao tác tài sản ${row.name}`}
+                                    aria-haspopup="menu"
+                                    aria-expanded={
+                                      assetMenu?.asset.id === row.id ? 'true' : undefined
+                                    }
+                                    onClick={(event) =>
+                                      setAssetMenu({ anchor: event.currentTarget, asset: row })
+                                    }
+                                  >
+                                    <MoreVertical size={18} />
+                                  </IconButton>
+                                </Tooltip>
+                                <Menu
+                                  anchorEl={
+                                    assetMenu?.asset.id === row.id ? assetMenu.anchor : null
+                                  }
+                                  open={assetMenu?.asset.id === row.id}
+                                  onClose={() => setAssetMenu(null)}
+                                >
+                                  <MenuItem
+                                    onClick={() => {
+                                      setAssetMenu(null);
+                                      edit(row);
+                                    }}
+                                  >
+                                    Chỉnh sửa
+                                  </MenuItem>
+                                  {row.status !== 3 && (
+                                    <MenuItem
+                                      disabled={row.status === 2}
+                                      onClick={() => {
+                                        setAssetMenu(null);
+                                        retire.reset();
+                                        setRetirementReason('');
+                                        setRetiringAsset(row);
+                                      }}
+                                    >
+                                      Ngừng sử dụng
+                                    </MenuItem>
+                                  )}
+                                </Menu>
+                              </>
+                            )}
+                          </Stack>
+                        ) : (
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            useFlexGap
+                            sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+                          >
+                            {kind === 'locations' && (
+                              <Button
+                                size="small"
+                                component={Link}
+                                to={`/locations/${row.id}/overview`}
+                              >
+                                Quản lý cấu hình
+                              </Button>
+                            )}
+                            {kind === 'rooms' && (
+                              <Button size="small" onClick={() => setInspectedRoom(row.id)}>
+                                Chi tiết
+                              </Button>
+                            )}
+                            {canManage && (
+                              <Button size="small" onClick={() => edit(row)}>
+                                Chỉnh sửa
+                              </Button>
+                            )}
+                          </Stack>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -747,6 +983,10 @@ export function PropertyApiPage({
           />
         </Paper>
       )}
+      {groupedAssets &&
+        location &&
+        activeGroupIndex >= 0 &&
+        assetGroups.slice(activeGroupIndex + 1).map(renderAssetGroup)}
       <Dialog
         open={open}
         onClose={() => {
@@ -769,7 +1009,15 @@ export function PropertyApiPage({
             else submit();
           }}
         >
-          <DialogTitle>{editing ? 'Chỉnh sửa cấu hình' : 'Thêm cấu hình'}</DialogTitle>
+          <DialogTitle>
+            {kind === 'assets'
+              ? editing
+                ? 'Chỉnh sửa tài sản'
+                : 'Thêm tài sản thực tế'
+              : editing
+                ? 'Chỉnh sửa cấu hình'
+                : 'Thêm cấu hình'}
+          </DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
@@ -921,33 +1169,48 @@ export function PropertyApiPage({
                 <>
                   {field('name', 'Tên tài sản')}
                   {field('code', 'Mã tài sản', false)}
+                  {field('category', 'Nhóm tài sản', false)}
                   {!editing && (
-                    <TextField
-                      select
-                      label="Đơn vị"
-                      value={values.unit || 'Cái'}
-                      onChange={(event) =>
-                        setValues((old) => ({ ...old, unit: event.target.value }))
-                      }
-                    >
-                      {ASSET_UNITS.map((unit) => (
-                        <MenuItem key={unit} value={unit}>
-                          {unit}
-                        </MenuItem>
-                      ))}
-                    </TextField>
+                    <>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                        <TextField
+                          required
+                          type="number"
+                          label="Số lượng"
+                          value={values.quantity ?? '1'}
+                          onChange={(event) =>
+                            setValues((old) => ({ ...old, quantity: event.target.value }))
+                          }
+                          slotProps={{ htmlInput: { min: 1, max: 10000, step: 1 } }}
+                        />
+                        <TextField
+                          select
+                          label="Đơn vị"
+                          value={values.unit || 'Cái'}
+                          onChange={(event) =>
+                            setValues((old) => ({ ...old, unit: event.target.value }))
+                          }
+                        >
+                          {ASSET_UNITS.map((unit) => (
+                            <MenuItem key={unit} value={unit}>
+                              {unit}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </Box>
+                    </>
                   )}
                   {field('condition', 'Tình trạng')}
                   <TextField
                     select
-                    label="Phòng đặt tài sản"
+                    label="Vị trí tài sản"
                     value={values.roomId ?? ''}
                     disabled={!!editing}
                     onChange={(event) =>
                       setValues((old) => ({ ...old, roomId: event.target.value }))
                     }
                   >
-                    <MenuItem value="">Khu vực chung</MenuItem>
+                    <MenuItem value="">Tài sản chung cơ sở</MenuItem>
                     {rooms.data?.map((room) => (
                       <MenuItem key={room.id} value={room.id}>
                         {room.label}
@@ -974,14 +1237,14 @@ export function PropertyApiPage({
                         }
                       >
                         <MenuItem value="__new__">+ Tạo khu vực mới</MenuItem>
-                        {commonAreas.data?.map((area) => (
+                        {commonAreaNames.map((area) => (
                           <MenuItem key={area} value={area}>
                             {area}
                           </MenuItem>
                         ))}
                         {values.commonArea &&
                           values.commonArea !== '__new__' &&
-                          !commonAreas.data?.includes(values.commonArea) && (
+                          !commonAreaNames.includes(values.commonArea) && (
                             <MenuItem value={values.commonArea}>
                               {values.commonArea} · hiện tại
                             </MenuItem>
@@ -1016,7 +1279,13 @@ export function PropertyApiPage({
                     <MenuItem
                       key={index}
                       value={String(index)}
-                      disabled={kind === 'rooms' && (index === 1 || index === 2)}
+                      disabled={
+                        kind === 'rooms'
+                          ? index === 1 || index === 2
+                          : kind === 'assets' &&
+                            (index === 2 || index === 3) &&
+                            String(index) !== values.status
+                      }
                     >
                       {label}
                     </MenuItem>
@@ -1110,6 +1379,46 @@ export function PropertyApiPage({
             onClose={() => setInspectedAsset('')}
           />
         ))}
+      {retiringAsset && (
+        <Dialog
+          open
+          fullWidth
+          maxWidth="sm"
+          onClose={retire.isPending ? undefined : () => setRetiringAsset(null)}
+          aria-labelledby="retire-asset-title"
+        >
+          <DialogTitle id="retire-asset-title">Ngừng sử dụng {retiringAsset.name}?</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 0.5 }}>
+              <Typography variant="body2">
+                Tài sản không còn được sử dụng cho công việc mới. Dữ liệu bàn giao, sự cố và lịch sử
+                vẫn được giữ nguyên.
+              </Typography>
+              <TextField
+                required
+                label="Lý do ngừng sử dụng"
+                value={retirementReason}
+                disabled={retire.isPending}
+                onChange={(event) => setRetirementReason(event.target.value)}
+              />
+              {retire.error && <Alert severity="error">{invoiceError(retire.error)}</Alert>}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button disabled={retire.isPending} onClick={() => setRetiringAsset(null)}>
+              Hủy
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              disabled={retire.isPending || !retirementReason.trim()}
+              onClick={() => retire.mutate()}
+            >
+              Ngừng sử dụng
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
       <ConfirmDialog
         open={confirmInactive}
         title="Ngừng hoạt động cơ sở?"

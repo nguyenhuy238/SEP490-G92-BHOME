@@ -786,10 +786,18 @@ export function WorkOrderDetail({
             <Typography variant="h6">Ảnh kiểm tra và kết quả</Typography>
             <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
               {evidence.data?.map((image) => (
-                <IncidentEvidencePreview
+                <PrivateEvidenceViewer
                   key={image.id}
-                  path={`${workRoot}/${id}/evidence/${image.id}`}
-                  alt={image.kind === 'Completion' ? 'Ảnh kết quả sửa chữa' : 'Ảnh kiểm tra'}
+                  label={image.kind === 'Completion' ? 'ảnh kết quả sửa chữa' : 'ảnh kiểm tra'}
+                  filename={`sua-chua-${image.kind}-${image.id}.jpg`}
+                  contentType={image.contentType}
+                  fetchBlob={(signal) =>
+                    action.request<Blob>(
+                      `${workRoot}/${id}/evidence/${image.id}`,
+                      { signal },
+                      'blob',
+                    )
+                  }
                 />
               ))}
             </Stack>
