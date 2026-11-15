@@ -15,6 +15,7 @@ internal sealed class ContractSigningMethods(IOptions<ContractSigningOptions> op
         {
             if (mode.SimulatedSigningEnabled) return [SigningMethods.Simulated];
             var methods = new List<string>();
+            methods.Add(SigningMethods.OwnerSession);
             if (options.Value.Methods.Otp) methods.Add(SigningMethods.Otp);
             if (options.Value.Methods.ViettelMySign) methods.Add(SigningMethods.ViettelMySign);
             if (options.Value.Methods.UploadProof) methods.Add(SigningMethods.UploadProof);
@@ -31,6 +32,7 @@ internal sealed class ContractSigningRouter(IContractSigningMethods methods, ICo
     : IContractSigningProvider
 {
     internal const string OtpCredential = "BHOME-OTP";
+    internal const string OwnerSessionCredential = "BHOME-OWNER-SESSION";
     internal const string UploadCredential = "BHOME-UPLOAD-PROOF";
 
     private IContractSigningProvider Otp() => methods.IsEnabled(SigningMethods.Otp)
@@ -52,10 +54,12 @@ internal sealed class ContractSigningRouter(IContractSigningMethods methods, ICo
     private IContractSigningProvider For(ContractSignature signature) => signature.CredentialId switch
     {
         OtpCredential => Otp(),
+        OwnerSessionCredential => services.GetRequiredService<OtpContractSigningAdapter>(),
         UploadCredential => Upload(),
         _ => Certificate()
     };
     private IContractSigningProvider For(SigningAppearance appearance) =>
+        SigningMethods.IsOwnerSession(appearance.Method) ? services.GetRequiredService<OtpContractSigningAdapter>() :
         SigningMethods.IsOtp(appearance.Method) ? Otp() : SigningMethods.IsUploadProof(appearance.Method) ? Upload() : Certificate();
 
     public Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf, CancellationToken t)
@@ -67,7 +71,8 @@ internal sealed class ContractSigningRouter(IContractSigningMethods methods, ICo
     // The layout screen shows the picture and name of the method the signer will use: OTP first when it is offered.
     public Task<(bool HasPicture, string SignerName)> SignerAsync(CancellationToken t)
     {
-        if (methods.IsEnabled(SigningMethods.Otp)) return Otp().SignerAsync(t);
+        if (methods.IsEnabled(SigningMethods.OwnerSession) || methods.IsEnabled(SigningMethods.Otp))
+            return services.GetRequiredService<OtpContractSigningAdapter>().SignerAsync(t);
         if (methods.Enabled.Count == 0) return Task.FromResult((false, ""));
         return Certificate().SignerAsync(t);
     }

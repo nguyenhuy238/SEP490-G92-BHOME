@@ -12,14 +12,14 @@ internal sealed class SePayAutomationWorker(IServiceScopeFactory scopes, SePayOp
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!options.Enabled) return;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
-                await scope.ServiceProvider.GetRequiredService<SePayScheduling>().EnqueueDueAsync(stoppingToken);
-                if (!jobs.Value.Enabled && await worker.ProcessAllowedAsync(stoppingToken, ["sepay-reconcile-" + options.Mode.ToLowerInvariant(), "sepay-poll-" + options.Mode.ToLowerInvariant()])) continue;
+                if (options.Enabled) await scope.ServiceProvider.GetRequiredService<SePayScheduling>().EnqueueDueAsync(stoppingToken);
+                await scope.ServiceProvider.GetRequiredService<MainContractActivationScheduling>().EnqueueDueAsync(stoppingToken);
+                if (!jobs.Value.Enabled && await worker.ProcessAllowedAsync(stoppingToken, ["sepay-reconcile-" + options.Mode.ToLowerInvariant(), "sepay-poll-" + options.Mode.ToLowerInvariant(), MainContractActivationJob.JobName])) continue;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception error) { logger.LogWarning("SePay automation deferred with {ErrorCode}", error.GetType().Name); }

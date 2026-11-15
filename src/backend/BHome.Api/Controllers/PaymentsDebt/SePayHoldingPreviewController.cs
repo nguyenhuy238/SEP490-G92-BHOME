@@ -29,28 +29,61 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
         return (target.Host is "localhost" or "127.0.0.1" or "::1" && Regex.IsMatch(target.Database ?? "", pattern)) ||
             testScope?.AllowsExternalDatabase == true;
     }
-    private async Task<Contract> Scoped(Guid id, CancellationToken token)
+    private async Task<Contract> Scoped(Guid id, CancellationToken token, bool allowRealQrPreview = false)
     {
         if (!Available()) throw new PaymentException(404, "sandbox_unavailable");
         await contracts.GetAsync(id, token); // Existing role/location authorization, including Staff assignment.
         var c = await contractRepository.FindAsync(id, token);
-        if (c is null || c.Kind != ContractKind.Holding || !c.IsDevelopmentDemo) throw new PaymentException(404, "contract_not_found");
+        if (c is null || c.Kind != ContractKind.Holding || !c.IsDevelopmentDemo && !allowRealQrPreview) throw new PaymentException(404, "contract_not_found");
         var target = new NpgsqlConnectionStringBuilder(configuration.GetConnectionString("Database") ?? "");
-        if (target.Host is not ("localhost" or "127.0.0.1" or "::1") && testScope?.Allows(c.Room.LocationId) != true)
+        if (target.Host is not ("localhost" or "127.0.0.1" or "::1") && testScope?.Allows(c.Room.LocationId) != true &&
+            !(allowRealQrPreview && options.ReceivingAccounts.Any(a => a.LocationId == c.Room.LocationId)))
             throw new PaymentException(404, "contract_not_found");
         return c;
     }
     private async Task<HoldingSandboxState> State(Contract c, CancellationToken token)
     {
+        var previewOnly = PreviewOnly(c);
         var signs = SandboxSignatures.Read(c);
         var evidence = AnonymousContractSigningService.AcceptedEvidence(c);
         var ownerConfirmed = AnonymousContractSigningService.Complete(c) || signs.OwnerConfirmed(c);
         var tenantAccepted = evidence?.SnapshotHash == c.SnapshotHash || signs.TenantAt is not null;
         var verified = await contractRepository.DepositTotalAsync(c.Id, token);
         return new("Test", c.Id, false, signs.TenantAt is not null,
-            ownerConfirmed && tenantAccepted && c.ApprovedAt is not null, c.RequiredDeposit > 0 && verified == c.RequiredDeposit,
+            previewOnly || ownerConfirmed && tenantAccepted && c.ApprovedAt is not null, c.RequiredDeposit > 0 && verified == c.RequiredDeposit,
             c.RequiredDeposit.ToString("0", System.Globalization.CultureInfo.InvariantCulture), verified.ToString("0", System.Globalization.CultureInfo.InvariantCulture),
             c.Status == ContractStatus.Active && c.Room.Status == RoomStatus.OnHold, c.Status.ToString());
+    }
+    private static bool PreviewOnly(Contract c)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(c.DraftMetadata);
+            return json.RootElement.TryGetProperty("SandboxQrPreviewOnly", out var value) &&
+                value.GetProperty("SnapshotHash").GetString() == c.SnapshotHash &&
+                value.GetProperty("RequestedBy").GetGuid() != Guid.Empty;
+        }
+        catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException) { return false; }
+    }
+    [HttpPost("simulation/skip-signing-preview")]
+    public async Task<HoldingSandboxState> SkipSigningPreview(Guid id, SandboxPreviewInput input, CancellationToken token)
+    {
+        if (!input.PreviewOnly) throw new PaymentException(400, "sandbox_simulation_input_required");
+        var before = await Scoped(id, token);
+        return await contractRepository.InTransactionAsync(before.RoomId, async () =>
+        {
+            var c = await Scoped(id, token);
+            if (c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation) || c.HoldingExpiryAt <= clock.GetUtcNow())
+                throw new PaymentException(409, "holding_not_payable");
+            if (!PreviewOnly(c))
+            {
+                var data = System.Text.Json.Nodes.JsonNode.Parse(c.DraftMetadata)!.AsObject();
+                data["SandboxQrPreviewOnly"] = JsonSerializer.SerializeToNode(new { c.SnapshotHash, RequestedBy = actor.UserId, RequestedAt = clock.GetUtcNow() });
+                c.DraftMetadata = data.ToJsonString();
+                contractRepository.Audit(actor.UserId!.Value, "SandboxHoldingQrPreviewWithoutSigning", id, clock.GetUtcNow());
+            }
+            return await State(c, token);
+        }, token);
     }
     [HttpGet("simulation")]
     public async Task<ActionResult<HoldingSandboxState>> Simulation(Guid id, CancellationToken token)
@@ -119,11 +152,20 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
     public async Task<IActionResult> Get(Guid id, CancellationToken token)
     {
         if (!Available()) return NotFound();
-        var contract = await Scoped(id, token);
+        // QR preview alone may be used on a genuinely signed contract in an explicitly scoped Test location.
+        // All simulation/activation endpoints still require a demo contract; Test receipts cannot pay a real contract.
+        var contract = await Scoped(id, token, allowRealQrPreview: true);
+        if (!contract.IsDevelopmentDemo && contract.ApprovedAt is null)
+            throw new PaymentException(409, "holding_owner_approval_required");
+        if (!contract.IsDevelopmentDemo && (!AnonymousContractSigningService.Complete(contract) &&
+            !new[] { contract.OwnerSignerId, contract.TenantUserId }.All(signer => signer is not null &&
+                contract.Signatures.Any(s => s.SignerUserId == signer && s.Status == SignatureStatus.Signed && s.SnapshotHash == contract.SnapshotHash))))
+            throw new PaymentException(409, "verified_signature_evidence_required");
+        if (!contract.IsDevelopmentDemo && !ContractChargeSnapshot.IsIntact(contract)) throw new PaymentException(409, "signed_terms_changed");
         if (contract.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation) ||
             contract.HoldingExpiryAt is null || contract.HoldingExpiryAt <= clock.GetUtcNow())
             throw new PaymentException(409, "holding_not_payable");
-        if (actor.IsInRole(Roles.Staff) && !(await State(contract, token)).CanShowQr)
+        if (contract.IsDevelopmentDemo && actor.IsInRole(Roles.Staff) && !(await State(contract, token)).CanShowQr)
             throw new PaymentException(409, "sandbox_simulated_signatures_required");
         var binding = options.ReceivingAccounts.SingleOrDefault(x => x.LocationId == contract.Room.LocationId);
         var account = await repository.ReceivingAccountAsync(contract.Room.LocationId, token);
@@ -140,14 +182,15 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
         return Ok(new HoldingTestTransferInstructions(contract.Id, contract.Room.LocationId, "Test", contract.Status.ToString(),
             true, remaining <= 0 ? "Settled" : rendered is null ? "InstructionsOnly" : "Available",
             account.BankIdentifier, account.AccountNumber, account.AccountHolder, position.Remaining,
-            position.TransferReference, rendered?.Payload, rendered?.PngDataUri));
+            position.TransferReference, rendered?.Payload, rendered?.PngDataUri, PreviewOnly: !ContractPaymentModes.IsTest(contract)));
     }
 }
 
 public sealed record HoldingTestTransferInstructions(Guid ContractId, Guid LocationId, string Mode, string ContractStatus,
     bool SignatureRequiredForActivation, string Availability, string BankIdentifier, string AccountNumber, string AccountHolder,
-    string OutstandingAmount, string TransferReference, string? QrPayload, string? QrImageDataUri);
+    string OutstandingAmount, string TransferReference, string? QrPayload, string? QrImageDataUri, bool PreviewOnly = false);
 
 public sealed record SandboxSignatureInput(string Participant, bool SimulationOnly);
+public sealed record SandboxPreviewInput(bool PreviewOnly);
 public sealed record HoldingSandboxState(string Mode, Guid ContractId, bool OwnerSimulated, bool TenantSimulated,
     bool CanShowQr, bool DepositVerified, string Required, string Verified, bool OnHold, string ContractStatus);

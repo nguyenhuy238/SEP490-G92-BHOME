@@ -81,6 +81,7 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
     { cache: ownerSigningPolicy },
   );
   const [reviewed, setReviewed] = useState(false);
+  const [emails, setEmails] = useState<Record<string, string>>({});
   const [date, setDate] = useState(''),
     [time, setTime] = useState('');
   const [busy, setBusy] = useState(false);
@@ -106,7 +107,6 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
     !recipient.error &&
     recipientMatches &&
     recipient.data?.verificationStatus === 'Verified' &&
-    !!recipient.data.contactEmail &&
     !status.tenantAcceptedAt;
   const canConfirm =
     allowed &&
@@ -139,7 +139,17 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
     try {
       const expiresAt = invitationExpiry(date, time);
       // The backend sends email. Deliberately discard the one-time invitation token.
-      void run(() => service.invite(contract.id, contract.snapshotHash!, expiresAt));
+      void run(() =>
+        service.invite(
+          contract.id,
+          contract.snapshotHash!,
+          expiresAt,
+          emails[contract.representativeResidentId],
+          Object.entries(emails)
+            .filter(([, email]) => email.trim())
+            .map(([residentId, email]) => ({ residentId, email })),
+        ),
+      );
     } catch {
       setError('Nhập hạn lời mời trong 24 giờ tới (ngày và giờ Việt Nam).');
     }
@@ -157,6 +167,26 @@ function OwnerInternalSigning({ api, contract, onChanged }: OwnerSigningProps) {
           'Người đại diện theo hồ sơ đã xác minh'}
       </Text>
       <Text>Email trong hồ sơ hiện tại: {recipient.data?.contactEmail ?? 'Chưa tải được'}</Text>
+      {!status?.tenantAcceptedAt &&
+        (contract.occupants?.length
+          ? contract.occupants
+          : [
+              {
+                id: contract.representativeResidentId,
+                label: 'Người đại diện',
+                representative: true,
+              },
+            ]
+        ).map((person) => (
+          <Input
+            key={person.id}
+            label={`Email nhận lời mời · ${person.label}`}
+            email
+            value={emails[person.id] ?? ''}
+            onChange={(email) => setEmails((before) => ({ ...before, [person.id]: email }))}
+            disabled={busy}
+          />
+        ))}
       <Text>
         Hồ sơ đại diện:{' '}
         {recipient.data?.verificationStatus === 'Verified'

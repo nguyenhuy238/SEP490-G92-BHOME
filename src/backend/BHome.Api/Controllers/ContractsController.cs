@@ -80,7 +80,7 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<ContractId> ConvertHolding(Guid id, HoldingConversionInput x, CancellationToken t) => service.ConvertHoldingAsync(id, x, Key(), t);
     [HttpGet("{id:guid}")]
     public Task<ContractView> Get(Guid id, CancellationToken t) => service.GetAsync(id, t);
-    [HttpGet("{id:guid}/activation-readiness"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    [HttpGet("{id:guid}/activation-readiness"), Authorize(Roles = Roles.Owner + "," + Roles.Staff + "," + Roles.Tenant)]
     public Task<ActivationReadiness> Readiness(Guid id, CancellationToken t) => service.ReadinessAsync(id, t);
     [HttpPost("{id:guid}/activate"), Authorize(Roles = Roles.Owner)]
     public Task<ContractView> Activate(Guid id, CancellationToken t) => service.ActivateAsync(id, Key(), t);

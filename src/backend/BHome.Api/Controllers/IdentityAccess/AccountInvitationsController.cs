@@ -16,4 +16,7 @@ public sealed class AccountInvitationsController(IAccountInvitations invitations
     [HttpPost("api/v1/auth/accept-invitation"), AllowAnonymous]
     public async Task<IActionResult> Accept(AcceptInvitationRequest input, CancellationToken t) => await invitations.AcceptAsync(input, t)
         ? NoContent() : Problem(statusCode: 400, title: "Lời mời không khả dụng.");
+
+    [HttpPost("api/v1/auth/accept-invitation/validate"), AllowAnonymous]
+    public Task<InvitationValidationResult> Validate(InvitationValidationRequest input, CancellationToken t) => invitations.ValidateAsync(input, t);
 }

@@ -30,7 +30,7 @@ import {
 } from './onboarding';
 import { IdentityFlowFrame } from './IdentityFlowFrame';
 import { identityFieldErrors } from './identityFieldErrors';
-import { showSuccess, showWarning } from '../../lib/toast';
+import { conciseMessage, showSuccess, showWarning } from '../../lib/toast';
 import { colors as c } from '../../theme/theme';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
 
@@ -393,7 +393,7 @@ export function IdentityWizard({
     <>
       {!!error && (
         <Text accessibilityRole="alert" style={ui.red}>
-          {error}
+          {conciseMessage(error)}
         </Text>
       )}
       <Checkbox.Item

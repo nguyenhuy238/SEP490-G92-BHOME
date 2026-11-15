@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   contractError,
   type ContractClient,
@@ -25,7 +25,15 @@ export function useContractDetail(
     data: ContractDetail | null;
     error: string;
     loading: boolean;
+    client?: ContractClient;
+    role?: string;
   }>({ id: '', data: null, error: '', loading: false });
+  const cached = useRef<{
+    client: ContractClient;
+    id: string;
+    role: string;
+    data: ContractDetail;
+  } | null>(null);
   const [revision, setRevision] = useState(0);
   const [refreshError, setRefreshError] = useState('');
   const reload = useCallback(() => setRevision((v) => v + 1), []);
@@ -39,20 +47,32 @@ export function useContractDetail(
     async function load(background = false) {
       if (running || signal.aborted) return;
       running = true;
-      if (!background) setState({ id, data: null, error: '', loading: true });
+      const retainData =
+        cached.current?.client === client &&
+        cached.current.id === id &&
+        cached.current.role === role;
+      if (!background) {
+        setRefreshError('');
+        if (!retainData) setState({ id, client, role, data: null, error: '', loading: true });
+      }
       try {
         const contract = await client.get(id, signal);
         pollingEligible =
           (contract.kind === 'Holding' || contract.kind === 'Main') &&
           ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status);
         if (contract.kind === 'Main' && contract.onboardingDraft) {
-          if (!signal.aborted)
+          if (!signal.aborted) {
+            const data = { contract, moveOut: null, readiness: null, history: [] };
+            cached.current = { client, id, role, data };
             setState({
               id,
-              data: { contract, moveOut: null, readiness: null, history: [] },
+              client,
+              role,
+              data,
               error: '',
               loading: false,
             });
+          }
           return;
         }
         const moveOut =
@@ -63,8 +83,10 @@ export function useContractDetail(
                 throw e;
               });
         const financial = role === 'Owner' || role === 'Tenant';
+        const canReadReadiness = financial || (role === 'Staff' && contract.kind === 'Main');
         const [readiness, history] = await Promise.all([
-          financial && ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status)
+          canReadReadiness &&
+          ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status)
             ? client.readiness(id, signal)
             : Promise.resolve(null),
           financial && moveOut ? client.history(id, signal) : Promise.resolve([]),
@@ -72,19 +94,27 @@ export function useContractDetail(
         if (!signal.aborted) {
           setRefreshError('');
           const data = { contract, moveOut, readiness, history };
+          cached.current = { client, id, role, data };
           setState((previous) =>
             previous.id === id &&
+            previous.client === client &&
+            previous.role === role &&
             !previous.loading &&
             !previous.error &&
             JSON.stringify(previous.data) === JSON.stringify(data)
               ? previous
-              : { id, data, error: '', loading: false },
+              : { id, client, role, data, error: '', loading: false },
           );
         }
       } catch (e) {
-        if (!signal.aborted && background) setRefreshError(contractError(e));
-        if (!signal.aborted && !background)
-          setState({ id, data: null, error: contractError(e), loading: false });
+        if (!signal.aborted) {
+          const accessLost = [401, 403, 404].includes((e as { status?: number })?.status ?? 0);
+          if ((background || retainData) && !accessLost) setRefreshError(contractError(e));
+          else {
+            cached.current = null;
+            setState({ id, client, role, data: null, error: contractError(e), loading: false });
+          }
+        }
       } finally {
         running = false;
       }
@@ -101,10 +131,11 @@ export function useContractDetail(
       if (timer !== null) clearInterval(timer);
     };
   }, [client, id, role, revision, refreshIntervalMs]);
+  const currentScope = state.id === id && state.client === client && state.role === role;
   return {
-    data: state.id === id ? state.data : null,
-    error: state.id === id ? state.error : '',
-    loading: !!id && (state.id !== id || state.loading),
+    data: currentScope ? state.data : null,
+    error: currentScope ? state.error : '',
+    loading: !!id && (!currentScope || state.loading),
     reload,
     refreshError,
   };

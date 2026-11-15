@@ -12,6 +12,7 @@ public sealed class AuthenticationEmailOptions
     public int ResendCooldownSeconds { get; set; } = 60;
 
     public bool Trusted(string value, bool development) => Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        (development || !uri.IsLoopback) &&
         string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) &&
         (uri.Scheme == "https" || development && uri.Scheme == "http" && uri.IsLoopback ||
             uri.Scheme == "bhome" && uri.Host is "reset-password" or "accept-invitation" or "confirm-email" && uri.AbsolutePath is "" or "/") &&

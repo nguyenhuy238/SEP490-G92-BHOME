@@ -36,3 +36,11 @@ public sealed class ContractDepositPaymentController(PaymentService service) : C
 {
     [HttpGet] public Task<ContractDepositPosition> Get(Guid id, CancellationToken token) => service.DepositPositionAsync(id, token);
 }
+
+[ApiController, Route("api/v1/contracts/{id:guid}/deposit-payment/transfer-instructions")]
+[Authorize(Roles = Roles.Owner + "," + Roles.Staff + "," + Roles.Tenant)]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+public sealed class ContractDepositInstructionsController(ContractDepositInstructionsService service) : ControllerBase
+{
+    [HttpGet] public Task<ContractDepositInstructions> Get(Guid id, CancellationToken token) => service.GetAsync(id, token);
+}

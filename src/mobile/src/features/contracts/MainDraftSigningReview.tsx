@@ -208,7 +208,7 @@ export function MainDraftSigningReview({
           .map((person) => (
             <Text key={person.id}>Cùng ở: {person.fullName}</Text>
           ))}
-        <Text>Email hồ sơ: {signer?.contactEmail ?? 'Chưa tải được'}</Text>
+        <Text>Email được nhập khi gửi lời mời ký, chưa gắn vào tài khoản trước khi kích hoạt.</Text>
         <Heading title="Phương thức ký" />
         {signer && (
           <Text>

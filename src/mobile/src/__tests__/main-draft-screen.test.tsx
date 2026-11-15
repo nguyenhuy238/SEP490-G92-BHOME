@@ -270,7 +270,7 @@ function fill() {
     ['Ngày bắt đầu (dd/MM/yyyy)', '02/11/2026'],
     ['Ngày kết thúc (dd/MM/yyyy)', '02/11/2027'],
     ['Số điện thoại người thuê', '0000000001'],
-    ['Email người thuê *', 'tenant.synthetic@example.invalid'],
+
     ['Điều khoản bổ sung / ghi chú', 'Ghi chú giữ nguyên'],
   ])
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
@@ -300,6 +300,34 @@ it('opens a saved Owner draft for review without editing or releasing before PDF
   expect(state.request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(
     true,
   );
+});
+it('returns to identity without discarding the in-progress contract form', async () => {
+  const previous = vi.fn();
+  const cancel = vi.fn();
+  const props = {
+    roomId: 'room',
+    representativeResidentId: 'resident',
+    residentIds: ['resident'],
+    persistRoute: false,
+    onPrevious: previous,
+    onCancel: cancel,
+    onList: vi.fn(),
+  };
+  const page = render(<MainDraftScreen {...props} visible />);
+  await screen.findByText('CCCD: ********0123');
+  fill();
+  fireEvent.click(screen.getByRole('button', { name: 'Quay lại: CCCD' }));
+  expect(previous).toHaveBeenCalledOnce();
+  expect(cancel).not.toHaveBeenCalled();
+  page.rerender(<MainDraftScreen {...props} visible={false} />);
+  page.rerender(<MainDraftScreen {...props} visible />);
+  expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
+  expect(screen.getByLabelText('Ngày kết thúc (dd/MM/yyyy)')).toHaveProperty('value', '02/11/2027');
+  expect(screen.getByLabelText('Điều khoản bổ sung / ghi chú')).toHaveProperty(
+    'value',
+    'Ghi chú giữ nguyên',
+  );
+  expect(state.request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 });
 it('recovers an outdated file using the latest draft version and a new document reference', async () => {
   const original = state.request.getMockImplementation()!;
@@ -350,11 +378,9 @@ it('requires an explicit save after a configuration conflict instead of regenera
     'Cấu hình đã thay đổi. Tải lại giá và lưu nháp trước khi tạo tài liệu.',
   );
   fireEvent.click(screen.getByText('Lưu lại bản nháp'));
-  expect(screen.getByLabelText('Email người thuê *')).toBeTruthy();
+  expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
   expect(state.request.mock.calls.filter(([path]) => path.endsWith('/documents'))).toHaveLength(1);
-  expect((screen.getByLabelText('Email người thuê *') as HTMLInputElement).value).toBe(
-    'tenant.synthetic@example.invalid',
-  );
+  expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
 });
 it('shows an Owner document conflict once and clears it after one locked recovery', async () => {
   state.roles = ['Owner'];
@@ -426,30 +452,33 @@ it('moves an Owner to the current workflow if the contract is released during do
   await waitFor(() => expect(onReleased).toHaveBeenCalledWith('draft-id'));
   expect(state.request.mock.calls.filter(([path]) => path.endsWith('/documents'))).toHaveLength(1);
 });
-it('returns an already released Owner draft to its actual contract detail without regenerating it', async () => {
-  state.roles = ['Owner'];
-  const original = state.request.getMockImplementation()!;
-  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
-    const result = await original(path, init);
-    return path.endsWith('/draft-id') && !init?.method
-      ? { ...result, status: 'PendingSigning' }
-      : result;
-  });
-  const released = vi.fn();
-  render(
-    <MainDraftScreen
-      initialId="draft-id"
-      roomId="room"
-      representativeResidentId="resident"
-      residentIds={['resident']}
-      onCancel={vi.fn()}
-      onList={vi.fn()}
-      onReleased={released}
-    />,
-  );
-  await waitFor(() => expect(released).toHaveBeenCalledWith('draft-id'));
-  expect(state.request.mock.calls.some(([path]) => path.endsWith('/documents'))).toBe(false);
-});
+it.each(['Owner', 'Staff'])(
+  'returns an already released %s draft to its actual contract detail without regenerating it',
+  async (role) => {
+    state.roles = [role];
+    const original = state.request.getMockImplementation()!;
+    state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+      const result = await original(path, init);
+      return path.endsWith('/draft-id') && !init?.method
+        ? { ...result, status: 'PendingSigning' }
+        : result;
+    });
+    const released = vi.fn();
+    render(
+      <MainDraftScreen
+        initialId="draft-id"
+        roomId="room"
+        representativeResidentId="resident"
+        residentIds={['resident']}
+        onCancel={vi.fn()}
+        onList={vi.fn()}
+        onReleased={released}
+      />,
+    );
+    await waitFor(() => expect(released).toHaveBeenCalledWith('draft-id'));
+    expect(state.request.mock.calls.some(([path]) => path.endsWith('/documents'))).toBe(false);
+  },
+);
 it('previews an unchanged Owner draft without saving a new version', async () => {
   state.roles = ['Owner'];
   setup('draft-id');
@@ -504,27 +533,15 @@ it('aborts the previous resource and ignores a late document generation after th
   fireEvent.click(screen.getByText('Hiển thị trang kiểm thử'));
   expect((screen.getByText('Tiếp tục duyệt hợp đồng') as HTMLButtonElement).disabled).toBe(false);
 });
-it('validates contact email, trims the supported draft field and omits issuing-place input', async () => {
+it('saves draft without collecting or persisting a tenant email', async () => {
   setup();
   await screen.findByText('CCCD: ********0123');
   fill();
-  expect(screen.queryByLabelText(/Nơi cấp CCCD/)).toBeNull();
-  fireEvent.change(screen.getByLabelText('Email người thuê *'), {
-    target: { value: 'not an email' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
-  expect(screen.getByText('Nhập email người thuê hợp lệ.')).toBeTruthy();
-  expect(state.request.mock.calls.some((call) => call[1]?.method === 'POST')).toBe(false);
-  fireEvent.change(screen.getByLabelText('Email người thuê *'), {
-    target: { value: '  synthetic.contact@example.invalid  ' },
-  });
+  expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
   await screen.findByText('Mã hợp đồng: draft-id');
   const post = state.request.mock.calls.find((call) => call[1]?.method === 'POST')!;
-  expect(JSON.parse(post[1].body)).toMatchObject({
-    tenantEmail: 'synthetic.contact@example.invalid',
-    tenantPlaceOfIssue: '',
-  });
+  expect(JSON.parse(post[1].body)).toMatchObject({ tenantEmail: null, tenantPlaceOfIssue: '' });
   expect(state.request.mock.calls.some((call) => call[0].includes('/invitation'))).toBe(false);
 });
 it('shows one configuration notice and blocks save/preview when the server requires configuration', async () => {
@@ -571,17 +588,13 @@ it('prefills only the authorized representative contact, keeping email when retu
       : original(path, init),
   );
   setup();
-  const email = await screen.findByLabelText('Email người thuê *');
-  await waitFor(() =>
-    expect((email as HTMLInputElement).value).toBe('representative@example.invalid'),
-  );
+  await screen.findByText('CCCD: ********0123');
+  expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
   fill();
   fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
   await screen.findByText('Bản hợp đồng PDF');
   fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa thông tin' }));
-  expect((screen.getByLabelText('Email người thuê *') as HTMLInputElement).value).toBe(
-    'tenant.synthetic@example.invalid',
-  );
+  expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
 });
 it('loads authoritative read-only identity and validates editable fields without posting invalid data', async () => {
   setup();
@@ -794,14 +807,14 @@ it('keeps the same saved draft and entered contact data when returning from sign
   setup();
   await screen.findByText('CCCD: ********0123');
   fill();
-  const email = (screen.getByLabelText('Email người thuê *') as HTMLInputElement).value;
+
   fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
   await screen.findByText('Bản hợp đồng PDF');
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục ký hợp đồng' }));
   await screen.findByText('Chờ Chủ cơ sở duyệt để ký');
   fireEvent.click(screen.getByRole('button', { name: 'Xem hợp đồng' }));
   fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa thông tin' }));
-  expect((screen.getByLabelText('Email người thuê *') as HTMLInputElement).value).toBe(email);
+  expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
   expect(screen.getByText('Mã hợp đồng: draft-id')).toBeTruthy();
   expect(
     state.request.mock.calls.filter(

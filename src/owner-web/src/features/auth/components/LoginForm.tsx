@@ -152,6 +152,7 @@ export function LoginForm({ busy, error, onLogin, onForgotPassword }: LoginFormP
                       type="button"
                       aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                       aria-pressed={visible}
+                      onMouseDown={(event) => event.preventDefault()}
                       onClick={() => setVisible(!visible)}
                     >
                       {visible ? (

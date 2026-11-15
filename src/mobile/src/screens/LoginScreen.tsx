@@ -123,6 +123,7 @@ export function LoginScreen() {
               right={
                 <TextInput.Icon
                   icon={visible ? 'eye-off-outline' : 'eye-outline'}
+                  accessibilityLabel={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                   onPress={() => setVisible(!visible)}
                 />
               }

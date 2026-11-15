@@ -18,6 +18,26 @@ const state = vi.hoisted(() => ({
   failConfirm: false,
   serial: 0,
 }));
+vi.mock('../features/contracts/MainDraftScreen', () => ({
+  MainDraftScreen: (props: {
+    visible: boolean;
+    roomId: string;
+    residentIds: string[];
+    onPrevious: () => void;
+    onReleased: (id: string) => void;
+    onList: () => void;
+  }) =>
+    props.visible ? (
+      <div role="dialog" aria-label="Contract preparation">
+        <span>
+          Room: {props.roomId}; Residents: {props.residentIds.join(',')}
+        </span>
+        <button onClick={props.onPrevious}>Previous identity step</button>
+        <button onClick={() => props.onReleased('released-contract')}>Web released contract</button>
+        <button onClick={props.onList}>Contract list</button>
+      </div>
+    ) : null,
+}));
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
   useFocusEffect: (cb: () => () => void) => useEffect(cb, [cb]),
@@ -273,6 +293,7 @@ vi.mock('../features/onboarding/useCaptureScope', () => ({
         ? [
             { id: 'room', label: '101', status: 'Available' },
             { id: 'occupied', label: '102', status: 'Occupied' },
+            { id: 'full', label: '105', status: 'Occupied', capacity: 2, remainingCapacity: 0 },
             { id: 'held', label: '103', status: 'OnHold' },
             { id: 'unavailable', label: '104', status: 'Unavailable' },
           ]
@@ -292,6 +313,16 @@ import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { MobileApiError } from '../lib/api';
 import { ContractProgress, signerState } from '../features/contracts/ContractProgress';
 import type { ContractView, Signature } from '../../../../packages/client-core/src/contracts';
+it('blocks a full room immediately at selection while allowing another room', () => {
+  render(<OnboardingScreen />);
+  const room = screen.getByRole('combobox', { name: 'Phòng *' });
+  fireEvent.change(room, { target: { value: 'full' } });
+  expect(screen.getByRole('alert').textContent).toContain('Phòng đã đủ người');
+  expect(screen.getByRole('button', { name: 'Tiếp tục' })).toHaveProperty('disabled', true);
+  fireEvent.change(room, { target: { value: 'occupied' } });
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Tiếp tục' })).toHaveProperty('disabled', false);
+});
 it('shows empty and occupied rooms together without a reception-type selector', () => {
   render(<OnboardingScreen />);
   expect(screen.queryByRole('combobox', { name: 'Nhu cầu tiếp nhận' })).toBeNull();
@@ -334,117 +365,25 @@ function selectRoom() {
 }
 function namePerson(label: string) {
   fireEvent.change(screen.getByLabelText('Tên gọi hồ sơ'), { target: { value: label } });
-  fireEvent.change(screen.getByLabelText('Email người ở'), {
-    target: {
-      value:
-        Array.from(label)
-          .map((c) => c.codePointAt(0)!.toString(16))
-          .join('') + '@example.invalid',
-    },
-  });
 }
-function startEmailConflict(entry: 'Nhập thủ công' | 'Bắt đầu quét CCCD' = 'Nhập thủ công') {
-  render(<OnboardingScreen />);
-  selectRoom();
-  namePerson('Synthetic occupant');
-  fireEvent.change(screen.getByLabelText('Email người ở'), {
-    target: { value: 'synthetic@example.invalid' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
-  state.json.mockRejectedValueOnce(new MobileApiError(409, 'resident_email_already_associated'));
-  fireEvent.click(screen.getByRole('button', { name: entry }));
-}
-it.each([0, 1])(
-  'offers an explicit existing profile link without confirming or recreating it (status %i)',
-  async (verificationStatus) => {
-    state.request.mockResolvedValueOnce([
-      {
-        id: 'existing',
-        roomId: 'room',
-        email: 'SYNTHETIC@example.invalid',
-        displayLabel: 'Existing synthetic occupant',
-        residentType: 0,
-        verificationStatus,
-      },
-    ]);
-    startEmailConflict();
-    const open = await screen.findByRole('button', { name: 'Mở hồ sơ đã có tại phòng này' });
-    expect(await screen.findByRole('alert')).toHaveProperty(
-      'textContent',
-      expect.stringContaining('Email này đã gắn với một hồ sơ người ở'),
-    );
-    expect(state.request).toHaveBeenCalledWith('/api/v1/capture/locations/location/residents', {
-      signal: undefined,
-    });
-    expect(state.json).toHaveBeenCalledOnce();
-    expect(state.image).not.toHaveBeenCalled();
-    expect(state.go).not.toHaveBeenCalled();
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
-      'disabled',
-      true,
-    );
-    fireEvent.click(open);
-    expect(state.go).toHaveBeenCalledWith('onboarding', {
-      residentId: 'existing',
-      locationId: 'location',
-    });
-  },
-);
 it.each(['Nhập thủ công', 'Bắt đầu quét CCCD'] as const)(
-  'lets Staff correct a conflicting email then open %s',
+  'creates an identity through %s without collecting email or reserving an account',
   async (entry) => {
-    startEmailConflict(entry);
-    fireEvent.click(await screen.findByRole('button', { name: 'Sửa email người ở' }));
-    expect(screen.getByLabelText('Tên gọi hồ sơ')).toHaveProperty('value', 'Synthetic occupant');
-    fireEvent.change(screen.getByLabelText('Email người ở'), {
-      target: { value: 'new@example.invalid' },
-    });
+    render(<OnboardingScreen />);
+    selectRoom();
+    namePerson('Synthetic deferred occupant');
+    expect(screen.queryByLabelText('Email người ở')).toBeNull();
+    expect(state.json).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
     fireEvent.click(screen.getByRole('button', { name: entry }));
     await screen.findByRole('dialog');
-    expect(state.json).toHaveBeenCalledTimes(2);
-    expect(state.json.mock.calls[1][1]).toMatchObject({
-      roomId: 'room',
-      email: 'new@example.invalid',
-    });
-    expect(screen.queryByText('Kiểm tra hồ sơ đã có')).toBeNull();
-  },
-);
-it.each(['another-room', 'another-email', 'not-visible', 'lookup-failed'])(
-  'does not resolve an existing identity from an unsuitable scoped match (%s)',
-  async (scenario) => {
-    if (scenario === 'lookup-failed') state.request.mockRejectedValueOnce(new MobileApiError(403));
-    else
-      state.request.mockResolvedValueOnce(
-        scenario === 'not-visible'
-          ? []
-          : [
-              {
-                id: 'unrelated',
-                roomId: scenario === 'another-room' ? 'other' : 'room',
-                email:
-                  scenario === 'another-email'
-                    ? 'other@example.invalid'
-                    : 'synthetic@example.invalid',
-              },
-            ],
-      );
-    startEmailConflict();
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Kiểm tra danh sách người ở' })).toHaveProperty(
-        'disabled',
-        false,
-      ),
-    );
-    expect(screen.queryByRole('button', { name: 'Mở hồ sơ đã có tại phòng này' })).toBeNull();
-    expect(screen.queryByRole('dialog')).toBeNull();
     expect(state.json).toHaveBeenCalledOnce();
-    expect(state.go).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' })).toHaveProperty(
-      'disabled',
-      true,
-    );
+    expect(state.json.mock.calls[0][1]).toMatchObject({
+      roomId: 'room',
+      displayLabel: 'Synthetic deferred occupant',
+    });
+    expect(state.json.mock.calls[0][1]).not.toHaveProperty('email');
+    expect(state.request.mock.calls.some(([path]) => path.includes('/residents'))).toBe(false);
   },
 );
 it('opens manual identity on Web without mounting the unsupported native screen-capture hook', async () => {
@@ -626,11 +565,12 @@ it('allows manual confirmation after OCR failure and completes only after the se
   expect(screen.queryByRole('button', { name: 'Hoàn tất tiếp nhận' })).toBeNull();
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
-  expect(state.go).toHaveBeenCalledWith('prepare-contract', {
-    roomId: 'room',
-    representativeResidentId: 'resident-1',
-    residentIds: '["resident-1"]',
-  });
+  expect(screen.getByRole('dialog', { name: 'Contract preparation' })).toBeTruthy();
+  expect(screen.getByText('Room: room; Residents: resident-1')).toBeTruthy();
+  expect(state.go).not.toHaveBeenCalledWith('prepare-contract', expect.anything());
+  fireEvent.click(screen.getByText('Previous identity step'));
+  expect(screen.queryByRole('dialog', { name: 'Contract preparation' })).toBeNull();
+  expect(screen.getByText('Đã xác nhận 1/1 người ở')).toBeTruthy();
 });
 it('does not blindly create another Resident after a timeout with an unknown save result', async () => {
   render(<OnboardingScreen />);
@@ -644,6 +584,26 @@ it('does not blindly create another Resident after a timeout with an unknown sav
   expect(state.json).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('dialog')).toBeNull();
 });
+it.each(['Web released contract', 'Contract list'])(
+  'keeps Staff on authorized contract routes after %s',
+  async (action) => {
+    render(<OnboardingScreen />);
+    selectRoom();
+    namePerson('Synthetic contract applicant');
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+    await openIdentity();
+    manualIdentity();
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
+    await screen.findByText('Đã xác nhận 1/1 người ở');
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
+    fireEvent.click(screen.getByRole('button', { name: action }));
+    if (action === 'Web released contract')
+      expect(state.go).toHaveBeenCalledWith('signing', { contractId: 'released-contract' });
+    else expect(state.go).toHaveBeenCalledWith('signing');
+    expect(state.go.mock.calls.some(([destination]) => destination === 'contract')).toBe(false);
+  },
+);
 async function submitAlreadyConfirmed() {
   render(<OnboardingScreen />);
   selectRoom();
@@ -679,11 +639,12 @@ it('recovers identity_already_confirmed only after explicit use of the same serv
     false,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }));
-  expect(state.go).toHaveBeenCalledWith('prepare-contract', {
-    roomId: 'room',
-    representativeResidentId: 'resident-1',
-    residentIds: '["resident-1"]',
-  });
+  expect(screen.getByRole('dialog', { name: 'Contract preparation' })).toBeTruthy();
+  expect(screen.getByText('Room: room; Residents: resident-1')).toBeTruthy();
+  expect(state.go).not.toHaveBeenCalledWith('prepare-contract', expect.anything());
+  fireEvent.click(screen.getByText('Previous identity step'));
+  expect(screen.queryByRole('dialog', { name: 'Contract preparation' })).toBeNull();
+  expect(screen.getByText('Đã xác nhận 1/1 người ở')).toBeTruthy();
 });
 it.each(['wrong-id', 'wrong-room', 'pending', 'rejected', 'forbidden'])(
   'keeps identity recovery blocked when the scoped lookup is unsuitable (%s)',
@@ -1124,7 +1085,7 @@ it('keeps a one-sided contract at signing and never presents it as active or pai
   } as ContractView;
   render(<ContractProgress contract={contract} readiness={null} />);
   expect(screen.getByText('Đang chờ khách thuê ký')).toBeTruthy();
-  expect(screen.getByText('Bước 2/4 · Ký hợp đồng')).toBeTruthy();
+  expect(screen.getByText('Bước 6/8')).toBeTruthy();
   expect(screen.queryByText('Hợp đồng đã được kích hoạt.')).toBeNull();
   expect(screen.queryByText('Tiền cọc đã được đối chiếu đầy đủ.')).toBeNull();
 });
@@ -1141,7 +1102,7 @@ it('moves the display to payment only after both verified signatures without act
     tenantUserId: 'tenant',
   } as ContractView;
   render(<ContractProgress contract={contract} readiness={null} />);
-  expect(screen.getByText('Bước 3/4 · Tạo mã QR')).toBeTruthy();
+  expect(screen.getByText('Bước 7/8')).toBeTruthy();
   expect(screen.getByText('Chưa có thông tin đối chiếu tiền cọc.')).toBeTruthy();
   expect(screen.queryByText('Hợp đồng đã được kích hoạt.')).toBeNull();
 });

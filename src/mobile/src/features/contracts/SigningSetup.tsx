@@ -244,7 +244,13 @@ export function SignaturePlacementField({
 
 // "Ảnh chữ ký": shown above "Ký bởi / Ngày ký" in the signer's box. On mobile it is generated from the signer's
 // name; a scanned PNG can be uploaded from the Owner portal.
-export function SignatureImageSection({ signing }: { signing: SigningClient }) {
+export function SignatureImageSection({
+  signing,
+  onChanged,
+}: {
+  signing: SigningClient;
+  onChanged?: () => void;
+}) {
   const [revision, setRevision] = useState(0);
   const view = useLoad<SignatureImageView>('picture:' + revision, (signal) =>
     signing.image(signal),
@@ -264,6 +270,7 @@ export function SignatureImageSection({ signing }: { signing: SigningClient }) {
     setNotice('');
     try {
       await work();
+      onChanged?.();
       setNotice(message);
     } catch (e) {
       setError(signingError(e));
@@ -276,7 +283,8 @@ export function SignatureImageSection({ signing }: { signing: SigningClient }) {
     <Box>
       <Text variant="titleSmall">Ảnh chữ ký của bạn</Text>
       <Text variant="bodySmall">
-        Ảnh chỉ để hiển thị trong ô ký; giá trị pháp lý nằm ở chữ ký số MySign.
+        Ảnh hiển thị trong ô ký. Xác thực được thực hiện bằng phương thức ký đã chọn; ảnh không phải
+        chứng thư số CA.
       </Text>
       {view.loading && <Text>Đang tải ảnh chữ ký…</Text>}
       {!!view.error && <Text style={ui.red}>{view.error}</Text>}
@@ -294,6 +302,27 @@ export function SignatureImageSection({ signing }: { signing: SigningClient }) {
         />
       )}
       <Input label="Họ tên để tạo ảnh chữ ký" value={name} onChange={setName} disabled={busy} />
+      <Action
+        disabled={busy}
+        onPress={() =>
+          void run(async () => {
+            const picker = await import('expo-document-picker');
+            const result = await picker.getDocumentAsync({
+              type: 'image/png',
+              copyToCacheDirectory: true,
+              multiple: false,
+            });
+            if (result.canceled || !result.assets.length) return;
+            const asset = result.assets[0];
+            const bytes = asset.file
+              ? new Uint8Array(await asset.file.arrayBuffer())
+              : await new (await import('expo-file-system')).File(asset.uri).bytes();
+            await signing.uploadImage(bytes as unknown as BodyInit);
+          }, 'Đã tải ảnh chữ ký.')
+        }
+      >
+        Tải ảnh chữ ký PNG
+      </Action>
       <Action
         disabled={busy || name.trim().length < 2 || name.trim().length > 60}
         onPress={() => void run(() => signing.generateImage(name), 'Đã tạo ảnh chữ ký từ họ tên.')}

@@ -4,7 +4,7 @@ export const holdingSteps = [
   { key: 'identity', label: 'CCCD' },
   { key: 'confirm', label: 'Xác nhận' },
   { key: 'draft', label: 'Bản nháp & phê duyệt' },
-  { key: 'signing', label: 'Chờ ký' },
-  { key: 'deposit', label: 'QR & tiền cọc' },
-  { key: 'activation', label: 'Giữ chỗ' },
+  { key: 'signing', label: 'Ký hợp đồng' },
+  { key: 'deposit', label: 'QR chuyển khoản' },
+  { key: 'activation', label: 'Cọc & giữ chỗ' },
 ] as const;

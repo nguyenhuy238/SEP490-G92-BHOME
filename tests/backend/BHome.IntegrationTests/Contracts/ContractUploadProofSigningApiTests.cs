@@ -21,11 +21,16 @@ namespace BHome.IntegrationTests.Contracts;
 // Expected behaviour: agreed 09/11/2026 + BHOME_OTP_Signing_Plan.md §7 (SRS v1.3 UC-15, DBR-03).
 public sealed partial class ContractLifecycleApiTests
 {
-    [Fact]
-    public async Task OwnerUploadsAMySignSignedPdfThenTenantSignsWithOtpAndBothSignaturesStayValid()
+    [Theory, InlineData(false), InlineData(true)]
+    public async Task OwnerUploadsAMySignSignedPdfThenTenantSignsWithOtpAndBothSignaturesStayValid(bool holding = false)
     {
+        if (await RunHoldingSigningOnNativeSchemaAsync(holding, tests => tests.OwnerUploadsAMySignSignedPdfThenTenantSignsWithOtpAndBothSignaturesStayValid(true))) return;
         var w = await Setup();
-        var id = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts", Input(w)))).Id;
+        if (holding) await PrepareHoldingSigningRate(w.Room, w.Location);
+        var id = holding
+            ? (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", new HoldingDraftInput(w.Room, w.Owner.Id, w.Tenant.Id, w.Resident, [w.Resident], Today, Today.AddYears(1), DateTimeOffset.UtcNow.AddDays(2), 1000000, "Synthetic Holding signing terms", 1)))).Id
+            : (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts", Input(w)))).Id;
+        if (holding) await Success<ContractView>(await Post(w.Owner, Path(id, "holding-approval"), new HoldingDecisionInput("Owner reviewed")));
         var email = new CapturedEmail();
         await using var host = fixture.Factory.WithWebHostBuilder(b =>
         {
@@ -53,7 +58,7 @@ public sealed partial class ContractLifecycleApiTests
         var tenant = As(w.Tenant);
 
         // Owner is offered UPLOAD_PROOF by default; the Tenant is not offered it at all.
-        Assert.Equal(SigningMethods.UploadProof, (await owner.Client.GetFromJsonAsync<SigningMethodsView>("/api/v1/contracts/signing-methods"))!.Default);
+        Assert.Equal(SigningMethods.OwnerSession, (await owner.Client.GetFromJsonAsync<SigningMethodsView>("/api/v1/contracts/signing-methods"))!.Default);
         var tenantMethods = (await tenant.Client.GetFromJsonAsync<SigningMethodsView>("/api/v1/contracts/signing-methods"))!;
         Assert.DoesNotContain(SigningMethods.UploadProof, tenantMethods.Methods);
         Assert.Equal(SigningMethods.Otp, tenantMethods.Default);
@@ -98,8 +103,11 @@ public sealed partial class ContractLifecycleApiTests
         var done = await Success<ContractView>(await Post(tenant, Path(id, "signing/otp/confirm"), new SigningOtpConfirmation(code), Guid.NewGuid()));
         Assert.Equal("PendingActivation", done.Status);
 
-        await Deposit(w, id);
-        await Success<ContractView>(await Post(w.Owner, Path(id, "activate")));
+        if (!holding)
+        {
+            await Deposit(w, id);
+            await Success<ContractView>(await Post(w.Owner, Path(id, "activate")));
+        }
         using var final = new PdfDocument(new PdfReader(new MemoryStream(await tenant.Client.GetByteArrayAsync(Path(id, "document")))));
         var signatures = new SignatureUtil(final);
         var names = signatures.GetSignatureNames();

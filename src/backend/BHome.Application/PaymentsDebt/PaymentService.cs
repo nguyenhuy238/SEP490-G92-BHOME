@@ -151,9 +151,12 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             }
             var invoice = await Invoice(x.InvoiceId, t);
             if (invoice.Status != InvoiceStatus.Final) throw new PaymentException(409, "final_invoice_required");
-            if (transfer.VerificationSource is "SePayTest" or "SePayLive" &&
-                (await repository.HoldingAsync(invoice.RepresentativeContractId, t))?.IsDevelopmentDemo != transfer.IsDevelopmentDemo)
-                throw new PaymentException(409, "sepay_environment_mismatch");
+            if (transfer.VerificationSource is "SePayTest" or "SePayLive")
+            {
+                var paymentContract = await repository.HoldingAsync(invoice.RepresentativeContractId, t);
+                if (paymentContract is null || BHome.Application.Contracts.ContractPaymentModes.IsTest(paymentContract) != transfer.IsDevelopmentDemo)
+                    throw new PaymentException(409, "sepay_environment_mismatch");
+            }
             var latest = await repository.LatestReviewAsync(transferId, t);
             if (latest?.Decision is "ExcessRefundPending" or "ExcessRefundCompleted") throw new PaymentException(409, "receipt_excess_already_confirmed");
             if (latest?.Decision == "Rejected") throw new PaymentException(409, "bank_transfer_rejected");

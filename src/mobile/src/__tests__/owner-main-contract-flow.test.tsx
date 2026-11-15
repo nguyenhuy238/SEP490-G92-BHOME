@@ -154,11 +154,12 @@ it('refreshes parent evidence after internal actions and does not fall back from
   expect(screen.queryByText('Yêu cầu ký MySign')).toBeNull();
   expect(screen.queryByText('Chấp thuận nội bộ')).toBeNull();
 });
-it('does not complete a step just by visiting it or enable activation with missing signatures/deposit', () => {
+it('does not complete a step just by visiting it or offer manual activation with missing signatures/deposit', () => {
   mount();
   fireEvent.click(screen.getByText('Xem tiền cọc'));
   fireEvent.click(screen.getByText('Kiểm tra kích hoạt'));
-  expect((screen.getByText('Kích hoạt hợp đồng') as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
+  expect(screen.queryByText('Máy chủ đã xác nhận hợp đồng đang hiệu lực')).toBeNull();
   expect(screen.getByRole('status').textContent).not.toContain('sign');
   expect(screen.getByRole('status').textContent).not.toContain('payment');
 });
@@ -171,9 +172,10 @@ it('uses explicit internal signing mode, shows each party separately and still r
   expect(screen.getByText('Owner: Chờ xác nhận ký')).toBeTruthy();
   fireEvent.click(screen.getByText('Xem tiền cọc'));
   fireEvent.click(screen.getByText('Kiểm tra kích hoạt'));
-  expect((screen.getByText('Kích hoạt hợp đồng') as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
+  expect(screen.queryByText('Máy chủ đã xác nhận hợp đồng đang hiệu lực')).toBeNull();
 });
-it('enables activation only from server readiness and does not synthesize a QR', () => {
+it('waits for backend activation despite readiness and does not synthesize a QR', () => {
   const contract = {
     ...c,
     status: 'PendingActivation',
@@ -183,7 +185,9 @@ it('enables activation only from server readiness and does not synthesize a QR',
     ],
   } as ContractView;
   mount(contract, readiness(true));
-  expect((screen.getByText('Kích hoạt hợp đồng') as HTMLButtonElement).disabled).toBe(false);
+  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
+  expect(screen.queryByText('Máy chủ đã xác nhận hợp đồng đang hiệu lực')).toBeNull();
+  expect(state.changed).not.toHaveBeenCalled();
   fireEvent.click(screen.getByText('Bước trước'));
   expect(screen.getByText(/Tiền cọc được cập nhật sau khi giao dịch được xác minh/)).toBeTruthy();
   expect(screen.queryByText('Xác minh cọc ngân hàng')).toBeNull();
@@ -200,5 +204,23 @@ it('keeps activation blocked even when local signature/deposit indicators are co
   } as ContractView;
   const r = { ...readiness(true), ready: false, blockers: ['room_contract_conflict'] };
   mount(contract, r);
-  expect((screen.getByText('Kích hoạt hợp đồng') as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
+  expect(screen.getByText('Phòng có hợp đồng đang xung đột.')).toBeTruthy();
+  expect(screen.queryByText('Máy chủ đã xác nhận hợp đồng đang hiệu lực')).toBeNull();
+});
+it('reflects Active only after the backend updates the contract, without a manual activation request', () => {
+  const view = mount({ ...c, status: 'PendingActivation' }, readiness(true));
+  expect(screen.queryByText('Máy chủ đã xác nhận hợp đồng đang hiệu lực')).toBeNull();
+  view.rerender(
+    <OwnerMainContractFlow
+      api={{ transport: state.request } as never}
+      contract={{ ...c, status: 'Active' }}
+      readiness={readiness(true)}
+      actorId="owner"
+      onChanged={state.changed}
+    />,
+  );
+  expect(screen.getByText('Máy chủ đã xác nhận hợp đồng đang hiệu lực')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
+  expect(state.request).not.toHaveBeenCalled();
 });

@@ -36,9 +36,12 @@ it('keeps token in request body and requires OTP before exposing exact PDF and a
   URL.revokeObjectURL = vi.fn();
   render(<AnonymousSigningPage />);
   await screen.findByText(/s\*\*\*@example.invalid/);
+  expect(screen.getByText(/Email nhận OTP:/)).toBeInTheDocument();
+  expect(screen.getByText(/Nhập mã OTP 6 chữ số trong email mời ký/)).toBeInTheDocument();
+  expect(fetch.mock.calls.some(([path]) => path.endsWith('/otp'))).toBe(false);
   expect(window.location.hash).toBe('');
   expect(screen.queryByTitle('PDF hợp đồng cần chấp thuận')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi mã OTP' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi lại mã OTP' }));
   await screen.findByText(/Đã yêu cầu gửi/);
   fireEvent.change(screen.getByLabelText('Mã OTP 6 chữ số'), { target: { value: '123456' } });
   fireEvent.click(screen.getByRole('button', { name: 'Xác minh và xem hợp đồng' }));
@@ -67,7 +70,7 @@ it('does not claim delivery when email is unavailable', async () => {
   );
   render(<AnonymousSigningPage />);
   await screen.findByText(/s\*\*\*@example.invalid/);
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi mã OTP' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi lại mã OTP' }));
   expect(await screen.findByText(/Chưa cấu hình dịch vụ gửi mã/)).toBeInTheDocument();
   expect(screen.queryByText(/Đã yêu cầu gửi/)).not.toBeInTheDocument();
 });

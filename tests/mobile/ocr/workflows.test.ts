@@ -136,7 +136,6 @@ describe('onboarding API adapter', () => {
       roomId: 'synthetic-room',
       displayLabel: 'Workspace label',
       residentType: 1,
-      email: 'occupant@example.invalid',
     });
     expect(init!.credentials).toBe('omit');
     expect(new Headers(init!.headers).get('Authorization')).toBe('Bearer synthetic-token');

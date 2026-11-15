@@ -14,6 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Apartment, LockOutlined, Visibility, VisibilityOff } from '@mui/icons-material';
+import { PasswordField } from '../components/PasswordField';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import { readAuthenticationFragment } from '../../../../../../packages/client-core/src/authLinks';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
@@ -182,6 +183,7 @@ export default function ResetPasswordPage() {
                           size="small"
                           type="button"
                           aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                          onMouseDown={(event) => event.preventDefault()}
                           onClick={() => setVisible(!visible)}
                         >
                           {visible ? (
@@ -195,16 +197,14 @@ export default function ResetPasswordPage() {
                   },
                 }}
               />
-              <TextField
+              <PasswordField
                 fullWidth
                 required
                 disabled={busy}
                 label="Xác nhận mật khẩu mới"
-                type={visible ? 'text' : 'password'}
                 autoComplete="new-password"
                 value={confirmation}
                 onChange={(event) => setConfirmation(event.target.value)}
-                slotProps={{ htmlInput: { maxLength: 1024 } }}
               />
               <Button
                 fullWidth

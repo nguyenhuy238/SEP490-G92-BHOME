@@ -24,6 +24,10 @@ internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext d
         var ids = contract.Residents.Select(r => r.ResidentId).ToArray();
         var residents = await db.Set<Resident>().Where(r => ids.Contains(r.Id) && r.RoomId == contract.RoomId && r.OwnerUserId == ownerId).ToArrayAsync(t);
         if (residents.Length != ids.Length) throw ContractException.Conflict("contract_residents_changed");
+        var evidence = AnonymousContractSigningService.AcceptedEvidence(contract);
+        var invitation = evidence is null ? null : await db.Set<ContractSigningInvitation>()
+            .SingleOrDefaultAsync(i => i.Id == evidence.InvitationId && i.ContractId == contract.Id && i.AcceptedAt != null, t);
+        var contacts = SigningContacts.Read(invitation);
         foreach (var resident in residents)
         {
             ApplicationUser account;
@@ -39,7 +43,7 @@ internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext d
             }
             else
             {
-                var email = resident.ContactEmail?.Trim().ToLowerInvariant();
+                var email = (contacts.TryGetValue(resident.Id, out var pendingEmail) ? pendingEmail : resident.ContactEmail)?.Trim().ToLowerInvariant();
                 if (email is null || email.Length > 256 || !new EmailAddressAttribute().IsValid(email)) throw ContractException.Conflict("resident_email_required");
                 if (await users.FindByEmailAsync(email) is not null) throw ContractException.Conflict("email_requires_explicit_account_link");
                 account = new ApplicationUser
@@ -62,6 +66,7 @@ internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext d
                 // before assigning its foreign keys; the enclosing activation transaction is still uncommitted.
                 await db.SaveChangesAsync(t);
                 resident.TenantUserId = account.Id;
+                resident.ContactEmail = email;
             }
             if (resident.Id == contract.RepresentativeResidentId) contract.TenantUserId = account.Id;
             if (!account.EmailConfirmed)
