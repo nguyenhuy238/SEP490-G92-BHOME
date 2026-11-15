@@ -1,15 +1,20 @@
 import { MoneyField } from '../../components/common/MoneyField';
-import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useRef, useState } from 'react';
+import { Link as RouterLink, useSearchParams } from 'react-router';
 import {
   Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Checkbox,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Drawer,
   FormControlLabel,
   LinearProgress,
   MenuItem,
@@ -18,6 +23,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { ChevronDown, X } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
@@ -31,6 +37,7 @@ import {
 import { formatContractMoney, vnd } from '../../../../../packages/client-core/src/contracts';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { PageHeader, FilterToolbar, StatusChip } from '../../components/common/PortalUI';
+import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
 import { OwnerTable, OwnerPagination } from '../../components/common/OwnerWorkspace';
 import { useAdjustmentApi } from './useAdjustmentApi';
 import { isMockMode } from '../../services/config';
@@ -39,9 +46,23 @@ export default function AdjustmentsPage() {
   const [params] = useSearchParams();
   return (
     <>
-      <PageHeader title="Điều chỉnh hóa đơn" />
+      <PageHeader
+        title="Điều chỉnh hóa đơn"
+        subtitle="Lọc yêu cầu cần xử lý, xem bằng chứng và số dư trước khi quyết định."
+      />
       {isMockMode ? (
-        <Alert severity="info">Bật chế độ API để sử dụng luồng điều chỉnh hóa đơn.</Alert>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          sx={{ gap: 1.5, alignItems: { sm: 'center' } }}
+        >
+          <Alert severity="info" sx={{ flex: 1 }}>
+            Chưa có yêu cầu điều chỉnh thực tế trong chế độ demo. Việc duyệt hoặc từ chối yêu cầu
+            chỉ thực hiện khi kết nối API.
+          </Alert>
+          <Button component={RouterLink} to="/invoices" variant="outlined" sx={{ flexShrink: 0 }}>
+            Xem danh sách hóa đơn demo
+          </Button>
+        </Stack>
       ) : (
         <OwnerAdjustmentList
           invoiceId={params.get('invoiceId') ?? ''}
@@ -64,9 +85,10 @@ export function OwnerAdjustmentList({
   const [location, setLocation] = useState(''),
     [room, setRoom] = useState(''),
     [invoice, setInvoice] = useState(invoiceId),
-    [status, setStatus] = useState(''),
+    [status, setStatus] = useState('Pending'),
     [page, setPage] = useState(1),
     [selected, setSelected] = useState(requestId);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const filter = { page, locationId: location, roomId: room, invoiceId: invoice, status };
   const list = useQuery({
     queryKey: ['adjustments', actor, filter],
@@ -87,68 +109,116 @@ export function OwnerAdjustmentList({
   });
   return (
     <Stack spacing={2}>
-      <FilterToolbar>
-        <TextField
-          select
-          label="Cơ sở điều chỉnh"
-          value={location}
-          onChange={(e) => {
-            setLocation(e.target.value);
-            setRoom('');
-            setPage(1);
-          }}
+      <Box component="section" aria-label="Lọc yêu cầu điều chỉnh" sx={{ minWidth: 0 }}>
+        <Stack
+          direction="row"
+          useFlexGap
+          sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}
         >
-          <MenuItem value="">Tất cả cơ sở</MenuItem>
-          {locations.data?.map((x) => (
-            <MenuItem key={x.id} value={x.id}>
-              {x.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Phòng điều chỉnh"
-          value={room}
-          disabled={!location}
-          onChange={(e) => {
-            setRoom(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả phòng</MenuItem>
-          {rooms.data?.map((x) => (
-            <MenuItem key={x.id} value={x.id}>
-              {x.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        {!invoiceId && (
-          <TextField
-            label="Lọc theo mã hóa đơn"
-            value={invoice}
-            onChange={(e) => {
-              setInvoice(e.target.value);
-              setPage(1);
-            }}
-          />
-        )}
-        <TextField
-          select
-          label="Trạng thái yêu cầu"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-        >
-          <MenuItem value="">Tất cả trạng thái</MenuItem>
-          {['Pending', 'Approved', 'Rejected'].map((x) => (
-            <MenuItem key={x} value={x}>
-              {adjustmentStatus(x)}
-            </MenuItem>
-          ))}
-        </TextField>
-      </FilterToolbar>
+          <Stack direction="row" useFlexGap sx={{ gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            <TextField
+              size="small"
+              select
+              label="Trạng thái yêu cầu"
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+              sx={{ minWidth: 190 }}
+            >
+              <MenuItem value="Pending">Chờ duyệt</MenuItem>
+              <MenuItem value="">Tất cả yêu cầu</MenuItem>
+              <MenuItem value="Approved">Đã duyệt</MenuItem>
+              <MenuItem value="Rejected">Đã từ chối</MenuItem>
+            </TextField>
+            {list.data && !list.error && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontVariantNumeric: 'tabular-nums' }}
+              >
+                {list.data.totalCount} yêu cầu
+              </Typography>
+            )}
+          </Stack>
+          <Stack direction="row" useFlexGap sx={{ gap: 0.5, alignItems: 'center' }}>
+            {(location || room || (!invoiceId && invoice)) && (
+              <Button
+                size="small"
+                onClick={() => {
+                  setLocation('');
+                  setRoom('');
+                  if (!invoiceId) setInvoice('');
+                  setStatus('Pending');
+                  setPage(1);
+                }}
+              >
+                Xóa bộ lọc
+              </Button>
+            )}
+            <Button
+              size="small"
+              variant="outlined"
+              aria-expanded={filtersExpanded}
+              aria-controls="adjustment-advanced-filters"
+              onClick={() => setFiltersExpanded((value) => !value)}
+            >
+              {filtersExpanded ? 'Thu gọn bộ lọc' : 'Lọc chi tiết'}
+            </Button>
+          </Stack>
+        </Stack>
+        <Collapse in={filtersExpanded}>
+          <Box id="adjustment-advanced-filters" sx={{ pt: 1.5 }}>
+            <FilterToolbar>
+              <TextField
+                select
+                label="Cơ sở điều chỉnh"
+                value={location}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  setRoom('');
+                  setPage(1);
+                }}
+              >
+                <MenuItem value="">Tất cả cơ sở</MenuItem>
+                {locations.data?.map((x) => (
+                  <MenuItem key={x.id} value={x.id}>
+                    {x.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label="Phòng điều chỉnh"
+                value={room}
+                disabled={!location}
+                onChange={(e) => {
+                  setRoom(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <MenuItem value="">Tất cả phòng</MenuItem>
+                {rooms.data?.map((x) => (
+                  <MenuItem key={x.id} value={x.id}>
+                    {x.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              {!invoiceId && (
+                <TextField
+                  label="Lọc theo mã hóa đơn"
+                  value={invoice}
+                  onChange={(e) => {
+                    setInvoice(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              )}
+            </FilterToolbar>
+          </Box>
+        </Collapse>
+      </Box>
       {(list.isPending || locations.isPending) && <LinearProgress />}
       {(list.error || locations.error || rooms.error) && (
         <Alert
@@ -219,27 +289,84 @@ export function OwnerAdjustmentList({
           busy={list.isFetching}
         />
       )}
-      {selected && <OwnerAdjustmentDetail key={selected} id={selected} />}
+      <Drawer
+        anchor="right"
+        open={!!selected}
+        onClose={() => setSelected('')}
+        slotProps={{
+          paper: {
+            'aria-labelledby': 'adjustment-detail-title',
+            sx: {
+              width: { xs: '100%', md: 780 },
+              maxWidth: '100vw',
+              bgcolor: 'background.default',
+            },
+          },
+        }}
+      >
+        <Stack
+          direction="row"
+          sx={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 1,
+            bgcolor: 'background.paper',
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            px: 2,
+            py: 1.5,
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+          }}
+        >
+          <Box>
+            <Typography id="adjustment-detail-title" variant="subtitle1" sx={{ fontWeight: 750 }}>
+              Xem & xử lý yêu cầu
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Đóng để quay lại danh sách và bộ lọc hiện tại.
+            </Typography>
+          </Box>
+          <Button variant="outlined" startIcon={<X size={16} />} onClick={() => setSelected('')}>
+            Đóng
+          </Button>
+        </Stack>
+        <Box sx={{ p: { xs: 1.5, sm: 2 }, minWidth: 0 }}>
+          {selected && <OwnerAdjustmentDetail key={selected} id={selected} />}
+        </Box>
+      </Drawer>
     </Stack>
   );
 }
 export function FinancialSummary({ value }: { value: AdjustmentFinancials }) {
   return (
-    <Stack spacing={1}>
-      <Typography>Tiền hóa đơn gốc: {formatContractMoney(value.originalIssuedAmount)}</Typography>
-      <Typography>Điều chỉnh sau phát hành: {signedVnd(value.approvedAdjustmentTotal)}</Typography>
-      <Typography>
-        Nghĩa vụ hiện hành: {formatContractMoney(value.effectivePayableAmount)} · Đã xác minh:{' '}
-        {formatContractMoney(value.allocatedPayments)}
+    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.default' }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 750, mb: 1 }}>
+        Số dư sau điều chỉnh
       </Typography>
-      <Typography>Còn phải trả: {formatContractMoney(value.outstandingAmount)}</Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
+        <Typography variant="body2">
+          Tiền hóa đơn gốc: {formatContractMoney(value.originalIssuedAmount)}
+        </Typography>
+        <Typography variant="body2">
+          Điều chỉnh sau phát hành: {signedVnd(value.approvedAdjustmentTotal)}
+        </Typography>
+        <Typography variant="body2">
+          Nghĩa vụ hiện hành: {formatContractMoney(value.effectivePayableAmount)} · Đã xác minh:{' '}
+          {formatContractMoney(value.allocatedPayments)}
+        </Typography>
+        <Typography variant="body2" sx={{ fontWeight: 750 }}>
+          Còn phải trả: {formatContractMoney(value.outstandingAmount)}
+        </Typography>
+      </Box>
       {value.reviewStatus === 'PendingReview' && (
-        <Alert severity="warning">
+        <Alert severity="warning" sx={{ mt: 1 }}>
           Tiền thừa chờ xem xét: {formatContractMoney(value.potentialExcessAmount)}. Chưa hoàn tiền
           hoặc chuyển credit.
         </Alert>
       )}
-    </Stack>
+    </Paper>
   );
 }
 export function OwnerAdjustmentDetail({ id }: { id: string }) {
@@ -265,41 +392,105 @@ export function OwnerAdjustmentDetail({ id }: { id: string }) {
             {adjustmentError(detail.error)}
           </Alert>
         )}
-        {detail.data && (
+        {detail.data && !detail.error && (
           <>
-            <Typography>
-              {detail.data.locationName} · Phòng {detail.data.roomNumber} ·{' '}
-              {adjustmentStatus(detail.data.status)}
+            <Paper variant="outlined" sx={{ p: 1.75, borderRadius: 1.5 }}>
+              <Stack spacing={1}>
+                <Stack
+                  direction="row"
+                  sx={{
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                    {detail.data.locationName} · Phòng {detail.data.roomNumber}
+                  </Typography>
+                  <StatusChip label={adjustmentStatus(detail.data.status)} />
+                </Stack>
+                <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                  Yêu cầu: {detail.data.reason}
+                </Typography>
+                <Typography variant="body2">
+                  Khoản cần xem xét: {detail.data.chargeCode ?? 'Toàn hóa đơn'} · Giá trị khi gửi:{' '}
+                  {formatContractMoney(detail.data.currentAmount)}
+                </Typography>
+                <Typography variant="body2">
+                  Khách thuê đề xuất:{' '}
+                  {detail.data.proposedAmount === null
+                    ? 'Chưa đề xuất'
+                    : formatContractMoney(detail.data.proposedAmount)}
+                </Typography>
+                {detail.data.status === 'Pending' && (
+                  <Alert severity="info">
+                    Bước 1: kiểm tra yêu cầu và số dư. Bước 2: xem khoản phí, bằng chứng. Bước 3:
+                    điền lý do và xác nhận quyết định bên dưới.
+                  </Alert>
+                )}
+              </Stack>
+            </Paper>
+            <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
+              Số tiền hiện hành trên hệ thống
             </Typography>
-            <Typography>Lý do yêu cầu: {detail.data.reason}</Typography>
-            <Typography>
-              Khoản tranh chấp: {detail.data.chargeCode ?? 'Toàn hóa đơn'} · Khi gửi:{' '}
-              {formatContractMoney(detail.data.currentAmount)} · Đề xuất:{' '}
-              {detail.data.proposedAmount === null
-                ? 'Chưa đề xuất'
-                : formatContractMoney(detail.data.proposedAmount)}
-            </Typography>
-            <Typography>
+            <Typography variant="body2">
               Giá trị hiện hành của khoản yêu cầu:{' '}
               {detail.data.currentChargeAmount === null
                 ? 'Khoản nguồn đã thay đổi'
                 : formatContractMoney(detail.data.currentChargeAmount)}
             </Typography>
-            <Typography>
-              Hóa đơn gốc khi gửi: {snapshotTotal(detail.data)} · Gửi lúc{' '}
-              {formatInstant(detail.data.submittedAt)}
-            </Typography>
-            {detail.data.currentInvoice.lines.map((line) => (
-              <Typography key={line.id}>
-                {line.name}: {formatContractMoney(line.amount)}
-                {line.calculatedAmount != null
-                  ? ` · Trước correction: ${formatContractMoney(line.calculatedAmount)}`
-                  : ''}
-              </Typography>
-            ))}
             {detail.data.financials && <FinancialSummary value={detail.data.financials} />}
+            <Accordion
+              variant="outlined"
+              disableGutters
+              sx={{ borderRadius: '12px !important', '&:before': { display: 'none' } }}
+            >
+              <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
+                    Xem bản chụp và các khoản phí của hóa đơn
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Kiểm tra hóa đơn gốc và các khoản phí hiện hành khi cần đối chiếu.
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Stack spacing={1}>
+                  <Typography>
+                    Hóa đơn gốc khi gửi: {snapshotTotal(detail.data)} · Gửi lúc{' '}
+                    {formatInstant(detail.data.submittedAt)}
+                  </Typography>
+                  {detail.data.currentInvoice.lines.map((line) => (
+                    <Typography key={line.id}>
+                      {line.name}: {formatContractMoney(line.amount)}
+                      {line.calculatedAmount != null
+                        ? ` · Trước correction: ${formatContractMoney(line.calculatedAmount)}`
+                        : ''}
+                    </Typography>
+                  ))}
+                </Stack>
+              </AccordionDetails>
+            </Accordion>
+            <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
+              Bằng chứng đính kèm ({detail.data.evidence.length})
+            </Typography>
+            {detail.data.evidence.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                Không có tệp bằng chứng đính kèm. Kiểm tra thông tin hóa đơn trước khi quyết định.
+              </Typography>
+            )}
             {detail.data.evidence.map((e, index) => (
-              <PrivateEvidence key={e.id} requestId={id} fileId={e.id} number={index + 1} />
+              <PrivateEvidenceViewer
+                key={e.id}
+                label={`Bằng chứng điều chỉnh ${index + 1}`}
+                filename={`bang-chung-dieu-chinh-${index + 1}.${e.contentType === 'application/pdf' ? 'pdf' : e.contentType === 'image/png' ? 'png' : 'jpg'}`}
+                contentType={e.contentType}
+                expectedSize={e.length}
+                fetchBlob={(signal) => api.evidence(id, e.id, signal)}
+                errorMessage={adjustmentError}
+              />
             ))}
             {detail.data.decision && (
               <Alert severity={detail.data.status === 'Approved' ? 'success' : 'info'}>
@@ -307,6 +498,11 @@ export function OwnerAdjustmentDetail({ id }: { id: string }) {
                 {formatInstant(detail.data.decision.decidedAt)} · Thay đổi{' '}
                 {signedVnd(detail.data.decision.delta)}
               </Alert>
+            )}
+            {detail.data.status === 'Pending' && (
+              <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
+                Bước 3 · Ghi quyết định của Owner
+              </Typography>
             )}
             {detail.data.status === 'Pending' && (
               <DecisionForm
@@ -480,58 +676,5 @@ function DecisionForm({ value, saved }: { value: Adjustment; saved: () => Promis
         </DialogActions>
       </Dialog>
     </Stack>
-  );
-}
-function PrivateEvidence({
-  requestId,
-  fileId,
-  number,
-}: {
-  requestId: string;
-  fileId: string;
-  number: number;
-}) {
-  const api = useAdjustmentApi();
-  const [url, setUrl] = useState(''),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
-  const lock = useRef(false);
-  useEffect(
-    () => () => {
-      if (url) URL.revokeObjectURL(url);
-    },
-    [url],
-  );
-  return (
-    <Box>
-      <Button
-        disabled={busy || !!url}
-        onClick={() => {
-          if (lock.current) return;
-          lock.current = true;
-          setBusy(true);
-          setError('');
-          void api
-            .evidence(requestId, fileId)
-            .then((blob) => setUrl(URL.createObjectURL(blob)))
-            .catch((e) => setError(adjustmentError(e)))
-            .finally(() => {
-              lock.current = false;
-              setBusy(false);
-            });
-        }}
-      >
-        Xem bằng chứng {number}
-      </Button>
-      {error && <Alert severity="error">{error}</Alert>}
-      {url && (
-        <Box
-          component="img"
-          src={url}
-          alt={`Bằng chứng điều chỉnh ${number}`}
-          sx={{ display: 'block', maxWidth: '100%', maxHeight: 480 }}
-        />
-      )}
-    </Box>
   );
 }

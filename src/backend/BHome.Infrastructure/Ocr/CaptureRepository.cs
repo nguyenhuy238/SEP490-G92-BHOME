@@ -166,6 +166,9 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         var m = new Meter { RoomId = x.RoomId, Code = x.Code.Trim(), UtilityType = x.UtilityType, Display = x.Display, DecimalPlaces = x.DecimalPlaces, InstalledOn = x.InstalledOn };
         db.Add(m); Audit("MeterCreated", "Meter", m.Id); await Save(t); return new(m.Id);
     }
+    public Task<Guid?> ActiveMeterLocationAsync(Guid meterId, CancellationToken t) => db.Set<Meter>().AsNoTracking()
+        .Where(m => m.Id == meterId && m.IsActive && scope.VisibleRooms.Any(r => r.Id == m.RoomId))
+        .Select(m => (Guid?)m.Room.LocationId).SingleOrDefaultAsync(t);
     public async Task<IReadOnlyList<NamedResource>> MetersAsync(Guid id, CancellationToken t)
     {
         if (!await scope.VisibleLocations.AnyAsync(l => l.Id == id, t)) throw new OcrAccessException();

@@ -1,5 +1,43 @@
 # Billing automation
 
+## Chế độ cấu hình lịch + chạy thử thủ công (14/11/2026)
+
+Owner Web `/billing-automation` tách **Cấu hình lịch** khỏi **Chạy thử thủ công**.
+Owner lưu ngày giao/chốt nhiệm vụ ghi số điện, nước và các mốc Draft/Final theo
+**ngày trong tháng**; hạn thanh toán hiện kế thừa từ cấu hình Giá & biểu phí.
+`effectiveFrom` là **kỳ đầu tiên** áp dụng
+phiên bản này, không phải lựa chọn một tháng cụ thể để lập hóa đơn. Các kỳ sau
+tiếp tục dùng phiên bản mới nhất có ngày hiệu lực không vượt quá kỳ đang xử lý.
+Tháng ngắn tự co ngày 29–31 về ngày cuối tháng; mốc Draft không được sau Final,
+Final không được sau hạn thanh toán. Lịch được ghi trong `BillingSnapshot` của
+plan và không thay thế `BillingSchedule` toàn cục hoặc snapshot đã phát hành.
+
+`PUT /api/v1/billing-automation` giữ contract và concurrency version hiện có,
+thêm sáu số nguyên **tùy chọn**: `draftDay`, `draftMonthOffset`, `finalDay`,
+`finalMonthOffset`, `dueDay`, `dueMonthOffset` (hai trường Due có sẵn ở API nhưng
+giao diện hiện chưa cho sửa trực tiếp). Màn cấu hình thử nghiệm ghi
+`enabled:false` và `authorizeAutomaticFinalization:false`. Không được dùng việc
+**lưu lịch** làm tín hiệu bắt đầu worker; các job hóa đơn chỉ được phép tự chạy
+khi cờ server `BillingAutomation:AutomaticJobsEnabled=true` được bật riêng theo
+quy trình phát hành chính thức (mặc định `false`). Cờ này không tắt worker của
+các phân hệ khác. Plan cũ vẫn có history; không thay hoặc xóa dữ liệu hóa đơn.
+
+**Chạy thử** chỉ hiển thị thao tác có ghi dữ liệu trong Development/Testing và
+gọi các API Owner thực, theo một phòng/kỳ/công tơ được chọn:
+
+- Giao nhiệm vụ ghi số **ban đầu**: `POST /api/v1/billing-automation/manual-meter-tasks`, `purpose=Initial`, `meterId` và `billingPeriod` để xác định lịch hiệu lực. Backend tạo Capture task Initial không có billingPeriod.
+- Giao nhiệm vụ ghi số **vận hành/định kỳ**: cùng endpoint, `purpose=Periodic`, với `meterId` và kỳ kiểm thử. Backend lấy ngày ghi số từ `meterDay` của lịch áp dụng, không cần nhập tay ngày thử; chỉ chấp nhận khi ngày hiện tại ở Việt Nam đã đến ngày giao việc của kỳ đó.
+- Tạo **Draft**: `POST /api/v1/invoices/drafts` với `roomId` và `billingPeriod` (không cần nhập hợp đồng đại diện). Backend dùng lựa chọn đại diện đã lưu cho kỳ nếu hợp lệ, hoặc hợp đồng duy nhất đủ điều kiện. Khi có nhiều hợp đồng nhưng chưa chọn đại diện, trả 409 `representative_selection_required` thay vì chọn tùy tiện; kỳ chưa có hợp đồng phù hợp trả 409 `representative_contract_not_eligible`.
+- Phát hành **Final**: `POST /api/v1/invoices/{id}/finalize` với `expectedVersion` và xác nhận Owner rõ ràng.
+
+Endpoint thử nhiệm vụ công tơ yêu cầu Owner có quyền quản lý Location và chỉ bật
+trong Development/Testing; việc cấu hình lịch không tự phát hành hoặc tự giao việc.
+Đây là thao tác ghi nghiệp vụ vào database Development/Testing **thật**, không
+phải nút xem giả; những ràng buộc ngày, hợp đồng, chỉ số Staff-confirmed,
+idempotency, phân quyền và bằng chứng vẫn được backend áp dụng. Nhiệm vụ chụp
+ban đầu và định kỳ tạo qua Capture API thủ công có thể được Staff đang phụ trách
+Location nhìn thấy; không được nhầm với tác vụ JOB-09 tự phân công từng Staff.
+
 Cập nhật **06/11/2026**: JOB-09/10 có implementation Compact24; không mặc định bật cho Location.
 [Trạng thái toàn API](API_IMPLEMENTATION_STATUS.md), [route/input/policy](API_RUNTIME_ROUTES.md).
 Tên entity/event bên dưới là tên logic; runtime lưu plan/settings/history trong cột/JSON Compact24,

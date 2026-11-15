@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import {
-  Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Checkbox,
   FormControlLabel,
   MenuItem,
-  Paper,
   Slider,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
+import { ChevronDown } from 'lucide-react';
 import {
   CartesianGrid,
   Legend,
@@ -66,9 +68,9 @@ function DemoWhatIfPage() {
   return (
     <>
       <PageHeader
-        title="Không gian mô phỏng & Kịch bản tài chính"
-        group="Báo cáo & Phân tích • Sandbox"
-        subtitle="Giả lập giá thuê, tỷ lệ lấp đầy và chi phí. Mọi kịch bản độc lập với giá thuê, hóa đơn và sổ tài chính hiện có."
+        title="Thử kịch bản tài chính"
+        group={null}
+        subtitle="Thay đổi giả định giá thuê, lấp đầy và chi phí để xem kết quả dự kiến. Không sửa dữ liệu thực tế."
         actions={
           <>
             <Button
@@ -94,19 +96,15 @@ function DemoWhatIfPage() {
           </>
         }
       />
-      <Alert severity="info" sx={{ mb: 3 }}>
-        Môi trường mô phỏng an toàn • Tính toán quản trị theo giả định do bạn nhập. Không có dự báo
-        AI, dữ liệu cạnh tranh hay cam kết lợi nhuận.
-      </Alert>
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: '340px minmax(0,1fr)' },
-          gap: 3,
+          gridTemplateColumns: { xs: '1fr', lg: '320px minmax(0,1fr)' },
+          gap: 2,
         }}
       >
-        <ChartCard title="Bảng thiết lập giả định">
-          <Stack spacing={2}>
+        <ChartCard title="Giả định">
+          <Stack spacing={1.5}>
             <TextField
               size="small"
               label="Tên kịch bản"
@@ -133,7 +131,7 @@ function DemoWhatIfPage() {
               </TextField>
             )}
             <Typography variant="subtitle2" color="primary">
-              1. Doanh thu & Giá phòng
+              Doanh thu & giá phòng
             </Typography>
             <Parameter
               label="Tỷ lệ lấp đầy mục tiêu"
@@ -163,7 +161,7 @@ function DemoWhatIfPage() {
               }
             />
             <Typography variant="subtitle2" color="primary">
-              2. Chi phí vận hành (OPEX)
+              Chi phí vận hành
             </Typography>
             <Parameter
               label="Chi phí nhân sự (triệu VND)"
@@ -182,7 +180,7 @@ function DemoWhatIfPage() {
               onChange={(value) => set('maintenanceDelta', value)}
             />
             <Typography variant="subtitle2" color="primary">
-              3. Đầu tư mở rộng (CAPEX)
+              Đầu tư mở rộng
             </Typography>
             <FormControlLabel
               control={
@@ -197,16 +195,7 @@ function DemoWhatIfPage() {
               Mở rộng chỉ điều chỉnh vốn đầu tư; doanh thu cơ sở mới chưa được giả định.
             </Typography>
             <Button
-              variant="contained"
-              onClick={() =>
-                portal.notify(
-                  'Đã tính lại theo các giả định đang hiển thị. Không sửa dữ liệu tài chính.',
-                )
-              }
-            >
-              Tính toán kịch bản tức thì
-            </Button>
-            <Button
+              variant="text"
               onClick={() =>
                 setScenario({
                   ...baselineScenario,
@@ -237,50 +226,50 @@ function DemoWhatIfPage() {
               },
             ]}
           />
-          <ChartCard
-            title="Dự phóng dòng tiền lũy kế 12 tháng tới"
-            subtitle="So sánh kịch bản cơ sở và giả định; không chiết khấu, không tính thuế hay chi phí vay"
-          >
-            <Box sx={{ height: 350, minWidth: 0 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={points}>
-                  <CartesianGrid stroke="#eaedff" strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                  <YAxis
-                    tickFormatter={(value) => `${Math.round(Number(value) / 1000000)}M`}
-                    tick={{ fontSize: 10 }}
-                    width={55}
-                  />
-                  <Tooltip formatter={(value) => compactMoney(Number(value))} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line
-                    dataKey="baseline"
-                    name="Kịch bản cơ sở"
-                    stroke="#8ba0c0"
-                    strokeDasharray="4 4"
-                    dot={false}
-                  />
-                  <Line
-                    dataKey="scenario"
-                    name="Kịch bản mô phỏng"
-                    stroke="#004ac6"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </Box>
-          </ChartCard>
-          <Paper sx={{ p: 2.5, mt: 3, bgcolor: '#e2e7ff' }}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Độ nhạy theo giả định
-            </Typography>
-            <Typography variant="body2">
-              Chênh lệch lợi nhuận tháng: {compactMoney(projection.profit - base.profit)}. Doanh thu
-              thay đổi theo giá và tỷ lệ lấp đầy bạn nhập. Kết quả không phản ánh phản ứng thị
-              trường thực tế.
-            </Typography>
-          </Paper>
+          <Accordion variant="outlined" disableGutters sx={{ mt: 1.5 }}>
+            <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                Xem biểu đồ dòng tiền dự kiến
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography variant="caption" color="text.secondary">
+                So sánh giả định trong 12 tháng; không tính thuế, lãi vay hay phản ứng thị trường.
+              </Typography>
+              <Box sx={{ height: 270, minWidth: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={points}>
+                    <CartesianGrid stroke="#eaedff" strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                    <YAxis
+                      tickFormatter={(value) => `${Math.round(Number(value) / 1000000)}M`}
+                      tick={{ fontSize: 10 }}
+                      width={55}
+                    />
+                    <Tooltip formatter={(value) => compactMoney(Number(value))} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Line
+                      dataKey="baseline"
+                      name="Kịch bản cơ sở"
+                      stroke="#8ba0c0"
+                      strokeDasharray="4 4"
+                      dot={false}
+                    />
+                    <Line
+                      dataKey="scenario"
+                      name="Kịch bản mô phỏng"
+                      stroke="#004ac6"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Box>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Chênh lệch lợi nhuận tháng: {compactMoney(projection.profit - base.profit)}.
+              </Typography>
+            </AccordionDetails>
+          </Accordion>
         </Box>
       </Box>
     </>
@@ -302,7 +291,7 @@ function Parameter({
   onChange: (value: number) => void;
 }) {
   return (
-    <Box sx={{ bgcolor: '#f2f3ff', p: 1.5, borderRadius: 1 }}>
+    <Box sx={{ bgcolor: 'background.default', p: 1.25, borderRadius: 1.5 }}>
       <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
         <Typography variant="caption">{label}</Typography>
         <Typography variant="caption" color="primary" sx={{ fontWeight: 650 }}>

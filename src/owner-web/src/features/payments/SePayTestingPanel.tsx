@@ -85,8 +85,12 @@ function TestingInvoice({ invoice }: { invoice: DebtInvoice }) {
     ['Available', 'InstructionsOnly'].includes(transfer.availability) &&
     transfer.accountNumber &&
     /^BH\d{8}$/.test(transfer.transferReference) &&
-    state.outstandingAmount === transfer.outstandingAmount &&
-    state.transferReference === transfer.transferReference;
+    transfer.transferDescription === transfer.transferReference &&
+    transfer.invoiceId === state.invoiceId &&
+    // The instructions endpoint may issue the BH code after the parallel payment
+    // request has read the previous legacy reference. Validate the same invoice
+    // and amount instead; the persisted instructions own the QR/memo.
+    state.outstandingAmount === transfer.outstandingAmount;
   async function copy(value: string) {
     try {
       await navigator.clipboard.writeText(value);

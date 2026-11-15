@@ -8,6 +8,7 @@ using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.TestHost;
 namespace BHome.IntegrationTests.PaymentsDebt;
 public sealed partial class PaymentLedgerTests
 {
@@ -25,7 +26,11 @@ public sealed partial class PaymentLedgerTests
             // Persisted state left by an interrupted process; the real worker performs recovery below.
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"BackgroundJobs\" SET \"State\"='Processing',\"Attempts\"=1,\"LockedUntil\"={DateTimeOffset.UtcNow.AddMinutes(-3)},\"AvailableAt\"={DateTimeOffset.UtcNow.AddDays(-1)} WHERE \"Name\"='billing-meter' AND \"IdempotencyKey\"={key}");
         }
-        var worker = fixture.Factory.Services.GetServices<IHostedService>().Single(x => x.GetType().Name == "PostgresJobWorker");
+        // This test explicitly opts in to the billing handler to verify crash recovery.
+        // The application's default remains OFF, including when generic Jobs is enabled.
+        using var enabledHost = fixture.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton(new BillingAutomationRuntime(true, true))));
+        var worker = enabledHost.Services.GetServices<IHostedService>().Single(x => x.GetType().Name == "PostgresJobWorker");
         var process = worker.GetType().GetMethod("ProcessOneAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
         Assert.True(await (Task<bool>)process.Invoke(worker, [CancellationToken.None])!);
         using (var owner = await Client(w.Owner))

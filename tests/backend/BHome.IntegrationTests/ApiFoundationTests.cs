@@ -42,6 +42,17 @@ public sealed class ApiFoundationTests : IClassFixture<ApiFactory>
     }
 
     [Theory]
+    [InlineData("/api/v1/invoice-adjustments/11111111-1111-1111-1111-111111111111/evidence/22222222-2222-2222-2222-222222222222")]
+    [InlineData("/api/v1/refund-requests/11111111-1111-1111-1111-111111111111/evidence")]
+    [InlineData("/api/v1/capture/readings/11111111-1111-1111-1111-111111111111/evidence")]
+    public async Task PrivateEvidenceEndpointsStillRejectAnonymousBeforeObjectLookup(string path)
+    {
+        var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Theory]
     [InlineData(Roles.Owner)]
     [InlineData(Roles.Staff)]
     [InlineData(Roles.Tenant)]
@@ -96,6 +107,31 @@ public sealed class ApiFoundationTests : IClassFixture<ApiFactory>
         Assert.Contains(correlation, body);
         Assert.DoesNotContain("PRIVATE_TEST_DETAIL", body);
         Assert.DoesNotContain("stackTrace", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("/test-probes/private-object-missing", 404, "private_evidence_file_missing")]
+    [InlineData("/test-probes/unrelated-file-missing", 500, null)]
+    [InlineData("/test-probes/private-storage-unavailable", 503, null)]
+    public async Task PrivateObjectNotFoundUsesSafeCodeWithoutChangingOtherErrorClassifications(
+        string path, int expectedStatus, string? expectedCode)
+    {
+        var correlation = Guid.NewGuid().ToString();
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        // Private evidence fetches can request binary; errors must remain ProblemDetails.
+        request.Headers.Accept.ParseAdd("application/octet-stream");
+        request.Headers.Add("X-Correlation-ID", correlation);
+        var response = await client.SendAsync(request);
+        Assert.Equal((HttpStatusCode)expectedStatus, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(expectedStatus, body.GetProperty("status").GetInt32());
+        Assert.Equal(correlation, body.GetProperty("correlationId").GetString());
+        if (expectedCode is null) Assert.False(body.TryGetProperty("code", out _));
+        else Assert.Equal(expectedCode, body.GetProperty("code").GetString());
+        Assert.DoesNotContain("PRIVATE_TEST_DETAIL", body.ToString());
+        Assert.DoesNotContain("stackTrace", body.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.False(body.TryGetProperty("detail", out _));
     }
 
     [Theory]

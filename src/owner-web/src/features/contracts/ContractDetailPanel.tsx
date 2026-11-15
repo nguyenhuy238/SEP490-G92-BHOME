@@ -39,6 +39,7 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { formatBillingDecimal } from '../../../../../packages/client-core/src/invoices';
 import { ChartCard, StatusChip } from '../../components/common/PortalUI';
+import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
 import { ContractActionDialog } from './ContractActionDialog';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
@@ -550,17 +551,13 @@ export function ContractDetailPanel({
               </>
             )}
             {(m.evidenceIds ?? []).map((e, i) => (
-              <Button
+              <PrivateEvidenceViewer
                 key={e}
-                disabled={busy}
-                onClick={() =>
-                  void run(async () =>
-                    downloadBlob(await api.evidence(id, e), `hien-trang-${i + 1}.jpg`),
-                  )
-                }
-              >
-                Tải ảnh hiện trạng {i + 1}
-              </Button>
+                label={`Ảnh hiện trạng ${i + 1}`}
+                filename={`hien-trang-${i + 1}.jpg`}
+                fetchBlob={(signal) => api.evidence(id, e, signal)}
+                errorMessage={contractError}
+              />
             ))}
             {m.status === 'Approved' && (
               <FinalMeterTask

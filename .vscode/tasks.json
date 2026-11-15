@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Owner Web: Chạy Vite",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev", "--workspace", "./src/owner-web"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Impeccable: Live Owner Web (/finance)",
+      "type": "shell",
+      "command": "${workspaceFolder}\\scripts\\impeccable.cmd",
+      "args": ["live", "--target", "src/owner-web/src/features/finance/FinanceHomePage.tsx"],
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Impeccable: Detect Owner Web (/finance)",
+      "type": "shell",
+      "command": "${workspaceFolder}\\scripts\\impeccable.cmd",
+      "args": ["detect", "--json", "src/owner-web/src/features/finance/FinanceHomePage.tsx"],
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "Impeccable: Tắt Live",
+      "type": "shell",
+      "command": "${workspaceFolder}\\scripts\\impeccable.cmd",
+      "args": ["live-server", "stop"],
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    }
+  ]
+}

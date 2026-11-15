@@ -22,13 +22,11 @@ import {
 import {
   Bell,
   Building2,
-  CalendarDays,
+  ChartNoAxesCombined,
   ClipboardList,
   DoorOpen,
   FileText,
   FilePenLine,
-  FlaskConical,
-  Gauge,
   Globe,
   KeyRound,
   LayoutDashboard,
@@ -59,6 +57,7 @@ import { isMockMode } from '../../services/config';
 import { ConfirmDialog } from '../common/PortalUI';
 import type { ResourceKind } from '../../types/portal';
 import { NotificationBell } from '../../features/notifications/NotificationBell';
+import { FinanceWorkflowStrip } from '../../features/finance/FinanceWorkflowStrip';
 
 const iconMap: Record<string, typeof Building2> = {
   dashboard: LayoutDashboard,
@@ -78,17 +77,12 @@ const iconMap: Record<string, typeof Building2> = {
   'digital-signing': FilePenLine,
   handovers: KeyRound,
   'temporary-residence': ShieldCheck,
-  meters: Gauge,
+  finance: ChartNoAxesCombined,
   invoices: Receipt,
-  'billing-automation': CalendarDays,
-  'invoice-adjustments': Receipt,
   payments: Wallet,
-  debts: Wallet,
   incidents: TriangleAlert,
   maintenance: Wrench,
-  expenses: Coins,
   reports: ChartColumn,
-  'what-if': FlaskConical,
   'public-content': Globe,
   'configuration/room-types': Shapes,
   'configuration/assets': Package,
@@ -114,20 +108,7 @@ const navGroups = [
     'Khách thuê & Hợp đồng',
     ['tenants', 'contracts', 'digital-signing', 'handovers', 'temporary-residence'],
   ],
-  [
-    'Tài chính & Hóa đơn',
-    [
-      'meters',
-      'invoices',
-      'billing-automation',
-      'invoice-adjustments',
-      'payments',
-      'debts',
-      'expenses',
-      'reports',
-      'what-if',
-    ],
-  ],
+  ['Tài chính & Hóa đơn', ['finance', 'invoices', 'payments', 'reports']],
   ['Sự cố & Bảo trì', ['incidents', 'maintenance']],
   ['Thông báo', ['notifications']],
   ['Hệ thống', ['public-content']],
@@ -157,17 +138,30 @@ const navLabels: Record<string, string> = {
   handovers: 'Bàn giao phòng',
   'temporary-residence': 'Đăng ký tạm trú',
   meters: 'Chỉ số điện nước',
-  invoices: 'Hóa đơn',
+  finance: 'Tổng quan',
+  invoices: 'Lập hóa đơn',
   'billing-automation': 'Lịch tự động',
   'invoice-adjustments': 'Điều chỉnh hóa đơn',
-  payments: 'Thanh toán / Đối soát',
+  payments: 'Thu tiền & công nợ',
   debts: 'Công nợ',
   incidents: 'Quản lý sự cố',
   maintenance: 'Công việc bảo trì',
   expenses: 'Đầu tư & Chi phí',
-  reports: 'Báo cáo kinh doanh',
+  reports: 'Chi phí & báo cáo',
   'what-if': 'Phân tích What-if',
   'public-content': 'Nội dung công khai',
+};
+const financeWorkspaceByRoute: Record<string, string> = {
+  finance: 'finance',
+  meters: 'invoices',
+  invoices: 'invoices',
+  'billing-automation': 'invoices',
+  'invoice-adjustments': 'invoices',
+  payments: 'payments',
+  debts: 'payments',
+  expenses: 'reports',
+  reports: 'reports',
+  'what-if': 'reports',
 };
 const sidebarPreference = 'bhome.owner.sidebar-collapsed';
 const headerHeight = 64;
@@ -191,6 +185,7 @@ export function AppShell() {
   const workspaceParts = location.pathname.split('/');
   const current = workspaceParts[1] || 'dashboard';
   const currentKey = current === 'configuration' ? workspaceParts.slice(1, 3).join('/') : current;
+  const selectedNavKey = financeWorkspaceByRoute[current] ?? currentKey;
   const inLocationWorkspace = workspaceParts[1] === 'locations' && Boolean(workspaceParts[2]);
   const locations = data?.records.locations ?? [];
   const locationValue = inLocationWorkspace ? workspaceParts[2] : portal.locationId;
@@ -265,17 +260,26 @@ export function AppShell() {
             <List dense disablePadding>
               {items.map((key) => {
                 const Icon = iconMap[key];
+                const accessibleLabel = key === 'finance' ? 'Tổng quan tài chính' : navLabels[key];
                 return (
                   <Tooltip
                     key={key}
-                    title={compact ? navLabels[key] : ''}
+                    title={compact ? accessibleLabel : ''}
                     placement="right"
                     disableInteractive
                   >
                     <ListItemButton
                       component={NavLink}
                       to={`/${key}`}
-                      aria-label={navLabels[key]}
+                      aria-label={accessibleLabel}
+                      aria-description={
+                        selectedNavKey === key &&
+                        financeWorkspaceByRoute[current] &&
+                        current !== key
+                          ? 'Nhóm đang mở'
+                          : undefined
+                      }
+                      selected={selectedNavKey === key}
                       onClick={() => {
                         setMobileOpen(false);
                         portal.setSearch('');
@@ -291,11 +295,12 @@ export function AppShell() {
                         py: 0.375,
                         color: '#53657f',
                         '&:hover': { bgcolor: '#f4f7fc' },
-                        '&.active': {
+                        '&.active, &.Mui-selected': {
                           bgcolor: 'primary.light',
                           color: 'primary.dark',
                           '& .MuiListItemText-primary': { fontWeight: 700 },
                         },
+                        '&.Mui-selected:hover': { bgcolor: 'primary.light' },
                         '&.Mui-focusVisible': {
                           outline: '2px solid',
                           outlineColor: 'primary.main',
@@ -607,6 +612,7 @@ export function AppShell() {
             boxSizing: 'border-box',
           }}
         >
+          <FinanceWorkflowStrip pathname={location.pathname} />
           <Outlet />
         </Box>
       </Box>

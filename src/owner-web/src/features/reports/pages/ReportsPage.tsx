@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import {
-  Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   MenuItem,
@@ -13,6 +15,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router';
 import { usePortalData } from '../../../hooks/usePortalData';
 import { usePortal } from '../../../app/PortalProvider';
@@ -35,8 +38,7 @@ export default function ReportsPage() {
 function DemoReportsPage() {
   const query = usePortalData(),
     portal = usePortal();
-  const [month, setMonth] = useState('2024-10'),
-    [compare, setCompare] = useState(false);
+  const [month, setMonth] = useState('2024-10');
   if (query.isPending) return <LoadingState />;
   if (query.isError) return <ErrorState error={query.error} retry={() => void query.refetch()} />;
   const db = query.data,
@@ -47,20 +49,24 @@ function DemoReportsPage() {
   return (
     <>
       <PageHeader
-        title="Báo cáo hiệu quả kinh doanh & Dòng tiền chuỗi trọ"
-        group="Báo cáo & Phân tích"
-        subtitle="Tổng hợp doanh thu đã phân bổ, chi phí và hiệu quả vận hành. Số liệu quản trị nội bộ từ bộ dữ liệu demo."
+        title="Báo cáo kinh doanh"
+        group={null}
+        subtitle="Doanh thu, chi phí và hiệu quả vận hành từ dữ liệu minh họa."
         actions={
           <>
-            <TextField select size="small" value={month} onChange={(e) => setMonth(e.target.value)}>
+            <TextField
+              select
+              size="small"
+              label="Kỳ báo cáo"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              sx={{ minWidth: 146 }}
+            >
               <MenuItem value="2024-10">Kỳ T10/2024</MenuItem>
               <MenuItem value="2024-09">Kỳ T09/2024</MenuItem>
             </TextField>
-            <Button variant="outlined" onClick={() => setCompare(!compare)}>
-              So sánh chu kỳ
-            </Button>
             <Button
-              variant="contained"
+              variant="outlined"
               onClick={() =>
                 exportCsv(
                   'bao-cao-kinh-doanh',
@@ -77,12 +83,6 @@ function DemoReportsPage() {
           </>
         }
       />
-      {compare && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Biểu đồ 6 tháng là chuỗi mô phỏng. Bộ dữ liệu giao dịch chi tiết hiện có kỳ T10/2024;
-          không khẳng định số liệu kỳ trước là thực tế.
-        </Alert>
-      )}
       {f.invoices.length === 0 ? (
         <EmptyState message="Chưa có dữ liệu trong kỳ được chọn." />
       ) : (
@@ -95,49 +95,56 @@ function DemoReportsPage() {
               { label: 'Phòng đang khai thác', value: f.occupied },
             ]}
           />
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' },
-              gap: 2.5,
-              mb: 3,
-            }}
-          >
-            <ChartCard
-              title="Đối sánh Doanh thu – Chi phí – Lợi nhuận"
-              subtitle="Chuỗi 6 tháng mô phỏng"
-            >
-              <FinanceChart data={f.chart} />
-            </ChartCard>
-            <ChartCard title="Cơ cấu nguồn thu">
-              <CollectionChart
-                data={[
-                  {
-                    name: 'Tiền phòng',
-                    value: f.invoices.reduce(
-                      (sum, row) => sum + Number(row.attributes.rent || 0),
-                      0,
-                    ),
-                  },
-                  {
-                    name: 'Điện nước',
-                    value: f.invoices.reduce(
-                      (sum, row) => sum + Number(row.attributes.utilities || 0),
-                      0,
-                    ),
-                  },
-                  {
-                    name: 'Dịch vụ',
-                    value: f.invoices.reduce(
-                      (sum, row) => sum + Number(row.attributes.service || 0),
-                      0,
-                    ),
-                  },
-                ]}
-              />
-            </ChartCard>
-          </Box>
-          <ChartCard title="Báo cáo kết quả hoạt động kinh doanh (P&L) theo từng cơ sở">
+          <Accordion variant="outlined" disableGutters sx={{ mb: 1.5 }}>
+            <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                Biểu đồ doanh thu và cơ cấu khoản thu
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                Biểu đồ 6 tháng dùng chuỗi mô phỏng; dữ liệu giao dịch chi tiết chỉ có kỳ T10/2024.
+              </Typography>
+              <Box
+                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 2 }}
+              >
+                <ChartCard
+                  title="Đối sánh Doanh thu – Chi phí – Lợi nhuận"
+                  subtitle="Chuỗi 6 tháng mô phỏng"
+                >
+                  <FinanceChart data={f.chart} />
+                </ChartCard>
+                <ChartCard title="Cơ cấu nguồn thu">
+                  <CollectionChart
+                    data={[
+                      {
+                        name: 'Tiền phòng',
+                        value: f.invoices.reduce(
+                          (sum, row) => sum + Number(row.attributes.rent || 0),
+                          0,
+                        ),
+                      },
+                      {
+                        name: 'Điện nước',
+                        value: f.invoices.reduce(
+                          (sum, row) => sum + Number(row.attributes.utilities || 0),
+                          0,
+                        ),
+                      },
+                      {
+                        name: 'Dịch vụ',
+                        value: f.invoices.reduce(
+                          (sum, row) => sum + Number(row.attributes.service || 0),
+                          0,
+                        ),
+                      },
+                    ]}
+                  />
+                </ChartCard>
+              </Box>
+            </AccordionDetails>
+          </Accordion>
+          <ChartCard title="Kết quả kinh doanh theo cơ sở">
             <Box sx={{ overflowX: 'auto' }}>
               <Table size="small">
                 <TableHead>
@@ -181,44 +188,48 @@ function DemoReportsPage() {
               </Table>
             </Box>
           </ChartCard>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' },
-              gap: 2.5,
-              mt: 3,
-            }}
-          >
-            <ChartCard title="Chỉ số hiệu quả thương mại trên từng đơn vị (RevPAR)">
-              <KPIGrid
-                items={[
-                  {
-                    label: 'Doanh thu / phòng',
-                    value: money(Math.round(f.revenue / Math.max(1, f.rooms.length))),
-                  },
-                  {
-                    label: 'Chi phí / phòng',
-                    value: money(Math.round(f.expenses / Math.max(1, f.rooms.length))),
-                  },
-                  {
-                    label: 'Biên lợi nhuận',
-                    value: `${((f.profit / Math.max(1, f.revenue)) * 100).toFixed(1)}%`,
-                  },
-                ]}
-              />
-            </ChartCard>
-            <Paper sx={{ p: 3, bgcolor: '#e2e7ff' }}>
-              <Typography component="h2" sx={{ fontWeight: 600, mb: 1 }}>
-                Dòng tiền & Hoàn vốn
+          <Accordion variant="outlined" disableGutters sx={{ mt: 1.5 }}>
+            <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                Chỉ số theo phòng và mô phỏng
               </Typography>
-              <Typography variant="body2" sx={{ mb: 2 }}>
-                Thay đổi giả định độc lập với sổ dữ liệu hiện tại. Kết quả là ước tính quản trị.
-              </Typography>
-              <Button component={Link} to="/what-if" variant="contained">
-                Mở phòng kịch bản What-if
-              </Button>
-            </Paper>
-          </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Box
+                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 2 }}
+              >
+                <ChartCard title="Chỉ số hiệu quả thương mại trên từng đơn vị (RevPAR)">
+                  <KPIGrid
+                    items={[
+                      {
+                        label: 'Doanh thu / phòng',
+                        value: money(Math.round(f.revenue / Math.max(1, f.rooms.length))),
+                      },
+                      {
+                        label: 'Chi phí / phòng',
+                        value: money(Math.round(f.expenses / Math.max(1, f.rooms.length))),
+                      },
+                      {
+                        label: 'Biên lợi nhuận',
+                        value: `${((f.profit / Math.max(1, f.revenue)) * 100).toFixed(1)}%`,
+                      },
+                    ]}
+                  />
+                </ChartCard>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography component="h2" sx={{ fontWeight: 600, mb: 1 }}>
+                    Dòng tiền & Hoàn vốn
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 2 }}>
+                    Thay đổi giả định độc lập với sổ dữ liệu hiện tại. Kết quả là ước tính quản trị.
+                  </Typography>
+                  <Button component={Link} to="/what-if" variant="outlined">
+                    Thử kịch bản What-if
+                  </Button>
+                </Paper>
+              </Box>
+            </AccordionDetails>
+          </Accordion>
         </>
       )}
     </>
