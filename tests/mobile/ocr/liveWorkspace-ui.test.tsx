@@ -696,7 +696,8 @@ it('shows real transfer instructions, copies exact amount and removes QR when th
   rerender(<TenantInvoicesScreen />);
   fireEvent.click(await screen.findByText('Chi tiết thanh toán'));
   fireEvent.click(await screen.findByText('Khoản thanh toán đã xác minh (1)'));
-  await screen.findByText(/Người trả: Khách thuê khác trong hóa đơn/);
+  await screen.findByText(/Xác minh lúc/);
+  expect(screen.queryByText(/Người trả:/)).toBeNull();
   expect(screen.queryByText('Sao chép số tiền')).toBeNull();
   expect(fetcher.mock.calls.every((call) => !call[1]?.method || call[1].method === 'GET')).toBe(
     true,
@@ -2847,7 +2848,8 @@ it('opens a payment from its date without duplicating summary fields or suggesti
   fireEvent.click(date);
   expect(date.closest('button')?.getAttribute('aria-expanded')).toBe('true');
   expect(screen.getAllByText('08:00 07/11/2026')).toHaveLength(1);
-  expect(screen.getAllByText(/Người trả:/)).toHaveLength(1);
+  expect(screen.getByText('Nguồn xác minh')).toBeTruthy();
+  expect(screen.queryByText(/Người trả:/)).toBeNull();
   expect(screen.queryByText(/^\+/)).toBeNull();
   fireEvent.click(screen.getByText('Xem hóa đơn liên quan'));
   expect(mocks.go).toHaveBeenLastCalledWith('invoice', {

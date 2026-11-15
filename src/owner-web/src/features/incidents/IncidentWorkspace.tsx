@@ -11,6 +11,7 @@ import {
   type OwnerPage,
 } from '../../hooks/useOwnerWorkspace';
 import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
+import { IncidentEvidencePreview } from './IncidentEvidencePreview';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { mutationKeys } from '../../../../../packages/client-core/src/contracts';
 import { todayVietnam, type StaffAssignment, type Staff } from '../staff/staffContracts';

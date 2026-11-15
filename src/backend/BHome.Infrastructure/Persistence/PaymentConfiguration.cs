@@ -14,6 +14,9 @@ internal sealed class PaymentTransferConfiguration : IEntityTypeConfiguration<Pa
         e.Property(x => x.Amount).HasPrecision(18, 0); e.Property(x => x.Currency).HasMaxLength(3);
         e.Property(x => x.ProviderIdentity).HasMaxLength(80); e.Property(x => x.BankReference).HasMaxLength(150); e.Property(x => x.NormalizedReference).HasMaxLength(150);
         e.Property(x => x.TransferDescription).HasMaxLength(100); e.Property(x => x.StatementReference).HasMaxLength(500);
+        e.Property(x => x.StatementEvidenceObjectKey).HasMaxLength(300);
+        e.Property(x => x.StatementEvidenceSha256).HasMaxLength(64);
+        e.Property(x => x.StatementEvidenceContentType).HasMaxLength(20);
         e.Property(x => x.VerificationReason).HasMaxLength(2000); e.Property(x => x.VerificationSource).HasMaxLength(50);
         e.Ignore(x => x.ProposedDepositContractId);
         e.HasIndex(x => new { x.ProviderIdentity, x.NormalizedReference }).IsUnique();

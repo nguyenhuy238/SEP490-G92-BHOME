@@ -65,7 +65,7 @@ it('does not reuse a whole-excess decision for another Main deposit', async () =
 });
 async function fill() {
   await screen.findByText('Xác nhận toàn bộ giao dịch là tiền dư');
-  fireEvent.mouseDown(screen.getByLabelText('Người thực trả nhận lại tiền'));
+  fireEvent.mouseDown(screen.getByLabelText('Người nhận hoàn tiền đã xác minh'));
   fireEvent.click(await screen.findByRole('option', { name: 'Synthetic actual payer' }));
   fireEvent.change(screen.getByLabelText('Lý do xác nhận toàn bộ tiền dư'), {
     target: { value: 'Synthetic statement reviewed' },
@@ -128,7 +128,7 @@ it('confirms whole excess to the attested outside payer without a placeholder Re
   api.confirmExcess.mockRejectedValue({ status: 503 });
   mount();
   await screen.findByText('Xác nhận toàn bộ giao dịch là tiền dư');
-  fireEvent.mouseDown(screen.getByLabelText('Người thực trả nhận lại tiền'));
+  fireEvent.mouseDown(screen.getByLabelText('Người nhận hoàn tiền đã xác minh'));
   fireEvent.click(await screen.findByRole('option', { name: /Synthetic outside payer/ }));
   fireEvent.change(screen.getByLabelText('Lý do xác nhận toàn bộ tiền dư'), {
     target: { value: 'Synthetic checked source' },

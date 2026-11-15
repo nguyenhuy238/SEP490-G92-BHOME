@@ -15,7 +15,6 @@ import {
   paymentError,
   type BankTransfer,
   type DebtInvoice,
-  type PayerChoice,
   type InvoicePayment,
 } from '../../../../../packages/client-core/src/payments';
 import type { Page } from '../../../../../packages/client-core/src/invoices';
@@ -244,7 +243,6 @@ function PaymentDecisionForm({ item, onChanged }: { item: BankTransfer; onChange
   const service = useMemo(() => paymentClient(api!.request.bind(api!)), [api]);
   const mutation = useFinancialMutation(paymentError, onChanged);
   const [invoiceId, setInvoiceId] = useState(item.proposedInvoiceId ?? ''),
-    [payer, setPayer] = useState(''),
     [reason, setReason] = useState('');
   const [page, setPage] = useState(1),
     [checked, setChecked] = useState(false),
@@ -252,33 +250,18 @@ function PaymentDecisionForm({ item, onChanged }: { item: BankTransfer; onChange
   const invoices = useWorkspaceQuery<Page<DebtInvoice>>(
     `/api/v1/payment-invoices?page=${page}&pageSize=20`,
   );
-  const payers = useWorkspaceQuery<PayerChoice[]>(
-    invoiceId ? `/api/v1/invoices/${encodeURIComponent(invoiceId)}/payment/eligible-payers` : null,
-  );
   const invoice = useWorkspaceQuery<InvoicePayment>(
     invoiceId ? `/api/v1/invoices/${encodeURIComponent(invoiceId)}/payment` : null,
   );
   const ready =
-    !!invoice.data &&
-    invoice.data.paymentStatus === 'Unpaid' &&
-    !!payers.data &&
-    !payers.error &&
-    !invoice.error &&
-    !payers.loading &&
-    !invoice.loading;
+    !!invoice.data && invoice.data.paymentStatus === 'Unpaid' && !invoice.error && !invoice.loading;
   const blocked = mutation.busy || mutation.review;
   function perform() {
     if (blocked || !checked || !decision) return;
-    if (
-      decision === 'allocate' &&
-      ready &&
-      invoiceId &&
-      payer &&
-      payers.data?.some((person) => person.userId === payer)
-    ) {
-      const body = { invoiceId, payer };
+    if (decision === 'allocate' && ready && invoiceId) {
+      const body = { invoiceId, paidByUserId: null };
       void mutation.run(`payment/${item.id}/allocate`, body, (key) =>
-        service.allocate(item.id, invoiceId, payer, key),
+        service.allocate(item.id, invoiceId, null, key),
       );
     } else if (decision === 'reject' && reason.trim() && reason.trim().length <= 2000) {
       void mutation.run(`payment/${item.id}/reject`, { reason: reason.trim() }, (key) =>
@@ -308,7 +291,6 @@ function PaymentDecisionForm({ item, onChanged }: { item: BankTransfer; onChange
         ]}
         onChange={(value) => {
           setInvoiceId(value);
-          setPayer('');
           setChecked(false);
         }}
       />
@@ -322,10 +304,8 @@ function PaymentDecisionForm({ item, onChanged }: { item: BankTransfer; onChange
       )}
       {!!invoiceId && (
         <>
-          {(invoice.loading || payers.loading) && <Text>Đang đối chiếu hóa đơn…</Text>}
-          {!!(invoice.error || payers.error) && (
-            <Text style={ui.red}>{invoice.error || payers.error}</Text>
-          )}
+          {invoice.loading && <Text>Đang đối chiếu hóa đơn…</Text>}
+          {!!invoice.error && <Text style={ui.red}>{invoice.error}</Text>}
           {invoice.data && (
             <Text>
               Phải thu: {formatContractMoney(invoice.data.payableAmount)} · Đã trả:{' '}
@@ -333,22 +313,6 @@ function PaymentDecisionForm({ item, onChanged }: { item: BankTransfer; onChange
               {formatContractMoney(invoice.data.outstandingAmount)}
             </Text>
           )}
-          <ChoiceField
-            label="Người thực trả"
-            value={payer}
-            disabled={blocked || !ready}
-            options={[
-              { id: '', label: 'Chọn người trả đã đối chiếu' },
-              ...(payers.data ?? []).map((value) => ({
-                id: value.userId,
-                label: value.displayLabel,
-              })),
-            ]}
-            onChange={(value) => {
-              setPayer(value);
-              setChecked(false);
-            }}
-          />
         </>
       )}
       <Input
@@ -361,7 +325,7 @@ function PaymentDecisionForm({ item, onChanged }: { item: BankTransfer; onChange
         }}
       />
       <Checkbox.Item
-        label="Tôi đã đối chiếu sao kê, nghĩa vụ và người thực trả"
+        label="Tôi đã đối chiếu giao dịch và hóa đơn theo sao kê"
         status={checked ? 'checked' : 'unchecked'}
         disabled={blocked}
         onPress={() => setChecked((value) => !value)}
@@ -372,10 +336,7 @@ function PaymentDecisionForm({ item, onChanged }: { item: BankTransfer; onChange
         </Text>
       )}
       {mutation.review && <Text>Tải lại giao dịch để kiểm tra kết quả trước khi gửi tiếp.</Text>}
-      <Action
-        disabled={blocked || !checked || !ready || !payer}
-        onPress={() => setDecision('allocate')}
-      >
+      <Action disabled={blocked || !checked || !ready} onPress={() => setDecision('allocate')}>
         Phân bổ vào hóa đơn
       </Action>
       <Action
@@ -387,7 +348,7 @@ function PaymentDecisionForm({ item, onChanged }: { item: BankTransfer; onChange
       </Action>
       <Confirmation
         title={decision === 'allocate' ? 'Xác nhận phân bổ?' : 'Không phân bổ giao dịch?'}
-        detail={`${formatContractMoney(item.amount)} · ${item.bankReference} · ${decision === 'allocate' ? 'Máy chủ sẽ kiểm tra số tiền, tham chiếu và người trả.' : reason}`}
+        detail={`${formatContractMoney(item.amount)} · ${item.bankReference} · ${decision === 'allocate' ? 'Máy chủ sẽ kiểm tra số tiền, tham chiếu và hóa đơn.' : reason}`}
         open={decision !== null}
         busy={mutation.busy}
         close={() => setDecision(null)}

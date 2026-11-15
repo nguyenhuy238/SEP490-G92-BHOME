@@ -243,8 +243,8 @@ export function ReceiptExcessPanel({
               {formatContractMoney(context.data.outstanding)}
             </Typography>
             <Alert severity="info">
-              Chỉ xác nhận sau khi đối chiếu sao kê và người thực trả. Sau đó cần lập, duyệt và ghi
-              bằng chứng hoàn tiền thực tế.
+              Chỉ xác nhận sau khi đối chiếu sao kê và người có quyền nhận hoàn. Sau đó cần lập,
+              duyệt và ghi bằng chứng hoàn tiền thực tế.
             </Alert>
             {context.data.problems.map((problem) => (
               <Alert severity="warning" key={problem}>
@@ -253,7 +253,7 @@ export function ReceiptExcessPanel({
             ))}
             <TextField
               select
-              label="Người thực trả nhận lại tiền"
+              label="Người nhận hoàn tiền đã xác minh"
               value={payer}
               disabled={busy}
               onChange={(e) => setPayer(e.target.value)}
@@ -266,7 +266,7 @@ export function ReceiptExcessPanel({
               ))}
               {context.data.externalPayer && (
                 <MenuItem value={`external:${context.data.externalPayer.id}`}>
-                  {context.data.externalPayer.payerLabel} · Người trả bên ngoài đã xác minh
+                  {context.data.externalPayer.payerLabel} · Hồ sơ bên ngoài đã xác minh
                 </MenuItem>
               )}
             </TextField>
@@ -286,7 +286,7 @@ export function ReceiptExcessPanel({
                   onChange={(_, value) => setConfirmation(value ? source : '')}
                 />
               }
-              label="Tôi đã đối chiếu nghĩa vụ đã đủ tiền và đúng người thực trả trên sao kê"
+              label="Tôi đã đối chiếu khoản tiền dư và người nhận hoàn theo bằng chứng"
             />
             <Button
               disabled={

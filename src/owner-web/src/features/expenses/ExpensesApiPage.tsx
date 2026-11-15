@@ -67,6 +67,13 @@ export function ExpensesApiPage() {
   });
   const scopedFilter = { ...filter, locationId: routeLocation || filter.locationId };
   const invalidRange = !!(filter.from && filter.to && filter.from > filter.to);
+  const hasActiveFilters = !!(
+    filter.expenseType ||
+    filter.locationId ||
+    filter.category ||
+    filter.from ||
+    filter.to
+  );
   const today = todayVietnam();
   const reportFilter = { from: `${today.slice(0, 7)}-01`, to: today, locationId: routeLocation };
   const report = useQuery({
@@ -264,6 +271,11 @@ export function ExpensesApiPage() {
           <Tab key={t.id} value={t.id} label={t.name} />
         ))}
       </Tabs>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        Danh sách gồm các khoản chi ghi tại đây và khoản chi do nghiệp vụ khác quản lý. Trạng thái
+        chỉnh sửa được hiển thị trên từng khoản; liên kết tài sản hoặc Work Order chỉ xuất hiện khi
+        khoản chi có tham chiếu tương ứng.
+      </Typography>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         sx={{ alignItems: { sm: 'center' }, gap: 1, mb: 1.5 }}
@@ -335,7 +347,18 @@ export function ExpensesApiPage() {
       </Collapse>
       {invalidRange && <Alert severity="warning">Chọn lại khoảng ngày để xem khoản chi.</Alert>}
       {!invalidRange && !rows.error && rows.data?.items.length === 0 && (
-        <Alert severity="info">Chưa có khoản chi phù hợp.</Alert>
+        <Alert
+          severity="info"
+          action={
+            hasActiveFilters ? (
+              <Button onClick={() => setFilter({ page: 1 })}>Xem tất cả khoản chi</Button>
+            ) : undefined
+          }
+        >
+          {hasActiveFilters
+            ? 'Không tìm thấy khoản chi theo bộ lọc hiện tại. Xem tất cả khoản chi để kiểm tra lại danh sách.'
+            : 'Chưa có khoản chi nào được ghi nhận trong phạm vi này. Chọn Ghi khoản chi để thêm khoản chi thực tế đầu tiên.'}
+        </Alert>
       )}
       {!invalidRange && !rows.error && !!rows.data?.items.length && (
         <>
@@ -365,6 +388,9 @@ export function ExpensesApiPage() {
                     {locations.data?.find((l) => l.id === e.locationId)?.label ??
                       'Cơ sở đã liên kết'}
                   </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {e.canEdit ? 'Có thể chỉnh sửa tại đây' : 'Do nghiệp vụ nguồn quản lý'}
+                  </Typography>
                   {e.note && (
                     <Typography
                       variant="body2"
@@ -375,7 +401,12 @@ export function ExpensesApiPage() {
                   )}
                   {(e.assetName || e.taskTitle) && (
                     <Typography variant="caption" color="text.secondary">
-                      {[e.assetName, e.taskTitle].filter(Boolean).join(' · ')}
+                      {[
+                        e.assetName ? `Tài sản: ${e.assetName}` : '',
+                        e.taskTitle ? `Work Order: ${e.taskTitle}` : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </Typography>
                   )}
                   <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap', pt: 0.5 }}>
@@ -432,6 +463,13 @@ export function ExpensesApiPage() {
                         {types.find((t) => t.id === e.expenseType)?.name ?? e.expenseType}
                       </Typography>
                       <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block' }}
+                      >
+                        {e.canEdit ? 'Có thể chỉnh sửa tại đây' : 'Do nghiệp vụ nguồn quản lý'}
+                      </Typography>
+                      <Typography
                         variant="body2"
                         color="text.secondary"
                         sx={{
@@ -446,8 +484,13 @@ export function ExpensesApiPage() {
                         {e.note}
                       </Typography>
                       {(e.assetName || e.taskTitle) && (
-                        <Typography variant="caption">
-                          {[e.assetName, e.taskTitle].filter(Boolean).join(' · ')}
+                        <Typography variant="caption" sx={{ display: 'block' }}>
+                          {[
+                            e.assetName ? `Tài sản: ${e.assetName}` : '',
+                            e.taskTitle ? `Work Order: ${e.taskTitle}` : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </Typography>
                       )}
                     </TableCell>
@@ -547,6 +590,14 @@ export function ExpensesApiPage() {
                 {editor.previous && !editor.previous.canEdit && (
                   <Alert severity="info">
                     Khoản chi này do nghiệp vụ nguồn quản lý; chỉnh sửa tại nghiệp vụ nguồn.
+                    {routed && editor.previous.taskId && (
+                      <Button
+                        component={RouterLink}
+                        to={`/maintenance?workOrderId=${encodeURIComponent(editor.previous.taskId)}`}
+                      >
+                        Mở Work Order liên quan
+                      </Button>
+                    )}
                   </Alert>
                 )}
                 <Box>
@@ -666,7 +717,8 @@ export function ExpensesApiPage() {
                         3. Liên kết bổ sung (không bắt buộc)
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Mở khi cần gắn khoản chi với phòng, tài sản hoặc công việc bảo trì.
+                        Mở khi cần gắn khoản chi với phòng, tài sản hoặc Work Order đã tồn tại. Liên
+                        kết này chỉ dùng để tham chiếu, không tạo Work Order mới.
                       </Typography>
                     </Box>
                   </AccordionSummary>

@@ -63,6 +63,11 @@ export interface BankTransfer {
   occurredAt: string;
   transferDescription: string;
   statementReference: string;
+  statementEvidence?: {
+    contentType: string;
+    length: number;
+    sha256: string;
+  } | null;
   verificationReason: string;
   verifiedByUserId: string;
   verifiedAt: string;
@@ -229,7 +234,13 @@ export function paymentQuery(filter: PaymentFilter = {}) {
     if (value !== undefined && value !== '') query.set(key, String(value));
   return query.toString();
 }
-export function paymentClient(request: <T>(path: string, init?: RequestInit) => Promise<T>) {
+export function paymentClient(
+  request: <T>(
+    path: string,
+    init?: RequestInit,
+    responseType?: 'json' | 'blob' | 'bytes',
+  ) => Promise<T>,
+) {
   const mutation = <T>(route: string, body: unknown, key: string) =>
     request<T>(route, {
       method: 'POST',
@@ -311,11 +322,28 @@ export function paymentClient(request: <T>(path: string, init?: RequestInit) => 
       request<Page<BankTransfer>>(root + '?' + paymentQuery(filter), { signal }),
     transfer: (id: string, signal?: AbortSignal) =>
       request<BankTransfer>(`${root}/${encodeURIComponent(id)}`, { signal }),
+    transferEvidence: (id: string, signal?: AbortSignal) =>
+      request<Blob>(`${root}/${encodeURIComponent(id)}/evidence`, { signal }, 'blob'),
     reviews: (id: string, signal?: AbortSignal) =>
       request<Page<Reconciliation>>(`${root}/${encodeURIComponent(id)}/reconciliation-history`, {
         signal,
       }),
     register: (input: TransferInput, key: string) => mutation<BankTransfer>(root, input, key),
+    registerWithEvidence: (input: TransferInput, evidence: File, key: string) => {
+      const body = new FormData();
+      body.append('input', JSON.stringify(input));
+      // The original filename may contain private bank or customer information.
+      body.append(
+        'evidence',
+        evidence,
+        evidence.type === 'image/png' ? 'sao-ke.png' : 'sao-ke.jpg',
+      );
+      return request<BankTransfer>(`${root}/manual-with-evidence`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body,
+      });
+    },
     allocate: (id: string, invoiceId: string, paidByUserId: string | null, key: string) =>
       mutation<{ status: string; reason: string }>(
         `${root}/${encodeURIComponent(id)}/allocate`,
@@ -455,6 +483,23 @@ export function paymentError(error: unknown) {
       'Cần chọn người thực trả, nhập lý do và xác nhận đối chiếu.',
     invalid_verified_bank_transfer:
       'Kiểm tra số tiền VND nguyên, thời gian và bằng chứng sao kê; cần xác nhận của Owner.',
+    bank_statement_image_required: 'Chọn ảnh sao kê PNG hoặc JPEG trước khi lưu giao dịch.',
+    bank_statement_image_too_large: 'Ảnh sao kê vượt quá 5 MB. Chọn ảnh nhỏ hơn rồi thử lại.',
+    bank_statement_image_type_invalid: 'Ảnh sao kê phải là tệp PNG hoặc JPEG.',
+    bank_statement_image_invalid:
+      'Nội dung tệp không phải ảnh PNG/JPEG hợp lệ. Chọn ảnh khác rồi thử lại.',
+    bank_statement_image_integrity_failed:
+      'Ảnh sao kê không còn khớp dữ liệu đã lưu. Không sử dụng ảnh này để đối soát; liên hệ quản trị viên.',
+    bank_statement_image_conflict:
+      'Ảnh sao kê hoặc giao dịch đã thay đổi trong lần ghi nhận trước. Tải lại danh sách và kiểm tra trước khi thử lại.',
+    bank_statement_image_missing:
+      'Ảnh sao kê đã ghi nhận không còn trong kho lưu trữ. Liên hệ quản trị viên để kiểm tra.',
+    bank_statement_image_not_found:
+      'Không tìm thấy ảnh sao kê trong phạm vi tài khoản. Tải lại chi tiết giao dịch để kiểm tra.',
+    bank_statement_storage_unavailable:
+      'Kho lưu trữ ảnh sao kê tạm thời không sẵn sàng. Kiểm tra trạng thái giao dịch rồi thử lại sau.',
+    invalid_payment_input:
+      'Thông tin giao dịch không hợp lệ. Kiểm tra các trường, ảnh đính kèm rồi thử lại.',
     payment_idempotency_key_reused:
       'Yêu cầu đã dùng với nội dung khác. Hãy tải lại trước khi thao tác.',
     bank_transaction_identity_conflict: 'Tham chiếu ngân hàng đã tồn tại với dữ liệu khác.',
@@ -472,10 +517,16 @@ export function paymentError(error: unknown) {
   };
   return (
     (code && errors[code]) ||
-    (value?.status === 403
-      ? 'Tài khoản không có quyền thực hiện thao tác.'
-      : value?.status === 404
-        ? 'Không tìm thấy dữ liệu trong phạm vi tài khoản.'
-        : 'Chưa hoàn thành yêu cầu. Tải lại trạng thái trước khi thử lại.')
+    (value?.status === 413
+      ? 'Ảnh đính kèm vượt giới hạn dung lượng. Chọn ảnh tối đa 5 MB.'
+      : value?.status === 415
+        ? 'Định dạng tệp không được hỗ trợ. Chỉ chọn ảnh PNG hoặc JPEG.'
+        : value?.status === 503
+          ? 'Dịch vụ thanh toán hoặc kho lưu trữ tạm thời không sẵn sàng. Kiểm tra trạng thái trước khi thử lại.'
+          : value?.status === 403
+            ? 'Tài khoản không có quyền thực hiện thao tác.'
+            : value?.status === 404
+              ? 'Không tìm thấy dữ liệu trong phạm vi tài khoản.'
+              : 'Chưa hoàn thành yêu cầu. Tải lại trạng thái trước khi thử lại.')
   );
 }

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@mui/material';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router';
 import { theme } from '../../theme/theme';
 import { OwnerAdjustmentDetail, OwnerAdjustmentList } from './AdjustmentsPage';
 const mocks = vi.hoisted(() => ({
@@ -52,7 +53,7 @@ function mount(element: React.ReactNode) {
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
-        {element}
+        <MemoryRouter>{element}</MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
   );
@@ -217,11 +218,48 @@ it('retries the real list and displays an explicit empty state', async () => {
   mocks.api.list.mockRejectedValue({ status: 503 });
   mount(<OwnerAdjustmentList />);
   const retry = await screen.findByText('Thử lại');
+  expect(screen.queryByText('0 yêu cầu chờ duyệt · Tất cả cơ sở')).not.toBeInTheDocument();
   mocks.api.list.mockResolvedValue({ items: [], totalCount: 0 });
   fireEvent.click(retry);
-  await screen.findByText('Không có yêu cầu phù hợp.');
+  await screen.findByText('Không có yêu cầu chờ duyệt');
+  expect(screen.getByText(/Khi khách thuê gửi yêu cầu/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem tất cả yêu cầu' }));
+  await waitFor(() => expect(mocks.api.list.mock.calls.at(-1)?.[0].status).toBe(''));
 });
-it('lets Owner filter the pending adjustment queue from one compact toolbar', async () => {
+it('explains a scoped empty queue and offers to clear location filters', async () => {
+  mocks.api.request.mockImplementation(async (path: string) =>
+    path.endsWith('/locations') ? [{ id: 'location-1', label: 'Cơ sở Trường Vũ' }] : [],
+  );
+  mount(<OwnerAdjustmentList />);
+  fireEvent.click(screen.getByRole('button', { name: 'Lọc theo cơ sở, phòng' }));
+  fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Cơ sở' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Cơ sở Trường Vũ' }));
+  expect(
+    await screen.findByText('Không tìm thấy yêu cầu trong phạm vi đã lọc'),
+  ).toBeInTheDocument();
+  expect(mocks.api.list.mock.calls.at(-1)?.[0]).toMatchObject({
+    locationId: 'location-1',
+    status: 'Pending',
+    page: 1,
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc chi tiết' }));
+  await waitFor(() =>
+    expect(mocks.api.list.mock.calls.at(-1)?.[0]).toMatchObject({
+      locationId: '',
+      status: 'Pending',
+      page: 1,
+    }),
+  );
+});
+it('shows the server total and proposed amount without treating one page as the whole queue', async () => {
+  mocks.api.list.mockResolvedValue({ items: [value], totalCount: 44 });
+  mount(<OwnerAdjustmentList />);
+  const table = await screen.findByRole('table', { name: 'Danh sách yêu cầu điều chỉnh' });
+  expect(screen.getByText('Hiển thị 1 / 44 yêu cầu · Trang 1')).toBeInTheDocument();
+  expect(within(table).getByText(/Đề xuất: 90.000/)).toBeInTheDocument();
+  expect(screen.getByRole('navigation', { name: 'Phân trang danh sách' })).toBeInTheDocument();
+});
+it('lets Owner switch queue states and apply advanced filters without changing decisions', async () => {
   mount(<OwnerAdjustmentList />);
   expect(screen.queryByText('Bắt đầu xử lý yêu cầu')).not.toBeInTheDocument();
   await waitFor(() =>
@@ -230,25 +268,25 @@ it('lets Owner filter the pending adjustment queue from one compact toolbar', as
       page: 1,
     }),
   );
-  const status = screen.getByRole('combobox', { name: 'Trạng thái yêu cầu' });
-  expect(status).toHaveTextContent('Chờ duyệt');
-  fireEvent.mouseDown(status);
-  fireEvent.click(screen.getByRole('option', { name: 'Tất cả yêu cầu' }));
+  expect(screen.getByRole('button', { name: /^Chờ duyệt/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /^Tất cả/ }));
   await waitFor(() =>
     expect(mocks.api.list.mock.calls.at(-1)?.[0]).toMatchObject({
       status: '',
       page: 1,
     }),
   );
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Trạng thái yêu cầu' }));
-  fireEvent.click(screen.getByRole('option', { name: 'Chờ duyệt' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Lọc chi tiết' }));
-  expect(screen.getByRole('button', { name: 'Thu gọn bộ lọc' })).toHaveAttribute(
+  fireEvent.click(screen.getByRole('button', { name: /^Chờ duyệt/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Lọc theo cơ sở, phòng' }));
+  expect(screen.getByRole('button', { name: 'Ẩn bộ lọc' })).toHaveAttribute(
     'aria-expanded',
     'true',
   );
-  expect(screen.getByLabelText('Cơ sở điều chỉnh')).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('Lọc theo mã hóa đơn'), {
+  expect(screen.getByLabelText('Cơ sở')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Mã hóa đơn (nếu có)'), {
     target: { value: 'invoice' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }));
@@ -279,7 +317,7 @@ it('keeps the mobile request action alongside the original amount and request st
   const identity = within(table).getByRole('rowheader');
   expect(within(identity).getByText('100.000 ₫')).toBeVisible();
   expect(within(identity).getByText('Đã phát hành')).toBeVisible();
-  fireEvent.click(within(table).getByRole('button', { name: 'Xem yêu cầu điều chỉnh' }));
+  fireEvent.click(within(table).getByRole('button', { name: 'Xem và xử lý' }));
   expect(await screen.findByText('Phê duyệt điều chỉnh')).toBeDisabled();
   expect(mocks.api.decide).not.toHaveBeenCalled();
 });
@@ -287,9 +325,11 @@ it('opens a request in a drawer and preserves the list after closing', async () 
   mocks.api.list.mockResolvedValue({ items: [value], totalCount: 1 });
   mount(<OwnerAdjustmentList />);
   const table = await screen.findByRole('table', { name: 'Danh sách yêu cầu điều chỉnh' });
-  fireEvent.click(within(table).getByRole('button', { name: 'Xem yêu cầu điều chỉnh' }));
+  fireEvent.click(within(table).getByRole('button', { name: 'Xem và xử lý' }));
   expect(await screen.findByRole('dialog', { name: 'Xem & xử lý yêu cầu' })).toBeInTheDocument();
-  expect(await screen.findByText('Sai tiền thuê', { exact: false })).toBeInTheDocument();
+  expect(
+    await within(screen.getByRole('dialog')).findByText('Yêu cầu: Sai tiền thuê'),
+  ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
   await waitFor(() => expect(screen.queryByText('Xem & xử lý yêu cầu')).not.toBeInTheDocument());
   expect(screen.getByRole('table', { name: 'Danh sách yêu cầu điều chỉnh' })).toBeInTheDocument();

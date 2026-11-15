@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Alert,
@@ -13,7 +13,6 @@ import {
   DialogTitle,
   FormControlLabel,
   LinearProgress,
-  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -38,17 +37,18 @@ import { usePaymentApi } from './usePaymentApi';
 import { signedVnd } from '../../../../../packages/client-core/src/adjustments';
 import { RefundPanel } from './RefundPanel';
 import { ReceiptExcessPanel } from './ReceiptExcessPanel';
-import { ExternalPaymentPayerPanel } from './ExternalPaymentPayerPanel';
 import { PaymentInvoicePicker } from './PaymentInvoicePicker';
 import { StatusChip } from '../../components/common/PortalUI';
 import { MoneyField } from '../../components/common/MoneyField';
+import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
+
+const MAX_STATEMENT_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
   const api = usePaymentApi();
   const navigate = useNavigate();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
-  const [record, setRecord] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [instructionsExpanded, setInstructionsExpanded] = useState(false);
   const state = useQuery({
@@ -140,7 +140,7 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
               <Alert severity="warning">
                 Tiền thừa chờ xem xét:{' '}
                 {formatContractMoney(state.data.potentialExcessAmount ?? '0')}. Owner cần đối chiếu
-                người thực trả và ghi bằng chứng hoàn tiền thực tế.
+                người nhận hoàn và ghi bằng chứng hoàn tiền thực tế.
               </Alert>
             )}
             {state.data.pendingReview && state.data.reviewStatus !== 'PendingReview' && (
@@ -152,31 +152,6 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
               <Alert severity="info">
                 Hóa đơn chưa phát hành nên chưa có thao tác ghi nhận tiền cho hóa đơn này.
               </Alert>
-            )}
-            {state.data.paymentStatus !== 'NotIssued' && (
-              <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
-                <Button
-                  variant="outlined"
-                  aria-expanded={record}
-                  aria-controls="invoice-bank-statement-form"
-                  onClick={() => setRecord((value) => !value)}
-                >
-                  {record ? 'Đóng biểu mẫu sao kê' : 'Ghi nhận giao dịch từ sao kê'}
-                </Button>
-              </Stack>
-            )}
-            {record && (
-              <Box
-                id="invoice-bank-statement-form"
-                sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2 }}
-              >
-                <RecordTransferForm
-                  key={invoiceId}
-                  invoiceId={invoiceId}
-                  state={state.data}
-                  onClose={() => setRecord(false)}
-                />
-              </Box>
             )}
             {(state.data.history.length > 0 ||
               state.data.originalIssuedAmount !== undefined ||
@@ -253,7 +228,6 @@ export function OwnerInvoicePaymentPanel({ invoiceId }: { invoiceId: string }) {
                             {formatContractMoney(item.amount)}
                           </Typography>
                         </Stack>
-                        <Typography variant="body2">Người trả: {item.paidBy}</Typography>
                         <Typography variant="caption" color="text.secondary">
                           {item.verificationSource === 'SePayTest'
                             ? 'SePay thử nghiệm xác minh'
@@ -391,14 +365,30 @@ export function RecordTransferForm({
     [amount, setAmount] = useState(state?.outstandingAmount ?? ''),
     [occurred, setOccurred] = useState(''),
     [description, setDescription] = useState(state?.transferReference ?? initialDescription ?? '');
-  const [statement, setStatement] = useState(''),
-    [reason, setReason] = useState(''),
+  const [evidence, setEvidence] = useState<File | null>(null);
+  const [evidencePreview, setEvidencePreview] = useState('');
+  const [evidenceError, setEvidenceError] = useState('');
+  const [reason, setReason] = useState(''),
     [checked, setChecked] = useState(false),
     [demo, setDemo] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const [saved, setSaved] = useState<BankTransfer | null>(null);
   const [proofExpanded, setProofExpanded] = useState(false);
+  const previewObjectUrl = useRef<string | null>(null);
+  useEffect(() => {
+    return () => {
+      if (previewObjectUrl.current) URL.revokeObjectURL(previewObjectUrl.current);
+    };
+  }, []);
+  const replaceEvidence = (file: File | null) => {
+    const url = file && typeof URL.createObjectURL === 'function' ? URL.createObjectURL(file) : '';
+    if (previewObjectUrl.current) URL.revokeObjectURL(previewObjectUrl.current);
+    previewObjectUrl.current = url || null;
+    setEvidencePreview(url);
+    setEvidence(file);
+    changed();
+  };
   const changed = () => {
     key.current = crypto.randomUUID();
     setChecked(false);
@@ -407,8 +397,8 @@ export function RecordTransferForm({
     return (
       <>
         <Alert severity="success">
-          Đã lưu giao dịch từ sao kê. Tiền chưa tự phân bổ vào hóa đơn; kiểm tra và xác nhận giao
-          dịch bên dưới.
+          Đã lưu giao dịch kèm ảnh sao kê để đối soát. Tiền chưa tự phân bổ vào hóa đơn; kiểm tra và
+          xác nhận giao dịch bên dưới.
         </Alert>
         {onRecorded ? (
           <Button onClick={() => onRecorded(saved.id)}>Đối chiếu receipt cọc vừa lưu</Button>
@@ -436,11 +426,16 @@ export function RecordTransferForm({
           setError('Nhập số nguyên VND và ngày giờ sao kê theo giờ Việt Nam.');
           return;
         }
+        if (!evidence) {
+          setEvidenceError('Chọn ảnh sao kê PNG hoặc JPEG trước khi lưu giao dịch.');
+          setProofExpanded(true);
+          return;
+        }
         lock.current = true;
         setBusy(true);
         setError('');
         void api
-          .register(
+          .registerWithEvidence(
             {
               providerIdentity: provider,
               bankReference: reference,
@@ -448,16 +443,23 @@ export function RecordTransferForm({
               currency: 'VND',
               occurredAt: instant,
               transferDescription: description,
-              statementReference: statement,
+              statementReference: '',
               verificationReason: reason,
               proposedInvoiceId: invoiceId || null,
               ...(depositContractId ? { proposedDepositContractId: depositContractId } : {}),
               humanVerified: checked,
               isDevelopmentDemo: demo,
             },
+            evidence,
             key.current,
           )
           .then(async (result) => {
+            if (previewObjectUrl.current) {
+              URL.revokeObjectURL(previewObjectUrl.current);
+              previewObjectUrl.current = null;
+            }
+            setEvidencePreview('');
+            setEvidence(null);
             setSaved(result);
             await cache.invalidateQueries({ queryKey: ['payment-transfers'] });
           })
@@ -475,8 +477,8 @@ export function RecordTransferForm({
         </Typography>
       </Stack>
       <Typography variant="body2" color="text.secondary">
-        Bước 1/2 · Nhập giao dịch thực nhận từ sao kê. Sau khi đối chiếu bằng chứng, Owner mới lưu
-        để phân bổ vào hóa đơn.
+        Bước 1/2 · Nhập giao dịch từ sao kê. Chọn ảnh chứng từ và ghi chú xác minh ở bước tiếp theo;
+        giao dịch sẽ chờ đối soát sau khi lưu.
       </Typography>
       <Box
         sx={{
@@ -553,26 +555,87 @@ export function RecordTransferForm({
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
             Bước 2/2 · Bằng chứng đối chiếu
           </Typography>
+          <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              Ảnh sao kê ngân hàng (bắt buộc)
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>
+              Chọn ảnh PNG hoặc JPEG, tối đa 5 MB. Ảnh sẽ được lưu riêng tư và chỉ tải khi người
+              được cấp quyền mở chứng từ.
+            </Typography>
+            <Button
+              component="label"
+              type="button"
+              variant="outlined"
+              disabled={busy}
+              sx={{ minHeight: 44 }}
+            >
+              {evidence ? 'Thay ảnh sao kê' : 'Chọn ảnh sao kê'}
+              <input
+                hidden
+                type="file"
+                accept="image/png,image/jpeg"
+                aria-label="Chọn ảnh sao kê PNG hoặc JPEG"
+                disabled={busy}
+                onChange={(event) => {
+                  const selected = event.currentTarget.files?.[0];
+                  event.currentTarget.value = '';
+                  if (!selected) return;
+                  if (!['image/png', 'image/jpeg'].includes(selected.type)) {
+                    setEvidenceError('Chỉ chấp nhận ảnh PNG hoặc JPEG.');
+                    replaceEvidence(null);
+                    return;
+                  }
+                  if (selected.size === 0 || selected.size > MAX_STATEMENT_IMAGE_BYTES) {
+                    setEvidenceError('Ảnh phải có dung lượng lớn hơn 0 và không quá 5 MB.');
+                    replaceEvidence(null);
+                    return;
+                  }
+                  replaceEvidence(selected);
+                  setEvidenceError('');
+                }}
+              />
+            </Button>
+            {evidence && (
+              <Stack spacing={1} sx={{ mt: 1.5, minWidth: 0 }}>
+                <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                  Ảnh đã chọn: {evidence.name} ({(evidence.size / 1024).toFixed(0)} KB)
+                </Typography>
+                {evidencePreview && (
+                  <Box
+                    component="img"
+                    src={evidencePreview}
+                    alt="Xem trước ảnh sao kê đã chọn, chưa được tải lên"
+                    sx={{
+                      maxWidth: '100%',
+                      maxHeight: 260,
+                      objectFit: 'contain',
+                      alignSelf: 'flex-start',
+                      borderRadius: 1,
+                    }}
+                  />
+                )}
+                <Typography variant="caption" color="text.secondary">
+                  Đây là ảnh xem trước trên thiết bị. Ảnh chỉ được tải lên khi bạn lưu giao dịch.
+                </Typography>
+              </Stack>
+            )}
+            {evidenceError && (
+              <Alert severity="error" sx={{ mt: 1 }}>
+                {evidenceError}
+              </Alert>
+            )}
+          </Box>
           <TextField
             size="small"
             required
-            label="Tham chiếu bằng chứng sao kê"
-            value={statement}
-            onChange={(e) => {
-              setStatement(e.target.value);
-              changed();
-            }}
-          />
-          <TextField
-            size="small"
-            required
-            label="Căn cứ xác minh"
+            label="Ghi chú xác minh"
             value={reason}
             onChange={(e) => {
               setReason(e.target.value);
               changed();
             }}
-            helperText="Ghi ngắn gọn căn cứ xác minh, không nhập thông tin nhạy cảm không cần thiết."
+            helperText="Ghi cách bạn đã đối chiếu mã giao dịch, số tiền và thời gian trên sao kê. Không nhập số tài khoản đầy đủ hoặc thông tin nhạy cảm."
           />
           <Box sx={{ border: '1px solid', borderColor: 'divider', p: 1.5, borderRadius: 1.5 }}>
             <FormControlLabel
@@ -585,19 +648,29 @@ export function RecordTransferForm({
                   }}
                 />
               }
-              label="Dữ liệu tổng hợp Development/Testing"
+              label="Dữ liệu tổng hợp Development/Testing (không phải giao dịch thật)"
             />
+            {demo && (
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                Chỉ dùng ảnh sao kê thử nghiệm không chứa dữ liệu ngân hàng thật. Khoản này không
+                xác nhận có tiền ngân hàng thực nhận.
+              </Alert>
+            )}
             <Divider sx={{ my: 1 }} />
             <FormControlLabel
               control={
                 <Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)} />
               }
-              label="Tôi đã đối chiếu sao kê và xác minh tiền thực nhận"
+              label={
+                demo
+                  ? 'Tôi xác nhận ảnh và giao dịch này là dữ liệu thử nghiệm'
+                  : 'Tôi đã đối chiếu sao kê và xác minh tiền thực nhận'
+              }
             />
           </Box>
           <Typography variant="caption" color="text.secondary">
-            Lưu giao dịch chỉ ghi nhận bằng chứng thực nhận. Số dư hóa đơn sẽ cập nhật sau khi đối
-            soát và phân bổ thành công.
+            Ảnh sao kê chỉ là bằng chứng hỗ trợ đối chiếu, không tự xác minh thanh toán. Số dư hóa
+            đơn chỉ cập nhật sau khi máy chủ xác nhận phân bổ thành công.
           </Typography>
         </Stack>
       </Collapse>
@@ -606,8 +679,12 @@ export function RecordTransferForm({
         <Button disabled={busy} onClick={onClose} variant="outlined">
           Hủy nhập
         </Button>
-        <Button type="submit" disabled={busy || !checked} variant="contained">
-          Lưu giao dịch đã đối chiếu
+        <Button
+          type="submit"
+          disabled={busy || !checked || !evidence || !!evidenceError}
+          variant="contained"
+        >
+          {busy ? 'Đang tải ảnh và lưu…' : 'Lưu giao dịch chờ đối soát'}
         </Button>
       </Stack>
     </Stack>
@@ -625,7 +702,6 @@ export function ReconcileTransfer({
   const { session } = useAuth();
   const actor = session?.userId ?? '';
   const [invoiceId, setInvoiceId] = useState(initialInvoiceId || transfer.proposedInvoiceId || ''),
-    [payer, setPayer] = useState(''),
     [reject, setReject] = useState(''),
     [checked, setChecked] = useState(false);
   const [confirm, setConfirm] = useState(false),
@@ -634,11 +710,6 @@ export function ReconcileTransfer({
     [notice, setNotice] = useState('');
   const lock = useRef(false);
   const key = useRef(crypto.randomUUID());
-  const payers = useQuery({
-    queryKey: ['payment-payers', actor, invoiceId],
-    enabled: /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(invoiceId),
-    queryFn: ({ signal }) => api.payers(invoiceId, signal),
-  });
   const latest = useQuery({
     queryKey: ['payment-transfer', actor, transfer.id],
     queryFn: ({ signal }) => api.transfer(transfer.id, signal),
@@ -651,7 +722,6 @@ export function ReconcileTransfer({
   const [choosing, setChoosing] = useState(false),
     [invoiceLabel, setInvoiceLabel] = useState('');
   const [rejectOpen, setRejectOpen] = useState(false);
-  const [excessOpen, setExcessOpen] = useState(false);
   const data = latest.data ?? transfer;
   const hasInvoice = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(invoiceId);
   async function perform(rejection = false) {
@@ -662,7 +732,7 @@ export function ReconcileTransfer({
     try {
       if (rejection) await api.reject(transfer.id, reject, key.current);
       else {
-        const result = await api.allocate(transfer.id, invoiceId, payer || null, key.current);
+        const result = await api.allocate(transfer.id, invoiceId, null, key.current);
         setNotice(paymentText(result.reason));
       }
       setConfirm(false);
@@ -726,13 +796,39 @@ export function ReconcileTransfer({
           </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="caption" color="text.secondary">
-              Tham chiếu sao kê
+              {data.statementEvidence ? 'Ảnh sao kê đã lưu' : 'Tham chiếu sao kê'}
             </Typography>
-            <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-              {data.statementReference}
-            </Typography>
+            {data.statementEvidence ? (
+              <Stack spacing={0.75} sx={{ alignItems: 'flex-start' }}>
+                <Typography variant="caption" color="text.secondary">
+                  Ảnh lưu riêng tư · {(data.statementEvidence.length / 1024).toFixed(0)} KB
+                </Typography>
+                <PrivateEvidenceViewer
+                  label="ảnh sao kê"
+                  filename="anh-sao-ke"
+                  contentType={data.statementEvidence.contentType}
+                  expectedSize={data.statementEvidence.length}
+                  fetchBlob={(signal) => api.transferEvidence(data.id, signal)}
+                  errorMessage={paymentError}
+                />
+              </Stack>
+            ) : (
+              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                {data.statementReference || 'Chưa có ảnh sao kê đính kèm'}
+              </Typography>
+            )}
           </Box>
         </Box>
+        {data.verificationReason && (
+          <Box>
+            <Typography variant="caption" color="text.secondary">
+              Ghi chú xác minh
+            </Typography>
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+              {data.verificationReason}
+            </Typography>
+          </Box>
+        )}
         <Typography variant="body2" color="text.secondary">
           {data.reason === 'verified_excess_payment_pending_review'
             ? 'Đã phân bổ đủ hóa đơn từ giao dịch có tiền thừa. Xem trạng thái xử lý tại mục hoàn tiền.'
@@ -751,7 +847,7 @@ export function ReconcileTransfer({
         {notice && <Alert severity="info">{notice}</Alert>}
         {data.status === 'PendingReview' && (
           <Alert severity="info">
-            Cần Owner đối chiếu hóa đơn và người thực trả trước khi ghi nhận số tiền phân bổ.
+            Cần Owner đối chiếu giao dịch ngân hàng với hóa đơn trước khi ghi nhận số tiền phân bổ.
           </Alert>
         )}
         {data.status === 'Allocated' &&
@@ -835,7 +931,6 @@ export function ReconcileTransfer({
                     setInvoiceLabel(
                       `${i.locationName} · Phòng ${i.roomNumber} · ${i.billingPeriod.slice(0, 7)}`,
                     );
-                    setPayer('');
                     setChecked(false);
                     setChoosing(false);
                     key.current = crypto.randomUUID();
@@ -845,47 +940,17 @@ export function ReconcileTransfer({
               {hasInvoice ? (
                 <Stack spacing={1.5}>
                   <Typography variant="caption" color="text.secondary">
-                    Bước 2/2 · Kiểm tra người trả rồi xác nhận theo bằng chứng sao kê.
+                    Bước 2/2 · Đối chiếu giao dịch với hóa đơn trước khi xác nhận.
                   </Typography>
-                  <TextField
-                    size="small"
-                    select
-                    fullWidth
-                    label="Người thực trả đã xác minh"
-                    value={payer}
-                    onChange={(e) => {
-                      setPayer(e.target.value);
-                      setChecked(false);
-                      key.current = crypto.randomUUID();
-                    }}
-                  >
-                    <MenuItem value="">Chưa xác định người trả</MenuItem>
-                    {payers.data?.map((p) => (
-                      <MenuItem key={p.userId} value={p.userId}>
-                        {p.displayLabel}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                  {payers.isPending && (
-                    <LinearProgress aria-label="Đang tải người trả có thể chọn" />
-                  )}
-                  {payers.error && (
-                    <Alert
-                      severity="error"
-                      action={<Button onClick={() => void payers.refetch()}>Thử lại</Button>}
-                    >
-                      {paymentError(payers.error)}
-                    </Alert>
-                  )}
                   <FormControlLabel
                     control={
                       <Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)} />
                     }
-                    label="Tôi xác nhận đúng hóa đơn và người thực trả theo bằng chứng"
+                    label="Tôi đã đối chiếu giao dịch và hóa đơn theo sao kê"
                   />
                   <Button
                     variant="contained"
-                    disabled={busy || !!latest.error || !checked || !payers.data}
+                    disabled={busy || !!latest.error || !checked}
                     onClick={() => setConfirm(true)}
                     sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
                   >
@@ -893,9 +958,7 @@ export function ReconcileTransfer({
                   </Button>
                 </Stack>
               ) : (
-                <Alert severity="info">
-                  Chọn hóa đơn trước khi xác nhận người trả và phân bổ tiền.
-                </Alert>
+                <Alert severity="info">Chọn hóa đơn trước khi xác nhận và phân bổ tiền.</Alert>
               )}
               <Divider />
               <Button
@@ -936,34 +999,6 @@ export function ReconcileTransfer({
             </Stack>
           </Box>
         )}
-        <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-            Trường hợp cần xử lý bổ sung
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Chỉ sử dụng khi người trả không có hồ sơ trong hệ thống hoặc khi có vấn đề về tiền thừa.
-          </Typography>
-          <ExternalPaymentPayerPanel transferId={transfer.id} />
-          {data.status === 'PendingReview' && hasInvoice && (
-            <>
-              <Button
-                size="small"
-                aria-expanded={excessOpen}
-                onClick={() => setExcessOpen((value) => !value)}
-                sx={{ mt: 1 }}
-              >
-                {excessOpen ? 'Ẩn xử lý tiền thừa' : 'Kiểm tra trường hợp phải hoàn toàn bộ tiền'}
-              </Button>
-              <Collapse in={excessOpen} timeout="auto" unmountOnExit>
-                <ReceiptExcessPanel
-                  key={`${transfer.id}:${invoiceId}`}
-                  transferId={transfer.id}
-                  target={{ invoiceId }}
-                />
-              </Collapse>
-            </>
-          )}
-        </Box>
         {error && <Alert severity="error">{error}</Alert>}
         {!!history.data?.items.length && (
           <Stack spacing={1} sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
@@ -982,6 +1017,8 @@ export function ReconcileTransfer({
             Ghi nhận {formatContractMoney(data.amount)} từ sao kê cho hóa đơn đã chọn. Hệ thống sẽ
             kiểm tra số dư và chống ghi có trùng. Nếu thiếu tiền, chỉ ghi nhận số đã nhận và giữ dư
             nợ. Nếu thừa tiền, chỉ phân bổ tối đa dư nợ; phần thừa chờ Owner xử lý, chưa tự hoàn.
+            Việc hoàn tiền cần xác minh riêng người nhận và có thể chưa thực hiện được nếu thiếu hồ
+            sơ hợp lệ.
           </DialogContent>
           <DialogActions>
             <Button disabled={busy} onClick={() => setConfirm(false)}>

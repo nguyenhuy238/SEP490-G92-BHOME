@@ -8,11 +8,15 @@ using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.PaymentsDebt;
 using BHome.Application.PropertyManagement;
+using BHome.Application.Contracts;
+using BHome.Application.Ocr;
+using BHome.Application.Storage;
 
 namespace BHome.Application.PaymentsDebt;
 
 public sealed partial class PaymentService(IPaymentRepository repository, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null,
-    BHome.Application.Contracts.ContractService? contracts = null, SePay.IPaymentCodeRegistry? codes = null)
+    BHome.Application.Contracts.ContractService? contracts = null, SePay.IPaymentCodeRegistry? codes = null,
+    IObjectStorage? storage = null, IContractImageValidator? images = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new PaymentException(401, "authentication_required");
     private DateTimeOffset Now => PaymentRules.Timestamp(clock.GetUtcNow());
@@ -43,7 +47,33 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
         if (!scope.Owner && !scope.Tenant) throw new PaymentException(403, "payment_view_forbidden");
         return await repository.InvoiceAsync(id, scope, t) ?? throw new PaymentException(404, "payment_invoice_not_found");
     }
-    public async Task<TransferView> RegisterAsync(PaymentTransferInput input, Guid key, CancellationToken t)
+    // The multipart API uses this method. The separate legacy JSON API and SePay callbacks
+    // retain their existing textual statement-reference contract and historical records.
+    public async Task<TransferView> RegisterWithStatementEvidenceAsync(PaymentTransferInput input, Guid key, Stream image, CancellationToken t)
+    {
+        Owner();
+        if (key == Guid.Empty || image is null) throw new PaymentException(400, "bank_statement_image_required");
+        if (storage is null || images is null) throw new PaymentException(503, "bank_statement_storage_unavailable");
+        PrivateImageContent evidence;
+        try { evidence = await PrivateImageEvidence.ReadValidatedAsync(image, images, t); }
+        catch (PrivateImageTooLargeException) { throw new PaymentException(413, "bank_statement_image_too_large"); }
+        catch (OcrInputException) { throw new PaymentException(400, "bank_statement_image_invalid"); }
+        try
+        {
+            if (evidence.Length == 0) throw new PaymentException(400, "bank_statement_image_required");
+            if (evidence.ContentType is not ("image/png" or "image/jpeg"))
+                throw new PaymentException(415, "bank_statement_image_type_invalid");
+            // Stable textual provenance for SePay-compatible consumers. The supplied
+            // reference cannot impersonate the actual uploaded bank-statement image.
+            var normalized = input with { StatementReference = "MANUAL_IMAGE/" + evidence.Sha256 };
+            return await RegisterCoreAsync(normalized, key, evidence, t);
+        }
+        finally { CryptographicOperations.ZeroMemory(evidence.Bytes); }
+    }
+    public Task<TransferView> RegisterAsync(PaymentTransferInput input, Guid key, CancellationToken t) =>
+        RegisterCoreAsync(input, key, null, t);
+
+    private async Task<TransferView> RegisterCoreAsync(PaymentTransferInput input, Guid key, PrivateImageContent? evidence, CancellationToken t)
     {
         Owner(); Validate(input);
         var x = input with
@@ -60,6 +90,8 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             x.StatementReference.Length == 0 || x.VerificationReason.Length == 0 || x.ProposedInvoiceId == Guid.Empty || x.ProposedDepositContractId == Guid.Empty ||
             x.ProposedInvoiceId.HasValue && x.ProposedDepositContractId.HasValue || x.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
             throw new PaymentException(400, "invalid_verified_bank_transfer");
+        if (evidence is null && x.StatementReference.StartsWith("MANUAL_IMAGE/", StringComparison.OrdinalIgnoreCase))
+            throw new PaymentException(400, "bank_statement_image_required");
         x = x with { Amount = decimal.Truncate(x.Amount) };
         if (x.ProviderIdentity is "SEPAY:TEST" or "SEPAY:LIVE") throw new PaymentException(400, "provider_identity_reserved");
         var normalized = PaymentRules.NormalizeReference(x.BankReference);
@@ -75,18 +107,41 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             x.VerificationReason,
             x.ProposedInvoiceId,
             x.ProposedDepositContractId,
-            x.IsDevelopmentDemo
+            x.IsDevelopmentDemo,
+            StatementEvidenceSha256 = evidence?.Sha256
         };
-        // Serializes bank identities across commands without a fictitious financial effect.
-        return await repository.TransactionAsync<TransferView>(null, x.ProposedInvoiceId, async () =>
+        string? uploadedKey = null;
+        Guid? createdTransferId = null;
+        var linked = false;
+        try
         {
-            if (await Replay(key, "register", identity, t) is { } prior) return await TransferAsync(prior, t);
+            if (evidence is not null)
+            {
+                // MinIO work happens BEFORE the global payment-ledger advisory lock.
+                // Unique attempt keys prevent another concurrent retry from losing its proof
+                // if this attempt fails and compensates the remote upload.
+                uploadedKey = $"payments/manual-statements/{Actor:N}/{Guid.NewGuid():N}/{evidence.Sha256}";
+                try { await PrivateImageEvidence.PutVerifiedAsync(storage!, uploadedKey, evidence, t); }
+                catch (PrivateImageIntegrityException) { throw new PaymentException(409, "bank_statement_image_integrity_failed"); }
+            }
+            // Only this DB transaction serializes bank identities and changes the ledger.
+            var result = await repository.TransactionAsync<TransferView>(null, x.ProposedInvoiceId, async () =>
+        {
+            if (await Replay(key, "register", identity, t) is { } prior)
+            {
+                var recorded = await repository.TransferAsync(prior, t) ?? throw new PaymentException(409, "bank_statement_image_conflict");
+                if (evidence is not null && recorded.StatementEvidenceSha256 != evidence.Sha256)
+                    throw new PaymentException(409, "bank_statement_image_conflict");
+                return await TransferAsync(prior, t);
+            }
             if (await repository.ProviderReferenceReceivedAsync(normalized, t)) throw new PaymentException(409, "provider_transaction_requires_existing_receipt");
             var existing = await repository.TransferReferenceAsync(x.ProviderIdentity, normalized, t);
             if (existing is not null)
             {
                 if (existing.Amount != x.Amount || existing.OccurredAt != x.OccurredAt || existing.TransferDescription.ToUpperInvariant() != x.TransferDescription.ToUpperInvariant() ||
-                    existing.ProposedInvoiceId != x.ProposedInvoiceId || existing.ProposedDepositContractId != x.ProposedDepositContractId)
+                    existing.ProposedInvoiceId != x.ProposedInvoiceId || existing.ProposedDepositContractId != x.ProposedDepositContractId ||
+                    evidence is not null && (existing.StatementEvidenceSha256 != evidence.Sha256 || existing.StatementEvidenceContentType != evidence.ContentType ||
+                        existing.StatementEvidenceLength != evidence.Bytes.Length || existing.VerifiedByUserId != Actor))
                     throw new PaymentException(409, "bank_transaction_identity_conflict");
                 Remember(key, "register", identity, existing.Id); return await TransferAsync(existing.Id, t);
             }
@@ -115,6 +170,14 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
                 ProposedDepositContractId = x.ProposedDepositContractId,
                 IsDevelopmentDemo = x.IsDevelopmentDemo
             };
+            if (evidence is not null)
+            {
+                transfer.StatementEvidenceObjectKey = uploadedKey;
+                transfer.StatementEvidenceSha256 = evidence.Sha256;
+                transfer.StatementEvidenceContentType = evidence.ContentType;
+                transfer.StatementEvidenceLength = evidence.Bytes.Length;
+            }
+            createdTransferId = transfer.Id;
             repository.Add(transfer);
             var review = new PaymentReconciliation
             {
@@ -130,6 +193,40 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             repository.Audit(Actor, "BankTransferManuallyVerified", transfer.Id, Now);
             return View(transfer, null, review);
         }, t);
+            linked = createdTransferId == result.Id;
+            return result;
+        }
+        finally
+        {
+            // Compensate failed/replayed attempts; only the successfully committed new
+            // receipt owns its staged object. Another attempt always uses a different key.
+            if (!linked && uploadedKey is not null && storage is not null)
+            {
+                try { await storage.DeleteAsync(uploadedKey, CancellationToken.None); }
+                catch { /* A failed cleanup must never create a fraudulent payment. */ }
+            }
+        }
+    }
+
+    public async Task<string> CopyStatementEvidenceAsync(Guid transferId, Stream output, CancellationToken t)
+    {
+        Owner();
+        var transfer = await repository.TransferAsync(transferId, t) ?? throw new PaymentException(404, "bank_statement_image_not_found");
+        // Restrict the private screenshot to the Owner who verified this manual receipt.
+        if (transfer.VerificationSource != "OwnerBankStatement" || transfer.VerifiedByUserId != Actor ||
+            string.IsNullOrWhiteSpace(transfer.StatementEvidenceObjectKey) ||
+            string.IsNullOrWhiteSpace(transfer.StatementEvidenceSha256) ||
+            transfer.StatementEvidenceContentType is not ("image/png" or "image/jpeg") ||
+            transfer.StatementEvidenceLength is null)
+            throw new PaymentException(404, "bank_statement_image_not_found");
+        if (storage is null) throw new PaymentException(503, "bank_statement_storage_unavailable");
+        try
+        {
+            await PrivateImageEvidence.CopyVerifiedAsync(storage, transfer.StatementEvidenceObjectKey,
+            transfer.StatementEvidenceLength.Value, transfer.StatementEvidenceSha256, output, t);
+        }
+        catch (PrivateImageIntegrityException) { throw new PaymentException(409, "bank_statement_image_integrity_failed"); }
+        return transfer.StatementEvidenceContentType;
     }
     public async Task<PaymentReviewResult> AllocateAsync(Guid transferId, PaymentMatchInput x, Guid key, CancellationToken t)
     {
@@ -140,6 +237,9 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             if (await Replay(key, "allocate", new { transferId, x }, t) is not null)
                 return await Outcome(transferId, t);
             var transfer = await repository.TransferAsync(transferId, t) ?? throw new PaymentException(404, "bank_transfer_not_found");
+            if (transfer.StatementReference.StartsWith("MANUAL_IMAGE/", StringComparison.OrdinalIgnoreCase) &&
+                (transfer.StatementEvidenceSha256 is null || transfer.StatementEvidenceObjectKey is null))
+                throw new PaymentException(409, "bank_statement_image_missing");
             if (x.PaidByUserId is not null && await repository.ExternalPayerRecordedAsync(transferId, t)) throw new PaymentException(409, "receipt_payer_already_external");
             if (transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
                 throw new PaymentException(409, "development_payment_unavailable");
@@ -251,7 +351,9 @@ public sealed partial class PaymentService(IPaymentRepository repository, ICurre
             transfer.ProposedInvoiceId, allocation is not null ? "Allocated" : review?.Decision ?? "PendingReview",
             review?.Reason ?? (allocation is not null ? "verified_full_payment" : "owner_allocation_confirmation_required"), allocation?.InvoiceId, transfer.IsDevelopmentDemo,
             allocation?.Amount ?? 0, transfer.Amount - (allocation?.Amount ?? 0), allocation?.TargetDepositContractId,
-            allocation?.TargetSettlementContractId, allocation?.SettlementReceivableId);
+            allocation?.TargetSettlementContractId, allocation?.SettlementReceivableId,
+            transfer.StatementEvidenceSha256 is not null && transfer.StatementEvidenceContentType is not null && transfer.StatementEvidenceLength is { } length
+                ? new(transfer.StatementEvidenceContentType, length, transfer.StatementEvidenceSha256) : null);
     public async Task<InvoicePaymentView> InvoicePaymentAsync(Guid id, CancellationToken t)
     {
         var invoice = await Invoice(id, t);

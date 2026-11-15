@@ -394,7 +394,7 @@ function HistoryRow({
     <View style={invoiceUi.chargeBorder}>
       <LedgerRowHeader
         title={`Phòng ${item.roomNumber} · ${periodLabel(item.billingPeriod)}`}
-        subtitle={`Người trả: ${item.paidBy}`}
+        subtitle={item.locationName}
         amount={formatContractMoney(item.amount)}
         amountLabel="Đã ghi nhận"
         date={formatInstant(item.paidAt)}

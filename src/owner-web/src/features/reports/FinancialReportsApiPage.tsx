@@ -114,6 +114,15 @@ export function FinancialReportsApiPage() {
         subtitle="Kết quả thu chi và hoàn vốn theo kỳ. Chỉ hiển thị số liệu do máy chủ tổng hợp."
       />
       <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
+        <Box sx={{ mb: 1.5 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
+            Chọn kỳ và phạm vi cần xem
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Trang tự tải tháng đã hoàn tất gần nhất. Khi đổi bộ lọc, nhấn Xem báo cáo để lấy số liệu
+            cho lựa chọn mới.
+          </Typography>
+        </Box>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -219,6 +228,22 @@ export function FinancialReportsApiPage() {
               />
             </Stack>
           </Collapse>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }} aria-live="polite">
+            Bộ lọc đang chọn: {displayContractDate(from)} – {displayContractDate(to)} ·{' '}
+            {location
+              ? (locations.data?.find((item) => item.id === location)?.label ?? location)
+              : 'Toàn chuỗi'}
+            {room && ` · ${rooms.data?.find((item) => item.id === room)?.label ?? room}`}
+            {filtersChanged
+              ? ' · Chưa áp dụng'
+              : report.isError
+                ? ' · Tải thất bại'
+                : report.isPending || report.isFetching
+                  ? ' · Đang tải'
+                  : value
+                    ? ' · Đã tải'
+                    : ' · Chưa có kết quả'}
+          </Typography>
         </form>
       </Paper>
       {filtersChanged && (
@@ -256,7 +281,7 @@ export function FinancialReportsApiPage() {
           >
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="h2" component="h2">
-                Kỳ báo cáo: {filter && displayContractDate(filter.from)} –{' '}
+                Kỳ báo cáo đã tải: {filter && displayContractDate(filter.from)} –{' '}
                 {filter && displayContractDate(filter.to)}
               </Typography>
               <Typography variant="body2">Phạm vi: {reportScope}</Typography>
@@ -452,7 +477,10 @@ export function FinancialReportsApiPage() {
             </AccordionSummary>
             <AccordionDetails sx={{ display: 'grid', gap: 1.5 }}>
               {value.locations.length === 0 && (
-                <Alert severity="info">Chưa có cơ sở trong phạm vi.</Alert>
+                <Alert severity="info">
+                  Không có dòng theo từng cơ sở trong kết quả này. Kiểm tra phạm vi đang xem; nếu đã
+                  chọn một phòng hoặc cơ sở, thử bỏ lựa chọn đó và nhấn Xem báo cáo.
+                </Alert>
               )}
               {value.locations.map((l) => (
                 <Paper

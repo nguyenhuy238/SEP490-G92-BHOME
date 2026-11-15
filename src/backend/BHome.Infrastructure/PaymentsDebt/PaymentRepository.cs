@@ -201,7 +201,9 @@ internal sealed partial class PaymentRepository(BHomePersistenceContext db) : IP
                 x.Amount - (db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Sum(a => (decimal?)a.Amount) ?? 0),
                 db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.TargetDepositContractId).FirstOrDefault(),
                 db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.TargetSettlementContractId).FirstOrDefault(),
-                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.SettlementReceivableId).FirstOrDefault()));
+                db.Set<PaymentAllocation>().Where(a => a.TransferId == x.Id).Select(a => a.SettlementReceivableId).FirstOrDefault(),
+                x.StatementEvidenceSha256 != null && x.StatementEvidenceContentType != null && x.StatementEvidenceLength != null
+                    ? new BankStatementEvidenceView(x.StatementEvidenceContentType, x.StatementEvidenceLength.Value, x.StatementEvidenceSha256) : null));
         return new(await views.ToArrayAsync(t),
             query.Page, query.PageSize, await source.CountAsync(t));
     }

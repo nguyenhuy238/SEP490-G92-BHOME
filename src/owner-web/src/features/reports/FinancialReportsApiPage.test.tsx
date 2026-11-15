@@ -175,6 +175,7 @@ it('reports API failure without a financial result', async () => {
   mount();
   request();
   await screen.findByText('Không thể tải hoặc lưu dữ liệu tài chính. Vui lòng thử lại.');
+  expect(screen.getByText(/Bộ lọc đang chọn:.*Tải thất bại/)).toBeInTheDocument();
   expect(screen.queryByText('Vốn & Thu hồi')).not.toBeInTheDocument();
 });
 it('keeps negative server totals exact, including amounts beyond safe integers', async () => {
@@ -242,12 +243,23 @@ it('offers a complete month shortcut and distinguishes unsent filter changes fro
   expect(screen.getByLabelText(/Từ ngày/)).toHaveValue(preset.from);
   expect(screen.getByLabelText(/Đến ngày/)).toHaveValue(preset.to);
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
+  expect(
+    screen.getByText(
+      `Kỳ báo cáo đã tải: ${preset.from.split('-').reverse().join('/')} – ${preset.to.split('-').reverse().join('/')}`,
+    ),
+  ).toBeInTheDocument();
   expect(mock.report).toHaveBeenCalledWith(
     { from: preset.from, to: preset.to, locationId: undefined },
     expect.any(AbortSignal),
   );
   fireEvent.change(screen.getByLabelText(/Từ ngày/), { target: { value: '2026-01-01' } });
   expect(screen.getByText(/số liệu đang hiển thị vẫn thuộc kỳ trước đó/)).toBeInTheDocument();
+  expect(screen.getByText(/Bộ lọc đang chọn: 01\/01\/2026.*Chưa áp dụng/)).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      `Kỳ báo cáo đã tải: ${preset.from.split('-').reverse().join('/')} – ${preset.to.split('-').reverse().join('/')}`,
+    ),
+  ).toBeInTheDocument();
   expect(mock.report).toHaveBeenCalledTimes(1);
 });
 it('loads the last complete month automatically without requiring a filter submission', async () => {
@@ -255,6 +267,7 @@ it('loads the last complete month automatically without requiring a filter submi
   mount();
   const period = financeMonthPeriod(-1);
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
+  expect(screen.getByText(/Bộ lọc đang chọn:.*Đã tải/)).toBeInTheDocument();
   expect(mock.report).toHaveBeenCalledWith(
     { from: period.from, to: period.to, locationId: undefined },
     expect.any(AbortSignal),
