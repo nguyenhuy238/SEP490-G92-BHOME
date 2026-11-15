@@ -199,6 +199,10 @@ const messages: Record<string, string> = {
   duplicate_or_overlapping_configuration:
     'Cấu hình bị trùng hoặc có kỳ hiệu lực chồng lấn. Kiểm tra dữ liệu trước khi lưu.',
   billing_schedule_required: 'Owner cần cấu hình quy tắc và lịch lập hóa đơn cho cơ sở.',
+  billing_initial_schedule_required:
+    'Chọn quy tắc tính tiền và hạn thanh toán ngay tại màn tạo lịch trước khi lưu.',
+  billing_automation_changed:
+    'Lịch hoặc quy tắc tính tiền đã được thay đổi. Tải lại trang trước khi lưu.',
   billing_schedule_changed: 'Cấu hình đã thay đổi. Hãy tải lại trước khi lưu.',
   invalid_billing_calendar_order:
     'Ngày Nháp phải trước hoặc bằng ngày Phát hành, ngày Hạn trả phải sau hoặc bằng ngày Phát hành.',

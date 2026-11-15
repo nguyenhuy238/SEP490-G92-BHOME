@@ -19,6 +19,7 @@ import { formatInstant } from '../../../../../packages/client-core/src/localizat
 import { refundError, type Refund } from '../../../../../packages/client-core/src/refunds';
 import { useRefundApi } from './useRefundApi';
 import { settlementBlocker } from '../../../../../packages/client-core/src/useContractLifecycle';
+import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
 type RefundPanelProps = {
   sourceId: string;
   sourceKind?: 'Receipt' | 'SecurityDeposit' | 'HoldingDeposit';
@@ -445,26 +446,6 @@ function RefundItem({
       setBusy(false);
     }
   }
-  async function download() {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    setError('');
-    try {
-      const blob = await api.evidence(row.id),
-        url = URL.createObjectURL(blob),
-        link = document.createElement('a');
-      link.href = url;
-      link.download = blob.type === 'image/png' ? 'chung-tu-hoan.png' : 'chung-tu-hoan.jpg';
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (e) {
-      setError(refundError(e));
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
-  }
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack spacing={1}>
@@ -479,9 +460,12 @@ function RefundItem({
         ))}
         {row.externalReference && <Typography>Tham chiếu hoàn: {row.externalReference}</Typography>}
         {row.status === 'COMPLETED' && (
-          <Button disabled={busy} onClick={() => void download()}>
-            Tải chứng từ hoàn tiền
-          </Button>
+          <PrivateEvidenceViewer
+            label="Chứng từ hoàn tiền"
+            filename="chung-tu-hoan"
+            fetchBlob={(signal) => api.evidence(row.id, signal)}
+            errorMessage={refundError}
+          />
         )}
         {row.executionIntent && (
           <Alert severity="warning">

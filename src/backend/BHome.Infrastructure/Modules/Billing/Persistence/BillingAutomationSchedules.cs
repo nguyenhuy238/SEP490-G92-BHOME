@@ -35,8 +35,67 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({x.LocationId.ToString()},0))", t);
         if (!await db.Locations.AnyAsync(l => l.Id == x.LocationId && l.IsActive, t)) throw new InvoiceException(404, "billing_location_not_found");
         var version = await db.Set<BillingAutomationPlan>().Where(p => p.LocationId == x.LocationId).Select(p => (int?)p.Version).MaxAsync(t) ?? 0;
-        var schedule = await db.Set<BillingSchedule>().AsNoTracking().SingleOrDefaultAsync(s => s.LocationId == x.LocationId, t) ?? throw new InvoiceException(409, "billing_schedule_required");
-        if (version != x.ExpectedVersion || schedule.Version != x.ExpectedBillingScheduleVersion) throw new InvoiceException(409, "billing_automation_changed");
+        var schedule = await db.Set<BillingSchedule>().SingleOrDefaultAsync(s => s.LocationId == x.LocationId, t);
+        if (version != x.ExpectedVersion || (schedule?.Version ?? 0) != x.ExpectedBillingScheduleVersion)
+            throw new InvoiceException(409, "billing_automation_changed");
+        if (schedule is null)
+        {
+            if (x.InitialSchedule is not { } initial || x.DraftDay is null || x.DraftMonthOffset is null ||
+                x.FinalDay is null || x.FinalMonthOffset is null || x.DueDay is null || x.DueMonthOffset is null)
+                throw new InvoiceException(409, "billing_initial_schedule_required");
+            schedule = new BillingSchedule
+            {
+                LocationId = x.LocationId,
+                RateDate = initial.RateDate,
+                RentSource = BillingRentSource.RepresentativeContract,
+                PartialMonth = initial.PartialMonth,
+                Rounding = initial.Rounding,
+                DraftDay = x.DraftDay.Value,
+                DraftMonthOffset = x.DraftMonthOffset.Value,
+                FinalDay = x.FinalDay.Value,
+                FinalMonthOffset = x.FinalMonthOffset.Value,
+                DueDay = x.DueDay.Value,
+                DueMonthOffset = x.DueMonthOffset.Value
+            };
+            db.Add(schedule);
+            db.SecurityAudit.Add(new() { UserId = actor, Event = "BillingScheduleConfigured", TargetType = "BillingSchedule", TargetId = schedule.Id, Succeeded = true, OccurredAt = now });
+        }
+        else if (x.InitialSchedule is { } desired &&
+                 (schedule.RateDate != desired.RateDate || schedule.PartialMonth != desired.PartialMonth || schedule.Rounding != desired.Rounding))
+        {
+            // Preserve RentSource and calendar defaults from legacy /pricing schedules.
+            // The previous automation plans retain their immutable BillingSnapshot.
+            schedule.RateDate = desired.RateDate;
+            schedule.PartialMonth = desired.PartialMonth;
+            schedule.Rounding = desired.Rounding;
+            schedule.Version++;
+            db.SecurityAudit.Add(new() { UserId = actor, Event = "BillingScheduleConfigured", TargetType = "BillingSchedule", TargetId = schedule.Id, Succeeded = true, OccurredAt = now });
+        }
+        // Freeze period-specific invoice dates in this immutable plan. Do not modify the
+        // location-wide fallback schedule: periods before EffectiveFrom retain their calendar.
+        var effectiveCalendar = new BillingSchedule
+        {
+            LocationId = schedule.LocationId,
+            Version = schedule.Version,
+            RateDate = schedule.RateDate,
+            RentSource = schedule.RentSource,
+            PartialMonth = schedule.PartialMonth,
+            Rounding = schedule.Rounding,
+            DraftDay = x.DraftDay ?? schedule.DraftDay,
+            DraftMonthOffset = x.DraftMonthOffset ?? schedule.DraftMonthOffset,
+            FinalDay = x.FinalDay ?? schedule.FinalDay,
+            FinalMonthOffset = x.FinalMonthOffset ?? schedule.FinalMonthOffset,
+            DueDay = x.DueDay ?? schedule.DueDay,
+            DueMonthOffset = x.DueMonthOffset ?? schedule.DueMonthOffset
+        };
+        try
+        {
+            foreach (var period in new[] { new DateOnly(2027, 2, 1), new DateOnly(2028, 2, 1), new DateOnly(2026, 12, 1) })
+                if (InvoiceMath.CalendarDate(period, effectiveCalendar.DraftDay, effectiveCalendar.DraftMonthOffset) > InvoiceMath.CalendarDate(period, effectiveCalendar.FinalDay, effectiveCalendar.FinalMonthOffset) ||
+                    InvoiceMath.CalendarDate(period, effectiveCalendar.FinalDay, effectiveCalendar.FinalMonthOffset) > InvoiceMath.CalendarDate(period, effectiveCalendar.DueDay, effectiveCalendar.DueMonthOffset))
+                    throw new InvoiceException(400, "invalid_billing_calendar_order");
+        }
+        catch (ArgumentOutOfRangeException) { throw new InvoiceException(400, "invalid_billing_automation"); }
         var plan = new BillingAutomationPlan
         {
             LocationId = x.LocationId,
@@ -49,7 +108,7 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
             MeterDueMonthOffset = x.MeterDueMonthOffset,
             TimeZone = x.TimeZone,
             BillingScheduleVersion = schedule.Version,
-            BillingSnapshot = JsonSerializer.Serialize(schedule),
+            BillingSnapshot = JsonSerializer.Serialize(effectiveCalendar),
             AuthorizedByUserId = actor,
             RecordedAt = now
         };

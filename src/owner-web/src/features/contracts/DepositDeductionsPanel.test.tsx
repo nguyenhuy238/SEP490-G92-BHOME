@@ -1,6 +1,9 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
-import type { SettlementSummary } from '../../../../../packages/client-core/src/contracts';
+import type {
+  ContractClient,
+  SettlementSummary,
+} from '../../../../../packages/client-core/src/contracts';
 import { DepositDeductionsPanel } from './DepositDeductionsPanel';
 afterEach(cleanup);
 it('retains the approved historical decision and evidence count without another write form', () => {
@@ -29,4 +32,19 @@ it('directs new damage to separate receivables instead of inventing a legacy pla
   expect(screen.getByText(/Thiệt hại mới được ghi thành khoản phải thu riêng/)).toBeInTheDocument();
   expect(screen.getByText('Chưa có quyết định khấu trừ theo luồng cũ.')).toBeInTheDocument();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
+});
+it('makes historical evidence viewable and downloadable when an authorized contract client is available', () => {
+  const summary = {
+    depositDeductions: {
+      version: 2,
+      approvedAt: '2026-11-11T00:00:00Z',
+      total: '100000',
+      reason: 'Synthetic historical decision',
+      items: [{ description: 'Synthetic damage', amount: '100000', evidenceIds: ['proof'] }],
+    },
+  } as unknown as SettlementSummary;
+  const api = { evidence: async () => new Blob([]) } as unknown as ContractClient;
+  render(<DepositDeductionsPanel summary={summary} api={api} contractId="contract" />);
+  expect(screen.getByRole('button', { name: 'Xem Ảnh biên bản 1.1' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Tải xuống Ảnh biên bản 1.1' })).toBeInTheDocument();
 });

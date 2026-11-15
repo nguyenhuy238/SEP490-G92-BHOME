@@ -5,10 +5,13 @@ using BHome.Domain.Billing;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Modules.Billing;
-internal sealed class BillingAutomationScheduling(BHomePersistenceContext db, IBillingAutomationSchedules schedules, IBackgroundJobQueue queue, TimeProvider clock) : IJobScheduleContributor
+internal sealed class BillingAutomationScheduling(BHomePersistenceContext db, IBillingAutomationSchedules schedules, IBackgroundJobQueue queue, TimeProvider clock, BillingAutomationRuntime runtime) : IJobScheduleContributor
 {
     public async Task EnqueueDueAsync(CancellationToken t)
     {
+        // Explicit deployment-level opt-in. Existing enabled plans and queued jobs must
+        // remain dormant while this product is operated through manual test actions.
+        if (!runtime.WorkerEnabled) return;
         var now = clock.GetUtcNow(); var today = BillingAutomationDates.BusinessDate(now); var month = new DateOnly(today.Year, today.Month, 1); Guid? after = null;
         while (true)
         {

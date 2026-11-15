@@ -12,6 +12,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mock.locations.mockResolvedValue([]);
   mock.rooms.mockResolvedValue([]);
+  mock.report.mockResolvedValue(backendReport);
 });
 function mount() {
   render(
@@ -23,6 +24,8 @@ function mount() {
   );
 }
 function request() {
+  const toggle = screen.getByRole('button', { name: /bộ lọc chi tiết/i });
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
   fireEvent.change(screen.getByLabelText(/Từ ngày/), { target: { value: '2026-11-01' } });
   fireEvent.change(screen.getByLabelText(/Đến ngày/), { target: { value: '2026-11-30' } });
   fireEvent.submit(screen.getByRole('button', { name: 'Xem báo cáo' }).closest('form')!);
@@ -51,10 +54,15 @@ const backendReport = {
     unavailableReason: 'initial_investment_required',
   },
 };
-it('displays backend figures and unavailable payback without calculating or substituting demo amounts', async () => {
+it('loads the last completed month from the API immediately and respects a changed report period', async () => {
   mock.report.mockResolvedValue(backendReport);
   mount();
-  expect(mock.report).not.toHaveBeenCalled();
+  const lastMonth = financeMonthPeriod(-1);
+  await screen.findByText('Lợi nhuận vận hành: 700 ₫');
+  expect(mock.report).toHaveBeenCalledWith(
+    { from: lastMonth.from, to: lastMonth.to, locationId: undefined },
+    expect.any(AbortSignal),
+  );
   request();
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
   expect(screen.getByText('Phạm vi: Toàn chuỗi')).toBeInTheDocument();
@@ -189,6 +197,8 @@ it('selects a scoped Room by name and clears it when the Location changes', asyn
   );
   mock.report.mockResolvedValue(backendReport);
   mount();
+  expect(screen.queryByRole('combobox', { name: 'Phòng' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc chi tiết' }));
   expect(screen.getByRole('combobox', { name: 'Phòng' })).toBeDisabled();
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Cơ sở' }));
   fireEvent.click(await screen.findByRole('option', { name: 'Cơ sở A' }));
@@ -213,22 +223,24 @@ it('selects a scoped Room by name and clears it when the Location changes', asyn
     expect.any(AbortSignal),
   );
 });
-it('rejects a reversed date range before requesting financial figures', () => {
+it('rejects a reversed date range without sending another report request', () => {
   mount();
+  const requestsBeforeSubmit = mock.report.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc chi tiết' }));
   fireEvent.change(screen.getByLabelText(/Từ ngày/), { target: { value: '2026-11-30' } });
   fireEvent.change(screen.getByLabelText(/Đến ngày/), { target: { value: '2026-11-01' } });
   fireEvent.submit(screen.getByRole('button', { name: 'Xem báo cáo' }).closest('form')!);
   expect(screen.getByText('Chọn khoảng ngày hợp lệ.')).toBeInTheDocument();
-  expect(mock.report).not.toHaveBeenCalled();
+  expect(mock.report).toHaveBeenCalledTimes(requestsBeforeSubmit);
 });
 it('offers a complete month shortcut and distinguishes unsent filter changes from loaded results', async () => {
   mock.report.mockResolvedValue(backendReport);
   mount();
   const preset = financeMonthPeriod(-1);
+  expect(screen.queryByLabelText(/Từ ngày/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc chi tiết' }));
   expect(screen.getByLabelText(/Từ ngày/)).toHaveValue(preset.from);
   expect(screen.getByLabelText(/Đến ngày/)).toHaveValue(preset.to);
-  expect(mock.report).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Xem báo cáo' }));
   await screen.findByText('Lợi nhuận vận hành: 700 ₫');
   expect(mock.report).toHaveBeenCalledWith(
     { from: preset.from, to: preset.to, locationId: undefined },
@@ -236,5 +248,28 @@ it('offers a complete month shortcut and distinguishes unsent filter changes fro
   );
   fireEvent.change(screen.getByLabelText(/Từ ngày/), { target: { value: '2026-01-01' } });
   expect(screen.getByText(/số liệu đang hiển thị vẫn thuộc kỳ trước đó/)).toBeInTheDocument();
+  expect(mock.report).toHaveBeenCalledTimes(1);
+});
+it('loads the last complete month automatically without requiring a filter submission', async () => {
+  mock.report.mockResolvedValue(backendReport);
+  mount();
+  const period = financeMonthPeriod(-1);
+  await screen.findByText('Lợi nhuận vận hành: 700 ₫');
+  expect(mock.report).toHaveBeenCalledWith(
+    { from: period.from, to: period.to, locationId: undefined },
+    expect.any(AbortSignal),
+  );
+});
+it('keeps the summary visible and lets Owner reveal detailed reconciliation, occupancy and capital sections', async () => {
+  mock.report.mockResolvedValue(backendReport);
+  mount();
+  await screen.findByText('Lợi nhuận vận hành: 700 ₫');
+  expect(screen.getByText('Hóa đơn / khoản phải thu')).toBeInTheDocument();
+  for (const heading of [/Đối chiếu chi tiết số liệu/, /Tỷ lệ lấp đầy/, /Tiến độ thu hồi vốn/]) {
+    const disclosure = screen.getByRole('button', { name: heading });
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  }
   expect(mock.report).toHaveBeenCalledTimes(1);
 });

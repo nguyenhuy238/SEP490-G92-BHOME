@@ -12,7 +12,9 @@ public sealed record BillingScheduleWrite([property: JsonRequired] Guid Location
     [property: JsonRequired] VndRounding Rounding, [property: JsonRequired] int DraftDay, [property: JsonRequired] int DraftMonthOffset,
     [property: JsonRequired] int FinalDay, [property: JsonRequired] int FinalMonthOffset,
     [property: JsonRequired] int DueDay, [property: JsonRequired] int DueMonthOffset, [property: JsonRequired] int ExpectedVersion);
-public sealed record DraftInvoiceInput(Guid RoomId, DateOnly BillingPeriod, Guid RepresentativeContractId);
+// Owner may omit the representative: the service resolves an existing explicit selection,
+// or the only eligible contract for the room and period, under the room billing lock.
+public sealed record DraftInvoiceInput(Guid RoomId, DateOnly BillingPeriod, Guid? RepresentativeContractId = null);
 public sealed record InvoiceFinalizeInput([Range(1, int.MaxValue)] int ExpectedVersion);
 public sealed record InvoiceLineView(Guid Id, string Category, string ChargeCode, string Name, Guid? PolicyId, int? PolicyVersion,
     DateOnly RateDate, [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Rate,

@@ -21,6 +21,10 @@ TestResults/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+!.vscode/tasks.json
+# Impeccable live session state is local; keep only its shared project configuration.
+**/.impeccable/live/*
+!**/.impeccable/live/config.json
 .DS_Store
 Thumbs.db
 # Environment files may contain credentials; examples are safe to track.

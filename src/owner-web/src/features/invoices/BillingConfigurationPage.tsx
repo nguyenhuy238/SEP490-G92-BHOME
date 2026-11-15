@@ -1,7 +1,11 @@
 import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
+  Box,
   Button,
   LinearProgress,
   MenuItem,
@@ -10,8 +14,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams, useSearchParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import {
   invoiceError,
@@ -24,6 +29,31 @@ import { PageHeader, FilterToolbar } from '../../components/common/PortalUI';
 import { useInvoiceApi } from './useInvoiceApi';
 import { ConflictReload } from '../locations/components/ConflictReload';
 import { todayVietnam } from '../staff/staffContracts';
+
+/**
+ * Inline, read-only guide for the existing /pricing demo. It deliberately
+ * leaves that page's sample CRUD editor in place; no separate price state.
+ */
+export function DemoBillingConfigurationGuide() {
+  return (
+    <Stack
+      direction={{ xs: 'column', md: 'row' }}
+      sx={{ gap: 1, alignItems: { md: 'center' }, justifyContent: 'space-between', mb: 1.5 }}
+    >
+      <Typography variant="caption" color="text.secondary">
+        Giá minh họa · Thay đổi tại đây không tác động hóa đơn thật.
+      </Typography>
+      <Stack direction="row" useFlexGap sx={{ gap: 1, flexWrap: 'wrap' }}>
+        <Button size="small" component={Link} to="/billing-automation">
+          Xem lịch xử lý
+        </Button>
+        <Button size="small" component={Link} to="/invoices">
+          Xem hóa đơn nháp
+        </Button>
+      </Stack>
+    </Stack>
+  );
+}
 
 export function BillingConfigurationPage({
   initialLocationId = '',
@@ -43,7 +73,10 @@ export function BillingConfigurationPage({
   });
   return (
     <>
-      <PageHeader title="Giá thuê & Chính sách phí" />
+      <PageHeader
+        title="Giá thuê & Chính sách phí"
+        subtitle="Kiểm tra quy tắc tính tiền và các mức giá đang áp dụng trước khi lập hóa đơn."
+      />
       <Stack spacing={2}>
         {locations.isPending && <LinearProgress />}
         {locations.error && (
@@ -71,6 +104,9 @@ export function BillingConfigurationPage({
             ))}
           </TextField>
         </FilterToolbar>
+        {!location && locations.data?.length !== 0 && (
+          <Alert severity="info">Chọn cơ sở để xem quy tắc hóa đơn và biểu giá.</Alert>
+        )}
         {location && <LocationBilling key={location + actor} location={location} />}
       </Stack>
     </>
@@ -81,6 +117,10 @@ function LocationBilling({ location }: { location: string }) {
   const { session } = useAuth();
   const actor = session?.userId ?? '';
   const [page, setPage] = useState(1);
+  const [editSchedule, setEditSchedule] = useState(false);
+  const [showPolicyForm, setShowPolicyForm] = useState(false);
+  const [notice, setNotice] = useState('');
+  const policyAnchor = useRef<HTMLDivElement>(null);
   const schedule = useQuery({
     queryKey: ['billing-schedule', actor, location],
     queryFn: async ({ signal }) => (await api.schedule(location, signal)) ?? null,
@@ -90,8 +130,25 @@ function LocationBilling({ location }: { location: string }) {
     queryFn: ({ signal }) => api.policies(location, page, signal),
   });
   const [replacing, setReplacing] = useState<Policy | null>(null);
+  const scrollTo = (ref: React.RefObject<HTMLDivElement | null>) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() =>
+        ref.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }),
+      );
+    }
+  };
+  const openPolicy = (policy: Policy | null) => {
+    setReplacing(policy);
+    setShowPolicyForm(true);
+    scrollTo(policyAnchor);
+  };
   return (
     <>
+      {notice && (
+        <Alert severity="success" onClose={() => setNotice('')}>
+          {notice}
+        </Alert>
+      )}
       {schedule.isPending && <LinearProgress />}
       {schedule.error && (
         <Alert
@@ -101,17 +158,19 @@ function LocationBilling({ location }: { location: string }) {
           {invoiceError(schedule.error)}
         </Alert>
       )}
-      {schedule.isSuccess && (
-        <ScheduleForm
-          key={schedule.data?.version ?? 0}
-          location={location}
-          current={schedule.data ?? undefined}
-          onSaved={() => void schedule.refetch()}
-        />
-      )}
       <Paper variant="outlined" sx={{ p: 1.5 }}>
         <Stack spacing={2}>
-          <Typography variant="h6">Biểu giá đã lưu</Typography>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            sx={{ gap: 1, alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+          >
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Biểu giá đã lưu
+            </Typography>
+            <Button size="small" variant="contained" onClick={() => openPolicy(null)}>
+              Thêm biểu giá
+            </Button>
+          </Stack>
           {policies.isPending && <LinearProgress />}
           {policies.error && (
             <Alert
@@ -158,14 +217,20 @@ function LocationBilling({ location }: { location: string }) {
                     {p.roomId ? 'Phòng' : 'Cơ sở'}
                   </Typography>
                 </Stack>
-                <Button onClick={() => setReplacing(p)}>Tạo giá kế tiếp</Button>
+                <Button variant="outlined" size="small" onClick={() => openPolicy(p)}>
+                  Tạo giá kế tiếp
+                </Button>
               </Stack>
             ))}
-          <Stack direction="row">
-            <Button disabled={page === 1} onClick={() => setPage(page - 1)}>
+          <Stack direction="row" sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
+            <Button size="small" disabled={page === 1} onClick={() => setPage(page - 1)}>
               Trang trước
             </Button>
+            <Typography variant="body2" color="text.secondary">
+              Trang {page}
+            </Typography>
             <Button
+              size="small"
               disabled={!policies.data || page * 20 >= policies.data.totalCount}
               onClick={() => setPage(page + 1)}
             >
@@ -174,16 +239,68 @@ function LocationBilling({ location }: { location: string }) {
           </Stack>
         </Stack>
       </Paper>
-      <PolicyForm
-        key={replacing?.id ?? 'new'}
-        location={location}
-        previous={replacing}
-        onSaved={() => {
-          setReplacing(null);
-          void policies.refetch();
+      <Accordion
+        variant="outlined"
+        disableGutters
+        expanded={schedule.isSuccess && (!schedule.data || editSchedule)}
+        onChange={(_, expanded) => {
+          if (schedule.data) setEditSchedule(expanded);
         }}
-        onCancel={() => setReplacing(null)}
-      />
+      >
+        <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            sx={{
+              width: '100%',
+              gap: 1,
+              alignItems: { sm: 'center' },
+              justifyContent: 'space-between',
+            }}
+          >
+            <Typography sx={{ fontWeight: 700 }}>Lịch & quy tắc hóa đơn</Typography>
+            {schedule.isSuccess && (
+              <Typography variant="body2" color={schedule.data ? 'text.secondary' : 'warning.dark'}>
+                {schedule.data
+                  ? `Nháp ngày ${schedule.data.draftDay} · Phát hành ${schedule.data.finalDay} · Hạn trả ${schedule.data.dueDay}`
+                  : 'Chưa thiết lập · Cần cấu hình'}
+              </Typography>
+            )}
+          </Stack>
+        </AccordionSummary>
+        {schedule.isSuccess && (!schedule.data || editSchedule) && (
+          <AccordionDetails>
+            <ScheduleForm
+              key={schedule.data?.version ?? 0}
+              location={location}
+              current={schedule.data ?? undefined}
+              onSaved={() => {
+                setEditSchedule(false);
+                setNotice('Đã lưu quy tắc hóa đơn.');
+                void schedule.refetch();
+              }}
+            />
+          </AccordionDetails>
+        )}
+      </Accordion>
+      {showPolicyForm && (
+        <Box ref={policyAnchor} sx={{ scrollMarginTop: 24 }}>
+          <PolicyForm
+            key={replacing?.id ?? 'new'}
+            location={location}
+            previous={replacing}
+            onSaved={() => {
+              setNotice(replacing ? 'Đã lưu phiên bản biểu giá kế tiếp.' : 'Đã thêm biểu giá.');
+              setReplacing(null);
+              setShowPolicyForm(false);
+              void policies.refetch();
+            }}
+            onCancel={() => {
+              setReplacing(null);
+              setShowPolicyForm(false);
+            }}
+          />
+        </Box>
+      )}
     </>
   );
 }
@@ -238,7 +355,7 @@ export function ScheduleForm({
     </TextField>
   );
   return (
-    <Paper sx={{ p: 2 }}>
+    <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
       <Stack
         component="form"
         spacing={2}
@@ -269,56 +386,103 @@ export function ScheduleForm({
             });
         }}
       >
-        <Typography variant="h6">Quy tắc và lịch hóa đơn</Typography>
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Quy tắc và lịch hóa đơn
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Chỉ điều chỉnh cách tính tiền và thời điểm xử lý, không thay đổi đơn giá hợp đồng.
+          </Typography>
+        </Box>
         {!current && (
           <Alert severity="info">Chọn đầy đủ các quy tắc trước khi lập hóa đơn đầu tiên.</Alert>
         )}
-        <TextField label="Nguồn tiền thuê cả phòng" value="Giá đã chốt trong hợp đồng" disabled />
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          Cách tính tiền
+        </Typography>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+            gap: 2,
+          }}
+        >
+          <TextField
+            label="Nguồn tiền thuê cả phòng"
+            value="Giá đã chốt trong hợp đồng"
+            disabled
+            sx={{ gridColumn: '1 / -1' }}
+          />
+          {choice('rateDate', 'Mốc tham chiếu kỳ (không thay đổi giá hợp đồng)', [
+            'Ngày đầu tháng',
+            'Ngày cuối tháng',
+          ])}
+          {choice('partialMonth', 'Phí cố định khi ở không đủ tháng', [
+            'Thu cả tháng',
+            'Theo số ngày phòng có khách / số ngày tháng',
+          ])}
+          {choice('rounding', 'Làm tròn từng khoản VND', [
+            'Làm tròn .5 lên',
+            'Làm tròn .5 về số chẵn',
+          ])}
+        </Box>
         <Alert severity="info">
           Tiền thuê, đơn giá điện nước và các khoản dịch vụ của hợp đồng được giữ cố định. Lịch hóa
           đơn chỉ điều khiển kỳ tính tiền, ngày chốt và cách làm tròn.
         </Alert>
-        {choice('rateDate', 'Mốc tham chiếu kỳ (không thay đổi giá hợp đồng)', [
-          'Ngày đầu tháng',
-          'Ngày cuối tháng',
-        ])}
-        {choice('partialMonth', 'Phí cố định khi ở không đủ tháng', [
-          'Thu cả tháng',
-          'Theo số ngày phòng có khách / số ngày tháng',
-        ])}
-        {choice('rounding', 'Làm tròn từng khoản VND', [
-          'Làm tròn .5 lên',
-          'Làm tròn .5 về số chẵn',
-        ])}
-        <Typography variant="body2">
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          Các mốc thời gian
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
           Tháng cộng thêm tính từ tháng hóa đơn. Ngày 29–31 tự co về cuối tháng ngắn.
         </Typography>
-        {(['draft', 'final', 'due'] as const).map((kind, i) => (
-          <Stack key={kind} direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
-              required
-              label={`Ngày ${['lập nháp', 'phát hành', 'hạn thanh toán'][i]}`}
-              type="number"
-              value={values[kind + 'Day']}
-              onChange={(e) => setValues((v) => ({ ...v, [kind + 'Day']: e.target.value }))}
-              slotProps={{ htmlInput: { min: 1, max: 31 } }}
-            />
-            {choice(kind + 'MonthOffset', 'Tháng cộng thêm', [
-              'Trong tháng hóa đơn',
-              'Tháng kế tiếp',
-              'Sau hai tháng',
-            ])}
-          </Stack>
-        ))}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
+            gap: 2,
+          }}
+        >
+          {(['draft', 'final', 'due'] as const).map((kind, i) => (
+            <Box
+              key={kind}
+              sx={{
+                p: 1.5,
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1.5,
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                gap: 1.5,
+              }}
+            >
+              <TextField
+                required
+                label={`Ngày ${['lập nháp', 'phát hành', 'hạn thanh toán'][i]}`}
+                type="number"
+                value={values[kind + 'Day']}
+                onChange={(e) => setValues((v) => ({ ...v, [kind + 'Day']: e.target.value }))}
+                slotProps={{ htmlInput: { min: 1, max: 31 } }}
+              />
+              {choice(kind + 'MonthOffset', 'Tháng cộng thêm', [
+                'Trong tháng hóa đơn',
+                'Tháng kế tiếp',
+                'Sau hai tháng',
+              ])}
+            </Box>
+          ))}
+        </Box>
         {error && <Alert severity="error">{error}</Alert>}
         {notice && <Alert severity="success">{notice}</Alert>}
-        <Button
-          type="submit"
-          variant="contained"
-          disabled={busy || Object.values(values).some((value) => value === '')}
-        >
-          Lưu quy tắc hóa đơn
-        </Button>
+        <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={busy || Object.values(values).some((value) => value === '')}
+          >
+            Lưu quy tắc hóa đơn
+          </Button>
+        </Stack>
       </Stack>
     </Paper>
   );
@@ -377,7 +541,7 @@ export function PolicyForm({
   const [rawError, setRawError] = useState<unknown>(null);
   const lock = useRef(false);
   return (
-    <Paper sx={{ p: 2 }}>
+    <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
       <Stack
         component="form"
         spacing={2}
@@ -443,112 +607,144 @@ export function PolicyForm({
             });
         }}
       >
-        <Typography variant="h6">
-          {previous
-            ? (mode === 'update' ? 'Chỉnh sửa giá tương lai: ' : 'Phiên bản giá kế tiếp: ') +
-              previous.name
-            : 'Thêm biểu giá'}
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            {previous
+              ? (mode === 'update' ? 'Chỉnh sửa giá tương lai: ' : 'Phiên bản giá kế tiếp: ') +
+                previous.name
+              : 'Thêm biểu giá'}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {previous
+              ? mode === 'update'
+                ? 'Cập nhật phiên bản giá tương lai hiện tại; máy chủ sẽ kiểm tra hiệu lực và phiên bản.'
+                : 'Tạo mức giá mới theo ngày hiệu lực, không thay đổi hóa đơn đã phát hành.'
+              : 'Chọn phạm vi, khoản thu và đơn giá cần áp dụng.'}
+          </Typography>
+        </Box>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          01 · Khoản thu và phạm vi
         </Typography>
-        <TextField
-          select
-          label="Phạm vi biểu giá"
-          value={roomId}
-          disabled={!!previous}
-          onChange={(e) => setRoomId(e.target.value)}
-        >
-          <MenuItem value="">Toàn cơ sở</MenuItem>
-          {(rooms.data ?? []).map((item) => (
-            <MenuItem key={item.id} value={item.id}>
-              {item.label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Khoản thu"
-          value={category}
-          disabled={!!previous}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            setServiceMethod('0');
-            setRate('');
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            gap: 2,
           }}
         >
-          {['Tiền thuê', 'Điện / kWh', 'Nước / m³', 'Phí dịch vụ / tháng'].map((text, i) => (
-            <MenuItem key={text} value={String(i)}>
-              {text}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          required
-          label="Tên khoản thu"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        {category === '3' && (
           <TextField
             select
-            label="Cách tính phí dịch vụ"
-            value={serviceMethod}
+            label="Phạm vi biểu giá"
+            value={roomId}
+            disabled={!!previous}
+            onChange={(e) => setRoomId(e.target.value)}
+          >
+            <MenuItem value="">Toàn cơ sở</MenuItem>
+            {(rooms.data ?? []).map((item) => (
+              <MenuItem key={item.id} value={item.id}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Khoản thu"
+            value={category}
+            disabled={!!previous}
             onChange={(e) => {
-              setServiceMethod(e.target.value);
+              setCategory(e.target.value);
+              setServiceMethod('0');
               setRate('');
             }}
           >
-            <MenuItem value="0">Cố định/phòng/tháng</MenuItem>
-            <MenuItem value="2">Cố định/người/tháng</MenuItem>
+            {['Tiền thuê', 'Điện / kWh', 'Nước / m³', 'Phí dịch vụ / tháng'].map((text, i) => (
+              <MenuItem key={text} value={String(i)}>
+                {text}
+              </MenuItem>
+            ))}
           </TextField>
-        )}
-        {category === '3' && (
           <TextField
             required
-            label="Mã phí dịch vụ"
-            value={code}
-            disabled={!!previous}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            label="Tên khoản thu"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            sx={{ gridColumn: { md: '1 / -1' } }}
           />
-        )}
-        <MoneyField
-          allowDecimal
-          required
-          label="Đơn giá VND"
-          value={rate}
-          onValueChange={(raw) => setRate(raw)}
-          slotProps={{ htmlInput: { inputMode: 'decimal' } }}
-        />
-        <TextField
-          required
-          type="date"
-          label="Hiệu lực từ ngày"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          slotProps={{
-            inputLabel: { shrink: true },
-            htmlInput: {
-              min: earliest(previous),
-              ...(previous && mode === 'replace' && previous.effectiveTo
-                ? { max: previous.effectiveTo }
-                : {}),
-            },
+          {category === '3' && (
+            <TextField
+              select
+              label="Cách tính phí dịch vụ"
+              value={serviceMethod}
+              onChange={(e) => {
+                setServiceMethod(e.target.value);
+                setRate('');
+              }}
+            >
+              <MenuItem value="0">Cố định/phòng/tháng</MenuItem>
+              <MenuItem value="2">Cố định/người/tháng</MenuItem>
+            </TextField>
+          )}
+          {category === '3' && (
+            <TextField
+              required
+              label="Mã phí dịch vụ"
+              value={code}
+              disabled={!!previous}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+            />
+          )}
+        </Box>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          02 · Đơn giá và ngày hiệu lực
+        </Typography>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            gap: 2,
           }}
-        />
-        <TextField
-          required
-          label="Lý do / ghi chú"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-        <TextField
-          type="date"
-          label="Hiệu lực đến ngày (không bắt buộc)"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          slotProps={{
-            inputLabel: { shrink: true },
-            htmlInput: { min: date || earliest(previous) },
-          }}
-        />
+        >
+          <MoneyField
+            allowDecimal
+            required
+            label="Đơn giá VND"
+            value={rate}
+            onValueChange={(raw) => setRate(raw)}
+            slotProps={{ htmlInput: { inputMode: 'decimal' } }}
+          />
+          <TextField
+            required
+            type="date"
+            label="Hiệu lực từ ngày"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            slotProps={{
+              inputLabel: { shrink: true },
+              htmlInput: {
+                min: earliest(previous),
+                ...(previous && mode === 'replace' && previous.effectiveTo
+                  ? { max: previous.effectiveTo }
+                  : {}),
+              },
+            }}
+          />
+          <TextField
+            required
+            label="Lý do / ghi chú"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <TextField
+            type="date"
+            label="Hiệu lực đến ngày (không bắt buộc)"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            slotProps={{
+              inputLabel: { shrink: true },
+              htmlInput: { min: date || earliest(previous) },
+            }}
+          />
+        </Box>
         {error && <Alert severity="error">{error}</Alert>}
         {previous && (
           <ConflictReload
@@ -572,12 +768,14 @@ export function PolicyForm({
             }}
           />
         )}
-        <Button type="submit" disabled={busy} variant="contained">
-          Lưu biểu giá
-        </Button>
-        <Button disabled={busy} onClick={onCancel}>
-          Đóng biểu giá
-        </Button>
+        <Stack direction="row" sx={{ gap: 1, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <Button disabled={busy} onClick={onCancel}>
+            Đóng biểu giá
+          </Button>
+          <Button type="submit" disabled={busy} variant="contained">
+            Lưu biểu giá
+          </Button>
+        </Stack>
       </Stack>
     </Paper>
   );

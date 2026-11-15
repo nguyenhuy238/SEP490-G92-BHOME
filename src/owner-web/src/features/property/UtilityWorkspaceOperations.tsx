@@ -13,7 +13,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { mutationKeys } from '../../../../../packages/client-core/src/contracts';
 import type {
@@ -39,7 +39,11 @@ import {
 export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
   const [operation, setOperation] = useState('');
   const api = usePropertySetupApi();
+  const cache = useQueryClient();
   const { session } = useAuth();
+  const refresh = () => {
+    void cache.invalidateQueries({ queryKey: ['property-setup'] });
+  };
   const meters = useQuery({
     queryKey: ['property-setup', 'source-meters', session?.userId, locationId],
     queryFn: ({ signal }) => api.utilityMeters(locationId, signal),
@@ -47,8 +51,16 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
   const nativeMeters = useQuery({
     queryKey: ['property-setup', 'native-meters', session?.userId, locationId],
     queryFn: ({ signal }) =>
-      api.request<{ id: string; label: string }[]>(
+      api.request<{ id: string; label: string; parentId?: string | null }[]>(
         `/api/v1/capture/locations/${encodeURIComponent(locationId)}/meters`,
+        { signal },
+      ),
+  });
+  const rooms = useQuery({
+    queryKey: ['property-setup', 'meter-rooms', session?.userId, locationId],
+    queryFn: ({ signal }) =>
+      api.request<{ id: string; label: string }[]>(
+        `/api/v1/capture/locations/${encodeURIComponent(locationId)}/rooms`,
         { signal },
       ),
   });
@@ -60,6 +72,8 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
     queryKey: ['property-setup', 'meter-links', session?.userId, locationId],
     queryFn: ({ signal }) => api.meterLinks(locationId, signal),
   });
+  const sourceById = new Map((meters.data ?? []).map((meter) => [meter.id, meter]));
+  const roomMeters = nativeMeters.data ?? [];
   if (meters.isPending) return <LoadingState />;
   if (meters.error) return <ErrorState error={meters.error} retry={() => void meters.refetch()} />;
   return (
@@ -80,6 +94,9 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
         </Paper>
       ))}
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+        <Button variant="contained" onClick={() => setOperation('room-meter')}>
+          Thêm đồng hồ cho phòng
+        </Button>
         <Button variant="contained" onClick={() => setOperation('meter')}>
           Thêm công tơ nguồn
         </Button>
@@ -103,22 +120,94 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
           Ghi chỉ số nguồn
         </Button>
       </Stack>
+      {!meters.data.some((meter) => meter.data.scope === 'Source') && (
+        <Alert severity="info">
+          Để liên kết đồng hồ phòng với công tơ tổng, hãy thêm công tơ nguồn trước. Bạn vẫn có thể
+          tạo đồng hồ cho từng phòng ngay bây giờ.
+        </Alert>
+      )}
+      {!nativeMeters.isPending && !nativeMeters.error && !nativeMeters.data?.length && (
+        <Alert severity="info">
+          Cơ sở chưa có đồng hồ phòng. Chọn “Thêm đồng hồ cho phòng”, sau đó liên kết với công tơ
+          tổng nếu cần đối soát.
+        </Alert>
+      )}
       {nativeMeters.error && (
         <ErrorState error={nativeMeters.error} retry={() => void nativeMeters.refetch()} />
       )}
+      <Stack spacing={1} aria-label="Danh sách đồng hồ phòng">
+        <Typography variant="h6">
+          Đồng hồ từng phòng ({nativeMeters.isPending ? '…' : roomMeters.length})
+        </Typography>
+        {nativeMeters.isPending && <LoadingState />}
+        {!nativeMeters.isPending && !nativeMeters.error && roomMeters.length === 0 && (
+          <Typography variant="body2" color="text.secondary">
+            Chưa có đồng hồ nào được tạo cho phòng trong cơ sở này.
+          </Typography>
+        )}
+        {roomMeters.map((meter) => {
+          const room = rooms.data?.find((item) => item.id === meter.parentId);
+          const link = links.data?.find((item) => item.data.meterId === meter.id);
+          const source = link ? sourceById.get(link.data.parentMeterId) : undefined;
+          return (
+            <Paper key={meter.id} variant="outlined" sx={{ p: 1.5 }}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={0.5}
+                sx={{ justifyContent: 'space-between' }}
+              >
+                <Stack spacing={0.25}>
+                  <Typography sx={{ fontWeight: 700 }}>{meter.label}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Phòng: {room?.label ?? 'Chưa xác định'}
+                  </Typography>
+                </Stack>
+                <Typography variant="body2" color={link ? 'success.main' : 'text.secondary'}>
+                  {link
+                    ? `Đã liên kết: ${source?.data.code ?? 'Công tơ tổng'}`
+                    : 'Chưa liên kết công tơ tổng'}
+                </Typography>
+              </Stack>
+              {link && (
+                <Typography variant="caption" color="text.secondary">
+                  Hiệu lực liên kết: {link.data.effectiveFrom} →{' '}
+                  {link.data.effectiveTo ?? 'Không hạn'}
+                </Typography>
+              )}
+            </Paper>
+          );
+        })}
+      </Stack>
       <Dialog open={!!operation} fullWidth maxWidth="md">
         <DialogTitle>
-          {operation === 'meter'
-            ? 'Công tơ nguồn / khu chung'
-            : operation === 'link'
-              ? 'Liên kết đồng hồ phòng'
-              : 'Chỉ số nguồn'}
+          {operation === 'room-meter'
+            ? 'Thêm đồng hồ cho phòng'
+            : operation === 'meter'
+              ? 'Công tơ nguồn / khu chung'
+              : operation === 'link'
+                ? 'Liên kết đồng hồ phòng'
+                : 'Chỉ số nguồn'}
         </DialogTitle>
         <DialogContent>
+          {operation === 'room-meter' && (
+            <RoomMeterEditor
+              rooms={rooms.data ?? []}
+              roomsLoading={rooms.isPending}
+              roomsError={!!rooms.error}
+              onSaved={() => {
+                void cache.invalidateQueries({
+                  queryKey: ['property-setup', 'native-meters', session?.userId, locationId],
+                });
+                refresh();
+              }}
+              onClose={() => setOperation('')}
+            />
+          )}
           {operation === 'meter' && (
             <SourceMeterEditor
               locationId={locationId}
               meters={meters.data}
+              onSaved={refresh}
               onClose={() => setOperation('')}
             />
           )}
@@ -131,6 +220,7 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
             <MeterLinkEditor
               meters={meters.data}
               nativeMeters={nativeMeters.data ?? []}
+              onSaved={refresh}
               onClose={() => setOperation('')}
             />
           ) : null}
@@ -183,13 +273,155 @@ export function UtilitySourcesPanel({ locationId }: { locationId: string }) {
   );
 }
 
+function RoomMeterEditor({
+  rooms,
+  roomsLoading,
+  roomsError,
+  onSaved,
+  onClose,
+}: {
+  rooms: { id: string; label: string }[];
+  roomsLoading: boolean;
+  roomsError: boolean;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
+  const api = usePropertySetupApi();
+  const action = useSetupAction();
+  const [values, setValues] = useState<UtilityValues>({
+    roomId: '',
+    code: '',
+    utilityType: '0',
+    display: '0',
+    decimalPlaces: '0',
+    installedOn: '',
+  });
+  return (
+    <Stack
+      component="form"
+      spacing={2}
+      sx={{ pt: 1 }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!rooms.some((room) => room.id === values.roomId)) return;
+        action.run(async () => {
+          await api.request('/api/v1/capture/meters', {
+            method: 'POST',
+            body: JSON.stringify({
+              roomId: values.roomId,
+              code: values.code.trim(),
+              utilityType: Number(values.utilityType),
+              display: Number(values.display),
+              decimalPlaces: Number(values.decimalPlaces),
+              installedOn: values.installedOn,
+            }),
+          });
+          onSaved();
+        }, 'Đã tạo đồng hồ phòng. Có thể tiếp tục liên kết với công tơ tổng.');
+      }}
+    >
+      <Typography variant="body2" color="text.secondary">
+        Tạo đồng hồ điện hoặc nước gắn trực tiếp với phòng trong cơ sở này. Không bắt buộc tạo công
+        tơ tổng trước.
+      </Typography>
+      {roomsLoading && <LoadingState />}
+      {roomsError && (
+        <Alert severity="error">Không tải được danh sách phòng. Đóng rồi mở lại để thử lại.</Alert>
+      )}
+      {!roomsLoading && !roomsError && rooms.length === 0 && (
+        <Alert severity="warning">Cơ sở chưa có phòng để gắn đồng hồ.</Alert>
+      )}
+      <TextField
+        select
+        required
+        label="Phòng gắn đồng hồ"
+        value={values.roomId}
+        onChange={(event) => setValues((old) => ({ ...old, roomId: event.target.value }))}
+      >
+        {rooms.map((room) => (
+          <MenuItem key={room.id} value={room.id}>
+            {room.label}
+          </MenuItem>
+        ))}
+      </TextField>
+      <TextField
+        required
+        label="Mã đồng hồ phòng"
+        value={values.code}
+        slotProps={{ htmlInput: { maxLength: 80 } }}
+        onChange={(event) => setValues((old) => ({ ...old, code: event.target.value }))}
+      />
+      <TextField
+        select
+        label="Loại đồng hồ"
+        value={values.utilityType}
+        onChange={(event) => setValues((old) => ({ ...old, utilityType: event.target.value }))}
+      >
+        <MenuItem value="0">Điện</MenuItem>
+        <MenuItem value="1">Nước</MenuItem>
+      </TextField>
+      <TextField
+        select
+        label="Kiểu hiển thị"
+        value={values.display}
+        onChange={(event) => setValues((old) => ({ ...old, display: event.target.value }))}
+      >
+        <MenuItem value="0">Cơ (đồng hồ kim/số)</MenuItem>
+        <MenuItem value="1">Điện tử</MenuItem>
+      </TextField>
+      <TextField
+        type="number"
+        required
+        label="Số chữ số thập phân"
+        value={values.decimalPlaces}
+        slotProps={{ htmlInput: { min: 0, max: 4, step: 1 } }}
+        onChange={(event) => setValues((old) => ({ ...old, decimalPlaces: event.target.value }))}
+      />
+      <TextField
+        type="date"
+        required
+        label="Ngày lắp đặt"
+        value={values.installedOn}
+        slotProps={{ inputLabel: { shrink: true } }}
+        onChange={(event) => setValues((old) => ({ ...old, installedOn: event.target.value }))}
+      />
+      <SetupActionFeedback {...action} />
+      <Stack direction="row" spacing={1}>
+        <Button
+          variant="contained"
+          type="submit"
+          disabled={
+            action.busy ||
+            roomsLoading ||
+            roomsError ||
+            !rooms.length ||
+            !rooms.some((room) => room.id === values.roomId) ||
+            !values.code.trim() ||
+            !values.installedOn ||
+            !Number.isInteger(Number(values.decimalPlaces)) ||
+            Number(values.decimalPlaces) < 0 ||
+            Number(values.decimalPlaces) > 4
+          }
+        >
+          Lưu đồng hồ phòng
+        </Button>
+        <Button disabled={action.busy} onClick={onClose}>
+          Đóng
+        </Button>
+      </Stack>
+    </Stack>
+  );
+}
+
 function SourceMeterEditor({
   locationId,
   meters,
+  onSaved,
   onClose,
 }: {
   locationId: string;
   meters: SetupDocument<UtilityMeter>[];
+  onSaved: () => void;
   onClose: () => void;
 }) {
   const api = usePropertySetupApi();
@@ -207,17 +439,16 @@ function SourceMeterEditor({
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
-          action.run(
-            () =>
-              api.saveUtilityMeter({
-                locationId,
-                utilityType: Number(values.utilityType),
-                scope: values.scope as 'Source' | 'Common',
-                code: values.code,
-                parentMeterId: values.scope === 'Common' ? values.parentMeterId || null : null,
-              }),
-            'Máy chủ đã lưu công tơ nguồn.',
-          );
+          action.run(async () => {
+            await api.saveUtilityMeter({
+              locationId,
+              utilityType: Number(values.utilityType),
+              scope: values.scope as 'Source' | 'Common',
+              code: values.code,
+              parentMeterId: values.scope === 'Common' ? values.parentMeterId || null : null,
+            });
+            onSaved();
+          }, 'Máy chủ đã lưu công tơ nguồn.');
         }}
       >
         <Typography variant="h6">Thêm công tơ nguồn / khu chung</Typography>
@@ -265,10 +496,12 @@ function SourceMeterEditor({
 function MeterLinkEditor({
   meters,
   nativeMeters,
+  onSaved,
   onClose,
 }: {
   meters: SetupDocument<UtilityMeter>[];
   nativeMeters: { id: string; label: string }[];
+  onSaved: () => void;
   onClose: () => void;
 }) {
   const api = usePropertySetupApi();
@@ -286,17 +519,16 @@ function MeterLinkEditor({
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
-          action.run(
-            () =>
-              api.linkMeter({
-                meterId: values.meterId,
-                parentMeterId: values.parentMeterId,
-                scope: 'Room',
-                effectiveFrom: values.effectiveFrom,
-                effectiveTo: values.effectiveTo || null,
-              }),
-            'Máy chủ đã lưu liên kết đồng hồ.',
-          );
+          action.run(async () => {
+            await api.linkMeter({
+              meterId: values.meterId,
+              parentMeterId: values.parentMeterId,
+              scope: 'Room',
+              effectiveFrom: values.effectiveFrom,
+              effectiveTo: values.effectiveTo || null,
+            });
+            onSaved();
+          }, 'Máy chủ đã lưu liên kết đồng hồ.');
         }}
       >
         <Typography variant="h6">Liên kết đồng hồ phòng với công tơ tổng</Typography>

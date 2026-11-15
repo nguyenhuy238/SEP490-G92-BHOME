@@ -22,6 +22,7 @@ import {
   type SettlementSummary,
 } from '../../../../../packages/client-core/src/contracts';
 import { SettlementBankPanel } from './SettlementBankPanel';
+import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
 import { FinalUtilitiesPanel } from './FinalUtilitiesPanel';
 import { FinalFixedChargesPanel } from './FinalFixedChargesPanel';
 import { FinalChargeReviewPanel } from './FinalChargeReviewPanel';
@@ -206,22 +207,34 @@ export function SettlementReceivablesPanel({
                   }}
                 />
                 {inspection.observed.evidenceIds.map((proof, i) => (
-                  <FormControlLabel
+                  <Stack
                     key={proof}
-                    control={
-                      <Checkbox
-                        disabled={busy}
-                        checked={proofs.includes(proof)}
-                        onChange={(_, selected) => {
-                          setProofs((v) =>
-                            selected ? [...v, proof] : v.filter((p) => p !== proof),
-                          );
-                          setChecked(false);
-                        }}
-                      />
-                    }
-                    label={`Dùng ảnh biên bản ${i + 1}`}
-                  />
+                    direction={{ xs: 'column', sm: 'row' }}
+                    sx={{ alignItems: { sm: 'center' }, gap: 1 }}
+                  >
+                    <FormControlLabel
+                      key={proof}
+                      control={
+                        <Checkbox
+                          disabled={busy}
+                          checked={proofs.includes(proof)}
+                          onChange={(_, selected) => {
+                            setProofs((v) =>
+                              selected ? [...v, proof] : v.filter((p) => p !== proof),
+                            );
+                            setChecked(false);
+                          }}
+                        />
+                      }
+                      label={`Dùng ảnh biên bản ${i + 1}`}
+                    />
+                    <PrivateEvidenceViewer
+                      label={`ảnh biên bản ${i + 1}`}
+                      filename={`bien-ban-thiet-hai-${i + 1}.jpg`}
+                      fetchBlob={(signal) => api.evidence(id, proof, signal)}
+                      errorMessage={contractError}
+                    />
+                  </Stack>
                 ))}
                 <FormControlLabel
                   control={

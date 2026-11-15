@@ -3,6 +3,7 @@ import { Alert, Button, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { financeError } from '../../../../../packages/client-core/src/finance';
+import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
 import { useFinanceApi } from './useFinanceApi';
 
 export function ExpenseEvidencePanel({
@@ -66,26 +67,6 @@ export function ExpenseEvidencePanel({
       setBusy(false);
     }
   }
-  async function download(id: string) {
-    if (lock.current || disabled) return;
-    lock.current = true;
-    setBusy(true);
-    setError('');
-    try {
-      const blob = await api.expenseEvidenceFile(expenseId, id);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = blob.type === 'image/png' ? 'chung-tu.png' : 'chung-tu.jpg';
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (e) {
-      setError(financeError(e));
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
-  }
   return (
     <Stack spacing={1}>
       <Typography variant="h6">Chứng từ khoản chi</Typography>
@@ -111,9 +92,15 @@ export function ExpenseEvidencePanel({
             {f.status === 'Uploaded' ? 'Đã lưu' : 'Chưa tải xong; chọn lại đúng ảnh để thử lại'}
           </Typography>
           {f.status === 'Uploaded' && (
-            <Button type="button" disabled={busy || disabled} onClick={() => void download(f.id)}>
-              Tải chứng từ {index + 1}
-            </Button>
+            <PrivateEvidenceViewer
+              label={`chứng từ ${index + 1}`}
+              filename={`chung-tu-${index + 1}`}
+              contentType={f.contentType}
+              expectedSize={f.length}
+              disabled={busy || disabled}
+              fetchBlob={(signal) => api.expenseEvidenceFile(expenseId, f.id, signal)}
+              errorMessage={financeError}
+            />
           )}
         </Stack>
       ))}

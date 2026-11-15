@@ -302,6 +302,8 @@ export function ContractLifecyclePanel({
                   <DepositDeductionsPanel
                     key={`deductions:${summary.reference}`}
                     summary={summary}
+                    api={api}
+                    contractId={contract.id}
                   />
                 )}
                 <RefundPanel

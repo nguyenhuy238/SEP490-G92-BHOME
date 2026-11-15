@@ -1,4 +1,5 @@
 using BHome.Application.Common;
+using BHome.Application.Storage;
 using BHome.Infrastructure.Storage;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
@@ -39,7 +40,9 @@ public sealed class MinioStorageRegressionTests : IAsyncLifetime
         using var output = new MemoryStream();
         await storage.CopyToAsync("synthetic.pdf", output, default);
         Assert.Equal(bytes, output.ToArray());
-        await Assert.ThrowsAsync<FileNotFoundException>(() => storage.CopyToAsync("missing.pdf", output, default));
+        var missing = await Assert.ThrowsAsync<PrivateObjectNotFoundException>(() => storage.CopyToAsync("missing.pdf", output, default));
+        // Existing draft generation deliberately catches FileNotFoundException to regenerate a missing draft.
+        Assert.IsAssignableFrom<FileNotFoundException>(missing);
     }
 
     [Fact]

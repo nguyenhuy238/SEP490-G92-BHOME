@@ -405,6 +405,10 @@ it('downloads private thumbnails, opens an image dialog and revokes object URLs'
       ]}
     />,
   );
+  const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  fireEvent.click(await screen.findByRole('button', { name: 'Tải xuống ảnh 1' }));
+  expect(anchorClick).toHaveBeenCalledOnce();
+  anchorClick.mockRestore();
   fireEvent.click(await screen.findByRole('button', { name: 'Xem ảnh bằng chứng 1' }));
   expect(screen.getByRole('img', { name: 'Bằng chứng 1 phóng lớn' })).toHaveAttribute(
     'src',

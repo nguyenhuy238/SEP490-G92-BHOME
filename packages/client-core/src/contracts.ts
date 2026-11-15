@@ -787,6 +787,12 @@ export function contractClient(request: ContractRequest) {
       request<Uint8Array>(root + '/' + id + '/handover/evidence/' + fileId, { signal }, 'bytes'),
     handoverMeterEvidence: (id: string, readingId: string, signal?: AbortSignal) =>
       request<Blob>(root + '/' + id + '/handover/meter-evidence/' + readingId, { signal }, 'blob'),
+    readingEvidence: (readingId: string, signal?: AbortSignal) =>
+      request<Blob>(
+        `/api/v1/capture/readings/${encodeURIComponent(readingId)}/evidence`,
+        { signal },
+        'blob',
+      ),
     handoverMeterEvidenceBytes: (id: string, readingId: string, signal?: AbortSignal) =>
       request<Uint8Array>(
         root + '/' + id + '/handover/meter-evidence/' + readingId,
