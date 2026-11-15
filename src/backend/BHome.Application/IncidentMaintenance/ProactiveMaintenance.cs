@@ -60,9 +60,15 @@ public sealed partial class IncidentService
             var staff = await repository.ResponsibleStaffAsync(input.LocationId, Today, t) ?? throw IncidentException.Conflict("staff_unavailable");
             var order = new MaintenanceWorkOrder
             {
-                Source = "Proactive", LocationId = input.LocationId, RoomId = input.RoomId, CommonArea = area,
-                AssetId = input.AssetId, Description = description, ExpectedOutcome = outcome,
-                TargetCompletionAt = input.TargetCompletionAt.ToUniversalTime(), AssignedStaffId = staff
+                Source = "Proactive",
+                LocationId = input.LocationId,
+                RoomId = input.RoomId,
+                CommonArea = area,
+                AssetId = input.AssetId,
+                Description = description,
+                ExpectedOutcome = outcome,
+                TargetCompletionAt = input.TargetCompletionAt.ToUniversalTime(),
+                AssignedStaffId = staff
             };
             repository.Add(order);
             if (order.AssetId is { } assetId)

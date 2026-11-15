@@ -623,7 +623,7 @@ public sealed partial class IncidentService(IIncidentRepository repository, ICur
                 EventKey = "incident:" + notification.Id,
                 EventType = notification.EventType,
                 Priority = notification.HighPriority ? "P0" : "P1",
-                Channels = ["IN_APP", "PUSH"],
+                Channels = BHome.Application.Notifications.NotificationEmailPolicy.Channels(notification.EventType, role, ["IN_APP", "PUSH"]),
                 Title = notification.HighPriority ? "Sự cố khẩn cấp có cập nhật" : "Sự cố và bảo trì có cập nhật",
                 Summary = notification.HighPriority ? "Ưu tiên an toàn và liên hệ cơ quan khẩn cấp phù hợp nếu có nguy hiểm tính mạng. Mở hồ sơ để ghi nhận ứng phó." : "Mở hồ sơ để xem nội dung và thao tác trong phạm vi được phân công.",
                 RelatedObjectType = report.IncidentId.HasValue ? "Incident" : "WorkOrder",

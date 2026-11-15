@@ -8,6 +8,28 @@ internal static class LocalDevelopmentCli
 {
     public static async Task<int> Main(string[] args)
     {
+        if (args.SequenceEqual(new[] { "seed-maintenance-demo" }))
+        {
+            try
+            {
+                var config = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+                var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "";
+                var setup = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(config);
+                setup.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(environment));
+                setup.AddInfrastructure(config);
+                setup.AddSingleton<LifecycleSeedActor>();
+                setup.AddSingleton<BHome.Application.IdentityAccess.ICurrentUser>(p => p.GetRequiredService<LifecycleSeedActor>());
+                await using var provider = setup.BuildServiceProvider();
+                await MaintenanceDemoSeed.RunAsync(provider, environment, Environment.GetEnvironmentVariable("BHOME_MAINTENANCE_DEMO_PASSWORD") ?? "");
+                return 0;
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(error is LocalTestAccountException ? error.Message : $"MAINTENANCE_DEMO_FAILED ({error.GetType().Name}); private configuration suppressed.");
+                if (error is BHome.Application.IncidentMaintenance.IncidentException incident) Console.Error.WriteLine(incident.Code);
+                return 1;
+            }
+        }
         if (args.SequenceEqual(new[] { "check-sms-configuration" }))
         {
             try

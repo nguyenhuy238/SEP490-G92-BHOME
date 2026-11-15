@@ -3,6 +3,7 @@ using BHome.Application.Notifications;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.IncidentMaintenance;
+using BHome.Domain.Notifications;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Persistence.Compact24;
@@ -124,6 +125,30 @@ public sealed partial class Compact24NotificationMvpTests
         await Pump(host); await Pump(host); await DispatchSms(host); await Pump(host); await DispatchSms(host);
         Assert.Single(host.Services.GetRequiredService<DemoSmsInbox>().List(), m => m.TemplateId == "SMS-05" && m.RecipientId == w.Tenants[0].Id);
         Assert.DoesNotContain(host.Services.GetRequiredService<DemoSmsInbox>().List(), m => m.TemplateId == "SMS-05" && m.RecipientId != w.Tenants[0].Id);
+    }
+
+    [CompactPostgresFact]
+    public async Task EmergencyReportApiPreservesImmediateInAppEmailAndConfiguredSmsChannels()
+    {
+        var w = await Seed(); using var host = await SmsHost(w); using var tenant = await Client(w.Tenants[0], host);
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent(w.Location.ToString()), "LocationId" }, { new StringContent(w.Room.ToString()), "RoomId" },
+            { new StringContent("Emergency"), "Severity" }, { new StringContent("Synthetic urgent maintenance report"), "Description" }
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/incidents") { Content = form };
+        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        var response = await tenant.SendAsync(request); response.EnsureSuccessStatusCode();
+        await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var notices = await db.Set<UserNotification>().Where(n => n.LocationId == w.Location && n.EventType == "INCIDENT_EMERGENCY_SUBMITTED").ToArrayAsync();
+        Assert.Equal(2, notices.Length);
+        Assert.All(notices, n =>
+        {
+            Assert.Contains(n.RecipientUserId, new[] { w.Owner.Id, w.Staff.Id });
+            Assert.Contains("IN_APP", n.Channels); Assert.Contains("EMAIL", n.Channels); Assert.Contains("SMS", n.Channels);
+        });
+        await Pump(host); await DispatchSms(host);
+        Assert.Equal(2, host.Services.GetRequiredService<DemoSmsInbox>().List().Count(m => m.TemplateId == "SMS-06"));
     }
 
     [CompactPostgresFact]

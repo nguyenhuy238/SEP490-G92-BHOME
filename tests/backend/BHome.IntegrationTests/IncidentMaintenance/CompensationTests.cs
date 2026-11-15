@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using BHome.Application.Contracts;
 using BHome.Application.IncidentMaintenance;
 using BHome.Application.PaymentsDebt;
 using BHome.Domain.IncidentMaintenance;
@@ -34,6 +36,9 @@ public sealed partial class IncidentApiTests
         var row = await Ok<CompensationView>(await Send(w.Owner, $"{Orders}/{id}/compensation", input));
         Assert.Equal("DepositPending", row.Status); Assert.Null(row.InvoiceId);
         Assert.Equal(HttpStatusCode.Conflict, (await Send(w.Owner, $"{Orders}/{id}/compensation/deduct", new CompensationDecision(row.Version, "Too early"))).StatusCode);
+        var pendingSummary = (await w.Owner.Client.GetFromJsonAsync<BHome.Application.Contracts.ContractSettlementSummary>($"/api/v1/contracts/{w.Contract}/move-out/settlement-summary"))!;
+        Assert.Contains("maintenance_compensation_pending", pendingSummary.UnresolvedItems);
+        Assert.Equal(0, pendingSummary.MaintenanceDeductions); Assert.False(pendingSummary.Resolved);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
@@ -58,7 +63,10 @@ public sealed partial class IncidentApiTests
                 OwnerDecision = "Confirmed",
                 OwnerId = w.Owner.Id,
                 ReviewedAt = DateTimeOffset.UtcNow,
-                OwnerReason = "Inspected fixture"
+                OwnerReason = "Inspected fixture",
+                ObservedSnapshot = JsonSerializer.Serialize(new HandoverSnapshot(Today, "Synthetic room", "Inspected", "Synthetic keys", "Fixture",
+                    [], new HandoverReading(Guid.NewGuid(), "E-SYNTHETIC", 0, Today, 1, Guid.Empty, "", ""),
+                    new HandoverReading(Guid.NewGuid(), "W-SYNTHETIC", 1, Today, 1, Guid.Empty, "", ""), []))
             });
             await db.SaveChangesAsync();
         }
@@ -74,6 +82,14 @@ public sealed partial class IncidentApiTests
         var context = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.False(await context.Set<BHome.Domain.Billing.Invoice>().AnyAsync(i => i.RepresentativeContractId == w.Contract));
         Assert.Equal(50000, (await context.Set<MaintenanceCompensation>().SingleAsync(c => c.WorkOrderId == id)).Amount);
+        var finalSummary = await Ok<BHome.Application.Contracts.ContractSettlementSummary>(await w.Owner.Client.GetAsync($"/api/v1/contracts/{w.Contract}/move-out/settlement-summary"));
+        Assert.Equal(50000, finalSummary.MaintenanceDeductions); Assert.Equal(50000, finalSummary.ApprovedDeductions);
+        Assert.DoesNotContain("maintenance_compensation_pending", finalSummary.UnresolvedItems);
+        Assert.False(finalSummary.Resolved); // Unbilled final readings still block full Contract closure.
+        var refund = (await w.Owner.Client.GetFromJsonAsync<BHome.Application.Finance.RefundSource>($"/api/v1/contracts/{w.Contract}/deposit-refunds"))!;
+        Assert.Equal(50000, refund.MaintenanceDeductions);
+        Assert.Equal(100000, refund.VerifiedDepositAmount);
+        Assert.Equal(50000, refund.AvailableAmount);
     }
 
     private async Task<(Workspace Workspace, Guid WorkOrder, Guid Evidence)> VerifiedMaintenance(decimal requiredDeposit = 0)

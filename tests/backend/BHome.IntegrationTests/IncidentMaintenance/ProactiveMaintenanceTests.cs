@@ -12,6 +12,42 @@ namespace BHome.IntegrationTests.IncidentMaintenance;
 public sealed partial class IncidentApiTests
 {
     [CompactPostgresFact]
+    public async Task FastRepairCompletesOnlyAfterOwnerVerificationAndCreatesNoZeroExpense()
+    {
+        var w = await Setup(); var policy = (await w.Owner.Client.GetFromJsonAsync<FastRepairPolicyView>($"{Orders}/fast-repair-policy"))!;
+        const string category = "Synthetic no-material adjustment";
+        await Ok<IncidentCommandResult>(await Send(w.Owner, $"{Orders}/fast-repair-policy", new FastRepairPolicyWrite(policy.Version, [category])));
+        var id = (await Ok<IncidentCommandResult>(await Send(w.Owner, Orders, Proactive(w)))).WorkOrderId!.Value;
+        await Ok<IncidentCommandResult>(await Send(w.Staff, $"{Orders}/{id}/fast-repair-start", new FastRepairStart(1, category, "Inspected", "Adjust without material", 5, 0, false)));
+        using var upload = new HttpRequestMessage(HttpMethod.Put, $"{Orders}/{id}/evidence?kind=Completion") { Content = new ByteArrayContent(Image()) };
+        upload.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        var evidence = (await Ok<IncidentCommandResult>(await w.Staff.Client.SendAsync(upload))).ResourceId!.Value;
+        var work = (await Work(w.Staff, id))!;
+        await Ok<IncidentCommandResult>(await Send(w.Staff, $"{Orders}/{id}/submit", new WorkOrderAction(work.Version, "Synthetic zero-cost completion", [evidence])));
+        Assert.Equal("PendingVerification", (await Work(w.Staff, id))!.Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await Verify(w, id, cost: 1)).StatusCode);
+        await Ok<IncidentCommandResult>(await Verify(w, id, cost: 0));
+        work = (await Work(w.Owner, id))!; Assert.Equal("Verified", work.Status); Assert.Null(work.ApprovedById);
+        Assert.NotNull(work.FastRepairPolicyVersion);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        Assert.False(await db.Set<MaintenanceExpense>().AnyAsync(e => e.WorkOrderId == id));
+        Assert.Equal(0, (await db.Set<MaintenanceHistory>().SingleAsync(h => h.WorkOrderId == id)).ActualCost);
+    }
+
+    [CompactPostgresFact]
+    public async Task OwnerCreatesAssetOnlyAfterStaffProposalAndPreservesItsScope()
+    {
+        var w = await Setup(); var id = (await Ok<IncidentCommandResult>(await Send(w.Owner, Orders, Proactive(w) with { AssetId = null }))).WorkOrderId!.Value;
+        await Ok<IncidentCommandResult>(await Send(w.Staff, $"{Orders}/{id}/asset-proposal",
+            new AssetLinkProposal(1, null, "Synthetic new fan", "Synthetic device", "Inspected synthetic condition", "Found an unmanaged device")));
+        var work = (await Work(w.Owner, id))!; Assert.Null(work.AssetId);
+        await Ok<IncidentCommandResult>(await Send(w.Owner, $"{Orders}/{id}/asset-decision", new AssetLinkDecision(work.Version, true, "Owner confirmed device")));
+        work = (await Work(w.Owner, id))!; Assert.NotNull(work.AssetId);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var asset = await db.Set<BHome.Domain.PropertyManagement.Asset>().SingleAsync(a => a.Id == work.AssetId);
+        Assert.Equal(w.Room, asset.RoomId); Assert.Equal(w.Location, asset.LocationId); Assert.Equal("Synthetic new fan", asset.Name);
+    }
+    [CompactPostgresFact]
     public async Task TenantWithoutAssetCompletesIncidentAndRepeatReportPreservesVerifiedWork()
     {
         var w = await Setup();

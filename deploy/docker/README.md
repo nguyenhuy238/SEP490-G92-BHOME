@@ -17,8 +17,8 @@ docker build -f deploy/docker/Web.Dockerfile --build-arg APP=public-web --build-
 ```
 
 The two web clients share a parameterized Dockerfile and serve SPA fallback with unprivileged Nginx
-on port 8080. Vite's API URL is embedded at build time and must never be a secret. Native mobile is
-built with Capacitor tooling, not a server container. Docker build contexts exclude private env files,
+on port 8080. Vite's API URL is embedded at build time and must never be a secret. Native mobile uses
+React Native and Expo. CI validates its Expo web export. Docker build contexts exclude private env files,
 generated output and local tool downloads.
 
 The API runs as the .NET image's unprivileged app user on port 8080 and requires runtime connection,
@@ -34,6 +34,13 @@ an appropriate operations boundary. Review/pin image digests in the release proc
 
 No infrastructure container was started during initialization because the local Docker daemon was
 stopped. Compose syntax validation does not prove image build/runtime behavior.
+
+## Incident và Maintenance demo
+
+Hướng dẫn seed và chạy Incident/Maintenance trên database local riêng nằm trong
+[BF07 demo walkthrough](../../docs/testing/BF07_DEMO_2026-11-15.md).
+Các migration bổ sung, quyền truy cập và API được ghi trong
+[Incident và Maintenance API](../../docs/api/INCIDENT_MAINTENANCE.md).
 
 ## Cấu hình SMS OTP thật qua eSMS
 

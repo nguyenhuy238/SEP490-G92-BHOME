@@ -74,6 +74,12 @@ public sealed partial class IncidentService
             var reason = Text(input.Note, 1, 2000);
             var basis = new { order.FastRepairPolicyVersion, order.FastRepairCategory, order.FastRepairAuthorizedAt };
             Transition(order.RequireNormalApproval);
+            if (order.AssetId is { } assetId)
+            {
+                var asset = await repository.AssetAsync(assetId, t) ?? throw IncidentException.Missing();
+                asset.Status = await repository.OtherAssetExecutionAsync(assetId, id, t) ? AssetStatus.UnderRepair : AssetStatus.NeedsRepair;
+                asset.Version++;
+            }
             var activity = Activity(context, order, "fast_repair_blocked", reason, false, basis);
             await NotifyAsync(context, activity, await repository.RecipientsAsync(context.LocationId, Today, false, t), t);
             return new(context.IncidentId, id);
@@ -114,8 +120,12 @@ public sealed partial class IncidentService
                 {
                     asset = new Asset
                     {
-                        LocationId = order.LocationId, RoomId = order.RoomId, CommonArea = context.CommonArea,
-                        Name = order.ProposedAssetName!, Category = order.ProposedAssetCategory!, Condition = order.ProposedAssetCondition!
+                        LocationId = order.LocationId,
+                        RoomId = order.RoomId,
+                        CommonArea = context.CommonArea,
+                        Name = order.ProposedAssetName!,
+                        Category = order.ProposedAssetCategory!,
+                        Condition = order.ProposedAssetCondition!
                     };
                     repository.Add(asset);
                 }

@@ -10,19 +10,19 @@ Work Order trả `incidentId` nullable, `source` là `Incident` hoặc `Proactiv
 `commonArea`, `usesMaterials`, `fastRepairPolicyVersion`, `fastRepairCategory` và trạng thái đề xuất Asset.
 Record lịch sử cũ thiếu source được đọc thành `Incident`. `workOrderId` lọc chính xác danh sách và lịch sử bảo trì.
 
-| Phương thức và route trong `/api/v1/work-orders` | Quyền và hành vi |
-| --- | --- |
-| GET `/assignment?locationId={id}` | Owner, trả `staffId` nullable và `available` theo phân công hôm nay |
-| POST `/` | Owner tạo proactive bằng `locationId`, một trong `roomId/commonArea`, `assetId` tùy chọn, `description`, `expectedOutcome`, `targetCompletionAt` có offset. Server chọn Staff |
-| GET `/{id}/history` | Owner/Staff đúng Location, phân trang; Staff không nhận internal JSON |
-| GET `/{id}/evidence`, GET `/{id}/evidence/{imageId}` | Metadata và ảnh private cho Owner/Staff đúng scope |
-| PUT `/{id}/evidence?kind=2\|3` | Staff được giao và còn phụ trách Location, binary PNG/JPEG, tối đa 5.000.000 byte |
-| GET `/fast-repair-policy` | Owner/Staff, version 0 và danh sách rỗng khi chưa cấu hình |
-| POST `/fast-repair-policy` | Owner, `version`, `activeCategories`; toàn hệ thống, không tự bật gợi ý |
-| POST `/{id}/fast-repair-start` | Assigned Staff, `version`, `category`, `inspectionResult`, `solution`, `estimatedMinutes`, `estimatedCost:0`, `usesMaterials:false` |
-| POST `/{id}/fast-repair-fallback` | Assigned Staff, `version`, `note`; trở về Assigned và phải gửi phương án thường |
-| POST `/{id}/asset-proposal` | Assigned Staff, `version`, `assetId` hiện có hoặc `name/category/condition` mới, `reason` |
-| POST `/{id}/asset-decision` | Owner, `version`, `approve`, `reason`; xác nhận đúng scope trước khi liên kết/tạo Asset |
+| Phương thức và route trong `/api/v1/work-orders`     | Quyền và hành vi                                                                                                                                                              |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET `/assignment?locationId={id}`                    | Owner, trả `staffId` nullable và `available` theo phân công hôm nay                                                                                                           |
+| POST `/`                                             | Owner tạo proactive bằng `locationId`, một trong `roomId/commonArea`, `assetId` tùy chọn, `description`, `expectedOutcome`, `targetCompletionAt` có offset. Server chọn Staff |
+| GET `/{id}/history`                                  | Owner/Staff đúng Location, phân trang; Staff không nhận internal JSON                                                                                                         |
+| GET `/{id}/evidence`, GET `/{id}/evidence/{imageId}` | Metadata và ảnh private cho Owner/Staff đúng scope                                                                                                                            |
+| PUT `/{id}/evidence?kind=2\|3`                       | Staff được giao và còn phụ trách Location, binary PNG/JPEG, tối đa 5.000.000 byte                                                                                             |
+| GET `/fast-repair-policy`                            | Owner/Staff, version 0 và danh sách rỗng khi chưa cấu hình                                                                                                                    |
+| POST `/fast-repair-policy`                           | Owner, `version`, `activeCategories`; toàn hệ thống, không tự bật gợi ý                                                                                                       |
+| POST `/{id}/fast-repair-start`                       | Assigned Staff, `version`, `category`, `inspectionResult`, `solution`, `estimatedMinutes`, `estimatedCost:0`, `usesMaterials:false`                                           |
+| POST `/{id}/fast-repair-fallback`                    | Assigned Staff, `version`, `note`; trở về Assigned và phải gửi phương án thường                                                                                               |
+| POST `/{id}/asset-proposal`                          | Assigned Staff, `version`, `assetId` hiện có hoặc `name/category/condition` mới, `reason`                                                                                     |
+| POST `/{id}/asset-decision`                          | Owner, `version`, `approve`, `reason`; xác nhận đúng scope trước khi liên kết/tạo Asset                                                                                       |
 
 Mọi POST/PUT mutation cần UUID `Idempotency-Key`. Tạo proactive và quyết định chính sách trả
 `IncidentCommandResult` với `incidentId:null`. Fast Repair giữ căn cứ phiên bản chính sách,
@@ -34,14 +34,14 @@ Staff có thể khai báo `usesMaterials` trong phương án thường. Không t
 
 Các route dưới `/{workOrderId}/compensation` chỉ cho Owner còn hoạt động.
 
-| Phương thức và route | Hành vi |
-| --- | --- |
-| GET `/` | Quyết định hiện hành hoặc JSON `null` HTTP 200 |
-| GET `/contracts` | Tối đa 100 Contract thực sự thuộc Room, gồm các tenancy đã được kích hoạt trong lịch sử |
-| GET `/history` | Tối đa 100 phiên bản quyết định mới nhất, giữ nguyên số tiền, lý do, actor và timestamp từng lần |
-| POST `/` | `contractId`, `amount` chuỗi/số nguyên VND, `collectionMethod` Invoice/Deposit, `dueDate` cho Invoice, `reason`, `evidenceIds` |
-| POST `/deduct` | `version`, `reason`; chỉ DepositPending, sau Owner duyệt trả phòng và xác nhận inspection, recheck đủ toàn bộ cọc |
-| POST `/cancel` | `version`, `reason`; hủy DepositPending, giữ lịch sử và giải phóng phần đang chờ |
+| Phương thức và route | Hành vi                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| GET `/`              | Quyết định hiện hành hoặc JSON `null` HTTP 200                                                                                 |
+| GET `/contracts`     | Tối đa 100 Contract thực sự thuộc Room, gồm các tenancy đã được kích hoạt trong lịch sử                                        |
+| GET `/history`       | Tối đa 100 phiên bản quyết định mới nhất, giữ nguyên số tiền, lý do, actor và timestamp từng lần                               |
+| POST `/`             | `contractId`, `amount` chuỗi/số nguyên VND, `collectionMethod` Invoice/Deposit, `dueDate` cho Invoice, `reason`, `evidenceIds` |
+| POST `/deduct`       | `version`, `reason`; chỉ DepositPending, sau Owner duyệt trả phòng và xác nhận inspection, recheck đủ toàn bộ cọc              |
+| POST `/cancel`       | `version`, `reason`; hủy DepositPending, giữ lịch sử và giải phóng phần đang chờ                                               |
 
 Chỉ Work Order Verified trong Room có actual cost mới tạo được nghĩa vụ, với số tiền dương
 không vượt actual cost và bằng chứng đã linked thuộc công việc. Một quyết định cho mỗi Work Order,

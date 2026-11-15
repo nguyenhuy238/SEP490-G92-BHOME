@@ -10,7 +10,8 @@ using Npgsql;
 
 namespace BHome.Infrastructure.Modules.IncidentMaintenance.Persistence;
 
-internal sealed class IncidentRepository(BHomePersistenceContext db) : IIncidentRepository
+internal sealed class IncidentRepository(BHomePersistenceContext db,
+    Microsoft.Extensions.Options.IOptions<BHome.Application.Notifications.SmsOptions>? sms = null) : IIncidentRepository
 {
     public async Task<T> TransactionAsync<T>(Guid locationId, Guid? roomId, Guid actorId, Guid key, Func<Task<T>> work, CancellationToken t)
     {
@@ -224,7 +225,15 @@ internal sealed class IncidentRepository(BHomePersistenceContext db) : IIncident
     private IQueryable<MaintenanceWorkOrder> VisibleWork(IncidentScope scope) => db.Set<MaintenanceWorkOrder>().AsNoTracking().Where(w =>
         scope.Owner || scope.Staff && db.Locations.Any(l => l.Id == w.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a =>
             a.LocationId == w.LocationId && a.StaffUserId == scope.ActorId && a.StartDate <= scope.Today && a.EndDate >= scope.Today));
-    public void Add(object entity) => db.Add(entity);
+    public void Add(object entity)
+    {
+        // Immediate in-app publication must retain the configured external delivery channels.
+        if (entity is BHome.Domain.Notifications.UserNotification notice && sms?.Value.Enabled == true &&
+            BHome.Infrastructure.Modules.Notifications.SmsNotificationPolicy.Template(notice.EventType, notice.AudienceRole) is { } template &&
+            sms.Value.EnabledTemplates.Contains(template))
+            notice.Channels = notice.Channels.Append("SMS").Distinct().ToArray();
+        db.Add(entity);
+    }
     public void Audit(Guid actor, string action, Guid activityId, DateTimeOffset now) => db.SecurityAudit.Add(new SecurityAuditRecord
     { UserId = actor, Event = action, TargetType = "IncidentActivity", TargetId = activityId, OccurredAt = now, Succeeded = true });
 }
