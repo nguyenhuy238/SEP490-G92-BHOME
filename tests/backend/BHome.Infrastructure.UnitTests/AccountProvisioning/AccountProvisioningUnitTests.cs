@@ -12,6 +12,7 @@ namespace BHome.Infrastructure.UnitTests.AccountProvisioning;
 // Pre-conditions, inputs and expected results are taken from the sheet, not from the code.
 [Collection(AccountProvisioningCollection.Name)]
 [Trait("Suite", "QA-SrsUnit")]
+[Trait("Sheet", "AccountProvisioning")]
 public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgres) : IAsyncLifetime
 {
     private static readonly Guid Location1Id = Guid.Parse("c2400000-0000-4000-8000-000000000010");

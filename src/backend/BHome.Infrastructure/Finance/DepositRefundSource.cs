@@ -21,7 +21,7 @@ internal sealed partial class RefundRepository
             summary.Calculation.DepositAllocated != summary.ApprovedDepositOffsets) blockers.Add("deposit_source_requires_review");
         if (summary.DepositDeductions is { } plan)
         {
-            if (summary.ApprovedDeductions != plan.Total || summary.ApprovedFinalCharges != plan.Total)
+            if (summary.ApprovedDeductions != plan.Total + summary.MaintenanceDeductions || summary.ApprovedFinalCharges != plan.Total + summary.MaintenanceDeductions)
                 blockers.Add("deposit_deductions_require_review");
             else
             {
@@ -35,7 +35,7 @@ internal sealed partial class RefundRepository
             if (chargeEvidence is null) throw new FinanceException(503, "settlement_evidence_unavailable");
             foreach (var charge in summary.Receivables) await chargeEvidence.VerifyAsync(charge.Charge, t);
         }
-        else if (summary.ApprovedFinalCharges != 0) blockers.Add("deposit_deductions_require_review");
+        else if (summary.ApprovedFinalCharges != summary.MaintenanceDeductions) blockers.Add("deposit_deductions_require_review");
         var requests = (await Rows.Where(r => r.SourceDepositContractId == summary.DepositContractId)
             .OrderByDescending(r => r.RequestedAt).ToArrayAsync(t)).Select(Decode).ToArray();
         var allReserved = await db.Database.SqlQuery<decimal>($"""
@@ -50,8 +50,8 @@ internal sealed partial class RefundRepository
             .OrderBy(r => r.Id).Select(r => new RefundPerson(r.Id, r.DisplayLabel)).ToArrayAsync(t);
         // BR-30: the Owner confirms the recipient under the Contract agreement. These choices
         // are eligible Residents, not an inference about who originally paid the deposit.
-        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0) - summary.ApprovedDepositOffsets, contract.IsDevelopmentDemo, people, requests,
+        return new(summary.VerifiedSecurityDeposit - (summary.DepositDeductions?.Total ?? 0) - summary.MaintenanceDeductions - summary.ApprovedDepositOffsets, contract.IsDevelopmentDemo, people, requests,
             summary.DepositContractId, summary.FinancialReference, blockers.Distinct().Order().ToArray(), summary.Calculation?.AvailableSecurityDeposit,
-            summary.VerifiedSecurityDeposit, summary.DepositDeductions, summary.ApprovedDepositOffsets);
+            summary.VerifiedSecurityDeposit, summary.DepositDeductions, summary.ApprovedDepositOffsets, MaintenanceDeductions: summary.MaintenanceDeductions);
     }
 }

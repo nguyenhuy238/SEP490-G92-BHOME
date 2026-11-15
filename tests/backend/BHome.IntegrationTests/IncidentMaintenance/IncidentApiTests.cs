@@ -29,7 +29,7 @@ using OpenCvSharp;
 namespace BHome.IntegrationTests.IncidentMaintenance;
 
 [Trait("Category", "CompactPostgres")]
-public sealed class IncidentApiTests(IncidentFixture fixture) : IClassFixture<IncidentFixture>
+public sealed partial class IncidentApiTests(IncidentFixture fixture) : IClassFixture<IncidentFixture>
 {
     private const string Base = "/api/v1/incidents";
     private const string Orders = "/api/v1/work-orders";
@@ -52,7 +52,7 @@ public sealed class IncidentApiTests(IncidentFixture fixture) : IClassFixture<In
         response.EnsureSuccessStatusCode(); var login = (await response.Content.ReadFromJsonAsync<LoginResult>())!;
         client.DefaultRequestHeaders.Authorization = new("Bearer", login.AccessToken); return new(id, client);
     }
-    private async Task<Workspace> Setup(bool assigned = true)
+    private async Task<Workspace> Setup(bool assigned = true, decimal requiredDeposit = 0)
     {
         var owner = await User(Roles.Owner); var staff = await User(Roles.Staff); var tenant = await User(Roles.Tenant);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
@@ -69,7 +69,7 @@ public sealed class IncidentApiTests(IncidentFixture fixture) : IClassFixture<In
             StartDate = Today.AddDays(-10),
             EndDate = Today.AddDays(100),
             MonthlyRent = 1000000,
-            RequiredDeposit = 0,
+            RequiredDeposit = requiredDeposit,
             Status = ContractStatus.Active,
             ActivatedByUserId = owner.Id,
             ActivatedAt = DateTimeOffset.UtcNow,
@@ -93,11 +93,12 @@ public sealed class IncidentApiTests(IncidentFixture fixture) : IClassFixture<In
         request.Headers.Add("Idempotency-Key", (key ?? Guid.NewGuid()).ToString()); return await actor.Client.SendAsync(request);
     }
     private static async Task<HttpResponseMessage> Submit(Actor actor, Workspace w, bool emergency = false, Guid? key = null,
-        byte[]? photo = null, Guid? room = null, Guid? asset = null, string description = "Synthetic incident description")
+        byte[]? photo = null, Guid? room = null, Guid? asset = null, string description = "Synthetic incident description", bool omitAsset = false)
     {
         using var form = new MultipartFormDataContent();
         form.Add(new StringContent(w.Location.ToString()), "locationId"); form.Add(new StringContent((room ?? w.Room).ToString()), "roomId");
-        form.Add(new StringContent((asset ?? w.Asset).ToString()), "assetId"); form.Add(new StringContent(description), "description");
+        if (!omitAsset) form.Add(new StringContent((asset ?? w.Asset).ToString()), "assetId");
+        form.Add(new StringContent(description), "description");
         form.Add(new StringContent(emergency ? "Emergency" : "Normal"), "severity");
         if (photo is not null)
         { var content = new ByteArrayContent(photo); content.Headers.ContentType = new("image/png"); form.Add(content, "images", "synthetic.png"); }
@@ -107,7 +108,7 @@ public sealed class IncidentApiTests(IncidentFixture fixture) : IClassFixture<In
     private static Task<IncidentView?> Report(Actor actor, Guid id) => actor.Client.GetFromJsonAsync<IncidentView>($"{Base}/{id}");
     private static Task<WorkOrderView?> Work(Actor actor, Guid id) => actor.Client.GetFromJsonAsync<WorkOrderView>($"{Orders}/{id}");
     private async Task<Guid> Create(Workspace w, Actor? reporter = null, bool emergency = false)
-        => (await Ok<IncidentCommandResult>(await Submit(reporter ?? w.Tenant, w, emergency))).IncidentId;
+        => (await Ok<IncidentCommandResult>(await Submit(reporter ?? w.Tenant, w, emergency))).IncidentId!.Value;
     private static async Task Review(Workspace w, Guid incident)
     {
         var report = (await Report(w.Owner, incident))!;
@@ -224,7 +225,7 @@ public sealed class IncidentApiTests(IncidentFixture fixture) : IClassFixture<In
     public async Task ReplacementStaffNeedsOwnerReassignmentAndOldStaffCannotReplay()
     {
         var w = await Setup(); var key = Guid.NewGuid();
-        var incident = (await Ok<IncidentCommandResult>(await Submit(w.Staff, w, key: key))).IncidentId;
+        var incident = (await Ok<IncidentCommandResult>(await Submit(w.Staff, w, key: key))).IncidentId!.Value;
         await Review(w, incident); var work = await Assign(w, incident); var next = await User(Roles.Staff);
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
@@ -347,7 +348,7 @@ public sealed class IncidentApiTests(IncidentFixture fixture) : IClassFixture<In
         Assert.Equal(HttpStatusCode.Conflict, (await Submit(w.Tenant, w, key: key, description: "Different description")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Submit(w.Tenant, w, description: "short")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Submit(w.Tenant, w, photo: [1, 2, 3])).StatusCode);
-        var report = (await Report(w.Owner, created.IncidentId))!;
+        var report = (await Report(w.Owner, created.IncidentId!.Value))!;
         Assert.Equal(HttpStatusCode.Conflict, (await Send(w.Owner, $"{Base}/{report.Id}/work-orders", new WorkOrderAssign(report.Version, w.Staff.Id, "Do work", DateTimeOffset.UtcNow.AddDays(1)))).StatusCode);
         await Review(w, report.Id); report = (await Report(w.Tenant, report.Id))!;
         Assert.Equal(HttpStatusCode.Forbidden, (await Send(w.Tenant, $"{Base}/{report.Id}/cancel", new IncidentDecision(report.Version, "Changed mind"))).StatusCode);
@@ -443,7 +444,7 @@ public sealed class IncidentApiTests(IncidentFixture fixture) : IClassFixture<In
         var maintenance = (await w.Tenant.Client.GetFromJsonAsync<IncidentPage<MaintenanceHistoryView>>($"{Orders}/maintenance-history?locationId={w.Location}"))!;
         Assert.Equal(0, maintenance.TotalCount); Assert.Empty(maintenance.Items);
         var ownReport = await Ok<IncidentCommandResult>(await Submit(w.Tenant, w));
-        Assert.Equal("Submitted", (await Report(w.Tenant, ownReport.IncidentId))!.Status);
+        Assert.Equal("Submitted", (await Report(w.Tenant, ownReport.IncidentId!.Value))!.Status);
     }
 
     [CompactPostgresFact]
@@ -523,7 +524,7 @@ public sealed class IncidentApiTests(IncidentFixture fixture) : IClassFixture<In
             using var request = new HttpRequestMessage(HttpMethod.Post, Base) { Content = content };
             request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString()); return await w.Tenant.Client.SendAsync(request);
         }
-        var created = await Ok<IncidentCommandResult>(await CommonArea()); var report = (await Report(w.Owner, created.IncidentId))!;
+        var created = await Ok<IncidentCommandResult>(await CommonArea()); var report = (await Report(w.Owner, created.IncidentId!.Value))!;
         Assert.Null(report.RoomId); Assert.False(report.StaffAvailable); await Review(w, report.Id);
         report = (await Report(w.Owner, report.Id))!;
         Assert.Equal(HttpStatusCode.Conflict, (await Send(w.Owner, $"{Base}/{report.Id}/work-orders", new WorkOrderAssign(report.Version, w.Staff.Id, "Expected", DateTimeOffset.UtcNow.AddDays(1)))).StatusCode);

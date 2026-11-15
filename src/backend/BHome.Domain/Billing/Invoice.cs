@@ -28,6 +28,7 @@ public sealed class BillingSchedule : AuditableEntity
 
 public sealed class Invoice : AuditableEntity
 {
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string Type { get; set; } = "PERIODIC";
     public Guid? AutomationPlanId { get; set; }
     public Guid? AutomationFinalizationPlanId { get; set; }
     public Guid RoomId { get; set; }

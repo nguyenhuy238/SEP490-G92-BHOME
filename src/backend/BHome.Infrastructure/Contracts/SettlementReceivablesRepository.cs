@@ -89,6 +89,9 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         }).ToArray();
         var position = await deposits.ReadAsync([chain[^1].Id], token) ?? throw new ContractException(503, "deposit_position_unavailable");
         var available = position.Received - position.Allocated - position.Refunded - position.Reserved;
+        var depositRoot = chain[^1].Id;
+        available -= await db.Set<BHome.Domain.IncidentMaintenance.MaintenanceCompensation>().Where(c => c.DepositContractId == depositRoot &&
+            (c.Status == "DepositPending" || c.Status == "Deducted")).SumAsync(c => (decimal?)c.Amount, token) ?? 0;
         if (available < 0) throw ContractException.Conflict("deposit_ledger_reconciliation_required");
         var incurred = observed?.Date ?? contract.ActualEndDate ?? contract.EndDate;
         var capturedAt = inspection?.InspectedAt ?? DateTimeOffset.MinValue;

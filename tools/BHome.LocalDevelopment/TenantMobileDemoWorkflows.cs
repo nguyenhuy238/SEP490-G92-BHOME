@@ -179,7 +179,7 @@ internal static partial class TenantMobileDemoSeed
                 $"/api/v1/residence-tasks/{Id(40)}/{Id(30)}/evidence" };
             var previews = await db.Set<ContractDocumentFile>().Where(f => new[] { Id(40), Id(41), Id(42) }.Contains(f.ContractId) && f.Kind == ContractFileKind.Preview).ToListAsync();
             files.AddRange(previews.Select(f => $"/api/v1/contracts/{f.ContractId}/previews/{f.Id}"));
-            var incidentImages = await db.Set<IncidentEvidence>().Where(e => demoIncidentIds.Contains(e.IncidentId)).ToListAsync();
+            var incidentImages = await db.Set<IncidentEvidence>().Where(e => e.IncidentId != null && demoIncidentIds.Contains(e.IncidentId.Value)).ToListAsync();
             files.AddRange(incidentImages.Select(e => $"/api/v1/incidents/{e.IncidentId}/evidence/{e.Id}"));
             var requestIds = await db.Set<InvoiceAdjustmentRequest>().Where(r => r.RequesterId == tenant.Id && r.Reason.StartsWith("[TEST-TENANT-V1-")).Select(r => r.Id).ToListAsync();
             var adjustmentImages = await db.Set<InvoiceAdjustmentEvidence>().Where(e => e.RequestId != null && requestIds.Contains(e.RequestId.Value)).ToListAsync();

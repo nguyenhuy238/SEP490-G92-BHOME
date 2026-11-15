@@ -357,6 +357,22 @@ beforeEach(() => {
   s.request.mockImplementation(async (path, init) => respond(path, init));
   s.gallery.mockResolvedValue({ canceled: true, assets: null });
 });
+it('opens a proactive work order and permits Staff actions without an Incident request', async () => {
+  s.params = { workOrderId: wid };
+  work = {
+    ...work,
+    incidentId: null,
+    source: 'Proactive',
+    description: 'Kiểm tra phòng trống tổng hợp',
+  };
+  render(<MaintenanceDetailScreen />);
+  expect(await screen.findByText(/Kiểm tra phòng trống tổng hợp/)).toBeTruthy();
+  expect(await screen.findByText('Gửi phương án sửa chữa')).toBeTruthy();
+  expect(
+    s.request.mock.calls.some(([path]) => path === `/api/v1/work-orders/${wid}/evidence`),
+  ).toBe(true);
+  expect(s.request.mock.calls.some(([path]) => path.includes('/incidents/null'))).toBe(false);
+});
 afterEach(() => {
   cleanup();
   api.queryCache.dispose();

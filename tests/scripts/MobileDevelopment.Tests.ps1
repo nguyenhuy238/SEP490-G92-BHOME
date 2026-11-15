@@ -102,6 +102,14 @@ param($LanIp, [switch]$SkipDatabase)
 if (-not $SkipDatabase) { throw 'Launcher must not migrate a user database.' }
 $global:prepared += $LanIp
 '@)
+    [IO.File]::WriteAllText((Join-Path $testRoot 'scripts/Test-Database.ps1'), @'
+param([string]$EnvironmentFile)
+$global:databaseChecks++
+$global:databaseProfiles += $EnvironmentFile
+if ($global:failDatabaseProbe) { throw 'Synthetic database probe failure.' }
+Write-Output 'PendingCompact24Migrations=synthetic_migration'
+$global:LASTEXITCODE = 2
+'@)
     function node {
         $global:LASTEXITCODE = if ($global:failReadiness) { 1 } else { 0 }
         if ($args.Count -eq 2 -and $args[0] -eq '-p') { $global:LASTEXITCODE = 0; '22.23.4' }
@@ -175,6 +183,7 @@ $global:prepared += $LanIp
     }
     function Start-Sleep { param($Seconds) }
     $global:computerName = 'synthetic-pc.local'; $global:serverId = 'SYNTHETIC-CA-A'; $global:modelDownloads = 0; $global:hostnameChecks = 0; $global:metroChecks = 0
+    $global:databaseChecks = 0; $global:databaseProfiles = @(); $global:failDatabaseProbe = $false
     $global:addressCalls = 0; $global:prepared = @(); $global:started = 0; $global:stopped = @()
     & (Join-Path $testRoot 'scripts/Start-OcrMobileApp.ps1') | Out-Null
     Assert-Equal ($global:prepared -join ',') '192.168.1.8,10.33.59.31' 'prepare initial and changed IP automatically'
@@ -241,6 +250,7 @@ $global:prepared += $LanIp
     }
     Assert-Equal $global:started 0 'never start Metro after failed verified HTTPS readiness'
     Assert-Equal $global:apiDiagnoses 1 'diagnose actual HTTPS endpoint on readiness failure'
+    Assert-Equal $global:databaseChecks 0 'an API without a listener does not probe a potentially different configured database'
     $global:noApi = $false; $global:readinessClock = 0; $global:addressCalls = 0
     try { & (Join-Path $testRoot 'scripts/Start-OcrMobileApp.ps1') | Out-Null; throw 'Unhealthy existing API was accepted.' }
     catch {
@@ -251,6 +261,8 @@ $global:prepared += $LanIp
         Assert-Equal $_.Exception.Message.Contains('API port 7240 is listening') $true 'distinguish an active listener from connection refusal'
     }
     Assert-Equal $global:apiDiagnoses 2 'diagnose existing API without launching a duplicate'
+    Assert-Equal $global:databaseChecks 1 'an unhealthy listening API runs a read-only database diagnosis automatically'
+    Assert-Equal $global:databaseProfiles[0] (Join-Path $testRoot '.env') 'database diagnosis uses the exact selected profile'
     Assert-Equal $global:stopped.Contains(123) $false 'unhealthy debugger API remains owned by user'
     $global:noApi = $true; $global:unboundApi = $true; $global:readinessClock = 0; $global:addressCalls = 0
     $apiStartsBeforePausedDebugger = $global:apiStarts
@@ -262,6 +274,11 @@ $global:prepared += $LanIp
     Assert-Equal $global:apiStarts $apiStartsBeforePausedDebugger 'paused API without a listener does not launch a duplicate API'
     Assert-Equal $global:stopped.Contains(123) $false 'never stop a paused debugger API'
     $global:unboundApi = $false
+    $global:noApi = $false; $global:readinessClock = 0; $global:addressCalls = 0; $global:failDatabaseProbe = $true
+    try { & (Join-Path $testRoot 'scripts/Start-OcrMobileApp.ps1') -WarningAction SilentlyContinue | Out-Null; throw 'Database probe failure masked API readiness.' }
+    catch { Assert-Equal $_.Exception.Message.StartsWith('API HTTPS readiness failed') $true 'a failed diagnostic preserves the primary readiness error' }
+    Assert-Equal $global:started 0 'a failed database diagnostic never starts Metro'
+    $global:failDatabaseProbe = $false
     $global:failReadiness = $false; $global:failModels = $true; $global:noApi = $false
     $global:prepared = @(); $global:started = 0; $global:addressCalls = 0
     Remove-Item -LiteralPath (Join-Path $testRoot '.tools/ocr-models/charset.txt')

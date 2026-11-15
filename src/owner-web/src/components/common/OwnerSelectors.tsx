@@ -23,6 +23,8 @@ function OwnerPicker<T extends { id: string }>({
   scope = '',
   enabled = true,
   optionLabel,
+  filters,
+  include,
 }: {
   value: string;
   change: (id: string) => void;
@@ -32,6 +34,8 @@ function OwnerPicker<T extends { id: string }>({
   scope?: string;
   enabled?: boolean;
   optionLabel: (item: T) => string;
+  filters?: Record<string, string | boolean>;
+  include?: (item: T) => boolean;
 }) {
   const { session } = useAuth();
   const { request } = useMeterApi();
@@ -42,12 +46,14 @@ function OwnerPicker<T extends { id: string }>({
     return () => clearTimeout(timer);
   }, [input]);
   const q = useInfiniteQuery({
-    queryKey: ['owner-workspace', session?.userId, 'picker', path, scope, search],
+    queryKey: ['owner-workspace', session?.userId, 'picker', path, scope, search, filters],
     enabled: enabled && !!session?.roles.includes('Owner'),
     initialPageParam: 1,
     queryFn: ({ pageParam, signal }) =>
       request<OwnerPage<T>>(
-        path + '?' + ownerQuery({ page: pageParam, pageSize: 20, search, locationId: scope }),
+        path +
+          '?' +
+          ownerQuery({ page: pageParam, pageSize: 20, search, locationId: scope, ...filters }),
         { signal },
       ),
     getNextPageParam: (last, pages) =>
@@ -56,7 +62,8 @@ function OwnerPicker<T extends { id: string }>({
         ? pages.length + 1
         : undefined,
   });
-  const rows = q.data?.pages.flatMap((p) => p.items) ?? [];
+  const loaded = q.data?.pages.flatMap((p) => p.items) ?? [];
+  const rows = include ? loaded.filter(include) : loaded;
   const found = rows.find((item) => item.id === value);
   const selected = useOwnerQuery<T>(
     ['picker-selected', path, scope, value],
@@ -125,6 +132,11 @@ function OwnerPicker<T extends { id: string }>({
           />
         )}
       />
+      {include && q.hasNextPage && (
+        <Button disabled={q.isFetching} onClick={more}>
+          Tải thêm lựa chọn
+        </Button>
+      )}
       {!!error && (
         <Button
           disabled={q.isFetching || selected.isFetching}
@@ -186,6 +198,45 @@ export function OwnerRoomPicker({
       scope={location}
       enabled={!!location}
       optionLabel={(item) => item.roomNumber}
+    />
+  );
+}
+
+export function OwnerAssetPicker({
+  location,
+  room,
+  area,
+  value,
+  change,
+}: {
+  location: string;
+  room: string;
+  area: string;
+  value: string;
+  change: (id: string) => void;
+}) {
+  return (
+    <OwnerPicker<{
+      id: string;
+      name: string;
+      roomId: string | null;
+      commonArea: string | null;
+      status: string;
+    }>
+      key={`${location}:${room}:${area}`}
+      value={value}
+      change={change}
+      required={false}
+      label="Tài sản liên quan (tùy chọn)"
+      path="/api/v1/assets"
+      scope={location}
+      enabled={!!location && (!!room || !!area.trim())}
+      filters={room ? { roomId: room } : { commonAreaOnly: true }}
+      include={(item) =>
+        item.status !== 'Retired' &&
+        (room ? item.roomId === room : item.roomId === null && item.commonArea === area.trim())
+      }
+      optionLabel={(item) => item.name}
     />
   );
 }

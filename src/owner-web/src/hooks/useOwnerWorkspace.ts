@@ -62,6 +62,31 @@ export function ownerError(error: unknown) {
       work_order_verification_required:
         'Các lệnh sửa chữa phải được Owner xác minh trước khi đóng.',
       staff_unavailable: 'Staff không còn được phân công hiệu lực tại cơ sở này.',
+      fast_repair_category_inactive:
+        'Nhóm sửa nhanh chưa được Owner kích hoạt. Gửi phương án sửa chữa thông thường để duyệt.',
+      fast_repair_requires_normal_approval:
+        'Công việc cần chi phí hoặc vật tư. Dừng sửa nhanh và gửi phương án để Owner duyệt.',
+      asset_link_unavailable:
+        'Tài sản đã được liên kết hoặc đề xuất chưa sẵn sàng. Tải lại lệnh sửa chữa.',
+      asset_proposal_pending: 'Owner cần quyết định đề xuất tài sản trước khi nghiệm thu.',
+      compensation_already_decided:
+        'Công việc đã có quyết định bồi thường. Xem quyết định và lịch sử để tránh thu trùng.',
+      compensation_deposit_insufficient:
+        'Cọc còn lại không đủ toàn bộ mức bồi thường hoặc đã được sử dụng. Chưa thể chọn hoặc thực hiện khấu trừ.',
+      compensation_move_out_required:
+        'Chỉ khấu trừ sau khi Owner duyệt trả phòng và xác nhận biên bản kiểm tra.',
+      compensation_collected_or_invoice_adjustment_required:
+        'Quyết định đã phát hành hóa đơn hoặc đã khấu trừ. Quy trình sửa hoặc đảo khoản đã thu chưa được phê duyệt. Lịch sử giao dịch được giữ nguyên.',
+      invalid_compensation_amount:
+        'Mức bồi thường phải là VND nguyên, lớn hơn 0 và không vượt chi phí sửa chữa thực tế.',
+      compensation_invoice_due_date_required:
+        'Hóa đơn cần ngày đến hạn từ hôm nay và Tenant có quyền theo hợp đồng được chọn.',
+      verified_room_maintenance_required:
+        'Chỉ xác nhận bồi thường cho công việc trong phòng đã được Owner nghiệm thu và xác nhận chi phí.',
+      compensation_evidence_changed:
+        'Bằng chứng đã thay đổi. Dừng quyết toán và kiểm tra nguồn bằng chứng.',
+      compensation_concurrent_or_invalid_state:
+        'Nguồn tiền hoặc quyết định đã thay đổi. Tải lại và đối chiếu trước khi thử lại.',
       public_location_incomplete:
         'Cần giới thiệu cơ sở và ít nhất một số điện thoại hoặc email liên hệ.',
       public_room_incomplete: 'Cần mô tả phòng trước khi xuất bản.',

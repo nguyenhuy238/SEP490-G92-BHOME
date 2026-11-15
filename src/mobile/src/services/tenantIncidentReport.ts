@@ -129,5 +129,5 @@ export async function submitTenantIncident(
     (result.resourceId !== null && !id(result.resourceId))
   )
     throw new MobileApiError(502, 'invalid_response');
-  return result;
+  return { ...result, incidentId: result.incidentId };
 }

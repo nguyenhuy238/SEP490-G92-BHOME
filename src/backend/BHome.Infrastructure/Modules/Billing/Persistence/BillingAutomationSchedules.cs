@@ -1,3 +1,4 @@
+using BHome.Infrastructure.Billing;
 using System.Text.Json;
 using BHome.Application.Billing;
 using BHome.Domain.Billing;
@@ -19,7 +20,7 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
         await using var tx = await db.Database.BeginTransactionAsync(t); var location = await db.Set<Room>().Where(r => r.Id == x.RoomId).Select(r => (Guid?)r.LocationId).SingleOrDefaultAsync(t) ?? throw new InvoiceException(404, "room_not_found");
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({location.ToString()},0))", t);
         await db.Locked<Room>(x.RoomId).SingleAsync(t);
-        if (await db.Set<Invoice>().AnyAsync(i => i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)) throw new InvoiceException(409, "invoice_period_already_exists");
+        if (await db.PeriodicInvoices().AnyAsync(i => i.RoomId == x.RoomId && i.BillingPeriod == x.BillingPeriod, t)) throw new InvoiceException(409, "invoice_period_already_exists");
         var old = await RepresentativeAsync(x.RoomId, x.BillingPeriod, t); if ((old?.Version ?? 0) != x.ExpectedVersion) throw new InvoiceException(409, "billing_representative_changed");
         var end = x.BillingPeriod.AddMonths(1).AddDays(-1);
         if (!await db.Set<Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == x.RoomId && c.ActivatedAt != null && (c.Status == ContractStatus.Active || c.Status == ContractStatus.Terminated || c.Status == ContractStatus.Superseded) && c.StartDate <= end && (c.ActualEndDate ?? c.EndDate) >= x.BillingPeriod, t)) throw new InvoiceException(400, "representative_contract_not_eligible");

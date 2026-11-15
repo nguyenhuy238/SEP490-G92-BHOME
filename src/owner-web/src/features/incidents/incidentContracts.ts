@@ -27,7 +27,18 @@ export interface Incident {
 }
 export interface WorkOrder {
   id: string;
-  incidentId: string;
+  incidentId: string | null;
+  source?: 'Incident' | 'Proactive';
+  description?: string;
+  commonArea?: string | null;
+  usesMaterials?: boolean;
+  fastRepairPolicyVersion?: number | null;
+  fastRepairCategory?: string | null;
+  assetProposalPending?: boolean;
+  proposedAssetId?: string | null;
+  proposedAssetName?: string | null;
+  proposedAssetCategory?: string | null;
+  proposedAssetCondition?: string | null;
   locationId: string;
   roomId: string | null;
   assetId: string | null;

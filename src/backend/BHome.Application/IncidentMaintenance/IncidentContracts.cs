@@ -16,6 +16,7 @@ public sealed class IncidentQuery
     [Range(1, 100)] public int PageSize { get; set; } = 20;
     public Guid? LocationId { get; set; }
     public Guid? IncidentId { get; set; }
+    public Guid? WorkOrderId { get; set; }
     public Guid? RoomId { get; set; }
     public Guid? AssetId { get; set; }
     public IncidentStatus? Status { get; set; }
@@ -34,7 +35,7 @@ public sealed record WorkOrderAssign(int Version, Guid StaffId, string ExpectedO
 public sealed record WorkOrderReassign(int Version, Guid StaffId, string Reason);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RepairProposal(int Version, string InspectionResult, string Solution, int EstimatedMinutes,
-    decimal? EstimatedCost, Guid[] EvidenceIds);
+    decimal? EstimatedCost, Guid[] EvidenceIds, bool UsesMaterials = false);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PlanDecision(int Version, [Required] bool? Approve, string? Reason = null, string? Vendor = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -55,24 +56,41 @@ public sealed record IncidentView(Guid Id, string Code, Guid LocationId, Guid? R
     Guid? AssetId, string Description, string Severity, string Status, string? Type, string? Category,
     DateTimeOffset? AcknowledgedAt, string? ResolutionNote, int Version, DateTimeOffset CreatedAt,
     bool? StaffAvailable, bool EscalationEnabled = false);
-public sealed record WorkOrderView(Guid Id, Guid IncidentId, Guid LocationId, Guid? RoomId, Guid? AssetId,
+public sealed record WorkOrderView(Guid Id, Guid? IncidentId, Guid LocationId, Guid? RoomId, Guid? AssetId,
     Guid AssignedStaffId, string ExpectedOutcome, DateTimeOffset TargetCompletionAt, bool IsOverdue,
     string Status, string? InspectionResult, string? ProposedSolution, int? EstimatedMinutes, decimal? EstimatedCost,
     string? Vendor, int ProposalVersion, bool PlanApproved, bool CanStart, Guid? ApprovedById,
-    DateTimeOffset? ApprovedAt, string? Result, decimal? ActualCost, Guid? VerifiedById, DateTimeOffset? VerifiedAt, int Version);
+    DateTimeOffset? ApprovedAt, string? Result, decimal? ActualCost, Guid? VerifiedById, DateTimeOffset? VerifiedAt, int Version,
+    string Source = "Incident", string Description = "", string? CommonArea = null,
+    bool UsesMaterials = false, int? FastRepairPolicyVersion = null, string? FastRepairCategory = null,
+    bool AssetProposalPending = false, Guid? ProposedAssetId = null, string? ProposedAssetName = null,
+    string? ProposedAssetCategory = null, string? ProposedAssetCondition = null);
 public sealed record IncidentActivityView(Guid Id, Guid? WorkOrderId, string Action, string Note,
     DateTimeOffset OccurredAt, Guid? ActorId, string? DataJson);
 public sealed record IncidentEvidenceView(Guid Id, Guid? WorkOrderId, Guid? ActivityId, string Kind,
     string ContentType, long Length);
-public sealed record IncidentNotificationView(Guid Id, Guid IncidentId, string Event, bool HighPriority,
-    DateTimeOffset CreatedAt, DateTimeOffset? ReadAt, string DeliveryState);
+public sealed record IncidentNotificationView(Guid Id, Guid? IncidentId, string Event, bool HighPriority,
+    DateTimeOffset CreatedAt, DateTimeOffset? ReadAt, string DeliveryState, Guid? WorkOrderId = null);
 public sealed record EmergencyActionView(Guid Id, Guid ActivityId, decimal? RequestedCost, bool? CostApproved);
-public sealed record MaintenanceHistoryView(Guid Id, Guid ActivityId, string Action, Guid IncidentId, Guid? WorkOrderId, Guid? RoomId, Guid? AssetId,
+public sealed record MaintenanceHistoryView(Guid Id, Guid ActivityId, string Action, Guid? IncidentId, Guid? WorkOrderId, Guid? RoomId, Guid? AssetId,
     string? ConditionBefore, string? ConditionAfter, string? StatusBefore, string? StatusAfter,
     decimal ActualCost, Guid VerifiedById, DateTimeOffset VerifiedAt);
-public sealed record ExpenseView(Guid Id, Guid IncidentId, Guid? WorkOrderId, Guid? EmergencyActionId,
+public sealed record ExpenseView(Guid Id, Guid? IncidentId, Guid? WorkOrderId, Guid? EmergencyActionId,
     string Category, decimal Amount, DateOnly ExpenseDate);
-public sealed record IncidentCommandResult(Guid IncidentId, Guid? WorkOrderId = null, Guid? ResourceId = null);
+public sealed record IncidentCommandResult(Guid? IncidentId, Guid? WorkOrderId = null, Guid? ResourceId = null);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ProactiveMaintenance(Guid LocationId, Guid? RoomId, string? CommonArea, Guid? AssetId,
+    string Description, string ExpectedOutcome,
+    [property: JsonConverter(typeof(BHome.Application.StaffOperations.TaskOffsetConverter))] DateTimeOffset TargetCompletionAt);
+public sealed record MaintenanceAssignment(Guid? StaffId, bool Available);
+
+// Shared execution context. Proactive work has no IncidentReport entity or persisted placeholder.
+public sealed record MaintenanceContext(Guid? IncidentId, Guid LocationId, Guid? RoomId, string? CommonArea,
+    Guid? AssetId, Guid? ReporterId, IncidentSeverity Severity, IncidentReport? Report)
+{
+    public static implicit operator MaintenanceContext(IncidentReport report) => new(report.Id, report.LocationId,
+        report.RoomId, report.CommonArea, report.AssetId, report.ReporterId, report.Severity, report);
+}
 public sealed record IncidentScope(Guid ActorId, bool Owner, bool Staff, bool Tenant, DateOnly Today);
 public sealed class IncidentLookupQuery
 {
@@ -110,6 +128,8 @@ public interface IIncidentRepository
     Task<bool> ActiveLocationAsync(Guid id, CancellationToken t);
     Task<bool> StaffAssignedAsync(Guid actor, Guid location, DateOnly today, CancellationToken t);
     Task<bool> StaffAvailableAsync(Guid location, DateOnly today, CancellationToken t);
+    Task<Guid?> ResponsibleStaffAsync(Guid location, DateOnly today, CancellationToken t);
+    Task<FastRepairPolicy?> FastRepairPolicyAsync(CancellationToken t);
     Task<IReadOnlyList<Guid>> RecipientsAsync(Guid location, DateOnly today, bool includeStaff, CancellationToken t);
     Task<IncidentRoom?> RoomAsync(Guid id, CancellationToken t);
     Task<IncidentTenancy?> TenancyAsync(Guid actor, Guid location, Guid? room, DateOnly date, CancellationToken t);
@@ -122,6 +142,8 @@ public interface IIncidentRepository
     Task<bool> OtherAssetExecutionAsync(Guid asset, Guid? exceptWorkOrder, CancellationToken t);
     Task<IncidentCommand?> CommandAsync(Guid actor, Guid key, CancellationToken t);
     Task<IReadOnlyList<IncidentEvidence>> EvidenceAsync(Guid incident, CancellationToken t);
+    Task<IReadOnlyList<IncidentEvidence>> WorkEvidenceAsync(Guid workOrder, CancellationToken t);
+    Task<IncidentPage<IncidentActivityView>> WorkHistoryAsync(Guid workOrder, IncidentScope scope, int page, int size, CancellationToken t);
     Task<IReadOnlyList<EmergencyAction>> EmergencyActionsAsync(Guid incident, CancellationToken t);
     Task<IncidentPage<IncidentView>> ListAsync(IncidentScope scope, IncidentQuery query, CancellationToken t);
     Task<IncidentPage<IncidentReportingRoom>> ReportingRoomsAsync(IncidentScope scope, IncidentLookupQuery query, CancellationToken t);

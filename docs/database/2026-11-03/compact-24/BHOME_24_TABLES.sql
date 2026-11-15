@@ -308,7 +308,7 @@ CREATE TABLE operational_tasks (
     CHECK (task_type IN ('SYSTEM_JOB','COMMAND') OR location_id IS NOT NULL),
     CHECK (task_type NOT IN ('SYSTEM_JOB','COMMAND') OR source_key IS NOT NULL),
     CHECK (task_type<>'METER_READ' OR meter_id IS NOT NULL),
-    CHECK (task_type<>'WORK_ORDER' OR incident_report_id IS NOT NULL),
+    CONSTRAINT ck_work_order_source CHECK (task_type<>'WORK_ORDER' OR incident_report_id IS NOT NULL OR task_data->'state'->>'source'='Proactive'),
     CHECK (task_type<>'STAFF_SHIFT' OR (assigned_user_id IS NOT NULL AND starts_at IS NOT NULL AND ends_at IS NOT NULL AND ends_at>starts_at))
 );
 CREATE UNIQUE INDEX ux_task_source ON operational_tasks(source_key) WHERE source_key IS NOT NULL;
@@ -605,16 +605,31 @@ CREATE FUNCTION bhome24_work_order_guard() RETURNS trigger LANGUAGE plpgsql AS $
 DECLARE s jsonb := NEW.task_data->'state'; report_location uuid;
 BEGIN
     IF NEW.task_type<>'WORK_ORDER' THEN RETURN NEW; END IF;
-    SELECT location_id INTO report_location FROM incident_reports WHERE id=NEW.incident_report_id;
-    IF report_location IS DISTINCT FROM NEW.location_id OR NEW.assigned_user_id IS NULL OR
+    IF NEW.incident_report_id IS NOT NULL THEN
+        SELECT location_id INTO report_location FROM incident_reports WHERE id=NEW.incident_report_id;
+        IF report_location IS DISTINCT FROM NEW.location_id OR COALESCE(s->>'source','Incident')<>'Incident' THEN
+            RAISE EXCEPTION 'Invalid incident Work Order scope' USING ERRCODE='23514';
+        END IF;
+    ELSIF s->>'source' IS DISTINCT FROM 'Proactive' OR
+        ((NEW.room_id IS NOT NULL) = (NULLIF(btrim(s->>'commonArea'),'') IS NOT NULL)) THEN
+        RAISE EXCEPTION 'Invalid proactive Work Order scope' USING ERRCODE='23514';
+    END IF;
+    IF NEW.assigned_user_id IS NULL OR NEW.location_id IS NULL OR
        NEW.status NOT IN ('Assigned','PendingApproval','InProgress','PendingVerification','Verified','Cancelled') OR
        s IS NULL OR (s->>'incidentId')::uuid IS DISTINCT FROM NEW.incident_report_id OR
-       (s->>'assignedStaffId')::uuid IS DISTINCT FROM NEW.assigned_user_id THEN
+       (s->>'assignedStaffId')::uuid IS DISTINCT FROM NEW.assigned_user_id OR
+       (NEW.room_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM rooms WHERE id=NEW.room_id AND location_id=NEW.location_id)) OR
+       (NEW.asset_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM assets WHERE id=NEW.asset_id AND location_id=NEW.location_id
+            AND room_id IS NOT DISTINCT FROM NEW.room_id)) THEN
         RAISE EXCEPTION 'Invalid Work Order scope or state' USING ERRCODE='23514';
     END IF;
-    IF NEW.status IN ('InProgress','PendingVerification','Verified') AND
-       (NEW.cost_approved_at IS NULL OR NEW.cost_approved_by_user_id IS NULL OR
-        s->>'approvedProposalVersion' IS NULL OR s->>'approvedProposalVersion' IS DISTINCT FROM s->>'proposalVersion') THEN
+    IF NEW.status IN ('InProgress','PendingVerification','Verified') AND NOT COALESCE((
+       (NEW.cost_approved_at IS NOT NULL AND NEW.cost_approved_by_user_id IS NOT NULL AND
+        s->>'approvedProposalVersion' IS NOT NULL AND s->>'approvedProposalVersion'=s->>'proposalVersion') OR
+       (COALESCE((s->>'fastRepairPolicyVersion')::int,0)>0 AND s->>'fastRepairAuthorizedAt' IS NOT NULL AND
+        NULLIF(btrim(s->>'fastRepairCategory'),'') IS NOT NULL AND
+        (s->>'estimatedCost')::numeric=0 AND (s->>'usesMaterials')::boolean=FALSE AND
+        (NEW.status<>'Verified' OR (s->>'actualCost')::numeric=0))),FALSE) THEN
         RAISE EXCEPTION 'Work Order requires approved current plan' USING ERRCODE='23514';
     END IF;
     IF NEW.status='Verified' AND (NEW.verified_at IS NULL OR NEW.verified_by_user_id IS NULL OR
@@ -1319,3 +1334,87 @@ BEGIN
   END IF;
   RETURN NEW;
 END $fn$;
+
+-- Compensation decisions remain in the Work Order's append-only history.
+-- The latest version is a projection. Original decisions and invoice/payment rows stay intact.
+CREATE OR REPLACE FUNCTION bhome24_compensation_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE row_data jsonb; prior_data jsonb; decision_count integer;
+BEGIN
+    IF NEW.task_type<>'WORK_ORDER' THEN RETURN NEW; END IF;
+    SELECT count(*) INTO decision_count FROM (
+        SELECT DISTINCT h->>'recordKey' FROM jsonb_array_elements(NEW.history) h WHERE h->>'recordType'='MaintenanceCompensation'
+    ) q;
+    IF decision_count=0 THEN RETURN NEW; END IF;
+    IF decision_count<>1 THEN RAISE EXCEPTION 'One exclusive compensation decision per Work Order' USING ERRCODE='23514'; END IF;
+    SELECT h->'state' INTO row_data FROM jsonb_array_elements(NEW.history) WITH ORDINALITY a(h,n)
+        WHERE h->>'recordType'='MaintenanceCompensation' ORDER BY n DESC LIMIT 1;
+    IF TG_OP='UPDATE' THEN
+        SELECT h->'state' INTO prior_data FROM jsonb_array_elements(OLD.history) WITH ORDINALITY a(h,n)
+            WHERE h->>'recordType'='MaintenanceCompensation' ORDER BY n DESC LIMIT 1;
+        IF row_data IS NOT DISTINCT FROM prior_data THEN RETURN NEW; END IF;
+    END IF;
+    PERFORM pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0));
+    IF NEW.status<>'Verified' OR NEW.room_id IS NULL OR
+        (row_data->>'workOrderId')::uuid IS DISTINCT FROM NEW.id OR
+        (row_data->>'roomId')::uuid IS DISTINCT FROM NEW.room_id OR
+        (row_data->>'locationId')::uuid IS DISTINCT FROM NEW.location_id OR
+        (row_data->>'amount')::numeric<=0 OR
+        (row_data->>'amount')::numeric>(NEW.task_data->'state'->>'actualCost')::numeric OR
+        NOT EXISTS(SELECT 1 FROM contracts WHERE id=(row_data->>'contractId')::uuid AND room_id=NEW.room_id AND activated_at IS NOT NULL) OR
+        row_data->>'collectionMethod' NOT IN ('Invoice','Deposit') THEN
+        RAISE EXCEPTION 'Invalid compensation scope or amount' USING ERRCODE='23514';
+    END IF;
+    IF row_data->>'collectionMethod'='Invoice' THEN
+        IF row_data->>'status'<>'InvoiceIssued' OR row_data->>'deductedAt' IS NOT NULL OR NOT EXISTS(
+            SELECT 1 FROM invoices WHERE id=(row_data->>'invoiceId')::uuid AND invoice_type='AD_HOC' AND status=1
+              AND contract_id=(row_data->>'contractId')::uuid AND room_id=NEW.room_id
+              AND base_total_amount=(row_data->>'amount')::numeric) THEN
+            RAISE EXCEPTION 'Compensation invoice must be exclusive' USING ERRCODE='23514';
+        END IF;
+    ELSIF row_data->>'invoiceId' IS NOT NULL OR row_data->>'status' NOT IN ('DepositPending','Deducted','Cancelled') OR
+        ((row_data->>'status'='Deducted') IS DISTINCT FROM (row_data->>'deductedAt' IS NOT NULL)) THEN
+        RAISE EXCEPTION 'Compensation deposit must be exclusive' USING ERRCODE='23514';
+    END IF;
+    IF prior_data IS NOT NULL AND (
+        prior_data->>'status'<>'DepositPending' OR
+        (prior_data-'status'-'reason'-'decidedById'-'decidedAt'-'deductedAt'-'version'-'updatedAt'-'createdAt') IS DISTINCT FROM
+        (row_data-'status'-'reason'-'decidedById'-'decidedAt'-'deductedAt'-'version'-'updatedAt'-'createdAt') OR
+        (row_data->>'version')::int<>(prior_data->>'version')::int+1) THEN
+        RAISE EXCEPTION 'Completed compensation cannot be overwritten' USING ERRCODE='23514';
+    END IF;
+    RETURN NEW;
+END $fn$;
+CREATE TRIGGER maintenance_compensation_consistent BEFORE INSERT OR UPDATE ON operational_tasks
+FOR EACH ROW EXECUTE FUNCTION bhome24_compensation_guard();
+
+CREATE OR REPLACE FUNCTION bhome24_maintenance_deposit_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+DECLARE reserved numeric; budget numeric; requested numeric; source uuid; excluded_refund uuid; excluded_allocation uuid;
+BEGIN
+    source:=NEW.source_deposit_contract_id;
+    IF source IS NULL THEN RETURN NEW; END IF;
+    IF TG_TABLE_NAME='refund_requests' THEN
+        IF NEW.status NOT IN ('REQUESTED','APPROVED','COMPLETED') THEN RETURN NEW; END IF;
+        requested:=NEW.requested_amount; excluded_refund:=NEW.id;
+    ELSE
+        IF NEW.amount<=0 THEN RETURN NEW; END IF;
+        requested:=NEW.amount; excluded_allocation:=NEW.id;
+    END IF;
+    PERFORM pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0));
+    SELECT COALESCE(sum((q.state->>'amount')::numeric),0) INTO reserved FROM operational_tasks task
+    CROSS JOIN LATERAL (
+        SELECT h->'state' AS state FROM jsonb_array_elements(task.history) WITH ORDINALITY e(h,n)
+        WHERE h->>'recordType'='MaintenanceCompensation' ORDER BY n DESC LIMIT 1
+    ) q WHERE task.task_type='WORK_ORDER' AND (q.state->>'depositContractId')::uuid=source
+        AND q.state->>'status' IN ('DepositPending','Deducted');
+    IF reserved=0 THEN RETURN NEW; END IF;
+    SELECT COALESCE((SELECT sum(amount) FROM payment_allocations WHERE target_deposit_contract_id=source),0)
+        -COALESCE((SELECT sum(amount) FROM payment_allocations WHERE source_deposit_contract_id=source AND id IS DISTINCT FROM excluded_allocation),0)
+        -COALESCE((SELECT sum(requested_amount) FROM refund_requests WHERE source_deposit_contract_id=source
+            AND status IN ('REQUESTED','APPROVED','COMPLETED') AND id IS DISTINCT FROM excluded_refund),0)-reserved INTO budget;
+    IF requested>budget THEN RAISE EXCEPTION 'Deposit reserved for maintenance compensation' USING ERRCODE='23514'; END IF;
+    RETURN NEW;
+END $fn$;
+CREATE TRIGGER maintenance_deposit_allocation_guard BEFORE INSERT ON payment_allocations
+FOR EACH ROW EXECUTE FUNCTION bhome24_maintenance_deposit_guard();
+CREATE TRIGGER maintenance_deposit_refund_guard BEFORE INSERT OR UPDATE ON refund_requests
+FOR EACH ROW EXECUTE FUNCTION bhome24_maintenance_deposit_guard();

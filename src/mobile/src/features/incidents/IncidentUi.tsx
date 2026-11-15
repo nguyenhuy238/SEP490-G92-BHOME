@@ -123,7 +123,7 @@ export function EvidenceImage({
   incidentId,
   evidence,
 }: {
-  incidentId: string;
+  incidentId: string | null;
   evidence: IncidentEvidence;
 }) {
   const { api } = useSession();
@@ -138,7 +138,7 @@ export function EvidenceImage({
     if (!api || attempt === 0) return;
     const controller = new AbortController();
     void incidentClient(api)
-      .evidence(incidentId, evidence.id, controller.signal)
+      .evidence(incidentId, evidence.id, controller.signal, evidence.workOrderId)
       .then(
         (bytes) => {
           if (!controller.signal.aborted) {
@@ -154,7 +154,7 @@ export function EvidenceImage({
         },
       );
     return () => controller.abort();
-  }, [api, attempt, incidentId, evidence.id]);
+  }, [api, attempt, incidentId, evidence.id, evidence.workOrderId]);
   const uri = state?.api === api ? state.uri : '';
   return (
     <Box>

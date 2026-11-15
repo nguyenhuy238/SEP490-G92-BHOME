@@ -116,7 +116,7 @@ it('gates work actions by assignee, role, approval and workflow state', () => {
   } as WorkOrder;
   expect(workActions(w, 'Tenant', key)).toEqual([]);
   expect(workActions(w, 'Staff', 'other-staff')).toEqual([]);
-  expect(workActions(w, 'Staff', key)).toEqual(['proposal']);
+  expect(workActions(w, 'Staff', key)).toEqual(['fast-repair-start', 'asset-proposal', 'proposal']);
   expect(workActions({ ...w, status: 'PendingApproval' }, 'Staff', key)).not.toContain('start');
   expect(
     workActions(
@@ -126,6 +126,7 @@ it('gates work actions by assignee, role, approval and workflow state', () => {
     ),
   ).toContain('start');
   expect(workActions({ ...w, status: 'InProgress' }, 'Staff', key)).toEqual([
+    'asset-proposal',
     'progress',
     'blocker',
     'submit',
@@ -137,6 +138,28 @@ it('gates work actions by assignee, role, approval and workflow state', () => {
     'rework',
   ]);
   expect(workActions({ ...w, status: 'Verified' }, 'Owner', key)).toEqual([]);
+});
+it('uploads proactive evidence through the WorkOrder endpoint and gates fast repair fallback', async () => {
+  const request = vi
+    .fn()
+    .mockResolvedValue({ incidentId: null, workOrderId: key, resourceId: key });
+  const client = incidentClient({ request } as unknown as MobileApi);
+  await client.upload(null, key, 'Completion', photo, key);
+  expect(request.mock.calls[0][0]).toBe(`/api/v1/work-orders/${key}/evidence?kind=3`);
+  const work = {
+    assignedStaffId: key,
+    status: 'InProgress',
+    fastRepairPolicyVersion: 2,
+    assetId: key,
+  } as WorkOrder;
+  expect(workActions(work, 'Staff', key)).toContain('fast-repair-fallback');
+  expect(workActions(work, 'Tenant', key)).toEqual([]);
+  expect(workActions({ ...work, fastRepairPolicyVersion: null }, 'Staff', key)).not.toContain(
+    'fast-repair-fallback',
+  );
+  expect(workActions({ ...work, assetProposalPending: true }, 'Owner', key)).toContain(
+    'asset-decision',
+  );
 });
 it('preserves backend status/code/correlation diagnostics on stale data', () => {
   const error = incidentError(

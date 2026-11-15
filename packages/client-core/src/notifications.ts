@@ -66,6 +66,8 @@ export function ownerNotificationRoute(t: NotificationTarget): string | null {
       return `/tasks?taskId=${t.objectId}`;
     case 'Incident':
       return `/incidents?incidentId=${t.objectId}`;
+    case 'WorkOrder':
+      return `/maintenance?workOrderId=${t.objectId}`;
     case 'AutomationExecution':
       return t.locationId &&
         idPattern.test(t.locationId) &&

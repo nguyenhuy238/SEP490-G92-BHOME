@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router';
 import { IncidentDetail, WorkOrderDetail, IncidentWorkspace } from './IncidentWorkspace';
 import { formatIncidentMoney } from './incidentContracts';
 import { IncidentReferenceField } from './IncidentReferenceField';
+import { FastRepairPolicyPanel } from './MaintenanceControls';
 const mocks = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('../meters/useMeterApi', () => ({ useMeterApi: () => ({ request: mocks.request }) }));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
@@ -49,6 +50,56 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it('renders proactive maintenance with work-owned evidence and no incident request', async () => {
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (path: string) =>
+    path === '/api/v1/work-orders/proactive'
+      ? {
+          id: 'proactive',
+          incidentId: null,
+          source: 'Proactive',
+          locationId: 'location',
+          roomId: null,
+          commonArea: 'Synthetic corridor',
+          description: 'Synthetic proactive work',
+          expectedOutcome: 'Safe corridor',
+          status: 'InProgress',
+          version: 3,
+          targetCompletionAt: '2027-01-01T03:00:00Z',
+        }
+      : original(path),
+  );
+  mount(<WorkOrderDetail id="proactive" showIncident />);
+  expect(await screen.findByText(/Synthetic proactive work/)).toBeVisible();
+  expect(
+    mocks.request.mock.calls.some(([path]) => path === '/api/v1/work-orders/proactive/evidence'),
+  ).toBe(true);
+  expect(
+    mocks.request.mock.calls.some(
+      ([path]) => path.includes('/incidents/null') || path.includes('incidentId=null'),
+    ),
+  ).toBe(false);
+});
+it('keeps suggested fast repair categories inactive until Owner saves a policy decision', async () => {
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/work-orders/fast-repair-policy' && !init?.method)
+      return { version: 0, activeCategories: [] };
+    return {};
+  });
+  mount(<FastRepairPolicyPanel />);
+  fireEvent.click(screen.getByRole('button', { name: 'Chính sách sửa nhanh' }));
+  const field = await screen.findByLabelText('Nhóm công việc được kích hoạt, mỗi dòng một nhóm');
+  expect(field).toHaveValue('');
+  expect(mocks.request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  fireEvent.change(field, { target: { value: 'Synthetic Owner-enabled category' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu chính sách' }));
+  await screen.findByRole('button', { name: 'Chính sách sửa nhanh' });
+  const write = mocks.request.mock.calls.find(([, init]) => init?.method === 'POST');
+  expect(JSON.parse(write![1].body)).toEqual({
+    version: 0,
+    activeCategories: ['Synthetic Owner-enabled category'],
+  });
+});
 it('posts the reviewed incident version once and preserves fields and retry key after uncertain failure', async () => {
   const original = mocks.request.getMockImplementation()!;
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {

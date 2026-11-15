@@ -153,26 +153,18 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             .OrderBy(n => n.CreatedAt).Take(50).ToArrayAsync(t); var count = 0;
         foreach (var n in rows)
         {
-            var report = await db.Set<IncidentReport>().AsNoTracking().SingleAsync(r => r.Id == n.IncidentId, t);
+            var report = await db.Set<IncidentReport>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == n.IncidentId, t);
+            var work = n.WorkOrderId is { } workId ? await db.Set<MaintenanceWorkOrder>().AsNoTracking().SingleOrDefaultAsync(w => w.Id == workId, t) : null;
+            var location = report?.LocationId ?? work?.LocationId ?? throw new InvalidOperationException("missing_maintenance_notification_scope");
             foreach (var r in await Roles([n.RecipientId], t))
             {
-                if (r.Role == "Staff" && !(await Staff(report.LocationId, t)).Contains(r.Id))
+                if (r.Role == "Staff" && !(await Staff(location, t)).Contains(r.Id))
                 { db.Attach(n); n.DeliveryState = "Suppressed"; continue; }
-                var eventType = n.Event switch
-                {
-                    "submitted" => n.HighPriority ? "INCIDENT_EMERGENCY_SUBMITTED" : "INCIDENT_NORMAL_SUBMITTED",
-                    "acknowledged" => "EMERGENCY_ACKNOWLEDGED",
-                    "assigned" or "reassigned" => "WORK_ORDER_ASSIGNED",
-                    "proposal_submitted" => "REPAIR_PROPOSAL_REQUIRES_APPROVAL",
-                    "submit" => "WORK_ORDER_VERIFICATION_REQUIRED",
-                    "rework" => "WORK_ORDER_REWORK_REQUESTED",
-                    "resolved" or "rejected" or "duplicate" => "INCIDENT_CLOSED",
-                    _ => "INCIDENT_UPDATED"
-                };
-                count += await sql.Emit(r.Id, r.Role, report.LocationId, "incident:" + n.Id, eventType, "Incident",
+                var eventType = n.EventType;
+                count += await sql.Emit(r.Id, r.Role, location, "incident:" + n.Id, eventType, "Incident",
                     n.HighPriority && n.Event == "submitted" ? "Có sự cố khẩn cấp tại cơ sở" : "Sự cố có cập nhật",
                     "Mở sự cố để xem thông tin và hành động trong phạm vi được phân công. Trường hợp đe dọa tính mạng, gọi cơ quan khẩn cấp phù hợp.",
-                    "Incident", report.Id, t, n.HighPriority && n.Event == "submitted" ? "P0" : "P1", channels: n.DeliveryState == "Delivered" ? ["IN_APP"] : ["IN_APP", "PUSH"], taskSource: n.Id);
+                    report is null ? "WorkOrder" : "Incident", report?.Id ?? work!.Id, t, n.HighPriority && n.Event == "submitted" ? "P0" : "P1", channels: n.DeliveryState == "Delivered" ? ["IN_APP"] : ["IN_APP", "PUSH"], taskSource: n.Id);
             }
             await Mark("incident:" + n.Id, t);
         }

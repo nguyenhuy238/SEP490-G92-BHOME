@@ -63,7 +63,16 @@ function Wait-MobileApi([string]$Address) {
     # can be stale when this launcher reuses a Visual Studio API.
     & node (Join-Path $repo 'scripts/Diagnose-MobileApi.cjs') "https://${Address}:7240" (Join-Path $repo '.tools/mobile-tls/root-ca.cer')
     $logHint = if ($script:ownedApi) { 'Check .tools/mobile-dev-api.stdout.log and .tools/mobile-dev-api.stderr.log.' } else { 'Check the running API/Visual Studio output; .tools/mobile-dev-api logs belong to earlier standalone runs.' }
-    $connectionHint = if (Get-NetTCPConnection -State Listen -LocalPort 7240 -ErrorAction SilentlyContinue) {
+    $apiListening = [bool](Get-NetTCPConnection -State Listen -LocalPort 7240 -ErrorAction SilentlyContinue)
+    if ($apiListening) {
+        Write-Output 'Checking the selected database profile with a read-only probe; pending migrations and schema compatibility follow.'
+        try {
+            & (Join-Path $repo 'scripts/Test-Database.ps1') -EnvironmentFile $EnvironmentFile
+        } catch {
+            Write-Warning 'Read-only database diagnosis could not complete. The API readiness failure still requires attention.'
+        }
+    }
+    $connectionHint = if ($apiListening) {
         'API port 7240 is listening. Check the HTTP status, TLS diagnosis and readiness timeout above.'
     } else { 'No API HTTPS listener on port 7240 (ECONNREFUSED). Check startup exceptions or a paused debugger.' }
     throw "API HTTPS readiness failed. $connectionHint $logHint Read-only database check for the selected profile: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Database.ps1 -EnvironmentFile `"$EnvironmentFile`". No TLS checks were bypassed."

@@ -222,6 +222,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentRepository, BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentRepository>();
         services.AddScoped<BHome.Application.IncidentMaintenance.IIncidentFiles, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFiles>();
         services.AddScoped<BHome.Application.IncidentMaintenance.IncidentService>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.ICompensationRepository, BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.CompensationRepository>();
+        services.AddScoped<BHome.Application.IncidentMaintenance.CompensationService>();
         services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();
         services.AddHostedService<BHome.Infrastructure.Modules.IncidentMaintenance.IncidentFileCleanup>();
         services.AddScoped<UnconfiguredBankProvider>();

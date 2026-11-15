@@ -500,6 +500,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("numeric(18,0)")
                         .HasColumnName("Total");
 
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("Type");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("UpdatedAt");
@@ -530,7 +535,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(((t.billing_snapshot->'compactState'->>'automationFinalizationPlanId'))::uuid)::uuid AS \"AutomationFinalizationPlanId\",(((t.billing_snapshot->'compactState'->>'automationPlanId'))::uuid)::uuid AS \"AutomationPlanId\",(t.billing_period)::date AS \"BillingPeriod\",(COALESCE(((t.billing_snapshot->'compactState'->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((t.billing_snapshot->'compactState'->>'createdByUserId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"CreatedByUserId\",(t.due_date)::date AS \"DueDate\",(t.finalized_at)::timestamptz AS \"FinalizedAt\",(t.finalized_by_user_id)::uuid AS \"FinalizedByUserId\",(t.location_id)::uuid AS \"LocationId\",(COALESCE(((t.billing_snapshot->'compactState'->>'locationName'))::text,''))::text AS \"LocationName\",(t.missing_inputs)::text[] AS \"MissingInputs\",(t.contract_id)::uuid AS \"RepresentativeContractId\",(t.representative_tenant_user_id)::uuid AS \"RepresentativeTenantUserId\",(t.room_id)::uuid AS \"RoomId\",(COALESCE(((t.billing_snapshot->'compactState'->>'roomNumber'))::text,''))::text AS \"RoomNumber\",(COALESCE(((t.billing_snapshot->'compactState'->>'scheduleSnapshot'))::jsonb,'{{}}'::jsonb))::jsonb AS \"ScheduleSnapshot\",(t.scheduled_final_date)::date AS \"ScheduledFinalDate\",(t.status)::integer AS \"Status\",(t.base_total_amount)::numeric AS \"Total\",(COALESCE(((t.billing_snapshot->'compactState'->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(t.version)::integer AS \"Version\" FROM invoices t WHERE TRUE");
+                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(((t.billing_snapshot->'compactState'->>'automationFinalizationPlanId'))::uuid)::uuid AS \"AutomationFinalizationPlanId\",(((t.billing_snapshot->'compactState'->>'automationPlanId'))::uuid)::uuid AS \"AutomationPlanId\",(t.billing_period)::date AS \"BillingPeriod\",(COALESCE(((t.billing_snapshot->'compactState'->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((t.billing_snapshot->'compactState'->>'createdByUserId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"CreatedByUserId\",(t.due_date)::date AS \"DueDate\",(t.finalized_at)::timestamptz AS \"FinalizedAt\",(t.finalized_by_user_id)::uuid AS \"FinalizedByUserId\",(t.location_id)::uuid AS \"LocationId\",(COALESCE(((t.billing_snapshot->'compactState'->>'locationName'))::text,''))::text AS \"LocationName\",(t.missing_inputs)::text[] AS \"MissingInputs\",(t.contract_id)::uuid AS \"RepresentativeContractId\",(t.representative_tenant_user_id)::uuid AS \"RepresentativeTenantUserId\",(t.room_id)::uuid AS \"RoomId\",(COALESCE(((t.billing_snapshot->'compactState'->>'roomNumber'))::text,''))::text AS \"RoomNumber\",(COALESCE(((t.billing_snapshot->'compactState'->>'scheduleSnapshot'))::jsonb,'{{}}'::jsonb))::jsonb AS \"ScheduleSnapshot\",(t.scheduled_final_date)::date AS \"ScheduledFinalDate\",(t.status)::integer AS \"Status\",(t.base_total_amount)::numeric AS \"Total\",(t.invoice_type)::text AS \"Type\",(COALESCE(((t.billing_snapshot->'compactState'->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(t.version)::integer AS \"Version\" FROM invoices t WHERE TRUE");
                 });
 
             modelBuilder.Entity("BHome.Domain.Billing.InvoiceAdjustmentCommand", b =>
@@ -1453,6 +1458,45 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.ToSqlQuery("SELECT (COALESCE(((s.data->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(COALESCE(((s.data->>'activityId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ActivityId\",(COALESCE(((s.data->>'actorId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ActorId\",(((s.data->>'costApproved'))::boolean)::boolean AS \"CostApproved\",(((s.data->>'costDecidedAt'))::timestamptz)::timestamptz AS \"CostDecidedAt\",(((s.data->>'costDecidedById'))::uuid)::uuid AS \"CostDecidedById\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((s.data->>'incidentId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"IncidentId\",(((s.data->>'requestedCost'))::numeric)::numeric AS \"RequestedCost\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\" FROM incident_reports t CROSS JOIN LATERAL (SELECT DISTINCT ON (h.value->>'recordKey') h.value->'state' AS data, h.value->>'deleted' AS deleted FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='EmergencyAction' ORDER BY h.value->>'recordKey',h.n DESC) s WHERE COALESCE(s.deleted,'false')<>'true'");
                 });
 
+            modelBuilder.Entity("BHome.Domain.IncidentMaintenance.FastRepairPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Id");
+
+                    b.Property<DateTimeOffset>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ApprovedAt");
+
+                    b.Property<Guid>("ApprovedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ApprovedById");
+
+                    b.Property<string>("CategoriesJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("CategoriesJson");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreatedAt");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("UpdatedAt");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("Version");
+
+                    b.HasKey("Id");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT (COALESCE(((t.task_data->'state'->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(COALESCE(((t.task_data->'state'->>'approvedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"ApprovedAt\",(COALESCE(((t.task_data->'state'->>'approvedById'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ApprovedById\",(COALESCE(((t.task_data->'state'->>'categoriesJson'))::text,''))::text AS \"CategoriesJson\",(COALESCE(((t.task_data->'state'->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((t.task_data->'state'->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(COALESCE(((t.task_data->'state'->>'version'))::integer,0))::integer AS \"Version\" FROM operational_tasks t WHERE t.task_type='SYSTEM_JOB' AND t.task_data->>'recordType'='FastRepairPolicy' AND COALESCE(t.task_data->>'deleted','false')<>'true'");
+                });
+
             modelBuilder.Entity("BHome.Domain.IncidentMaintenance.IncidentActivity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1478,7 +1522,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("DataJson");
 
-                    b.Property<Guid>("IncidentId")
+                    b.Property<Guid?>("IncidentId")
                         .HasColumnType("uuid")
                         .HasColumnName("IncidentId");
 
@@ -1514,7 +1558,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (COALESCE(((s.data->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(COALESCE(((s.data->>'action'))::text,''))::text AS \"Action\",(COALESCE(((s.data->>'actorId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ActorId\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((s.data->>'dataJson'))::jsonb,'{{}}'::jsonb))::jsonb AS \"DataJson\",(COALESCE(((s.data->>'incidentId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"IncidentId\",(COALESCE(((s.data->>'note'))::text,''))::text AS \"Note\",(COALESCE(((s.data->>'occurredAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"OccurredAt\",(COALESCE(((s.data->>'tenantVisible'))::boolean,FALSE))::boolean AS \"TenantVisible\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(((s.data->>'workOrderId'))::uuid)::uuid AS \"WorkOrderId\" FROM incident_reports t CROSS JOIN LATERAL (SELECT DISTINCT ON (h.value->>'recordKey') h.value->'state' AS data, h.value->>'deleted' AS deleted FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='IncidentActivity' ORDER BY h.value->>'recordKey',h.n DESC) s WHERE COALESCE(s.deleted,'false')<>'true'");
+                    b.ToSqlQuery("SELECT (COALESCE(((s.data->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(COALESCE(((s.data->>'action'))::text,''))::text AS \"Action\",(COALESCE(((s.data->>'actorId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ActorId\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((s.data->>'dataJson'))::jsonb,'{{}}'::jsonb))::jsonb AS \"DataJson\",(((s.data->>'incidentId'))::uuid)::uuid AS \"IncidentId\",(COALESCE(((s.data->>'note'))::text,''))::text AS \"Note\",(COALESCE(((s.data->>'occurredAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"OccurredAt\",(COALESCE(((s.data->>'tenantVisible'))::boolean,FALSE))::boolean AS \"TenantVisible\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(((s.data->>'workOrderId'))::uuid)::uuid AS \"WorkOrderId\" FROM (SELECT history FROM incident_reports UNION ALL SELECT history FROM operational_tasks WHERE task_type='WORK_ORDER') t CROSS JOIN LATERAL (SELECT DISTINCT ON (h.value->>'recordKey') h.value->'state' AS data, h.value->>'deleted' AS deleted FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='IncidentActivity' ORDER BY h.value->>'recordKey',h.n DESC) s WHERE COALESCE(s.deleted,'false')<>'true'");
                 });
 
             modelBuilder.Entity("BHome.Domain.IncidentMaintenance.IncidentCommand", b =>
@@ -1537,7 +1581,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("Fingerprint");
 
-                    b.Property<Guid>("IncidentId")
+                    b.Property<Guid?>("IncidentId")
                         .HasColumnType("uuid")
                         .HasColumnName("IncidentId");
 
@@ -1563,7 +1607,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (COALESCE(((t.task_data->'state'->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(COALESCE(((t.task_data->'state'->>'actorId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ActorId\",(COALESCE(((t.task_data->'state'->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((t.task_data->'state'->>'fingerprint'))::text,''))::text AS \"Fingerprint\",(COALESCE(((t.task_data->'state'->>'incidentId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"IncidentId\",(COALESCE(((t.task_data->'state'->>'key'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Key\",(COALESCE(((t.task_data->'state'->>'responseJson'))::jsonb,'{{}}'::jsonb))::jsonb AS \"ResponseJson\",(COALESCE(((t.task_data->'state'->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\" FROM operational_tasks t WHERE t.task_type='COMMAND' AND t.task_data->>'recordType'='IncidentCommand' AND COALESCE(t.task_data->>'deleted','false')<>'true'");
+                    b.ToSqlQuery("SELECT (COALESCE(((t.task_data->'state'->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(COALESCE(((t.task_data->'state'->>'actorId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ActorId\",(COALESCE(((t.task_data->'state'->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((t.task_data->'state'->>'fingerprint'))::text,''))::text AS \"Fingerprint\",(((t.task_data->'state'->>'incidentId'))::uuid)::uuid AS \"IncidentId\",(COALESCE(((t.task_data->'state'->>'key'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Key\",(COALESCE(((t.task_data->'state'->>'responseJson'))::jsonb,'{{}}'::jsonb))::jsonb AS \"ResponseJson\",(COALESCE(((t.task_data->'state'->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\" FROM operational_tasks t WHERE t.task_type='COMMAND' AND t.task_data->>'recordType'='IncidentCommand' AND COALESCE(t.task_data->>'deleted','false')<>'true'");
                 });
 
             modelBuilder.Entity("BHome.Domain.IncidentMaintenance.IncidentEvidence", b =>
@@ -1586,7 +1630,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreatedAt");
 
-                    b.Property<Guid>("IncidentId")
+                    b.Property<Guid?>("IncidentId")
                         .HasColumnType("uuid")
                         .HasColumnName("IncidentId");
 
@@ -1637,7 +1681,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (COALESCE(((s.data->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(((s.data->>'activityId'))::uuid)::uuid AS \"ActivityId\",(COALESCE(((s.data->>'contentType'))::text,''))::text AS \"ContentType\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((s.data->>'incidentId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"IncidentId\",(COALESCE(((s.data->>'kind'))::integer,0))::integer AS \"Kind\",(COALESCE(((s.data->>'length'))::bigint,0))::bigint AS \"Length\",(COALESCE(((s.data->>'objectKey'))::text,''))::text AS \"ObjectKey\",(COALESCE(((s.data->>'sha256'))::text,''))::text AS \"Sha256\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(COALESCE(((s.data->>'uploadedById'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"UploadedById\",(((s.data->>'workOrderId'))::uuid)::uuid AS \"WorkOrderId\" FROM incident_reports t CROSS JOIN LATERAL (SELECT DISTINCT ON (h.value->>'recordKey') h.value->'state' AS data, h.value->>'deleted' AS deleted FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='IncidentEvidence' ORDER BY h.value->>'recordKey',h.n DESC) s WHERE COALESCE(s.deleted,'false')<>'true'");
+                    b.ToSqlQuery("SELECT (COALESCE(((s.data->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(((s.data->>'activityId'))::uuid)::uuid AS \"ActivityId\",(COALESCE(((s.data->>'contentType'))::text,''))::text AS \"ContentType\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(((s.data->>'incidentId'))::uuid)::uuid AS \"IncidentId\",(COALESCE(((s.data->>'kind'))::integer,0))::integer AS \"Kind\",(COALESCE(((s.data->>'length'))::bigint,0))::bigint AS \"Length\",(COALESCE(((s.data->>'objectKey'))::text,''))::text AS \"ObjectKey\",(COALESCE(((s.data->>'sha256'))::text,''))::text AS \"Sha256\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(COALESCE(((s.data->>'uploadedById'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"UploadedById\",(((s.data->>'workOrderId'))::uuid)::uuid AS \"WorkOrderId\" FROM (SELECT history FROM incident_reports UNION ALL SELECT history FROM operational_tasks WHERE task_type='WORK_ORDER') t CROSS JOIN LATERAL (SELECT DISTINCT ON (h.value->>'recordKey') h.value->'state' AS data, h.value->>'deleted' AS deleted FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='IncidentEvidence' ORDER BY h.value->>'recordKey',h.n DESC) s WHERE COALESCE(s.deleted,'false')<>'true'");
                 });
 
             modelBuilder.Entity("BHome.Domain.IncidentMaintenance.IncidentFileUpload", b =>
@@ -1720,9 +1764,13 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("HighPriority");
 
-                    b.Property<Guid>("IncidentId")
+                    b.Property<Guid?>("IncidentId")
                         .HasColumnType("uuid")
                         .HasColumnName("IncidentId");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LocationId");
 
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("timestamp with time zone")
@@ -1736,6 +1784,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("UpdatedAt");
 
+                    b.Property<Guid?>("WorkOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("WorkOrderId");
+
                     b.HasKey("Id");
 
                     b.HasIndex("IncidentId");
@@ -1747,7 +1799,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (COALESCE(((COALESCE(s.data,t.event_data->'state')->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'activityId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ActivityId\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(((COALESCE(s.data,t.event_data->'state')->>'deliveryError'))::text)::text AS \"DeliveryError\",(((COALESCE(s.data,t.event_data->'state')->>'deliveryReference'))::text)::text AS \"DeliveryReference\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'deliveryState'))::text,''))::text AS \"DeliveryState\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'event'))::text,''))::text AS \"Event\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'highPriority'))::boolean,FALSE))::boolean AS \"HighPriority\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'incidentId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"IncidentId\",(t.read_at)::timestamptz AS \"ReadAt\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'recipientId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"RecipientId\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\" FROM notifications t LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(t.delivery_history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='IncidentNotification' ORDER BY n DESC LIMIT 1) s ON TRUE WHERE t.record_kind='OUTBOX' AND t.event_data->>'recordType'='IncidentNotification'");
+                    b.ToSqlQuery("SELECT (COALESCE(((COALESCE(s.data,t.event_data->'state')->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'activityId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ActivityId\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(((COALESCE(s.data,t.event_data->'state')->>'deliveryError'))::text)::text AS \"DeliveryError\",(((COALESCE(s.data,t.event_data->'state')->>'deliveryReference'))::text)::text AS \"DeliveryReference\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'deliveryState'))::text,''))::text AS \"DeliveryState\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'event'))::text,''))::text AS \"Event\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'highPriority'))::boolean,FALSE))::boolean AS \"HighPriority\",(((COALESCE(s.data,t.event_data->'state')->>'incidentId'))::uuid)::uuid AS \"IncidentId\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'locationId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"LocationId\",(t.read_at)::timestamptz AS \"ReadAt\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'recipientId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"RecipientId\",(COALESCE(((COALESCE(s.data,t.event_data->'state')->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(((COALESCE(s.data,t.event_data->'state')->>'workOrderId'))::uuid)::uuid AS \"WorkOrderId\" FROM notifications t LEFT JOIN LATERAL (SELECT h->'state' AS data FROM jsonb_array_elements(t.delivery_history) WITH ORDINALITY a(h,n) WHERE h->>'recordType'='IncidentNotification' ORDER BY n DESC LIMIT 1) s ON TRUE WHERE t.record_kind='OUTBOX' AND t.event_data->>'recordType'='IncidentNotification'");
                 });
 
             modelBuilder.Entity("BHome.Domain.IncidentMaintenance.IncidentReport", b =>
@@ -1870,6 +1922,104 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(((s.data->>'acknowledgedAt'))::timestamptz)::timestamptz AS \"AcknowledgedAt\",(((s.data->>'acknowledgedById'))::uuid)::uuid AS \"AcknowledgedById\",(t.asset_id)::uuid AS \"AssetId\",(((s.data->>'category'))::text)::text AS \"Category\",(((s.data->>'commonArea'))::text)::text AS \"CommonArea\",(((s.data->>'contractId'))::uuid)::uuid AS \"ContractId\",(t.reported_at)::timestamptz AS \"CreatedAt\",(t.description)::text AS \"Description\",(t.duplicate_of_report_id)::uuid AS \"DuplicateOfId\",(t.location_id)::uuid AS \"LocationId\",(((s.data->>'ownerDecisionAt'))::timestamptz)::timestamptz AS \"OwnerDecisionAt\",(t.reporter_user_id)::uuid AS \"ReporterId\",(COALESCE(((s.data->>'reporterRole'))::text,''))::text AS \"ReporterRole\",(((s.data->>'resolutionNote'))::text)::text AS \"ResolutionNote\",(t.resolved_at)::timestamptz AS \"ResolvedAt\",(t.room_id)::uuid AS \"RoomId\",(CASE t.severity WHEN 'EMERGENCY' THEN 1 ELSE 0 END)::integer AS \"Severity\",(CASE t.status WHEN 'Submitted' THEN 0 WHEN 'InProgress' THEN 1 WHEN 'Resolved' THEN 2 WHEN 'Rejected' THEN 3 WHEN 'Duplicate' THEN 4 WHEN 'Cancelled' THEN 5 END)::integer AS \"Status\",(((s.data->>'type'))::text)::text AS \"Type\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(t.version)::integer AS \"Version\" FROM incident_reports t LEFT JOIN LATERAL (SELECT h.value->'state' AS data FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='IncidentReport' ORDER BY h.n DESC LIMIT 1) s ON TRUE WHERE TRUE");
                 });
 
+            modelBuilder.Entity("BHome.Domain.IncidentMaintenance.MaintenanceCompensation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("Id");
+
+                    b.Property<decimal>("ActualRepairCost")
+                        .HasColumnType("numeric")
+                        .HasColumnName("ActualRepairCost");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric")
+                        .HasColumnName("Amount");
+
+                    b.Property<string>("CollectionMethod")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("CollectionMethod");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ContractId");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreatedAt");
+
+                    b.Property<DateTimeOffset>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DecidedAt");
+
+                    b.Property<Guid>("DecidedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DecidedById");
+
+                    b.Property<DateTimeOffset?>("DeductedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeductedAt");
+
+                    b.Property<Guid>("DepositContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DepositContractId");
+
+                    b.Property<string>("EvidenceIdsJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("EvidenceIdsJson");
+
+                    b.Property<Guid?>("IncidentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("IncidentId");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("InvoiceId");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LocationId");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("Reason");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("RoomId");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("Status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("UpdatedAt");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("Version");
+
+                    b.Property<Guid>("WorkOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("WorkOrderId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("WorkOrderId");
+
+                    b.ToTable((string)null);
+
+                    b.ToSqlQuery("SELECT (COALESCE(((s.data->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(COALESCE(((s.data->>'actualRepairCost'))::numeric,0))::numeric AS \"ActualRepairCost\",(COALESCE(((s.data->>'amount'))::numeric,0))::numeric AS \"Amount\",(COALESCE(((s.data->>'collectionMethod'))::text,''))::text AS \"CollectionMethod\",(COALESCE(((s.data->>'contractId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ContractId\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((s.data->>'decidedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"DecidedAt\",(COALESCE(((s.data->>'decidedById'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"DecidedById\",(((s.data->>'deductedAt'))::timestamptz)::timestamptz AS \"DeductedAt\",(COALESCE(((s.data->>'depositContractId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"DepositContractId\",(COALESCE(((s.data->>'evidenceIdsJson'))::text,''))::text AS \"EvidenceIdsJson\",(((s.data->>'incidentId'))::uuid)::uuid AS \"IncidentId\",(((s.data->>'invoiceId'))::uuid)::uuid AS \"InvoiceId\",(COALESCE(((s.data->>'locationId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"LocationId\",(COALESCE(((s.data->>'reason'))::text,''))::text AS \"Reason\",(COALESCE(((s.data->>'roomId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"RoomId\",(COALESCE(((s.data->>'status'))::text,''))::text AS \"Status\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(COALESCE(((s.data->>'version'))::integer,0))::integer AS \"Version\",(COALESCE(((s.data->>'workOrderId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"WorkOrderId\" FROM operational_tasks t CROSS JOIN LATERAL (SELECT DISTINCT ON (h.value->>'recordKey') h.value->'state' AS data, h.value->>'deleted' AS deleted FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='MaintenanceCompensation' ORDER BY h.value->>'recordKey',h.n DESC) s WHERE COALESCE(s.deleted,'false')<>'true'");
+                });
+
             modelBuilder.Entity("BHome.Domain.IncidentMaintenance.MaintenanceExpense", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1911,7 +2061,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("date")
                         .HasColumnName("ExpenseDate");
 
-                    b.Property<Guid>("IncidentId")
+                    b.Property<Guid?>("IncidentId")
                         .HasColumnType("uuid")
                         .HasColumnName("IncidentId");
 
@@ -1998,7 +2148,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreatedAt");
 
-                    b.Property<Guid>("IncidentId")
+                    b.Property<Guid?>("IncidentId")
                         .HasColumnType("uuid")
                         .HasColumnName("IncidentId");
 
@@ -2053,7 +2203,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (COALESCE(((s.data->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(COALESCE(((s.data->>'activityId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ActivityId\",(COALESCE(((s.data->>'actualCost'))::numeric,0))::numeric AS \"ActualCost\",(((s.data->>'assetId'))::uuid)::uuid AS \"AssetId\",(((s.data->>'conditionAfter'))::text)::text AS \"ConditionAfter\",(((s.data->>'conditionBefore'))::text)::text AS \"ConditionBefore\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((s.data->>'incidentId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"IncidentId\",(COALESCE(((s.data->>'locationId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"LocationId\",(((s.data->>'roomId'))::uuid)::uuid AS \"RoomId\",(((s.data->>'statusAfter'))::text)::text AS \"StatusAfter\",(((s.data->>'statusBefore'))::text)::text AS \"StatusBefore\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(COALESCE(((s.data->>'verifiedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"VerifiedAt\",(COALESCE(((s.data->>'verifiedById'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"VerifiedById\",(((s.data->>'workOrderId'))::uuid)::uuid AS \"WorkOrderId\" FROM incident_reports t CROSS JOIN LATERAL (SELECT DISTINCT ON (h.value->>'recordKey') h.value->'state' AS data, h.value->>'deleted' AS deleted FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='MaintenanceHistory' ORDER BY h.value->>'recordKey',h.n DESC) s WHERE COALESCE(s.deleted,'false')<>'true'");
+                    b.ToSqlQuery("SELECT (COALESCE(((s.data->>'id'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"Id\",(COALESCE(((s.data->>'activityId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"ActivityId\",(COALESCE(((s.data->>'actualCost'))::numeric,0))::numeric AS \"ActualCost\",(((s.data->>'assetId'))::uuid)::uuid AS \"AssetId\",(((s.data->>'conditionAfter'))::text)::text AS \"ConditionAfter\",(((s.data->>'conditionBefore'))::text)::text AS \"ConditionBefore\",(COALESCE(((s.data->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(((s.data->>'incidentId'))::uuid)::uuid AS \"IncidentId\",(COALESCE(((s.data->>'locationId'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"LocationId\",(((s.data->>'roomId'))::uuid)::uuid AS \"RoomId\",(((s.data->>'statusAfter'))::text)::text AS \"StatusAfter\",(((s.data->>'statusBefore'))::text)::text AS \"StatusBefore\",(COALESCE(((s.data->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(COALESCE(((s.data->>'verifiedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"VerifiedAt\",(COALESCE(((s.data->>'verifiedById'))::uuid,'00000000-0000-0000-0000-000000000000'::uuid))::uuid AS \"VerifiedById\",(((s.data->>'workOrderId'))::uuid)::uuid AS \"WorkOrderId\" FROM (SELECT history FROM incident_reports UNION ALL SELECT history FROM operational_tasks WHERE task_type='WORK_ORDER') t CROSS JOIN LATERAL (SELECT DISTINCT ON (h.value->>'recordKey') h.value->'state' AS data, h.value->>'deleted' AS deleted FROM jsonb_array_elements(t.history) WITH ORDINALITY h(value,n) WHERE h.value->>'recordType'='MaintenanceHistory' ORDER BY h.value->>'recordKey',h.n DESC) s WHERE COALESCE(s.deleted,'false')<>'true'");
                 });
 
             modelBuilder.Entity("BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder", b =>
@@ -2083,9 +2233,17 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("AssetId");
 
+                    b.Property<bool>("AssetProposalPending")
+                        .HasColumnType("boolean")
+                        .HasColumnName("AssetProposalPending");
+
                     b.Property<Guid>("AssignedStaffId")
                         .HasColumnType("uuid")
                         .HasColumnName("AssignedStaffId");
+
+                    b.Property<string>("CommonArea")
+                        .HasColumnType("text")
+                        .HasColumnName("CommonArea");
 
                     b.Property<Guid?>("CompletionActivityId")
                         .HasColumnType("uuid")
@@ -2094,6 +2252,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreatedAt");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("Description");
 
                     b.Property<decimal?>("EstimatedCost")
                         .HasPrecision(18)
@@ -2110,7 +2273,19 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("character varying(4000)")
                         .HasColumnName("ExpectedOutcome");
 
-                    b.Property<Guid>("IncidentId")
+                    b.Property<DateTimeOffset?>("FastRepairAuthorizedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("FastRepairAuthorizedAt");
+
+                    b.Property<string>("FastRepairCategory")
+                        .HasColumnType("text")
+                        .HasColumnName("FastRepairCategory");
+
+                    b.Property<int?>("FastRepairPolicyVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("FastRepairPolicyVersion");
+
+                    b.Property<Guid?>("IncidentId")
                         .HasColumnType("uuid")
                         .HasColumnName("IncidentId");
 
@@ -2127,6 +2302,22 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("ProposalVersion");
 
+                    b.Property<string>("ProposedAssetCategory")
+                        .HasColumnType("text")
+                        .HasColumnName("ProposedAssetCategory");
+
+                    b.Property<string>("ProposedAssetCondition")
+                        .HasColumnType("text")
+                        .HasColumnName("ProposedAssetCondition");
+
+                    b.Property<Guid?>("ProposedAssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ProposedAssetId");
+
+                    b.Property<string>("ProposedAssetName")
+                        .HasColumnType("text")
+                        .HasColumnName("ProposedAssetName");
+
                     b.Property<string>("ProposedSolution")
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)")
@@ -2141,6 +2332,11 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("RoomId");
 
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("Source");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer")
                         .HasColumnName("Status");
@@ -2152,6 +2348,10 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("UpdatedAt");
+
+                    b.Property<bool>("UsesMaterials")
+                        .HasColumnType("boolean")
+                        .HasColumnName("UsesMaterials");
 
                     b.Property<string>("Vendor")
                         .HasMaxLength(500)
@@ -2189,7 +2389,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(((t.task_data->'state'->>'actualCost'))::numeric)::numeric AS \"ActualCost\",(t.cost_approved_at)::timestamptz AS \"ApprovedAt\",(t.cost_approved_by_user_id)::uuid AS \"ApprovedById\",(((t.task_data->'state'->>'approvedProposalVersion'))::integer)::integer AS \"ApprovedProposalVersion\",(t.asset_id)::uuid AS \"AssetId\",(t.assigned_user_id)::uuid AS \"AssignedStaffId\",(((t.task_data->'state'->>'completionActivityId'))::uuid)::uuid AS \"CompletionActivityId\",(COALESCE(((t.task_data->'state'->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(t.estimated_cost)::numeric AS \"EstimatedCost\",(((t.task_data->'state'->>'estimatedMinutes'))::integer)::integer AS \"EstimatedMinutes\",(COALESCE(((t.task_data->'state'->>'expectedOutcome'))::text,''))::text AS \"ExpectedOutcome\",(t.incident_report_id)::uuid AS \"IncidentId\",(((t.task_data->'state'->>'inspectionResult'))::text)::text AS \"InspectionResult\",(t.location_id)::uuid AS \"LocationId\",(COALESCE(((t.task_data->'state'->>'proposalVersion'))::integer,0))::integer AS \"ProposalVersion\",(((t.task_data->'state'->>'proposedSolution'))::text)::text AS \"ProposedSolution\",(((t.task_data->'state'->>'result'))::text)::text AS \"Result\",(t.room_id)::uuid AS \"RoomId\",(CASE t.status WHEN 'Assigned' THEN 0 WHEN 'PendingApproval' THEN 1 WHEN 'InProgress' THEN 2 WHEN 'PendingVerification' THEN 3 WHEN 'Verified' THEN 4 WHEN 'Cancelled' THEN 5 END)::integer AS \"Status\",(t.due_at)::timestamptz AS \"TargetCompletionAt\",(COALESCE(((t.task_data->'state'->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(((t.task_data->'state'->>'vendor'))::text)::text AS \"Vendor\",(t.verified_at)::timestamptz AS \"VerifiedAt\",(t.verified_by_user_id)::uuid AS \"VerifiedById\",(t.version)::integer AS \"Version\" FROM operational_tasks t WHERE t.task_type='WORK_ORDER'");
+                    b.ToSqlQuery("SELECT (t.id)::uuid AS \"Id\",(((t.task_data->'state'->>'actualCost'))::numeric)::numeric AS \"ActualCost\",(t.cost_approved_at)::timestamptz AS \"ApprovedAt\",(t.cost_approved_by_user_id)::uuid AS \"ApprovedById\",(((t.task_data->'state'->>'approvedProposalVersion'))::integer)::integer AS \"ApprovedProposalVersion\",(t.asset_id)::uuid AS \"AssetId\",(COALESCE(((t.task_data->'state'->>'assetProposalPending'))::boolean,FALSE))::boolean AS \"AssetProposalPending\",(t.assigned_user_id)::uuid AS \"AssignedStaffId\",(((t.task_data->'state'->>'commonArea'))::text)::text AS \"CommonArea\",(((t.task_data->'state'->>'completionActivityId'))::uuid)::uuid AS \"CompletionActivityId\",(COALESCE(((t.task_data->'state'->>'createdAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"CreatedAt\",(COALESCE(((t.task_data->'state'->>'description'))::text,''))::text AS \"Description\",(t.estimated_cost)::numeric AS \"EstimatedCost\",(((t.task_data->'state'->>'estimatedMinutes'))::integer)::integer AS \"EstimatedMinutes\",(COALESCE(((t.task_data->'state'->>'expectedOutcome'))::text,''))::text AS \"ExpectedOutcome\",(((t.task_data->'state'->>'fastRepairAuthorizedAt'))::timestamptz)::timestamptz AS \"FastRepairAuthorizedAt\",(((t.task_data->'state'->>'fastRepairCategory'))::text)::text AS \"FastRepairCategory\",(((t.task_data->'state'->>'fastRepairPolicyVersion'))::integer)::integer AS \"FastRepairPolicyVersion\",(t.incident_report_id)::uuid AS \"IncidentId\",(((t.task_data->'state'->>'inspectionResult'))::text)::text AS \"InspectionResult\",(t.location_id)::uuid AS \"LocationId\",(COALESCE(((t.task_data->'state'->>'proposalVersion'))::integer,0))::integer AS \"ProposalVersion\",(((t.task_data->'state'->>'proposedAssetCategory'))::text)::text AS \"ProposedAssetCategory\",(((t.task_data->'state'->>'proposedAssetCondition'))::text)::text AS \"ProposedAssetCondition\",(((t.task_data->'state'->>'proposedAssetId'))::uuid)::uuid AS \"ProposedAssetId\",(((t.task_data->'state'->>'proposedAssetName'))::text)::text AS \"ProposedAssetName\",(((t.task_data->'state'->>'proposedSolution'))::text)::text AS \"ProposedSolution\",(((t.task_data->'state'->>'result'))::text)::text AS \"Result\",(t.room_id)::uuid AS \"RoomId\",(COALESCE(t.task_data->'state'->>'source','Incident'))::text AS \"Source\",(CASE t.status WHEN 'Assigned' THEN 0 WHEN 'PendingApproval' THEN 1 WHEN 'InProgress' THEN 2 WHEN 'PendingVerification' THEN 3 WHEN 'Verified' THEN 4 WHEN 'Cancelled' THEN 5 END)::integer AS \"Status\",(t.due_at)::timestamptz AS \"TargetCompletionAt\",(COALESCE(((t.task_data->'state'->>'updatedAt'))::timestamptz,'1970-01-01Z'::timestamptz))::timestamptz AS \"UpdatedAt\",(COALESCE(((t.task_data->'state'->>'usesMaterials'))::boolean,FALSE))::boolean AS \"UsesMaterials\",(((t.task_data->'state'->>'vendor'))::text)::text AS \"Vendor\",(t.verified_at)::timestamptz AS \"VerifiedAt\",(t.verified_by_user_id)::uuid AS \"VerifiedById\",(t.version)::integer AS \"Version\" FROM operational_tasks t WHERE t.task_type='WORK_ORDER'");
                 });
 
             modelBuilder.Entity("BHome.Domain.Locations.Location", b =>
@@ -5634,8 +5834,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasOne("BHome.Domain.IncidentMaintenance.IncidentReport", null)
                         .WithMany()
                         .HasForeignKey("IncidentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder", null)
                         .WithMany()
@@ -5654,8 +5853,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasOne("BHome.Domain.IncidentMaintenance.IncidentReport", null)
                         .WithMany()
                         .HasForeignKey("IncidentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("BHome.Domain.IncidentMaintenance.IncidentEvidence", b =>
@@ -5668,8 +5866,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasOne("BHome.Domain.IncidentMaintenance.IncidentReport", null)
                         .WithMany()
                         .HasForeignKey("IncidentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
@@ -5694,8 +5891,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasOne("BHome.Domain.IncidentMaintenance.IncidentReport", null)
                         .WithMany()
                         .HasForeignKey("IncidentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BHome.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
@@ -5745,6 +5941,20 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("BHome.Domain.IncidentMaintenance.MaintenanceCompensation", b =>
+                {
+                    b.HasOne("BHome.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder", null)
+                        .WithMany()
+                        .HasForeignKey("WorkOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BHome.Domain.IncidentMaintenance.MaintenanceExpense", b =>
                 {
                     b.HasOne("BHome.Domain.PropertyManagement.Asset", null)
@@ -5766,8 +5976,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasOne("BHome.Domain.IncidentMaintenance.IncidentReport", null)
                         .WithMany()
                         .HasForeignKey("IncidentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BHome.Domain.Locations.Location", null)
                         .WithMany()
@@ -5802,8 +6011,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasOne("BHome.Domain.IncidentMaintenance.IncidentReport", null)
                         .WithMany()
                         .HasForeignKey("IncidentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BHome.Domain.Locations.Location", null)
                         .WithMany()
@@ -5843,8 +6051,7 @@ namespace BHome.Infrastructure.Persistence.Compact24.Migrations
                     b.HasOne("BHome.Domain.IncidentMaintenance.IncidentReport", null)
                         .WithMany()
                         .HasForeignKey("IncidentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BHome.Domain.Locations.Location", null)
                         .WithMany()

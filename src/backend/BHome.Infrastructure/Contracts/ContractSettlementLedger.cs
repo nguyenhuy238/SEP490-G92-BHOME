@@ -42,6 +42,11 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
             if (root.RoomId != c.RoomId || root.TenantUserId != c.TenantUserId) throw ContractException.Conflict("contract_version_integrity_failed");
         }
         var blockers = new List<string>(); var m = await db.Set<ContractMoveOut>().AsNoTracking().SingleOrDefaultAsync(m => m.ContractId == id, t);
+        var compensations = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
+            ? await db.Set<BHome.Domain.IncidentMaintenance.MaintenanceCompensation>().AsNoTracking().Where(c => c.DepositContractId == root.Id &&
+                (c.Status == "DepositPending" || c.Status == "Deducted")).ToArrayAsync(t) : [];
+        if (compensations.Any(c => c.Status == "DepositPending")) blockers.Add("maintenance_compensation_pending");
+        var maintenanceDeductions = compensations.Where(c => c.Status == "Deducted").Sum(c => c.Amount);
         var charges = await SettlementChargeRecords.ReadAsync<SettlementReceivable>(db, id, SettlementChargeRecords.ChargeKind, t);
         if (await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAsync(db, null, id, t, depositContractIds: chain.Select(v => v.Id).Append(root.HoldingContractId ?? root.Id).Distinct().ToArray()) ||
             await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAllocatedSettlementAsync(db, id, t) ||
@@ -86,14 +91,17 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
             if (applied != root.AppliedHoldingDeposit) blockers.Add("holding_allocation_settlement_required");
         }
         else if (root.AppliedHoldingDeposit > 0) blockers.Add("holding_allocation_settlement_required");
-        var invoiceEntities = await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines).Where(i => i.RoomId == c.RoomId && i.BillingPeriod >= start && i.BillingPeriod <= through).OrderBy(i => i.BillingPeriod).ToArrayAsync(t);
+        var invoiceQuery = db.Set<Invoice>().AsNoTracking().Include(i => i.Lines).Where(i => i.RoomId == c.RoomId && i.BillingPeriod >= start && i.BillingPeriod <= through);
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            invoiceQuery = invoiceQuery.Where(i => i.Type == "PERIODIC" || chain.Select(v => v.Id).Contains(i.RepresentativeContractId));
+        var invoiceEntities = await invoiceQuery.OrderBy(i => i.BillingPeriod).ToArrayAsync(t);
         if (invoiceEntities.Length > 250) throw ContractException.Conflict("settlement_period_review_required");
         var ids = invoiceEntities.Select(i => i.Id).ToArray();
         var allRecipients = await db.Set<InvoiceRecipient>().AsNoTracking().Where(r => ids.Contains(r.InvoiceId)).ToArrayAsync(t);
         var invoices = new List<SettlementInvoice>();
         foreach (var month in Enumerable.Range(0, (through.Year - start.Year) * 12 + through.Month - start.Month + 1).Select(n => start.AddMonths(n)))
             if (!(month == through && reviewedCharges && charges.Any(ch => ch.FixedCharge is { Category: "Rent" } fixedCharge && fixedCharge.BillingPeriod == month)) &&
-                !invoiceEntities.Any(i => i.BillingPeriod == month && i.Status == InvoiceStatus.Final && allRecipients.Any(r => r.InvoiceId == i.Id && r.TenantUserId == c.TenantUserId))) blockers.Add("final_invoice_coverage_required:" + month.ToString("yyyy-MM"));
+                !invoiceEntities.Any(i => i.Type == "PERIODIC" && i.BillingPeriod == month && i.Status == InvoiceStatus.Final && allRecipients.Any(r => r.InvoiceId == i.Id && r.TenantUserId == c.TenantUserId))) blockers.Add("final_invoice_coverage_required:" + month.ToString("yyyy-MM"));
         foreach (var invoice in invoiceEntities.Where(i => allRecipients.Any(r => r.InvoiceId == i.Id && r.TenantUserId == c.TenantUserId)))
         {
             if (invoice.Status != InvoiceStatus.Final) { if (!(reviewedCharges && invoice.BillingPeriod == through)) blockers.Add("draft_invoice_pending"); continue; }
@@ -140,6 +148,12 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
             Readings = m is null ? null : new { m.ElectricityReadingId, m.WaterReadingId }
         })));
         var plan = await DepositDeductionRecords.LatestAsync(db, id, t);
+        if (compensations.Length > 0)
+            obligationReference = "DEPOSIT-" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                obligationReference,
+                Maintenance = compensations.OrderBy(c => c.Id).Select(c => new { c.Id, c.Version, c.Status, c.Amount, c.DeductedAt })
+            })));
         var planValid = plan is not null && inspection is not null && plan.ObligationReference == obligationReference && plan.DepositContractId == root.Id &&
             plan.InspectionId == inspection.Id && plan.InspectionVersion == inspection.Version && inspection.OwnerDecision == "Confirmed" &&
             !inspection.NoAdditionalCharges && plan.Total >= 0 && plan.Total == plan.Items.Sum(i => i.Amount);
@@ -148,7 +162,7 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         var financialReference = plan is null ? obligationReference : "DEPOSIT-" + Convert.ToHexString(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(new { obligationReference, plan.Id, plan.Version, plan.Total })));
         var position = positions is null ? null : await positions.ReadAsync(chain.Select(v => v.Id).ToArray(), t, financialReference);
-        var deductions = plan?.Total ?? 0;
+        var deductions = (plan?.Total ?? 0) + maintenanceDeductions;
         var calculation = SettlementCalculator.Calculate(invoices, deposit, position, deductions);
         if (position is not null && !calculation.DepositPositionConsistent) blockers.Add("deposit_ledger_reconciliation_required");
         if (position?.UnclassifiedRefunds > 0) blockers.Add("deposit_refund_manual_review_required");
@@ -164,12 +178,12 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         if (returned) blockers.Remove("deposit_deduction_refund_policy_required");
         var resolved = blockers.Count == 0;
         var value = new ContractSettlementSummary(id, root.Id, c.RoomId, c.Room.RoomNumber, c.TenantUserId ?? throw ContractException.Conflict("active_tenant_account_required"), deposit, root.AppliedHoldingDeposit,
-            calculation.ContractSpecificOutstanding, planValid ? deductions : inspection?.NoAdditionalCharges == true ? 0 : null,
-            planValid ? deductions : deposit == 0 || returned ? 0 : null,
+            calculation.ContractSpecificOutstanding, planValid || maintenanceDeductions > 0 ? deductions : inspection?.NoAdditionalCharges == true ? 0 : null,
+            planValid || maintenanceDeductions > 0 ? deductions : deposit == 0 || returned ? 0 : null,
             returned ? position!.Refunded : deposit == 0 && root.AppliedHoldingDeposit == 0 ? 0 : null,
             invoices, blockers.Distinct().Order().ToArray(), other, resolved, "",
             returned ? position!.Refunded > 0 ? "VerifiedManual" : "NotRequired" : deposit == 0 && root.AppliedHoldingDeposit == 0 ? "NotRequired" : "PendingReview",
-            calculation, financialReference, plan, obligationReference, chargeBalances, reviewedCharges ? review : null, canonicalOffsets);
+            calculation, financialReference, plan, obligationReference, chargeBalances, reviewedCharges ? review : null, canonicalOffsets, maintenanceDeductions);
         if (charges.Length > 0) value = value with { ApprovedFinalCharges = charges.Sum(charge => charge.Amount) };
         // Snapshot identity includes sources and their revisions, no user supplied financial totals.
         var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { value, Root = root.Id, root.RequiredDeposit, deposits, Inspection = inspection is null ? null : new { inspection.Id, inspection.Version, inspection.OwnerDecision, inspection.NoAdditionalCharges }, Readings = m is null ? null : new { m.ElectricityReadingId, m.WaterReadingId } })));
