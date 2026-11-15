@@ -191,7 +191,7 @@ function OtpStart({
         value={choice}
         onChange={setChoice}
         disabled={busy}
-        caption={`Ký điện tử bởi: ${owner ? 'Chủ trọ' : 'Khách thuê'}\nXác thực: ${session ? 'phiên đăng nhập Owner' : 'mã OTP qua email'}`}
+        caption={`Ký điện tử bởi: ${owner ? 'Chủ trọ' : 'Khách thuê'}`}
       />
       <Text variant="titleSmall">Chữ ký của bạn</Text>
       <SignaturePad onChange={setDrawing} disabled={busy} />
