@@ -63,7 +63,7 @@ public static class ContractChargeSnapshot
     {
         var charges = policies.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category, (int)p.Method,
             p.ChargeCode == "RENT" ? contract.MonthlyRent : p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version)
-        { Name = p.Name }).ToList();
+        { Name = p.Name, PolicyLocationId = p.LocationId, PolicyRoomId = p.RoomId, PolicyRoomTypeId = p.RoomTypeId }).ToList();
         // The direct contract/renewal API already accepts an agreed rent explicitly.
         // It may have no RENT policy; the contract itself is then the rate source.
         if (!charges.Any(p => p.ChargeCode == "RENT"))
@@ -73,12 +73,24 @@ public static class ContractChargeSnapshot
         return charges.OrderBy(p => p.ChargeCode, StringComparer.Ordinal).ToArray();
     }
 
-    internal static void Store(Contract contract, IReadOnlyList<HoldingPriceCharge> charges, string trigger, DateTimeOffset at)
+    // Older drafts have no scope metadata; keep checking the original immutable
+    // policy identity, version, dates, name and all economic fields.
+    internal static bool SameDraftChargeReferences(IReadOnlyList<HoldingPriceCharge> existing, IReadOnlyList<HoldingPriceCharge> current) =>
+        existing.Count == current.Count && existing.Zip(current).All(pair =>
+            pair.First.PolicyLocationId is null
+                ? pair.First == (pair.Second with { PolicyLocationId = null, PolicyRoomId = null, PolicyRoomTypeId = null })
+                : pair.First == pair.Second);
+
+    internal static void Store(Contract contract, IReadOnlyList<HoldingPriceCharge> charges, string trigger, DateTimeOffset at,
+        int? holdingSettingsVersion = null)
     {
+        if (contract.Kind == ContractKind.Holding && holdingSettingsVersion is null && !string.IsNullOrWhiteSpace(contract.AgreedPriceSnapshot) &&
+            contract.AgreedPriceSnapshot != "{}")
+            holdingSettingsVersion = Read(contract).HoldingSettingsVersion;
         contract.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.MonthlyRent,
             contract.RequiredDeposit, contract.StartDate, contract.EndDate, contract.HoldingExpiryAt ?? default,
             trigger, at.ToUniversalTime(), charges)
-        { SnapshotVersion = 1 });
+        { SnapshotVersion = 1, HoldingSettingsVersion = holdingSettingsVersion });
         _ = Read(contract);
     }
 

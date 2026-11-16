@@ -385,7 +385,7 @@ export function SharedTemplateDetails({
                         </TableHead>
                         <TableBody>
                           {usage.data.items.map((item) => (
-                            <TableRow key={item.id}>
+                            <TableRow key={`${item.id}:${item.sourceId}:${item.sourceVersion}`}>
                               <TableCell>
                                 {locations.data?.find((l) => l.id === item.targetLocationId)
                                   ?.label ?? item.targetLocationId}

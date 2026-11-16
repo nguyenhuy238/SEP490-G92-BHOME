@@ -91,6 +91,8 @@ export interface LocalAssetTemplate {
   expectedVersion?: number;
   scoped?: boolean;
   scopeRoomId?: string | null;
+  familyId?: string;
+  edition?: number;
 }
 export interface DesiredAssets {
   templateId: string;
@@ -168,6 +170,9 @@ export interface OperatingPolicyInput {
   content: string;
   effectiveFrom: string;
   expectedVersion?: number;
+  familyId?: string;
+  edition?: number;
+  previousVersionId?: string | null;
 }
 export interface PolicyBinding {
   policyId: string;
@@ -378,6 +383,12 @@ export function propertySetupClient(request: SetupRequest) {
         input,
         id ? 'PUT' : 'POST',
       ),
+    saveReadyTemplate: (id: string | null, input: LocalAssetTemplate) =>
+      write<SetupDocument<LocalAssetTemplate>>(
+        `/api/v1/asset-templates${id ? '/' + encodeURIComponent(id) : ''}/ready`,
+        input,
+        id ? 'PUT' : 'POST',
+      ),
     cloneTemplate: (id: string) =>
       request<SetupDocument<LocalAssetTemplate>>(
         `/api/v1/asset-templates/${encodeURIComponent(id)}/drafts`,
@@ -438,6 +449,17 @@ export function propertySetupClient(request: SetupRequest) {
         `/api/v1/operating-policies${id ? '/' + encodeURIComponent(id) + '/draft' : ''}`,
         input,
         id ? 'PUT' : 'POST',
+      ),
+    saveReadyPolicy: (id: string | null, input: OperatingPolicyInput) =>
+      write<SetupDocument<OperatingPolicyInput>>(
+        `/api/v1/operating-policies${id ? '/' + encodeURIComponent(id) : ''}/ready`,
+        input,
+        id ? 'PUT' : 'POST',
+      ),
+    policyFamilyRevisions: (id: string, signal?: AbortSignal) =>
+      request<SetupDocument<OperatingPolicyInput>[]>(
+        `/api/v1/operating-policies/${encodeURIComponent(id)}/family-versions`,
+        { signal },
       ),
     publishPolicy: (id: string, expectedVersion: number) =>
       write<SetupDocument<OperatingPolicyInput>>(

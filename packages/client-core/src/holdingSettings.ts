@@ -26,6 +26,10 @@ export function holdingSettingsClient(request: ContractRequest) {
       request<HoldingSettings | null>(`/api/v1/contracts/holding-settings/${locationId}`, {
         signal,
       }),
+    versions: (locationId: string, signal?: AbortSignal) =>
+      request<HoldingSettings[]>(`/api/v1/contracts/holding-settings/${locationId}/versions`, {
+        signal,
+      }),
     save: (
       locationId: string,
       input: Omit<HoldingSettings, 'locationId' | 'version'> & { expectedVersion: number },

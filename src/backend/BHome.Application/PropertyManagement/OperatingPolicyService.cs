@@ -20,6 +20,60 @@ public sealed class OperatingPolicyService(ISetupWorkspaceStore store, ICurrentU
             return await Store.SaveAsync(id ?? Guid.NewGuid(), input.LocationId, "OperatingPolicy", "Draft", input, input.ExpectedVersion, Actor, t);
         }, t);
     }
+    private static Guid Family(SetupDocument doc) =>
+        doc.Data.TryGetProperty("familyId", out var family) && family.ValueKind == JsonValueKind.String && family.TryGetGuid(out var id) ? id : doc.Id;
+    private static int Edition(SetupDocument doc) =>
+        doc.Data.TryGetProperty("edition", out var edition) && edition.TryGetInt32(out var number) && number > 0 ? number : 1;
+
+    // Owner Web's one-save workflow. Legacy draft/publish routes remain available
+    // for existing clients; published policy content and signed bindings are immutable.
+    public async Task<SetupDocument> SaveReadyAsync(Guid? id, OperatingPolicyWrite input, CancellationToken t)
+    {
+        Owner(); await Scope(input.LocationId, true, t);
+        input = input with { Title = Text(input.Title, 150), Content = Text(input.Content, 12000) };
+        if (input.EffectiveFrom == default) throw new PropertyException(400, "effective_date_required");
+        return await Store.TransactionAsync(input.LocationId, async () =>
+        {
+            var before = id is { } existing ? await Document(existing, "OperatingPolicy", true, t) : null;
+            if (before is not null && before.LocationId != input.LocationId) throw new PropertyException(404, "resource_not_found");
+            if ((before?.Version ?? 0) != input.ExpectedVersion) throw new PropertyException(409, "stale_version");
+            if (before is not null && before.Status is not ("Draft" or "Published")) throw new PropertyException(409, "published_policy_immutable");
+            var all = await Store.ListAsync(input.LocationId, "OperatingPolicy", t);
+            var nextId = before?.Id ?? Guid.NewGuid();
+            var family = before is null ? nextId : Family(before);
+            var edition = before is null ? 1 : Edition(before);
+            Guid? previous = null;
+            var expected = before?.Version ?? 0;
+            if (before is not null)
+            {
+                if (all.Any(d => Family(d) == family && Edition(d) > edition)) throw new PropertyException(409, "stale_version");
+                var old = Read<OperatingPolicyWrite>(before);
+                if (before.Status == "Published")
+                {
+                    if (old.Title == input.Title && old.Content == input.Content && old.EffectiveFrom == input.EffectiveFrom) return before;
+                    var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
+                    if (input.EffectiveFrom < today || input.EffectiveFrom <= old.EffectiveFrom)
+                        throw new PropertyException(409, "policy_successor_date_invalid");
+                    previous = before.Id; nextId = Guid.NewGuid(); edition++; expected = 0;
+                }
+            }
+            if (all.Any(d => d.Id != nextId && d.Status == "Published" && Read<OperatingPolicyWrite>(d).EffectiveFrom == input.EffectiveFrom))
+                throw new PropertyException(409, "policy_effective_date_conflict");
+            var saved = await Store.SaveAsync(nextId, input.LocationId, "OperatingPolicy", "Published",
+                new { input.LocationId, input.Title, input.Content, input.EffectiveFrom, familyId = family, edition, previousVersionId = previous }, expected, Actor, t);
+            await Store.NotifyPolicyPublicationAsync(input.LocationId, saved.Id, t);
+            return saved;
+        }, t);
+    }
+
+    public async Task<IReadOnlyList<SetupDocument>> FamilyRevisionsAsync(Guid id, CancellationToken t)
+    {
+        var doc = await ReadPolicyAsync(id, t);
+        var family = Family(doc);
+        return (await Store.ListAsync(doc.LocationId, "OperatingPolicy", t))
+            .Where(d => Family(d) == family && (User.IsInRole(Roles.Owner) || d.Status == "Published"))
+            .OrderBy(Edition).ThenBy(d => d.Version).ToArray();
+    }
     public async Task<SetupDocument> PublishAsync(Guid id, int version, CancellationToken t)
     {
         var initial = await Document(id, "OperatingPolicy", true, t);

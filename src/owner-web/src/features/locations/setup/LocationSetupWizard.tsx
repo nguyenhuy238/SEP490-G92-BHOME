@@ -187,17 +187,29 @@ const uniqueReferences = (references: SetupSourceReference[]) => [
   ...new Map(references.map((item) => [`${item.kind}:${item.id}:${item.version}`, item])).values(),
 ];
 
-const matchesCatalog = (asset: DraftAsset, doc: SharedDocument) =>
-  asset.references?.some((item) => item.kind === 'asset-catalog' && item.id === doc.id) ||
+type SameFamily = (id: string | null | undefined, doc: SharedDocument) => boolean;
+const sameDocument: SameFamily = (id, doc) => id === doc.id;
+const latestDocuments = (documents: SharedDocument[], status: SharedDocument['status']) => {
+  const latest = new Map<string, SharedDocument>();
+  for (const doc of documents) {
+    if (doc.status !== status) continue;
+    const previous = latest.get(doc.familyId);
+    if (!previous || previous.edition < doc.edition) latest.set(doc.familyId, doc);
+  }
+  return [...latest.values()];
+};
+
+const matchesCatalog = (asset: DraftAsset, doc: SharedDocument, sameFamily = sameDocument) =>
+  asset.references?.some((item) => item.kind === 'asset-catalog' && sameFamily(item.id, doc)) ||
   norm(asset.name) === norm(doc.name);
 
-const matchesRoomTemplate = (type: DraftType, doc: SharedDocument) =>
-  type.sourceId === doc.id || norm(type.name) === norm(doc.name);
+const matchesRoomTemplate = (type: DraftType, doc: SharedDocument, sameFamily = sameDocument) =>
+  sameFamily(type.sourceId, doc) || norm(type.name) === norm(doc.name);
 
-const matchesFeeTemplate = (fee: DraftFee, doc: SharedDocument) => {
+const matchesFeeTemplate = (fee: DraftFee, doc: SharedDocument, sameFamily = sameDocument) => {
   const data = doc.data as FeeTemplateData;
   return (
-    fee.sourceId === doc.id ||
+    sameFamily(fee.sourceId, doc) ||
     (data.scope === 'Location' &&
       !fee.requiresRoom &&
       fee.roomKey === null &&
@@ -210,14 +222,15 @@ const matchesFeeTemplate = (fee: DraftFee, doc: SharedDocument) => {
   );
 };
 
-function mergeCatalogAssets(assets: DraftAsset[], documents: SharedDocument[]): DraftAsset[] {
+function mergeCatalogAssets(assets: DraftAsset[], documents: SharedDocument[], sameFamily = sameDocument): DraftAsset[] {
   const merged = [...assets];
   for (const doc of documents) {
     if (doc.resource !== 'asset-catalog' || doc.status !== 'Published') continue;
-    const index = merged.findIndex((asset) => matchesCatalog(asset, doc));
+    const index = merged.findIndex((asset) => matchesCatalog(asset, doc, sameFamily));
     const imported = reference('asset-catalog', doc);
     if (index >= 0) {
       const existing = merged[index];
+      if (existing.references?.some((item) => item.kind === 'asset-catalog' && sameFamily(item.id, doc))) continue;
       merged[index] = {
         ...existing,
         references: uniqueReferences([...(existing.references ?? []), imported]),
@@ -648,7 +661,7 @@ export function LocationSetupWizard({
             if (items.length >= data.total) break;
             if (!data.items.length) throw new Error('Danh sách mẫu thay đổi khi tải.');
           }
-          return [resource, items.filter((item) => item.status !== 'Archived')] as const;
+          return [resource, items] as const;
         }),
       );
       return {
@@ -669,7 +682,9 @@ export function LocationSetupWizard({
     enabled: owner && draft.mode === 'copy' && !!draft.sourceLocationId,
   });
   const all = (resource: SharedResource) =>
-    (library.data?.items[resource] ?? []).filter((item) => item.status === 'Published');
+    latestDocuments(library.data?.items[resource] ?? [], 'Published');
+  const sameFamily: SameFamily = (id, doc) => id === doc.id ||
+    (library.data?.items[doc.resource] ?? []).some((item) => item.id === id && item.familyId === doc.familyId);
   const librarySection: { resource: SharedResource; label: string } | null =
     draft.step === 1
       ? { resource: 'room-type-templates', label: 'Thêm mẫu loại phòng' }
@@ -690,7 +705,8 @@ export function LocationSetupWizard({
       items: {
         ...previous?.items,
         [document.resource]: [
-          ...(previous?.items[document.resource] ?? []).filter((item) => item.id !== document.id),
+          ...(previous?.items[document.resource] ?? []).filter((item) => item.id !== document.id &&
+            !(item.status === 'Draft' && item.familyId === document.familyId)),
           document,
         ],
       },
@@ -710,39 +726,18 @@ export function LocationSetupWizard({
     setLibrarySaving(true);
     setLibraryError('');
     const { resource, document } = libraryEditor;
-    let saved = document;
     try {
-      // If a previous publish response was lost, recover the same document instead of
-      // creating another family or overwriting a concurrent edit.
-      if (saved) {
-        const latest = await shared.get(resource, saved.id);
-        if (latest.status === 'Published' && latest.version === saved.version + 1) {
-          await rememberLibraryDocument(latest);
-          setLibraryEditor(null);
-          setNotice(`Đã công bố ${latest.name}. Bạn có thể thêm mẫu vào cấu hình.`);
-          return;
-        }
-        if (latest.status !== 'Draft' || latest.version !== saved.version) {
-          await rememberLibraryDocument(latest);
-          setLibraryError('Mẫu đã thay đổi ở nơi khác. Đóng và mở lại bản nháp mới nhất.');
-          return;
-        }
-      }
-      saved = await shared.save(resource, saved?.id ?? null, {
+      const published = await shared.save(resource, document?.id ?? null, {
         ...input,
-        expectedVersion: saved?.version ?? 0,
+        expectedVersion: document?.version ?? 0,
+        publishImmediately: true,
       });
-      setLibraryEditor({ resource, document: saved });
-      await rememberLibraryDocument(saved);
-      const published = await shared.publish(resource, saved.id, saved.version);
       await rememberLibraryDocument(published);
       setLibraryEditor(null);
       setNotice(`Đã công bố ${published.name}. Bạn có thể thêm mẫu vào cấu hình.`);
     } catch (failure) {
-      setLibraryError(
-        (saved ? 'Bản nháp đã được lưu. Chưa thể hoàn tất công bố. ' : '') + invoiceError(failure),
-      );
-      if (!saved) void library.refetch();
+      setLibraryError(invoiceError(failure));
+      void library.refetch();
     } finally {
       librarySaveLock.current = false;
       setLibrarySaving(false);
@@ -762,7 +757,7 @@ export function LocationSetupWizard({
       </Button>
       {library.isFetching && <LinearProgress aria-label="Đang tải thư viện mẫu" />}
       {!library.isFetching &&
-        (library.data?.items[librarySection.resource] ?? [])
+        latestDocuments(library.data?.items[librarySection.resource] ?? [], 'Draft')
           .filter(
             (doc) =>
               doc.status === 'Draft' &&
@@ -819,7 +814,7 @@ export function LocationSetupWizard({
   const addType = (id: string) => {
     const template = all('room-type-templates').find((item) => item.id === id);
     if (!template) return;
-    if (draft.roomTypes.some((type) => matchesRoomTemplate(type, template))) {
+    if (draft.roomTypes.some((type) => matchesRoomTemplate(type, template, sameFamily))) {
       setError('Loại phòng này đã có trong cấu hình cơ sở.');
       return;
     }
@@ -946,7 +941,7 @@ export function LocationSetupWizard({
       ...previous,
       roomTypes: previous.roomTypes.map((type) =>
         type.key === assetType.key
-          ? { ...type, assets: mergeCatalogAssets(type.assets, documents) }
+          ? { ...type, assets: mergeCatalogAssets(type.assets, documents, sameFamily) }
           : type,
       ),
     }));
@@ -958,7 +953,7 @@ export function LocationSetupWizard({
     if (item) addCatalogAssets([item]);
   };
   const selectedCatalogIds = catalogAssets
-    .filter((doc) => assetType?.assets.some((asset) => matchesCatalog(asset, doc)))
+    .filter((doc) => assetType?.assets.some((asset) => matchesCatalog(asset, doc, sameFamily)))
     .map((doc) => doc.id);
   const remainingCatalog = catalogAssets.filter((doc) => !selectedCatalogIds.includes(doc.id));
   const newFee = (): DraftFee => ({
@@ -995,7 +990,7 @@ export function LocationSetupWizard({
       effectiveFrom: feeDate(data.effectiveFrom),
       effectiveTo: data.effectiveTo && data.effectiveTo >= today() ? data.effectiveTo : null,
     };
-    if (draft.fees.some((fee) => matchesFeeTemplate(fee, item))) {
+    if (draft.fees.some((fee) => matchesFeeTemplate(fee, item, sameFamily))) {
       setError('Khoản phí cùng mã và thời gian hiệu lực đã có trong cấu hình.');
       return;
     }
@@ -1003,7 +998,7 @@ export function LocationSetupWizard({
   };
   const addRule = (id: string) => {
     const item = all('policy-templates').find((document) => document.id === id);
-    if (!item || draft.rules.some((rule) => rule.sourceId === id)) return;
+    if (!item || draft.rules.some((rule) => sameFamily(rule.sourceId, item))) return;
     const data = item.data as PolicyTemplateData;
     patch({
       rules: [
@@ -1754,7 +1749,7 @@ export function LocationSetupWizard({
                       })}
                       selected={all('room-type-templates')
                         .filter((doc) =>
-                          draft.roomTypes.some((type) => matchesRoomTemplate(type, doc)),
+                          draft.roomTypes.some((type) => matchesRoomTemplate(type, doc, sameFamily)),
                         )
                         .map((doc) => doc.id)}
                       add={addType}
@@ -2372,7 +2367,7 @@ export function LocationSetupWizard({
                       kind="fee"
                       add={addFee}
                       selected={all('fee-templates')
-                        .filter((doc) => draft.fees.some((fee) => matchesFeeTemplate(fee, doc)))
+                        .filter((doc) => draft.fees.some((fee) => matchesFeeTemplate(fee, doc, sameFamily)))
                         .map((doc) => doc.id)}
                       items={all('fee-templates')
                         .filter(
@@ -2692,9 +2687,9 @@ export function LocationSetupWizard({
                       libraryActions={libraryActions}
                       kind="rule"
                       add={addRule}
-                      selected={draft.rules.flatMap((rule) =>
-                        rule.sourceId ? [rule.sourceId] : [],
-                      )}
+                      selected={all('policy-templates')
+                        .filter((doc) => draft.rules.some((rule) => sameFamily(rule.sourceId, doc)))
+                        .map((doc) => doc.id)}
                       items={all('policy-templates').map((doc) => ({
                         id: doc.id,
                         name: doc.name,

@@ -255,11 +255,11 @@ function SharedLibrary({
     ],
     queryFn: async ({ signal }) => {
       if (resource !== 'asset-catalog' || !scope)
-        return api.list(resource, search, status, page + 1, 20, signal);
+        return api.list(resource, search, status, page + 1, 20, signal, true);
       const items: SharedDocument[] = [];
       let scanned = 0;
       for (let index = 1; ; index++) {
-        const result = await api.list(resource, search, status, index, 100, signal);
+        const result = await api.list(resource, search, status, index, 100, signal, true);
         scanned += result.items.length;
         items.push(
           ...result.items.filter(
@@ -462,6 +462,13 @@ function SharedLibrary({
                               {document.name}
                             </Typography>
                           </Button>
+                          {(document.edition > 1 || query.data.items.some(
+                            (other) => other.id !== document.id && other.familyId === document.familyId,
+                          )) && (
+                            <Typography component="div" variant="caption" color="text.secondary">
+                              Phiên bản {document.edition}
+                            </Typography>
+                          )}
                           {document.description && (
                             <Typography
                               component="div"
@@ -581,7 +588,7 @@ function SharedLibrary({
         <MenuItem onClick={() => runMenuAction((document) => setDetails(document.id))}>
           Xem chi tiết
         </MenuItem>
-        {selected?.status === 'Draft' && (
+        {selected && selected.status !== 'Archived' && (
           <MenuItem
             disabled={action.busy}
             onClick={() => runMenuAction((document) => setEditor({ document }))}
@@ -602,21 +609,6 @@ function SharedLibrary({
             }
           >
             Công bố
-          </MenuItem>
-        )}
-        {selected?.status === 'Published' && (
-          <MenuItem
-            disabled={action.busy}
-            onClick={() =>
-              runMenuAction((document) =>
-                action.run(
-                  () => api.edition(resource, document.id, document.version),
-                  'Đã tạo bản nháp phiên bản mới.',
-                ),
-              )
-            }
-          >
-            Phiên bản mới
           </MenuItem>
         )}
         {selected && selected.status !== 'Archived' && (
@@ -643,8 +635,8 @@ function SharedLibrary({
             onClick={() =>
               runMenuAction((document) =>
                 action.run(
-                  () => api.restore(resource, document.id, document.version),
-                  'Đã khôi phục mẫu thành bản nháp để tiếp tục chỉnh sửa.',
+                  () => api.restore(resource, document.id, document.version, true),
+                  'Đã khôi phục mẫu để sử dụng.',
                 ),
               )
             }
@@ -665,9 +657,9 @@ function SharedLibrary({
           close={() => setEditor(null)}
           save={(input) =>
             action.run(async () => {
-              await api.save(resource, editor.document?.id ?? null, input);
+              await api.save(resource, editor.document?.id ?? null, { ...input, publishImmediately: true });
               setEditor(null);
-            }, 'Đã lưu bản nháp trên máy chủ.')
+            }, 'Đã lưu mẫu. Có thể sử dụng ngay.')
           }
         />
       )}
@@ -682,12 +674,12 @@ function SharedLibrary({
         onConfirm={() => {
           if (archive)
             action.run(async () => {
-              await api.archive(resource, archive.id, archive.version);
+              await api.archive(resource, archive.id, archive.version, true);
               setArchive(null);
             }, 'Đã lưu trữ mẫu.');
         }}
       >
-        Phiên bản đã áp dụng tại cơ sở và lịch sử vẫn được giữ lại.
+        Tất cả phiên bản của mẫu sẽ ngừng được chọn để áp dụng mới. Cấu hình đã áp dụng tại cơ sở và lịch sử vẫn được giữ lại.
       </ConfirmDialog>
       <Dialog
         open={!!duplicate}
@@ -701,7 +693,7 @@ function SharedLibrary({
             event.preventDefault();
             if (duplicate)
               action.run(async () => {
-                await api.duplicate(resource, duplicate.id, duplicateName, duplicate.version);
+                await api.duplicate(resource, duplicate.id, duplicateName, duplicate.version, true);
                 setDuplicate(null);
               }, 'Đã lưu bản sao trên máy chủ.');
           }}

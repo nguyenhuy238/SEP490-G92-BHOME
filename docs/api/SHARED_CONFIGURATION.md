@@ -5,18 +5,39 @@ Resources: `room-type-templates`, `asset-catalog`, `asset-templates`, `fee-templ
 `policy-templates`. The compatibility room-template route describes defaults only;
 it introduces no operational RoomType or hierarchy.
 
-GET collection accepts search, status, page (1+), pageSize (1–100) and returns
-items/total/page/pageSize. Every edition is returned; status filtering is explicit.
+GET collection accepts search, status, page (1+), pageSize (1–100), and optional
+`latestOnly=true` and returns items/total/page/pageSize. By default every edition is
+returned for compatibility. `latestOnly` selects one current edition per family
+before searching and paging. With `status=Published`, it selects the latest
+published edition; with `status=Archived`, it lists only fully archived families.
 GET `/{id}`, POST collection and PUT `/{id}` use shared document metadata and
-`{name, description, data, expectedVersion}`. Data is strictly validated per resource.
-Names are limited to 150 characters for compatibility with local configuration.
+`{name, description, data, expectedVersion, publishImmediately?}`. Data is strictly
+validated per resource. Names are limited to 150 characters for compatibility with
+local configuration, normalized for whitespace, Unicode and case-insensitive
+uniqueness across families, including archived names.
 Money and fractional quantities preserve exact decimal strings. Counts are integers.
 
-POST `/{id}/publish`, `/{id}/archive` and `/{id}/versions` require expectedVersion.
-Versions creates a Draft edition in the same family; only one Draft per family is
-allowed. POST `/{id}/duplicate` additionally requires a distinct name and creates a
-new family. GET versions returns family editions; GET history returns revisions of
-that document. Published payloads are immutable. Archive retains data and references.
+Owner Web sends `publishImmediately=true`: creation or completion of a legacy
+Draft persists a Published document atomically, so it is immediately selectable.
+Updating an unused Published document keeps its ID and edition and advances its
+concurrency version; updating an already applied document creates a new Published
+edition with a new ID in the same family. An unchanged valid Published payload
+returns the current document without a new revision or edition. Application and
+setup provenance, including nested catalog references in published/archived
+templates, prevent changes to a used edition. A stale edit returns 409. Existing
+configuration copies are independent and historical source editions remain intact.
+
+POST `/{id}/publish`, `/{id}/archive`, `/{id}/restore` and `/{id}/versions` require
+expectedVersion. The legacy lifecycle remains supported when the optional flags
+are omitted: versions creates a Draft edition in the same family; only one Draft
+per family is allowed. POST `/{id}/duplicate` additionally requires a distinct name
+and creates a new family; `publishImmediately=true` creates it as Published.
+GET versions returns family editions; GET history returns revisions of that
+document. `wholeFamily=true` on archive archives every active edition atomically;
+on restore it reactivates the latest archived edition after validation of its name
+and nested dependencies. Older editions remain archived. Archive retains data and
+references. A stale or unpublished nested catalog reference prevents publication
+or restoration; existing copied configuration is unaffected.
 
 Room defaults: capacity 1–32767, positive area, distinct amenities, optional referenceRent.
 Catalog: category, unit, non-negative referencePrice. These are reference data.
@@ -52,7 +73,8 @@ creates a Draft local policy; existing signing and activation flows remain autho
 Fee application creates a native policy and requires a current/future source effective
 date and no overlapping target charge. No implicit replacement is performed.
 
-GET `/{id}/applications?page=1&pageSize=20` returns committed family usage, exact
+GET `/{id}/applications?page=1&pageSize=20` returns committed family usage from
+direct application and Location setup provenance, exact
 sourceId/sourceVersion/sourceEdition, actual target, actor/time/status and created
 references. Total and locationsUsing are database-derived across all editions.
 LocationsUsing counts historical distinct target Locations, including subsequently
@@ -85,10 +107,14 @@ No Tenant, contract, financial transaction, physical Asset, meter or evidence is
 
 ## Owner Web integration
 
-API mode uses typed clients and server pagination for every library. Draft forms,
-published editions, duplication, archive confirmation, family history, application
-preview and persisted usage are connected. Asset packages select real published
-catalog editions. Decimal inputs remain strings. Failed writes retain the form;
+API mode uses typed clients and server pagination for every library. The library
+uses grouped latest editions, atomic save/duplicate, whole-family archive/restore,
+family history, application preview and persisted usage. The setup wizard offers
+only the latest Published edition of each family for new selections, but keeps
+previously selected data and exact provenance in its draft; refreshing the library
+does not replace selected snapshots. Legacy drafts remain available to complete.
+Asset packages select real published catalog editions. Decimal inputs remain
+strings. Failed writes retain the form;
 an ambiguous apply/copy retry retains the same payload and UUID key.
 
 Copy is available from Location management and the native Location workspace.
@@ -113,6 +139,7 @@ Example room-default request (illustrative, not executed evidence):
   "name": "Two-person room defaults",
   "description": "Reference configuration for explicit setup",
   "expectedVersion": 0,
+  "publishImmediately": true,
   "data": {
     "capacity": 2,
     "area": "25.0001",

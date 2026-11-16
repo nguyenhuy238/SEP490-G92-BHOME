@@ -221,26 +221,22 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('creates, publishes and selects all four kinds of shared templates without leaving the setup draft', async () => {
+it('atomically creates usable templates, retries a failed save and keeps the setup draft', async () => {
   const documents: SharedDocument[] = [];
-  let failAssetPublish = true;
+  let failAssetSave = true;
   const prefix = '/api/v1/shared-configuration/';
   state.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (!path.startsWith(prefix)) return mockReads(path);
     const [resource, id, action] = path.slice(prefix.length).split('?')[0].split('/');
     const current = documents.find((doc) => doc.id === id);
-    if (action === 'publish' && current) {
-      if (resource === 'asset-catalog' && failAssetPublish) {
-        failAssetPublish = false;
-        throw new Error('Synthetic publish failure');
-      }
-      expect(JSON.parse(String(init?.body)).expectedVersion).toBe(current.version);
-      current.status = 'Published';
-      current.version += 1;
-      return { ...current };
-    }
+    if (action === 'publish') throw new Error('Unexpected separate publish request');
     if (init?.method === 'POST' || init?.method === 'PUT') {
       const input = JSON.parse(String(init.body)) as SharedWrite;
+      expect(input.publishImmediately).toBe(true);
+      if (resource === 'asset-catalog' && failAssetSave) {
+        failAssetSave = false;
+        throw new Error('Synthetic save failure');
+      }
       const doc: SharedDocument = {
         ...template,
         ...input,
@@ -248,7 +244,7 @@ it('creates, publishes and selects all four kinds of shared templates without le
         id: current?.id ?? resource + '-created',
         familyId: current?.familyId ?? resource + '-family',
         version: (current?.version ?? 0) + 1,
-        status: 'Draft',
+        status: 'Published',
       };
       expect(input.expectedVersion).toBe(current?.version ?? 0);
       if (current) documents.splice(documents.indexOf(current), 1, doc);
@@ -268,7 +264,7 @@ it('creates, publishes and selects all four kinds of shared templates without le
     return within(await screen.findByRole('dialog', { name: title }));
   };
   const publish = (dialog: ReturnType<typeof within>) =>
-    fireEvent.click(dialog.getByRole('button', { name: 'Lưu và công bố' }));
+    fireEvent.click(dialog.getByRole('button', { name: 'Lưu mẫu' }));
   const room = await open('Thêm mẫu loại phòng', 'Tạo mẫu loại phòng');
   expect(screen.queryByRole('button', { name: 'Làm mới mẫu' })).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Mở thư viện mẫu' })).not.toBeInTheDocument();
@@ -285,9 +281,9 @@ it('creates, publishes and selects all four kinds of shared templates without le
   fill(/Tên mẫu/, 'New desk', asset);
   fill(/Giá tham khảo/, '300000', asset);
   publish(asset);
-  expect(await screen.findByText(/Bản nháp đã được lưu/)).toBeInTheDocument();
-  expect(documents.filter((doc) => doc.resource === 'asset-catalog')).toHaveLength(1);
-  publish(within(screen.getByRole('dialog', { name: 'Sửa loại tài sản' })));
+  expect(await screen.findByText(/Chưa hoàn thành yêu cầu/)).toBeInTheDocument();
+  expect(documents.filter((doc) => doc.resource === 'asset-catalog')).toHaveLength(0);
+  publish(within(screen.getByRole('dialog', { name: 'Tạo loại tài sản' })));
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm New desk' }));
   expect(
     within(screen.getByRole('list', { name: 'Tài sản đã chọn' })).getByText('New desk'),
@@ -314,7 +310,7 @@ it('creates, publishes and selects all four kinds of shared templates without le
     state.request.mock.calls.filter(
       ([path, init]) => path === prefix + 'asset-catalog' && init?.method === 'POST',
     ),
-  ).toHaveLength(1);
+  ).toHaveLength(2);
   const draft = JSON.parse(sessionStorage.getItem(draftKey)!);
   expect(draft.location.name).toBe('Synthetic native setup');
   expect(draft.roomTypes[0].assets[0].name).toBe('New desk');
@@ -327,6 +323,7 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   const catalog = {
     ...template,
     id: 'new-catalog',
+    familyId: 'new-catalog-family',
     resource: 'asset-catalog' as const,
     name: 'Bàn học',
     data: { category: 'Nội thất', unit: 'cái', referencePrice: 500000 },
@@ -337,12 +334,14 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
     {
       ...catalog,
       id: 'second-catalog',
+      familyId: 'second-catalog-family',
       name: 'Giường đôi',
       data: { ...catalog.data, scope: 'Room' },
     },
     {
       ...catalog,
       id: 'common-catalog',
+      familyId: 'common-catalog-family',
       name: 'Camera hành lang',
       data: { ...catalog.data, scope: 'Location', unit: 'Bộ' },
     },
@@ -409,9 +408,13 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   const legacyDraft = JSON.parse(sessionStorage.getItem(draftKey)!);
   legacyDraft.roomTypes[0].assets[0].quantity = 4;
   sessionStorage.setItem(draftKey, JSON.stringify(legacyDraft));
+  // A new edition must be the only selectable library item, without replacing the draft snapshot.
+  const nextCatalog = { ...catalog, id: 'next-catalog', edition: catalog.edition + 1, name: 'Bàn học mới' };
+  docs.push(nextCatalog);
   mount(wizard());
   await screen.findByText('Bàn học', { selector: '[role="listitem"] .MuiTypography-root' });
   expect(JSON.parse(sessionStorage.getItem(draftKey)!).roomTypes[0].assets[0].quantity).toBe(4);
+  expect(screen.queryByRole('button', { name: 'Thêm Bàn học mới' })).not.toBeInTheDocument();
   expect(screen.queryByRole('combobox', { name: 'Gói tài sản' })).not.toBeInTheDocument();
   expect(screen.queryByText(/\d+ mẫu đã công bố/)).not.toBeInTheDocument();
   expect(
@@ -472,8 +475,11 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   expect(writes()).toHaveLength(1);
   expect(payload(writes()[0]).sourceReferences).toEqual(
     expect.arrayContaining(
-      docs.map((doc) => ({ id: doc.id, kind: doc.resource, version: doc.version })),
+      docs.filter((doc) => doc.id !== nextCatalog.id).map((doc) => ({ id: doc.id, kind: doc.resource, version: doc.version })),
     ),
+  );
+  expect(payload(writes()[0]).sourceReferences).not.toContainEqual(
+    expect.objectContaining({ id: nextCatalog.id }),
   );
   expect(payload(writes()[0]).fees[0]).toMatchObject({ method: 2, rate: '30000' });
   expect(payload(writes()[0]).roomTypes[0].assets).toEqual([

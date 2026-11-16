@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using BHome.Application.Billing;
 using BHome.Domain.Billing;
 using BHome.Infrastructure.Persistence;
@@ -43,6 +44,11 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(PartialMonthRule.OccupiedCalendarDays, schedule.PartialMonth);
         Assert.Equal(BillingRentSource.RepresentativeContract, schedule.RentSource);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync("/api/v1/billing-automation", initial)).StatusCode);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IInvoiceRepository>();
+        Assert.Null(await repository.ScheduleForPeriodAsync(w.Location, initial.EffectiveFrom.AddMonths(-1), default));
+        Assert.Equal(PartialMonthRule.OccupiedCalendarDays,
+            (await repository.ScheduleForPeriodAsync(w.Location, initial.EffectiveFrom, default))!.PartialMonth);
     }
     [Fact]
     public async Task EditingExistingAutomationUpdatesFinancialRulesAtomicallyWithoutChangingOldSnapshots()
@@ -182,6 +188,101 @@ public sealed partial class PaymentLedgerTests
         var historical = (await owner.GetFromJsonAsync<BillingAutomationPlan>($"/api/v1/billing-automation/{w.Location}?period={from:yyyy-MM-dd}"))!;
         Assert.Equal(6, BillingAutomationService.Calendar(historical).DraftDay);
         Assert.Equal(9, BillingAutomationService.Calendar((await subsequent.Content.ReadFromJsonAsync<BillingAutomationPlan>())!).DraftDay);
+    }
+
+    [Fact]
+    public async Task FutureFinancialPlansPreserveUngeneratedPeriodsAndSamePeriodSavesAreNoOps()
+    {
+        var w = await Setup(); await AddAutomationRates(w);
+        using var owner = await Client(w.Owner);
+        var period = CurrentPeriod();
+        var from = period.AddMonths(2);
+        var original = Calendar(w);
+        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", original)).EnsureSuccessStatusCode();
+        var input = Plan(w) with
+        {
+            EffectiveFrom = from, Enabled = false, DraftDay = 3, FinalDay = 15, DueDay = 25,
+            InitialSchedule = new(BillingRateDate.PeriodEnd, PartialMonthRule.OccupiedCalendarDays, VndRounding.ToEven)
+        };
+        var response = await owner.PutAsJsonAsync("/api/v1/billing-automation", input);
+        response.EnsureSuccessStatusCode();
+        var first = (await response.Content.ReadFromJsonAsync<BillingAutomationPlan>())!;
+        Assert.Equal(2, first.BillingScheduleVersion);
+        var legacy = (await owner.GetFromJsonAsync<BillingSchedule>($"/api/v1/billing-schedules/{w.Location}"))!;
+        Assert.Equal(2, legacy.Version);
+        Assert.Equal(PartialMonthRule.OccupiedCalendarDays, legacy.PartialMonth);
+        Assert.Equal(original.DueDay, legacy.DueDay);
+        // PostgreSQL timestamps have microsecond precision; compare the stored
+        // plan with the no-op response rather than the pre-persistence clock.
+        var storedFirst = (await owner.GetFromJsonAsync<BillingAutomationPlan>(
+            $"/api/v1/billing-automation/{w.Location}?period={from:yyyy-MM-dd}"))!;
+        var retry = input with { ExpectedVersion = first.Version, ExpectedBillingScheduleVersion = legacy.Version };
+        var noOpResponse = await owner.PutAsJsonAsync("/api/v1/billing-automation", retry);
+        noOpResponse.EnsureSuccessStatusCode();
+        var noOp = (await noOpResponse.Content.ReadFromJsonAsync<BillingAutomationPlan>())!;
+        Assert.Equal(first.Id, noOp.Id);
+        Assert.Equal(first.Version, noOp.Version);
+        Assert.Equal(storedFirst.RecordedAt, noOp.RecordedAt);
+        Assert.Equal(storedFirst.BillingSnapshot, noOp.BillingSnapshot);
+        Assert.Single((await owner.GetFromJsonAsync<BillingAutomationPlan[]>($"/api/v1/billing-automation/{w.Location}/history"))!);
+        // An unchanged stale request must still fail optimistic concurrency.
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync("/api/v1/billing-automation", input)).StatusCode);
+        // Two competing changed requests keep exactly one winner.
+        var races = await Task.WhenAll(new[] { 26, 27 }.Select(day => owner.PutAsJsonAsync("/api/v1/billing-automation", retry with { DueDay = day })));
+        var winnerResponse = Assert.Single(races, r => r.IsSuccessStatusCode);
+        Assert.Single(races, r => r.StatusCode == HttpStatusCode.Conflict);
+        var winner = (await winnerResponse.Content.ReadFromJsonAsync<BillingAutomationPlan>())!;
+        Assert.Equal(2, winner.Version);
+        Assert.Equal(2, winner.BillingScheduleVersion);
+        Assert.Equal(2, (await owner.GetFromJsonAsync<BillingAutomationPlan[]>($"/api/v1/billing-automation/{w.Location}/history"))!.Length);
+
+        // No earlier effective plan exists. Generate the old period only AFTER
+        // the future configuration was changed, and inspect its persisted snapshot.
+        var invoiceResponse = await owner.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, period, w.Contract));
+        invoiceResponse.EnsureSuccessStatusCode();
+        var draft = (await invoiceResponse.Content.ReadFromJsonAsync<InvoiceView>())!;
+        Assert.Equal(InvoiceMath.CalendarDate(period, original.DueDay, original.DueMonthOffset), draft.DueDate);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var invoice = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == draft.Id);
+            var snapshot = JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!;
+            Assert.Equal(BillingRateDate.PeriodStart, snapshot.RateDate);
+            Assert.Equal(PartialMonthRule.FullMonth, snapshot.PartialMonth);
+            Assert.Equal(VndRounding.AwayFromZero, snapshot.Rounding);
+            Assert.Equal(1, snapshot.Version);
+            var repository = scope.ServiceProvider.GetRequiredService<IInvoiceRepository>();
+            var intermediate = await repository.ScheduleForPeriodAsync(w.Location, period.AddMonths(1), default);
+            Assert.Equal(PartialMonthRule.FullMonth, intermediate!.PartialMonth);
+            var effective = await repository.ScheduleForPeriodAsync(w.Location, from, default);
+            Assert.Equal(PartialMonthRule.OccupiedCalendarDays, effective!.PartialMonth);
+            Assert.Equal(VndRounding.ToEven, effective.Rounding);
+            Assert.Equal(BillingAutomationService.Calendar(winner).DueDay, effective.DueDay);
+        }
+        // An out-of-order plan, before the future plan, must inherit the old
+        // fallback, not the financial rules of the already-written future plan.
+        var earlier = Plan(w) with { EffectiveFrom = period.AddMonths(1), Enabled = false, ExpectedVersion = 2, ExpectedBillingScheduleVersion = 2 };
+        var earlierResponse = await owner.PutAsJsonAsync("/api/v1/billing-automation", earlier);
+        earlierResponse.EnsureSuccessStatusCode();
+        var earlierPlan = (await earlierResponse.Content.ReadFromJsonAsync<BillingAutomationPlan>())!;
+        Assert.Equal(PartialMonthRule.FullMonth, BillingAutomationService.Calendar(earlierPlan).PartialMonth);
+        Assert.Equal(VndRounding.AwayFromZero, BillingAutomationService.Calendar(earlierPlan).Rounding);
+        Assert.Equal(1, BillingAutomationService.Calendar(earlierPlan).Version);
+        var future = (await owner.GetFromJsonAsync<BillingAutomationPlan>($"/api/v1/billing-automation/{w.Location}?period={from:yyyy-MM-dd}"))!;
+        Assert.Equal(winner.Id, future.Id);
+        // Legacy PUT continues to be an explicit fallback update; effective
+        // automation plans and existing invoice snapshots are still immutable.
+        (await owner.PutAsJsonAsync("/api/v1/billing-schedules", original with { ExpectedVersion = 2, DueDay = 30 })).EnsureSuccessStatusCode();
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var repository = scope.ServiceProvider.GetRequiredService<IInvoiceRepository>();
+            Assert.Equal(30, (await repository.ScheduleForPeriodAsync(w.Location, period, default))!.DueDay);
+            Assert.Equal(BillingAutomationService.Calendar(winner).DueDay,
+                (await repository.ScheduleForPeriodAsync(w.Location, from, default))!.DueDay);
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var persisted = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == draft.Id);
+            Assert.Equal(original.DueDay, JsonSerializer.Deserialize<BillingSchedule>(persisted.ScheduleSnapshot)!.DueDay);
+        }
     }
     [Theory]
     [InlineData(0, 20, 31)]

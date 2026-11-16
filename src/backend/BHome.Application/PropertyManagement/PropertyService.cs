@@ -56,7 +56,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         if (expected < 1) throw Error(400, "version_required");
         if (actual != expected) throw Error(409, "stale_version");
     }
-    private void Audit(Guid? location, AuditableEntity entity, string action, string reason, string? before)
+    private void Audit(Guid? location, AuditableEntity entity, string action, string reason, string? before, object? after = null)
         => repository.Audit(new PropertyChange
         {
             ActorId = Actor,
@@ -66,7 +66,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             Action = action,
             Reason = Text(reason),
             Before = before,
-            After = Snapshot(entity),
+            After = after is null ? Snapshot(entity) : JsonSerializer.Serialize(after),
             OccurredAt = clock.GetUtcNow()
         });
     // Explicit DTOs avoid navigation cycles and accidental capture of unrelated personal data.
@@ -128,14 +128,25 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         metadata is null ? asset : asset with { TrackingMode = metadata.TrackingMode, Quantity = metadata.Quantity, Unit = metadata.Unit };
     private async Task<AssetDto> AssetWithMetadataAsync(Asset asset, CancellationToken t) =>
         WithMetadata(Map(asset), setup is null ? null : (await setup.AssetMetadataAsync([asset.Id], t)).GetValueOrDefault(asset.Id));
-    public Task<PagedResult<PolicyDto>> PoliciesAsync(PropertyQuery q, CancellationToken t) =>
-        List<BillingPolicy, PolicyDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
+    public async Task<PagedResult<PolicyDto>> PoliciesAsync(PropertyQuery q, CancellationToken t)
+    {
+        var page = await List<BillingPolicy, PolicyDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
             (!q.RoomId.HasValue || x.RoomId == q.RoomId) &&
             (!q.ChargeCategory.HasValue || x.Category == q.ChargeCategory) &&
             (!q.EffectiveOn.HasValue || x.EffectiveFrom <= q.EffectiveOn && (x.EffectiveTo == null || x.EffectiveTo >= q.EffectiveOn)) &&
             (q.Search == null || x.ChargeCode.Contains(q.Search) || x.Name.Contains(q.Search)),
             x => new(x.Id, x.LocationId, x.RoomId, x.Category, x.ChargeCode, x.Name, x.Method,
-                x.Rate, x.EffectiveFrom, x.EffectiveTo, x.Version, x.FirstUsedAt, x.RoomTypeId), q, t);
+                x.Rate, x.EffectiveFrom, x.EffectiveTo, x.Version, x.FirstUsedAt, x.RoomTypeId, null), q, t);
+        if (page.Items.Count == 0) return page;
+        return page with { Items = await DescribePoliciesAsync(page.Items, t) };
+    }
+
+    private async Task<IReadOnlyList<PolicyDto>> DescribePoliciesAsync(IReadOnlyList<PolicyDto> policies, CancellationToken t)
+    {
+        var bindings = await repository.BindingPriceContractsForLocationsAsync(policies.Select(p => p.LocationId).Distinct().ToArray(), t);
+        var lineage = await repository.PolicyLineagesAsync(policies.Select(p => p.Id).ToArray(), t);
+        return RoomPricingLock.Describe(policies, bindings, lineage, Today);
+    }
 
     public async Task<LocationDto> GetLocationAsync(Guid id, CancellationToken t) => Map(await LocationAsync(id, false, t));
     public async Task<RoomDto> GetRoomAsync(Guid id, CancellationToken t)
@@ -160,7 +171,8 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
     {
         Require(Permissions.Property.View);
         var x = await repository.FindAsync<BillingPolicy>(id, t) ?? throw Error(404, "resource_not_found");
-        await LocationAsync(x.LocationId, false, t); return Map(x);
+        await LocationAsync(x.LocationId, false, t);
+        return (await DescribePoliciesAsync([Map(x)], t))[0];
     }
 
     public async Task<LocationDto> SaveLocationAsync(Guid? id, LocationWrite input, CancellationToken t)
@@ -367,7 +379,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         }, t);
     }
 
-    private async Task ValidatePolicyAsync(PolicyWrite input, CancellationToken t, bool successor = false)
+    private async Task ValidatePolicyAsync(PolicyWrite input, CancellationToken t, bool checkRoomLock = true)
     {
         Validate(input);
         if (!Enum.IsDefined(input.Category) || !Enum.IsDefined(input.Method) || Text(input.Name).Length == 0 ||
@@ -386,9 +398,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         if (input.RoomTypeId is { } roomType && !await repository.AnyAsync<RoomType>(x =>
                 x.Id == roomType && x.LocationId == location.Id && x.IsActive, t))
             throw Error(400, "policy_scope_invalid");
-        if (successor && input.Category == ChargeCategory.ServiceFee)
-            await RoomPricingLock.EnsureServiceFeeSuccessorAsync(repository, input.LocationId, input.RoomId, t);
-        else await RoomPricingLock.EnsureUnlockedAsync(repository, input.RoomId, t);
+        if (checkRoomLock) await RoomPricingLock.EnsureUnlockedAsync(repository, input.RoomId, t);
     }
     private async Task EnsureNonOverlappingPolicyAsync(PolicyWrite input, Guid? exceptId, CancellationToken t)
     {
@@ -420,7 +430,8 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             await ValidatePolicyAsync(input, t);
             await EnsureNonOverlappingPolicyAsync(input, null, t);
             var x = NewPolicy(input); repository.Add(x);
-            Audit(x.LocationId, x, "Created", input.Reason, null); return Map(x);
+            var result = Map(x) with { FamilyId = x.Id, Edition = 1, CanEditInPlace = x.EffectiveFrom > Today };
+            Audit(x.LocationId, x, "Created", input.Reason, null, result); return result;
         }, t);
     }
     public async Task<PolicyDto> UpdateFuturePolicyAsync(Guid id, PolicyUpdate update, CancellationToken t)
@@ -437,13 +448,18 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             if (x.LocationId != input.LocationId || x.RoomTypeId != input.RoomTypeId || x.RoomId != input.RoomId ||
                 x.Category != input.Category || x.ChargeCode != PropertyRules.Normalize(input.ChargeCode))
                 throw Error(400, "policy_scope_immutable");
-            await ValidatePolicyAsync(input, t);
+            await ValidatePolicyAsync(input, t, checkRoomLock: false);
             if (input.EffectiveFrom <= Today) throw Error(400, "future_policy_date_required");
+            if (x.Name == Text(input.Name) && x.Rate == input.Rate && x.Method == input.Method &&
+                x.EffectiveFrom == input.EffectiveFrom && x.EffectiveTo == input.EffectiveTo)
+                return (await DescribePoliciesAsync([Map(x)], t))[0];
+            await RoomPricingLock.EnsurePolicyNotBoundAsync(repository, x, t);
             await EnsureNonOverlappingPolicyAsync(input, x.Id, t);
             var before = Snapshot(x);
             x.Name = Text(input.Name); x.Rate = input.Rate; x.Method = input.Method;
             x.EffectiveFrom = input.EffectiveFrom; x.EffectiveTo = input.EffectiveTo; x.Version++;
-            Audit(x.LocationId, x, "Updated", input.Reason, before); return Map(x);
+            Audit(x.LocationId, x, "Updated", input.Reason, before);
+            return (await DescribePoliciesAsync([Map(x)], t))[0];
         }, t);
     }
 
@@ -454,7 +470,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
         var input = replacement.Policy;
         return await repository.WithLocationLockAsync(input.LocationId, async () =>
         {
-            await ValidatePolicyAsync(input, t, successor: true);
+            await ValidatePolicyAsync(input, t, checkRoomLock: false);
             var old = await repository.FindAsync<BillingPolicy>(id, t) ?? throw Error(404, "resource_not_found");
             CheckVersion(old.Version, replacement.ExpectedVersion);
             if (old.LocationId != input.LocationId || old.RoomTypeId != input.RoomTypeId || old.RoomId != input.RoomId ||
@@ -462,11 +478,19 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                 throw Error(400, "replacement_scope_mismatch");
             if (input.EffectiveFrom <= Today || input.EffectiveFrom <= old.EffectiveFrom || old.EffectiveTo < input.EffectiveFrom)
                 throw Error(409, "replacement_date_invalid");
+            if (old.Name == Text(input.Name) && old.Rate == input.Rate && old.Method == input.Method &&
+                old.EffectiveTo == input.EffectiveTo) return (await DescribePoliciesAsync([Map(old)], t))[0];
+            await RoomPricingLock.EnsureSuccessorAsync(repository, old, t);
             await EnsureNonOverlappingPolicyAsync(input, old.Id, t);
             var before = Snapshot(old); old.EffectiveTo = input.EffectiveFrom.AddDays(-1); old.Version++;
             Audit(old.LocationId, old, "Superseded", input.Reason, before);
-            var next = NewPolicy(input); repository.Add(next); Audit(next.LocationId, next, "Created", input.Reason, null);
-            return Map(next);
+            var next = NewPolicy(input); repository.Add(next);
+            var lineage = await repository.PolicyLineagesAsync([old.Id], t);
+            var previous = lineage.TryGetValue(old.Id, out var known) ? known : new PolicyLineage(old.Id, 1);
+            var result = Map(next) with { FamilyId = previous.FamilyId, Edition = checked(previous.Edition + 1),
+                PreviousPolicyId = old.Id, CanEditInPlace = true };
+            Audit(next.LocationId, next, "Created", input.Reason, null, result);
+            return result;
         }, t);
     }
     public async Task<PolicyDto> EndPolicyAsync(Guid id, PolicyEnd input, CancellationToken t)
@@ -479,11 +503,12 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             var x = await repository.FindAsync<BillingPolicy>(id, t) ?? throw Error(404, "resource_not_found");
             CheckVersion(x.Version, input.Version);
             await RoomPricingLock.EnsureUnlockedAsync(repository, x.RoomId, t);
+            await RoomPricingLock.EnsurePolicyNotBoundAsync(repository, x, t);
             if (input.EffectiveTo < Today || input.EffectiveTo < x.EffectiveFrom ||
                 x.EffectiveTo.HasValue && input.EffectiveTo > x.EffectiveTo || Text(input.Reason).Length == 0)
                 throw Error(400, "policy_end_invalid");
             var before = Snapshot(x); x.EffectiveTo = input.EffectiveTo; x.Version++;
-            Audit(x.LocationId, x, "Ended", input.Reason, before); return Map(x);
+            Audit(x.LocationId, x, "Ended", input.Reason, before); return (await DescribePoliciesAsync([Map(x)], t))[0];
         }, t);
     }
     public async Task<ResolvedPrices> ResolvePricesAsync(Guid roomId, DateOnly date, CancellationToken t)

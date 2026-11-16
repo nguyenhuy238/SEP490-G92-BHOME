@@ -42,8 +42,8 @@ export function UtilityWorkspace({ locationId }: { locationId: string }) {
   return (
     <Stack spacing={2}>
       <Typography variant="body2" color="text.secondary">
-        Thiết lập giá đã xác minh, gán cho phòng, ghi chỉ số và đối soát hóa đơn nguồn theo kỳ. Máy
-        chủ tính giá chính thức từ dữ liệu đã xác nhận.
+        Thiết lập biểu giá nâng cao, định mức và đối soát hóa đơn nguồn theo kỳ. Hóa đơn và quyết toán
+        hiện vẫn dùng đơn giá điện nước đã chốt trong hợp đồng; cấu hình nâng cao chưa thay thế đơn giá đó.
       </Typography>
       <Tabs
         aria-label="Nghiệp vụ điện nước"
@@ -75,6 +75,21 @@ export function UtilityWorkspace({ locationId }: { locationId: string }) {
       )}
     </Stack>
   );
+}
+
+function revisionNumber<T extends { replacesId?: string | null }>(
+  row: SetupDocument<T>,
+  rows: SetupDocument<T>[],
+) {
+  let current = row;
+  const seen = new Set([row.id]);
+  while (current.data.replacesId) {
+    const prior = rows.find((item) => item.id === current.data.replacesId);
+    if (!prior || seen.has(prior.id)) break;
+    seen.add(prior.id);
+    current = prior;
+  }
+  return seen.size;
 }
 
 function TariffsPanel({ locationId }: { locationId: string }) {
@@ -141,7 +156,8 @@ function TariffsPanel({ locationId }: { locationId: string }) {
                   />
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
-                  {tariff.data.utilityType === 0 ? 'Điện' : 'Nước'} · Phiên bản {tariff.version} ·{' '}
+                  {tariff.data.utilityType === 0 ? 'Điện' : 'Nước'} · Phiên bản{' '}
+                  {revisionNumber(tariff, tariffs.data)} ·{' '}
                   {tariff.data.effectiveFrom.split('-').reverse().join('/')} →{' '}
                   {tariff.data.effectiveTo?.split('-').reverse().join('/') ?? 'Không thời hạn'}
                 </Typography>
@@ -167,7 +183,7 @@ function TariffsPanel({ locationId }: { locationId: string }) {
                       setEditing(true);
                     }}
                   >
-                    Tạo biểu giá thay thế
+                    Chỉnh sửa biểu giá
                   </Button>
                 )}
               </Stack>
@@ -177,7 +193,7 @@ function TariffsPanel({ locationId }: { locationId: string }) {
       )}
       <Dialog open={editing} fullWidth maxWidth="md">
         <DialogTitle>
-          {source ? 'Thay thế biểu giá điện nước' : 'Thêm biểu giá điện nước'}
+          {source ? 'Chỉnh sửa biểu giá điện nước' : 'Thêm biểu giá điện nước'}
         </DialogTitle>
         <DialogContent>
           {editing && (
@@ -211,9 +227,9 @@ function TariffEditor({
     supplier: source?.data.supplier ?? '',
     classification: source?.data.classification ?? '',
     sourceReference: source?.data.sourceReference ?? '',
-    effectiveFrom: '',
-    effectiveTo: '',
-    verified: 'false',
+    effectiveFrom: source?.data.effectiveFrom ?? '',
+    effectiveTo: source?.data.effectiveTo ?? '',
+    verified: String(source?.data.verified ?? false),
   });
   const [tiers, setTiers] = useState<{ through: string; rate: string }[]>(
     source?.data.tiers.map((tier) => ({
@@ -252,9 +268,13 @@ function TariffEditor({
           }, 'Máy chủ đã lưu biểu giá; lịch sử nguồn được giữ nguyên.');
         }}
       >
-        <Typography variant="h6">
-          {source ? 'Biểu giá thay thế từ ngày mới' : 'Biểu giá mới'}
-        </Typography>
+        <Typography variant="h6">{source ? 'Chỉnh sửa biểu giá' : 'Biểu giá mới'}</Typography>
+        {source && (
+          <Typography variant="body2" color="text.secondary">
+            Khi thay đổi, chọn ngày hiệu lực sau phiên bản cũ. Hệ thống lưu phiên bản mới và giữ
+            nguyên lịch sử. Biểu giá của phòng đang có hợp đồng ràng buộc chưa thể được thay thế.
+          </Typography>
+        )}
         {[
           {
             name: 'utilityType',
@@ -362,6 +382,10 @@ function ProfilesPanel({ locationId }: { locationId: string }) {
   });
   return (
     <Stack spacing={2}>
+      <Alert severity="warning">
+        Chưa thể gán hoặc thay đổi cấu hình nâng cao cho phòng có hợp đồng ràng buộc. Hợp đồng mới
+        có thời hạn trùng với cấu hình nâng cao cũng chưa thể được lập.
+      </Alert>
       <Stack direction="row">
         <Button
           variant="contained"
@@ -390,7 +414,7 @@ function ProfilesPanel({ locationId }: { locationId: string }) {
             <Typography variant="body2" color="text.secondary">
               Hiệu lực {row.data.effectiveFrom.split('-').reverse().join('/')} →{' '}
               {row.data.effectiveTo?.split('-').reverse().join('/') ?? 'Không thời hạn'} · Phiên bản{' '}
-              {row.version}
+              {revisionNumber(row, profiles.data)}
             </Typography>
             <Typography variant="body2">
               Biểu giá:{' '}
@@ -408,7 +432,7 @@ function ProfilesPanel({ locationId }: { locationId: string }) {
                 disabled={rooms.isPending || !!rooms.error || tariffs.isPending || !!tariffs.error}
                 onClick={() => setProfile(row)}
               >
-                Thay cấu hình phòng từ ngày mới
+                Chỉnh sửa cấu hình phòng
               </Button>
             )}
           </Paper>
@@ -489,9 +513,9 @@ function ProfileEditor({
   const [values, setValues] = useState<UtilityValues>({
     roomId: source?.data.roomId ?? '',
     utilityType: String(source?.data.utilityType ?? 0),
-    tariffId: '',
-    effectiveFrom: '',
-    effectiveTo: '',
+    tariffId: source?.data.tariffId ?? '',
+    effectiveFrom: source?.data.effectiveFrom ?? '',
+    effectiveTo: source?.data.effectiveTo ?? '',
     requireQuota: String(source?.data.requireQuota ?? false),
     requireReconciliation: String(source?.data.requireReconciliation ?? false),
   });
@@ -522,6 +546,12 @@ function ProfileEditor({
         }}
       >
         <Typography variant="h6">Cấu hình biểu giá của phòng</Typography>
+        {source && (
+          <Typography variant="body2" color="text.secondary">
+            Khi thay đổi, chọn ngày hiệu lực mới. Cấu hình phòng đang ràng buộc hợp đồng không được
+            ghi đè.
+          </Typography>
+        )}
         {[
           { name: 'roomId', label: 'Phòng áp dụng biểu giá', options: rooms, disabled: !!source },
           {

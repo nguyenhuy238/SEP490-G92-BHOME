@@ -103,6 +103,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
     private static string Name(SetupDocument document) => document.Data.GetProperty("name").GetString() ?? "";
     private static Guid? Template(SetupDocument document) => document.Data.TryGetProperty("assetTemplateId", out var id) && id.ValueKind == JsonValueKind.String && id.TryGetGuid(out var value) ? value : null;
     private static SharedRoomDefaults Defaults(SetupDocument document) => SharedDataValidator.Read<SharedRoomDefaults>(document.Data.GetProperty("defaults"));
+    private static int DefaultsEdition(SetupDocument document) => document.Data.TryGetProperty("edition", out var edition) && edition.TryGetInt32(out var number) && number > 0 ? number : 1;
     private static bool Same(string a, string b) => string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
     private async Task<SharedRoomDefaults> ValidateDefaults(SharedRoomDefaults input, CancellationToken t)
     {
@@ -198,6 +199,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
         {
             _ = await properties.GetLocationAsync(location, t);
             var before = id.HasValue ? await ScopedDocument(location, id.Value, "RoomDefaults", t) : null;
+            if ((before?.Version ?? 0) != input.ExpectedVersion) throw new PropertyException(409, "stale_room_defaults");
             if (input.Status == "Archived")
             {
                 if (before is null) throw new PropertyException(400, "invalid_room_defaults");
@@ -219,10 +221,15 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 if (SharedDataValidator.Read<AssetTemplateWrite>(assetTemplate.Data).ScopeRoomId is not null)
                     throw new PropertyException(400, "template_scope_invalid");
             }
+            if (before is not null && before.Status == input.Status && Name(before) == name &&
+                (before.Data.TryGetProperty("description", out var priorDescription) ? priorDescription.GetString() ?? "" : "") == description &&
+                Template(before) == input.AssetTemplateId && JsonNode.DeepEquals(JsonSerializer.SerializeToNode(Defaults(before), Json), JsonSerializer.SerializeToNode(defaults, Json)))
+                return before;
             // Preserve lineage when editing a copied/applied document; only editable local fields are replaced.
             var data = before is null ? new JsonObject() : JsonNode.Parse(before.Data.GetRawText())!.AsObject();
             data["name"] = name; data["description"] = description; data["defaults"] = JsonSerializer.SerializeToNode(defaults, Json);
             data["assetTemplateId"] = input.AssetTemplateId.HasValue ? JsonValue.Create(input.AssetTemplateId.Value) : null;
+            data["edition"] = before is null ? 1 : DefaultsEdition(before) + 1;
             data["reason"] = Text(input.Reason, 500, false);
             return await local.SaveAsync(id ?? Guid.NewGuid(), location, "RoomDefaults", input.Status, data, input.ExpectedVersion, actor, t);
         }, t, validateActiveLocations: false);
@@ -370,12 +377,21 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
             if (before.Status != "Recorded" || before.Version != input.ExpectedVersion)
                 throw new PropertyException(409, "stale_room_defaults");
             var name = Name(before);
-            var suffix = $" assets {before.Version + 1}";
-            var template = await assets.CreateRequirementsAsync(location, name[..Math.Min(name.Length, 150 - suffix.Length)] + suffix, input.Items, null, t);
-            var data = JsonNode.Parse(before.Data.GetRawText())!.AsObject();
-            data["assetTemplateId"] = template is null ? null : JsonValue.Create(template.Id);
-            data["reason"] = reason;
-            var updated = await local.SaveAsync(id, location, "RoomDefaults", "Recorded", data, before.Version, actor, t);
+            var items = AssetInventoryService.ValidateItems(input.Items, allowEmpty: true);
+            var template = Template(before) is { } previousTemplateId ? await ScopedDocument(location, previousTemplateId, "AssetTemplate", t) : null;
+            var previousItems = template is null ? [] : SharedDataValidator.Read<AssetTemplateWrite>(template.Data).Items;
+            var changed = !items.OrderBy(item => item.Id).SequenceEqual(previousItems.OrderBy(item => item.Id));
+            var updated = before;
+            if (changed)
+            {
+                var suffix = $" assets {DefaultsEdition(before) + 1}";
+                template = await assets.CreateRequirementsAsync(location, name[..Math.Min(name.Length, 150 - suffix.Length)] + suffix, items, null, t);
+                var data = JsonNode.Parse(before.Data.GetRawText())!.AsObject();
+                data["assetTemplateId"] = template is null ? null : JsonValue.Create(template.Id);
+                data["edition"] = DefaultsEdition(before) + 1;
+                data["reason"] = reason;
+                updated = await local.SaveAsync(id, location, "RoomDefaults", "Recorded", data, before.Version, actor, t);
+            }
             var results = new List<AssetSyncRoom>();
             if (input.ApplyToExistingRooms)
             {
@@ -383,13 +399,14 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 {
                     var provenance = SharedDataValidator.Read<RoomProvenanceData>(document.Data);
                     if (provenance.RoomDefaultsId != id) continue;
-                    if (await local.RoomConfigurationLockReasonAsync(provenance.RoomId, t) is not null)
+                    if (!await local.EligibleRoomAsync(provenance.RoomId, t))
                     {
                         results.Add(new(provenance.RoomId, "SkippedNotEligible"));
                         continue;
                     }
                     var inventory = await assets.InventoryAsync(provenance.RoomId, t);
-                    await assets.AssignRequirementsAsync(location, provenance.RoomId, template, inventory.AssignmentVersion, t);
+                    if (inventory.AssignedTemplateId != template?.Id || template is not null && inventory.CurrentDesiredId is null || template is null && inventory.CurrentDesiredId is not null)
+                        await assets.AssignRequirementsAsync(location, provenance.RoomId, template, inventory.AssignmentVersion, t);
                     results.Add(new(provenance.RoomId, "Applied"));
                 }
             }
@@ -622,7 +639,8 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                     ["name"] = type.Name.Trim(),
                     ["description"] = type.Description?.Trim() ?? "",
                     ["defaults"] = JsonSerializer.SerializeToNode(normalized[type.Key], Json),
-                    ["assetTemplateId"] = assetTemplateId.HasValue ? JsonValue.Create(assetTemplateId.Value) : null
+                    ["assetTemplateId"] = assetTemplateId.HasValue ? JsonValue.Create(assetTemplateId.Value) : null,
+                    ["edition"] = 1
                 };
                 if (type.SourceId.HasValue)
                 {
@@ -647,8 +665,8 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
             }
             if (input.Policy is { } policy)
             {
-                var saved = await policies.SaveAsync(null, new(location.Id, policy.Title, policy.Content, policy.EffectiveFrom), t);
-                await policies.PublishAsync(saved.Id, saved.Version, t); created.Add(saved.Id);
+                var saved = await policies.SaveReadyAsync(null, new(location.Id, policy.Title, policy.Content, policy.EffectiveFrom), t);
+                created.Add(saved.Id);
             }
             if (!input.Activate)
             {

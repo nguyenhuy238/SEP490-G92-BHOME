@@ -22,39 +22,42 @@ import type {
   OperatingPolicyInput,
   SetupDocument,
 } from '../../../../../packages/client-core/src/propertySetup';
-import { ConfirmDialog, ErrorState, LoadingState } from '../../components/common/PortalUI';
+import { ErrorState, LoadingState } from '../../components/common/PortalUI';
 import { usePropertySetupApi } from './usePropertySetupApi';
 import { useSetupAction } from './useSetupAction';
 
 const policyStatusLabel = (status: string) =>
-  status === 'Published' ? 'Đã công bố' : status === 'Draft' ? 'Bản nháp' : status;
+  status === 'Published' ? 'Sẵn sàng sử dụng' : status === 'Draft' ? 'Chưa sử dụng' : status;
 const policyDateLabel = (date: string) => date.split('-').reverse().join('/');
 
 export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
   const api = usePropertySetupApi();
   const { session } = useAuth();
-  const action = useSetupAction();
   const owner = session?.roles.includes('Owner') ?? false;
   const [editing, setEditing] = useState<SetupDocument<OperatingPolicyInput> | null | undefined>();
-  const [copied, setCopied] = useState<OperatingPolicyInput | undefined>();
   const [historyId, setHistoryId] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [preview, setPreview] = useState<SetupDocument<OperatingPolicyInput> | null>(null);
-  const [publishing, setPublishing] = useState<SetupDocument<OperatingPolicyInput> | null>(null);
   const policies = useQuery({
     queryKey: ['property-setup', 'policies', session?.userId, locationId],
     queryFn: ({ signal }) => api.policies(locationId, signal),
   });
   const history = useQuery({
     queryKey: ['property-setup', 'policy-history', session?.userId, historyId],
-    queryFn: ({ signal }) => api.policyRevisions(historyId, signal),
+    queryFn: ({ signal }) => api.policyFamilyRevisions(historyId, signal),
     enabled: !!historyId,
   });
   if (policies.isPending) return <LoadingState />;
   if (policies.error)
     return <ErrorState error={policies.error} retry={() => void policies.refetch()} />;
-  const filtered = policies.data.filter(
+  const latest = new Map<string, SetupDocument<OperatingPolicyInput>>();
+  for (const policy of policies.data) {
+    const key = policy.data.familyId ?? policy.id;
+    const prior = latest.get(key);
+    if (!prior || (policy.data.edition ?? 1) > (prior.data.edition ?? 1)) latest.set(key, policy);
+  }
+  const filtered = [...latest.values()].filter(
     (policy) =>
       (!status || policy.status === status) &&
       `${policy.data.title} ${policy.data.content}`
@@ -70,16 +73,13 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
             variant="contained"
             onClick={() => {
               setEditing(null);
-              setCopied(undefined);
             }}
           >
-            Tạo bản nháp nội quy
+            Tạo nội quy
           </Button>
         ) : undefined
       }
     >
-      {action.error && <Alert severity="error">{action.error}</Alert>}
-      {action.notice && <Alert severity="success">{action.notice}</Alert>}
       <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 } }}>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
@@ -105,8 +105,8 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
             onChange={(e) => setStatus(e.target.value)}
           >
             <MenuItem value="">Tất cả</MenuItem>
-            <MenuItem value="Draft">Bản nháp</MenuItem>
-            <MenuItem value="Published">Đã công bố</MenuItem>
+            <MenuItem value="Draft">Chưa sử dụng</MenuItem>
+            <MenuItem value="Published">Sẵn sàng sử dụng</MenuItem>
           </TextField>
           <Button onClick={() => void policies.refetch()}>Làm mới</Button>
         </Stack>
@@ -117,7 +117,7 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
           description={
             policies.data.length
               ? 'Thử đổi từ khóa hoặc trạng thái.'
-              : 'Tạo bản nháp để chuẩn bị nội dung áp dụng tại cơ sở.'
+              : 'Tạo nội quy để áp dụng tại cơ sở.'
           }
         />
       )}
@@ -172,44 +172,19 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
                 Xem nội dung
               </Button>
               <Button onClick={() => setHistoryId(policy.id)}>Lịch sử sửa đổi</Button>
-              {owner &&
-                (policy.status === 'Draft' ? (
-                  <>
-                    <Button
-                      onClick={() => {
-                        setCopied(undefined);
-                        setEditing(policy);
-                      }}
-                    >
-                      Sửa nội quy nháp
-                    </Button>
-                    <Button disabled={action.busy} onClick={() => setPublishing(policy)}>
-                      Công bố nội quy
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    onClick={() => {
-                      setCopied({ ...policy.data, effectiveFrom: '', expectedVersion: 0 });
-                      setEditing(null);
-                    }}
-                  >
-                    Tạo nội quy mới từ bản này
-                  </Button>
-                ))}
+              {owner && <Button onClick={() => setEditing(policy)}>Chỉnh sửa</Button>}
             </Stack>
           </Stack>
         </Paper>
       ))}
       <Dialog open={editing !== undefined} fullWidth maxWidth="md">
-        <DialogTitle>{editing ? 'Sửa bản nháp nội quy' : 'Soạn nội quy mới'}</DialogTitle>
+        <DialogTitle>{editing ? 'Chỉnh sửa nội quy' : 'Tạo nội quy'}</DialogTitle>
         <DialogContent>
           {editing !== undefined && (
             <PolicyEditor
-              key={editing?.id ?? `${copied?.title ?? 'new'}`}
+              key={editing?.id ?? 'new'}
               locationId={locationId}
               document={editing}
-              initial={copied}
               onClose={() => setEditing(undefined)}
             />
           )}
@@ -222,7 +197,7 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
             <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
               <Chip size="small" variant="outlined" label={policyStatusLabel(preview.status)} />
               <Typography variant="body2" color="text.secondary">
-                Phiên bản {preview.version} · Hiệu lực từ{' '}
+                Phiên bản {preview.data.edition ?? 1} · Hiệu lực từ{' '}
                 {policyDateLabel(preview.data.effectiveFrom)}
               </Typography>
             </Stack>
@@ -236,34 +211,6 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
           <Button onClick={() => setPreview(null)}>Đóng</Button>
         </DialogActions>
       </Dialog>
-      <ConfirmDialog
-        open={!!publishing}
-        title="Công bố nội quy?"
-        busy={action.busy}
-        onClose={() => setPublishing(null)}
-        onConfirm={() => {
-          if (!publishing) return;
-          action.run(async () => {
-            await api.publishPolicy(publishing.id, publishing.version);
-            setPublishing(null);
-          }, 'Máy chủ đã công bố nội quy. Hợp đồng đã ký được giữ nguyên.');
-        }}
-      >
-        {publishing && (
-          <Stack spacing={1}>
-            <Typography sx={{ fontWeight: 700 }}>{publishing.data.title}</Typography>
-            <Typography variant="body2">
-              Phiên bản {publishing.version} · Hiệu lực từ{' '}
-              {policyDateLabel(publishing.data.effectiveFrom)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Nội quy mới dùng cho các thỏa thuận mới. Hợp đồng đã ký giữ nguyên nội dung; thay đổi
-              chỉ qua phụ lục đã ký và được Owner áp dụng.
-            </Typography>
-            {action.error && <Alert severity="error">{action.error}</Alert>}
-          </Stack>
-        )}
-      </ConfirmDialog>
       <Dialog open={!!historyId} onClose={() => setHistoryId('')} fullWidth maxWidth="md">
         <DialogTitle>Lịch sử phiên bản nội quy</DialogTitle>
         <DialogContent>
@@ -276,12 +223,13 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
               ) : history.data?.length ? (
                 history.data.map((revision) => (
                   <Stack
-                    key={revision.version}
+                    key={revision.id}
                     spacing={1}
                     sx={{ py: 2, borderTop: '1px solid', borderColor: 'divider' }}
                   >
                     <Typography sx={{ fontWeight: 700 }}>
-                      Phiên bản {revision.version} · {policyStatusLabel(revision.status)} ·{' '}
+                      Phiên bản {revision.data.edition ?? 1} · {policyStatusLabel(revision.status)}{' '}
+                      ·{' '}
                       {revision.recordedAt
                         ? new Date(revision.recordedAt).toLocaleString('vi-VN', {
                             timeZone: 'Asia/Ho_Chi_Minh',
@@ -312,20 +260,22 @@ export function OperatingPoliciesPanel({ locationId }: { locationId: string }) {
 function PolicyEditor({
   locationId,
   document,
-  initial,
   onClose,
 }: {
   locationId: string;
   document: SetupDocument<OperatingPolicyInput> | null;
-  initial?: OperatingPolicyInput;
   onClose: () => void;
 }) {
   const api = usePropertySetupApi();
   const action = useSetupAction();
-  const source = document?.data ?? initial;
+  const source = document?.data;
   const [title, setTitle] = useState(source?.title ?? '');
   const [content, setContent] = useState(source?.content ?? '');
-  const [date, setDate] = useState(source?.effectiveFrom ?? '');
+  const [date, setDate] = useState(
+    () =>
+      source?.effectiveFrom ??
+      new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()),
+  );
   const [version, setVersion] = useState(document?.version ?? 0);
   return (
     <Paper sx={{ p: 2 }}>
@@ -335,7 +285,7 @@ function PolicyEditor({
         onSubmit={(event) => {
           event.preventDefault();
           action.run(async () => {
-            await api.savePolicy(document?.id ?? null, {
+            await api.saveReadyPolicy(document?.id ?? null, {
               locationId,
               title,
               content,
@@ -343,7 +293,7 @@ function PolicyEditor({
               expectedVersion: version,
             });
             onClose();
-          }, 'Máy chủ đã lưu bản nháp nội quy.');
+          }, 'Đã lưu nội quy. Hợp đồng đã chốt được giữ nguyên.');
         }}
       >
         <TextField
@@ -368,6 +318,12 @@ function PolicyEditor({
           value={date}
           onChange={(event) => setDate(event.target.value)}
         />
+        {document?.status === 'Published' && (
+          <Typography variant="body2" color="text.secondary">
+            Khi thay đổi nội dung, hãy chọn ngày hiệu lực mới sau ngày hiệu lực của phiên bản cũ. Hệ
+            thống tạo phiên bản mới; hợp đồng đã chốt vẫn giữ nguyên nội quy.
+          </Typography>
+        )}
         {action.error && <Alert severity="error">{action.error}</Alert>}
         {document && (
           <ConflictReload
@@ -385,10 +341,10 @@ function PolicyEditor({
         )}
         <Stack direction="row">
           <Button type="submit" variant="contained" disabled={action.busy}>
-            Lưu nội quy nháp
+            Lưu
           </Button>
           <Button disabled={action.busy} onClick={onClose}>
-            Đóng bản sửa
+            Hủy
           </Button>
         </Stack>
       </Stack>

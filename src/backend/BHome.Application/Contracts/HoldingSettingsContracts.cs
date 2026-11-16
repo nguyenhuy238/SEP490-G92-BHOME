@@ -17,5 +17,6 @@ public sealed record HoldingPreparation(Guid RoomId, Guid LocationId, string Roo
 public interface IHoldingSettingsData
 {
     Task<HoldingSettings?> GetAsync(Guid locationId, CancellationToken t);
+    Task<IReadOnlyList<HoldingSettings>> HistoryAsync(Guid locationId, CancellationToken t);
     Task SetAsync(Guid locationId, HoldingSettingsInput input, Guid actor, DateTimeOffset now, CancellationToken t);
 }

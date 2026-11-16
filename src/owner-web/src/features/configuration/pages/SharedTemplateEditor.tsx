@@ -119,6 +119,9 @@ export function SharedTemplateEditor({
   );
   const [catalogId, setCatalogId] = useState('');
   const [validationError, setValidationError] = useState('');
+  const [submittedName, setSubmittedName] = useState('');
+  const normalizedName = name.normalize('NFC').trim().replace(/\s+/g, ' ');
+  const duplicateName = error.startsWith('Tên mẫu đã tồn tại.') && submittedName === normalizedName;
   const updateFields: typeof setValues = (update) => {
     setValues((old) => {
       const next = typeof update === 'function' ? update(old) : update;
@@ -221,6 +224,10 @@ export function SharedTemplateEditor({
             : [];
   function submit() {
     if (busy) return;
+    if (!normalizedName) {
+      setValidationError('Vui lòng nhập tên mẫu.');
+      return;
+    }
     if (resource === 'fee-templates') {
       const defaults = feeDefaults[values.category];
       const code = (values.chargeCode ?? '').trim().toUpperCase();
@@ -277,7 +284,8 @@ export function SharedTemplateEditor({
                   effectiveTo: values.effectiveTo || null,
                 }
               : { content: values.content ?? '', effectiveFrom: values.effectiveFrom ?? '' };
-    save({ name, description, data, expectedVersion: document?.version ?? 0 });
+    setSubmittedName(normalizedName);
+    save({ name: normalizedName, description, data, expectedVersion: document?.version ?? 0 });
   }
   return (
     <Dialog
@@ -301,7 +309,7 @@ export function SharedTemplateEditor({
           >
             <Chip
               size="small"
-              label={setupCreation ? 'Thư viện dùng chung' : 'Bản nháp'}
+              label={document?.status === 'Draft' ? 'Bản nháp' : 'Thư viện dùng chung'}
               variant="outlined"
             />
             {document && (
@@ -326,7 +334,9 @@ export function SharedTemplateEditor({
       >
         <DialogContent dividers sx={configurationDialogContentSx}>
           <Stack spacing={1.5}>
-            {error && <Alert severity="error">{error}</Alert>}
+            {error && !error.startsWith('Tên mẫu đã tồn tại.') && (
+              <Alert severity="error">{error}</Alert>
+            )}
             {validationError && <Alert severity="error">{validationError}</Alert>}
             {setupCreation && (
               <Typography variant="body2" color="text.secondary">
@@ -334,12 +344,23 @@ export function SharedTemplateEditor({
                 thêm vào cơ sở đang thiết lập.
               </Typography>
             )}
+            {document?.status === 'Published' && (
+              <Typography variant="body2" color="text.secondary">
+                Nếu mẫu đã được sử dụng, thay đổi sẽ tạo phiên bản mới. Cấu hình đã áp dụng vẫn được
+                giữ nguyên.
+              </Typography>
+            )}
             <TextField
               required
               disabled={busy}
               label="Tên mẫu"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              error={duplicateName}
+              helperText={duplicateName ? error : undefined}
+              onChange={(e) => {
+                setName(e.target.value);
+                setValidationError('');
+              }}
               slotProps={{ htmlInput: { maxLength: 150 } }}
             />
             <TextField
@@ -624,7 +645,7 @@ export function SharedTemplateEditor({
             type="submit"
             variant="contained"
           >
-            {setupCreation ? 'Lưu và công bố' : 'Lưu bản nháp'}
+            Lưu mẫu
           </Button>
         </DialogActions>
       </Box>

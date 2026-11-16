@@ -74,7 +74,7 @@ internal sealed partial class SettlementReceivablesRepository
         else
         {
             var locationId = await LocationAsync(id, token);
-            schedule = await db.Set<BillingSchedule>().AsNoTracking().SingleOrDefaultAsync(s => s.LocationId == locationId, token);
+            schedule = await new InvoiceRepository(db).ScheduleForPeriodAsync(locationId, period, token);
         }
         if (schedule is not null && (schedule.LocationId != await LocationAsync(id, token) || schedule.Version < 1 ||
             !Enum.IsDefined(schedule.RateDate) || !Enum.IsDefined(schedule.RentSource) || !Enum.IsDefined(schedule.PartialMonth) || !Enum.IsDefined(schedule.Rounding)))

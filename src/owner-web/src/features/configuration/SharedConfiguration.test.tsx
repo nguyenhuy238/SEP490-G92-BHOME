@@ -140,7 +140,7 @@ function setViewport(width: number) {
   });
 }
 
-it('edits only a Draft with its loaded version and retains exact defaults', async () => {
+it('completes a legacy Draft atomically using its loaded version and retains exact defaults', async () => {
   state.request.mockImplementation(async (path: string, init?: RequestInit) =>
     init?.method
       ? doc
@@ -152,8 +152,8 @@ it('edits only a Draft with its loaded version and retains exact defaults', asyn
   await chooseRowAction('Sửa');
   expect(screen.getByLabelText(/Giá thuê tham khảo/)).toHaveValue('12.345.678.901.234,0001');
   fill('Mô tả', 'Edited draft');
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
-  await screen.findByText('Đã lưu bản nháp trên máy chủ.');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
   const call = state.request.mock.calls.find(
     ([path, init]) => path === base + '/' + doc.id && init?.method === 'PUT',
   );
@@ -183,8 +183,8 @@ it('accepts safe integer response quantities and writes them back as decimal str
   mount();
   await chooseRowAction('Sửa');
   expect(screen.getByLabelText(/Diện tích/)).toHaveValue('25');
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
-  await screen.findByText('Đã lưu bản nháp trên máy chủ.');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
   const call = state.request.mock.calls.find(
     ([path, init]) => path === base + '/' + doc.id && init?.method === 'PUT',
   );
@@ -199,9 +199,32 @@ it('duplicates a persisted edition with a distinct name and concurrency version'
   expect(state.request).toHaveBeenCalledWith(
     base + '/' + doc.id + '/duplicate',
     expect.objectContaining({
-      body: JSON.stringify({ name: 'Independent copy', expectedVersion: 7 }),
+      body: JSON.stringify({ name: 'Independent copy', expectedVersion: 7, publishImmediately: true }),
     }),
   );
+});
+it('shows duplicate name validation on the name field and keeps the draft editable', async () => {
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === base && init?.method === 'POST') {
+      const input = JSON.parse(String(init.body));
+      if (input.name === doc.name) throw new ApiError(409, { code: 'duplicate_shared_name' });
+      return doc;
+    }
+    return init?.method ? doc : reads(path);
+  });
+  mount();
+  await screen.findByText(doc.name);
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu' }));
+  fill('Tên mẫu', `  ${doc.name.replaceAll(' ', '   ')}  `);
+  fill('Sức chứa', '3');
+  fill('Diện tích', '25');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText(/Tên mẫu đã tồn tại/);
+  expect(screen.getByLabelText(/Tên mẫu/)).toHaveAttribute('aria-invalid', 'true');
+  fill('Tên mẫu', 'Different room name');
+  expect(screen.getByLabelText(/Tên mẫu/)).toHaveAttribute('aria-invalid', 'false');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
 });
 it('loads persisted local defaults for explicit Room creation without writing a Room', async () => {
   const choose = vi.fn();
@@ -244,8 +267,8 @@ it('creates exact room defaults through the real client and refreshes persisted 
   fill('Diện tích', '25.0001');
   fill('Giá thuê tham khảo', '12.345.678.901.234,0001');
   fill('Tiện ích', 'Balcony\nWi-Fi');
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
-  await screen.findByText('Đã lưu bản nháp trên máy chủ.');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
   const call = state.request.mock.calls.find(
     ([path, init]) => path === base && init?.method === 'POST',
   );
@@ -253,6 +276,7 @@ it('creates exact room defaults through the real client and refreshes persisted 
     name: 'New defaults',
     description: '',
     expectedVersion: 0,
+    publishImmediately: true,
     data: {
       capacity: 4,
       area: '25.0001',
@@ -274,10 +298,10 @@ it('retains a failed form and never shows a persistence success', async () => {
   fill('Tên mẫu', 'Retained defaults');
   fill('Sức chứa', '2');
   fill('Diện tích', '20');
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
   await screen.findByText(/Cấu hình đã thay đổi/);
   expect(screen.getByLabelText(/Tên mẫu/)).toHaveValue('Retained defaults');
-  expect(screen.queryByText('Đã lưu bản nháp trên máy chủ.')).toBeNull();
+  expect(screen.queryByText('Đã lưu mẫu. Có thể sử dụng ngay.')).toBeNull();
 });
 it('uses server preview, preserves its token and retries apply with the same durable key', async () => {
   let attempts = 0;
@@ -476,7 +500,7 @@ it('filters asset templates by scope and writes the selected scope for a new cat
   fireEvent.change(within(dialog).getByLabelText(/Giá tham khảo/), { target: { value: '100000' } });
   fireEvent.mouseDown(within(dialog).getByLabelText(/Phạm vi tài sản/));
   fireEvent.click(await screen.findByRole('option', { name: 'Tài sản chung của cơ sở' }));
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu bản nháp' }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu mẫu' }));
   await waitFor(() =>
     expect(
       state.request.mock.calls.some(
@@ -523,10 +547,10 @@ it('keeps room prices and status without version clutter, with accessible action
   const actions = within(published).getByRole('cell');
   expect(within(actions).getByRole('button', { name: 'Áp dụng' })).toBeVisible();
   fireEvent.click(within(actions).getByRole('button', { name: `Thao tác cho ${longName}` }));
-  expect(await screen.findByRole('menuitem', { name: 'Phiên bản mới' })).toBeVisible();
+  expect(await screen.findByRole('menuitem', { name: 'Sửa' })).toBeVisible();
   expect(screen.getByRole('menuitem', { name: 'Nhân bản' })).toBeVisible();
   expect(screen.getByRole('menuitem', { name: 'Lưu trữ' })).toBeVisible();
-  expect(screen.queryByRole('menuitem', { name: 'Sửa' })).toBeNull();
+  expect(screen.queryByRole('menuitem', { name: 'Phiên bản mới' })).toBeNull();
   fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
   await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
   const draft = within(table).getByRole('row', { name: /Draft room/ });
@@ -539,7 +563,7 @@ it('keeps room prices and status without version clutter, with accessible action
   expect(await screen.findByRole('menuitem', { name: 'Công bố' })).toBeVisible();
   expect(screen.getByRole('menuitem', { name: 'Sửa' })).toBeVisible();
   fireEvent.click(screen.getByRole('menuitem', { name: 'Sửa' }));
-  expect(await screen.findByRole('button', { name: 'Lưu bản nháp' })).toBeVisible();
+  expect(await screen.findByRole('button', { name: 'Lưu mẫu' })).toBeVisible();
 });
 it('keeps each resource summary and its allowed actions visible on a 390px viewport', async () => {
   setViewport(390);
@@ -582,7 +606,7 @@ it('selects real catalog versions and submits optional flags with internal track
   fill('Số lượng mục 1', '3');
   fireEvent.click(screen.getByLabelText('Bắt buộc'));
   expect(screen.queryByLabelText('Theo dõi mục 1')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
   await waitFor(() =>
     expect(
       state.request.mock.calls.some(
@@ -638,8 +662,8 @@ it('submits exact fee rates and effective dates without obsolete scope fields', 
   expect(screen.getByLabelText(/Đơn vị/)).toHaveValue('VND/month');
   fill('Hiệu lực từ', '2026-12-01');
   fill('Hiệu lực đến', '2027-12-01');
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
-  await screen.findByText('Đã lưu bản nháp trên máy chủ.');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
   const call = state.request.mock.calls.find(
     ([path, init]) => path.endsWith('/fee-templates') && init?.method === 'POST',
   );
@@ -668,8 +692,8 @@ it('resets fee identity and rate on category changes and saves water with its ca
   expect(screen.getByLabelText(/Đơn giá tham khảo/)).toHaveValue('');
   fill('Đơn giá tham khảo', '15000');
   fill('Hiệu lực từ', '2026-12-01');
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
-  await screen.findByText('Đã lưu bản nháp trên máy chủ.');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
   const call = state.request.mock.calls.find(
     ([path, init]) => path.endsWith('/fee-templates') && init?.method === 'POST',
   );
@@ -691,7 +715,7 @@ it('selects a service code and rejects reserved codes before submitting', async 
   fill('Đơn giá tham khảo', '100000');
   fill('Hiệu lực từ', '2026-12-01');
   fill('Mã khoản thu', 'RENT');
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
   await screen.findByText('Mã khoản thu hoặc cách tính không phù hợp với nhóm phí.');
   expect(
     state.request.mock.calls.some(
@@ -699,8 +723,8 @@ it('selects a service code and rejects reserved codes before submitting', async 
     ),
   ).toBe(false);
   fill('Mã khoản thu', 'internet');
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
-  await screen.findByText('Đã lưu bản nháp trên máy chủ.');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
   const call = state.request.mock.calls.find(
     ([path, init]) => path.endsWith('/fee-templates') && init?.method === 'POST',
   );
@@ -722,8 +746,8 @@ it('creates a per-person monthly service fee with live grouping and canonical pa
   fill('Đơn giá tham khảo', '3000000');
   expect(screen.getByLabelText(/Đơn giá tham khảo/)).toHaveValue('3.000.000');
   fill('Hiệu lực từ', '2026-12-01');
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }));
-  await screen.findByText('Đã lưu bản nháp trên máy chủ.');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu mẫu' }));
+  await screen.findByText('Đã lưu mẫu. Có thể sử dụng ngay.');
   const call = state.request.mock.calls.find(
     ([path, init]) => path.endsWith('/fee-templates') && init?.method === 'POST',
   );

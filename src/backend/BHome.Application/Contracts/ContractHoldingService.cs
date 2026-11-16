@@ -110,7 +110,7 @@ public sealed partial class ContractService
                 ResidenceFrom = c.StartDate
             }).ToList();
             await ContractChargeSnapshot.RejectUtilityProfileAsync(repository, c, token);
-            ContractChargeSnapshot.Store(c, ContractChargeSnapshot.FromPolicies(c, prices.Charges), "HoldingDraft", now);
+            ContractChargeSnapshot.Store(c, ContractChargeSnapshot.FromPolicies(c, prices.Charges), "HoldingDraft", now, holdingSettingsVersion: input.SettingsVersion);
             if (operatingPolicies is not null) await operatingPolicies.BindDraftAsync(c, token);
             Seal(c); repository.Add(c); Audit("HoldingDraftCreated", c.Id);
             Remember(key, "holding-draft", input, c.Id); return new ContractId(c.Id);
@@ -133,7 +133,7 @@ public sealed partial class ContractService
                 throw ContractException.Conflict("holding_approved_price_changed");
             var charges = ContractChargeSnapshot.FromPolicies(c, prices.Charges);
             if (!string.IsNullOrWhiteSpace(c.AgreedPriceSnapshot) && c.AgreedPriceSnapshot != "{}" &&
-                !ContractChargeSnapshot.Read(c).Charges.SequenceEqual(charges))
+                !ContractChargeSnapshot.SameDraftChargeReferences(ContractChargeSnapshot.Read(c).Charges, charges))
                 throw ContractException.Conflict("holding_approved_price_changed");
             var approvedAt = clock.GetUtcNow();
             ContractChargeSnapshot.Store(c, charges, "OwnerApproved", approvedAt);
@@ -316,7 +316,7 @@ public sealed partial class ContractService
             };
             main.OperatingPolicySnapshot = holding.OperatingPolicySnapshot;
             var holdingPrices = ContractChargeSnapshot.Read(holding);
-            ContractChargeSnapshot.Store(main, holdingPrices.Charges, "HoldingConverted", clock.GetUtcNow());
+            ContractChargeSnapshot.Store(main, holdingPrices.Charges, "HoldingConverted", clock.GetUtcNow(), holdingSettingsVersion: holdingPrices.HoldingSettingsVersion);
             await ContractChargeSnapshot.ValidateBindingAsync(repository, main, token, checkProfile: false);
             // The holding agreement is already binding; no new property lookup on conversion.
             ContractChargeSnapshot.MarkMainBound(main, holding.PriceLockedAt.Value);

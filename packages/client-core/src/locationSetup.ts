@@ -93,6 +93,7 @@ export interface LocationSetupInput {
 }
 export interface LocalRoomDefaultsData {
   name: string;
+  edition?: number;
   description?: string;
   defaults: RoomTemplateData;
   assetTemplateId?: string | null;
