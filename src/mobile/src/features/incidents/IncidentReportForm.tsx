@@ -112,18 +112,11 @@ function ReportForm() {
         {role === 'Staff' ? (
           <>
             <QueryState {...staff.locations} />
-            <ChoiceField
-              label="Cơ sở"
-              value={staff.location}
-              options={staff.locations.data ?? []}
-              disabled={mutation.busy || !enabled}
-              onChange={(id) => {
-                staff.selectLocation(id);
-                if (common) staff.selectArea('common');
-                setAssetId('');
-                setPhotos([]);
-              }}
-            />
+            <Text variant="labelMedium">
+              Cơ sở đang làm việc:{' '}
+              {staff.locations.data?.find((location) => location.id === staff.location)?.label ??
+                'Chưa có cơ sở được phân công'}
+            </Text>
             {staff.location && <QueryState {...staff.rooms} />}
             <ChoiceField
               label="Phòng"

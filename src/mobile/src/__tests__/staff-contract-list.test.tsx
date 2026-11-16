@@ -28,7 +28,7 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ resetScroll: state.scroll }),
+  useWorkspace: () => ({ resetScroll: state.scroll, staffLocationId: 'location' }),
 }));
 vi.mock('../components/WorkspaceHeaderContext', () => ({
   useWorkspaceHeaderRefresh: (refresh: () => void, disabled: boolean) => {
@@ -167,7 +167,7 @@ beforeEach(() => {
   }));
   state.schedules.mockResolvedValue([
     {
-      contractId: 'inspection-contract',
+      contractId: 'contract-8',
       roomNumber: 'CT208',
       locationName: 'BHOME TEST',
       scheduledAt: '2026-11-07T03:00:00Z',
@@ -318,7 +318,7 @@ it('keeps inspection details collapsed and opens the existing assigned contract 
   expect(screen.queryByRole('button', { name: 'Mở kiểm tra phòng CT208' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Lịch kiểm tra trả phòng, 1 lịch' }));
   fireEvent.click(screen.getByRole('button', { name: 'Mở kiểm tra phòng CT208' }));
-  expect(state.inspect).toHaveBeenCalledWith('inspection-contract');
+  expect(state.inspect).toHaveBeenCalledWith('contract-8');
 });
 it('handles an empty query and restores the list when clearing filters', async () => {
   await openList();

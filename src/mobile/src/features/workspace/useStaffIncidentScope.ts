@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useWorkspaceQuery } from './useWorkspaceQuery';
 import type { Named } from '../../lib/api';
+import { useWorkspace } from './WorkspaceProvider';
 
 // Existing Property AssetDto fields used by the local-only reporting form.
 interface IncidentAssetOption {
@@ -20,13 +21,13 @@ interface AssetPage {
 }
 
 export function useStaffIncidentScope(enabled: boolean) {
-  const [locationId, setLocationId] = useState('');
+  const { staffLocationId, selectStaffLocation } = useWorkspace();
   const [area, setArea] = useState('');
   const [assetId, setAssetId] = useState('');
   const [page, setPage] = useState(1);
   const locations = useWorkspaceQuery<Named[]>(enabled ? '/api/v1/capture/locations' : null);
   const location =
-    enabled && locations.data?.some((item) => item.id === locationId) ? locationId : '';
+    enabled && locations.data?.some((item) => item.id === staffLocationId) ? staffLocationId : '';
   const rooms = useWorkspaceQuery<Named[]>(
     location ? `/api/v1/capture/locations/${encodeURIComponent(location)}/rooms` : null,
   );
@@ -63,7 +64,7 @@ export function useStaffIncidentScope(enabled: boolean) {
     options,
     page,
     selectLocation: (id: string) => {
-      setLocationId(id);
+      selectStaffLocation(id);
       setArea('');
       setAssetId('');
       setPage(1);

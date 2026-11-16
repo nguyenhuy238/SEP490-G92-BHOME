@@ -157,7 +157,7 @@ const screens = {
   preferences: () => <UnavailableWorkspaceScreen screen="preferences" />,
 };
 export function WorkspaceScreenView({ screen }: { screen: string }) {
-  const { role, preview, go } = useWorkspace();
+  const { role, preview, go, staffLocationId } = useWorkspace();
   const { session } = useSession();
   if (!role) return <Redirect href="/" />;
   if (!isWorkspaceScreen(screen) || !canOpenScreen(role, screen))
@@ -306,7 +306,11 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
       }
     return (
       <WorkspaceShell screen={screen}>
-        <React.Fragment key={`${session?.userId}:${role}:${screen}`}>{content}</React.Fragment>
+        <React.Fragment
+          key={`${session?.userId}:${role}:${screen}:${role === 'Staff' ? staffLocationId : ''}`}
+        >
+          {content}
+        </React.Fragment>
       </WorkspaceShell>
     );
   }

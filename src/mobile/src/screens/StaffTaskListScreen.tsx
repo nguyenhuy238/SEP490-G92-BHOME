@@ -26,15 +26,17 @@ const filters = [
 ];
 
 export function StaffTaskListScreen() {
-  const { go } = useWorkspace();
+  const { go, staffLocationId } = useWorkspace();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
   const query = useWorkspaceQuery<TaskPage<OperationalTask>>(
-    `/api/v1/operational-tasks?page=${page}&pageSize=20${status ? `&status=${status}` : ''}`,
+    staffLocationId
+      ? `/api/v1/operational-tasks?page=${page}&pageSize=20&locationId=${encodeURIComponent(staffLocationId)}${status ? `&status=${status}` : ''}`
+      : null,
     { cache: queryPolicies.tasks, notifyError: false },
   );
   const inHeader = useWorkspaceHeaderRefresh(query.reload, query.fetching);
-  const data = query.data;
+  const data = staffLocationId ? query.data : null;
   const items = data?.items ?? [];
   return (
     <>
@@ -52,8 +54,13 @@ export function StaffTaskListScreen() {
         </View>
       )}
       <Text variant="bodySmall" style={styles.muted}>
-        Công việc trong cơ sở đang được phân công
+        Công việc thuộc cơ sở đang chọn trên trang chủ
       </Text>
+      {!staffLocationId && (
+        <Text accessibilityRole="alert" variant="bodySmall" style={styles.muted}>
+          Chưa có cơ sở được phân công để xem công việc.
+        </Text>
+      )}
       <TaskFilterBar
         status={status}
         onChange={(next) => {

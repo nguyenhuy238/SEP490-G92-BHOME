@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Dialog, Portal, Text, TouchableRipple } from 'react-native-paper';
 import { router } from 'expo-router';
 import { DashboardHeading, DashboardStatus, dashboardStyles } from '../components/DashboardKit';
@@ -11,9 +11,27 @@ import { colors as c, staffColors as s } from '../theme/theme';
 import { typography } from '../theme/typography';
 
 export function StaffDashboard() {
-  const { go, preview } = useWorkspace();
+  const {
+    go,
+    preview,
+    staffLocationId,
+    staffLocations,
+    staffLocationsLoading,
+    staffLocationsError,
+    selectStaffLocation,
+    reloadStaffLocations,
+  } = useWorkspace();
   const data = useStaffDashboard();
   const [handover, setHandover] = useState(false);
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  const availableLocations = staffLocations ?? data.locations.data ?? [];
+  const activeLocation = availableLocations.find(
+    (item) => item.id === (staffLocationId ?? availableLocations[0]?.id),
+  );
+  const scopedLocationId = staffLocationId ?? activeLocation?.id ?? '';
+  // useStaffDashboard resolves move-out assignments against Room IDs from the
+  // selected authorized Location; never rely on non-unique Location names here.
+  const selectedInspections = data.inspections.data ?? [];
   const priorities = preview
     ? [
         {
@@ -26,7 +44,12 @@ export function StaffDashboard() {
       ]
     : [
         ...(data.overdue.data?.items ?? [])
-          .filter((task) => ['Assigned', 'InProgress'].includes(task.status))
+          .filter(
+            (task) =>
+              ['Assigned', 'InProgress'].includes(task.status) &&
+              !!scopedLocationId &&
+              task.locationId === scopedLocationId,
+          )
           .map((task) => ({
             id: task.id,
             title: task.title,
@@ -36,7 +59,7 @@ export function StaffDashboard() {
             status: 'Quá hạn',
             open: () => go('task-detail', { taskId: task.id }),
           })),
-        ...(data.inspections.data ?? [])
+        ...selectedInspections
           .filter((item) => item.status === 'Approved')
           .slice(0, 2)
           .map((item) => ({
@@ -47,7 +70,10 @@ export function StaffDashboard() {
             open: () => go('move-out', { contractId: item.contractId }),
           })),
         ...(data.meters.data ?? [])
-          .filter((item) => item.status === 0)
+          .filter(
+            (item) =>
+              item.status === 0 && !!scopedLocationId && item.locationId === scopedLocationId,
+          )
           .slice(0, 2)
           .map((item) => ({
             id: item.id,
@@ -62,16 +88,18 @@ export function StaffDashboard() {
   );
   const locationLabel = preview
     ? 'BHOME Đống Đa - Tòa B · Mẫu'
-    : data.locations.loading
+    : (staffLocationsLoading ?? data.locations.loading)
       ? 'Đang tải cơ sở…'
-      : data.locations.data?.length
-        ? data.locations.data.map((item) => item.label).join(' · ') +
-          (data.locations.error ? ' · Chưa cập nhật được' : '')
-        : data.locations.error
+      : availableLocations.length
+        ? (activeLocation ?? availableLocations[0])!.label +
+          (staffLocationsError ? ' · Chưa cập nhật được' : '')
+        : (staffLocationsError ?? data.locations.error)
           ? 'Chưa tải được cơ sở'
           : 'Chưa có cơ sở được phân công';
   const taskValue = preview ? '6' : data.tasks.data ? String(data.tasks.data.totalCount) : '—';
-  const pendingInspections = data.inspections.data?.filter((item) => item.status === 'Approved');
+  const pendingInspections = data.inspections.data
+    ? selectedInspections.filter((item) => item.status === 'Approved')
+    : null;
   function open(screen: WorkspaceScreen, params?: Record<string, string>) {
     if (screen === 'move-in') setHandover(true);
     else if (params) go(screen, params);
@@ -92,12 +120,25 @@ export function StaffDashboard() {
           <Button
             compact
             icon="refresh"
-            onPress={data.reload}
+            onPress={() => {
+              data.reload();
+              reloadStaffLocations?.();
+            }}
             accessibilityLabel="Làm mới tổng quan"
           >
             Làm mới
           </Button>
         </View>
+        {!preview && availableLocations.length > 1 && (
+          <Button
+            mode="outlined"
+            icon="map-marker-multiple-outline"
+            onPress={() => setLocationPickerOpen(true)}
+            accessibilityLabel="Chuyển cơ sở"
+          >
+            Cơ sở hiện tại: {activeLocation?.label ?? 'Chọn cơ sở'} · Đổi cơ sở
+          </Button>
+        )}
         <TouchableRipple
           onPress={() => go('shifts')}
           accessibilityRole="button"
@@ -199,6 +240,28 @@ export function StaffDashboard() {
       )}
       <StaffFeatureDirectory onOpen={open} />
       <Portal>
+        <Dialog visible={locationPickerOpen} onDismiss={() => setLocationPickerOpen(false)}>
+          <Dialog.Title>Chuyển cơ sở</Dialog.Title>
+          <Dialog.ScrollArea>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {availableLocations.map((location) => (
+                <Button
+                  key={location.id}
+                  mode={location.id === scopedLocationId ? 'contained-tonal' : 'text'}
+                  onPress={() => {
+                    setLocationPickerOpen(false);
+                    selectStaffLocation?.(location.id);
+                  }}
+                >
+                  {location.label}
+                </Button>
+              ))}
+            </ScrollView>
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button onPress={() => setLocationPickerOpen(false)}>Đóng</Button>
+          </Dialog.Actions>
+        </Dialog>
         <Dialog visible={handover} onDismiss={() => setHandover(false)}>
           <Dialog.Title>Bàn giao / Trả phòng</Dialog.Title>
           <Dialog.Content>

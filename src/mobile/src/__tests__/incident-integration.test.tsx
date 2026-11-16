@@ -28,7 +28,13 @@ vi.mock('../lib/SessionProvider', () => ({
   }),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ role: s.role, preview: s.preview, go: s.go }),
+  useWorkspace: () => ({
+    role: s.role,
+    preview: s.preview,
+    go: s.go,
+    staffLocationId: '44444444-4444-4444-8444-444444444444',
+    selectStaffLocation: vi.fn(),
+  }),
 }));
 vi.mock('expo-router', () => ({
   useFocusEffect: (cb: () => void) => useEffect(cb, [cb]),
@@ -413,8 +419,7 @@ it('locks double submit and reuses the same idempotency key after ambiguous fail
       : respond(path, init),
   );
   render(<StaffIncidentReportScreen />);
-  await screen.findByRole('option', { name: 'Cơ sở thử nghiệm' });
-  choose('Cơ sở', lid);
+  await screen.findByText(/Cơ sở đang làm việc:/);
   await screen.findByRole('option', { name: 'A101' });
   choose('Phòng', rid);
   choose('Mô tả sự cố (10–8000 ký tự)', 'Ống nước đang bị rò trong phòng');

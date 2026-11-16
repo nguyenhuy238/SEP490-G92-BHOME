@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { MeterTask, Named } from '../lib/api';
 import type { ConfirmedReading } from '../../../../packages/client-core/src/meter';
+import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 
 const state = vi.hoisted(() => ({
   role: 'Staff',
@@ -19,6 +20,28 @@ vi.mock('../lib/SessionProvider', () => ({
     api,
     session: { userId: state.userId, roles: [state.role] },
   }),
+}));
+
+vi.mock('../features/workspace/WorkspaceProvider', () => ({
+  useWorkspace: () => {
+    const [requestedId, setRequestedId] = React.useState('');
+    const locations = useWorkspaceQuery<Named[]>(
+      state.role === 'Staff' ? '/api/v1/capture/locations' : null,
+      { notifyError: false },
+    );
+    const authorized = locations.data ?? [];
+    return {
+      staffLocationId:
+        authorized.find((item) => item.id === requestedId)?.id ?? authorized[0]?.id ?? '',
+      staffLocations: authorized,
+      staffLocationsLoading: locations.loading,
+      staffLocationsError: locations.error,
+      selectStaffLocation: (id: string) => {
+        if (authorized.some((item) => item.id === id)) setRequestedId(id);
+      },
+      reloadStaffLocations: locations.reload,
+    };
+  },
 }));
 
 vi.mock('expo-router', () => ({
@@ -158,6 +181,7 @@ vi.mock('react-native-paper', () => ({
 import { MeterTasksScreen } from '../screens/MeterTasksScreen';
 
 const sampleLocation: Named = { id: 'loc-1', label: 'BHOME SAMPLE 1' };
+const secondLocation: Named = { id: 'loc-2', label: 'BHOME SAMPLE 2' };
 const sampleRooms: Named[] = [
   { id: 'room-101', label: '101' },
   { id: 'room-102', label: '102' },
@@ -230,6 +254,146 @@ it('auto-identifies the single assigned Location as read-only and removes the lo
   expect(screen.queryByText('Lọc kỳ ghi & trạng thái')).toBeNull();
   expect(screen.queryByText('Tải lại dữ liệu')).toBeNull();
   expect(screen.queryByLabelText('Phòng')).toBeNull();
+});
+
+it('lets Staff switch between every assigned Location and scopes room/task requests to the selected one', async () => {
+  locationsResponse = [sampleLocation, secondLocation];
+  tasksResponse = [
+    { ...baseElectric },
+    {
+      ...baseElectric,
+      id: 'task-e-201',
+      locationId: secondLocation.id,
+      location: secondLocation.label,
+      roomId: 'room-201',
+      room: '201',
+    },
+  ];
+  render(<MeterTasksScreen />);
+  await screen.findByText('Phòng 101');
+
+  const locationPicker = screen.getByLabelText('Cơ sở') as HTMLSelectElement;
+  expect([...locationPicker.options].map((option) => option.text)).toEqual([
+    sampleLocation.label,
+    secondLocation.label,
+  ]);
+  expect(locationPicker.value).toBe(sampleLocation.id);
+
+  fireEvent.change(locationPicker, { target: { value: secondLocation.id } });
+  await screen.findByText('Phòng 201');
+  expect(locationPicker.value).toBe(secondLocation.id);
+  expect(screen.queryByText('Phòng 101')).toBeNull();
+  expect(state.request).toHaveBeenCalledWith(
+    '/api/v1/capture/locations/loc-2/rooms',
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  expect(state.request).toHaveBeenCalledWith(
+    expect.stringMatching(/^\/api\/v1\/capture\/meter-tasks\?page=1&locationId=loc-2$/),
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+});
+
+it('drops location-specific room/period filters on switch but preserves status and resets pagination', async () => {
+  locationsResponse = [sampleLocation, secondLocation];
+  tasksResponse = [
+    ...Array.from({ length: 21 }, (_, index) => ({
+      ...baseElectric,
+      id: `task-e-${index + 1}`,
+      roomId: `room-${index + 1}`,
+      room: String(index + 1),
+    })),
+    {
+      ...baseElectric,
+      id: 'task-e-201',
+      locationId: secondLocation.id,
+      location: secondLocation.label,
+      roomId: 'room-201',
+      room: '201',
+    },
+  ];
+  render(<MeterTasksScreen />);
+  await screen.findByText('Phòng được phân công (21)');
+  fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+  expect(screen.getByText('Trang 2 / 2')).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc' }));
+  fireEvent.change(screen.getByLabelText('Phòng'), { target: { value: 'room-101' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Chưa ghi' }));
+  await screen.findByRole('button', { name: 'Xóa lọc phòng 101' });
+
+  fireEvent.change(screen.getByLabelText('Cơ sở'), { target: { value: secondLocation.id } });
+  await screen.findByText('Phòng 201');
+  expect(screen.queryByRole('button', { name: 'Xóa lọc phòng 101' })).toBeNull();
+  expect(screen.queryByText('Trang 2 / 2')).toBeNull();
+  expect(screen.getByRole('tab', { name: 'Chưa ghi' }).getAttribute('aria-selected')).toBe('true');
+  expect(
+    state.request.mock.calls.some(
+      ([path]) =>
+        String(path).includes('locationId=loc-2') && String(path).includes('roomId=room-101'),
+    ),
+  ).toBe(false);
+});
+
+it('hides previous Location tasks while the newly selected Location is still loading', async () => {
+  locationsResponse = [sampleLocation, secondLocation];
+  let resolveSecond!: (tasks: MeterTask[]) => void;
+  const pendingSecond = new Promise<MeterTask[]>((resolve) => {
+    resolveSecond = resolve;
+  });
+  state.request.mockImplementation(async (path: string) => {
+    if (path === '/api/v1/capture/locations') return locationsResponse;
+    if (path.endsWith('/rooms')) return roomsResponse;
+    if (path.startsWith('/api/v1/capture/meter-tasks')) {
+      return path.includes('locationId=loc-2') ? pendingSecond : tasksResponse;
+    }
+    return [];
+  });
+  render(<MeterTasksScreen />);
+  await screen.findByText('Phòng 101');
+  fireEvent.change(screen.getByLabelText('Cơ sở'), { target: { value: secondLocation.id } });
+  expect(screen.queryByText('Phòng 101')).toBeNull();
+  expect(screen.getByText('Đang tải danh sách phòng cần ghi chỉ số…')).toBeTruthy();
+  resolveSecond([
+    {
+      ...baseElectric,
+      id: 'task-e-201',
+      locationId: 'loc-2',
+      location: 'BHOME SAMPLE 2',
+      roomId: 'room-201',
+      room: '201',
+    },
+  ]);
+  await screen.findByText('Phòng 201');
+});
+
+it('falls back to a still-authorized Location when the selected assignment is revoked on reload', async () => {
+  locationsResponse = [sampleLocation, secondLocation];
+  render(<MeterTasksScreen />);
+  await screen.findByText('Phòng 101');
+  fireEvent.change(screen.getByLabelText('Cơ sở'), { target: { value: secondLocation.id } });
+  await waitFor(() =>
+    expect((screen.getByLabelText('Cơ sở') as HTMLSelectElement).value).toBe('loc-2'),
+  );
+  locationsResponse = [sampleLocation];
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại danh sách ghi chỉ số' }));
+  await screen.findByText('Cơ sở: BHOME SAMPLE 1');
+  await screen.findByText('Phòng 101');
+  expect(screen.queryByLabelText('Cơ sở')).toBeNull();
+});
+
+it('shows an empty-assignment state without requesting tasks and keeps non-Staff blocked', async () => {
+  locationsResponse = [];
+  const view = render(<MeterTasksScreen />);
+  await screen.findByText('Chưa có cơ sở được phân công');
+  expect(state.request.mock.calls.some(([path]) => String(path).includes('meter-tasks'))).toBe(
+    false,
+  );
+  expect(screen.queryByLabelText('Cơ sở')).toBeNull();
+  state.role = 'Tenant';
+  view.rerender(<MeterTasksScreen />);
+  expect(screen.getByText('Chỉ Staff được phép ghi chỉ số điện nước.')).toBeTruthy();
+  expect(screen.queryByLabelText('Cơ sở')).toBeNull();
 });
 
 it('displays 0/2 đã ghi, 1/2 đã ghi, and Hoàn thành progress badges with confirmed readings and action buttons', async () => {

@@ -19,6 +19,7 @@ vi.mock('../../../src/mobile/src/features/workspace/WorkspaceProvider', () => ({
 }));
 vi.mock('react-native', () => ({
   View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  ScrollView: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   StyleSheet: { create: (value: unknown) => value },
   useWindowDimensions: () => ({ width: 393, height: 852, fontScale: 1, scale: 3 }),
 }));
@@ -60,7 +61,7 @@ vi.mock('react-native-paper', () => {
     Dialog: Object.assign(
       ({ visible, children }: { visible: boolean; children: React.ReactNode }) =>
         visible ? <div role="dialog">{children}</div> : null,
-      { Title: Content, Content, Actions: Content },
+      { Title: Content, Content, Actions: Content, ScrollArea: Content },
     ),
   };
 });

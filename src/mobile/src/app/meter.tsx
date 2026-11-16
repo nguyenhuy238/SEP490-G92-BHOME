@@ -16,6 +16,7 @@ import { meterService } from '../services/meterService';
 import { meterOcrFeedback } from '../services/meterOcrFeedback';
 import { MeterRoomOverview } from '../screens/MeterRoomOverview';
 import { meterRoundLabel, roomMeterTasks } from '../features/workspace/roomMeterTasks';
+import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import {
   estimatedConsumption,
   normalizedReading,
@@ -26,6 +27,7 @@ import {
 export default function MeterScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   const { api, session } = useSession();
+  const { staffLocationId } = useWorkspace();
   if (!api || !session) return <Redirect href="/" />;
   if (!session.roles.includes('Staff'))
     return (
@@ -33,16 +35,28 @@ export default function MeterScreen() {
         <Text>Chỉ Staff được giao cơ sở mới có thể ghi chỉ số.</Text>
       </Page>
     );
+  if (!staffLocationId)
+    return (
+      <WorkspaceShell screen="meter-reading">
+        <Text>Chưa có cơ sở được phân công để ghi chỉ số.</Text>
+      </WorkspaceShell>
+    );
   if (!taskId)
     return (
       <WorkspaceShell screen="meter-reading">
         <Text>Không tìm thấy mã tác vụ.</Text>
       </WorkspaceShell>
     );
-  return <RoomMeterScreen key={`${session.userId}:${taskId}`} taskId={taskId} />;
+  return (
+    <RoomMeterScreen
+      key={`${session.userId}:${staffLocationId}:${taskId}`}
+      taskId={taskId}
+      staffLocationId={staffLocationId}
+    />
+  );
 }
 
-function RoomMeterScreen({ taskId }: { taskId: string }) {
+function RoomMeterScreen({ taskId, staffLocationId }: { taskId: string; staffLocationId: string }) {
   const { api } = useSession();
   const [tasks, setTasks] = useState<MeterTask[]>([]);
   const [readings, setReadings] = useState<Record<string, ConfirmedReading>>({});
@@ -74,6 +88,10 @@ function RoomMeterScreen({ taskId }: { taskId: string }) {
       try {
         const client = meterService(api);
         const current = await client.task(taskId, controller.signal);
+        if (current.locationId !== staffLocationId)
+          throw new Error(
+            'Nhiệm vụ không thuộc cơ sở đang làm việc. Hãy chọn đúng cơ sở ở trang chủ.',
+          );
         const candidates: MeterTask[] = [];
         if (current.roomId && current.locationId) {
           for (let page = 1; ; page++) {
@@ -107,7 +125,7 @@ function RoomMeterScreen({ taskId }: { taskId: string }) {
       }
     })();
     return () => controller.abort();
-  }, [api, taskId, revision, setError]);
+  }, [api, taskId, staffLocationId, revision, setError]);
   useEffect(() => {
     const listener = AppState.addEventListener('change', (state) => {
       if (state === 'active' && !selected) reload();

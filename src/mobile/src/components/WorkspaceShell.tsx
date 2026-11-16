@@ -29,22 +29,20 @@ import { ui } from './WorkspaceKit';
 import { NotificationBadge } from './NotificationBadge';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { queryPolicies } from '../lib/queryPolicies';
-import type { Named } from '../lib/api';
 import { WorkspaceHeaderContext, type WorkspaceHeaderAction } from './WorkspaceHeaderContext';
 import { WorkspaceFooterContext } from './WorkspaceFooter';
 
 function StaffLocationSubtitle() {
-  const locations = useWorkspaceQuery<Named[]>('/api/v1/capture/locations', {
-    cache: queryPolicies.rooms,
-  });
+  const { staffLocationId, staffLocations, staffLocationsLoading, staffLocationsError } =
+    useWorkspace();
+  const selected = staffLocations.find((location) => location.id === staffLocationId);
   return (
     <Text variant="labelSmall" numberOfLines={2} style={styles.staffSubtitle}>
-      {locations.loading
+      {staffLocationsLoading
         ? 'Đang tải cơ sở…'
-        : locations.data?.length
-          ? locations.data.map((item) => item.label).join(' · ') +
-            (locations.error ? ' · Chưa cập nhật được' : '')
-          : locations.error
+        : selected
+          ? selected.label + (staffLocationsError ? ' · Chưa cập nhật được' : '')
+          : staffLocationsError
             ? 'Chưa tải được cơ sở'
             : 'Chưa có cơ sở được phân công'}
     </Text>

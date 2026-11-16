@@ -23,7 +23,11 @@ const state = vi.hoisted(() => ({
   foreground: null as null | ((state: string) => void),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ role: state.role, go: state.go }),
+  useWorkspace: () => ({
+    role: state.role,
+    go: state.go,
+    staffLocationId: '00000000-0000-4000-8000-000000000001',
+  }),
 }));
 
 vi.mock('../features/contracts/HoldingNewTenant', () => ({

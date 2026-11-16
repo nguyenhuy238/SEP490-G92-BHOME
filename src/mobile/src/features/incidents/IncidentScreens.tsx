@@ -66,15 +66,16 @@ function QueryState(props: React.ComponentProps<typeof SharedQueryState>) {
 }
 
 export function IncidentListScreen({ emergency = false }: { emergency?: boolean }) {
-  const { role, preview, go } = useWorkspace();
+  const { role, preview, go, staffLocationId } = useWorkspace();
   const { session } = useSession();
   const [page, setPage] = useState(1),
     [status, setStatus] = useState(''),
     [severity, setSeverity] = useState('');
   const enabled = !preview && !!session && !!role && session.roles.includes(role);
+  const active = enabled && (role !== 'Staff' || !!staffLocationId);
   const query = useIncidentQuery<IncidentPage<Incident>>(
-    enabled
-      ? `${incidentRoot}?${incidentQuery({ page, status, severity: emergency ? 'Emergency' : severity })}`
+    active
+      ? `${incidentRoot}?${incidentQuery({ page, status, severity: emergency ? 'Emergency' : severity, locationId: role === 'Staff' ? staffLocationId : undefined })}`
       : null,
   );
   return (
@@ -86,7 +87,10 @@ export function IncidentListScreen({ emergency = false }: { emergency?: boolean 
         detail="Dữ liệu theo quyền tài khoản và phân công hiện hành"
       />
       {!enabled && <Text>Đăng nhập để xem dữ liệu sự cố thật.</Text>}
-      {enabled && (
+      {enabled && role === 'Staff' && !staffLocationId && (
+        <Text accessibilityRole="alert">Chưa có cơ sở được phân công để xem sự cố.</Text>
+      )}
+      {active && (
         <>
           <Button compact mode="text" icon="bell-outline" onPress={() => go('incident-inbox')}>
             Thông báo sự cố và bảo trì
@@ -184,13 +188,15 @@ export function IncidentDetailScreen() {
   );
 }
 function IncidentDetail({ id }: { id: string }) {
-  const { role, preview, go } = useWorkspace();
+  const { role, preview, go, staffLocationId } = useWorkspace();
   const { session } = useSession();
   const enabled = !!session && !preview && !!role && session.roles.includes(role);
   const query = useIncidentQuery<Incident>(enabled ? `${incidentRoot}/${id}` : null);
+  const inSelectedLocation =
+    role !== 'Staff' || (!!staffLocationId && query.data?.locationId === staffLocationId);
   const [historyPage, setHistoryPage] = useState(1),
     [workPage, setWorkPage] = useState(1);
-  const loaded = enabled && !!query.data;
+  const loaded = enabled && !!query.data && inSelectedLocation;
   const history = useIncidentQuery<IncidentPage<IncidentActivity>>(
     loaded ? `${incidentRoot}/${id}/history?page=${historyPage}&pageSize=20` : null,
   );
@@ -253,7 +259,12 @@ function IncidentDetail({ id }: { id: string }) {
         Về danh sách báo cáo
       </Action>
       <QueryState {...query} />
-      {query.data && (
+      {query.data && !inSelectedLocation && (
+        <Text accessibilityRole="alert">
+          Báo cáo này không thuộc cơ sở đang làm việc. Hãy chọn đúng cơ sở trên trang chủ.
+        </Text>
+      )}
+      {query.data && inSelectedLocation && (
         <>
           <Box>
             <Heading title={query.data.code} detail={incidentDate(query.data.createdAt)} />
@@ -402,14 +413,17 @@ function WorkCard({ work }: { work: WorkOrder }) {
   );
 }
 export function MaintenanceListScreen() {
-  const { role, preview, go } = useWorkspace();
+  const { role, preview, go, staffLocationId } = useWorkspace();
   const { session } = useSession();
   const [page, setPage] = useState(1),
     [status, setStatus] = useState('');
   const enabled =
     !preview && !!session && (role === 'Staff' || role === 'Owner') && session.roles.includes(role);
+  const active = enabled && (role !== 'Staff' || !!staffLocationId);
   const query = useIncidentQuery<IncidentPage<WorkOrder>>(
-    enabled ? `${workOrderRoot}?${incidentQuery({ page, workOrderStatus: status })}` : null,
+    active
+      ? `${workOrderRoot}?${incidentQuery({ page, workOrderStatus: status, locationId: role === 'Staff' ? staffLocationId : undefined })}`
+      : null,
   );
   return (
     <>
@@ -418,7 +432,10 @@ export function MaintenanceListScreen() {
         detail="Lệnh sửa chữa theo phân công và quyền truy cập"
       />
       {!enabled && <Text>Đăng nhập Staff hoặc Owner để xem lệnh sửa chữa.</Text>}
-      {enabled && (
+      {enabled && role === 'Staff' && !staffLocationId && (
+        <Text accessibilityRole="alert">Chưa có cơ sở được phân công để xem bảo trì.</Text>
+      )}
+      {active && (
         <>
           <ChoiceField
             label="Trạng thái lệnh sửa chữa"
@@ -474,12 +491,15 @@ export function MaintenanceDetailScreen() {
   );
 }
 function WorkDetail({ id }: { id: string }) {
-  const { role, preview, go } = useWorkspace();
+  const { role, preview, go, staffLocationId } = useWorkspace();
   const { session } = useSession();
   const enabled =
     !preview && !!session && (role === 'Staff' || role === 'Owner') && session.roles.includes(role);
   const query = useIncidentQuery<WorkOrder>(enabled ? `${workOrderRoot}/${id}` : null);
-  const work = query.data;
+  const work =
+    role === 'Staff' && (!staffLocationId || query.data?.locationId !== staffLocationId)
+      ? null
+      : query.data;
   const incident = useIncidentQuery<Incident>(
     work?.incidentId ? `${incidentRoot}/${work.incidentId}` : null,
   );
@@ -525,6 +545,11 @@ function WorkDetail({ id }: { id: string }) {
         Về danh sách lệnh sửa chữa
       </Action>
       <QueryState {...query} />
+      {query.data && !work && (
+        <Text accessibilityRole="alert">
+          Lệnh sửa chữa này không thuộc cơ sở đang làm việc. Hãy chọn đúng cơ sở trên trang chủ.
+        </Text>
+      )}
       {work && (
         <>
           <Box>

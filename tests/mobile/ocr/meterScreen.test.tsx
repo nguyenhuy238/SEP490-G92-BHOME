@@ -135,6 +135,9 @@ vi.mock('../../../src/mobile/src/components/CameraCapture', () => ({
 vi.mock('../../../src/mobile/src/lib/SessionProvider', () => ({
   useSession: () => ({ api: mocks, session: { roles: ['Staff'] } }),
 }));
+vi.mock('../../../src/mobile/src/features/workspace/WorkspaceProvider', () => ({
+  useWorkspace: () => ({ staffLocationId: 'synthetic-location' }),
+}));
 import MeterScreen from '../../../src/mobile/src/app/meter';
 
 const proposal = {
@@ -149,6 +152,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.request.mockResolvedValue({
     id: 'synthetic-task',
+    locationId: 'synthetic-location',
     status: 0,
     location: 'Synthetic',
     room: 'P1',
