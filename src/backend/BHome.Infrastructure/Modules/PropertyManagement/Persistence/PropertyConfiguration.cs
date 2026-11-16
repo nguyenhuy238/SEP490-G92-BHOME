@@ -44,9 +44,6 @@ internal sealed class AssetConfiguration : IEntityTypeConfiguration<Asset>
         b.Property(x => x.CommonArea).HasMaxLength(200); b.Property(x => x.Code).HasMaxLength(80);
         b.Property(x => x.Name).HasMaxLength(150); b.Property(x => x.Category).HasMaxLength(80); b.Property(x => x.Condition).HasMaxLength(1000);
         b.Property(x => x.Version).IsConcurrencyToken();
-        // Compact24 stores asset quantities and tracking details in this existing JSONB column.
-        // Map it as a shadow property so grouped inserts can persist metadata with the Asset.
-        b.Property<string>("PurchaseInfo").HasColumnName("purchase_info").HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
     }
 }
 internal sealed class BillingPolicyConfiguration : IEntityTypeConfiguration<BillingPolicy>

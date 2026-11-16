@@ -335,7 +335,7 @@ it('requires human confirmation and keeps an ambiguous create retry on the same 
   const create = screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' });
   expect(create).toBeDisabled();
   fireEvent.click(
-    screen.getByLabelText('Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn'),
+    screen.getByLabelText('Tôi xác nhận nguồn tiền và người nhận hoàn theo bằng chứng'),
   );
   fireEvent.click(create);
   await screen.findByText('Chưa ghi nhận hoàn tất. Tải lại để kiểm tra trước khi thử lại.');
@@ -548,7 +548,7 @@ it('requests a refund to the verified outside payer without inventing a Resident
     target: { value: 'Synthetic verified outside payer return' },
   });
   fireEvent.click(
-    screen.getByLabelText('Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn'),
+    screen.getByLabelText('Tôi xác nhận nguồn tiền và người nhận hoàn theo bằng chứng'),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' }));
   await vi.waitFor(() =>

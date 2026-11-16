@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   Alert,
@@ -17,17 +17,22 @@ import {
   Menu,
   MenuItem,
   Paper,
+  Skeleton,
   Stack,
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
   Chip,
 } from '@mui/material';
 import {
   ArrowDownToLine,
+  Check,
   Clock3,
+  Copy,
   FileText,
+  Plus,
   RefreshCw,
   Settings2,
   SlidersHorizontal,
@@ -78,6 +83,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
     [selectedLabel, setSelectedLabel] = useState(''),
     [transferPage, setTransferPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
+  const [reviewTransfer, setReviewTransfer] = useState<BankTransfer | null>(null);
   const [recordUnmatched, setRecordUnmatched] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [showDebtHistory, setShowDebtHistory] = useState(false);
@@ -149,8 +155,17 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
     room ||
     period ||
     (showInvoiceFilters && (status || overdue)) ||
-    (!debtOnly && section === 1 && transferStatus !== 'PendingReview'),
+    (!debtOnly && section === 1 && !['PendingReview', ''].includes(transferStatus)),
   );
+  const paymentScope = [
+    location
+      ? (locations.data?.find((item) => item.id === location)?.label ?? 'Cơ sở đã chọn')
+      : 'Tất cả cơ sở',
+    room ? `Phòng ${rooms.data?.find((item) => item.id === room)?.label ?? 'đã chọn'}` : '',
+    period ? `Kỳ ${period.slice(5)}/${period.slice(0, 4)}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const refresh = () =>
     void cache.invalidateQueries({
       predicate: (q) =>
@@ -274,6 +289,7 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
               value={section <= 2 ? section : false}
               onChange={(_, value) => {
                 setSelected('');
+                setReviewTransfer(null);
                 setSection(value);
               }}
               variant="scrollable"
@@ -367,13 +383,84 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
             fullWidth
             aria-labelledby="unmatched-transfer-title"
           >
-            <DialogTitle id="unmatched-transfer-title">
-              Ghi nhận giao dịch chưa xác định hóa đơn
-            </DialogTitle>
+            <DialogTitle id="unmatched-transfer-title">Ghi nhận giao dịch thủ công</DialogTitle>
             <DialogContent>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Chỉ sử dụng khi đã đối chiếu tiền nhận trên sao kê nhưng giao dịch chưa xuất hiện
+                trong BHOME. Đính kèm ảnh sao kê để Owner có thể kiểm tra sau khi lưu; ảnh không tự
+                ghi nhận thanh toán. Kiểm tra danh sách giao dịch trước để tránh nhập trùng.
+              </Alert>
               <RecordTransferForm invoiceId="" onClose={() => setRecordUnmatched(false)} />
             </DialogContent>
           </Dialog>
+        )}
+        {!debtOnly && section === 1 && (
+          <Stack component="section" aria-label="Tổng quan đối soát" spacing={1.5}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              sx={{ gap: 1.5, alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+            >
+              <Box sx={{ minWidth: 0 }}>
+                <Typography component="h2" variant="h6" sx={{ fontWeight: 750 }}>
+                  {transferStatus === 'PendingReview'
+                    ? 'Giao dịch cần kiểm tra'
+                    : 'Danh sách giao dịch'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {transferStatus === 'PendingReview'
+                    ? 'Đối chiếu số tiền, mã chuyển khoản và hóa đơn trước khi xác nhận phân bổ.'
+                    : 'Tra cứu giao dịch theo trạng thái, thời gian và mã chuyển khoản.'}
+                </Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<Plus size={17} />}
+                onClick={() => setRecordUnmatched(true)}
+                sx={{ alignSelf: { xs: 'flex-start', sm: 'center' }, minHeight: 40 }}
+              >
+                Ghi nhận giao dịch thủ công
+              </Button>
+            </Stack>
+            <Stack
+              direction="row"
+              useFlexGap
+              role="group"
+              aria-label="Chọn trạng thái xem giao dịch"
+              sx={{ gap: 1, flexWrap: 'wrap' }}
+            >
+              <Button
+                size="small"
+                variant={transferStatus === 'PendingReview' ? 'contained' : 'outlined'}
+                aria-pressed={transferStatus === 'PendingReview'}
+                onClick={() => {
+                  setTransferStatus('PendingReview');
+                  setTransferPage(1);
+                }}
+                sx={{ minHeight: { xs: 44, sm: 36 } }}
+              >
+                Chờ đối soát
+                {transferStatus === 'PendingReview' && transfers.data && !transfers.error
+                  ? ` · ${transfers.data.totalCount}`
+                  : ''}
+              </Button>
+              <Button
+                size="small"
+                variant={transferStatus === '' ? 'contained' : 'outlined'}
+                aria-pressed={transferStatus === ''}
+                onClick={() => {
+                  setTransferStatus('');
+                  setTransferPage(1);
+                }}
+                sx={{ minHeight: { xs: 44, sm: 36 } }}
+              >
+                Tất cả giao dịch
+                {transferStatus === '' && transfers.data && !transfers.error
+                  ? ` · ${transfers.data.totalCount}`
+                  : ''}
+              </Button>
+            </Stack>
+          </Stack>
         )}
         {showFilters && (
           <Box component="section" aria-label="Bộ lọc thanh toán" sx={{ minWidth: 0 }}>
@@ -388,11 +475,13 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
                 }}
               >
                 <Typography variant="body2" sx={{ fontWeight: 650 }} color="text.secondary">
-                  {section === 3 && !debtOnly
-                    ? 'Chọn cơ sở nhận tiền'
-                    : hasCustomFilters
-                      ? 'Đang lọc kết quả'
-                      : ''}
+                  {!debtOnly && section === 1
+                    ? paymentScope
+                    : section === 3 && !debtOnly
+                      ? 'Chọn cơ sở nhận tiền'
+                      : hasCustomFilters
+                        ? 'Đang lọc kết quả'
+                        : ''}
                 </Typography>
                 <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
                   {hasCustomFilters && (
@@ -859,22 +948,25 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
             <Alert severity="info">Chọn cơ sở để cấu hình tài khoản nhận tiền.</Alert>
           ))}
         {!debtOnly && section === 1 && (
-          <Box component="section" aria-label="Giao dịch cần đối soát">
+          <Box
+            component="section"
+            aria-label={
+              transferStatus === 'PendingReview'
+                ? 'Giao dịch cần đối soát'
+                : 'Danh sách giao dịch theo trạng thái'
+            }
+          >
             <Stack spacing={1.5}>
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                sx={{ gap: 1, alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
-              >
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  Giao dịch{' '}
-                  {transferStatus === 'PendingReview' ? 'cần đối soát' : 'theo trạng thái'}
-                  {transfers.data ? ` · ${transfers.data.totalCount}` : ''}
-                </Typography>
-                <Button variant="contained" size="small" onClick={() => setRecordUnmatched(true)}>
-                  Ghi nhận giao dịch chưa xác định hóa đơn
-                </Button>
-              </Stack>
-              {transfers.isPending && <LinearProgress />}
+              {transfers.isPending && (
+                <Stack spacing={1} aria-label="Đang tải danh sách giao dịch">
+                  <Skeleton variant="rounded" height={78} />
+                  <Skeleton variant="rounded" height={78} />
+                  <Skeleton variant="rounded" height={78} />
+                </Stack>
+              )}
+              {transfers.isFetching && !transfers.isPending && (
+                <LinearProgress aria-label="Đang cập nhật danh sách giao dịch" />
+              )}
               {transfers.error && (
                 <Alert
                   severity="error"
@@ -883,40 +975,173 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
                   {paymentError(transfers.error)}
                 </Alert>
               )}
-              {transfers.data?.items.length === 0 && (
+              {!transfers.error && !transfers.isPending && transfers.data?.items.length === 0 && (
                 <Alert
                   severity="info"
                   action={
                     transferStatus !== 'PendingReview' ? (
-                      <Button color="inherit" onClick={() => setTransferStatus('PendingReview')}>
-                        Xem giao dịch cần đối soát
+                      <Button
+                        color="inherit"
+                        onClick={() => {
+                          setTransferStatus('PendingReview');
+                          setTransferPage(1);
+                        }}
+                      >
+                        Xem giao dịch chờ đối soát
+                      </Button>
+                    ) : hasCustomFilters ? (
+                      <Button
+                        color="inherit"
+                        onClick={() => {
+                          setLocation('');
+                          setRoom('');
+                          setPeriod('');
+                          setTransferPage(1);
+                        }}
+                      >
+                        Xóa bộ lọc
                       </Button>
                     ) : undefined
                   }
                 >
-                  {transferStatus === 'PendingReview'
-                    ? 'Không có giao dịch chờ xác minh trong phạm vi đã chọn.'
-                    : 'Không có giao dịch ở trạng thái này trong phạm vi đã chọn.'}
+                  {transfers.data.totalCount > 0
+                    ? 'Trang này không còn giao dịch. Quay lại trang trước để tiếp tục.'
+                    : transferStatus === 'PendingReview'
+                      ? hasCustomFilters
+                        ? 'Không có giao dịch chờ đối soát trong phạm vi đã lọc.'
+                        : 'Hiện chưa có giao dịch chờ đối soát. Giao dịch cần kiểm tra sẽ xuất hiện tại đây.'
+                      : 'Không có giao dịch phù hợp trạng thái và phạm vi đang chọn.'}
                 </Alert>
               )}
-              {transfers.data?.items.map((transfer) => (
-                <TransferListItem key={transfer.id} transfer={transfer} initiallyExpanded={false} />
-              ))}
-              <Stack direction="row">
-                <Button
-                  disabled={transferPage === 1}
-                  onClick={() => setTransferPage(transferPage - 1)}
+              {!!transfers.data?.items.length && !transfers.error && (
+                <Paper
+                  role="list"
+                  aria-label="Danh sách giao dịch đối soát"
+                  variant="outlined"
+                  sx={{ borderRadius: 2, overflow: 'hidden' }}
                 >
-                  Giao dịch trước
-                </Button>
-                <Button
-                  disabled={!transfers.data || transferPage * 20 >= transfers.data.totalCount}
-                  onClick={() => setTransferPage(transferPage + 1)}
+                  {transfers.data.items.map((transfer, index) => (
+                    <TransferListItem
+                      key={transfer.id}
+                      transfer={transfer}
+                      last={index === transfers.data.items.length - 1}
+                      onReview={() => setReviewTransfer(transfer)}
+                    />
+                  ))}
+                </Paper>
+              )}
+              {!!transfers.data && transfers.data.totalCount > 0 && !transfers.error && (
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  sx={{ gap: 1, alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
                 >
-                  Giao dịch sau
-                </Button>
-              </Stack>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    Hiển thị {Math.min((transferPage - 1) * 20 + 1, transfers.data.totalCount)}–
+                    {Math.min(
+                      (transferPage - 1) * 20 + transfers.data.items.length,
+                      transfers.data.totalCount,
+                    )}{' '}
+                    / {transfers.data.totalCount} giao dịch
+                  </Typography>
+                  <Stack direction="row" sx={{ gap: 1, alignItems: 'center' }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={transferPage === 1 || transfers.isFetching}
+                      onClick={() => setTransferPage(transferPage - 1)}
+                    >
+                      Giao dịch trước
+                    </Button>
+                    <Typography
+                      variant="body2"
+                      sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
+                    >
+                      Trang {transferPage}
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={
+                        transfers.isFetching || transferPage * 20 >= transfers.data.totalCount
+                      }
+                      onClick={() => setTransferPage(transferPage + 1)}
+                    >
+                      Giao dịch sau
+                    </Button>
+                  </Stack>
+                </Stack>
+              )}
             </Stack>
+            <Drawer
+              anchor="right"
+              open={!!reviewTransfer}
+              onClose={() => setReviewTransfer(null)}
+              ModalProps={{ keepMounted: false }}
+              slotProps={{
+                paper: {
+                  'aria-labelledby': 'transfer-review-title',
+                  sx: {
+                    width: { xs: '100%', sm: 640, md: 700 },
+                    maxWidth: '100%',
+                    height: '100dvh',
+                    bgcolor: 'background.default',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  },
+                },
+              }}
+            >
+              <Stack
+                direction="row"
+                sx={{
+                  px: { xs: 1.5, sm: 2 },
+                  py: 1.5,
+                  bgcolor: 'background.paper',
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1.5,
+                  flexShrink: 0,
+                }}
+              >
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography
+                    id="transfer-review-title"
+                    variant="subtitle1"
+                    sx={{ fontWeight: 750 }}
+                  >
+                    Chi tiết đối soát giao dịch
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Đóng để quay lại danh sách và bộ lọc hiện tại.
+                  </Typography>
+                </Box>
+                <IconButton
+                  aria-label="Đóng chi tiết giao dịch"
+                  onClick={() => setReviewTransfer(null)}
+                >
+                  <X size={20} />
+                </IconButton>
+              </Stack>
+              <Box
+                sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  minWidth: 0,
+                  overflowY: 'auto',
+                  p: { xs: 1.5, sm: 2 },
+                }}
+              >
+                {reviewTransfer && (
+                  <ReconcileTransfer key={reviewTransfer.id} transfer={reviewTransfer} />
+                )}
+              </Box>
+            </Drawer>
           </Box>
         )}
         {(debtOnly ? showDebtHistory : section === 2) && (
@@ -1039,62 +1264,149 @@ export function PaymentManagementPage({ debtOnly = false }: { debtOnly?: boolean
 
 function TransferListItem({
   transfer,
-  initiallyExpanded,
+  last,
+  onReview,
 }: {
   transfer: BankTransfer;
-  initiallyExpanded: boolean;
+  last: boolean;
+  onReview: () => void;
 }) {
-  const [expanded, setExpanded] = useState(initiallyExpanded);
-  const detailId = useId();
+  const [showFullReference, setShowFullReference] = useState(false);
+  const [copyState, setCopyState] = useState<'copied' | 'failed' | null>(null);
+  const longReference = transfer.bankReference.length > 28;
+  const shortReference = longReference
+    ? `${transfer.bankReference.slice(0, 14)}…${transfer.bankReference.slice(-8)}`
+    : transfer.bankReference;
+  const copyReference = () => {
+    if (!navigator.clipboard?.writeText) {
+      setCopyState('failed');
+      setShowFullReference(true);
+      return;
+    }
+    void navigator.clipboard
+      .writeText(transfer.bankReference)
+      .then(() => setCopyState('copied'))
+      .catch(() => {
+        setCopyState('failed');
+        setShowFullReference(true);
+      });
+  };
   return (
-    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
+    <Box
+      role="listitem"
+      sx={{
+        minWidth: 0,
+        borderBottom: last ? 0 : '1px solid',
+        borderColor: 'divider',
+        '&:hover': { bgcolor: 'action.hover' },
+      }}
+    >
       <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        sx={{ p: 1.5, gap: 1.5, alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+        direction={{ xs: 'column', md: 'row' }}
+        sx={{
+          px: { xs: 1.5, md: 2 },
+          py: 1.5,
+          gap: 1.5,
+          alignItems: { md: 'center' },
+          justifyContent: 'space-between',
+        }}
       >
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-            {transfer.bankReference} · {formatContractMoney(transfer.amount)}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {formatInstant(transfer.occurredAt)} · {transfer.providerIdentity}
-          </Typography>
-        </Box>
-        <Stack
-          direction="row"
-          sx={{ gap: 1, alignItems: 'center', justifyContent: 'space-between' }}
-        >
-          <StatusChip label={paymentText(transfer.status)} />
-          <Button
-            variant={
-              expanded ? 'text' : transfer.status === 'PendingReview' ? 'contained' : 'outlined'
-            }
-            size="small"
-            aria-expanded={expanded}
-            aria-controls={detailId}
-            onClick={() => setExpanded((value) => !value)}
+        <Stack spacing={0.5} sx={{ minWidth: 0, flex: 1 }}>
+          <Stack
+            direction="row"
+            useFlexGap
+            sx={{ flexWrap: 'wrap', alignItems: 'center', columnGap: 1.25, rowGap: 0.5 }}
           >
-            {expanded
-              ? 'Thu gọn'
-              : transfer.status === 'PendingReview'
-                ? 'Kiểm tra & đối soát'
-                : 'Xem chi tiết'}
-          </Button>
+            <Typography
+              variant="subtitle1"
+              sx={{ fontWeight: 750, lineHeight: 1.3, fontVariantNumeric: 'tabular-nums' }}
+            >
+              {formatContractMoney(transfer.amount)}
+            </Typography>
+            <StatusChip label={paymentText(transfer.status)} />
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            {formatInstant(transfer.occurredAt)} · Nguồn: {transfer.providerIdentity}
+            {transfer.isDevelopmentDemo ? ' · Dữ liệu thử nghiệm' : ''}
+          </Typography>
+          <Stack
+            direction="row"
+            useFlexGap
+            sx={{ alignItems: 'center', gap: 0.5, flexWrap: 'wrap', minWidth: 0 }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              Mã giao dịch:
+            </Typography>
+            <Tooltip title={transfer.bankReference} arrow>
+              <Typography
+                component="span"
+                variant="body2"
+                sx={{
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: 'text.secondary',
+                  overflowWrap: 'anywhere',
+                  userSelect: 'text',
+                }}
+              >
+                {showFullReference ? transfer.bankReference : shortReference}
+              </Typography>
+            </Tooltip>
+            {longReference && (
+              <Button
+                size="small"
+                variant="text"
+                aria-expanded={showFullReference}
+                onClick={() => setShowFullReference((value) => !value)}
+                sx={{
+                  minWidth: 0,
+                  px: 0.75,
+                  py: 0,
+                  minHeight: { xs: 44, sm: 32 },
+                  fontSize: 12,
+                  textTransform: 'none',
+                }}
+              >
+                {showFullReference ? 'Thu gọn mã' : 'Xem mã đầy đủ'}
+              </Button>
+            )}
+            <Tooltip title="Sao chép mã giao dịch">
+              <IconButton
+                size="small"
+                color={copyState === 'copied' ? 'success' : 'default'}
+                aria-label="Sao chép mã giao dịch"
+                onClick={copyReference}
+                sx={{ width: { xs: 44, sm: 32 }, height: { xs: 44, sm: 32 } }}
+              >
+                {copyState === 'copied' ? <Check size={16} /> : <Copy size={16} />}
+              </IconButton>
+            </Tooltip>
+            {copyState === 'copied' && (
+              <Typography role="status" variant="caption" color="success.main">
+                Đã sao chép
+              </Typography>
+            )}
+            {copyState === 'failed' && (
+              <Typography role="status" variant="caption" color="text.secondary">
+                Chọn mã đầy đủ để sao chép
+              </Typography>
+            )}
+          </Stack>
         </Stack>
-      </Stack>
-      {expanded && (
-        <Box
-          id={detailId}
+        <Button
+          variant={transfer.status === 'PendingReview' ? 'contained' : 'outlined'}
+          size="small"
+          aria-haspopup="dialog"
+          onClick={onReview}
           sx={{
-            p: { xs: 1, sm: 1.5 },
-            borderTop: '1px solid',
-            borderColor: 'divider',
-            bgcolor: 'background.default',
+            flexShrink: 0,
+            alignSelf: { xs: 'stretch', md: 'center' },
+            minHeight: { xs: 44, md: 38 },
           }}
         >
-          <ReconcileTransfer transfer={transfer} />
-        </Box>
-      )}
+          {transfer.status === 'PendingReview' ? 'Kiểm tra & đối soát' : 'Xem chi tiết'}
+        </Button>
+      </Stack>
     </Box>
   );
 }

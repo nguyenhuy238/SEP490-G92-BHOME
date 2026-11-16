@@ -15,6 +15,12 @@ public sealed class PaymentTransfer : AuditableEntity
     public DateTimeOffset OccurredAt { get; set; }
     public string TransferDescription { get; set; } = "";
     public string StatementReference { get; set; } = "";
+    // Private, Owner-authenticated evidence for a manually registered bank receipt.
+    // Historical receipts and authenticated SePay receipts intentionally leave these null.
+    public string? StatementEvidenceObjectKey { get; set; }
+    public string? StatementEvidenceSha256 { get; set; }
+    public string? StatementEvidenceContentType { get; set; }
+    public long? StatementEvidenceLength { get; set; }
     public string VerificationReason { get; set; } = "";
     public string VerificationSource { get; set; } = "OwnerBankStatement";
     public Guid VerifiedByUserId { get; set; }

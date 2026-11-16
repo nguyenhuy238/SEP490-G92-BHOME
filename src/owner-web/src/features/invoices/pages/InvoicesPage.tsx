@@ -662,17 +662,22 @@ export function LiveInvoicesPage() {
         title="Hóa đơn phòng"
         subtitle="Kiểm tra chi phí theo hợp đồng và chỉ số đã xác nhận trước khi phát hành."
         actions={
-          <Button
-            variant="contained"
-            onClick={() => {
-              if (filterLocation) setLocationId(filterLocation);
-              if (filterRoom) setRoomId(filterRoom);
-              if (filterPeriod) setPeriod(filterPeriod);
-              setCreating(true);
-            }}
-          >
-            Lập hóa đơn nháp
-          </Button>
+          <Stack spacing={0.5} sx={{ alignItems: { sm: 'flex-end' } }}>
+            <Button
+              variant="contained"
+              onClick={() => {
+                if (filterLocation) setLocationId(filterLocation);
+                if (filterRoom) setRoomId(filterRoom);
+                if (filterPeriod) setPeriod(filterPeriod);
+                setCreating(true);
+              }}
+            >
+              Lập hóa đơn nháp
+            </Button>
+            <Typography variant="caption" color="text.secondary">
+              Kiểm tra bản nháp trước khi phát hành chính thức.
+            </Typography>
+          </Stack>
         }
       />
       <Stack spacing={2}>
@@ -684,6 +689,9 @@ export function LiveInvoicesPage() {
               setPage(1);
             }}
           />
+          <Typography variant="caption" color="text.secondary">
+            Bản nháp: còn có thể cập nhật đầu vào · Đã phát hành: xem công nợ và thanh toán.
+          </Typography>
           <FilterToolbar>
             <TextField
               select
@@ -777,7 +785,8 @@ export function LiveInvoicesPage() {
             <Stack spacing={2}>
               {!!error && <Alert severity="error">{error}</Alert>}
               <Typography variant="body2" color="text.secondary">
-                Chọn cơ sở, phòng và kỳ cần lập nháp. Hợp đồng phù hợp sẽ xuất hiện bên dưới.
+                Chọn cơ sở, phòng và kỳ cần lập nháp, sau đó chọn hợp đồng phù hợp. Bạn có thể kiểm
+                tra các khoản thu trước khi phát hành.
               </Typography>
               <Stack spacing={2} sx={{ pt: 1 }}>
                 <TextField
@@ -894,12 +903,16 @@ export function LiveInvoicesPage() {
           </Alert>
         )}
         {!list.error && !list.isPending && list.data?.items.length === 0 && (
-          <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
-            <Typography sx={{ fontWeight: 700 }}>Chưa có hóa đơn.</Typography>
+          <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, textAlign: 'center' }}>
+            <Typography sx={{ fontWeight: 700 }}>
+              {filterLocation || filterRoom || filterPeriod || filterStatus
+                ? 'Không tìm thấy hóa đơn phù hợp'
+                : 'Chưa có hóa đơn.'}
+            </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {filterLocation || filterRoom || filterPeriod || filterStatus
                 ? 'Không có hóa đơn phù hợp với bộ lọc hiện tại.'
-                : 'Lập bản nháp cho một phòng và kỳ thanh toán để bắt đầu.'}
+                : 'Lập bản nháp theo phòng và kỳ thanh toán. Sau đó kiểm tra chỉ số, biểu giá và từng khoản thu trước khi phát hành.'}
             </Typography>
             <Button
               variant="outlined"
@@ -920,6 +933,20 @@ export function LiveInvoicesPage() {
                 ? 'Xóa bộ lọc'
                 : 'Lập hóa đơn nháp'}
             </Button>
+            {!filterLocation && !filterRoom && !filterPeriod && !filterStatus && (
+              <Stack
+                direction="row"
+                useFlexGap
+                sx={{ mt: 1, gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}
+              >
+                <Button size="small" component={Link} to="/meters">
+                  Kiểm tra chỉ số
+                </Button>
+                <Button size="small" component={Link} to="/pricing">
+                  Kiểm tra biểu giá
+                </Button>
+              </Stack>
+            )}
           </Paper>
         )}
         {!!list.data?.items.length && !list.error && (

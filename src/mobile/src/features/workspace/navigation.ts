@@ -19,6 +19,7 @@ export const screenRoles = {
   'contract-request': ['Tenant'],
   signing: ['Owner', 'Staff', 'Tenant'],
   'billing-history': ['Tenant'],
+  'refund-requests': ['Tenant'],
   shifts: ['Staff'],
   rooms: ['Staff'],
   'debt-follow-up': ['Staff'],
@@ -120,7 +121,15 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
     if (['profile', 'security', 'preferences'].includes(screen)) return 'profile';
     if (['invoice', 'billing-history', 'adjustment', 'tenant-meters'].includes(screen))
       return 'invoice';
-    if (['incidents', 'tenant-requests', 'incident-detail', 'incident-inbox'].includes(screen))
+    if (
+      [
+        'incidents',
+        'tenant-requests',
+        'incident-detail',
+        'incident-inbox',
+        'refund-requests',
+      ].includes(screen)
+    )
       return 'tenant-requests';
     return 'tenant-home';
   }

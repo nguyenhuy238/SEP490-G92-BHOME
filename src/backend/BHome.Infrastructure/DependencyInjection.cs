@@ -280,6 +280,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Finance.IFinancialReportRepository, BHome.Infrastructure.Finance.FinancialReportRepository>();
         services.AddScoped<BHome.Application.Finance.IRefundRepository, BHome.Infrastructure.Finance.RefundRepository>();
         services.AddScoped<BHome.Application.Finance.RefundService>();
+        services.AddScoped<BHome.Application.Finance.ITenantRefundPetitionRepository, BHome.Infrastructure.Finance.TenantRefundPetitionRepository>();
+        services.AddScoped<BHome.Application.Finance.TenantRefundPetitionService>();
         services.AddScoped<BHome.Application.Finance.FinancialReportService>();
         services.AddScoped<BHome.Application.Finance.IFinancialScenarioRepository, BHome.Infrastructure.Finance.FinancialScenarioRepository>();
         services.AddScoped<BHome.Application.Finance.FinancialScenarioService>();

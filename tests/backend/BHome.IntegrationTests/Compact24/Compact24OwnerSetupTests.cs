@@ -219,9 +219,8 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         await using (var scope = host.Services.CreateAsyncScope()) evidence = (await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [1, 2, 3], "image/png", w.Staff.Id, default)).ObjectKey;
         var verified = await Read<JsonElement>(await staff.PostAsJsonAsync($"/api/v1/rooms/{w.Room}/assets/verify", new AssetVerification(template.Id, item.Id, "LEGACY-CHAIR", 1, "Good", evidence, desired.Version, asset.Id)));
         Assert.Equal(asset.Id, verified.GetProperty("assetId").GetGuid());
-        var after = (await staff.GetFromJsonAsync<AssetInventory>($"/api/v1/rooms/{w.Room}/asset-inventory"))!;
-        Assert.Single(after.Physical);
-        Assert.Equal(asset.Id, (await staff.GetFromJsonAsync<JsonElement>($"/api/v1/rooms/{w.Room}/asset-inventory")).GetProperty("physical")[0].GetProperty("id").GetGuid());
+        var after = (await staff.GetFromJsonAsync<InventoryResponse>($"/api/v1/rooms/{w.Room}/asset-inventory"))!;
+        Assert.Equal(asset.Id, Assert.Single(after.Physical).Id);
         Assert.Equal("BulkQuantity", after.Metadata![asset.Id].TrackingMode);
         Assert.Equal("Verified", after.Desired.Single(d => d.Id == after.CurrentDesiredId).Status);
     }

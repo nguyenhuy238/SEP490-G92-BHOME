@@ -274,3 +274,65 @@ it('shows API failure without demo rows or false success and preserves the retry
   expect(mock.createExpense.mock.calls[0][1]).toBe(mock.createExpense.mock.calls[1][1]);
   expect(screen.queryByText('Đã lưu khoản chi.')).not.toBeInTheDocument();
 });
+it('offers a clear all-expenses recovery when a filter returns no results', async () => {
+  mock.expenses.mockImplementation(async (filters) =>
+    filters.category
+      ? { items: [], total: 0, page: 1, pageSize: 25 }
+      : { items: [expense], total: 1, page: 1, pageSize: 25 },
+  );
+  mount();
+  await screen.findAllByText('Bảo trì');
+  fireEvent.click(screen.getByRole('button', { name: 'Bộ lọc chi tiết' }));
+  fireEvent.change(screen.getByLabelText('Danh mục'), { target: { value: 'không có' } });
+  await screen.findByText(/Không tìm thấy khoản chi theo bộ lọc hiện tại/);
+  fireEvent.click(screen.getByRole('button', { name: 'Xem tất cả khoản chi' }));
+  await screen.findAllByText('Bảo trì');
+  expect(screen.getByLabelText('Danh mục')).toHaveValue('');
+  expect(mock.expenses).toHaveBeenLastCalledWith(
+    expect.objectContaining({ page: 1 }),
+    expect.any(AbortSignal),
+  );
+});
+it('distinguishes an immutable source-managed expense from its optional Work Order and asset links', async () => {
+  mock.expenses.mockResolvedValue({
+    items: [
+      {
+        ...expense,
+        canEdit: false,
+        assetName: 'Máy bơm',
+        taskTitle: 'Sửa máy bơm',
+        taskId: 'work-order',
+      },
+    ],
+    total: 1,
+    page: 1,
+    pageSize: 25,
+  });
+  mount();
+  expect((await screen.findAllByText('Do nghiệp vụ nguồn quản lý')).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/Tài sản: Máy bơm · Work Order: Sửa máy bơm/).length).toBeGreaterThan(
+    0,
+  );
+  expect(screen.getAllByRole('button', { name: 'Xem chi tiết' }).length).toBeGreaterThan(0);
+});
+it('opens the linked Work Order from a read-only expense when a router is available', async () => {
+  const linked = { ...expense, canEdit: false, taskId: 'work-order', taskTitle: 'Sửa máy bơm' };
+  mock.expenses.mockResolvedValue({ items: [linked], total: 1, page: 1, pageSize: 25 });
+  mock.expense.mockResolvedValue(linked);
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter initialEntries={['/locations/location/investment']}>
+        <Routes>
+          <Route path="/locations/:locationId/investment" element={<ExpensesApiPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Xem chi tiết' }))[0]);
+  expect(await screen.findByRole('link', { name: 'Mở Work Order liên quan' })).toHaveAttribute(
+    'href',
+    '/maintenance?workOrderId=work-order',
+  );
+});

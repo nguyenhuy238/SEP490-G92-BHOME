@@ -171,6 +171,10 @@ export function FinancialScenariosApiPage() {
             <Typography variant="h6" component="h2" sx={{ fontWeight: 750 }}>
               Giả định & kỳ dữ liệu nền
             </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Kỳ dữ liệu nền dùng số liệu thực tế để đối chiếu; số tháng dự báo xác định khoảng thời
+              gian ước tính. Các số tiền và tỷ lệ bên dưới là giả định bạn nhập.
+            </Typography>
             <Box
               sx={{
                 display: 'grid',
@@ -341,10 +345,21 @@ export function FinancialScenariosApiPage() {
               <Button type="submit" variant="contained" disabled={busy}>
                 Phân tích
               </Button>
-              <Button disabled={busy || !view || !!view.id} onClick={() => void run('save')}>
+              <Button
+                disabled={busy || !view || !!view.id}
+                onClick={() => void run('save')}
+                variant="outlined"
+              >
                 Lưu kịch bản
               </Button>
             </Stack>
+            <Typography variant="body2" color="text.secondary" aria-live="polite">
+              {!view
+                ? 'Nhấn Phân tích để xem dự báo trước. Nút Lưu kịch bản chỉ dùng được khi đã có kết quả phân tích.'
+                : view.id
+                  ? 'Đây là kịch bản đã lưu. Nếu thay đổi giả định, hãy Phân tích lại trước khi lưu một kết quả mới.'
+                  : 'Kết quả phân tích hiện chưa được lưu. Nhấn Lưu kịch bản để giữ lại giả định và ảnh chụp dữ liệu nền.'}
+            </Typography>
           </Stack>
         </form>
       </Paper>
@@ -426,7 +441,16 @@ export function FinancialScenariosApiPage() {
         </AccordionSummary>
         <AccordionDetails>
           {!saved.error && !saved.isPending && saved.data?.length === 0 && (
-            <Alert severity="info">Chưa có kịch bản ở trang này.</Alert>
+            <Alert
+              severity="info"
+              action={
+                page > 1 ? <Button onClick={() => setPage(1)}>Về trang đầu</Button> : undefined
+              }
+            >
+              {page > 1
+                ? 'Trang này không có kịch bản. Quay về trang đầu để xem các bản đã lưu.'
+                : 'Chưa có kịch bản đã lưu. Nhập giả định ở trên, nhấn Phân tích rồi Lưu kịch bản để giữ kết quả.'}
+            </Alert>
           )}
           {!saved.error &&
             saved.data?.map((s) => (

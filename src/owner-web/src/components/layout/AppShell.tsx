@@ -31,8 +31,6 @@ import {
   KeyRound,
   LayoutDashboard,
   Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
   Package,
   Receipt,
   RotateCcw,
@@ -140,7 +138,7 @@ const navLabels: Record<string, string> = {
   meters: 'Chỉ số điện nước',
   finance: 'Tổng quan',
   invoices: 'Lập hóa đơn',
-  'billing-automation': 'Lịch tự động',
+  'billing-automation': 'Lịch lập hóa đơn',
   'invoice-adjustments': 'Điều chỉnh hóa đơn',
   payments: 'Thu tiền & công nợ',
   debts: 'Công nợ',
@@ -153,6 +151,7 @@ const navLabels: Record<string, string> = {
 };
 const financeWorkspaceByRoute: Record<string, string> = {
   finance: 'finance',
+  pricing: 'invoices',
   meters: 'invoices',
   invoices: 'invoices',
   'billing-automation': 'invoices',
@@ -163,19 +162,11 @@ const financeWorkspaceByRoute: Record<string, string> = {
   reports: 'reports',
   'what-if': 'reports',
 };
-const sidebarPreference = 'bhome.owner.sidebar-collapsed';
 const headerHeight = 64;
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false),
     [resetOpen, setResetOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(sidebarPreference) === 'true';
-    } catch {
-      return false;
-    }
-  });
   const [searchAnchor, setSearchAnchor] = useState<HTMLElement | null>(null);
   const { data, isError } = usePortalData();
   const portal = usePortal();
@@ -193,16 +184,7 @@ export function AppShell() {
   const missingLocation =
     locationValue !== 'all' && !locations.some((row) => row.id === locationValue);
   const showLocationSelector = isMockMode || inLocationWorkspace;
-  const sidebarWidth = collapsed ? 72 : 248;
-  const toggleSidebar = () => {
-    const next = !collapsed;
-    setCollapsed(next);
-    try {
-      localStorage.setItem(sidebarPreference, String(next));
-    } catch {
-      // The navigation remains usable when browser storage is unavailable.
-    }
-  };
+  const sidebarWidth = 248;
   const nav = (compact: boolean) => (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'white' }}>
       <Stack
@@ -372,7 +354,7 @@ export function AppShell() {
           zIndex: 1200,
         }}
       >
-        {nav(collapsed)}
+        {nav(false)}
       </Box>
       <Drawer
         open={mobileOpen}
@@ -410,16 +392,6 @@ export function AppShell() {
           >
             <Menu size={20} />
           </IconButton>
-          <Tooltip title={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}>
-            <IconButton
-              aria-label={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
-              aria-expanded={!collapsed}
-              onClick={toggleSidebar}
-              sx={{ display: { xs: 'none', lg: 'inline-flex' }, flexShrink: 0 }}
-            >
-              {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-            </IconButton>
-          </Tooltip>
           <Typography
             noWrap
             sx={{

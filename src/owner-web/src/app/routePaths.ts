@@ -27,6 +27,7 @@ export const portalRoutes = [
   '/invoices',
   '/invoice-adjustments',
   '/payments',
+  '/tenant-refund-requests',
   '/debts',
   '/incidents',
   '/maintenance',
