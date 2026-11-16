@@ -22,14 +22,16 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync(policyRoute, LifecyclePolicy() with { InspectionIntervalDays = 0 })).StatusCode);
         var published = await Read<SetupDocument>(await owner.PostAsJsonAsync($"/api/v1/asset-lifecycle-policies/{policy.Id}/publish", new TemplatePublish(policy.Version)));
         Assert.Equal("Published", published.Status);
+        var future = await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/locations/{w.Location}/asset-lifecycle-policies/{Guid.NewGuid()}", LifecyclePolicy() with { Name = "Synthetic future policy", EffectiveFrom = Today.AddDays(1) }));
+        await Read<SetupDocument>(await owner.PostAsJsonAsync($"/api/v1/asset-lifecycle-policies/{future.Id}/publish", new TemplatePublish(future.Version)));
         var copyInput = new ConfigurationCopy(w.Location, other.Location, ["AssetLifecyclePolicies"]);
         var preview = await Read<ConfigurationCopyPlan>(await owner.PostAsJsonAsync("/api/v1/location-configuration/copy-preview", copyInput));
         Assert.True(preview.CanProceed);
         var copied = await Read<SharedOperation>(await Keyed(owner, "/api/v1/location-configuration/copy",
             copyInput with { SourceState = preview.SourceState, TargetState = preview.TargetState }, Guid.NewGuid()));
-        Assert.Single(copied.CreatedReferences);
+        Assert.Equal(2, copied.CreatedReferences.Length);
         var copiedPolicies = (await owner.GetFromJsonAsync<SetupPage>($"/api/v1/locations/{other.Location}/asset-lifecycle-policies"))!;
-        Assert.Equal("Draft", Assert.Single(copiedPolicies.Items).Status);
+        Assert.Equal(2, copiedPolicies.TotalCount); Assert.All(copiedPolicies.Items, item => Assert.Equal("Draft", item.Status));
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(policyRoute, LifecyclePolicy() with { ExpectedVersion = published.Version })).StatusCode);
         var asset = await Read<AssetDto>(await owner.PostAsJsonAsync("/api/v1/assets", new AssetWrite(w.Location, null, "Lobby", "SYN-FIRE", "Synthetic extinguisher", "FireSafetyEquipment", "Unassessed", InitialTrackingMode: "BulkQuantity", InitialQuantity: 4)));
         var ids = Enumerable.Range(0, 4).Select(_ => Guid.NewGuid()).ToArray();
@@ -42,6 +44,8 @@ public sealed partial class Compact24OwnerSetupTests
         await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/assets/{asset.Id}/equipment-units/{ids[0]}", input with { Status = "Unsafe", ExpectedVersion = 1 }));
         var summary = (await owner.GetFromJsonAsync<AssetLifecycleSummary>($"/api/v1/assets/{asset.Id}/lifecycle-summary"))!;
         Assert.Equal(4, summary.Quantity); Assert.Equal(1, summary.FailedUnits);
+        Assert.Equal(published.Id, Assert.Single(summary.ApplicablePolicies).Id);
+        Assert.Equal("Recorded", summary.ConfigurationStatus);
         await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/assets/{asset.Id}/equipment-units/{ids[0]}", input with { Status = "Retired", RetiredOn = Today, RetirementReason = "Synthetic replacement", ExpectedVersion = 2 }));
         await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/assets/{asset.Id}/equipment-units/{Guid.NewGuid()}", input with { ReplacesUnitId = ids[0] }));
         summary = (await owner.GetFromJsonAsync<AssetLifecycleSummary>($"/api/v1/assets/{asset.Id}/lifecycle-summary"))!;

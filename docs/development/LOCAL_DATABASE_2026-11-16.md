@@ -13,11 +13,11 @@ Tên database dùng định dạng local được công cụ migration/seed hi�
 
 ## Đăng nhập demo
 
-| Vai trò | Email đăng nhập |
-| --- | --- |
-| Owner | `owner.sample@example.invalid` |
-| Staff | `staff.sample@example.invalid` |
-| Tenant | `tenant.sample@example.invalid` |
+| Vai trò                            | Email đăng nhập                       |
+| ---------------------------------- | ------------------------------------- |
+| Owner                              | `owner.sample@example.invalid`        |
+| Staff                              | `staff.sample@example.invalid`        |
+| Tenant                             | `tenant.sample@example.invalid`       |
 | Tenant khác để kiểm tra phân quyền | `tenant.other.sample@example.invalid` |
 
 Mật khẩu chung được tạo ngẫu nhiên, lưu trong [file tài khoản riêng](../../.tools/local-database-20261116/DEMO_ACCOUNTS.txt). File này nằm trong `.tools/`, bị Git bỏ qua. Không đưa mật khẩu vào tài liệu hoặc commit.
@@ -63,16 +63,16 @@ Thư mục riêng `.tools/local-database-20261116/` chứa:
 
 Nguồn phạm vi: yêu cầu chuyển môi trường local ngày 16/11/2026; AGENTS.md §6/7/9/10; GBR-01/02 về quyền truy cập; BF-01/BF-02 về dữ liệu cơ sở và phân công mẫu. Không bổ sung quy tắc nghiệp vụ hoặc coi seed là bằng chứng thực hiện ký/thanh toán. Thành phần dùng lại: `Compact24DbContext` và 17 migration hiện có, `Compact24SampleSeed`, `Start-Api.ps1`, `Test-Database.ps1`.
 
-| Kiểm tra | Kết quả |
-| --- | --- |
-| Kiểm tra `bhome` cũ bằng `Update-LocalDatabase.ps1 -Check` | Từ chối `unrecognized_existing_schema`; giữ nguyên database |
-| EF update trên database mới | PASS — áp dụng 17 migration |
-| Build công cụ seed và database probe | PASS — 0 warning, 0 error |
-| Probe schema/runtime EF | PASS — 24 bảng, 17 migration đã áp dụng, 0 pending, 0 unknown |
-| Seed lần đầu và chạy lại | PASS — tạo dữ liệu; chạy lại báo `SAMPLE_ALREADY_PRESENT`, số bản ghi không tăng |
-| Smoke API thực trên PostgreSQL local | PASS — 31 assertions |
-| Sao lưu database cũ/mới và đọc catalog dump mới | PASS |
-| Khôi phục đầy đủ dump, UI pgAdmin, UI trình duyệt/điện thoại | NOT RUN |
+| Kiểm tra                                                     | Kết quả                                                                          |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Kiểm tra `bhome` cũ bằng `Update-LocalDatabase.ps1 -Check`   | Từ chối `unrecognized_existing_schema`; giữ nguyên database                      |
+| EF update trên database mới                                  | PASS — áp dụng 17 migration                                                      |
+| Build công cụ seed và database probe                         | PASS — 0 warning, 0 error                                                        |
+| Probe schema/runtime EF                                      | PASS — 24 bảng, 17 migration đã áp dụng, 0 pending, 0 unknown                    |
+| Seed lần đầu và chạy lại                                     | PASS — tạo dữ liệu; chạy lại báo `SAMPLE_ALREADY_PRESENT`, số bản ghi không tăng |
+| Smoke API thực trên PostgreSQL local                         | PASS — 31 assertions                                                             |
+| Sao lưu database cũ/mới và đọc catalog dump mới              | PASS                                                                             |
+| Khôi phục đầy đủ dump, UI pgAdmin, UI trình duyệt/điện thoại | NOT RUN                                                                          |
 
 31 assertions gồm liveness/readiness, chặn anonymous và mật khẩu sai, đăng nhập/session/vai trò cho cả 4 tài khoản, Owner đọc 2 cơ sở, Staff chỉ có 1 phân công và nhận 404 ở cơ sở khác, Staff/Tenant nhận 403 khi đọc danh sách cư dân, Tenant đọc danh sách hóa đơn trong phạm vi riêng, logout 4 session kiểm tra.
 
@@ -118,14 +118,14 @@ Tunnel ngrok và một Owner Web Development riêng trên `127.0.0.1:5176` đã 
 
 Địa chỉ hiện tại nằm trong file riêng `.tools/local-public-links/public-origin.txt`. Các đường dẫn:
 
-| Chức năng | Đường dẫn trên public origin |
-| --- | --- |
-| Lời mời tài khoản | `/accept-invitation` |
-| Đặt lại mật khẩu | `/reset-password` |
-| Xác nhận email | `/confirm-email` |
-| Lời mời ký ẩn danh | `/contract-signing` |
-| Mở ứng dụng để ký | `/open/sign-contract` |
-| SePay webhook | `/api/v1/integrations/sepay/webhook` |
+| Chức năng          | Đường dẫn trên public origin         |
+| ------------------ | ------------------------------------ |
+| Lời mời tài khoản  | `/accept-invitation`                 |
+| Đặt lại mật khẩu   | `/reset-password`                    |
+| Xác nhận email     | `/confirm-email`                     |
+| Lời mời ký ẩn danh | `/contract-signing`                  |
+| Mở ứng dụng để ký  | `/open/sign-contract`                |
+| SePay webhook      | `/api/v1/integrations/sepay/webhook` |
 
 Sau khi khởi động lại máy, dùng ngrok đã được cài/đăng nhập và dependencies hiện có:
 

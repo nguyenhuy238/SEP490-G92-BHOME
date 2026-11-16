@@ -73,6 +73,7 @@ export interface LifecycleSummary {
   failedUnits: number;
   retiredUnits: number;
   configurationStatus: string;
+  applicablePolicies?: { id: string; version: number; name: string }[];
 }
 export function assetLifecycleClient(request: SetupRequest) {
   const put = <T>(path: string, value: unknown) =>

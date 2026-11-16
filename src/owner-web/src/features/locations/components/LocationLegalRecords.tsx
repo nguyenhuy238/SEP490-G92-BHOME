@@ -11,6 +11,7 @@ import {
   Pagination,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -25,10 +26,10 @@ import {
 } from '../../../../../../packages/client-core/src/assetLifecycle';
 import type { SetupDocument } from '../../../../../../packages/client-core/src/propertySetup';
 import { displayContractDate } from '../../../../../../packages/client-core/src/contracts';
-import { useMeterApi } from '../../meters/useMeterApi';
+import { usePropertySetupApi } from '../../property/usePropertySetupApi';
 
 export function LocationLegalRecords({ locationId }: { locationId: string }) {
-  const { request } = useMeterApi();
+  const { request } = usePropertySetupApi();
   const api = assetLifecycleClient(request);
   const cache = useQueryClient();
   const [page, setPage] = useState(1);
@@ -79,39 +80,41 @@ export function LocationLegalRecords({ locationId }: { locationId: string }) {
       {download.isError && <Alert severity="error">{lifecycleError(download.error)}</Alert>}
       {records.data?.items.length === 0 && <Typography>Chưa có hồ sơ pháp lý.</Typography>}
       {!!records.data?.items.length && (
-        <Table size="small" aria-label="Hồ sơ pháp lý">
-          <TableHead>
-            <TableRow>
-              <TableCell>Tài liệu</TableCell>
-              <TableCell>Ngày cấp / hết hạn</TableCell>
-              <TableCell>Trạng thái</TableCell>
-              <TableCell>Thao tác</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {records.data.items.map((record) => (
-              <TableRow key={record.id}>
-                <TableCell>
-                  {record.data.details.name}
-                  <Typography variant="caption" sx={{ display: 'block' }}>
-                    {record.data.details.documentType} · Phiên bản {record.version}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  {displayContractDate(record.data.details.issuedOn)} /{' '}
-                  {record.data.details.expiresOn
-                    ? displayContractDate(record.data.details.expiresOn)
-                    : 'Không có hạn'}
-                </TableCell>
-                <TableCell>{record.status === 'Active' ? 'Đang sử dụng' : 'Lưu trữ'}</TableCell>
-                <TableCell>
-                  <Button onClick={() => setEditing(record)}>Cập nhật</Button>
-                  <Button onClick={() => setHistoryId(record.id)}>Lịch sử</Button>
-                </TableCell>
+        <TableContainer>
+          <Table size="small" aria-label="Hồ sơ pháp lý">
+            <TableHead>
+              <TableRow>
+                <TableCell>Tài liệu</TableCell>
+                <TableCell>Ngày cấp / hết hạn</TableCell>
+                <TableCell>Trạng thái</TableCell>
+                <TableCell>Thao tác</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {records.data.items.map((record) => (
+                <TableRow key={record.id}>
+                  <TableCell>
+                    {record.data.details.name}
+                    <Typography variant="caption" sx={{ display: 'block' }}>
+                      {record.data.details.documentType} · Phiên bản {record.version}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    {displayContractDate(record.data.details.issuedOn)} /{' '}
+                    {record.data.details.expiresOn
+                      ? displayContractDate(record.data.details.expiresOn)
+                      : 'Không có hạn'}
+                  </TableCell>
+                  <TableCell>{record.status === 'Active' ? 'Đang sử dụng' : 'Lưu trữ'}</TableCell>
+                  <TableCell>
+                    <Button onClick={() => setEditing(record)}>Cập nhật</Button>
+                    <Button onClick={() => setHistoryId(record.id)}>Lịch sử</Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
       {records.data && records.data.totalCount > 20 && (
         <Pagination
@@ -174,7 +177,7 @@ function LegalRecordForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { request } = useMeterApi();
+  const { request } = usePropertySetupApi();
   const [id] = useState(() => record?.id ?? crypto.randomUUID());
   const mutation = useMutation({
     mutationFn: (form: FormData) => assetLifecycleClient(request).saveLegal(locationId, id, form),

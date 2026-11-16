@@ -14,8 +14,9 @@ public sealed record EquipmentUnitWrite(string Label, string? SerialNumber, stri
     string? Model, DateOnly? ManufacturedOn, DateOnly? CommissionedOn, string Position,
     string Status, DateOnly? RetiredOn, string? RetirementReason, Guid? ReplacesUnitId, int ExpectedVersion = 0);
 public sealed record EquipmentUnit(Guid AssetId, EquipmentUnitWrite Details);
+public sealed record ApplicableLifecyclePolicy(Guid Id, int Version, string Name);
 public sealed record AssetLifecycleSummary(int Quantity, int RecordedUnits, int ActiveUnits, int FailedUnits,
-    int RetiredUnits, string ConfigurationStatus);
+    int RetiredUnits, string ConfigurationStatus, IReadOnlyList<ApplicableLifecyclePolicy> ApplicablePolicies);
 
 public static class AssetLifecycleRules
 {

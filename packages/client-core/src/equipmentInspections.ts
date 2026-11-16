@@ -96,8 +96,12 @@ export function equipmentInspectionClient(request: SetupRequest) {
       }),
     save: (id: string, expectedVersion: number, answers: InspectionAnswer[], submit: boolean) =>
       write(id, 'answers', { expectedVersion, answers, submit }, 'PUT'),
-    review: (id: string, expectedVersion: number, action: 'Verify' | 'Rework', note: string) =>
-      write(id, 'review', { expectedVersion, action, note }),
+    review: (
+      id: string,
+      expectedVersion: number,
+      action: 'Verify' | 'Rework' | 'Cancel',
+      note: string,
+    ) => write(id, 'review', { expectedVersion, action, note }),
     remediate: (
       id: string,
       expectedVersion: number,

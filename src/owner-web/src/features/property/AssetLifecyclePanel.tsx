@@ -14,6 +14,7 @@ import {
   Pagination,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -40,6 +41,7 @@ export function AssetLifecyclePanel({ asset }: { asset: PhysicalAsset }) {
   const api = assetLifecycleClient(request);
   const cache = useQueryClient();
   const [page, setPage] = useState(1);
+  const [policyPage, setPolicyPage] = useState(1);
   const [editing, setEditing] = useState<SetupDocument<EquipmentUnit> | 'new' | null>(null);
   const [policyForm, setPolicyForm] = useState(false);
   const units = useQuery({
@@ -51,13 +53,14 @@ export function AssetLifecyclePanel({ asset }: { asset: PhysicalAsset }) {
     queryFn: ({ signal }) => api.summary(asset.id, signal),
   });
   const policies = useQuery({
-    queryKey: ['asset-lifecycle-policies', asset.locationId],
-    queryFn: ({ signal }) => api.policies(asset.locationId, 1, signal),
+    queryKey: ['asset-lifecycle-policies', asset.locationId, policyPage],
+    queryFn: ({ signal }) => api.policies(asset.locationId, policyPage, signal),
   });
   const publish = useMutation({
     mutationFn: (item: SetupDocument<LifecyclePolicy>) => api.publishPolicy(item.id, item.version),
     onSuccess: () => {
       void cache.invalidateQueries({ queryKey: ['asset-lifecycle-policies'] });
+      void cache.invalidateQueries({ queryKey: ['asset-lifecycle-summary', asset.id] });
     },
   });
   return (
@@ -71,8 +74,15 @@ export function AssetLifecyclePanel({ asset }: { asset: PhysicalAsset }) {
         </Typography>
       )}
       {summary.data?.configurationStatus === 'NeedsConfiguration' && (
-        <Alert severity="info">Cần bổ sung thông tin từng thiết bị và đối soát số lượng.</Alert>
+        <Alert severity="info">
+          Kiểm tra thông tin thiết bị, số lượng và chính sách vòng đời đã công bố có hiệu lực.
+        </Alert>
       )}
+      {summary.data?.applicablePolicies?.map((policy) => (
+        <Typography key={policy.id} variant="body2">
+          Chính sách phù hợp · {policy.name} · Phiên bản {policy.version}
+        </Typography>
+      ))}
       {(units.isError || summary.isError || policies.isError || publish.isError) && (
         <Alert
           severity="error"
@@ -97,41 +107,43 @@ export function AssetLifecyclePanel({ asset }: { asset: PhysicalAsset }) {
       </Button>
       {units.data?.items.length === 0 && <Typography>Chưa ghi nhận chi tiết thiết bị.</Typography>}
       {!!units.data?.items.length && (
-        <Table size="small" aria-label="Thiết bị thuộc nhóm">
-          <TableHead>
-            <TableRow>
-              <TableCell>Thiết bị / vị trí</TableCell>
-              <TableCell>Serial</TableCell>
-              <TableCell>Tình trạng</TableCell>
-              <TableCell />
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {units.data.items.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell>
-                  {item.data.details.label}
-                  <Typography variant="caption" sx={{ display: 'block' }}>
-                    {item.data.details.position}
-                  </Typography>
-                </TableCell>
-                <TableCell>{item.data.details.serialNumber || 'Chưa xác định'}</TableCell>
-                <TableCell>
-                  {item.status === 'InService'
-                    ? 'Đang sử dụng'
-                    : item.status === 'Unsafe'
-                      ? 'Không được sử dụng'
-                      : 'Đã ngừng sử dụng'}
-                </TableCell>
-                <TableCell>
-                  {item.status !== 'Retired' && (
-                    <Button onClick={() => setEditing(item)}>Cập nhật</Button>
-                  )}
-                </TableCell>
+        <TableContainer>
+          <Table size="small" aria-label="Thiết bị thuộc nhóm">
+            <TableHead>
+              <TableRow>
+                <TableCell>Thiết bị / vị trí</TableCell>
+                <TableCell>Serial</TableCell>
+                <TableCell>Tình trạng</TableCell>
+                <TableCell />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {units.data.items.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    {item.data.details.label}
+                    <Typography variant="caption" sx={{ display: 'block' }}>
+                      {item.data.details.position}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{item.data.details.serialNumber || 'Chưa xác định'}</TableCell>
+                  <TableCell>
+                    {item.status === 'InService'
+                      ? 'Đang sử dụng'
+                      : item.status === 'Unsafe'
+                        ? 'Không được sử dụng'
+                        : 'Đã ngừng sử dụng'}
+                  </TableCell>
+                  <TableCell>
+                    {item.status !== 'Retired' && (
+                      <Button onClick={() => setEditing(item)}>Cập nhật</Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
       {units.data && units.data.totalCount > 20 && (
         <Pagination
@@ -168,6 +180,13 @@ export function AssetLifecyclePanel({ asset }: { asset: PhysicalAsset }) {
             )}
           </Stack>
         ))}
+      {policies.data && policies.data.totalCount > 20 && (
+        <Pagination
+          page={policyPage}
+          count={Math.ceil(policies.data.totalCount / 20)}
+          onChange={(_, value) => setPolicyPage(value)}
+        />
+      )}
       {editing && (
         <EquipmentForm
           asset={asset}

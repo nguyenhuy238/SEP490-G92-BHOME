@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { LocationLegalRecords } from './LocationLegalRecords';
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock('../../meters/useMeterApi', () => ({ useMeterApi: () => ({ request }) }));
+vi.mock('../../property/usePropertySetupApi', () => ({ usePropertySetupApi: () => ({ request }) }));
 beforeEach(() => request.mockReset());
 function mount() {
   render(

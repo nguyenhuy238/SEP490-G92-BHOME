@@ -18,6 +18,8 @@ import type {
 } from '../../../../packages/client-core/src/assetLifecycle';
 import type { PhysicalAsset } from '../../../../packages/client-core/src/propertySetup';
 import { displayContractDate } from '../../../../packages/client-core/src/contracts';
+import type { SetupDocument } from '../../../../packages/client-core/src/propertySetup';
+import { PrivateFileDownload } from '../components/PrivateFileDownload';
 
 export function OwnerLocationRecordsScreen() {
   const { go } = useWorkspace();
@@ -27,6 +29,10 @@ export function OwnerLocationRecordsScreen() {
   const [assetPage, setAssetPage] = useState(1);
   const [unitPage, setUnitPage] = useState(1);
   const [inspectionPage, setInspectionPage] = useState(1);
+  const [historyId, setHistoryId] = useState('');
+  const history = useWorkspaceQuery<SetupDocument<LegalRecord>[]>(
+    historyId ? `/api/v1/location-legal-records/${historyId}/versions` : null,
+  );
   const locations = useWorkspaceQuery<Named[]>('/api/v1/capture/locations');
   const records = useWorkspaceQuery<RecordPage<LegalRecord>>(
     location ? `/api/v1/locations/${location}/legal-records?page=${page}` : null,
@@ -58,6 +64,7 @@ export function OwnerLocationRecordsScreen() {
           setAssetPage(1);
           setUnitPage(1);
           setInspectionPage(1);
+          setHistoryId('');
         }}
       />
       <QueryState {...records} />
@@ -71,6 +78,27 @@ export function OwnerLocationRecordsScreen() {
               : 'Không có ngày hết hạn'}
           </Text>
           <Text>{item.status === 'Active' ? 'Đang sử dụng' : 'Lưu trữ'}</Text>
+          <PrivateFileDownload
+            path={`/api/v1/location-legal-records/${item.id}/versions/${item.version}/file`}
+            contentType={item.data.contentType}
+            label="Mở hoặc lưu tài liệu"
+          />
+          <Action secondary onPress={() => setHistoryId(historyId === item.id ? '' : item.id)}>
+            Lịch sử phiên bản
+          </Action>
+          {historyId === item.id && (
+            <>
+              <QueryState {...history} />
+              {history.data?.map((version) => (
+                <PrivateFileDownload
+                  key={version.version}
+                  path={`/api/v1/location-legal-records/${version.id}/versions/${version.version}/file`}
+                  contentType={version.data.contentType}
+                  label={`Tải phiên bản ${version.version}`}
+                />
+              ))}
+            </>
+          )}
         </Box>
       ))}
       {records.data?.totalCount === 0 && <Text>Chưa có hồ sơ pháp lý.</Text>}
@@ -121,6 +149,11 @@ export function OwnerLocationRecordsScreen() {
           dụng {summary.data.failedUnits}
         </Text>
       )}
+      {summary.data?.applicablePolicies?.map((policy) => (
+        <Text key={policy.id}>
+          Chính sách phù hợp · {policy.name} · Phiên bản {policy.version}
+        </Text>
+      ))}
       {units.data?.items.map((item) => (
         <Box key={item.id}>
           <Heading title={item.data.details.label} detail={item.data.details.position} />

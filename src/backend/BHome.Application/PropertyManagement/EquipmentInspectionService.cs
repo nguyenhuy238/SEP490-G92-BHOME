@@ -93,13 +93,21 @@ public sealed class EquipmentInspectionService(ISetupWorkspaceStore store, ICurr
     public async Task<SetupDocument> ReviewAsync(Guid id, InspectionReview input, CancellationToken t)
     {
         var initial = await Document(id, "EquipmentInspection", true, t); Text(input.Note, 2000);
-        if (input.Action is not ("Verify" or "Rework")) throw new PropertyException(400, "invalid_inspection_review");
+        if (input.Action is not ("Verify" or "Rework" or "Cancel")) throw new PropertyException(400, "invalid_inspection_review");
         return await Store.TransactionAsync(initial.LocationId, async () =>
         {
             var doc = await Document(id, initial.Kind, true, t);
-            if (doc.Status != "Submitted") throw new PropertyException(409, "inspection_not_submitted");
+            if (input.Action == "Cancel" ? doc.Status is not ("Draft" or "Submitted") : doc.Status != "Submitted")
+                throw new PropertyException(409, "inspection_not_submitted");
             var data = Read<EquipmentInspection>(doc);
             var task = await tasks.GetAsync(data.TaskId, t);
+            if (input.Action == "Cancel")
+            {
+                var cancelled = await Store.SaveAsync(id, doc.LocationId, doc.Kind, "Cancelled", data with { ReviewNote = input.Note }, input.ExpectedVersion, Actor, t);
+                await tasks.ActAsync(data.TaskId, "cancel", new(task.Version, input.Note), Key($"inspection-cancel:{id}:{cancelled.Version}"), t);
+                await Store.AuditAsync(doc.LocationId, id, Actor, "EquipmentInspectionCancelled", t);
+                return cancelled;
+            }
             if (input.Action == "Verify" && data.PolicySnapshot.IndividualTracking)
             {
                 var hasOpenWork = await Store.HasOpenAssetWorkAsync(data.AssetId, t);

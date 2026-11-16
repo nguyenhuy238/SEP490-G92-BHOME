@@ -16,7 +16,7 @@ import {
 } from '../../../../../packages/client-core/src/equipmentInspections';
 import { lifecycleError } from '../../../../../packages/client-core/src/assetLifecycle';
 import type { SetupDocument } from '../../../../../packages/client-core/src/propertySetup';
-import { inputDate } from '../../../../../packages/client-core/src/contracts';
+import { inputDate } from '../../lib/identity';
 
 export function EquipmentInspectionPanel({
   taskId,
@@ -66,7 +66,7 @@ function InspectionContent({
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const service = api ? equipmentInspectionClient((path, init) => api.request(path, init)) : null;
-  async function perform(action: 'Save' | 'Submit' | 'Verify' | 'Rework' | 'Remediate') {
+  async function perform(action: 'Save' | 'Submit' | 'Verify' | 'Rework' | 'Cancel' | 'Remediate') {
     if (!service || lock.current) return;
     lock.current = true;
     setBusy(true);
@@ -192,6 +192,16 @@ function InspectionContent({
           </Action>
           <Action secondary disabled={busy || !note.trim()} onPress={() => void perform('Rework')}>
             Yêu cầu kiểm tra lại
+          </Action>
+        </>
+      )}
+      {role === 'Owner' && ['Draft', 'Submitted'].includes(record.status) && (
+        <>
+          {record.status === 'Draft' && (
+            <Input label="Lý do hủy kỳ kiểm tra" value={note} onChange={setNote} disabled={busy} />
+          )}
+          <Action secondary disabled={busy || !note.trim()} onPress={() => void perform('Cancel')}>
+            Hủy kỳ kiểm tra theo ghi chú
           </Action>
         </>
       )}

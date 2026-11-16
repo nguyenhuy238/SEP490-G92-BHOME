@@ -3,7 +3,7 @@ using BHome.Domain.PropertyManagement;
 
 namespace BHome.Application.PropertyManagement;
 
-public sealed class AssetLifecycleService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access)
+public sealed class AssetLifecycleService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access, TimeProvider clock)
     : SetupWorkspaceService(store, user, access)
 {
     public async Task<SetupPage> PoliciesAsync(Guid location, int page, int size, CancellationToken t)
@@ -23,7 +23,9 @@ public sealed class AssetLifecycleService(ISetupWorkspaceStore store, ICurrentUs
             if (input.ReplacesId is { } replaced)
             {
                 var source = await Document(replaced, "AssetLifecyclePolicy", true, t);
-                if (source.LocationId != location || source.Status != "Published") throw new PropertyException(400, "invalid_policy_replacement");
+                var sourceData = Read<AssetLifecyclePolicyWrite>(source);
+                if (source.LocationId != location || source.Status != "Published" || sourceData.Category != input.Category || input.EffectiveFrom < sourceData.EffectiveFrom)
+                    throw new PropertyException(400, "invalid_policy_replacement");
             }
             var saved = await Store.SaveAsync(id, location, "AssetLifecyclePolicy", "Draft", input, input.ExpectedVersion, Actor, t);
             await Store.AuditAsync(location, id, Actor, "AssetLifecyclePolicyDraftSaved", t);
@@ -63,8 +65,22 @@ public sealed class AssetLifecycleService(ISetupWorkspaceStore store, ICurrentUs
         var units = await AllUnits(asset, t);
         var quantity = (await Store.AssetMetadataAsync([asset.Id], t)).GetValueOrDefault(asset.Id)?.Quantity ?? 1;
         var active = units.Count(d => d.Status != "Retired");
+        var policyDocuments = new List<SetupDocument>();
+        SetupPage policyPage; var page = 1;
+        do
+        {
+            policyPage = await Store.PageAsync(asset.LocationId, "AssetLifecyclePolicy", null, page++, 100, t);
+            policyDocuments.AddRange(policyPage.Items);
+        } while (policyDocuments.Count < policyPage.TotalCount);
+        var today = BHome.Application.Billing.BillingAutomationDates.BusinessDate(clock.GetUtcNow());
+        var effective = policyDocuments.Where(d => d.Status == "Published")
+            .Select(d => (Document: d, Data: Read<AssetLifecyclePolicyWrite>(d)))
+            .Where(p => p.Data.Category == asset.Category && p.Data.EffectiveFrom <= today).ToArray();
+        var replaced = effective.Select(p => p.Data.ReplacesId).ToHashSet();
+        var applicable = effective.Where(p => !replaced.Contains(p.Document.Id))
+            .Select(p => new ApplicableLifecyclePolicy(p.Document.Id, p.Document.Version, p.Data.Name)).ToArray();
         return new(quantity, units.Count, active, units.Count(d => d.Status == "Unsafe"), units.Count(d => d.Status == "Retired"),
-            active == quantity ? "Recorded" : "NeedsConfiguration");
+            active == quantity && applicable.Length > 0 ? "Recorded" : "NeedsConfiguration", applicable);
     }
 
     internal async Task<IReadOnlyList<SetupDocument>> AllUnits(Asset asset, CancellationToken t)
@@ -98,6 +114,8 @@ public sealed class AssetLifecycleService(ISetupWorkspaceStore store, ICurrentUs
             var old = await Store.GetAsync(unitId, "AssetEquipmentUnit", t);
             if (old is not null && (old.LocationId != asset.LocationId || Read<EquipmentUnit>(old).AssetId != assetId || old.Status == "Retired"))
                 throw new PropertyException(409, "equipment_unit_immutable_or_wrong_asset");
+            if (old?.Status == "Unsafe" && input.Status == "InService")
+                throw new PropertyException(409, "equipment_reinspection_required");
             var quantity = (await Store.AssetMetadataAsync([assetId], t)).GetValueOrDefault(assetId)?.Quantity ?? 1;
             if (input.Status != "Retired" && units.Count(d => d.Status != "Retired" && d.Id != unitId) >= quantity)
                 throw new PropertyException(409, "equipment_quantity_exceeded");

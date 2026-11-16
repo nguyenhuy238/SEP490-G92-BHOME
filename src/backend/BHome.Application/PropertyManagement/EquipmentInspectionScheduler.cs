@@ -37,11 +37,13 @@ public sealed class EquipmentInspectionScheduler(ISetupWorkspaceStore store, IOp
                 page = await store.PageAsync(asset.LocationId, "AssetEquipmentUnit", asset.Id, number++, 100, t);
                 units.AddRange(page.Items.Where(d => d.Status != "Retired"));
             } while ((number - 1) * 100 < page.TotalCount);
-            if (policyData.IndividualTracking && units.Count != quantity)
+            if (policyData.Category != asset.Category || policyData.IndividualTracking && units.Count != quantity)
             {
                 if (schedule.Status != "NeedsConfiguration") await store.SaveAsync(schedule.Id, schedule.LocationId, schedule.Kind, "NeedsConfiguration", input, schedule.Version, schedule.RecordedBy!.Value, t);
                 return 0;
             }
+            if (schedule.Status == "NeedsConfiguration")
+                await store.SaveAsync(schedule.Id, schedule.LocationId, schedule.Kind, "Enabled", input, schedule.Version, schedule.RecordedBy!.Value, t);
             var snapshots = policyData.IndividualTracking
                 ? units.Select(d => { var u = d.Data.Deserialize<EquipmentUnit>(Json)!; return new InspectionUnitSnapshot(d.Id, d.Version, u.Details.Label, u.Details.Position); }).ToArray()
                 : [new InspectionUnitSnapshot(asset.Id, asset.Version, asset.Name, asset.CommonArea ?? "Room")];
@@ -56,13 +58,20 @@ public sealed class EquipmentInspectionScheduler(ISetupWorkspaceStore store, IOp
                     var responsible = await tasks.ResponsibilityAsync(asset.LocationId, today, t);
                     var task = new OperationalTask(taskId)
                     {
-                        Kind = OperationalTaskKind.AdHoc, LocationId = asset.LocationId,
-                        AssignedStaffUserId = responsible?.StaffUserId, AssignmentId = responsible?.AssignmentId,
-                        AssignedAt = clock.GetUtcNow(), Title = "Kiểm tra thiết bị · " + asset.Name,
-                        Requirements = policyData.Name, EvidenceRequired = policyData.EvidenceRequired,
+                        Kind = OperationalTaskKind.AdHoc,
+                        LocationId = asset.LocationId,
+                        AssignedStaffUserId = responsible?.StaffUserId,
+                        AssignmentId = responsible?.AssignmentId,
+                        AssignedAt = clock.GetUtcNow(),
+                        Title = "Kiểm tra thiết bị · " + asset.Name,
+                        Requirements = policyData.Name,
+                        EvidenceRequired = policyData.EvidenceRequired,
                         DueAt = new DateTimeOffset(date.AddDays(input.CompletionWindowDays).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime(),
-                        TargetAssetId = asset.Id, TargetRoomId = asset.RoomId, TargetCommonArea = asset.CommonArea,
-                        TargetLabel = asset.Name, Status = MeterTaskStatus.Assigned
+                        TargetAssetId = asset.Id,
+                        TargetRoomId = asset.RoomId,
+                        TargetCommonArea = asset.CommonArea,
+                        TargetLabel = asset.Name,
+                        Status = MeterTaskStatus.Assigned
                     };
                     tasks.Add(task);
                     tasks.Add(new OperationalTaskHistory { TaskId = taskId, ActorId = schedule.RecordedBy!.Value, Action = "created", Note = "Equipment inspection scheduled", OccurredAt = clock.GetUtcNow(), TaskVersion = 1, ResponsibleStaffUserId = responsible?.StaffUserId });

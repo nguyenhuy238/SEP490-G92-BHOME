@@ -24,6 +24,7 @@ import {
 import {
   assetLifecycleClient,
   lifecycleError,
+  type LifecyclePolicy,
 } from '../../../../../packages/client-core/src/assetLifecycle';
 import type {
   PhysicalAsset,
@@ -36,6 +37,7 @@ export function EquipmentInspectionsPanel({ asset }: { asset: PhysicalAsset }) {
   const { request } = useMeterApi();
   const api = equipmentInspectionClient(request);
   const [page, setPage] = useState(1);
+  const [schedulePage, setSchedulePage] = useState(1);
   const [open, setOpen] = useState(false);
   const cache = useQueryClient();
   const cycles = useQuery({
@@ -43,8 +45,8 @@ export function EquipmentInspectionsPanel({ asset }: { asset: PhysicalAsset }) {
     queryFn: () => api.list(asset.id, page),
   });
   const schedules = useQuery({
-    queryKey: ['equipment-inspection-schedules', asset.id],
-    queryFn: () => api.schedules(asset.id),
+    queryKey: ['equipment-inspection-schedules', asset.id, schedulePage],
+    queryFn: () => api.schedules(asset.id, schedulePage),
   });
   const generate = useMutation({
     mutationFn: api.generate,
@@ -95,6 +97,13 @@ export function EquipmentInspectionsPanel({ asset }: { asset: PhysicalAsset }) {
           </Button>
         </Stack>
       ))}
+      {schedules.data && schedules.data.totalCount > 20 && (
+        <Pagination
+          page={schedulePage}
+          count={Math.ceil(schedules.data.totalCount / 20)}
+          onChange={(_, value) => setSchedulePage(value)}
+        />
+      )}
       {generate.isSuccess && (
         <Typography role="status">Đã tạo {generate.data.created} nhiệm vụ mới.</Typography>
       )}
@@ -155,7 +164,7 @@ function InspectionReviewPanel({
   const data = record.data;
   const api = equipmentInspectionClient(request);
   const mutation = useMutation({
-    mutationFn: (action: 'Verify' | 'Rework' | 'Remediate') =>
+    mutationFn: (action: 'Verify' | 'Rework' | 'Cancel' | 'Remediate') =>
       action === 'Remediate'
         ? api.remediate(
             record.id,
@@ -212,7 +221,8 @@ function InspectionReviewPanel({
       ))}
       {data.reviewNote && <Typography>Ghi chú Owner · {data.reviewNote}</Typography>}
       {mutation.isError && <Alert severity="error">{lifecycleError(mutation.error)}</Alert>}
-      {(record.status === 'Submitted' ||
+      {(record.status === 'Draft' ||
+        record.status === 'Submitted' ||
         (record.status === 'Verified' &&
           data.outcome === 'Failed' &&
           !data.remediationWorkOrderId)) && (
@@ -238,6 +248,14 @@ function InspectionReviewPanel({
             Yêu cầu kiểm tra lại
           </Button>
         </Stack>
+      )}
+      {['Draft', 'Submitted'].includes(record.status) && (
+        <Button
+          disabled={mutation.isPending || !note.trim()}
+          onClick={() => mutation.mutate('Cancel')}
+        >
+          Hủy kỳ kiểm tra theo ghi chú
+        </Button>
       )}
       {record.status === 'Verified' &&
         data.outcome === 'Failed' &&
@@ -277,14 +295,17 @@ function InspectionScheduleForm({
   onSaved: () => void;
 }) {
   const { request } = useMeterApi();
+  const [policyPage, setPolicyPage] = useState(1);
+  const [selectedPolicy, setSelectedPolicy] = useState<SetupDocument<LifecyclePolicy> | null>(null);
   const policies = useQuery({
-    queryKey: ['asset-lifecycle-policies', asset.locationId],
-    queryFn: () => assetLifecycleClient(request).policies(asset.locationId),
+    queryKey: ['asset-lifecycle-policies', asset.locationId, policyPage],
+    queryFn: ({ signal }) =>
+      assetLifecycleClient(request).policies(asset.locationId, policyPage, signal),
   });
   const [id] = useState(() => crypto.randomUUID());
   const mutation = useMutation({
     mutationFn: (form: FormData) => {
-      const policy = policies.data?.items.find((item) => item.id === form.get('policy'));
+      const policy = selectedPolicy;
       if (!policy) throw new Error('policy_required');
       return equipmentInspectionClient(request).schedule(asset.id, id, {
         assetId: asset.id,
@@ -312,7 +333,22 @@ function InspectionScheduleForm({
             {(mutation.isError || policies.isError) && (
               <Alert severity="error">{lifecycleError(mutation.error ?? policies.error)}</Alert>
             )}
-            <TextField required select label="Chính sách đã công bố" name="policy" defaultValue="">
+            <TextField
+              required
+              select
+              label="Chính sách đã công bố"
+              name="policy"
+              value={selectedPolicy?.id ?? ''}
+              onChange={(event) =>
+                setSelectedPolicy(
+                  policies.data?.items.find((item) => item.id === event.target.value) ?? null,
+                )
+              }
+            >
+              {selectedPolicy &&
+                !policies.data?.items.some((item) => item.id === selectedPolicy.id) && (
+                  <MenuItem value={selectedPolicy.id}>{selectedPolicy.data.name}</MenuItem>
+                )}
               {policies.data?.items
                 .filter(
                   (item) => item.status === 'Published' && item.data.category === asset.category,
@@ -323,6 +359,13 @@ function InspectionScheduleForm({
                   </MenuItem>
                 ))}
             </TextField>
+            {policies.data && policies.data.totalCount > 20 && (
+              <Pagination
+                page={policyPage}
+                count={Math.ceil(policies.data.totalCount / 20)}
+                onChange={(_, value) => setPolicyPage(value)}
+              />
+            )}
             <TextField
               required
               type="date"

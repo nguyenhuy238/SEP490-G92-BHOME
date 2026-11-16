@@ -44,6 +44,9 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal("Verified", verified.Status);
         var summary = (await owner.GetFromJsonAsync<AssetLifecycleSummary>($"/api/v1/assets/{asset.Id}/lifecycle-summary"))!;
         Assert.Equal(4, summary.Quantity); Assert.Equal(4, summary.ActiveUnits); Assert.Equal(1, summary.FailedUnits);
+        var unsafeUnit = (await owner.GetFromJsonAsync<SetupPage>($"/api/v1/assets/{asset.Id}/equipment-units"))!.Items.Single(item => item.Id == units[0]);
+        var unsafeDetails = unsafeUnit.Data.Deserialize<EquipmentUnit>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!.Details;
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/assets/{asset.Id}/equipment-units/{unsafeUnit.Id}", unsafeDetails with { Status = "InService", ExpectedVersion = unsafeUnit.Version })).StatusCode);
         var remediation = new InspectionRemediation(verified.Version, "Synthetic failed equipment", "Restore safe operation and reinspect", DateTimeOffset.UtcNow.AddDays(2));
         var linked = await Read<SetupDocument>(await owner.PostAsJsonAsync(route + "/remediation", remediation));
         var replay = await Read<SetupDocument>(await owner.PostAsJsonAsync(route + "/remediation", remediation));
@@ -84,5 +87,14 @@ public sealed partial class Compact24OwnerSetupTests
         summary = (await owner.GetFromJsonAsync<AssetLifecycleSummary>($"/api/v1/assets/{asset.Id}/lifecycle-summary"))!;
         Assert.Equal(4, summary.Quantity); Assert.Equal(0, summary.FailedUnits);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(route + "/review", new InspectionReview(submitted.Version, "Verify", "Stale"))).StatusCode);
+        var cancelledSchedule = await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/assets/{asset.Id}/inspection-schedules/{Guid.NewGuid()}", new InspectionScheduleWrite(asset.Id, policy.Id, policy.Version, Today, null, 2, true)));
+        Assert.True((await owner.PostAsync($"/api/v1/equipment-inspection-schedules/{cancelledSchedule.Id}/generate", null)).IsSuccessStatusCode);
+        var pending = (await owner.GetFromJsonAsync<SetupPage>($"/api/v1/assets/{asset.Id}/inspections"))!.Items.Single(item => item.Data.GetProperty("scheduleId").GetGuid() == cancelledSchedule.Id);
+        var cancelRoute = $"/api/v1/equipment-inspections/{pending.Id}/review";
+        var cancel = new InspectionReview(pending.Version, "Cancel", "Synthetic obsolete inspection");
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync(cancelRoute, cancel)).StatusCode);
+        Assert.Equal("Cancelled", (await Read<SetupDocument>(await owner.PostAsJsonAsync(cancelRoute, cancel))).Status);
+        Assert.Equal("Cancelled", (await owner.GetFromJsonAsync<BHome.Application.StaffOperations.TaskView>($"/api/v1/operational-tasks/{pending.Data.GetProperty("taskId").GetGuid()}"))!.Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(cancelRoute, cancel)).StatusCode);
     }
 }
