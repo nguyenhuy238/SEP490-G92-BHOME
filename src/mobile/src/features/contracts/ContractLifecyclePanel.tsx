@@ -91,6 +91,7 @@ export function ContractLifecyclePanel({
     moveOut.version,
     q.preparation?.baselineContractId,
     q.preparation?.baseline?.version,
+    q.preparation?.inventory?.stateToken,
     q.preparation?.finalReadings,
     values,
     selected,
@@ -104,6 +105,7 @@ export function ContractLifecyclePanel({
     ]),
   );
   const unusedEvidence = evidenceIds.filter((e) => !usedEvidence.has(e));
+  const feedbackKey = `${id}:${q.inspections[0]?.id ?? ''}:${q.inspections[0]?.version ?? ''}`;
   return (
     <Box>
       <Heading title="Đối chiếu trả phòng" />
@@ -183,27 +185,32 @@ export function ContractLifecyclePanel({
               <>
                 <Input
                   label="Nội dung phản hồi biên bản trả phòng"
-                  value={values.feedback ?? ''}
-                  onChange={(v) => set('feedback', v)}
+                  value={values[`feedback.${feedbackKey}`] ?? ''}
+                  onChange={(v) => set(`feedback.${feedbackKey}`, v)}
                   disabled={busy}
                   multiline
                 />
                 <Checkbox.Item
                   label={`Tôi đã xem biên bản trả phòng phiên bản ${i.version}`}
-                  status={values.feedbackChecked === 'true' ? 'checked' : 'unchecked'}
+                  status={
+                    values[`feedbackChecked.${feedbackKey}`] === 'true' ? 'checked' : 'unchecked'
+                  }
                   onPress={() =>
-                    set('feedbackChecked', values.feedbackChecked === 'true' ? 'false' : 'true')
+                    set(
+                      `feedbackChecked.${feedbackKey}`,
+                      values[`feedbackChecked.${feedbackKey}`] === 'true' ? 'false' : 'true',
+                    )
                   }
                   disabled={busy}
                 />
                 <Text>Xác nhận hiện trạng không đồng nghĩa chấp nhận số tiền bồi thường.</Text>
                 <Action
-                  disabled={busy || values.feedbackChecked !== 'true'}
+                  disabled={busy || values[`feedbackChecked.${feedbackKey}`] !== 'true'}
                   onPress={() =>
                     void save('move-out/tenant-feedback', {
                       version: i.version,
                       confirmed: true,
-                      reason: values.feedback ?? '',
+                      reason: values[`feedback.${feedbackKey}`] ?? '',
                     })
                   }
                 >
@@ -211,12 +218,16 @@ export function ContractLifecyclePanel({
                 </Action>
                 <Action
                   secondary
-                  disabled={busy || values.feedbackChecked !== 'true' || !values.feedback?.trim()}
+                  disabled={
+                    busy ||
+                    values[`feedbackChecked.${feedbackKey}`] !== 'true' ||
+                    !values[`feedback.${feedbackKey}`]?.trim()
+                  }
                   onPress={() =>
                     void save('move-out/tenant-feedback', {
                       version: i.version,
                       confirmed: false,
-                      reason: values.feedback,
+                      reason: values[`feedback.${feedbackKey}`],
                     })
                   }
                 >

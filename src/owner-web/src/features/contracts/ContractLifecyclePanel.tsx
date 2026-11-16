@@ -58,6 +58,7 @@ export function ContractLifecyclePanel({
         query.queryKey[2] === 'SecurityDeposit' && query.queryKey[3] === contract.id,
     });
     q.reload();
+    onChanged();
   }
   const staff = useQuery({
     queryKey: ['inspection-staff', contract.locationId],
@@ -67,7 +68,7 @@ export function ContractLifecyclePanel({
   const [reason, setReason] = useState(''),
     [schedule, setSchedule] = useState(''),
     [assignee, setAssignee] = useState('');
-  const [tenantException, setTenantException] = useState(false),
+  const [exceptionInspection, setExceptionInspection] = useState<string | null>(null),
     [exceptionReason, setExceptionReason] = useState(''),
     [disposition, setDisposition] = useState('');
   const [reviewedReference, setReviewedReference] = useState<string | null>(null),
@@ -91,7 +92,6 @@ export function ContractLifecyclePanel({
       setReason('');
       setNotice('Đã lưu tại máy chủ.');
       await reload();
-      onChanged();
     } catch (e) {
       setError(contractError(e));
     } finally {
@@ -102,6 +102,7 @@ export function ContractLifecyclePanel({
   const inspection = q.inspections[0],
     summary = q.summary;
   const inspectionKey = inspection ? `${contract.id}:${inspection.id}:${inspection.version}` : null;
+  const tenantException = !!inspectionKey && exceptionInspection === inspectionKey;
   const noCharges = !!inspectionKey && noChargesInspection === inspectionKey;
   const checked = !!summary && reviewedReference === summary.reference;
   const money = (v: string | null) => (v === null ? 'Chờ xác minh' : formatContractMoney(v));
@@ -338,7 +339,6 @@ export function ContractLifecyclePanel({
                 summary={summary}
                 saved={async () => {
                   await reload();
-                  onChanged();
                 }}
               />
             )}
@@ -403,7 +403,9 @@ export function ContractLifecyclePanel({
                       control={
                         <Checkbox
                           checked={tenantException}
-                          onChange={(_, value) => setTenantException(value)}
+                          onChange={(_, value) =>
+                            setExceptionInspection(value ? inspectionKey : null)
+                          }
                         />
                       }
                       label="Owner xử lý ngoại lệ Tenant chưa phản hồi hoặc không đồng ý"
