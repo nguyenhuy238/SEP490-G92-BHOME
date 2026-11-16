@@ -138,6 +138,15 @@ function PaymentLedger() {
         </View>
       )}
       <View style={invoiceUi.surface}>
+        <View style={{ paddingTop: 16, gap: 8 }}>
+          <Button mode="contained-tonal" icon="cash-refund" onPress={() => go('refund-requests')}>
+            Gửi / theo dõi yêu cầu hoàn tiền
+          </Button>
+          <Text style={invoiceUi.secondary}>
+            Gửi đề nghị độc lập hoặc liên kết giao dịch, hợp đồng. Các khoản hoàn Owner đã ghi nhận
+            được hiển thị riêng bên dưới.
+          </Text>
+        </View>
         <TenantRefundPanel
           key={historyTab === 'refunds' ? 'refund-notice' : 'refund-history'}
           initiallyOpen={historyTab === 'refunds'}
@@ -394,7 +403,7 @@ function HistoryRow({
     <View style={invoiceUi.chargeBorder}>
       <LedgerRowHeader
         title={`Phòng ${item.roomNumber} · ${periodLabel(item.billingPeriod)}`}
-        subtitle={`Người trả: ${item.paidBy}`}
+        subtitle={item.locationName}
         amount={formatContractMoney(item.amount)}
         amountLabel="Đã ghi nhận"
         date={formatInstant(item.paidAt)}

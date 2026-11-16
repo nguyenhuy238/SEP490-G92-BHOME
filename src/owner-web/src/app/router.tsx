@@ -34,6 +34,9 @@ const InvoicesPage = lazy(() => import('../features/invoices/pages/InvoicesPage'
 const AutomationPage = lazy(() => import('../features/invoices/AutomationPage'));
 const AdjustmentsPage = lazy(() => import('../features/adjustments/AdjustmentsPage'));
 const PaymentsPage = lazy(() => import('../features/payments/pages/PaymentsPage'));
+const TenantRefundRequestsPage = lazy(
+  () => import('../features/payments/pages/TenantRefundRequestsPage'),
+);
 const DebtsPage = lazy(() => import('../features/debts/pages/DebtsPage'));
 const IncidentsPage = lazy(() => import('../features/incidents/pages/IncidentsPage'));
 const MaintenancePage = lazy(() => import('../features/maintenance/pages/MaintenancePage'));
@@ -138,6 +141,7 @@ export function AppRouter() {
               <Route path="/billing-automation" element={<AutomationPage />} />
               <Route path="/invoice-adjustments" element={<AdjustmentsPage />} />
               <Route path="/payments" element={<PaymentsPage />} />
+              <Route path="/tenant-refund-requests" element={<TenantRefundRequestsPage />} />
               <Route path="/debts" element={<DebtsPage />} />
               <Route path="/incidents" element={<IncidentsPage />} />
               <Route path="/maintenance" element={<MaintenancePage />} />

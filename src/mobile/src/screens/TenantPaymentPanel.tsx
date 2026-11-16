@@ -77,7 +77,7 @@ export function TenantPaymentDetails({ state }: { state: InvoicePayment }) {
                   <View key={item.id} style={invoiceUi.divider}>
                     <InvoiceMoneyRow label={formatInstant(item.paidAt)} value={item.amount} />
                     <Text style={invoiceUi.secondary}>
-                      Người trả: {item.paidBy} · Xác minh {formatInstant(item.verifiedAt)}
+                      Xác minh lúc {formatInstant(item.verifiedAt)}
                     </Text>
                   </View>
                 ))}

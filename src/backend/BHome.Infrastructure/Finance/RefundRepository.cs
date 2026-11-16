@@ -134,7 +134,8 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
         SELECT EXISTS(SELECT 1 FROM refund_requests r WHERE id<>{exceptId} AND (
           upper(external_refund_reference)={reference} OR EXISTS(
             SELECT 1 FROM jsonb_array_elements(r.history) h
-            WHERE h->>'recordType' IN ({Kind},'SecurityDepositRefundV1','HoldingDepositRefundV1') AND h->'state'->'upload'->>'externalReference'={reference}))) AS "Value"
+            WHERE h->>'recordType' IN ({Kind},'SecurityDepositRefundV1','HoldingDepositRefundV1','TenantRefundPetitionV1')
+              AND h->'state'->'upload'->>'externalReference'={reference}))) AS "Value"
         """).SingleAsync(t);
     public async Task SaveAsync(RefundRecord row, bool create, Guid actor, string action, DateTimeOffset now, CancellationToken t)
     {

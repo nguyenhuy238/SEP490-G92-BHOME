@@ -3,6 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@mui/material';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
+import {
+  paymentClient,
+  paymentError,
+  type BankTransfer,
+} from '../../../../../packages/client-core/src/payments';
 import { theme } from '../../theme/theme';
 import {
   OwnerInvoicePaymentPanel,
@@ -16,6 +21,8 @@ const mocks = vi.hoisted(() => ({
     instructions: vi.fn(),
     payers: vi.fn(),
     register: vi.fn(),
+    registerWithEvidence: vi.fn(),
+    transferEvidence: vi.fn(),
     allocate: vi.fn(),
     transfer: vi.fn(),
     reviews: vi.fn(),
@@ -81,6 +88,126 @@ const transfer = {
   allocatedInvoiceId: null,
   isDevelopmentDemo: true,
 };
+it('shows a clear review queue and switches between pending and all transfers on page one', async () => {
+  mocks.api.transfers.mockResolvedValue({ items: [transfer], totalCount: 41 });
+  mount(<PaymentManagementPage />);
+  await screen.findByRole('list', { name: 'Danh sách giao dịch đối soát' });
+  expect(screen.getByRole('button', { name: /Chờ đối soát/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(screen.getByText('Hiển thị 1–1 / 41 giao dịch')).toBeInTheDocument();
+  expect(screen.getByText('100.000 ₫')).toBeInTheDocument();
+  expect(screen.getByText(/Dữ liệu thử nghiệm/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Giao dịch sau' }));
+  await waitFor(() => expect(mocks.api.transfers.mock.calls.at(-1)?.[0].page).toBe(2));
+  fireEvent.click(screen.getByRole('button', { name: /Tất cả giao dịch/ }));
+  await waitFor(() =>
+    expect(mocks.api.transfers.mock.calls.at(-1)?.[0]).toMatchObject({
+      page: 1,
+      paymentStatus: '',
+    }),
+  );
+  expect(screen.getByRole('button', { name: /Tất cả giao dịch/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(mocks.api.allocate).not.toHaveBeenCalled();
+});
+it('offers manual bank-statement entry only on the reconciliation tab, outside utilities', async () => {
+  mount(<PaymentManagementPage />);
+  const manualAction = await screen.findByRole('button', { name: 'Ghi nhận giao dịch thủ công' });
+  fireEvent.click(screen.getByRole('button', { name: 'Tiện ích' }));
+  expect(
+    within(screen.getByRole('menu')).queryByText('Ghi nhận giao dịch thủ công'),
+  ).not.toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+  fireEvent.click(manualAction);
+
+  const dialog = await screen.findByRole('dialog', { name: 'Ghi nhận giao dịch thủ công' });
+  expect(
+    within(dialog).getByText(/Chỉ sử dụng khi đã đối chiếu tiền nhận trên sao kê/),
+  ).toBeInTheDocument();
+  expect(within(dialog).getByLabelText(/Mã giao dịch ngân hàng/)).toBeInTheDocument();
+  expect(mocks.api.register).not.toHaveBeenCalled();
+  expect(mocks.api.allocate).not.toHaveBeenCalled();
+
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Hủy nhập' }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Ghi nhận giao dịch thủ công' }),
+    ).not.toBeInTheDocument(),
+  );
+  fireEvent.click(screen.getByRole('tab', { name: 'Hóa đơn và số dư' }));
+  expect(
+    screen.queryByRole('button', { name: 'Ghi nhận giao dịch thủ công' }),
+  ).not.toBeInTheDocument();
+});
+it('keeps a long bank reference readable and lets Owner reveal and copy the exact value', async () => {
+  const reference = 'SP:ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789';
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText },
+  });
+  try {
+    mocks.api.transfers.mockResolvedValue({
+      items: [{ ...transfer, bankReference: reference }],
+      totalCount: 1,
+    });
+    mount(<PaymentManagementPage />);
+    await screen.findByRole('list', { name: 'Danh sách giao dịch đối soát' });
+    expect(screen.queryByText(reference)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem mã đầy đủ' }));
+    expect(screen.getByText(reference)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sao chép mã giao dịch' }));
+    expect(await screen.findByText('Đã sao chép')).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith(reference);
+  } finally {
+    if (original) Object.defineProperty(navigator, 'clipboard', original);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});
+it('opens reconciliation in a right drawer without expanding the row, then returns to the same queue', async () => {
+  const secondTransfer = {
+    ...transfer,
+    id: 'transfer-two',
+    bankReference: 'SYN-002',
+    amount: '200000',
+  };
+  mocks.api.transfers.mockResolvedValue({ items: [transfer, secondTransfer], totalCount: 2 });
+  mocks.api.transfer.mockImplementation(async (transferId: string) =>
+    transferId === secondTransfer.id ? secondTransfer : transfer,
+  );
+  mount(<PaymentManagementPage />);
+
+  const queue = await screen.findByRole('list', { name: 'Danh sách giao dịch đối soát' });
+  const actions = within(queue).getAllByRole('button', { name: 'Kiểm tra & đối soát' });
+  expect(actions).toHaveLength(2);
+  fireEvent.click(actions[1]!);
+  const drawer = await screen.findByRole('dialog', { name: 'Chi tiết đối soát giao dịch' });
+  expect(within(drawer).getByText('SYN-002')).toBeInTheDocument();
+  expect(within(drawer).getByText('200.000 ₫')).toBeInTheDocument();
+  expect(within(drawer).getByText('Xác minh và phân bổ giao dịch')).toBeInTheDocument();
+  expect(drawer).toHaveTextContent('Đóng để quay lại danh sách và bộ lọc hiện tại.');
+  expect(document.querySelectorAll('[role="listitem"]')).toHaveLength(2);
+
+  fireEvent.click(within(drawer).getByRole('button', { name: 'Đóng chi tiết giao dịch' }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Chi tiết đối soát giao dịch' }),
+    ).not.toBeInTheDocument(),
+  );
+  expect(screen.getByRole('list', { name: 'Danh sách giao dịch đối soát' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Chờ đối soát/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(mocks.api.allocate).not.toHaveBeenCalled();
+});
 const state = {
   invoiceId: id,
   paymentStatus: 'Unpaid' as const,
@@ -94,6 +221,25 @@ const state = {
   history: [],
 };
 
+it.each(['Unpaid', 'Paid', 'NotIssued'] as const)(
+  'keeps bank-statement registration out of invoice details when status is %s',
+  async (paymentStatus) => {
+    mocks.api.payment.mockResolvedValue({
+      ...state,
+      paymentStatus,
+      paidAmount: paymentStatus === 'Paid' ? '100000' : '0',
+      outstandingAmount: paymentStatus === 'Paid' ? '0' : '100000',
+    });
+    mount(<OwnerInvoicePaymentPanel invoiceId={id} />);
+    await screen.findByText('Còn phải trả:');
+    expect(
+      screen.queryByRole('button', { name: 'Ghi nhận giao dịch từ sao kê' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Đối chiếu sao kê ngân hàng')).not.toBeInTheDocument();
+    expect(mocks.api.register).not.toHaveBeenCalled();
+  },
+);
+
 it('identifies provider verification without claiming an Owner manually verified the statement', async () => {
   mocks.api.payment.mockResolvedValue({
     ...state,
@@ -102,7 +248,7 @@ it('identifies provider verification without claiming an Owner manually verified
         id: 'payment',
         amount: '100000',
         paidAt: '2026-11-12T05:00:00Z',
-        paidBy: 'Chưa xác định',
+        paidBy: 'Synthetic unrelated tenant - should not appear',
         verificationSource: 'SePayTest',
         verifiedAt: '2026-11-12T05:00:00Z',
       },
@@ -118,6 +264,10 @@ it('identifies provider verification without claiming an Owner manually verified
   );
   expect(await screen.findByText(/SePay thử nghiệm xác minh/)).toBeTruthy();
   expect(screen.queryByText(/Owner xác minh sao kê/)).toBeNull();
+  expect(screen.queryByText(/Người trả:/)).not.toBeInTheDocument();
+  expect(
+    screen.queryByText('Synthetic unrelated tenant - should not appear'),
+  ).not.toBeInTheDocument();
 });
 
 it('shows backend allocation and surplus separately without offering another allocation', async () => {
@@ -153,6 +303,11 @@ function mount(element: React.ReactNode, route = '/payments') {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value: vi.fn(() => 'blob:synthetic-bank-statement'),
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
   vi.mocked(window.matchMedia).mockImplementation((query) => ({
     matches: false,
     media: query,
@@ -167,6 +322,9 @@ beforeEach(() => {
   mocks.api.instructions.mockResolvedValue({ availability: 'ReceivingAccountUnavailable' });
   mocks.api.payers.mockResolvedValue([{ userId: 'tenant', displayLabel: 'Khách tổng hợp A' }]);
   mocks.api.transfer.mockResolvedValue(transfer);
+  mocks.api.transferEvidence.mockResolvedValue(
+    new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: 'image/png' }),
+  );
   mocks.api.reviews.mockResolvedValue({ items: [], totalCount: 0 });
   mocks.api.request.mockResolvedValue([]);
   mocks.api.excessDisposition.mockResolvedValue(null);
@@ -276,9 +434,20 @@ it('requires human allocation review and blocks duplicate confirmation clicks', 
       }),
   );
   mount(<ReconcileTransfer transfer={transfer} />);
-  const human = await screen.findByLabelText(
-    'Tôi xác nhận đúng hóa đơn và người thực trả theo bằng chứng',
-  );
+  const human = await screen.findByLabelText('Tôi đã đối chiếu giao dịch và hóa đơn theo sao kê');
+  expect(screen.queryByText('Trường hợp cần xử lý bổ sung')).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Xác minh người trả bên ngoài' }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Kiểm tra trường hợp phải hoàn toàn bộ tiền' }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText(/Người chuyển khoản:/)).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Có bằng chứng xác định người chuyển?' }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/Người.*trả|Người.*chuyển/i)).not.toBeInTheDocument();
+  expect(mocks.api.payers).not.toHaveBeenCalled();
   expect(screen.getByText('Xác nhận phân bổ tiền')).toBeDisabled();
   fireEvent.click(human);
   fireEvent.click(screen.getByText('Xác nhận phân bổ tiền'));
@@ -291,24 +460,248 @@ it('requires human allocation review and blocks duplicate confirmation clicks', 
   resolve({ status: 'PendingReview', reason: 'excess_payment_policy_required' });
   await screen.findByText('Tiền thừa: chờ xử lý, chưa tự phân bổ hoặc hoàn tiền.');
 });
+it('never calls the eligible-payer lookup or uses a suggested payer for invoice allocations', async () => {
+  mocks.api.payers.mockRejectedValue({ status: 503 });
+  mount(<ReconcileTransfer transfer={transfer} />);
+  expect(screen.queryByText(/Không tải được danh sách khách thuê/)).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('combobox', { name: /người trả|người chuyển/i }),
+  ).not.toBeInTheDocument();
+  expect(mocks.api.payers).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByLabelText('Tôi đã đối chiếu giao dịch và hóa đơn theo sao kê'));
+  expect(screen.getByRole('button', { name: 'Xác nhận phân bổ tiền' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận phân bổ tiền' }));
+  fireEvent.click(
+    within(screen.getByRole('dialog')).getByRole('button', { name: 'Xác nhận đối soát' }),
+  );
+  await waitFor(() =>
+    expect(mocks.api.allocate).toHaveBeenCalledWith('transfer', id, null, expect.any(String)),
+  );
+  expect(mocks.api.payers).not.toHaveBeenCalled();
+});
 it('retains statement form input after failed registration instead of showing a false success', async () => {
-  mocks.api.register.mockRejectedValue({ status: 409, code: 'bank_transaction_identity_conflict' });
+  mocks.api.registerWithEvidence.mockRejectedValue({
+    status: 409,
+    code: 'bank_transaction_identity_conflict',
+  });
   mount(<RecordTransferForm invoiceId={id} state={state} onClose={() => {}} />);
   for (const [label, value] of [
     ['Ngân hàng / nguồn sao kê', 'SYNTHETIC'],
     ['Mã giao dịch ngân hàng', 'SYN-001'],
     ['Thời gian giao dịch (giờ Việt Nam)', '2026-10-31T10:00'],
-    ['Tham chiếu bằng chứng sao kê', 'SYNTHETIC-STATEMENT'],
-    ['Căn cứ xác minh', 'Đã đối chiếu dữ liệu tổng hợp'],
   ])
     fireEvent.change(screen.getByLabelText(new RegExp(label.replace(/[()]/g, '\\$&'))), {
       target: { value },
     });
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục: kiểm tra bằng chứng & xác nhận' }));
+  const file = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], 'synthetic.png', {
+    type: 'image/png',
+  });
+  fireEvent.change(screen.getByLabelText('Chọn ảnh sao kê PNG hoặc JPEG'), {
+    target: { files: [file] },
+  });
+  fireEvent.change(screen.getByLabelText(/Ghi chú xác minh/), {
+    target: { value: 'Đã đối chiếu dữ liệu tổng hợp' },
+  });
   fireEvent.click(screen.getByLabelText('Tôi đã đối chiếu sao kê và xác minh tiền thực nhận'));
-  fireEvent.click(screen.getByText('Lưu giao dịch đã đối chiếu'));
+  fireEvent.click(screen.getByText('Lưu giao dịch chờ đối soát'));
   await screen.findByText('Tham chiếu ngân hàng đã tồn tại với dữ liệu khác.');
   expect(screen.getByLabelText(/Mã giao dịch ngân hàng/)).toHaveValue('SYN-001');
+  expect(screen.getByText(/Ảnh đã chọn: synthetic.png/)).toBeInTheDocument();
+  expect(mocks.api.registerWithEvidence).toHaveBeenCalledWith(
+    expect.objectContaining({
+      statementReference: '',
+      verificationReason: 'Đã đối chiếu dữ liệu tổng hợp',
+      proposedInvoiceId: id,
+      isDevelopmentDemo: false,
+      humanVerified: true,
+    }),
+    file,
+    expect.any(String),
+  );
+  const previousKey = mocks.api.registerWithEvidence.mock.calls[0][2];
+  fireEvent.click(screen.getByText('Lưu giao dịch chờ đối soát'));
+  await waitFor(() => expect(mocks.api.registerWithEvidence).toHaveBeenCalledTimes(2));
+  expect(mocks.api.registerWithEvidence.mock.calls[1][2]).toBe(previousKey);
+  expect(mocks.api.register).not.toHaveBeenCalled();
   expect(screen.queryByText('Đã lưu giao dịch. Chưa phân bổ vào hóa đơn.')).toBeNull();
+});
+it('uploads once while busy and keeps the saved transfer pending separate reconciliation', async () => {
+  let complete!: (value: BankTransfer) => void;
+  mocks.api.registerWithEvidence.mockImplementation(
+    () =>
+      new Promise<BankTransfer>((resolve) => {
+        complete = resolve;
+      }),
+  );
+  mount(<RecordTransferForm invoiceId="" onClose={() => {}} />);
+  fireEvent.change(screen.getByLabelText(/Ngân hàng \/ nguồn sao kê/), {
+    target: { value: 'SYNTHETIC' },
+  });
+  fireEvent.change(screen.getByLabelText(/Mã giao dịch ngân hàng/), {
+    target: { value: 'SYN-NEW-001' },
+  });
+  fireEvent.change(screen.getByLabelText(/Số tiền thực nhận VND/), {
+    target: { value: '100000' },
+  });
+  fireEvent.change(screen.getByLabelText(/Thời gian giao dịch/), {
+    target: { value: '2026-10-31T10:00' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục: kiểm tra bằng chứng & xác nhận' }));
+  fireEvent.change(screen.getByLabelText('Chọn ảnh sao kê PNG hoặc JPEG'), {
+    target: { files: [new File(['synthetic'], 'demo.jpg', { type: 'image/jpeg' })] },
+  });
+  fireEvent.change(screen.getByLabelText(/Ghi chú xác minh/), {
+    target: { value: 'Synthetic transaction reviewed' },
+  });
+  fireEvent.click(
+    screen.getByLabelText('Dữ liệu tổng hợp Development/Testing (không phải giao dịch thật)'),
+  );
+  fireEvent.click(screen.getByLabelText('Tôi xác nhận ảnh và giao dịch này là dữ liệu thử nghiệm'));
+  const save = screen.getByRole('button', { name: 'Lưu giao dịch chờ đối soát' });
+  fireEvent.click(save);
+  expect(mocks.api.registerWithEvidence).toHaveBeenCalledTimes(1);
+  expect(mocks.api.registerWithEvidence.mock.calls[0][0]).toMatchObject({
+    isDevelopmentDemo: true,
+    humanVerified: true,
+    statementReference: '',
+    proposedInvoiceId: null,
+  });
+  expect(screen.getByRole('button', { name: 'Đang tải ảnh và lưu…' })).toBeDisabled();
+  fireEvent.submit(save.closest('form')!);
+  expect(mocks.api.registerWithEvidence).toHaveBeenCalledTimes(1);
+  expect(mocks.api.allocate).not.toHaveBeenCalled();
+  complete({ ...transfer, status: 'PendingReview', proposedInvoiceId: null });
+  await screen.findByText(/Đã lưu giao dịch kèm ảnh sao kê để đối soát/);
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:synthetic-bank-statement');
+  expect(screen.getByText(/Tiền chưa tự phân bổ vào hóa đơn/)).toBeInTheDocument();
+  expect(mocks.api.allocate).not.toHaveBeenCalled();
+});
+it('rejects missing or invalid evidence before calling the backend and requires reconfirmation after replacement', async () => {
+  mount(<RecordTransferForm invoiceId="" onClose={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục: kiểm tra bằng chứng & xác nhận' }));
+  expect(screen.getByRole('button', { name: 'Lưu giao dịch chờ đối soát' })).toBeDisabled();
+  const input = screen.getByLabelText('Chọn ảnh sao kê PNG hoặc JPEG');
+  fireEvent.change(input, {
+    target: { files: [new File(['not an image'], 'bad.pdf', { type: 'application/pdf' })] },
+  });
+  expect(screen.getByText('Chỉ chấp nhận ảnh PNG hoặc JPEG.')).toBeInTheDocument();
+  expect(mocks.api.registerWithEvidence).not.toHaveBeenCalled();
+
+  const oversized = new File(['synthetic'], 'large.jpg', { type: 'image/jpeg' });
+  Object.defineProperty(oversized, 'size', { value: 5 * 1024 * 1024 + 1 });
+  fireEvent.change(input, { target: { files: [oversized] } });
+  expect(
+    screen.getByText('Ảnh phải có dung lượng lớn hơn 0 và không quá 5 MB.'),
+  ).toBeInTheDocument();
+
+  const first = new File(['synthetic'], 'first.jpg', { type: 'image/jpeg' });
+  fireEvent.change(input, { target: { files: [first] } });
+  expect(
+    await screen.findByAltText('Xem trước ảnh sao kê đã chọn, chưa được tải lên'),
+  ).toHaveAttribute('src', 'blob:synthetic-bank-statement');
+  fireEvent.click(screen.getByLabelText('Tôi đã đối chiếu sao kê và xác minh tiền thực nhận'));
+  expect(screen.getByRole('button', { name: 'Lưu giao dịch chờ đối soát' })).toBeEnabled();
+  fireEvent.change(input, {
+    target: { files: [new File(['bad'], 'another.pdf', { type: 'application/pdf' })] },
+  });
+  expect(screen.queryByText(/Ảnh đã chọn: first.jpg/)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Lưu giao dịch chờ đối soát' })).toBeDisabled();
+  const replacement = new File(['synthetic replacement'], 'replacement.jpg', {
+    type: 'image/jpeg',
+  });
+  fireEvent.change(input, { target: { files: [replacement] } });
+  expect(screen.getByText(/Ảnh đã chọn: replacement.jpg/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Lưu giao dịch chờ đối soát' })).toBeDisabled();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:synthetic-bank-statement');
+});
+it('keeps demo evidence clearly separate from real bank verification', () => {
+  mount(<RecordTransferForm invoiceId="" onClose={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục: kiểm tra bằng chứng & xác nhận' }));
+  fireEvent.click(
+    screen.getByLabelText('Dữ liệu tổng hợp Development/Testing (không phải giao dịch thật)'),
+  );
+  expect(
+    screen.getByText(/Chỉ dùng ảnh sao kê thử nghiệm không chứa dữ liệu ngân hàng thật/),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByLabelText('Tôi xác nhận ảnh và giao dịch này là dữ liệu thử nghiệm'),
+  ).toBeInTheDocument();
+  expect(mocks.api.registerWithEvidence).not.toHaveBeenCalled();
+});
+it('sends the verified image and transfer data in one idempotent private multipart request', async () => {
+  const request = vi.fn().mockResolvedValue(transfer);
+  const client = paymentClient(request);
+  const file = new File(['synthetic'], 'evidence.png', { type: 'image/png' });
+  const input = {
+    providerIdentity: 'SYNTHETIC',
+    bankReference: 'SYN-001',
+    amount: '100000',
+    currency: 'VND' as const,
+    occurredAt: transfer.occurredAt,
+    transferDescription: '',
+    statementReference: '',
+    verificationReason: 'Confirmed synthetic data',
+    proposedInvoiceId: null,
+    humanVerified: true,
+    isDevelopmentDemo: true,
+  };
+  await client.registerWithEvidence(input, file, 'synthetic-idempotency-key');
+  const [path, options] = request.mock.calls[0];
+  expect(path).toBe('/api/v1/payment-transactions/manual-with-evidence');
+  expect(options.method).toBe('POST');
+  expect(options.headers).toEqual({ 'Idempotency-Key': 'synthetic-idempotency-key' });
+  expect(options.body).toBeInstanceOf(FormData);
+  expect(options.body.get('input')).toBe(JSON.stringify(input));
+  expect((options.body.get('evidence') as File).name).toBe('sao-ke.png');
+  expect(options.headers).not.toHaveProperty('Content-Type');
+  await client.transferEvidence('transfer', new AbortController().signal);
+  expect(request).toHaveBeenLastCalledWith(
+    '/api/v1/payment-transactions/transfer/evidence',
+    { signal: expect.any(AbortSignal) },
+    'blob',
+  );
+});
+it('loads a saved statement image only through the authorized detail action', async () => {
+  const withEvidence = {
+    ...transfer,
+    statementEvidence: { contentType: 'image/png', length: 8, sha256: 'abc123' },
+  };
+  mocks.api.transfer.mockResolvedValue(withEvidence);
+  mount(<ReconcileTransfer transfer={withEvidence} />);
+  expect(await screen.findByText('Ảnh sao kê đã lưu')).toBeInTheDocument();
+  expect(mocks.api.transferEvidence).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh sao kê' }));
+  expect(await screen.findByRole('img', { name: 'ảnh sao kê' })).toHaveAttribute(
+    'src',
+    'blob:synthetic-bank-statement',
+  );
+  expect(mocks.api.transferEvidence).toHaveBeenCalledWith('transfer', expect.any(AbortSignal));
+  fireEvent.click(
+    within(screen.getByRole('dialog', { name: 'Xem ảnh sao kê' })).getByRole('button', {
+      name: 'Đóng',
+    }),
+  );
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:synthetic-bank-statement');
+  expect(mocks.api.allocate).not.toHaveBeenCalled();
+});
+it.each([
+  ['bank_statement_image_required', 'Chọn ảnh sao kê PNG hoặc JPEG'],
+  ['bank_statement_image_too_large', 'Ảnh sao kê vượt quá 5 MB'],
+  ['bank_statement_image_type_invalid', 'Ảnh sao kê phải là tệp PNG hoặc JPEG'],
+  ['bank_statement_image_invalid', 'Nội dung tệp không phải ảnh'],
+  ['bank_statement_image_conflict', 'Ảnh sao kê hoặc giao dịch đã thay đổi'],
+  ['bank_statement_image_integrity_failed', 'Ảnh sao kê không còn khớp'],
+  ['bank_statement_image_missing', 'Ảnh sao kê đã ghi nhận không còn'],
+  ['bank_statement_storage_unavailable', 'Kho lưu trữ ảnh sao kê tạm thời'],
+])(
+  'explains backend evidence failure %s without pretending payment was recorded',
+  (code, message) => {
+    expect(paymentError({ status: 400, problem: { code } })).toContain(message);
+  },
+);
+it('explains a storage outage even without a JSON problem payload', () => {
+  expect(paymentError({ status: 503 })).toContain('Dịch vụ thanh toán hoặc kho lưu trữ');
 });
 it('retries an unavailable payment overview and renders the real empty state', async () => {
   mocks.api.invoices.mockRejectedValue({ status: 503 });
@@ -465,15 +858,26 @@ it('refreshes invoice balance and history after successful allocation', async ()
   await screen.findByText('Trang lịch sử 1 · 0 thanh toán');
   fireEvent.click(screen.getByRole('tab', { name: 'Đối soát giao dịch' }));
   expect(
-    screen.queryByLabelText('Tôi xác nhận đúng hóa đơn và người thực trả theo bằng chứng'),
+    screen.queryByLabelText('Tôi đã đối chiếu giao dịch và hóa đơn theo sao kê'),
   ).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole('button', { name: 'Kiểm tra & đối soát' }));
   fireEvent.click(
-    await screen.findByLabelText('Tôi xác nhận đúng hóa đơn và người thực trả theo bằng chứng'),
+    await screen.findByLabelText('Tôi đã đối chiếu giao dịch và hóa đơn theo sao kê'),
   );
   fireEvent.click(screen.getByText('Xác nhận phân bổ tiền'));
   fireEvent.click(within(screen.getByRole('dialog')).getByText('Xác nhận đối soát'));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Xác nhận đối soát giao dịch?' }),
+    ).not.toBeInTheDocument(),
+  );
+  const reviewDrawer = screen.getByRole('dialog', { name: 'Chi tiết đối soát giao dịch' });
+  fireEvent.click(within(reviewDrawer).getByRole('button', { name: 'Đóng chi tiết giao dịch' }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Chi tiết đối soát giao dịch' }),
+    ).not.toBeInTheDocument(),
+  );
   fireEvent.click(screen.getByRole('tab', { name: 'Hóa đơn và số dư' }));
   await screen.findByRole('cell', { name: /^0\s₫$/ });
   fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử đã xác minh' }));
@@ -526,5 +930,5 @@ it('chooses a readable unpaid invoice for an unmatched transfer without entering
     expect.objectContaining({ paymentStatus: 'Unpaid' }),
     expect.any(AbortSignal),
   );
-  await waitFor(() => expect(mocks.api.payers).toHaveBeenCalledWith(id, expect.any(AbortSignal)));
+  expect(mocks.api.payers).not.toHaveBeenCalled();
 });

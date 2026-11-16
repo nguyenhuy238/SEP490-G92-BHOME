@@ -45,12 +45,11 @@ export function SettlementBankPanel({
       bank.transfers({ page: historyPage, settlementContractId: data.contractId }, signal),
   });
   const [target, setTarget] = useState(''),
-    [transfer, setTransfer] = useState(''),
-    [payer, setPayer] = useState('');
+    [transfer, setTransfer] = useState('');
   const [confirmation, setConfirmation] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  const confirmationSource = JSON.stringify([data.reference, target, transfer, payer]);
+  const confirmationSource = JSON.stringify([data.reference, target, transfer]);
   const checked = confirmation === confirmationSource;
   const setChecked = (value: boolean) => setConfirmation(value ? confirmationSource : null);
   const [result, setResult] = useState<SettlementBankResult | null>(null),
@@ -71,7 +70,7 @@ export function SettlementBankPanel({
     const body = {
       expectedReference: data.reference,
       transferId: transfer,
-      paidByUserId: payer || null,
+      paidByUserId: null,
       humanConfirmed: checked,
     };
     try {
@@ -101,7 +100,8 @@ export function SettlementBankPanel({
       <Typography variant="subtitle1">Đối soát tiền ngân hàng cho khoản phải thu</Typography>
       <Alert severity="info">
         Chọn khoản tiền đã được xác minh từ sao kê tại mục Thanh toán. Backend kiểm tra nội dung
-        chuyển khoản, giao dịch trùng, số còn nợ và giữ tiền dư để hoàn cho người thực trả.
+        chuyển khoản, giao dịch trùng, số còn nợ và giữ tiền dư để xử lý hoàn tiền. Khoản dư chỉ có
+        thể hoàn khi đã xác minh được người nhận đủ điều kiện.
       </Alert>
       {(error || transfers.error || history.error || instructions.error) && (
         <Alert severity="error">
@@ -159,30 +159,11 @@ export function SettlementBankPanel({
           Tải lại tiền ngân hàng
         </Button>
       </Stack>
-      <TextField
-        select
-        label="Người thực chuyển tiền"
-        value={payer}
-        disabled={busy}
-        onChange={(e) => {
-          setPayer(e.target.value);
-          setChecked(false);
-        }}
-      >
-        <MenuItem value="">
-          Chưa xác định tài khoản người trả; tiền dư cần xác minh trước khi hoàn
-        </MenuItem>
-        {(data.payers ?? []).map((p) => (
-          <MenuItem key={p.userId} value={p.userId}>
-            {p.displayLabel}
-          </MenuItem>
-        ))}
-      </TextField>
       <FormControlLabel
         control={
           <Checkbox checked={checked} disabled={busy} onChange={(_, value) => setChecked(value)} />
         }
-        label="Tôi đã kiểm tra giao dịch thực nhận, khoản đích và người thực trả trên sao kê"
+        label="Tôi đã kiểm tra giao dịch ngân hàng và khoản phải thu theo sao kê"
       />
       <Button
         disabled={

@@ -228,3 +228,33 @@ it('shows meter evidence permission errors without embedding private files', asy
   expect(await within(evidenceDialog).findByRole('alert')).toBeInTheDocument();
   expect(createUrl).not.toHaveBeenCalled();
 });
+it('guides the Owner to the existing schedule on an empty task list and clears task filters', async () => {
+  mock.tasks.mockResolvedValue([]);
+  render(
+    <ThemeProvider theme={theme}>
+      <MemoryRouter>
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          <LiveMetersPage />
+        </QueryClientProvider>
+      </MemoryRouter>
+    </ThemeProvider>,
+  );
+  expect(await screen.findByText('Chưa có nhiệm vụ ghi chỉ số')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Mở lịch xử lý' })).toHaveAttribute(
+    'href',
+    '/billing-automation',
+  );
+  fireEvent.mouseDown(screen.getByLabelText('Trạng thái tác vụ'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Chờ xác minh' }));
+  expect(await screen.findByText('Không có nhiệm vụ phù hợp bộ lọc')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc nhiệm vụ' }));
+  await waitFor(() =>
+    expect(mock.tasks).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: '', page: 1 }),
+    ),
+  );
+  expect(mock.request.mock.calls.every(([, init]) => !init?.method)).toBe(true);
+});

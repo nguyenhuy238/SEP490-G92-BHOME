@@ -23,7 +23,7 @@ it('shows three visible work areas with direct links to each core finance task',
     {
       area: 'Lập hóa đơn',
       links: [
-        ['Mở hóa đơn', '/invoices'],
+        ['Mở danh sách hóa đơn', '/invoices'],
         ['Chỉ số điện nước', '/meters'],
         ['Lịch lập hóa đơn', '/billing-automation'],
         ['Giá & biểu phí', '/pricing'],
@@ -35,6 +35,7 @@ it('shows three visible work areas with direct links to each core finance task',
       links: [
         ['Đối soát thanh toán', '/payments'],
         ['Công nợ', '/debts'],
+        ['Yêu cầu hoàn tiền', '/tenant-refund-requests'],
       ],
     },
     {
@@ -58,12 +59,21 @@ it('shows three visible work areas with direct links to each core finance task',
     }
   }
 
-  expect(screen.getAllByRole('link')).toHaveLength(10);
+  expect(screen.getAllByRole('link')).toHaveLength(11);
 });
 
 it('keeps all destinations visible without speculative progress, figures or hidden tabs', () => {
   renderFinanceHome();
 
+  const guide = screen.getByRole('region', { name: 'Quy trình thu tiền thường gặp' });
+  for (const stage of [
+    'Kiểm tra giá & phí',
+    'Kiểm tra chỉ số',
+    'Lập và phát hành',
+    'Đối soát thanh toán',
+  ]) {
+    expect(within(guide).getByText(stage)).toBeVisible();
+  }
   expect(screen.queryByRole('tab')).not.toBeInTheDocument();
   expect(screen.queryByText('Hôm nay bạn cần làm gì?')).not.toBeInTheDocument();
   expect(screen.queryByText(/Bước [1-9]/)).not.toBeInTheDocument();
