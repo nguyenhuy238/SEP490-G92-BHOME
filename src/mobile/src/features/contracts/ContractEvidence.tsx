@@ -21,6 +21,8 @@ export function ContractEvidence({
   pdf = false,
   number,
   label,
+  handoverDocumentId,
+  assetChangeId,
 }: {
   api: ContractClient;
   contractId: string;
@@ -31,6 +33,8 @@ export function ContractEvidence({
   pdf?: boolean;
   number?: number;
   label?: string;
+  handoverDocumentId?: string;
+  assetChangeId?: string;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useFeedbackState();
@@ -47,20 +51,33 @@ export function ContractEvidence({
     abort.current = controller;
     try {
       if (Platform.OS === 'web') {
-        const blob = readingId
-          ? await api.handoverMeterEvidence(contractId, readingId, controller.signal)
-          : handover
-            ? await api.handoverEvidence(contractId, evidenceId!, controller.signal)
-            : previewId
-              ? await api.preview(contractId, previewId, controller.signal)
-              : pdf
-                ? await api.document(contractId, controller.signal)
-                : await api.evidence(contractId, evidenceId!, controller.signal);
+        const blob = handoverDocumentId
+          ? await api.handoverDocument(contractId, handoverDocumentId, controller.signal)
+          : assetChangeId
+            ? await api.assetChangeEvidence(
+                contractId,
+                assetChangeId,
+                evidenceId!,
+                controller.signal,
+              )
+            : readingId
+              ? await api.handoverMeterEvidence(contractId, readingId, controller.signal)
+              : handover
+                ? await api.handoverEvidence(contractId, evidenceId!, controller.signal)
+                : previewId
+                  ? await api.preview(contractId, previewId, controller.signal)
+                  : pdf
+                    ? await api.document(contractId, controller.signal)
+                    : await api.evidence(contractId, evidenceId!, controller.signal);
         if (controller.signal.aborted) return;
         const url = URL.createObjectURL(blob),
           link = document.createElement('a');
         link.href = url;
-        link.download = pdf ? 'hop-dong.pdf' : 'hien-trang.jpg';
+        link.download = handoverDocumentId
+          ? 'bien-ban-ban-giao.pdf'
+          : pdf
+            ? 'hop-dong.pdf'
+            : 'hien-trang.jpg';
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } else {
@@ -68,28 +85,46 @@ export function ContractEvidence({
           setError('Thiết bị chưa hỗ trợ mở hoặc lưu tài liệu.');
           return;
         }
-        const bytes = readingId
-          ? await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
-          : handover
-            ? await api.handoverEvidenceBytes(contractId, evidenceId!, controller.signal)
-            : previewId
-              ? await api.previewBytes(contractId, previewId, controller.signal)
-              : pdf
-                ? await api.documentBytes(contractId, controller.signal)
-                : await api.evidenceBytes(contractId, evidenceId!, controller.signal);
+        const bytes = handoverDocumentId
+          ? await api.handoverDocumentBytes(contractId, handoverDocumentId, controller.signal)
+          : assetChangeId
+            ? await api.assetChangeEvidenceBytes(
+                contractId,
+                assetChangeId,
+                evidenceId!,
+                controller.signal,
+              )
+            : readingId
+              ? await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
+              : handover
+                ? await api.handoverEvidenceBytes(contractId, evidenceId!, controller.signal)
+                : previewId
+                  ? await api.previewBytes(contractId, previewId, controller.signal)
+                  : pdf
+                    ? await api.documentBytes(contractId, controller.signal)
+                    : await api.evidenceBytes(contractId, evidenceId!, controller.signal);
         if (controller.signal.aborted) return;
         const directory = new Directory(Paths.cache, 'bhome-contract-downloads');
         directory.create({ idempotent: true, intermediates: true });
         // Unpredictable app-cache name; never a public URL or a file from the photo library.
         temporary = new File(
           directory,
-          `${randomUUID()}.${pdf ? 'pdf' : bytes[0] === 137 ? 'png' : 'jpg'}`,
+          `${randomUUID()}.${pdf || handoverDocumentId ? 'pdf' : bytes[0] === 137 ? 'png' : 'jpg'}`,
         );
         temporary.create();
         temporary.write(bytes);
         await Sharing.shareAsync(temporary.uri, {
-          mimeType: pdf ? 'application/pdf' : bytes[0] === 137 ? 'image/png' : 'image/jpeg',
-          dialogTitle: pdf ? 'Mở hoặc lưu hợp đồng' : 'Mở hoặc lưu ảnh hiện trạng',
+          mimeType:
+            pdf || handoverDocumentId
+              ? 'application/pdf'
+              : bytes[0] === 137
+                ? 'image/png'
+                : 'image/jpeg',
+          dialogTitle: handoverDocumentId
+            ? 'Mở hoặc lưu biên bản bàn giao'
+            : pdf
+              ? 'Mở hoặc lưu hợp đồng'
+              : 'Mở hoặc lưu ảnh hiện trạng',
         });
       }
     } catch (e) {

@@ -8,6 +8,8 @@ import { theme } from '../../theme/theme';
 import { LocalAssetSetup } from './LocalAssetSetup';
 import { OperatingPoliciesPanel } from './OperatingPoliciesPanel';
 import { AssetOperationsPanel } from './AssetOperationsPanel';
+import { CommonAssetRequirementsPanel } from './CommonAssetRequirementsPanel';
+import type { SetupCommonAssetRequirement } from '../../../../../packages/client-core/src/locationSetup';
 
 const state = vi.hoisted(() => ({ request: vi.fn(), roles: ['Owner'] }));
 vi.mock('./usePropertySetupApi', () => ({
@@ -48,6 +50,7 @@ const policy = {
   },
 };
 function reads(path: string) {
+  if (path.includes('/asset-catalog?')) return { items: [], total: 0 };
   if (path.endsWith('/asset-count-observations')) return [];
   if (path.endsWith('/configuration')) return { canEdit: true };
   if (path.endsWith('/room-defaults')) return [];
@@ -102,10 +105,81 @@ function mount(child: React.ReactNode) {
     </ThemeProvider>,
   );
 }
+
+it('configures shared-area assets once per Location, inherits sample unit and edits/removes individual rows', async () => {
+  let items: SetupCommonAssetRequirement[] = [];
+  let version = 0;
+  const writes: { items: SetupCommonAssetRequirement[]; expectedVersion: number }[] = [];
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.includes('/asset-catalog?'))
+      return {
+        items: [
+          {
+            id: 'pump',
+            name: 'Máy bơm',
+            data: { category: 'Thiết bị', unit: 'Bộ', scope: 'Location' },
+          },
+          { id: 'bed', name: 'Giường', data: { category: 'Nội thất', unit: 'Cái', scope: 'Room' } },
+        ],
+        total: 2,
+      };
+    if (path.endsWith('/common-asset-requirements')) {
+      if (init?.method === 'PUT') {
+        const input = JSON.parse(String(init.body));
+        expect(input.expectedVersion).toBe(version);
+        writes.push(input);
+        items = input.items;
+        version++;
+      }
+      return version
+        ? {
+            id: 'common',
+            locationId: 'location',
+            kind: 'CommonAssetRequirements',
+            status: 'Recorded',
+            version,
+            data: { items },
+          }
+        : null;
+    }
+    throw new Error(`Unexpected ${path}`);
+  });
+  mount(<CommonAssetRequirementsPanel locationId="location" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm tài sản chung' }));
+  const dialog = within(screen.getByRole('dialog'));
+  fireEvent.mouseDown(dialog.getByRole('combobox', { name: /Chọn từ tài sản mẫu/ }));
+  expect(screen.queryByRole('option', { name: 'Giường' })).toBeNull();
+  fireEvent.click(await screen.findByRole('option', { name: 'Máy bơm' }));
+  expect(dialog.getByLabelText(/Tên tài sản/)).toHaveValue('Máy bơm');
+  expect(dialog.getByRole('combobox', { name: /Đơn vị/ })).toHaveTextContent('Bộ');
+  fireEvent.change(dialog.getByLabelText(/Khu vực sử dụng/), { target: { value: 'Khu kỹ thuật' } });
+  fireEvent.change(dialog.getByLabelText(/Số lượng/), { target: { value: '2' } });
+  fireEvent.click(dialog.getByRole('button', { name: 'Lưu tài sản chung' }));
+  await screen.findByText('Khu kỹ thuật');
+  expect(writes[0].items[0]).toMatchObject({
+    name: 'Máy bơm',
+    quantity: 2,
+    unit: 'Bộ',
+    commonArea: 'Khu kỹ thuật',
+  });
+  const id = writes[0].items[0].id;
+  fireEvent.click(await screen.findByRole('button', { name: 'Sửa Máy bơm' }));
+  fireEvent.change(screen.getByLabelText(/Số lượng/), { target: { value: '3' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu tài sản chung' }));
+  await waitFor(() => expect(writes).toHaveLength(2));
+  expect(writes[1].items[0]).toMatchObject({ id, quantity: 3, unit: 'Bộ' });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Bỏ Máy bơm' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Bỏ Máy bơm' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Xác nhận' }));
+  await screen.findByText(/Chưa cấu hình tài sản chung/);
+  expect(writes[2]).toEqual({ items: [], expectedVersion: 2 });
+  expect(state.request.mock.calls.some(([path]) => path === '/api/v1/assets')).toBe(false);
+});
+
 async function room() {
   fireEvent.mouseDown(await screen.findByLabelText('Phòng kiểm kê'));
   fireEvent.click(await screen.findByRole('option', { name: 'A101' }));
-  await screen.findByText('Định mức mong muốn');
+  await screen.findByText('Tài sản được cấu hình');
 }
 
 it('publishes a local Draft using its loaded version and shows per-Room sync outcomes', async () => {
@@ -135,18 +209,14 @@ it('publishes a local Draft using its loaded version and shows per-Room sync out
     ),
   ).toBe(false);
 });
-it('assigns a template with the server assignment version after reload', async () => {
-  mount(<LocalAssetSetup locationId="location" />);
-  await room();
-  const assign = screen.getByRole('button', { name: 'Gán bộ mẫu cho phòng' });
-  await waitFor(() => expect(assign).toBeEnabled());
-  fireEvent.click(assign);
-  await waitFor(() =>
-    expect(state.request).toHaveBeenCalledWith('/api/v1/rooms/room/asset-template', {
-      method: 'PUT',
-      body: JSON.stringify({ templateId: 'template', expectedVersion: 7 }),
-    }),
-  );
+it('keeps the legacy room inventory workflow out of the Owner view', async () => {
+  mount(<LocalAssetSetup locationId="location" mode="inventory" />);
+  expect(
+    await screen.findByText(/Owner xác nhận kiểm kê theo danh sách tài sản đã cấu hình/),
+  ).toBeVisible();
+  expect(screen.queryByLabelText('Phòng kiểm kê')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Gán bộ mẫu cho phòng' })).toBeNull();
+  expect(state.request.mock.calls.some(([path]) => path.includes('/asset-inventory'))).toBe(false);
 });
 
 it('edits the existing type requirements and applies only to the chosen type through the scoped API', async () => {
@@ -176,7 +246,7 @@ it('edits the existing type requirements and applies only to the chosen type thr
     return reads(path);
   });
   mount(<LocalAssetSetup locationId="location" mode="templates" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa định mức Studio' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa tài sản Studio' }));
   fireEvent.change(screen.getByLabelText(/Số lượng 1/), { target: { value: '3' } });
   fireEvent.click(
     screen.getByRole('checkbox', { name: 'Áp dụng cho các phòng hiện có thuộc loại này' }),
@@ -207,6 +277,7 @@ it('edits the existing type requirements and applies only to the chosen type thr
   ).toBe(false);
 });
 it('uploads private evidence and retries ambiguous verification with the same evidence and desired version', async () => {
+  state.roles = ['Staff'];
   let attempts = 0;
   state.request.mockImplementation(async (path: string) => {
     if (path.endsWith('/setup-evidence')) return { objectKey: 'setup/location/evidence/synthetic' };
@@ -244,10 +315,11 @@ it('hides template management from Staff while keeping the scoped inventory entr
   state.roles = ['Staff'];
   mount(<LocalAssetSetup locationId="location" />);
   await screen.findByLabelText('Phòng kiểm kê');
-  expect(screen.queryByRole('button', { name: 'Tạo bộ mẫu trang bị' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Tạo danh sách tài sản phòng' })).toBeNull();
   expect(state.request.mock.calls.some(([path]) => path.includes('asset-templates'))).toBe(false);
 });
 it('records a physical shortage without creating or retiring physical assets', async () => {
+  state.roles = ['Staff'];
   mount(<LocalAssetSetup locationId="location" mode="inventory" />);
   await room();
   fireEvent.click(await screen.findByRole('button', { name: /^Kiểm đếm$/ }));
@@ -320,13 +392,15 @@ it('retains edited policy content after a stale-version rejection', async () => 
 it('updates physical metadata with its own document version and exact purchase cost', async () => {
   state.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (init?.method === 'PUT') return { version: 6 };
+    if (path.startsWith('/api/v1/incidents?') || path.startsWith('/api/v1/work-orders?'))
+      return { items: [], page: 1, pageSize: 10, totalCount: 0 };
     if (path.endsWith('/metadata'))
       return {
         id: 'physical',
         version: 5,
         data: {
-          trackingMode: 'BulkQuantity',
-          quantity: 2,
+          trackingMode: 'Serialized',
+          quantity: 1,
           purchaseCost: '9007199254740993',
           purchaseDate: null,
           usefulLifeMonths: null,
@@ -352,6 +426,9 @@ it('updates physical metadata with its own document version and exact purchase c
     />,
   );
   await screen.findByLabelText('Giá mua VND');
+  expect(screen.queryByLabelText('Cách quản lý')).not.toBeInTheDocument();
+  expect(screen.getByLabelText(/Số lượng thực tế/)).toBeEnabled();
+  fireEvent.change(screen.getByLabelText(/Số lượng thực tế/), { target: { value: '4' } });
   fireEvent.change(screen.getByLabelText(/Lý do cập nhật tài sản/), {
     target: { value: 'Synthetic metadata check' },
   });
@@ -362,7 +439,7 @@ it('updates physical metadata with its own document version and exact purchase c
       body: JSON.stringify({
         metadata: {
           trackingMode: 'BulkQuantity',
-          quantity: 2,
+          quantity: 4,
           purchaseCost: '9007199254740993',
           purchaseDate: null,
           usefulLifeMonths: null,

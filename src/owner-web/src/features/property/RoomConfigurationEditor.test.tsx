@@ -108,7 +108,11 @@ const defaults = [
 beforeEach(() => {
   state.request.mockReset();
   state.request.mockImplementation(async (url: string) =>
-    url.endsWith('/room-defaults') ? defaults : view,
+    url.includes('/asset-catalog?')
+      ? { items: [], total: 0 }
+      : url.endsWith('/room-defaults')
+        ? defaults
+        : view,
   );
 });
 afterEach(cleanup);
@@ -130,6 +134,31 @@ function mount() {
   );
   return saved;
 }
+
+it('shows physical asset names and condition without exposing asset codes', async () => {
+  state.request.mockImplementation(async (url: string) => {
+    if (url.includes('/asset-catalog?')) return { items: [], total: 0 };
+    if (url.endsWith('/room-defaults')) return defaults;
+    return {
+      ...view,
+      inventory: {
+        ...view.inventory,
+        physical: [
+          {
+            id: 'physical-bed',
+            name: 'Giường thực tế',
+            code: 'INV-private-id',
+            condition: 'Hoạt động tốt',
+          },
+        ],
+        metadata: { 'physical-bed': { quantity: 1, unit: 'Cái' } },
+      },
+    };
+  });
+  mount();
+  expect(await screen.findByText(/Giường thực tế ·/)).toHaveTextContent('1 Cái · Hoạt động tốt');
+  expect(screen.queryByText(/INV-private-id/)).not.toBeInTheDocument();
+});
 
 it('saves room details, exact rent and edited requirements atomically with loaded versions', async () => {
   const saved = mount();
@@ -182,6 +211,42 @@ it('does not replace unchanged rent or assets when editing room metadata', async
   expect(input.roomNumber).toBe('A102');
   expect(input).not.toHaveProperty('rent');
   expect(input).not.toHaveProperty('assets');
+});
+
+it('shows assigned units and allows explicit confirmation from a matching room sample', async () => {
+  state.request.mockImplementation(async (url: string) => {
+    if (url.includes('/asset-catalog?'))
+      return {
+        items: [
+          { id: 'bed', name: 'Giường', data: { category: 'Nội thất', unit: 'Bộ', scope: 'Room' } },
+          {
+            id: 'camera',
+            name: 'Camera',
+            data: { category: 'An ninh', unit: 'Cái', scope: 'Location' },
+          },
+        ],
+        total: 2,
+      };
+    if (url.endsWith('/room-defaults')) return defaults;
+    return view;
+  });
+  const saved = mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Dùng đơn vị mẫu Giường: Bộ' }));
+  expect(screen.getByRole('combobox', { name: 'Đơn vị 1' })).toHaveTextContent('Bộ');
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Tài sản mẫu theo phòng' }));
+  expect(screen.queryByRole('option', { name: /Camera/ })).toBeNull();
+  fireEvent.click(await screen.findByRole('option', { name: 'Giường · Bộ' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm từ mẫu' }));
+  expect(screen.getByRole('combobox', { name: 'Đơn vị 2' })).toHaveTextContent('Bộ');
+  fireEvent.change(screen.getByLabelText(/Lý do thay đổi/), {
+    target: { value: 'Xác nhận đơn vị' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu cấu hình' }));
+  await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
+  const [, init] = state.request.mock.calls.find(([, options]) => options?.method === 'PUT')!;
+  const assets = JSON.parse(init.body).assets.items;
+  expect(assets).toHaveLength(2);
+  expect(assets.every((asset: { unit: string }) => asset.unit === 'Bộ')).toBe(true);
 });
 
 it('locks all editing and sends no mutation when the server reports a binding contract', async () => {

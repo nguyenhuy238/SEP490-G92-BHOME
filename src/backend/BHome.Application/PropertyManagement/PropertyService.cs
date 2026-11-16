@@ -14,7 +14,8 @@ namespace BHome.Application.PropertyManagement;
 
 public sealed class PropertyService(IPropertyRepository repository, ICurrentUser user,
     PermissionAccess access, TimeProvider clock, IRoomInsightsRepository? insights = null,
-    IAdministrativeContractReadiness? contractReadiness = null, IPropertyLifecycleChecks? lifecycle = null)
+    IAdministrativeContractReadiness? contractReadiness = null, IPropertyLifecycleChecks? lifecycle = null,
+    ISetupWorkspaceStore? setup = null)
 {
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
         clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
@@ -111,12 +112,22 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             (q.Search == null || x.Name.Contains(q.Search)),
             x => new(x.Id, x.LocationId, x.Name, x.Description, x.DefaultCapacity, x.AreaM2,
                 x.Amenities, x.IsActive, x.Version), q, t);
-    public Task<PagedResult<AssetDto>> AssetsAsync(PropertyQuery q, CancellationToken t) =>
-        List<Asset, AssetDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
+    public async Task<PagedResult<AssetDto>> AssetsAsync(PropertyQuery q, CancellationToken t)
+    {
+        var page = await List<Asset, AssetDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
             (!q.CommonAreaOnly || x.RoomId == null && x.CommonArea != null) &&
+            (!q.RoomAssetsOnly || x.RoomId != null) &&
             (!q.RoomId.HasValue || x.RoomId == q.RoomId) && (!q.AssetStatus.HasValue || x.Status == q.AssetStatus) &&
             (q.Search == null || x.Name.Contains(q.Search) || x.Code != null && x.Code.Contains(q.Search)),
-            x => new(x.Id, x.LocationId, x.RoomId, x.CommonArea, x.Code, x.Name, x.Category, x.Condition, x.Status, x.Version), q, t);
+            x => new(x.Id, x.LocationId, x.RoomId, x.CommonArea, x.Code, x.Name, x.Category, x.Condition, x.Status, x.Version, "Serialized", 1, null), q, t);
+        if (setup is null || page.Items.Count == 0) return page;
+        var metadata = await setup.AssetMetadataAsync(page.Items.Select(asset => asset.Id).ToArray(), t);
+        return page with { Items = page.Items.Select(asset => WithMetadata(asset, metadata.GetValueOrDefault(asset.Id))).ToArray() };
+    }
+    private static AssetDto WithMetadata(AssetDto asset, AssetMetadata? metadata) =>
+        metadata is null ? asset : asset with { TrackingMode = metadata.TrackingMode, Quantity = metadata.Quantity, Unit = metadata.Unit };
+    private async Task<AssetDto> AssetWithMetadataAsync(Asset asset, CancellationToken t) =>
+        WithMetadata(Map(asset), setup is null ? null : (await setup.AssetMetadataAsync([asset.Id], t)).GetValueOrDefault(asset.Id));
     public Task<PagedResult<PolicyDto>> PoliciesAsync(PropertyQuery q, CancellationToken t) =>
         List<BillingPolicy, PolicyDto>(x => (!q.LocationId.HasValue || x.LocationId == q.LocationId) &&
             (!q.RoomId.HasValue || x.RoomId == q.RoomId) &&
@@ -143,7 +154,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
     {
         Require(Permissions.Property.View);
         var x = await repository.FindAsync<Asset>(id, t) ?? throw Error(404, "resource_not_found");
-        await LocationAsync(x.LocationId, false, t); return Map(x);
+        await LocationAsync(x.LocationId, false, t); return await AssetWithMetadataAsync(x, t);
     }
     public async Task<PolicyDto> GetPolicyAsync(Guid id, CancellationToken t)
     {
@@ -289,7 +300,11 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
     public async Task<AssetDto> SaveAssetAsync(Guid? id, AssetWrite input, CancellationToken t)
     {
         Require(Permissions.Property.Manage); Validate(input);
-        if (input.InitialUnit is not null && (id.HasValue || string.IsNullOrWhiteSpace(input.InitialUnit)))
+        var hasInitialMetadata = input.InitialUnit is not null || input.InitialTrackingMode is not null || input.InitialQuantity.HasValue;
+        var trackingMode = input.InitialTrackingMode ?? "Serialized";
+        var quantity = input.InitialQuantity ?? 1;
+        if (hasInitialMetadata && (id.HasValue || input.InitialUnit is not null && string.IsNullOrWhiteSpace(input.InitialUnit) ||
+            trackingMode is not ("Serialized" or "BulkQuantity") || quantity is < 1 or > 10000 || trackingMode == "Serialized" && quantity != 1))
             throw Error(400, "invalid_asset_metadata");
         if (Text(input.Name).Length == 0 || Text(input.Category).Length == 0 || Text(input.Condition).Length == 0 ||
             !Enum.IsDefined(input.Status) || input.RoomId.HasValue == !string.IsNullOrWhiteSpace(input.CommonArea))
@@ -321,9 +336,13 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             x.Name = Text(input.Name); x.Category = Text(input.Category); x.Condition = Text(input.Condition); x.Status = input.Status;
             if (!id.HasValue) repository.Add(x);
             Audit(l.Id, x, id.HasValue ? "Updated" : "Created", input.Reason, before);
-            if (input.InitialUnit is not null)
-                await repository.SaveInitialAssetMetadataAsync(x.Id, new("Serialized", 1, null, null, null, input.InitialUnit.Trim()), t);
-            return Map(x);
+            if (hasInitialMetadata)
+            {
+                var metadata = new AssetMetadata(trackingMode, quantity, null, null, null, Optional(input.InitialUnit));
+                await repository.SaveInitialAssetMetadataAsync(x.Id, metadata, t);
+                return WithMetadata(Map(x), metadata);
+            }
+            return id.HasValue ? await AssetWithMetadataAsync(x, t) : Map(x);
         }, t);
     }
 
@@ -344,7 +363,7 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
                     w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Cancelled, t))
                 throw Error(409, "asset_workflow_controlled");
             var before = Snapshot(asset); asset.Condition = Text(input.Condition); asset.Version++;
-            Audit(asset.LocationId, asset, "ConditionUpdated", input.Reason, before); return Map(asset);
+            Audit(asset.LocationId, asset, "ConditionUpdated", input.Reason, before); return await AssetWithMetadataAsync(asset, t);
         }, t);
     }
 

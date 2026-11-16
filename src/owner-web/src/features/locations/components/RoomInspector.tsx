@@ -400,7 +400,7 @@ export function RoomInspector({
             <Stack spacing={2}>
               <Stack spacing={1}>
                 <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  Định mức mong muốn
+                  Tài sản được cấu hình
                 </Typography>
                 {desired ? (
                   desired.data.items.map((item) => (
@@ -432,7 +432,7 @@ export function RoomInspector({
                   ))
                 ) : (
                   <Typography variant="body2" color="text.secondary">
-                    Chưa có định mức được áp dụng.
+                    Chưa cấu hình tài sản được áp dụng.
                   </Typography>
                 )}
               </Stack>
@@ -464,6 +464,9 @@ export function RoomInspector({
                       </Box>
                       <Typography sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
                         {inventoryData.metadata?.[asset.id]?.quantity ?? '—'}
+                        {inventoryData.metadata?.[asset.id]?.unit
+                          ? ` ${inventoryData.metadata[asset.id].unit}`
+                          : ''}
                       </Typography>
                     </Stack>
                   ))

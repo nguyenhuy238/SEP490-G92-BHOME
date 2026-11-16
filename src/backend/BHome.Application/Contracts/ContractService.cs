@@ -24,7 +24,9 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IHoldingTestScope? holdingTestScope = null, BHome.Application.PaymentsDebt.IMainInitialPaymentLedger? initialPayments = null,
     IContractSigningMethods? signingMethods = null, IContractSigningNotifier? signingNotifier = null,
     IAnonymousSigningRepository? signingInvitations = null,
-    BHome.Application.PaymentsDebt.SePay.SePayOptions? paymentOptions = null) : IAdministrativeContractReadiness
+    BHome.Application.PaymentsDebt.SePay.SePayOptions? paymentOptions = null,
+    IHandoverInventory? handoverInventory = null, IHandoverDocumentRenderer? handoverDocuments = null,
+    ISetupWorkspaceStore? contractSetup = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
@@ -485,6 +487,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         ContractChargeSnapshot.MarkMainBound(c, clock.GetUtcNow());
         c.Status = ContractStatus.Active; c.ActivatedByUserId = approvedOwner; c.ActivatedAt = clock.GetUtcNow();
         if (provisioning is not null) await provisioning.ProvisionAsync(c, approvedOwner, t);
+        if (handoverRepository is not null && c.PreviousContractId is null)
+            await handoverRepository.EnsureMoveInTaskAsync(c, approvedOwner, clock.GetUtcNow(), t);
         if (c.HoldingContractId is { } acceptedHolding && c.SigningMode == ContractSigningModes.Internal)
         {
             var linked = await repository.FindAsync(acceptedHolding, t) ?? throw ContractException.Missing();
@@ -1050,8 +1054,21 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         }
         c.Status = ContractStatus.Terminated; c.ActualEndDate = x.ActualEndDate;
         var otherActive = await repository.HasOtherActiveContractsAsync(c.RoomId, c.Id, t);
-        ChangeRoomStatus(c, otherActive ? RoomStatus.Occupied : c.Room.Status == RoomStatus.Occupied ? RoomStatus.Available : c.Room.Status,
+        if (!otherActive && handoverInventory is not null && x.RoomDisposition is not ("Available" or "Unavailable"))
+            throw ContractException.Invalid("owner_room_disposition_required");
+        if (x.RoomDisposition is not null && x.RoomDisposition is not ("Available" or "Unavailable")) throw ContractException.Invalid("invalid_room_disposition");
+        ChangeRoomStatus(c, otherActive ? RoomStatus.Occupied : x.RoomDisposition == "Unavailable" ? RoomStatus.Unavailable : c.Room.Status == RoomStatus.Occupied ? RoomStatus.Available : c.Room.Status,
             RoomTransitionSource.ContractTermination, otherActive);
+        if (handoverDocuments is not null)
+        {
+            var baseline = JsonSerializer.Deserialize<HandoverSnapshot>(inspection.BaselineSnapshot);
+            await PersistReport(c, "MoveOut", inspection.Version, observed with { OtherTenantsRemain = otherActive }, baseline, inspection.StaffId,
+                observed.TenantFeedback is { Confirmed: true } feedback ? feedback.At : null, clock.GetUtcNow(),
+                [$"Baseline contract {inspection.BaselineContractId}; v{inspection.BaselineVersion}"],
+                [$"Owner review: {inspection.OwnerId}; {inspection.ReviewedAt:O}; {inspection.OwnerReason}",
+                    otherActive ? "Phòng tiếp tục Occupied do còn hợp đồng khác." : $"Owner quyết định trạng thái phòng: {x.RoomDisposition}",
+                    "Bàn giao vật lý hoàn tất độc lập với nghĩa vụ tài chính."], t);
+        }
         m.Status = MoveOutStatus.Completed; m.Version++; MoveOutEvent(m, "Completed");
         foreach (var r in c.Residents) r.ResidenceTo = x.ActualEndDate;
         await repository.CloseResidenceAsync(c, x.ActualEndDate, Actor, clock.GetUtcNow(), t);
@@ -1085,6 +1102,10 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
         var evidence = (await repository.InspectionEvidenceAsync(id, t)).SingleOrDefault(e => e.Id == evidenceId &&
             (e.IsLinked || e.UploadedByUserId == Actor)) ?? throw ContractException.Missing();
-        await storage.CopyToAsync(evidence.ObjectKey, output, t);
+        using var bytes = new MemoryStream(); await storage.CopyToAsync(evidence.ObjectKey, bytes, t);
+        var recorded = (await repository.FinalInspectionsAsync(id, t)).Select(i => JsonSerializer.Deserialize<HandoverSnapshot>(i.ObservedSnapshot))
+            .FirstOrDefault(s => s?.EvidenceHashes?.ContainsKey(evidenceId) == true);
+        if (recorded?.EvidenceHashes is { } hashes && FileHash(bytes.ToArray()) != hashes[evidenceId]) throw ContractException.Conflict("inspection_evidence_integrity_failed");
+        bytes.Position = 0; await bytes.CopyToAsync(output, t);
     }
 }

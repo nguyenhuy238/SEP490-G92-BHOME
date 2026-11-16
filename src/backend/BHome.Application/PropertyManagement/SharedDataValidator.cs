@@ -7,7 +7,7 @@ namespace BHome.Application.PropertyManagement;
 public sealed record SharedRoomDefaults([property: JsonRequired] int Capacity, [property: JsonRequired] decimal Area, string[] Amenities, decimal? ReferenceRent,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SharedAssetItem[]? AssetItems = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SharedCatalogData(string Category, string Unit, [property: JsonRequired] decimal ReferencePrice);
+public sealed record SharedCatalogData(string Category, string Unit, [property: JsonRequired] decimal ReferencePrice, string? Scope = null);
 
 public sealed partial class SharedDataValidator(ISharedConfigurationStore store) : ISharedDataValidator
 {
@@ -38,8 +38,12 @@ public sealed partial class SharedDataValidator(ISharedConfigurationStore store)
         if (input.Capacity is < 1 or > 32767 || input.Area is <= 0 or > 1000000 || decimal.Round(input.Area, 4) != input.Area || input.Amenities is null || input.Amenities.Length > 100) throw new PropertyException(400, "invalid_room_defaults");
         var amenities = input.Amenities.Select(x => Text(x, 200)).ToArray();
         if (amenities.Distinct(StringComparer.OrdinalIgnoreCase).Count() != amenities.Length) throw new PropertyException(400, "duplicate_amenity");
-        var assets = input.AssetItems is { Length: > 0 } items ? (await AssetsAsync(new(items), t)).Items : null;
+        var assets = input.AssetItems is { Length: > 0 } items ? (await AssetsAsync(new(items), t, roomOnly: true)).Items : null;
         return input with { Amenities = amenities, ReferenceRent = input.ReferenceRent.HasValue ? Money(input.ReferenceRent.Value) : null, AssetItems = assets };
     }
-    private static SharedCatalogData Catalog(SharedCatalogData input) => new(Text(input.Category, 80), Text(input.Unit, 80), Money(input.ReferencePrice));
+    private static SharedCatalogData Catalog(SharedCatalogData input)
+    {
+        if (input.Scope is not (null or "Room" or "Location" or "Both")) throw new PropertyException(400, "invalid_asset_catalog_scope");
+        return new(Text(input.Category, 80), Text(input.Unit, 80), Money(input.ReferencePrice), input.Scope ?? "Both");
+    }
 }

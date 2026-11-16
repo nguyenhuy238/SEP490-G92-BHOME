@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text;
 using BHome.Application.Common;
 using BHome.Application.Contracts;
+using BHome.Application.PropertyManagement;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Ocr;
 using BHome.Domain.Billing;
@@ -95,6 +96,37 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await Success<ContractId>(await Post(w.Owner, Path(id, "deposit-verifications"), new DepositInput("SYNTHETIC-" + Guid.NewGuid(), amount, "Verified synthetic bank statement")));
     private async Task<Guid> Active(Workspace w)
     { var id = await Draft(w); await Signed(w, id); await Deposit(w, id); await Success<ContractView>(await Post(w.Owner, Path(id, "activate"))); return id; }
+
+    private static async Task<HandoverChoices> EmptyRoomHandoverChoices(Workspace w, Guid id)
+    {
+        var choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
+        if (choices.InventoryToken is not null && !choices.NoAssetsConfirmed)
+        {
+            await Success<HandoverInventory>(await w.Owner.Client.PostAsJsonAsync($"/api/v1/locations/{w.Location}/room-inventory-review/{w.Room}/no-assets",
+                new RoomNoAssetsConfirmation(choices.InventoryToken, "Owner checked synthetic empty room")));
+            choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
+        }
+        return choices;
+    }
+
+    internal async Task ActivationCreatesOneMoveInTaskWithoutDependingOnAvailableStaff(bool assigned)
+    {
+        var w = await Setup();
+        var id = await Draft(w);
+        if (!assigned)
+        {
+            await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            foreach (var assignment in await db.StaffLocationAssignments.Where(a => a.LocationId == w.Location).ToArrayAsync()) assignment.ChangePeriod(Today.AddYears(-1), Today.AddDays(-1));
+            await db.SaveChangesAsync();
+        }
+        await Signed(w, id); await Deposit(w, id);
+        var key = Guid.NewGuid();
+        await Success<ContractView>(await Post(w.Owner, Path(id, "activate"), null, key));
+        await Success<ContractView>(await Post(w.Owner, Path(id, "activate"), null, key));
+        await using var check = fixture.Factory.Services.CreateAsyncScope(); var store = check.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var task = Assert.Single(await store.Set<OperationalTask>().Where(task => task.ContractId == id && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.AdHoc).ToArrayAsync());
+        Assert.Equal(w.Room, task.TargetRoomId); Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, task.AssignedStaffUserId);
+    }
 
     [Fact]
     public async Task CaptureRoomsReportsRemainingCapacityFromActiveContracts()
@@ -233,7 +265,8 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         }
         using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
         var picture = await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), photo));
-        var input = new HandoverInput(0, Today, "SYNTHETIC room condition", "SYNTHETIC keys checklist", "", [], readingIds[0], readingIds[1], [picture.Id]);
+        var choices = await EmptyRoomHandoverChoices(w, id);
+        var input = new HandoverInput(0, Today, "SYNTHETIC room condition", "SYNTHETIC keys checklist", "", [], readingIds[0], readingIds[1], [picture.Id], choices.InventoryToken);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { EvidenceIds = [] })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { ElectricityReadingId = readingIds[1] })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { Date = Today.AddDays(1) })).StatusCode);
@@ -288,11 +321,12 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var electricity = await FinalReading(w, id, UtilityType.Electricity); var water = await FinalReading(w, id, UtilityType.Water);
         using var finalPhoto = new ByteArrayContent(Image()); finalPhoto.Headers.ContentType = new("image/png");
         var finalFile = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), finalPhoto))).Id;
-        var inspected = await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), new InspectionInput(electricity, water, "Synthetic final inspection", [finalFile], [], "SYNTHETIC final condition", "Keys returned")));
+        var preparation = await Success<InspectionPreparation>(await w.Staff.Client.GetAsync(Path(id, "move-out/inspection-preparation")));
+        var inspected = await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), new InspectionInput(electricity, water, "Synthetic final inspection", [finalFile], [], "SYNTHETIC final condition", "Keys returned", InventoryToken: preparation.Inventory?.StateToken)));
         var comparison = Assert.Single((await w.Owner.Client.GetFromJsonAsync<FinalInspectionView[]>(Path(id, "move-out/inspections")))!);
-        Assert.Equal("SYNTHETIC corrected", comparison.Baseline.RoomCondition); Assert.Equal("SYNTHETIC final condition", comparison.Observed.RoomCondition);
+        Assert.Equal("SYNTHETIC corrected", Assert.IsType<HandoverSnapshot>(comparison.Baseline).RoomCondition); Assert.Equal("SYNTHETIC final condition", comparison.Observed.RoomCondition);
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, Path(id, "move-out/inspection-review"), new InspectionReviewInput(1, true, "Checked"))).StatusCode);
-        await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/inspection-review"), new InspectionReviewInput(1, true, "Synthetic Owner confirmed")));
+        await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/inspection-review"), new InspectionReviewInput(1, true, "Synthetic Owner confirmed", TenantException: true, TenantExceptionReason: "Synthetic Tenant unavailable; record exception explicitly")));
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/inspection-review"), new InspectionReviewInput(1, true, "Cannot review twice"))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await outside.Tenant.Client.GetAsync(Path(id, "move-out/inspections"))).StatusCode);
     }
@@ -443,39 +477,40 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal("Active", (await w.Tenant.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, Path(id, "move-out/approve"))).StatusCode);
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today, "Available"))).StatusCode);
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/schedule"), new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(5))));
         var assignment = (await w.Staff.Client.GetFromJsonAsync<MoveOutAssignment[]>("/api/v1/contracts/move-out-assignments"))!.Single(a => a.ContractId == id);
         Assert.Equal("Approved", assignment.Status); Assert.Equal(w.Room, assignment.RoomId);
         var history = (await w.Owner.Client.GetFromJsonAsync<MoveOutHistoryView[]>(Path(id, "move-out/history")))!;
         Assert.Equal(3, history.Length); Assert.Equal("Scheduled", history[0].Action);
         var electricity = await FinalReading(w, id, UtilityType.Electricity); var water = await FinalReading(w, id, UtilityType.Water);
-        var choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
+        var choices = await EmptyRoomHandoverChoices(w, id);
         var openingElectricity = choices.Readings.First(r => r.UtilityType == 0);
         var openingWater = choices.Readings.First(r => r.UtilityType == 1);
         using var openingPhoto = new ByteArrayContent(Image()); openingPhoto.Headers.ContentType = new("image/png");
         var openingFile = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), openingPhoto))).Id;
         await Success<HandoverView>(await Post(w.Staff, Path(id, "handover"), new HandoverInput(0, openingElectricity.Date,
-            "Synthetic original room", "Synthetic original keys", "", [], openingElectricity.Id, openingWater.Id, [openingFile])));
+            "Synthetic original room", "Synthetic original keys", "", [], openingElectricity.Id, openingWater.Id, [openingFile], choices.InventoryToken)));
         await Success<HandoverView>(await Post(w.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(1, "Synthetic present")));
         await Success<HandoverView>(await Post(w.Staff, Path(id, "handover/staff-confirmation"), new HandoverDecision(1, "Synthetic checked")));
         using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
         var evidence = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), photo))).Id;
+        var preparation = await Success<InspectionPreparation>(await w.Staff.Client.GetAsync(Path(id, "move-out/inspection-preparation")));
         var inspect = new InspectionInput(electricity, water, "Synthetic room and asset condition", [evidence],
-            [], "Synthetic final room", "Synthetic returned keys");
+            [], "Synthetic final room", "Synthetic returned keys", InventoryToken: preparation.Inventory?.StateToken);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Staff, Path(id, "move-out/inspection"), inspect with { WaterReadingId = electricity })).StatusCode);
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), inspect));
         var reviewedInspection = (await w.Owner.Client.GetFromJsonAsync<MoveOutView>(Path(id, "move-out")))!;
         Assert.Equal(inspect.Notes, reviewedInspection.InspectionNotes); Assert.Contains(evidence, reviewedInspection.EvidenceIds!);
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today, "Available"))).StatusCode);
         var finalInspection = (await Success<FinalInspectionView[]>(await w.Owner.Client.GetAsync(Path(id, "move-out/inspections")))).First();
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/inspection-review"),
-            new InspectionReviewInput(finalInspection.Version, true, "Synthetic reviewed physical handover")));
+            new InspectionReviewInput(finalInspection.Version, true, "Synthetic reviewed physical handover", TenantException: true, TenantExceptionReason: "Synthetic Tenant unavailable; record exception explicitly")));
         var pending = await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/settlement"), new SettlementInput("Pending approved financial module")));
         Assert.Equal("PendingSettlement", pending.Status);
         Assert.Equal("PendingReview", pending.FinancialReviewStatus);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(Path(id, "move-out/settlement-history"))).StatusCode);
-        var key = Guid.NewGuid(); var replies = await Task.WhenAll(Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today), key), Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today), key));
+        var key = Guid.NewGuid(); var replies = await Task.WhenAll(Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today, "Available"), key), Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today, "Available"), key));
         Assert.All(replies, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
         fixture.Ledger.Resolved[id] = true; // TEST ONLY: check finance can continue after physical closure.
         var settledLater = await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/settlement"), new SettlementInput("Synthetic verified settlement after handover")));

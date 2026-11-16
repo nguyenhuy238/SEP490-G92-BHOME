@@ -93,7 +93,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(originalInvoice, await owner.GetStringAsync($"/api/v1/invoices/{w.Invoice}"));
         // Physical closure preserves the debt and historical access, independently of its payment.
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
-        await RefundValue<ContractView>(await Post(owner, root + "/move-out/complete", new CompletionInput(today)));
+        await RefundValue<ContractView>(await Post(owner, root + "/move-out/complete", new CompletionInput(today, "Available")));
         var historical = await RefundValue<SettlementReceivablesView>(await tenant.GetAsync(route));
         Assert.Equal(200000, historical.Receivables[0].Outstanding);
         await using var finalScope = fixture.Factory.Services.CreateAsyncScope();

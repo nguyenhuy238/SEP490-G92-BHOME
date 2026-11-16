@@ -5,10 +5,116 @@ using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+using BHome.Application.StaffOperations;
+using BHome.Domain.StaffOperations;
+using System.Security.Cryptography;
+using System.Text;
+using BHome.Infrastructure.Modules.Notifications;
+using BHome.Domain.IdentityAccess;
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractHandoverRepository(BHomePersistenceContext db) : IContractHandoverRepository
+internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOperationalTaskRepository tasks, CompactNotificationWriter? inbox = null) : IContractHandoverRepository
 {
+    private static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
+    public async Task EnsureMoveInTaskAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
+        var id = Key($"contract-move-in:{c.Id:N}");
+        if (await db.Set<OperationalTask>().AnyAsync(x => x.Id == id, t)) return;
+        var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
+        var responsible = await tasks.ResponsibilityAsync(c.Room.LocationId, date, t);
+        var task = new OperationalTask
+        {
+            Kind = OperationalTaskKind.AdHoc,
+            LocationId = c.Room.LocationId,
+            ContractId = c.Id,
+            TargetRoomId = c.RoomId,
+            TargetLabel = c.Room.RoomNumber,
+            Title = $"Bàn giao vào phòng {c.Room.RoomNumber}",
+            Requirements = "Kiểm tra tài sản, bằng chứng và chỉ số đã xác nhận; Tenant xác nhận trước khi Staff hoàn tất bàn giao.",
+            AssignedStaffUserId = responsible?.StaffUserId,
+            AssignmentId = responsible?.AssignmentId,
+            AssignedAt = responsible is null ? null : now,
+            EvidenceRequired = true,
+            Status = MeterTaskStatus.Assigned,
+            ReadingDate = c.StartDate
+        };
+        db.Entry(task).Property(x => x.Id).CurrentValue = id; db.Add(task);
+        db.Add(new OperationalTaskHistory
+        {
+            TaskId = id,
+            ActorId = actor,
+            Action = "MoveInCreated",
+            OccurredAt = now,
+            TaskVersion = 1,
+            ResponsibleStaffUserId = responsible?.StaffUserId,
+            Note = responsible is null ? "AwaitingAssignment" : ""
+        });
+        foreach (var recipient in (await tasks.OwnersAsync(t)).Concat(responsible is null ? [] : new[] { responsible.StaffUserId }).Distinct())
+            AddNotice(Key($"move-in-notice:{id:N}:{recipient:N}"), new OperationalTaskNotification
+            {
+                TaskId = id,
+                RecipientUserId = recipient,
+                EventId = id,
+                Event = responsible is null ? "MoveInAwaitingAssignment" : "MoveInAssigned"
+            });
+        if (inbox is not null)
+            foreach (var party in new[] { (c.TenantUserId, Roles.Tenant), (responsible?.StaffUserId, Roles.Staff), ((Guid?)c.OwnerSignerId, Roles.Owner) }.Where(p => p.Item1 is not null).Distinct())
+                await inbox.Emit(party.Item1!.Value, party.Item2, c.Room.LocationId, $"move-in:{c.Id:N}:{party.Item1:N}", "MOVE_IN_PENDING", "Contract",
+                    "Bàn giao nhận phòng chưa hoàn tất", "Hợp đồng đã kích hoạt. Theo dõi kiểm tra và xác nhận bàn giao trong hợp đồng.", "Contract", c.Id, t);
+    }
+    public async Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
+        var task = await db.Set<OperationalTask>().SingleOrDefaultAsync(x => x.Id == Key($"contract-move-in:{contractId:N}"), t);
+        if (task is null || task.Status == MeterTaskStatus.Completed) return;
+        task.Status = MeterTaskStatus.Completed; task.CompletedAt = now; task.VerifiedAt = now; task.VerifiedByUserId = actor; task.Version++;
+        task.Result = "Bàn giao đã được Tenant xác nhận và Staff hoàn tất.";
+        db.Add(new OperationalTaskHistory { TaskId = task.Id, ActorId = actor, Action = "MoveInCompleted", OccurredAt = now, TaskVersion = task.Version });
+    }
+    public async Task NotifyAsync(Contract c, string action, Guid actor, int version, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
+        // Existing persistent notifications are committed with the workflow; external delivery is independent.
+        var taskId = Key($"contract-move-in:{c.Id:N}");
+        var recipients = await tasks.OwnersAsync(t);
+        if (inbox is not null)
+        {
+            var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+            var staff = await tasks.ResponsibilityAsync(c.Room.LocationId, date, t);
+            foreach (var party in recipients.Select(owner => ((Guid?)owner, Roles.Owner)).Concat(new[] { (c.TenantUserId, Roles.Tenant), (staff?.StaffUserId, Roles.Staff) }).Where(p => p.Item1 is not null && p.Item1 != actor).Distinct())
+                await inbox.Emit(party.Item1!.Value, party.Item2, c.Room.LocationId, $"handover:{c.Id:N}:{version}:{action}:{party.Item1:N}", "HANDOVER_UPDATED", "Contract",
+                    "Bàn giao có cập nhật", "Mở hợp đồng để xem phiên bản và thao tác đang chờ xử lý.", "Contract", c.Id, t);
+        }
+        if (!await db.Set<OperationalTask>().AnyAsync(x => x.Id == taskId, t)) return;
+        foreach (var recipient in recipients.Concat(c.TenantUserId is { } tenant ? new[] { tenant } : []).Where(r => r != actor).Distinct())
+        {
+            var id = Key($"handover-notice:{c.Id:N}:{version}:{action}:{recipient:N}");
+            if (!await db.Set<OperationalTaskNotification>().AnyAsync(n => n.Id == id, t))
+                AddNotice(id, new OperationalTaskNotification
+                {
+                    TaskId = taskId,
+                    EventId = Key($"handover-event:{c.Id:N}:{version}:{action}"),
+                    RecipientUserId = recipient,
+                    Event = action
+                });
+        }
+    }
+    private void AddNotice(Guid id, OperationalTaskNotification notice)
+    { db.Entry(notice).Property(n => n.Id).CurrentValue = id; db.Add(notice); }
+    public async Task<IReadOnlyList<AssetChangeParty>> ActivePartiesAsync(Guid roomId, CancellationToken t) =>
+        await db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId && (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal) && c.Status == ContractStatus.Active)
+            .Select(c => new AssetChangeParty(c.Id, c.TenantUserId)).ToArrayAsync(t);
+    public async Task<IReadOnlyList<AssetChangeSource>> ChangeSourcesAsync(Guid roomId, CancellationToken t)
+    {
+        var assetIds = db.Set<Asset>().Where(a => a.RoomId == roomId).Select(a => a.Id);
+        var history = await db.Set<PropertyChange>().AsNoTracking().Where(h => h.TargetType == nameof(Asset) && assetIds.Contains(h.TargetId))
+            .OrderByDescending(h => h.OccurredAt).Take(200).Select(h => new AssetChangeSource(h.Id, h.TargetId, h.Reason, null)).ToArrayAsync(t);
+        var maintenance = await db.Set<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>().AsNoTracking()
+            .Where(w => w.RoomId == roomId && w.Status == BHome.Domain.IncidentMaintenance.WorkOrderStatus.Verified && w.AssetId != null)
+            .Select(w => new AssetChangeSource(w.Id, w.AssetId!.Value, w.Description, w.Id)).Take(200).ToArrayAsync(t);
+        return maintenance.Concat(history).ToArray();
+    }
     public Task<ContractHandover?> GetAsync(Guid id, CancellationToken t) => db.Set<ContractHandover>().SingleOrDefaultAsync(h => h.ContractId == id, t);
     public async Task<IReadOnlyList<Asset>> AssetsAsync(Guid roomId, CancellationToken t)
     {

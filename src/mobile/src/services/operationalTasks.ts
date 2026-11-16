@@ -23,6 +23,13 @@ export interface OperationalTask {
   result: string | null;
   version: number;
   verifiedAt: string | null;
+  target?: {
+    roomId: string | null;
+    assetId: string | null;
+    commonArea: string | null;
+    label: string;
+    contractId?: string | null;
+  } | null;
 }
 export interface TaskHistory {
   id: string;

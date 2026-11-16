@@ -427,9 +427,67 @@ it('displays fee units and does not offer apply directly on catalog entries', as
   expect(screen.getByText('Người/tháng')).toBeVisible();
   unmount();
   mount(<ApiConfigurationLibraryPage kind="asset" />);
-  const catalog = await screen.findByRole('table', { name: 'Danh mục tài sản' });
+  const catalog = await screen.findByRole('table', { name: 'Tài sản mẫu' });
   expect(within(catalog).getByText('item')).toBeVisible();
   expect(within(catalog).queryByRole('button', { name: 'Áp dụng' })).toBeNull();
+});
+it('filters asset templates by scope and writes the selected scope for a new catalog item', async () => {
+  const entries = [
+    {
+      ...doc,
+      id: 'room-only',
+      name: 'Room chair',
+      resource: 'asset-catalog',
+      data: { category: 'Furniture', unit: 'Cái', referencePrice: 100, scope: 'Room' },
+    },
+    {
+      ...doc,
+      id: 'common-only',
+      name: 'Common camera',
+      resource: 'asset-catalog',
+      data: { category: 'Security', unit: 'Bộ', referencePrice: 200, scope: 'Location' },
+    },
+    {
+      ...doc,
+      id: 'legacy',
+      name: 'Legacy lamp',
+      resource: 'asset-catalog',
+      data: { category: 'Other', unit: 'Cái', referencePrice: 300 },
+    },
+  ];
+  state.request.mockImplementation(async (path: string, init?: RequestInit) =>
+    init?.method
+      ? doc
+      : path.includes('asset-catalog?')
+        ? { items: entries, total: entries.length, page: 1, pageSize: 100 }
+        : reads(path),
+  );
+  mount(<ApiConfigurationLibraryPage kind="asset" />);
+  await screen.findByText('Room chair');
+  await select('Phạm vi tài sản', 'Chung cơ sở');
+  expect(await screen.findByText('Common camera')).toBeVisible();
+  expect(screen.queryByText('Room chair')).not.toBeInTheDocument();
+  expect(screen.getByText('Legacy lamp')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm loại tài sản' }));
+  const dialog = screen.getByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText(/Tên mẫu/), {
+    target: { value: 'New common asset' },
+  });
+  fireEvent.change(within(dialog).getByLabelText(/Giá tham khảo/), { target: { value: '100000' } });
+  fireEvent.mouseDown(within(dialog).getByLabelText(/Phạm vi tài sản/));
+  fireEvent.click(await screen.findByRole('option', { name: 'Tài sản chung của cơ sở' }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu bản nháp' }));
+  await waitFor(() =>
+    expect(
+      state.request.mock.calls.some(
+        ([path, init]) => path.endsWith('/asset-catalog') && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  );
+  const call = state.request.mock.calls.find(
+    ([path, init]) => path.endsWith('/asset-catalog') && init?.method === 'POST',
+  );
+  expect(JSON.parse(call![1].body).data).toMatchObject({ scope: 'Location', unit: 'Cái' });
 });
 it('keeps room prices and status without version clutter, with accessible actions at 390px', async () => {
   setViewport(390);
@@ -493,13 +551,13 @@ it('keeps each resource summary and its allowed actions visible on a 390px viewp
   expect(within(feeTable).getByRole('button', { name: 'Áp dụng' })).toBeVisible();
   fee.unmount();
   const assets = mount(<ApiConfigurationLibraryPage kind="asset" />);
-  const catalog = await screen.findByRole('table', { name: 'Danh mục tài sản' });
-  expect(within(catalog).getByText('item')).toBeVisible();
+  const catalog = await screen.findByRole('table', { name: 'Tài sản mẫu' });
+  expect(within(catalog).getByText('item · Cả hai')).toBeVisible();
   expect(within(catalog).getByText('Giá tham khảo: 123,0001 đ/item')).toBeVisible();
   expect(within(catalog).queryByRole('button', { name: 'Áp dụng' })).toBeNull();
   expect(within(catalog).getByRole('button', { name: `Thao tác cho ${doc.name}` })).toBeVisible();
-  fireEvent.click(screen.getByRole('tab', { name: 'Gói tài sản' }));
-  const packages = await screen.findByRole('table', { name: 'Mẫu tài sản' });
+  fireEvent.click(screen.getByRole('tab', { name: 'Gói tài sản theo phòng' }));
+  const packages = await screen.findByRole('table', { name: 'Gói tài sản theo phòng' });
   expect(within(packages).getByText('0 loại tài sản')).toBeVisible();
   expect(within(packages).getByRole('button', { name: 'Áp dụng' })).toBeVisible();
   assets.unmount();
@@ -510,7 +568,7 @@ it('keeps each resource summary and its allowed actions visible on a 390px viewp
 });
 it('selects real catalog versions and submits optional flags with internal tracking', async () => {
   mount(<ApiConfigurationLibraryPage kind="asset" />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Gói tài sản' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Gói tài sản theo phòng' }));
   fireEvent.click(screen.getByRole('button', { name: 'Tạo mẫu' }));
   fill('Tên mẫu', 'New package');
   await waitFor(() =>
@@ -540,7 +598,7 @@ it('selects real catalog versions and submits optional flags with internal track
     catalogVersion: 7,
     quantity: 3,
     required: false,
-    trackingMode: 'Serialized',
+    trackingMode: 'BulkQuantity',
   });
 });
 it('copies only after confirmed server preview and displays conflicts without execution', async () => {

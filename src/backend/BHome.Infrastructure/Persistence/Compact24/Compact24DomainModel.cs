@@ -22,6 +22,12 @@ internal static class Compact24DomainModel
         compensation.HasOne<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>().WithMany().HasForeignKey(c => c.WorkOrderId).OnDelete(DeleteBehavior.Restrict);
         compensation.HasOne<BHome.Domain.Billing.Invoice>().WithMany().HasForeignKey(c => c.InvoiceId).OnDelete(DeleteBehavior.Restrict);
         model.ApplyConfigurationsFromAssembly(typeof(Compact24DomainModel).Assembly);
+        // Compact24 stores asset quantities and tracking details in its existing JSONB column.
+        // Keep this runtime-only shadow property out of the frozen legacy source model.
+        model.Entity<Asset>().Property<string>("PurchaseInfo")
+            .HasColumnName("purchase_info")
+            .HasColumnType("jsonb")
+            .HasDefaultValueSql("'{}'::jsonb");
         new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentReportConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.IncidentReport>());
         new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.WorkOrderConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>());
         new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentActivityConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.IncidentActivity>());

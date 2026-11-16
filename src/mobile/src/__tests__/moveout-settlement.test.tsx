@@ -47,10 +47,92 @@ vi.mock('../components/WorkflowControls', () => ({
   ChoiceField: () => <div />,
 }));
 import { ContractLifecyclePanel } from '../features/contracts/ContractLifecyclePanel';
+vi.mock('../features/contracts/ContractEvidence', () => ({ ContractEvidence: () => null }));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ session: { roles: ['Owner'] } }),
 }));
 afterEach(cleanup);
+it('Tenant confirms the observed inspection version through the UI without approving compensation', async () => {
+  let version = 4;
+  const observed = {
+    date: '2026-11-16',
+    roomCondition: 'Đã kiểm tra',
+    keysAndAccess: 'Đã thu riêng',
+    notes: 'Synthetic',
+    assets: [],
+    evidenceIds: [],
+    electricity: { value: '101' },
+    water: { value: '101' },
+  };
+  const request = vi.fn<ContractRequest>(
+    async <T,>(path: string): Promise<T> =>
+      (path.endsWith('/inspections')
+        ? [
+            {
+              id: 'inspection',
+              version,
+              inspectedAt: '2026-11-16T00:00:00Z',
+              baselineVersion: 1,
+              baseline: observed,
+              observed,
+              ownerDecision: null,
+            },
+          ]
+        : path.endsWith('/settlement-summary')
+          ? data
+          : []) as T,
+  );
+  const api = contractClient(
+    <T,>(path: string, init?: RequestInit) => request(path, init) as Promise<T>,
+  );
+  render(
+    <ContractLifecyclePanel
+      api={api}
+      id="tenant-contract"
+      role="Tenant"
+      moveOut={{ status: 'Inspected' } as MoveOut}
+      evidenceIds={[]}
+      onChanged={vi.fn()}
+    />,
+  );
+  const confirm = await screen.findByRole('button', { name: 'Xác nhận hiện trạng trả phòng' });
+  expect((confirm as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Nội dung phản hồi biên bản trả phòng'), {
+    target: { value: 'Tôi xác nhận hiện trạng thực tế' },
+  });
+  fireEvent.click(screen.getByLabelText('Tôi đã xem biên bản trả phòng phiên bản 4'));
+  version = 5;
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại biên bản & quyết toán' }));
+  const currentConsent = await screen.findByLabelText('Tôi đã xem biên bản trả phòng phiên bản 5');
+  expect((currentConsent as HTMLInputElement).checked).toBe(false);
+  expect(
+    (screen.getByRole('button', { name: 'Xác nhận hiện trạng trả phòng' }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(
+    (screen.getByLabelText('Nội dung phản hồi biên bản trả phòng') as HTMLInputElement).value,
+  ).toBe('');
+  fireEvent.change(screen.getByLabelText('Nội dung phản hồi biên bản trả phòng'), {
+    target: { value: 'Tôi xác nhận hiện trạng thực tế' },
+  });
+  fireEvent.click(currentConsent);
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hiện trạng trả phòng' }));
+  await waitFor(() =>
+    expect(
+      request.mock.calls.some(
+        ([path, init]) => path.endsWith('/move-out/tenant-feedback') && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  );
+  const call = request.mock.calls.find(
+    ([path, init]) => path.endsWith('/move-out/tenant-feedback') && init?.method === 'POST',
+  )!;
+  expect(JSON.parse(call[1]!.body as string)).toEqual({
+    version: 5,
+    confirmed: true,
+    reason: 'Tôi xác nhận hiện trạng thực tế',
+  });
+});
 const id = '00000000-0000-0000-0000-000000000001';
 const data: SettlementSummary = {
   contractId: id,

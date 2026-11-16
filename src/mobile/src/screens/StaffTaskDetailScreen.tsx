@@ -145,6 +145,16 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
         <Text variant="titleLarge" numberOfLines={3} style={styles.title}>
           {task.title || 'Công việc vận hành'}
         </Text>
+        {task.target?.contractId && (
+          <Button
+            mode="contained"
+            onPress={() =>
+              go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+            }
+          >
+            Mở bàn giao nhận phòng
+          </Button>
+        )}
         <View style={styles.row}>
           <View style={[styles.badge, pending && { backgroundColor: c.amberSoft }]}>
             <Text variant="labelMedium" style={{ color: pending ? c.amber : c.primary }}>

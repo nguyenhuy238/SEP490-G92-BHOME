@@ -17,24 +17,45 @@ using Microsoft.AspNetCore.WebUtilities;
 namespace BHome.Infrastructure.IdentityAccess;
 
 internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, CompactNotificationWriter sql,
-    INotificationChannelProvider provider, IDataProtectionProvider protection, IOptions<AuthenticationEmailOptions> options,
+    IDataProtectionProvider protection, IOptions<AuthenticationEmailOptions> options,
     IHostEnvironment environment, IOptions<SessionOptions> sessions, IOptions<NotificationChannelOptions> channels,
     UserManager<ApplicationUser> users) : IPasswordResetDelivery
 {
     private IDataProtector Protector => protection.CreateProtector("BHome.AuthenticationEmail.v1");
-    public bool IsAvailable => channels.Value.Enabled && provider.IsConfigured("EMAIL") && options.Value.Configured(environment.IsDevelopment());
+    public bool IsAvailable => IsAvailableFor("PasswordReset");
+    public bool IsAvailableFor(string kind) => channels.Value.Enabled && kind switch
+    {
+        "PasswordReset" => options.Value.PasswordResetConfigured(environment.IsDevelopment()),
+        "StaffInvitation" or "TenantInvitation" => options.Value.InvitationConfigured(environment.IsDevelopment()),
+        "EmailConfirmation" => options.Value.VerificationConfigured(environment.IsDevelopment()),
+        _ => false
+    };
     public bool IsDurable => true;
     private sealed record Envelope(AuthenticationEmailRequest Request);
     internal sealed record Content(string Destination, string Title, string Body, string ActionUrl);
+
+    public async Task EnsureQueueWritableAsync(CancellationToken t)
+    {
+        var transaction = db.Database.CurrentTransaction ?? throw new InvalidOperationException("Authentication email requires the grant transaction.");
+        // Exercise the same durable sink for every identifier, so a system-wide Outbox write
+        // failure cannot reveal account existence. The savepoint removes the probe immediately;
+        // no notification, delivery, identifier or token is retained or visible to a worker.
+        const string savepoint = "authentication_email_acceptance";
+        await transaction.CreateSavepointAsync(savepoint, t);
+        await sql.Execute("""
+            INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
+            VALUES(@id,'OUTBOX',@key,'CHANNEL_DELIVERY','{"schemaVersion":1,"recordType":"ChannelDelivery"}'::jsonb,@now,'Pending',@now)
+            """, t, ("id", Guid.NewGuid()), ("key", "authentication-email:acceptance:" + Guid.NewGuid()), ("now", sql.Now));
+        await transaction.RollbackToSavepointAsync(savepoint, t);
+        await transaction.ReleaseSavepointAsync(savepoint, t);
+    }
 
     public Task SendAsync(Guid userId, string destination, string token, CancellationToken t) =>
         QueueAsync(new(userId, destination, token, sql.Now.AddMinutes(sessions.Value.PasswordResetMinutes)), t);
 
     public async Task QueueAsync(AuthenticationEmailRequest request, CancellationToken t)
     {
-        if (!IsAvailable) throw new IntegrationUnavailableException("Authentication email URLs or SMTP are not configured.");
-        if (request.Kind == "EmailConfirmation" && !options.Value.VerificationConfigured(environment.IsDevelopment()))
-            throw new IntegrationUnavailableException("Email verification URLs are not configured.");
+        if (!IsAvailableFor(request.Kind)) throw new IntegrationUnavailableException("Authentication email callbacks or channel processing are not configured.");
         if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("Authentication email requires the grant transaction.");
         if (!EmailOptions.ValidAddress(request.Destination)) throw new ChannelDeliveryException("email_recipient_invalid");
         var user = await db.Users.SingleAsync(u => u.Id == request.UserId, t);

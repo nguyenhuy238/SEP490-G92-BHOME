@@ -18,9 +18,16 @@ public interface ISetupWorkspaceStore
     Task<SetupDocument> SaveAsync(Guid id, Guid locationId, string kind, string status, object data, int expectedVersion, Guid actor, CancellationToken t);
     Task<Guid?> RoomLocationAsync(Guid roomId, CancellationToken t);
     Task<IReadOnlyList<Guid>> RoomsAsync(Guid locationId, CancellationToken t);
+    Task<IReadOnlyList<Room>> ReviewRoomsAsync(Guid locationId, CancellationToken t);
+    Task<IReadOnlyList<RoomInventoryPhysicalAsset>> ReviewRoomAssetsAsync(Guid locationId, CancellationToken t);
+    Task<IReadOnlyList<SetupDocument>> ReviewDocumentsAsync(Guid locationId, Guid[] activeAssetIds, CancellationToken t);
+    Task<IReadOnlyList<SetupDocument>> EvidenceDocumentsAsync(Guid locationId, Guid[] evidenceIds, CancellationToken t);
+    Task<IReadOnlyList<SetupDocument>> SaveBatchAsync(Guid locationId, IReadOnlyList<SetupDocumentWrite> documents, Guid actor, CancellationToken t);
+    Task SaveInventoryAssetsAsync(Guid locationId, IReadOnlyList<AssetInventoryCreation> assets, Guid actor, CancellationToken t);
     Task<bool> EligibleRoomAsync(Guid roomId, CancellationToken t);
     Task<string?> RoomConfigurationLockReasonAsync(Guid roomId, CancellationToken t);
     Task<Asset?> AssetAsync(Guid id, CancellationToken t);
+    Task<bool> HasOpenAssetWorkAsync(Guid id, CancellationToken t);
     Task SaveAssetAsync(Asset asset, Guid actor, string reason, CancellationToken t);
     Task<IReadOnlyList<Asset>> AssetsAsync(Guid roomId, CancellationToken t);
     Task SaveAssetMetadataAsync(Guid assetId, AssetMetadata metadata, CancellationToken t);
@@ -30,10 +37,15 @@ public interface ISetupWorkspaceStore
     Task SaveContractAsync(Contract contract, Guid actor, string action, CancellationToken t);
     Task NotifyPolicyPublicationAsync(Guid locationId, Guid policyId, CancellationToken t);
     Task<string?> EvidenceHashAsync(string objectKey, CancellationToken t);
-    Task<string> UploadEvidenceAsync(Guid locationId, byte[] bytes, string contentType, Guid actor, CancellationToken t);
+    Task<Guid?> EvidenceIdAsync(Guid locationId, string objectKey, CancellationToken t);
+    Task<SetupEvidenceUpload> UploadEvidenceAsync(Guid locationId, byte[] bytes, string contentType, Guid actor, CancellationToken t);
     Task<IReadOnlyList<UtilityRoomUsage>> UtilityUsageAsync(Guid locationId, UtilityType type, DateOnly period, CancellationToken t);
     Task<(Guid LocationId, UtilityType Type)?> MeterScopeAsync(Guid meterId, CancellationToken t);
 }
+public sealed record RoomInventoryPhysicalAsset(Asset Asset, AssetMetadata Metadata);
+public sealed record AssetInventoryCreation(Asset Asset, AssetMetadata Metadata, string Reason);
+public sealed record SetupDocumentWrite(Guid Id, string Kind, string Status, object Data, int ExpectedVersion);
+public sealed record SetupEvidenceUpload(Guid EvidenceId, string ObjectKey);
 public sealed record AssetTemplateItem(Guid Id, string Name, string Category, string TrackingMode, int Quantity, string? Unit = null);
 public sealed record AssetTemplateWrite(Guid LocationId, string Name, AssetTemplateItem[] Items, int ExpectedVersion = 0,
     bool Scoped = false, Guid? ScopeRoomId = null);

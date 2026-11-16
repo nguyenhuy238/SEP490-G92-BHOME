@@ -59,7 +59,9 @@ internal static class Compact24Records
         assignment.Read["CreatedAt"] = "COALESCE(e.data->>'createdAt',e.data->>'recordedAt')::timestamptz";
         assignment.Read["UpdatedAt"] = "COALESCE(e.data->>'updatedAt',e.data->>'recordedAt')::timestamptz";
         Root("Room", "rooms", "LocationId:location_id RoomNumber:room_number Floor:floor Capacity:capacity Status:status Version:version");
-        Root("Asset", "assets", "LocationId:location_id RoomId:room_id CommonArea:common_area Code:asset_code Name:name Category:category Condition:condition Status:status Version:version");
+        var asset = Root("Asset", "assets", "LocationId:location_id RoomId:room_id CommonArea:common_area Code:asset_code Name:name Category:category Condition:condition Status:status Version:version");
+        // The physical JSONB column is authoritative; metadata edits do not rewrite the asset's history envelope.
+        asset.Read["PurchaseInfo"] = "t.purchase_info";
         Root("Resident", "residents", "TenantUserId:user_id RoomId:current_room_id OwnerUserId:identity_owner_scope_id DisplayLabel:display_label IdentityHmac:identity_hmac HmacKeyVersion:hmac_key_version VerificationStatus:verification_status ConfirmedByUserId:verified_by_user_id ConfirmedAt:verified_at")
             .Map("IdentityData", "identity_data", write: "COALESCE((@state::jsonb->>'identityData')::jsonb,'{}'::jsonb)")
             .Map("ContactEmail", "contact_email");

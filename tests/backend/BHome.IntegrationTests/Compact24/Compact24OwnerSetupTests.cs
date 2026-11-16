@@ -32,8 +32,10 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
     private sealed class Files : IObjectStorage
     {
         private readonly Dictionary<string, byte[]> data = [];
+        internal bool FailPdfWrites { get; set; }
+        internal void Corrupt(string key) => data[key] = [0, 1, 2];
         public async Task PutAsync(string key, Stream stream, long length, string type, CancellationToken t)
-        { using var bytes = new MemoryStream(); await stream.CopyToAsync(bytes, t); data[key] = bytes.ToArray(); }
+        { if (FailPdfWrites && type == "application/pdf") throw new IOException("Synthetic storage failure"); using var bytes = new MemoryStream(); await stream.CopyToAsync(bytes, t); data[key] = bytes.ToArray(); }
         public Task CopyToAsync(string key, Stream destination, CancellationToken t) => destination.WriteAsync(data[key], t).AsTask();
         public Task DeleteAsync(string key, CancellationToken t) { data.Remove(key); return Task.CompletedTask; }
     }
@@ -59,7 +61,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         db.Add(new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddYears(-1), Today.AddYears(1)));
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id);
     }
-    private WebApplicationFactory<Program> Host() => fixture.Factory!.WithWebHostBuilder(builder => builder.ConfigureServices(s => s.AddSingleton<IObjectStorage>(new Files())));
+    private WebApplicationFactory<Program> Host(Files? files = null) => fixture.Factory!.WithWebHostBuilder(builder => builder.ConfigureServices(s => s.AddSingleton<IObjectStorage>(files ?? new Files())));
     private async Task<HttpClient> Client(ApplicationUser account, WebApplicationFactory<Program>? host = null)
     {
         var client = (host ?? fixture.Factory!).CreateClient();
@@ -119,7 +121,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         var period = new DateOnly(Today.Year, Today.Month, 1);
         var meter = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-source-meters", new UtilitySourceMeter(w.Location, UtilityType.Electricity, "Source", "SYN-EXACT", null)));
         string evidence;
-        await using (var scope = host.Services.CreateAsyncScope()) evidence = await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [1, 2, 3], "image/png", w.Owner.Id, default);
+        await using (var scope = host.Services.CreateAsyncScope()) evidence = (await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [1, 2, 3], "image/png", w.Owner.Id, default)).ObjectKey;
         owner.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var saved = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-source-bills", new
         {
@@ -183,7 +185,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         var doc = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/asset-templates", new AssetTemplateWrite(w.Location, "Synthetic equipment", [item])));
         await Read<AssetSyncRun>(await owner.PostAsJsonAsync($"/api/v1/asset-templates/{doc.Id}/publish", new TemplatePublish(1)));
         string key;
-        await using (var scope = host.Services.CreateAsyncScope()) key = await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [1, 2, 3], "image/png", w.Staff.Id, default);
+        await using (var scope = host.Services.CreateAsyncScope()) key = (await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [1, 2, 3], "image/png", w.Staff.Id, default)).ObjectKey;
         var input = new AssetVerification(doc.Id, item.Id, "SYN-LAMP", 4, "Good", key, 1);
         var one = await Read<JsonElement>(await staff.PostAsJsonAsync($"/api/v1/rooms/{w.Room}/assets/verify", input));
         var two = await Read<JsonElement>(await staff.PostAsJsonAsync($"/api/v1/rooms/{w.Room}/assets/verify", input));
@@ -204,6 +206,26 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync($"/api/v1/rooms/{w.Room}/asset-template", new AssetTemplateAssignment(doc.Id, pinned.AssignmentVersion))).StatusCode);
     }
     [CompactPostgresFact]
+    public async Task SingleAssetCanBeLinkedToLegacySerializedRequirementWithoutChangingItsId()
+    {
+        var w = await Seed(); using var host = Host(); using var owner = await Client(w.Owner, host); using var staff = await Client(w.Staff, host);
+        var item = new AssetTemplateItem(Guid.NewGuid(), "Synthetic chair", "Furniture", "Serialized", 1, "item");
+        var template = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/asset-templates", new AssetTemplateWrite(w.Location, "Legacy chair requirement", [item])));
+        await Read<AssetSyncRun>(await owner.PostAsJsonAsync($"/api/v1/asset-templates/{template.Id}/publish", new TemplatePublish(template.Version)));
+        var asset = await Read<AssetDto>(await owner.PostAsJsonAsync("/api/v1/assets", new AssetWrite(w.Location, w.Room, null, "LEGACY-CHAIR", item.Name, item.Category, "Good", InitialUnit: "item", InitialTrackingMode: "BulkQuantity", InitialQuantity: 1)));
+        var inventory = (await staff.GetFromJsonAsync<AssetInventory>($"/api/v1/rooms/{w.Room}/asset-inventory"))!;
+        var desired = inventory.Desired.Single(d => d.Id == inventory.CurrentDesiredId);
+        string evidence;
+        await using (var scope = host.Services.CreateAsyncScope()) evidence = (await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [1, 2, 3], "image/png", w.Staff.Id, default)).ObjectKey;
+        var verified = await Read<JsonElement>(await staff.PostAsJsonAsync($"/api/v1/rooms/{w.Room}/assets/verify", new AssetVerification(template.Id, item.Id, "LEGACY-CHAIR", 1, "Good", evidence, desired.Version, asset.Id)));
+        Assert.Equal(asset.Id, verified.GetProperty("assetId").GetGuid());
+        var after = (await staff.GetFromJsonAsync<InventoryResponse>($"/api/v1/rooms/{w.Room}/asset-inventory"))!;
+        Assert.Equal(asset.Id, Assert.Single(after.Physical).Id);
+        Assert.Equal("BulkQuantity", after.Metadata![asset.Id].TrackingMode);
+        Assert.Equal("Verified", after.Desired.Single(d => d.Id == after.CurrentDesiredId).Status);
+    }
+
+    [CompactPostgresFact]
     public async Task AssetCountObservationsRecordShortageAndExcessWithoutChangingPhysicalInventory()
     {
         var w = await Seed(); using var host = Host(); using var owner = await Client(w.Owner, host); using var staff = await Client(w.Staff, host);
@@ -213,7 +235,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         var inventory = (await staff.GetFromJsonAsync<AssetInventory>($"/api/v1/rooms/{w.Room}/asset-inventory"))!;
         var desired = inventory.Desired.Single(d => d.Id == inventory.CurrentDesiredId);
         string evidence;
-        await using (var scope = host.Services.CreateAsyncScope()) evidence = await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [1, 2, 3], "image/png", w.Staff.Id, default);
+        await using (var scope = host.Services.CreateAsyncScope()) evidence = (await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [1, 2, 3], "image/png", w.Staff.Id, default)).ObjectKey;
         var root = $"/api/v1/rooms/{w.Room}/asset-count-observations";
         var input = new AssetCountObservationWrite(desired.Id, desired.Version, 0, evidence, "None observed", 0);
         Assert.Equal(HttpStatusCode.BadRequest, (await staff.PutAsJsonAsync($"{root}/{item.Id}", input with { Quantity = -1 })).StatusCode);
@@ -249,7 +271,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
     {
         var w = await Seed(); using var host = Host(); using var owner = await Client(w.Owner, host); var period = new DateOnly(Today.Year, Today.Month, 1);
         var meter = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-source-meters", new UtilitySourceMeter(w.Location, UtilityType.Electricity, "Source", "SYN-TOTAL", null)));
-        string evidence; await using (var scope = host.Services.CreateAsyncScope()) evidence = await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [4, 5, 6], "image/png", w.Owner.Id, default);
+        string evidence; await using (var scope = host.Services.CreateAsyncScope()) evidence = (await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [4, 5, 6], "image/png", w.Owner.Id, default)).ObjectKey;
         var input = new UtilitySourceBill(w.Location, meter.Id, UtilityType.Electricity, period, 1200, 1000000, "SYN-SUPPLIER", evidence);
         owner.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var bill = await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-source-bills", input));
@@ -394,7 +416,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         await Read<SetupDocument>(await owner.PostAsJsonAsync($"/api/v1/utility-profiles/{oldProfile.Id}/replacement", new UtilityProfileWrite(w.Location, w.Room, UtilityType.Electricity, newTariff.Id, middle, null, false, false, oldProfile.Version)));
         await using var scope = host.Services.CreateAsyncScope(); var billing = scope.ServiceProvider.GetRequiredService<IUtilityBilling>();
         Assert.Contains("utility_period_split_requires_review", (await billing.CalculateAsync(w.Room, UtilityType.Electricity, period, 100, default))!.MissingInputs);
-        var evidence = await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [7, 8, 9], "image/png", w.Owner.Id, default);
+        var evidence = (await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(w.Location, [7, 8, 9], "image/png", w.Owner.Id, default)).ObjectKey;
         await Read<SetupDocument>(await owner.PostAsJsonAsync("/api/v1/utility-period-breakdowns", new UtilityPeriodBreakdown(w.Location, w.Room, UtilityType.Electricity, period,
             [new(period, middle.AddDays(-1), oldTariff.Id, 40, 0, evidence), new(middle, end, newTariff.Id, 60, 0, evidence)], true)));
         var result = await billing.CalculateAsync(w.Room, UtilityType.Electricity, period, 100, default); Assert.Equal(160000, result!.Amount); Assert.Empty(result.MissingInputs);

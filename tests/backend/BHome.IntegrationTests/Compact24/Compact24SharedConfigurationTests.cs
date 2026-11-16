@@ -11,6 +11,7 @@ public sealed partial class Compact24OwnerSetupTests
     {
         "room-type-templates" => (object)new { capacity = 3, area = "25.0001", amenities = new[] { "Synthetic amenity" }, referenceRent = "3500000.0001" },
         "asset-catalog" => new { category = "Synthetic furniture", unit = "item", referencePrice = "1500000.0001" },
+        "asset-templates" => new { items = Array.Empty<SharedAssetItem>() },
         "fee-templates" => new { category = "Rent", chargeCode = "RENT", method = "FixedPerRoomPerMonth", referenceRate = "3500000.0001", unit = "VND/month", scope = "Location", effectiveFrom = Today.ToString("yyyy-MM-dd"), effectiveTo = (string?)null },
         "policy-templates" => new { content = "Synthetic reusable content", effectiveFrom = Today.ToString("yyyy-MM-dd") },
         _ => throw new InvalidOperationException()

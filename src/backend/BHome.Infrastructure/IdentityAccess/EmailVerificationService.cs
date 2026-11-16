@@ -6,7 +6,6 @@ using BHome.Infrastructure.Modules.Notifications;
 using BHome.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace BHome.Infrastructure.IdentityAccess;
@@ -14,11 +13,11 @@ namespace BHome.Infrastructure.IdentityAccess;
 // Verification has its own outbox grant; it never replaces a password-reset or invitation grant.
 internal sealed class EmailVerificationService(IIdentityPersistence identity, IdentitySecurityStore security,
     UserManager<ApplicationUser> users, AuthenticationEmailDelivery delivery, CompactNotificationWriter sql,
-    IOptions<AuthenticationEmailOptions> options, IOptions<SessionOptions> sessions, IHostEnvironment environment) : IEmailVerification
+    IOptions<AuthenticationEmailOptions> options, IOptions<SessionOptions> sessions) : IEmailVerification
 {
     public async Task RequestAsync(string userName, CancellationToken t)
     {
-        if (!delivery.IsAvailable || !options.Value.VerificationConfigured(environment.IsDevelopment()))
+        if (!delivery.IsAvailableFor("EmailConfirmation"))
             throw new IntegrationUnavailableException("Email verification delivery is not configured.");
         if (string.IsNullOrWhiteSpace(userName) || userName.Length > LoginService.MaxUserNameLength) return;
         var candidate = await users.FindByEmailAsync(userName.Trim()) ?? await users.FindByNameAsync(userName.Trim());

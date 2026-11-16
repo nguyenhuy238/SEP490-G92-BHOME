@@ -75,6 +75,7 @@ public sealed class ContractServiceTests
         public readonly IContractImageValidator Images = Substitute.For<IContractImageValidator>();
         public readonly IContractSettlementLedger Ledger = Substitute.For<IContractSettlementLedger>();
         public readonly IContractHoldingLedger Holdings = Substitute.For<IContractHoldingLedger>();
+        public readonly IContractHandoverRepository Handovers = Substitute.For<IContractHandoverRepository>();
         public readonly IContractDepositPosition Positions = Substitute.For<IContractDepositPosition>();
         public readonly IHoldingSettingsData Settings = Substitute.For<IHoldingSettingsData>();
         public readonly List<Contract> Contracts = [];
@@ -126,7 +127,7 @@ public sealed class ContractServiceTests
             });
             Holdings.ApplyAsync(default, default, default, default, default, default).ReturnsForAnyArgs(Task.FromException<HoldingDepositApplication>(new IntegrationUnavailableException("holding ledger")));
             Positions.ReadAsync(default!, default, default!).ReturnsForAnyArgs(call => (DepositLedgerPosition?)new(Deposits.Where(d => call.Arg<Guid[]>().Contains(d.ContractId)).Sum(d => d.Amount), 0, 0, 0));
-            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock(), depositPositions: Positions, holdingSettings: Settings, initialPayments: withInitialPayments ? InitialPayments : null);
+            Service = new(Repo, User, new ResourceAccess(User, Staff), Signing, Storage, Files, Images, Ledger, Holdings, new Clock(), handoverRepository: Handovers, depositPositions: Positions, holdingSettings: Settings, initialPayments: withInitialPayments ? InitialPayments : null);
         }
         public ContractDraftInput Draft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id], Today.AddDays(-10), Today.AddDays(30), 3000000, 3000000, "Synthetic approved terms");
         public HoldingDraftInput HoldingDraft => new(Room.Id, User.UserId!.Value, Tenant, Resident.Id, [Resident.Id],
@@ -348,6 +349,7 @@ public sealed class ContractServiceTests
         r.Repo.Received(1).Add(Arg.Is<PropertyChange>(a => a.TargetId == r.Room.Id && a.ActorId == r.User.UserId &&
             a.Before!.Contains("\"Version\":1") && a.After.Contains("\"Version\":2")));
         r.Repo.Received(1).Audit(r.User.UserId!.Value, "ContractActivated", c.Id, Arg.Any<DateTimeOffset>());
+        await r.Handovers.Received(1).EnsureMoveInTaskAsync(c, r.User.UserId.Value, Arg.Any<DateTimeOffset>(), default);
     }
 
     [Theory]

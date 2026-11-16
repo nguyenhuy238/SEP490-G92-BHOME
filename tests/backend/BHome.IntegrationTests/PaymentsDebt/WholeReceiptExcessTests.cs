@@ -144,7 +144,7 @@ public sealed partial class PaymentLedgerTests
         view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(root));
         await RefundValue<DepositOffsetApproval>(await Post(owner, root + "/deposit-offsets", new DepositOffsetInput(view.Reference, charge.Id, null, 400000, "Synthetic full offset", true)));
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
-        await RefundValue<ContractView>(await Post(owner, $"/api/v1/contracts/{w.Contract}/move-out/complete", new CompletionInput(today)));
+        await RefundValue<ContractView>(await Post(owner, $"/api/v1/contracts/{w.Contract}/move-out/complete", new CompletionInput(today, "Available")));
         var extra = await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w, 25000) with { ProposedInvoiceId = null, TransferDescription = PaymentRules.InvoiceReference(charge.Id) }, Guid.NewGuid(), default));
         var route = $"/api/v1/payment-transactions/{extra.Id}/excess-disposition";
         var context = await RefundValue<ReceiptExcessContext>(await owner.GetAsync(route + $"/context?settlementContractId={w.Contract}&receivableId={charge.Id}")); Assert.Empty(context.Problems);

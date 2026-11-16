@@ -199,6 +199,7 @@ public sealed partial class IncidentService(IIncidentRepository repository, ICur
                 var asset = await repository.AssetAsync(assetId, t) ?? throw IncidentException.Missing();
                 if (asset.LocationId != input.LocationId || asset.RoomId != input.RoomId ||
                     input.RoomId is null && !string.Equals(asset.CommonArea, commonArea, StringComparison.Ordinal)) throw IncidentException.Missing();
+                if (asset.Status == AssetStatus.Retired) throw IncidentException.Conflict("asset_retired");
             }
             var report = new IncidentReport
             {

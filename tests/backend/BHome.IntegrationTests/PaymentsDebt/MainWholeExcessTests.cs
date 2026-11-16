@@ -45,7 +45,7 @@ public sealed partial class PaymentLedgerTests
         var summaryPath = $"/api/v1/contracts/{w.Contract}/move-out/settlement-summary";
         Assert.Contains("receipt_excess_refund_pending", (await RefundValue<ContractSettlementSummary>(await owner.GetAsync(summaryPath))).UnresolvedItems);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
-        await RefundValue<ContractView>(await Post(owner, $"/api/v1/contracts/{w.Contract}/move-out/complete", new CompletionInput(today)));
+        await RefundValue<ContractView>(await Post(owner, $"/api/v1/contracts/{w.Contract}/move-out/complete", new CompletionInput(today, "Available")));
         Assert.Contains("receipt_excess_refund_pending", (await RefundValue<ContractSettlementSummary>(await owner.GetAsync(summaryPath))).UnresolvedItems);
         var history = await RefundValue<PagedResult<TransferView>>(await owner.GetAsync($"/api/v1/payment-transactions?depositContractId={w.Contract}&paymentStatus=ExcessRefundPending"));
         Assert.Contains(history.Items, p => p.Id == extra.Id && p.AllocatedAmount == 0 && p.UnallocatedAmount == 25000);
