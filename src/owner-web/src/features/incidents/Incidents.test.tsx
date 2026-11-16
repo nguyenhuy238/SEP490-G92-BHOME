@@ -96,7 +96,13 @@ it.each([true, false])(
       },
     );
     const original = mocks.request.getMockImplementation()!;
-    const blob = new Blob(['synthetic evidence'], { type: 'image/png' });
+    // PrivateEvidenceViewer verifies the file signature before allowing inline
+    // rendering, so the fixture must contain a real PNG signature rather than
+    // arbitrary text labelled as image/png.
+    const blob = new Blob(
+      [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0, 0, 0, 0, 0])],
+      { type: 'image/png' },
+    );
     mocks.request.mockImplementation(async (path: string, init?: RequestInit, type?: string) => {
       if (path === '/api/v1/work-orders/work')
         return {
@@ -117,15 +123,19 @@ it.each([true, false])(
       return original(path, init);
     });
     const view = mount(<WorkOrderDetail id="work" />);
+    // Evidence is private: it is fetched only after the Owner explicitly
+    // chooses the preview action, and the verified image is rendered in a
+    // dialog rather than embedded automatically in the detail page.
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem ảnh kết quả sửa chữa' }));
+    const dialog = screen.getByRole('dialog', { name: 'Xem ảnh kết quả sửa chữa' });
     if (allowed) {
-      expect(await screen.findByRole('img', { name: 'Ảnh kết quả sửa chữa' })).toHaveAttribute(
-        'src',
-        'blob:synthetic-work-evidence',
-      );
-      expect(createUrl).toHaveBeenCalledWith(blob);
+      expect(
+        await within(dialog).findByRole('img', { name: 'ảnh kết quả sửa chữa' }),
+      ).toHaveAttribute('src', 'blob:synthetic-work-evidence');
+      expect(createUrl).toHaveBeenCalledWith(expect.objectContaining({ type: 'image/png' }));
     } else {
-      expect(await screen.findByText('Không tải được ảnh xem trước.')).toBeVisible();
-      expect(screen.queryByRole('img')).toBeNull();
+      expect(await within(dialog).findByText('Không tải được chứng từ.')).toBeVisible();
+      expect(within(dialog).queryByRole('img')).toBeNull();
       expect(createUrl).not.toHaveBeenCalled();
     }
     expect(mocks.request).toHaveBeenCalledWith(

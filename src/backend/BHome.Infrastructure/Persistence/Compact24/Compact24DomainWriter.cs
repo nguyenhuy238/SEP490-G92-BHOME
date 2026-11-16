@@ -167,6 +167,10 @@ public sealed partial class Compact24DbContext
             return;
         }
         var values = new Dictionary<string, string>(spec.Write, StringComparer.Ordinal);
+        // Owner inventory creates an Asset and its grouped quantity together. Existing asset
+        // updates must leave purchase_info intact; explicit metadata changes use their own SQL.
+        if (entry.Entity is BHome.Domain.PropertyManagement.Asset && entry.State == EntityState.Added)
+            values["purchase_info"] = "COALESCE((@state::jsonb->>'purchaseInfo')::jsonb,'{}'::jsonb)";
         if (entry.Entity is PaymentAllocation { VerifiedByUserId: var verifier } && verifier == Guid.Empty)
             values["created_by_user_id"] = "NULL";
         if (entry.Entity is BHome.Domain.Locations.Location)

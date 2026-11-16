@@ -117,10 +117,10 @@ it('keeps property functions inside the selected Location Workspace', async () =
   const expectedLinks: Record<string, string> = {
     '/locations': 'Cơ sở',
     '/configuration/room-types': 'Mẫu loại phòng',
-    '/configuration/assets': 'Tài sản dùng chung',
+    '/configuration/assets': 'Tài sản mẫu',
   };
   const propertyLinks = within(navigation).getAllByRole('link', {
-    name: /^(Cơ sở|Mẫu loại phòng|Tài sản dùng chung)$/,
+    name: /^(Cơ sở|Mẫu loại phòng|Tài sản mẫu)$/,
   });
   expect(propertyLinks.map((link) => link.getAttribute('href')).sort()).toEqual(
     Object.keys(expectedLinks).sort(),

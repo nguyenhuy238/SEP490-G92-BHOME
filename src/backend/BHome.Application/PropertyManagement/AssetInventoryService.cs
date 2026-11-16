@@ -1,5 +1,7 @@
 using BHome.Application.IdentityAccess;
 using BHome.Domain.PropertyManagement;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace BHome.Application.PropertyManagement;
 
@@ -150,15 +152,81 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             var item = Read<DesiredAssets>(desired).Items.SingleOrDefault(i => i.Id == input.ItemId) ?? throw new PropertyException(400, "template_item_not_found");
             var id = Key($"verified:{room}:{template.Id}:{input.ItemId}:{input.Code.Trim().ToUpperInvariant()}");
             var prior = await Store.GetAsync(id, "AssetVerification", t);
-            if (prior is not null)
-            {
-                if (prior.Data.GetProperty("fingerprint").GetString() != Hash(input)) throw new PropertyException(409, "verification_conflict");
+            var fingerprint = Hash(input);
+            if (prior is not null && prior.Data.TryGetProperty("fingerprint", out var priorFingerprint) &&
+                priorFingerprint.GetString() == fingerprint)
                 return prior.Data.GetProperty("assetId").GetGuid();
-            }
-            if ((await InventoryAsync(room, t)).CurrentDesiredId != desired.Id) throw new PropertyException(409, "desired_template_changed");
-            if (desired.Version != input.ExpectedVersion || input.Quantity < 1 || item.TrackingMode == "Serialized" && input.Quantity != 1)
-                throw new PropertyException(409, "invalid_verification_quantity_or_version");
+
             var verifications = await Store.ListAsync(location, "AssetVerification", t);
+            var attestedGroups = verifications.Where(v => v.Data.GetProperty("roomId").GetGuid() == room &&
+                v.Data.GetProperty("itemId").GetGuid() == item.Id && v.Data.TryGetProperty("source", out var source) &&
+                source.GetString() == "OwnerAttestation");
+            var activeAttestations = new List<(SetupDocument Document, Asset Asset)>();
+            foreach (var attestation in attestedGroups)
+            {
+                var grouped = await Store.AssetAsync(attestation.Data.GetProperty("assetId").GetGuid(), t);
+                if (grouped is not null && grouped.Status != AssetStatus.Retired)
+                    activeAttestations.Add((attestation, grouped));
+            }
+            if (activeAttestations.Count > 0)
+            {
+                if ((await InventoryAsync(room, t)).CurrentDesiredId != desired.Id)
+                    throw new PropertyException(409, "desired_template_changed");
+                if (desired.Version != input.ExpectedVersion || input.Quantity < 1)
+                    throw new PropertyException(409, "invalid_verification_quantity_or_version");
+                if (activeAttestations.Count != 1 || activeAttestations[0].Document.Data.GetProperty("templateId").GetGuid() != template.Id)
+                    throw new PropertyException(409, "asset_group_already_attested");
+
+                var (ownerAttestation, groupedAsset) = activeAttestations[0];
+                var attestedMetadata = (await Store.AssetMetadataAsync([groupedAsset.Id], t)).GetValueOrDefault(groupedAsset.Id)
+                    ?? throw new PropertyException(409, "asset_metadata_missing");
+                if (groupedAsset.LocationId != location || groupedAsset.RoomId != room ||
+                    groupedAsset.Status == AssetStatus.Retired ||
+                    !string.Equals(groupedAsset.Name, item.Name, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(groupedAsset.Category, item.Category, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(groupedAsset.Code, input.Code.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(groupedAsset.Condition, input.Condition.Trim(), StringComparison.Ordinal) ||
+                    attestedMetadata.Quantity != input.Quantity || input.Quantity != item.Quantity ||
+                    attestedMetadata.Unit is not null && item.Unit is not null &&
+                    !string.Equals(attestedMetadata.Unit, item.Unit, StringComparison.OrdinalIgnoreCase) ||
+                    input.ExistingAssetId is { } requestedAssetId && requestedAssetId != groupedAsset.Id ||
+                    ownerAttestation.Data.GetProperty("quantity").GetInt32() != attestedMetadata.Quantity)
+                    throw new PropertyException(409, "owner_attested_asset_mismatch");
+
+                var evidenceId = await Store.EvidenceIdAsync(location, input.EvidenceObjectKey, t)
+                    ?? throw new PropertyException(400, "verified_private_evidence_required");
+                var attestationData = JsonNode.Parse(ownerAttestation.Data.GetRawText())?.AsObject()
+                    ?? throw new PropertyException(409, "invalid_setup_document");
+                var fingerprints = attestationData["staffEvidenceFingerprints"] as JsonArray ?? new JsonArray();
+                if (fingerprints.Any(value => string.Equals(value?.GetValue<string>(), fingerprint, StringComparison.Ordinal)))
+                    return groupedAsset.Id;
+
+                var evidenceIds = attestationData["staffEvidenceIds"] as JsonArray ?? new JsonArray();
+                if (!evidenceIds.Any(value => Guid.TryParse(value?.GetValue<string>(), out var id) && id == evidenceId))
+                    evidenceIds.Add(evidenceId);
+                fingerprints.Add(fingerprint);
+                var evidenceEntries = attestationData["staffEvidenceEntries"] as JsonArray ?? new JsonArray();
+                evidenceEntries.Add(JsonSerializer.SerializeToNode(new
+                {
+                    evidenceId,
+                    verifiedBy = Actor,
+                    fingerprint
+                }, Json));
+                attestationData["staffEvidenceIds"] = evidenceIds;
+                attestationData["staffEvidenceFingerprints"] = fingerprints;
+                attestationData["staffEvidenceEntries"] = evidenceEntries;
+                await Store.SaveAsync(ownerAttestation.Id, location, "AssetVerification", "Verified",
+                    attestationData, ownerAttestation.Version, Actor, t);
+                return groupedAsset.Id;
+            }
+            if (prior is not null)
+                throw new PropertyException(409, "verification_conflict");
+            if ((await InventoryAsync(room, t)).CurrentDesiredId != desired.Id)
+                throw new PropertyException(409, "desired_template_changed");
+            if (desired.Version != input.ExpectedVersion || input.Quantity < 1)
+                throw new PropertyException(409, "invalid_verification_quantity_or_version");
+            if (item.TrackingMode == "Serialized" && input.Quantity != 1)
+                throw new PropertyException(409, "invalid_verification_quantity_or_version");
             var verified = verifications.Where(v => v.Data.GetProperty("roomId").GetGuid() == room &&
                 v.Data.GetProperty("templateId").GetGuid() == template.Id && v.Data.GetProperty("itemId").GetGuid() == item.Id)
                 .Sum(v => v.Data.GetProperty("quantity").GetInt32());
@@ -169,7 +237,8 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             {
                 var existingMetadata = (await Store.AssetMetadataAsync([asset.Id], t))[asset.Id];
                 if (asset.LocationId != location || asset.RoomId != room || asset.Status == AssetStatus.Retired || !string.Equals(asset.Code, input.Code.Trim(), StringComparison.OrdinalIgnoreCase) ||
-                    asset.Condition != input.Condition.Trim() || existingMetadata.Quantity != input.Quantity || existingMetadata.TrackingMode != item.TrackingMode ||
+                    asset.Condition != input.Condition.Trim() || existingMetadata.Quantity != input.Quantity ||
+                    (input.Quantity != 1 && existingMetadata.TrackingMode != item.TrackingMode) ||
                     (existingMetadata.Unit is not null && item.Unit is not null && !string.Equals(existingMetadata.Unit, item.Unit, StringComparison.OrdinalIgnoreCase)))
                     throw new PropertyException(409, "existing_asset_verification_mismatch");
                 if (verifications.Any(v => v.Data.GetProperty("roomId").GetGuid() == room &&
@@ -195,8 +264,11 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             }, 0, Actor, t);
             var all = await Store.ListAsync(location, "AssetVerification", t);
             var data = Read<DesiredAssets>(desired);
+            var physical = await Store.AssetsAsync(room, t);
+            var metadata = await Store.AssetMetadataAsync(physical.Where(a => a.Status != AssetStatus.Retired).Select(a => a.Id).ToArray(), t);
             var complete = data.Items.All(i => all.Where(v => v.Data.GetProperty("roomId").GetGuid() == room && v.Data.GetProperty("templateId").GetGuid() == template.Id &&
-                v.Data.GetProperty("itemId").GetGuid() == i.Id).Sum(v => v.Data.GetProperty("quantity").GetInt32()) == i.Quantity);
+                v.Data.GetProperty("itemId").GetGuid() == i.Id).GroupBy(v => v.Data.GetProperty("assetId").GetGuid())
+                .Sum(g => Math.Min(g.Max(v => v.Data.GetProperty("quantity").GetInt32()), metadata.GetValueOrDefault(g.Key)?.Quantity ?? 0)) == i.Quantity);
             await Store.SaveAsync(desired.Id, location, desired.Kind, complete ? "Verified" : "PartiallyVerified",
                 data with { Status = complete ? "Verified" : "PartiallyVerified" }, desired.Version, Actor, t);
             return asset.Id;
@@ -273,8 +345,12 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             m.PurchaseCost < 0 || m.UsefulLifeMonths < 1) throw new PropertyException(400, "invalid_asset_metadata");
         return await Store.TransactionAsync(asset.LocationId, async () =>
         {
+            asset = await Store.AssetAsync(id, t) ?? throw new PropertyException(404, "resource_not_found");
             var previous = (await Store.AssetMetadataAsync([id], t))[id];
             m = m with { Unit = string.IsNullOrWhiteSpace(m.Unit) ? previous.Unit : Text(m.Unit, 80) };
+            if ((m.Quantity != previous.Quantity || m.TrackingMode != previous.TrackingMode) &&
+                (asset.Status is AssetStatus.Retired or AssetStatus.UnderRepair || await Store.HasOpenAssetWorkAsync(id, t)))
+                throw new PropertyException(409, "asset_workflow_controlled");
             await Store.SaveAssetMetadataAsync(id, m, t);
             asset.Version++; await Store.SaveAssetAsync(asset, Actor, input.Reason, t);
             return await Store.SaveAsync(id, asset.LocationId, "AssetMetadata", "Recorded", new { m.TrackingMode, m.Quantity, m.PurchaseCost, m.PurchaseDate, m.UsefulLifeMonths, m.Unit, input.Reason }, input.ExpectedVersion, Actor, t);
@@ -292,7 +368,9 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
         Text(input.Code, 80); Text(input.Condition, 1000); Text(input.Reason, 500);
         return await Store.TransactionAsync(asset.LocationId, async () =>
         {
-            if (asset.Version != input.ExpectedVersion || asset.Status is AssetStatus.UnderRepair or AssetStatus.Retired)
+            asset = await Store.AssetAsync(id, t) ?? throw new PropertyException(404, "resource_not_found");
+            if (asset.Version != input.ExpectedVersion || asset.Status is AssetStatus.UnderRepair or AssetStatus.Retired ||
+                await Store.HasOpenAssetWorkAsync(id, t))
                 throw new PropertyException(409, "asset_workflow_controlled");
             asset.Status = AssetStatus.Retired; asset.Version++; await Store.SaveAssetAsync(asset, Actor, input.Reason, t);
             var next = new Asset

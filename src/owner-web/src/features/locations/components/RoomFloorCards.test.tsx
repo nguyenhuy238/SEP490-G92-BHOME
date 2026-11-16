@@ -223,7 +223,7 @@ it('opens current room data with an edit callback using the detail version, plus
   expect(screen.getByText('Ban công')).toBeInTheDocument();
   expect(screen.queryByText(/phiên bản 2/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: 'Tài sản' }));
-  expect(screen.getByText('Định mức mong muốn')).toBeInTheDocument();
+  expect(screen.getByText('Tài sản được cấu hình')).toBeInTheDocument();
   expect(screen.getByText('Chưa ghi nhận tài sản vật lý.')).toBeInTheDocument();
 });
 

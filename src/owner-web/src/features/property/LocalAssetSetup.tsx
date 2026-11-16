@@ -49,9 +49,11 @@ import { ConflictReload } from '../locations/components/ConflictReload';
 export function LocalAssetSetup({
   locationId,
   mode = 'all',
+  initialRoomId = '',
 }: {
   locationId: string;
   mode?: 'all' | 'templates' | 'inventory';
+  initialRoomId?: string;
 }) {
   const api = usePropertySetupApi();
   const { session } = useAuth();
@@ -60,7 +62,7 @@ export function LocalAssetSetup({
     undefined,
   );
   const [editingType, setEditingType] = useState<SetupDocument<LocalRoomDefaultsData> | null>(null);
-  const [roomId, setRoomId] = useState('');
+  const [roomId, setRoomId] = useState(initialRoomId);
   const [run, setRun] = useState<Pick<AssetSyncRun, 'rooms'> | null>(null);
   const action = useSetupAction();
   const showTemplates = mode !== 'inventory';
@@ -85,7 +87,7 @@ export function LocalAssetSetup({
       {mode === 'all' && (
         <Box>
           <Typography variant="h6" component="h2">
-            Bộ mẫu trang bị & Kiểm kê phòng
+            Tài sản theo phòng & Kiểm kê phòng
           </Typography>
         </Box>
       )}
@@ -93,8 +95,7 @@ export function LocalAssetSetup({
       {action.notice && <Alert severity="success">{action.notice}</Alert>}
       {showTemplates && !owner && (
         <Alert severity="info">
-          Owner quản lý bộ định mức trang bị. Chọn mục kiểm kê phòng để xem thông tin được cấp
-          quyền.
+          Owner cấu hình tài sản theo phòng. Chọn mục kiểm kê phòng để xem thông tin được cấp quyền.
         </Alert>
       )}
       {showTemplates && owner && (
@@ -105,7 +106,7 @@ export function LocalAssetSetup({
             disabled={action.busy}
             onClick={() => setEditing(null)}
           >
-            Tạo bộ mẫu trang bị
+            Tạo danh sách tài sản phòng
           </Button>
           {templates.isPending ? (
             <LoadingState />
@@ -120,7 +121,7 @@ export function LocalAssetSetup({
               ) : (
                 <>
                   <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    Định mức theo loại phòng
+                    Tài sản theo loại phòng
                   </Typography>
                   {!defaults.data?.filter((item) => item.status !== 'Archived').length ? (
                     <Typography variant="body2" color="text.secondary">
@@ -135,7 +136,7 @@ export function LocalAssetSetup({
                       <Table
                         size="small"
                         role="table"
-                        aria-label="Định mức theo loại phòng"
+                        aria-label="Tài sản theo loại phòng"
                         sx={{ display: { xs: 'block', sm: 'table' }, minWidth: { xs: 0, sm: 380 } }}
                       >
                         <TableHead
@@ -150,7 +151,7 @@ export function LocalAssetSetup({
                         >
                           <TableRow role="row">
                             <TableCell role="columnheader">Loại phòng</TableCell>
-                            <TableCell role="columnheader">Định mức trang bị</TableCell>
+                            <TableCell role="columnheader">Tài sản được cấu hình</TableCell>
                             <TableCell role="columnheader" align="right">
                               Thao tác
                             </TableCell>
@@ -211,7 +212,7 @@ export function LocalAssetSetup({
                                       </>
                                     ) : (
                                       <Typography variant="body2" color="text.secondary">
-                                        Chưa có định mức
+                                        Chưa cấu hình tài sản
                                       </Typography>
                                     )}
                                   </TableCell>
@@ -224,7 +225,7 @@ export function LocalAssetSetup({
                                       variant="outlined"
                                       disabled={action.busy}
                                       onClick={() => setEditingType(type)}
-                                      aria-label={`Chỉnh sửa định mức ${type.data.name}`}
+                                      aria-label={`Chỉnh sửa tài sản ${type.data.name}`}
                                       sx={{ minHeight: { xs: 44, sm: 36 } }}
                                     >
                                       Chỉnh sửa
@@ -364,7 +365,9 @@ export function LocalAssetSetup({
         </>
       )}
       <Dialog open={editing !== undefined} fullWidth maxWidth="md">
-        <DialogTitle>{editing ? 'Chỉnh sửa bộ mẫu nháp' : 'Tạo bộ mẫu trang bị'}</DialogTitle>
+        <DialogTitle>
+          {editing ? 'Chỉnh sửa bộ mẫu nháp' : 'Tạo danh sách tài sản phòng'}
+        </DialogTitle>
         <DialogContent>
           {editing !== undefined && (
             <LocalTemplateEditor
@@ -378,7 +381,7 @@ export function LocalAssetSetup({
       </Dialog>
       {editingType && (
         <Dialog open fullWidth maxWidth="md">
-          <DialogTitle>Định mức · {editingType.data.name}</DialogTitle>
+          <DialogTitle>Tài sản · {editingType.data.name}</DialogTitle>
           <DialogContent>
             <RoomTypeAssetEditor
               key={`${editingType.id}:${editingType.version}`}
@@ -435,7 +438,13 @@ export function LocalAssetSetup({
           </Stack>
         </Paper>
       )}
-      {showInventory && (
+      {showInventory && owner && (
+        <Alert severity="info">
+          Owner xác nhận kiểm kê theo danh sách tài sản đã cấu hình tại mục Kiểm kê phòng. Quy trình
+          kiểm kê bàn giao có ảnh dành riêng cho Staff.
+        </Alert>
+      )}
+      {showInventory && !owner && (
         <Stack spacing={2}>
           {owner && templates.error && (
             <ErrorState error={templates.error} retry={() => void templates.refetch()} />
@@ -459,15 +468,7 @@ export function LocalAssetSetup({
           {rooms.isSuccess && !rooms.data.length && (
             <Alert severity="info">Cơ sở chưa có phòng để kiểm kê.</Alert>
           )}
-          {roomId && (
-            <RoomAssetInventory
-              key={roomId}
-              roomId={roomId}
-              locationId={locationId}
-              templates={templates.data ?? []}
-              templatesAvailable={templates.isSuccess}
-            />
-          )}
+          {roomId && <RoomAssetInventory key={roomId} roomId={roomId} locationId={locationId} />}
           {!roomId && rooms.isSuccess && !!rooms.data.length && (
             <Typography variant="body2" color="text.secondary">
               Chọn một phòng để xem tài sản đã ghi nhận, định mức và các chênh lệch cần kiểm tra.
@@ -543,7 +544,7 @@ function RoomTypeAssetEditor({
       <Typography variant="body2" color="text.secondary">
         {apply
           ? 'Chỉ cập nhật phòng cùng loại đủ điều kiện, chưa có hợp đồng. Giữ nguyên tài sản đã kiểm kê.'
-          : 'Định mức mới dùng cho phòng tạo sau này.'}
+          : 'Cấu hình mới dùng cho phòng tạo sau này.'}
       </Typography>
       <TextField
         label="Lý do thay đổi"
@@ -561,7 +562,7 @@ function RoomTypeAssetEditor({
           Hủy
         </Button>
         <Button disabled={action.busy || !valid} type="submit" variant="contained">
-          {apply ? 'Lưu và áp dụng' : 'Lưu định mức'}
+          {apply ? 'Lưu và áp dụng' : 'Lưu tài sản phòng'}
         </Button>
       </Stack>
     </Stack>
@@ -635,32 +636,14 @@ function LocalTemplateEditor({
   );
 }
 
-function RoomAssetInventory({
-  roomId,
-  locationId,
-  templates,
-  templatesAvailable,
-}: {
-  roomId: string;
-  locationId: string;
-  templates: SetupDocument<LocalAssetTemplate>[];
-  templatesAvailable: boolean;
-}) {
+function RoomAssetInventory({ roomId, locationId }: { roomId: string; locationId: string }) {
   const api = usePropertySetupApi();
   const { session } = useAuth();
-  const owner = session?.roles.includes('Owner') ?? false;
   const action = useSetupAction();
-  const [selected, setSelected] = useState<string | undefined>(undefined);
   const [countItemId, setCountItemId] = useState('');
   const inventory = useQuery({
     queryKey: ['property-setup', 'inventory', session?.userId, roomId],
     queryFn: ({ signal }) => api.inventory(roomId, signal),
-  });
-  const eligibility = useQuery({
-    queryKey: ['property-setup', 'room-configuration', session?.userId, locationId, roomId],
-    queryFn: ({ signal }) =>
-      locationSetupClient(api.request).roomConfiguration(locationId, roomId, signal),
-    enabled: owner,
   });
   const counts = useAssetCounts(roomId, inventory.data?.currentDesiredId ?? undefined);
   if (inventory.isPending) return <LoadingState />;
@@ -681,76 +664,6 @@ function RoomAssetInventory({
         </Button>
         {action.error && <Alert severity="error">{action.error}</Alert>}
         {action.notice && <Alert severity="success">{action.notice}</Alert>}
-        {owner && (
-          <>
-            {eligibility.data?.canEdit === false && (
-              <Alert severity="info">
-                Phòng chưa đủ điều kiện thay đổi định mức. Tài sản thực tế vẫn có thể kiểm kê.
-              </Alert>
-            )}
-            {eligibility.error && (
-              <ErrorState error={eligibility.error} retry={() => void eligibility.refetch()} />
-            )}
-            <TextField
-              select
-              label="Bộ mẫu của phòng"
-              disabled={
-                action.busy ||
-                !templatesAvailable ||
-                !eligibility.data?.canEdit ||
-                eligibility.isFetching
-              }
-              value={selected ?? inventory.data.assignedTemplateId ?? ''}
-              onChange={(event) => setSelected(event.target.value)}
-            >
-              <MenuItem value="">Bộ mẫu mặc định của cơ sở</MenuItem>
-              {inventory.data.assignedTemplateId &&
-                !templates.some(
-                  (template) =>
-                    template.id === inventory.data.assignedTemplateId &&
-                    template.status === 'Published',
-                ) && (
-                  <MenuItem value={inventory.data.assignedTemplateId} disabled>
-                    Gói đã gán · chưa có trong danh sách công bố
-                  </MenuItem>
-                )}
-              {templates
-                .filter(
-                  (template) =>
-                    template.status === 'Published' &&
-                    (!template.data.scopeRoomId || template.data.scopeRoomId === roomId),
-                )
-                .map((template) => (
-                  <MenuItem key={template.id} value={template.id}>
-                    {template.data.name}
-                  </MenuItem>
-                ))}
-            </TextField>
-            <Button
-              variant="outlined"
-              sx={{ alignSelf: 'flex-start' }}
-              disabled={
-                action.busy ||
-                !templatesAvailable ||
-                !eligibility.data?.canEdit ||
-                eligibility.isFetching
-              }
-              onClick={() =>
-                action.run(
-                  () =>
-                    api.assignTemplate(
-                      roomId,
-                      (selected ?? inventory.data.assignedTemplateId) || null,
-                      inventory.data.assignmentVersion,
-                    ),
-                  'Máy chủ đã lưu lựa chọn bộ mẫu.',
-                )
-              }
-            >
-              Gán bộ mẫu cho phòng
-            </Button>
-          </>
-        )}
         <Divider />
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
           Tài sản vật lý đã ghi nhận
@@ -812,7 +725,7 @@ function RoomAssetInventory({
         ))}
         <Divider />
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-          Định mức mong muốn
+          Tài sản được cấu hình
         </Typography>
         {current ? (
           <>
@@ -837,7 +750,11 @@ function RoomAssetInventory({
               </Typography>
             </Stack>
             <TableContainer>
-              <Table size="small" aria-label="Định mức mong muốn của phòng" sx={{ minWidth: 560 }}>
+              <Table
+                size="small"
+                aria-label="Tài sản được cấu hình cho phòng"
+                sx={{ minWidth: 560 }}
+              >
                 <TableHead>
                   <TableRow>
                     <TableCell>Thiết bị</TableCell>
@@ -927,7 +844,8 @@ function RoomAssetInventory({
           </>
         ) : (
           <Typography>
-            Chưa có định mức cho phòng đủ điều kiện. Kiểm tra trạng thái phòng và kết quả đồng bộ.
+            Chưa cấu hình tài sản cho phòng đủ điều kiện. Kiểm tra trạng thái phòng và kết quả đồng
+            bộ.
           </Typography>
         )}
       </Stack>

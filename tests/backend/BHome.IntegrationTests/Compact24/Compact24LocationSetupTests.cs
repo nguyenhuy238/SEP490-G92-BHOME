@@ -309,7 +309,7 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(desired.Id, pinned.CurrentDesiredId);
         Assert.Empty((await owner.GetFromJsonAsync<AssetInventory>($"/api/v1/rooms/{unassignedRoom}/asset-inventory"))!.Desired);
         var item = desired.Data.GetProperty("items")[0].GetProperty("id").GetGuid();
-        var evidence = await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(location, [1, 2, 3], "image/png", w.Owner.Id, default);
+        var evidence = (await scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().UploadEvidenceAsync(location, [1, 2, 3], "image/png", w.Owner.Id, default)).ObjectKey;
         await Read<SetupDocument>(await owner.PutAsJsonAsync($"/api/v1/rooms/{room}/asset-template", new AssetTemplateAssignment(null, pinned.AssignmentVersion)));
         var cleared = (await owner.GetFromJsonAsync<AssetInventory>(inventoryRoute))!;
         Assert.Null(cleared.AssignedTemplateId); Assert.Null(cleared.CurrentDesiredId); Assert.Single(cleared.Desired);

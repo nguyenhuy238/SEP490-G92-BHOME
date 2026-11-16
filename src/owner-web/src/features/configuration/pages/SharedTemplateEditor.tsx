@@ -18,6 +18,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ASSET_UNITS } from '../../../../../../packages/client-core/src/assetUnits';
+import { assetCatalogSupportsScope } from '../../../../../../packages/client-core/src/sharedConfiguration';
 import type {
   AssetCatalogData,
   RoomTemplateData,
@@ -64,6 +65,8 @@ export function SharedTemplateEditor({
   error,
   close,
   save,
+  setupCreation = false,
+  assetScope = 'Room',
 }: {
   resource: SharedResource;
   document: SharedDocument | null;
@@ -71,6 +74,8 @@ export function SharedTemplateEditor({
   error: string;
   close: () => void;
   save: (input: SharedWrite) => void;
+  setupCreation?: boolean;
+  assetScope?: 'Room' | 'Location';
 }) {
   const api = useSharedConfigurationApi();
   const { session } = useAuth();
@@ -82,17 +87,18 @@ export function SharedTemplateEditor({
       resource === 'fee-templates'
         ? {
             scope: 'Location',
-            category: 'Rent',
+            category: setupCreation ? 'ServiceFee' : 'Rent',
             method: 'FixedPerRoomPerMonth',
-            chargeCode: 'RENT',
+            chargeCode: setupCreation ? '' : 'RENT',
             unit: 'VND/month',
           }
         : resource === 'asset-catalog'
-          ? { category: 'Khác', unit: 'Cái' }
+          ? { category: 'Khác', unit: 'Cái', scope: document ? 'Both' : assetScope }
           : {};
     if (document)
       for (const [key, value] of Object.entries(document.data))
         result[key] = Array.isArray(value) ? value.join('\n') : value == null ? '' : String(value);
+    if (resource === 'asset-catalog' && !result.scope) result.scope = 'Both';
     if (resource === 'fee-templates' && feeDefaults[result.category]) {
       const defaults = feeDefaults[result.category];
       result.method =
@@ -149,6 +155,15 @@ export function SharedTemplateEditor({
       : resource === 'asset-catalog'
         ? [
             {
+              name: 'scope',
+              label: 'Phạm vi tài sản',
+              options: [
+                { id: 'Room', label: 'Tài sản theo phòng' },
+                { id: 'Location', label: 'Tài sản chung của cơ sở' },
+                ...(values.scope === 'Both' ? [{ id: 'Both', label: 'Cả hai (mẫu hiện có)' }] : []),
+              ],
+            },
+            {
               name: 'unit',
               label: 'Đơn vị',
               options: [...new Set([...ASSET_UNITS, ...(values.unit ? [values.unit] : [])])].map(
@@ -163,7 +178,7 @@ export function SharedTemplateEditor({
                 name: 'category',
                 label: 'Nhóm phí',
                 options: [
-                  { id: 'Rent', label: 'Tiền thuê' },
+                  ...(!setupCreation ? [{ id: 'Rent', label: 'Tiền thuê' }] : []),
                   { id: 'Electricity', label: 'Điện' },
                   { id: 'Water', label: 'Nước' },
                   { id: 'ServiceFee', label: 'Dịch vụ' },
@@ -246,6 +261,7 @@ export function SharedTemplateEditor({
               category: values.category || 'Khác',
               unit: values.unit ?? '',
               referencePrice: values.referencePrice ?? '',
+              scope: values.scope as AssetCatalogData['scope'],
             }
           : resource === 'asset-templates'
             ? { items }
@@ -283,7 +299,11 @@ export function SharedTemplateEditor({
             useFlexGap
             sx={{ flexWrap: 'wrap', alignItems: 'center' }}
           >
-            <Chip size="small" label="Bản nháp" variant="outlined" />
+            <Chip
+              size="small"
+              label={setupCreation ? 'Thư viện dùng chung' : 'Bản nháp'}
+              variant="outlined"
+            />
             {document && (
               <Typography
                 variant="caption"
@@ -308,6 +328,12 @@ export function SharedTemplateEditor({
           <Stack spacing={1.5}>
             {error && <Alert severity="error">{error}</Alert>}
             {validationError && <Alert severity="error">{validationError}</Alert>}
+            {setupCreation && (
+              <Typography variant="body2" color="text.secondary">
+                Mẫu được lưu và công bố trong thư viện dùng chung. Sau đó bạn có thể chọn mẫu để
+                thêm vào cơ sở đang thiết lập.
+              </Typography>
+            )}
             <TextField
               required
               disabled={busy}
@@ -456,6 +482,7 @@ export function SharedTemplateEditor({
                     {catalog.data
                       ?.filter(
                         (item) =>
+                          assetCatalogSupportsScope(item.data as AssetCatalogData, 'Room') &&
                           !items.some(
                             (selected) =>
                               selected.catalogId === item.id ||
@@ -490,7 +517,7 @@ export function SharedTemplateEditor({
                           catalogVersion: selected.version,
                           quantity: 1,
                           required: true,
-                          trackingMode: 'Serialized',
+                          trackingMode: 'BulkQuantity',
                           catalog: {
                             ...(selected.data as AssetCatalogData),
                             familyId: selected.familyId,
@@ -597,7 +624,7 @@ export function SharedTemplateEditor({
             type="submit"
             variant="contained"
           >
-            Lưu bản nháp
+            {setupCreation ? 'Lưu và công bố' : 'Lưu bản nháp'}
           </Button>
         </DialogActions>
       </Box>

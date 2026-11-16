@@ -33,7 +33,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, ChevronDown, Copy, Package, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ASSET_UNITS } from '../../../../../../packages/client-core/src/assetUnits';
@@ -47,11 +47,13 @@ import {
   type LocationSetupInformation,
   type LocationSetupResult,
   type SetupAssetRequirement,
+  type SetupCommonAssetRequirement,
   type SetupFee,
   type SetupRoomDefaults,
   type LocationSetupSource,
   type SetupSourceReference,
 } from '../../../../../../packages/client-core/src/locationSetup';
+import { assetCatalogSupportsScope } from '../../../../../../packages/client-core/src/sharedConfiguration';
 import type {
   AssetCatalogData,
   FeeTemplateData,
@@ -59,9 +61,11 @@ import type {
   RoomTemplateData,
   SharedDocument,
   SharedResource,
+  SharedWrite,
 } from '../../../../../../packages/client-core/src/sharedConfiguration';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
 import { useSharedConfigurationApi } from '../../configuration/useSharedConfigurationApi';
+import { SharedTemplateEditor } from '../../configuration/pages/SharedTemplateEditor';
 import { todayVietnam } from '../../staff/staffContracts';
 import type { PortalRecord } from '../../../types/portal';
 import { SetupDropZone, SetupTemplatePicker } from './SetupTemplatePicker';
@@ -131,6 +135,10 @@ type DraftRoom = {
   rent: number | string | null;
 };
 type DraftAsset = SetupAssetRequirement & { references?: SetupSourceReference[] };
+type DraftCommonAsset = SetupCommonAssetRequirement & {
+  references?: SetupSourceReference[];
+  sourceItemId?: string;
+};
 type DraftType = Omit<SetupRoomDefaults, 'assets'> & {
   assets: DraftAsset[];
   assetTemplateSourceName?: string;
@@ -161,6 +169,7 @@ type Draft = {
   appliedSource: string | null;
   sourceState: string | null;
   roomTypes: DraftType[];
+  commonAssets: DraftCommonAsset[];
   rooms: DraftRoom[];
   fees: DraftFee[];
   rules: RuleSection[];
@@ -179,10 +188,27 @@ const uniqueReferences = (references: SetupSourceReference[]) => [
 ];
 
 const matchesCatalog = (asset: DraftAsset, doc: SharedDocument) =>
-  norm(asset.name) === norm(doc.name) &&
-  (!asset.unit ||
-    !(doc.data as AssetCatalogData).unit ||
-    norm(asset.unit) === norm((doc.data as AssetCatalogData).unit));
+  asset.references?.some((item) => item.kind === 'asset-catalog' && item.id === doc.id) ||
+  norm(asset.name) === norm(doc.name);
+
+const matchesRoomTemplate = (type: DraftType, doc: SharedDocument) =>
+  type.sourceId === doc.id || norm(type.name) === norm(doc.name);
+
+const matchesFeeTemplate = (fee: DraftFee, doc: SharedDocument) => {
+  const data = doc.data as FeeTemplateData;
+  return (
+    fee.sourceId === doc.id ||
+    (data.scope === 'Location' &&
+      !fee.requiresRoom &&
+      fee.roomKey === null &&
+      feeOverlaps(fee, {
+        roomKey: null,
+        chargeCode: data.chargeCode,
+        effectiveFrom: feeDate(data.effectiveFrom),
+        effectiveTo: data.effectiveTo && data.effectiveTo >= today() ? data.effectiveTo : null,
+      }))
+  );
+};
 
 function mergeCatalogAssets(assets: DraftAsset[], documents: SharedDocument[]): DraftAsset[] {
   const merged = [...assets];
@@ -201,7 +227,7 @@ function mergeCatalogAssets(assets: DraftAsset[], documents: SharedDocument[]): 
         name: doc.name,
         category: (doc.data as AssetCatalogData).category,
         quantity: 1,
-        trackingMode: 'Serialized',
+        trackingMode: 'BulkQuantity',
         unit: (doc.data as AssetCatalogData).unit,
         references: [imported],
       });
@@ -241,6 +267,7 @@ const newDraft = (source?: string): Draft => ({
   appliedSource: null,
   sourceState: null,
   roomTypes: [],
+  commonAssets: [],
   rooms: [],
   fees: [],
   rules: [],
@@ -375,6 +402,20 @@ function validateSetupStep(draft: Draft, step: number): string | null {
     )
   )
     return 'Kiểm tra tên và số lượng tài sản; mỗi số lượng phải từ 1 đến 10.000.';
+  if (
+    step === 3 &&
+    (draft.commonAssets.length > 100 ||
+      draft.commonAssets.some(
+        (asset) =>
+          !asset.name.trim() ||
+          !asset.commonArea.trim() ||
+          asset.commonArea.trim().length > 200 ||
+          !Number.isInteger(asset.quantity) ||
+          asset.quantity < 1 ||
+          asset.quantity > 10000,
+      ))
+  )
+    return 'Tối đa 100 mục tài sản chung. Nhập khu vực sử dụng (tối đa 200 ký tự) và số lượng từ 1 đến 10.000.';
   if (step === 4) {
     if (draft.fees.some((fee) => fee.requiresRoom && !fee.roomKey))
       return 'Biểu phí riêng của phòng nguồn cần chọn phòng đích hoặc bỏ khoản phí.';
@@ -429,6 +470,7 @@ function toLocationSetupInput(draft: Draft): LocationSetupInput {
       ...type.assets.flatMap((asset) => asset.references ?? []),
     ]),
     ...draft.fees.flatMap((fee) => (fee.reference ? [fee.reference] : [])),
+    ...draft.commonAssets.flatMap((asset) => asset.references ?? []),
     ...draft.rules.flatMap((rule) => (rule.reference ? [rule.reference] : [])),
   ]);
   return {
@@ -466,6 +508,19 @@ function toLocationSetupInput(draft: Draft): LocationSetupInput {
       rent:
         room.rent ?? draft.roomTypes.find((type) => type.key === room.roomTypeKey)!.referenceRent!,
     })),
+    ...(draft.commonAssets.length
+      ? {
+          commonAssets: draft.commonAssets.map((asset) => ({
+            id: asset.id,
+            name: asset.name.trim(),
+            category: asset.category.trim(),
+            commonArea: asset.commonArea.trim(),
+            quantity: asset.quantity,
+            trackingMode: asset.trackingMode,
+            unit: asset.unit ?? null,
+          })),
+        }
+      : {}),
     fees: draft.fees.map((fee) => ({
       roomKey: fee.roomKey,
       category: fee.category,
@@ -512,6 +567,8 @@ export function LocationSetupWizard({
   const storageKey = `bhome-location-setup-v2:${session?.userId ?? 'owner'}`;
   const property = usePropertySetupApi();
   const shared = useSharedConfigurationApi();
+  const queryClient = useQueryClient();
+  const libraryKey = ['property-setup', 'location-setup-library', session?.userId] as const;
   const api = useMemo(() => locationSetupClient(property.request), [property.request]);
   const [draft, setDraft] = useState<Draft>(() => {
     try {
@@ -543,10 +600,18 @@ export function LocationSetupWizard({
   const [prefix, setPrefix] = useState('P.');
   const [quantity, setQuantity] = useState('4');
   const [assetTypeKey, setAssetTypeKey] = useState('');
+  const [assetScope, setAssetScope] = useState<'Room' | 'Location'>('Room');
   const [confirmSave, setConfirmSave] = useState(false);
   const [editingType, setEditingType] = useState<DraftType | null>(null);
   const [editingFeeKey, setEditingFeeKey] = useState('');
   const [editingRuleKey, setEditingRuleKey] = useState('');
+  const [libraryEditor, setLibraryEditor] = useState<{
+    resource: SharedResource;
+    document: SharedDocument | null;
+  } | null>(null);
+  const [librarySaving, setLibrarySaving] = useState(false);
+  const [libraryError, setLibraryError] = useState('');
+  const librarySaveLock = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const billingPreviewRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -572,7 +637,7 @@ export function LocationSetupWizard({
   }, [draft, owner, storageKey]);
 
   const library = useQuery({
-    queryKey: ['property-setup', 'location-setup-library', session?.userId],
+    queryKey: libraryKey,
     queryFn: async ({ signal }) => {
       const result = await Promise.allSettled(
         libraryKinds.map(async (resource) => {
@@ -605,55 +670,117 @@ export function LocationSetupWizard({
   });
   const all = (resource: SharedResource) =>
     (library.data?.items[resource] ?? []).filter((item) => item.status === 'Published');
-  const unpublished = (resources: SharedResource[]) =>
-    resources.flatMap((resource) =>
-      (library.data?.items[resource] ?? []).filter((item) => item.status === 'Draft'),
-    );
-  const librarySection =
+  const librarySection: { resource: SharedResource; label: string } | null =
     draft.step === 1
-      ? {
-          resources: ['room-type-templates'] as SharedResource[],
-          path: '/configuration/room-types',
-        }
+      ? { resource: 'room-type-templates', label: 'Thêm mẫu loại phòng' }
       : draft.step === 3
-        ? {
-            resources: ['asset-catalog'] as SharedResource[],
-            path: '/configuration/assets',
-          }
+        ? { resource: 'asset-catalog', label: 'Thêm loại tài sản mới' }
         : draft.step === 4
-          ? {
-              resources: ['fee-templates'] as SharedResource[],
-              path: '/configuration/pricing-fees',
-            }
+          ? { resource: 'fee-templates', label: 'Thêm mẫu biểu phí' }
           : draft.step === 5
-            ? {
-                resources: ['policy-templates'] as SharedResource[],
-                path: '/configuration/policies',
-              }
+            ? { resource: 'policy-templates', label: 'Thêm mẫu nội quy' }
             : null;
+  const openLibraryEditor = (resource: SharedResource, document: SharedDocument | null = null) => {
+    setLibraryError('');
+    setLibraryEditor({ resource, document });
+  };
+  const rememberLibraryDocument = async (document: SharedDocument) => {
+    await queryClient.cancelQueries({ queryKey: libraryKey, exact: true });
+    queryClient.setQueryData<NonNullable<typeof library.data>>(libraryKey, (previous) => ({
+      items: {
+        ...previous?.items,
+        [document.resource]: [
+          ...(previous?.items[document.resource] ?? []).filter((item) => item.id !== document.id),
+          document,
+        ],
+      },
+      failures: previous?.failures ?? [],
+    }));
+    void queryClient.invalidateQueries({
+      queryKey: ['property-setup', 'shared', session?.userId, document.resource],
+    });
+    if (document.resource === 'asset-catalog')
+      void queryClient.invalidateQueries({
+        queryKey: ['property-setup', 'shared-catalog-picker', session?.userId],
+      });
+  };
+  const saveLibraryTemplate = async (input: SharedWrite) => {
+    if (!owner || !libraryEditor || librarySaveLock.current) return;
+    librarySaveLock.current = true;
+    setLibrarySaving(true);
+    setLibraryError('');
+    const { resource, document } = libraryEditor;
+    let saved = document;
+    try {
+      // If a previous publish response was lost, recover the same document instead of
+      // creating another family or overwriting a concurrent edit.
+      if (saved) {
+        const latest = await shared.get(resource, saved.id);
+        if (latest.status === 'Published' && latest.version === saved.version + 1) {
+          await rememberLibraryDocument(latest);
+          setLibraryEditor(null);
+          setNotice(`Đã công bố ${latest.name}. Bạn có thể thêm mẫu vào cấu hình.`);
+          return;
+        }
+        if (latest.status !== 'Draft' || latest.version !== saved.version) {
+          await rememberLibraryDocument(latest);
+          setLibraryError('Mẫu đã thay đổi ở nơi khác. Đóng và mở lại bản nháp mới nhất.');
+          return;
+        }
+      }
+      saved = await shared.save(resource, saved?.id ?? null, {
+        ...input,
+        expectedVersion: saved?.version ?? 0,
+      });
+      setLibraryEditor({ resource, document: saved });
+      await rememberLibraryDocument(saved);
+      const published = await shared.publish(resource, saved.id, saved.version);
+      await rememberLibraryDocument(published);
+      setLibraryEditor(null);
+      setNotice(`Đã công bố ${published.name}. Bạn có thể thêm mẫu vào cấu hình.`);
+    } catch (failure) {
+      setLibraryError(
+        (saved ? 'Bản nháp đã được lưu. Chưa thể hoàn tất công bố. ' : '') + invoiceError(failure),
+      );
+      if (!saved) void library.refetch();
+    } finally {
+      librarySaveLock.current = false;
+      setLibrarySaving(false);
+    }
+  };
   const libraryActions = librarySection ? (
     <Stack spacing={0.5}>
-      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-        <Button size="small" disabled={library.isFetching} onClick={() => void library.refetch()}>
-          Làm mới mẫu
-        </Button>
-        <Button
-          size="small"
-          component="a"
-          href={librarySection.path}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Mở thư viện mẫu
-        </Button>
-      </Stack>
+      <Button
+        size="small"
+        variant="outlined"
+        startIcon={<Plus size={16} />}
+        disabled={librarySaving || library.isPending}
+        onClick={() => openLibraryEditor(librarySection.resource)}
+        sx={{ alignSelf: 'flex-start', minHeight: { xs: 44, sm: 36 } }}
+      >
+        {librarySection.label}
+      </Button>
       {library.isFetching && <LinearProgress aria-label="Đang tải thư viện mẫu" />}
       {!library.isFetching &&
-        unpublished(librarySection.resources).map((doc) => (
-          <Typography key={doc.id} variant="caption" color="text.secondary">
-            {doc.name} · Bản nháp, cần công bố
-          </Typography>
-        ))}
+        (library.data?.items[librarySection.resource] ?? [])
+          .filter(
+            (doc) =>
+              doc.status === 'Draft' &&
+              (doc.resource !== 'asset-catalog' ||
+                assetCatalogSupportsScope(doc.data as AssetCatalogData, assetScope)) &&
+              (doc.resource !== 'fee-templates' ||
+                categoryNumber((doc.data as FeeTemplateData).category) !== 0),
+          )
+          .map((doc) => (
+            <Stack key={doc.id} direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                {doc.name} · Bản nháp, cần công bố
+              </Typography>
+              <Button size="small" onClick={() => openLibraryEditor(doc.resource, doc)}>
+                Tiếp tục
+              </Button>
+            </Stack>
+          ))}
     </Stack>
   ) : null;
   const currentType = draft.roomTypes.find((type) => type.key === typeKey) ?? draft.roomTypes[0];
@@ -692,11 +819,7 @@ export function LocationSetupWizard({
   const addType = (id: string) => {
     const template = all('room-type-templates').find((item) => item.id === id);
     if (!template) return;
-    if (
-      draft.roomTypes.some(
-        (type) => type.sourceId === id || norm(type.name) === norm(template.name),
-      )
-    ) {
+    if (draft.roomTypes.some((type) => matchesRoomTemplate(type, template))) {
       setError('Loại phòng này đã có trong cấu hình cơ sở.');
       return;
     }
@@ -781,7 +904,42 @@ export function LocationSetupWizard({
     patch({ rooms: [...draft.rooms, ...rows] });
     setNotice(`Đã sinh ${rows.length} phòng nháp từ ${currentType.name}.`);
   };
-  const catalogAssets = all('asset-catalog');
+  const catalogAssets = all('asset-catalog').filter((doc) =>
+    assetCatalogSupportsScope(doc.data as AssetCatalogData, 'Room'),
+  );
+  const commonCatalog = all('asset-catalog').filter((doc) =>
+    assetCatalogSupportsScope(doc.data as AssetCatalogData, 'Location'),
+  );
+  const addCommonAsset = (id: string) => {
+    const doc = commonCatalog.find((item) => item.id === id);
+    if (!doc) return;
+    const data = doc.data as AssetCatalogData;
+    setDraft((previous) => ({
+      ...previous,
+      commonAssets: [
+        ...previous.commonAssets,
+        {
+          id: uid(),
+          name: doc.name,
+          category: data.category,
+          unit: data.unit,
+          quantity: 1,
+          trackingMode: 'BulkQuantity',
+          commonArea: '',
+          references: [reference('asset-catalog', doc)],
+        },
+      ],
+    }));
+    setError('');
+    setConfirmSave(false);
+  };
+  const updateCommonAsset = (id: string, change: Partial<DraftCommonAsset>) =>
+    setDraft((previous) => ({
+      ...previous,
+      commonAssets: previous.commonAssets.map((asset) =>
+        asset.id === id ? { ...asset, ...change } : asset,
+      ),
+    }));
   const addCatalogAssets = (documents: SharedDocument[]) => {
     if (!assetType) return;
     setDraft((previous) => ({
@@ -837,13 +995,7 @@ export function LocationSetupWizard({
       effectiveFrom: feeDate(data.effectiveFrom),
       effectiveTo: data.effectiveTo && data.effectiveTo >= today() ? data.effectiveTo : null,
     };
-    if (
-      draft.fees.some(
-        (fee) =>
-          fee.sourceId === id ||
-          (!candidate.requiresRoom && !fee.requiresRoom && feeOverlaps(fee, candidate)),
-      )
-    ) {
+    if (draft.fees.some((fee) => matchesFeeTemplate(fee, item))) {
       setError('Khoản phí cùng mã và thời gian hiệu lực đã có trong cấu hình.');
       return;
     }
@@ -885,6 +1037,21 @@ export function LocationSetupWizard({
           };
         }),
     },
+    ...(data.commonAssets?.data.items.length
+      ? [
+          {
+            label: 'Tài sản chung cơ sở',
+            kind: 'common',
+            items: [
+              {
+                id: data.commonAssets.id,
+                name: 'Tài sản chung cơ sở nguồn',
+                detail: `${data.commonAssets.data.items.length} mục theo khu vực`,
+              },
+            ],
+          },
+        ]
+      : []),
     {
       label: 'Biểu phí dịch vụ',
       kind: 'fee',
@@ -1041,16 +1208,31 @@ export function LocationSetupWizard({
         sourceId: doc.id,
         reference: reference('OperatingPolicy', doc),
       }));
+    const sourceCommon = data.commonAssets;
+    const newCommon =
+      sourceCommon && selected('common', sourceCommon.id)
+        ? sourceCommon.data.items
+            .filter(
+              (asset) => !draft.commonAssets.some((existing) => existing.sourceItemId === asset.id),
+            )
+            .map((asset) => ({
+              ...asset,
+              id: uid(),
+              sourceItemId: asset.id,
+              references: [reference('CommonAssetRequirements', sourceCommon)],
+            }))
+        : [];
     patch({
       appliedSource: draft.sourceLocationId,
       sourceState: data.sourceState,
       roomTypes: [...draft.roomTypes, ...newTypes],
+      commonAssets: [...draft.commonAssets, ...newCommon],
       fees: [...draft.fees, ...newFees],
       rules: [...draft.rules, ...newRules],
     });
     const copiedAssets = newTypes.reduce((total, type) => total + type.assets.length, 0);
     setNotice(
-      `Đã nạp ${newTypes.length} loại phòng kèm ${copiedAssets} loại tài sản, ${newFees.length} biểu phí và ${newRules.length} nội quy. Giá thuê được xác nhận theo từng loại phòng ở bước tiếp theo.`,
+      `Đã nạp ${newTypes.length} loại phòng kèm ${copiedAssets} loại tài sản, ${newCommon.length} mục tài sản chung, ${newFees.length} biểu phí và ${newRules.length} nội quy. Giá thuê được xác nhận theo từng loại phòng ở bước tiếp theo.`,
     );
   };
   const finish = async () => {
@@ -1570,9 +1752,11 @@ export function LocationSetupWizard({
                           detail: `${data.area} m² · ${data.capacity} người`,
                         };
                       })}
-                      selected={draft.roomTypes.flatMap((type) =>
-                        type.sourceId ? [type.sourceId] : [],
-                      )}
+                      selected={all('room-type-templates')
+                        .filter((doc) =>
+                          draft.roomTypes.some((type) => matchesRoomTemplate(type, doc)),
+                        )
+                        .map((doc) => doc.id)}
                       add={addType}
                     />
                   </Grid>
@@ -1823,190 +2007,340 @@ export function LocationSetupWizard({
             )}
             {draft.step === 3 && (
               <>
-                <TextField
-                  select
-                  label="Loại phòng đang cấu hình"
-                  value={assetType?.key ?? ''}
-                  onChange={(e) => setAssetTypeKey(e.target.value)}
-                >
-                  {draft.roomTypes.map((type) => (
-                    <MenuItem key={type.key} value={type.key}>
-                      {type.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, md: 5 }}>
-                    <SetupTemplatePicker
-                      title="Danh mục tài sản"
-                      libraryActions={libraryActions}
-                      kind="asset"
-                      add={addAsset}
-                      selected={selectedCatalogIds}
-                      items={catalogAssets.map((doc) => ({
-                        id: doc.id,
-                        name: doc.name,
-                        detail: `Đơn vị ${(doc.data as AssetCatalogData).unit} · ${money((doc.data as AssetCatalogData).referencePrice)}`,
-                      }))}
+                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                  <Button
+                    variant={assetScope === 'Room' ? 'contained' : 'outlined'}
+                    aria-pressed={assetScope === 'Room'}
+                    onClick={() => setAssetScope('Room')}
+                  >
+                    Tài sản theo phòng
+                  </Button>
+                  <Button
+                    variant={assetScope === 'Location' ? 'contained' : 'outlined'}
+                    aria-pressed={assetScope === 'Location'}
+                    onClick={() => setAssetScope('Location')}
+                  >
+                    Tài sản chung cơ sở
+                  </Button>
+                </Stack>
+                {assetScope === 'Room' ? (
+                  <>
+                    <TextField
+                      select
+                      label="Loại phòng đang cấu hình"
+                      value={assetType?.key ?? ''}
+                      onChange={(e) => setAssetTypeKey(e.target.value)}
                     >
-                      <Button
-                        fullWidth
-                        variant="outlined"
-                        startIcon={<Plus size={16} />}
-                        disabled={
-                          !assetType ||
-                          !remainingCatalog.length ||
-                          library.isFetching ||
-                          library.isError ||
-                          !!library.data?.failures.includes('asset-catalog')
-                        }
-                        onClick={() => addCatalogAssets(remainingCatalog)}
-                      >
-                        Nạp toàn bộ danh mục
-                      </Button>
-                    </SetupTemplatePicker>
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 7 }}>
-                    <SetupDropZone kind="asset" add={addAsset}>
-                      <Stack spacing={1.5}>
-                        <Stack
-                          direction="row"
-                          sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
+                      {draft.roomTypes.map((type) => (
+                        <MenuItem key={type.key} value={type.key}>
+                          {type.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 12, md: 5 }}>
+                        <SetupTemplatePicker
+                          title="Danh mục tài sản"
+                          libraryActions={libraryActions}
+                          kind="asset"
+                          add={addAsset}
+                          selected={selectedCatalogIds}
+                          items={catalogAssets.map((doc) => ({
+                            id: doc.id,
+                            name: doc.name,
+                            detail: `Đơn vị ${(doc.data as AssetCatalogData).unit} · ${money((doc.data as AssetCatalogData).referencePrice)}`,
+                          }))}
                         >
-                          <Box sx={{ minWidth: 0 }}>
-                            <Typography
-                              variant="subtitle1"
-                              sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}
+                          <Button
+                            fullWidth
+                            variant="outlined"
+                            startIcon={<Plus size={16} />}
+                            disabled={
+                              !assetType ||
+                              !remainingCatalog.length ||
+                              library.isFetching ||
+                              library.isError ||
+                              !!library.data?.failures.includes('asset-catalog')
+                            }
+                            onClick={() => addCatalogAssets(remainingCatalog)}
+                          >
+                            Nạp toàn bộ danh mục
+                          </Button>
+                        </SetupTemplatePicker>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 7 }}>
+                        <SetupDropZone kind="asset" add={addAsset}>
+                          <Stack spacing={1.5}>
+                            <Stack
+                              direction="row"
+                              sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
                             >
-                              {assetType?.name ?? 'Chưa chọn loại phòng'}
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography
+                                  variant="subtitle1"
+                                  sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}
+                                >
+                                  {assetType?.name ?? 'Chưa chọn loại phòng'}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  {assetType?.assets.length ?? 0} loại tài sản ·{' '}
+                                  {
+                                    draft.rooms.filter(
+                                      (room) => room.roomTypeKey === assetType?.key,
+                                    ).length
+                                  }{' '}
+                                  phòng
+                                </Typography>
+                              </Box>
+                            </Stack>
+                            {assetType?.assetTemplateSourceName && (
+                              <Alert severity="info" variant="outlined">
+                                Tài sản được sao chép cùng loại phòng từ mẫu{' '}
+                                <strong>{assetType.assetTemplateSourceName}</strong>
+                                {assetType.assetTemplateSourceVersion
+                                  ? ` · phiên bản ${assetType.assetTemplateSourceVersion}`
+                                  : ''}
+                                . Bạn có thể điều chỉnh số lượng và đơn vị tại đây.
+                              </Alert>
+                            )}
+                            <Box
+                              role="list"
+                              aria-label="Tài sản đã chọn"
+                              sx={{ borderTop: '1px solid', borderColor: 'divider' }}
+                            >
+                              {assetType?.assets.map((asset, index) => (
+                                <Stack
+                                  role="listitem"
+                                  key={index}
+                                  direction={{ xs: 'column', sm: 'row' }}
+                                  spacing={1.5}
+                                  sx={{
+                                    alignItems: { sm: 'center' },
+                                    py: 1.25,
+                                    minWidth: 0,
+                                    borderBottom: '1px solid',
+                                    borderColor: 'divider',
+                                  }}
+                                >
+                                  <Box
+                                    sx={{ color: 'text.secondary', display: 'flex', flexShrink: 0 }}
+                                  >
+                                    <Package size={19} />
+                                  </Box>
+                                  <Box sx={{ minWidth: 0, flex: '1 1 0' }}>
+                                    <Typography sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>
+                                      {asset.name || 'Tài sản chưa đặt tên'}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {asset.unit ? `Đơn vị: ${asset.unit}` : 'Chưa đặt đơn vị'}
+                                    </Typography>
+                                  </Box>
+                                  <TextField
+                                    size="small"
+                                    type="number"
+                                    label="Số lượng"
+                                    value={asset.quantity}
+                                    slotProps={{ htmlInput: { min: 1, max: 10000, step: 1 } }}
+                                    sx={{ width: { xs: '100%', sm: 112 }, flexShrink: 0 }}
+                                    onChange={(event) =>
+                                      updateType(assetType.key, {
+                                        assets: assetType.assets.map((item, i) =>
+                                          i === index
+                                            ? { ...item, quantity: Number(event.target.value) }
+                                            : item,
+                                        ),
+                                      })
+                                    }
+                                  />
+                                  <TextField
+                                    select
+                                    size="small"
+                                    label="Đơn vị"
+                                    value={asset.unit ?? ''}
+                                    sx={{ width: { xs: '100%', sm: 132 }, flexShrink: 0 }}
+                                    onChange={(event) =>
+                                      updateType(assetType.key, {
+                                        assets: assetType.assets.map((item, i) =>
+                                          i === index
+                                            ? { ...item, unit: event.target.value || null }
+                                            : item,
+                                        ),
+                                      })
+                                    }
+                                  >
+                                    <MenuItem value="">Chưa đặt</MenuItem>
+                                    {asset.unit &&
+                                      !ASSET_UNITS.includes(
+                                        asset.unit as (typeof ASSET_UNITS)[number],
+                                      ) && (
+                                        <MenuItem value={asset.unit}>
+                                          {asset.unit} · hiện tại
+                                        </MenuItem>
+                                      )}
+                                    {ASSET_UNITS.map((unit) => (
+                                      <MenuItem key={unit} value={unit}>
+                                        {unit}
+                                      </MenuItem>
+                                    ))}
+                                  </TextField>
+                                  <Button
+                                    color="error"
+                                    aria-label={`Bỏ ${asset.name || 'tài sản chưa đặt tên'}`}
+                                    onClick={() =>
+                                      updateType(assetType.key, {
+                                        assets: assetType.assets.filter((_, i) => i !== index),
+                                      })
+                                    }
+                                    sx={{
+                                      flexShrink: 0,
+                                      minWidth: 44,
+                                      alignSelf: { xs: 'flex-end', sm: 'center' },
+                                    }}
+                                  >
+                                    <Trash2 size={16} />
+                                  </Button>
+                                </Stack>
+                              ))}
+                            </Box>
+                            {!assetType?.assets.length && (
+                              <Box sx={{ py: 3, textAlign: 'center' }}>
+                                <Typography sx={{ fontWeight: 650 }}>Chưa chọn tài sản</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  Chọn hoặc kéo tài sản từ danh mục bên trái.
+                                </Typography>
+                              </Box>
+                            )}
+                          </Stack>
+                        </SetupDropZone>
+                      </Grid>
+                    </Grid>
+                  </>
+                ) : (
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, md: 5 }}>
+                      <SetupTemplatePicker
+                        title="Tài sản mẫu của cơ sở"
+                        libraryActions={libraryActions}
+                        kind="common-asset"
+                        add={addCommonAsset}
+                        items={commonCatalog.map((doc) => ({
+                          id: doc.id,
+                          name: doc.name,
+                          detail: `Đơn vị ${(doc.data as AssetCatalogData).unit} · ${money((doc.data as AssetCatalogData).referencePrice)}`,
+                        }))}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 7 }}>
+                      <SetupDropZone kind="common-asset" add={addCommonAsset}>
+                        <Stack spacing={1.5}>
+                          <Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                              Tài sản chung của cơ sở
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              {assetType?.assets.length ?? 0} loại tài sản ·{' '}
-                              {
-                                draft.rooms.filter((room) => room.roomTypeKey === assetType?.key)
-                                  .length
-                              }{' '}
-                              phòng
+                              Số lượng tính một lần cho cơ sở, theo khu vực sử dụng.
                             </Typography>
                           </Box>
-                        </Stack>
-                        {assetType?.assetTemplateSourceName && (
-                          <Alert severity="info" variant="outlined">
-                            Định mức được sao chép cùng loại phòng từ mẫu{' '}
-                            <strong>{assetType.assetTemplateSourceName}</strong>
-                            {assetType.assetTemplateSourceVersion
-                              ? ` · phiên bản ${assetType.assetTemplateSourceVersion}`
-                              : ''}
-                            . Bạn có thể điều chỉnh số lượng và đơn vị tại đây.
-                          </Alert>
-                        )}
-                        <Box
-                          role="list"
-                          aria-label="Tài sản đã chọn"
-                          sx={{ borderTop: '1px solid', borderColor: 'divider' }}
-                        >
-                          {assetType?.assets.map((asset, index) => (
+                          {!draft.commonAssets.length && (
+                            <Typography variant="body2" color="text.secondary">
+                              Chưa chọn tài sản chung. Chọn mẫu bên cạnh để thêm.
+                            </Typography>
+                          )}
+                          {draft.commonAssets.map((asset) => (
                             <Stack
-                              role="listitem"
-                              key={index}
-                              direction={{ xs: 'column', sm: 'row' }}
-                              spacing={1.5}
-                              sx={{
-                                alignItems: { sm: 'center' },
-                                py: 1.25,
-                                minWidth: 0,
-                                borderBottom: '1px solid',
-                                borderColor: 'divider',
-                              }}
+                              key={asset.id}
+                              spacing={1}
+                              sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}
                             >
-                              <Box sx={{ color: 'text.secondary', display: 'flex', flexShrink: 0 }}>
-                                <Package size={19} />
-                              </Box>
-                              <Box sx={{ minWidth: 0, flex: '1 1 0' }}>
-                                <Typography sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>
-                                  {asset.name || 'Tài sản chưa đặt tên'}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {asset.unit ? `Đơn vị: ${asset.unit}` : 'Chưa đặt đơn vị'}
-                                </Typography>
-                              </Box>
-                              <TextField
-                                size="small"
-                                type="number"
-                                label="Số lượng"
-                                value={asset.quantity}
-                                slotProps={{ htmlInput: { min: 1, max: 10000, step: 1 } }}
-                                sx={{ width: { xs: '100%', sm: 112 }, flexShrink: 0 }}
-                                onChange={(event) =>
-                                  updateType(assetType.key, {
-                                    assets: assetType.assets.map((item, i) =>
-                                      i === index
-                                        ? { ...item, quantity: Number(event.target.value) }
-                                        : item,
-                                    ),
-                                  })
-                                }
-                              />
-                              <TextField
-                                select
-                                size="small"
-                                label="Đơn vị"
-                                value={asset.unit ?? ''}
-                                sx={{ width: { xs: '100%', sm: 132 }, flexShrink: 0 }}
-                                onChange={(event) =>
-                                  updateType(assetType.key, {
-                                    assets: assetType.assets.map((item, i) =>
-                                      i === index
-                                        ? { ...item, unit: event.target.value || null }
-                                        : item,
-                                    ),
-                                  })
-                                }
-                              >
-                                <MenuItem value="">Chưa đặt</MenuItem>
-                                {asset.unit &&
-                                  !ASSET_UNITS.includes(
-                                    asset.unit as (typeof ASSET_UNITS)[number],
-                                  ) && (
-                                    <MenuItem value={asset.unit}>{asset.unit} · hiện tại</MenuItem>
-                                  )}
-                                {ASSET_UNITS.map((unit) => (
-                                  <MenuItem key={unit} value={unit}>
-                                    {unit}
-                                  </MenuItem>
-                                ))}
-                              </TextField>
-                              <Button
-                                color="error"
-                                aria-label={`Bỏ ${asset.name || 'tài sản chưa đặt tên'}`}
-                                onClick={() =>
-                                  updateType(assetType.key, {
-                                    assets: assetType.assets.filter((_, i) => i !== index),
-                                  })
-                                }
+                              <Stack
+                                direction="row"
                                 sx={{
-                                  flexShrink: 0,
-                                  minWidth: 44,
-                                  alignSelf: { xs: 'flex-end', sm: 'center' },
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: 1,
                                 }}
                               >
-                                <Trash2 size={16} />
-                              </Button>
+                                <Box sx={{ minWidth: 0 }}>
+                                  <Typography sx={{ fontWeight: 650, overflowWrap: 'anywhere' }}>
+                                    {asset.name}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Đơn vị: {asset.unit || 'Chưa đặt'}
+                                  </Typography>
+                                </Box>
+                                <Button
+                                  color="error"
+                                  aria-label={`Bỏ tài sản chung ${asset.name}`}
+                                  onClick={() =>
+                                    setDraft((previous) => ({
+                                      ...previous,
+                                      commonAssets: previous.commonAssets.filter(
+                                        (item) => item.id !== asset.id,
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  <Trash2 size={16} />
+                                </Button>
+                              </Stack>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                required
+                                label="Khu vực sử dụng"
+                                placeholder="VD: Hành lang tầng 1"
+                                slotProps={{ htmlInput: { maxLength: 200 } }}
+                                value={asset.commonArea}
+                                onChange={(event) =>
+                                  updateCommonAsset(asset.id, { commonArea: event.target.value })
+                                }
+                              />
+                              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  type="number"
+                                  label="Số lượng"
+                                  value={asset.quantity}
+                                  slotProps={{ htmlInput: { min: 1, max: 10000, step: 1 } }}
+                                  onChange={(event) =>
+                                    updateCommonAsset(asset.id, {
+                                      quantity: Number(event.target.value),
+                                    })
+                                  }
+                                />
+                                <TextField
+                                  select
+                                  fullWidth
+                                  size="small"
+                                  label="Đơn vị"
+                                  value={asset.unit ?? ''}
+                                  onChange={(event) =>
+                                    updateCommonAsset(asset.id, {
+                                      unit: event.target.value || null,
+                                    })
+                                  }
+                                >
+                                  <MenuItem value="">Chưa đặt</MenuItem>
+                                  {[
+                                    ...new Set([
+                                      ...ASSET_UNITS,
+                                      ...(asset.unit ? [asset.unit] : []),
+                                    ]),
+                                  ].map((unit) => (
+                                    <MenuItem key={unit} value={unit}>
+                                      {unit}
+                                    </MenuItem>
+                                  ))}
+                                </TextField>
+                              </Stack>
                             </Stack>
                           ))}
-                        </Box>
-                        {!assetType?.assets.length && (
-                          <Box sx={{ py: 3, textAlign: 'center' }}>
-                            <Typography sx={{ fontWeight: 650 }}>Chưa chọn tài sản</Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              Chọn hoặc kéo tài sản từ danh mục bên trái.
-                            </Typography>
-                          </Box>
-                        )}
-                      </Stack>
-                    </SetupDropZone>
+                        </Stack>
+                      </SetupDropZone>
+                    </Grid>
                   </Grid>
-                </Grid>
+                )}
               </>
             )}
             {draft.step === 4 && (
@@ -2037,7 +2371,9 @@ export function LocationSetupWizard({
                       libraryActions={libraryActions}
                       kind="fee"
                       add={addFee}
-                      selected={draft.fees.flatMap((fee) => (fee.sourceId ? [fee.sourceId] : []))}
+                      selected={all('fee-templates')
+                        .filter((doc) => draft.fees.some((fee) => matchesFeeTemplate(fee, doc)))
+                        .map((doc) => doc.id)}
                       items={all('fee-templates')
                         .filter(
                           (doc) => categoryNumber((doc.data as FeeTemplateData).category) !== 0,
@@ -2566,7 +2902,7 @@ export function LocationSetupWizard({
                     ['Loại phòng', draft.roomTypes.length],
                     ['Phòng', draft.rooms.length],
                     [
-                      'Loại có định mức',
+                      'Loại phòng có tài sản',
                       draft.roomTypes.filter((type) => type.assets.length).length,
                     ],
                     ['Biểu phí bổ sung', draft.fees.length],
@@ -2591,14 +2927,14 @@ export function LocationSetupWizard({
                   sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
                 >
                   <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    Loại phòng và định mức
+                    Loại phòng và tài sản
                   </Typography>
                   <Button onClick={() => changeStep(1)}>Sửa loại phòng</Button>
                 </Stack>
                 <TableContainer component={Paper} variant="outlined">
                   <Table
                     size="small"
-                    aria-label="Loại phòng và định mức xác nhận"
+                    aria-label="Loại phòng và tài sản xác nhận"
                     sx={{ minWidth: 650 }}
                   >
                     <TableHead>
@@ -2650,6 +2986,35 @@ export function LocationSetupWizard({
                     </TableBody>
                   </Table>
                 </TableContainer>
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    Tài sản chung cơ sở
+                  </Typography>
+                  <Button
+                    onClick={() => {
+                      setAssetScope('Location');
+                      changeStep(3);
+                    }}
+                  >
+                    Sửa tài sản chung
+                  </Button>
+                </Stack>
+                <Paper variant="outlined" sx={{ p: 1.5 }}>
+                  {draft.commonAssets.length ? (
+                    draft.commonAssets.map((asset) => (
+                      <Typography key={asset.id} variant="body2">
+                        {asset.commonArea} · {asset.name} × {asset.quantity} {asset.unit}
+                      </Typography>
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      Không có tài sản chung.
+                    </Typography>
+                  )}
+                </Paper>
                 <Stack
                   direction="row"
                   sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
@@ -2789,6 +3154,19 @@ export function LocationSetupWizard({
           )}
         </DialogActions>
       </Dialog>
+      {libraryEditor && (
+        <SharedTemplateEditor
+          key={libraryEditor.resource}
+          resource={libraryEditor.resource}
+          document={libraryEditor.document}
+          busy={librarySaving}
+          error={libraryError}
+          close={() => setLibraryEditor(null)}
+          save={(input) => void saveLibraryTemplate(input)}
+          setupCreation
+          assetScope={assetScope}
+        />
+      )}
       {editingType && (
         <Dialog
           open
