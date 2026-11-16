@@ -101,6 +101,9 @@ export function OwnerOperationsScreen({ initialSection = 'Sự cố' }: { initia
       <Action secondary onPress={() => go('owner-location-records')}>
         Hồ sơ và thiết bị cơ sở
       </Action>
+      <Action secondary onPress={() => go('owner-tax-records')}>
+        Thuế & chứng từ
+      </Action>
       <Filters
         minTouchSize={48}
         options={sections}

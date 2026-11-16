@@ -34,6 +34,8 @@ export const screenRoles = {
   'owner-finance': ['Owner'],
   'owner-residence': ['Owner'],
   'owner-location-records': ['Owner'],
+  'owner-tax-records': ['Owner'],
+  'personal-data-requests': ['Owner', 'Staff', 'Tenant'],
   operations: ['Owner'],
   'staff-home': ['Staff'],
   'work-orders': ['Staff'],

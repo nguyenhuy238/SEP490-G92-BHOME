@@ -136,6 +136,11 @@ export function ProfileScreen() {
           label="Thông báo của tôi"
           onPress={() => go('notifications')}
         />
+        <ProfileSettingRow
+          icon="account-lock-outline"
+          label="Yêu cầu dữ liệu cá nhân"
+          onPress={() => go('personal-data-requests')}
+        />
       </View>
       <Button
         mode="text"

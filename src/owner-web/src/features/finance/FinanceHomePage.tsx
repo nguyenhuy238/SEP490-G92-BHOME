@@ -96,6 +96,11 @@ const workAreas: FinanceWorkArea[] = [
         to: '/expenses',
       },
       {
+        label: 'Thuế & chứng từ',
+        description: 'Chủ thể kinh doanh, kỳ nghĩa vụ và hồ sơ Owner ghi nhận',
+        to: '/finance/tax-records',
+      },
+      {
         label: 'Kịch bản What-if',
         description: 'Thử giả định, không thay đổi sổ tài chính thực',
         to: '/what-if',

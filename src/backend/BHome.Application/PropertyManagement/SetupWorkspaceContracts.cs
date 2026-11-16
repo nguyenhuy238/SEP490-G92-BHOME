@@ -11,7 +11,7 @@ public sealed record SetupDocument(Guid Id, Guid LocationId, string Kind, string
     [property: JsonConverter(typeof(ExactSetupDataConverter))] JsonElement Data, DateTimeOffset? RecordedAt = null, Guid? RecordedBy = null);
 public interface ISetupWorkspaceStore
 {
-    Task<SetupPage> PageAsync(Guid locationId, string kind, Guid? assetId, int page, int pageSize, CancellationToken t);
+    Task<SetupPage> PageAsync(Guid? locationId, string kind, Guid? assetId, int page, int pageSize, CancellationToken t);
     Task AuditAsync(Guid locationId, Guid targetId, Guid actor, string action, CancellationToken t);
     Task<T> TransactionAsync<T>(Guid locationId, Func<Task<T>> work, CancellationToken t);
     Task<SetupDocument?> GetAsync(Guid id, string kind, CancellationToken t);

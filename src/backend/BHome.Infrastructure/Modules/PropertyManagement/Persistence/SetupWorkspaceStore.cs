@@ -13,10 +13,10 @@ namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotificationWriter sql, IObjectStorage storage) : ISetupWorkspaceStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    public async Task<SetupPage> PageAsync(Guid locationId, string kind, Guid? assetId, int page, int pageSize, CancellationToken t)
+    public async Task<SetupPage> PageAsync(Guid? locationId, string kind, Guid? assetId, int page, int pageSize, CancellationToken t)
     {
         if (page is < 1 or > 1000000 || pageSize is < 1 or > 100) throw new PropertyException(400, "invalid_pagination");
-        const string filter = "location_id=@location AND task_type='SYSTEM_JOB' AND task_data->>'recordType'=@kind AND (@asset IS NULL OR task_data->'document'->'data'->>'assetId'=@assetText)";
+        const string filter = "(@location IS NULL OR location_id=@location) AND task_type='SYSTEM_JOB' AND task_data->>'recordType'=@kind AND (@asset IS NULL OR task_data->'document'->'data'->>'assetId'=@assetText)";
         var total = await sql.Scalar<long>("SELECT count(*) FROM operational_tasks WHERE " + filter, t,
             ("location", locationId), ("kind", "Setup" + kind), ("asset", assetId), ("assetText", assetId?.ToString() ?? ""));
         await using var command = await sql.Command("SELECT task_data->'document' FROM operational_tasks WHERE " + filter + " ORDER BY id OFFSET @skip LIMIT @take", t,
