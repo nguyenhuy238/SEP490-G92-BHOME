@@ -45,3 +45,14 @@ Không chạy migration hoặc seed trên database người dùng.
 `dotnet restore src/backend/BHome.sln`: exit 0.
 `dotnet build src/backend/BHome.sln -c Release --no-restore`: exit 0, 0 warning/error sau tích hợp.
 Kết quả kiểm chứng cuối cùng được ghi trong báo cáo testing của thay đổi này.
+
+## Bàn giao triển khai
+
+Đã triển khai nhận phòng, thay đổi tài sản có xác nhận riêng từng hợp đồng, baseline theo renewal,
+kiểm tra/tranh chấp/Owner review trả phòng, hoàn tất vật lý và PDF lưu bền; nối API thật ở Owner Web
+và Staff/Tenant Mobile. Dữ liệu demo độc lập được tạo qua công cụ local, không sửa database làm việc.
+
+- [Hướng dẫn demo 15 bước](ASSET_HANDOVER_DEMO.md)
+- [Hợp đồng API](../api/ASSET_HANDOVER.md)
+- [Kết quả kiểm thử và ánh xạ 62 tình huống](../testing/ASSET_HANDOVER_2026-11-16.md)
+- [Danh sách file thay đổi](../testing/ASSET_HANDOVER_CHANGED_FILES.md)
