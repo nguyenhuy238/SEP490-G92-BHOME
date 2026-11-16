@@ -46,6 +46,10 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<IReadOnlyList<MoveOutHistoryView>> MoveHistory(Guid id, CancellationToken t) => service.MoveOutHistoryAsync(id, t);
     [HttpGet("{id:guid}/move-out/inspection-preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<InspectionPreparation> InspectionPreparation(Guid id, CancellationToken t) => service.InspectionPreparationAsync(id, t);
+    [HttpPost("{id:guid}/move-out/legacy-baseline-exception"), Authorize(Roles = Roles.Owner)]
+    public Task<ContractId> LegacyBaseline(Guid id, LegacyHandoverException x, CancellationToken t) => service.ApproveLegacyHandoverAsync(id, x, Key(), t);
+    [HttpPost("{id:guid}/move-out/tenant-feedback"), Authorize(Roles = Roles.Tenant)]
+    public Task<MoveOutView> InspectionFeedback(Guid id, InspectionTenantFeedback x, CancellationToken t) => service.RespondToInspectionAsync(id, x, Key(), t);
     [HttpGet("{id:guid}/move-out/inspections")]
     public Task<IReadOnlyList<FinalInspectionView>> Inspections(Guid id, CancellationToken t) => service.FinalInspectionsAsync(id, t);
     [HttpPost("{id:guid}/move-out/inspection-review"), Authorize(Roles = Roles.Owner)]
@@ -139,6 +143,17 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<HandoverView> SaveHandover(Guid id, HandoverInput x, CancellationToken t) => service.SaveHandoverAsync(id, x, Key(), t);
     [HttpPost("{id:guid}/handover/owner-review"), Authorize(Roles = Roles.Owner)]
     public Task<HandoverView> ReviewHandover(Guid id, HandoverOwnerReview x, CancellationToken t) => service.ReviewHandoverAsync(id, x, Key(), t);
+    [HttpGet("{id:guid}/asset-changes")]
+    public Task<IReadOnlyList<AssetChangeView>> AssetChanges(Guid id, CancellationToken t) => service.AssetChangesAsync(id, t);
+    [HttpGet("{id:guid}/asset-changes/preparation"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
+    public Task<AssetChangePreparation> AssetChangePreparation(Guid id, CancellationToken t) => service.AssetChangePreparationAsync(id, t);
+    [HttpPost("{id:guid}/asset-changes"), Authorize(Roles = Roles.Staff)]
+    public Task<AssetChangeView> AssetChange(Guid id, AssetChangeInput x, CancellationToken t) => service.CreateAssetChangeAsync(id, x, Key(), t);
+    [HttpPost("{id:guid}/asset-changes/{eventId:guid}/confirmation"), Authorize(Roles = Roles.Tenant)]
+    public Task<AssetChangeView> AssetChangeConfirmation(Guid id, Guid eventId, InspectionTenantFeedback x, CancellationToken t) => service.ConfirmAssetChangeAsync(id, eventId, x, Key(), t);
+    [HttpGet("{id:guid}/asset-changes/{eventId:guid}/evidence/{evidenceId:guid}")]
+    public async Task<IActionResult> AssetChangeEvidence(Guid id, Guid eventId, Guid evidenceId, CancellationToken t)
+    { var buffer = new MemoryStream(); await service.CopyAssetChangeEvidenceAsync(id, eventId, evidenceId, buffer, t); buffer.Position = 0; return File(buffer, "application/octet-stream"); }
     [HttpGet("{id:guid}/handover/documents")]
     public Task<IReadOnlyList<ContractDocumentView>> HandoverDocuments(Guid id, CancellationToken t) => service.HandoverDocumentsAsync(id, t);
     [HttpPost("{id:guid}/handover/documents/retry"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]

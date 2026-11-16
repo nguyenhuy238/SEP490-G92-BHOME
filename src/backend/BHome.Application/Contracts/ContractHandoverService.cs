@@ -14,15 +14,22 @@ public sealed partial class ContractService
         Audit("ContractHandover" + action, h.ContractId);
     }
     private static void HandoverActive(Contract c)
-    { if (c.Status != ContractStatus.Active || c.Kind != ContractKind.Main) throw ContractException.Conflict("active_main_contract_required"); }
+    { if (c.Status != ContractStatus.Active || c.Kind is not (ContractKind.Main or ContractKind.Renewal)) throw ContractException.Conflict("active_main_contract_required"); }
     private static string HandoverText(string? value, int max, bool required = true)
     { var text = value?.Trim() ?? ""; if (text.Length > max || required && text.Length == 0) throw ContractException.Invalid("invalid_handover_input"); return text; }
 
     public async Task<HandoverView> GetHandoverAsync(Guid id, CancellationToken t)
-    { await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t); return HandoverView(await Handovers.GetAsync(id, t) ?? throw ContractException.Missing()); }
+    {
+        var c = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
+        var current = await Handovers.GetAsync(id, t);
+        if (current is not null) return HandoverView(current) with { SourceContractId = id };
+        var (root, inherited) = await Baseline(c, t);
+        return HandoverView(inherited ?? throw ContractException.Missing()) with { SourceContractId = root.Id };
+    }
     public async Task<IReadOnlyList<HandoverHistoryView>> HandoverHistoryAsync(Guid id, CancellationToken t)
     {
-        await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
+        var contract = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
+        if (contract.PreviousContractId is not null && await Handovers.GetAsync(id, t) is null) id = (await Baseline(contract, t)).Contract.Id;
         return (await Handovers.HistoryAsync(id, t)).Select(h => new HandoverHistoryView(h.Version, h.Action, h.ActorId, h.OccurredAt, h.Note,
             JsonSerializer.Deserialize<HandoverSnapshot>(h.Snapshot) ?? throw ContractException.Conflict("handover_integrity_failed"))).ToArray();
     }
@@ -59,6 +66,7 @@ public sealed partial class ContractService
     public Task<HandoverView> SaveHandoverAsync(Guid id, HandoverInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Staff], async c =>
     {
         HandoverActive(c);
+        if (c.PreviousContractId is not null && (await Baseline(c, t)).Handover is not null) throw ContractException.Conflict("renewal_inherits_handover_baseline");
         var h = await Handovers.GetAsync(id, t);
         if (await Replay(key, "handover-save", new { id, x }, t) is not null) return HandoverView(h ?? throw ContractException.Missing());
         if (h?.Status == ContractHandoverStatus.Confirmed) throw ContractException.Conflict("handover_already_confirmed");
@@ -148,8 +156,8 @@ public sealed partial class ContractService
         var bytes = buffer.ToArray(); var type = images.Validate(bytes);
         return await Mutate(id, [Roles.Staff], async c =>
         {
-            HandoverActive(c); if ((await Handovers.GetAsync(id, t))?.Status == ContractHandoverStatus.Confirmed) throw ContractException.Conflict("handover_already_confirmed");
-            if ((await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Count >= 50) throw ContractException.Conflict("handover_evidence_limit");
+            HandoverActive(c);
+            if ((await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Count >= 200) throw ContractException.Conflict("handover_evidence_limit");
             var f = new ContractDocumentFile { ContractId = id, Kind = ContractFileKind.HandoverEvidence, SnapshotHash = c.SnapshotHash, DevelopmentOnly = c.IsDevelopmentDemo, ContentType = type, Length = bytes.Length, FileHash = FileHash(bytes), RecordedByUserId = Actor, RecordedAt = clock.GetUtcNow() };
             f.ObjectKey = $"contracts/{id:N}/handover/{f.Id:N}"; await files.PutAsync(c.RoomId, f.ObjectKey, bytes, type, t); repository.Add(f); Audit("ContractHandoverEvidenceAdded", id); return new ContractId(f.Id);
         }, t);

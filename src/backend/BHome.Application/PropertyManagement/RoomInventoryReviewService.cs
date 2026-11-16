@@ -13,7 +13,7 @@ public sealed record RoomInventoryReviewItem(Guid Id, string Name, string Catego
     bool Checked, IReadOnlyList<RoomInventoryReviewEvidence> Evidence);
 public sealed record RoomInventoryReviewRoom(Guid RoomId, string RoomNumber, Guid? DesiredId, int DesiredVersion,
     IReadOnlyList<RoomInventoryReviewItem> Items, string State, int CheckedCount, int TotalCount,
-    int UnlinkedAssetCount, string? BlockedReason, string StateToken, DateTimeOffset? ReviewedAt);
+    int UnlinkedAssetCount, string? BlockedReason, string StateToken, DateTimeOffset? ReviewedAt, bool NoAssetsConfirmed = false);
 public sealed record RoomInventoryReviewView(IReadOnlyList<RoomInventoryReviewRoom> Rooms);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -28,7 +28,7 @@ public sealed record RoomInventoryReviewConfirm(Guid RequestId, RoomInventoryRev
 /// The configured quantity remains authoritative; only checked groups create/link one physical Asset.
 /// </summary>
 public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access,
-    PropertyService properties, ILogger<RoomInventoryReviewService> logger) : SetupWorkspaceService(store, user, access)
+    IPropertyRepository propertyRepository, ILogger<RoomInventoryReviewService> logger) : SetupWorkspaceService(store, user, access)
 {
     private const string ReviewKind = "RoomInventoryChecklistReview";
     private const string CommandKind = "RoomInventoryChecklistCommand";
@@ -235,7 +235,9 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
                 configuration is null ? "no_asset_requirements" : physicalIssues ? "physical_assets_need_review" : null;
             var view = new RoomInventoryReviewRoom(room.Id, room.RoomNumber, current?.Id, current?.Version ?? 0,
                 itemViews, state, checkedCount, itemViews.Length, unlinked.Length, blockedReason,
-                Hash(new { baseline, reviewVersion = previous?.Version ?? 0 }), previous?.RecordedAt);
+                Hash(new { baseline, reviewVersion = previous?.Version ?? 0 }), previous?.RecordedAt,
+                items.Length == 0 && actual.Length == 0 && documents.Any(d => d.Kind == "RoomNoAssets" && d.Data.GetProperty("roomId").GetGuid() == room.Id &&
+                    d.Data.GetProperty("baseline").GetString() == EmptyInventoryBaseline(room.Id, assignment, current)));
             result.Add(new(room, assignment, roomProvenance, effective, current, configuration, items,
                 actual, roomMappings, unlinked, invalid, previous, baseline, view));
         }
@@ -257,7 +259,8 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
     {
         Owner();
         var started = Stopwatch.GetTimestamp();
-        var target = await properties.GetLocationAsync(location, t);
+        await Scope(location, false, t);
+        var target = await propertyRepository.FindAsync<BHome.Domain.Locations.Location>(location, t) ?? throw new PropertyException(404, "resource_not_found");
         var snapshot = await SnapshotAsync(location, target.IsActive, [], t);
         logger.LogInformation("Room inventory GET completed: rooms={RoomCount}, databaseReads={DatabaseReads}, elapsedMs={ElapsedMs:F1}",
             snapshot.Rooms.Length, 1 + 3 + (snapshot.EvidenceRead ? 1 : 0), Stopwatch.GetElapsedTime(started).TotalMilliseconds);

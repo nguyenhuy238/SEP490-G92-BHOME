@@ -32,8 +32,10 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
     private sealed class Files : IObjectStorage
     {
         private readonly Dictionary<string, byte[]> data = [];
+        internal bool FailPdfWrites { get; set; }
+        internal void Corrupt(string key) => data[key] = [0, 1, 2];
         public async Task PutAsync(string key, Stream stream, long length, string type, CancellationToken t)
-        { using var bytes = new MemoryStream(); await stream.CopyToAsync(bytes, t); data[key] = bytes.ToArray(); }
+        { if (FailPdfWrites && type == "application/pdf") throw new IOException("Synthetic storage failure"); using var bytes = new MemoryStream(); await stream.CopyToAsync(bytes, t); data[key] = bytes.ToArray(); }
         public Task CopyToAsync(string key, Stream destination, CancellationToken t) => destination.WriteAsync(data[key], t).AsTask();
         public Task DeleteAsync(string key, CancellationToken t) { data.Remove(key); return Task.CompletedTask; }
     }
@@ -59,7 +61,7 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         db.Add(new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddYears(-1), Today.AddYears(1)));
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id);
     }
-    private WebApplicationFactory<Program> Host() => fixture.Factory!.WithWebHostBuilder(builder => builder.ConfigureServices(s => s.AddSingleton<IObjectStorage>(new Files())));
+    private WebApplicationFactory<Program> Host(Files? files = null) => fixture.Factory!.WithWebHostBuilder(builder => builder.ConfigureServices(s => s.AddSingleton<IObjectStorage>(files ?? new Files())));
     private async Task<HttpClient> Client(ApplicationUser account, WebApplicationFactory<Program>? host = null)
     {
         var client = (host ?? fixture.Factory!).CreateClient();
@@ -218,7 +220,8 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         var verified = await Read<JsonElement>(await staff.PostAsJsonAsync($"/api/v1/rooms/{w.Room}/assets/verify", new AssetVerification(template.Id, item.Id, "LEGACY-CHAIR", 1, "Good", evidence, desired.Version, asset.Id)));
         Assert.Equal(asset.Id, verified.GetProperty("assetId").GetGuid());
         var after = (await staff.GetFromJsonAsync<AssetInventory>($"/api/v1/rooms/{w.Room}/asset-inventory"))!;
-        Assert.Equal(asset.Id, Assert.Single(after.Physical).Id);
+        Assert.Single(after.Physical);
+        Assert.Equal(asset.Id, (await staff.GetFromJsonAsync<JsonElement>($"/api/v1/rooms/{w.Room}/asset-inventory")).GetProperty("physical")[0].GetProperty("id").GetGuid());
         Assert.Equal("BulkQuantity", after.Metadata![asset.Id].TrackingMode);
         Assert.Equal("Verified", after.Desired.Single(d => d.Id == after.CurrentDesiredId).Status);
     }

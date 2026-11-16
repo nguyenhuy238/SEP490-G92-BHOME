@@ -159,8 +159,9 @@ public sealed partial class Compact24OwnerSetupTests
         var inventory = (await staff.GetFromJsonAsync<AssetInventory>($"/api/v1/rooms/{room.RoomId}/asset-inventory"))!;
         var desired = inventory.Desired.Single(d => d.Id == inventory.CurrentDesiredId);
         var asset = Assert.Single(inventory.Physical);
-        Assert.Equal(assetId, asset.Id);
-        var metadata = inventory.Metadata![asset.Id];
+        var rawInventory = await staff.GetFromJsonAsync<JsonElement>($"/api/v1/rooms/{room.RoomId}/asset-inventory");
+        Assert.Equal(assetId, rawInventory.GetProperty("physical")[0].GetProperty("id").GetGuid());
+        var metadata = inventory.Metadata![assetId];
         var staffEvidence = await UploadReviewEvidence(staff, location);
         var verify = new AssetVerification(
             desired.Data.GetProperty("templateId").GetGuid(),
@@ -170,17 +171,18 @@ public sealed partial class Compact24OwnerSetupTests
             asset.Condition,
             staffEvidence.ObjectKey,
             desired.Version,
-            asset.Id);
+            assetId);
         Assert.Equal(HttpStatusCode.Conflict, (await staff.PostAsJsonAsync(
             $"/api/v1/rooms/{room.RoomId}/assets/verify", verify with { ExpectedVersion = desired.Version - 1 })).StatusCode);
         var appended = await Read<JsonElement>(await staff.PostAsJsonAsync($"/api/v1/rooms/{room.RoomId}/assets/verify", verify));
-        Assert.Equal(asset.Id, appended.GetProperty("assetId").GetGuid());
+        Assert.Equal(assetId, appended.GetProperty("assetId").GetGuid());
         var replay = await Read<JsonElement>(await staff.PostAsJsonAsync($"/api/v1/rooms/{room.RoomId}/assets/verify", verify));
-        Assert.Equal(asset.Id, replay.GetProperty("assetId").GetGuid());
+        Assert.Equal(assetId, replay.GetProperty("assetId").GetGuid());
 
         var afterInventory = (await staff.GetFromJsonAsync<AssetInventory>($"/api/v1/rooms/{room.RoomId}/asset-inventory"))!;
-        Assert.Equal(asset.Id, Assert.Single(afterInventory.Physical).Id);
-        Assert.Equal(metadata.Quantity, afterInventory.Metadata![asset.Id].Quantity);
+        Assert.Single(afterInventory.Physical);
+        Assert.Equal(assetId, (await staff.GetFromJsonAsync<JsonElement>($"/api/v1/rooms/{room.RoomId}/asset-inventory")).GetProperty("physical")[0].GetProperty("id").GetGuid());
+        Assert.Equal(metadata.Quantity, afterInventory.Metadata![assetId].Quantity);
         Assert.Equal(asset.Condition, afterInventory.Physical.Single().Condition);
 
         var after = (await owner.GetFromJsonAsync<RoomInventoryReviewView>(route))!;

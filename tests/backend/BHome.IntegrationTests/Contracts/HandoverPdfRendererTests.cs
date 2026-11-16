@@ -7,7 +7,10 @@ namespace BHome.IntegrationTests.Contracts;
 [Trait("Category", "Unit")]
 public sealed class HandoverPdfRendererTests
 {
-    [Theory] [InlineData("MoveIn")] [InlineData("MoveOut")] [InlineData("AssetChange")]
+    [Theory]
+    [InlineData("MoveIn")]
+    [InlineData("MoveOut")]
+    [InlineData("AssetChange")]
     public async Task VietnameseMultiPageReportHasVersionQuantitiesAndNoDigitalSignature(string type)
     {
         using var backend = ContractPdfRendererTests.Backend(); using var scope = backend.CreateScope();

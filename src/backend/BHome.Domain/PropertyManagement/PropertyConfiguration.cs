@@ -90,7 +90,7 @@ public static class PropertyRules
                 current is RoomStatus.Available or RoomStatus.OnHold or RoomStatus.Occupied && requested == RoomStatus.Occupied,
             RoomTransitionSource.ContractTermination => hasOtherActiveContracts
                 ? requested == RoomStatus.Occupied
-                : requested == (current == RoomStatus.Occupied ? RoomStatus.Available : current),
+                : current == RoomStatus.Occupied ? requested is RoomStatus.Available or RoomStatus.Unavailable : requested == current,
             RoomTransitionSource.HoldingActivation => current == RoomStatus.Available && requested == RoomStatus.OnHold,
             RoomTransitionSource.HoldingRelease => current == RoomStatus.OnHold && requested == RoomStatus.Available,
             _ => false

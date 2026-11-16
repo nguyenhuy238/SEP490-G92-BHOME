@@ -7,7 +7,7 @@ public sealed record HandoverAssetInput(Guid Id, string Condition, int? Observed
     int? HandedOverQuantity = null, int? GoodQuantity = null, int? WornQuantity = null,
     int? DamagedQuantity = null, int? MissingQuantity = null, bool Checked = true,
     string? Notes = null, Guid[]? EvidenceIds = null, HandoverPhysicalObservation[]? PhysicalObservations = null);
-public sealed record HandoverPhysicalObservation(Guid Id, int Quantity, string Condition);
+public sealed record HandoverPhysicalObservation(Guid Id, int Quantity, string Condition, int? HandedOverQuantity = null);
 public sealed record HandoverInput(int Version, DateOnly Date, string RoomCondition, string KeysAndAccess,
     string Notes, HandoverAssetInput[] Assets, Guid ElectricityReadingId, Guid WaterReadingId, Guid[] EvidenceIds,
     string? InventoryToken = null);
@@ -31,9 +31,10 @@ public sealed record HandoverSnapshot(DateOnly Date, string RoomNumber, string R
     string Notes, HandoverAsset[] Assets, HandoverReading Electricity, HandoverReading Water, Guid[] EvidenceIds,
     string? InventoryToken = null, string? InventoryState = null, bool NoAssetsConfirmed = false,
     HandoverOwnerAcceptance? OwnerAcceptance = null, HandoverFeedback? TenantFeedback = null,
-    string? MissingBaselineReason = null, bool OtherTenantsRemain = false);
+    string? MissingBaselineReason = null, bool OtherTenantsRemain = false,
+    IReadOnlyDictionary<Guid, string>? EvidenceHashes = null, string? ProposedCompensation = null);
 public sealed record HandoverView(int Version, string Status, HandoverSnapshot Snapshot, int? TenantConfirmedVersion,
-    DateTimeOffset? TenantConfirmedAt, DateTimeOffset? StaffConfirmedAt);
+    DateTimeOffset? TenantConfirmedAt, DateTimeOffset? StaffConfirmedAt, Guid? SourceContractId = null);
 public sealed record HandoverHistoryView(int Version, string Action, Guid ActorId, DateTimeOffset OccurredAt, string Note, HandoverSnapshot Snapshot);
 public sealed record HandoverChoices(IReadOnlyList<HandoverAsset> Assets, IReadOnlyList<HandoverReading> Readings, IReadOnlyList<ContractDocumentView> Evidence,
     string? InventoryToken = null, string? InventoryState = null, bool NoAssetsConfirmed = false);
@@ -42,7 +43,7 @@ public interface IHandoverInventory
 {
     Task<HandoverInventory> PrepareAsync(Guid roomId, CancellationToken t);
     Task MarkForReviewAsync(Guid roomId, Guid contractId, int version, Guid actor, CancellationToken t);
-    Task SynchronizeAsync(Guid roomId, HandoverSnapshot snapshot, Guid actor, CancellationToken t);
+    Task SynchronizeAsync(Guid roomId, Guid contractId, int version, HandoverSnapshot snapshot, Guid actor, CancellationToken t);
 }
 
 public interface IContractHandoverRepository
@@ -57,4 +58,6 @@ public interface IContractHandoverRepository
     Task EnsureMoveInTaskAsync(Contract contract, Guid actor, DateTimeOffset now, CancellationToken t);
     Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t);
     Task NotifyAsync(Contract contract, string action, Guid actor, int version, CancellationToken t);
+    Task<IReadOnlyList<AssetChangeParty>> ActivePartiesAsync(Guid roomId, CancellationToken t);
+    Task<IReadOnlyList<AssetChangeSource>> ChangeSourcesAsync(Guid roomId, CancellationToken t);
 }

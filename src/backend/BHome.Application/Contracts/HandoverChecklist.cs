@@ -2,7 +2,7 @@ namespace BHome.Application.Contracts;
 
 public static class HandoverChecklist
 {
-    public static HandoverAsset[] Inspect(HandoverAsset[] source, HandoverAssetInput[] input, bool quantitiesRequired)
+    public static HandoverAsset[] Inspect(HandoverAsset[] source, HandoverAssetInput[] input, bool quantitiesRequired, bool baselineKnown = true)
     {
         if (input is null || input.Length > 200 || input.Any(i => i is null) ||
             input.Select(i => i.Id).Distinct().Count() != input.Length || input.Length != source.Length ||
@@ -18,15 +18,22 @@ public static class HandoverChecklist
             var hasQuantities = values.Any(v => v is not null);
             if ((quantitiesRequired || hasQuantities) && (values.Any(v => v is null or < 0 or > 10000) ||
                 i.GoodQuantity + i.WornQuantity + i.DamagedQuantity != i.ObservedQuantity || i.HandedOverQuantity > i.ObservedQuantity ||
-                i.MissingQuantity != Math.Max(0, (s.ConfiguredQuantity ?? s.HandedOverQuantity ?? s.PhysicalAssets?.Sum(p => p.Quantity) ?? 0) - i.ObservedQuantity!.Value)))
+                i.MissingQuantity != (baselineKnown ? Math.Max(0, (s.ConfiguredQuantity ?? s.HandedOverQuantity ?? s.PhysicalAssets?.Sum(p => p.Quantity) ?? 0) - i.ObservedQuantity!.Value) : 0)))
                 throw ContractException.Invalid("invalid_handover_quantities");
             if (hasQuantities && i.HandedOverQuantity < i.ObservedQuantity && string.IsNullOrWhiteSpace(i.Notes))
                 throw ContractException.Invalid("withheld_asset_reason_required");
             var observed = s with
             {
-                ObservedCondition = i.Condition.Trim(), ObservedQuantity = i.ObservedQuantity, HandedOverQuantity = i.HandedOverQuantity,
-                GoodQuantity = i.GoodQuantity, WornQuantity = i.WornQuantity, DamagedQuantity = i.DamagedQuantity,
-                MissingQuantity = i.MissingQuantity, Checked = i.Checked, Notes = i.Notes?.Trim(), EvidenceIds = i.EvidenceIds ?? [],
+                ObservedCondition = i.Condition.Trim(),
+                ObservedQuantity = i.ObservedQuantity,
+                HandedOverQuantity = i.HandedOverQuantity,
+                GoodQuantity = i.GoodQuantity,
+                WornQuantity = i.WornQuantity,
+                DamagedQuantity = i.DamagedQuantity,
+                MissingQuantity = i.MissingQuantity,
+                Checked = i.Checked,
+                Notes = i.Notes?.Trim(),
+                EvidenceIds = i.EvidenceIds ?? [],
                 PhysicalObservations = i.PhysicalObservations
             };
             if (Problem(observed) && observed.EvidenceIds.Length == 0) throw ContractException.Invalid("asset_group_evidence_required");
@@ -34,9 +41,12 @@ public static class HandoverChecklist
             {
                 var expected = s.PhysicalAssets ?? [];
                 if (physical.Length != expected.Length || physical.Any(p => p is null || p.Quantity is < 0 or > 10000 ||
+                    p.HandedOverQuantity is < 0 || p.HandedOverQuantity > p.Quantity ||
                     string.IsNullOrWhiteSpace(p.Condition) || p.Condition.Length > 1000 || !expected.Any(e => e.Id == p.Id)) ||
                     physical.Select(p => p.Id).Distinct().Count() != physical.Length || physical.Sum(p => p.Quantity) != i.ObservedQuantity)
                     throw ContractException.Invalid("invalid_physical_asset_quantities");
+                if (i.HandedOverQuantity != i.ObservedQuantity && (physical.Any(p => p.HandedOverQuantity is null) || physical.Sum(p => p.HandedOverQuantity) != i.HandedOverQuantity))
+                    throw ContractException.Invalid("physical_asset_handover_quantities_required");
             }
             return observed;
         }).ToArray();
@@ -45,5 +55,5 @@ public static class HandoverChecklist
     public static bool Problem(HandoverAsset a) => a.MissingQuantity > 0 || a.DamagedQuantity > 0 ||
         a.ObservedQuantity != null && (a.ObservedQuantity != (a.PhysicalAssets?.Sum(p => p.Quantity) ?? 0) || a.HandedOverQuantity < a.ObservedQuantity);
     public static bool RequiresOwner(HandoverSnapshot s) => !s.NoAssetsConfirmed && (s.Assets.Length == 0 ||
-        s.Assets.Any(a => a.ConfigurationItemId is not null && !a.OwnerChecked || Problem(a)));
+        s.Assets.Any(a => !a.OwnerChecked || Problem(a)));
 }

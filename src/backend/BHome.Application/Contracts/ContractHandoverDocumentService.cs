@@ -14,7 +14,7 @@ public sealed partial class ContractService
 
     private async Task<ContractDocumentView> PersistReport(Contract c, string type, int version, HandoverSnapshot snapshot,
         HandoverSnapshot? baseline, Guid staffId, DateTimeOffset? tenantAt, DateTimeOffset confirmedAt,
-        string[] references, string[] decisions, CancellationToken t, Guid? eventId = null)
+        string[] references, string[] decisions, CancellationToken t, Guid? eventId = null, Guid? evidenceContractId = null)
     {
         var kind = type == "MoveIn" ? ContractFileKind.MoveInReport : type == "MoveOut" ? ContractFileKind.MoveOutReport : ContractFileKind.AssetChangeReport;
         var templateId = "handover-" + type + (eventId is null ? "" : "-" + eventId.Value.ToString("N"));
@@ -31,10 +31,12 @@ public sealed partial class ContractService
                 var evidence = (await repository.InspectionEvidenceAsync(c.Id, t)).SingleOrDefault(e => e.Id == id && e.IsLinked)
                     ?? throw ContractException.Invalid("invalid_handover_evidence");
                 await storage.CopyToAsync(evidence.ObjectKey, bytes, t);
+                if (snapshot.EvidenceHashes is not null && (!snapshot.EvidenceHashes.TryGetValue(id, out var hash) || FileHash(bytes.ToArray()) != hash))
+                    throw ContractException.Conflict("inspection_evidence_integrity_failed");
             }
             else
             {
-                var file = await Workflow.FileAsync(c.Id, id, t) ?? throw ContractException.Invalid("invalid_handover_evidence");
+                var file = await Workflow.FileAsync(evidenceContractId ?? c.Id, id, t) ?? throw ContractException.Invalid("invalid_handover_evidence");
                 if (file.Kind != ContractFileKind.HandoverEvidence) throw ContractException.Invalid("invalid_handover_evidence");
                 await CopyVerifiedFile(file, bytes, t);
             }
@@ -59,8 +61,10 @@ public sealed partial class ContractService
     {
         await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
         var result = new List<ContractDocumentView>();
-        foreach (var kind in new[] { ContractFileKind.MoveInReport, ContractFileKind.AssetChangeReport, ContractFileKind.MoveOutReport })
-            result.AddRange((await Workflow.FilesAsync(id, kind, t)).Select(DocumentView));
+        var c = await repository.FindAsync(id, t) ?? throw ContractException.Missing();
+        foreach (var related in await HandoverLineage(c, t))
+            foreach (var kind in new[] { ContractFileKind.MoveInReport, ContractFileKind.AssetChangeReport, ContractFileKind.MoveOutReport })
+                result.AddRange((await Workflow.FilesAsync(related, kind, t)).Select(DocumentView));
         return result.OrderBy(f => f.RecordedAt).ToArray();
     }
     public async Task CopyHandoverDocumentAsync(Guid id, Guid documentId, Stream output, CancellationToken t)

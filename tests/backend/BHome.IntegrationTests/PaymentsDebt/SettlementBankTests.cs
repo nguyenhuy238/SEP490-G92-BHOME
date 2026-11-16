@@ -33,7 +33,7 @@ public sealed partial class PaymentLedgerTests
         view = await RefundValue<SettlementReceivablesView>(await owner.GetAsync(route));
         await RefundValue<DepositOffsetApproval>(await Post(owner, route + "/deposit-offsets", new DepositOffsetInput(view.Reference, charge.Id, null, 400000, "Synthetic Owner offset", true)));
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
-        await RefundValue<ContractView>(await Post(owner, $"/api/v1/contracts/{w.Contract}/move-out/complete", new CompletionInput(today)));
+        await RefundValue<ContractView>(await Post(owner, $"/api/v1/contracts/{w.Contract}/move-out/complete", new CompletionInput(today, "Available")));
         var bankRoute = route + $"/{charge.Id}/bank-allocations";
         async Task<TransferView> Incoming(decimal amount, string? description = null, string? bankReference = null, string provider = "SYNTHETIC-SETTLEMENT") =>
             await As(w.Owner, Roles.Owner, s => s.RegisterAsync(Input(w, amount) with

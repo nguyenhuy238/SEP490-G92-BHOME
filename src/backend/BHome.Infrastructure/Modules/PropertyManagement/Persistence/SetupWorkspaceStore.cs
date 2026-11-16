@@ -279,8 +279,18 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         .Where(a => a.TargetId == assetId && a.TargetType == nameof(Asset)).OrderByDescending(a => a.OccurredAt).ThenBy(a => a.Id)
         .Select(a => new AssetHistoryEntry(a.Id, a.Action, a.Reason, a.OccurredAt, a.ActorId, a.After)).Take(1000).ToArrayAsync(t);
     public async Task<IReadOnlyList<Asset>> AssetsAsync(Guid roomId, CancellationToken t) => await db.Set<Asset>().AsNoTracking().Where(a => a.RoomId == roomId).OrderBy(a => a.Id).Take(1000).ToArrayAsync(t);
-    public Task SaveAssetMetadataAsync(Guid assetId, AssetMetadata metadata, CancellationToken t) => sql.Execute(
-        "UPDATE assets SET purchase_info=purchase_info||@data::jsonb WHERE id=@id", t, ("id", assetId), ("data", JsonSerializer.Serialize(metadata, Json)));
+    public async Task SaveAssetMetadataAsync(Guid assetId, AssetMetadata metadata, CancellationToken t)
+    {
+        var merged = await sql.Scalar<string>("UPDATE assets SET purchase_info=purchase_info||@data::jsonb WHERE id=@id RETURNING purchase_info::text", t,
+            ("id", assetId), ("data", JsonSerializer.Serialize(metadata, Json)));
+        if (merged is null) throw new PropertyException(404, "resource_not_found");
+        var tracked = db.ChangeTracker.Entries<Asset>().SingleOrDefault(e => e.Entity.Id == assetId);
+        if (tracked is not null)
+        {
+            var property = tracked.Property<string>("PurchaseInfo");
+            property.CurrentValue = merged; property.OriginalValue = merged; property.IsModified = false;
+        }
+    }
     public async Task<IReadOnlyDictionary<Guid, AssetMetadata>> AssetMetadataAsync(Guid[] assetIds, CancellationToken t)
     {
         await using var command = await sql.Command("SELECT id,purchase_info FROM assets WHERE id=ANY(@ids)", t, ("ids", assetIds));

@@ -41,28 +41,34 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer
             Text("Các xác nhận dưới đây được ghi nhận trong ứng dụng BHOME, không phải chữ ký số được chứng thực.");
             if (r.Snapshot.OtherTenantsRemain) Text("Kiểm tra hiện trạng phòng chung khi một Tenant rời đi. Tài sản chung tiếp tục ở lại phòng; không ghi nhận hoàn trả toàn bộ tài sản.");
             if (r.Snapshot.MissingBaselineReason is { } missing) Text("GIỚI HẠN DỮ LIỆU SO SÁNH: " + missing + ". Không suy đoán hiện trạng ban đầu hoặc tự xác định trách nhiệm bồi thường.");
-            void Assets(string heading, HandoverAsset[] assets)
+            void Assets(string heading, HandoverAsset[] assets, bool comparison = false)
             {
                 Text(heading);
                 if (assets.Length == 0) { Text(r.Snapshot.NoAssetsConfirmed ? "Owner đã xác nhận không có tài sản bàn giao." : "Không có dữ liệu lịch sử về tài sản."); return; }
-                var table = new Table(UnitValue.CreatePercentArray([27f, 12f, 12f, 12f, 37f])).UseAllAvailableWidth();
-                foreach (var label in new[] { "Nhóm / đơn vị", "Yêu cầu", "Thực tế", "Bàn giao", "Tình trạng / ghi chú" }) table.AddHeaderCell(new Cell().Add(new Paragraph(label)));
+                var table = new Table(UnitValue.CreatePercentArray(comparison ? [27f, 18f, 55f] : [27f, 12f, 12f, 12f, 37f])).UseAllAvailableWidth();
+                foreach (var label in comparison ? new[] { "Nhóm / đơn vị", "Số đã nhận hiệu lực", "Tình trạng tham chiếu / ghi chú" } : new[] { "Nhóm / đơn vị", "Yêu cầu", "Thực tế", "Bàn giao", "Tình trạng / ghi chú" }) table.AddHeaderCell(new Cell().Add(new Paragraph(label)));
                 foreach (var a in assets)
                 {
                     t.ThrowIfCancellationRequested();
                     static string Q(int? value) => value?.ToString(CultureInfo.InvariantCulture) ?? "Chưa rõ";
-                    foreach (var value in new[] { a.Name + "\n" + a.Unit, Q(a.ConfiguredQuantity), Q(a.ObservedQuantity), Q(a.HandedOverQuantity),
-                        $"Tốt: {Q(a.GoodQuantity)}; hao mòn: {Q(a.WornQuantity)}; hỏng: {Q(a.DamagedQuantity)}; thiếu: {Q(a.MissingQuantity)}\n{a.ObservedCondition}\n{a.Notes}" })
+                    var cells = comparison ? new[] { a.Name + "\n" + a.Unit, Q(a.HandedOverQuantity), a.ObservedCondition + "\n" + a.Notes } :
+                        new[] { a.Name + "\n" + a.Unit, Q(a.ConfiguredQuantity), Q(a.ObservedQuantity), Q(a.HandedOverQuantity),
+                        $"Tốt: {Q(a.GoodQuantity)}; hao mòn: {Q(a.WornQuantity)}; hỏng: {Q(a.DamagedQuantity)}; thiếu: {Q(a.MissingQuantity)}\n{a.ObservedCondition}\n{a.Notes}" };
+                    foreach (var value in cells)
                         table.AddCell(new Cell().Add(new Paragraph(value)).SetPadding(5));
                 }
                 doc.Add(table);
             }
-            if (r.Baseline is not null) Assets("Dữ liệu bàn giao đã xác nhận dùng để so sánh", r.Baseline.Assets);
+            if (r.Baseline is not null) Assets("Baseline đối chiếu: số đã nhận có tính các thay đổi Tenant đã xác nhận", r.Baseline.Assets, true);
             Assets("Kết quả kiểm tra thực tế", r.Snapshot.Assets);
-            Text("Hiện trạng phòng: " + r.Snapshot.RoomCondition);
-            Text("Chìa khóa / thẻ / quyền truy cập: " + r.Snapshot.KeysAndAccess);
-            Text($"Chỉ số điện đã xác nhận: {r.Snapshot.Electricity.Value} ({r.Snapshot.Electricity.MeterCode}, {r.Snapshot.Electricity.Id})\nChỉ số nước đã xác nhận: {r.Snapshot.Water.Value} ({r.Snapshot.Water.MeterCode}, {r.Snapshot.Water.Id})");
+            if (r.Type != "AssetChange")
+            {
+                Text("Hiện trạng phòng: " + r.Snapshot.RoomCondition);
+                Text("Chìa khóa / thẻ / quyền truy cập: " + r.Snapshot.KeysAndAccess);
+                Text($"Chỉ số điện đã xác nhận: {r.Snapshot.Electricity.Value} ({r.Snapshot.Electricity.MeterCode}, {r.Snapshot.Electricity.Id})\nChỉ số nước đã xác nhận: {r.Snapshot.Water.Value} ({r.Snapshot.Water.MeterCode}, {r.Snapshot.Water.Id})");
+            }
             Text("Ghi chú: " + r.Snapshot.Notes);
+            if (!string.IsNullOrWhiteSpace(r.Snapshot.ProposedCompensation)) Text("Đề xuất của Staff, chưa phải khoản phải thu: " + r.Snapshot.ProposedCompensation);
             if (r.Snapshot.OwnerAcceptance is { } approval) Text($"Owner chấp nhận ngoại lệ v{approval.Version}: {approval.Reason}\nPhương án: {approval.HandlingPlan}\nNgười xác nhận: {approval.ActorId} · {approval.At:O}");
             if (r.Snapshot.TenantFeedback is { } feedback) Text($"Phản hồi Tenant: {(feedback.Confirmed ? "Xác nhận hiện trạng" : "Không đồng ý")} · {feedback.Reason}\n{feedback.ActorId} · {feedback.At:O}\nPhản hồi hiện trạng không đồng nghĩa chấp nhận bồi thường.");
             foreach (var decision in r.Decisions) Text(decision);

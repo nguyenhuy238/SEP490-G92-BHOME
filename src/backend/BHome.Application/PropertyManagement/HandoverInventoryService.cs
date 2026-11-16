@@ -19,12 +19,19 @@ public sealed partial class RoomInventoryReviewService : IHandoverInventory
 
     private static HandoverPhysicalAsset PhysicalView(Physical p) =>
         new(p.Asset.Id, p.Asset.Version, p.Metadata.Quantity, p.Asset.Condition, p.Asset.Status.ToString());
+    private static string EmptyInventoryBaseline(RoomContext room) => EmptyInventoryBaseline(room.Room.Id, room.Assignment, room.Desired);
+    private static string EmptyInventoryBaseline(Guid roomId, SetupDocument? assignmentDocument, SetupDocument? desiredDocument) => Hash(new
+    {
+        Id = roomId,
+        assignment = assignmentDocument is null ? null : new { assignmentDocument.Id, assignmentDocument.Version },
+        desired = desiredDocument is null ? null : new { desiredDocument.Id, desiredDocument.Version }
+    });
 
     private async Task<HandoverInventory> HandoverInventory(RoomContext room, CancellationToken t)
     {
         var empty = await Store.GetAsync(Key($"room-no-assets:{room.Room.Id:N}"), "RoomNoAssets", t);
         var noAssets = room.Items.Length == 0 && room.Physical.Length == 0 && empty is not null &&
-            empty.Data.GetProperty("baseline").GetString() == room.Baseline;
+            empty.Data.GetProperty("baseline").GetString() == EmptyInventoryBaseline(room);
         var groups = room.Items.Select(item => new HandoverAsset(item.Requirement.Id, item.Requirement.Name,
             string.Join("; ", item.Linked.Select(p => p.Asset.Condition).Distinct()), "", item.Requirement.Id,
             item.Requirement.Quantity, item.Requirement.Unit, item.Requirement.TrackingMode,
@@ -52,7 +59,7 @@ public sealed partial class RoomInventoryReviewService : IHandoverInventory
             var key = Key($"room-no-assets:{roomId:N}");
             var previous = await Store.GetAsync(key, "RoomNoAssets", t);
             await Store.SaveAsync(key, location, "RoomNoAssets", "Confirmed",
-                new { roomId, baseline = context.Baseline, reason = Text(input.Reason, 2000) }, previous?.Version ?? 0, Actor, t);
+                new { roomId, baseline = EmptyInventoryBaseline(context), reason = Text(input.Reason, 2000) }, previous?.Version ?? 0, Actor, t);
             return await HandoverInventory(context, t);
         }, t);
     }
@@ -65,7 +72,7 @@ public sealed partial class RoomInventoryReviewService : IHandoverInventory
             await Store.SaveAsync(key, location, "HandoverInventoryDiscrepancy", "NeedsReview", new { roomId, contractId, version }, 0, actor, t);
     }
 
-    public async Task SynchronizeAsync(Guid roomId, HandoverSnapshot snapshot, Guid actor, CancellationToken t)
+    public async Task SynchronizeAsync(Guid roomId, Guid contractId, int version, HandoverSnapshot snapshot, Guid actor, CancellationToken t)
     {
         // Called only by the Owner review mutation, inside the existing Location/Room transaction.
         Owner();
@@ -100,9 +107,25 @@ public sealed partial class RoomInventoryReviewService : IHandoverInventory
                 asset.Condition = condition;
                 if (observed == 0) asset.Status = AssetStatus.Retired;
                 asset.Version++;
-                await Store.SaveAssetAsync(asset, actor, $"Owner confirmed move-out {snapshot.Date:yyyy-MM-dd}; observed quantity {observed}", t);
+                var reason = $"Owner confirmed move-out contract {contractId}, inspection v{version}, {snapshot.Date:yyyy-MM-dd}; observed quantity {observed}";
+                await Store.SaveAssetAsync(asset, actor, reason, t);
                 // Zero is represented through retirement; metadata's positive-quantity invariant is retained.
-                if (observed > 0) await Store.SaveAssetMetadataAsync(asset.Id, metadata with { Quantity = observed }, t);
+                if (observed > 0)
+                {
+                    var updated = metadata with { Quantity = observed };
+                    await Store.SaveAssetMetadataAsync(asset.Id, updated, t);
+                    var previous = await Store.GetAsync(asset.Id, "AssetMetadata", t);
+                    await Store.SaveAsync(asset.Id, asset.LocationId, "AssetMetadata", "Recorded", new
+                    {
+                        updated.TrackingMode,
+                        updated.Quantity,
+                        updated.PurchaseCost,
+                        updated.PurchaseDate,
+                        updated.UsefulLifeMonths,
+                        updated.Unit,
+                        reason
+                    }, previous?.Version ?? 0, actor, t);
+                }
             }
         }
     }
