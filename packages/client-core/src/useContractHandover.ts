@@ -5,6 +5,7 @@ import {
   type HandoverChoices,
   type HandoverHistory,
   type HandoverView,
+  type PreviewDocument,
 } from './contracts';
 
 export function useContractHandover(api: ContractClient, id: string, staff: boolean) {
@@ -16,6 +17,7 @@ export function useContractHandover(api: ContractClient, id: string, staff: bool
     record: HandoverView | null;
     history: HandoverHistory[];
     choices: HandoverChoices | null;
+    documents: PreviewDocument[];
   } | null>(null);
   const [loading, setLoading] = useState(true),
     [error, setError] = useState(''),
@@ -30,13 +32,14 @@ export function useContractHandover(api: ContractClient, id: string, staff: bool
           if (e && typeof e === 'object' && 'status' in e && e.status === 404) return null;
           throw e;
         });
-        const [recordValue, history, choices] = await Promise.all([
+        const [recordValue, history, choices, documents] = await Promise.all([
           record,
           api.handoverHistory(id, c.signal),
           staff ? api.handoverChoices(id, c.signal) : Promise.resolve(null),
+          api.handoverDocuments?.(id, c.signal) ?? Promise.resolve([]),
         ]);
         if (!c.signal.aborted)
-          setData({ api, id, staff, revision, record: recordValue, history, choices });
+          setData({ api, id, staff, revision, record: recordValue, history, choices, documents });
       } catch (e) {
         if (!c.signal.aborted) setError(contractError(e));
       } finally {

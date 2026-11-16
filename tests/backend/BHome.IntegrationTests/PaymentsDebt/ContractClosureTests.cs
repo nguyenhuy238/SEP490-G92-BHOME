@@ -77,7 +77,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, path + "/settlement", new SettlementInput("Checked", "stale"))).StatusCode);
         (await Post(owner, path + "/settlement", new SettlementInput("Synthetic zero-deposit fully verified", summary.Reference))).EnsureSuccessStatusCode();
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime); var key = Guid.NewGuid();
-        var results = await Task.WhenAll(Post(owner, path + "/complete", new CompletionInput(today), key), Post(owner, path + "/complete", new CompletionInput(today), key)); Assert.All(results, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+        var results = await Task.WhenAll(Post(owner, path + "/complete", new CompletionInput(today, "Available"), key), Post(owner, path + "/complete", new CompletionInput(today, "Available"), key)); Assert.All(results, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); Assert.Equal(ContractStatus.Terminated, (await db.Set<Contract>().SingleAsync(c => c.Id == w.Contract)).Status);
         Assert.Equal(others ? RoomStatus.Occupied : RoomStatus.Available, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
         Assert.Equal(others ? 2 : 0, await db.Set<Contract>().CountAsync(c => c.RoomId == w.Room && c.Status == ContractStatus.Active));
@@ -91,7 +91,7 @@ public sealed partial class PaymentLedgerTests
         var summary = (await owner.GetFromJsonAsync<ContractSettlementSummary>(path + "/settlement-summary"))!; (await Post(owner, path + "/settlement", new SettlementInput("Synthetic reviewed", summary.Reference))).EnsureSuccessStatusCode();
         await AdjustRequest(tenant, w.Invoice, 1, 90000);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
-        (await Post(owner, path + "/complete", new CompletionInput(today))).EnsureSuccessStatusCode();
+        (await Post(owner, path + "/complete", new CompletionInput(today, "Available"))).EnsureSuccessStatusCode();
         var pending = await owner.GetFromJsonAsync<ContractSettlementSummary>(path + "/settlement-summary");
         Assert.False(pending!.Resolved);
         Assert.Contains("invoice_adjustment_pending", pending.UnresolvedItems);
@@ -107,7 +107,7 @@ public sealed partial class PaymentLedgerTests
         var before = (await owner.GetFromJsonAsync<ContractSettlementSummary>(path + "/settlement-summary"))!;
         Assert.True(before.Calculation!.RoomOutstanding > 0); Assert.False(before.Resolved);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
-        (await Post(owner, path + "/complete", new CompletionInput(today))).EnsureSuccessStatusCode();
+        (await Post(owner, path + "/complete", new CompletionInput(today, "Available"))).EnsureSuccessStatusCode();
         var after = (await owner.GetFromJsonAsync<ContractSettlementSummary>(path + "/settlement-summary"))!;
         Assert.Equal(before.Calculation.RoomOutstanding, after.Calculation!.RoomOutstanding);
         Assert.False(after.Resolved);

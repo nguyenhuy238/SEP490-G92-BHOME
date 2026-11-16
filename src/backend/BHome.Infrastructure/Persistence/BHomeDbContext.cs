@@ -38,6 +38,8 @@ public sealed class BHomeDbContext(DbContextOptions<BHomeDbContext> options)
         builder.ConfigureContracts();
         builder.Entity<ApplicationUser>().Property(x => x.IsActive).HasDefaultValue(true);
         builder.ApplyConfigurationsFromAssembly(typeof(BHomeDbContext).Assembly);
+        // Purchase metadata is native Compact24 JSONB; the archived import source has no such column.
+        builder.Entity<BHome.Domain.PropertyManagement.Asset>().Ignore("PurchaseInfo");
         builder.Entity<IdentityRole<Guid>>().HasData(
             new IdentityRole<Guid>(BusinessRoles.Owner) { Id = Guid.Parse("00000000-0000-0000-0000-000000000001"), NormalizedName = BusinessRoles.Owner.ToUpperInvariant() },
             new IdentityRole<Guid>(BusinessRoles.Staff) { Id = Guid.Parse("00000000-0000-0000-0000-000000000002"), NormalizedName = BusinessRoles.Staff.ToUpperInvariant() },

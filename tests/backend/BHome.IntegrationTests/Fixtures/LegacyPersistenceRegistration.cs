@@ -52,6 +52,11 @@ internal static class LegacyPersistenceRegistration
         services.RemoveAll<LocationSetupService>();
         services.RemoveAll<AssetInventoryService>();
         services.RemoveAll<RoomInventoryReviewService>();
+        services.RemoveAll<BHome.Application.Contracts.IHandoverInventory>();
+        // The archived source host has neither Compact24 workspaces nor its notification writer.
+        services.AddScoped<BHome.Application.Contracts.IContractHandoverRepository>(p =>
+            new BHome.Infrastructure.Contracts.ContractHandoverRepository(p.GetRequiredService<BHomePersistenceContext>(),
+                p.GetRequiredService<BHome.Application.StaffOperations.IOperationalTaskRepository>(), null));
         services.RemoveAll<AssetCountObservationService>();
         services.RemoveAll<SetupEvidenceService>();
         services.RemoveAll<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();

@@ -5,9 +5,10 @@ lease/history và worker JOB-04. Không thêm bảng/migration hoặc gửi mậ
 
 ## Cấu hình sử dụng
 
-Máy Development đã có Email:AppPassword, Email:Enabled=true và sender trong .NET User Secrets
-ID `bhome-api-development`. Các callback Development cũng đã được cấu hình: Web localhost:5173,
-Mobile dùng scheme bhome có sẵn trong app.json. Khởi động lại Backend để nạp cấu hình.
+Mỗi máy Development cần cấu hình Email:AppPassword, Email:Enabled và sender bằng .NET User Secrets
+ID `bhome-api-development` hoặc biến môi trường riêng. Secrets không đi theo Git khi thành viên pull code.
+Web Development có thể dùng HTTP loopback; Mobile dùng scheme bhome có sẵn trong app.json.
+Khởi động lại Backend sau khi thay cấu hình để nạp giá trị mới.
 Không chép password vào appsettings hoặc chạy `user-secrets list` vào log/báo cáo.
 Máy/tài khoản Windows khác cần cấp secret riêng; Production dùng deployment secrets.
 
@@ -37,27 +38,42 @@ Owner dùng Web callback; Staff/Tenant dùng Mobile callback. Native link cần 
 có scheme bhome; chưa nghiệm thu Expo Go/universal links. Có thể cấu hình Mobile callback bằng
 HTTPS của client triển khai các route tương ứng; không tự tạo domain association/analytics redirect.
 
-Khi Jobs.Enabled=false và callback hợp lệ, worker hiện có vẫn xử lý email xác thực nếu
+Callback được kiểm tra riêng cho từng thao tác: reset chỉ cần WebResetUrl/MobileResetUrl;
+invitation chỉ cần WebInvitationUrl/MobileInvitationUrl; verification chỉ cần
+WebVerificationUrl/MobileVerificationUrl. Mỗi cặp cần origin nằm trong TrustedOrigins;
+Web callback phải là HTTP(S) hợp lệ để cung cấp fallback cho native link. Thiếu callback
+của thao tác khác không chặn thao tác đã cấu hình.
+
+Khi Jobs.Enabled=false và ít nhất một cặp callback hợp lệ, worker hiện có vẫn xử lý email xác thực nếu
 NotificationChannels.AutomationEnabled=false: chỉ publish/deliver Account notices, không xử lý
 backlog hóa đơn/thanh toán/hợp đồng hoặc bật financial jobs. NotificationChannels.Enabled vẫn
 phải true. Nếu Jobs.Enabled=true, scheduler/queue hiện có xử lý JOB-04. Không thêm worker mới.
 
 ## API và client
 
-| API                                            | Hành vi                                                                                      |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| POST `/api/v1/auth/forgot-password`            | Anonymous `{userName}`; email đăng ký hoặc username legacy; generic 202 khi adapter sẵn sàng |
-| POST `/api/v1/auth/request-email-verification` | Anonymous `{userName}`; generic 202; gửi link tới email đã lưu của tài khoản đủ điều kiện    |
-| POST `/api/v1/auth/confirm-email`              | `{userName,token}`; Identity + verification grant hợp lệ → 204; lỗi chung 400                |
-| POST `/api/v1/auth/reset-password`             | `{userName,token,newPassword}`; Identity + grant hợp lệ → 204; lỗi chung 400                 |
-| POST `/api/v1/auth/change-password`            | Phiên xác thực; body cũ; giữ 204/400 và revoke sessions                                      |
-| POST `/api/v1/staff/{id}/invitation`           | Owner; dùng email Staff đã lưu                                                               |
-| POST `/api/v1/residents/{id}/invitation`       | Owner; `{email}` khớp Resident/contact và active tenancy hiện có                             |
-| POST `/api/v1/auth/accept-invitation`          | `{userName,token,newPassword}`; Identity AccountInvitation token một lần                     |
+| API                                            | Hành vi                                                                                            |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| POST `/api/v1/auth/forgot-password`            | Anonymous `{userName}`; email đăng ký hoặc username legacy; generic 202 sau khi chấp nhận bền vững |
+| POST `/api/v1/auth/request-email-verification` | Anonymous `{userName}`; generic 202; gửi link tới email đã lưu của tài khoản đủ điều kiện          |
+| POST `/api/v1/auth/confirm-email`              | `{userName,token}`; Identity + verification grant hợp lệ → 204; lỗi chung 400                      |
+| POST `/api/v1/auth/reset-password`             | `{userName,token,newPassword}`; Identity + grant hợp lệ → 204; lỗi chung 400                       |
+| POST `/api/v1/auth/change-password`            | Phiên xác thực; body cũ; giữ 204/400 và revoke sessions                                            |
+| POST `/api/v1/staff/{id}/invitation`           | Owner; dùng email Staff đã lưu                                                                     |
+| POST `/api/v1/residents/{id}/invitation`       | Owner; `{email}` khớp Resident/contact và active tenancy hiện có                                   |
+| POST `/api/v1/auth/accept-invitation`          | `{userName,token,newPassword}`; Identity AccountInvitation token một lần                           |
 
 Body/route cũ giữ nguyên. Lookup email giải quyết username khác email. Unknown/invalid identifier,
 unconfirmed/ineligible account không tạo reset email, vẫn generic 202. Required/length validation
-giữ 400. Thiếu SMTP/callback configuration trả unavailable chung cho mọi tên, không lộ account existence.
+giữ 400. Thiếu/không hợp lệ callback reset hoặc tắt NotificationChannels.Enabled trả 503 chung cho mọi tên.
+SMTP chưa cấu hình hoặc chưa kết nối không chặn 202: grant và protected Outbox được commit cùng transaction,
+không gọi SMTP trong request. Worker giữ Pending khi provider chưa sẵn sàng và không tiêu hao retry;
+khi provider được cấu hình lại, worker kiểm tra lifetime/hash/consumed/eligibility trước khi gửi.
+Email.Enabled=true nhưng cấu hình SMTP sai vẫn bị validation lúc khởi động như trước; sửa cấu hình
+hoặc dùng Email.Enabled=false cùng NotificationChannels.Mode=Unconfigured trong lúc chuẩn bị provider,
+không hạ yêu cầu STARTTLS. Mode=Smtp cũ vẫn có fallback cấu hình Email như trước.
+Database/Outbox lỗi không được đổi thành 202. Trước lookup, một INSERT Outbox không chứa identifier/token
+được thử trong savepoint rồi rollback ngay, để lỗi ghi Outbox toàn hệ thống trả cùng lỗi đã sanitize
+cho mọi tên. Probe không tạo record bền vững, không đến worker; grant/INBOX/OUTBOX/audit thật vẫn atomic.
 Auth rate limit hiện có áp dụng; thêm cooldown user-row lock giữa request/instance: mặc định 60 giây,
 cấu hình 30–3600. Thời hạn token giữ Sessions.PasswordResetMinutes hiện có, mặc định 15 phút (1–60).
 

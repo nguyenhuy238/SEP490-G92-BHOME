@@ -99,7 +99,7 @@ public sealed partial class PaymentLedgerTests
         Assert.Equal(0, summary.Calculation!.AvailableSecurityDeposit);
         await RefundValue<MoveOutView>(await Post(owner, root + "/move-out/settlement", new SettlementInput("Synthetic final checks", summary.Reference)));
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
-        await RefundValue<ContractView>(await Post(owner, root + "/move-out/complete", new CompletionInput(today)));
+        await RefundValue<ContractView>(await Post(owner, root + "/move-out/complete", new CompletionInput(today, "Available")));
         Assert.Equal(originalInvoice, await owner.GetStringAsync($"/api/v1/invoices/{w.Invoice}"));
         var report = await RefundValue<FinancialReport>(await owner.GetAsync("/api/v1/financial-reports?from=2000-01-01&to=2100-12-31"));
         Assert.False(report.HasUnclassifiedRefunds);

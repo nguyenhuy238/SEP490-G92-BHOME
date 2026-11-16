@@ -152,8 +152,8 @@ export function StaffDashboard() {
         </View>
         {!preview && (
           <Text variant="labelSmall" style={[styles.muted, typography.status]}>
-            Lịch bàn giao nhận phòng chưa có dữ liệu tổng hợp. Dấu — nghĩa là chưa có dữ liệu hoặc
-            chưa tải được dữ liệu.
+            Bàn giao nhận phòng chưa hoàn tất được theo dõi trong Công việc của tôi. Mở tác vụ để
+            kiểm tra và lấy xác nhận của Tenant.
           </Text>
         )}
         {!preview && !!data.incidents?.error && (

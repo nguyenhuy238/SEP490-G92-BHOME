@@ -42,7 +42,7 @@ public sealed partial class ContractLifecycleApiTests
         async Task<HttpResponseMessage> Transition()
         {
             await release.Task;
-            return termination ? await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today)) : await Post(w.Owner, Path(id, "activate"));
+            return termination ? await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today, "Available")) : await Post(w.Owner, Path(id, "activate"));
         }
         var property = Property(); var transition = Transition(); release.SetResult();
         await Task.WhenAll(property, transition);
@@ -75,20 +75,21 @@ public sealed partial class ContractLifecycleApiTests
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/schedule"), new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(5))));
         var electricity = await FinalReading(w, id, BHome.Domain.Billing.UtilityType.Electricity);
         var water = await FinalReading(w, id, BHome.Domain.Billing.UtilityType.Water);
-        var choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
+        var choices = await EmptyRoomHandoverChoices(w, id);
         var openingElectricity = choices.Readings.First(r => r.UtilityType == 0); var openingWater = choices.Readings.First(r => r.UtilityType == 1);
         using var openingPhoto = new ByteArrayContent(Image()); openingPhoto.Headers.ContentType = new("image/png");
         var openingFile = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), openingPhoto))).Id;
         await Success<HandoverView>(await Post(w.Staff, Path(id, "handover"), new HandoverInput(0, openingElectricity.Date,
-            "Synthetic original room", "Synthetic original keys", "", [], openingElectricity.Id, openingWater.Id, [openingFile])));
+            "Synthetic original room", "Synthetic original keys", "", [], openingElectricity.Id, openingWater.Id, [openingFile], choices.InventoryToken)));
         await Success<HandoverView>(await Post(w.Tenant, Path(id, "handover/tenant-confirmation"), new HandoverDecision(1, "Synthetic present")));
         await Success<HandoverView>(await Post(w.Staff, Path(id, "handover/staff-confirmation"), new HandoverDecision(1, "Synthetic checked")));
         using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
         var evidence = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), photo))).Id;
+        var preparation = await Success<InspectionPreparation>(await w.Staff.Client.GetAsync(Path(id, "move-out/inspection-preparation")));
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), new InspectionInput(electricity, water,
-            "Synthetic physical condition", [evidence], [], "Synthetic final room", "Synthetic returned keys")));
+            "Synthetic physical condition", [evidence], [], "Synthetic final room", "Synthetic returned keys", InventoryToken: preparation.Inventory?.StateToken)));
         var inspection = (await Success<FinalInspectionView[]>(await w.Owner.Client.GetAsync(Path(id, "move-out/inspections")))).First();
-        await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/inspection-review"), new InspectionReviewInput(inspection.Version, true, "Synthetic Owner physical approval", true)));
+        await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/inspection-review"), new InspectionReviewInput(inspection.Version, true, "Synthetic Owner physical approval", true, true, "Synthetic Tenant unavailable; explicit Owner exception")));
     }
 
     internal async Task RemainingContractKeepsRoomOccupiedWithoutVersionBump()
@@ -111,7 +112,7 @@ public sealed partial class ContractLifecycleApiTests
         var before = (await w.Owner.Client.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!;
         Assert.Equal(2, before.Version);
         await ConfirmedPhysicalBoundary(w, first);
-        await Success<ContractView>(await Post(w.Owner, Path(first, "move-out/complete"), new CompletionInput(Today)));
+        await Success<ContractView>(await Post(w.Owner, Path(first, "move-out/complete"), new CompletionInput(Today, "Available")));
         var after = (await w.Owner.Client.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!;
         Assert.Equal(RoomStatus.Occupied, after.Status); Assert.Equal(before.Version, after.Version);
         await using var verify = fixture.Factory.Services.CreateAsyncScope();

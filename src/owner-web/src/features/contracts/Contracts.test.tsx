@@ -190,6 +190,7 @@ function setup(c = draft, ready = false, m: MoveOut | null = null) {
         '/deposit-verifications',
         '/history',
         '/handover/history',
+        '/handover/documents',
         '/versions',
         '/inspections',
       ].some((s) => path.endsWith(s))

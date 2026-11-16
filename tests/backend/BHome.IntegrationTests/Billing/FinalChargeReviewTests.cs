@@ -32,7 +32,7 @@ public sealed partial class InvoiceApiTests
         Assert.Contains(electricity.Id, approved.ChargeIds);
         Assert.Equal(approved.Id, (await Success<SettlementChargeReview>(await UtilityPost(w.Owner.Client, route + "/charge-review", input, key))).Id);
         // The physical handover can finish while debt and refund are both unresolved.
-        await Success<ContractView>(await UtilityPost(w.Owner.Client, root + "/move-out/complete", new CompletionInput(date), Guid.NewGuid()));
+        await Success<ContractView>(await UtilityPost(w.Owner.Client, root + "/move-out/complete", new CompletionInput(date, "Available"), Guid.NewGuid()));
         var summary = await Success<ContractSettlementSummary>(await w.Owner.Client.GetAsync(root + "/move-out/settlement-summary"));
         Assert.NotNull(summary.ChargeReview); Assert.Contains("settlement_receivable_outstanding", summary.UnresolvedItems);
         Assert.DoesNotContain("final_charge_review_required", summary.UnresolvedItems);

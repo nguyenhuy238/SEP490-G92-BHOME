@@ -34,6 +34,7 @@ import { invoiceError } from '../../../../../packages/client-core/src/invoices';
 import { ErrorState, LoadingState } from '../../components/common/PortalUI';
 import { usePropertySetupApi } from './usePropertySetupApi';
 import { ConflictReload } from '../locations/components/ConflictReload';
+import { RoomNoAssetsConfirmation } from './RoomNoAssetsConfirmation';
 
 type Evidence = {
   id: string;
@@ -542,6 +543,16 @@ export function RoomInventoryReviewPanel({ locationId }: { locationId: string })
                     )}
                   </TableCell>
                   <TableCell align="right">
+                    {room.noAssetsConfirmed && (
+                      <Typography variant="body2">Đã xác nhận không có tài sản bàn giao</Typography>
+                    )}
+                    {room.items.length === 0 && !room.noAssetsConfirmed && (
+                      <RoomNoAssetsConfirmation
+                        locationId={locationId}
+                        roomId={room.roomId}
+                        onChanged={() => void query.refetch()}
+                      />
+                    )}
                     <Button
                       variant="outlined"
                       disabled={busy || query.isFetching}

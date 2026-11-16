@@ -102,7 +102,8 @@ export function useStaffTaskDetail(id: string) {
     task && session?.roles.includes('Staff') && task.responsibilityAvailable && !detail.rawError
       ? availableTaskActions(task, 'Staff', session.userId).filter(
           (action): action is StaffTaskAction =>
-            ['start', 'progress', 'blockers', 'submit'].includes(action),
+            ['start', 'progress', 'blockers', 'submit'].includes(action) &&
+            !(task.target?.contractId && action === 'submit'),
         )
       : [];
   const canUpload = allowed.includes('submit');
