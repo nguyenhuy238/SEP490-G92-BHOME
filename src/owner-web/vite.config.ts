@@ -43,7 +43,10 @@ export default defineConfig(({ mode }) => {
     // Same-origin browser cookies retain Secure/HttpOnly/SameSite=Strict. The API
     // remains HTTPS and its certificate is verified; never set secure:false.
     server: {
-      proxy: { '/api': { target: target.origin, changeOrigin: true, secure: true, agent } },
+      proxy: {
+        '/api': { target: target.origin, changeOrigin: true, secure: true, agent },
+        '/open/sign-contract': { target: target.origin, changeOrigin: true, secure: true, agent },
+      },
     },
   };
 });

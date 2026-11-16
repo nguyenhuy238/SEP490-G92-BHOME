@@ -37,6 +37,7 @@
         }
       ],
       "expo-font",
+      "../../scripts/mobile/withCameraFocus.cjs",
       [
         "expo-image-picker",
         {

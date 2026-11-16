@@ -3,6 +3,12 @@ import React, { forwardRef, useEffect, useImperativeHandle } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CameraViewProps } from 'expo-camera';
+import type { CameraFocusEvent } from '../lib/cameraFocus';
+
+type NativeCameraProps = CameraViewProps & {
+  bhomeFocusEnabled?: boolean;
+  onBhomeFocusChanged?: (event: { nativeEvent: CameraFocusEvent }) => void;
+};
 
 const native = vi.hoisted(() => ({
   granted: true,
@@ -18,8 +24,13 @@ const native = vi.hoisted(() => ({
   platform: 'android',
   autoReady: true,
   mounts: 0,
-  props: {} as CameraViewProps,
+  props: {} as NativeCameraProps,
+  focusExtension: false,
   lenses: vi.fn(),
+}));
+vi.mock('../lib/cameraFocus', async (original) => ({
+  ...(await original<typeof import('../lib/cameraFocus')>()),
+  supportsNativeCameraFocus: () => native.focusExtension,
 }));
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
@@ -52,7 +63,19 @@ vi.mock('react-native', () => ({
         {children}
       </div>
     ) : null,
-  View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  View: ({
+    children,
+    accessibilityLabel,
+    style,
+  }: {
+    children?: React.ReactNode;
+    accessibilityLabel?: string;
+    style?: unknown;
+  }) => (
+    <div aria-label={accessibilityLabel} data-style={JSON.stringify(style)}>
+      {children}
+    </div>
+  ),
   Image: ({
     accessibilityLabel,
     source,
@@ -146,6 +169,7 @@ import { CameraCapture } from '../components/CameraCapture';
 beforeEach(() => {
   vi.clearAllMocks();
   native.granted = true;
+  native.focusExtension = false;
   native.platform = 'android';
   native.autoReady = true;
   native.mounts = 0;
@@ -783,3 +807,164 @@ it('blocks simultaneous native captures while the first capture is pending', asy
   await act(async () => finish({ width: 2000, height: 1200, release: native.release }));
   await screen.findByAltText('Ảnh CCCD vừa chụp');
 });
+
+function nativeFocus(
+  state: CameraFocusEvent['state'],
+  requestId: number,
+  point = { x: 0.25, y: 0.75 },
+) {
+  act(() =>
+    native.props.onBhomeFocusChanged?.({
+      nativeEvent: {
+        state,
+        requestId,
+        ...point,
+        supportsAutoFocus: true,
+        supportsTapFocus: true,
+        supportsContinuousFocus: true,
+      },
+    }),
+  );
+}
+it.each(['ios', 'android'])(
+  'enables native taps only on a ready supported %s camera, then captures with real feedback',
+  async (platform) => {
+    native.platform = platform;
+    native.focusExtension = true;
+    render(
+      <CameraCapture
+        label="CCCD"
+        presentation="document"
+        reviewBeforeSubmit
+        disabled={false}
+        onCapture={vi.fn()}
+      />,
+    );
+    await readyShutter();
+    expect(native.props.bhomeFocusEnabled).toBe(true);
+    expect(native.props.autofocus).toBe('off');
+    nativeFocus('focusing', 1);
+    expect(screen.getByText('Đang lấy nét…')).toBeTruthy();
+    expect(
+      JSON.parse(screen.getByLabelText('Điểm lấy nét').getAttribute('data-style')!),
+    ).toMatchObject({
+      left: '25%',
+      top: '75%',
+    });
+    expect(screen.queryByText('Đã lấy nét')).toBeNull();
+    nativeFocus(platform === 'android' ? 'focused' : 'settled', 1);
+    expect(
+      screen.getByText(platform === 'android' ? 'Đã lấy nét' : /Đã điều chỉnh tiêu cự/),
+    ).toBeTruthy();
+    fireEvent.click(await readyShutter());
+    await screen.findByAltText('Ảnh CCCD vừa chụp');
+  },
+);
+it('keeps capture available during focus and on unsupported, failed or timed-out AF', async () => {
+  native.focusExtension = true;
+  render(
+    <CameraCapture
+      label="CCCD"
+      presentation="document"
+      reviewBeforeSubmit
+      disabled={false}
+      onCapture={vi.fn()}
+    />,
+  );
+  await readyShutter();
+  for (const [id, state] of ['focusing', 'failed', 'timeout', 'unsupported'].entries()) {
+    nativeFocus(state as CameraFocusEvent['state'], id);
+    expect(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(screen.queryByText('Đã lấy nét')).toBeNull();
+  }
+  fireEvent.click(await readyShutter());
+  await screen.findByAltText('Ảnh CCCD vừa chụp');
+});
+it('ignores old focus results after a later tap, zoom, background and unmount', async () => {
+  native.focusExtension = true;
+  const view = render(
+    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+  );
+  await readyShutter();
+  nativeFocus('focusing', 2);
+  nativeFocus('focused', 1);
+  expect(screen.queryByText('Đã lấy nét')).toBeNull();
+  const previous = native.props;
+  fireEvent.click(screen.getByRole('button', { name: 'Phóng thêm' }));
+  expect(native.props.bhomeFocusEnabled).toBe(false);
+  await readyShutter();
+  nativeFocus('focused', 1);
+  nativeFocus('focused', 2);
+  expect(screen.queryByText('Đã lấy nét')).toBeNull();
+  nativeFocus('failed', 3);
+  expect(screen.getByText(/Chưa xác nhận được nét/)).toBeTruthy();
+  act(() => native.listeners.forEach((listener) => listener('background')));
+  act(() =>
+    previous.onBhomeFocusChanged?.({
+      nativeEvent: {
+        requestId: 4,
+        state: 'focused',
+        x: 0.5,
+        y: 0.5,
+        supportsAutoFocus: true,
+        supportsTapFocus: true,
+        supportsContinuousFocus: true,
+      },
+    }),
+  );
+  expect(screen.queryByText('Đã lấy nét')).toBeNull();
+  view.unmount();
+  expect(native.listeners.size).toBe(0);
+});
+it('shows a standard-camera fallback in an Expo Go or older binary', async () => {
+  render(
+    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+  );
+  await readyShutter();
+  expect(native.props.bhomeFocusEnabled).toBeUndefined();
+  expect(native.props.onBhomeFocusChanged).toBeUndefined();
+  expect(screen.getByText(/Chạm lấy nét cần bản ứng dụng hỗ trợ/)).toBeTruthy();
+});
+it.each([
+  ['CCCD mặt sau', 'document', 'back'],
+  ['Công tơ điện', 'meter', undefined],
+  ['Đồng hồ nước', 'meter', undefined],
+  ['Test OCR', 'inline', undefined],
+] as const)(
+  'uses native focus feedback through the shared %s capture entry',
+  async (label, presentation, documentSide) => {
+    native.focusExtension = true;
+    const capture = vi.fn();
+    render(
+      <CameraCapture
+        label={label}
+        presentation={presentation}
+        documentSide={documentSide}
+        autoOpen
+        disabled={false}
+        reviewBeforeSubmit
+        onCapture={capture}
+      />,
+    );
+    if (presentation === 'inline') fireEvent.click(screen.getByRole('button', { name: label }));
+    const shutter = await readyShutter(
+      presentation === 'document' ? 'Chụp ảnh mặt sau' : 'Chụp ảnh',
+    );
+    expect(native.props.bhomeFocusEnabled).toBe(true);
+    nativeFocus('focusing', 1);
+    nativeFocus('focused', 1);
+    expect(screen.getByText('Đã lấy nét')).toBeTruthy();
+    fireEvent.click(shutter);
+    await screen.findByAltText(
+      presentation === 'document'
+        ? 'Ảnh CCCD vừa chụp'
+        : presentation === 'meter'
+          ? 'Ảnh công tơ đã chụp'
+          : 'Ảnh vừa chụp',
+    );
+    expect(capture).not.toHaveBeenCalled();
+  },
+);

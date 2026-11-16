@@ -3,6 +3,22 @@ import { Platform, View } from 'react-native';
 import { CameraView, type CameraViewProps } from 'expo-camera';
 import { Button, Text } from 'react-native-paper';
 import { captureLensOptions } from '../lib/captureLenses';
+import {
+  acceptCameraFocusEvent,
+  cameraFocusMessage,
+  supportsNativeCameraFocus,
+  type CameraFocusEvent,
+} from '../lib/cameraFocus';
+
+// Expo Camera forwards native props. The config plugin registers these additions
+// on the existing Expo view, and the runtime version check protects Expo Go.
+const FocusCameraView = CameraView as unknown as React.ComponentType<
+  CameraViewProps & {
+    ref: React.RefObject<CameraView | null>;
+    bhomeFocusEnabled?: boolean;
+    onBhomeFocusChanged?: (event: { nativeEvent: CameraFocusEvent }) => void;
+  }
+>;
 
 // Preserve the existing normalized zoom ceiling pending physical-device calibration.
 // Expo's 0..1 range is device-dependent and does not represent an optical multiplier.
@@ -30,11 +46,15 @@ export function LiveCaptureCamera({
   const [lenses, setLenses] = useState<ReturnType<typeof captureLensOptions>>([]);
   const [zoom, setZoom] = useState(0);
   const [settling, setSettling] = useState(true);
+  const [focus, setFocus] = useState<CameraFocusEvent | null>(null);
+  const [nativeFocus] = useState(supportsNativeCameraFocus);
   const mounted = useRef(true);
   const started = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selected = useRef('');
   const switching = useRef(false);
+  const focusRequest = useRef(-1);
+  const focusFloor = useRef(0);
   const readyCallback = useRef(onReady);
   useEffect(() => {
     readyCallback.current = onReady;
@@ -43,6 +63,10 @@ export function LiveCaptureCamera({
     if (timer.current) clearTimeout(timer.current);
     readyCallback.current(false);
     setSettling(true);
+    // Disable/enable in native increments its generation. Require a fresh event
+    // after zoom/lens changes, including a late result with the last accepted ID.
+    focusFloor.current = focusRequest.current + 1;
+    setFocus(null);
     timer.current = setTimeout(() => {
       if (!mounted.current || !started.current) return;
       switching.current = false;
@@ -95,13 +119,30 @@ export function LiveCaptureCamera({
   return (
     <View style={{ flex: 1 }}>
       <View style={{ flex: 1, overflow: 'hidden' }}>
-        <CameraView
+        <FocusCameraView
           ref={camera}
           style={{ flex: 1 }}
           facing="back"
           mode="picture"
           // SDK 58 maps off to continuousAutoFocus on iOS. Android uses CameraX AF.
           autofocus="off"
+          bhomeFocusEnabled={nativeFocus ? !disabled && !settling : undefined}
+          onBhomeFocusChanged={
+            nativeFocus
+              ? ({ nativeEvent }) => {
+                  if (!mounted.current || !started.current || disabled || settling) return;
+                  const event = acceptCameraFocusEvent(null, nativeEvent);
+                  if (
+                    !event ||
+                    event.requestId < focusRequest.current ||
+                    event.requestId < focusFloor.current
+                  )
+                    return;
+                  focusRequest.current = event.requestId;
+                  setFocus((previous) => acceptCameraFocusEvent(previous, event));
+                }
+              : undefined
+          }
           selectedLens={Platform.OS === 'ios' && lens ? lens : undefined}
           zoom={zoom}
           onCameraReady={handleReady}
@@ -115,6 +156,34 @@ export function LiveCaptureCamera({
           }}
         />
         {children}
+        {nativeFocus && focus && focus.x >= 0 && focus.y >= 0 && (
+          <View
+            pointerEvents="none"
+            accessibilityLabel="Điểm lấy nét"
+            style={{
+              position: 'absolute',
+              left: `${focus.x * 100}%`,
+              top: `${focus.y * 100}%`,
+              width: 56,
+              height: 56,
+              marginLeft: -28,
+              marginTop: -28,
+              borderWidth: 2,
+              borderRadius: 12,
+              borderColor: focus.state === 'focused' ? '#86EFAC' : '#FFFFFF',
+            }}
+          />
+        )}
+        {showControls && (
+          <View pointerEvents="none" style={{ position: 'absolute', top: 8, left: 8, right: 8 }}>
+            <Text
+              accessibilityLiveRegion="polite"
+              style={{ color: '#FFFFFF', backgroundColor: '#07121F', padding: 8, borderRadius: 8 }}
+            >
+              {settling ? 'Đang mở camera…' : cameraFocusMessage(focus, nativeFocus)}
+            </Text>
+          </View>
+        )}
       </View>
       {showControls && (
         <View style={{ gap: 4, padding: 8, backgroundColor: dark ? '#07121F' : '#FFFFFF' }}>
