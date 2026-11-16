@@ -5,6 +5,7 @@ import { resolveApiEndpoint } from './apiEndpoint';
 import { clearAbandonedCaptures } from './captureFiles';
 import { createCredentialStore } from './credentialStore';
 import { MobileSessions, type SessionView } from './sessions';
+import { showWarning } from './toast';
 
 // Exported only so ContextPortal can re-provide it inside react-native-paper portals.
 export const SessionContext = createContext<
@@ -60,7 +61,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       value={{
         ...view,
         login: (base, name, password) => manager.login(base, name, password),
-        logout: () => manager.logout(),
+        logout: async () => {
+          const { api, session, baseUrl } = manager.snapshot;
+          if (api && session && Platform.OS !== 'web') {
+            try {
+              const { unregisterPushDevice } = await import('../services/pushRegistration');
+              const result = await unregisterPushDevice(api, { userId: session.userId, baseUrl });
+              if (!result.removed) showWarning(result.message);
+            } catch {
+              // Continue logout, but never say push was disabled without server confirmation.
+              showWarning(
+                'Chưa hủy được thông báo đẩy trên máy chủ. Thiết bị có thể vẫn nhận tin của tài khoản này.',
+              );
+            }
+          }
+          await manager.logout();
+        },
         retryRestore: () => manager.reconnect(),
       }}
     >

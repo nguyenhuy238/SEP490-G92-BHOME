@@ -140,7 +140,6 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
         var plan = automation is null ? null : await automation.ForPeriodAsync(invoice.LocationId, invoice.BillingPeriod, t);
         if (plan?.Id != expected || !await automation!.AuthorizedAsync(plan, Actor, invoice.BillingPeriod, true, t)) throw new InvoiceException(409, "automation_authorization_changed");
         if (BillingAutomationService.CalendarKey(JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot)!) != BillingAutomationService.CalendarKey(BillingAutomationService.Calendar(plan))) throw new InvoiceException(409, "automation_calendar_conflict");
-        if (await repository.HasPendingAdjustmentsAsync(invoice.Id, t)) throw new InvoiceException(409, "invoice_adjustment_pending");
     }
     private static IEnumerable<InvoiceLineView> Charges(Invoice i) => View(i).Lines.Select(line => line with { Id = Guid.Empty });
     public async Task<InvoiceView> RefreshAsync(Guid id, int version, CancellationToken t, Guid? expectedAutomationPlanId = null)
@@ -183,6 +182,10 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
             await ScheduledAuthority(invoice, expectedAutomationPlanId, t);
             if (invoice.Version != version) throw new InvoiceException(409, "invoice_changed_or_final");
             if (Today < invoice.ScheduledFinalDate) throw new InvoiceException(409, "finalization_date_not_reached");
+            // Both Owner-initiated and delegated finalization must wait for an
+            // explicit Owner decision on every pending Tenant adjustment.
+            if (await repository.HasPendingAdjustmentsAsync(invoice.Id, t))
+                throw new InvoiceException(409, "invoice_adjustment_pending");
             var room = await repository.RoomAsync(invoice.RoomId, t) ?? throw new InvoiceException(404, "room_not_found");
             if (!room.Location.IsActive) throw new InvoiceException(409, "billing_location_inactive");
             var check = new Invoice

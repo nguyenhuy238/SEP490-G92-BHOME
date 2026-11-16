@@ -49,7 +49,9 @@ Inject riêng `Email__AppPassword` từ secret store vào **process Backend**, k
 PostgreSQL/MinIO. Docker Compose gốc hiện không chạy Backend; không có Rancher manifest được
 kiểm chứng trong tác vụ này. Người triển khai tự cấp secret vào workload Backend thực tế.
 EMAIL hoạt động khi Email.Enabled=true ngay cả Mode=Unconfigured; Mode vẫn phục vụ
-Sandbox/adapter cũ. PUSH production chưa có provider. Không dùng Sandbox để xác nhận gửi thật.
+Sandbox/adapter cũ. PUSH production đã có adapter Expo, chỉ bật bằng cấu hình
+`ExpoPush__Enabled=true` và access token riêng (xem [Expo Push](EXPO_PUSH.md)).
+Không dùng Sandbox để xác nhận gửi thật.
 Cấu hình cũ Mode=Smtp + SmtpHost/SmtpPort/SmtpUser/SmtpPassword/FromAddress còn được map
 khi Email.Enabled=false; cần bỏ cấu hình cũ nếu muốn tắt SMTP bằng Email.Enabled.
 

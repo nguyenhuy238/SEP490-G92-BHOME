@@ -54,6 +54,23 @@ internal sealed class NotificationRepository(BHomePersistenceContext db) : INoti
             _ => false
         };
         if (!allowed) return null;
+        if (s.Owner && n.EventType == "INVOICE_FINALIZATION_BLOCKED" && n.RelatedObjectType == "Adjustment")
+        {
+            // The published notice has one stable per-invoice key and points to the
+            // first request. A different request may remain pending after it is decided.
+            // Keep the established Owner Adjustment deep link, but resolve a currently
+            // pending request within that same invoice after the normal access check.
+            var invoiceId = await db.Set<InvoiceAdjustmentRequest>().AsNoTracking()
+                .Where(r => r.Id == n.RelatedObjectId).Select(r => (Guid?)r.InvoiceId)
+                .SingleOrDefaultAsync(t);
+            if (invoiceId is { } sourceInvoice)
+            {
+                var pendingId = await HeldInvoiceFinalNotifications.PendingForInvoice(
+                        db.Set<InvoiceAdjustmentRequest>().AsNoTracking(), sourceInvoice)
+                    .Select(r => (Guid?)r.Id).FirstOrDefaultAsync(t);
+                if (pendingId is { } current) return new("Adjustment", current, n.LocationId);
+            }
+        }
         var period = n.RelatedObjectType == "AutomationExecution" ? await db.Set<BillingAutomationExecution>().Where(e => e.Id == n.RelatedObjectId).Select(e => (DateOnly?)e.BillingPeriod).SingleAsync(t) : null;
         return new(n.RelatedObjectType, n.RelatedObjectId, n.LocationId, period);
     }

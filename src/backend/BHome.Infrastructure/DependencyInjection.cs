@@ -153,6 +153,12 @@ public static class DependencyInjection
             })
             .Validate(o => o.Valid(), "Email configuration invalid: check Email host, port, username, sender, STARTTLS, timeout and Email:AppPassword in secrets.").ValidateOnStart();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
+        services.AddOptions<BHome.Infrastructure.Modules.Notifications.ExpoPushOptions>()
+            .BindConfiguration("ExpoPush")
+            .Validate(o => o.Valid(), "ExpoPush requires Enabled, a secret AccessToken and a 1-45 second timeout.")
+            .ValidateOnStart();
+        services.AddHttpClient<BHome.Infrastructure.Modules.Notifications.ExpoPushSender>()
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
         services.AddScoped<BHome.Application.Notifications.IDevelopmentEmailTest, BHome.Infrastructure.Modules.Notifications.DevelopmentEmailTest>();
         services.AddScoped<BHome.Application.Notifications.INotificationChannelProvider, BHome.Infrastructure.Modules.Notifications.NotificationChannelProvider>();

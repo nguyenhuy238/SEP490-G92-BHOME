@@ -210,6 +210,8 @@ const messages: Record<string, string> = {
   invalid_billing_schedule: 'Chọn đầy đủ quy tắc, ngày 1–31 và tháng cộng thêm 0–2.',
   draft_date_not_reached: 'Chưa đến ngày lập nháp đã cấu hình.',
   finalization_date_not_reached: 'Chưa đến ngày phát hành đã cấu hình.',
+  invoice_adjustment_pending:
+    'Hóa đơn đang có yêu cầu điều chỉnh chờ Owner xác nhận. Hãy duyệt hoặc từ chối yêu cầu trước khi phát hành.',
   confirmed_billing_inputs_required:
     'Thiếu giá hoặc chỉ số đã xác nhận. Hãy bổ sung rồi cập nhật bản nháp.',
   draft_refresh_and_review_required:
