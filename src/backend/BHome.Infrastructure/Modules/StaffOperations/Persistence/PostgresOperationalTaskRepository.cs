@@ -14,6 +14,13 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
 {
     public async Task<T> TransactionAsync<T>(Guid locationId, Guid actorId, Guid commandKey, Func<Task<T>> operation, CancellationToken t)
     {
+        // An enclosing inspection workflow owns the Location lock and commits both records.
+        if (db.Database.CurrentTransaction is not null)
+        {
+            var nestedResult = await operation();
+            await db.SaveChangesAsync(t);
+            return nestedResult;
+        }
         await using var tx = await db.Database.BeginTransactionAsync(t);
         // Serialize retries across targets, then share Location lock ordering with configuration/assignments.
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"task-command:" + actorId + ":" + commandKey}, 0))", t);
@@ -133,7 +140,18 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         db.Set<OperationalTaskNotification>().SingleOrDefaultAsync(x => x.Id == id && x.RecipientUserId == recipient, t);
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
     public void Add(object entity) => db.Add(entity);
-    public void Track(OperationalTask task) => db.Attach(task);
+    public void Track(OperationalTask task)
+    {
+        // Consecutive inspection start/submit commands have flushed the previous root.
+        // Replace that unchanged instance with the row re-read under the enclosing lock.
+        var previous = db.ChangeTracker.Entries<OperationalTask>().SingleOrDefault(entry => entry.Entity.Id == task.Id);
+        if (previous is not null && !ReferenceEquals(previous.Entity, task))
+        {
+            if (previous.State != EntityState.Unchanged) throw OperationalTaskException.Conflict("task_changes_not_flushed");
+            previous.State = EntityState.Detached;
+        }
+        db.Attach(task);
+    }
     public void Audit(Guid actorId, string action, Guid taskId, DateTimeOffset now) => db.SecurityAudit.Add(new SecurityAuditRecord
     { UserId = actorId, Event = action, TargetType = "OperationalTask", TargetId = taskId, Succeeded = true, OccurredAt = now });
 }

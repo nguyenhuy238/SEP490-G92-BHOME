@@ -39,7 +39,7 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
             .Where(d => SharedDataValidator.Read<AssetTemplateWrite>(d.Data).ScopeRoomId is null).ToArray() : [],
         input.Groups.Contains("FeePolicies") ? await shared.PoliciesAsync(location, t) : [],
         input.Groups.Contains("OperatingPolicies") ? await local.ListAsync(location, "OperatingPolicy", t) : [],
-        input.Groups.Contains("AssetLifecyclePolicies") ? (await local.ListAsync(location, "AssetLifecyclePolicy", t)).Where(d => d.Status == "Published").ToArray() : []);
+        input.Groups.Contains("AssetLifecyclePolicies") ? (await local.ListAsync(location, "AssetLifecyclePolicy", t)).Where(d => location != input.SourceLocationId || d.Status == "Published").ToArray() : []);
     }
     private static string Name(SetupDocument document) => document.Data.TryGetProperty("name", out var name) ? name.GetString() ?? "" : document.Data.GetProperty("title").GetString() ?? "";
     private static string Label(string group) => group switch { "RoomDefaults" => "Gợi ý tạo phòng", "AssetTemplates" => "Gói tài sản", "OperatingPolicies" => "Nội quy", "AssetLifecyclePolicies" => "Chính sách vòng đời thiết bị", _ => "Biểu phí" };

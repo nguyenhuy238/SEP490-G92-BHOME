@@ -1,4 +1,5 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
+import { EquipmentInspectionPanel } from '../features/workspace/EquipmentInspectionPanel';
 import { showSuccess } from '../lib/toast';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-native';
@@ -281,6 +282,7 @@ function TaskDetail({ id }: { id: string }) {
         <>
           <Box>
             <Heading title={task.title} />
+            <EquipmentInspectionPanel taskId={task.id} onSaved={reload} />
             <OwnerPlaceLabel item={task} />
             <OwnerStaffName staffId={task.currentResponsibleStaffUserId} />
             <Pill>{taskStatusLabels[task.status]}</Pill>

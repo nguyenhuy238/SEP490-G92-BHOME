@@ -1,4 +1,9 @@
 import React, { useState } from 'react';
+import { useWorkspace } from '../features/workspace/WorkspaceProvider';
+import {
+  inspectionLabels,
+  type EquipmentInspection,
+} from '../../../../packages/client-core/src/equipmentInspections';
 import { Text } from 'react-native-paper';
 import { Action, Box, Heading } from '../components/WorkspaceKit';
 import { ChoiceField } from '../components/WorkflowControls';
@@ -15,21 +20,28 @@ import type { PhysicalAsset } from '../../../../packages/client-core/src/propert
 import { displayContractDate } from '../../../../packages/client-core/src/contracts';
 
 export function OwnerLocationRecordsScreen() {
+  const { go } = useWorkspace();
   const [location, setLocation] = useState('');
   const [page, setPage] = useState(1);
   const [assetId, setAssetId] = useState('');
+  const [assetPage, setAssetPage] = useState(1);
+  const [unitPage, setUnitPage] = useState(1);
+  const [inspectionPage, setInspectionPage] = useState(1);
   const locations = useWorkspaceQuery<Named[]>('/api/v1/capture/locations');
   const records = useWorkspaceQuery<RecordPage<LegalRecord>>(
     location ? `/api/v1/locations/${location}/legal-records?page=${page}` : null,
   );
   const assets = useWorkspaceQuery<{ items: PhysicalAsset[]; totalCount: number }>(
-    location ? `/api/v1/assets?locationId=${location}&pageSize=100` : null,
+    location ? `/api/v1/assets?locationId=${location}&pageSize=20&page=${assetPage}` : null,
   );
   const units = useWorkspaceQuery<RecordPage<EquipmentUnit>>(
-    assetId ? `/api/v1/assets/${assetId}/equipment-units` : null,
+    assetId ? `/api/v1/assets/${assetId}/equipment-units?page=${unitPage}` : null,
   );
   const summary = useWorkspaceQuery<LifecycleSummary>(
     assetId ? `/api/v1/assets/${assetId}/lifecycle-summary` : null,
+  );
+  const inspections = useWorkspaceQuery<RecordPage<EquipmentInspection>>(
+    assetId ? `/api/v1/assets/${assetId}/inspections?page=${inspectionPage}` : null,
   );
   return (
     <>
@@ -43,6 +55,9 @@ export function OwnerLocationRecordsScreen() {
           setLocation(value);
           setPage(1);
           setAssetId('');
+          setAssetPage(1);
+          setUnitPage(1);
+          setInspectionPage(1);
         }}
       />
       <QueryState {...records} />
@@ -81,8 +96,23 @@ export function OwnerLocationRecordsScreen() {
             ].includes(item.category),
           )
           .map((item) => ({ id: item.id, label: item.name }))}
-        onChange={setAssetId}
+        onChange={(value) => {
+          setAssetId(value);
+          setUnitPage(1);
+          setInspectionPage(1);
+        }}
       />
+      {assets.data && assets.data.totalCount > 20 && (
+        <Pagination
+          page={assetPage}
+          total={assets.data.totalCount}
+          loading={assets.loading}
+          onChange={(value) => {
+            setAssetPage(value);
+            setAssetId('');
+          }}
+        />
+      )}
       <QueryState {...summary} />
       <QueryState {...units} />
       {summary.data && (
@@ -104,6 +134,34 @@ export function OwnerLocationRecordsScreen() {
           <Text>Serial {item.data.details.serialNumber || 'Chưa xác định'}</Text>
         </Box>
       ))}
+      {units.data && units.data.totalCount > 20 && (
+        <Pagination
+          page={unitPage}
+          total={units.data.totalCount}
+          loading={units.loading}
+          onChange={setUnitPage}
+        />
+      )}
+      <QueryState {...inspections} />
+      {inspections.data?.items.map((item) => (
+        <Box key={item.id}>
+          <Heading
+            title={`Kiểm tra ${displayContractDate(item.data.period)}`}
+            detail={`${inspectionLabels[item.status]} · ${inspectionLabels[item.data.outcome]}`}
+          />
+          <Action secondary onPress={() => go('task-detail', { taskId: item.data.taskId })}>
+            Xem và xác minh kiểm tra
+          </Action>
+        </Box>
+      ))}
+      {inspections.data && inspections.data.totalCount > 20 && (
+        <Pagination
+          page={inspectionPage}
+          total={inspections.data.totalCount}
+          loading={inspections.loading}
+          onChange={setInspectionPage}
+        />
+      )}
       {assetId && (
         <Action
           secondary

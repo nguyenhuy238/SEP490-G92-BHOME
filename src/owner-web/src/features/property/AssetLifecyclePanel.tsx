@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { EquipmentInspectionsPanel } from './EquipmentInspectionsPanel';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
@@ -189,6 +190,7 @@ export function AssetLifecyclePanel({ asset }: { asset: PhysicalAsset }) {
           }}
         />
       )}
+      <EquipmentInspectionsPanel asset={asset} />
     </Stack>
   );
 }

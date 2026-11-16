@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { EquipmentInspectionPanel } from '../features/workspace/EquipmentInspectionPanel';
 import {
   AppState,
   Image,
@@ -129,6 +130,11 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
     <>
       {!inShell && <Text variant="titleLarge">Chi tiết công việc</Text>}
       {!!detail.rawError && <ReadFailure error={detail.rawError} retry={refresh} />}
+      <EquipmentInspectionPanel
+        taskId={id}
+        evidence={model.evidence.data ?? []}
+        onSaved={refresh}
+      />
       <View style={styles.section}>
         <Text variant="titleLarge" numberOfLines={3} style={styles.title}>
           {task.title || 'Công việc vận hành'}
