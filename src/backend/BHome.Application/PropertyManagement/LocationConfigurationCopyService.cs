@@ -14,7 +14,7 @@ public sealed record ConfigurationCopyPlan(Guid SourceLocationId, Guid TargetLoc
 public sealed class LocationConfigurationCopyService(ISharedConfigurationStore shared, ISetupWorkspaceStore local,
     PropertyService properties, AssetInventoryService assets, OperatingPolicyService policies, ICurrentUser user, TimeProvider clock)
 {
-    private static readonly string[] Supported = ["RoomDefaults", "AssetTemplates", "FeePolicies", "OperatingPolicies"];
+    private static readonly string[] Supported = ["RoomDefaults", "AssetTemplates", "FeePolicies", "OperatingPolicies", "AssetLifecyclePolicies"];
     private Guid Owner()
     {
         var actor = user.UserId ?? throw new PropertyException(401, "authentication_required");
@@ -24,11 +24,11 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
     {
         _ = Owner();
         if (input.SourceLocationId == Guid.Empty || input.TargetLocationId == Guid.Empty || input.SourceLocationId == input.TargetLocationId ||
-            input.ConflictStrategy != "Reject" || input.Groups is null || input.Groups.Length is < 1 or > 4 || input.Groups.Distinct().Count() != input.Groups.Length || input.Groups.Any(g => !Supported.Contains(g)))
+            input.ConflictStrategy != "Reject" || input.Groups is null || input.Groups.Length is < 1 or > 5 || input.Groups.Distinct().Count() != input.Groups.Length || input.Groups.Any(g => !Supported.Contains(g)))
             throw new PropertyException(400, "invalid_configuration_copy");
         if (input.Groups.Contains("FeePolicies") && (input.EffectiveFrom is null || input.EffectiveFrom < BHome.Application.Billing.BillingAutomationDates.BusinessDate(clock.GetUtcNow()))) throw new PropertyException(400, "copy_fee_effective_date_required");
     }
-    private sealed record ConfigurationState(LocationDto Location, IReadOnlyList<SetupDocument> Defaults, IReadOnlyList<SetupDocument> Assets, IReadOnlyList<PolicyDto> Fees, IReadOnlyList<SetupDocument> Policies);
+    private sealed record ConfigurationState(LocationDto Location, IReadOnlyList<SetupDocument> Defaults, IReadOnlyList<SetupDocument> Assets, IReadOnlyList<PolicyDto> Fees, IReadOnlyList<SetupDocument> Policies, IReadOnlyList<SetupDocument> LifecyclePolicies);
     private async Task<ConfigurationState> State(Guid location, ConfigurationCopy input, CancellationToken t)
     {
         var target = await properties.GetLocationAsync(location, t);
@@ -38,10 +38,11 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
         input.Groups.Contains("AssetTemplates") ? (await local.ListAsync(location, "AssetTemplate", t))
             .Where(d => SharedDataValidator.Read<AssetTemplateWrite>(d.Data).ScopeRoomId is null).ToArray() : [],
         input.Groups.Contains("FeePolicies") ? await shared.PoliciesAsync(location, t) : [],
-        input.Groups.Contains("OperatingPolicies") ? await local.ListAsync(location, "OperatingPolicy", t) : []);
+        input.Groups.Contains("OperatingPolicies") ? await local.ListAsync(location, "OperatingPolicy", t) : [],
+        input.Groups.Contains("AssetLifecyclePolicies") ? (await local.ListAsync(location, "AssetLifecyclePolicy", t)).Where(d => d.Status == "Published").ToArray() : []);
     }
     private static string Name(SetupDocument document) => document.Data.TryGetProperty("name", out var name) ? name.GetString() ?? "" : document.Data.GetProperty("title").GetString() ?? "";
-    private static string Label(string group) => group switch { "RoomDefaults" => "Gợi ý tạo phòng", "AssetTemplates" => "Gói tài sản", "OperatingPolicies" => "Nội quy", _ => "Biểu phí" };
+    private static string Label(string group) => group switch { "RoomDefaults" => "Gợi ý tạo phòng", "AssetTemplates" => "Gói tài sản", "OperatingPolicies" => "Nội quy", "AssetLifecyclePolicies" => "Chính sách vòng đời thiết bị", _ => "Biểu phí" };
     private static IReadOnlyList<PolicyDto> EffectiveFees(ConfigurationState state, ConfigurationCopy input) => state.Fees.Where(p => p.EffectiveFrom <= input.EffectiveFrom && (p.EffectiveTo is null || p.EffectiveTo >= input.EffectiveFrom)).ToArray();
     private static ConfigurationCopyPlan Plan(ConfigurationCopy input, ConfigurationState source, ConfigurationState target)
     {
@@ -58,6 +59,7 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
             }
         }
         Documents("RoomDefaults", source.Defaults, target.Defaults); Documents("AssetTemplates", source.Assets, target.Assets); Documents("OperatingPolicies", source.Policies, target.Policies);
+        Documents("AssetLifecyclePolicies", source.LifecyclePolicies, target.LifecyclePolicies);
         if (input.Groups.Contains("FeePolicies"))
         {
             var selected = EffectiveFees(source, input);
@@ -104,7 +106,15 @@ public sealed class LocationConfigurationCopyService(ISharedConfigurationStore s
                 var data = policy.Data.Deserialize<OperatingPolicyWrite>(SharedDataValidator.Json) ?? throw new PropertyException(409, "invalid_source_configuration");
                 created.Add((await policies.SaveAsync(null, new(input.TargetLocationId, data.Title, data.Content, data.EffectiveFrom), t)).Id);
             }
-            var references = source.Defaults.Concat(source.Assets).Concat(source.Policies).Select(d => new ConfigurationSourceReference(d.Id, d.Version, d.Kind))
+            foreach (var policy in source.LifecyclePolicies)
+            {
+                var data = SharedDataValidator.Read<AssetLifecyclePolicyWrite>(policy.Data);
+                var id = Guid.NewGuid();
+                await local.SaveAsync(id, input.TargetLocationId, "AssetLifecyclePolicy", "Draft", data with { ExpectedVersion = 0, ReplacesId = null }, 0, actor, t);
+                await local.AuditAsync(input.TargetLocationId, id, actor, "AssetLifecyclePolicyCopied", t);
+                created.Add(id);
+            }
+            var references = source.Defaults.Concat(source.Assets).Concat(source.Policies).Concat(source.LifecyclePolicies).Select(d => new ConfigurationSourceReference(d.Id, d.Version, d.Kind))
                 .Concat(EffectiveFees(source, input).Select(p => new ConfigurationSourceReference(p.Id, p.Version, "BillingPolicy"))).ToArray();
             var operation = new SharedOperation(Guid.NewGuid(), "Copy", key, fingerprint, actor, clock.GetUtcNow(), input.SourceLocationId, input.SourceLocationId, Guid.Empty, 0, 0, string.Join(",", input.Groups), input.TargetLocationId, "Completed", created.ToArray(), references, plan.SourceState, plan.TargetState);
             await shared.SaveOperationAsync(operation, t); return operation;

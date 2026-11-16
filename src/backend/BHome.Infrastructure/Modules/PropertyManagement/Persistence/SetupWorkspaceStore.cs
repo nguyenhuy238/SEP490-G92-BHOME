@@ -13,6 +13,30 @@ namespace BHome.Infrastructure.Modules.PropertyManagement.Persistence;
 internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotificationWriter sql, IObjectStorage storage) : ISetupWorkspaceStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    public async Task<SetupPage> PageAsync(Guid locationId, string kind, Guid? assetId, int page, int pageSize, CancellationToken t)
+    {
+        if (page is < 1 or > 1000000 || pageSize is < 1 or > 100) throw new PropertyException(400, "invalid_pagination");
+        const string filter = "location_id=@location AND task_type='SYSTEM_JOB' AND task_data->>'recordType'=@kind AND (@asset IS NULL OR task_data->'document'->'data'->>'assetId'=@assetText)";
+        var total = await sql.Scalar<long>("SELECT count(*) FROM operational_tasks WHERE " + filter, t,
+            ("location", locationId), ("kind", "Setup" + kind), ("asset", assetId), ("assetText", assetId?.ToString() ?? ""));
+        await using var command = await sql.Command("SELECT task_data->'document' FROM operational_tasks WHERE " + filter + " ORDER BY id OFFSET @skip LIMIT @take", t,
+            ("location", locationId), ("kind", "Setup" + kind), ("asset", assetId), ("assetText", assetId?.ToString() ?? ""),
+            ("skip", checked((page - 1) * pageSize)), ("take", pageSize));
+        await using var reader = await command.ExecuteReaderAsync(t);
+        var items = new List<SetupDocument>();
+        while (await reader.ReadAsync(t)) items.Add(JsonSerializer.Deserialize<SetupDocument>(reader.GetString(0), Json)!);
+        return new(items, page, pageSize, checked((int)total));
+    }
+
+    public async Task AuditAsync(Guid locationId, Guid targetId, Guid actor, string action, CancellationToken t)
+    {
+        await sql.Execute("""
+            INSERT INTO notifications(id,record_kind,actor_user_id,location_id,event_key,notification_type,
+                related_entity_type,related_entity_id,event_data,event_at,delivery_history)
+            VALUES(@id,'AUDIT',@actor,@location,@key,@action,'SetupDocument',@target,'{"succeeded":true}'::jsonb,@now,'[]')
+            """, t, ("id", Guid.NewGuid()), ("actor", actor), ("location", locationId), ("key", "setup-audit:" + Guid.NewGuid()),
+            ("action", action), ("target", targetId), ("now", sql.Now));
+    }
     public async Task<T> TransactionAsync<T>(Guid locationId, Func<Task<T>> work, CancellationToken t)
     {
         if (db.Database.CurrentTransaction is not null) return await work();
@@ -281,6 +305,13 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     public async Task<IReadOnlyList<Asset>> AssetsAsync(Guid roomId, CancellationToken t) => await db.Set<Asset>().AsNoTracking().Where(a => a.RoomId == roomId).OrderBy(a => a.Id).Take(1000).ToArrayAsync(t);
     public async Task SaveAssetMetadataAsync(Guid assetId, AssetMetadata metadata, CancellationToken t)
     {
+        var unitCount = await sql.Scalar<long>("""
+            SELECT count(*) FROM operational_tasks WHERE task_type='SYSTEM_JOB'
+                AND task_data->>'recordType'='SetupAssetEquipmentUnit'
+                AND task_data->'document'->'data'->>'assetId'=@asset
+                AND status<>'Retired'
+            """, t, ("asset", assetId.ToString()));
+        if (metadata.Quantity < unitCount) throw new PropertyException(409, "equipment_quantity_exceeded");
         var merged = await sql.Scalar<string>("UPDATE assets SET purchase_info=purchase_info||@data::jsonb WHERE id=@id RETURNING purchase_info::text", t,
             ("id", assetId), ("data", JsonSerializer.Serialize(metadata, Json)));
         if (merged is null) throw new PropertyException(404, "resource_not_found");

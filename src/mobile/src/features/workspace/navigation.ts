@@ -33,6 +33,7 @@ export const screenRoles = {
   'owner-announcements': ['Owner'],
   'owner-finance': ['Owner'],
   'owner-residence': ['Owner'],
+  'owner-location-records': ['Owner'],
   operations: ['Owner'],
   'staff-home': ['Staff'],
   'work-orders': ['Staff'],

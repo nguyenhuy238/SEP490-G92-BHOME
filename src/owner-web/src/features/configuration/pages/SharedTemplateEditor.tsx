@@ -1,4 +1,5 @@
 import { Fragment, useId, useState } from 'react';
+import { lifecycleCategories } from '../../../../../../packages/client-core/src/assetLifecycle';
 import {
   Alert,
   Box,
@@ -154,6 +155,19 @@ export function SharedTemplateEditor({
         ]
       : resource === 'asset-catalog'
         ? [
+            {
+              name: 'category',
+              label: 'Nhóm tài sản',
+              options: [
+                ...new Set([
+                  ...lifecycleCategories.map((item) => item.value),
+                  ...(values.category ? [values.category] : []),
+                ]),
+              ].map((value) => ({
+                id: value,
+                label: lifecycleCategories.find((item) => item.value === value)?.label ?? value,
+              })),
+            },
             {
               name: 'scope',
               label: 'Phạm vi tài sản',

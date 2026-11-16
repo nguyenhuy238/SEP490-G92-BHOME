@@ -207,6 +207,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PropertyManagement.LocationConfigurationCopyService>();
         services.AddScoped<BHome.Application.PropertyManagement.LocationSetupService>();
         services.AddScoped<BHome.Application.PropertyManagement.AssetInventoryService>();
+        services.AddScoped<BHome.Application.PropertyManagement.LocationLegalRecordService>();
+        services.AddScoped<BHome.Application.PropertyManagement.AssetLifecycleService>();
         services.AddScoped<BHome.Application.PropertyManagement.RoomInventoryReviewService>();
         services.AddScoped<BHome.Application.Contracts.IHandoverInventory>(p => p.GetRequiredService<BHome.Application.PropertyManagement.RoomInventoryReviewService>());
         services.AddScoped<BHome.Application.PropertyManagement.AssetCountObservationService>();
