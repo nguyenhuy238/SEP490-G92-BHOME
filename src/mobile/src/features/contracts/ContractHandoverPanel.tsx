@@ -20,6 +20,13 @@ import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
 import { CameraCapture } from '../../components/CameraCapture';
 import { ContractEvidence } from './ContractEvidence';
+import { HandoverAssetFields } from './HandoverAssetFields';
+import {
+  assetInspectionInput,
+  handoverAssetSummary,
+  quantityFields,
+} from '../../../../../packages/client-core/src/handoverForm';
+import { ContractAssetChangesPanel } from './ContractAssetChangesPanel';
 
 export function ContractHandoverPanel({
   api,
@@ -34,6 +41,7 @@ export function ContractHandoverPanel({
   const query = useContractHandover(api, contract.id, staff),
     h = query.data?.record,
     choices = query.data?.choices;
+  const sourceId = h?.sourceContractId ?? contract.id;
   const [editing, setEditing] = useState(false),
     [values, setValues] = useState<Record<string, string>>({}),
     [selected, setSelected] = useState<string[]>([]);
@@ -81,7 +89,7 @@ export function ContractHandoverPanel({
   function edit() {
     const s = h?.snapshot;
     setValues({
-      date: s?.date ?? businessToday(),
+      date: displayContractDate(s?.date ?? businessToday()),
       roomCondition: s?.roomCondition ?? '',
       keysAndAccess: s?.keysAndAccess ?? '',
       notes: s?.notes ?? '',
@@ -91,6 +99,21 @@ export function ContractHandoverPanel({
         (choices?.assets ?? []).map((a) => [
           'asset-' + a.id,
           s?.assets.find((old) => old.id === a.id)?.observedCondition ?? '',
+        ]),
+      ),
+      ...Object.fromEntries(
+        (s?.assets ?? []).flatMap((a) => [
+          ...quantityFields.map(([key]) => [
+            `${a.id}.${key}`,
+            a[key] == null ? '' : String(a[key]),
+          ]),
+          [`${a.id}.checked`, 'false'],
+          [`${a.id}.notes`, a.notes ?? ''],
+          ...(a.evidenceIds ?? []).map((id) => [`${a.id}.evidence.${id}`, 'true']),
+          ...(a.physicalObservations ?? []).flatMap((p) => [
+            [`${p.id}.physicalQuantity`, String(p.quantity)],
+            [`${p.id}.physicalCondition`, p.condition],
+          ]),
         ]),
       ),
     });
@@ -127,20 +150,28 @@ export function ContractHandoverPanel({
           <Text>Chìa khóa / quyền truy cập: {h.snapshot.keysAndAccess}</Text>
           <Text>{h.snapshot.notes}</Text>
           {h.snapshot.assets.map((a) => (
-            <Text key={a.id}>
-              {a.name}: {a.observedCondition} (kiểm kê: {a.inventoryCondition})
-            </Text>
+            <Text key={a.id}>{handoverAssetSummary(a)}</Text>
           ))}
+          {h.snapshot.noAssetsConfirmed && (
+            <Text>Owner đã xác nhận phòng không có tài sản bàn giao.</Text>
+          )}
+          {h.snapshot.ownerAcceptance && (
+            <Text>
+              Owner đã chấp nhận ngoại lệ: {h.snapshot.ownerAcceptance.reason}. Phương án:{' '}
+              {h.snapshot.ownerAcceptance.handlingPlan}
+            </Text>
+          )}
+          {h.status !== 'Confirmed' && (
+            <Text>
+              Bàn giao còn chờ hoàn tất. Hợp đồng Active và quyền ở phòng vẫn giữ hiệu lực.
+            </Text>
+          )}
           <Text>
             Điện: {h.snapshot.electricity.value} · Nước: {h.snapshot.water.value} · chỉ số đã xác
             nhận ngày {displayContractDate(h.snapshot.date)}
           </Text>
-          <ContractEvidence
-            api={api}
-            contractId={contract.id}
-            readingId={h.snapshot.electricity.id}
-          />
-          <ContractEvidence api={api} contractId={contract.id} readingId={h.snapshot.water.id} />
+          <ContractEvidence api={api} contractId={sourceId} readingId={h.snapshot.electricity.id} />
+          <ContractEvidence api={api} contractId={sourceId} readingId={h.snapshot.water.id} />
           <Text>
             Tenant:{' '}
             {h.tenantConfirmedAt
@@ -154,12 +185,24 @@ export function ContractHandoverPanel({
             <ContractEvidence
               key={id}
               api={api}
-              contractId={contract.id}
+              contractId={sourceId}
               evidenceId={id}
               handover
               number={i + 1}
             />
           ))}
+          {h.snapshot.assets.flatMap((a) =>
+            (a.evidenceIds ?? []).map((fileId, index) => (
+              <ContractEvidence
+                key={`${a.id}-${fileId}`}
+                api={api}
+                contractId={sourceId}
+                evidenceId={fileId}
+                handover
+                label={`${a.name} · Ảnh ${index + 1}`}
+              />
+            )),
+          )}
         </>
       )}
       {staff && h?.status !== 'Confirmed' && !editing && (
@@ -184,14 +227,28 @@ export function ContractHandoverPanel({
               multiline={name !== 'date'}
             />
           ))}
+          {choices?.inventoryState && (
+            <Text>
+              Trạng thái kiểm kê: {text(choices.inventoryState)} · {choices.assets.length} nhóm cần
+              kiểm tra
+            </Text>
+          )}
+          {choices?.assets.length === 0 && (
+            <Text>
+              {choices.noAssetsConfirmed
+                ? 'Owner đã xác nhận không có tài sản.'
+                : 'Owner cần xác nhận phòng không có tài sản trong màn hình kiểm kê.'}
+            </Text>
+          )}
           {choices?.assets.map((a) => (
-            <Input
+            <HandoverAssetFields
               key={a.id}
-              label={`${a.name} · Kiểm kê: ${a.inventoryCondition}`}
-              value={values['asset-' + a.id] ?? ''}
-              onChange={(v) => set('asset-' + a.id, v)}
+              asset={a}
+              values={values}
+              set={set}
+              evidenceIds={(choices.evidence ?? []).map((f) => f.id)}
               disabled={busy}
-              multiline
+              quantities={!!choices.inventoryToken}
             />
           ))}
           <Text>
@@ -216,8 +273,8 @@ export function ContractHandoverPanel({
             Mở tác vụ điện / nước
           </Action>
           <Text>
-            Ảnh phòng / tài sản; tối đa 5 ảnh được chọn, mỗi ảnh tối đa 5 MB. Không chụp giấy tờ cá
-            nhân.
+            Ảnh toàn cảnh phòng; tối đa 10 ảnh được chọn, mỗi ảnh tối đa 5 MB. Ảnh riêng của nhóm
+            chọn ở trên. Không chụp giấy tờ cá nhân.
           </Text>
           <Checkbox.Item
             label="Tôi đã kiểm tra ảnh không có giấy tờ cá nhân"
@@ -235,7 +292,7 @@ export function ContractHandoverPanel({
               run(async () => {
                 if (bytes.byteLength > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
                 const file = await api.uploadHandover(contract.id, bytes, 'image/jpeg');
-                setSelected((ids) => (ids.length < 5 ? [...ids, file.id] : ids));
+                setSelected((ids) => (ids.length < 10 ? [...ids, file.id] : ids));
                 setSafePhoto(false);
               })
             }
@@ -250,7 +307,7 @@ export function ContractHandoverPanel({
                 setSelected((ids) =>
                   ids.includes(f.id)
                     ? ids.filter((v) => v !== f.id)
-                    : ids.length < 5
+                    : ids.length < 10
                       ? [...ids, f.id]
                       : ids,
                 )
@@ -267,10 +324,15 @@ export function ContractHandoverPanel({
                   roomCondition: values.roomCondition ?? '',
                   keysAndAccess: values.keysAndAccess ?? '',
                   notes: values.notes ?? '',
-                  assets: (choices?.assets ?? []).map((a) => ({
-                    id: a.id,
-                    condition: values['asset-' + a.id] ?? '',
-                  })),
+                  assets: (choices?.assets ?? []).map((a) =>
+                    assetInspectionInput(
+                      a,
+                      values,
+                      (choices?.evidence ?? []).map((f) => f.id),
+                      !!choices?.inventoryToken,
+                    ),
+                  ),
+                  inventoryToken: choices?.inventoryToken,
                   electricityReadingId: values.electricityReadingId,
                   waterReadingId: values.waterReadingId,
                   evidenceIds: selected,
@@ -345,6 +407,18 @@ export function ContractHandoverPanel({
           {formatInstant(event.occurredAt)} · v{event.version} · {text(event.action)} {event.note}
         </Text>
       ))}
+      {query.data?.documents.map((document) => (
+        <ContractEvidence
+          key={document.id}
+          api={api}
+          contractId={document.contractId}
+          handoverDocumentId={document.id}
+          label={`${text(document.kind)} · PDF v${document.templateVersion}`}
+        />
+      ))}
+      {h?.status === 'Confirmed' && (
+        <ContractAssetChangesPanel api={api} contract={contract} role={role} />
+      )}
       {!!error && <Text style={ui.red}>{error}</Text>}
       {!!notice && <Text style={ui.green}>{notice}</Text>}
       <Action secondary disabled={query.loading || busy} onPress={query.reload}>

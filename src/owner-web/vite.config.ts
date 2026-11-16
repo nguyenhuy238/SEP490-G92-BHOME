@@ -26,8 +26,12 @@ export default defineConfig(({ mode }) => {
     );
   // Trust the workstation CA and standalone localhost certificate when present.
   const certificateDirectory = new URL('../../.tools/mobile-tls/', import.meta.url);
-  const certificates = ['localhost.cer', 'root-ca.cer']
-    .map((name) => fileURLToPath(new URL(name, certificateDirectory)))
+  const certificates = [
+    ...['localhost.cer', 'root-ca.cer'].map((name) =>
+      fileURLToPath(new URL(name, certificateDirectory)),
+    ),
+    ...(process.env.VITE_DEV_CA_FILE ? [process.env.VITE_DEV_CA_FILE] : []),
+  ]
     .filter(existsSync)
     .map((path) => new X509Certificate(readFileSync(path)).toString());
   const agent =

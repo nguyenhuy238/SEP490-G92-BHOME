@@ -96,7 +96,9 @@ it.each([true, false])(
       },
     );
     const original = mocks.request.getMockImplementation()!;
-    const blob = new Blob(['synthetic evidence'], { type: 'image/png' });
+    const blob = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], {
+      type: 'image/png',
+    });
     mocks.request.mockImplementation(async (path: string, init?: RequestInit, type?: string) => {
       if (path === '/api/v1/work-orders/work')
         return {
@@ -117,14 +119,18 @@ it.each([true, false])(
       return original(path, init);
     });
     const view = mount(<WorkOrderDetail id="work" />);
+    expect(
+      mocks.request.mock.calls.some(([path]) => path === '/api/v1/work-orders/work/evidence/proof'),
+    ).toBe(false);
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem ảnh kết quả sửa chữa' }));
     if (allowed) {
-      expect(await screen.findByRole('img', { name: 'Ảnh kết quả sửa chữa' })).toHaveAttribute(
+      expect(await screen.findByRole('img', { name: 'ảnh kết quả sửa chữa' })).toHaveAttribute(
         'src',
         'blob:synthetic-work-evidence',
       );
       expect(createUrl).toHaveBeenCalledWith(blob);
     } else {
-      expect(await screen.findByText('Không tải được ảnh xem trước.')).toBeVisible();
+      expect(await screen.findByRole('alert')).toHaveTextContent('Không tải được chứng từ.');
       expect(screen.queryByRole('img')).toBeNull();
       expect(createUrl).not.toHaveBeenCalled();
     }

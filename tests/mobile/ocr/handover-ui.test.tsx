@@ -76,7 +76,143 @@ vi.mock('../../../src/mobile/src/features/contracts/ContractEvidence', () => ({
   ContractEvidence: () => null,
 }));
 import { ContractHandoverPanel } from '../../../src/mobile/src/features/contracts/ContractHandoverPanel';
+import { ContractAssetChangesPanel } from '../../../src/mobile/src/features/contracts/ContractAssetChangesPanel';
 afterEach(cleanup);
+
+it('a renewal displays the original party acknowledgement and confirms a pending change under the current contract', async () => {
+  const api = contractClient(vi.fn());
+  const original = '00000000-0000-0000-0000-000000000002';
+  const eventId = '00000000-0000-0000-0000-000000000003';
+  let accepted = false;
+  api.assetChanges = vi.fn().mockImplementation(async () => [
+    {
+      id: eventId,
+      version: 1,
+      status: accepted ? 'Confirmed' : 'AwaitingTenant',
+      acknowledgementContractId: original,
+      data: {
+        roomId: 'synthetic',
+        sourceId: 'synthetic',
+        kind: 'Supplement',
+        date: '2026-11-16',
+        reason: 'Bổ sung từ kỳ thuê trước',
+        staffId: 'synthetic',
+        lines: [],
+        assets: [],
+        parties: [{ contractId: original, tenantId: 'synthetic' }],
+        acknowledgements: accepted
+          ? [
+              {
+                contractId: original,
+                tenantId: 'synthetic',
+                at: '2026-11-16T00:00:00Z',
+                accepted: true,
+                reason: 'Đã nhận',
+                actingContractId: id,
+              },
+            ]
+          : [],
+      },
+    },
+  ]);
+  api.mutate = vi.fn().mockImplementation(async () => {
+    accepted = true;
+  });
+  render(
+    <ContractAssetChangesPanel
+      api={api}
+      contract={{ ...contract, kind: 'Renewal' }}
+      role="Tenant"
+    />,
+  );
+  await screen.findByText('Bổ sung từ kỳ thuê trước');
+  fireEvent.click(screen.getByLabelText('Tôi đã kiểm tra thay đổi tài sản thực tế'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thay đổi tài sản' }));
+  await waitFor(() =>
+    expect(api.mutate).toHaveBeenCalledWith(
+      id,
+      `asset-changes/${eventId}/confirmation`,
+      { version: 1, confirmed: true, reason: '' },
+      expect.any(String),
+    ),
+  );
+  await screen.findByText('Bạn đã xác nhận · Đã nhận');
+  expect(screen.queryByRole('button', { name: 'Xác nhận thay đổi tài sản' })).toBeNull();
+});
+
+it('Staff submits quantities, group evidence and inventory token from actual form interactions', async () => {
+  const api = contractClient(vi.fn());
+  const current = record(1);
+  const asset = {
+    id: 'chair-group',
+    name: 'Ghế',
+    inventoryCondition: 'Tốt',
+    observedCondition: '',
+    configuredQuantity: 4,
+    unit: 'cái',
+    physicalAssets: [
+      { id: 'chair-asset', version: 2, quantity: 4, condition: 'Tốt', status: 'Active' },
+    ],
+  };
+  current.snapshot.assets = [asset];
+  current.snapshot.evidenceIds = ['overall'];
+  api.handover = vi.fn().mockResolvedValue(current);
+  api.handoverHistory = vi.fn().mockResolvedValue([]);
+  api.handoverDocuments = vi.fn().mockResolvedValue([]);
+  api.handoverChoices = vi.fn().mockResolvedValue({
+    assets: [asset],
+    inventoryToken: 'current-inventory',
+    inventoryState: 'PartiallyChecked',
+    readings: [],
+    evidence: [
+      { id: 'overall', recordedAt: '2026-11-06T00:00:00Z' },
+      { id: 'group-photo', recordedAt: '2026-11-06T00:00:00Z' },
+    ],
+  });
+  api.mutate = vi.fn().mockResolvedValue({});
+  render(<ContractHandoverPanel api={api} contract={contract} role="Staff" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Sửa biên bản bàn giao' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra Ghế' }));
+  fireEvent.change(screen.getByLabelText('Ghế · Tình trạng thực tế'), {
+    target: { value: 'Hai tốt, một hao mòn' },
+  });
+  for (const [label, value] of [
+    ['Số lượng thực tế', '3'],
+    ['Số lượng bàn giao', '3'],
+    ['Tình trạng tốt', '2'],
+    ['Hao mòn', '1'],
+    ['Hư hỏng', '0'],
+  ])
+    fireEvent.change(screen.getByLabelText(`Ghế · ${label}`), { target: { value } });
+  fireEvent.change(screen.getByLabelText('Ghế · Ghi chú / lý do không bàn giao'), {
+    target: { value: 'Thiếu một ghế' },
+  });
+  fireEvent.click(screen.getByLabelText('Ghế · Ảnh 2'));
+  fireEvent.click(screen.getByLabelText('Đã kiểm tra Ghế'));
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu biên bản nhận phòng' }));
+  await waitFor(() => expect(api.mutate).toHaveBeenCalledOnce());
+  expect(api.mutate).toHaveBeenCalledWith(
+    id,
+    'handover',
+    expect.objectContaining({
+      inventoryToken: 'current-inventory',
+      assets: [
+        expect.objectContaining({
+          id: 'chair-group',
+          observedQuantity: 3,
+          handedOverQuantity: 3,
+          goodQuantity: 2,
+          wornQuantity: 1,
+          damagedQuantity: 0,
+          missingQuantity: 1,
+          checked: true,
+          evidenceIds: ['group-photo'],
+        }),
+      ],
+    }),
+    expect.any(String),
+  );
+});
 const id = '00000000-0000-0000-0000-000000000001';
 const contract = { id, status: 'Active', kind: 'Main' } as ContractView;
 const record = (version: number): HandoverView =>
