@@ -771,7 +771,7 @@ it('retains unconfirmed identity edits across steps and keeps each person separa
     displayLabel: 'Người mẫu B',
   });
 });
-it('keeps OCR suggestions unconfirmed and clears temporary identity data when backgrounded', async () => {
+it('keeps OCR suggestions and Staff edits in memory without confirming them when backgrounded', async () => {
   state.image.mockResolvedValue({
     proposedFields: {
       citizenIdentityNumber: '000000000001',
@@ -799,15 +799,19 @@ it('keeps OCR suggestions unconfirmed and clears temporary identity data when ba
   expect(
     (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Họ và tên' }), {
+    target: { value: 'TÊN ĐÃ SỬA' },
+  });
   act(() => {
     state.listeners.forEach((listener) => listener('background'));
   });
   expect(screen.queryByRole('dialog')).toBeNull();
   await openIdentity();
-  fireEvent.click(
-    within(screen.getByRole('dialog')).getByRole('button', { name: 'Nhập thủ công' }),
+  expect((screen.getByRole('textbox', { name: 'Họ và tên' }) as HTMLInputElement).value).toBe(
+    'TÊN ĐÃ SỬA',
   );
-  expect((screen.getByRole('textbox', { name: 'Họ và tên' }) as HTMLInputElement).value).toBe('');
+  expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false');
+  expect(state.json).toHaveBeenCalledTimes(1);
 });
 it('scans both existing endpoints and uses the back-side issue date in confirmation', async () => {
   state.image.mockResolvedValue({
