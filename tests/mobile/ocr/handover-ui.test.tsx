@@ -187,7 +187,14 @@ it('Staff submits quantities, group evidence and inventory token from actual for
   fireEvent.change(screen.getByLabelText('Ghế · Ghi chú / lý do không bàn giao'), {
     target: { value: 'Thiếu một ghế' },
   });
+  fireEvent.click(screen.getByLabelText('Ghế · Ảnh 1'));
+  const overallPhoto = screen.getByLabelText(/^Ảnh 1 ·/) as HTMLInputElement;
+  expect(overallPhoto.disabled).toBe(true);
+  expect(overallPhoto.checked).toBe(false);
+  fireEvent.click(screen.getByLabelText('Ghế · Ảnh 1'));
+  fireEvent.click(overallPhoto);
   fireEvent.click(screen.getByLabelText('Ghế · Ảnh 2'));
+  expect((screen.getByLabelText(/^Ảnh 2 ·/) as HTMLInputElement).disabled).toBe(true);
   fireEvent.click(screen.getByLabelText('Đã kiểm tra Ghế'));
   fireEvent.click(screen.getByRole('button', { name: 'Lưu biên bản nhận phòng' }));
   await waitFor(() => expect(api.mutate).toHaveBeenCalledOnce());

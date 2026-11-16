@@ -41,8 +41,8 @@ public sealed partial class ContractService
                 await CopyVerifiedFile(file, bytes, t);
             }
             if (bytes.Length > 5 * 1024 * 1024) throw ContractException.Invalid("inspection_image_too_large");
-            var group = snapshot.Assets.FirstOrDefault(a => a.EvidenceIds?.Contains(id) == true)?.Name;
-            photos.Add(new(id, $"{snapshot.Date:dd/MM/yyyy} · {group ?? "Toàn cảnh phòng"}", bytes.ToArray()));
+            var groups = snapshot.Assets.Where(a => a.EvidenceIds?.Contains(id) == true).Select(a => a.Name).Distinct().ToArray();
+            photos.Add(new(id, $"{snapshot.Date:dd/MM/yyyy} · {(groups.Length == 0 ? "Toàn cảnh phòng" : string.Join(", ", groups))}", bytes.ToArray()));
         }
         var report = new HandoverDocumentReport(documentId, c.Id, type, version, c.Room.Location.Name,
             c.Room.Location.Address, c.OwnerSignerId, c.TenantUserId, staffId, tenantAt, confirmedAt, snapshot, baseline, references, decisions, photos.ToArray());

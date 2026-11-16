@@ -92,12 +92,14 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.NotFound, (await otherTenant.GetAsync(route)).StatusCode);
         var choices = (await staff.GetFromJsonAsync<HandoverChoices>(route + "/choices"))!;
         Assert.Equal(9, choices.Assets.Count); Assert.Equal(7, choices.Assets.Count(a => a.OwnerChecked));
-        var overall = await HandoverPhoto(staff, id); var issueA = await HandoverPhoto(staff, id); var issueB = await HandoverPhoto(staff, id);
+        var overall = await HandoverPhoto(staff, id); var issueA = await HandoverPhoto(staff, id);
         var inputs = choices.Assets.Select((a, index) => new HandoverAssetInput(a.Id, index < 7 ? "Tốt" : "Chưa được bổ sung", index < 7 ? 4 : 0,
-            index < 7 ? 4 : 0, index < 7 ? 4 : 0, 0, 0, index < 7 ? 0 : 4, true, "Đã kiểm tra thực tế", index < 7 ? [] : [index == 7 ? issueA : issueB])).ToArray();
+            index < 7 ? 4 : 0, index < 7 ? 4 : 0, 0, 0, index < 7 ? 0 : 4, true, "Đã kiểm tra thực tế", index < 7 ? [] : [issueA])).ToArray();
         var input = new HandoverInput(0, Today, "Tường, sàn, cửa đã kiểm tra", "Hai chìa khóa", "Synthetic handover", inputs, seeded.Readings[0], seeded.Readings[1], [overall], choices.InventoryToken);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(staff, id, "handover", input with { InventoryToken = "stale" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "handover", input with { Assets = inputs[..7] })).StatusCode);
+        var reusedOverview = await HandoverPost(staff, id, "handover", input with { EvidenceIds = [issueA] });
+        Assert.Equal(HttpStatusCode.BadRequest, reusedOverview.StatusCode); Assert.Contains("asset_group_evidence_must_be_separate", await reusedOverview.Content.ReadAsStringAsync());
         var h = await Read<HandoverView>(await HandoverPost(staff, id, "handover", input));
         Assert.Equal("NeedsReview", (await owner.GetFromJsonAsync<RoomInventoryReviewView>(ReviewRoute(w.Location)))!.Rooms.Single(r => r.RoomId == w.Room).State);
         Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(staff, id, "handover/staff-confirmation", new HandoverDecision(h.Version, ""))).StatusCode);
@@ -113,6 +115,11 @@ public sealed partial class Compact24OwnerSetupTests
         await Read<HandoverView>(await HandoverPost(staff, id, "handover/staff-confirmation", decision, completionKey));
         var document = Assert.Single((await tenant.GetFromJsonAsync<ContractDocumentView[]>(route + "/documents"))!);
         var pdf = await tenant.GetByteArrayAsync(route + "/documents/" + document.Id); Assert.True(pdf.AsSpan(0, 5).SequenceEqual("%PDF-"u8));
+        using (var rendered = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(pdf))))
+        {
+            var captions = string.Join("\n", Enumerable.Range(1, rendered.GetNumberOfPages()).Select(p => iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor.GetTextFromPage(rendered.GetPage(p))));
+            Assert.Contains("Ghế tổng hợp 8, Ghế tổng hợp 9", captions);
+        }
         Assert.Equal(pdf, await owner.GetByteArrayAsync(route + "/documents/" + document.Id));
         Assert.Equal(HttpStatusCode.NotFound, (await otherTenant.GetAsync(route + "/documents/" + document.Id)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(route + "/documents/" + document.Id)).StatusCode);
@@ -392,8 +399,14 @@ public sealed partial class Compact24OwnerSetupTests
             [new(group.Id, null, assetId, 1, 0, "Tốt", [evidence])]);
         var change = await Read<AssetChangeView>(await HandoverPost(staff, seeded.Contract, "asset-changes", input)); Assert.Equal(2, change.Data.Parties.Length);
         var firstKey = Guid.NewGuid();
-        await Read<AssetChangeView>(await HandoverPost(tenant, seeded.Contract, $"asset-changes/{change.Id}/confirmation", new InspectionTenantFeedback(1, true, "First Tenant received"), firstKey));
-        await Read<AssetChangeView>(await HandoverPost(tenant, seeded.Contract, $"asset-changes/{change.Id}/confirmation", new InspectionTenantFeedback(1, true, "First Tenant received"), firstKey));
+        var firstResponse = await Read<AssetChangeView>(await HandoverPost(tenant, seeded.Contract, $"asset-changes/{change.Id}/confirmation", new InspectionTenantFeedback(1, true, "First Tenant received"), firstKey));
+        var replayResponse = await Read<AssetChangeView>(await HandoverPost(tenant, seeded.Contract, $"asset-changes/{change.Id}/confirmation", new InspectionTenantFeedback(1, true, "First Tenant received"), firstKey));
+        foreach (var response in new[] { firstResponse, replayResponse })
+        {
+            Assert.Equal(seeded.Contract, Assert.Single(response.Data.Parties).ContractId);
+            Assert.Equal(w.Tenant.Id, Assert.Single(response.Data.Acknowledgements).TenantId);
+            Assert.Equal(Guid.Empty, response.Data.EvidenceContractId);
+        }
         Assert.Empty((await staff.GetFromJsonAsync<InspectionPreparation>($"/api/v1/contracts/{secondId}/move-out/inspection-preparation"))!.Baseline!.Snapshot.Assets);
         var secondView = Assert.Single((await secondTenant.GetFromJsonAsync<AssetChangeView[]>($"/api/v1/contracts/{secondId}/asset-changes"))!);
         Assert.Single(secondView.Data.Parties); Assert.Empty(secondView.Data.Acknowledgements);

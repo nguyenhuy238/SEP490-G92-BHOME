@@ -42,6 +42,13 @@ public sealed class HandoverChecklistTests
     public void ProblemRequiresItsOwnEvidence() => Assert.Equal("asset_group_evidence_required",
         Assert.Throws<ContractException>(() => HandoverChecklist.Inspect([Source], [Valid with { EvidenceIds = [] }], true)).Code);
     [Fact]
+    public void ProblemEvidenceCannotReuseTheOverallRoomPhotograph()
+    {
+        var asset = Assert.Single(HandoverChecklist.Inspect([Source], [Valid], true));
+        Assert.Equal("asset_group_evidence_must_be_separate", Assert.Throws<ContractException>(() => HandoverChecklist.RequireSeparateEvidence([Evidence], [asset])).Code);
+        HandoverChecklist.RequireSeparateEvidence([Guid.NewGuid()], [asset]);
+    }
+    [Fact]
     public void WithheldQuantityRequiresReason() => Assert.Equal("withheld_asset_reason_required",
         Assert.Throws<ContractException>(() => HandoverChecklist.Inspect([Source], [Valid with { HandedOverQuantity = 2, Notes = "" }], true)).Code);
     [Fact]

@@ -56,4 +56,10 @@ public static class HandoverChecklist
         a.ObservedQuantity != null && (a.ObservedQuantity != (a.PhysicalAssets?.Sum(p => p.Quantity) ?? 0) || a.HandedOverQuantity < a.ObservedQuantity);
     public static bool RequiresOwner(HandoverSnapshot s) => !s.NoAssetsConfirmed && (s.Assets.Length == 0 ||
         s.Assets.Any(a => !a.OwnerChecked || Problem(a)));
+
+    public static void RequireSeparateEvidence(Guid[] overall, HandoverAsset[] assets)
+    {
+        if (assets.Where(Problem).Any(a => (a.EvidenceIds ?? []).Intersect(overall).Any()))
+            throw ContractException.Invalid("asset_group_evidence_must_be_separate");
+    }
 }

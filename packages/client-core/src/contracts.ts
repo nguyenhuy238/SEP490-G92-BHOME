@@ -1144,6 +1144,8 @@ export const labels: Record<string, string> = {
     'Kiểm tra số lượng: tổng tốt, hao mòn và hỏng phải bằng thực tế; số giao không vượt thực tế.',
   handover_checklist_incomplete: 'Cần đánh dấu đã kiểm tra tất cả nhóm tài sản.',
   asset_group_evidence_required: 'Nhóm tài sản có vấn đề cần ảnh minh chứng riêng.',
+  asset_group_evidence_must_be_separate:
+    'Chọn ảnh riêng cho nhóm tài sản có vấn đề; không dùng lại ảnh toàn cảnh phòng.',
   withheld_asset_reason_required: 'Nhập lý do khi số lượng bàn giao nhỏ hơn số lượng thực tế.',
   owner_handover_exception_required:
     'Owner cần duyệt ngoại lệ của phiên bản hiện tại trước khi hoàn tất.',

@@ -53,7 +53,11 @@ export function ContractLifecyclePanel({
     [notice, setNotice] = useFeedbackState('success');
   const [keys] = useState(() => mutationKeys(randomUUID));
   const lock = useRef(false);
-  const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));
+  const set = (name: string, value: string) => {
+    setValues((v) => ({ ...v, [name]: value }));
+    if (value === 'true')
+      setSelected((ids) => ids.filter((id) => !name.endsWith(`.evidence.${id}`)));
+  };
   async function save(operation: string, body: Record<string, unknown>) {
     if (role === 'Owner' || lock.current) return;
     lock.current = true;
@@ -93,7 +97,12 @@ export function ContractLifecyclePanel({
   ]);
   const inspectionChecked = canInspect && confirmedInspectionInput === inspectionInput;
   const money = (v: string | null) => (v === null ? 'Chờ xác minh' : formatContractMoney(v));
-  const usedEvidence = new Set(q.inspections.flatMap((i) => i.observed.evidenceIds));
+  const usedEvidence = new Set(
+    q.inspections.flatMap((i) => [
+      ...i.observed.evidenceIds,
+      ...i.observed.assets.flatMap((a) => a.evidenceIds ?? []),
+    ]),
+  );
   const unusedEvidence = evidenceIds.filter((e) => !usedEvidence.has(e));
   return (
     <Box>
@@ -309,7 +318,10 @@ export function ContractLifecyclePanel({
                     key={e}
                     label={`Ảnh hiện trạng ${n + 1}`}
                     status={selected.includes(e) ? 'checked' : 'unchecked'}
-                    disabled={busy}
+                    disabled={
+                      busy ||
+                      inspectionGroups.some((a) => values[`${a.id}.evidence.${e}`] === 'true')
+                    }
                     onPress={() =>
                       setSelected((v) => (v.includes(e) ? v.filter((x) => x !== e) : [...v, e]))
                     }

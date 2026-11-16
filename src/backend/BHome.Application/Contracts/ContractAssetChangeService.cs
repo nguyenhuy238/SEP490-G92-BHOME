@@ -23,20 +23,25 @@ public sealed partial class ContractService
             current = await repository.FindAsync(previous, t) ?? throw ContractException.Missing();
         }
     }
+    private AssetChangeView ScopedAssetChange(AssetChangeView change, HashSet<Guid> chain)
+    {
+        var view = change with { AcknowledgementContractId = change.Data.Parties.First(p => chain.Contains(p.ContractId)).ContractId };
+        return user.IsInRole(Roles.Tenant) ? view with
+        {
+            Data = view.Data with
+            {
+                Parties = view.Data.Parties.Where(p => chain.Contains(p.ContractId)).ToArray(),
+                Acknowledgements = view.Data.Acknowledgements.Where(a => chain.Contains(a.ContractId)).ToArray(),
+                EvidenceContractId = Guid.Empty
+            }
+        } : view;
+    }
     public async Task<IReadOnlyList<AssetChangeView>> AssetChangesAsync(Guid id, CancellationToken t)
     {
         var c = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
         var chain = await HandoverLineage(c, t);
         return (await RoomChanges(c, t)).Where(e => e.Data.Parties.Any(p => chain.Contains(p.ContractId)))
-            .Select(e => e with { AcknowledgementContractId = e.Data.Parties.First(p => chain.Contains(p.ContractId)).ContractId })
-            .Select(e => user.IsInRole(Roles.Tenant) ? e with
-            {
-                Data = e.Data with
-                {
-                    Parties = e.Data.Parties.Where(p => chain.Contains(p.ContractId)).ToArray(),
-                    Acknowledgements = e.Data.Acknowledgements.Where(a => chain.Contains(a.ContractId)).ToArray()
-                }
-            } : e).ToArray();
+            .Select(e => ScopedAssetChange(e, chain)).ToArray();
     }
     public async Task<AssetChangePreparation> AssetChangePreparationAsync(Guid id, CancellationToken t)
     {
@@ -141,7 +146,7 @@ public sealed partial class ContractService
         var chain = await HandoverLineage(c, t);
         var party = data.Parties.SingleOrDefault(p => chain.Contains(p.ContractId) && p.TenantId == Actor);
         if (data.RoomId != c.RoomId || party is null) throw ContractException.Missing();
-        if (await Replay(key, "asset-change-confirm", new { id, eventId, x }, t) is not null) return change;
+        if (await Replay(key, "asset-change-confirm", new { id, eventId, x }, t) is not null) return ScopedAssetChange(change, chain);
         // Acknowledgements are per contract. Another Tenant's response must not invalidate the physical event version.
         if (x.Version != 1 || data.Acknowledgements.Any(a => a.ContractId == party.ContractId && a.Accepted)) throw ContractException.Conflict("asset_change_already_answered");
         var acknowledgement = new AssetChangeAcknowledgement(party.ContractId, Actor, clock.GetUtcNow(), x.Confirmed, HandoverText(x.Reason, 2000, !x.Confirmed), id);
@@ -169,7 +174,7 @@ public sealed partial class ContractService
             data.Acknowledgements.Count(a => a.Accepted) == data.Parties.Length ? "Confirmed" : data.Acknowledgements.Any(a => !a.Accepted) ? "Disputed" : "AwaitingTenant",
             data, doc.Version, Actor, t);
         await Handovers.NotifyAsync(c, $"AssetChangeTenantResponded:{eventId:N}", Actor, saved.Version, t);
-        Audit("ContractAssetChangeTenantResponded", id); Remember(key, "asset-change-confirm", new { id, eventId, x }, eventId); return ChangeView(saved);
+        Audit("ContractAssetChangeTenantResponded", id); Remember(key, "asset-change-confirm", new { id, eventId, x }, eventId); return ScopedAssetChange(ChangeView(saved), chain);
     }, t);
     public async Task CopyAssetChangeEvidenceAsync(Guid id, Guid eventId, Guid evidenceId, Stream output, CancellationToken t)
     {

@@ -84,6 +84,7 @@ public sealed partial class ContractService
         if (inventory is { Groups.Length: 0, NoAssetsConfirmed: false }) throw ContractException.Conflict("owner_no_assets_confirmation_required");
         var groups = inventory is null ? baseline!.Assets : InspectionGroups(baseline, inventory);
         var inspected = HandoverChecklist.Inspect(groups, x.Assets, inventory is not null, !missingQuantities);
+        HandoverChecklist.RequireSeparateEvidence(x.EvidenceIds, inspected);
         if (inspected.Any(a => !a.Checked)) throw ContractException.Invalid("handover_checklist_incomplete");
         var readings = await repository.FinalReadingsAsync(c.Id, c.RoomId, Today, t);
         var electricity = readings.Single(r => r.Id == x.ElectricityReadingId); var water = readings.Single(r => r.Id == x.WaterReadingId);

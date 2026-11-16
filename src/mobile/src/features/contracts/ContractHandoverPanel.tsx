@@ -67,7 +67,11 @@ export function ContractHandoverPanel({
     }));
   const [keys] = useState(() => mutationKeys(randomUUID)),
     lock = useRef(false);
-  const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));
+  const set = (name: string, value: string) => {
+    setValues((v) => ({ ...v, [name]: value }));
+    if (value === 'true')
+      setSelected((ids) => ids.filter((id) => !name.endsWith(`.evidence.${id}`)));
+  };
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true;
@@ -117,7 +121,8 @@ export function ContractHandoverPanel({
         ]),
       ),
     });
-    setSelected(s?.evidenceIds ?? []);
+    const groupEvidence = new Set((s?.assets ?? []).flatMap((a) => a.evidenceIds ?? []));
+    setSelected((s?.evidenceIds ?? []).filter((id) => !groupEvidence.has(id)));
     setError('');
     setEditing(true);
   }
@@ -301,7 +306,10 @@ export function ContractHandoverPanel({
             <Checkbox.Item
               key={f.id}
               label={`Ảnh ${i + 1} · ${formatInstant(f.recordedAt)}`}
-              disabled={busy}
+              disabled={
+                busy ||
+                (choices?.assets ?? []).some((a) => values[`${a.id}.evidence.${f.id}`] === 'true')
+              }
               status={selected.includes(f.id) ? 'checked' : 'unchecked'}
               onPress={() =>
                 setSelected((ids) =>
