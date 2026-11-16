@@ -2,6 +2,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { CameraViewProps } from 'expo-camera';
 
 const native = vi.hoisted(() => ({
   granted: true,
@@ -14,12 +15,21 @@ const native = vi.hoisted(() => ({
   files: new Set<string>(),
   bytes: new Uint8Array([1, 2, 3]),
   listeners: new Set<(state: string) => void>(),
+  platform: 'android',
+  autoReady: true,
+  mounts: 0,
+  props: {} as CameraViewProps,
+  lenses: vi.fn(),
 }));
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
 }));
 vi.mock('react-native', () => ({
-  Platform: { OS: 'android' },
+  Platform: {
+    get OS() {
+      return native.platform;
+    },
+  },
   AppState: {
     addEventListener: (_: string, cb: (s: string) => void) => {
       native.listeners.add(cb);
@@ -87,9 +97,18 @@ vi.mock('../components/Controls', () => ({ styles: {} }));
 vi.mock('../lib/captureFiles', () => ({ ownCapture: (uri: string) => uri }));
 vi.mock('expo-camera', () => ({
   useCameraPermissions: () => [{ granted: native.granted }, native.request],
-  CameraView: forwardRef(function Camera({ onCameraReady }: { onCameraReady: () => void }, ref) {
-    useImperativeHandle(ref, () => ({ takePictureAsync: native.take }), []);
-    useEffect(onCameraReady, [onCameraReady]);
+  CameraView: forwardRef(function Camera(props: CameraViewProps, ref) {
+    native.props = props;
+    const { onCameraReady } = props;
+    useImperativeHandle(
+      ref,
+      () => ({ takePictureAsync: native.take, getAvailableLensesAsync: native.lenses }),
+      [],
+    );
+    useEffect(() => {
+      native.mounts++;
+      if (native.autoReady) onCameraReady?.();
+    }, [onCameraReady]);
     return <div data-testid="native-camera" />;
   }),
 }));
@@ -116,6 +135,7 @@ vi.mock('expo-image-manipulator', () => ({
   ImageManipulator: {
     manipulate: () => ({
       resize: native.resized,
+      reset: vi.fn(),
       renderAsync: native.render,
       release: native.release,
     }),
@@ -126,6 +146,10 @@ import { CameraCapture } from '../components/CameraCapture';
 beforeEach(() => {
   vi.clearAllMocks();
   native.granted = true;
+  native.platform = 'android';
+  native.autoReady = true;
+  native.mounts = 0;
+  native.lenses.mockResolvedValue([]);
   native.files.clear();
   native.listeners.clear();
   native.bytes = new Uint8Array([1, 2, 3]);
@@ -182,7 +206,7 @@ it('handles denied permission when opening the selected meter camera automatical
   expect(native.take).not.toHaveBeenCalled();
   expect(capture).not.toHaveBeenCalled();
 });
-it('uses only capture/close then use/retake controls for meters and keeps a compact preview during review', async () => {
+it('shares camera controls with meters and keeps a compact preview during review', async () => {
   const capture = vi.fn().mockResolvedValue(undefined);
   const clear = vi.fn();
   const props = {
@@ -198,9 +222,16 @@ it('uses only capture/close then use/retake controls for meters and keeps a comp
   fireEvent.click(screen.getByRole('button', { name: 'Chụp đồng hồ nước' }));
   await screen.findByTestId('native-camera');
   expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+    'Thu bớt',
+    'Phóng thêm',
     'Chụp ảnh',
     'Đóng camera',
   ]);
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: 'Chụp ảnh' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
   const image = await screen.findByAltText('Ảnh công tơ đã chụp');
   expect(image.getAttribute('data-resize')).toBe('contain');
@@ -241,6 +272,11 @@ it('retains a meter preview after OCR, clears it on retake and never submits on 
   );
   fireEvent.click(screen.getByRole('button', { name: 'Chụp công tơ' }));
   await screen.findByTestId('native-camera');
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: 'Chụp ảnh' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
   await screen.findByAltText('Ảnh vừa chụp');
   expect(capture).not.toHaveBeenCalled();
@@ -299,7 +335,8 @@ it('unmounts the camera for an undistorted preview and deletes a rejected image 
   expect(screen.getByAltText('Ảnh CCCD vừa chụp').getAttribute('data-resize')).toBe('contain');
   expect(capture).not.toHaveBeenCalled();
   expect(native.files.size).toBe(1);
-  expect(native.resized).toHaveBeenCalledWith({ width: 1600 });
+  expect(native.resized).not.toHaveBeenCalled();
+  expect(native.save).toHaveBeenCalledWith({ format: 'jpeg', compress: 0.95 });
   expect(native.release).toHaveBeenCalledTimes(3);
   fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
   await screen.findByTestId('native-camera');
@@ -451,6 +488,11 @@ it('opens evidence in an opaque modal, unmounts live camera for review, retakes 
   fireEvent.click(screen.getByRole('button', { name: 'Chụp lại' }));
   expect(native.files.size).toBe(0);
   await screen.findByTestId('native-camera');
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Chụp ảnh minh chứng' }) as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh minh chứng' }));
   await screen.findByAltText('Ảnh minh chứng vừa chụp');
   fireEvent.click(screen.getByRole('button', { name: 'Dùng ảnh' }));
@@ -542,4 +584,202 @@ it('cleans an evidence preview on Android back and background', async () => {
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(screen.queryByTestId('native-camera')).toBeNull();
   expect(native.files.size).toBe(0);
+});
+
+async function readyShutter(name = 'Chụp ảnh mặt trước') {
+  const button = await screen.findByRole('button', { name });
+  await waitFor(() => expect(button).toHaveProperty('disabled', false));
+  return button;
+}
+it.each(['document', 'meter', 'inline'] as const)(
+  'shares continuous AF, zero zoom and readiness gating with %s',
+  async (presentation) => {
+    native.autoReady = false;
+    render(
+      <CameraCapture
+        label="Mở thử OCR"
+        presentation={presentation}
+        autoOpen
+        disabled={false}
+        onCapture={vi.fn()}
+      />,
+    );
+    if (presentation === 'inline')
+      fireEvent.click(screen.getByRole('button', { name: 'Mở thử OCR' }));
+    await screen.findByTestId('native-camera');
+    const name = presentation === 'document' ? 'Chụp ảnh mặt trước' : 'Chụp ảnh';
+    expect(screen.getByRole('button', { name })).toHaveProperty('disabled', true);
+    expect(native.props.autofocus).toBe('off');
+    expect(native.props.zoom).toBe(0);
+    expect(native.props.selectedLens).toBeUndefined();
+    expect(native.props.onAvailableLensesChanged).toBeUndefined();
+    act(() => native.props.onCameraReady?.());
+    await readyShutter(name);
+    expect(native.mounts).toBe(1);
+    expect(screen.queryByRole('button', { name: 'Camera chính' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Phóng thêm' })).toBeTruthy();
+  },
+);
+it('changes iOS lenses and zoom in place, resets zoom on lens selection and guards rapid switches', async () => {
+  native.platform = 'ios';
+  const lenses = [
+    { deviceType: 'AVCaptureDeviceTypeBuiltInWideAngleCamera' },
+    { deviceType: 'AVCaptureDeviceTypeBuiltInUltraWideCamera' },
+    { deviceType: 'AVCaptureDeviceTypeBuiltInTelephotoCamera' },
+  ];
+  native.lenses.mockResolvedValue(lenses);
+  render(
+    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+  );
+  await readyShutter();
+  expect(native.lenses).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Phóng thêm' }));
+  expect(native.props.zoom).toBe(0.02);
+  expect(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' })).toHaveProperty(
+    'disabled',
+    true,
+  );
+  await readyShutter();
+  fireEvent.click(screen.getByRole('button', { name: 'Siêu rộng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tele' }));
+  expect(native.props.selectedLens).toBe('AVCaptureDeviceTypeBuiltInUltraWideCamera');
+  expect(native.props.zoom).toBe(0);
+  act(() =>
+    native.props.onAvailableLensesChanged?.({
+      lenses: lenses.map((lens) => ({ ...lens, localizedName: 'Synthetic lens' })),
+    }),
+  );
+  await readyShutter();
+  fireEvent.click(screen.getByRole('button', { name: 'Tự động' }));
+  await readyShutter();
+  expect(native.props.selectedLens).toBeUndefined();
+  expect(native.mounts).toBe(1);
+  expect(screen.queryByRole('button', { name: 'Lấy nét lại' })).toBeNull();
+});
+it('falls back to the default iOS camera when discovery fails', async () => {
+  native.platform = 'ios';
+  native.lenses.mockRejectedValue(new Error('unsupported discovery'));
+  render(
+    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+  );
+  await readyShutter();
+  expect(native.props.selectedLens).toBeUndefined();
+  expect(screen.queryByRole('button', { name: 'Siêu rộng' })).toBeNull();
+});
+it('retries a mount failure and ignores ready callbacks from the closed camera', async () => {
+  native.autoReady = false;
+  render(
+    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+  );
+  await screen.findByTestId('native-camera');
+  const old = native.props;
+  act(() => old.onMountError?.({ message: 'Synthetic camera failure' }));
+  expect(screen.queryByTestId('native-camera')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Mở camera' }));
+  await screen.findByTestId('native-camera');
+  act(() => old.onCameraReady?.());
+  expect(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' })).toHaveProperty(
+    'disabled',
+    true,
+  );
+  act(() => native.props.onCameraReady?.());
+  await readyShutter();
+});
+it('reopens after background and ignores a late capture failure from the previous session', async () => {
+  let reject!: (reason: Error) => void;
+  native.take.mockImplementationOnce(
+    () =>
+      new Promise((_, fail) => {
+        reject = fail;
+      }),
+  );
+  render(
+    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+  );
+  fireEvent.click(await readyShutter());
+  act(() => native.listeners.forEach((listener) => listener('background')));
+  await act(async () => reject(new Error('old capture failure')));
+  act(() => native.listeners.forEach((listener) => listener('active')));
+  fireEvent.click(screen.getByRole('button', { name: 'Mở camera' }));
+  await readyShutter();
+  expect(screen.queryByText(/Không xử lý được ảnh/)).toBeNull();
+});
+it('allows a native permission prompt to return through inactive and active states', async () => {
+  native.granted = false;
+  let grant!: (permission: { granted: boolean }) => void;
+  native.request.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        grant = resolve;
+      }),
+  );
+  render(
+    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+  );
+  await waitFor(() => expect(native.request).toHaveBeenCalledOnce());
+  act(() => native.listeners.forEach((listener) => listener('inactive')));
+  await act(async () => grant({ granted: true }));
+  expect(screen.queryByTestId('native-camera')).toBeNull();
+  act(() => native.listeners.forEach((listener) => listener('active')));
+  await readyShutter();
+});
+it('uploads the exact reviewed JPEG bytes once and zeroes the buffer after processing', async () => {
+  let uploaded: number[] = [];
+  const capture = vi.fn(async (bytes: Uint8Array) => {
+    uploaded = [...bytes];
+  });
+  render(
+    <CameraCapture
+      label="CCCD"
+      presentation="document"
+      reviewBeforeSubmit
+      disabled={false}
+      onCapture={capture}
+    />,
+  );
+  await takePhoto();
+  expect(capture).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Sử dụng ảnh' }));
+  await waitFor(() => expect(capture).toHaveBeenCalledOnce());
+  expect(uploaded).toEqual([1, 2, 3]);
+  await waitFor(() => expect([...native.bytes]).toEqual([0, 0, 0]));
+  expect(native.files.size).toBe(0);
+});
+it('bounds normalized zoom without remounting or claiming an optical multiplier', async () => {
+  render(
+    <CameraCapture label="CCCD" presentation="document" disabled={false} onCapture={vi.fn()} />,
+  );
+  await readyShutter();
+  for (let step = 0; step < 6; step++) {
+    fireEvent.click(screen.getByRole('button', { name: 'Phóng thêm' }));
+    await readyShutter();
+  }
+  expect(native.props.zoom).toBe(0.12);
+  expect(screen.getByRole('button', { name: 'Phóng thêm' })).toHaveProperty('disabled', true);
+  expect(screen.getByText('Zoom 12%')).toBeTruthy();
+  expect(native.mounts).toBe(1);
+});
+it('blocks simultaneous native captures while the first capture is pending', async () => {
+  let finish!: (picture: unknown) => void;
+  native.take.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(
+    <CameraCapture
+      label="CCCD"
+      presentation="document"
+      reviewBeforeSubmit
+      disabled={false}
+      onCapture={vi.fn()}
+    />,
+  );
+  const shutter = await readyShutter();
+  fireEvent.click(shutter);
+  fireEvent.click(shutter);
+  expect(native.take).toHaveBeenCalledOnce();
+  await act(async () => finish({ width: 2000, height: 1200, release: native.release }));
+  await screen.findByAltText('Ảnh CCCD vừa chụp');
 });
