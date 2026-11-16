@@ -141,34 +141,24 @@ export function IdentityWizard({
   }, [modal, visible, active]);
   useEffect(() => {
     if (Platform.OS === 'ios') void enableAppSwitcherProtectionAsync().catch(() => {});
-    const clear = () => {
+    const suspend = () => {
       if (confirmed.current) return;
-      statusCallback.current?.('unscanned');
-      setWarnings([]);
-      sideWarnings.current = { front: [], back: [] };
-      setPlaceOfIssue('');
       generation.current++;
       abort.current?.abort();
       lock.current = false;
       setBusy(false);
-      setAttempted(false);
-      setTouched({});
-      current.current = emptyIdentity();
-      fieldOrigin.current = {};
-      setFields(emptyIdentity());
-      setSources({});
       setChecked(false);
-      setScanned(false);
-      captureProgress.current = emptyCaptureProgress();
-      progressCallback.current?.(captureProgress.current);
-      setSide('front');
+      statusCallback.current?.(
+        Object.values(current.current).some(Boolean) ? 'pending' : 'unscanned',
+      );
       setNotice(
-        'Thông tin tạm đã xóa khi ứng dụng rời trạng thái hoạt động. Hãy chụp lại hoặc nhập thủ công.',
+        'Ảnh tạm đã xóa. Thông tin đã nhập được giữ trong phiên này, hãy kiểm tra lại trước khi xác nhận.',
       );
       if (modal) dismissCallback.current?.();
     };
     const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') clear();
+      // A native camera permission prompt can temporarily make iOS inactive.
+      if (state === 'background') suspend();
     });
     const invalidate = () => {
       generation.current++;

@@ -22,14 +22,9 @@ interface Props {
 // Pure presentation. The shared capture component owns camera resources and temporary files.
 export function DocumentCameraView(props: Props) {
   const back = props.documentSide === 'back';
-  const [area, setArea] = useState({ width: 0, height: 0 });
-  const width = Math.max(0, Math.min(area.width - 40, (area.height - 40) * 1.586));
-  const height = width / 1.586;
-  const left = (area.width - width) / 2;
-  const top = (area.height - height) / 2;
   return (
     <View style={styles.root}>
-      <View style={styles.viewport} onLayout={({ nativeEvent }) => setArea(nativeEvent.layout)}>
+      <View style={styles.viewport}>
         {props.camera}
         {!!props.preview && !props.working && (
           <Image
@@ -38,20 +33,6 @@ export function DocumentCameraView(props: Props) {
             resizeMode="contain"
             style={styles.fill}
           />
-        )}
-        {!!props.camera && !props.preview && width > 0 && (
-          <View pointerEvents="none" style={styles.fill}>
-            <View style={[styles.shade, { top: 0, left: 0, right: 0, height: top }]} />
-            <View style={[styles.shade, { top: top + height, bottom: 0, left: 0, right: 0 }]} />
-            <View style={[styles.shade, { top, left: 0, width: left, height }]} />
-            <View style={[styles.shade, { top, right: 0, width: left, height }]} />
-            <View style={[styles.guide, { top, left, width, height }]}>
-              <View style={[styles.corner, styles.topLeft]} />
-              <View style={[styles.corner, styles.topRight]} />
-              <View style={[styles.corner, styles.bottomLeft]} />
-              <View style={[styles.corner, styles.bottomRight]} />
-            </View>
-          </View>
         )}
         {(props.working || props.requestingPermission) && (
           <View style={styles.processing}>
@@ -147,6 +128,36 @@ export function DocumentCameraView(props: Props) {
           Nhập thủ công
         </Button>
       </View>
+    </View>
+  );
+}
+// The guide covers only the live preview, leaving shared camera controls unobstructed.
+export function DocumentCameraGuide() {
+  const [area, setArea] = useState({ width: 0, height: 0 });
+  const width = Math.max(0, Math.min(area.width - 40, (area.height - 40) * 1.586));
+  const height = width / 1.586;
+  const left = (area.width - width) / 2;
+  const top = (area.height - height) / 2;
+  return (
+    <View
+      pointerEvents="none"
+      style={styles.fill}
+      onLayout={({ nativeEvent }) => setArea(nativeEvent.layout)}
+    >
+      {width > 0 && (
+        <>
+          <View style={[styles.shade, { top: 0, left: 0, right: 0, height: top }]} />
+          <View style={[styles.shade, { top: top + height, bottom: 0, left: 0, right: 0 }]} />
+          <View style={[styles.shade, { top, left: 0, width: left, height }]} />
+          <View style={[styles.shade, { top, right: 0, width: left, height }]} />
+          <View style={[styles.guide, { top, left, width, height }]}>
+            <View style={[styles.corner, styles.topLeft]} />
+            <View style={[styles.corner, styles.topRight]} />
+            <View style={[styles.corner, styles.bottomLeft]} />
+            <View style={[styles.corner, styles.bottomRight]} />
+          </View>
+        </>
+      )}
     </View>
   );
 }

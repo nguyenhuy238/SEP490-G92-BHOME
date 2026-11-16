@@ -1,7 +1,8 @@
 // Only offer physical lenses reported by this device. Ultra-wide presence does not prove macro autofocus.
 const lensLabels = [
   ['AVCaptureDeviceTypeBuiltInWideAngleCamera', 'Camera chính'],
-  ['AVCaptureDeviceTypeBuiltInUltraWideCamera', 'Siêu rộng · thử chụp gần'],
+  ['AVCaptureDeviceTypeBuiltInUltraWideCamera', 'Siêu rộng'],
+  ['AVCaptureDeviceTypeBuiltInTelephotoCamera', 'Tele'],
 ] as const;
 
 export function captureLensOptions(reported: unknown): { id: string; label: string }[] {

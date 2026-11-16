@@ -27,4 +27,9 @@ describe('camera lens capability fallback', () => {
     expect(captureLensOptions([null, 'Back Camera', {}, { deviceType: 123 }])).toEqual([]);
     expect(captureLensOptions({ lenses: [] })).toEqual([]);
   });
+  it('labels a discovered telephoto lens separately from wide and ultra-wide', () => {
+    expect(
+      captureLensOptions([{ deviceType: 'AVCaptureDeviceTypeBuiltInTelephotoCamera' }]),
+    ).toEqual([{ id: 'AVCaptureDeviceTypeBuiltInTelephotoCamera', label: 'Tele' }]);
+  });
 });
