@@ -18,6 +18,10 @@ export interface ResidenceTask {
   ownerConfirmed: boolean;
   ownerConfirmedAt: string | null;
   history: { action: string; actorId: string; occurredAt: string; note: string | null }[];
+  reference?: string;
+  accommodationConfirmed?: boolean;
+  registrationDeadline?: string | null;
+  trackingActive?: boolean;
 }
 export interface ResidencePage {
   items: ResidenceTask[];
@@ -30,6 +34,7 @@ export interface ResidenceUpdate {
   status: ResidenceStatus;
   resultAt: string | null;
   note: string | null;
+  expectedReference?: string;
 }
 type Transport = <T>(
   path: string,
@@ -47,6 +52,7 @@ export const residenceStatus: Record<string, string> = {
 export const residenceAction: Record<string, string> = {
   TenantStatusUpdated: 'Cập nhật trạng thái',
   OwnerConfirmed: 'Owner xác nhận',
+  AccommodationConfirmed: 'Owner ghi nhận xác nhận chỗ ở trên kênh chính thức',
   EvidenceUploaded: 'Cập nhật ảnh minh chứng',
 };
 export function residenceImageType(bytes: Uint8Array): 'image/png' | 'image/jpeg' {
@@ -142,7 +148,7 @@ export function residenceClient(request: Transport) {
       request<ResidenceTask>(path(task.contractId, task.residentId), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
+        body: JSON.stringify({ ...input, expectedReference: task.reference }),
       }),
     upload: (task: ResidenceTask, bytes: Uint8Array<ArrayBuffer>) =>
       request<ResidenceTask>(`${path(task.contractId, task.residentId)}/evidence`, {
@@ -162,6 +168,22 @@ export function residenceClient(request: Transport) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: note.trim() }),
       }),
+    confirmAccommodation: (
+      task: ResidenceTask,
+      note: string,
+      registrationDeadline: string | null,
+    ) =>
+      request<ResidenceTask>(
+        `${path(task.contractId, task.residentId)}/accommodation-confirmation`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            note: note.trim(),
+            expectedReference: task.reference,
+            registrationDeadline,
+          }),
+        },
+      ),
   };
 }
 export type ResidenceClient = ReturnType<typeof residenceClient>;

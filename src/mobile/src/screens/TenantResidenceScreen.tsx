@@ -253,6 +253,12 @@ function ResidenceContent({
             {task.ownerConfirmed ? 'Owner đã xác nhận' : 'Chờ Owner xác nhận'}
           </Text>
         )}
+        {task.accommodationConfirmed && (
+          <Text>Owner đã ghi nhận xác nhận chỗ ở trên kênh chính thức.</Text>
+        )}
+        {task.registrationDeadline && (
+          <Text>Hạn đăng ký được ghi nhận {displayContractDate(task.registrationDeadline)}</Text>
+        )}
         {task.ownerConfirmedAt && (
           <Text variant="bodySmall">Xác nhận lúc: {formatInstant(task.ownerConfirmedAt)}</Text>
         )}
