@@ -159,3 +159,17 @@ it('sets a completed baseline month with one explicit click without analyzing or
   expect(mock.analyzeScenario).not.toHaveBeenCalled();
   expect(mock.saveScenario).not.toHaveBeenCalled();
 });
+it('teaches the Analyze then Save flow and hides outdated results when assumptions change', async () => {
+  mount();
+  expect(
+    screen.getByText(/Nút Lưu kịch bản chỉ dùng được khi đã có kết quả phân tích/),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Lưu kịch bản' })).toBeDisabled();
+  fill();
+  await screen.findByText(/Kết quả phân tích hiện chưa được lưu/);
+  expect(screen.getByRole('button', { name: 'Lưu kịch bản' })).not.toBeDisabled();
+  fireEvent.change(screen.getByLabelText(/Giá thuê giả định/), { target: { value: '3500000' } });
+  expect(screen.queryByText(/Kết quả phân tích hiện chưa được lưu/)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Lưu kịch bản' })).toBeDisabled();
+  expect(mock.saveScenario).not.toHaveBeenCalled();
+});

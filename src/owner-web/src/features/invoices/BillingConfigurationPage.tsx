@@ -87,7 +87,18 @@ export function BillingConfigurationPage({
             {invoiceError(locations.error)}
           </Alert>
         )}
-        {locations.data?.length === 0 && <Alert severity="info">Chưa có cơ sở.</Alert>}
+        {locations.data?.length === 0 && (
+          <Alert
+            severity="info"
+            action={
+              <Button component={Link} to="/locations" size="small">
+                Xem cơ sở
+              </Button>
+            }
+          >
+            Chưa có cơ sở. Hãy tạo hoặc chọn cơ sở trước khi thiết lập biểu giá và lịch hóa đơn.
+          </Alert>
+        )}
         <FilterToolbar>
           <TextField
             select
@@ -158,6 +169,19 @@ function LocationBilling({ location }: { location: string }) {
           {invoiceError(schedule.error)}
         </Alert>
       )}
+      {schedule.isSuccess && !schedule.data && (
+        <Alert
+          severity="info"
+          action={
+            <Button size="small" href="#billing-schedule">
+              Thiết lập lịch
+            </Button>
+          }
+        >
+          Cơ sở chưa có lịch lập nháp và phát hành. Hoàn tất phần “Lịch & quy tắc hóa đơn” bên dưới
+          để xác định các ngày xử lý.
+        </Alert>
+      )}
       <Paper variant="outlined" sx={{ p: 1.5 }}>
         <Stack spacing={2}>
           <Stack
@@ -171,6 +195,10 @@ function LocationBilling({ location }: { location: string }) {
               Thêm biểu giá
             </Button>
           </Stack>
+          <Typography variant="body2" color="text.secondary">
+            Kiểm tra khoản thu, phạm vi phòng hoặc cơ sở và ngày hiệu lực. Sử dụng “Thêm biểu giá”
+            để bắt đầu hoặc “Tạo giá kế tiếp” khi cần thay đổi mức giá.
+          </Typography>
           {policies.isPending && <LinearProgress />}
           {policies.error && (
             <Alert
@@ -240,8 +268,10 @@ function LocationBilling({ location }: { location: string }) {
         </Stack>
       </Paper>
       <Accordion
+        id="billing-schedule"
         variant="outlined"
         disableGutters
+        sx={{ scrollMarginTop: { xs: '80px', md: '96px' } }}
         expanded={schedule.isSuccess && (!schedule.data || editSchedule)}
         onChange={(_, expanded) => {
           if (schedule.data) setEditSchedule(expanded);
@@ -261,7 +291,7 @@ function LocationBilling({ location }: { location: string }) {
             {schedule.isSuccess && (
               <Typography variant="body2" color={schedule.data ? 'text.secondary' : 'warning.dark'}>
                 {schedule.data
-                  ? `Nháp ngày ${schedule.data.draftDay} · Phát hành ${schedule.data.finalDay} · Hạn trả ${schedule.data.dueDay}`
+                  ? `Nháp ngày ${schedule.data.draftDay}${schedule.data.draftMonthOffset ? ` (+${schedule.data.draftMonthOffset} tháng)` : ''} · Phát hành ${schedule.data.finalDay}${schedule.data.finalMonthOffset ? ` (+${schedule.data.finalMonthOffset} tháng)` : ''} · Hạn trả ${schedule.data.dueDay}${schedule.data.dueMonthOffset ? ` (+${schedule.data.dueMonthOffset} tháng)` : ''}`
                   : 'Chưa thiết lập · Cần cấu hình'}
               </Typography>
             )}

@@ -35,21 +35,19 @@ public sealed class ExpenseEvidenceService(IExpenseEvidenceRepository repository
         var actor = Owner(); if (key == Guid.Empty) throw new FinanceException(400, "idempotency_key_required");
         // Authorize/lookup before reading a potentially large body or sending it to storage.
         _ = await repository.ListAsync(id, t);
-        using var buffer = new MemoryStream(); var block = new byte[81920];
-        while (true)
+        PrivateImageContent image;
+        try { image = await PrivateImageEvidence.ReadValidatedAsync(input, images, t); }
+        catch (PrivateImageTooLargeException) { throw new FinanceException(413, "expense_evidence_too_large"); }
+        try
         {
-            var count = await input.ReadAsync(block, t); if (count == 0) break;
-            if (buffer.Length + count > 5 * 1024 * 1024) throw new FinanceException(413, "expense_evidence_too_large");
-            await buffer.WriteAsync(block.AsMemory(0, count), t);
+            var intent = await repository.BeginAsync(id, key, actor, image.ContentType, image.Length, image.Sha256, clock.GetUtcNow(), t);
+            if (intent.Status == "Uploaded") { await CopyVerifiedAsync(intent, Stream.Null, t); return intent.View(); }
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(t); deadline.CancelAfter(TimeSpan.FromSeconds(30));
+            try { await PrivateImageEvidence.PutVerifiedAsync(storage, intent.ObjectKey, image, deadline.Token); }
+            catch (PrivateImageIntegrityException) { throw new FinanceException(409, "expense_evidence_integrity_failed"); }
+            return (await repository.CompleteAsync(id, intent.Id, actor, clock.GetUtcNow(), t)).View();
         }
-        var bytes = buffer.ToArray(); var type = images.Validate(bytes); var hash = Convert.ToHexString(SHA256.HashData(bytes));
-        var intent = await repository.BeginAsync(id, key, actor, type, bytes.Length, hash, clock.GetUtcNow(), t);
-        if (intent.Status == "Uploaded") { await CopyVerifiedAsync(intent, Stream.Null, t); return intent.View(); }
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(t); deadline.CancelAfter(TimeSpan.FromSeconds(30));
-        using var content = new MemoryStream(bytes);
-        await storage.PutAsync(intent.ObjectKey, content, bytes.Length, type, deadline.Token);
-        await CopyVerifiedAsync(intent, Stream.Null, deadline.Token);
-        return (await repository.CompleteAsync(id, intent.Id, actor, clock.GetUtcNow(), t)).View();
+        finally { CryptographicOperations.ZeroMemory(image.Bytes); }
     }
     public async Task<string> CopyAsync(Guid id, Guid fileId, Stream output, CancellationToken t)
     {
@@ -60,9 +58,7 @@ public sealed class ExpenseEvidenceService(IExpenseEvidenceRepository repository
     }
     private async Task CopyVerifiedAsync(ExpenseEvidenceFile file, Stream output, CancellationToken t)
     {
-        using var bytes = new MemoryStream(); await storage.CopyToAsync(file.ObjectKey, bytes, t);
-        if (bytes.Length != file.Length || Convert.ToHexString(SHA256.HashData(bytes.ToArray())) != file.Sha256)
-            throw new FinanceException(409, "expense_evidence_integrity_failed");
-        bytes.Position = 0; await bytes.CopyToAsync(output, t);
+        try { await PrivateImageEvidence.CopyVerifiedAsync(storage, file.ObjectKey, file.Length, file.Sha256, output, t); }
+        catch (PrivateImageIntegrityException) { throw new FinanceException(409, "expense_evidence_integrity_failed"); }
     }
 }

@@ -64,7 +64,7 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
 import { theme } from '../theme/theme';
 import { typography, fontFaces } from '../theme/typography';
 import { StaffFeatureCard } from '../components/StaffFeatureCard';
-import { TenantFeatureDirectory } from '../components/TenantFeatureDirectory';
+import { TenantFeatureDirectory, tenantFeatureGroups } from '../components/TenantFeatureDirectory';
 afterEach(cleanup);
 const styleOf = (node: Element | null) => JSON.parse(node?.getAttribute('data-rn-style') ?? '{}');
 it('uses loaded static Inter faces for every Paper slot, including unvarianted text', () => {
@@ -97,7 +97,9 @@ it('centers the whole Tenant tile group and matches the Staff compact icon/title
   const staffIconStyle = styleOf(staffIcon.parentElement);
   const staffTitle = styleOf(screen.getByText('Staff reference'));
   const tenantButtons = screen.getAllByRole('button').filter((button) => button !== reference);
-  expect(tenantButtons).toHaveLength(11);
+  expect(tenantButtons).toHaveLength(
+    tenantFeatureGroups.reduce((total, group) => total + group.items.length, 0),
+  );
   for (const button of tenantButtons) {
     const icon = button.querySelector('i')!;
     const iconStyle = styleOf(icon.parentElement);

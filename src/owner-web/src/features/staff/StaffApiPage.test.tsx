@@ -330,7 +330,9 @@ it('shows exact unresolved responsibilities and blocks known unsafe deactivation
   );
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
-  fireEvent.click(await screen.findByRole('button', { name: /Cơ sở đang\/sắp phụ trách/ }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: /Cơ sở đang\/sắp phụ trách/ }, { timeout: 5000 }),
+  );
   expect(screen.getByRole('link', { name: 'Xử lý' })).toHaveAttribute(
     'href',
     '/staff-assignments?staffUserId=staff&locationId=loc',

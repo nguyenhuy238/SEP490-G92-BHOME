@@ -298,12 +298,29 @@ it('shows an empty list and a retryable failure without inventing financial valu
   fireEvent.click(screen.getByText('Thử lại'));
   await screen.findByText('Chưa có hóa đơn.');
 });
+it('guides a first-time Owner from an empty invoice list to verified inputs and the draft action', async () => {
+  mocks.api.list.mockResolvedValue({ items: [], page: 1, pageSize: 20, totalCount: 0 });
+  mount(<LiveInvoicesPage />);
+  await screen.findByText('Chưa có hóa đơn.');
+  expect(screen.getByRole('link', { name: 'Kiểm tra chỉ số' })).toHaveAttribute('href', '/meters');
+  expect(screen.getByRole('link', { name: 'Kiểm tra biểu giá' })).toHaveAttribute(
+    'href',
+    '/pricing',
+  );
+  fireEvent.click(screen.getAllByRole('button', { name: 'Lập hóa đơn nháp' })[1]);
+  expect(screen.getByRole('dialog', { name: 'Lập hóa đơn nháp' })).toBeInTheDocument();
+  expect(mocks.api.draft).not.toHaveBeenCalled();
+});
 it('requires Owner to choose every billing rule when the location has no schedule', async () => {
   mocks.api.request.mockResolvedValue([{ id: 'location', label: 'Synthetic' }]);
   mount(<BillingConfigurationPage />);
   fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
   fireEvent.click(await screen.findByRole('option', { name: 'Synthetic' }));
   await screen.findByText('Chọn đầy đủ các quy tắc trước khi lập hóa đơn đầu tiên.');
+  expect(screen.getByRole('link', { name: 'Thiết lập lịch' })).toHaveAttribute(
+    'href',
+    '#billing-schedule',
+  );
   expect(screen.getByText('Lưu quy tắc hóa đơn')).toBeDisabled();
   expect(mocks.api.saveSchedule).not.toHaveBeenCalled();
   await waitFor(() =>
@@ -337,4 +354,26 @@ it('keeps existing schedule folded until Owner requests a change', async () => {
   expect(await screen.findByRole('button', { name: 'Lưu quy tắc hóa đơn' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /Lịch & quy tắc hóa đơn/ }));
   expect(screen.queryByRole('button', { name: 'Lưu quy tắc hóa đơn' })).not.toBeInTheDocument();
+});
+it('identifies schedule month offsets in the saved summary', async () => {
+  mocks.api.schedule.mockResolvedValue({
+    version: 8,
+    rentSource: 1,
+    rateDate: 0,
+    partialMonth: 0,
+    rounding: 0,
+    draftDay: 5,
+    draftMonthOffset: 0,
+    finalDay: 10,
+    finalMonthOffset: 1,
+    dueDay: 15,
+    dueMonthOffset: 2,
+  });
+  mocks.api.request.mockResolvedValue([{ id: 'location', label: 'Synthetic' }]);
+  mount(<BillingConfigurationPage />);
+  fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic' }));
+  expect(
+    await screen.findByText('Nháp ngày 5 · Phát hành 10 (+1 tháng) · Hạn trả 15 (+2 tháng)'),
+  ).toBeInTheDocument();
 });

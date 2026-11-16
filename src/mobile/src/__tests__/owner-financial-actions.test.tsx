@@ -13,8 +13,7 @@ const state = vi.hoisted(() => ({
   queryError: '',
 }));
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  invoiceId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-  payer = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  invoiceId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const api = { request: state.request };
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ api, session: { roles: [state.role] } }),
@@ -155,15 +154,13 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
                 ],
             totalCount: state.empty ? 0 : 1,
           }
-        : path.includes('eligible-payers')
-          ? [{ userId: payer, displayLabel: 'Người trả tổng hợp' }]
-          : {
-              invoiceId,
-              paymentStatus: state.paid ? 'Paid' : 'Unpaid',
-              payableAmount: '100000',
-              paidAmount: '0',
-              outstandingAmount: '100000',
-            },
+        : {
+            invoiceId,
+            paymentStatus: state.paid ? 'Paid' : 'Unpaid',
+            payableAmount: '100000',
+            paidAmount: '0',
+            outstandingAmount: '100000',
+          },
   }),
 }));
 import {
@@ -259,7 +256,7 @@ it('rejects invalid VND and forces a new review after stale financial data', asy
   expect(state.saved).not.toHaveBeenCalled();
   expect((screen.getByText('Phê duyệt') as HTMLButtonElement).disabled).toBe(true);
 });
-it('allocates only after invoice and actual payer review, blocks repeat taps and reloads server state', async () => {
+it('allocates after reviewing the invoice without collecting payer identity, blocks repeat taps and reloads server state', async () => {
   let finish!: () => void;
   state.request.mockImplementation(
     () =>
@@ -269,8 +266,8 @@ it('allocates only after invoice and actual payer review, blocks repeat taps and
   );
   render(<OwnerPaymentDecision item={transfer} onChanged={state.saved} />);
   expect((screen.getByText('Phân bổ vào hóa đơn') as HTMLButtonElement).disabled).toBe(true);
-  change('Người thực trả', payer);
-  fireEvent.click(screen.getByLabelText('Tôi đã đối chiếu sao kê, nghĩa vụ và người thực trả'));
+  expect(screen.queryByLabelText('Người thực trả')).toBeNull();
+  fireEvent.click(screen.getByLabelText('Tôi đã đối chiếu giao dịch và hóa đơn theo sao kê'));
   fireEvent.click(screen.getByText('Phân bổ vào hóa đơn'));
   const confirm = screen.getByText('Xác nhận quyết định');
   fireEvent.click(confirm);
@@ -279,7 +276,7 @@ it('allocates only after invoice and actual payer review, blocks repeat taps and
   expect(state.request.mock.calls[0]![0]).toBe(`/api/v1/payment-transactions/${id}/allocate`);
   expect(JSON.parse(state.request.mock.calls[0]![1].body)).toEqual({
     invoiceId,
-    paidByUserId: payer,
+    paidByUserId: null,
     humanVerified: true,
   });
   expect(state.request.mock.calls[0]![1].headers['Idempotency-Key']).toBeTruthy();
@@ -312,7 +309,7 @@ it('allows a reasoned rejection without an invoice and never exposes decisions t
     />,
   );
   change('Lý do không phân bổ', 'Không khớp nghĩa vụ');
-  fireEvent.click(screen.getByLabelText('Tôi đã đối chiếu sao kê, nghĩa vụ và người thực trả'));
+  fireEvent.click(screen.getByLabelText('Tôi đã đối chiếu giao dịch và hóa đơn theo sao kê'));
   fireEvent.click(screen.getByText('Không phân bổ giao dịch'));
   fireEvent.click(screen.getByText('Xác nhận quyết định'));
   await waitFor(() => expect(state.saved).toHaveBeenCalledOnce());

@@ -685,10 +685,6 @@ export const featureDefinitions: FeatureDefinition[] = [
         label: 'Số tiền',
       },
       {
-        field: 'tenant',
-        label: 'Người chuyển & NH',
-      },
-      {
         field: 'description',
         label: 'Nội dung thực tế',
       },

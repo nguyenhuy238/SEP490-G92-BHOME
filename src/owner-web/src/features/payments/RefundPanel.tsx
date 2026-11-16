@@ -218,7 +218,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
             <Alert severity="warning">
               {sourceKind === 'SecurityDeposit'
                 ? 'Chưa có người nhận đủ điều kiện trong danh sách. Owner cần làm rõ người nhận theo thỏa thuận hợp đồng.'
-                : 'Chưa có hồ sơ người thực trả đã xác minh. Owner cần làm rõ nguồn trước khi hoàn.'}
+                : 'Chưa có người nhận hoàn đủ điều kiện. Cần xác minh nguồn và người nhận trước khi lập yêu cầu hoàn.'}
             </Alert>
           ) : (
             <>
@@ -232,7 +232,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                   changed();
                 }}
               >
-                <MenuItem value="">Chọn đúng người thực trả</MenuItem>
+                <MenuItem value="">Chọn người nhận hoàn đã xác minh</MenuItem>
                 {source.data.beneficiaries.map((p) => (
                   <MenuItem key={p.id} value={p.id}>
                     {p.label}
@@ -240,7 +240,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                 ))}
                 {source.data.externalBeneficiary && (
                   <MenuItem value={`external:${source.data.externalBeneficiary.attestationId}`}>
-                    {source.data.externalBeneficiary.label} · Người trả bên ngoài
+                    {source.data.externalBeneficiary.label} · Người nhận bên ngoài đã xác minh
                   </MenuItem>
                 )}
               </TextField>
@@ -273,7 +273,7 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                 label={
                   sourceKind === 'SecurityDeposit'
                     ? 'Tôi xác nhận nguồn tiền và người nhận hoàn theo thỏa thuận hợp đồng'
-                    : 'Tôi xác nhận nguồn tiền và đúng người thực trả được nhận hoàn'
+                    : 'Tôi xác nhận nguồn tiền và người nhận hoàn theo bằng chứng'
                 }
               />
               {sourceKind !== 'Receipt' && (

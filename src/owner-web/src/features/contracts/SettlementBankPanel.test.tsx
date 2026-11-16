@@ -79,13 +79,12 @@ async function fill() {
   fireEvent.click(await screen.findByRole('option', { name: /Synthetic repair/ }));
   fireEvent.mouseDown(screen.getByLabelText('Tiền ngân hàng đã xác minh'));
   fireEvent.click(await screen.findByRole('option', { name: /SYN-BANK/ }));
-  fireEvent.mouseDown(screen.getByLabelText('Người thực chuyển tiền'));
-  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic actual payer' }));
 }
-const consent = 'Tôi đã kiểm tra giao dịch thực nhận, khoản đích và người thực trả trên sao kê';
-it('submits the selected actual payer and uses the backend allocation result', async () => {
+const consent = 'Tôi đã kiểm tra giao dịch ngân hàng và khoản phải thu theo sao kê';
+it('allocates settlement payment without using a payer identity from eligible users', async () => {
   const { request, saved } = mount();
   await fill();
+  expect(screen.queryByLabelText('Người thực chuyển tiền')).not.toBeInTheDocument();
   const confirm = screen.getByRole('button', { name: 'Xác nhận phân bổ tiền ngân hàng' });
   expect(confirm).toBeDisabled();
   fireEvent.click(screen.getByLabelText(consent));
@@ -96,7 +95,7 @@ it('submits the selected actual payer and uses the backend allocation result', a
   expect(JSON.parse(post[1]?.body as string)).toEqual({
     expectedReference: 'source-1',
     transferId: 'receipt',
-    paidByUserId: 'co-tenant',
+    paidByUserId: null,
     humanConfirmed: true,
   });
   expect(screen.getByText(/Đã phân bổ 50.000/)).toBeTruthy();

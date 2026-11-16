@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   Alert,
   Box,
@@ -101,8 +101,17 @@ export function LiveMetersPage() {
       <PageHeader
         title="Ghi chỉ số điện nước"
         subtitle="Theo dõi nhiệm vụ ghi số và kiểm tra chỉ số Staff đã xác nhận trước khi lập hóa đơn."
+        actions={
+          <Button component={Link} to="/billing-automation" variant="outlined">
+            Xem lịch tạo nhiệm vụ
+          </Button>
+        }
       />
       <Stack spacing={2}>
+        <Typography variant="body2" color="text.secondary">
+          Chọn “Xem chi tiết” trên một nhiệm vụ để kiểm tra trạng thái, phân công và chỉ số đã xác
+          nhận. Số liệu tổng quan chỉ tính trên trang đang xem.
+        </Typography>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           sx={{ gap: 1.5 }}
@@ -254,11 +263,48 @@ export function LiveMetersPage() {
             {contractError(tasks.error)}
           </Alert>
         )}
-        {tasks.data && !tasks.data.length && (
-          <Alert severity="info">
-            Chưa có nhiệm vụ phù hợp. Thử bỏ bộ lọc, hoặc chọn cơ sở và phòng để giao nhiệm vụ ghi
-            số ban đầu.
-          </Alert>
+        {tasks.data && !tasks.data.length && !tasks.error && (
+          <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 2 }}>
+            <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
+              <Typography sx={{ fontWeight: 700 }}>
+                {page > 1
+                  ? `Không có nhiệm vụ ở trang ${page}`
+                  : location || room || status || dueDate
+                    ? 'Không có nhiệm vụ phù hợp bộ lọc'
+                    : 'Chưa có nhiệm vụ ghi chỉ số'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {page > 1
+                  ? 'Quay về trang đầu để xem nhiệm vụ hiện có.'
+                  : location || room || status || dueDate
+                    ? 'Thử xem tất cả cơ sở và trạng thái để tìm nhiệm vụ cần kiểm tra.'
+                    : 'Mở lịch xử lý để kiểm tra thời điểm tạo nhiệm vụ ghi số cho phòng.'}
+              </Typography>
+              {page > 1 ? (
+                <Button variant="outlined" onClick={() => setPage(1)}>
+                  Về trang đầu
+                </Button>
+              ) : location || room || status || dueDate ? (
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setLocation('');
+                    setRoom('');
+                    setStatus('');
+                    setDueDate('');
+                    setWorkView('all');
+                    setPage(1);
+                  }}
+                >
+                  Xóa bộ lọc nhiệm vụ
+                </Button>
+              ) : (
+                <Button variant="outlined" component={Link} to="/billing-automation">
+                  Mở lịch xử lý
+                </Button>
+              )}
+            </Stack>
+          </Paper>
         )}
         {!!tasks.data?.length && !tasks.error && (
           <Paper variant="outlined" sx={{ minWidth: 0, overflow: 'hidden', borderRadius: 2 }}>
