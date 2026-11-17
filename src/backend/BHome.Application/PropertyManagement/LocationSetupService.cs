@@ -19,9 +19,11 @@ public sealed record LocationMetadataWrite(string Code, int Floors, string Conta
 public sealed record LocalRoomDefaultsWrite(string Name, string Description, SharedRoomDefaults Defaults,
     Guid? AssetTemplateId, int ExpectedVersion = 0, string Reason = "", string Status = "Recorded");
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SetupAssetRequirement(string Name, string Category, string TrackingMode, int Quantity, string? Unit = null);
+public sealed record SetupAssetRequirement(string Name, string Category, string TrackingMode, int Quantity, string? Unit = null,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? ReferencePrice = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SetupCommonAssetRequirement(Guid Id, string Name, string Category, string TrackingMode, int Quantity, string CommonArea, string? Unit = null);
+public sealed record SetupCommonAssetRequirement(Guid Id, string Name, string Category, string TrackingMode, int Quantity, string CommonArea, string? Unit = null,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? ReferencePrice = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CommonAssetRequirementsWrite(SetupCommonAssetRequirement[] Items, int ExpectedVersion = 0);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -159,7 +161,8 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
     private static SetupCommonAssetRequirement[] ValidateCommonAssets(SetupCommonAssetRequirement[]? items)
     {
         if (items is null || items.Length > 100 || items.Any(item => item is null || item.Id == Guid.Empty ||
-            item.Quantity is < 1 or > 10000 || item.TrackingMode is not ("Serialized" or "BulkQuantity")) ||
+            item.Quantity is < 1 or > 10000 || item.TrackingMode is not ("Serialized" or "BulkQuantity") ||
+            !InventoryAcquisitionPrice.ValidReference(item.ReferencePrice)) ||
             items.Select(item => item.Id).Distinct().Count() != items.Length)
             throw new PropertyException(400, "invalid_common_asset_requirements");
         return items.Select(item => item with
@@ -631,7 +634,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 Guid? assetTemplateId = null;
                 if (type.Assets.Length > 0)
                 {
-                    var template = await assets.SaveTemplateAsync(null, new(location.Id, type.Name.Trim(), type.Assets.Select(asset => new AssetTemplateItem(Guid.NewGuid(), asset.Name.Trim(), asset.Category.Trim(), asset.TrackingMode, asset.Quantity, string.IsNullOrWhiteSpace(asset.Unit) ? null : asset.Unit.Trim())).ToArray(), Scoped: true), t);
+                    var template = await assets.SaveTemplateAsync(null, new(location.Id, type.Name.Trim(), type.Assets.Select(asset => new AssetTemplateItem(Guid.NewGuid(), asset.Name.Trim(), asset.Category.Trim(), asset.TrackingMode, asset.Quantity, string.IsNullOrWhiteSpace(asset.Unit) ? null : asset.Unit.Trim(), asset.ReferencePrice)).ToArray(), Scoped: true), t);
                     await assets.PublishAsync(template.Id, template.Version, t); assetTemplateId = template.Id; created.Add(template.Id);
                 }
                 var data = new JsonObject

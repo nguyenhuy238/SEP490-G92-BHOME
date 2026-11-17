@@ -182,9 +182,25 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
             return new RoomInventoryPhysicalAsset(row.Asset, metadata);
         }).ToArray();
     }
+    public async Task<IReadOnlyList<RoomInventoryPhysicalAsset>> ReviewCommonAssetsAsync(Guid locationId, CancellationToken t)
+    {
+        var rows = await db.Set<Asset>().AsNoTracking()
+            .Where(a => a.LocationId == locationId && a.RoomId == null && a.CommonArea != null && a.Status != AssetStatus.Retired)
+            .OrderBy(a => a.Id)
+            .Select(a => new { Asset = a, PurchaseInfo = EF.Property<string>(a, "PurchaseInfo") })
+            .ToArrayAsync(t);
+        return rows.Select(row =>
+        {
+            using var data = JsonDocument.Parse(row.PurchaseInfo ?? "{}");
+            var metadata = data.RootElement.TryGetProperty("trackingMode", out _)
+                ? data.RootElement.Deserialize<AssetMetadata>(Json)!
+                : new AssetMetadata("Serialized", 1, null, null, null);
+            return new RoomInventoryPhysicalAsset(row.Asset, metadata);
+        }).ToArray();
+    }
     public async Task<IReadOnlyList<SetupDocument>> ReviewDocumentsAsync(Guid locationId, Guid[] activeAssetIds, CancellationToken t)
     {
-        string[] kinds = ["SetupAssetTemplate", "SetupAssetTemplateAssignment", "SetupRoomProvenance", "SetupDesiredAssets", "SetupRoomInventoryChecklistReview"];
+        string[] kinds = ["SetupAssetTemplate", "SetupAssetTemplateAssignment", "SetupRoomProvenance", "SetupDesiredAssets", "SetupRoomInventoryChecklistReview", "SetupAssetMetadata"];
         await using var cmd = await sql.Command("""
             SELECT task_data->'document' FROM operational_tasks WHERE location_id=@location AND task_type='SYSTEM_JOB'
                 AND (task_data->>'recordType'=ANY(@kinds) OR
@@ -214,7 +230,8 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     public async Task SaveInventoryAssetsAsync(Guid locationId, IReadOnlyList<AssetInventoryCreation> assets, Guid actor, CancellationToken t)
     {
         if (assets.Count == 0) return;
-        if (assets.Count > 1000 || assets.Any(x => x.Asset.LocationId != locationId || x.Asset.RoomId is null ||
+        if (assets.Count > 1000 || assets.Any(x => x.Asset.LocationId != locationId ||
+            (x.Asset.RoomId is null) == string.IsNullOrWhiteSpace(x.Asset.CommonArea) ||
             x.Asset.Status == AssetStatus.Retired || x.Metadata.Quantity < 1 || string.IsNullOrWhiteSpace(x.Asset.Code)) ||
             assets.Select(x => x.Asset.Id).Distinct().Count() != assets.Count ||
             assets.Select(x => x.Asset.Code!.Trim().ToUpperInvariant()).Distinct().Count() != assets.Count)

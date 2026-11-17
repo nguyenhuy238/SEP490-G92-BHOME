@@ -233,6 +233,7 @@ function mergeCatalogAssets(assets: DraftAsset[], documents: SharedDocument[], s
       if (existing.references?.some((item) => item.kind === 'asset-catalog' && sameFamily(item.id, doc))) continue;
       merged[index] = {
         ...existing,
+        referencePrice: (doc.data as AssetCatalogData).referencePrice,
         references: uniqueReferences([...(existing.references ?? []), imported]),
       };
     } else {
@@ -242,6 +243,7 @@ function mergeCatalogAssets(assets: DraftAsset[], documents: SharedDocument[], s
         quantity: 1,
         trackingMode: 'BulkQuantity',
         unit: (doc.data as AssetCatalogData).unit,
+        referencePrice: (doc.data as AssetCatalogData).referencePrice,
         references: [imported],
       });
     }
@@ -322,6 +324,7 @@ const sourceType = (document: SharedDocument): DraftType => {
               name: item.catalog.name,
               category: item.catalog.category,
               unit: item.catalog.unit,
+              referencePrice: item.catalog.referencePrice,
               quantity: item.quantity,
               trackingMode: item.trackingMode,
             },
@@ -510,6 +513,7 @@ function toLocationSetupInput(draft: Draft): LocationSetupInput {
         quantity: asset.quantity,
         trackingMode: asset.trackingMode,
         unit: asset.unit ?? null,
+        ...(asset.referencePrice == null ? {} : { referencePrice: asset.referencePrice }),
       })),
       sourceId: type.sourceId,
       sourceVersion: type.sourceVersion,
@@ -531,6 +535,7 @@ function toLocationSetupInput(draft: Draft): LocationSetupInput {
             quantity: asset.quantity,
             trackingMode: asset.trackingMode,
             unit: asset.unit ?? null,
+            ...(asset.referencePrice == null ? {} : { referencePrice: asset.referencePrice }),
           })),
         }
       : {}),
@@ -918,6 +923,7 @@ export function LocationSetupWizard({
           name: doc.name,
           category: data.category,
           unit: data.unit,
+          referencePrice: data.referencePrice,
           quantity: 1,
           trackingMode: 'BulkQuantity',
           commonArea: '',
@@ -1144,6 +1150,7 @@ export function LocationSetupWizard({
               quantity: item.quantity,
               trackingMode: item.trackingMode,
               unit: item.unit ?? null,
+              referencePrice: item.referencePrice ?? null,
               references: assetReference ? [assetReference] : [],
             })) ?? [],
           assetTemplateSourceName: linked?.data.name,

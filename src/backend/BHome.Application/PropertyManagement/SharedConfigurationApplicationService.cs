@@ -77,7 +77,7 @@ public sealed class SharedConfigurationApplicationService(ISharedConfigurationSt
                     if (defaults.AssetItems is { Length: > 0 })
                     {
                         var requirements = defaults.AssetItems.Where(i => i.Required || input.IncludeOptionalItems)
-                            .Select(i => new AssetTemplateItem(Guid.NewGuid(), i.Catalog!.Name, i.Catalog.Category, i.TrackingMode, i.Quantity, i.Catalog.Unit)).ToArray();
+                            .Select(i => new AssetTemplateItem(Guid.NewGuid(), i.Catalog!.Name, i.Catalog.Category, i.TrackingMode, i.Quantity, i.Catalog.Unit, i.Catalog.ReferencePrice)).ToArray();
                         if (requirements.Length > 0)
                         {
                             var template = await local.SaveAsync(Guid.NewGuid(), input.LocationId, "AssetTemplate", "Published",
@@ -88,7 +88,7 @@ public sealed class SharedConfigurationApplicationService(ISharedConfigurationSt
                     created = Guid.NewGuid();
                     await local.SaveAsync(created, input.LocationId, "RoomDefaults", "Recorded", new { name = source.Name, defaults = defaults with { AssetItems = null }, assetTemplateId, sourceId = source.Id, sourceVersion = source.Version, sourceEdition = source.Edition, edition = 1 }, 0, actor, t); break;
                 case "asset-templates":
-                    var items = Data<SharedAssetData>(source).Items.Where(i => i.Required || input.IncludeOptionalItems).Select(i => new AssetTemplateItem(Guid.NewGuid(), i.Catalog!.Name, i.Catalog.Category, i.TrackingMode, i.Quantity, i.Catalog.Unit)).ToArray();
+                    var items = Data<SharedAssetData>(source).Items.Where(i => i.Required || input.IncludeOptionalItems).Select(i => new AssetTemplateItem(Guid.NewGuid(), i.Catalog!.Name, i.Catalog.Category, i.TrackingMode, i.Quantity, i.Catalog.Unit, i.Catalog.ReferencePrice)).ToArray();
                     created = (await assets.SaveReadyTemplateAsync(null, new(input.LocationId, source.Name, items), t)).Id; break;
                 case "fee-templates":
                     var fee = Data<SharedFeeData>(source);

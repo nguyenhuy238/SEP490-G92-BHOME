@@ -21,6 +21,7 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
         return items.Select(item =>
         {
             if (item.Id == Guid.Empty || item.Quantity is < 1 or > 10000 ||
+                !InventoryAcquisitionPrice.ValidReference(item.ReferencePrice) ||
                 item.TrackingMode is not ("Serialized" or "BulkQuantity"))
                 throw new PropertyException(400, "invalid_template_item");
             return item with
@@ -390,6 +391,26 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             asset = await Store.AssetAsync(id, t) ?? throw new PropertyException(404, "resource_not_found");
             var previous = (await Store.AssetMetadataAsync([id], t))[id];
             m = m with { Unit = string.IsNullOrWhiteSpace(m.Unit) ? previous.Unit : Text(m.Unit, 80) };
+            // An Owner-verified purchase is a historical financial snapshot, not
+            // a mutable reference price. An acquisition-price change with no
+            // additional units would retroactively revalue that purchase before
+            // the background capital ledger has run. Only an increase in
+            // quantity may carry a new unit price for newly acquired units.
+            if (previous.PurchaseCost.HasValue && previous.PurchaseCost != m.PurchaseCost &&
+                m.Quantity <= previous.Quantity)
+            {
+                var roomVerified = (await Store.ListAsync(asset.LocationId, "AssetVerification", t))
+                    .Any(document => document.Status == "Verified" &&
+                        document.Data.TryGetProperty("assetId", out var linked) &&
+                        linked.TryGetGuid(out var linkedId) && linkedId == id);
+                var commonVerified = !roomVerified && (await Store.ListAsync(
+                        asset.LocationId, "CommonAssetInventoryVerification", t))
+                    .Any(document => document.Status == "Verified" &&
+                        document.Data.TryGetProperty("assetId", out var linked) &&
+                        linked.TryGetGuid(out var linkedId) && linkedId == id);
+                if (roomVerified || commonVerified)
+                    throw new PropertyException(409, "asset_acquisition_price_locked");
+            }
             if ((m.Quantity != previous.Quantity || m.TrackingMode != previous.TrackingMode) &&
                 (asset.Status is AssetStatus.Retired or AssetStatus.UnderRepair || await Store.HasOpenAssetWorkAsync(id, t)))
                 throw new PropertyException(409, "asset_workflow_controlled");

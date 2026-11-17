@@ -41,6 +41,11 @@ const DebtsPage = lazy(() => import('../features/debts/pages/DebtsPage'));
 const IncidentsPage = lazy(() => import('../features/incidents/pages/IncidentsPage'));
 const MaintenancePage = lazy(() => import('../features/maintenance/pages/MaintenancePage'));
 const ExpensesPage = lazy(() => import('../features/expenses/pages/ExpensesPage'));
+const LocationFinanceWorkspace = lazy(() =>
+  import('../features/locations/pages/LocationFinanceWorkspace').then((module) => ({
+    default: module.LocationFinanceWorkspace,
+  })),
+);
 const DashboardPage = lazy(() => import('../features/dashboard/pages/DashboardPage'));
 const FinanceHomePage = lazy(() => import('../features/finance/FinanceHomePage'));
 const ReportsPage = lazy(() => import('../features/reports/pages/ReportsPage'));
@@ -117,7 +122,7 @@ export function AppRouter() {
                 <Route path="rules" element={<></>} />
                 <Route path="history" element={<></>} />
                 <Route path="settings" element={<></>} />
-                <Route path="investment" element={<ExpensesPage />} />
+                <Route path="investment" element={<LocationFinanceWorkspace />} />
               </Route>
               <Route path="/rooms" element={<RoomsPage />} />
               <Route path="/rooms/new" element={<CreateRooms />} />

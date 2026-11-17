@@ -77,7 +77,7 @@ it.each(portalRoutes)(
   30000,
 );
 
-it('renders the investment child route inside a Location Workspace', async () => {
+it('mounts the Owner-only investment child route inside a Location Workspace in demo mode', async () => {
   render(
     <ThemeProvider theme={theme}>
       <AuthProvider>
@@ -89,9 +89,15 @@ it('renders the investment child route inside a Location Workspace', async () =>
       </AuthProvider>
     </ThemeProvider>,
   );
+  // Phase 7 finance uses the real authenticated Owner session. Demo sign-in
+  // grants access to the mock Location shell but deliberately has no API JWT.
+  // Its child route must mount and show the authorization boundary rather than
+  // silently falling back to the old investment screen.
   expect(
-    await screen.findByRole('heading', { name: 'Đầu tư ban đầu & Chi phí' }, { timeout: 10000 }),
+    await screen.findByText('Chỉ Owner được truy cập thông tin vốn và chi phí của cơ sở.',
+      {}, { timeout: 10000 }),
   ).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'BHOME Central 1 - Bạch Đằng', level: 1 })).toBeInTheDocument();
 }, 15000);
 
 it('keeps property functions inside the selected Location Workspace', async () => {

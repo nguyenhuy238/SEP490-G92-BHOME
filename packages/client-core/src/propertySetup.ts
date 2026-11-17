@@ -83,6 +83,7 @@ export interface LocalAssetItem {
   trackingMode: 'Serialized' | 'BulkQuantity';
   quantity: number;
   unit?: string | null;
+  referencePrice?: string | number | null;
 }
 export interface LocalAssetTemplate {
   locationId: string;
@@ -135,6 +136,8 @@ export interface RoomInventoryReviewItem {
   quantity: number;
   checked: boolean;
   evidence: RoomInventoryReviewEvidence[];
+  referenceUnitCost?: string | number | null;
+  acquisitionUnitCost?: string | number | null;
 }
 export interface RoomInventoryReviewRow {
   roomId: string;
@@ -161,8 +164,30 @@ export interface RoomInventoryConfirmation {
     desiredId: string | null;
     desiredVersion: number;
     stateToken: string;
-    items: { itemId: string; checked: boolean; evidenceIds: string[] }[];
+    items: { itemId: string; checked: boolean; evidenceIds: string[]; unitCost?: string | null }[];
   }[];
+}
+export interface CommonAssetInventoryItem extends RoomInventoryReviewItem {
+  commonArea: string;
+  blockedReason: string | null;
+}
+export interface CommonAssetInventoryReview {
+  requirementsId: string | null;
+  requirementsVersion: number;
+  stateToken: string;
+  state: 'NotChecked' | 'PartiallyChecked' | 'Matched' | 'NeedsReview';
+  checkedCount: number;
+  totalCount: number;
+  reviewedAt: string | null;
+  items: CommonAssetInventoryItem[];
+}
+export interface CommonAssetInventoryConfirmation {
+  requestId: string;
+  requirementsId: string;
+  requirementsVersion: number;
+  stateToken: string;
+  confirmed: true;
+  items: { itemId: string; checked: boolean; evidenceIds: string[]; unitCost?: string | null }[];
 }
 export interface OperatingPolicyInput {
   locationId: string;
@@ -331,6 +356,16 @@ export function propertySetupClient(request: SetupRequest) {
     confirmRoomInventory: (locationId: string, input: RoomInventoryConfirmation) =>
       write<RoomInventoryReview>(
         `/api/v1/locations/${encodeURIComponent(locationId)}/room-inventory-review/confirm`,
+        input,
+      ),
+    commonAssetInventoryReview: (locationId: string, signal?: AbortSignal) =>
+      request<CommonAssetInventoryReview>(
+        `/api/v1/locations/${encodeURIComponent(locationId)}/common-asset-inventory-review`,
+        { signal },
+      ),
+    confirmCommonAssetInventory: (locationId: string, input: CommonAssetInventoryConfirmation) =>
+      write<CommonAssetInventoryReview>(
+        `/api/v1/locations/${encodeURIComponent(locationId)}/common-asset-inventory-review/confirm`,
         input,
       ),
     locationOptions: (signal?: AbortSignal) =>

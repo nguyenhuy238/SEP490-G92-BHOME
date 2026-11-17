@@ -495,6 +495,7 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
       trackingMode: 'BulkQuantity',
       unit: 'Bộ',
       commonArea: 'Hành lang tầng 1',
+      referencePrice: 500000,
     },
   ]);
 }, 30000);

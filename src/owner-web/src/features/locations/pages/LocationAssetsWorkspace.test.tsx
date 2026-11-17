@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material';
+import { MemoryRouter } from 'react-router';
 import { afterEach, expect, it, vi } from 'vitest';
 import { theme } from '../../../theme/theme';
 import { LocationAssetsWorkspace } from './LocationAssetsWorkspace';
@@ -22,13 +23,18 @@ vi.mock('../../property/CommonAssetRequirementsPanel', () => ({
 vi.mock('../../property/RoomInventoryReviewPanel', () => ({
   RoomInventoryReviewPanel: () => <div data-testid="owner-review" />,
 }));
+vi.mock('../../property/CommonAssetInventoryReviewPanel', () => ({
+  CommonAssetInventoryReviewPanel: () => <div data-testid="common-review" />,
+}));
 
 afterEach(cleanup);
-function mount() {
+function mount(initialPath = '/locations/location/assets') {
   return render(
-    <ThemeProvider theme={theme}>
-      <LocationAssetsWorkspace locationId="location" />
-    </ThemeProvider>,
+    <MemoryRouter initialEntries={[initialPath]}>
+      <ThemeProvider theme={theme}>
+        <LocationAssetsWorkspace locationId="location" />
+      </ThemeProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -37,8 +43,18 @@ it('keeps Owner configuration and attestation tabs separate from the legacy Staf
   mount();
   fireEvent.click(screen.getByRole('tab', { name: 'Tài sản theo phòng' }));
   expect(screen.getByTestId('legacy-inventory')).toHaveTextContent('templates');
-  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê phòng' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê tài sản' }));
   expect(screen.getByTestId('owner-review')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê khu vực chung' }));
+  expect(screen.getByTestId('common-review')).toBeInTheDocument();
+});
+
+it('opens the inventory review tab directly from a finance link', () => {
+  state.roles = ['Owner'];
+  mount('/locations/location/assets?tab=review&scope=common');
+  expect(screen.getByRole('tab', { name: 'Kiểm kê tài sản' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tab', { name: 'Kiểm kê khu vực chung' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByTestId('common-review')).toBeInTheDocument();
 });
 
 it('shows Staff only the dedicated handover inventory entry and keeps its legacy flow', () => {
@@ -47,7 +63,7 @@ it('shows Staff only the dedicated handover inventory entry and keeps its legacy
   expect(screen.getByRole('tab', { name: 'Kiểm kê bàn giao' })).toBeVisible();
   expect(screen.queryByRole('tab', { name: 'Tài sản theo phòng' })).not.toBeInTheDocument();
   expect(screen.queryByRole('tab', { name: 'Tài sản chung cơ sở' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('tab', { name: 'Kiểm kê phòng' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: 'Kiểm kê tài sản' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: 'Kiểm kê bàn giao' }));
   expect(screen.getByTestId('legacy-inventory')).toHaveTextContent('inventory');
 });

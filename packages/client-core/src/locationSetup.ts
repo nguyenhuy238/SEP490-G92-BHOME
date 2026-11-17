@@ -24,6 +24,7 @@ export interface SetupAssetRequirement {
   trackingMode: 'Serialized' | 'BulkQuantity';
   quantity: number;
   unit?: string | null;
+  referencePrice?: string | number | null;
 }
 export interface SetupCommonAssetRequirement extends SetupAssetRequirement {
   id: string;

@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 namespace BHome.Infrastructure.Finance;
 
 public sealed partial class FinancialReportRepository(BHomePersistenceContext db, IRoomInsightsRepository insights,
-    TimeProvider clock) : IFinancialReportRepository
+    ICapitalAssetRepository capitalAssets, TimeProvider clock) : IFinancialReportRepository
 {
     public async Task<ReportBasis> ReadAsync(ReportFilter filter, CancellationToken token)
     {
@@ -47,6 +47,23 @@ public sealed partial class FinancialReportRepository(BHomePersistenceContext db
               AND ({filter.LocationId}::uuid IS NULL OR location_id={filter.LocationId})
               AND ({filter.RoomId}::uuid IS NULL OR room_id={filter.RoomId}) GROUP BY location_id
             """).ToDictionaryAsync(e => e.LocationId, token);
+        // A physical investment becomes visible as soon as the Owner confirms
+        // inventory and records a price. The daily snapshot job will persist
+        // exactly one source-managed expense for this asset. Exclude already
+        // snapshotted or manually linked amounts to avoid double-counting.
+        var pendingAssetInvestments = new Dictionary<Guid, decimal>();
+        foreach (var locationRow in names)
+        {
+            var investments = await capitalAssets.ReadAsync(locationRow.Id, token);
+            pendingAssetInvestments[locationRow.Id] = investments
+                .Where(asset => asset.Verified &&
+                    (filter.RoomId is null || asset.RoomId == filter.RoomId))
+                .SelectMany(asset => asset.PendingEvents)
+                .Where(purchase => (purchase.PurchaseDate ??
+                    DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+                        clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime)) <= filter.To)
+                .Sum(purchase => purchase.Amount);
+        }
         var collected = await db.Database.SqlQuery<CollectionAggregate>($"""
             SELECT i.location_id AS "LocationId",COALESCE(sum(a.amount),0) AS "CumulativeCollected",
               COALESCE(sum(a.amount) FILTER(WHERE a.allocated_at>={start}),0) AS "Collected"
@@ -63,7 +80,7 @@ public sealed partial class FinancialReportRepository(BHomePersistenceContext db
             issued.TryGetValue(l.Id, out var i); expense.TryGetValue(l.Id, out var e); collected.TryGetValue(l.Id, out var c); counts.TryGetValue(l.Id, out var r);
             settlements.TryGetValue(l.Id, out var s);
             return new FinanceBasis(l.Id, l.Name, (i?.Issued ?? 0) + (s?.Charges ?? 0), i?.Adjustments ?? 0, (c?.Collected ?? 0) + (s?.Collections ?? 0), e?.Operating ?? 0, (i?.Debt ?? 0) + (s?.Debt ?? 0),
-                e?.Investment ?? 0, (c?.CumulativeCollected ?? 0) + (s?.CumulativeCollections ?? 0), e?.CumulativeOperating ?? 0, r?.Total ?? 0, r?.Occupied ?? 0,
+                (e?.Investment ?? 0) + pendingAssetInvestments[l.Id], (c?.CumulativeCollected ?? 0) + (s?.CumulativeCollections ?? 0), e?.CumulativeOperating ?? 0, r?.Total ?? 0, r?.Occupied ?? 0,
                 s?.Charges ?? 0, s?.Debt ?? 0, s?.Collections ?? 0, s?.DepositOffsets ?? 0, s?.HoldingForfeitures ?? 0);
         }).ToArray();
         var historical = await HistoricalAsync(filter, token);

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using BHome.Application.IdentityAccess;
+using BHome.Application.Finance;
 using BHome.Application.PropertyManagement;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.Locations;
@@ -26,7 +27,7 @@ public sealed class RoomInventoryReviewServiceTests
         public Guid[] LastActiveAssetIds { get; private set; } = [];
         public readonly RoomInventoryReviewService Service;
 
-        public World()
+        public World(ISharedConfigurationStore? shared = null)
         {
             store = Substitute.For<ISetupWorkspaceStore>();
             var user = Substitute.For<ICurrentUser>();
@@ -36,7 +37,7 @@ public sealed class RoomInventoryReviewServiceTests
             var repository = Substitute.For<IPropertyRepository>();
             repository.FindAsync<Location>(Location.Id, Arg.Any<CancellationToken>()).Returns(Location);
             var properties = new PropertyService(repository, user, new PermissionAccess(user, access), TimeProvider.System);
-            Service = new(store, user, access, properties, NullLogger<RoomInventoryReviewService>.Instance);
+            Service = new(store, user, access, properties, NullLogger<RoomInventoryReviewService>.Instance, shared);
 
             store.ReviewRoomsAsync(Location.Id, Arg.Any<CancellationToken>()).Returns(_ => rooms.ToArray());
             store.ReviewRoomAssetsAsync(Location.Id, Arg.Any<CancellationToken>()).Returns(_ =>
@@ -67,6 +68,12 @@ public sealed class RoomInventoryReviewServiceTests
                         Assets.Add(creation.Asset);
                         Metadata[creation.Asset.Id] = creation.Metadata;
                     }
+                    return Task.CompletedTask;
+                });
+            store.SaveAssetMetadataAsync(Arg.Any<Guid>(), Arg.Any<AssetMetadata>(), Arg.Any<CancellationToken>())
+                .Returns(call =>
+                {
+                    Metadata[call.ArgAt<Guid>(0)] = call.ArgAt<AssetMetadata>(1);
                     return Task.CompletedTask;
                 });
             store.SaveBatchAsync(Location.Id, Arg.Any<IReadOnlyList<SetupDocumentWrite>>(),
@@ -108,6 +115,20 @@ public sealed class RoomInventoryReviewServiceTests
             Add(Guid.NewGuid(), "DesiredAssets", "PendingVerification",
                 new DesiredAssets(templateId, 1, room.Id, configuredItems, "PendingVerification"));
             return room;
+        }
+
+        public void ReplaceRoomRequirements(Room room, AssetTemplateItem replacement)
+        {
+            var template = documents.Values.Single(d => d.Kind == "AssetTemplate" &&
+                Read<AssetTemplateWrite>(d).ScopeRoomId == null);
+            documents[template.Id] = template with
+            {
+                Version = template.Version + 1,
+                Data = JsonSerializer.SerializeToElement(
+                    new AssetTemplateWrite(Location.Id, "Updated", [replacement], Scoped: true), Json)
+            };
+            Add(Guid.NewGuid(), "DesiredAssets", "PendingVerification",
+                new DesiredAssets(template.Id, template.Version + 1, room.Id, [replacement], "PendingVerification"));
         }
 
         public static AssetTemplateItem Item(string name = "Chair", int quantity = 2) =>
@@ -185,6 +206,7 @@ public sealed class RoomInventoryReviewServiceTests
         private static T Read<T>(SetupDocument document) =>
             document.Data.Deserialize<T>(Json) ?? throw new InvalidOperationException();
         public Task<RoomInventoryReviewView> Read() => Service.GetAsync(Location.Id, default);
+        public SetupDocument MetadataDocument(Guid assetId) => documents[assetId];
         public Task<RoomInventoryReviewView> Confirm(RoomInventoryReviewConfirm command) =>
             Service.ConfirmAsync(Location.Id, command, default);
         public static RoomInventoryReviewInputRoom Input(RoomInventoryReviewRoom room, params RoomInventoryReviewInputItem[] items) =>
@@ -202,6 +224,25 @@ public sealed class RoomInventoryReviewServiceTests
         var view = await world.Read();
         Assert.Single(view.Rooms);
         Assert.Equal(new[] { asset.Id }, world.LastActiveAssetIds);
+    }
+
+    [Fact]
+    public async Task FinanceReviewCount_RejectsHistoricMatchedChecklistAfterTemplateChanges()
+    {
+        var world = new World();
+        var room = world.AddRoom(World.Item("Chair", 2));
+        var original = Assert.Single((await world.Read()).Rooms);
+        var checkedItems = original.Items.Select(item =>
+            new RoomInventoryReviewInputItem(item.Id, true, [])).ToArray();
+        var confirmed = await world.Confirm(new(Guid.NewGuid(), [World.Input(original, checkedItems)], true));
+        Assert.Equal("Matched", Assert.Single(confirmed.Rooms).State);
+        Assert.Equal(0, await world.Service.CountRoomsRequiringReviewAsync(world.Location.Id, default));
+
+        // Previous review persists as Matched, but its baseline is no longer
+        // valid after new required assets are published for the same room.
+        world.ReplaceRoomRequirements(room, World.Item("Desk", 1));
+        Assert.NotEqual("Matched", Assert.Single((await world.Read()).Rooms).State);
+        Assert.Equal(1, await world.Service.CountRoomsRequiringReviewAsync(world.Location.Id, default));
     }
 
     [Fact]
@@ -258,6 +299,114 @@ public sealed class RoomInventoryReviewServiceTests
         Assert.Equal("Matched", Assert.Single((await world.Read()).Rooms).State);
         await world.Confirm(quickConfirm);
         Assert.Equal(2, world.Assets.Count);
+    }
+
+    [Fact]
+    public async Task LegacyRoomWithoutSavedPricesPrefillsFromMatchingPublishedAssetCatalog()
+    {
+        var shared = Substitute.For<ISharedConfigurationStore>();
+        var actor = Guid.NewGuid();
+        var recordedAt = DateTimeOffset.UtcNow;
+        SharedDocument Catalog(string name, decimal price) => new(
+            Guid.NewGuid(), "asset-catalog", Guid.NewGuid(), 1, 1, name, "",
+            "Published", "Owner", actor, recordedAt, actor, recordedAt,
+            JsonSerializer.SerializeToElement(new SharedCatalogData("Khác", "Cái", price, "Room")));
+        var catalogs = new[]
+        {
+            Catalog("Bóng đèn", 110_000m),
+            Catalog("Giường", 2_000_000m),
+            Catalog("Tủ quần áo", 3_000_000m)
+        };
+        shared.ListAsync("asset-catalog", "", "Published", 1, 100,
+                Arg.Any<CancellationToken>(), true)
+            .Returns(new SharedPage(catalogs, catalogs.Length, 1, 100));
+        var world = new World(shared);
+        var bulbs = World.Item("Bóng đèn", 1) with { Category = "Khác", Unit = "Cái" };
+        var bed = World.Item("Giường", 1) with { Category = "Khác", Unit = "Cái" };
+        var wardrobe = World.Item("Tủ quần áo", 1) with { Category = "Khác", Unit = "Cái" };
+        world.AddRoom(bulbs, bed, wardrobe);
+
+        // These older room requirements have no referencePrice property. The
+        // read-only inventory response still supplies the exact published
+        // catalog suggestion; the frontend only lets Owner adjust it.
+        var room = Assert.Single((await world.Read()).Rooms);
+        Assert.Equal(110_000m, room.Items.Single(item => item.Name == "Bóng đèn").ReferenceUnitCost);
+        Assert.Equal(2_000_000m, room.Items.Single(item => item.Name == "Giường").ReferenceUnitCost);
+        Assert.Equal(3_000_000m, room.Items.Single(item => item.Name == "Tủ quần áo").ReferenceUnitCost);
+        Assert.Empty(world.Assets);
+
+        var input = new RoomInventoryReviewConfirm(Guid.NewGuid(),
+        [
+            World.Input(room, room.Items.Select(item => new RoomInventoryReviewInputItem(
+                item.Id, true, [],
+                item.Name == "Giường" ? 1_900_000m : item.ReferenceUnitCost)).ToArray())
+        ], true);
+        var confirmed = Assert.Single((await world.Confirm(input)).Rooms);
+        Assert.Equal("Matched", confirmed.State);
+        Assert.Equal(3, world.Assets.Count);
+        Assert.Equal(110_000m, confirmed.Items.Single(item => item.Name == "Bóng đèn").AcquisitionUnitCost);
+        Assert.Equal(1_900_000m, confirmed.Items.Single(item => item.Name == "Giường").AcquisitionUnitCost);
+        Assert.Equal(3_000_000m, confirmed.Items.Single(item => item.Name == "Tủ quần áo").AcquisitionUnitCost);
+        Assert.All(world.Metadata.Values, metadata => Assert.NotNull(metadata.PurchaseCost));
+    }
+
+    [Fact]
+    public async Task PricedInventoryWritesDurableAcquisitionSnapshotAndRejectsRepricing()
+    {
+        var world = new World();
+        var item = World.Item("Chair", 2) with { ReferencePrice = 1_500_000m };
+        world.AddRoom(item);
+        var initial = Assert.Single((await world.Read()).Rooms);
+        Assert.Equal(1_500_000m, Assert.Single(initial.Items).ReferenceUnitCost);
+        var command = new RoomInventoryReviewConfirm(Guid.NewGuid(),
+            [World.Input(initial, new RoomInventoryReviewInputItem(item.Id, true, [], 1_350_000m))], true);
+        var confirmed = Assert.Single((await world.Confirm(command)).Rooms);
+        var asset = Assert.Single(world.Assets);
+        Assert.Equal(1_350_000m, world.Metadata[asset.Id].PurchaseCost);
+        var snapshot = world.MetadataDocument(asset.Id);
+        Assert.Equal("AssetMetadata", snapshot.Kind);
+        Assert.Equal(1_350_000m, snapshot.Data.GetProperty("purchaseCost").GetDecimal());
+        Assert.Equal(2, snapshot.Data.GetProperty("quantity").GetInt32());
+        Assert.Equal(1_350_000m, Assert.Single(confirmed.Items).AcquisitionUnitCost);
+        // The immutable metadata revision feeds pending capital even before
+        // the daily financial journal job runs. Once posted it must not recur.
+        var revision = new AssetCapitalRevision(snapshot.Version, 2,
+            snapshot.Data.GetProperty("purchaseCost").GetDecimal(), null);
+        var pending = Assert.Single(AssetCapitalMath.Pending(asset.Id, 2, 1_350_000m,
+            null, snapshot.Version, [revision], [], false));
+        Assert.Equal(2_700_000m, pending.Amount);
+        Assert.Empty(AssetCapitalMath.Pending(asset.Id, 2, 1_350_000m,
+            null, snapshot.Version, [revision],
+            [new AssetCapitalPosted(pending.SourceKey, pending.Quantity, pending.UnitCost,
+                pending.Amount, pending.MetadataVersion)], false));
+        await world.Confirm(command);
+        Assert.Single(world.Assets);
+        Assert.Equal(snapshot.Version, world.MetadataDocument(asset.Id).Version);
+
+        var replayRow = Assert.Single((await world.Read()).Rooms);
+        Assert.Equal("asset_acquisition_price_locked",
+            (await Assert.ThrowsAsync<PropertyException>(() => world.Confirm(new(Guid.NewGuid(),
+                [World.Input(replayRow, new RoomInventoryReviewInputItem(item.Id, true, [], 2_000_000m))], true)))).Code);
+        Assert.Equal(1_350_000m, world.Metadata[asset.Id].PurchaseCost);
+    }
+
+    [Fact]
+    public async Task ExistingVerifiedUnpricedAssetAcceptsExplicitZeroWithoutRecreatingOrReinventory()
+    {
+        var world = new World();
+        var item = World.Item();
+        var room = world.AddRoom(item);
+        var asset = world.AddPhysical(room, item, item.Quantity);
+        world.AddOwnerMapping(room, item, asset);
+        var before = Assert.Single((await world.Read()).Rooms);
+        Assert.Equal("Matched", before.State);
+        var confirmation = await world.Confirm(new(Guid.NewGuid(),
+            [World.Input(before, new RoomInventoryReviewInputItem(item.Id, true, [], 0m))], true));
+        var updated = Assert.Single(confirmation.Rooms);
+        Assert.Equal("Matched", updated.State);
+        Assert.Equal(0m, world.Metadata[asset.Id].PurchaseCost);
+        Assert.Single(world.Assets);
+        Assert.Equal(0m, world.MetadataDocument(asset.Id).Data.GetProperty("purchaseCost").GetDecimal());
     }
 
     [Fact]
