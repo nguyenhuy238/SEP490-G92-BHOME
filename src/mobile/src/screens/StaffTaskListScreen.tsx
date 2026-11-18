@@ -94,6 +94,8 @@ export function StaffTaskListScreen() {
           onPress={() =>
             task.kind === 'MeterReading'
               ? go('meter-reading')
+              : task.kind === 'MoveInInventory'
+                ? go('move-in-inventory', { taskId: task.id })
               : go('task-detail', { taskId: task.id })
           }
         />
@@ -213,7 +215,7 @@ function TaskSummaryBar({
 }
 
 export function TaskCard({ task, onPress }: { task: OperationalTask; onPress: () => void }) {
-  const title = task.title || (task.kind === 'MeterReading' ? 'Ghi chỉ số đồng hồ' : 'Công việc');
+  const title = task.title || (task.kind === 'MeterReading' ? 'Ghi chỉ số đồng hồ' : task.kind === 'MoveInInventory' ? 'Kiểm kê trước nhận phòng' : 'Công việc');
   const status = taskStatusLabels[task.status] ?? task.status;
   const due =
     task.dueAt && Number.isFinite(Date.parse(task.dueAt)) ? formatInstant(task.dueAt) : null;

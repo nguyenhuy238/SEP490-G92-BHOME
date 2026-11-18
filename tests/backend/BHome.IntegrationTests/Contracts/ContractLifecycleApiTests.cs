@@ -126,6 +126,16 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await using var check = fixture.Factory.Services.CreateAsyncScope(); var store = check.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var task = Assert.Single(await store.Set<OperationalTask>().Where(task => task.ContractId == id && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.AdHoc).ToArrayAsync());
         Assert.Equal(w.Room, task.TargetRoomId); Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, task.AssignedStaffUserId);
+        var inventory = Assert.Single(await store.Set<OperationalTask>().Where(task => task.ContractId == id &&
+            task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MoveInInventory).ToArrayAsync());
+        Assert.Equal(w.Room, inventory.TargetRoomId);
+        Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, inventory.AssignedStaffUserId);
+        Assert.NotNull(inventory.DueAt);
+        Assert.Equal(BHome.Domain.Billing.MeterTaskStatus.Assigned, inventory.Status);
+        var checklist = System.Text.Json.JsonSerializer.Deserialize<BHome.Application.StaffOperations.MoveInInventorySnapshot>(
+            inventory.MoveInInventoryJson);
+        Assert.NotNull(checklist);
+        Assert.NotNull(checklist.Items);
     }
 
     [Fact]

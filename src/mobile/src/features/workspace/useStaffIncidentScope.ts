@@ -19,9 +19,12 @@ interface AssetPage {
   pageSize: number;
 }
 
-export function useStaffIncidentScope(enabled: boolean) {
-  const [locationId, setLocationId] = useState('');
-  const [area, setArea] = useState('');
+export function useStaffIncidentScope(
+  enabled: boolean,
+  initial?: { locationId?: string; roomId?: string },
+) {
+  const [locationId, setLocationId] = useState(initial?.locationId ?? '');
+  const [area, setArea] = useState(initial?.roomId ?? '');
   const [assetId, setAssetId] = useState('');
   const [page, setPage] = useState(1);
   const locations = useWorkspaceQuery<Named[]>(enabled ? '/api/v1/capture/locations' : null);

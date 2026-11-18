@@ -77,6 +77,12 @@ export const staffFeatureGroups: { title: string; items: StaffFeature[] }[] = [
         screen: 'move-in',
       },
       {
+        title: 'Kiểm kê trước nhận phòng',
+        detail: 'Danh sách và tình trạng tài sản',
+        icon: 'clipboard-check-outline',
+        screen: 'move-in-inventory',
+      },
+      {
         title: 'Tài sản',
         detail: 'Thiết bị & hiện trạng',
         icon: 'package-variant-closed',

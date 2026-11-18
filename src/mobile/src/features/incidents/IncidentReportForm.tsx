@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import { Text } from 'react-native-paper';
 import { useSession } from '../../lib/SessionProvider';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
@@ -18,6 +19,12 @@ import {
 } from '../../services/incidents';
 import { useIncidentMutation, useIncidentQuery } from './useIncidentData';
 import { TenantIncidentReportForm } from './TenantIncidentReportForm';
+import { operationalTasks } from '../../services/operationalTasks';
+import { moveInInventoryClient } from '../../services/moveInInventory';
+import { randomUUID } from '../../lib/randomUUID';
+import { errorMessage } from '../../lib/api';
+
+const idPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 
 export function IncidentReportForm() {
   const { session } = useSession();
@@ -31,18 +38,66 @@ export function IncidentReportForm() {
 function ReportForm() {
   const { api, session } = useSession();
   const { role, preview, go } = useWorkspace();
+  const params = useLocalSearchParams<{
+    locationId?: string;
+    roomId?: string;
+    assetId?: string;
+    description?: string;
+    inventoryTaskId?: string;
+    inventoryItemId?: string;
+    inventoryEvidenceIds?: string;
+  }>();
+  const fromInventory = role === 'Staff' &&
+    !!params.inventoryTaskId && idPattern.test(params.inventoryTaskId) &&
+    !!params.inventoryItemId && idPattern.test(params.inventoryItemId);
+  const initialLocation = fromInventory && params.locationId && idPattern.test(params.locationId)
+    ? params.locationId : '';
+  const initialRoom = fromInventory && params.roomId && idPattern.test(params.roomId)
+    ? params.roomId : '';
   const enabled = !preview && !!session && (role === 'Staff' || role === 'Tenant');
-  const staff = useStaffIncidentScope(enabled && role === 'Staff');
+  const staff = useStaffIncidentScope(enabled && role === 'Staff', {
+    locationId: initialLocation,
+    roomId: initialRoom,
+  });
   const [roomPage, setRoomPage] = useState(1),
     [assetPage, setAssetPage] = useState(1);
   const [tenantRoom, setTenantRoom] = useState(''),
-    [assetId, setAssetId] = useState('');
+    [assetId, setAssetId] = useState(fromInventory && params.assetId && idPattern.test(params.assetId) ? params.assetId : '');
   const [common, setCommon] = useState(false),
     [commonArea, setCommonArea] = useState('');
   const [severity, setSeverity] = useState('Normal'),
-    [description, setDescription] = useState('');
+    [description, setDescription] = useState(fromInventory ? (params.description ?? '').slice(0, 8000) : '');
   const [photos, setPhotos] = useState<IncidentPhoto[]>([]);
+  const [prefillMessage, setPrefillMessage] = useState(fromInventory && params.inventoryEvidenceIds ? 'Đang nạp ảnh từ mục kiểm kê…' : '');
+  const [pendingIncidentId, setPendingIncidentId] = useState('');
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState('');
+  const changedScope = useRef(false);
   const mutation = useIncidentMutation();
+  useEffect(() => {
+    if (!api || !enabled || !fromInventory || !params.inventoryEvidenceIds) return;
+    const ids = params.inventoryEvidenceIds.split(',').filter((id) => idPattern.test(id)).slice(0, 5);
+    if (!ids.length) return;
+    const controller = new AbortController();
+    void (async () => {
+      const task = operationalTasks(api);
+      const evidence = await task.evidence(params.inventoryTaskId!, controller.signal);
+      const selected = evidence.filter((entry) =>
+        ids.includes(entry.id) && (entry.contentType === 'image/png' || entry.contentType === 'image/jpeg'),
+      );
+      const loaded = await Promise.all(selected.map(async (entry) => ({
+        id: randomUUID(),
+        bytes: await task.imageBytes(params.inventoryTaskId!, entry.id, controller.signal),
+        contentType: entry.contentType as 'image/png' | 'image/jpeg',
+      })));
+      if (controller.signal.aborted || changedScope.current) return;
+      setPhotos((before) => [...before, ...loaded].slice(0, 5));
+      setPrefillMessage(loaded.length ? `Đã nạp ${loaded.length} ảnh từ kiểm kê.` : 'Ảnh kiểm kê chưa khả dụng; bạn có thể chọn ảnh khác.');
+    })().catch(() => {
+      if (!controller.signal.aborted) setPrefillMessage('Không nạp được ảnh kiểm kê. Bạn vẫn có thể thêm ảnh thủ công.');
+    });
+    return () => controller.abort();
+  }, [api, enabled, fromInventory, params.inventoryTaskId, params.inventoryEvidenceIds]);
   const rooms = useIncidentQuery<IncidentPage<ReportingRoom>>(
     enabled && role === 'Tenant'
       ? `${incidentRoot}/reporting-rooms?page=${roomPage}&pageSize=20`
@@ -57,7 +112,7 @@ function ReportForm() {
       : null,
   );
   const commonName = commonArea.trim();
-  const assetOptions =
+  const visibleAssetOptions =
     role === 'Staff'
       ? staff.options
           .filter((item) => (common ? item.commonArea === commonName : item.roomId === roomId))
@@ -70,14 +125,55 @@ function ReportForm() {
             id: item.assetId,
             label: `${item.name} · ${item.category} · ${incidentText(item.status)}`,
           }));
+  // The assigned room may have more than 100 assets. The item's trusted
+  // backend snapshot supplies the exact AssetId even if this page omits it.
+  const initialAsset = fromInventory && params.assetId && idPattern.test(params.assetId)
+    && locationId === initialLocation && roomId === initialRoom && !common
+      ? params.assetId : '';
+  const assetOptions = initialAsset && !visibleAssetOptions.some((item) => item.id === initialAsset)
+    ? [{ id: initialAsset, label: 'Tài sản đã ghi nhận trong kiểm kê' }, ...visibleAssetOptions]
+    : visibleAssetOptions;
   const selectedAsset = assetOptions.some((item) => item.id === assetId) ? assetId : '';
   const valid =
     !!locationId &&
     (common ? commonName.length > 0 && commonName.length <= 200 : !!roomId) &&
     description.trim().length >= 10 &&
     description.trim().length <= 8000;
+  async function linkInventoryIncident(incidentId: string) {
+    if (!api || !fromInventory || linking) return;
+    setLinking(true);
+    setLinkError('');
+    try {
+      const client = moveInInventoryClient(api);
+      const view = await client.get(params.inventoryTaskId!);
+      const item = view.items.find((entry) => entry.id === params.inventoryItemId);
+      if (!item || view.locationId !== locationId || view.roomId !== roomId ||
+          (item.assetId && item.assetId !== selectedAsset))
+        throw new Error('Phạm vi phòng hoặc tài sản đã thay đổi. Kiểm tra lại mục kiểm kê trước khi liên kết.');
+      if (!item.condition || item.condition === 'Good' || item.actualQuantity === null)
+        throw new Error('Mục kiểm kê chưa lưu tình trạng thiếu hoặc hư hỏng.');
+      if (item.incidentId && item.incidentId !== incidentId)
+        throw new Error('Mục này đã được liên kết với báo cáo sự cố khác.');
+      if (!item.incidentId) {
+        await client.saveItem(params.inventoryTaskId!, item.id, {
+          version: view.version,
+          actualQuantity: item.actualQuantity,
+          condition: item.condition,
+          notes: item.notes ?? '',
+          evidenceIds: item.evidenceIds ?? [],
+          incidentId,
+        }, randomUUID());
+      }
+      go('move-in-inventory', { taskId: params.inventoryTaskId! });
+    } catch (failure) {
+      setLinkError(failure instanceof Error && failure.message !== 'Yêu cầu không thành công.'
+        ? failure.message : errorMessage(failure));
+    } finally {
+      setLinking(false);
+    }
+  }
   async function submit() {
-    if (!api || !enabled || !valid || mutation.busy) return;
+    if (!api || !enabled || !valid || mutation.busy || linking || pendingIncidentId) return;
     const input = {
       locationId: locationId!,
       roomId: roomId || null,
@@ -95,12 +191,23 @@ function ReportForm() {
     );
     if (result) {
       setPhotos([]);
-      go('incident-detail', { incidentId: result.incidentId });
+      if (fromInventory) {
+        setPendingIncidentId(result.incidentId);
+        await linkInventoryIncident(result.incidentId);
+      } else {
+        go('incident-detail', { incidentId: result.incidentId });
+      }
     }
   }
   return (
     <>
       <Heading title="Báo cáo sự cố" detail="Phòng, thiết bị hoặc khu vực chung" />
+      {fromInventory && (
+        <Box>
+          <Text>Thông tin cơ sở, phòng, tài sản và tình trạng đã lấy từ mục kiểm kê. Kiểm tra lại trước khi gửi báo cáo BF-07.</Text>
+          {!!prefillMessage && <Text style={ui.muted}>{prefillMessage}</Text>}
+        </Box>
+      )}
       {!enabled && (
         <Box>
           <Text>
@@ -116,8 +223,9 @@ function ReportForm() {
               label="Cơ sở"
               value={staff.location}
               options={staff.locations.data ?? []}
-              disabled={mutation.busy || !enabled}
+              disabled={mutation.busy || !enabled || fromInventory}
               onChange={(id) => {
+                changedScope.current = true;
                 staff.selectLocation(id);
                 if (common) staff.selectArea('common');
                 setAssetId('');
@@ -129,8 +237,9 @@ function ReportForm() {
               label="Phòng"
               value={common ? '' : staff.area}
               options={staff.rooms.data ?? []}
-              disabled={common || mutation.busy || !enabled}
+              disabled={common || mutation.busy || !enabled || fromInventory}
               onChange={(id) => {
+                changedScope.current = true;
                 staff.selectArea(id);
                 setAssetId('');
                 setPhotos([]);
@@ -172,12 +281,13 @@ function ReportForm() {
         <ChoiceField
           label="Phạm vi sự cố"
           value={common ? 'common' : 'room'}
-          disabled={mutation.busy}
+          disabled={mutation.busy || fromInventory}
           options={[
             { id: 'room', label: 'Trong phòng' },
             { id: 'common', label: 'Khu vực chung' },
           ]}
           onChange={(value) => {
+            changedScope.current = true;
             const next = value === 'common';
             setCommon(next);
             setAssetId('');
@@ -201,7 +311,7 @@ function ReportForm() {
             <ChoiceField
               label="Tài sản liên quan (tùy chọn)"
               value={selectedAsset}
-              disabled={mutation.busy}
+              disabled={mutation.busy || fromInventory}
               options={[{ id: '', label: 'Không chọn tài sản' }, ...assetOptions]}
               onChange={setAssetId}
             />
@@ -262,9 +372,19 @@ function ReportForm() {
           disabled={mutation.busy || !enabled}
         />
       </Box>
-      <Action disabled={!enabled || !valid || mutation.busy} onPress={() => void submit()}>
+      <Action disabled={!enabled || !valid || mutation.busy || linking || !!pendingIncidentId} onPress={() => void submit()}>
         Gửi báo cáo sự cố
       </Action>
+      {!!pendingIncidentId && fromInventory && (
+        <Box>
+          <Text style={ui.green}>Báo cáo sự cố đã được tạo. Mã: {pendingIncidentId}</Text>
+          <Text style={ui.muted}>Cần liên kết báo cáo với mục kiểm kê để hoàn tất công việc.</Text>
+          <Action disabled={linking} onPress={() => void linkInventoryIncident(pendingIncidentId)}>
+            {linking ? 'Đang liên kết…' : 'Liên kết báo cáo với kiểm kê'}
+          </Action>
+          {!!linkError && <Text accessibilityRole="alert" style={ui.red}>{linkError}</Text>}
+        </Box>
+      )}
       {!!mutation.progress && <Text accessibilityRole="status">{mutation.progress}</Text>}
       {!!mutation.error && (
         <Text accessibilityRole="alert" style={ui.red}>
