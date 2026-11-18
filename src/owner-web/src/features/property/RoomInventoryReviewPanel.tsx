@@ -35,6 +35,7 @@ import { ErrorState, LoadingState } from '../../components/common/PortalUI';
 import { usePropertySetupApi } from './usePropertySetupApi';
 import { ConflictReload } from '../locations/components/ConflictReload';
 import { MoneyField } from '../../components/common/MoneyField';
+import { RoomNoAssetsConfirmation } from './RoomNoAssetsConfirmation';
 
 type Evidence = {
   id: string;
@@ -99,18 +100,27 @@ const defaultUnitCost = (item: ReviewItem): string => {
   return /^\d{1,14}$/.test(value) ? value : '';
 };
 const validUnitCost = (value: string): boolean =>
-  value === '' || /^\d{1,14}$/.test(value) && Number(value) <= 99_999_999_999_999;
+  value === '' || (/^\d{1,14}$/.test(value) && Number(value) <= 99_999_999_999_999);
 const unitCostHint = (item: ReviewItem): string =>
-  item.acquisitionUnitCost != null ? 'Đã chốt giá vốn' :
-    item.referenceUnitCost != null && defaultUnitCost(item) === ''
+  item.acquisitionUnitCost != null
+    ? 'Đã chốt giá vốn'
+    : item.referenceUnitCost != null && defaultUnitCost(item) === ''
       ? 'Giá mẫu không phải số nguyên VND; vui lòng nhập đơn giá mua.'
-      : item.referenceUnitCost != null ? 'Gợi ý từ mẫu' : 'Chưa có giá tham khảo';
+      : item.referenceUnitCost != null
+        ? 'Gợi ý từ mẫu'
+        : 'Chưa có giá tham khảo';
 const checkedCount = (room: RoomInventoryReviewRow) => room.items.filter(itemChecked).length;
 const isCheckedRoom = (room: RoomInventoryReviewRow) =>
   (room.state as string) === 'Matched' || (room.state as string) === 'Checked';
 const isBlocked = (room: RoomInventoryReviewRow) => !!room.blockedReason;
 
-export function RoomInventoryReviewPanel({ locationId, focusRoomId }: { locationId: string; focusRoomId?: string }) {
+export function RoomInventoryReviewPanel({
+  locationId,
+  focusRoomId,
+}: {
+  locationId: string;
+  focusRoomId?: string;
+}) {
   const api = usePropertySetupApi();
   const { session } = useAuth();
   const owner = session?.roles.includes('Owner') ?? false;
@@ -161,7 +171,9 @@ export function RoomInventoryReviewPanel({ locationId, focusRoomId }: { location
       });
       setFocusApplied(focusRoomId);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [focusRoomId, focusApplied, query.data]);
 
   if (!owner) return <Alert severity="info">Chỉ Owner được xác nhận kiểm kê theo thiết lập.</Alert>;
@@ -308,8 +320,12 @@ export function RoomInventoryReviewPanel({ locationId, focusRoomId }: { location
             const draft = dialog.itemDrafts.find(
               (row) => row.roomId === room.roomId && row.itemId === item.id,
             )!;
-            return { itemId: item.id, checked: dialog.attested, evidenceIds: [],
-              unitCost: dialog.attested && draft.unitCost !== '' ? draft.unitCost : null };
+            return {
+              itemId: item.id,
+              checked: dialog.attested,
+              evidenceIds: [],
+              unitCost: dialog.attested && draft.unitCost !== '' ? draft.unitCost : null,
+            };
           }
           const draft = dialog.itemDrafts.find(
             (row) => row.roomId === room.roomId && row.itemId === item.id,
@@ -673,8 +689,8 @@ export function RoomInventoryReviewPanel({ locationId, focusRoomId }: { location
                     label="Tôi đã kiểm tra và xác nhận tài sản đủ theo thiết lập ở các phòng trên."
                   />
                   <Typography variant="body2" color="text.secondary">
-                    Đơn giá mua mặc định từ mẫu tài sản. Có thể sửa trước khi xác nhận; để trống nếu chưa biết giá.
-                    Giá mua đã ghi nhận trước đó không được định giá lại.
+                    Đơn giá mua mặc định từ mẫu tài sản. Có thể sửa trước khi xác nhận; để trống nếu
+                    chưa biết giá. Giá mua đã ghi nhận trước đó không được định giá lại.
                   </Typography>
                   <TableContainer>
                     <Table size="small" aria-label="Đơn giá mua kiểm kê nhanh">
@@ -686,25 +702,36 @@ export function RoomInventoryReviewPanel({ locationId, focusRoomId }: { location
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {dialog.rooms.flatMap((room) => room.items.map((item) => {
-                          const draft = dialog.itemDrafts.find(
-                            (row) => row.roomId === room.roomId && row.itemId === item.id,
-                          )!;
-                          return (
-                            <TableRow key={room.roomId + ':' + item.id}>
-                              <TableCell>{room.roomNumber} · {item.name}</TableCell>
-                              <TableCell align="right">{item.quantity} {item.unit ?? ''}</TableCell>
-                              <TableCell>
-                                <MoneyField size="small" label={`Đơn giá mua (VNĐ) · ${item.name} (${room.roomNumber})`}
-                                  value={draft.unitCost}
-                                  disabled={busy || item.acquisitionUnitCost != null}
-                                  error={!validUnitCost(draft.unitCost)}
-                                  helperText={unitCostHint(item)}
-                                  onValueChange={(unitCost) => updateItem(room.roomId, item.id, { unitCost })} />
-                              </TableCell>
-                            </TableRow>
-                          );
-                        }))}
+                        {dialog.rooms.flatMap((room) =>
+                          room.items.map((item) => {
+                            const draft = dialog.itemDrafts.find(
+                              (row) => row.roomId === room.roomId && row.itemId === item.id,
+                            )!;
+                            return (
+                              <TableRow key={room.roomId + ':' + item.id}>
+                                <TableCell>
+                                  {room.roomNumber} · {item.name}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {item.quantity} {item.unit ?? ''}
+                                </TableCell>
+                                <TableCell>
+                                  <MoneyField
+                                    size="small"
+                                    label={`Đơn giá mua (VNĐ) · ${item.name} (${room.roomNumber})`}
+                                    value={draft.unitCost}
+                                    disabled={busy || item.acquisitionUnitCost != null}
+                                    error={!validUnitCost(draft.unitCost)}
+                                    helperText={unitCostHint(item)}
+                                    onValueChange={(unitCost) =>
+                                      updateItem(room.roomId, item.id, { unitCost })
+                                    }
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            );
+                          }),
+                        )}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -799,13 +826,21 @@ export function RoomInventoryReviewPanel({ locationId, focusRoomId }: { location
                                         />
                                       </TableCell>
                                       <TableCell>
-                                        <MoneyField size="small"
+                                        <MoneyField
+                                          size="small"
                                           label={`Đơn giá mua (VNĐ) · ${item.name} (${room.roomNumber})`}
                                           value={draft.unitCost}
-                                          disabled={busy || !draft.checked || item.acquisitionUnitCost != null}
+                                          disabled={
+                                            busy ||
+                                            !draft.checked ||
+                                            item.acquisitionUnitCost != null
+                                          }
                                           error={!validUnitCost(draft.unitCost)}
                                           helperText={unitCostHint(item)}
-                                          onValueChange={(unitCost) => updateItem(room.roomId, item.id, { unitCost })} />
+                                          onValueChange={(unitCost) =>
+                                            updateItem(room.roomId, item.id, { unitCost })
+                                          }
+                                        />
                                       </TableCell>
                                       <TableCell>
                                         {draft.checked || draft.evidence.length > 0 ? (

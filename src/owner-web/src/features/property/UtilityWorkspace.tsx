@@ -42,8 +42,9 @@ export function UtilityWorkspace({ locationId }: { locationId: string }) {
   return (
     <Stack spacing={2}>
       <Typography variant="body2" color="text.secondary">
-        Thiết lập biểu giá nâng cao, định mức và đối soát hóa đơn nguồn theo kỳ. Hóa đơn và quyết toán
-        hiện vẫn dùng đơn giá điện nước đã chốt trong hợp đồng; cấu hình nâng cao chưa thay thế đơn giá đó.
+        Thiết lập biểu giá nâng cao, định mức và đối soát hóa đơn nguồn theo kỳ. Hóa đơn và quyết
+        toán hiện vẫn dùng đơn giá điện nước đã chốt trong hợp đồng; cấu hình nâng cao chưa thay thế
+        đơn giá đó.
       </Typography>
       <Tabs
         aria-label="Nghiệp vụ điện nước"

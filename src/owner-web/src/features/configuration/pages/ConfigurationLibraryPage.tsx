@@ -474,11 +474,7 @@ function PreviewContent({
         <Typography>
           {money.format(fee.price)} {fee.unit} · {fee.scope}
         </Typography>
-        {!compact && (
-          <Typography variant="caption">
-            Hiệu lực {fee.effectiveDate}
-          </Typography>
-        )}
+        {!compact && <Typography variant="caption">Hiệu lực {fee.effectiveDate}</Typography>}
       </Stack>
     );
   }

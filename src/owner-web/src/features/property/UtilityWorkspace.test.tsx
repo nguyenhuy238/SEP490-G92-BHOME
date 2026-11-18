@@ -211,11 +211,15 @@ it('explains advanced pricing limits and keeps a contract-locked tariff editor o
     return reads(path);
   });
   mount();
-  expect(screen.getByText(/Hóa đơn và quyết toán hiện vẫn dùng đơn giá điện nước đã chốt/)).toBeInTheDocument();
+  expect(
+    screen.getByText(/Hóa đơn và quyết toán hiện vẫn dùng đơn giá điện nước đã chốt/),
+  ).toBeInTheDocument();
   fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa biểu giá' }));
   fill('Biểu giá hiệu lực từ', '2026-12-01');
   fireEvent.click(screen.getByRole('button', { name: 'Lưu biểu giá điện nước' }));
-  expect(await screen.findByText(/Biểu giá đang được cấu hình cho phòng có hợp đồng ràng buộc/)).toBeInTheDocument();
+  expect(
+    await screen.findByText(/Biểu giá đang được cấu hình cho phòng có hợp đồng ràng buộc/),
+  ).toBeInTheDocument();
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   expect(screen.getByLabelText(/Biểu giá hiệu lực từ/)).toHaveValue('2026-12-01');
 });

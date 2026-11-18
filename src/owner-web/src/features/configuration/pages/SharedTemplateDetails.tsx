@@ -502,8 +502,7 @@ function AssetItemsSummary({ items }: { items: SharedAssetItem[] }) {
 
 function SharedDataSummary({ document }: { document: SharedDocument }) {
   const data = document.data;
-  if ('items' in data)
-    return <AssetItemsSummary items={data.items} />;
+  if ('items' in data) return <AssetItemsSummary items={data.items} />;
   if ('capacity' in data)
     return (
       <Stack spacing={2}>

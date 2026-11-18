@@ -174,11 +174,27 @@ export function sharedConfigurationClient(
     publish: (resource: SharedResource, id: string, expectedVersion: number) =>
       write<SharedDocument>(route(resource, id) + '/publish', { expectedVersion }),
     archive: (resource: SharedResource, id: string, expectedVersion: number, wholeFamily = false) =>
-      write<SharedDocument>(route(resource, id) + '/archive', { expectedVersion, ...(wholeFamily ? { wholeFamily } : {}) }),
+      write<SharedDocument>(route(resource, id) + '/archive', {
+        expectedVersion,
+        ...(wholeFamily ? { wholeFamily } : {}),
+      }),
     restore: (resource: SharedResource, id: string, expectedVersion: number, wholeFamily = false) =>
-      write<SharedDocument>(route(resource, id) + '/restore', { expectedVersion, ...(wholeFamily ? { wholeFamily } : {}) }),
-    duplicate: (resource: SharedResource, id: string, name: string, expectedVersion: number, publishImmediately = false) =>
-      write<SharedDocument>(route(resource, id) + '/duplicate', { name, expectedVersion, ...(publishImmediately ? { publishImmediately } : {}) }),
+      write<SharedDocument>(route(resource, id) + '/restore', {
+        expectedVersion,
+        ...(wholeFamily ? { wholeFamily } : {}),
+      }),
+    duplicate: (
+      resource: SharedResource,
+      id: string,
+      name: string,
+      expectedVersion: number,
+      publishImmediately = false,
+    ) =>
+      write<SharedDocument>(route(resource, id) + '/duplicate', {
+        name,
+        expectedVersion,
+        ...(publishImmediately ? { publishImmediately } : {}),
+      }),
     edition: (resource: SharedResource, id: string, expectedVersion: number) =>
       write<SharedDocument>(route(resource, id) + '/versions', { expectedVersion }),
     versions: (resource: SharedResource, id: string, signal?: AbortSignal) =>

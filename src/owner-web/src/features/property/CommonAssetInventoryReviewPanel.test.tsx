@@ -11,9 +11,10 @@ vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner', roles: context.roles } }),
 }));
 vi.mock('./usePropertySetupApi', () => ({
-  usePropertySetupApi: () => propertySetupClient(
-    <T,>(path: string, init?: RequestInit) => context.request(path, init) as Promise<T>,
-  ),
+  usePropertySetupApi: () =>
+    propertySetupClient(
+      <T,>(path: string, init?: RequestInit) => context.request(path, init) as Promise<T>,
+    ),
 }));
 
 type Item = {
@@ -56,14 +57,37 @@ let failNext: boolean;
 beforeEach(() => {
   context.roles = ['Owner'];
   view = {
-    requirementsId: 'configuration', requirementsVersion: 3, stateToken: 'initial',
-    state: 'NotChecked', checkedCount: 0, totalCount: 2, reviewedAt: null,
+    requirementsId: 'configuration',
+    requirementsVersion: 3,
+    stateToken: 'initial',
+    state: 'NotChecked',
+    checkedCount: 0,
+    totalCount: 2,
+    reviewedAt: null,
     items: [
-      { id: 'camera', name: 'Camera', category: 'Điện tử', commonArea: 'Hành lang',
-        unit: 'Cái', quantity: 2, checked: false, blockedReason: null, evidence: [],
-        referenceUnitCost: '1500000' },
-      { id: 'broom', name: 'Chổi', category: 'Vệ sinh', commonArea: 'Sân',
-        unit: 'Cái', quantity: 3, checked: false, blockedReason: null, evidence: [] },
+      {
+        id: 'camera',
+        name: 'Camera',
+        category: 'Điện tử',
+        commonArea: 'Hành lang',
+        unit: 'Cái',
+        quantity: 2,
+        checked: false,
+        blockedReason: null,
+        evidence: [],
+        referenceUnitCost: '1500000',
+      },
+      {
+        id: 'broom',
+        name: 'Chổi',
+        category: 'Vệ sinh',
+        commonArea: 'Sân',
+        unit: 'Cái',
+        quantity: 3,
+        checked: false,
+        blockedReason: null,
+        evidence: [],
+      },
     ],
   };
   confirms = [];
@@ -83,9 +107,12 @@ beforeEach(() => {
         throw new Error('Connection interrupted');
       }
       view = {
-        ...view, stateToken: 'updated', reviewedAt: '2026-11-15T10:00:00Z',
+        ...view,
+        stateToken: 'updated',
+        reviewedAt: '2026-11-15T10:00:00Z',
         items: view.items.map((item) => ({
-          ...item, checked: input.items.find((entry) => entry.itemId === item.id)!.checked,
+          ...item,
+          checked: input.items.find((entry) => entry.itemId === item.id)!.checked,
         })),
         checkedCount: input.items.filter((item) => item.checked).length,
         state: input.items.every((item) => item.checked) ? 'Matched' : 'PartiallyChecked',
@@ -98,13 +125,16 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const mount = () => render(
-  <ThemeProvider theme={theme}>
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <CommonAssetInventoryReviewPanel locationId="location" />
-    </QueryClientProvider>
-  </ThemeProvider>,
-);
+const mount = () =>
+  render(
+    <ThemeProvider theme={theme}>
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <CommonAssetInventoryReviewPanel locationId="location" />
+      </QueryClientProvider>
+    </ThemeProvider>,
+  );
 
 it('requires Owner confirmation before bulk review and saves configured quantities without quantity inputs', async () => {
   mount();
@@ -133,7 +163,9 @@ it('allows Owner to override the catalog reference cost before confirmation and 
   const dialog = within(screen.getByRole('dialog'));
   expect(dialog.getByLabelText('Đơn giá mua (VNĐ) · Camera')).toHaveValue('1.500.000');
   expect(dialog.getByLabelText('Đơn giá mua (VNĐ) · Chổi')).toHaveValue('');
-  fireEvent.change(dialog.getByLabelText('Đơn giá mua (VNĐ) · Camera'), { target: { value: '2.750.000' } });
+  fireEvent.change(dialog.getByLabelText('Đơn giá mua (VNĐ) · Camera'), {
+    target: { value: '2.750.000' },
+  });
   fireEvent.change(dialog.getByLabelText('Đơn giá mua (VNĐ) · Chổi'), { target: { value: '0' } });
   fireEvent.click(dialog.getByRole('checkbox', { name: /Tôi đã trực tiếp kiểm tra/ }));
   fireEvent.click(dialog.getByRole('button', { name: 'Xác nhận kiểm kê' }));
@@ -168,7 +200,10 @@ it('rejects more than five photos before uploading and retries the exact command
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra từng tài sản' }));
   const dialog = within(screen.getByRole('dialog'));
   fireEvent.click(dialog.getAllByRole('checkbox', { name: 'Đã kiểm tra và đủ' })[0]);
-  const files = Array.from({ length: 6 }, (_, index) => new File(['abc'], `${index}.jpg`, { type: 'image/jpeg' }));
+  const files = Array.from(
+    { length: 6 },
+    (_, index) => new File(['abc'], `${index}.jpg`, { type: 'image/jpeg' }),
+  );
   fireEvent.change(dialog.getByLabelText('Ảnh bằng chứng Camera'), { target: { files } });
   expect(dialog.getByText('Mỗi nhóm tài sản chỉ được đính kèm tối đa 5 ảnh.')).toBeVisible();
   expect(evidenceUploads).toBe(0);

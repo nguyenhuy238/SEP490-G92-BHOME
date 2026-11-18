@@ -94,10 +94,15 @@ it('mounts the Owner-only investment child route inside a Location Workspace in 
   // Its child route must mount and show the authorization boundary rather than
   // silently falling back to the old investment screen.
   expect(
-    await screen.findByText('Chỉ Owner được truy cập thông tin vốn và chi phí của cơ sở.',
-      {}, { timeout: 10000 }),
+    await screen.findByText(
+      'Chỉ Owner được truy cập thông tin vốn và chi phí của cơ sở.',
+      {},
+      { timeout: 10000 },
+    ),
   ).toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: 'BHOME Central 1 - Bạch Đằng', level: 1 })).toBeInTheDocument();
+  expect(
+    screen.getByRole('heading', { name: 'BHOME Central 1 - Bạch Đằng', level: 1 }),
+  ).toBeInTheDocument();
 }, 15000);
 
 it('keeps property functions inside the selected Location Workspace', async () => {
@@ -135,7 +140,9 @@ it('keeps property functions inside the selected Location Workspace', async () =
     expect(link).toHaveAccessibleName(expectedLinks[link.getAttribute('href')!]),
   );
   expect(propertyLinks.map((link) => link.getAttribute('href'))).toEqual([
-    '/locations', '/configuration/assets', '/configuration/room-types',
+    '/locations',
+    '/configuration/assets',
+    '/configuration/room-types',
   ]);
   expect(
     within(navigation).getByRole('link', { name: 'Phân công nhân viên cho từng cơ sở' }),

@@ -200,7 +200,11 @@ it('duplicates a persisted edition with a distinct name and concurrency version'
   expect(state.request).toHaveBeenCalledWith(
     base + '/' + doc.id + '/duplicate',
     expect.objectContaining({
-      body: JSON.stringify({ name: 'Independent copy', expectedVersion: 7, publishImmediately: true }),
+      body: JSON.stringify({
+        name: 'Independent copy',
+        expectedVersion: 7,
+        publishImmediately: true,
+      }),
     }),
   );
 });
@@ -330,9 +334,7 @@ it('uses server preview, preserves its token and retries apply with the same dur
   fireEvent.click(screen.getByRole('button', { name: 'Xem trước áp dụng' }));
   await screen.findByText('Server planned change');
   const preview = screen.getByRole('region', { name: 'Bản xem trước' });
-  expect(
-    within(preview).getByText('Nguồn: Synthetic room defaults'),
-  ).toBeVisible();
+  expect(within(preview).getByText('Nguồn: Synthetic room defaults')).toBeVisible();
   expect(within(preview).getByText(/Target Location/)).toBeVisible();
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/apply'))).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận áp dụng' }));
@@ -357,12 +359,22 @@ it('shows a simplified application history and invalidates preview when the targ
   state.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path.includes('/applications?'))
       return {
-        items: [{
-          id: 'application-a', sourceId: doc.id, sourceVersion: 7, sourceEdition: 2,
-          targetLocationId: 'location-b', appliedAt: '2026-11-09T02:00:00Z',
-          status: 'Completed', actorId: 'owner',
-        }],
-        total: 1, locationsUsing: 1, page: 1, pageSize: 20,
+        items: [
+          {
+            id: 'application-a',
+            sourceId: doc.id,
+            sourceVersion: 7,
+            sourceEdition: 2,
+            targetLocationId: 'location-b',
+            appliedAt: '2026-11-09T02:00:00Z',
+            status: 'Completed',
+            actorId: 'owner',
+          },
+        ],
+        total: 1,
+        locationsUsing: 1,
+        page: 1,
+        pageSize: 20,
       };
     if (path.endsWith('/apply-preview')) {
       const input = JSON.parse(String(init?.body));
@@ -388,12 +400,18 @@ it('shows a simplified application history and invalidates preview when the targ
   expect(within(dialog).getByText('12.345.678.901.234,0001 đ/tháng')).toBeVisible();
   fireEvent.click(within(dialog).getByText(/Lịch sử áp dụng/));
   const history = await within(dialog).findByRole('table', { name: 'Lịch sử áp dụng' });
-  expect(within(history).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
-    'Cơ sở', 'Ngày áp dụng',
-  ]);
+  expect(
+    within(history)
+      .getAllByRole('columnheader')
+      .map((cell) => cell.textContent),
+  ).toEqual(['Cơ sở', 'Ngày áp dụng']);
   expect(within(history).getByText('Target Location')).toBeVisible();
   expect(within(history).queryByText('owner')).toBeNull();
-  expect(state.request.mock.calls.some(([path]) => path.endsWith('/versions') || path.endsWith('/history'))).toBe(false);
+  expect(
+    state.request.mock.calls.some(
+      ([path]) => path.endsWith('/versions') || path.endsWith('/history'),
+    ),
+  ).toBe(false);
   expect(within(dialog).getByRole('button', { name: 'Xem trước áp dụng' })).toBeDisabled();
   await select('Cơ sở đích', 'Target Location');
   fireEvent.click(within(dialog).getByRole('button', { name: 'Xem trước áp dụng' }));
@@ -407,16 +425,27 @@ it('shows a simplified application history and invalidates preview when the targ
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/apply'))).toBe(false);
 });
 it('preserves configured room-type assets in writes and displays the saved asset snapshot in details', async () => {
-  const assetItems: SharedAssetItem[] = [{
-    catalogId: 'catalog', catalogVersion: 7, quantity: 2, required: true,
-    trackingMode: 'BulkQuantity',
-    catalog: {
-      familyId: 'catalog-family', edition: 3, name: 'Giường đơn', category: 'Nội thất',
-      unit: 'cái', referencePrice: '3000000', scope: 'Room',
+  const assetItems: SharedAssetItem[] = [
+    {
+      catalogId: 'catalog',
+      catalogVersion: 7,
+      quantity: 2,
+      required: true,
+      trackingMode: 'BulkQuantity',
+      catalog: {
+        familyId: 'catalog-family',
+        edition: 3,
+        name: 'Giường đơn',
+        category: 'Nội thất',
+        unit: 'cái',
+        referencePrice: '3000000',
+        scope: 'Room',
+      },
     },
-  }];
+  ];
   const roomWithAssets: SharedDocument = {
-    ...doc, data: { ...doc.data, assetItems },
+    ...doc,
+    data: { ...doc.data, assetItems },
   };
   state.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (init?.method) return roomWithAssets;
@@ -554,9 +583,11 @@ it.each([
     expect(nameButton).toBeVisible();
     fireEvent.click(within(row).getByRole('button', { name: `Thao tác cho ${template.name}` }));
     const menu = await screen.findByRole('menu', { name: `Thao tác cho ${template.name}` });
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Sửa', 'Nhân bản', 'Ngừng áp dụng',
-    ]);
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Sửa', 'Nhân bản', 'Ngừng áp dụng']);
     expect(within(menu).queryByRole('menuitem', { name: 'Xem chi tiết' })).toBeNull();
     expect(within(menu).queryByRole('menuitem', { name: 'Áp dụng' })).toBeNull();
     fireEvent.keyDown(menu, { key: 'Escape' });
@@ -679,7 +710,9 @@ it('keeps room prices and status without version clutter, with accessible action
   expect(screen.getByRole('menuitem', { name: 'Nhân bản' })).toBeVisible();
   expect(screen.getByRole('menuitem', { name: 'Ngừng áp dụng' })).toBeVisible();
   expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-    'Sửa', 'Nhân bản', 'Ngừng áp dụng',
+    'Sửa',
+    'Nhân bản',
+    'Ngừng áp dụng',
   ]);
   expect(screen.queryByRole('menuitem', { name: 'Phiên bản mới' })).toBeNull();
   fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });

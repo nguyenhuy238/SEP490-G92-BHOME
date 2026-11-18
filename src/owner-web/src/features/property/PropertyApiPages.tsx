@@ -680,7 +680,11 @@ export function PropertyApiPage({
                 </Stack>
               )}
               {canManage && kind === 'assets' && onAssetInventory && !search && !statusFilter && (
-                <Button sx={{ mt: 2 }} variant="contained" onClick={() => onAssetInventory(assetScope === 'common' ? 'common' : 'rooms')}>
+                <Button
+                  sx={{ mt: 2 }}
+                  variant="contained"
+                  onClick={() => onAssetInventory(assetScope === 'common' ? 'common' : 'rooms')}
+                >
                   {assetScope === 'common' ? 'Kiểm kê tài sản chung' : 'Kiểm kê tài sản theo phòng'}
                 </Button>
               )}

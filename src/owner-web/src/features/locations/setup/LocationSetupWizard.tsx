@@ -35,7 +35,16 @@ import {
   useTheme,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, CheckCircle2, ChevronDown, Copy, Package, Plus, Sparkles, Trash2 } from 'lucide-react';
+import {
+  Building2,
+  CheckCircle2,
+  ChevronDown,
+  Copy,
+  Package,
+  Plus,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ASSET_UNITS } from '../../../../../../packages/client-core/src/assetUnits';
 import {
@@ -245,7 +254,11 @@ const matchesFeeTemplate = (fee: DraftFee, doc: SharedDocument, sameFamily = sam
   );
 };
 
-function mergeCatalogAssets(assets: DraftAsset[], documents: SharedDocument[], sameFamily = sameDocument): DraftAsset[] {
+function mergeCatalogAssets(
+  assets: DraftAsset[],
+  documents: SharedDocument[],
+  sameFamily = sameDocument,
+): DraftAsset[] {
   const merged = [...assets];
   for (const doc of documents) {
     if (doc.resource !== 'asset-catalog' || doc.status !== 'Published') continue;
@@ -253,7 +266,12 @@ function mergeCatalogAssets(assets: DraftAsset[], documents: SharedDocument[], s
     const imported = reference('asset-catalog', doc);
     if (index >= 0) {
       const existing = merged[index];
-      if (existing.references?.some((item) => item.kind === 'asset-catalog' && sameFamily(item.id, doc))) continue;
+      if (
+        existing.references?.some(
+          (item) => item.kind === 'asset-catalog' && sameFamily(item.id, doc),
+        )
+      )
+        continue;
       merged[index] = {
         ...existing,
         referencePrice: (doc.data as AssetCatalogData).referencePrice,
@@ -729,8 +747,11 @@ export function LocationSetupWizard({
   });
   const all = (resource: SharedResource) =>
     latestDocuments(library.data?.items[resource] ?? [], 'Published');
-  const sameFamily: SameFamily = (id, doc) => id === doc.id ||
-    (library.data?.items[doc.resource] ?? []).some((item) => item.id === id && item.familyId === doc.familyId);
+  const sameFamily: SameFamily = (id, doc) =>
+    id === doc.id ||
+    (library.data?.items[doc.resource] ?? []).some(
+      (item) => item.id === id && item.familyId === doc.familyId,
+    );
   const librarySection: { resource: SharedResource; label: string } | null =
     draft.step === 1
       ? { resource: 'room-type-templates', label: 'Thêm loại phòng mẫu' }
@@ -751,8 +772,11 @@ export function LocationSetupWizard({
       items: {
         ...previous?.items,
         [document.resource]: [
-          ...(previous?.items[document.resource] ?? []).filter((item) => item.id !== document.id &&
-            !(item.status === 'Draft' && item.familyId === document.familyId)),
+          ...(previous?.items[document.resource] ?? []).filter(
+            (item) =>
+              item.id !== document.id &&
+              !(item.status === 'Draft' && item.familyId === document.familyId),
+          ),
           document,
         ],
       },
@@ -842,9 +866,7 @@ export function LocationSetupWizard({
     setDraft((previous) => ({
       ...previous,
       rooms: previous.rooms.filter((room) => room.key !== key),
-      fees: previous.fees.map((fee) =>
-        fee.roomKey === key ? { ...fee, roomKey: '' } : fee,
-      ),
+      fees: previous.fees.map((fee) => (fee.roomKey === key ? { ...fee, roomKey: '' } : fee)),
     }));
     setEditingRoomKey(null);
     setError('');
@@ -853,7 +875,7 @@ export function LocationSetupWizard({
     setDraft((previous) => ({
       ...previous,
       rooms: [],
-      fees: previous.fees.map((fee) => fee.roomKey ? { ...fee, roomKey: '' } : fee),
+      fees: previous.fees.map((fee) => (fee.roomKey ? { ...fee, roomKey: '' } : fee)),
     }));
     setConfirmClearRooms(false);
     setError('');
@@ -954,25 +976,25 @@ export function LocationSetupWizard({
     setGenerating(true);
     // Allow the busy indicator to paint before building the room matrix.
     window.setTimeout(() => {
-    const existing = new Set(draft.rooms.map((room) => norm(room.roomNumber)));
-    let sequence = level * 100 + 1;
-    const rows: DraftRoom[] = [];
-    while (rows.length < count) {
-      const roomNumber = `${prefix}${sequence++}`;
-      if (existing.has(norm(roomNumber))) continue;
-      existing.add(norm(roomNumber));
-      rows.push({
-        key: uid(),
-        roomNumber,
-        floor: String(level),
-        roomTypeKey: currentType.key,
-        rent: null,
-      });
-    }
-    patch({ rooms: [...draft.rooms, ...rows] });
-    setNotice(`Đã sinh ${rows.length} phòng nháp từ ${currentType.name}.`);
-    generationLock.current = false;
-    setGenerating(false);
+      const existing = new Set(draft.rooms.map((room) => norm(room.roomNumber)));
+      let sequence = level * 100 + 1;
+      const rows: DraftRoom[] = [];
+      while (rows.length < count) {
+        const roomNumber = `${prefix}${sequence++}`;
+        if (existing.has(norm(roomNumber))) continue;
+        existing.add(norm(roomNumber));
+        rows.push({
+          key: uid(),
+          roomNumber,
+          floor: String(level),
+          roomTypeKey: currentType.key,
+          rent: null,
+        });
+      }
+      patch({ rooms: [...draft.rooms, ...rows] });
+      setNotice(`Đã sinh ${rows.length} phòng nháp từ ${currentType.name}.`);
+      generationLock.current = false;
+      setGenerating(false);
     }, 120);
   };
   const catalogAssets = all('asset-catalog').filter((doc) =>
@@ -990,7 +1012,9 @@ export function LocationSetupWizard({
     const doc = commonCatalog.find((item) => item.id === id);
     if (!doc) return;
     if (draft.commonAssets.some((asset) => matchesCommonCatalog(asset, doc, sameFamily))) {
-      setNotice(`${doc.name} đã có trong tài sản chung. Bạn có thể chỉnh số lượng ở danh sách bên phải.`);
+      setNotice(
+        `${doc.name} đã có trong tài sản chung. Bạn có thể chỉnh số lượng ở danh sách bên phải.`,
+      );
       return;
     }
     const data = doc.data as AssetCatalogData;
@@ -1389,7 +1413,9 @@ export function LocationSetupWizard({
       onClose();
     } catch {
       setDraftSaved(false);
-      setError('Không thể tự lưu bản nháp trên trình duyệt này. Hãy kiểm tra dung lượng lưu trữ trước khi đóng.');
+      setError(
+        'Không thể tự lưu bản nháp trên trình duyệt này. Hãy kiểm tra dung lượng lưu trữ trước khi đóng.',
+      );
     }
   };
 
@@ -1427,7 +1453,9 @@ export function LocationSetupWizard({
                 {draftSaved ? (
                   <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                     <CheckCircle2 size={14} color={theme.palette.success.main} />
-                    <Typography variant="caption" color="success.main">Đã tự lưu</Typography>
+                    <Typography variant="caption" color="success.main">
+                      Đã tự lưu
+                    </Typography>
                   </Stack>
                 ) : (
                   <Typography variant="caption" color="error.main">
@@ -1873,7 +1901,9 @@ export function LocationSetupWizard({
                       })}
                       selected={all('room-type-templates')
                         .filter((doc) =>
-                          draft.roomTypes.some((type) => matchesRoomTemplate(type, doc, sameFamily)),
+                          draft.roomTypes.some((type) =>
+                            matchesRoomTemplate(type, doc, sameFamily),
+                          ),
                         )
                         .map((doc) => doc.id)}
                       add={addType}
@@ -2013,7 +2043,13 @@ export function LocationSetupWizard({
                     <Grid size={12}>
                       <Button
                         variant="contained"
-                        startIcon={generating ? <CircularProgress size={16} color="inherit" /> : <Sparkles size={16} />}
+                        startIcon={
+                          generating ? (
+                            <CircularProgress size={16} color="inherit" />
+                          ) : (
+                            <Sparkles size={16} />
+                          )
+                        }
                         onClick={generate}
                         disabled={generating}
                       >
@@ -2029,7 +2065,15 @@ export function LocationSetupWizard({
                   onChange={(e) => patch({ rentEffectiveFrom: e.target.value })}
                   slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: today() } }}
                 />{' '}
-                <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
+                <Stack
+                  direction="row"
+                  sx={{
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    flexWrap: 'wrap',
+                  }}
+                >
                   <Typography sx={{ fontWeight: 700 }}>
                     Danh sách phòng nháp ({draft.rooms.length})
                   </Typography>
@@ -2045,7 +2089,11 @@ export function LocationSetupWizard({
                   </Button>
                 </Stack>
                 <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', mb: 1.5 }}
+                  >
                     Chọn một phòng trên ma trận để xem thông tin, đổi loại phòng hoặc đặt giá riêng.
                   </Typography>
                   <Stack spacing={2}>
@@ -2056,43 +2104,70 @@ export function LocationSetupWizard({
                           <Typography variant="subtitle2" sx={{ mb: 1 }}>
                             Tầng {level}
                           </Typography>
-                          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(128px, 1fr))', gap: 1 }}>
-                            {draft.rooms.filter((room) => room.floor === level).map((room) => {
-                              const type = draft.roomTypes.find((item) => item.key === room.roomTypeKey);
-                              return (
-                                <Button
-                                  key={room.key}
-                                  variant="outlined"
-                                  color="inherit"
-                                  aria-label={`Xem phòng ${room.roomNumber}`}
-                                  onClick={() => setEditingRoomKey(room.key)}
-                                  sx={{
-                                    minHeight: 76,
-                                    textTransform: 'none',
-                                    borderColor: 'divider',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'flex-start',
-                                    textAlign: 'left',
-                                    px: 1.5,
-                                    '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
-                                  }}
-                                >
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{room.roomNumber}</Typography>
-                                  <Typography variant="caption" color="text.secondary" sx={{ maxWidth: '100%' }} noWrap>
-                                    {type?.name ?? 'Chưa có loại phòng'}
-                                  </Typography>
-                                  <Typography variant="caption" color={room.rent === null ? 'text.secondary' : 'primary.main'}>
-                                    {money(room.rent ?? type?.referenceRent ?? null)}
-                                  </Typography>
-                                </Button>
-                              );
-                            })}
+                          <Box
+                            sx={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fill, minmax(128px, 1fr))',
+                              gap: 1,
+                            }}
+                          >
+                            {draft.rooms
+                              .filter((room) => room.floor === level)
+                              .map((room) => {
+                                const type = draft.roomTypes.find(
+                                  (item) => item.key === room.roomTypeKey,
+                                );
+                                return (
+                                  <Button
+                                    key={room.key}
+                                    variant="outlined"
+                                    color="inherit"
+                                    aria-label={`Xem phòng ${room.roomNumber}`}
+                                    onClick={() => setEditingRoomKey(room.key)}
+                                    sx={{
+                                      minHeight: 76,
+                                      textTransform: 'none',
+                                      borderColor: 'divider',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      alignItems: 'flex-start',
+                                      textAlign: 'left',
+                                      px: 1.5,
+                                      '&:hover': {
+                                        borderColor: 'primary.main',
+                                        bgcolor: 'action.hover',
+                                      },
+                                    }}
+                                  >
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                      {room.roomNumber}
+                                    </Typography>
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      sx={{ maxWidth: '100%' }}
+                                      noWrap
+                                    >
+                                      {type?.name ?? 'Chưa có loại phòng'}
+                                    </Typography>
+                                    <Typography
+                                      variant="caption"
+                                      color={room.rent === null ? 'text.secondary' : 'primary.main'}
+                                    >
+                                      {money(room.rent ?? type?.referenceRent ?? null)}
+                                    </Typography>
+                                  </Button>
+                                );
+                              })}
                           </Box>
                         </Box>
                       ))}
                     {!draft.rooms.length && (
-                      <Typography color="text.secondary" variant="body2" sx={{ textAlign: 'center', py: 3 }}>
+                      <Typography
+                        color="text.secondary"
+                        variant="body2"
+                        sx={{ textAlign: 'center', py: 3 }}
+                      >
                         Chưa có phòng nháp. Chọn tầng, loại phòng và số lượng để sinh phòng.
                       </Typography>
                     )}
@@ -2468,7 +2543,9 @@ export function LocationSetupWizard({
                       kind="fee"
                       add={addFee}
                       selected={all('fee-templates')
-                        .filter((doc) => draft.fees.some((fee) => matchesFeeTemplate(fee, doc, sameFamily)))
+                        .filter((doc) =>
+                          draft.fees.some((fee) => matchesFeeTemplate(fee, doc, sameFamily)),
+                        )
                         .map((doc) => doc.id)}
                       items={all('fee-templates')
                         .filter(
@@ -3220,7 +3297,10 @@ export function LocationSetupWizard({
             '& .MuiButton-root': { minHeight: { xs: 44, sm: 36 } },
           }}
         >
-          <Button onClick={() => changeStep(stepOrder[stepPosition(draft.step) - 1])} disabled={busy || generating || draft.step === 0}>
+          <Button
+            onClick={() => changeStep(stepOrder[stepPosition(draft.step) - 1])}
+            disabled={busy || generating || draft.step === 0}
+          >
             Quay lại
           </Button>
           <Box sx={{ display: { xs: 'none', sm: 'block' } }} />
@@ -3247,16 +3327,24 @@ export function LocationSetupWizard({
           )}
         </DialogActions>
       </Dialog>
-      <Dialog open={confirmClearRooms} onClose={() => setConfirmClearRooms(false)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={confirmClearRooms}
+        onClose={() => setConfirmClearRooms(false)}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Xóa hết phòng nháp?</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
-            Xóa {draft.rooms.length} phòng vừa sinh trong bản nháp này. Các phòng đã lưu ở cơ sở khác không bị ảnh hưởng.
+            Xóa {draft.rooms.length} phòng vừa sinh trong bản nháp này. Các phòng đã lưu ở cơ sở
+            khác không bị ảnh hưởng.
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmClearRooms(false)}>Hủy</Button>
-          <Button color="error" variant="contained" onClick={clearRooms}>Xóa hết phòng</Button>
+          <Button color="error" variant="contained" onClick={clearRooms}>
+            Xóa hết phòng
+          </Button>
         </DialogActions>
       </Dialog>
       {editingRoom && (
@@ -3264,8 +3352,16 @@ export function LocationSetupWizard({
           <DialogTitle>Thông tin phòng {editingRoom.roomNumber}</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
-              <TextField label="Mã phòng" value={editingRoom.roomNumber} slotProps={{ input: { readOnly: true } }} />
-              <TextField label="Tầng" value={editingRoom.floor} slotProps={{ input: { readOnly: true } }} />
+              <TextField
+                label="Mã phòng"
+                value={editingRoom.roomNumber}
+                slotProps={{ input: { readOnly: true } }}
+              />
+              <TextField
+                label="Tầng"
+                value={editingRoom.floor}
+                slotProps={{ input: { readOnly: true } }}
+              />
               <TextField
                 select
                 label="Loại phòng"
@@ -3273,30 +3369,60 @@ export function LocationSetupWizard({
                 onChange={(e) => updateRoom(editingRoom.key, { roomTypeKey: e.target.value })}
               >
                 {draft.roomTypes.map((type) => (
-                  <MenuItem key={type.key} value={type.key}>{type.name}</MenuItem>
+                  <MenuItem key={type.key} value={type.key}>
+                    {type.name}
+                  </MenuItem>
                 ))}
               </TextField>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 6 }}>
-                  <TextField fullWidth label="Sức chứa" value={editingRoomType ? `${editingRoomType.capacity} người` : ''} slotProps={{ input: { readOnly: true } }} helperText="Theo loại phòng" />
+                  <TextField
+                    fullWidth
+                    label="Sức chứa"
+                    value={editingRoomType ? `${editingRoomType.capacity} người` : ''}
+                    slotProps={{ input: { readOnly: true } }}
+                    helperText="Theo loại phòng"
+                  />
                 </Grid>
                 <Grid size={{ xs: 6 }}>
-                  <TextField fullWidth label="Diện tích" value={editingRoomType ? `${editingRoomType.area} m²` : ''} slotProps={{ input: { readOnly: true } }} helperText="Theo loại phòng" />
+                  <TextField
+                    fullWidth
+                    label="Diện tích"
+                    value={editingRoomType ? `${editingRoomType.area} m²` : ''}
+                    slotProps={{ input: { readOnly: true } }}
+                    helperText="Theo loại phòng"
+                  />
                 </Grid>
               </Grid>
               <MoneyField
                 label="Giá riêng (đ/tháng)"
                 value={editingRoom.rent ?? ''}
-                placeholder={editingRoomType?.referenceRent == null ? '' : money(editingRoomType.referenceRent)}
+                placeholder={
+                  editingRoomType?.referenceRent == null ? '' : money(editingRoomType.referenceRent)
+                }
                 allowDecimal
-                onValueChange={(raw) => updateRoom(editingRoom.key, { rent: raw === '' ? null : exactRent(raw) })}
-                helperText={editingRoom.rent === null ? 'Để trống để dùng giá mặc định của loại phòng' : 'Giá riêng chỉ áp dụng cho phòng này'}
+                onValueChange={(raw) =>
+                  updateRoom(editingRoom.key, { rent: raw === '' ? null : exactRent(raw) })
+                }
+                helperText={
+                  editingRoom.rent === null
+                    ? 'Để trống để dùng giá mặc định của loại phòng'
+                    : 'Giá riêng chỉ áp dụng cho phòng này'
+                }
               />
             </Stack>
           </DialogContent>
           <DialogActions sx={{ justifyContent: 'space-between' }}>
-            <Button color="error" startIcon={<Trash2 size={16} />} onClick={() => removeRoom(editingRoom.key)}>Xóa phòng</Button>
-            <Button variant="contained" onClick={() => setEditingRoomKey(null)}>Hoàn tất</Button>
+            <Button
+              color="error"
+              startIcon={<Trash2 size={16} />}
+              onClick={() => removeRoom(editingRoom.key)}
+            >
+              Xóa phòng
+            </Button>
+            <Button variant="contained" onClick={() => setEditingRoomKey(null)}>
+              Hoàn tất
+            </Button>
           </DialogActions>
         </Dialog>
       )}

@@ -520,9 +520,7 @@ function SharedLibrary({
                           aria-haspopup="menu"
                           aria-controls={selected?.id === document.id ? menuId : undefined}
                           aria-expanded={selected?.id === document.id}
-                          onClick={(event) =>
-                            setRowMenu({ anchor: event.currentTarget, document })
-                          }
+                          onClick={(event) => setRowMenu({ anchor: event.currentTarget, document })}
                           sx={{ minWidth: { xs: 44, lg: 32 }, minHeight: { xs: 44, lg: 32 } }}
                         >
                           <MoreHorizontal size={20} />
@@ -629,7 +627,10 @@ function SharedLibrary({
           close={() => setEditor(null)}
           save={(input) =>
             action.run(async () => {
-              await api.save(resource, editor.document?.id ?? null, { ...input, publishImmediately: true });
+              await api.save(resource, editor.document?.id ?? null, {
+                ...input,
+                publishImmediately: true,
+              });
               setEditor(null);
             }, 'Đã lưu mẫu. Có thể sử dụng ngay.')
           }
@@ -651,7 +652,8 @@ function SharedLibrary({
             }, 'Mẫu đã ngừng áp dụng.');
         }}
       >
-        Mẫu sẽ không còn được chọn để áp dụng mới. Cấu hình đã áp dụng tại cơ sở và lịch sử vẫn được giữ lại.
+        Mẫu sẽ không còn được chọn để áp dụng mới. Cấu hình đã áp dụng tại cơ sở và lịch sử vẫn được
+        giữ lại.
       </ConfirmDialog>
       <Dialog
         open={!!duplicate}

@@ -134,11 +134,15 @@ it('keeps immediate replacement and schedules future work through the main creat
   fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
   const drawer = await screen.findByRole('dialog', { name: 'Chi tiết phân công' });
   expect(within(drawer).getByRole('button', { name: 'Thay người phụ trách' })).toBeVisible();
-  expect(within(drawer).queryByRole('button', { name: 'Lên lịch phân công' })).not.toBeInTheDocument();
+  expect(
+    within(drawer).queryByRole('button', { name: 'Lên lịch phân công' }),
+  ).not.toBeInTheDocument();
   expect(within(drawer).queryByRole('button', { name: 'Tạo phân công' })).not.toBeInTheDocument();
 
   fireEvent.click(within(drawer).getByRole('button', { name: 'Đóng chi tiết' }));
-  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chi tiết phân công' })).not.toBeInTheDocument());
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'Chi tiết phân công' })).not.toBeInTheDocument(),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Tạo phân công' }));
   await pick('Cơ sở', 'Cơ sở mẫu');
   await ready();

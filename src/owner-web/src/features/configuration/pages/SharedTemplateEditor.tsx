@@ -340,13 +340,14 @@ export function SharedTemplateEditor({
             {validationError && <Alert severity="error">{validationError}</Alert>}
             {setupCreation && (
               <Typography variant="body2" color="text.secondary">
-                Mẫu được lưu vào thư viện dùng chung và có thể áp dụng ngay tại cơ sở đang thiết lập.
+                Mẫu được lưu vào thư viện dùng chung và có thể áp dụng ngay tại cơ sở đang thiết
+                lập.
               </Typography>
             )}
             {document?.status === 'Published' && (
               <Typography variant="body2" color="text.secondary">
-                Khi chỉnh sửa mẫu, cấu hình tại các cơ sở đã áp dụng vẫn được giữ nguyên.
-                Bạn có thể áp dụng nội dung mới cho cơ sở khi cần.
+                Khi chỉnh sửa mẫu, cấu hình tại các cơ sở đã áp dụng vẫn được giữ nguyên. Bạn có thể
+                áp dụng nội dung mới cho cơ sở khi cần.
               </Typography>
             )}
             <TextField

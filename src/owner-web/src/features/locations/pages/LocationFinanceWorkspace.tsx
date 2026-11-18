@@ -119,14 +119,28 @@ function Empty({ children }: { children: ReactNode }) {
     </Paper>
   );
 }
-function Metric({ title, value, description }: { title: string; value: string | null | undefined; description?: string }) {
+function Metric({
+  title,
+  value,
+  description,
+}: {
+  title: string;
+  value: string | null | undefined;
+  description?: string;
+}) {
   return (
     <Paper variant="outlined" sx={{ flex: '1 1 180px', p: 2, minWidth: 0 }}>
-      <Typography variant="caption" color="text.secondary">{title}</Typography>
+      <Typography variant="caption" color="text.secondary">
+        {title}
+      </Typography>
       <Typography variant="h6" sx={{ fontWeight: 750, fontVariantNumeric: 'tabular-nums' }}>
         <Amount value={value} />
       </Typography>
-      {description && <Typography variant="caption" color="text.secondary">{description}</Typography>}
+      {description && (
+        <Typography variant="caption" color="text.secondary">
+          {description}
+        </Typography>
+      )}
     </Paper>
   );
 }
@@ -143,11 +157,22 @@ function recoveryBaseline(today: string) {
   };
 }
 
-function ExpenseList({ records, title, onView }: { records: Expense[]; title: string; onView: (expense: Expense) => void }) {
+function ExpenseList({
+  records,
+  title,
+  onView,
+}: {
+  records: Expense[];
+  title: string;
+  onView: (expense: Expense) => void;
+}) {
   if (!records.length) return <Empty>Chưa có {title.toLowerCase()} được ghi nhận cho cơ sở.</Empty>;
   return (
     <TableContainer component={Paper} variant="outlined">
-      <Table size="small" sx={{ '& td, & th': { borderRight: '1px solid', borderRightColor: 'divider' } }}>
+      <Table
+        size="small"
+        sx={{ '& td, & th': { borderRight: '1px solid', borderRightColor: 'divider' } }}
+      >
         <TableHead>
           <TableRow>
             <TableCell>Hạng mục</TableCell>
@@ -163,9 +188,13 @@ function ExpenseList({ records, title, onView }: { records: Expense[]; title: st
               <TableCell>{record.category}</TableCell>
               <TableCell>{record.occurredOn.split('-').reverse().join('/')}</TableCell>
               <TableCell>{record.canEdit ? 'Owner' : 'Nghiệp vụ nguồn'}</TableCell>
-              <TableCell align="right"><Amount value={record.amount} /></TableCell>
               <TableCell align="right">
-                <Button size="small" onClick={() => onView(record)}>Chi tiết</Button>
+                <Amount value={record.amount} />
+              </TableCell>
+              <TableCell align="right">
+                <Button size="small" onClick={() => onView(record)}>
+                  Chi tiết
+                </Button>
               </TableCell>
             </TableRow>
           ))}
@@ -208,8 +237,16 @@ export function LocationFinanceWorkspace() {
     enabled: !!locationId && owner,
   });
   const capitalReport = useQuery({
-    queryKey: ['location-finance', 'capital-report', session?.userId, locationId, baseline.from, baseline.to],
-    queryFn: ({ signal }) => api.report({ locationId, from: baseline.from, to: baseline.to }, signal),
+    queryKey: [
+      'location-finance',
+      'capital-report',
+      session?.userId,
+      locationId,
+      baseline.from,
+      baseline.to,
+    ],
+    queryFn: ({ signal }) =>
+      api.report({ locationId, from: baseline.from, to: baseline.to }, signal),
     enabled: !!locationId && owner && section === 'overview',
   });
   const capitalAssets = useQuery({
@@ -238,11 +275,14 @@ export function LocationFinanceWorkspace() {
             `/api/v1/location-investments?locationId=${encodeURIComponent(locationId)}&page=${expensePage}`,
             { signal },
           )
-        : api.expenses({
-            locationId,
-            expenseType: 'OPERATING',
-            page: expensePage,
-          }, signal),
+        : api.expenses(
+            {
+              locationId,
+              expenseType: 'OPERATING',
+              page: expensePage,
+            },
+            signal,
+          ),
     enabled: !!locationId && owner && (section === 'initial' || section === 'expenses'),
   });
   const allVisibleExpenses = useMemo(() => expenses.data?.items ?? [], [expenses.data?.items]);
@@ -281,10 +321,14 @@ export function LocationFinanceWorkspace() {
   async function saveRecurring() {
     if (!recurringForm || busy) return;
     const parsed = Number(recurringForm.amount);
-    if (!recurringForm.name.trim() || !Number.isSafeInteger(parsed) || parsed <= 0 ||
+    if (
+      !recurringForm.name.trim() ||
+      !Number.isSafeInteger(parsed) ||
+      parsed <= 0 ||
       !/^\d{4}-\d{2}-\d{2}$/.test(recurringForm.startsOn) ||
       (recurringForm.endsOn !== '' && recurringForm.endsOn < recurringForm.startsOn) ||
-      (recurringForm.existing && recurringForm.effectiveFrom < todayVietnam())) {
+      (recurringForm.existing && recurringForm.effectiveFrom < todayVietnam())
+    ) {
       setError('Quy tắc chưa hợp lệ. Kiểm tra số tiền, ngày, chu kỳ và ngày hiệu lực.');
       return;
     }
@@ -317,9 +361,15 @@ export function LocationFinanceWorkspace() {
         },
       );
       await Promise.all([
-        client.invalidateQueries({ queryKey: ['location-finance', 'recurring', session?.userId, locationId] }),
-        client.invalidateQueries({ queryKey: ['location-finance', 'expenses', session?.userId, locationId] }),
-        client.invalidateQueries({ queryKey: ['location-finance', 'report', session?.userId, locationId] }),
+        client.invalidateQueries({
+          queryKey: ['location-finance', 'recurring', session?.userId, locationId],
+        }),
+        client.invalidateQueries({
+          queryKey: ['location-finance', 'expenses', session?.userId, locationId],
+        }),
+        client.invalidateQueries({
+          queryKey: ['location-finance', 'report', session?.userId, locationId],
+        }),
       ]);
       setRecurringForm(null);
       setNotice('Đã lưu quy tắc chi phí định kỳ.');
@@ -333,22 +383,42 @@ export function LocationFinanceWorkspace() {
   async function saveExpense() {
     if (!dialog || busy) return;
     const parsed = Number(amount);
-    if ((!category.trim() || !note.trim() || !occurredOn || !Number.isSafeInteger(parsed) || parsed <= 0) && entryMode === 'total') {
+    if (
+      (!category.trim() ||
+        !note.trim() ||
+        !occurredOn ||
+        !Number.isSafeInteger(parsed) ||
+        parsed <= 0) &&
+      entryMode === 'total'
+    ) {
       setError('Hãy nhập đầy đủ tên khoản chi, số tiền, ngày phát sinh và nội dung.');
       return;
     }
-    if (entryMode === 'detail' && (!note.trim() || !occurredOn || rows.length > 100 ||
-      rows.some((r) => !r.name.trim() || !Number.isSafeInteger(Number(r.amount)) || Number(r.amount) <= 0))) {
+    if (
+      entryMode === 'detail' &&
+      (!note.trim() ||
+        !occurredOn ||
+        rows.length > 100 ||
+        rows.some(
+          (r) => !r.name.trim() || !Number.isSafeInteger(Number(r.amount)) || Number(r.amount) <= 0,
+        ))
+    ) {
       setError('Mỗi hạng mục cần có tên và số tiền hợp lệ.');
       return;
     }
     setBusy(true);
     setError('');
     try {
-      const expenseType: ExpenseInput['expenseType'] = dialog === 'initial' ? 'INITIAL_INVESTMENT' : 'OPERATING';
+      const expenseType: ExpenseInput['expenseType'] =
+        dialog === 'initial' ? 'INITIAL_INVESTMENT' : 'OPERATING';
       const base: ExpenseInput = {
-        locationId, roomId: null, expenseType, category: category.trim(), amount,
-        occurredOn, note: note.trim(),
+        locationId,
+        roomId: null,
+        expenseType,
+        category: category.trim(),
+        amount,
+        occurredOn,
+        note: note.trim(),
       };
       if (entryMode === 'total') {
         await api.createExpense(base, mutationKey.current);
@@ -383,68 +453,147 @@ export function LocationFinanceWorkspace() {
     }
   }
 
-  if (!owner) return <Alert severity="error">Chỉ Owner được truy cập thông tin vốn và chi phí của cơ sở.</Alert>;
+  if (!owner)
+    return (
+      <Alert severity="error">Chỉ Owner được truy cập thông tin vốn và chi phí của cơ sở.</Alert>
+    );
 
   return (
     <Stack spacing={2}>
       <Typography variant="h2">Vốn & Chi phí</Typography>
       <Tabs
         value={section}
-        onChange={(_, id: FinanceSection) => { setSection(id); setExpensePage(1); setError(''); setNotice(''); }}
+        onChange={(_, id: FinanceSection) => {
+          setSection(id);
+          setExpensePage(1);
+          setError('');
+          setNotice('');
+        }}
         variant="scrollable"
         scrollButtons="auto"
         aria-label="Các nhóm vốn và chi phí"
-        sx={{ borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { textTransform: 'none', minHeight: 44 } }}
+        sx={{
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          '& .MuiTab-root': { textTransform: 'none', minHeight: 44 },
+        }}
       >
-        {sections.map((item) => <Tab key={item.id} value={item.id} label={item.label} />)}
+        {sections.map((item) => (
+          <Tab key={item.id} value={item.id} label={item.label} />
+        ))}
       </Tabs>
-      {notice && <Alert severity="success" onClose={() => setNotice('')}>{notice}</Alert>}
-      {error && !dialog && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
+      {notice && (
+        <Alert severity="success" onClose={() => setNotice('')}>
+          {notice}
+        </Alert>
+      )}
+      {error && !dialog && (
+        <Alert severity="error" onClose={() => setError('')}>
+          {error}
+        </Alert>
+      )}
 
       {section === 'overview' && (
         <>
           {report.isPending && <LinearProgress aria-label="Đang tải số liệu tài chính" />}
-          {report.isError && <Alert severity="error" action={<Button onClick={() => void report.refetch()}>Thử lại</Button>}>{financeError(report.error)}</Alert>}
+          {report.isError && (
+            <Alert
+              severity="error"
+              action={<Button onClick={() => void report.refetch()}>Thử lại</Button>}
+            >
+              {financeError(report.error)}
+            </Alert>
+          )}
           {report.data && (
             <>
               <Stack direction="row" useFlexGap spacing={1.5} sx={{ flexWrap: 'wrap' }}>
-                <Metric title="Vốn đầu tư đã ghi nhận" value={report.data.total.initialInvestment} description="Bao gồm các khoản vốn đủ điều kiện ghi nhận" />
-                <Metric title="Chi phí vận hành tháng này" value={report.data.total.operatingExpenses} />
-                <Metric title="Đã thu xác minh tháng này" value={report.data.total.verifiedCollections} />
+                <Metric
+                  title="Vốn đầu tư đã ghi nhận"
+                  value={report.data.total.initialInvestment}
+                  description="Bao gồm các khoản vốn đủ điều kiện ghi nhận"
+                />
+                <Metric
+                  title="Chi phí vận hành tháng này"
+                  value={report.data.total.operatingExpenses}
+                />
+                <Metric
+                  title="Đã thu xác minh tháng này"
+                  value={report.data.total.verifiedCollections}
+                />
                 <Metric title="Công nợ hiện tại" value={report.data.total.outstandingNow} />
               </Stack>
               <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Hiệu quả đầu tư</Typography>
-                {capitalReport.isPending && <LinearProgress aria-label="Đang tải hiệu quả đầu tư" />}
-                {capitalReport.isError && <Alert severity="warning" action={<Button onClick={() => void capitalReport.refetch()}>Thử lại</Button>}>Chưa tải được dữ liệu hoàn vốn.</Alert>}
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  Hiệu quả đầu tư
+                </Typography>
+                {capitalReport.isPending && (
+                  <LinearProgress aria-label="Đang tải hiệu quả đầu tư" />
+                )}
+                {capitalReport.isError && (
+                  <Alert
+                    severity="warning"
+                    action={<Button onClick={() => void capitalReport.refetch()}>Thử lại</Button>}
+                  >
+                    Chưa tải được dữ liệu hoàn vốn.
+                  </Alert>
+                )}
                 {capitalReport.data?.capital.unavailableReason ? (
                   <Alert severity="info" sx={{ mt: 1 }}>
-                    Chưa đủ dữ liệu tin cậy để xác định thời gian hoàn vốn. Kiểm tra vốn ban đầu, công nợ, hoàn tiền và các kỳ báo cáo đầy đủ.
+                    Chưa đủ dữ liệu tin cậy để xác định thời gian hoàn vốn. Kiểm tra vốn ban đầu,
+                    công nợ, hoàn tiền và các kỳ báo cáo đầy đủ.
                   </Alert>
                 ) : capitalReport.data ? (
                   <Stack direction="row" spacing={3} sx={{ mt: 1, flexWrap: 'wrap' }}>
-                    <Box><Typography variant="caption">Vốn còn thu hồi</Typography><Typography sx={{ fontWeight: 700 }}><Amount value={capitalReport.data.capital.remainingCapital} /></Typography></Box>
-                    <Box><Typography variant="caption">Tiến độ thu hồi</Typography><Typography sx={{ fontWeight: 700 }}>{capitalReport.data.capital.recoveryPercent}%</Typography></Box>
-                    <Box><Typography variant="caption">Dự kiến còn lại</Typography><Typography sx={{ fontWeight: 700 }}>{capitalReport.data.capital.estimatedRemainingMonths} tháng</Typography></Box>
+                    <Box>
+                      <Typography variant="caption">Vốn còn thu hồi</Typography>
+                      <Typography sx={{ fontWeight: 700 }}>
+                        <Amount value={capitalReport.data.capital.remainingCapital} />
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption">Tiến độ thu hồi</Typography>
+                      <Typography sx={{ fontWeight: 700 }}>
+                        {capitalReport.data.capital.recoveryPercent}%
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption">Dự kiến còn lại</Typography>
+                      <Typography sx={{ fontWeight: 700 }}>
+                        {capitalReport.data.capital.estimatedRemainingMonths} tháng
+                      </Typography>
+                    </Box>
                   </Stack>
                 ) : null}
                 <Typography variant="caption" color="text.secondary">
-                  Dự báo dựa trên 6 tháng hoàn chỉnh gần nhất ({baseline.from} đến {baseline.to}), không phải cam kết hoàn vốn.
+                  Dự báo dựa trên 6 tháng hoàn chỉnh gần nhất ({baseline.from} đến {baseline.to}),
+                  không phải cam kết hoàn vốn.
                 </Typography>
               </Paper>
-              {capitalAssets.isError && <Alert severity="warning">Không tải được vốn đầu tư tài sản. <Button onClick={() => void capitalAssets.refetch()}>Thử lại</Button></Alert>}
+              {capitalAssets.isError && (
+                <Alert severity="warning">
+                  Không tải được vốn đầu tư tài sản.{' '}
+                  <Button onClick={() => void capitalAssets.refetch()}>Thử lại</Button>
+                </Alert>
+              )}
               {capitalAssets.data && (
                 <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Typography sx={{ fontWeight: 700, mb: 1 }}>Đầu tư tài sản đã xác định</Typography>
+                  <Typography sx={{ fontWeight: 700, mb: 1 }}>
+                    Đầu tư tài sản đã xác định
+                  </Typography>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                     <Metric title="Tài sản phòng" value={capitalAssets.data.roomsTotal} />
                     <Metric title="Tài sản chung" value={capitalAssets.data.commonTotal} />
                   </Stack>
                 </Paper>
               )}
-              {(capitalAssets.data == null || capitalAssets.data.unpricedCount > 0 ||
-                capitalAssets.data.unreviewedRoomCount > 0 || capitalAssets.data.unreviewedCommonCount > 0) && (
-                <Alert severity="info">Vốn đầu tư tài sản chỉ được tính sau khi kiểm kê xác nhận. Tài sản thiếu đơn giá hoặc chưa kiểm kê không được mặc định bằng 0.</Alert>
+              {(capitalAssets.data == null ||
+                capitalAssets.data.unpricedCount > 0 ||
+                capitalAssets.data.unreviewedRoomCount > 0 ||
+                capitalAssets.data.unreviewedCommonCount > 0) && (
+                <Alert severity="info">
+                  Vốn đầu tư tài sản chỉ được tính sau khi kiểm kê xác nhận. Tài sản thiếu đơn giá
+                  hoặc chưa kiểm kê không được mặc định bằng 0.
+                </Alert>
               )}
             </>
           )}
@@ -458,7 +607,14 @@ export function LocationFinanceWorkspace() {
             <Chip label="Tự động từ kiểm kê" size="small" variant="outlined" />
           </Stack>
           {capitalAssets.isPending && <LinearProgress aria-label="Đang tổng hợp vốn tài sản" />}
-          {capitalAssets.isError && <Alert severity="error" action={<Button onClick={() => void capitalAssets.refetch()}>Thử lại</Button>}>{financeError(capitalAssets.error)}</Alert>}
+          {capitalAssets.isError && (
+            <Alert
+              severity="error"
+              action={<Button onClick={() => void capitalAssets.refetch()}>Thử lại</Button>}
+            >
+              {financeError(capitalAssets.error)}
+            </Alert>
+          )}
           {capitalAssets.data && (
             <>
               <Stack direction="row" useFlexGap spacing={1.5} sx={{ flexWrap: 'wrap' }}>
@@ -470,8 +626,9 @@ export function LocationFinanceWorkspace() {
                 capitalAssets.data.unreviewedRoomCount > 0 ||
                 capitalAssets.data.unreviewedCommonCount > 0) && (
                 <Alert severity="warning">
-                  Vốn tài sản chưa đầy đủ: {capitalAssets.data.unpricedCount} tài sản thiếu đơn giá đầu tư,
-                  {' '}{capitalAssets.data.unreviewedRoomCount} phòng và {capitalAssets.data.unreviewedCommonCount} khu vực chung chưa hoàn tất kiểm kê.
+                  Vốn tài sản chưa đầy đủ: {capitalAssets.data.unpricedCount} tài sản thiếu đơn giá
+                  đầu tư, {capitalAssets.data.unreviewedRoomCount} phòng và{' '}
+                  {capitalAssets.data.unreviewedCommonCount} khu vực chung chưa hoàn tất kiểm kê.
                   Không dùng tổng hiện tại để kết luận đã hoàn vốn.
                 </Alert>
               )}
@@ -483,58 +640,111 @@ export function LocationFinanceWorkspace() {
                 <Tab value="room" label="Tài sản phòng" sx={{ textTransform: 'none' }} />
                 <Tab value="common" label="Tài sản chung cơ sở" sx={{ textTransform: 'none' }} />
               </Tabs>
-              {capitalAssets.data.groups.filter((group) => group.scope === capitalScope).length === 0 && (
-                <Empty>Chưa có dữ liệu tài sản thực tế thuộc nhóm này.</Empty>
-              )}
-              {capitalAssets.data.groups.filter((group) => group.scope === capitalScope).map((group) => (
-                <Accordion
-                  key={group.id}
-                  variant="outlined"
-                  disableGutters
-                  sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}
-                >
-                  <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-                    <Stack direction="row" spacing={2} sx={{ width: '100%', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
-                      <Box>
-                        <Typography sx={{ fontWeight: 700 }}>{group.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">{group.assets.length} nhóm tài sản</Typography>
-                      </Box>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                        {!group.verified && <Chip label="Cần đối chiếu" size="small" color="warning" variant="outlined" />}
-                        <Typography sx={{ fontVariantNumeric: 'tabular-nums' }}><Amount value={group.knownTotal} /></Typography>
+              {capitalAssets.data.groups.filter((group) => group.scope === capitalScope).length ===
+                0 && <Empty>Chưa có dữ liệu tài sản thực tế thuộc nhóm này.</Empty>}
+              {capitalAssets.data.groups
+                .filter((group) => group.scope === capitalScope)
+                .map((group) => (
+                  <Accordion
+                    key={group.id}
+                    variant="outlined"
+                    disableGutters
+                    sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}
+                  >
+                    <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+                      <Stack
+                        direction="row"
+                        spacing={2}
+                        sx={{
+                          width: '100%',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          pr: 1,
+                        }}
+                      >
+                        <Box>
+                          <Typography sx={{ fontWeight: 700 }}>{group.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {group.assets.length} nhóm tài sản
+                          </Typography>
+                        </Box>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                          {!group.verified && (
+                            <Chip
+                              label="Cần đối chiếu"
+                              size="small"
+                              color="warning"
+                              variant="outlined"
+                            />
+                          )}
+                          <Typography sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                            <Amount value={group.knownTotal} />
+                          </Typography>
+                        </Stack>
                       </Stack>
-                    </Stack>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    {!group.verified && !group.assets.some((asset) => asset.totalCost != null) ? (
-                      <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
-                        <Typography color="text.secondary">Cần kiểm kê trước khi ghi nhận vốn đầu tư tài sản.</Typography>
-                        <Button component={Link} to={`/locations/${locationId}/assets?tab=review`} size="small" variant="outlined">Đi đến kiểm kê</Button>
-                      </Stack>
-                    ) : (
-                      <TableContainer>
-                        <Table size="small">
-                          <TableHead><TableRow>
-                            <TableCell>Tài sản</TableCell><TableCell align="right">SL</TableCell>
-                            <TableCell align="right">Đơn giá hiện lưu</TableCell><TableCell align="right">Vốn đã ghi nhận</TableCell>
-                          </TableRow></TableHead>
-                          <TableBody>
-                            {group.assets.map((asset) => (
-                              <TableRow key={asset.id}>
-                                <TableCell>{asset.name}</TableCell>
-                                <TableCell align="right">{asset.quantity}</TableCell>
-                                <TableCell align="right">{asset.unitCost == null ? <Chip size="small" color="warning" variant="outlined" label="Thiếu giá" /> : <Amount value={asset.unitCost} />}</TableCell>
-                                <TableCell align="right"><Amount value={asset.totalCost} /></TableCell>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      {!group.verified && !group.assets.some((asset) => asset.totalCost != null) ? (
+                        <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
+                          <Typography color="text.secondary">
+                            Cần kiểm kê trước khi ghi nhận vốn đầu tư tài sản.
+                          </Typography>
+                          <Button
+                            component={Link}
+                            to={`/locations/${locationId}/assets?tab=review`}
+                            size="small"
+                            variant="outlined"
+                          >
+                            Đi đến kiểm kê
+                          </Button>
+                        </Stack>
+                      ) : (
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Tài sản</TableCell>
+                                <TableCell align="right">SL</TableCell>
+                                <TableCell align="right">Đơn giá hiện lưu</TableCell>
+                                <TableCell align="right">Vốn đã ghi nhận</TableCell>
                               </TableRow>
-                            ))}
-                            {group.assets.length === 0 && <TableRow><TableCell colSpan={4}>Chưa có tài sản thực tế đã xác nhận.</TableCell></TableRow>}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                    )}
-                  </AccordionDetails>
-                </Accordion>
-              ))}
+                            </TableHead>
+                            <TableBody>
+                              {group.assets.map((asset) => (
+                                <TableRow key={asset.id}>
+                                  <TableCell>{asset.name}</TableCell>
+                                  <TableCell align="right">{asset.quantity}</TableCell>
+                                  <TableCell align="right">
+                                    {asset.unitCost == null ? (
+                                      <Chip
+                                        size="small"
+                                        color="warning"
+                                        variant="outlined"
+                                        label="Thiếu giá"
+                                      />
+                                    ) : (
+                                      <Amount value={asset.unitCost} />
+                                    )}
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Amount value={asset.totalCost} />
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {group.assets.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={4}>
+                                    Chưa có tài sản thực tế đã xác nhận.
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
             </>
           )}
         </Stack>
@@ -542,56 +752,107 @@ export function LocationFinanceWorkspace() {
 
       {(section === 'initial' || section === 'expenses') && (
         <Stack spacing={2}>
-          <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
-            <Typography variant="h6">{section === 'initial' ? 'Đầu tư ban đầu & bổ sung khác' : 'Chi phí phát sinh'}</Typography>
-            <Button variant="contained" startIcon={<Plus size={17} />} onClick={() => openCreate(section === 'initial' ? 'initial' : 'expenses')}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}
+          >
+            <Typography variant="h6">
+              {section === 'initial' ? 'Đầu tư ban đầu & bổ sung khác' : 'Chi phí phát sinh'}
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<Plus size={17} />}
+              onClick={() => openCreate(section === 'initial' ? 'initial' : 'expenses')}
+            >
               {section === 'initial' ? 'Thêm đầu tư khác' : 'Thêm chi phí'}
             </Button>
           </Stack>
           {section === 'initial' && (
-            <Alert severity="info">Chỉ nhập các khoản đầu tư không nằm trong giá trị tài sản đã kiểm kê. Có thể khai báo một khoản tổng để tránh nhập từng hóa đơn.</Alert>
+            <Alert severity="info">
+              Chỉ nhập các khoản đầu tư không nằm trong giá trị tài sản đã kiểm kê. Có thể khai báo
+              một khoản tổng để tránh nhập từng hóa đơn.
+            </Alert>
           )}
           {expenses.isPending && <LinearProgress />}
-          {expenses.isError && <Alert severity="error" action={<Button onClick={() => void expenses.refetch()}>Thử lại</Button>}>{financeError(expenses.error)}</Alert>}
-          {expenses.data && <>
-            <ExpenseList records={allVisibleExpenses} title={section === 'initial' ? 'khoản đầu tư khác' : 'chi phí phát sinh'} onView={setInspect} />
-            <TablePagination
-              component="div"
-              count={expenses.data.total}
-              page={expenses.data.page - 1}
-              rowsPerPage={expenses.data.pageSize}
-              rowsPerPageOptions={[expenses.data.pageSize]}
-              onPageChange={(_, page) => setExpensePage(page + 1)}
-              labelRowsPerPage="Số dòng"
-              labelDisplayedRows={({ from, to, count }) => `${from}–${to} / ${count}`}
-            />
-          </>}
+          {expenses.isError && (
+            <Alert
+              severity="error"
+              action={<Button onClick={() => void expenses.refetch()}>Thử lại</Button>}
+            >
+              {financeError(expenses.error)}
+            </Alert>
+          )}
+          {expenses.data && (
+            <>
+              <ExpenseList
+                records={allVisibleExpenses}
+                title={section === 'initial' ? 'khoản đầu tư khác' : 'chi phí phát sinh'}
+                onView={setInspect}
+              />
+              <TablePagination
+                component="div"
+                count={expenses.data.total}
+                page={expenses.data.page - 1}
+                rowsPerPage={expenses.data.pageSize}
+                rowsPerPageOptions={[expenses.data.pageSize]}
+                onPageChange={(_, page) => setExpensePage(page + 1)}
+                labelRowsPerPage="Số dòng"
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} / ${count}`}
+              />
+            </>
+          )}
         </Stack>
       )}
 
       {section === 'recurring' && (
         <Stack spacing={2}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
+          >
             <Typography variant="h6">Chi phí định kỳ</Typography>
-            <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => openRecurring()}>Thêm định kỳ</Button>
+            <Button
+              variant="contained"
+              startIcon={<Plus size={16} />}
+              onClick={() => openRecurring()}
+            >
+              Thêm định kỳ
+            </Button>
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            Ngày bắt đầu là mốc phát sinh; mỗi kỳ lặp lại cùng ngày (tháng ngắn dùng ngày cuối tháng). Khoản chi phát sinh chưa được xem là đã thanh toán.
+            Ngày bắt đầu là mốc phát sinh; mỗi kỳ lặp lại cùng ngày (tháng ngắn dùng ngày cuối
+            tháng). Khoản chi phát sinh chưa được xem là đã thanh toán.
           </Typography>
           {recurring.isPending && <LinearProgress />}
-          {recurring.isError && <Alert severity="error" action={<Button onClick={() => void recurring.refetch()}>Thử lại</Button>}>{financeError(recurring.error)}</Alert>}
-          {recurring.data && (
-            recurring.data.length === 0 ? <Empty>Chưa có quy tắc chi phí định kỳ cho cơ sở.</Empty> :
+          {recurring.isError && (
+            <Alert
+              severity="error"
+              action={<Button onClick={() => void recurring.refetch()}>Thử lại</Button>}
+            >
+              {financeError(recurring.error)}
+            </Alert>
+          )}
+          {recurring.data &&
+            (recurring.data.length === 0 ? (
+              <Empty>Chưa có quy tắc chi phí định kỳ cho cơ sở.</Empty>
+            ) : (
               <TableContainer component={Paper} variant="outlined">
-                <Table size="small" sx={{ '& td, & th': { borderRight: '1px solid', borderRightColor: 'divider' } }}>
-                  <TableHead><TableRow>
-                    <TableCell>Khoản chi</TableCell>
-                    <TableCell>Chu kỳ</TableCell>
-                    <TableCell>Ngày bắt đầu</TableCell>
-                    <TableCell align="right">Số tiền/kỳ</TableCell>
-                    <TableCell>Trạng thái</TableCell>
-                    <TableCell align="right">Thao tác</TableCell>
-                  </TableRow></TableHead>
+                <Table
+                  size="small"
+                  sx={{ '& td, & th': { borderRight: '1px solid', borderRightColor: 'divider' } }}
+                >
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Khoản chi</TableCell>
+                      <TableCell>Chu kỳ</TableCell>
+                      <TableCell>Ngày bắt đầu</TableCell>
+                      <TableCell align="right">Số tiền/kỳ</TableCell>
+                      <TableCell>Trạng thái</TableCell>
+                      <TableCell align="right">Thao tác</TableCell>
+                    </TableRow>
+                  </TableHead>
                   <TableBody>
                     {recurring.data.map((rule) => (
                       <TableRow key={rule.id}>
@@ -600,86 +861,244 @@ export function LocationFinanceWorkspace() {
                         <TableCell>
                           {rule.startsOn.split('-').reverse().join('/')}
                           {rule.dayOfMonth !== Number(rule.startsOn.slice(8, 10)) && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block' }}
+                            >
                               Quy tắc cũ: ngày {rule.dayOfMonth} mỗi kỳ
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell align="right"><Amount value={rule.amount} /></TableCell>
-                        <TableCell><Chip size="small" variant="outlined" color={rule.active ? 'success' : 'default'} label={rule.active ? 'Đang áp dụng' : 'Ngừng áp dụng'} /></TableCell>
-                        <TableCell align="right"><Button size="small" onClick={() => openRecurring(rule)}>Điều chỉnh</Button></TableCell>
+                        <TableCell align="right">
+                          <Amount value={rule.amount} />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            color={rule.active ? 'success' : 'default'}
+                            label={rule.active ? 'Đang áp dụng' : 'Ngừng áp dụng'}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Button size="small" onClick={() => openRecurring(rule)}>
+                            Điều chỉnh
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
-          )}
+            ))}
         </Stack>
       )}
 
-      <Dialog open={!!dialog} onClose={() => { if (!busy) setDialog(null); }} fullWidth maxWidth="sm">
-        <DialogTitle>{dialog === 'initial' ? 'Ghi nhận đầu tư khác' : 'Ghi nhận chi phí phát sinh'}</DialogTitle>
+      <Dialog
+        open={!!dialog}
+        onClose={() => {
+          if (!busy) setDialog(null);
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {dialog === 'initial' ? 'Ghi nhận đầu tư khác' : 'Ghi nhận chi phí phát sinh'}
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {error && <Alert severity="error">{error}</Alert>}
             {dialog === 'initial' && (
-              <Tabs value={entryMode} onChange={(_, mode: EntryMode) => setEntryMode(mode)} variant="fullWidth">
+              <Tabs
+                value={entryMode}
+                onChange={(_, mode: EntryMode) => setEntryMode(mode)}
+                variant="fullWidth"
+              >
                 <Tab value="total" label="Nhập tổng" />
                 <Tab value="detail" label="Nhập chi tiết" />
               </Tabs>
             )}
             {entryMode === 'total' || dialog === 'expenses' ? (
               <>
-                <TextField required label="Tên hạng mục" value={category} onChange={(e) => setCategory(e.target.value)} slotProps={{ htmlInput: { maxLength: 60 } }} />
-                <MoneyField required label="Số tiền (VNĐ)" value={amount} onValueChange={setAmount} />
+                <TextField
+                  required
+                  label="Tên hạng mục"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  slotProps={{ htmlInput: { maxLength: 60 } }}
+                />
+                <MoneyField
+                  required
+                  label="Số tiền (VNĐ)"
+                  value={amount}
+                  onValueChange={setAmount}
+                />
               </>
             ) : (
               <>
                 {rows.map((row) => (
                   <Stack key={row.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                    <TextField required label="Hạng mục" value={row.name} onChange={(e) => setRows((old) => old.map((item) => item.id === row.id ? { ...item, name: e.target.value } : item))} fullWidth />
-                    <MoneyField required label="Số tiền" value={row.amount} onValueChange={(v) => setRows((old) => old.map((item) => item.id === row.id ? { ...item, amount: v } : item))} />
-                    <Button disabled={rows.length < 2} onClick={() => setRows((old) => old.filter((item) => item.id !== row.id))}>Bỏ</Button>
+                    <TextField
+                      required
+                      label="Hạng mục"
+                      value={row.name}
+                      onChange={(e) =>
+                        setRows((old) =>
+                          old.map((item) =>
+                            item.id === row.id ? { ...item, name: e.target.value } : item,
+                          ),
+                        )
+                      }
+                      fullWidth
+                    />
+                    <MoneyField
+                      required
+                      label="Số tiền"
+                      value={row.amount}
+                      onValueChange={(v) =>
+                        setRows((old) =>
+                          old.map((item) => (item.id === row.id ? { ...item, amount: v } : item)),
+                        )
+                      }
+                    />
+                    <Button
+                      disabled={rows.length < 2}
+                      onClick={() => setRows((old) => old.filter((item) => item.id !== row.id))}
+                    >
+                      Bỏ
+                    </Button>
                   </Stack>
                 ))}
-                <Button variant="outlined" disabled={rows.length >= 100} startIcon={<Plus size={16} />} onClick={() => setRows((old) => [...old, { id: Math.max(...old.map((v) => v.id)) + 1, name: '', amount: '' }])}>Thêm hạng mục</Button>
+                <Button
+                  variant="outlined"
+                  disabled={rows.length >= 100}
+                  startIcon={<Plus size={16} />}
+                  onClick={() =>
+                    setRows((old) => [
+                      ...old,
+                      { id: Math.max(...old.map((v) => v.id)) + 1, name: '', amount: '' },
+                    ])
+                  }
+                >
+                  Thêm hạng mục
+                </Button>
               </>
             )}
-            <TextField required type="date" label="Ngày phát sinh" value={occurredOn} onChange={(e) => setOccurredOn(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
-            <TextField required multiline minRows={2} label="Nội dung / chứng từ" value={note} onChange={(e) => setNote(e.target.value)} slotProps={{ htmlInput: { maxLength: 4000 } }} />
-            {dialog === 'initial' && <Alert severity="warning">Không cộng lại tiền mua tài sản đã được ghi nhận từ kiểm kê. Tách riêng tiền cọc có thể thu hồi.</Alert>}
+            <TextField
+              required
+              type="date"
+              label="Ngày phát sinh"
+              value={occurredOn}
+              onChange={(e) => setOccurredOn(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+            <TextField
+              required
+              multiline
+              minRows={2}
+              label="Nội dung / chứng từ"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              slotProps={{ htmlInput: { maxLength: 4000 } }}
+            />
+            {dialog === 'initial' && (
+              <Alert severity="warning">
+                Không cộng lại tiền mua tài sản đã được ghi nhận từ kiểm kê. Tách riêng tiền cọc có
+                thể thu hồi.
+              </Alert>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button disabled={busy} onClick={() => setDialog(null)}>Hủy</Button>
-          <Button variant="contained" disabled={busy} onClick={() => void saveExpense()}>{busy ? 'Đang lưu…' : 'Ghi nhận'}</Button>
+          <Button disabled={busy} onClick={() => setDialog(null)}>
+            Hủy
+          </Button>
+          <Button variant="contained" disabled={busy} onClick={() => void saveExpense()}>
+            {busy ? 'Đang lưu…' : 'Ghi nhận'}
+          </Button>
         </DialogActions>
       </Dialog>
       <Dialog open={!!inspect} onClose={() => setInspect(null)} fullWidth maxWidth="sm">
         <DialogTitle>Chi tiết khoản chi</DialogTitle>
         <DialogContent>
-          {inspect && <Stack spacing={1}>
-            <Typography>{inspect.category}</Typography>
-            <Typography sx={{ fontWeight: 750 }}><Amount value={inspect.amount} /></Typography>
-            <Typography variant="body2" color="text.secondary">Ngày phát sinh: {inspect.occurredOn.split('-').reverse().join('/')}</Typography>
-            <Typography variant="body2">{inspect.note}</Typography>
-            <Typography variant="caption" color="text.secondary">{inspect.canEdit ? 'Khoản Owner khai báo' : 'Khoản từ nghiệp vụ nguồn; quản lý tại nghiệp vụ gốc'}</Typography>
-          </Stack>}
+          {inspect && (
+            <Stack spacing={1}>
+              <Typography>{inspect.category}</Typography>
+              <Typography sx={{ fontWeight: 750 }}>
+                <Amount value={inspect.amount} />
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Ngày phát sinh: {inspect.occurredOn.split('-').reverse().join('/')}
+              </Typography>
+              <Typography variant="body2">{inspect.note}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {inspect.canEdit
+                  ? 'Khoản Owner khai báo'
+                  : 'Khoản từ nghiệp vụ nguồn; quản lý tại nghiệp vụ gốc'}
+              </Typography>
+            </Stack>
+          )}
         </DialogContent>
-        <DialogActions><Button onClick={() => setInspect(null)}>Đóng</Button></DialogActions>
+        <DialogActions>
+          <Button onClick={() => setInspect(null)}>Đóng</Button>
+        </DialogActions>
       </Dialog>
-      <Dialog open={!!recurringForm} onClose={() => { if (!busy) setRecurringForm(null); }} fullWidth maxWidth="sm">
-        <DialogTitle>{recurringForm?.existing ? 'Điều chỉnh chi phí định kỳ' : 'Thêm chi phí định kỳ'}</DialogTitle>
+      <Dialog
+        open={!!recurringForm}
+        onClose={() => {
+          if (!busy) setRecurringForm(null);
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {recurringForm?.existing ? 'Điều chỉnh chi phí định kỳ' : 'Thêm chi phí định kỳ'}
+        </DialogTitle>
         <DialogContent>
           {recurringForm && (
             <Stack spacing={2} sx={{ pt: 1 }}>
               {error && <Alert severity="error">{error}</Alert>}
-              <TextField required label="Tên khoản chi" value={recurringForm.name} slotProps={{ htmlInput: { maxLength: 200 } }} onChange={(e) => setRecurringForm((v) => v && { ...v, name: e.target.value })} />
-              <MoneyField required label="Số tiền mỗi kỳ (VNĐ)" value={recurringForm.amount} onValueChange={(amount) => setRecurringForm((v) => v && { ...v, amount })} />
-              <TextField select required label="Chu kỳ" value={recurringForm.frequency} onChange={(e) => setRecurringForm((v) => v && { ...v, frequency: e.target.value as RecurringExpenseRule['frequency'] })}>
-                {Object.entries(recurringFrequency).map(([key, label]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}
+              <TextField
+                required
+                label="Tên khoản chi"
+                value={recurringForm.name}
+                slotProps={{ htmlInput: { maxLength: 200 } }}
+                onChange={(e) => setRecurringForm((v) => v && { ...v, name: e.target.value })}
+              />
+              <MoneyField
+                required
+                label="Số tiền mỗi kỳ (VNĐ)"
+                value={recurringForm.amount}
+                onValueChange={(amount) => setRecurringForm((v) => v && { ...v, amount })}
+              />
+              <TextField
+                select
+                required
+                label="Chu kỳ"
+                value={recurringForm.frequency}
+                onChange={(e) =>
+                  setRecurringForm(
+                    (v) =>
+                      v && { ...v, frequency: e.target.value as RecurringExpenseRule['frequency'] },
+                  )
+                }
+              >
+                {Object.entries(recurringFrequency).map(([key, label]) => (
+                  <MenuItem key={key} value={key}>
+                    {label}
+                  </MenuItem>
+                ))}
               </TextField>
-              <TextField type="date" required label="Ngày bắt đầu" value={recurringForm.startsOn} disabled={!!recurringForm.existing} slotProps={{ inputLabel: { shrink: true } }} onChange={(e) => setRecurringForm((v) => v && { ...v, startsOn: e.target.value })} />
+              <TextField
+                type="date"
+                required
+                label="Ngày bắt đầu"
+                value={recurringForm.startsOn}
+                disabled={!!recurringForm.existing}
+                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={(e) => setRecurringForm((v) => v && { ...v, startsOn: e.target.value })}
+              />
               <Typography variant="caption" color="text.secondary">
                 {recurringForm.frequency === 'MONTHLY'
                   ? 'Mỗi tháng hệ thống phát sinh khoản chi theo ngày bắt đầu; tháng không có ngày đó sẽ lấy ngày cuối tháng.'
@@ -687,21 +1106,34 @@ export function LocationFinanceWorkspace() {
                     ? 'Mỗi 3 tháng hệ thống phát sinh khoản chi theo ngày bắt đầu.'
                     : 'Mỗi năm hệ thống phát sinh khoản chi theo ngày bắt đầu.'}
               </Typography>
-              <TextField select label="Trạng thái" value={recurringForm.active ? 'active' : 'inactive'} onChange={(e) => setRecurringForm((v) => v && { ...v, active: e.target.value === 'active' })}>
+              <TextField
+                select
+                label="Trạng thái"
+                value={recurringForm.active ? 'active' : 'inactive'}
+                onChange={(e) =>
+                  setRecurringForm((v) => v && { ...v, active: e.target.value === 'active' })
+                }
+              >
                 <MenuItem value="active">Đang áp dụng</MenuItem>
                 <MenuItem value="inactive">Ngừng áp dụng</MenuItem>
               </TextField>
               {recurringForm.existing && (
                 <Alert severity="info">
-                  Ngày bắt đầu không đổi để bảo toàn lịch sử. Thay đổi sẽ áp dụng từ {recurringForm.effectiveFrom.split('-').reverse().join('/')}, không sửa các kỳ đã ghi nhận.
+                  Ngày bắt đầu không đổi để bảo toàn lịch sử. Thay đổi sẽ áp dụng từ{' '}
+                  {recurringForm.effectiveFrom.split('-').reverse().join('/')}, không sửa các kỳ đã
+                  ghi nhận.
                 </Alert>
               )}
             </Stack>
           )}
         </DialogContent>
         <DialogActions>
-          <Button disabled={busy} onClick={() => setRecurringForm(null)}>Hủy</Button>
-          <Button disabled={busy} variant="contained" onClick={() => void saveRecurring()}>{busy ? 'Đang lưu…' : 'Lưu quy tắc'}</Button>
+          <Button disabled={busy} onClick={() => setRecurringForm(null)}>
+            Hủy
+          </Button>
+          <Button disabled={busy} variant="contained" onClick={() => void saveRecurring()}>
+            {busy ? 'Đang lưu…' : 'Lưu quy tắc'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Stack>

@@ -52,8 +52,14 @@ it('keeps Owner configuration and attestation tabs separate from the legacy Staf
 it('opens the inventory review tab directly from a finance link', () => {
   state.roles = ['Owner'];
   mount('/locations/location/assets?tab=review&scope=common');
-  expect(screen.getByRole('tab', { name: 'Kiểm kê tài sản' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByRole('tab', { name: 'Kiểm kê khu vực chung' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tab', { name: 'Kiểm kê tài sản' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(screen.getByRole('tab', { name: 'Kiểm kê khu vực chung' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   expect(screen.getByTestId('common-review')).toBeInTheDocument();
 });
 

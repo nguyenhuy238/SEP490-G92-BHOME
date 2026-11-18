@@ -180,7 +180,9 @@ async function manualType() {
 async function generate(count = '1') {
   fill('Số lượng phòng', count);
   fireEvent.click(button('Sinh phòng xem trước'));
-  await waitFor(() => expect(screen.getByText('Danh sách phòng nháp (' + count + ')')).toBeInTheDocument());
+  await waitFor(() =>
+    expect(screen.getByText('Danh sách phòng nháp (' + count + ')')).toBeInTheDocument(),
+  );
   next();
 }
 function finishSteps() {
@@ -407,7 +409,12 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   legacyDraft.roomTypes[0].assets[0].quantity = 4;
   sessionStorage.setItem(draftKey, JSON.stringify(legacyDraft));
   // A new edition must be the only selectable library item, without replacing the draft snapshot.
-  const nextCatalog = { ...catalog, id: 'next-catalog', edition: catalog.edition + 1, name: 'Bàn học mới' };
+  const nextCatalog = {
+    ...catalog,
+    id: 'next-catalog',
+    edition: catalog.edition + 1,
+    name: 'Bàn học mới',
+  };
   docs.push(nextCatalog);
   mount(wizard());
   await screen.findByText('Bàn học', { selector: '[role="listitem"] .MuiTypography-root' });
@@ -478,7 +485,9 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   expect(writes()).toHaveLength(1);
   expect(payload(writes()[0]).sourceReferences).toEqual(
     expect.arrayContaining(
-      docs.filter((doc) => doc.id !== nextCatalog.id).map((doc) => ({ id: doc.id, kind: doc.resource, version: doc.version })),
+      docs
+        .filter((doc) => doc.id !== nextCatalog.id)
+        .map((doc) => ({ id: doc.id, kind: doc.resource, version: doc.version })),
     ),
   );
   expect(payload(writes()[0]).sourceReferences).not.toContainEqual(
@@ -551,8 +560,16 @@ it('edits generated rooms from the floor matrix and deletes a room or the remain
   fireEvent.change(details.getByLabelText('Giá riêng (đ/tháng)'), { target: { value: '2800000' } });
   fireEvent.click(details.getByRole('button', { name: 'Hoàn tất' }));
   fireEvent.click(button('Xem phòng P.101'));
-  expect(within(screen.getByRole('dialog', { name: 'Thông tin phòng P.101' })).getByLabelText('Giá riêng (đ/tháng)')).toHaveValue('2.800.000');
-  fireEvent.click(within(screen.getByRole('dialog', { name: 'Thông tin phòng P.101' })).getByRole('button', { name: 'Xóa phòng' }));
+  expect(
+    within(screen.getByRole('dialog', { name: 'Thông tin phòng P.101' })).getByLabelText(
+      'Giá riêng (đ/tháng)',
+    ),
+  ).toHaveValue('2.800.000');
+  fireEvent.click(
+    within(screen.getByRole('dialog', { name: 'Thông tin phòng P.101' })).getByRole('button', {
+      name: 'Xóa phòng',
+    }),
+  );
   expect(screen.queryByRole('button', { name: 'Xem phòng P.101' })).not.toBeInTheDocument();
   fireEvent.click(button('Xóa hết phòng'));
   const confirmation = within(screen.getByRole('dialog', { name: 'Xóa hết phòng nháp?' }));
@@ -601,7 +618,9 @@ it('preloads configured sample assets from a room template before room generatio
   const assets = within(screen.getByRole('list', { name: 'Tài sản đã chọn' }));
   expect(assets.getByText('Giường đôi mẫu')).toBeInTheDocument();
   expect(assets.getByText('Đơn vị: Cái')).toBeInTheDocument();
-  const persisted = JSON.parse(sessionStorage.getItem(draftKey)!) as { roomTypes: Array<{ assets: Array<{ quantity: number; referencePrice: number }> }> };
+  const persisted = JSON.parse(sessionStorage.getItem(draftKey)!) as {
+    roomTypes: Array<{ assets: Array<{ quantity: number; referencePrice: number }> }>;
+  };
   expect(persisted.roomTypes[0].assets[0]).toMatchObject({ quantity: 2, referencePrice: 2000000 });
   expect(writes()).toHaveLength(0);
 });
