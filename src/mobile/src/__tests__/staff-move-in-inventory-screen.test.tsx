@@ -17,15 +17,35 @@ const state = vi.hoisted(() => ({
   reload: vi.fn(),
   go: vi.fn(),
 }));
-function inventory(status: string, actual: number | null = null, condition: 'Good' | 'Missing' | 'Damaged' | null = null, evidenceIds: string[] = []): MoveInInventory {
+function inventory(
+  status: string,
+  actual: number | null = null,
+  condition: 'Good' | 'Missing' | 'Damaged' | null = null,
+  evidenceIds: string[] = [],
+): MoveInInventory {
   return {
-    taskId, contractId: taskId, roomId, locationId, status, version: 1, dueAt: null,
-    completedAt: null, readyForHandover: false,
-    items: [{
-      id: itemId, assetId, name: 'Giường đơn', expectedQuantity: 2,
-      actualQuantity: actual, condition, notes: condition === 'Missing' ? 'Thiếu một giường' : '',
-      evidenceIds, incidentId: null,
-    }],
+    taskId,
+    contractId: taskId,
+    roomId,
+    locationId,
+    status,
+    version: 1,
+    dueAt: null,
+    completedAt: null,
+    readyForHandover: false,
+    items: [
+      {
+        id: itemId,
+        assetId,
+        name: 'Giường đơn',
+        expectedQuantity: 2,
+        actualQuantity: actual,
+        condition,
+        notes: condition === 'Missing' ? 'Thiếu một giường' : '',
+        evidenceIds,
+        incidentId: null,
+      },
+    ],
   };
 }
 type C = { children?: React.ReactNode };
@@ -48,37 +68,88 @@ vi.mock('../components/WorkspaceKit', () => ({
   Heading: ({ title }: { title: string }) => <h2>{title}</h2>,
   Row: ({ children }: C) => <div>{children}</div>,
   Pill: ({ children }: C) => <span>{children}</span>,
-  Action: ({ children, disabled, onPress }: C & { disabled: boolean; onPress: () => void }) =>
-    <button disabled={disabled} onClick={onPress}>{children}</button>,
+  Action: ({ children, disabled, onPress }: C & { disabled: boolean; onPress: () => void }) => (
+    <button disabled={disabled} onClick={onPress}>
+      {children}
+    </button>
+  ),
 }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: C) => <span>{children}</span>,
-  Button: ({ children, disabled, onPress }: C & { disabled: boolean; onPress: () => void }) =>
-    <button disabled={disabled} onClick={onPress}>{children}</button>,
+  Button: ({ children, disabled, onPress }: C & { disabled: boolean; onPress: () => void }) => (
+    <button disabled={disabled} onClick={onPress}>
+      {children}
+    </button>
+  ),
   Checkbox: {
-    Item: ({ label, onPress }: { label: string; onPress: () => void }) =>
-      <button onClick={onPress}>{label}</button>,
+    Item: ({ label, onPress }: { label: string; onPress: () => void }) => (
+      <button onClick={onPress}>{label}</button>
+    ),
   },
 }));
 vi.mock('../components/WorkflowControls', () => ({
-  Input: ({ label, value, disabled, onChange }: {
-    label: string; value: string; disabled: boolean; onChange: (s: string) => void;
-  }) => <input aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />,
-  ChoiceField: ({ label, value, disabled, options, onChange }: {
-    label: string; value: string; disabled: boolean;
-    options: { id: string; label: string }[]; onChange: (s: string) => void;
-  }) => <select aria-label={label} disabled={disabled} value={value} onChange={(e) => onChange(e.target.value)}>
-    <option value="">Chọn tình trạng</option>
-    {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-  </select>,
+  Input: ({
+    label,
+    value,
+    disabled,
+    onChange,
+  }: {
+    label: string;
+    value: string;
+    disabled: boolean;
+    onChange: (s: string) => void;
+  }) => (
+    <input
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  ),
+  ChoiceField: ({
+    label,
+    value,
+    disabled,
+    options,
+    onChange,
+  }: {
+    label: string;
+    value: string;
+    disabled: boolean;
+    options: { id: string; label: string }[];
+    onChange: (s: string) => void;
+  }) => (
+    <select
+      aria-label={label}
+      disabled={disabled}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">Chọn tình trạng</option>
+      {options.map((o) => (
+        <option key={o.id} value={o.id}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  ),
 }));
 vi.mock('../components/IncidentEvidencePicker', () => ({
-  IncidentEvidencePicker: ({ onChange }: { onChange: (photos: unknown[]) => void }) =>
-    <button onClick={() => onChange([{
-      id: evidenceId,
-      bytes: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
-      contentType: 'image/png',
-    }])}>Chụp ảnh tài sản</button>,
+  IncidentEvidencePicker: ({ onChange }: { onChange: (photos: unknown[]) => void }) => (
+    <button
+      onClick={() =>
+        onChange([
+          {
+            id: evidenceId,
+            bytes: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+            contentType: 'image/png',
+          },
+        ])
+      }
+    >
+      Chụp ảnh tài sản
+    </button>
+  ),
 }));
 vi.mock('../lib/toast', () => ({ showSuccess: vi.fn() }));
 import { StaffMoveInInventoryScreen } from '../screens/StaffMoveInInventoryScreen';
@@ -87,25 +158,39 @@ beforeEach(() => {
   state.go.mockReset();
   state.reload.mockReset();
   state.request.mockReset();
-  state.request.mockImplementation(async (path: string, init?: { method: string; body: string }) => {
-    if (path.endsWith('/start')) {
-      state.data = { ...state.data!, status: 'InProgress', version: 2 };
-      return { ...state.data };
-    }
-    if (path.endsWith('/evidence')) return { id: evidenceId };
-    if (path.includes('/items/') && init?.method === 'PUT') {
-      const body = JSON.parse(init.body);
-      state.data = { ...state.data!, version: state.data!.version + 1, items: [{
-        ...state.data!.items[0], ...body,
-      }] };
-      return { ...state.data };
-    }
-    if (path.endsWith('/complete')) {
-      state.data = { ...state.data!, status: 'Completed', completedAt: '2026-11-18T00:00:00Z', version: 2 };
-      return { ...state.data };
-    }
-    return state.data;
-  });
+  state.request.mockImplementation(
+    async (path: string, init?: { method: string; body: string }) => {
+      if (path.endsWith('/start')) {
+        state.data = { ...state.data!, status: 'InProgress', version: 2 };
+        return { ...state.data };
+      }
+      if (path.endsWith('/evidence')) return { id: evidenceId };
+      if (path.includes('/items/') && init?.method === 'PUT') {
+        const body = JSON.parse(init.body);
+        state.data = {
+          ...state.data!,
+          version: state.data!.version + 1,
+          items: [
+            {
+              ...state.data!.items[0],
+              ...body,
+            },
+          ],
+        };
+        return { ...state.data };
+      }
+      if (path.endsWith('/complete')) {
+        state.data = {
+          ...state.data!,
+          status: 'Completed',
+          completedAt: '2026-11-18T00:00:00Z',
+          version: 2,
+        };
+        return { ...state.data };
+      }
+      return state.data;
+    },
+  );
 });
 afterEach(cleanup);
 
@@ -115,9 +200,14 @@ it('starts a server-assigned inventory task before allowing edits', async () => 
   fireEvent.click(screen.getByText('Kiểm tra'));
   expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty('disabled', true);
   fireEvent.click(screen.getByText('Bắt đầu kiểm kê'));
-  await waitFor(() => expect(state.request.mock.calls.some(([path, init]) =>
-    path.endsWith('/start') && init.method === 'POST' && JSON.parse(init.body).version === 1,
-  )).toBe(true));
+  await waitFor(() =>
+    expect(
+      state.request.mock.calls.some(
+        ([path, init]) =>
+          path.endsWith('/start') && init.method === 'POST' && JSON.parse(init.body).version === 1,
+      ),
+    ).toBe(true),
+  );
   view.rerender(<StaffMoveInInventoryScreen />);
   expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty('disabled', false);
 });
@@ -126,24 +216,39 @@ it('saves missing count and item evidence, then opens existing BF-07 form prefil
   state.data = inventory('InProgress');
   render(<StaffMoveInInventoryScreen />);
   fireEvent.click(screen.getByText('Kiểm tra'));
-  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), { target: { value: '1' } });
-  fireEvent.change(screen.getByLabelText('Tình trạng – Giường đơn'), { target: { value: 'Missing' } });
-  fireEvent.change(screen.getByLabelText('Ghi chú – Giường đơn'), { target: { value: 'Thiếu một giường' } });
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), {
+    target: { value: '1' },
+  });
+  fireEvent.change(screen.getByLabelText('Tình trạng – Giường đơn'), {
+    target: { value: 'Missing' },
+  });
+  fireEvent.change(screen.getByLabelText('Ghi chú – Giường đơn'), {
+    target: { value: 'Thiếu một giường' },
+  });
   fireEvent.click(screen.getByText('Chụp ảnh tài sản'));
   fireEvent.click(screen.getByText('Báo cáo sự cố'));
-  await waitFor(() => expect(state.go).toHaveBeenCalledWith('report-incident', expect.objectContaining({
-    inventoryTaskId: taskId,
-    inventoryItemId: itemId,
-    locationId,
-    roomId,
-    assetId,
-    inventoryEvidenceIds: evidenceId,
-    description: expect.stringContaining('Thiếu'),
-  })));
-  const write = state.request.mock.calls.find(([path, init]) =>
-    path.includes('/move-in-inventory/items/') && init.method === 'PUT');
+  await waitFor(() =>
+    expect(state.go).toHaveBeenCalledWith(
+      'report-incident',
+      expect.objectContaining({
+        inventoryTaskId: taskId,
+        inventoryItemId: itemId,
+        locationId,
+        roomId,
+        assetId,
+        inventoryEvidenceIds: evidenceId,
+        description: expect.stringContaining('Thiếu'),
+      }),
+    ),
+  );
+  const write = state.request.mock.calls.find(
+    ([path, init]) => path.includes('/move-in-inventory/items/') && init.method === 'PUT',
+  );
   expect(JSON.parse(write![1].body)).toMatchObject({
-    actualQuantity: 1, condition: 'Missing', evidenceIds: [evidenceId], incidentId: null,
+    actualQuantity: 1,
+    condition: 'Missing',
+    evidenceIds: [evidenceId],
+    incidentId: null,
   });
 });
 
@@ -151,9 +256,13 @@ it('completes directly from Staff without any Owner verification action', async 
   state.data = inventory('InProgress', 2, 'Good', [evidenceId]);
   const view = render(<StaffMoveInInventoryScreen />);
   fireEvent.click(screen.getByText('Hoàn thành kiểm kê'));
-  await waitFor(() => expect(state.request.mock.calls.some(([path, init]) =>
-    path.endsWith('/complete') && init.method === 'POST',
-  )).toBe(true));
+  await waitFor(() =>
+    expect(
+      state.request.mock.calls.some(
+        ([path, init]) => path.endsWith('/complete') && init.method === 'POST',
+      ),
+    ).toBe(true),
+  );
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/verify'))).toBe(false);
   view.rerender(<StaffMoveInInventoryScreen />);
   expect(screen.getByText('Đã hoàn thành, không chờ Owner duyệt')).toBeTruthy();

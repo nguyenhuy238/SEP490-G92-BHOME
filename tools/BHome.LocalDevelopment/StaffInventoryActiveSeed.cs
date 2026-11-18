@@ -177,66 +177,80 @@ internal static class StaffInventoryActiveSeed
         var now = DateTimeOffset.UtcNow;
         if (!existing)
         {
-        var credentials = await CredentialsAsync(t);
-        await using (var tx = await db.Database.BeginTransactionAsync(t))
-        {
-            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('staff-inventory-active-v1',0))", t);
-            // Recheck the name under the lock, before the first write.
-            if (await db.Locations.AnyAsync(l => l.Id == Id(10) || l.Name == LocationName, t))
-                throw new LocalTestAccountException("Fixture được tạo đồng thời; không ghi đè.");
-            for (var i = 0; i < UserNames.Length; i++)
+            var credentials = await CredentialsAsync(t);
+            await using (var tx = await db.Database.BeginTransactionAsync(t))
             {
-                var role = i == 0 ? Roles.Staff : Roles.Tenant;
-                var account = new ApplicationUser
+                await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('staff-inventory-active-v1',0))", t);
+                // Recheck the name under the lock, before the first write.
+                if (await db.Locations.AnyAsync(l => l.Id == Id(10) || l.Name == LocationName, t))
+                    throw new LocalTestAccountException("Fixture được tạo đồng thời; không ghi đè.");
+                for (var i = 0; i < UserNames.Length; i++)
                 {
-                    Id = Id(i + 2), UserName = UserNames[i], Email = UserNames[i] + "@example.invalid",
-                    IsActive = true, LockoutEnabled = true, EmailConfirmed = true
-                };
-                db.PrepareUserRole(account, role);
-                var result = await users.CreateAsync(account, credentials[UserNames[i]]);
-                if (!result.Succeeded)
-                    throw new LocalTestAccountException("Không thể tạo tài khoản tổng hợp: " + string.Join(",", result.Errors.Select(e => e.Code)));
-            }
-            var chain = await db.Set<Chain>().SingleOrDefaultAsync(t)
-                ?? throw new LocalTestAccountException("Chưa có Chain; từ chối tạo dữ liệu chain thực.");
-            Add(db, 10, new Location(LocationName)
-            {
-                ChainId = chain.Id,
-                Address = "[DEMO] Dữ liệu tổng hợp phục vụ kiểm kê Staff; không phải địa chỉ thật"
-            });
-            db.Add(new StaffLocationAssignment(Id(10), Id(2), owner, today.AddDays(-1), today.AddYears(1)));
-            for (var i = 0; i < 3; i++)
-            {
-                Add(db, 20 + i, new Room
+                    var role = i == 0 ? Roles.Staff : Roles.Tenant;
+                    var account = new ApplicationUser
+                    {
+                        Id = Id(i + 2),
+                        UserName = UserNames[i],
+                        Email = UserNames[i] + "@example.invalid",
+                        IsActive = true,
+                        LockoutEnabled = true,
+                        EmailConfirmed = true
+                    };
+                    db.PrepareUserRole(account, role);
+                    var result = await users.CreateAsync(account, credentials[UserNames[i]]);
+                    if (!result.Succeeded)
+                        throw new LocalTestAccountException("Không thể tạo tài khoản tổng hợp: " + string.Join(",", result.Errors.Select(e => e.Code)));
+                }
+                var chain = await db.Set<Chain>().SingleOrDefaultAsync(t)
+                    ?? throw new LocalTestAccountException("Chưa có Chain; từ chối tạo dữ liệu chain thực.");
+                Add(db, 10, new Location(LocationName)
                 {
-                    LocationId = Id(10), RoomNumber = $"KI-10{i + 1}", Capacity = 1,
-                    Floor = "1", Status = RoomStatus.Available
+                    ChainId = chain.Id,
+                    Address = "[DEMO] Dữ liệu tổng hợp phục vụ kiểm kê Staff; không phải địa chỉ thật"
                 });
-                Add(db, 30 + i, new Resident
+                db.Add(new StaffLocationAssignment(Id(10), Id(2), owner, today.AddDays(-1), today.AddYears(1)));
+                for (var i = 0; i < 3; i++)
                 {
-                    RoomId = Id(20 + i), OwnerUserId = owner, TenantUserId = Id(3 + i),
-                    DisplayLabel = $"[DEMO] Người thuê kiểm kê {i + 1}",
-                    ResidentType = ResidentType.Representative,
-                    VerificationStatus = IdentityVerificationStatus.Verified,
-                    ConfirmedByUserId = Id(2), ConfirmedAt = now
-                });
-            }
-            foreach (var (number, category, code, rate) in new[]
-            {
+                    Add(db, 20 + i, new Room
+                    {
+                        LocationId = Id(10),
+                        RoomNumber = $"KI-10{i + 1}",
+                        Capacity = 1,
+                        Floor = "1",
+                        Status = RoomStatus.Available
+                    });
+                    Add(db, 30 + i, new Resident
+                    {
+                        RoomId = Id(20 + i),
+                        OwnerUserId = owner,
+                        TenantUserId = Id(3 + i),
+                        DisplayLabel = $"[DEMO] Người thuê kiểm kê {i + 1}",
+                        ResidentType = ResidentType.Representative,
+                        VerificationStatus = IdentityVerificationStatus.Verified,
+                        ConfirmedByUserId = Id(2),
+                        ConfirmedAt = now
+                    });
+                }
+                foreach (var (number, category, code, rate) in new[]
+                {
                 (60, ChargeCategory.Rent, "RENT", 3_000_000m),
                 (61, ChargeCategory.Electricity, "ELECTRICITY", 3_500m),
                 (62, ChargeCategory.Water, "WATER", 15_000m)
             })
-                Add(db, number, new BillingPolicy
-                {
-                    LocationId = Id(10), ChargeCode = code, Category = category, Name = "[DEMO] " + code,
-                    Rate = rate, Method = category == ChargeCategory.Rent
-                        ? ChargingMethod.FixedPerRoomPerMonth : ChargingMethod.Metered,
-                    EffectiveFrom = today.AddDays(-1)
-                });
-            await db.SaveChangesAsync(t);
-            await tx.CommitAsync(t);
-        }
+                    Add(db, number, new BillingPolicy
+                    {
+                        LocationId = Id(10),
+                        ChargeCode = code,
+                        Category = category,
+                        Name = "[DEMO] " + code,
+                        Rate = rate,
+                        Method = category == ChargeCategory.Rent
+                            ? ChargingMethod.FixedPerRoomPerMonth : ChargingMethod.Metered,
+                        EffectiveFrom = today.AddDays(-1)
+                    });
+                await db.SaveChangesAsync(t);
+                await tx.CommitAsync(t);
+            }
         }
 
         var store = sp.GetRequiredService<ISetupWorkspaceStore>();

@@ -79,8 +79,12 @@ public sealed class MoveInInventoryServiceTests
         {
             var file = new OperationalTaskEvidence
             {
-                TaskId = Task.Id, UploadedByUserId = User.UserId!.Value, ObjectKey = "synthetic/test.png",
-                ContentType = "image/png", Sha256 = new string('A', 64), Length = 3
+                TaskId = Task.Id,
+                UploadedByUserId = User.UserId!.Value,
+                ObjectKey = "synthetic/test.png",
+                ContentType = "image/png",
+                Sha256 = new string('A', 64),
+                Length = 3
             };
             Added.Add(file);
             return file.Id;

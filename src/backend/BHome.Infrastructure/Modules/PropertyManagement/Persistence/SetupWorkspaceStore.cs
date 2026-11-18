@@ -200,7 +200,7 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
     }
     public async Task<IReadOnlyList<SetupDocument>> ReviewDocumentsAsync(Guid locationId, Guid[] activeAssetIds, CancellationToken t)
     {
-        string[] kinds = ["SetupAssetTemplate", "SetupAssetTemplateAssignment", "SetupRoomProvenance", "SetupDesiredAssets", "SetupRoomInventoryChecklistReview", "SetupAssetMetadata"];
+        string[] kinds = ["SetupAssetTemplate", "SetupAssetTemplateAssignment", "SetupRoomProvenance", "SetupDesiredAssets", "SetupRoomInventoryChecklistReview", "SetupAssetMetadata", "SetupRoomNoAssets", "SetupHandoverInventoryDiscrepancy"];
         await using var cmd = await sql.Command("""
             SELECT task_data->'document' FROM operational_tasks WHERE location_id=@location AND task_type='SYSTEM_JOB'
                 AND (task_data->>'recordType'=ANY(@kinds) OR

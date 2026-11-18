@@ -112,15 +112,21 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         db.Add(task);
         var history = new OperationalTaskHistory
         {
-            TaskId = id, ActorId = actor, Action = "MoveInInventoryCreated",
-            OccurredAt = now, TaskVersion = 1, ResponsibleStaffUserId = responsible?.StaffUserId,
+            TaskId = id,
+            ActorId = actor,
+            Action = "MoveInInventoryCreated",
+            OccurredAt = now,
+            TaskVersion = 1,
+            ResponsibleStaffUserId = responsible?.StaffUserId,
             Note = responsible is null ? "AwaitingAssignment" : ""
         };
         db.Add(history);
         foreach (var owner in (await tasks.OwnersAsync(t)).Concat(responsible is null ? [] : [responsible.StaffUserId]).Distinct())
             db.Add(new OperationalTaskNotification
             {
-                TaskId = id, RecipientUserId = owner, EventId = history.Id,
+                TaskId = id,
+                RecipientUserId = owner,
+                EventId = history.Id,
                 Event = responsible is null ? "MoveInInventoryAwaitingAssignment" : "MoveInInventoryAssigned"
             });
         if (inbox is not null)

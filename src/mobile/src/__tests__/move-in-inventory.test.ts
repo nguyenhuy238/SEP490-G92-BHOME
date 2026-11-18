@@ -28,13 +28,30 @@ const item: MoveInInventoryItem = {
 
 it('checks exact quantities and requires issue details for prefilled BF-07 reporting', () => {
   expect(validateInventoryItem({ actualQuantity: 3, condition: 'Good', notes: '' }, 3)).toBe('');
-  expect(validateInventoryItem({ actualQuantity: 2, condition: 'Good', notes: '' }, 3)).toMatch(/đủ số lượng/);
-  expect(validateInventoryItem({ actualQuantity: 3, condition: 'Missing', notes: 'Mất 1 chiếc' }, 3)).toMatch(/nhỏ hơn/);
-  expect(validateInventoryItem({ actualQuantity: 2, condition: 'Missing', notes: 'Thiếu một chiếc' }, 3)).toBe('');
-  expect(validateInventoryItem({ actualQuantity: 2, condition: 'Damaged', notes: 'Một chiếc bị gãy' }, 3)).toBe('');
-  expect(validateInventoryItem({ actualQuantity: 2, condition: 'Damaged', notes: '' }, 3)).toMatch(/Mô tả/);
-  expect(validateInventoryItem({ actualQuantity: -1, condition: 'Missing', notes: 'Thiếu' }, 3)).toMatch(/không âm/);
-  expect(validateInventoryItem({ actualQuantity: 4, condition: 'Good', notes: '' }, 3)).toMatch(/vượt/);
+  expect(validateInventoryItem({ actualQuantity: 2, condition: 'Good', notes: '' }, 3)).toMatch(
+    /đủ số lượng/,
+  );
+  expect(
+    validateInventoryItem({ actualQuantity: 3, condition: 'Missing', notes: 'Mất 1 chiếc' }, 3),
+  ).toMatch(/nhỏ hơn/);
+  expect(
+    validateInventoryItem({ actualQuantity: 2, condition: 'Missing', notes: 'Thiếu một chiếc' }, 3),
+  ).toBe('');
+  expect(
+    validateInventoryItem(
+      { actualQuantity: 2, condition: 'Damaged', notes: 'Một chiếc bị gãy' },
+      3,
+    ),
+  ).toBe('');
+  expect(validateInventoryItem({ actualQuantity: 2, condition: 'Damaged', notes: '' }, 3)).toMatch(
+    /Mô tả/,
+  );
+  expect(
+    validateInventoryItem({ actualQuantity: -1, condition: 'Missing', notes: 'Thiếu' }, 3),
+  ).toMatch(/không âm/);
+  expect(validateInventoryItem({ actualQuantity: 4, condition: 'Good', notes: '' }, 3)).toMatch(
+    /vượt/,
+  );
 });
 
 it('requires per-item evidence and linked incidents before enabling direct Staff completion', () => {
@@ -42,9 +59,19 @@ it('requires per-item evidence and linked incidents before enabling direct Staff
   expect(readyToComplete([{ ...item, evidenceIds: null }])).toBe(false);
   expect(readyToComplete([{ ...item, condition: null }])).toBe(false);
   expect(readyToComplete([{ ...item, actualQuantity: null }])).toBe(false);
-  expect(readyToComplete([{ ...item, condition: 'Missing', actualQuantity: 2, notes: 'Thiếu một chiếc' }])).toBe(false);
-  expect(readyToComplete([{ ...item, condition: 'Missing', actualQuantity: 2, notes: 'Thiếu một chiếc', incidentId }])).toBe(true);
-  expect(readyToComplete([{ ...item, condition: 'Damaged', notes: 'Gãy chân giường', incidentId }])).toBe(true);
+  expect(
+    readyToComplete([
+      { ...item, condition: 'Missing', actualQuantity: 2, notes: 'Thiếu một chiếc' },
+    ]),
+  ).toBe(false);
+  expect(
+    readyToComplete([
+      { ...item, condition: 'Missing', actualQuantity: 2, notes: 'Thiếu một chiếc', incidentId },
+    ]),
+  ).toBe(true);
+  expect(
+    readyToComplete([{ ...item, condition: 'Damaged', notes: 'Gãy chân giường', incidentId }]),
+  ).toBe(true);
   expect(readyToComplete([{ ...item, condition: 'Damaged', notes: '', incidentId }])).toBe(false);
   // Empty configured asset list uses a separate explicit confirmNoAssets checkbox.
   expect(readyToComplete([])).toBe(true);
@@ -77,7 +104,9 @@ it('uses the Backend inventory routes, version and idempotency headers with zero
   expect(JSON.parse(options.body)).toEqual(write);
 
   await client.complete(taskId, 3, 'Không có tài sản', key, true);
-  expect(request.mock.calls[2][0]).toBe(`/api/v1/operational-tasks/${taskId}/move-in-inventory/complete`);
+  expect(request.mock.calls[2][0]).toBe(
+    `/api/v1/operational-tasks/${taskId}/move-in-inventory/complete`,
+  );
   expect(request.mock.calls[2][1].method).toBe('POST');
   expect(JSON.parse(request.mock.calls[2][1].body)).toEqual({
     version: 3,

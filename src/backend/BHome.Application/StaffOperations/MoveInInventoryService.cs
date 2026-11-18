@@ -168,8 +168,12 @@ public sealed partial class OperationalTaskService
                     (input.Note?.Trim() ?? "");
                 var owners = await repository.OwnersAsync(t);
                 await RecordAsync(task, "move_in_inventory_completed", input.Note?.Trim() ?? "",
-                    new { Outcome = Outcome(snapshot.Items), CompletedAt = task.CompletedAt,
-                        Items = snapshot.Items.Select(i => new { i.Id, i.Condition, i.ActualQuantity, i.IncidentId }) },
+                    new
+                    {
+                        Outcome = Outcome(snapshot.Items),
+                        CompletedAt = task.CompletedAt,
+                        Items = snapshot.Items.Select(i => new { i.Id, i.Condition, i.ActualQuantity, i.IncidentId })
+                    },
                     owners, t);
                 task.Version++;
                 await repository.NotifyMoveInInventoryCompletedAsync(task, Actor, t);

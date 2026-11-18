@@ -47,13 +47,18 @@ function ReportForm() {
     inventoryItemId?: string;
     inventoryEvidenceIds?: string;
   }>();
-  const fromInventory = role === 'Staff' &&
-    !!params.inventoryTaskId && idPattern.test(params.inventoryTaskId) &&
-    !!params.inventoryItemId && idPattern.test(params.inventoryItemId);
-  const initialLocation = fromInventory && params.locationId && idPattern.test(params.locationId)
-    ? params.locationId : '';
-  const initialRoom = fromInventory && params.roomId && idPattern.test(params.roomId)
-    ? params.roomId : '';
+  const fromInventory =
+    role === 'Staff' &&
+    !!params.inventoryTaskId &&
+    idPattern.test(params.inventoryTaskId) &&
+    !!params.inventoryItemId &&
+    idPattern.test(params.inventoryItemId);
+  const initialLocation =
+    fromInventory && params.locationId && idPattern.test(params.locationId)
+      ? params.locationId
+      : '';
+  const initialRoom =
+    fromInventory && params.roomId && idPattern.test(params.roomId) ? params.roomId : '';
   const enabled = !preview && !!session && (role === 'Staff' || role === 'Tenant');
   const staff = useStaffIncidentScope(enabled && role === 'Staff', {
     locationId: initialLocation,
@@ -62,13 +67,19 @@ function ReportForm() {
   const [roomPage, setRoomPage] = useState(1),
     [assetPage, setAssetPage] = useState(1);
   const [tenantRoom, setTenantRoom] = useState(''),
-    [assetId, setAssetId] = useState(fromInventory && params.assetId && idPattern.test(params.assetId) ? params.assetId : '');
+    [assetId, setAssetId] = useState(
+      fromInventory && params.assetId && idPattern.test(params.assetId) ? params.assetId : '',
+    );
   const [common, setCommon] = useState(false),
     [commonArea, setCommonArea] = useState('');
   const [severity, setSeverity] = useState('Normal'),
-    [description, setDescription] = useState(fromInventory ? (params.description ?? '').slice(0, 8000) : '');
+    [description, setDescription] = useState(
+      fromInventory ? (params.description ?? '').slice(0, 8000) : '',
+    );
   const [photos, setPhotos] = useState<IncidentPhoto[]>([]);
-  const [prefillMessage, setPrefillMessage] = useState(fromInventory && params.inventoryEvidenceIds ? 'Đang nạp ảnh từ mục kiểm kê…' : '');
+  const [prefillMessage, setPrefillMessage] = useState(
+    fromInventory && params.inventoryEvidenceIds ? 'Đang nạp ảnh từ mục kiểm kê…' : '',
+  );
   const [pendingIncidentId, setPendingIncidentId] = useState('');
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState('');
@@ -76,25 +87,37 @@ function ReportForm() {
   const mutation = useIncidentMutation();
   useEffect(() => {
     if (!api || !enabled || !fromInventory || !params.inventoryEvidenceIds) return;
-    const ids = params.inventoryEvidenceIds.split(',').filter((id) => idPattern.test(id)).slice(0, 5);
+    const ids = params.inventoryEvidenceIds
+      .split(',')
+      .filter((id) => idPattern.test(id))
+      .slice(0, 5);
     if (!ids.length) return;
     const controller = new AbortController();
     void (async () => {
       const task = operationalTasks(api);
       const evidence = await task.evidence(params.inventoryTaskId!, controller.signal);
-      const selected = evidence.filter((entry) =>
-        ids.includes(entry.id) && (entry.contentType === 'image/png' || entry.contentType === 'image/jpeg'),
+      const selected = evidence.filter(
+        (entry) =>
+          ids.includes(entry.id) &&
+          (entry.contentType === 'image/png' || entry.contentType === 'image/jpeg'),
       );
-      const loaded = await Promise.all(selected.map(async (entry) => ({
-        id: randomUUID(),
-        bytes: await task.imageBytes(params.inventoryTaskId!, entry.id, controller.signal),
-        contentType: entry.contentType as 'image/png' | 'image/jpeg',
-      })));
+      const loaded = await Promise.all(
+        selected.map(async (entry) => ({
+          id: randomUUID(),
+          bytes: await task.imageBytes(params.inventoryTaskId!, entry.id, controller.signal),
+          contentType: entry.contentType as 'image/png' | 'image/jpeg',
+        })),
+      );
       if (controller.signal.aborted || changedScope.current) return;
       setPhotos((before) => [...before, ...loaded].slice(0, 5));
-      setPrefillMessage(loaded.length ? `Đã nạp ${loaded.length} ảnh từ kiểm kê.` : 'Ảnh kiểm kê chưa khả dụng; bạn có thể chọn ảnh khác.');
+      setPrefillMessage(
+        loaded.length
+          ? `Đã nạp ${loaded.length} ảnh từ kiểm kê.`
+          : 'Ảnh kiểm kê chưa khả dụng; bạn có thể chọn ảnh khác.',
+      );
     })().catch(() => {
-      if (!controller.signal.aborted) setPrefillMessage('Không nạp được ảnh kiểm kê. Bạn vẫn có thể thêm ảnh thủ công.');
+      if (!controller.signal.aborted)
+        setPrefillMessage('Không nạp được ảnh kiểm kê. Bạn vẫn có thể thêm ảnh thủ công.');
     });
     return () => controller.abort();
   }, [api, enabled, fromInventory, params.inventoryTaskId, params.inventoryEvidenceIds]);
@@ -127,12 +150,19 @@ function ReportForm() {
           }));
   // The assigned room may have more than 100 assets. The item's trusted
   // backend snapshot supplies the exact AssetId even if this page omits it.
-  const initialAsset = fromInventory && params.assetId && idPattern.test(params.assetId)
-    && locationId === initialLocation && roomId === initialRoom && !common
-      ? params.assetId : '';
-  const assetOptions = initialAsset && !visibleAssetOptions.some((item) => item.id === initialAsset)
-    ? [{ id: initialAsset, label: 'Tài sản đã ghi nhận trong kiểm kê' }, ...visibleAssetOptions]
-    : visibleAssetOptions;
+  const initialAsset =
+    fromInventory &&
+    params.assetId &&
+    idPattern.test(params.assetId) &&
+    locationId === initialLocation &&
+    roomId === initialRoom &&
+    !common
+      ? params.assetId
+      : '';
+  const assetOptions =
+    initialAsset && !visibleAssetOptions.some((item) => item.id === initialAsset)
+      ? [{ id: initialAsset, label: 'Tài sản đã ghi nhận trong kiểm kê' }, ...visibleAssetOptions]
+      : visibleAssetOptions;
   const selectedAsset = assetOptions.some((item) => item.id === assetId) ? assetId : '';
   const valid =
     !!locationId &&
@@ -147,27 +177,41 @@ function ReportForm() {
       const client = moveInInventoryClient(api);
       const view = await client.get(params.inventoryTaskId!);
       const item = view.items.find((entry) => entry.id === params.inventoryItemId);
-      if (!item || view.locationId !== locationId || view.roomId !== roomId ||
-          (item.assetId && item.assetId !== selectedAsset))
-        throw new Error('Phạm vi phòng hoặc tài sản đã thay đổi. Kiểm tra lại mục kiểm kê trước khi liên kết.');
+      if (
+        !item ||
+        view.locationId !== locationId ||
+        view.roomId !== roomId ||
+        (item.assetId && item.assetId !== selectedAsset)
+      )
+        throw new Error(
+          'Phạm vi phòng hoặc tài sản đã thay đổi. Kiểm tra lại mục kiểm kê trước khi liên kết.',
+        );
       if (!item.condition || item.condition === 'Good' || item.actualQuantity === null)
         throw new Error('Mục kiểm kê chưa lưu tình trạng thiếu hoặc hư hỏng.');
       if (item.incidentId && item.incidentId !== incidentId)
         throw new Error('Mục này đã được liên kết với báo cáo sự cố khác.');
       if (!item.incidentId) {
-        await client.saveItem(params.inventoryTaskId!, item.id, {
-          version: view.version,
-          actualQuantity: item.actualQuantity,
-          condition: item.condition,
-          notes: item.notes ?? '',
-          evidenceIds: item.evidenceIds ?? [],
-          incidentId,
-        }, randomUUID());
+        await client.saveItem(
+          params.inventoryTaskId!,
+          item.id,
+          {
+            version: view.version,
+            actualQuantity: item.actualQuantity,
+            condition: item.condition,
+            notes: item.notes ?? '',
+            evidenceIds: item.evidenceIds ?? [],
+            incidentId,
+          },
+          randomUUID(),
+        );
       }
       go('move-in-inventory', { taskId: params.inventoryTaskId! });
     } catch (failure) {
-      setLinkError(failure instanceof Error && failure.message !== 'Yêu cầu không thành công.'
-        ? failure.message : errorMessage(failure));
+      setLinkError(
+        failure instanceof Error && failure.message !== 'Yêu cầu không thành công.'
+          ? failure.message
+          : errorMessage(failure),
+      );
     } finally {
       setLinking(false);
     }
@@ -204,7 +248,10 @@ function ReportForm() {
       <Heading title="Báo cáo sự cố" detail="Phòng, thiết bị hoặc khu vực chung" />
       {fromInventory && (
         <Box>
-          <Text>Thông tin cơ sở, phòng, tài sản và tình trạng đã lấy từ mục kiểm kê. Kiểm tra lại trước khi gửi báo cáo BF-07.</Text>
+          <Text>
+            Thông tin cơ sở, phòng, tài sản và tình trạng đã lấy từ mục kiểm kê. Kiểm tra lại trước
+            khi gửi báo cáo BF-07.
+          </Text>
           {!!prefillMessage && <Text style={ui.muted}>{prefillMessage}</Text>}
         </Box>
       )}
@@ -372,7 +419,10 @@ function ReportForm() {
           disabled={mutation.busy || !enabled}
         />
       </Box>
-      <Action disabled={!enabled || !valid || mutation.busy || linking || !!pendingIncidentId} onPress={() => void submit()}>
+      <Action
+        disabled={!enabled || !valid || mutation.busy || linking || !!pendingIncidentId}
+        onPress={() => void submit()}
+      >
         Gửi báo cáo sự cố
       </Action>
       {!!pendingIncidentId && fromInventory && (
@@ -382,7 +432,11 @@ function ReportForm() {
           <Action disabled={linking} onPress={() => void linkInventoryIncident(pendingIncidentId)}>
             {linking ? 'Đang liên kết…' : 'Liên kết báo cáo với kiểm kê'}
           </Action>
-          {!!linkError && <Text accessibilityRole="alert" style={ui.red}>{linkError}</Text>}
+          {!!linkError && (
+            <Text accessibilityRole="alert" style={ui.red}>
+              {linkError}
+            </Text>
+          )}
         </Box>
       )}
       {!!mutation.progress && <Text accessibilityRole="status">{mutation.progress}</Text>}

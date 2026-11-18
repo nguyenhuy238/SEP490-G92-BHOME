@@ -139,10 +139,15 @@ it('exposes all 16 Staff functions including inventory and keeps maintenance sep
   expect(screen.queryByText('SỰ CỐ & BẢO TRÌ')).toBeNull();
 });
 it('opens overdue inventory task directly in the Staff checklist', () => {
-  state.overdue = [{
-    id: 'inventory-task', title: 'Kiểm kê trước nhận phòng', locationId: 'loc',
-    status: 'Assigned', kind: 'MoveInInventory',
-  }];
+  state.overdue = [
+    {
+      id: 'inventory-task',
+      title: 'Kiểm kê trước nhận phòng',
+      locationId: 'loc',
+      status: 'Assigned',
+      kind: 'MoveInInventory',
+    },
+  ];
   render(<StaffDashboard />);
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm kê trước nhận phòng, Cơ sở kiểm thử' }));
   expect(state.go).toHaveBeenLastCalledWith('move-in-inventory', { taskId: 'inventory-task' });

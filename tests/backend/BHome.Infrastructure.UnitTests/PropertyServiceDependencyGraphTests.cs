@@ -11,7 +11,7 @@ namespace BHome.Infrastructure.UnitTests;
 public sealed class PropertyServiceDependencyGraphTests
 {
     [Fact]
-    public void OwnerLocationListAndMoveInInventoryServicesResolveWithoutCircularDependencies()
+    public void OwnerLocationAndInventoryServicesResolveWithoutCircularDependencies()
     {
         // No database is contacted: exercise the production DI graph with inert test settings.
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
@@ -35,6 +35,7 @@ public sealed class PropertyServiceDependencyGraphTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ContractService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IContractHandoverRepository>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RoomInventoryReviewService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CommonAssetInventoryReviewService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IHandoverInventory>());
     }
 
