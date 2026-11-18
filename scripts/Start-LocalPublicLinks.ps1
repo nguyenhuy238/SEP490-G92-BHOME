@@ -63,7 +63,12 @@ $changes = [ordered]@{
 }
 $content = [IO.File]::ReadAllText($profile)
 foreach ($section in @('AuthenticationEmail__TrustedOrigins','AuthWeb__AllowedOrigins','Cors__AllowedOrigins')) {
-    $indices = @()
+    # Configuration arrays merge by index. Reserve checked-in Development CORS
+    # entries even when the selected .env/user-secrets contains only indices 0-2.
+    $developmentOrigins = @((Get-Content -LiteralPath (Join-Path $repository 'src/backend/BHome.Api/appsettings.Development.json') -Raw | ConvertFrom-Json).Cors.AllowedOrigins)
+    $indices = @(if ($section -eq 'Cors__AllowedOrigins') {
+        for ($i = 0; $i -lt $developmentOrigins.Count; $i++) { $i }
+    })
     $matchingIndex = $null
     foreach ($property in $secrets.PSObject.Properties) {
         if ($property.Name -match ('^' + [regex]::Escape($section.Replace('__',':')) + ':(\d+)$')) {
