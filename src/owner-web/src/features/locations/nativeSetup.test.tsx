@@ -159,7 +159,7 @@ function next() {
 }
 function enterInfo() {
   fill(/Tên cơ sở/, 'Synthetic native setup');
-  fill(/Mã cơ sở/, 'SYN-01');
+  expect(screen.getByRole('textbox', { name: /Mã cơ sở \(tự động\)/ })).toHaveValue('SNS');
   fill(/Địa chỉ/, 'Synthetic address');
   fill(/Số tầng/, '2');
   next();
@@ -177,14 +177,13 @@ async function manualType() {
   await screen.findByText('Synthetic local type');
   await screen.findByRole('button', { name: /^Tiếp tục \(/ });
 }
-function generate(count = '1') {
+async function generate(count = '1') {
   fill('Số lượng phòng', count);
   fireEvent.click(button('Sinh phòng xem trước'));
-  expect(screen.getByText('Danh sách phòng nháp (' + count + ')')).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText('Danh sách phòng nháp (' + count + ')')).toBeInTheDocument());
   next();
 }
 function finishSteps() {
-  next();
   next();
   next();
   expect(screen.getByRole('checkbox', { name: /Tôi xác nhận giá thuê/ })).toBeInTheDocument();
@@ -265,7 +264,7 @@ it('atomically creates usable templates, retries a failed save and keeps the set
   };
   const publish = (dialog: ReturnType<typeof within>) =>
     fireEvent.click(dialog.getByRole('button', { name: 'Lưu mẫu' }));
-  const room = await open('Thêm mẫu loại phòng', 'Tạo mẫu loại phòng');
+  const room = await open('Thêm loại phòng mẫu', 'Tạo loại phòng mẫu');
   expect(screen.queryByRole('button', { name: 'Làm mới mẫu' })).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Mở thư viện mẫu' })).not.toBeInTheDocument();
   fill(/Tên mẫu/, 'New room template', room);
@@ -276,7 +275,6 @@ it('atomically creates usable templates, retries a failed save and keeps the set
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm New room template' }));
   expect(screen.getByText('Cấu hình riêng (1)')).toBeInTheDocument();
   next();
-  generate();
   const asset = await open('Thêm loại tài sản mới', 'Tạo loại tài sản');
   fill(/Tên mẫu/, 'New desk', asset);
   fill(/Giá tham khảo/, '300000', asset);
@@ -289,6 +287,7 @@ it('atomically creates usable templates, retries a failed save and keeps the set
     within(screen.getByRole('list', { name: 'Tài sản đã chọn' })).getByText('New desk'),
   ).toBeVisible();
   next();
+  await generate();
   const fee = await open('Thêm mẫu biểu phí', 'Tạo mẫu giá & biểu phí');
   fill(/Tên mẫu/, 'New wifi', fee);
   fill(/Mã khoản thu/, 'WIFI', fee);
@@ -386,14 +385,14 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   );
   const first = mount(wizard());
   enterInfo();
-  await screen.findByText('Phòng mới · Bản nháp, cần công bố');
+  await screen.findByText('Phòng mới · Bản nháp, chưa cho phép áp dụng');
   expect(writes()).toHaveLength(0);
   first.unmount();
   published = true;
   const resumed = mount(wizard());
   expect(screen.getByText('Synthetic native setup · Bản nháp')).toBeInTheDocument();
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm Phòng mới' }));
-  const pickerFilter = screen.getByRole('combobox', { name: 'Lọc mẫu loại phòng' });
+  const pickerFilter = screen.getByRole('combobox', { name: 'Lọc loại phòng mẫu' });
   fireEvent.mouseDown(pickerFilter);
   fireEvent.click(screen.getByRole('option', { name: 'Chưa chọn' }));
   expect(screen.getByText('Không tìm thấy mẫu phù hợp với bộ lọc.')).toBeInTheDocument();
@@ -401,7 +400,6 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   fireEvent.click(screen.getByRole('option', { name: 'Đã chọn' }));
   expect(screen.getByText('Đã chọn', { selector: '.MuiChip-label' })).toBeInTheDocument();
   next();
-  generate('1');
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm Bàn học' }));
   // A manually edited quantity must survive reopening and idempotent catalog selection.
   resumed.unmount();
@@ -436,6 +434,9 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   expect(screen.queryByRole('button', { name: 'Thêm Giường đôi' })).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm Camera hành lang' }));
   expect(screen.getByText('Đơn vị: Bộ')).toBeVisible();
+  // An already-added common catalog item must no longer offer an Add action.
+  expect(screen.queryByRole('button', { name: 'Thêm Camera hành lang' })).not.toBeInTheDocument();
+  expect(screen.getByText('Đã chọn', { selector: '.MuiChip-label' })).toBeVisible();
   fill(/Khu vực sử dụng/, 'Hành lang tầng 1');
   fill('Số lượng', '3');
   fireEvent.click(button('Tài sản theo phòng'));
@@ -444,7 +445,9 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
   ).toHaveLength(2);
   fireEvent.click(button('Tài sản chung cơ sở'));
   expect(screen.getByLabelText(/Khu vực sử dụng/)).toHaveValue('Hành lang tầng 1');
+  expect(screen.queryByRole('button', { name: 'Thêm Camera hành lang' })).not.toBeInTheDocument();
   next();
+  await generate('1');
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm Phí vệ sinh' }));
   const preview = within(
     screen.getByRole('region', { name: 'Mô phỏng chi phí hàng tháng của phòng' }),
@@ -531,6 +534,78 @@ it('uses compact step navigation on mobile and preserves validation when jumping
   }
 });
 
+it('edits generated rooms from the floor matrix and deletes a room or the remaining draft rooms', async () => {
+  mount(<LocationSetupWizard locations={[]} onClose={vi.fn()} onComplete={vi.fn()} />);
+  enterInfo();
+  await manualType();
+  next(); // Configure room assets before generating rooms.
+  next();
+  fill('Số lượng phòng', '2');
+  fireEvent.click(button('Sinh phòng xem trước'));
+  await screen.findByText('Danh sách phòng nháp (2)');
+  fireEvent.click(button('Xem phòng P.101'));
+  const details = within(screen.getByRole('dialog', { name: 'Thông tin phòng P.101' }));
+  expect(details.getByRole('textbox', { name: 'Mã phòng' })).toHaveValue('P.101');
+  expect(details.getByRole('textbox', { name: 'Sức chứa' })).toHaveValue('3 người');
+  expect(details.getByRole('textbox', { name: 'Diện tích' })).toHaveValue('20 m²');
+  fireEvent.change(details.getByLabelText('Giá riêng (đ/tháng)'), { target: { value: '2800000' } });
+  fireEvent.click(details.getByRole('button', { name: 'Hoàn tất' }));
+  fireEvent.click(button('Xem phòng P.101'));
+  expect(within(screen.getByRole('dialog', { name: 'Thông tin phòng P.101' })).getByLabelText('Giá riêng (đ/tháng)')).toHaveValue('2.800.000');
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Thông tin phòng P.101' })).getByRole('button', { name: 'Xóa phòng' }));
+  expect(screen.queryByRole('button', { name: 'Xem phòng P.101' })).not.toBeInTheDocument();
+  fireEvent.click(button('Xóa hết phòng'));
+  const confirmation = within(screen.getByRole('dialog', { name: 'Xóa hết phòng nháp?' }));
+  fireEvent.click(confirmation.getByRole('button', { name: 'Xóa hết phòng' }));
+  expect(screen.getByText('Danh sách phòng nháp (0)')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Xem phòng P.102' })).not.toBeInTheDocument();
+});
+
+it('preloads configured sample assets from a room template before room generation', async () => {
+  const roomWithAssets: SharedDocument = {
+    ...template,
+    name: 'Phòng có giường mẫu',
+    data: {
+      ...template.data,
+      assetItems: [
+        {
+          catalogId: 'sample-bed',
+          catalogVersion: 2,
+          quantity: 2,
+          required: true,
+          trackingMode: 'BulkQuantity',
+          catalog: {
+            name: 'Giường đôi mẫu',
+            category: 'Nội thất',
+            unit: 'Cái',
+            referencePrice: 2000000,
+            scope: 'Room',
+            familyId: 'sample-bed-family',
+            edition: 1,
+          },
+        },
+      ],
+    },
+  };
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/location-setup' && init?.method === 'POST') return response;
+    if (path.startsWith('/api/v1/shared-configuration/room-type-templates?')) {
+      return { items: [roomWithAssets], total: 1, page: 1, pageSize: 100 };
+    }
+    return mockReads(path);
+  });
+  mount(<LocationSetupWizard locations={[]} onClose={vi.fn()} onComplete={vi.fn()} />);
+  enterInfo();
+  fireEvent.click(await screen.findByRole('button', { name: 'Thêm Phòng có giường mẫu' }));
+  next();
+  const assets = within(screen.getByRole('list', { name: 'Tài sản đã chọn' }));
+  expect(assets.getByText('Giường đôi mẫu')).toBeInTheDocument();
+  expect(assets.getByText('Đơn vị: Cái')).toBeInTheDocument();
+  const persisted = JSON.parse(sessionStorage.getItem(draftKey)!) as { roomTypes: Array<{ assets: Array<{ quantity: number; referencePrice: number }> }> };
+  expect(persisted.roomTypes[0].assets[0]).toMatchObject({ quantity: 2, referencePrice: 2000000 });
+  expect(writes()).toHaveLength(0);
+});
+
 it('does not read or create setup data for Staff even when the wizard is mounted directly', () => {
   state.roles = ['Staff'];
   mount(<LocationSetupWizard locations={[]} onClose={vi.fn()} onComplete={vi.fn()} />);
@@ -574,7 +649,8 @@ it('creates local defaults and rooms using a single atomic setup write from the 
   enterInfo();
   await manualType();
   next();
-  generate();
+  next();
+  await generate();
   finishSteps();
   expect(writes()).toHaveLength(0);
   fireEvent.click(button('Xác nhận hoàn tất thiết lập'));
@@ -585,7 +661,7 @@ it('creates local defaults and rooms using a single atomic setup write from the 
   const data = payload(call);
   expect(data.location).toMatchObject({
     name: 'Synthetic native setup',
-    code: 'SYN-01',
+    code: 'SNS',
     address: 'Synthetic address',
     floors: 2,
   });
@@ -656,8 +732,8 @@ it('loads only Published templates, saves provenance, and retries an uncertain r
     screen.queryByRole('button', { name: 'Thêm Synthetic unpublished template' }),
   ).not.toBeInTheDocument();
   next();
-  generate('2');
   next();
+  await generate('2');
   fireEvent.click(await screen.findByRole('button', { name: 'Thêm Synthetic person service' }));
   next();
   next();

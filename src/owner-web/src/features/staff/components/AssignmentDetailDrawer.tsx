@@ -216,13 +216,15 @@ export function AssignmentDetailDrawer({
             Thay người phụ trách
           </Button>
         )}
-        <Button
-          variant={current ? 'outlined' : 'contained'}
-          disabled={row?.location.isActive === false}
-          onClick={() => act({ mode: 'create', locationId: row!.location.id })}
-        >
-          {current ? 'Lên lịch phân công' : 'Tạo phân công'}
-        </Button>
+        {!current && (
+          <Button
+            variant="contained"
+            disabled={row?.location.isActive === false}
+            onClick={() => act({ mode: 'create', locationId: row!.location.id })}
+          >
+            Tạo phân công
+          </Button>
+        )}
         {current && (
           <Button
             color="error"

@@ -33,14 +33,19 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         await using var tx = await identity.BeginTransactionAsync(t);
         var user = await security.LockUserAsync(userId, t);
         if (user is null || !user.IsActive || !(await security.RolesAsync(userId, t)).Contains(Roles.Staff)) throw new NotificationException(404, "staff_not_found");
-        if (user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email)) throw new NotificationException(409, "account_not_eligible_for_invitation");
+        if (string.IsNullOrWhiteSpace(user.Email)) throw new NotificationException(409, "account_not_eligible_for_invitation");
         var grant = await identity.ResetGrantAsync(user.Id, t);
         if (CoolingDown(grant)) return new(user.Id, "ExistingInvitationPreserved");
-        var token = await InvitationToken(user, t);
+        // A Staff who has completed setup receives a reset link, while a new Staff
+        // receives an invitation link. Neither flow discloses a password to the Owner.
+        var confirmed = user.EmailConfirmed;
+        var token = confirmed
+            ? WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await users.GeneratePasswordResetTokenAsync(user)))
+            : await InvitationToken(user, t);
         if (grant is null) { grant = new PasswordResetGrant { UserId = user.Id }; identity.AddResetGrant(grant); }
         grant.TokenHash = IdentitySecurityStore.Hash(token); grant.ExpiresAt = sql.Now.AddMinutes(options.Value.PasswordResetMinutes); grant.ConsumedAt = null;
-        security.Audit("AccountInvitationCreated", true, user.Id);
-        if (delivery.IsDurable) await delivery.QueueAsync(new(user.Id, user.Email, token, grant.ExpiresAt, "StaffInvitation"), t);
+        security.Audit(confirmed ? "PasswordResetRequested" : "AccountInvitationCreated", true, user.Id);
+        if (delivery.IsDurable) await delivery.QueueAsync(new(user.Id, user.Email, token, grant.ExpiresAt, confirmed ? "PasswordReset" : "StaffInvitation"), t);
         await identity.SaveChangesAsync(t); await tx.CommitAsync(t);
         if (delivery.IsDurable) return new(user.Id, "Queued");
         try { await delivery.SendAsync(user.Id, user.Email, token, t); return new(user.Id, "AcceptedByProvider"); }

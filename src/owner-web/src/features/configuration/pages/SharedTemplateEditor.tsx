@@ -39,7 +39,7 @@ import {
 } from '../SharedConfigurationLayout';
 
 const resourceNames: Record<SharedResource, string> = {
-  'room-type-templates': 'mẫu loại phòng',
+  'room-type-templates': 'loại phòng mẫu',
   'asset-catalog': 'loại tài sản',
   'asset-templates': 'mẫu tài sản',
   'fee-templates': 'mẫu giá & biểu phí',
@@ -318,7 +318,7 @@ export function SharedTemplateEditor({
                 color="text.secondary"
                 sx={{ overflowWrap: 'anywhere' }}
               >
-                {document.name} · Phiên bản {document.edition} · Lần cập nhật {document.version}
+                {document.name}
               </Typography>
             )}
           </Stack>
@@ -340,14 +340,13 @@ export function SharedTemplateEditor({
             {validationError && <Alert severity="error">{validationError}</Alert>}
             {setupCreation && (
               <Typography variant="body2" color="text.secondary">
-                Mẫu được lưu và công bố trong thư viện dùng chung. Sau đó bạn có thể chọn mẫu để
-                thêm vào cơ sở đang thiết lập.
+                Mẫu được lưu vào thư viện dùng chung và có thể áp dụng ngay tại cơ sở đang thiết lập.
               </Typography>
             )}
             {document?.status === 'Published' && (
               <Typography variant="body2" color="text.secondary">
-                Nếu mẫu đã được sử dụng, thay đổi sẽ tạo phiên bản mới. Cấu hình đã áp dụng vẫn được
-                giữ nguyên.
+                Khi chỉnh sửa mẫu, cấu hình tại các cơ sở đã áp dụng vẫn được giữ nguyên.
+                Bạn có thể áp dụng nội dung mới cho cơ sở khi cần.
               </Typography>
             )}
             <TextField
@@ -512,7 +511,7 @@ export function SharedTemplateEditor({
                       )
                       .map((item) => (
                         <MenuItem key={item.id} value={item.id}>
-                          {item.name} · phiên bản {item.edition}
+                          {item.name}
                         </MenuItem>
                       ))}
                   </TextField>
@@ -555,7 +554,7 @@ export function SharedTemplateEditor({
                 </Stack>
                 {!items.length && (
                   <Typography variant="body2" color="text.secondary">
-                    Chọn tài sản đã công bố để thêm vào mẫu.
+                    Chọn tài sản có thể áp dụng để thêm vào mẫu.
                   </Typography>
                 )}
                 {items.map((item, index) => (
@@ -569,11 +568,6 @@ export function SharedTemplateEditor({
                         catalog.data?.find((d) => d.id === item.catalogId)?.name ??
                         'Mục danh mục đã chọn'}
                     </Typography>
-                    {item.catalog && (
-                      <Typography variant="caption" color="text.secondary">
-                        Phiên bản {item.catalog.edition} · Lần cập nhật {item.catalogVersion}
-                      </Typography>
-                    )}
                     <Box sx={configurationFormGridSx}>
                       <TextField
                         required

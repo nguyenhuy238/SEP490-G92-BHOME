@@ -43,7 +43,7 @@ type LibraryItem = RoomTemplate | AssetCatalogEntry | AssetTemplate | FeeTemplat
 
 const meta = {
   room: {
-    title: 'Mẫu loại phòng',
+    title: 'Loại phòng mẫu',
     subtitle: 'Tạo cấu hình loại phòng dùng chung và tái sử dụng cho nhiều cơ sở.',
     action: 'Tạo mẫu',
   },
@@ -476,7 +476,7 @@ function PreviewContent({
         </Typography>
         {!compact && (
           <Typography variant="caption">
-            Phiên bản V{fee.version} · Hiệu lực {fee.effectiveDate}
+            Hiệu lực {fee.effectiveDate}
           </Typography>
         )}
       </Stack>
@@ -487,7 +487,7 @@ function PreviewContent({
     <Stack spacing={0.6}>
       <Typography color="text.secondary">{policy.summary}</Typography>
       <Typography>
-        <b>{policy.category}</b> · Phiên bản V{policy.version}
+        <b>{policy.category}</b>
       </Typography>
       {!compact && <Typography sx={{ whiteSpace: 'pre-wrap' }}>{policy.content}</Typography>}
     </Stack>

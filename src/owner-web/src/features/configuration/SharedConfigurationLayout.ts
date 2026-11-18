@@ -32,8 +32,8 @@ export function configurationStatusLabel(status: string) {
   return status === 'Draft'
     ? 'Bản nháp'
     : status === 'Published'
-      ? 'Đã công bố'
+      ? 'Có thể áp dụng'
       : status === 'Archived'
-        ? 'Đã lưu trữ'
+        ? 'Ngừng áp dụng'
         : status;
 }

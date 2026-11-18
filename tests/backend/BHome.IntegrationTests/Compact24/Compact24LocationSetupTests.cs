@@ -26,6 +26,52 @@ public sealed partial class Compact24OwnerSetupTests
             [new(null, ChargeCategory.ServiceFee, "WIFI", "Internet", ChargingMethod.FixedPerPersonPerMonth, 50000m, Today, null)],
             new("Synthetic rules", "Owner reviewed rules", Today), active, Today.AddDays(2));
     }
+    [CompactPostgresFact]
+    public async Task LocationSetupAndLaterCommonAssetEditsRejectDuplicateCatalogItems()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner);
+        var first = new SetupCommonAssetRequirement(Guid.NewGuid(), "Chổi Lau Nhà", "Vệ sinh",
+            "BulkQuantity", 4, "Hành lang", "Cái", 100000m);
+        var second = first with { Id = Guid.NewGuid(), Name = "  choi  LAU nha  ", Quantity = 1 };
+        var draft = SetupDraft() with { CommonAssets = [first, second] };
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Keyed(owner, SetupRoute, draft, Guid.NewGuid())).StatusCode);
+
+        var valid = draft with { CommonAssets = [first] };
+        var location = (await Read<LocationSetupResult>(
+            await Keyed(owner, SetupRoute, valid, Guid.NewGuid()))).Location.Id;
+        var update = new CommonAssetRequirementsWrite([first, second], 1);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await owner.PutAsJsonAsync($"/api/v1/locations/{location}/common-asset-requirements", update)).StatusCode);
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+        var persisted = Assert.Single(await store.ListAsync(location, "CommonAssetRequirements", default));
+        Assert.Single(persisted.Data.GetProperty("items").EnumerateArray());
+    }
+    [CompactPostgresFact]
+    public async Task LocationSetupAutomaticallyAddsSuffixToRepeatedNameInitials()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner);
+        var firstDraft = SetupDraft() with
+        {
+            Location = new("Cơ Sở Tân Xã", "Địa chỉ thử nghiệm 1", "CSTX", 2, "", "", "")
+        };
+        var secondDraft = SetupDraft() with
+        {
+            Location = new("Cơ Sở Tân Xã", "Địa chỉ thử nghiệm 2", "CSTX", 2, "", "", "")
+        };
+        var first = await Read<LocationSetupResult>(await Keyed(owner, SetupRoute, firstDraft, Guid.NewGuid()));
+        var second = await Read<LocationSetupResult>(await Keyed(owner, SetupRoute, secondDraft, Guid.NewGuid()));
+        Assert.NotEqual(first.Location.Id, second.Location.Id);
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+        var firstCode = Assert.Single(await store.ListAsync(first.Location.Id, "LocationMetadata", default))
+            .Data.GetProperty("code").GetString();
+        var secondCode = Assert.Single(await store.ListAsync(second.Location.Id, "LocationMetadata", default))
+            .Data.GetProperty("code").GetString();
+        Assert.Equal("CSTX", firstCode);
+        Assert.Equal("CSTX-01", secondCode);
+    }
 
     [CompactPostgresFact]
     public async Task LocationSetupPersistsNativeRecordsAndIndependentDesiredInventory()

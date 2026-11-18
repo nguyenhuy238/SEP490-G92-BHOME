@@ -175,7 +175,7 @@ it('uses server totals and server pagination, resetting the page for search', as
 it('keeps invitation errors visible and allows a successful retry', async () => {
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Gửi thông tin tài khoản' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Thiết lập mật khẩu mới và gửi cho nhân viên' }));
   const original = mocks.request.getMockImplementation()!;
   let failInvitation = true;
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {

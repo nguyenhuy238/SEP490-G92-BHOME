@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -102,6 +103,35 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
         if (result.Length > limit || required && result.Length == 0) throw new PropertyException(400, "invalid_location_setup_text");
         return result;
     }
+    // Match the Owner Web preview. Existing API callers with a custom code
+    // remain compatible; new wizard-created locations use initials + suffix.
+    private static string SuggestedLocationCode(string name)
+    {
+        var normalized = name.Replace('đ', 'd').Replace('Đ', 'D').Normalize(NormalizationForm.FormD);
+        var initials = new StringBuilder();
+        var atWordStart = true;
+        foreach (var letter in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(letter) == UnicodeCategory.NonSpacingMark) continue;
+            if (!char.IsAsciiLetterOrDigit(letter)) { atWordStart = true; continue; }
+            if (atWordStart && initials.Length < 42) initials.Append(char.ToUpperInvariant(letter));
+            atWordStart = false;
+        }
+        return initials.Length == 0 ? "CS" : initials.ToString();
+    }
+    private async Task<string> AssignedLocationCode(string name, string requested, CancellationToken t)
+    {
+        var baseCode = SuggestedLocationCode(name);
+        if (!string.IsNullOrWhiteSpace(requested) &&
+            !string.Equals(requested.Trim(), baseCode, StringComparison.OrdinalIgnoreCase))
+            return requested.Trim(); // Legacy API compatibility.
+        for (var suffix = 0; suffix < 10000; suffix++)
+        {
+            var candidate = suffix == 0 ? baseCode : $"{baseCode}-{suffix:00}";
+            if (!await shared.LocationCodeExistsAsync(candidate, null, t)) return candidate;
+        }
+        throw new PropertyException(409, "location_code_space_exhausted");
+    }
     private static string Name(SetupDocument document) => document.Data.GetProperty("name").GetString() ?? "";
     private static Guid? Template(SetupDocument document) => document.Data.TryGetProperty("assetTemplateId", out var id) && id.ValueKind == JsonValueKind.String && id.TryGetGuid(out var value) ? value : null;
     private static SharedRoomDefaults Defaults(SetupDocument document) => SharedDataValidator.Read<SharedRoomDefaults>(document.Data.GetProperty("defaults"));
@@ -165,13 +195,33 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
             !InventoryAcquisitionPrice.ValidReference(item.ReferencePrice)) ||
             items.Select(item => item.Id).Distinct().Count() != items.Length)
             throw new PropertyException(400, "invalid_common_asset_requirements");
-        return items.Select(item => item with
+        var normalized = items.Select(item => item with
         {
             Name = Text(item.Name, 150),
             Category = Text(item.Category, 80),
             CommonArea = Text(item.CommonArea, 200),
             Unit = string.IsNullOrWhiteSpace(item.Unit) ? null : Text(item.Unit, 80)
         }).ToArray();
+        // IDs are client-generated checklist identities; they do not prevent a
+        // repeated catalog item with a new ID. One item + editable quantity per
+        // location is the intended model, for both setup and later updates.
+        static string CatalogNameKey(string name)
+        {
+            var decomposed = name.Replace('đ', 'd').Replace('Đ', 'D').Normalize(NormalizationForm.FormD);
+            var result = new StringBuilder();
+            var spacing = false;
+            foreach (var letter in decomposed)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(letter) == UnicodeCategory.NonSpacingMark) continue;
+                if (char.IsWhiteSpace(letter)) { spacing = result.Length > 0; continue; }
+                if (spacing) { result.Append(' '); spacing = false; }
+                result.Append(char.ToLowerInvariant(letter));
+            }
+            return result.ToString();
+        }
+        if (normalized.Select(item => CatalogNameKey(item.Name)).Distinct(StringComparer.Ordinal).Count() != normalized.Length)
+            throw new PropertyException(400, "duplicate_common_asset");
+        return normalized;
     }
 
     public async Task<SetupDocument?> CommonAssetsAsync(Guid location, CancellationToken t)
@@ -514,9 +564,10 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
             }
             if (input.RentEffectiveFrom < Today) throw new PropertyException(400, "invalid_rent_effective_date");
             var info = input.Location;
-            var metadata = new LocationMetadataWrite(info.Code, info.Floors, info.ContactPhone, info.ContactEmail, info.Description);
+            var assignedCode = await AssignedLocationCode(info.Name, info.Code, t);
+            var metadata = new LocationMetadataWrite(assignedCode, info.Floors, info.ContactPhone, info.ContactEmail, info.Description);
             ValidateMetadata(metadata); _ = Text(info.Name, 200); _ = Text(info.Address, 1000);
-            if (await shared.LocationCodeExistsAsync(info.Code, null, t)) throw new PropertyException(409, "duplicate_location_code");
+            if (await shared.LocationCodeExistsAsync(metadata.Code, null, t)) throw new PropertyException(409, "duplicate_location_code");
             LocationSetupSource? source = null;
             if (input.SourceLocationId is { } sourceId)
             {

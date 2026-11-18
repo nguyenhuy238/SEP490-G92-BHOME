@@ -906,7 +906,7 @@ export function InitialLocationSetupWizard({
                           Sao chép từ cơ sở có sẵn (Copy Configuration)
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          Thừa hưởng toàn bộ mẫu loại phòng, định mức trang bị và biểu phí từ một cơ
+                          Thừa hưởng toàn bộ loại phòng mẫu, định mức trang bị và biểu phí từ một cơ
                           sở đang vận hành tốt.
                         </Typography>
                       </Box>
@@ -1110,7 +1110,7 @@ export function InitialLocationSetupWizard({
             >
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                  Bước 2: Cấu hình các mẫu loại phòng
+                  Bước 2: Cấu hình các loại phòng mẫu
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Định nghĩa các phân khúc phòng (diện tích chuẩn, sức chứa, giá thuê mặc định và

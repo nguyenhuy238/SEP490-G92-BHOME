@@ -8,6 +8,8 @@ public sealed class AuthenticationEmailOptions
     public string MobileInvitationUrl { get; set; } = "";
     public string WebVerificationUrl { get; set; } = "";
     public string MobileVerificationUrl { get; set; } = "";
+    // Login entry point for Staff assignment emails (e.g. the deployed Staff app URL).
+    public string StaffPortalUrl { get; set; } = "";
     public string[] TrustedOrigins { get; set; } = [];
     public int ResendCooldownSeconds { get; set; } = 60;
 

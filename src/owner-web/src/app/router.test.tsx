@@ -122,11 +122,11 @@ it('keeps property functions inside the selected Location Workspace', async () =
   // calculations. Keep exact accessible names, uniqueness and absent-link assertions.
   const expectedLinks: Record<string, string> = {
     '/locations': 'Cơ sở',
-    '/configuration/room-types': 'Mẫu loại phòng',
+    '/configuration/room-types': 'Loại phòng mẫu',
     '/configuration/assets': 'Tài sản mẫu',
   };
   const propertyLinks = within(navigation).getAllByRole('link', {
-    name: /^(Cơ sở|Mẫu loại phòng|Tài sản mẫu)$/,
+    name: /^(Cơ sở|Loại phòng mẫu|Tài sản mẫu)$/,
   });
   expect(propertyLinks.map((link) => link.getAttribute('href')).sort()).toEqual(
     Object.keys(expectedLinks).sort(),
@@ -134,6 +134,13 @@ it('keeps property functions inside the selected Location Workspace', async () =
   propertyLinks.forEach((link) =>
     expect(link).toHaveAccessibleName(expectedLinks[link.getAttribute('href')!]),
   );
+  expect(propertyLinks.map((link) => link.getAttribute('href'))).toEqual([
+    '/locations', '/configuration/assets', '/configuration/room-types',
+  ]);
+  expect(
+    within(navigation).getByRole('link', { name: 'Phân công nhân viên cho từng cơ sở' }),
+  ).toHaveAttribute('href', '/staff-assignments');
+  expect(within(navigation).queryByRole('link', { name: 'Phân công cơ sở' })).toBeNull();
   expect(
     within(navigation).queryByRole('link', {
       name: /^(Phòng|Loại phòng|Tài sản|Giá thuê & Biểu phí)$/,

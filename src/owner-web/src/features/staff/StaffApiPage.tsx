@@ -204,7 +204,7 @@ export function StaffApiPage() {
       <ConfirmDialog
         error={action.error}
         open={invite}
-        title="Gửi thông tin tài khoản"
+        title="Thiết lập mật khẩu mới và gửi cho nhân viên"
         busy={action.busy}
         onClose={() => setInvite(false)}
         onConfirm={() => {
@@ -218,8 +218,8 @@ export function StaffApiPage() {
             });
         }}
       >
-        Gửi liên kết dùng một lần để nhân viên tự đặt mật khẩu đến email hiện tại. Không gửi mật
-        khẩu rõ.
+        Gửi liên kết dùng một lần đến email của nhân viên để họ tự thiết lập mật khẩu mới. Vì lý do
+        bảo mật, hệ thống không gửi mật khẩu qua email.
       </ConfirmDialog>
       {editor !== undefined && <StaffEditor staff={editor} close={() => setEditor(undefined)} />}
       {renewal && <StaffEditor staff={renewal} renewal close={() => setRenewal(undefined)} />}

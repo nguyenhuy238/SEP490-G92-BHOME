@@ -21,12 +21,14 @@ AuthenticationEmail__WebResetUrl=https://owner.example.invalid/reset-password
 AuthenticationEmail__WebInvitationUrl=https://owner.example.invalid/accept-invitation
 AuthenticationEmail__MobileResetUrl=bhome://reset-password
 AuthenticationEmail__MobileInvitationUrl=bhome://accept-invitation
+AuthenticationEmail__StaffPortalUrl=https://staff.example.invalid/login
 AuthenticationEmail__WebVerificationUrl=https://owner.example.invalid/confirm-email
 AuthenticationEmail__MobileVerificationUrl=bhome://confirm-email
 AuthenticationEmail__TrustedOrigins__0=https://owner.example.invalid
 AuthenticationEmail__TrustedOrigins__1=bhome://reset-password
 AuthenticationEmail__TrustedOrigins__2=bhome://accept-invitation
 AuthenticationEmail__TrustedOrigins__3=bhome://confirm-email
+AuthenticationEmail__TrustedOrigins__4=https://staff.example.invalid
 AuthenticationEmail__ResendCooldownSeconds=60
 ```
 
@@ -36,6 +38,28 @@ không dựng link từ Host header hoặc callback tùy ý do caller gửi.
 Owner dùng Web callback; Staff/Tenant dùng Mobile callback. Native link cần ứng dụng được cài
 có scheme bhome; chưa nghiệm thu Expo Go/universal links. Có thể cấu hình Mobile callback bằng
 HTTPS của client triển khai các route tương ứng; không tự tạo domain association/analytics redirect.
+
+Khi Owner tạo phân công đang hiệu lực hoặc tương lai, thay người phụ trách, chỉnh thời hạn,
+hủy lịch sắp tới hay gỡ người phụ trách (BF-02/UC-08..12), Backend ghi thông báo `Account`
+có kênh `EMAIL` trong cùng transaction với phân công. Khi thay người phụ trách, cả nhân viên
+cũ lẫn nhân viên mới đều được thông báo. JOB-04 gửi **sau commit**, kiểm tra lại người nhận
+và chống phát trùng theo assignment/event/version. Khi JOB phân công tự động chuyển sang
+hiệu lực hoặc kết thúc, cùng transaction cập nhật trách nhiệm sẽ ghi thêm email bắt đầu/kết thúc;
+chạy lại job không gửi trùng nhờ reconciliation marker và event key.
+
+Email gồm họ tên nhân viên, tên/địa chỉ cơ sở, vai trò Staff, email đăng nhập và thời gian
+phân công, kể cả thông báo thay đổi hoặc kết thúc. Email có thể tới Staff chưa xác nhận email
+vì địa chỉ do Owner khai báo; mật khẩu và token đăng nhập không xuất hiện trong thư này.
+Lời mời tự đặt mật khẩu vẫn dùng `/api/v1/staff/{id}/invitation` tách biệt. Nếu chưa cấu hình
+SMTP hoặc người nhận không còn hợp lệ tại thời điểm gửi, notice vẫn được lưu cùng transaction
+và trạng thái xử lý được giữ trong outbox; không thể khẳng định email đã tới hộp thư.
+
+`AuthenticationEmail__StaffPortalUrl` là URL đăng nhập **thực tế** của ứng dụng Staff
+được triển khai, phải nằm trong `AuthenticationEmail__TrustedOrigins`. Mẫu `staff.example.invalid`
+chỉ là ví dụ, không phải trang đang tồn tại. Nếu chưa cấu hình, thông báo vẫn được tạo
+và email vẫn chứa thông tin phân công, nhưng không chèn đường dẫn đăng nhập chưa được xác minh.
+Những email này được xử lý ngay cả khi chỉ bật notification-only automation; không kích hoạt
+các job thanh toán/hóa đơn.
 
 Khi Jobs.Enabled=false và callback hợp lệ, worker hiện có vẫn xử lý email xác thực nếu
 NotificationChannels.AutomationEnabled=false: chỉ publish/deliver Account notices, không xử lý

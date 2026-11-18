@@ -133,7 +133,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
           />
           <Tab
             value="types"
-            label={`Mẫu loại phòng (${roomTypes.length})`}
+            label={`Loại phòng mẫu (${roomTypes.length})`}
             icon={<Layers3 size={16} />}
             iconPosition="start"
           />
@@ -557,7 +557,7 @@ export function LocationRoomsTab({ db, location }: LocationRoomsTabProps) {
           maxWidth="sm"
           fullWidth
         >
-          <DialogTitle sx={{ fontWeight: 800 }}>Cấu hình mẫu loại phòng</DialogTitle>
+          <DialogTitle sx={{ fontWeight: 800 }}>Cấu hình loại phòng mẫu</DialogTitle>
           <DialogContent sx={{ py: 2 }}>
             <Grid container spacing={2}>
               <Grid size={{ xs: 8 }}>

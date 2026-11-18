@@ -29,6 +29,7 @@ import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import type {
   ConfigurationPlan,
   SharedApply,
+  SharedAssetItem,
   SharedDocument,
   SharedResource,
 } from '../../../../../../packages/client-core/src/sharedConfiguration';
@@ -68,21 +69,12 @@ export function SharedTemplateDetails({
     input: SharedApply;
     key: string;
     sourceName: string;
-    sourceEdition: number;
     locationLabel: string;
     roomLabel: string;
   } | null>(null);
   const doc = useQuery({
     queryKey: ['property-setup', 'shared-detail', session?.userId, resource, id],
     queryFn: ({ signal }) => api.get(resource, id, signal),
-  });
-  const versions = useQuery({
-    queryKey: ['property-setup', 'shared-versions', session?.userId, resource, id],
-    queryFn: ({ signal }) => api.versions(resource, id, signal),
-  });
-  const history = useQuery({
-    queryKey: ['property-setup', 'shared-history', session?.userId, resource, id],
-    queryFn: ({ signal }) => api.history(resource, id, signal),
   });
   const usage = useQuery({
     queryKey: ['property-setup', 'shared-usage', session?.userId, resource, id, usagePage],
@@ -126,7 +118,6 @@ export function SharedTemplateDetails({
         input: { ...input, targetState: response.targetState },
         key: crypto.randomUUID(),
         sourceName: source.name,
-        sourceEdition: source.edition,
         locationLabel,
         roomLabel,
       });
@@ -166,9 +157,6 @@ export function SharedTemplateDetails({
                 color={doc.data.status === 'Published' ? 'success' : 'default'}
                 label={configurationStatusLabel(doc.data.status)}
               />
-              <Typography variant="caption" color="text.secondary">
-                Phiên bản {doc.data.edition} · Lần cập nhật {doc.data.version}
-              </Typography>
             </Stack>
           )}
         </Stack>
@@ -277,8 +265,7 @@ export function SharedTemplateDetails({
                     )}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Nguồn: {plan.sourceName} · Phiên bản {plan.sourceEdition} · Lần cập nhật{' '}
-                    {plan.input.expectedVersion}
+                    Nguồn: {plan.sourceName}
                     {resource === 'asset-templates' &&
                       (plan.input.includeOptionalItems
                         ? ' · Có mục tùy chọn'
@@ -295,77 +282,9 @@ export function SharedTemplateDetails({
           )}
           <Box component="details" sx={historySectionSx}>
             <Typography component="summary" variant="h2" sx={historyHeadingSx}>
-              Phiên bản và lịch sử
-            </Typography>
-            <Stack spacing={1.5} sx={{ mt: 1.5 }}>
-              {versions.isPending || history.isPending ? (
-                <LoadingState />
-              ) : versions.isError || history.isError ? (
-                <ErrorState
-                  error={versions.error ?? history.error}
-                  retry={() => {
-                    void versions.refetch();
-                    void history.refetch();
-                  }}
-                />
-              ) : (
-                <>
-                  <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                    Các phiên bản
-                  </Typography>
-                  {versions.data?.length ? (
-                    <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                      {versions.data.map((v) => (
-                        <Chip
-                          key={v.id}
-                          size="small"
-                          variant="outlined"
-                          label={`Phiên bản ${v.edition} · ${configurationStatusLabel(v.status)}`}
-                        />
-                      ))}
-                    </Stack>
-                  ) : (
-                    <Typography color="text.secondary">Chưa có phiên bản.</Typography>
-                  )}
-                  <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                    Lịch sử cập nhật mẫu
-                  </Typography>
-                  {history.data?.length ? (
-                    <TableContainer>
-                      <Table size="small" aria-label="Lịch sử cập nhật mẫu" sx={{ minWidth: 360 }}>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Lần cập nhật</TableCell>
-                            <TableCell>Trạng thái</TableCell>
-                            <TableCell>Thời gian</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {history.data.map((v) => (
-                            <TableRow key={v.version}>
-                              <TableCell>{v.version}</TableCell>
-                              <TableCell>{configurationStatusLabel(v.status)}</TableCell>
-                              <TableCell>{formatEventTime(v.updatedAt)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  ) : (
-                    <Typography color="text.secondary">Chưa có lịch sử cập nhật.</Typography>
-                  )}
-                </>
-              )}
-            </Stack>
-          </Box>
-          <Box component="details" sx={historySectionSx}>
-            <Typography component="summary" variant="h2" sx={historyHeadingSx}>
               Lịch sử áp dụng · {usage.data?.locationsUsing ?? '…'} cơ sở
             </Typography>
             <Stack spacing={1} sx={{ mt: 1.5 }}>
-              <Typography color="text.secondary" variant="caption">
-                Các cơ sở từng nhận bản sao của mẫu, gồm cả các phiên bản trước.
-              </Typography>
               {usage.isPending ? (
                 <LoadingState />
               ) : usage.isError ? (
@@ -374,13 +293,11 @@ export function SharedTemplateDetails({
                 <>
                   {usage.data?.items.length ? (
                     <TableContainer>
-                      <Table size="small" aria-label="Lịch sử áp dụng" sx={{ minWidth: 460 }}>
+                      <Table size="small" aria-label="Lịch sử áp dụng">
                         <TableHead>
                           <TableRow>
                             <TableCell>Cơ sở</TableCell>
-                            <TableCell>Phiên bản nguồn</TableCell>
-                            <TableCell>Thời gian</TableCell>
-                            <TableCell>Kết quả</TableCell>
+                            <TableCell>Ngày áp dụng</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -390,16 +307,7 @@ export function SharedTemplateDetails({
                                 {locations.data?.find((l) => l.id === item.targetLocationId)
                                   ?.label ?? item.targetLocationId}
                               </TableCell>
-                              <TableCell>
-                                <Typography variant="body2">v{item.sourceEdition}</Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  Lần cập nhật {item.sourceVersion}
-                                </Typography>
-                              </TableCell>
                               <TableCell>{formatEventTime(item.appliedAt)}</TableCell>
-                              <TableCell>
-                                {item.status === 'Completed' ? 'Đã lưu' : item.status}
-                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -556,83 +464,68 @@ function SummaryFields({ fields }: { fields: { label: string; value: ReactNode }
   );
 }
 
+function AssetItemsSummary({ items }: { items: SharedAssetItem[] }) {
+  return (
+    <Stack spacing={1}>
+      <Typography variant="body2" sx={{ fontWeight: 650 }}>
+        Tài sản mẫu · {items.length} loại
+      </Typography>
+      {items.length ? (
+        <TableContainer>
+          <Table size="small" aria-label="Tài sản trong mẫu">
+            <TableHead>
+              <TableRow>
+                <TableCell>Tài sản mẫu</TableCell>
+                <TableCell align="right">Số lượng</TableCell>
+                <TableCell>Yêu cầu</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {items.map((item, i) => (
+                <TableRow key={`${item.catalogId}-${i}`}>
+                  <TableCell>{item.catalog?.name ?? 'Tài sản chưa có thông tin'}</TableCell>
+                  <TableCell align="right">
+                    {item.quantity} {item.catalog?.unit ?? ''}
+                  </TableCell>
+                  <TableCell>{item.required ? 'Bắt buộc' : 'Tùy chọn'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      ) : (
+        <Typography color="text.secondary">Chưa cấu hình tài sản mẫu.</Typography>
+      )}
+    </Stack>
+  );
+}
+
 function SharedDataSummary({ document }: { document: SharedDocument }) {
   const data = document.data;
   if ('items' in data)
-    return (
-      <Stack spacing={1}>
-        <Typography variant="body2" sx={{ fontWeight: 650 }}>
-          Tài sản trong mẫu · {data.items.length} loại
-        </Typography>
-        {data.items.length ? (
-          <TableContainer>
-            <Table size="small" aria-label="Tài sản trong mẫu" sx={{ minWidth: 380 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Tài sản</TableCell>
-                  <TableCell align="right">Số lượng</TableCell>
-                  <TableCell>Yêu cầu</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.items.map((item, i) => (
-                  <TableRow key={`${item.catalogId}-${i}`}>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {item.catalog?.name ?? 'Mục danh mục đã chọn'}
-                      </Typography>
-                      {item.catalog && (
-                        <Typography variant="caption" color="text.secondary">
-                          Phiên bản {item.catalog.edition}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell align="right">
-                      {item.quantity} {item.catalog?.unit}
-                    </TableCell>
-                    <TableCell>{item.required ? 'Bắt buộc' : 'Tùy chọn'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        ) : (
-          <Typography color="text.secondary">Chưa có tài sản trong mẫu.</Typography>
-        )}
-      </Stack>
-    );
+    return <AssetItemsSummary items={data.items} />;
   if ('capacity' in data)
     return (
-      <SummaryFields
-        fields={[
-          { label: 'Sức chứa', value: `${data.capacity} người` },
-          { label: 'Diện tích', value: `${formatBillingDecimal(data.area)} m²` },
-          {
-            label: 'Giá thuê tham khảo',
-            value:
-              data.referenceRent == null
-                ? 'Chưa đặt'
-                : `${formatBillingDecimal(data.referenceRent)} đ/tháng`,
-          },
-          {
-            label: 'Đặc điểm phòng',
-            value: data.amenities.length ? data.amenities.join(', ') : 'Chưa đặt',
-          },
-          ...(data.assetItems?.length
-            ? [
-                {
-                  label: 'Tài sản định mức',
-                  value: data.assetItems
-                    .map(
-                      (item) =>
-                        `${item.catalog?.name ?? 'Tài sản'} × ${item.quantity} ${item.catalog?.unit ?? ''}`,
-                    )
-                    .join(', '),
-                },
-              ]
-            : []),
-        ]}
-      />
+      <Stack spacing={2}>
+        <SummaryFields
+          fields={[
+            { label: 'Sức chứa', value: `${data.capacity} người` },
+            { label: 'Diện tích', value: `${formatBillingDecimal(data.area)} m²` },
+            {
+              label: 'Giá thuê tham khảo',
+              value:
+                data.referenceRent == null
+                  ? 'Chưa đặt'
+                  : `${formatBillingDecimal(data.referenceRent)} đ/tháng`,
+            },
+            {
+              label: 'Đặc điểm phòng',
+              value: data.amenities.length ? data.amenities.join(', ') : 'Chưa đặt',
+            },
+          ]}
+        />
+        <AssetItemsSummary items={data.assetItems ?? []} />
+      </Stack>
     );
   if ('content' in data)
     return (

@@ -658,7 +658,7 @@ function RoomWizard({ db }: { db: DemoDatabase }) {
                   onChange={setType}
                 />
                 <Button component={Link} to="/room-types">
-                  Quản lý mẫu loại phòng
+                  Quản lý loại phòng mẫu
                 </Button>
                 {selectedType && (
                   <Alert severity="info">

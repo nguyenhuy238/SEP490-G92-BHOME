@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Locations;
+using BHome.Application.Notifications;
 using BHome.Application.Jobs;
 using BHome.Domain.Billing;
 using BHome.Domain.IncidentMaintenance;
@@ -11,15 +12,28 @@ using BHome.Domain.StaffOperations;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.Modules.Notifications;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace BHome.IntegrationTests.Compact24;
 
 [Trait("Category", "CompactPostgres")]
 public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
+    private sealed class CapturingMail : INotificationChannelProvider
+    {
+        public List<ChannelMessage> Messages { get; } = [];
+        public bool IsConfigured(string channel) => channel == "EMAIL";
+        public bool SupportsIdempotency(string channel) => channel == "EMAIL";
+        public Task<string> SendAsync(ChannelMessage message, CancellationToken token)
+        {
+            Messages.Add(message);
+            return Task.FromResult("synthetic-accepted");
+        }
+    }
     private sealed class Clock(DateTimeOffset now) : TimeProvider
     {
         public DateTimeOffset Now { get; set; } = now;
@@ -53,6 +67,12 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         var id = Guid.NewGuid(); await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO locations(id,name,address) VALUES ({id},{"Synthetic " + id},'Synthetic address')"); return id;
     }
+    private static Task<int> EmailNotices(Compact24DbContext db, Guid location, Guid staff, string type) =>
+        db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM notifications WHERE record_kind='INBOX'
+              AND location_id={location} AND recipient_user_id={staff} AND notification_type={type}
+              AND event_data->'state'->'channels' ? 'EMAIL'
+            """).SingleAsync();
     [CompactPostgresFact]
     public async Task ExistingAssignmentEndpointKeepsOwnerOnlyAccessAndOriginalResponse()
     {
@@ -78,6 +98,29 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/api/v1/staff-location-assignments", request)).StatusCode);
         var entries = await client.GetFromJsonAsync<StaffAssignmentSummary[]>($"/api/v1/staff-location-assignments?locationId={location}");
         Assert.Single(entries!);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var notification = await db.Database.SqlQuery<string>($"""
+            SELECT message AS "Value" FROM notifications WHERE recipient_user_id={staff.Id}
+              AND notification_type='STAFF_ASSIGNMENT_CREATED' AND record_kind='INBOX'
+            """).SingleAsync();
+        Assert.Contains(staff.Email!, notification);
+        Assert.Contains("Synthetic address", notification);
+        Assert.Contains("Nhân viên phụ trách cơ sở (Staff)", notification);
+        Assert.Equal(1, await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM notifications WHERE recipient_user_id={staff.Id}
+              AND notification_type='STAFF_ASSIGNMENT_CREATED' AND record_kind='INBOX'
+              AND event_data->'state'->'channels' ? 'EMAIL'
+            """).SingleAsync());
+        var fake = new CapturingMail();
+        var channel = ActivatorUtilities.CreateInstance<NotificationChannelWorker>(scope.ServiceProvider,
+            fake, Options.Create(new NotificationChannelOptions { Enabled = true }));
+        await channel.ProcessPendingAsync(default, authenticationOnly: true);
+        var email = Assert.Single(fake.Messages, m => m.EventType == "STAFF_ASSIGNMENT_CREATED" && m.Destination == staff.Email);
+        Assert.Contains("Synthetic address", email.Body);
+        Assert.Contains("Nhân viên phụ trách cơ sở", email.Body);
+        await channel.ProcessPendingAsync(default, authenticationOnly: true);
+        Assert.Single(fake.Messages, m => m.EventType == "STAFF_ASSIGNMENT_CREATED" && m.Destination == staff.Email);
     }
     [CompactPostgresFact]
     public async Task LocationUpdateRequiresLatestVersionAfterStaffAssignment()
@@ -141,6 +184,11 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Single(results, x => x.Status == CreateAssignmentStatus.DateRangeOverlaps);
         await using var check = fixture.Factory!.Services.CreateAsyncScope();
         Assert.Single((await check.ServiceProvider.GetRequiredService<ILocationAssignments>().ListAssignmentsAsync(location, default))!);
+        var db = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        Assert.Equal(1, await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM notifications WHERE location_id={location}
+              AND notification_type='STAFF_ASSIGNMENT_CREATED' AND record_kind='INBOX'
+            """).SingleAsync());
     }
 
     [CompactPostgresFact]
@@ -161,6 +209,11 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
             """);
         var version = await db.Locations.Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
 
+        Assert.Equal(ChangeAssignmentStatus.Invalid, (await repository.ReplaceAssignmentAsync(owner.Id, location,
+            previous.Id, today, version, "Synthetic same staff", default)).Status);
+        Assert.Equal(version, await db.Locations.Where(x => x.Id == location).Select(x => x.Version).SingleAsync());
+        Assert.Equal(0, await EmailNotices(db, location, previous.Id, "STAFF_ASSIGNMENT_REMOVED"));
+
         var changed = await repository.ReplaceAssignmentAsync(owner.Id, location, replacement.Id, today, version,
             "Synthetic replacement", default);
 
@@ -169,6 +222,16 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Equal(replacement.Id, await db.Database.SqlQuery<Guid>($"SELECT assigned_user_id AS \"Value\" FROM operational_tasks WHERE id={task}").SingleAsync());
         Assert.Single(await repository.ListAssignedLocationsAsync(replacement.Id, today, default));
         Assert.Empty(await repository.ListAssignedLocationsAsync(previous.Id, today, default));
+        Assert.Equal(1, await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM notifications WHERE location_id={location}
+              AND recipient_user_id={previous.Id} AND notification_type='STAFF_ASSIGNMENT_REMOVED'
+            """).SingleAsync());
+        Assert.Equal(1, await db.Database.SqlQuery<int>($"""
+            SELECT count(*)::int AS "Value" FROM notifications WHERE location_id={location}
+              AND recipient_user_id={replacement.Id} AND notification_type='STAFF_ASSIGNMENT_CREATED'
+            """).SingleAsync());
+        Assert.Equal(1, await EmailNotices(db, location, previous.Id, "STAFF_ASSIGNMENT_REMOVED"));
+        Assert.Equal(1, await EmailNotices(db, location, replacement.Id, "STAFF_ASSIGNMENT_CREATED"));
     }
 
     [CompactPostgresFact]
@@ -215,6 +278,9 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
 
         await job.ExecuteAsync(run, default);
         Assert.True(await repository.IsAssignedAsync(first.Id, location, default));
+        Assert.Equal(1, await EmailNotices(db, location, first.Id, "STAFF_ASSIGNMENT_CREATED"));
+        Assert.Equal(1, await EmailNotices(db, location, next.Id, "STAFF_ASSIGNMENT_CREATED"));
+        Assert.Equal(0, await EmailNotices(db, location, first.Id, "STAFF_ASSIGNMENT_ACTIVATED"));
         clock.Now = clock.Now.AddMinutes(1);
         await job.ExecuteAsync(run, default);
         await job.ExecuteAsync(run, default);
@@ -226,6 +292,8 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Equal(first.Id, (await db.Set<ContractMoveOut>().AsNoTracking().SingleAsync(t => t.ContractId == contract.Id)).InspectionStaffId);
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM notifications WHERE location_id={location} AND recipient_user_id={owner.Id} AND notification_type='STAFF_RESPONSIBILITY_UNRESOLVED'").SingleAsync());
         Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(h => h.TaskId == task.Id && h.Action == "responsibility_changed"));
+        Assert.Equal(1, await EmailNotices(db, location, first.Id, "STAFF_ASSIGNMENT_ENDED"));
+        Assert.Equal(0, await EmailNotices(db, location, next.Id, "STAFF_ASSIGNMENT_ACTIVATED"));
 
         clock.Now = clock.Now.AddDays(1);
         await job.ExecuteAsync(run, default);
@@ -245,6 +313,8 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Equal(first.Id, (await db.Set<OperationalTask>().AsNoTracking().SingleAsync(t => t.Id == done.Id)).AssignedStaffUserId);
         Assert.Equal(1, await db.Set<IncidentActivity>().CountAsync(h => h.WorkOrderId == order.Id && h.Action == "reassigned"));
         Assert.Equal(1, await db.Set<ContractMoveOutHistory>().CountAsync(h => h.ContractId == contract.Id && h.Action == "InspectionResponsibilityChanged"));
+        Assert.Equal(1, await EmailNotices(db, location, first.Id, "STAFF_ASSIGNMENT_ENDED"));
+        Assert.Equal(1, await EmailNotices(db, location, next.Id, "STAFF_ASSIGNMENT_ACTIVATED"));
     }
 
     [CompactPostgresFact]
@@ -275,6 +345,60 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Equal(current.Id, Assert.Single((await repository.ListAssignmentsAsync(location, default))!).Id);
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.staff_assignments) a WHERE l.id={location} AND (a->>'createdByUserId')::uuid={owner.Id} AND a->>'createdAt' IS NOT NULL").SingleAsync());
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.history) h WHERE l.id={location} AND h->>'action'='StaffAssignmentCancelled' AND (h->'before'->>'id')::uuid={future.Id}").SingleAsync());
+        Assert.Equal(1, await EmailNotices(db, location, staff.Id, "STAFF_ASSIGNMENT_CANCELLED"));
         Assert.Equal(CreateAssignmentStatus.Created, (await repository.CreateAssignmentAsync(owner.Id, location, staff.Id, today.AddDays(1), today.AddDays(2), default)).Status);
+    }
+
+    [CompactPostgresFact]
+    public async Task PeriodChangesAndFutureCancellationEmailAssignedStaffOnlyAfterSuccess()
+    {
+        var owner = await User("Owner"); var employee = await User("Staff"); var location = await Location();
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var repo = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
+        var current = (await repo.CreateAssignmentAsync(owner.Id, location, employee.Id, today, today.AddDays(1), default)).Assignment!;
+        var future = (await repo.CreateAssignmentAsync(owner.Id, location, employee.Id, today.AddDays(3), today.AddDays(5), default)).Assignment!;
+        var version = await db.Locations.Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
+
+        Assert.Equal(UpdateAssignmentPeriodStatus.Changed,
+            (await repo.UpdateAssignmentPeriodAsync(owner.Id, current.Id, today, today, version, "Current end amended", default)).Status);
+        Assert.Equal(1, await EmailNotices(db, location, employee.Id, "STAFF_ASSIGNMENT_UPDATED"));
+        Assert.Equal(UpdateAssignmentPeriodStatus.StaleVersion,
+            (await repo.UpdateAssignmentPeriodAsync(owner.Id, future.Id, today.AddDays(3), today.AddDays(6), version, "Stale", default)).Status);
+        Assert.Equal(1, await EmailNotices(db, location, employee.Id, "STAFF_ASSIGNMENT_UPDATED"));
+        Assert.Equal(UpdateAssignmentPeriodStatus.Changed,
+            (await repo.UpdateAssignmentPeriodAsync(owner.Id, future.Id, today.AddDays(3), today.AddDays(6), version + 1, "Future end amended", default)).Status);
+        Assert.Equal(2, await EmailNotices(db, location, employee.Id, "STAFF_ASSIGNMENT_UPDATED"));
+
+        // Every accepted decision gets a versioned email, including an unchanged valid period.
+        Assert.Equal(UpdateAssignmentPeriodStatus.Changed,
+            (await repo.UpdateAssignmentPeriodAsync(owner.Id, future.Id, today.AddDays(3), today.AddDays(6), version + 2, "Confirmed unchanged period", default)).Status);
+        Assert.Equal(3, await EmailNotices(db, location, employee.Id, "STAFF_ASSIGNMENT_UPDATED"));
+        Assert.Equal(UpdateAssignmentPeriodStatus.Changed,
+            (await repo.CancelFutureAssignmentAsync(owner.Id, future.Id, version + 3, "Future cancelled", default)).Status);
+        Assert.Equal(1, await EmailNotices(db, location, employee.Id, "STAFF_ASSIGNMENT_CANCELLED"));
+        Assert.Equal(0, await EmailNotices(db, location, owner.Id, "STAFF_ASSIGNMENT_CANCELLED"));
+    }
+
+    [CompactPostgresFact]
+    public async Task RemovingCurrentAssignmentEmailsPriorStaffAndRejectsDuplicateRequest()
+    {
+        var owner = await User("Owner"); var employee = await User("Staff"); var location = await Location();
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var repo = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
+        Assert.Equal(CreateAssignmentStatus.Created,
+            (await repo.CreateAssignmentAsync(owner.Id, location, employee.Id, today, today.AddDays(4), default)).Status);
+        var version = await db.Locations.Where(l => l.Id == location).Select(l => l.Version).SingleAsync();
+
+        Assert.Equal(ChangeAssignmentStatus.Changed,
+            (await repo.RemoveAssignmentAsync(owner.Id, location, today, version, "Staff removed", default)).Status);
+        Assert.Equal(1, await EmailNotices(db, location, employee.Id, "STAFF_ASSIGNMENT_REMOVED"));
+        Assert.Equal(0, await EmailNotices(db, location, owner.Id, "STAFF_ASSIGNMENT_REMOVED"));
+        Assert.Equal(ChangeAssignmentStatus.StaleVersion,
+            (await repo.RemoveAssignmentAsync(owner.Id, location, today, version, "Stale removal retry", default)).Status);
+        Assert.Equal(1, await EmailNotices(db, location, employee.Id, "STAFF_ASSIGNMENT_REMOVED"));
     }
 }
