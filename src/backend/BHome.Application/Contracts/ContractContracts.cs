@@ -85,14 +85,18 @@ public sealed record TerminationInput(DateOnly ProposedDate,
 public sealed record InspectionScheduleInput(DateTimeOffset ScheduledAt, Guid? StaffUserId = null, int? ExpectedVersion = null);
 public sealed record InspectionInput(Guid ElectricityReadingId, Guid WaterReadingId,
     [Required, StringLength(4000, MinimumLength = 1)] string Notes,
-    [Required, MinLength(1), MaxLength(5)] Guid[] EvidenceIds,
-    HandoverAssetInput[]? Assets = null, string? RoomCondition = null, string? KeysAndAccess = null, int? ExpectedVersion = null);
-public sealed record InspectionReviewInput(int Version, bool Confirmed, string Reason, bool NoAdditionalCharges = false);
-public sealed record FinalInspectionView(Guid Id, int Version, Guid BaselineContractId, int BaselineVersion, HandoverSnapshot Baseline,
+    [Required, MinLength(1), MaxLength(10)] Guid[] EvidenceIds,
+    HandoverAssetInput[]? Assets = null, string? RoomCondition = null, string? KeysAndAccess = null, int? ExpectedVersion = null,
+    string? InventoryToken = null, string? ProposedCompensation = null);
+public sealed record InspectionReviewInput(int Version, bool Confirmed, string Reason, bool NoAdditionalCharges = false,
+    bool TenantException = false, string? TenantExceptionReason = null);
+public sealed record FinalInspectionView(Guid Id, int Version, Guid BaselineContractId, int BaselineVersion, HandoverSnapshot? Baseline,
     HandoverSnapshot Observed, Guid StaffId, DateTimeOffset InspectedAt, string? OwnerDecision, string? OwnerReason, DateTimeOffset? ReviewedAt);
-public sealed record InspectionPreparation(HandoverView? Baseline, Guid? BaselineContractId, IReadOnlyList<HandoverReading> FinalReadings, bool OtherTenantsRemain);
+public sealed record InspectionPreparation(HandoverView? Baseline, Guid? BaselineContractId, IReadOnlyList<HandoverReading> FinalReadings, bool OtherTenantsRemain,
+    HandoverInventory? Inventory = null, HandoverAsset[]? InspectionGroups = null, string? LegacyExceptionReason = null, bool LegacyExceptionRequired = false);
+public sealed record LegacyHandoverException(string Reason);
 public sealed record SettlementInput([Required, StringLength(2000, MinimumLength = 1)] string Decision, string? ExpectedReference = null);
-public sealed record CompletionInput(DateOnly ActualEndDate);
+public sealed record CompletionInput(DateOnly ActualEndDate, string? RoomDisposition = null);
 public sealed record SigningRecoveryInput([Required, StringLength(200, MinimumLength = 1)] string ProviderReference);
 // Method: OTP / UPLOAD_PROOF / VIETTEL_MYSIGN / SIMULATED. ExpiresAt: until when a pending signature can complete.
 // CertificateSubject/Issuer: the certificate that produced the signature (BHOME seal for OTP).

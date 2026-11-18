@@ -140,6 +140,7 @@ export interface RoomInventoryReviewItem {
   acquisitionUnitCost?: string | number | null;
 }
 export interface RoomInventoryReviewRow {
+  noAssetsConfirmed?: boolean;
   roomId: string;
   roomNumber: string;
   desiredId: string | null;
@@ -352,6 +353,20 @@ export function propertySetupClient(request: SetupRequest) {
       request<RoomInventoryReview>(
         `/api/v1/locations/${encodeURIComponent(locationId)}/room-inventory-review`,
         { signal },
+      ),
+    handoverInventory: (locationId: string, roomId: string, signal?: AbortSignal) =>
+      request<import('./contracts').HandoverInventory>(
+        `/api/v1/locations/${locationId}/room-inventory-review/${roomId}/handover-preparation`,
+        { signal },
+      ),
+    confirmNoAssets: (
+      locationId: string,
+      roomId: string,
+      input: { stateToken: string; reason: string },
+    ) =>
+      write<import('./contracts').HandoverInventory>(
+        `/api/v1/locations/${locationId}/room-inventory-review/${roomId}/no-assets`,
+        input,
       ),
     confirmRoomInventory: (locationId: string, input: RoomInventoryConfirmation) =>
       write<RoomInventoryReview>(

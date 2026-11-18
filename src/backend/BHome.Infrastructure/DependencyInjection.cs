@@ -208,7 +208,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PropertyManagement.LocationSetupService>();
         services.AddScoped<BHome.Application.PropertyManagement.AssetInventoryService>();
         services.AddScoped<BHome.Application.PropertyManagement.RoomInventoryReviewService>();
-        services.AddScoped<BHome.Application.PropertyManagement.CommonAssetInventoryReviewService>();
+        services.AddScoped<BHome.Application.Contracts.IHandoverInventory>(p => p.GetRequiredService<BHome.Application.PropertyManagement.RoomInventoryReviewService>());
         services.AddScoped<BHome.Application.PropertyManagement.AssetCountObservationService>();
         services.AddScoped<BHome.Application.PropertyManagement.SetupEvidenceService>();
         services.AddScoped<BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateSyncJob>();
@@ -318,6 +318,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IContractSigningProvider, BHome.Infrastructure.Contracts.ContractSigningRouter>();
         services.AddScoped<BHome.Application.Contracts.IContractWorkflowRepository, BHome.Infrastructure.Contracts.ContractWorkflowRepository>();
         services.AddScoped<BHome.Application.Contracts.IContractHandoverRepository, BHome.Infrastructure.Contracts.ContractHandoverRepository>();
+        services.AddScoped<BHome.Application.Contracts.IHandoverDocumentRenderer, BHome.Infrastructure.Contracts.HandoverPdfRenderer>();
         services.AddOptions<BHome.Infrastructure.Contracts.ContractPdfOptions>().Bind(configuration.GetSection(BHome.Infrastructure.Contracts.ContractPdfOptions.Section))
             .Validate(o => o.IsValid(), "ContractPdf:TemplateId must be an embedded template identifier of at most 80 ASCII letters, digits or hyphens.").ValidateOnStart();
         services.AddScoped<BHome.Application.Contracts.IContractDocumentRenderer, BHome.Infrastructure.Contracts.ContractPdfRenderer>();

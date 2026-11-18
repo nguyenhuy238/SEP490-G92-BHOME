@@ -16,7 +16,7 @@ public sealed record TaskWrite(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TaskTarget? Target = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record TaskTarget(Guid? RoomId = null, Guid? AssetId = null, [StringLength(200)] string? CommonArea = null);
-public sealed record TaskTargetView(Guid? RoomId, Guid? AssetId, string? CommonArea, string Label);
+public sealed record TaskTargetView(Guid? RoomId, Guid? AssetId, string? CommonArea, string Label, Guid? ContractId = null);
 public sealed record TaskTargetOption(Guid Id, string Name, Guid? RoomId, string? CommonArea);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record TaskCreate(Guid LocationId, TaskWrite Work);

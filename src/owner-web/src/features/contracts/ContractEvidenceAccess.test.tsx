@@ -27,6 +27,7 @@ vi.mock('../../../../../packages/client-core/src/useContractHandover', () => ({
         },
       },
       history: [],
+      documents: [],
     },
   }),
 }));

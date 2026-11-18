@@ -123,6 +123,9 @@ it.each([true, false])(
       return original(path, init);
     });
     const view = mount(<WorkOrderDetail id="work" />);
+    expect(
+      mocks.request.mock.calls.some(([path]) => path === '/api/v1/work-orders/work/evidence/proof'),
+    ).toBe(false);
     // Evidence is private: it is fetched only after the Owner explicitly
     // chooses the preview action, and the verified image is rendered in a
     // dialog rather than embedded automatically in the detail page.

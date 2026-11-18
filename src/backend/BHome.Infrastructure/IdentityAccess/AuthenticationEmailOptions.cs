@@ -20,9 +20,18 @@ public sealed class AuthenticationEmailOptions
             uri.Scheme == "bhome" && uri.Host is "reset-password" or "accept-invitation" or "confirm-email" && uri.AbsolutePath is "" or "/") &&
         TrustedOrigins.Contains(uri.GetLeftPart(UriPartial.Authority), StringComparer.OrdinalIgnoreCase);
 
-    public bool Configured(bool development) => ResendCooldownSeconds is >= 30 and <= 3600 &&
-        new[] { WebResetUrl, MobileResetUrl, WebInvitationUrl, MobileInvitationUrl }.All(u => Trusted(u, development));
+    public bool PasswordResetConfigured(bool development) => CallbacksConfigured(WebResetUrl, MobileResetUrl, development);
 
-    public bool VerificationConfigured(bool development) => Configured(development) &&
-        new[] { WebVerificationUrl, MobileVerificationUrl }.All(u => Trusted(u, development));
+    public bool InvitationConfigured(bool development) => CallbacksConfigured(WebInvitationUrl, MobileInvitationUrl, development);
+
+    public bool VerificationConfigured(bool development) => CallbacksConfigured(WebVerificationUrl, MobileVerificationUrl, development);
+
+    public bool Configured(bool development) => PasswordResetConfigured(development) && InvitationConfigured(development);
+
+    public bool AnyConfigured(bool development) => PasswordResetConfigured(development) ||
+        InvitationConfigured(development) || VerificationConfigured(development);
+
+    private bool CallbacksConfigured(string web, string mobile, bool development) =>
+        ResendCooldownSeconds is >= 30 and <= 3600 && Trusted(web, development) &&
+        new Uri(web).Scheme is "https" or "http" && Trusted(mobile, development);
 }

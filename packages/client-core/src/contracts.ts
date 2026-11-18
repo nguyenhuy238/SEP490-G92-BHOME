@@ -160,6 +160,78 @@ export interface HandoverAsset {
   name: string;
   inventoryCondition: string;
   observedCondition: string;
+  configurationItemId?: string | null;
+  configuredQuantity?: number | null;
+  unit?: string | null;
+  trackingMode?: string | null;
+  physicalAssets?: {
+    id: string;
+    version: number;
+    quantity: number;
+    condition: string;
+    status: string;
+  }[];
+  ownerChecked?: boolean;
+  observedQuantity?: number | null;
+  handedOverQuantity?: number | null;
+  goodQuantity?: number | null;
+  wornQuantity?: number | null;
+  damagedQuantity?: number | null;
+  missingQuantity?: number | null;
+  checked?: boolean;
+  notes?: string | null;
+  evidenceIds?: string[];
+  physicalObservations?: {
+    id: string;
+    quantity: number;
+    condition: string;
+    handedOverQuantity?: number | null;
+  }[];
+}
+export interface HandoverInventory {
+  stateToken: string;
+  state: string;
+  noAssetsConfirmed: boolean;
+  groups: HandoverAsset[];
+}
+export interface AssetChangeLine {
+  groupId: string;
+  removedAssetId: string | null;
+  addedAssetId: string | null;
+  addedQuantity: number;
+  withdrawnQuantity: number;
+  condition: string;
+  evidenceIds: string[];
+}
+export interface AssetChange {
+  id: string;
+  version: number;
+  status: string;
+  acknowledgementContractId?: string | null;
+  data: {
+    roomId: string;
+    sourceId: string;
+    kind: string;
+    date: string;
+    reason: string;
+    staffId: string;
+    lines: AssetChangeLine[];
+    assets: HandoverAsset[];
+    parties: { contractId: string; tenantId: string }[];
+    acknowledgements: {
+      contractId: string;
+      tenantId: string;
+      at: string;
+      accepted: boolean;
+      reason: string;
+      actingContractId?: string | null;
+    }[];
+  };
+}
+export interface AssetChangePreparation {
+  inventory: HandoverInventory;
+  sources: { id: string; assetId: string; label: string; workOrderId: string | null }[];
+  baseline: HandoverSnapshot | null;
 }
 export interface HandoverReading {
   id: string;
@@ -180,8 +252,23 @@ export interface HandoverSnapshot {
   electricity: HandoverReading;
   water: HandoverReading;
   evidenceIds: string[];
+  inventoryToken?: string | null;
+  inventoryState?: string | null;
+  noAssetsConfirmed?: boolean;
+  ownerAcceptance?: {
+    version: number;
+    actorId: string;
+    at: string;
+    reason: string;
+    handlingPlan: string;
+  } | null;
+  tenantFeedback?: { actorId: string; at: string; confirmed: boolean; reason: string } | null;
+  missingBaselineReason?: string | null;
+  otherTenantsRemain?: boolean;
+  proposedCompensation?: string | null;
 }
 export interface HandoverView {
+  sourceContractId?: string | null;
   version: number;
   status: string;
   snapshot: HandoverSnapshot;
@@ -201,6 +288,9 @@ export interface HandoverChoices {
   assets: HandoverAsset[];
   readings: HandoverReading[];
   evidence: PreviewDocument[];
+  inventoryToken?: string | null;
+  inventoryState?: string | null;
+  noAssetsConfirmed?: boolean;
 }
 export interface MoveOut {
   id: string;
@@ -233,7 +323,7 @@ export interface FinalInspection {
   version: number;
   baselineContractId: string;
   baselineVersion: number;
-  baseline: HandoverSnapshot;
+  baseline: HandoverSnapshot | null;
   observed: HandoverSnapshot;
   staffId: string;
   inspectedAt: string;
@@ -246,6 +336,10 @@ export interface InspectionPreparation {
   baselineContractId: string | null;
   finalReadings: HandoverReading[];
   otherTenantsRemain: boolean;
+  inventory?: HandoverInventory | null;
+  inspectionGroups?: HandoverAsset[];
+  legacyExceptionReason?: string | null;
+  legacyExceptionRequired?: boolean;
 }
 export interface SettlementSummary {
   approvedDepositOffsets?: string;
@@ -786,6 +880,33 @@ export function contractClient(request: ContractRequest) {
       request<HandoverHistory[]>(root + '/' + id + '/handover/history', { signal }),
     handoverChoices: (id: string, signal?: AbortSignal) =>
       request<HandoverChoices>(root + '/' + id + '/handover/choices', { signal }),
+    handoverDocuments: (id: string, signal?: AbortSignal) =>
+      request<PreviewDocument[]>(`${root}/${id}/handover/documents`, { signal }),
+    handoverDocument: (id: string, documentId: string, signal?: AbortSignal) =>
+      request<Blob>(`${root}/${id}/handover/documents/${documentId}`, { signal }, 'blob'),
+    handoverDocumentBytes: (id: string, documentId: string, signal?: AbortSignal) =>
+      request<Uint8Array>(`${root}/${id}/handover/documents/${documentId}`, { signal }, 'bytes'),
+    assetChanges: (id: string, signal?: AbortSignal) =>
+      request<AssetChange[]>(`${root}/${id}/asset-changes`, { signal }),
+    assetChangePreparation: (id: string, signal?: AbortSignal) =>
+      request<AssetChangePreparation>(`${root}/${id}/asset-changes/preparation`, { signal }),
+    assetChangeEvidence: (id: string, eventId: string, evidenceId: string, signal?: AbortSignal) =>
+      request<Blob>(
+        `${root}/${id}/asset-changes/${eventId}/evidence/${evidenceId}`,
+        { signal },
+        'blob',
+      ),
+    assetChangeEvidenceBytes: (
+      id: string,
+      eventId: string,
+      evidenceId: string,
+      signal?: AbortSignal,
+    ) =>
+      request<Uint8Array>(
+        `${root}/${id}/asset-changes/${eventId}/evidence/${evidenceId}`,
+        { signal },
+        'bytes',
+      ),
     handoverEvidence: (id: string, fileId: string, signal?: AbortSignal) =>
       request<Blob>(root + '/' + id + '/handover/evidence/' + fileId, { signal }, 'blob'),
     handoverEvidenceBytes: (id: string, fileId: string, signal?: AbortSignal) =>
@@ -996,6 +1117,15 @@ export const labels: Record<string, string> = {
   ContractHandoverTenantConfirmed: 'Tenant xác nhận bàn giao',
   ContractHandoverCompleted: 'Staff hoàn tất bàn giao',
   ContractHandoverEvidenceAdded: 'Tải ảnh nhận phòng',
+  MoveInReport: 'Biên bản nhận phòng',
+  AssetChangeReport: 'Biên bản thay đổi tài sản',
+  MoveOutReport: 'Biên bản trả phòng',
+  NotChecked: 'Chưa kiểm kê',
+  PartiallyChecked: 'Kiểm kê chưa đủ',
+  Matched: 'Đã kiểm kê đủ',
+  NeedsReview: 'Cần Owner kiểm tra lại',
+  OwnerExceptionApproved: 'Owner chấp nhận ngoại lệ',
+  OwnerReinspectionRequested: 'Owner yêu cầu kiểm tra lại',
   handover_version_changed:
     'Biên bản đã thay đổi. Tải lại và kiểm tra phiên bản mới trước khi xác nhận.',
   handover_correction_required: 'Staff cần lưu nội dung đã sửa trước khi Tenant xác nhận lại.',
@@ -1004,6 +1134,38 @@ export const labels: Record<string, string> = {
   confirmed_handover_readings_required:
     'Cần đủ chỉ số điện và nước đã xác nhận, kèm ảnh, đúng phòng và ngày bàn giao.',
   handover_already_confirmed: 'Biên bản đã hoàn tất; nội dung và bằng chứng được giữ nguyên.',
+  handover_asset_inventory_changed:
+    'Tài sản hoặc cấu hình đã thay đổi. Tải lại dữ liệu và kiểm tra phiên bản mới trước khi gửi.',
+  owner_no_assets_confirmation_required:
+    'Owner cần xác nhận rõ phòng không có tài sản trong màn hình kiểm kê.',
+  room_has_asset_requirements_or_inventory:
+    'Phòng còn yêu cầu hoặc tài sản thực tế; cần kiểm kê từng nhóm.',
+  invalid_handover_quantities:
+    'Kiểm tra số lượng: tổng tốt, hao mòn và hỏng phải bằng thực tế; số giao không vượt thực tế.',
+  handover_checklist_incomplete: 'Cần đánh dấu đã kiểm tra tất cả nhóm tài sản.',
+  asset_group_evidence_required: 'Nhóm tài sản có vấn đề cần ảnh minh chứng riêng.',
+  asset_group_evidence_must_be_separate:
+    'Chọn ảnh riêng cho nhóm tài sản có vấn đề; không dùng lại ảnh toàn cảnh phòng.',
+  withheld_asset_reason_required: 'Nhập lý do khi số lượng bàn giao nhỏ hơn số lượng thực tế.',
+  owner_handover_exception_required:
+    'Owner cần duyệt ngoại lệ của phiên bản hiện tại trước khi hoàn tất.',
+  owner_legacy_handover_exception_required:
+    'Owner cần duyệt ngoại lệ thiếu dữ liệu nhận phòng cho hợp đồng cũ.',
+  tenant_inspection_response_or_owner_exception_required:
+    'Chờ phản hồi Tenant hoặc Owner ghi rõ căn cứ xử lý ngoại lệ.',
+  owner_room_disposition_required: 'Owner cần chọn phòng được cho thuê lại hay cần bảo trì.',
+  asset_change_source_already_used:
+    'Nguồn thay đổi này đã có biên bản. Tải lại lịch sử để xem và xác nhận.',
+  asset_change_inventory_invalid:
+    'Số lượng bàn giao thay đổi vượt tài sản thực tế hoặc đã được ghi nhận trước đó.',
+  verified_replacement_work_order_required:
+    'Thay thế cần Work Order BF-07 đã xác minh đúng tài sản.',
+  asset_replacement_relationship_required:
+    'Cần thao tác thay thế trong quản lý tài sản để liên kết tài sản cũ và mới.',
+  physical_asset_quantities_required:
+    'Nhóm có nhiều tài sản vật lý: nhập số lượng và hiện trạng của từng tài sản.',
+  renewal_inherits_handover_baseline:
+    'Hợp đồng gia hạn dùng lại baseline bàn giao trước đó; không lập nhận phòng vật lý lần nữa.',
   invalid_handover_input:
     'Kiểm tra ngày bàn giao, hiện trạng, chìa khóa, tài sản và từ 1 đến 5 ảnh.',
   handover_evidence_integrity_failed:

@@ -1,14 +1,13 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Image, Platform, View } from 'react-native';
+import { AppState, Image, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File, Paths } from 'expo-file-system';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import { Button, SegmentedButtons, Text } from 'react-native-paper';
+import { Button, Text } from 'react-native-paper';
 import { styles } from './Controls';
-import { ownCapture } from '../lib/captureFiles';
-import { captureLensOptions } from '../lib/captureLenses';
-import { DocumentCameraView } from './DocumentCameraView';
+import { prepareCapture } from '../lib/prepareCapture';
+import { LiveCaptureCamera } from './LiveCaptureCamera';
+import { DocumentCameraGuide, DocumentCameraView } from './DocumentCameraView';
 import { MeterCameraView } from './MeterCameraView';
 import { TaskEvidenceCameraView } from './TaskEvidenceCameraView';
 import { useFocusEffect } from 'expo-router';
@@ -62,21 +61,21 @@ export function CameraCapture({
   const [permission, requestPermission] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
   const [open, setOpen] = useState(false);
+  const [session, setSession] = useState(0);
   const [evidenceVisible, setEvidenceVisible] = useState(false);
   const [ready, setReady] = useState(false);
   const [working, setWorking] = useState(false);
   const [preview, setPreview] = useState('');
   const [error, setError] = useFeedbackState();
-  const [lens, setLens] = useState('');
-  const [lenses, setLenses] = useState<{ id: string; label: string }[]>([]);
-  const [zoom, setZoom] = useState(0);
-  const [cameraGeneration, setCameraGeneration] = useState(0);
   const files = useRef(new Set<string>());
   const pending = useRef('');
   const alive = useRef(true);
   const generation = useRef(0);
   const workingLock = useRef(false);
   const permissionLock = useRef(false);
+  const readyAccess = useRef(false);
+  const active = useRef(true);
+  const pendingOpen = useRef<number | null>(null);
   const permissionAccess = useRef({ permission, requestPermission });
   const clearCallback = useRef(onPhotoCleared);
   useEffect(() => {
@@ -95,14 +94,15 @@ export function CameraCapture({
   useFocusEffect(
     useCallback(
       () => () => {
-        if (presentation !== 'meter' && presentation !== 'evidence') return;
         generation.current++;
+        readyAccess.current = false;
+        setReady(false);
         clearFiles();
         setPreview('');
         setOpen(false);
         setEvidenceVisible(false);
       },
-      [clearFiles, presentation],
+      [clearFiles],
     ),
   );
   const openCamera = useCallback(async () => {
@@ -112,6 +112,7 @@ export function CameraCapture({
     clearFiles();
     setPreview('');
     setError('');
+    readyAccess.current = false;
     setReady(false);
     if (presentation === 'evidence') setEvidenceVisible(true);
     setRequestingPermission(true);
@@ -127,11 +128,9 @@ export function CameraCapture({
         );
         return;
       }
-      setLens('');
-      setLenses([]);
-      setZoom(0);
-      setCameraGeneration((value) => value + 1);
-      setOpen(true);
+      setSession(epoch);
+      if (active.current) setOpen(true);
+      else pendingOpen.current = epoch;
     } catch {
       if (alive.current && epoch === generation.current)
         setError(
@@ -147,8 +146,17 @@ export function CameraCapture({
   useEffect(() => {
     alive.current = true;
     const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') {
+      active.current = state === 'active';
+      if (state === 'active' && pendingOpen.current === generation.current) {
+        pendingOpen.current = null;
+        setOpen(true);
+      }
+      // Permission dialogs can inactivate the app before a camera has opened.
+      if (state === 'background' || (state !== 'active' && !permissionLock.current)) {
         generation.current++;
+        pendingOpen.current = null;
+        readyAccess.current = false;
+        setReady(false);
         clearFiles();
         setPreview('');
         setOpen(false);
@@ -172,7 +180,7 @@ export function CameraCapture({
     return () => clearTimeout(start);
   }, [presentation, openCamera, autoOpen]);
   const take = async () => {
-    if (!camera.current || workingLock.current || disabled || !ready) return;
+    if (!camera.current || workingLock.current || disabled || !readyAccess.current) return;
     workingLock.current = true;
     setWorking(true);
     setError('');
@@ -182,34 +190,17 @@ export function CameraCapture({
       // Native image reference avoids saving an original full-resolution identity photo to disk.
       const picture = await camera.current.takePictureAsync({ pictureRef: true });
       try {
-        const manipulator = ImageManipulator.manipulate(picture);
-        try {
-          manipulator.resize(
-            picture.width >= picture.height
-              ? { width: Math.min(1600, picture.width) }
-              : { height: Math.min(1600, picture.height) },
-          );
-          const image = await manipulator.renderAsync();
-          try {
-            const output = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.85 });
-            saved = output.uri;
-            files.current.add(saved);
-            const owned = ownCapture(saved);
-            files.current.delete(saved);
-            saved = owned;
-            files.current.add(saved);
-          } finally {
-            image.release();
-          }
-        } finally {
-          manipulator.release();
-        }
+        saved = await prepareCapture(
+          picture,
+          () => alive.current && epoch === generation.current,
+          presentation === 'evidence',
+        );
+        files.current.add(saved);
       } finally {
         picture.release();
       }
       if (epoch !== generation.current || !alive.current) return;
       const file = new File(saved);
-      if (file.size > 5 * 1024 * 1024) throw new Error('oversized');
       if (reviewBeforeSubmit || presentation === 'evidence') {
         pending.current = saved;
         setPreview(saved);
@@ -218,15 +209,16 @@ export function CameraCapture({
         return;
       }
       const bytes = await file.bytes();
-      setOpen(false);
-      if (retainPreview) setPreview(saved);
       try {
+        if (!alive.current || epoch !== generation.current) return;
+        setOpen(false);
+        if (retainPreview) setPreview(saved);
         await onCapture(bytes);
       } finally {
         bytes.fill(0);
       }
     } catch {
-      if (alive.current)
+      if (alive.current && epoch === generation.current)
         setError(
           presentation === 'meter' || presentation === 'evidence'
             ? 'Không xử lý được ảnh. Hãy chụp lại.'
@@ -266,7 +258,7 @@ export function CameraCapture({
         bytes.fill(0);
       }
     } catch {
-      if (alive.current)
+      if (alive.current && epoch === generation.current)
         setError(
           presentation === 'evidence'
             ? 'Chưa tải được ảnh. Hãy thử lại.'
@@ -286,18 +278,55 @@ export function CameraCapture({
         files.current.delete(uri);
         if (pending.current === uri) pending.current = '';
       }
-      if (alive.current) {
-        setWorking(false);
+      if (alive.current && epoch === generation.current) {
         if (!keep) setPreview('');
         if (presentation === 'evidence' && confirmed) setEvidenceVisible(false);
       }
+      if (alive.current) setWorking(false);
       workingLock.current = false;
     }
+  };
+  const liveCamera =
+    open && !preview ? (
+      <LiveCaptureCamera
+        key={session}
+        camera={camera}
+        disabled={disabled || working}
+        dark={presentation === 'document'}
+        showControls={presentation !== 'evidence'}
+        onReady={(value) => {
+          if (!alive.current || generation.current !== session) return;
+          readyAccess.current = value;
+          setReady(value);
+        }}
+        onError={() => {
+          if (!alive.current || generation.current !== session) return;
+          setOpen(false);
+          setError('Không mở được camera. Hãy thử lại.');
+        }}
+      >
+        {presentation === 'document' && <DocumentCameraGuide />}
+      </LiveCaptureCamera>
+    ) : null;
+  const closeCamera = () => {
+    generation.current++;
+    pendingOpen.current = null;
+    readyAccess.current = false;
+    setReady(false);
+    setOpen(false);
+  };
+  const retake = () => {
+    closeCamera();
+    setSession(generation.current);
+    clearFiles();
+    setPreview('');
+    setError('');
+    setOpen(true);
   };
   if (presentation === 'evidence') {
     const close = () => {
       if (workingLock.current) return;
-      generation.current++;
+      closeCamera();
       clearFiles();
       setPreview('');
       setReady(false);
@@ -316,24 +345,7 @@ export function CameraCapture({
         </Button>
         <TaskEvidenceCameraView
           visible={evidenceVisible}
-          camera={
-            evidenceVisible && open && !preview ? (
-              <CameraView
-                ref={camera}
-                key={cameraGeneration}
-                style={{ flex: 1 }}
-                facing="back"
-                mode="picture"
-                autofocus="off"
-                onCameraReady={() => setReady(true)}
-                onMountError={() => {
-                  setOpen(false);
-                  setReady(false);
-                  setError('Không mở được camera. Hãy thử lại.');
-                }}
-              />
-            ) : null
-          }
+          camera={liveCamera}
           preview={preview}
           working={working || requestingPermission}
           ready={ready}
@@ -344,13 +356,7 @@ export function CameraCapture({
           onTake={() => void take()}
           onUse={() => void submitPending()}
           onOpen={() => void openCamera()}
-          onRetake={() => {
-            clearFiles();
-            setPreview('');
-            setReady(false);
-            setError('');
-            setOpen(true);
-          }}
+          onRetake={retake}
         />
       </>
     );
@@ -358,24 +364,7 @@ export function CameraCapture({
   if (presentation === 'meter')
     return (
       <MeterCameraView
-        camera={
-          open ? (
-            <CameraView
-              ref={camera}
-              key={cameraGeneration}
-              style={{ flex: 1 }}
-              facing="back"
-              mode="picture"
-              autofocus="off"
-              onCameraReady={() => setReady(true)}
-              onMountError={() => {
-                setOpen(false);
-                setReady(false);
-                setError('Không mở được camera. Hãy thử lại.');
-              }}
-            />
-          ) : null
-        }
+        camera={liveCamera}
         label={label}
         step={meterStep}
         preview={preview}
@@ -386,37 +375,15 @@ export function CameraCapture({
         error={error}
         onOpen={() => void openCamera()}
         onTake={() => void take()}
-        onClose={() => setOpen(false)}
+        onClose={closeCamera}
         onUse={() => void submitPending()}
-        onRetake={() => {
-          clearFiles();
-          setPreview('');
-          setReady(false);
-          setOpen(true);
-        }}
+        onRetake={retake}
       />
     );
   if (presentation === 'document')
     return (
       <DocumentCameraView
-        camera={
-          open && !preview ? (
-            <CameraView
-              ref={camera}
-              key={cameraGeneration}
-              style={{ flex: 1 }}
-              facing="back"
-              mode="picture"
-              autofocus="off"
-              onCameraReady={() => setReady(true)}
-              onMountError={() => {
-                setOpen(false);
-                setReady(false);
-                setError('Không mở được camera. Hãy thử lại hoặc nhập thủ công.');
-              }}
-            />
-          ) : null
-        }
+        camera={liveCamera}
         preview={preview}
         documentSide={documentSide}
         working={working}
@@ -426,14 +393,10 @@ export function CameraCapture({
         error={error}
         onTake={() => void take()}
         onUse={() => void submitPending()}
-        onRetake={() => {
-          clearFiles();
-          setPreview('');
-          setReady(false);
-          setOpen(true);
-        }}
+        onRetake={retake}
         onRequestPermission={() => void openCamera()}
         onManual={() => {
+          closeCamera();
           clearFiles();
           onManual?.();
         }}
@@ -451,30 +414,8 @@ export function CameraCapture({
       </Button>
       {open && (
         <>
-          <View style={{ height: 300, overflow: 'hidden', borderRadius: 12 }}>
-            <CameraView
-              key={`${cameraGeneration}:${lens || 'auto'}`}
-              ref={camera}
-              style={{ height: 300 }}
-              facing="back"
-              mode="picture"
-              // SDK 58: 'off' means CONTINUOUS auto focus; 'on' focuses once then locks.
-              autofocus="off"
-              selectedLens={Platform.OS === 'ios' && lens ? lens : undefined}
-              zoom={zoom}
-              onAvailableLensesChanged={
-                Platform.OS === 'ios'
-                  ? ({ lenses: reported }) => {
-                      setLenses(captureLensOptions(reported));
-                    }
-                  : undefined
-              }
-              onCameraReady={() => setReady(true)}
-              onMountError={() => {
-                setReady(false);
-                setError('Không mở được camera. Hãy thử lấy nét lại hoặc đóng rồi mở camera.');
-              }}
-            />
+          <View style={{ height: 460, overflow: 'hidden', borderRadius: 12 }}>
+            {liveCamera}
             {documentSide && (
               <View
                 pointerEvents="none"
@@ -503,70 +444,13 @@ export function CameraCapture({
             <Button mode="contained" disabled={!ready || working} onPress={() => void take()}>
               Chụp ảnh
             </Button>
-            <Button disabled={working} onPress={() => setOpen(false)}>
+            <Button disabled={working} onPress={closeCamera}>
               Hủy chụp
             </Button>
           </View>
           <Text>
             {captureInstruction ??
               'Giữ giấy tờ hoặc mặt số ở giữa khung, đủ sáng. Di chuyển chậm và chờ chữ rõ rồi chụp.'}
-          </Text>
-          <Text>
-            Nếu đưa gần bị mờ: lùi máy đến khi chữ rõ, rồi dùng Phóng thêm. Không áp sát ống kính.
-          </Text>
-          {Platform.OS === 'ios' && lenses.length > 0 && (
-            <View style={styles.row}>
-              <Text variant="titleSmall">Ống kính</Text>
-              <SegmentedButtons
-                value={lens}
-                onValueChange={(value) => {
-                  if (value === lens || working) return;
-                  setReady(false);
-                  setError('');
-                  setZoom(0);
-                  setLens(value);
-                }}
-                buttons={[
-                  { value: '', label: 'Tự động', disabled: working },
-                  ...lenses.map((option) => ({
-                    value: option.id,
-                    label: option.id.includes('UltraWide') ? 'Siêu rộng' : 'Chính',
-                    accessibilityLabel: option.label,
-                    disabled: working,
-                  })),
-                ]}
-              />
-              {lens.includes('UltraWide') && (
-                <Text>Chụp gần còn tùy khả năng camera. Nếu vẫn mờ, hãy lùi máy.</Text>
-              )}
-            </View>
-          )}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Button
-              disabled={!ready || working || zoom <= 0}
-              onPress={() => setZoom((value) => Math.max(0, value - 0.02))}
-            >
-              Thu bớt
-            </Button>
-            <Button
-              disabled={!ready || working || zoom >= 0.12}
-              onPress={() => setZoom((value) => Math.min(0.12, value + 0.02))}
-            >
-              Phóng thêm
-            </Button>
-            <Button
-              disabled={working}
-              onPress={() => {
-                setReady(false);
-                setError('');
-                setCameraGeneration((value) => value + 1);
-              }}
-            >
-              Lấy nét lại
-            </Button>
-          </View>
-          <Text style={styles.note}>
-            Phóng ảnh giúp ngắm từ xa hơn; không khôi phục chi tiết của ảnh đã mờ.
           </Text>
         </>
       )}
@@ -589,15 +473,7 @@ export function CameraCapture({
           >
             {reviewActionLabel}
           </Button>
-          <Button
-            disabled={disabled || working}
-            onPress={() => {
-              clearFiles();
-              setPreview('');
-              setReady(false);
-              setOpen(true);
-            }}
-          >
+          <Button disabled={disabled || working} onPress={retake}>
             Chụp lại
           </Button>
           <Button

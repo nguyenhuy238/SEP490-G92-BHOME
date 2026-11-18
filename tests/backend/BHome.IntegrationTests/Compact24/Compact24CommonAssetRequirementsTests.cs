@@ -65,7 +65,7 @@ public sealed partial class Compact24OwnerSetupTests
         var items = new[] { new SharedAssetItem(published.Id, published.Version, 2, true, "Serialized") };
         var room = SharedInput("room-type-templates") with { Data = JsonSerializer.SerializeToElement(new { capacity = 2, area = 20, amenities = Array.Empty<string>(), referenceRent = 100, assetItems = items }, new JsonSerializerOptions(JsonSerializerDefaults.Web)) };
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/shared-configuration/room-type-templates", room)).StatusCode);
-        var generic = SharedInput("asset-templates") with { Data = JsonSerializer.SerializeToElement(new SharedAssetData(items), new JsonSerializerOptions(JsonSerializerDefaults.Web)) };
+        var generic = new SharedWrite("Synthetic shared assets", "Package", JsonSerializer.SerializeToElement(new SharedAssetData(items), new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         var package = await Read<SharedDocument>(await owner.PostAsJsonAsync("/api/v1/shared-configuration/asset-templates", generic));
         Assert.Equal("Location", package.Data.GetProperty("items")[0].GetProperty("catalog").GetProperty("scope").GetString());
     }

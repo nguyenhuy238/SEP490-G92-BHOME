@@ -60,7 +60,13 @@ const mount = (
       api={api}
       id={id}
       moveOut={{ status: 'Inspected', version: 5 } as MoveOut}
-      inspection={{ version: 3, ownerDecision: null } as unknown as FinalInspection}
+      inspection={
+        {
+          version: 3,
+          ownerDecision: null,
+          observed: { tenantFeedback: { confirmed: true } },
+        } as unknown as FinalInspection
+      }
       summary={summary}
       onChanged={state.changed}
     />,
@@ -97,6 +103,8 @@ it('uses the inspected version, explicit no-charge decision, idempotency and a s
     confirmed: true,
     reason: 'Đối chiếu biên bản',
     noAdditionalCharges: false,
+    tenantException: false,
+    tenantExceptionReason: null,
   });
   expect(init.headers['Idempotency-Key']).toBeTruthy();
   finish();

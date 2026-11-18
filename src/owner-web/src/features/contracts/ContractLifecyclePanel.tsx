@@ -35,6 +35,8 @@ import { ChartCard } from '../../components/common/PortalUI';
 import { RefundPanel } from '../payments/RefundPanel';
 import { DepositDeductionsPanel } from './DepositDeductionsPanel';
 import { SettlementReceivablesPanel } from './SettlementReceivablesPanel';
+import { handoverAssetSummary } from '../../../../../packages/client-core/src/handoverForm';
+import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
 
 export function ContractLifecyclePanel({
   api,
@@ -56,6 +58,7 @@ export function ContractLifecyclePanel({
         query.queryKey[2] === 'SecurityDeposit' && query.queryKey[3] === contract.id,
     });
     q.reload();
+    onChanged();
   }
   const staff = useQuery({
     queryKey: ['inspection-staff', contract.locationId],
@@ -65,6 +68,9 @@ export function ContractLifecyclePanel({
   const [reason, setReason] = useState(''),
     [schedule, setSchedule] = useState(''),
     [assignee, setAssignee] = useState('');
+  const [exceptionInspection, setExceptionInspection] = useState<string | null>(null),
+    [exceptionReason, setExceptionReason] = useState(''),
+    [disposition, setDisposition] = useState('');
   const [reviewedReference, setReviewedReference] = useState<string | null>(null),
     [noChargesInspection, setNoChargesInspection] = useState<string | null>(null);
   const [busy, setBusy] = useState(false),
@@ -86,7 +92,6 @@ export function ContractLifecyclePanel({
       setReason('');
       setNotice('Đã lưu tại máy chủ.');
       await reload();
-      onChanged();
     } catch (e) {
       setError(contractError(e));
     } finally {
@@ -97,6 +102,7 @@ export function ContractLifecyclePanel({
   const inspection = q.inspections[0],
     summary = q.summary;
   const inspectionKey = inspection ? `${contract.id}:${inspection.id}:${inspection.version}` : null;
+  const tenantException = !!inspectionKey && exceptionInspection === inspectionKey;
   const noCharges = !!inspectionKey && noChargesInspection === inspectionKey;
   const checked = !!summary && reviewedReference === summary.reference;
   const money = (v: string | null) => (v === null ? 'Chờ xác minh' : formatContractMoney(v));
@@ -183,26 +189,30 @@ export function ContractLifecyclePanel({
               <TableBody>
                 <TableRow>
                   <TableCell>Phòng</TableCell>
-                  <TableCell>{i.baseline.roomCondition}</TableCell>
+                  <TableCell>{i.baseline?.roomCondition ?? 'Không có dữ liệu ban đầu'}</TableCell>
                   <TableCell>{i.observed.roomCondition}</TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell>Chìa khóa / quyền truy cập</TableCell>
-                  <TableCell>{i.baseline.keysAndAccess}</TableCell>
+                  <TableCell>{i.baseline?.keysAndAccess ?? 'Chưa rõ'}</TableCell>
                   <TableCell>{i.observed.keysAndAccess}</TableCell>
                 </TableRow>
                 {i.observed.assets.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell>{a.name}</TableCell>
                     <TableCell>
-                      {i.baseline.assets.find((b) => b.id === a.id)?.observedCondition}
+                      {i.baseline?.assets.find((b) => b.id === a.id)?.observedCondition ??
+                        'Chưa rõ'}{' '}
+                      · Số giao:{' '}
+                      {i.baseline?.assets.find((b) => b.id === a.id)?.handedOverQuantity ??
+                        'chưa rõ'}
                     </TableCell>
-                    <TableCell>{a.observedCondition}</TableCell>
+                    <TableCell>{handoverAssetSummary(a)}</TableCell>
                   </TableRow>
                 ))}
                 <TableRow>
                   <TableCell>Điện</TableCell>
-                  <TableCell>{i.baseline.electricity.value}</TableCell>
+                  <TableCell>{i.baseline?.electricity.value ?? 'Chưa rõ'}</TableCell>
                   <TableCell>
                     {i.observed.electricity.value} ·{' '}
                     {displayContractDate(i.observed.electricity.date)}
@@ -210,7 +220,7 @@ export function ContractLifecyclePanel({
                 </TableRow>
                 <TableRow>
                   <TableCell>Nước</TableCell>
-                  <TableCell>{i.baseline.water.value}</TableCell>
+                  <TableCell>{i.baseline?.water.value ?? 'Chưa rõ'}</TableCell>
                   <TableCell>
                     {i.observed.water.value} · {displayContractDate(i.observed.water.date)}
                   </TableCell>
@@ -218,6 +228,43 @@ export function ContractLifecyclePanel({
               </TableBody>
             </Table>
             <Typography>{i.observed.notes}</Typography>
+            {i.observed.missingBaselineReason && (
+              <Alert severity="warning">
+                Giới hạn dữ liệu: {i.observed.missingBaselineReason}. Không suy đoán hiện trạng ban
+                đầu.
+              </Alert>
+            )}
+            <Typography>
+              Tenant:{' '}
+              {i.observed.tenantFeedback
+                ? `${i.observed.tenantFeedback.confirmed ? 'Đã xác nhận hiện trạng' : 'Không đồng ý'} · ${i.observed.tenantFeedback.reason}`
+                : 'Chưa phản hồi'}
+            </Typography>
+            {i.observed.proposedCompensation && (
+              <Alert severity="info">
+                Đề xuất của Staff, chưa phải khoản phải thu: {i.observed.proposedCompensation}
+              </Alert>
+            )}
+            {i.observed.evidenceIds.map((fileId, n) => (
+              <PrivateEvidenceViewer
+                key={fileId}
+                label={`Ảnh trả phòng v${i.version} · ${n + 1}`}
+                filename="tra-phong.jpg"
+                fetchBlob={(signal) => api.evidence(contract.id, fileId, signal)}
+                errorMessage={contractError}
+              />
+            ))}
+            {i.observed.assets.flatMap((a) =>
+              (a.evidenceIds ?? []).map((fileId, n) => (
+                <PrivateEvidenceViewer
+                  key={`${a.id}-${fileId}`}
+                  label={`${a.name} · Ảnh v${i.version} · ${n + 1}`}
+                  filename="tai-san-tra-phong.jpg"
+                  fetchBlob={(signal) => api.evidence(contract.id, fileId, signal)}
+                  errorMessage={contractError}
+                />
+              )),
+            )}
             <Typography>
               {i.ownerDecision === 'Confirmed'
                 ? 'Owner đã xác nhận'
@@ -292,7 +339,6 @@ export function ContractLifecyclePanel({
                 summary={summary}
                 saved={async () => {
                   await reload();
-                  onChanged();
                 }}
               />
             )}
@@ -333,8 +379,46 @@ export function ContractLifecyclePanel({
               onChange={(e) => setReason(e.target.value)}
               slotProps={{ htmlInput: { maxLength: 2000 } }}
             />
+            {q.preparation?.legacyExceptionRequired &&
+              !q.preparation.legacyExceptionReason &&
+              !inspection && (
+                <>
+                  <Alert severity="warning">
+                    Hợp đồng cũ chưa có biên bản nhận phòng. Ngoại lệ chỉ cho phép kiểm tra hiện
+                    trạng; không tạo dữ liệu bàn giao trong quá khứ.
+                  </Alert>
+                  <Button
+                    disabled={busy || !reason.trim()}
+                    onClick={() => void save('move-out/legacy-baseline-exception', { reason })}
+                  >
+                    Duyệt ngoại lệ thiếu baseline với căn cứ trên
+                  </Button>
+                </>
+              )}
             {inspection && !inspection.ownerDecision && moveOut.status === 'Inspected' && (
               <>
+                {inspection.observed.tenantFeedback?.confirmed !== true && (
+                  <>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={tenantException}
+                          onChange={(_, value) =>
+                            setExceptionInspection(value ? inspectionKey : null)
+                          }
+                        />
+                      }
+                      label="Owner xử lý ngoại lệ Tenant chưa phản hồi hoặc không đồng ý"
+                    />
+                    <TextField
+                      label="Căn cứ xử lý ngoại lệ phản hồi Tenant"
+                      value={exceptionReason}
+                      onChange={(e) => setExceptionReason(e.target.value)}
+                      multiline
+                      disabled={busy}
+                    />
+                  </>
+                )}
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -347,13 +431,20 @@ export function ContractLifecyclePanel({
                   label="Đã đối chiếu: không phát sinh phí bổ sung hoặc thiệt hại cần thu"
                 />
                 <Button
-                  disabled={busy || !reason.trim()}
+                  disabled={
+                    busy ||
+                    !reason.trim() ||
+                    (inspection.observed.tenantFeedback?.confirmed !== true &&
+                      (!tenantException || !exceptionReason.trim()))
+                  }
                   onClick={() =>
                     void save('move-out/inspection-review', {
                       version: inspection.version,
                       confirmed: true,
                       reason,
                       noAdditionalCharges: noCharges,
+                      tenantException,
+                      tenantExceptionReason: exceptionReason,
                     })
                   }
                 >
@@ -370,6 +461,36 @@ export function ContractLifecyclePanel({
                   }
                 >
                   Yêu cầu kiểm tra lại
+                </Button>
+              </>
+            )}
+            {inspection?.ownerDecision === 'Confirmed' && (
+              <>
+                <Alert severity="info">
+                  Hoàn tất bàn giao vật lý độc lập với quyết toán. Phòng có Tenant khác sẽ tiếp tục
+                  Đang thuê.
+                </Alert>
+                <TextField
+                  select
+                  label="Trạng thái phòng nếu không còn Tenant"
+                  value={disposition}
+                  onChange={(e) => setDisposition(e.target.value)}
+                  disabled={busy}
+                >
+                  <MenuItem value="Available">Có thể cho thuê lại</MenuItem>
+                  <MenuItem value="Unavailable">Chưa cho thuê · cần bảo trì / kiểm tra</MenuItem>
+                </TextField>
+                <Button
+                  variant="contained"
+                  disabled={busy || !disposition}
+                  onClick={() =>
+                    void save('move-out/complete', {
+                      actualEndDate: inspection.observed.date,
+                      roomDisposition: disposition,
+                    })
+                  }
+                >
+                  Hoàn tất bàn giao trả phòng và lưu PDF
                 </Button>
               </>
             )}

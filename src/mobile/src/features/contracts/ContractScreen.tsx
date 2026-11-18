@@ -289,7 +289,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         role={role}
         actorId={session.userId}
         initialSection={
-          ['Tenant', 'Owner'].includes(role) &&
+          ['Tenant', 'Owner', 'Staff'].includes(role) &&
           contractSections.some((item) => item.id === params.section)
             ? (params.section as ContractSection)
             : 'overview'

@@ -49,7 +49,7 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
         task.Result, task.Version, task.VerifiedByUserId, task.VerifiedAt, task.CreatedAt, task.UpdatedAt,
         TargetView(task));
     public static TaskTargetView? TargetView(OperationalTask task) => task.TargetLabel is null ? null :
-        new(task.TargetRoomId, task.TargetAssetId, task.TargetCommonArea, task.TargetLabel);
+        new(task.TargetRoomId, task.TargetAssetId, task.TargetCommonArea, task.TargetLabel, task.ContractId);
     private TaskView CurrentView(OperationalTask task, TaskResponsibility? responsible) => View(task, responsible) with { IsOverdue = task.IsOverdue(Now) };
 
     public async Task<TaskPage<TaskView>> ListAsync(TaskQuery query, CancellationToken t)
@@ -185,6 +185,8 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
             throw OperationalTaskException.Invalid("task_note_required");
         return MutateAsync(id, input.Version, key, action, input, async (task, responsible) =>
         {
+            if (task.ContractId is not null && action is "submit" or "verify" or "cancel")
+                throw OperationalTaskException.Conflict("contract_handover_workflow_required");
             if (action == "assign")
             {
                 if (task.Status is MeterTaskStatus.Completed or MeterTaskStatus.Cancelled) throw OperationalTaskException.Conflict("task_closed");

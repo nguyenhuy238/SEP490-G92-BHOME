@@ -29,7 +29,7 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
     public async Task<TenantInvitationResult> InviteStaffAsync(Guid userId, CancellationToken t)
     {
         if (actor.UserId is null || !actor.IsInRole(Roles.Owner)) throw new NotificationException(403, "invitation_owner_required");
-        if (!delivery.IsAvailable) throw new BHome.Application.Common.IntegrationUnavailableException("Account invitation email is not configured.");
+        if (!delivery.IsAvailableFor("StaffInvitation")) throw new BHome.Application.Common.IntegrationUnavailableException("Account invitation email is not configured.");
         await using var tx = await identity.BeginTransactionAsync(t);
         var user = await security.LockUserAsync(userId, t);
         if (user is null || !user.IsActive || !(await security.RolesAsync(userId, t)).Contains(Roles.Staff)) throw new NotificationException(404, "staff_not_found");
@@ -58,7 +58,7 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
     }
     internal async Task<TenantInvitationResult> InviteApprovedAsync(Guid owner, Guid residentId, TenantInvitationRequest request, CancellationToken t, Guid? dispatchJob = null)
     {
-        if (!delivery.IsAvailable) throw new BHome.Application.Common.IntegrationUnavailableException("Account invitation email is not configured.");
+        if (!delivery.IsAvailableFor("TenantInvitation")) throw new BHome.Application.Common.IntegrationUnavailableException("Account invitation email is not configured.");
         // Co-occupant account invitations are limited to a confirmed, active tenancy; never reserve or activate a room here.
         await using var tx = await identity.BeginTransactionAsync(t);
         if (dispatchJob is { } job)

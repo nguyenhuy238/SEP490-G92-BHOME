@@ -603,6 +603,16 @@ export function RoomInventoryReviewPanel({ locationId, focusRoomId }: { location
                     )}
                   </TableCell>
                   <TableCell align="right">
+                    {room.noAssetsConfirmed && (
+                      <Typography variant="body2">Đã xác nhận không có tài sản bàn giao</Typography>
+                    )}
+                    {room.items.length === 0 && !room.noAssetsConfirmed && (
+                      <RoomNoAssetsConfirmation
+                        locationId={locationId}
+                        roomId={room.roomId}
+                        onChanged={() => void query.refetch()}
+                      />
+                    )}
                     <Button
                       variant="outlined"
                       disabled={busy || query.isFetching}

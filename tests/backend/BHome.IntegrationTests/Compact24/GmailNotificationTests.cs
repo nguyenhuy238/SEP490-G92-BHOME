@@ -144,8 +144,9 @@ public sealed partial class Compact24NotificationMvpTests
     private sealed class SmtpProbe : INotificationChannelProvider
     {
         public ChannelDeliveryException? Failure;
+        public bool Available = true;
         public List<ChannelMessage> Messages { get; } = [];
-        public bool IsConfigured(string channel) => channel == "EMAIL";
+        public bool IsConfigured(string channel) => Available && channel == "EMAIL";
         public bool SupportsIdempotency(string channel) => false;
         public Task<string> SendAsync(ChannelMessage message, CancellationToken t)
         {
