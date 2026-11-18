@@ -39,9 +39,17 @@ public sealed class AnonymousSigningSecurityTests
     public async Task HoldingTenantRejectsOwnerSignatureForDifferentReviewDocument()
     {
         var r = new Rig(); r.Contract.Kind = ContractKind.Holding;
-        r.Contract.Signatures.Add(new ContractSignature { SignerUserId = r.Contract.OwnerSignerId,
-            Status = SignatureStatus.Signed, SnapshotHash = r.Contract.SnapshotHash, SignedAt = r.Time.Now,
-            SourceHash = "DIFFERENT", SignedHash = "OTHER", SignedObjectKey = "test", ProviderReference = "test" });
+        r.Contract.Signatures.Add(new ContractSignature
+        {
+            SignerUserId = r.Contract.OwnerSignerId,
+            Status = SignatureStatus.Signed,
+            SnapshotHash = r.Contract.SnapshotHash,
+            SignedAt = r.Time.Now,
+            SourceHash = "DIFFERENT",
+            SignedHash = "OTHER",
+            SignedObjectKey = "test",
+            ProviderReference = "test"
+        });
         var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.AcceptAsync(
             new(Rig.Token, Rig.Session, r.Invite.DocumentHash, ContractSigningModes.InternalConsent, true,
                 [[new(.1, .1), new(.8, .8)]]), default));
@@ -54,8 +62,16 @@ public sealed class AnonymousSigningSecurityTests
     public void HoldingCannotTreatPendingOrWrongSnapshotAsOwnerSignature()
     {
         var r = new Rig(); r.Contract.Kind = ContractKind.Holding;
-        var s = new ContractSignature { SignerUserId = r.Contract.OwnerSignerId, Status = SignatureStatus.Pending,
-            SnapshotHash = r.Contract.SnapshotHash, SignedAt = r.Time.Now, SignedObjectKey = "test", SignedHash = "test", ProviderReference = "test" };
+        var s = new ContractSignature
+        {
+            SignerUserId = r.Contract.OwnerSignerId,
+            Status = SignatureStatus.Pending,
+            SnapshotHash = r.Contract.SnapshotHash,
+            SignedAt = r.Time.Now,
+            SignedObjectKey = "test",
+            SignedHash = "test",
+            ProviderReference = "test"
+        };
         r.Contract.Signatures.Add(s);
         Assert.False(AnonymousContractSigningService.HoldingOwnerHasSigned(r.Contract));
         s.Status = SignatureStatus.Signed; s.SnapshotHash = "different";

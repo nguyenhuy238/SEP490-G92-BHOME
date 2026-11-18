@@ -38,28 +38,37 @@ internal sealed class HouseholdProfiles(Compact24DbContext db, CaptureScope scop
         query = ids is null ? query.Where(r => r.HouseholdRepresentativeId == representative.Id) : query.Where(r => ids.Contains(r.Id));
         var members = await query.OrderBy(r => r.HouseholdClientKey).ToArrayAsync(t);
         HouseholdRepresentativeView? primary = null;
-        if (!string.IsNullOrWhiteSpace(representative.IdentityData) && representative.IdentityData != "{}") {
+        if (!string.IsNullOrWhiteSpace(representative.IdentityData) && representative.IdentityData != "{}")
+        {
             var bytes = protection.Decrypt(JsonSerializer.Deserialize<EncryptedIdentity>(representative.IdentityData)!, new(representative.OwnerUserId, representative.Id));
-            try {
+            try
+            {
                 var p = JsonSerializer.Deserialize<IdentityConfirmation>(bytes)!;
                 var phone = representative.TenantUserId is { } account ? await db.Users.Where(u => u.Id == account).Select(u => u.PhoneNumber).SingleOrDefaultAsync(t) : null;
-                primary = new(p.FullName,p.DateOfBirth,phone,p.CitizenIdentityNumber is { Length: >=4 } number ? "********"+number[^4..] : null);
-            } finally { CryptographicOperations.ZeroMemory(bytes); }
+                primary = new(p.FullName, p.DateOfBirth, phone, p.CitizenIdentityNumber is { Length: >= 4 } number ? "********" + number[^4..] : null);
+            }
+            finally { CryptographicOperations.ZeroMemory(bytes); }
         }
         var draftId = await db.Set<Contract>().Where(c => c.RepresentativeResidentId == representative.Id && c.Kind == ContractKind.Main && c.Status == ContractStatus.Draft)
             .OrderByDescending(c => c.CreatedAt).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(t);
-        return new(representative.Id, representative.HouseholdVersion, members.Select(r => {
-            if (!string.IsNullOrWhiteSpace(r.HouseholdProfile) && r.HouseholdProfile != "{}") {
+        return new(representative.Id, representative.HouseholdVersion, members.Select(r =>
+        {
+            if (!string.IsNullOrWhiteSpace(r.HouseholdProfile) && r.HouseholdProfile != "{}")
+            {
                 var p = Profile(r); return new HouseholdMemberView(r.Id, p.ClientKey, p.FullName, p.DateOfBirth, p.Relationship, p.Phone, p.CitizenNumber);
             }
-            if (!string.IsNullOrWhiteSpace(r.IdentityData) && r.IdentityData != "{}") {
-                var bytes = protection.Decrypt(JsonSerializer.Deserialize<EncryptedIdentity>(r.IdentityData)!, new(r.OwnerUserId,r.Id));
-                try { var p=JsonSerializer.Deserialize<IdentityConfirmation>(bytes)!;
-                    return new HouseholdMemberView(r.Id,r.Id.ToString("N"),p.FullName,p.DateOfBirth,"Thành viên cùng ở",null,p.CitizenIdentityNumber);
-                } finally { CryptographicOperations.ZeroMemory(bytes); }
+            if (!string.IsNullOrWhiteSpace(r.IdentityData) && r.IdentityData != "{}")
+            {
+                var bytes = protection.Decrypt(JsonSerializer.Deserialize<EncryptedIdentity>(r.IdentityData)!, new(r.OwnerUserId, r.Id));
+                try
+                {
+                    var p = JsonSerializer.Deserialize<IdentityConfirmation>(bytes)!;
+                    return new HouseholdMemberView(r.Id, r.Id.ToString("N"), p.FullName, p.DateOfBirth, "Thành viên cùng ở", null, p.CitizenIdentityNumber);
+                }
+                finally { CryptographicOperations.ZeroMemory(bytes); }
             }
-            return new HouseholdMemberView(r.Id,r.Id.ToString("N"),r.DisplayLabel,default,"Thành viên cùng ở",null,null);
-        }).ToArray(),primary,draftId);
+            return new HouseholdMemberView(r.Id, r.Id.ToString("N"), r.DisplayLabel, default, "Thành viên cùng ở", null, null);
+        }).ToArray(), primary, draftId);
     }
     public async Task<HouseholdView> GetAsync(Guid representative, CancellationToken t) => await Read(await Operator(representative, false, t), null, t);
     public async Task<HouseholdView> ContractAsync(Guid contract, CancellationToken t)
@@ -100,7 +109,8 @@ internal sealed class HouseholdProfiles(Compact24DbContext db, CaptureScope scop
         var representative = await db.Locked<Resident>(id).SingleAsync(t);
         if (representative.RoomId != before.RoomId || representative.OwnerUserId != before.OwnerUserId || representative.VerificationStatus != IdentityVerificationStatus.Verified)
             throw ContractException.Conflict("household_representative_not_verified");
-        if (representative.HouseholdRequestKey == key) {
+        if (representative.HouseholdRequestKey == key)
+        {
             if (representative.HouseholdRequestHash != hash) throw ContractException.Conflict("idempotency_key_reused");
             await tx.CommitAsync(t); return await Read(representative, null, t);
         }
@@ -123,18 +133,32 @@ internal sealed class HouseholdProfiles(Compact24DbContext db, CaptureScope scop
             if (member.ResidentId is { } existing && (resident is null || resident.Id != existing))
                 throw ContractException.Conflict("household_member_mismatch");
             var created = resident is null;
-            resident ??= new Resident { RoomId = room.Id, OwnerUserId = representative.OwnerUserId, ResidentType = ResidentType.CoOccupant,
-                DisplayLabel = "Thành viên hộ gia đình", HouseholdRepresentativeId = id, HouseholdClientKey = member.ClientKey };
-            if (!string.IsNullOrWhiteSpace(member.CitizenNumber)) {
+            resident ??= new Resident
+            {
+                RoomId = room.Id,
+                OwnerUserId = representative.OwnerUserId,
+                ResidentType = ResidentType.CoOccupant,
+                DisplayLabel = "Thành viên hộ gia đình",
+                HouseholdRepresentativeId = id,
+                HouseholdClientKey = member.ClientKey
+            };
+            if (!string.IsNullOrWhiteSpace(member.CitizenNumber))
+            {
                 var index = protection.CreateMatchIndex(member.CitizenNumber.Trim(), resident.OwnerUserId);
                 var digests = protection.CreateMatchIndexes(member.CitizenNumber.Trim(), resident.OwnerUserId).Select(i => i.Digest).ToArray();
                 if (await db.Set<Resident>().AnyAsync(r => r.Id != resident.Id && r.IdentityHmac != null && digests.Contains(r.IdentityHmac), t))
                     throw ContractException.Conflict("duplicate_or_conflicting_record");
                 resident.IdentityHmac = index.Digest; resident.HmacKeyVersion = index.KeyVersion;
-            } else { resident.IdentityHmac = null; resident.HmacKeyVersion = null; }
-            var normalized = member with { FullName = member.FullName.Trim().Normalize(), Relationship = member.Relationship.Trim(),
+            }
+            else { resident.IdentityHmac = null; resident.HmacKeyVersion = null; }
+            var normalized = member with
+            {
+                FullName = member.FullName.Trim().Normalize(),
+                Relationship = member.Relationship.Trim(),
                 Phone = string.IsNullOrWhiteSpace(member.Phone) ? null : ContactPhone.Normalize(member.Phone),
-                CitizenNumber = string.IsNullOrWhiteSpace(member.CitizenNumber) ? null : member.CitizenNumber.Trim(), ResidentId = resident.Id };
+                CitizenNumber = string.IsNullOrWhiteSpace(member.CitizenNumber) ? null : member.CitizenNumber.Trim(),
+                ResidentId = resident.Id
+            };
             var bytes = JsonSerializer.SerializeToUtf8Bytes(normalized);
             try { resident.HouseholdProfile = JsonSerializer.Serialize(protection.Encrypt(bytes, new(resident.OwnerUserId, resident.Id))); }
             finally { CryptographicOperations.ZeroMemory(bytes); }
@@ -142,25 +166,33 @@ internal sealed class HouseholdProfiles(Compact24DbContext db, CaptureScope scop
             if (created) db.Add(resident);
             keep.Add(resident.Id);
         }
-        foreach (var removed in previous.Where(r => !keep.Contains(r.Id))) {
+        foreach (var removed in previous.Where(r => !keep.Contains(r.Id)))
+        {
             removed.HouseholdRepresentativeId = null;
-            if (removed.VerificationStatus != IdentityVerificationStatus.Verified && (removed.IdentityData == "{}" || string.IsNullOrWhiteSpace(removed.IdentityData))) {
+            if (removed.VerificationStatus != IdentityVerificationStatus.Verified && (removed.IdentityData == "{}" || string.IsNullOrWhiteSpace(removed.IdentityData)))
+            {
                 removed.IdentityHmac = null; removed.HmacKeyVersion = null;
             }
         }
         // An unsigned shared Main draft follows roster edits atomically. Old previews become stale;
         // signatures/issued invitations are never modified and have already been rejected above.
-        foreach (var draft in bound) {
+        foreach (var draft in bound)
+        {
             var state = drafts.Unprotect(draft);
             var ids = new[] { id }.Concat(keep.Order()).ToArray();
             state = state with { Input = state.Input with { ResidentIds = ids, ExpectedVersion = draft.DraftVersion + 1 } };
             foreach (var removed in draft.Residents.Where(r => !ids.Contains(r.ResidentId)).ToArray()) draft.Residents.Remove(removed);
             foreach (var resident in ids.Where(resident => draft.Residents.All(r => r.ResidentId != resident)))
-                draft.Residents.Add(new ContractResident { ContractId = draft.Id, ResidentId = resident,
-                    Role = resident == id ? ResidentType.Representative : ResidentType.CoOccupant, ResidenceFrom = draft.StartDate });
+                draft.Residents.Add(new ContractResident
+                {
+                    ContractId = draft.Id,
+                    ResidentId = resident,
+                    Role = resident == id ? ResidentType.Representative : ResidentType.CoOccupant,
+                    ResidenceFrom = draft.StartDate
+                });
             draft.DraftVersion++;
-            draft.DraftMetadata = drafts.Protect(draft,state);
-            draft.SnapshotHash = MainDraftService.Snapshot(draft,state);
+            draft.DraftMetadata = drafts.Protect(draft, state);
+            draft.SnapshotHash = MainDraftService.Snapshot(draft, state);
         }
         representative.HouseholdVersion++; representative.HouseholdRequestKey = key; representative.HouseholdRequestHash = hash;
         db.SecurityAudit.Add(new SecurityAuditRecord { UserId = user.UserId, Event = "HouseholdSaved", TargetType = "Resident", TargetId = id, Succeeded = true, OccurredAt = clock.GetUtcNow() });

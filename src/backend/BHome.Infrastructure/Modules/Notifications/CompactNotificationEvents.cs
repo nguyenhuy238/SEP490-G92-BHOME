@@ -101,9 +101,15 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                         "Contract", holding.Id, t, channels: ["IN_APP"]);
                     // This publisher sees only committed activation audits. All activation paths share this key.
                     // Anonymous signers need no user account: delivery resolves the accepted invitation's email.
-                    var payload = System.Text.Json.JsonSerializer.Serialize(new {
-                        schemaVersion = 1, recordType = "ChannelDelivery", notificationId = Guid.Empty,
-                        recipient = holding.OwnerSignerId, role = "Owner", channel = "EMAIL", eventType = "HOLDING_CONFIRMED",
+                    var payload = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        schemaVersion = 1,
+                        recordType = "ChannelDelivery",
+                        notificationId = Guid.Empty,
+                        recipient = holding.OwnerSignerId,
+                        role = "Owner",
+                        channel = "EMAIL",
+                        eventType = "HOLDING_CONFIRMED",
                         holdingContractId = holding.Id
                     }, CompactNotificationWriter.Json);
                     count += await sql.Execute("""

@@ -61,7 +61,8 @@ public sealed class ContractServiceTests
         security.EmailConfigured.Returns(true);
         security.InvitationUrl(Arg.Any<string>()).Returns(call => "https://signing.example.invalid/#token=" + call.Arg<string>());
         security.When(x => x.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default))
-            .Do(call => {
+            .Do(call =>
+            {
                 emailBody = call.ArgAt<string>(3);
                 if (initialDeliveryFails && call.ArgAt<string>(0) == "staff-entered@example.invalid")
                     throw new InvalidOperationException("Synthetic SMTP rejection");
@@ -70,7 +71,8 @@ public sealed class ContractServiceTests
         source.ReadAsync(default!, default).ReturnsForAnyArgs(_ => ownerAlreadyStarted && tenantFirst
             ? "%PDF-1.7 REGENERATED DIFFERENT BYTES"u8.ToArray() : raw);
         evidence.Accept(default!, default!, default, default, default!, true).ReturnsForAnyArgs(new InternalAcceptedDocument([1, 2, 3], tenantPdf));
-        r.Files.PutAsync(default, default!, default!, default!, default).ReturnsForAnyArgs(call => {
+        r.Files.PutAsync(default, default!, default!, default!, default).ReturnsForAnyArgs(call =>
+        {
             objects[call.ArgAt<string>(1)] = call.ArgAt<byte[]>(2); return Task.CompletedTask;
         });
         r.Storage.CopyToAsync(default!, default!, default).ReturnsForAnyArgs(async call =>
@@ -86,7 +88,8 @@ public sealed class ContractServiceTests
             renderer, source, r.Files, r.Storage, invitationClock, Substitute.For<IContractSigningPages>(), r.Service);
         var staff = Guid.NewGuid();
         r.Staff.IsAssignedAsync(default, default, default).ReturnsForAnyArgs(true);
-        r.Signing.PrepareAsync(default!, default, default, default).ReturnsForAnyArgs(_ => {
+        r.Signing.PrepareAsync(default!, default, default, default).ReturnsForAnyArgs(_ =>
+        {
             var bytes = AnonymousContractSigningService.AcceptedEvidence(c) is null ? raw : tenantPdf;
             return new SigningPreparation(bytes, bytes, "field", "digest", "data", "chain", "owner", "credential");
         });
@@ -273,9 +276,16 @@ public sealed class ContractServiceTests
         var c = r.Contracts.Single(); c.Status = ContractStatus.PendingActivation;
         var pdf = "%PDF-1.7 SYNTHETIC SIGNED"u8.ToArray();
         var hash = Convert.ToHexString(SHA256.HashData(pdf));
-        foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId!.Value }) c.Signatures.Add(new ContractSignature {
-            ContractId = id.Id, SignerUserId = signer, Status = SignatureStatus.Signed, SnapshotHash = c.SnapshotHash,
-            SignedObjectKey = "synthetic-signed", SignedHash = hash, ProviderReference = "synthetic", SignedAt = new Clock().GetUtcNow()
+        foreach (var signer in new[] { c.OwnerSignerId, c.TenantUserId!.Value }) c.Signatures.Add(new ContractSignature
+        {
+            ContractId = id.Id,
+            SignerUserId = signer,
+            Status = SignatureStatus.Signed,
+            SnapshotHash = c.SnapshotHash,
+            SignedObjectKey = "synthetic-signed",
+            SignedHash = hash,
+            ProviderReference = "synthetic",
+            SignedAt = new Clock().GetUtcNow()
         });
         r.Storage.CopyToAsync(default!, default!, default).ReturnsForAnyArgs(async x => await x.Arg<Stream>().WriteAsync(pdf));
         await r.Service.VerifyDepositAsync(id.Id, new("HOLD-NO-APPROVAL", c.RequiredDeposit, "Synthetic bank statement"), Guid.NewGuid(), default);
@@ -444,8 +454,15 @@ public sealed class ContractServiceTests
         r.User.Role = Roles.Staff; r.User.UserId = Guid.NewGuid();
         r.Staff.IsAssignedAsync(default, default, default).ReturnsForAnyArgs(assigned);
         var bytes = "%PDF-1.7 SYNTHETIC PREVIEW"u8.ToArray();
-        var file = new ContractDocumentFile { ContractId = c.Id, Kind = ContractFileKind.Preview,
-            SnapshotHash = c.SnapshotHash, ObjectKey = "synthetic-preview", Length = bytes.Length, FileHash = Convert.ToHexString(SHA256.HashData(bytes)) };
+        var file = new ContractDocumentFile
+        {
+            ContractId = c.Id,
+            Kind = ContractFileKind.Preview,
+            SnapshotHash = c.SnapshotHash,
+            ObjectKey = "synthetic-preview",
+            Length = bytes.Length,
+            FileHash = Convert.ToHexString(SHA256.HashData(bytes))
+        };
         var old = new ContractDocumentFile { ContractId = c.Id, Kind = ContractFileKind.Preview, SnapshotHash = "OLD" };
         workflow.FilesAsync(c.Id, ContractFileKind.Preview, default).Returns(new[] { file, old });
         workflow.FileAsync(c.Id, file.Id, default).Returns(file); workflow.FileAsync(c.Id, old.Id, default).Returns(old);

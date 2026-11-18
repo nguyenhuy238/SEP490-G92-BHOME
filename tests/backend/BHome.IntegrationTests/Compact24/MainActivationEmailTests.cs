@@ -26,14 +26,22 @@ public sealed partial class Compact24NotificationMvpTests
         var c = await db.Set<Contract>().SingleAsync(c => c.Id == w.Contracts[0]);
         var evidence = AnonymousContractSigningService.AcceptedEvidence(c)!;
         if (scenario == "missing") await confirmationStorage.DeleteAsync(evidence.FinalDocumentKey!, default);
-        if (scenario == "altered") {
+        if (scenario == "altered")
+        {
             using var changed = new MemoryStream("%PDF-1.7 ALTERED"u8.ToArray());
             await confirmationStorage.PutAsync(evidence.FinalDocumentKey!, changed, changed.Length, "application/pdf", default);
         }
         if (scenario == "other-contract")
             c.InternalAcceptance = JsonSerializer.Serialize(evidence with { FinalDocumentKey = $"contracts/{w.Contracts[1]:N}/internal/synthetic-accepted.pdf" });
-        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = w.Owner.Id, Event = "ContractActivated", TargetId = c.Id,
-            TargetType = "Contract", Succeeded = true, OccurredAt = DateTimeOffset.UtcNow });
+        db.SecurityAudit.Add(new SecurityAuditRecord
+        {
+            UserId = w.Owner.Id,
+            Event = "ContractActivated",
+            TargetId = c.Id,
+            TargetType = "Contract",
+            Succeeded = true,
+            OccurredAt = DateTimeOffset.UtcNow
+        });
         await db.SaveChangesAsync();
         await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(default);
         var user = w.Tenants[0].Id;
@@ -46,7 +54,8 @@ public sealed partial class Compact24NotificationMvpTests
         await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().DeliverAsync(delivery, default);
         var state = await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync();
         Assert.Equal(expectedState, state);
-        if (scenario == "valid") {
+        if (scenario == "valid")
+        {
             var mail = Assert.Single(probe.Messages);
             Assert.Equal(w.Tenants[0].Email, mail.Destination);
             Assert.Null(mail.ActionUrl);
@@ -56,7 +65,8 @@ public sealed partial class Compact24NotificationMvpTests
             Assert.Equal("application/pdf", file.ContentType);
             await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().DeliverAsync(delivery, default);
             Assert.Single(probe.Messages);
-        } else Assert.Empty(probe.Messages);
+        }
+        else Assert.Empty(probe.Messages);
         Assert.Equal(ContractStatus.Active, c.Status);
     }
 

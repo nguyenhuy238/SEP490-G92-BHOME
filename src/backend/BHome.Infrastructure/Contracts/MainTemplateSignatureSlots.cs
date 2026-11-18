@@ -18,7 +18,8 @@ internal static class MainTemplateSignatureSlots
         internal List<Fragment> Text { get; } = [];
         public void EventOccurred(IEventData data, EventType type)
         {
-            if (data is TextRenderInfo text) {
+            if (data is TextRenderInfo text)
+            {
                 var line = text.GetBaseline();
                 Text.Add(new(text.GetText(), line.GetStartPoint().Get(Vector.I1), line.GetEndPoint().Get(Vector.I1), line.GetStartPoint().Get(Vector.I2)));
             }
@@ -31,10 +32,12 @@ internal static class MainTemplateSignatureSlots
         using (var pdf = new PdfDocument(new PdfReader(new MemoryStream(source)), new PdfWriter(output)))
         {
             var found = new HashSet<string>();
-            for (var page = 1; page <= pdf.GetNumberOfPages(); page++) {
+            for (var page = 1; page <= pdf.GetNumberOfPages(); page++)
+            {
                 var size = pdf.GetPage(page).GetPageSize(); var listener = new Listener();
                 new PdfCanvasProcessor(listener).ProcessPageContent(pdf.GetPage(page));
-                foreach (var (owner, key) in new[] { (true, ContractSignatureSlots.Owner), (false, ContractSignatureSlots.Tenant) }) {
+                foreach (var (owner, key) in new[] { (true, ContractSignatureSlots.Owner), (false, ContractSignatureSlots.Tenant) })
+                {
                     var lines = listener.Text.Where(f => owner ? f.X >= size.GetWidth() / 2 : f.X < size.GetWidth() / 2)
                         .GroupBy(f => Math.Round(f.Y)).Select(g => new { Text = string.Concat(g.OrderBy(f => f.X).Select(f => f.Text)).Normalize(NormalizationForm.FormC).Replace(" ", ""), Parts = g.ToArray() });
                     var title = lines.FirstOrDefault(l => l.Text.Contains(owner ? "ĐẠIDIỆNBÊNA" : "ĐẠIDIỆNBÊNB"));

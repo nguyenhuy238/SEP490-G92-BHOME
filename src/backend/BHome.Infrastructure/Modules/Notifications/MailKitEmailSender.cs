@@ -63,7 +63,8 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
 
     internal static MimeEntity BuildBody(ChannelMessage message)
     {
-        var body = new BodyBuilder {
+        var body = new BodyBuilder
+        {
             TextBody = message.Body + (message.ActionUrl is null ? "" : "\n\n" + message.ActionUrl),
             HtmlBody = EmailTemplate.Html(message.Title, message.Body, message.ActionUrl, EmailTemplate.ActionLabel(message.EventType))
         };

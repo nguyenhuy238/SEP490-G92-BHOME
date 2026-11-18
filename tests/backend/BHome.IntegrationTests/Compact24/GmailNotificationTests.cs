@@ -169,7 +169,8 @@ public sealed partial class Compact24NotificationMvpTests
             ["Email:AppPassword"] = "SYNTHETIC_TEST_SECRET",
             ["Email:TestRecipient"] = "configured@example.invalid"
         }));
-        b.ConfigureServices(s => {
+        b.ConfigureServices(s =>
+        {
             s.AddSingleton<INotificationChannelProvider>(provider);
             s.AddSingleton<BHome.Application.Storage.IObjectStorage>(confirmationStorage);
         });

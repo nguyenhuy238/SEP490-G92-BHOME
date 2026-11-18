@@ -21,11 +21,15 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
         var contract = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).ThenInclude(r => r.Location).Include(c => c.Signatures)
             .SingleOrDefaultAsync(c => c.Id == document.ContractId, t);
         if (contract is null) return null;
-        if (contract.DraftMetadata == "{}") {
+        if (contract.DraftMetadata == "{}")
+        {
             if (contract.Kind != ContractKind.Main) return null;
             var existing = await db.Set<ContractDocumentFile>().AsNoTracking().AnyAsync(f => f.ContractId == contract.Id &&
                 f.Kind == ContractFileKind.Preview && f.SnapshotHash == contract.SnapshotHash && f.TemplateId == "main-tenancy-docx-v1", t);
-            if (!existing) {
+            if (!existing)
+            {
+                // Reviewed Main drafts already persist their source; only Holding conversions need it generated here.
+                if (contract.HoldingContractId is null) return null;
                 // Never replace a document already handed to a signer or covered by signing evidence.
                 if (contract.Signatures.Any(s => s.Status != SignatureStatus.Failed) || contract.InternalAcceptance != "{}" ||
                     await db.Set<ContractSigningInvitation>().AnyAsync(i => i.ContractId == contract.Id && i.SnapshotHash == contract.SnapshotHash &&
@@ -97,10 +101,20 @@ internal sealed class ContractSigningDocumentSource(BHomePersistenceContext db, 
             var state = new MainDraftState(input, charges, settings.Version, "", mainRenderer.TemplateHash);
             var docx = await mainRenderer.DocxAsync(new(c, state, settings, tenant, c.Room.Location.Name, c.Room.RoomNumber, c.Room.Location.Address, occupants.ToArray(), SigningReview: true), t);
             var bytes = await mainRenderer.PdfAsync(docx, t);
-            var file = new ContractDocumentFile { ContractId = c.Id, Kind = ContractFileKind.Preview, SnapshotHash = c.SnapshotHash,
-                TemplateId = "main-tenancy-docx-v1", TemplateVersion = 1, DevelopmentOnly = true,
-                ContentType = "application/pdf", FileHash = Convert.ToHexString(SHA256.HashData(bytes)), Length = bytes.Length,
-                RecordedAt = clock?.GetUtcNow() ?? DateTimeOffset.UtcNow, RecordedByUserId = actor };
+            var file = new ContractDocumentFile
+            {
+                ContractId = c.Id,
+                Kind = ContractFileKind.Preview,
+                SnapshotHash = c.SnapshotHash,
+                TemplateId = "main-tenancy-docx-v1",
+                TemplateVersion = 1,
+                DevelopmentOnly = true,
+                ContentType = "application/pdf",
+                FileHash = Convert.ToHexString(SHA256.HashData(bytes)),
+                Length = bytes.Length,
+                RecordedAt = clock?.GetUtcNow() ?? DateTimeOffset.UtcNow,
+                RecordedByUserId = actor
+            };
             file.ObjectKey = $"contracts/{c.Id:N}/preview/{file.Id:N}.pdf";
             await fileStore.PutAsync(c.RoomId, file.ObjectKey, bytes, file.ContentType, t);
             db.Add(file); await db.SaveChangesAsync(t);

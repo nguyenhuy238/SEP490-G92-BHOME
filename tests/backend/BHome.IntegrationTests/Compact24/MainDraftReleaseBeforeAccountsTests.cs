@@ -99,30 +99,34 @@ public sealed class MainDraftReleaseBeforeAccountsTests
         }
         Guid[] people = [resident];
         BHome.Application.Ocr.HouseholdView? family = null;
-        async Task<BHome.Application.Ocr.HouseholdView> SaveFamily(string name) {
+        async Task<BHome.Application.Ocr.HouseholdView> SaveFamily(string name)
+        {
             var member = family?.Members.Single();
-            var message = new HttpRequestMessage(HttpMethod.Put,$"/api/v1/capture/residents/{resident}/household") {
-                Content=JsonContent.Create(new BHome.Application.Ocr.HouseholdSaveInput(family?.Version ?? 0,true,
-                    [new("child-review",name,new(2015,1,1),"Con",null,null,member?.ResidentId)])) };
-            message.Headers.Add("Idempotency-Key",Guid.NewGuid().ToString());
-            var result=await staff.SendAsync(message); Assert.True(result.IsSuccessStatusCode,await result.Content.ReadAsStringAsync());
+            var message = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/capture/residents/{resident}/household")
+            {
+                Content = JsonContent.Create(new BHome.Application.Ocr.HouseholdSaveInput(family?.Version ?? 0, true,
+                    [new("child-review", name, new(2015, 1, 1), "Con", null, null, member?.ResidentId)]))
+            };
+            message.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            var result = await staff.SendAsync(message); Assert.True(result.IsSuccessStatusCode, await result.Content.ReadAsStringAsync());
             return (await result.Content.ReadFromJsonAsync<BHome.Application.Ocr.HouseholdView>())!;
         }
-        if(household) { family=await SaveFamily("SYNTHETIC CHILD"); people=[resident,family.Members.Single().ResidentId]; }
+        if (household) { family = await SaveFamily("SYNTHETIC CHILD"); people = [resident, family.Members.Single().ResidentId]; }
         var created = await Post(staff, root, new MainDraftInput(room, resident, people, today, today.AddMonths(6), "Synthetic notes", "0900000001", "Synthetic issuer"), Guid.NewGuid());
         Assert.True(created.IsSuccessStatusCode, await created.Content.ReadAsStringAsync()); var draft = (await created.Content.ReadFromJsonAsync<MainDraftView>())!;
-        if(household) {
-            var staleResponse=await staff.PostAsync($"{root}/{draft.Id}/signing-review",null); staleResponse.EnsureSuccessStatusCode();
-            var stale=(await staleResponse.Content.ReadFromJsonAsync<ContractDocumentView>())!;
-            var oldVersion=draft.Version;
-            family=await SaveFamily("SYNTHETIC EDITED CHILD");
-            Assert.Equal(draft.Id,family.DraftId);
-            Assert.Equal(HttpStatusCode.Conflict,(await Post(owner,$"{root}/{draft.Id}/release",new MainDraftReleaseInput(null,oldVersion,stale.Id,true),Guid.NewGuid())).StatusCode);
-            draft=(await staff.GetFromJsonAsync<MainDraftView>($"{root}/{draft.Id}"))!;
-            Assert.True(draft.Version>oldVersion);
-            Assert.Equal("SYNTHETIC EDITED CHILD",draft.Preparation.Residents.Single(r=>!r.Representative).FullName);
-            Assert.Equal("Con",draft.Preparation.Residents.Single(r=>!r.Representative).Relationship);
-            Assert.Equal(2,draft.Input.ResidentIds.Length);
+        if (household)
+        {
+            var staleResponse = await staff.PostAsync($"{root}/{draft.Id}/signing-review", null); staleResponse.EnsureSuccessStatusCode();
+            var stale = (await staleResponse.Content.ReadFromJsonAsync<ContractDocumentView>())!;
+            var oldVersion = draft.Version;
+            family = await SaveFamily("SYNTHETIC EDITED CHILD");
+            Assert.Equal(draft.Id, family.DraftId);
+            Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, $"{root}/{draft.Id}/release", new MainDraftReleaseInput(null, oldVersion, stale.Id, true), Guid.NewGuid())).StatusCode);
+            draft = (await staff.GetFromJsonAsync<MainDraftView>($"{root}/{draft.Id}"))!;
+            Assert.True(draft.Version > oldVersion);
+            Assert.Equal("SYNTHETIC EDITED CHILD", draft.Preparation.Residents.Single(r => !r.Representative).FullName);
+            Assert.Equal("Con", draft.Preparation.Residents.Single(r => !r.Representative).Relationship);
+            Assert.Equal(2, draft.Input.ResidentIds.Length);
         }
         var response = await staff.PostAsync($"{root}/{draft.Id}/signing-review", null); response.EnsureSuccessStatusCode(); var review = (await response.Content.ReadFromJsonAsync<ContractDocumentView>())!;
         var input = new MainDraftReleaseInput(null, draft.Version, review.Id, true); var key = Guid.NewGuid();

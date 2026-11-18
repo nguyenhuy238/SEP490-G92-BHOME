@@ -135,7 +135,8 @@ internal sealed class NotificationEmailContent(Compact24DbContext db, BHome.Appl
     }
 
     private sealed record HoldingReceiptRow(Guid Id, string Reference, decimal Amount, DateTimeOffset PaidAt);
-    private static readonly Lazy<byte[]> ReceiptFont = new(() => {
+    private static readonly Lazy<byte[]> ReceiptFont = new(() =>
+    {
         using var source = typeof(NotificationEmailContent).Assembly.GetManifestResourceStream("BHome.Contracts.Tinos-Regular.ttf")
             ?? throw new ChannelDeliveryException("holding_receipt_font_unavailable");
         using var bytes = new MemoryStream(); source.CopyTo(bytes); return bytes.ToArray();

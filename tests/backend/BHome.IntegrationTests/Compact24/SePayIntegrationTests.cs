@@ -672,11 +672,17 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         db.ChangeTracker.Clear(); var approved = await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id);
         if (ownerSigned)
         {
-            db.Add(new ContractSignature {
-                ContractId = holding.Id, SignerUserId = scenario.Owner, Status = SignatureStatus.Simulated,
-                SnapshotHash = approved.SnapshotHash, SignedAt = DateTimeOffset.UtcNow,
+            db.Add(new ContractSignature
+            {
+                ContractId = holding.Id,
+                SignerUserId = scenario.Owner,
+                Status = SignatureStatus.Simulated,
+                SnapshotHash = approved.SnapshotHash,
+                SignedAt = DateTimeOffset.UtcNow,
                 ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
-                SignedObjectKey = "synthetic-owner.pdf", SignedHash = "synthetic-owner-hash", ProviderReference = "synthetic-provider"
+                SignedObjectKey = "synthetic-owner.pdf",
+                SignedHash = "synthetic-owner-hash",
+                ProviderReference = "synthetic-provider"
             });
         }
         else { approved.ApprovedAt = DateTimeOffset.UtcNow; approved.ApprovedByUserId = scenario.Owner; approved.ApprovalReason = "Synthetic approval"; }

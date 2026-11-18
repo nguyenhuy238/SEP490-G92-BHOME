@@ -3,6 +3,7 @@ using BHome.Application.IdentityAccess;
 using BHome.Application.Jobs;
 using BHome.Application.Locations;
 using BHome.Application.Notifications;
+using BHome.Application.Ocr;
 using BHome.Application.Operations;
 using BHome.Application.PropertyManagement;
 using BHome.Infrastructure.IdentityAccess;
@@ -34,6 +35,7 @@ internal static class LegacyPersistenceRegistration
                     options.JsonSerializerOptions.Converters.RemoveAt(i);
         });
         services.RemoveAll<Compact24DbContext>(); services.RemoveAll<DbContextOptions<Compact24DbContext>>();
+        services.RemoveAll<IHouseholdProfiles>();
         services.RemoveAll<CompactJobPersistence>(); services.RemoveAll<CompactLocationAssignments>();
         services.RemoveAll<AssignmentReconciliationJob>();
         // Compose the source-schema handlers explicitly. Registration order is not a schema boundary:

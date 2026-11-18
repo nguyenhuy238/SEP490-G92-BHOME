@@ -24,20 +24,34 @@ public sealed partial class Compact24NotificationMvpTests
         other.Kind = ContractKind.Main;
         var otherResident = await db.Set<Resident>().SingleAsync(r => r.Id == other.RepresentativeResidentId);
         otherResident.ContactEmail = "stored-main@example.invalid";
-        db.Add(new ContractSigningInvitation {
-            ContractId = other.Id, ResidentId = other.RepresentativeResidentId, ApprovedByUserId = w.Owner.Id,
-            SnapshotHash = other.SnapshotHash, TokenHash = new string('D', 64), DocumentHash = new string('E', 64),
-            RecipientEmail = "accepted-only@example.invalid", AcceptedAt = DateTimeOffset.UtcNow,
-            ContactEmails = System.Text.Json.JsonSerializer.Serialize(new Dictionary<Guid, string> {
+        db.Add(new ContractSigningInvitation
+        {
+            ContractId = other.Id,
+            ResidentId = other.RepresentativeResidentId,
+            ApprovedByUserId = w.Owner.Id,
+            SnapshotHash = other.SnapshotHash,
+            TokenHash = new string('D', 64),
+            DocumentHash = new string('E', 64),
+            RecipientEmail = "accepted-only@example.invalid",
+            AcceptedAt = DateTimeOffset.UtcNow,
+            ContactEmails = System.Text.Json.JsonSerializer.Serialize(new Dictionary<Guid, string>
+            {
                 [other.RepresentativeResidentId] = "accepted-only@example.invalid",
                 [Guid.NewGuid()] = "family-accepted@example.invalid"
             }),
-            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1), DeliveryStatus = "Accepted"
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+            DeliveryStatus = "Accepted"
         });
-        db.Add(new ContractSigningInvitation {
-            ContractId = other.Id, ResidentId = other.RepresentativeResidentId, ApprovedByUserId = w.Owner.Id,
-            SnapshotHash = other.SnapshotHash, TokenHash = new string('F', 64), DocumentHash = new string('E', 64),
-            RecipientEmail = "pending-only@example.invalid", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
+        db.Add(new ContractSigningInvitation
+        {
+            ContractId = other.Id,
+            ResidentId = other.RepresentativeResidentId,
+            ApprovedByUserId = w.Owner.Id,
+            SnapshotHash = other.SnapshotHash,
+            TokenHash = new string('F', 64),
+            DocumentHash = new string('E', 64),
+            RecipientEmail = "pending-only@example.invalid",
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
         });
         await db.SaveChangesAsync();
         var repository = scope.ServiceProvider.GetRequiredService<IAnonymousSigningRepository>();
