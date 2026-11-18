@@ -50,7 +50,12 @@ public sealed class CommonAssetInventoryReviewService(ISetupWorkspaceStore store
         Key($"common-asset-inventory-command:{location:N}:{actor:N}:{request:N}");
     private static string Fingerprint(SetupCommonAssetRequirement item) => Hash(new
     {
-        item.Id, item.Name, item.Category, item.CommonArea, item.Quantity, item.Unit
+        item.Id,
+        item.Name,
+        item.Category,
+        item.CommonArea,
+        item.Quantity,
+        item.Unit
     });
     private static bool Equal(string? a, string? b) =>
         string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
@@ -125,9 +130,17 @@ public sealed class CommonAssetInventoryReviewService(ISetupWorkspaceStore store
             requirements = requirements is null ? null : new { requirements.Id, requirements.Version },
             physical = physical.OrderBy(p => p.Asset.Id).Select(p => new
             {
-                p.Asset.Id, p.Asset.Version, p.Asset.Name, p.Asset.Category, p.Asset.CommonArea,
-                p.Asset.RoomId, p.Asset.Status, p.Metadata.Quantity, p.Metadata.Unit,
-                p.Metadata.PurchaseCost, p.Metadata.PurchaseDate
+                p.Asset.Id,
+                p.Asset.Version,
+                p.Asset.Name,
+                p.Asset.Category,
+                p.Asset.CommonArea,
+                p.Asset.RoomId,
+                p.Asset.Status,
+                p.Metadata.Quantity,
+                p.Metadata.Unit,
+                p.Metadata.PurchaseCost,
+                p.Metadata.PurchaseDate
             }),
             verification = verifications.Values.OrderBy(doc => doc.Id).Select(doc => new { doc.Id, doc.Version, doc.Status }),
             reviewVersion = review?.Version ?? 0
@@ -212,9 +225,13 @@ public sealed class CommonAssetInventoryReviewService(ISetupWorkspaceStore store
                 {
                     var asset = new Asset
                     {
-                        LocationId = location, RoomId = null, CommonArea = state.Requirement.CommonArea,
-                        Name = state.Requirement.Name, Category = state.Requirement.Category,
-                        Condition = DefaultCondition, Status = AssetStatus.Active
+                        LocationId = location,
+                        RoomId = null,
+                        CommonArea = state.Requirement.CommonArea,
+                        Name = state.Requirement.Name,
+                        Category = state.Requirement.Category,
+                        Condition = DefaultCondition,
+                        Status = AssetStatus.Active
                     };
                     asset.Code = $"INV-{asset.Id:N}";
                     var metadata = new AssetMetadata("BulkQuantity", state.Requirement.Quantity,

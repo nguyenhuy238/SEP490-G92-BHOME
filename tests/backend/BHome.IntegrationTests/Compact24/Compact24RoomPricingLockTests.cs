@@ -125,8 +125,14 @@ public sealed partial class Compact24OwnerSetupTests
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-            var resident = new Resident { RoomId = w.Room, OwnerUserId = w.Owner.Id, TenantUserId = w.Tenant.Id,
-                DisplayLabel = "Synthetic successor resident", VerificationStatus = IdentityVerificationStatus.Verified };
+            var resident = new Resident
+            {
+                RoomId = w.Room,
+                OwnerUserId = w.Owner.Id,
+                TenantUserId = w.Tenant.Id,
+                DisplayLabel = "Synthetic successor resident",
+                VerificationStatus = IdentityVerificationStatus.Verified
+            };
             residentId = resident.Id; db.Add(resident); await db.SaveChangesAsync();
         }
         PolicyWrite[] inputs = [

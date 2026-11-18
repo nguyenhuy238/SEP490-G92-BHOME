@@ -19,8 +19,12 @@ internal static class InventoryAcquisitionPrice
 
     internal static object MetadataSnapshot(AssetMetadata metadata) => new
     {
-        metadata.TrackingMode, metadata.Quantity, metadata.PurchaseCost,
-        metadata.PurchaseDate, metadata.UsefulLifeMonths, metadata.Unit,
+        metadata.TrackingMode,
+        metadata.Quantity,
+        metadata.PurchaseCost,
+        metadata.PurchaseDate,
+        metadata.UsefulLifeMonths,
+        metadata.Unit,
         Reason = "Giá vốn xác nhận khi kiểm kê"
     };
 }

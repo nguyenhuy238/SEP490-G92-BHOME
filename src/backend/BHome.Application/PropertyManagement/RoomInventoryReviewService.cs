@@ -29,7 +29,7 @@ public sealed record RoomInventoryReviewConfirm(Guid RequestId, RoomInventoryRev
 /// Owner attestation that each configured asset group was physically checked and found sufficient.
 /// The configured quantity remains authoritative; only checked groups create/link one physical Asset.
 /// </summary>
-public sealed class RoomInventoryReviewService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access,
+public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access,
     PropertyService properties, ILogger<RoomInventoryReviewService> logger,
     ISharedConfigurationStore? shared = null) : SetupWorkspaceService(store, user, access)
 {
@@ -273,7 +273,7 @@ public sealed class RoomInventoryReviewService(ISetupWorkspaceStore store, ICurr
         Owner();
         var started = Stopwatch.GetTimestamp();
         await Scope(location, false, t);
-        var target = await propertyRepository.FindAsync<BHome.Domain.Locations.Location>(location, t) ?? throw new PropertyException(404, "resource_not_found");
+        var target = await properties.GetLocationAsync(location, t);
         var snapshot = await SnapshotAsync(location, target.IsActive, [], t);
         logger.LogInformation("Room inventory GET completed: rooms={RoomCount}, databaseReads={DatabaseReads}, elapsedMs={ElapsedMs:F1}",
             snapshot.Rooms.Length, 1 + 3 + (snapshot.EvidenceRead ? 1 : 0), Stopwatch.GetElapsedTime(started).TotalMilliseconds);

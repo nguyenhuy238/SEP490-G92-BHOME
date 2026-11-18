@@ -22,7 +22,12 @@ public sealed class CapitalAssetRepository(BHomePersistenceContext db, ISetupWor
             .Where(a => a.LocationId == id)
             .Select(a => new
             {
-                a.Id, a.RoomId, a.CommonArea, a.Name, a.Category, a.Status,
+                a.Id,
+                a.RoomId,
+                a.CommonArea,
+                a.Name,
+                a.Category,
+                a.Status,
                 PurchaseInfo = EF.Property<string>(a, "PurchaseInfo")
             }).ToArrayAsync(token);
         var names = await db.Set<Room>().AsNoTracking().Where(r => r.LocationId == id)
@@ -56,7 +61,12 @@ public sealed class CapitalAssetRepository(BHomePersistenceContext db, ISetupWor
             if (item is null) continue;
             var expected = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
             {
-                item.Id, item.Name, item.Category, item.CommonArea, item.Quantity, item.Unit
+                item.Id,
+                item.Name,
+                item.Category,
+                item.CommonArea,
+                item.Quantity,
+                item.Unit
             }, Json)));
             if (fingerprint.GetString() == expected) commonVerified[assetId.GetGuid()] = document.RecordedBy;
         }

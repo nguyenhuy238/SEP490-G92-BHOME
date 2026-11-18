@@ -20,7 +20,8 @@ public sealed class CommonAssetInventoryReviewServiceTests
         private readonly ICurrentUser user = Substitute.For<ICurrentUser>();
         public readonly Location Location = new("Synthetic common inventory")
         {
-            Address = "Synthetic address", IsActive = true
+            Address = "Synthetic address",
+            IsActive = true
         };
         public readonly List<Asset> Assets = [];
         public readonly Dictionary<Guid, AssetMetadata> Metadata = [];
@@ -96,9 +97,14 @@ public sealed class CommonAssetInventoryReviewServiceTests
         {
             var asset = new Asset
             {
-                LocationId = Location.Id, CommonArea = item.CommonArea, RoomId = null,
-                Name = item.Name, Category = item.Category, Code = $"AS-{Guid.NewGuid():N}",
-                Condition = "Hoạt động tốt", Status = AssetStatus.Active
+                LocationId = Location.Id,
+                CommonArea = item.CommonArea,
+                RoomId = null,
+                Name = item.Name,
+                Category = item.Category,
+                Code = $"AS-{Guid.NewGuid():N}",
+                Condition = "Hoạt động tốt",
+                Status = AssetStatus.Active
             };
             Assets.Add(asset);
             Metadata[asset.Id] = new("BulkQuantity", quantity ?? item.Quantity, null, null, null, item.Unit);
@@ -110,8 +116,10 @@ public sealed class CommonAssetInventoryReviewServiceTests
             documents[id] = new(id, Location.Id, "Evidence", "Recorded", 1,
                 JsonSerializer.SerializeToElement(new
                 {
-                    objectKey = $"setup/{Location.Id:N}/evidence/{id:N}", hash = new string('A', 64),
-                    contentType = "image/jpeg", length = 1000
+                    objectKey = $"setup/{Location.Id:N}/evidence/{id:N}",
+                    hash = new string('A', 64),
+                    contentType = "image/jpeg",
+                    length = 1000
                 }, Json));
             return id;
         }

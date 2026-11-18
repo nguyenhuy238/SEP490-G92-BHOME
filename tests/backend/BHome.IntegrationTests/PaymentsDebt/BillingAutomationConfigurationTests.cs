@@ -201,7 +201,11 @@ public sealed partial class PaymentLedgerTests
         (await owner.PutAsJsonAsync("/api/v1/billing-schedules", original)).EnsureSuccessStatusCode();
         var input = Plan(w) with
         {
-            EffectiveFrom = from, Enabled = false, DraftDay = 3, FinalDay = 15, DueDay = 25,
+            EffectiveFrom = from,
+            Enabled = false,
+            DraftDay = 3,
+            FinalDay = 15,
+            DueDay = 25,
             InitialSchedule = new(BillingRateDate.PeriodEnd, PartialMonthRule.OccupiedCalendarDays, VndRounding.ToEven)
         };
         var response = await owner.PutAsJsonAsync("/api/v1/billing-automation", input);

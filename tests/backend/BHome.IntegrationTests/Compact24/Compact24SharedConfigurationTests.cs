@@ -158,11 +158,18 @@ public sealed partial class Compact24OwnerSetupTests
         var catalogInput = SharedInput("asset-catalog") with { PublishImmediately = true };
         var catalog = await Read<SharedDocument>(await owner.PostAsJsonAsync(catalogRoute, catalogInput));
         var item = new SharedAssetItem(catalog.Id, catalog.Version, 2, true, "BulkQuantity");
-        var roomInput = SharedInput("room-type-templates") with { PublishImmediately = true, Data = JsonSerializer.SerializeToElement(new
+        var roomInput = SharedInput("room-type-templates") with
         {
-            capacity = 3, area = 25, amenities = Array.Empty<string>(), referenceRent = 3500000,
-            assetItems = new[] { item }
-        }) };
+            PublishImmediately = true,
+            Data = JsonSerializer.SerializeToElement(new
+            {
+                capacity = 3,
+                area = 25,
+                amenities = Array.Empty<string>(),
+                referenceRent = 3500000,
+                assetItems = new[] { item }
+            })
+        };
         var room = await Read<SharedDocument>(await owner.PostAsJsonAsync(roomRoute, roomInput));
         var nextCatalog = await Read<SharedDocument>(await owner.PutAsJsonAsync(catalogRoute + "/" + catalog.Id,
             catalogInput with { ExpectedVersion = catalog.Version, Name = catalog.Name + " new" }));

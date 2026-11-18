@@ -487,8 +487,13 @@ public sealed class PropertyService(IPropertyRepository repository, ICurrentUser
             var next = NewPolicy(input); repository.Add(next);
             var lineage = await repository.PolicyLineagesAsync([old.Id], t);
             var previous = lineage.TryGetValue(old.Id, out var known) ? known : new PolicyLineage(old.Id, 1);
-            var result = Map(next) with { FamilyId = previous.FamilyId, Edition = checked(previous.Edition + 1),
-                PreviousPolicyId = old.Id, CanEditInPlace = true };
+            var result = Map(next) with
+            {
+                FamilyId = previous.FamilyId,
+                Edition = checked(previous.Edition + 1),
+                PreviousPolicyId = old.Id,
+                CanEditInPlace = true
+            };
             Audit(next.LocationId, next, "Created", input.Reason, null, result);
             return result;
         }, t);
