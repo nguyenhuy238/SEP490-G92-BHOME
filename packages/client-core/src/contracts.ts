@@ -1220,12 +1220,16 @@ export const labels: Record<string, string> = {
   invalid_contract_signers: 'Tài khoản bên ký chưa hợp lệ.',
   security_deposit_insufficient: 'Tiền cọc đã xác minh chưa đủ.',
   room_contract_conflict: 'Phòng đã đủ chỗ hoặc có hợp đồng đang xung đột.',
-  household_version_changed: 'Thông tin hộ gia đình đã được cập nhật ở phiên khác. Tải lại hồ sơ trước khi lưu tiếp.',
+  household_version_changed:
+    'Thông tin hộ gia đình đã được cập nhật ở phiên khác. Tải lại hồ sơ trước khi lưu tiếp.',
   household_member_mismatch: 'Thành viên không khớp hộ gia đình đang nhập. Hãy tải lại hồ sơ.',
-  household_representative_not_verified: 'Người đại diện cần hoàn tất xác minh CCCD trước khi lưu thành viên.',
-  invalid_household_members: 'Kiểm tra họ tên, ngày sinh, quan hệ và số điện thoại/CCCD của thành viên nếu có.',
+  household_representative_not_verified:
+    'Người đại diện cần hoàn tất xác minh CCCD trước khi lưu thành viên.',
+  invalid_household_members:
+    'Kiểm tra họ tên, ngày sinh, quan hệ và số điện thoại/CCCD của thành viên nếu có.',
   invalid_household_input: 'Kiểm tra và xác nhận thông tin thành viên trước khi tiếp tục.',
-  household_already_used_by_contract: 'Hợp đồng đã chuyển sang giai đoạn không cho phép sửa danh sách thành viên. Kiểm tra lại hợp đồng.',
+  household_already_used_by_contract:
+    'Hợp đồng đã chuyển sang giai đoạn không cho phép sửa danh sách thành viên. Kiểm tra lại hợp đồng.',
   room_capacity_exceeded:
     'Số người ở vượt sức chứa của phòng. Hãy bớt người ở hoặc chọn phòng khác.',
   financial_ledger_and_deposit_policy:

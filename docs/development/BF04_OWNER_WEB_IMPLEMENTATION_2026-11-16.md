@@ -10,21 +10,21 @@ Không tìm thấy `nghiepvutemanation.docx` hoặc swimlane BF-04 có tên tư�
 
 ## Inventory trước → sau
 
-| Nghiệp vụ / màn hình | Trước | Hành động triển khai | API hiện hữu |
-| --- | --- | --- | --- |
-| Danh sách/chi tiết hợp đồng | Có, API thật; selection chỉ giữ state lúc mở | Giữ route `/contracts`; lưu contractId trong URL để refresh/back mở đúng hồ sơ | contracts list/detail |
-| Nhắc hết hạn/gia hạn | Đã nối API | Giữ panel và hành động hiện hữu | expiry-reminders, renewals, signing, activate |
-| Owner không gia hạn/duyệt | Có dialog, API thật | Giữ contract action dialog và state backend; thêm empty state chỉ đường | expiry-move-out, move-out/approve |
-| Tenant gửi yêu cầu | API có; không có Tenant Web trong repo | Không tạo màn hình giả trong portal Owner; ghi rõ giới hạn nền tảng | termination-requests |
-| Từ chối/hủy yêu cầu | Backend chưa có | Không thêm nút/API giả | Chưa có |
-| Lịch kiểm tra Staff | Panel có, lấy Staff thật và UTC conversion | Đưa vào một workspace; giữ expectedVersion và scope; hiển thị lịch/người phụ trách | inspection-staff, move-out/schedule |
-| Staff kiểm kê | Backend có, không có Staff Web | Tái sử dụng dữ liệu baseline/finalReading cho Owner; không thay Staff gửi inspection | inspection-preparation, inspections, evidence |
-| Owner duyệt/kiểm tra lại | Có, API thật | Bổ sung confirmation, hiện ảnh baseline/quan sát, giữ nguồn đã tải khi nguồn khác lỗi | inspection-review |
-| Chi phí cuối kỳ | Panel đầy đủ, API thật | Giữ preview/ref, thêm dialog trước khi duyệt | final-fixed-charges, final-utilities, damage, charge-review |
-| Cấn trừ cọc | Panel có | Giữ endpoint mới; bổ sung xác nhận trước mutation | deposit-offsets |
-| Đối soát/hoàn cọc | Dùng lại Payment/Refund có sẵn | Thêm xác nhận theo từng bước; không coi tạo request là đã hoàn | bank-allocations, deposit-refunds, refund decision/execution |
-| Quyết toán sau trả phòng | Các panel tài chính còn, nhưng form quyết toán bị ẩn khi Completed | Cho tiếp tục Owner review sau Completed; tách trạng thái vật lý/tài chính | settlement-summary, move-out/settlement |
-| Tiến trình/lịch sử | Thông tin phân tán, lặp hai khu vực, có raw ID/reference | Gom workspace, tiến trình server-derived; parse snapshot an toàn; không in fingerprint/object key | move-out/history, inspections, settlement-history |
+| Nghiệp vụ / màn hình        | Trước                                                              | Hành động triển khai                                                                              | API hiện hữu                                                 |
+| --------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Danh sách/chi tiết hợp đồng | Có, API thật; selection chỉ giữ state lúc mở                       | Giữ route `/contracts`; lưu contractId trong URL để refresh/back mở đúng hồ sơ                    | contracts list/detail                                        |
+| Nhắc hết hạn/gia hạn        | Đã nối API                                                         | Giữ panel và hành động hiện hữu                                                                   | expiry-reminders, renewals, signing, activate                |
+| Owner không gia hạn/duyệt   | Có dialog, API thật                                                | Giữ contract action dialog và state backend; thêm empty state chỉ đường                           | expiry-move-out, move-out/approve                            |
+| Tenant gửi yêu cầu          | API có; không có Tenant Web trong repo                             | Không tạo màn hình giả trong portal Owner; ghi rõ giới hạn nền tảng                               | termination-requests                                         |
+| Từ chối/hủy yêu cầu         | Backend chưa có                                                    | Không thêm nút/API giả                                                                            | Chưa có                                                      |
+| Lịch kiểm tra Staff         | Panel có, lấy Staff thật và UTC conversion                         | Đưa vào một workspace; giữ expectedVersion và scope; hiển thị lịch/người phụ trách                | inspection-staff, move-out/schedule                          |
+| Staff kiểm kê               | Backend có, không có Staff Web                                     | Tái sử dụng dữ liệu baseline/finalReading cho Owner; không thay Staff gửi inspection              | inspection-preparation, inspections, evidence                |
+| Owner duyệt/kiểm tra lại    | Có, API thật                                                       | Bổ sung confirmation, hiện ảnh baseline/quan sát, giữ nguồn đã tải khi nguồn khác lỗi             | inspection-review                                            |
+| Chi phí cuối kỳ             | Panel đầy đủ, API thật                                             | Giữ preview/ref, thêm dialog trước khi duyệt                                                      | final-fixed-charges, final-utilities, damage, charge-review  |
+| Cấn trừ cọc                 | Panel có                                                           | Giữ endpoint mới; bổ sung xác nhận trước mutation                                                 | deposit-offsets                                              |
+| Đối soát/hoàn cọc           | Dùng lại Payment/Refund có sẵn                                     | Thêm xác nhận theo từng bước; không coi tạo request là đã hoàn                                    | bank-allocations, deposit-refunds, refund decision/execution |
+| Quyết toán sau trả phòng    | Các panel tài chính còn, nhưng form quyết toán bị ẩn khi Completed | Cho tiếp tục Owner review sau Completed; tách trạng thái vật lý/tài chính                         | settlement-summary, move-out/settlement                      |
+| Tiến trình/lịch sử          | Thông tin phân tán, lặp hai khu vực, có raw ID/reference           | Gom workspace, tiến trình server-derived; parse snapshot an toàn; không in fingerprint/object key | move-out/history, inspections, settlement-history            |
 
 ## Tiêu chí kiểm chứng
 
