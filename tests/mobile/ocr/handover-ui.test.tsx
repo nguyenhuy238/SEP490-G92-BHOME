@@ -75,6 +75,9 @@ vi.mock('../../../src/mobile/src/components/CameraCapture', () => ({ CameraCaptu
 vi.mock('../../../src/mobile/src/features/contracts/ContractEvidence', () => ({
   ContractEvidence: () => null,
 }));
+vi.mock('../../../src/mobile/src/features/contracts/ContractInitialMeterTasks', () => ({
+  ContractInitialMeterTasks: () => null,
+}));
 import { ContractHandoverPanel } from '../../../src/mobile/src/features/contracts/ContractHandoverPanel';
 import { ContractAssetChangesPanel } from '../../../src/mobile/src/features/contracts/ContractAssetChangesPanel';
 afterEach(cleanup);

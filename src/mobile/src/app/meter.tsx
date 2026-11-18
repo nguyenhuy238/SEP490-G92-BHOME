@@ -228,7 +228,8 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
   const captureLabel = task?.utilityType === 0 ? 'Chụp công tơ điện' : 'Chụp đồng hồ nước';
   const isInitial = task?.purpose === 0;
   const validation = task ? readingError(reading, task.decimalPlaces) : '';
-  const decreased = !isInitial && readingDecreased(reading, task?.previousValue ?? null);
+  // A new contract baseline on a reused physical meter must also be monotonic.
+  const decreased = readingDecreased(reading, task?.previousValue ?? null);
   const consumption = isInitial ? null : estimatedConsumption(reading, task?.previousValue ?? null);
   const editable = !!task && task.status < 2;
 
@@ -384,7 +385,9 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
           </Text>
           <Text variant="bodySmall" style={ui.muted}>
             {isInitial
-              ? 'Giá trị này được lưu làm mốc chỉ số ban đầu cho phòng, không tính tiền tiêu thụ định kỳ.'
+              ? task.contractId
+                ? 'Giá trị này là mốc khởi tạo riêng cho hợp đồng nhận phòng, không tính lượng điện/nước của người thuê trước.'
+                : 'Giá trị này được lưu làm mốc chỉ số ban đầu cho phòng, không tính tiền tiêu thụ định kỳ.'
               : 'Chỉ số và mức tiêu thụ đã lưu vào hệ thống để tổng hợp vào hóa đơn kỳ theo lịch cấu hình.'}
           </Text>
           <Button mode="contained" contentStyle={{ minHeight: 48 }} onPress={onReturn}>
@@ -423,7 +426,9 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
                 </Text>
                 {isInitial && (
                   <Text style={ui.muted}>
-                    Loại ghi: Chỉ số ban đầu (mốc khởi tạo, không tính tiêu thụ tháng)
+                    {task.contractId
+                      ? 'Loại ghi: Khởi tạo chỉ số cho hợp đồng (chụp mới cả khi công tơ tái sử dụng)'
+                      : 'Loại ghi: Chỉ số ban đầu (mốc khởi tạo, không tính tiêu thụ tháng)'}
                   </Text>
                 )}
                 {!!proposal?.proposedFields.reading && (

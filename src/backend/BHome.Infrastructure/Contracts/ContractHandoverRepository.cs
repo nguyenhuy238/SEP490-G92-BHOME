@@ -20,9 +20,37 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
         var id = Key($"contract-move-in:{c.Id:N}");
-        if (await db.Set<OperationalTask>().AnyAsync(x => x.Id == id, t)) return;
         var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
         var responsible = await tasks.ResponsibilityAsync(c.Room.LocationId, date, t);
+        // Every tenancy starts with its own photographed electricity/water baseline.
+        // A physical meter may have confirmed readings from previous occupants, so
+        // these tasks are keyed by Contract + Meter instead of Meter alone.
+        var meters = await db.Set<Meter>().AsNoTracking().Where(m => m.RoomId == c.RoomId && m.IsActive)
+            .OrderBy(m => m.UtilityType).ThenBy(m => m.Id).ToArrayAsync(t);
+        foreach (var meter in meters)
+        {
+            var meterTaskId = Key($"contract-meter-initial:{c.Id:N}:{meter.Id:N}");
+            if (await db.Set<OperationalTask>().AnyAsync(x => x.Id == meterTaskId, t)) continue;
+            var meterTask = new OperationalTask
+            {
+                Kind = OperationalTaskKind.MeterReading,
+                LocationId = c.Room.LocationId,
+                MeterId = meter.Id,
+                ContractId = c.Id,
+                Title = $"Chụp chỉ số {(meter.UtilityType == UtilityType.Electricity ? "điện" : "nước")} khi nhận phòng {c.Room.RoomNumber}",
+                Requirements = "Chụp ảnh công tơ thực tế và xác nhận chỉ số khởi tạo cho hợp đồng này, kể cả khi công tơ đã được dùng trước đó.",
+                Purpose = ReadingPurpose.Initial,
+                ReadingDate = new[] { c.StartDate, date, meter.InstalledOn }.Max(),
+                AssignedStaffUserId = responsible?.StaffUserId,
+                AssignmentId = responsible?.AssignmentId,
+                AssignedAt = responsible is null ? null : now,
+                EvidenceRequired = true,
+                Status = MeterTaskStatus.Assigned
+            };
+            db.Entry(meterTask).Property(x => x.Id).CurrentValue = meterTaskId;
+            db.Add(meterTask);
+        }
+        if (await db.Set<OperationalTask>().AnyAsync(x => x.Id == id, t)) return;
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.AdHoc,
@@ -31,7 +59,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             TargetRoomId = c.RoomId,
             TargetLabel = c.Room.RoomNumber,
             Title = $"Bàn giao vào phòng {c.Room.RoomNumber}",
-            Requirements = "Kiểm tra tài sản, bằng chứng và chỉ số đã xác nhận; Tenant xác nhận trước khi Staff hoàn tất bàn giao.",
+            Requirements = "Kiểm tra tài sản và chụp xác nhận chỉ số điện, nước khởi tạo riêng cho hợp đồng; Tenant xác nhận trước khi Staff hoàn tất bàn giao.",
             AssignedStaffUserId = responsible?.StaffUserId,
             AssignmentId = responsible?.AssignmentId,
             AssignedAt = responsible is null ? null : now,
@@ -122,16 +150,26 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (assets.Length > 200) throw new ContractException(503, "handover_inventory_limit");
         return assets;
     }
-    public async Task<IReadOnlyList<HandoverReading>> ReadingsAsync(Guid roomId, DateOnly startDate, CancellationToken t) => await (
-        from r in db.Set<MeterReading>().AsNoTracking()
-        join task in db.Set<OperationalTask>() on r.TaskId equals task.Id
-        join meter in db.Set<Meter>() on r.MeterId equals meter.Id
-        join evidence in db.Set<MeterEvidence>() on r.EvidenceId equals evidence.Id
-        where meter.RoomId == roomId && meter.IsActive && task.ReadingDate >= startDate && task.Status == MeterTaskStatus.Completed &&
-            (task.Purpose == ReadingPurpose.Initial || task.Purpose == ReadingPurpose.Periodic) && evidence.IsUploaded && evidence.IsLinked
-        orderby task.ReadingDate descending
-        select new HandoverReading(r.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate, r.ConfirmedValue, evidence.Id, evidence.ObjectKey, evidence.ImageHash))
-        .Take(100).ToArrayAsync(t);
+    public async Task<IReadOnlyList<HandoverReading>> ReadingsAsync(Guid contractId, Guid roomId, DateOnly startDate, CancellationToken t)
+    {
+        // Compact24 is the production path and must never recycle an older
+        // tenant's initial/periodic photo. Legacy source-schema test fixtures
+        // still validate their original room-based behavior independently.
+        var contractScoped = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext;
+        return await (
+            from r in db.Set<MeterReading>().AsNoTracking()
+            join task in db.Set<OperationalTask>() on r.TaskId equals task.Id
+            join meter in db.Set<Meter>() on r.MeterId equals meter.Id
+            join evidence in db.Set<MeterEvidence>() on r.EvidenceId equals evidence.Id
+            where meter.RoomId == roomId && meter.IsActive && task.ReadingDate >= startDate &&
+                task.Status == MeterTaskStatus.Completed && evidence.IsUploaded && evidence.IsLinked &&
+                (contractScoped
+                    ? task.ContractId == contractId && task.Purpose == ReadingPurpose.Initial
+                    : task.Purpose == ReadingPurpose.Initial || task.Purpose == ReadingPurpose.Periodic)
+            orderby task.ReadingDate descending
+            select new HandoverReading(r.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate, r.ConfirmedValue, evidence.Id, evidence.ObjectKey, evidence.ImageHash))
+            .Take(100).ToArrayAsync(t);
+    }
     public async Task<IReadOnlyList<ContractHandoverHistory>> HistoryAsync(Guid id, CancellationToken t) => await db.Set<ContractHandoverHistory>().AsNoTracking().Where(h => h.ContractId == id).OrderByDescending(h => h.OccurredAt).Take(100).ToArrayAsync(t);
     public Task<HandoverReading?> ReadingAsync(Guid roomId, Guid readingId, CancellationToken t) => (
         from reading in db.Set<MeterReading>().AsNoTracking()

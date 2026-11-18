@@ -39,20 +39,31 @@ public sealed partial class ContractService
         if (handoverInventory is not null)
         {
             var inventory = await handoverInventory.PrepareAsync(c.RoomId, t);
-            return new(inventory.Groups, await Handovers.ReadingsAsync(c.RoomId, c.StartDate, t),
+            return new(inventory.Groups, await Handovers.ReadingsAsync(c.Id, c.RoomId, c.StartDate, t),
                 (await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Select(DocumentView).ToArray(),
                 inventory.StateToken, inventory.State, inventory.NoAssetsConfirmed);
         }
         return new((await Handovers.AssetsAsync(c.RoomId, t)).Select(a => new HandoverAsset(a.Id, a.Name, a.Condition, "")).ToArray(),
-            await Handovers.ReadingsAsync(c.RoomId, c.StartDate, t), (await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Select(DocumentView).ToArray());
+            await Handovers.ReadingsAsync(c.Id, c.RoomId, c.StartDate, t), (await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Select(DocumentView).ToArray());
     }
-    private async Task ValidateHandoverEvidence(Contract c, HandoverSnapshot snapshot, CancellationToken t)
+    private async Task ValidateHandoverEvidence(Contract c, HandoverSnapshot snapshot, CancellationToken t, bool existingSnapshot = false)
     {
-        var readings = await Handovers.ReadingsAsync(c.RoomId, c.StartDate, t);
+        var readings = await Handovers.ReadingsAsync(c.Id, c.RoomId, c.StartDate, t);
         foreach (var reading in new[] { snapshot.Electricity, snapshot.Water })
         {
-            var current = readings.SingleOrDefault(r => r.Id == reading.Id && r.Date == snapshot.Date && r.UtilityType == reading.UtilityType && r.Value == reading.Value && r.EvidenceHash == reading.EvidenceHash)
-                ?? throw ContractException.Invalid("confirmed_handover_readings_required");
+            var current = readings.SingleOrDefault(r => r.Id == reading.Id && r.Date == snapshot.Date && r.UtilityType == reading.UtilityType && r.Value == reading.Value && r.EvidenceHash == reading.EvidenceHash);
+            if (current is null && existingSnapshot)
+            {
+                // Preserve already-recorded handovers created before the
+                // contract-specific Initial task rule. This is ONLY called for
+                // Staff confirmation of an existing immutable snapshot; new
+                // SaveHandover requests may never select another tenant's photo.
+                var historical = await Handovers.ReadingAsync(c.RoomId, reading.Id, t);
+                if (historical is not null && historical.Date == snapshot.Date && historical.UtilityType == reading.UtilityType &&
+                    historical.Value == reading.Value && historical.EvidenceHash == reading.EvidenceHash)
+                    current = historical;
+            }
+            if (current is null) throw ContractException.Invalid("confirmed_handover_readings_required");
             using var image = new MemoryStream(); await storage.CopyToAsync(current.EvidenceObjectKey, image, t);
             if (FileHash(image.ToArray()) != current.EvidenceHash) throw ContractException.Conflict("handover_evidence_integrity_failed");
         }
@@ -80,7 +91,7 @@ public sealed partial class ContractService
         var assets = inventory?.Groups ?? (await Handovers.AssetsAsync(c.RoomId, t)).Select(a => new HandoverAsset(a.Id, a.Name, a.Condition, "")).ToArray();
         var inspected = HandoverChecklist.Inspect(assets, x.Assets, inventory is not null);
         HandoverChecklist.RequireSeparateEvidence(x.EvidenceIds, inspected);
-        var readings = await Handovers.ReadingsAsync(c.RoomId, c.StartDate, t);
+        var readings = await Handovers.ReadingsAsync(c.Id, c.RoomId, c.StartDate, t);
         var electricity = readings.SingleOrDefault(r => r.Id == x.ElectricityReadingId && r.UtilityType == 0 && r.Date == x.Date);
         var water = readings.SingleOrDefault(r => r.Id == x.WaterReadingId && r.UtilityType == 1 && r.Date == x.Date);
         if (electricity is null || water is null) throw ContractException.Invalid("confirmed_handover_readings_required");
@@ -133,7 +144,7 @@ public sealed partial class ContractService
                 if (HandoverChecklist.RequiresOwner(snapshot) && snapshot.OwnerAcceptance?.Version != h.Version)
                     throw ContractException.Conflict("owner_handover_exception_required");
             }
-            await ValidateHandoverEvidence(c, snapshot, t);
+            await ValidateHandoverEvidence(c, snapshot, t, existingSnapshot: true);
             h.StaffConfirmedBy = Actor; h.StaffConfirmedAt = clock.GetUtcNow(); h.Status = ContractHandoverStatus.Confirmed;
             await Handovers.CompleteMoveInTaskAsync(id, Actor, clock.GetUtcNow(), t);
             if (handoverDocuments is not null) await PersistHandoverDocument(c, h, t);

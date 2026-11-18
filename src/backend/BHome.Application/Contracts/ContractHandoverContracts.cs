@@ -50,7 +50,7 @@ public interface IContractHandoverRepository
 {
     Task<ContractHandover?> GetAsync(Guid contractId, CancellationToken t);
     Task<IReadOnlyList<Asset>> AssetsAsync(Guid roomId, CancellationToken t);
-    Task<IReadOnlyList<HandoverReading>> ReadingsAsync(Guid roomId, DateOnly startDate, CancellationToken t);
+    Task<IReadOnlyList<HandoverReading>> ReadingsAsync(Guid contractId, Guid roomId, DateOnly startDate, CancellationToken t);
     Task<HandoverReading?> ReadingAsync(Guid roomId, Guid readingId, CancellationToken t);
     Task<IReadOnlyList<ContractHandoverHistory>> HistoryAsync(Guid contractId, CancellationToken t);
     Task<bool> HistoryContainsEvidenceAsync(Guid contractId, Guid evidenceId, CancellationToken t);

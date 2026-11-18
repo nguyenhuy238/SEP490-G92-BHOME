@@ -97,6 +97,37 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     private async Task<Guid> Active(Workspace w)
     { var id = await Draft(w); await Signed(w, id); await Deposit(w, id); await Success<ContractView>(await Post(w.Owner, Path(id, "activate"))); return id; }
 
+    private async Task<Meter[]> InstallHandoverMeters(Workspace w)
+    {
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var meters = new[] { UtilityType.Electricity, UtilityType.Water }.Select(type => new Meter
+        {
+            RoomId = w.Room,
+            Code = "SYNTHETIC-CONTRACT-" + type,
+            UtilityType = type,
+            InstalledOn = Today.AddDays(-20)
+        }).ToArray();
+        db.AddRange(meters);
+        await db.SaveChangesAsync();
+        return meters;
+    }
+
+    private async Task<ConfirmedReading> ConfirmInitialTask(Workspace w, Guid taskId, decimal value)
+    {
+        using var photo = new ByteArrayContent(Image());
+        photo.Headers.ContentType = new("image/png");
+        var evidence = await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{taskId}/evidence", photo));
+        return await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{taskId}/confirm",
+            new MeterConfirmation(true, value, evidence.Id)));
+    }
+
+    private async Task<bool> UsesCompact24()
+    {
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        return scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>() is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext;
+    }
+
     private static async Task<HandoverChoices> EmptyRoomHandoverChoices(Workspace w, Guid id)
     {
         var choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
@@ -112,6 +143,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     internal async Task ActivationCreatesOneMoveInTaskWithoutDependingOnAvailableStaff(bool assigned)
     {
         var w = await Setup();
+        var meters = await InstallHandoverMeters(w);
         var id = await Draft(w);
         if (!assigned)
         {
@@ -126,6 +158,111 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await using var check = fixture.Factory.Services.CreateAsyncScope(); var store = check.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var task = Assert.Single(await store.Set<OperationalTask>().Where(task => task.ContractId == id && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.AdHoc).ToArrayAsync());
         Assert.Equal(w.Room, task.TargetRoomId); Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, task.AssignedStaffUserId);
+        var initialTasks = await store.Set<OperationalTask>().Where(task => task.ContractId == id && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading)
+            .OrderBy(task => task.MeterId).ToArrayAsync();
+        Assert.Equal(2, initialTasks.Length);
+        Assert.Equal(meters.Select(meter => meter.Id).Order().ToArray(), initialTasks.Select(meterTask => meterTask.MeterId!.Value).ToArray());
+        Assert.All(initialTasks, meterTask =>
+        {
+            Assert.Equal(ReadingPurpose.Initial, meterTask.Purpose);
+            Assert.Equal(w.Location, meterTask.LocationId);
+            Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, meterTask.AssignedStaffUserId);
+            Assert.Equal(MeterTaskStatus.Assigned, meterTask.Status);
+        });
+    }
+
+    internal async Task ReusedMetersRequireFreshContractInitialReadingsBeforeMoveInHandover()
+    {
+        var w = await Setup();
+        await using (var setup = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = setup.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var room = await db.Set<Room>().SingleAsync(room => room.Id == w.Room);
+            room.Capacity = 2; // Two individual Tenants can have separate contracts in one Room.
+            await db.SaveChangesAsync();
+        }
+        var meters = await InstallHandoverMeters(w);
+        var firstId = await Active(w);
+        var firstTasks = (await Success<MeterTaskSummary[]>(await w.Staff.Client.GetAsync("/api/v1/capture/meter-tasks")))
+            .Where(task => task.ContractId == firstId).OrderBy(task => task.UtilityType).ToArray();
+        Assert.Equal(2, firstTasks.Length);
+        var firstReadings = new[]
+        {
+            await ConfirmInitialTask(w, firstTasks[0].Id, 100),
+            await ConfirmInitialTask(w, firstTasks[1].Id, 50)
+        };
+        Assert.All(firstReadings, reading => Assert.Null(reading.Consumption));
+
+        var nextTenant = await User(Roles.Tenant);
+        Guid nextResident;
+        await using (var setup = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = setup.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var resident = new Resident
+            {
+                RoomId = w.Room,
+                TenantUserId = nextTenant.Id,
+                OwnerUserId = w.Owner.Id,
+                DisplayLabel = "Synthetic second contract representative",
+                VerificationStatus = IdentityVerificationStatus.Verified
+            };
+            db.Add(resident); await db.SaveChangesAsync(); nextResident = resident.Id;
+        }
+        var second = w with { Tenant = nextTenant, Resident = nextResident };
+        var secondId = await Active(second);
+        Assert.NotEqual(firstId, secondId);
+        var allTasks = await Success<MeterTaskSummary[]>(await w.Staff.Client.GetAsync("/api/v1/capture/meter-tasks"));
+        var secondTasks = allTasks.Where(task => task.ContractId == secondId).OrderBy(task => task.UtilityType).ToArray();
+        Assert.Equal(2, secondTasks.Length);
+        Assert.Equal(meters.Select(meter => meter.Id).Order().ToArray(), secondTasks.Select(task => task.MeterId).Order().ToArray());
+        Assert.All(secondTasks, task => Assert.Equal(ReadingPurpose.Initial, task.Purpose));
+        Assert.Empty(secondTasks.Select(task => task.Id).Intersect(firstTasks.Select(task => task.Id)));
+        Assert.Equal(firstTasks.Select(task => task.ReadingDate).ToArray(), secondTasks.Select(task => task.ReadingDate).ToArray());
+
+        // Same physical meters still need new evidence for this contract.
+        var choices = await EmptyRoomHandoverChoices(second, secondId);
+        Assert.Empty(choices.Readings);
+        using var oldPhoto = new ByteArrayContent(Image()); oldPhoto.Headers.ContentType = new("image/png");
+        var photo = await Success<ContractId>(await w.Staff.Client.PostAsync(Path(secondId, "handover/evidence"), oldPhoto));
+        var stale = new HandoverInput(0, firstTasks[0].ReadingDate, "Synthetic room", "Synthetic keys", "", [],
+            firstReadings[0].Id, firstReadings[1].Id, [photo.Id], choices.InventoryToken);
+        var staleResponse = await Post(w.Staff, Path(secondId, "handover"), stale);
+        Assert.Equal(HttpStatusCode.BadRequest, staleResponse.StatusCode);
+        Assert.Contains("confirmed_handover_readings_required", await staleResponse.Content.ReadAsStringAsync());
+
+        // Staff cannot issue extra tasks, and Owner cannot bypass the per-contract uniqueness key.
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks",
+            new MeterTaskInput(secondTasks[0].MeterId, ReadingPurpose.Initial, secondTasks[0].ReadingDate, null, secondId))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks",
+            new MeterTaskInput(secondTasks[0].MeterId, ReadingPurpose.Initial, secondTasks[0].ReadingDate, null, secondId))).StatusCode);
+
+        using var secondPhoto = new ByteArrayContent(Image()); secondPhoto.Headers.ContentType = new("image/png");
+        var secondProof = await Success<IdResult>(await second.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{secondTasks[0].Id}/evidence", secondPhoto));
+        var decreasing = await second.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{secondTasks[0].Id}/confirm",
+            new MeterConfirmation(true, 90, secondProof.Id));
+        Assert.Equal(HttpStatusCode.Conflict, decreasing.StatusCode);
+        Assert.Contains("meter_reset_or_rollover_requires_review", await decreasing.Content.ReadAsStringAsync());
+        // Same-day recapture is valid at a non-decreasing value, but its delta is not billable usage.
+        var secondReadings = new[]
+        {
+            await Success<ConfirmedReading>(await second.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{secondTasks[0].Id}/confirm",
+                new MeterConfirmation(true, 110, secondProof.Id))),
+            await ConfirmInitialTask(second, secondTasks[1].Id, 55)
+        };
+        Assert.All(secondReadings, reading => Assert.Null(reading.Consumption));
+        var current = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(secondId, "handover/choices")));
+        Assert.Equal(secondReadings.Select(reading => reading.Id).Order().ToArray(), current.Readings.Select(reading => reading.Id).Order().ToArray());
+        var original = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(firstId, "handover/choices")));
+        Assert.Equal(firstReadings.Select(reading => reading.Id).Order().ToArray(), original.Readings.Select(reading => reading.Id).Order().ToArray());
+
+        var recorded = await Success<HandoverView>(await Post(w.Staff, Path(secondId, "handover"), stale with
+        {
+            Date = secondTasks[0].ReadingDate,
+            ElectricityReadingId = secondReadings[0].Id,
+            WaterReadingId = secondReadings[1].Id
+        }));
+        Assert.Equal(secondReadings[0].Id, recorded.Snapshot.Electricity.Id);
+        Assert.Equal(secondReadings[1].Id, recorded.Snapshot.Water.Id);
     }
 
     [Fact]
@@ -247,26 +384,41 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     [Fact]
     public async Task MoveInHandoverRequiresScopedStaffRealReadingsEvidenceAndSameVersionConfirmations()
     {
-        var w = await Setup(); var outside = await Setup(); var id = await Active(w);
+        var w = await Setup(); var outside = await Setup();
+        await InstallHandoverMeters(w);
+        var id = await Active(w);
+        var compact24 = await UsesCompact24();
         var readingIds = new List<Guid>();
+        DateOnly? handoverDate = null;
         foreach (var type in new[] { UtilityType.Electricity, UtilityType.Water })
         {
-            Guid meterId;
-            await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+            var tasks = await Success<MeterTaskSummary[]>(await w.Staff.Client.GetAsync("/api/v1/capture/meter-tasks"));
+            Guid taskId;
+            DateOnly taskDate;
+            if (compact24)
             {
-                var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
-                var meter = new Meter { RoomId = w.Room, Code = "SYNTHETIC-HANDOVER-" + type, UtilityType = type, InstalledOn = Today.AddDays(-1) }; db.Add(meter); await db.SaveChangesAsync(); meterId = meter.Id;
+                var task = Assert.Single(tasks, task => task.ContractId == id && task.Purpose == ReadingPurpose.Initial && task.UtilityType == type);
+                taskId = task.Id;
+                taskDate = task.ReadingDate;
             }
-            var task = await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(meterId, ReadingPurpose.Initial, Today, null, null)));
-            using var image = new ByteArrayContent(Image()); image.Headers.ContentType = new("image/png");
-            var evidence = await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{task.Id}/evidence", image));
-            var reading = await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task.Id}/confirm", new MeterConfirmation(true, 100, evidence.Id)));
+            else
+            {
+                await using var scope = fixture.Factory.Services.CreateAsyncScope();
+                var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+                var meter = await db.Set<Meter>().SingleAsync(m => m.RoomId == w.Room && m.UtilityType == type && m.IsActive);
+                taskDate = Today;
+                taskId = (await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks",
+                    new MeterTaskInput(meter.Id, ReadingPurpose.Initial, taskDate, null)))).Id;
+            }
+            handoverDate ??= taskDate;
+            Assert.Equal(handoverDate, taskDate);
+            var reading = await ConfirmInitialTask(w, taskId, 100);
             readingIds.Add(reading.Id);
         }
         using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
         var picture = await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), photo));
         var choices = await EmptyRoomHandoverChoices(w, id);
-        var input = new HandoverInput(0, Today, "SYNTHETIC room condition", "SYNTHETIC keys checklist", "", [], readingIds[0], readingIds[1], [picture.Id], choices.InventoryToken);
+        var input = new HandoverInput(0, handoverDate!.Value, "SYNTHETIC room condition", "SYNTHETIC keys checklist", "", [], readingIds[0], readingIds[1], [picture.Id], choices.InventoryToken);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { EvidenceIds = [] })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { ElectricityReadingId = readingIds[1] })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(w.Staff, Path(id, "handover"), input with { Date = Today.AddDays(1) })).StatusCode);
@@ -443,31 +595,38 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     private async Task<Guid> FinalReading(Workspace w, Guid contractId, UtilityType type)
     {
         Guid meter;
+        Guid? initialTask = null;
+        var compact24 = await UsesCompact24();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>(); var m = await db.Set<Meter>().SingleOrDefaultAsync(m => m.RoomId == w.Room && m.UtilityType == type && m.IsActive);
             if (m is null) { m = new Meter { RoomId = w.Room, Code = "SYNTHETIC-" + type, UtilityType = type, InstalledOn = Today.AddDays(-10) }; db.Add(m); await db.SaveChangesAsync(); }
             meter = m.Id;
+            initialTask = await db.Set<OperationalTask>().Where(task => task.MeterId == meter && task.ContractId == (compact24 ? contractId : null) && task.Purpose == ReadingPurpose.Initial)
+                .Select(task => (Guid?)task.Id).SingleOrDefaultAsync();
         }
-        foreach (var purpose in new[] { ReadingPurpose.Initial, ReadingPurpose.Final })
+        if (initialTask is null)
         {
-            if (purpose == ReadingPurpose.Initial) { await using var s = fixture.Factory.Services.CreateAsyncScope(); if (await s.ServiceProvider.GetRequiredService<BHomePersistenceContext>().Set<MeterReading>().AnyAsync(r => r.MeterId == meter)) continue; }
-            var response = await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(meter, purpose, purpose == ReadingPurpose.Initial ? Today.AddDays(-10) : Today, null, purpose == ReadingPurpose.Final ? contractId : null));
-            var task = (await Success<IdResult>(response)).Id;
-            using var binary = new ByteArrayContent(Image()); binary.Headers.ContentType = new("image/png");
-            var evidence = (await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{task}/evidence", binary))).Id;
-            var reading = await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task}/confirm", new MeterConfirmation(true, purpose == ReadingPurpose.Initial ? 100 : 120, evidence)));
-            if (purpose == ReadingPurpose.Final)
-            {
-                var tasks = (await w.Staff.Client.GetFromJsonAsync<MeterTaskSummary[]>("/api/v1/capture/meter-tasks"))!;
-                var summary = Assert.Single(tasks, x => x.Id == task);
-                Assert.Equal(contractId, summary.ContractId); Assert.Equal(reading.Id, summary.ConfirmedReadingId);
-                var outsider = await User(Roles.Staff);
-                Assert.DoesNotContain((await outsider.Client.GetFromJsonAsync<MeterTaskSummary[]>("/api/v1/capture/meter-tasks"))!, x => x.Id == task);
-                return reading.Id;
-            }
+            initialTask = (await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks",
+                new MeterTaskInput(meter, ReadingPurpose.Initial, Today.AddDays(-10), null, compact24 ? contractId : null)))).Id;
         }
-        throw new InvalidOperationException();
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            if (!await db.Set<MeterReading>().AnyAsync(reading => reading.TaskId == initialTask.Value))
+                await ConfirmInitialTask(w, initialTask.Value, 100);
+        }
+        var taskId = (await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks",
+            new MeterTaskInput(meter, ReadingPurpose.Final, Today, null, contractId)))).Id;
+        using var binary = new ByteArrayContent(Image()); binary.Headers.ContentType = new("image/png");
+        var evidence = (await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{taskId}/evidence", binary))).Id;
+        var readingResult = await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{taskId}/confirm", new MeterConfirmation(true, 120, evidence)));
+        var tasks = (await w.Staff.Client.GetFromJsonAsync<MeterTaskSummary[]>("/api/v1/capture/meter-tasks"))!;
+        var summary = Assert.Single(tasks, x => x.Id == taskId);
+        Assert.Equal(contractId, summary.ContractId); Assert.Equal(readingResult.Id, summary.ConfirmedReadingId);
+        var outsider = await User(Roles.Staff);
+        Assert.DoesNotContain((await outsider.Client.GetFromJsonAsync<MeterTaskSummary[]>("/api/v1/capture/meter-tasks"))!, x => x.Id == taskId);
+        return readingResult.Id;
     }
     [Fact]
     public async Task T10_T11_T12_T13_T14_InspectionFinalMetersPendingSettlementAndCompletedMoveOut()

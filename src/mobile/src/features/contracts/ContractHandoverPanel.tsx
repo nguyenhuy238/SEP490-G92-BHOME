@@ -1,7 +1,6 @@
 import { conciseMessage } from '../../lib/toast';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
-import { router } from 'expo-router';
 import { Checkbox, Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
 import {
@@ -27,6 +26,7 @@ import {
   quantityFields,
 } from '../../../../../packages/client-core/src/handoverForm';
 import { ContractAssetChangesPanel } from './ContractAssetChangesPanel';
+import { ContractInitialMeterTasks } from './ContractInitialMeterTasks';
 
 export function ContractHandoverPanel({
   api,
@@ -141,6 +141,7 @@ export function ContractHandoverPanel({
         title="Bàn giao nhận phòng (UC-17)"
         detail="Tenant xác nhận nội dung · Staff hoàn tất cùng phiên bản"
       />
+      {staff && <ContractInitialMeterTasks contract={contract} />}
       {query.loading && <Text>Đang tải bàn giao…</Text>}
       {!!query.error && <Text style={ui.red}>{conciseMessage(query.error)}</Text>}
       {!query.loading && !query.error && !h && <Text>Chưa có biên bản nhận phòng.</Text>}
@@ -274,9 +275,9 @@ export function ContractHandoverPanel({
               onChange={(v) => set(String(name), v)}
             />
           ))}
-          <Action secondary disabled={busy} onPress={() => router.push('/capture')}>
-            Mở tác vụ điện / nước
-          </Action>
+          <Text>
+            Chọn nhiệm vụ khởi tạo điện và nước của hợp đồng ở trên để chụp và xác nhận chỉ số.
+          </Text>
           <Text>
             Ảnh toàn cảnh phòng; tối đa 10 ảnh được chọn, mỗi ảnh tối đa 5 MB. Ảnh riêng của nhóm
             chọn ở trên. Không chụp giấy tờ cá nhân.
