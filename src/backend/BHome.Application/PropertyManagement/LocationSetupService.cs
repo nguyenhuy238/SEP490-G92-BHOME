@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -19,9 +20,11 @@ public sealed record LocationMetadataWrite(string Code, int Floors, string Conta
 public sealed record LocalRoomDefaultsWrite(string Name, string Description, SharedRoomDefaults Defaults,
     Guid? AssetTemplateId, int ExpectedVersion = 0, string Reason = "", string Status = "Recorded");
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SetupAssetRequirement(string Name, string Category, string TrackingMode, int Quantity, string? Unit = null);
+public sealed record SetupAssetRequirement(string Name, string Category, string TrackingMode, int Quantity, string? Unit = null,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? ReferencePrice = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SetupCommonAssetRequirement(Guid Id, string Name, string Category, string TrackingMode, int Quantity, string CommonArea, string? Unit = null);
+public sealed record SetupCommonAssetRequirement(Guid Id, string Name, string Category, string TrackingMode, int Quantity, string CommonArea, string? Unit = null,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? ReferencePrice = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CommonAssetRequirementsWrite(SetupCommonAssetRequirement[] Items, int ExpectedVersion = 0);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -100,9 +103,39 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
         if (result.Length > limit || required && result.Length == 0) throw new PropertyException(400, "invalid_location_setup_text");
         return result;
     }
+    // Match the Owner Web preview. Existing API callers with a custom code
+    // remain compatible; new wizard-created locations use initials + suffix.
+    private static string SuggestedLocationCode(string name)
+    {
+        var normalized = name.Replace('đ', 'd').Replace('Đ', 'D').Normalize(NormalizationForm.FormD);
+        var initials = new StringBuilder();
+        var atWordStart = true;
+        foreach (var letter in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(letter) == UnicodeCategory.NonSpacingMark) continue;
+            if (!char.IsAsciiLetterOrDigit(letter)) { atWordStart = true; continue; }
+            if (atWordStart && initials.Length < 42) initials.Append(char.ToUpperInvariant(letter));
+            atWordStart = false;
+        }
+        return initials.Length == 0 ? "CS" : initials.ToString();
+    }
+    private async Task<string> AssignedLocationCode(string name, string requested, CancellationToken t)
+    {
+        var baseCode = SuggestedLocationCode(name);
+        if (!string.IsNullOrWhiteSpace(requested) &&
+            !string.Equals(requested.Trim(), baseCode, StringComparison.OrdinalIgnoreCase))
+            return requested.Trim(); // Legacy API compatibility.
+        for (var suffix = 0; suffix < 10000; suffix++)
+        {
+            var candidate = suffix == 0 ? baseCode : $"{baseCode}-{suffix:00}";
+            if (!await shared.LocationCodeExistsAsync(candidate, null, t)) return candidate;
+        }
+        throw new PropertyException(409, "location_code_space_exhausted");
+    }
     private static string Name(SetupDocument document) => document.Data.GetProperty("name").GetString() ?? "";
     private static Guid? Template(SetupDocument document) => document.Data.TryGetProperty("assetTemplateId", out var id) && id.ValueKind == JsonValueKind.String && id.TryGetGuid(out var value) ? value : null;
     private static SharedRoomDefaults Defaults(SetupDocument document) => SharedDataValidator.Read<SharedRoomDefaults>(document.Data.GetProperty("defaults"));
+    private static int DefaultsEdition(SetupDocument document) => document.Data.TryGetProperty("edition", out var edition) && edition.TryGetInt32(out var number) && number > 0 ? number : 1;
     private static bool Same(string a, string b) => string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
     private async Task<SharedRoomDefaults> ValidateDefaults(SharedRoomDefaults input, CancellationToken t)
     {
@@ -158,16 +191,37 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
     private static SetupCommonAssetRequirement[] ValidateCommonAssets(SetupCommonAssetRequirement[]? items)
     {
         if (items is null || items.Length > 100 || items.Any(item => item is null || item.Id == Guid.Empty ||
-            item.Quantity is < 1 or > 10000 || item.TrackingMode is not ("Serialized" or "BulkQuantity")) ||
+            item.Quantity is < 1 or > 10000 || item.TrackingMode is not ("Serialized" or "BulkQuantity") ||
+            !InventoryAcquisitionPrice.ValidReference(item.ReferencePrice)) ||
             items.Select(item => item.Id).Distinct().Count() != items.Length)
             throw new PropertyException(400, "invalid_common_asset_requirements");
-        return items.Select(item => item with
+        var normalized = items.Select(item => item with
         {
             Name = Text(item.Name, 150),
             Category = Text(item.Category, 80),
             CommonArea = Text(item.CommonArea, 200),
             Unit = string.IsNullOrWhiteSpace(item.Unit) ? null : Text(item.Unit, 80)
         }).ToArray();
+        // IDs are client-generated checklist identities; they do not prevent a
+        // repeated catalog item with a new ID. One item + editable quantity per
+        // location is the intended model, for both setup and later updates.
+        static string CatalogNameKey(string name)
+        {
+            var decomposed = name.Replace('đ', 'd').Replace('Đ', 'D').Normalize(NormalizationForm.FormD);
+            var result = new StringBuilder();
+            var spacing = false;
+            foreach (var letter in decomposed)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(letter) == UnicodeCategory.NonSpacingMark) continue;
+                if (char.IsWhiteSpace(letter)) { spacing = result.Length > 0; continue; }
+                if (spacing) { result.Append(' '); spacing = false; }
+                result.Append(char.ToLowerInvariant(letter));
+            }
+            return result.ToString();
+        }
+        if (normalized.Select(item => CatalogNameKey(item.Name)).Distinct(StringComparer.Ordinal).Count() != normalized.Length)
+            throw new PropertyException(400, "duplicate_common_asset");
+        return normalized;
     }
 
     public async Task<SetupDocument?> CommonAssetsAsync(Guid location, CancellationToken t)
@@ -198,6 +252,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
         {
             _ = await properties.GetLocationAsync(location, t);
             var before = id.HasValue ? await ScopedDocument(location, id.Value, "RoomDefaults", t) : null;
+            if ((before?.Version ?? 0) != input.ExpectedVersion) throw new PropertyException(409, "stale_room_defaults");
             if (input.Status == "Archived")
             {
                 if (before is null) throw new PropertyException(400, "invalid_room_defaults");
@@ -219,10 +274,15 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 if (SharedDataValidator.Read<AssetTemplateWrite>(assetTemplate.Data).ScopeRoomId is not null)
                     throw new PropertyException(400, "template_scope_invalid");
             }
+            if (before is not null && before.Status == input.Status && Name(before) == name &&
+                (before.Data.TryGetProperty("description", out var priorDescription) ? priorDescription.GetString() ?? "" : "") == description &&
+                Template(before) == input.AssetTemplateId && JsonNode.DeepEquals(JsonSerializer.SerializeToNode(Defaults(before), Json), JsonSerializer.SerializeToNode(defaults, Json)))
+                return before;
             // Preserve lineage when editing a copied/applied document; only editable local fields are replaced.
             var data = before is null ? new JsonObject() : JsonNode.Parse(before.Data.GetRawText())!.AsObject();
             data["name"] = name; data["description"] = description; data["defaults"] = JsonSerializer.SerializeToNode(defaults, Json);
             data["assetTemplateId"] = input.AssetTemplateId.HasValue ? JsonValue.Create(input.AssetTemplateId.Value) : null;
+            data["edition"] = before is null ? 1 : DefaultsEdition(before) + 1;
             data["reason"] = Text(input.Reason, 500, false);
             return await local.SaveAsync(id ?? Guid.NewGuid(), location, "RoomDefaults", input.Status, data, input.ExpectedVersion, actor, t);
         }, t, validateActiveLocations: false);
@@ -370,12 +430,21 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
             if (before.Status != "Recorded" || before.Version != input.ExpectedVersion)
                 throw new PropertyException(409, "stale_room_defaults");
             var name = Name(before);
-            var suffix = $" assets {before.Version + 1}";
-            var template = await assets.CreateRequirementsAsync(location, name[..Math.Min(name.Length, 150 - suffix.Length)] + suffix, input.Items, null, t);
-            var data = JsonNode.Parse(before.Data.GetRawText())!.AsObject();
-            data["assetTemplateId"] = template is null ? null : JsonValue.Create(template.Id);
-            data["reason"] = reason;
-            var updated = await local.SaveAsync(id, location, "RoomDefaults", "Recorded", data, before.Version, actor, t);
+            var items = AssetInventoryService.ValidateItems(input.Items, allowEmpty: true);
+            var template = Template(before) is { } previousTemplateId ? await ScopedDocument(location, previousTemplateId, "AssetTemplate", t) : null;
+            var previousItems = template is null ? [] : SharedDataValidator.Read<AssetTemplateWrite>(template.Data).Items;
+            var changed = !items.OrderBy(item => item.Id).SequenceEqual(previousItems.OrderBy(item => item.Id));
+            var updated = before;
+            if (changed)
+            {
+                var suffix = $" assets {DefaultsEdition(before) + 1}";
+                template = await assets.CreateRequirementsAsync(location, name[..Math.Min(name.Length, 150 - suffix.Length)] + suffix, items, null, t);
+                var data = JsonNode.Parse(before.Data.GetRawText())!.AsObject();
+                data["assetTemplateId"] = template is null ? null : JsonValue.Create(template.Id);
+                data["edition"] = DefaultsEdition(before) + 1;
+                data["reason"] = reason;
+                updated = await local.SaveAsync(id, location, "RoomDefaults", "Recorded", data, before.Version, actor, t);
+            }
             var results = new List<AssetSyncRoom>();
             if (input.ApplyToExistingRooms)
             {
@@ -383,13 +452,14 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 {
                     var provenance = SharedDataValidator.Read<RoomProvenanceData>(document.Data);
                     if (provenance.RoomDefaultsId != id) continue;
-                    if (await local.RoomConfigurationLockReasonAsync(provenance.RoomId, t) is not null)
+                    if (!await local.EligibleRoomAsync(provenance.RoomId, t))
                     {
                         results.Add(new(provenance.RoomId, "SkippedNotEligible"));
                         continue;
                     }
                     var inventory = await assets.InventoryAsync(provenance.RoomId, t);
-                    await assets.AssignRequirementsAsync(location, provenance.RoomId, template, inventory.AssignmentVersion, t);
+                    if (inventory.AssignedTemplateId != template?.Id || template is not null && inventory.CurrentDesiredId is null || template is null && inventory.CurrentDesiredId is not null)
+                        await assets.AssignRequirementsAsync(location, provenance.RoomId, template, inventory.AssignmentVersion, t);
                     results.Add(new(provenance.RoomId, "Applied"));
                 }
             }
@@ -494,9 +564,10 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
             }
             if (input.RentEffectiveFrom < Today) throw new PropertyException(400, "invalid_rent_effective_date");
             var info = input.Location;
-            var metadata = new LocationMetadataWrite(info.Code, info.Floors, info.ContactPhone, info.ContactEmail, info.Description);
+            var assignedCode = await AssignedLocationCode(info.Name, info.Code, t);
+            var metadata = new LocationMetadataWrite(assignedCode, info.Floors, info.ContactPhone, info.ContactEmail, info.Description);
             ValidateMetadata(metadata); _ = Text(info.Name, 200); _ = Text(info.Address, 1000);
-            if (await shared.LocationCodeExistsAsync(info.Code, null, t)) throw new PropertyException(409, "duplicate_location_code");
+            if (await shared.LocationCodeExistsAsync(metadata.Code, null, t)) throw new PropertyException(409, "duplicate_location_code");
             LocationSetupSource? source = null;
             if (input.SourceLocationId is { } sourceId)
             {
@@ -614,7 +685,7 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                 Guid? assetTemplateId = null;
                 if (type.Assets.Length > 0)
                 {
-                    var template = await assets.SaveTemplateAsync(null, new(location.Id, type.Name.Trim(), type.Assets.Select(asset => new AssetTemplateItem(Guid.NewGuid(), asset.Name.Trim(), asset.Category.Trim(), asset.TrackingMode, asset.Quantity, string.IsNullOrWhiteSpace(asset.Unit) ? null : asset.Unit.Trim())).ToArray(), Scoped: true), t);
+                    var template = await assets.SaveTemplateAsync(null, new(location.Id, type.Name.Trim(), type.Assets.Select(asset => new AssetTemplateItem(Guid.NewGuid(), asset.Name.Trim(), asset.Category.Trim(), asset.TrackingMode, asset.Quantity, string.IsNullOrWhiteSpace(asset.Unit) ? null : asset.Unit.Trim(), asset.ReferencePrice)).ToArray(), Scoped: true), t);
                     await assets.PublishAsync(template.Id, template.Version, t); assetTemplateId = template.Id; created.Add(template.Id);
                 }
                 var data = new JsonObject
@@ -622,7 +693,8 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
                     ["name"] = type.Name.Trim(),
                     ["description"] = type.Description?.Trim() ?? "",
                     ["defaults"] = JsonSerializer.SerializeToNode(normalized[type.Key], Json),
-                    ["assetTemplateId"] = assetTemplateId.HasValue ? JsonValue.Create(assetTemplateId.Value) : null
+                    ["assetTemplateId"] = assetTemplateId.HasValue ? JsonValue.Create(assetTemplateId.Value) : null,
+                    ["edition"] = 1
                 };
                 if (type.SourceId.HasValue)
                 {
@@ -647,8 +719,8 @@ public sealed class LocationSetupService(ISharedConfigurationStore shared, ISetu
             }
             if (input.Policy is { } policy)
             {
-                var saved = await policies.SaveAsync(null, new(location.Id, policy.Title, policy.Content, policy.EffectiveFrom), t);
-                await policies.PublishAsync(saved.Id, saved.Version, t); created.Add(saved.Id);
+                var saved = await policies.SaveReadyAsync(null, new(location.Id, policy.Title, policy.Content, policy.EffectiveFrom), t);
+                created.Add(saved.Id);
             }
             if (!input.Activate)
             {

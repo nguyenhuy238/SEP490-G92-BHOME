@@ -19,15 +19,37 @@ public sealed partial class UtilityWorkspaceService(ISetupWorkspaceStore store, 
             if (input.ReplacesId is { } source)
             {
                 var old = await Document(source, "UtilityTariff", true, t);
-                if (old.LocationId != input.LocationId || Read<UtilityTariffWrite>(old).UtilityType != input.UtilityType ||
-                    input.EffectiveFrom <= Read<UtilityTariffWrite>(old).EffectiveFrom) throw new PropertyException(400, "invalid_tariff_replacement");
-                if (tariffs.Any(d => Read<UtilityTariffWrite>(d).ReplacesId == source)) throw new PropertyException(409, "tariff_already_replaced");
+                var previous = Read<UtilityTariffWrite>(old);
+                if (old.LocationId != input.LocationId || previous.UtilityType != input.UtilityType)
+                    throw new PropertyException(400, "invalid_tariff_replacement");
+                var replacement = tariffs.SingleOrDefault(d => Read<UtilityTariffWrite>(d).ReplacesId == source);
+                if (replacement is not null)
+                {
+                    if (Hash(Read<UtilityTariffWrite>(replacement)) == Hash(input)) return replacement;
+                    throw new PropertyException(409, "tariff_already_replaced");
+                }
+                if (Hash(previous with { ReplacesId = source }) == Hash(input)) return old;
+                if (input.EffectiveFrom <= previous.EffectiveFrom) throw new PropertyException(400, "invalid_tariff_replacement");
+                // A replacement also shortens the old tariff's usable window in the
+                // advanced utility calculator. Do not bypass the room-profile lock
+                // indirectly while contract-level advanced snapshots are unavailable.
+                var affectedRooms = NormalizeProfiles(await Store.ListAsync(input.LocationId, "UtilityProfile", t))
+                    .Select(Read<UtilityProfileWrite>)
+                    .Where(p => p.TariffId == source && (p.EffectiveTo is null || p.EffectiveTo >= input.EffectiveFrom))
+                    .Select(p => p.RoomId).ToHashSet();
+                if (affectedRooms.Count > 0 && (await properties.BindingPriceContractsForLocationsAsync([input.LocationId], t))
+                    .Any(binding => affectedRooms.Contains(binding.Contract.RoomId)))
+                    throw new PropertyException(409, "utility_tariff_locked_by_contract");
             }
             foreach (var doc in tariffs.Where(d => d.Id != input.ReplacesId))
             {
                 var old = Read<UtilityTariffWrite>(doc);
+                var successor = tariffs.Where(d => Read<UtilityTariffWrite>(d).ReplacesId == doc.Id)
+                    .Select(d => (DateOnly?)Read<UtilityTariffWrite>(d).EffectiveFrom).Min();
+                var last = successor is { } from && (old.EffectiveTo is null || old.EffectiveTo >= from)
+                    ? from.AddDays(-1) : old.EffectiveTo;
                 if (old.UtilityType == input.UtilityType && old.EffectiveFrom <= (input.EffectiveTo ?? DateOnly.MaxValue) &&
-                    input.EffectiveFrom <= (old.EffectiveTo ?? DateOnly.MaxValue) && !tariffs.Any(d => Read<UtilityTariffWrite>(d).ReplacesId == doc.Id))
+                    input.EffectiveFrom <= (last ?? DateOnly.MaxValue))
                     throw new PropertyException(409, "tariff_period_overlap");
             }
             return await Store.SaveAsync(Guid.NewGuid(), input.LocationId, "UtilityTariff", input.Verified ? "Verified" : "NeedsReview", input, 0, Actor, t);
@@ -98,17 +120,27 @@ public sealed partial class UtilityWorkspaceService(ISetupWorkspaceStore store, 
         if (tariff.LocationId != input.LocationId || Read<UtilityTariffWrite>(tariff).UtilityType != input.UtilityType) throw new PropertyException(400, "tariff_scope_invalid");
         return await Store.TransactionAsync(input.LocationId, async () =>
         {
-            await RoomPricingLock.EnsureUnlockedAsync(properties, input.RoomId, t);
             var originals = await Store.ListAsync(input.LocationId, "UtilityProfile", t);
             if (input.ReplacesId is { } source)
             {
                 var original = originals.SingleOrDefault(d => d.Id == source) ?? throw new PropertyException(404, "profile_not_found");
                 var old = Read<UtilityProfileWrite>(original);
-                if (old.RoomId != input.RoomId || old.UtilityType != input.UtilityType || input.EffectiveFrom <= old.EffectiveFrom)
+                if (old.RoomId != input.RoomId || old.UtilityType != input.UtilityType)
                     throw new PropertyException(400, "profile_replacement_invalid");
-                if (original.Version != input.ExpectedVersion || originals.Any(d => Read<UtilityProfileWrite>(d).ReplacesId == source))
+                if (original.Version != input.ExpectedVersion)
                     throw new PropertyException(409, "profile_replacement_conflict");
+                var replacement = originals.SingleOrDefault(d => Read<UtilityProfileWrite>(d).ReplacesId == source);
+                if (replacement is not null)
+                {
+                    // The store deliberately omits the request's concurrency token.
+                    // Compare the saved business data after checking the source version.
+                    if (Hash(Read<UtilityProfileWrite>(replacement) with { ExpectedVersion = input.ExpectedVersion }) == Hash(input)) return replacement;
+                    throw new PropertyException(409, "profile_replacement_conflict");
+                }
+                if (Hash(old with { ExpectedVersion = input.ExpectedVersion, ReplacesId = source }) == Hash(input)) return original;
+                if (input.EffectiveFrom <= old.EffectiveFrom) throw new PropertyException(400, "profile_replacement_invalid");
             }
+            await RoomPricingLock.EnsureUnlockedAsync(properties, input.RoomId, t);
             if (NormalizeProfiles(originals).Where(d => d.Id != input.ReplacesId).Any(d =>
             {
                 var p = Read<UtilityProfileWrite>(d); return p.RoomId == input.RoomId && p.UtilityType == input.UtilityType &&

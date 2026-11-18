@@ -191,7 +191,7 @@ it('creates an exact tiered tariff without browser charge calculation', async ()
 });
 it('replaces a tariff through the immutable-source replacement route', async () => {
   mount();
-  fireEvent.click(await screen.findByRole('button', { name: 'Tạo biểu giá thay thế' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa biểu giá' }));
   fill('Biểu giá hiệu lực từ', '2026-12-01');
   fireEvent.click(screen.getByRole('button', { name: 'Lưu biểu giá điện nước' }));
   await waitFor(() =>
@@ -203,6 +203,25 @@ it('replaces a tariff through the immutable-source replacement route', async () 
     ).toBe(true),
   );
   expect(state.request.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
+});
+it('explains advanced pricing limits and keeps a contract-locked tariff editor open', async () => {
+  state.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/replacement') && init?.method === 'POST')
+      throw new ApiError(409, { code: 'utility_tariff_locked_by_contract' });
+    return reads(path);
+  });
+  mount();
+  expect(
+    screen.getByText(/Hóa đơn và quyết toán hiện vẫn dùng đơn giá điện nước đã chốt/),
+  ).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa biểu giá' }));
+  fill('Biểu giá hiệu lực từ', '2026-12-01');
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu biểu giá điện nước' }));
+  expect(
+    await screen.findByText(/Biểu giá đang được cấu hình cho phòng có hợp đồng ràng buộc/),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  expect(screen.getByLabelText(/Biểu giá hiệu lực từ/)).toHaveValue('2026-12-01');
 });
 it('sends all required utility profile flags and current Location/Room scope', async () => {
   mount();

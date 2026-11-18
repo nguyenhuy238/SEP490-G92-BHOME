@@ -100,7 +100,17 @@ public sealed record PolicyDto(Guid Id, Guid LocationId, Guid? RoomId,
     ChargeCategory Category, string ChargeCode, string Name, ChargingMethod Method,
     [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.WriteAsString | System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString)] decimal Rate,
     DateOnly EffectiveFrom, DateOnly? EffectiveTo, int Version, DateTimeOffset? FirstUsedAt = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RoomTypeId = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? RoomTypeId = null,
+    DateOnly? LastContractEndDate = null)
+{
+    public int BindingContractCount { get; init; }
+    public bool CanEditInPlace { get; init; }
+    public Guid? FamilyId { get; init; }
+    public int Edition { get; init; } = 1;
+    public Guid? PreviousPolicyId { get; init; }
+}
+public sealed record PolicyLineage(Guid FamilyId, int Edition, Guid? PreviousPolicyId = null);
+public sealed record ScopedPriceContract(Guid LocationId, Guid? RoomTypeId, Contract Contract);
 public sealed record ResolvedPrices(Guid RoomId, DateOnly EffectiveOn, IReadOnlyList<PolicyDto> Charges,
     IReadOnlyList<string> MissingRequiredCharges);
 
@@ -116,6 +126,8 @@ public interface IPropertyRepository
     Task<bool> AnyAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken token) where T : class;
     Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token);
     Task<IReadOnlyList<Contract>> BindingPriceContractsAsync(Guid roomId, CancellationToken token);
+    Task<IReadOnlyList<ScopedPriceContract>> BindingPriceContractsForLocationsAsync(Guid[] locationIds, CancellationToken token);
+    Task<IReadOnlyDictionary<Guid, PolicyLineage>> PolicyLineagesAsync(Guid[] policyIds, CancellationToken token);
     Task<PagedResult<TDto>> ListAsync<T, TDto>(Expression<Func<T, bool>> predicate,
         Expression<Func<T, TDto>> projection, PropertyQuery query, Guid? staffId, DateOnly today,
         CancellationToken token) where T : AuditableEntity;

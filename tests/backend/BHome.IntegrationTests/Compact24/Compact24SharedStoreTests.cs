@@ -47,6 +47,11 @@ public sealed class Compact24SharedStoreTests(Compact24Fixture fixture) : IClass
         Assert.Equal(draft.FamilyId, next.FamilyId); Assert.Equal(2, next.Edition); Assert.Equal(1, next.Version);
         var duplicate = await service.DeriveAsync("store-test", draft.Id, new(Guid.NewGuid().ToString("N"), 2), false, default);
         Assert.NotEqual(draft.FamilyId, duplicate.FamilyId);
+        // Simulate legacy data with two archived/active families sharing a name.
+        var legacy = document with { Id = Guid.NewGuid(), FamilyId = Guid.NewGuid(), Name = draft.Name, Status = "Archived" };
+        await store.TransactionAsync([], async () => { await store.SaveAsync(legacy, 0, default); return true; }, default);
+        Assert.Equal(409, (await Assert.ThrowsAsync<PropertyException>(() => service.RestoreAsync("store-test", legacy.Id, new(legacy.Version), default))).Status);
+        Assert.Equal("Archived", (await store.GetAsync(legacy.Id, "store-test", default))!.Status);
         foreach (var role in new[] { Roles.Staff, Roles.Tenant })
         {
             var forbidden = new SharedConfigurationService(store, new Validator(), new User(actor.Id, role), TimeProvider.System);

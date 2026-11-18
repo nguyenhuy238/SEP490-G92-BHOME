@@ -26,6 +26,8 @@ type ReviewItem = {
   quantity: number;
   checked: boolean;
   evidence: Evidence[];
+  referenceUnitCost?: string | null;
+  acquisitionUnitCost?: string | null;
 };
 type ReviewRoom = {
   roomId: string;
@@ -50,7 +52,7 @@ type ConfirmInput = {
     desiredId: string | null;
     desiredVersion: number;
     stateToken: string;
-    items: { itemId: string; checked: boolean; evidenceIds: string[] }[];
+    items: { itemId: string; checked: boolean; evidenceIds: string[]; unitCost?: string | null }[];
   }[];
 };
 
@@ -67,6 +69,7 @@ const room = (id: string, roomNumber: string, itemIds: string[]): ReviewRoom => 
     unit: 'Cái',
     quantity: index ? 2 : 4,
     checked: false,
+    referenceUnitCost: index ? null : '1200000',
     evidence: [],
   })),
   state: 'NotChecked',
@@ -224,6 +227,22 @@ it('saves a room with only some groups confirmed', async () => {
   await screen.findByText('Đã lưu xác nhận kiểm kê.');
   expect(writes[0].rooms[0].items.map((item) => item.checked)).toEqual([true, false]);
   expect(writes[0].rooms[0].items.map((item) => item.evidenceIds)).toEqual([[], []]);
+  expect(writes[0].rooms[0].items.map((item) => item.unitCost)).toEqual(['1200000', null]);
+});
+
+it('lets Owner override default per-unit acquisition cost without entering quantity or condition', async () => {
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Kiểm kê P.101' }));
+  const dialog = within(screen.getByRole('dialog'));
+  const price = dialog.getByLabelText('Đơn giá mua (VNĐ) · Ghế (P.101)');
+  expect(price).toHaveValue('1.200.000');
+  expect(dialog.queryByRole('spinbutton')).not.toBeInTheDocument();
+  fireEvent.click(dialog.getByLabelText('Đã kiểm tra và đủ theo thiết lập · Ghế (P.101)'));
+  fireEvent.change(price, { target: { value: '3.000.000' } });
+  fireEvent.click(dialog.getByRole('button', { name: 'Xác nhận đã kiểm tra' }));
+  await screen.findByText('Đã lưu xác nhận kiểm kê.');
+  expect(writes[0].rooms[0].items[0].unitCost).toBe('3000000');
+  expect(writes[0].rooms[0].items[1].unitCost).toBeNull();
 });
 
 it('rejects more than five photos for one group before uploading', async () => {

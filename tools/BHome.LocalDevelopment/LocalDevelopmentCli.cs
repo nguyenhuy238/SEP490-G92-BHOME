@@ -8,6 +8,45 @@ internal static class LocalDevelopmentCli
 {
     public static async Task<int> Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "seed-staff-inventory-active" && args[1] is "--inspect" or "--apply")
+        {
+            try
+            {
+                var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "";
+                // Overrides are scoped to this short-lived CLI process; no hosted workers run.
+                var settings = new ConfigurationBuilder().AddEnvironmentVariables().AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["ContractWorkflow:SimulatedSigningEnabled"] = "true",
+                        ["ContractPdf:TemplateId"] = "main-contract-development-v1",
+                        ["Jobs:Enabled"] = "false",
+                        ["Email:Enabled"] = "false",
+                        ["Sms:Enabled"] = "false",
+                        ["NotificationChannels:Enabled"] = "false",
+                        ["NotificationChannels:AutomationEnabled"] = "false",
+                        ["NotificationChannels:Mode"] = "Unconfigured"
+                    }).Build();
+                StaffInventoryActiveSeed.ValidateTarget(settings, environment, args[1]);
+                var setup = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(settings);
+                setup.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new DemoHostEnvironment(environment));
+                setup.AddInfrastructure(settings);
+                setup.AddScoped<LifecycleSeedActor>();
+                setup.AddScoped<BHome.Application.IdentityAccess.ICurrentUser>(p => p.GetRequiredService<LifecycleSeedActor>());
+                await using var provider = setup.BuildServiceProvider();
+                await StaffInventoryActiveSeed.RunAsync(provider, args[1]);
+                return 0;
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(error is LocalTestAccountException ? error.Message
+                    : $"STAFF_INVENTORY_SEED_FAILED ({error.GetType().Name}); private configuration suppressed.");
+                if (error is BHome.Application.Contracts.ContractException contract)
+                    Console.Error.WriteLine("CONTRACT_CODE=" + contract.Code);
+                if (error is BHome.Application.PropertyManagement.PropertyException property)
+                    Console.Error.WriteLine("PROPERTY_CODE=" + property.Code);
+                return 1;
+            }
+        }
         if (args.SequenceEqual(new[] { "seed-asset-handover-demo" }))
         {
             try

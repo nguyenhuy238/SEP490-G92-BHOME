@@ -15,8 +15,13 @@ public sealed record ExpenseInput(Guid LocationId, Guid? RoomId, string ExpenseT
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? AssetId = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? TaskId = null);
 public sealed record ExpenseUpdate(ExpenseInput Expense, int ExpectedVersion, string Reason);
+public sealed record BulkInvestmentItem(string Category,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount,
+    string Note);
+public sealed record BulkInvestmentInput(Guid LocationId, DateOnly OccurredOn, BulkInvestmentItem[] Items);
 public sealed record ExpenseFilter(Guid? LocationId = null, DateOnly? From = null, DateOnly? To = null,
-    string? ExpenseType = null, string? Category = null, int Page = 1, int PageSize = 25);
+    string? ExpenseType = null, string? Category = null, int Page = 1, int PageSize = 25,
+    bool OnlyOtherInvestments = false);
 public sealed record ExpenseView(Guid Id, Guid LocationId, Guid? RoomId, string ExpenseType, string Category,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount,
     DateOnly OccurredOn, string Note, int Version, bool CanEdit, Guid? AssetId = null, Guid? TaskId = null,
@@ -33,6 +38,8 @@ public interface IExpenseRepository
     Task<ExpenseView> CreateAsync(ExpenseInput input, Guid actor, Guid key, DateTimeOffset now, CancellationToken token);
     Task<ExpenseView> UpdateAsync(Guid id, ExpenseUpdate input, Guid actor, DateTimeOffset now, CancellationToken token);
     Task<ExpenseReferences> ReferencesAsync(Guid locationId, Guid? roomId, CancellationToken token);
+    Task<IReadOnlyList<ExpenseView>> CreateInvestmentsAsync(IReadOnlyList<ExpenseInput> items,
+        Guid actor, Guid key, DateTimeOffset now, CancellationToken token);
 }
 public sealed class ExpenseService(IExpenseRepository repository, ICurrentUser user, TimeProvider clock)
 {
@@ -81,5 +88,20 @@ public sealed class ExpenseService(IExpenseRepository repository, ICurrentUser u
             throw new FinanceException(400, "invalid_expense_update");
         await ValidateAsync(input.Expense, token);
         return await repository.UpdateAsync(id, input, actor, clock.GetUtcNow(), token);
+    }
+    public Task<ExpensePage> ListInvestmentsAsync(ExpenseFilter filter, CancellationToken token) =>
+        ListAsync(filter with { ExpenseType = "INITIAL_INVESTMENT", OnlyOtherInvestments = true }, token);
+
+    public async Task<IReadOnlyList<ExpenseView>> CreateInvestmentsAsync(BulkInvestmentInput input, Guid key, CancellationToken token)
+    {
+        var actor = Owner();
+        if (key == Guid.Empty) throw new FinanceException(400, "idempotency_key_required");
+        if (input is null || input.Items is not { Length: > 0 and <= 100 } ||
+            input.Items.Any(i => i is null))
+            throw new FinanceException(400, "invalid_investment_batch");
+        var items = input.Items.Select(i => new ExpenseInput(input.LocationId, null, "INITIAL_INVESTMENT",
+            i.Category, i.Amount, input.OccurredOn, i.Note)).ToArray();
+        foreach (var item in items) await ValidateAsync(item, token);
+        return await repository.CreateInvestmentsAsync(items, actor, key, clock.GetUtcNow(), token);
     }
 }

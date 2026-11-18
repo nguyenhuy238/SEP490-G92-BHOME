@@ -129,7 +129,7 @@ describe('BHOME Owner Web - Initial Location Configuration UI/UX (Vietnamese)', 
     fireEvent.click(screen.getByRole('button', { name: /Tiếp tục/i }));
 
     expect(screen.getByText(/Bước 2: Chọn các nhóm cấu hình cần sao chép/i)).toBeInTheDocument();
-    expect(screen.getByText('Mẫu loại phòng & Tiện nghi')).toBeInTheDocument();
+    expect(screen.getByText('Loại phòng mẫu & Tiện nghi')).toBeInTheDocument();
     expect(screen.getByText('Định mức trang bị tài sản')).toBeInTheDocument();
     expect(screen.getByText('Biểu phí điện, nước & Dịch vụ')).toBeInTheDocument();
 

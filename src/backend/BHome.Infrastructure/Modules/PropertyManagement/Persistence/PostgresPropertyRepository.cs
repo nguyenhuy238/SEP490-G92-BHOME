@@ -69,9 +69,9 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
     public Task<bool> AnyAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken token) where T : class =>
         db.Set<T>().AsNoTracking().AnyAsync(predicate, token);
 
-    private IQueryable<Contract> BindingPriceContracts(Guid roomId)
+    private IQueryable<Contract> BindingPriceContracts()
     {
-        var contracts = db.Set<Contract>().AsNoTracking().Where(c => c.RoomId == roomId &&
+        var contracts = db.Set<Contract>().AsNoTracking().Where(c =>
             (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal || c.Kind == ContractKind.Holding));
         // The archived persistence model has no holding approval metadata.
         return db is Compact24DbContext
@@ -81,9 +81,43 @@ internal sealed class PostgresPropertyRepository(BHomePersistenceContext db) : I
             : contracts.Where(c => c.Status == ContractStatus.Active || c.Status == ContractStatus.PendingSigning ||
                 c.Status == ContractStatus.PendingActivation);
     }
-    public Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token) => BindingPriceContracts(roomId).AnyAsync(token);
+    public Task<bool> HasBindingPriceContractAsync(Guid roomId, CancellationToken token) => BindingPriceContracts().AnyAsync(c => c.RoomId == roomId, token);
     public async Task<IReadOnlyList<Contract>> BindingPriceContractsAsync(Guid roomId, CancellationToken token) =>
-        await BindingPriceContracts(roomId).Include(c => c.Residents).ToArrayAsync(token);
+        await BindingPriceContracts().Where(c => c.RoomId == roomId).Include(c => c.Residents).ToArrayAsync(token);
+
+    public async Task<IReadOnlyList<ScopedPriceContract>> BindingPriceContractsForLocationsAsync(Guid[] locationIds, CancellationToken token)
+    {
+        if (locationIds.Length == 0) return [];
+        var rooms = await db.Set<Room>().AsNoTracking().Where(r => locationIds.Contains(r.LocationId))
+            .Select(r => new { r.Id, r.LocationId, r.RoomTypeId }).ToDictionaryAsync(r => r.Id, token);
+        var roomIds = rooms.Keys.ToArray();
+        var contracts = await BindingPriceContracts().Where(c => roomIds.Contains(c.RoomId))
+            .Include(c => c.Residents).ToArrayAsync(token);
+        return contracts.Select(c => new ScopedPriceContract(rooms[c.RoomId].LocationId, rooms[c.RoomId].RoomTypeId, c)).ToArray();
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, PolicyLineage>> PolicyLineagesAsync(Guid[] policyIds, CancellationToken token)
+    {
+        if (policyIds.Length == 0) return new Dictionary<Guid, PolicyLineage>();
+        var created = await db.Set<PropertyChange>().AsNoTracking()
+            .Where(c => policyIds.Contains(c.TargetId) && c.TargetType == nameof(BillingPolicy) && c.Action == "Created")
+            .Select(c => new { c.TargetId, c.After }).ToArrayAsync(token);
+        var lineages = new Dictionary<Guid, PolicyLineage>();
+        foreach (var change in created)
+        {
+            using var snapshot = System.Text.Json.JsonDocument.Parse(change.After);
+            var root = snapshot.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !root.TryGetProperty("FamilyId", out var family) || family.ValueKind != System.Text.Json.JsonValueKind.String ||
+                !family.TryGetGuid(out var familyId) || familyId == Guid.Empty ||
+                !root.TryGetProperty("Edition", out var edition) || !edition.TryGetInt32(out var number) || number < 1)
+                continue;
+            Guid? predecessor = root.TryGetProperty("PreviousPolicyId", out var previous) &&
+                previous.ValueKind == System.Text.Json.JsonValueKind.String && previous.TryGetGuid(out var previousId) ? previousId : null;
+            lineages.Add(change.TargetId, new(familyId, number, predecessor));
+        }
+        return lineages;
+    }
 
     public async Task<PagedResult<TDto>> ListAsync<T, TDto>(Expression<Func<T, bool>> predicate,
         Expression<Func<T, TDto>> projection, PropertyQuery query, Guid? staffId, DateOnly today,

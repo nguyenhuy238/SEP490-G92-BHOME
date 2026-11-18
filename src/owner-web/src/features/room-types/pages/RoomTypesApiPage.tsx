@@ -404,7 +404,12 @@ function RoomDefaultsWorkspace({
                   )}
                 {templates.data?.map((item) => (
                   <MenuItem key={item.id} value={item.id} disabled={item.status !== 'Published'}>
-                    {item.data.name} · {item.status === 'Published' ? 'Đã công bố' : 'Chưa công bố'}
+                    {item.data.name} ·{' '}
+                    {item.status === 'Published'
+                      ? 'Có thể áp dụng'
+                      : item.status === 'Archived'
+                        ? 'Ngừng áp dụng'
+                        : 'Bản nháp'}
                   </MenuItem>
                 ))}
               </TextField>

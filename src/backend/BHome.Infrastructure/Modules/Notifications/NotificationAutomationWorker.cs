@@ -16,6 +16,10 @@ internal sealed class NotificationAutomationWorker(IServiceScopeFactory scopes, 
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // BackgroundService.StartAsync runs synchronously until the first incomplete
+        // await. Resolving notification/job persistence can block startup for minutes;
+        // allow Kestrel to start independently of the notification delivery loop.
+        await Task.Yield();
         var authenticationOnly = !options.Value.AutomationEnabled;
         if (jobs.Value.Enabled || authenticationOnly && !authentication.Value.AnyConfigured(environment.IsDevelopment()) && !recovery.Value.Enabled) return;
         while (!stoppingToken.IsCancellationRequested)

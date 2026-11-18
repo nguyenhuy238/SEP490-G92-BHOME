@@ -160,6 +160,46 @@ Database guard, migration và route được kiểm tra bằng test riêng. Vi�
 
 ## HTTPS tunnel và Dashboard
 
+### Cloudflare Tunnel
+
+Nếu API chạy trên máy Windows qua launch profile `https` (`https://localhost:7240`),
+có thể cung cấp endpoint SePay qua Cloudflare Tunnel. Tạo **Public hostname** HTTPS
+riêng trong Cloudflare Zero Trust, trỏ `Service` tới `https://localhost:7240`.
+Máy chạy `cloudflared` phải truy cập được cổng đó; nếu chạy `cloudflared` trong
+container, `localhost` của container không tự động là máy Windows. Dùng chứng chỉ
+origin được tin cậy và đặt `Origin Server Name` là `localhost` khi chứng chỉ
+ASP.NET Development được cấp cho tên này; không tắt xác thực TLS để thử webhook.
+
+Public URL nhập vào SePay là **hostname chính xác đã tạo**, cộng đường dẫn:
+
+```text
+https://<PUBLIC_CLOUDFLARE_HOST>/api/v1/integrations/sepay/webhook
+```
+
+Đặt hostname (không có `https://`, cổng hoặc path) vào danh sách `AllowedHosts`
+trong `.env.sepay.local`, giữ các host cũ; sau đó khởi động lại API bằng
+`scripts/Start-Api.ps1 -EnvironmentFile .env.sepay.local`. Để Cloudflare giữ
+nguyên body JSON và các header `X-SePay-Timestamp`, `X-SePay-Signature`.
+Nếu hostname có Cloudflare Access, phải có quy tắc cho phép SePay POST tới
+endpoint này; chính Backend vẫn bắt buộc xác thực HMAC trước khi nhận giao dịch.
+Không sử dụng URL trỏ tới Owner Web hoặc email worker làm webhook thanh toán.
+
+Sau khi tunnel hoạt động, kiểm tra không ghi nhận thanh toán và không phát sinh
+giao dịch bằng lệnh sau (thay public host thật):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-SePayWebhook.ps1 `
+  -PublicBaseUrl 'https://<PUBLIC_CLOUDFLARE_HOST>'
+```
+
+Script yêu cầu health trả HTTP 200 và POST webhook **thiếu chữ ký** trả HTTP 401
+với mã `sepay_authentication_failed`. Đây chỉ là kiểm tra định tuyến và bảo mật;
+Webhook phải được tạo/chọn tài khoản, mode Test/Live và HMAC secret trùng
+`SePay__WebhookSecret` trong Dashboard SePay trước khi chạy giao dịch mô phỏng.
+Không in hoặc gửi secret qua chat, command line, ảnh chụp hay Git.
+
+### Ngrok
+
 Sau khi cài đặt và cấu hình ngrok, có thể forward tới binding HTTPS local.
 
 ```powershell

@@ -28,6 +28,7 @@ internal static class Compact24DomainModel
             .HasColumnName("purchase_info")
             .HasColumnType("jsonb")
             .HasDefaultValueSql("'{}'::jsonb");
+        model.Entity<BHome.Domain.Billing.OperationalTask>().Property(x => x.MoveInInventoryJson);
         new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentReportConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.IncidentReport>());
         new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.WorkOrderConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>());
         new BHome.Infrastructure.Modules.IncidentMaintenance.Persistence.IncidentActivityConfiguration().Configure(model.Entity<BHome.Domain.IncidentMaintenance.IncidentActivity>());

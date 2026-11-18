@@ -106,6 +106,24 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
                 new RoomNoAssetsConfirmation(choices.InventoryToken, "Owner checked synthetic empty room")));
             choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
         }
+        // Compact24 provisions a separate pre-handover inventory task upon activation.
+        // Complete the explicit no-assets checklist through the Staff API before the
+        // legacy contract scenarios proceed to the handover confirmations.
+        var tasks = await Success<BHome.Application.StaffOperations.TaskPage<BHome.Application.StaffOperations.TaskView>>(
+            await w.Staff.Client.GetAsync($"/api/v1/operational-tasks?locationId={w.Location}&pageSize=100"));
+        var inventory = tasks.Items.SingleOrDefault(task =>
+            task.Kind == "MoveInInventory" && task.Target?.ContractId == id);
+        if (inventory is not null)
+        {
+            var started = await Success<BHome.Application.StaffOperations.TaskView>(await Post(w.Staff,
+                $"/api/v1/operational-tasks/{inventory.Id}/start",
+                new BHome.Application.StaffOperations.TaskAction(inventory.Version)));
+            var completed = await Success<BHome.Application.StaffOperations.MoveInInventoryView>(await Post(w.Staff,
+                $"/api/v1/operational-tasks/{inventory.Id}/move-in-inventory/complete",
+                new BHome.Application.StaffOperations.MoveInInventoryComplete(started.Version,
+                    "Synthetic empty room physically checked", ConfirmNoAssets: true)));
+            Assert.True(completed.ReadyForHandover);
+        }
         return choices;
     }
 
@@ -126,6 +144,16 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await using var check = fixture.Factory.Services.CreateAsyncScope(); var store = check.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         var task = Assert.Single(await store.Set<OperationalTask>().Where(task => task.ContractId == id && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.AdHoc).ToArrayAsync());
         Assert.Equal(w.Room, task.TargetRoomId); Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, task.AssignedStaffUserId);
+        var inventory = Assert.Single(await store.Set<OperationalTask>().Where(task => task.ContractId == id &&
+            task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MoveInInventory).ToArrayAsync());
+        Assert.Equal(w.Room, inventory.TargetRoomId);
+        Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, inventory.AssignedStaffUserId);
+        Assert.NotNull(inventory.DueAt);
+        Assert.Equal(BHome.Domain.Billing.MeterTaskStatus.Assigned, inventory.Status);
+        var checklist = System.Text.Json.JsonSerializer.Deserialize<BHome.Application.StaffOperations.MoveInInventorySnapshot>(
+            inventory.MoveInInventoryJson);
+        Assert.NotNull(checklist);
+        Assert.NotNull(checklist.Items);
     }
 
     [Fact]

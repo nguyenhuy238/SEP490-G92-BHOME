@@ -10,14 +10,16 @@ namespace BHome.Application.PropertyManagement;
 
 public sealed record RoomInventoryReviewEvidence(Guid Id, string ContentType, DateTimeOffset? UploadedAt, Guid? UploadedBy);
 public sealed record RoomInventoryReviewItem(Guid Id, string Name, string Category, string? Unit, int Quantity,
-    bool Checked, IReadOnlyList<RoomInventoryReviewEvidence> Evidence);
+    bool Checked, IReadOnlyList<RoomInventoryReviewEvidence> Evidence,
+    decimal? ReferenceUnitCost = null, decimal? AcquisitionUnitCost = null);
 public sealed record RoomInventoryReviewRoom(Guid RoomId, string RoomNumber, Guid? DesiredId, int DesiredVersion,
     IReadOnlyList<RoomInventoryReviewItem> Items, string State, int CheckedCount, int TotalCount,
     int UnlinkedAssetCount, string? BlockedReason, string StateToken, DateTimeOffset? ReviewedAt, bool NoAssetsConfirmed = false);
 public sealed record RoomInventoryReviewView(IReadOnlyList<RoomInventoryReviewRoom> Rooms);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record RoomInventoryReviewInputItem(Guid ItemId, [property: JsonRequired] bool Checked, Guid[] EvidenceIds);
+public sealed record RoomInventoryReviewInputItem(Guid ItemId, [property: JsonRequired] bool Checked, Guid[] EvidenceIds,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? UnitCost = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RoomInventoryReviewInputRoom(Guid RoomId, Guid? DesiredId, int DesiredVersion, string StateToken, RoomInventoryReviewInputItem[] Items);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -28,7 +30,8 @@ public sealed record RoomInventoryReviewConfirm(Guid RequestId, RoomInventoryRev
 /// The configured quantity remains authoritative; only checked groups create/link one physical Asset.
 /// </summary>
 public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access,
-    IPropertyRepository propertyRepository, ILogger<RoomInventoryReviewService> logger) : SetupWorkspaceService(store, user, access)
+    Lazy<PropertyService> properties, ILogger<RoomInventoryReviewService> logger,
+    ISharedConfigurationStore? shared = null) : SetupWorkspaceService(store, user, access)
 {
     private const string ReviewKind = "RoomInventoryChecklistReview";
     private const string CommandKind = "RoomInventoryChecklistCommand";
@@ -46,9 +49,11 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
         SetupDocument? Template, SetupDocument? Desired, DesiredAssets? Configuration, ItemContext[] Items,
         Physical[] Physical, Mapping[] Mappings, Physical[] Unlinked, bool InvalidConfiguration,
         SetupDocument? Prior, string Baseline, RoomInventoryReviewRoom View);
-    private sealed record SnapshotData(RoomContext[] Rooms, IReadOnlyDictionary<Guid, SetupDocument> Evidence, bool EvidenceRead);
+    private sealed record SnapshotData(RoomContext[] Rooms, IReadOnlyDictionary<Guid, SetupDocument> Evidence,
+        IReadOnlyDictionary<Guid, SetupDocument> AssetMetadataDocuments, bool EvidenceRead);
     private sealed record PendingRoom(RoomContext Context, string State, bool HasReviewIssues, ItemReview[] Items,
-        Physical[] PhysicalAfter, SetupDocumentWrite[] MappingWrites, SetupDocumentWrite? DesiredWrite, string Baseline);
+        Physical[] PhysicalAfter, SetupDocumentWrite[] MappingWrites, SetupDocumentWrite[] MetadataWrites,
+        (Guid AssetId, AssetMetadata Metadata)[] MetadataUpdates, SetupDocumentWrite? DesiredWrite, string Baseline);
 
     private static Guid ReviewKey(Guid room) => Key($"room-inventory-checklist:{room:N}");
     private static Guid CommandKey(Guid location, Guid actor, Guid request) => Key($"room-inventory-checklist-command:{location:N}:{actor:N}:{request:N}");
@@ -148,9 +153,14 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
             .Select(d => (Document: d, Data: Read<DesiredAssets>(d))).ToLookup(d => d.Data.RoomId);
         var mappings = documents.Where(d => d.Kind == "AssetVerification").Select(ReadMapping).ToLookup(m => m.RoomId);
         var prior = documents.Where(d => d.Kind == ReviewKind).ToDictionary(d => d.Id);
+        var metadataDocuments = documents.Where(d => d.Kind == "AssetMetadata").ToDictionary(d => d.Id);
         var byRoom = physical.ToLookup(a => a.Asset.RoomId);
         var legacyDefault = templates.Values.Where(AssetInventoryService.IsLocationDefault)
             .OrderByDescending(d => d.RecordedAt).ThenBy(d => d.Id).FirstOrDefault();
+        var fallbackPrices = shared is not null && desired.SelectMany(group => group)
+            .Any(d => d.Data.Items.Any(item => item.ReferencePrice is null))
+            ? await InventoryReferencePrices.ReadAsync(shared, "Room", t)
+            : new Dictionary<string, decimal>();
         var allReviewRecords = prior.Values.ToDictionary(d => d.Id, Read<ReviewRecord>);
         var evidenceIds = additionalEvidenceIds
             .Concat(allReviewRecords.Values.SelectMany(r => r.Items).Where(i => i.Checked).SelectMany(i => i.EvidenceIds))
@@ -219,7 +229,10 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
                     item.VerifiedQuantity == item.Requirement.Quantity;
                 var isChecked = matchingReview && savedItem is not null ? savedItem.Checked : verified;
                 return new RoomInventoryReviewItem(item.Requirement.Id, item.Requirement.Name, item.Requirement.Category,
-                    item.Requirement.Unit, item.Requirement.Quantity, isChecked, itemEvidence);
+                    item.Requirement.Unit, item.Requirement.Quantity, isChecked, itemEvidence,
+                    item.Requirement.ReferencePrice ?? InventoryReferencePrices.Suggest(
+                        fallbackPrices, item.Requirement.Name, item.Requirement.Category, item.Requirement.Unit),
+                    item.Linked.Length == 1 ? item.Linked[0].Metadata.PurchaseCost : null);
             }).ToArray();
             var checkedCount = itemViews.Count(i => i.Checked);
             var physicalIssues = unlinked.Length > 0 || items.Any(i => i.Ambiguous ||
@@ -244,7 +257,7 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
         logger.LogDebug("Room inventory snapshot: rooms={RoomCount}, assets={AssetCount}, evidence={EvidenceCount}, elapsedMs={ElapsedMs:F1}, databaseReads={DatabaseReads}",
             rooms.Count, physical.Length, evidenceIds.Length, Stopwatch.GetElapsedTime(started).TotalMilliseconds,
             evidenceIds.Length == 0 ? 3 : 4);
-        return new(result.ToArray(), evidence, evidenceIds.Length > 0);
+        return new(result.ToArray(), evidence, metadataDocuments, evidenceIds.Length > 0);
     }
 
     private static RoomInventoryReviewEvidence EvidenceView(SetupDocument document) => new(
@@ -260,11 +273,22 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
         Owner();
         var started = Stopwatch.GetTimestamp();
         await Scope(location, false, t);
-        var target = await propertyRepository.FindAsync<BHome.Domain.Locations.Location>(location, t) ?? throw new PropertyException(404, "resource_not_found");
+        var target = await properties.Value.GetLocationAsync(location, t);
         var snapshot = await SnapshotAsync(location, target.IsActive, [], t);
         logger.LogInformation("Room inventory GET completed: rooms={RoomCount}, databaseReads={DatabaseReads}, elapsedMs={ElapsedMs:F1}",
             snapshot.Rooms.Length, 1 + 3 + (snapshot.EvidenceRead ? 1 : 0), Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return View(snapshot);
+    }
+
+    // Finance's background valuation runs without an interactive Owner principal.
+    // Reuse the same live configuration/physical-asset snapshot as the Owner
+    // checklist instead of trusting a historic "Matched" document: a changed
+    // room template, required quantity or retired physical asset can invalidate it.
+    // This method only reads persisted data and does not confirm inventory.
+    public async Task<int> CountRoomsRequiringReviewAsync(Guid location, CancellationToken t)
+    {
+        var snapshot = await SnapshotAsync(location, true, [], t);
+        return snapshot.Rooms.Count(room => room.View.State != "Matched");
     }
 
     private static RoomInventoryReviewInputItem[] ValidateRoom(RoomContext context, RoomInventoryReviewInputRoom input)
@@ -281,7 +305,9 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
         if (input.Items is null || input.Items.Length != context.Items.Length ||
             input.Items.Any(i => i is null || i.ItemId == Guid.Empty || i.EvidenceIds is null ||
                 i.EvidenceIds.Length > 5 || i.EvidenceIds.Any(id => id == Guid.Empty) ||
-                i.EvidenceIds.Distinct().Count() != i.EvidenceIds.Length) ||
+                i.EvidenceIds.Distinct().Count() != i.EvidenceIds.Length ||
+                !InventoryAcquisitionPrice.Valid(i.UnitCost) ||
+                !i.Checked && i.UnitCost.HasValue) ||
             input.Items.Select(i => i.ItemId).Distinct().Count() != input.Items.Length ||
             input.Items.Any(i => !context.Items.Any(c => c.Requirement.Id == i.ItemId)))
             throw new PropertyException(400, "inventory_review_items_incomplete");
@@ -295,11 +321,14 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
     }
 
     private PendingRoom PrepareRoom(Guid location, RoomContext context, RoomInventoryReviewInputItem[] input,
-        Guid requestId, IReadOnlyDictionary<Guid, SetupDocument> evidence)
+        Guid requestId, IReadOnlyDictionary<Guid, SetupDocument> evidence,
+        IReadOnlyDictionary<Guid, SetupDocument> priorMetadata)
     {
         var itemsById = input.ToDictionary(i => i.ItemId);
         var newAssets = new List<AssetInventoryCreation>();
         var mappingWrites = new List<SetupDocumentWrite>();
+        var metadataWrites = new List<SetupDocumentWrite>();
+        var metadataUpdates = new List<(Guid AssetId, AssetMetadata Metadata)>();
         var newMappings = new List<Mapping>();
         var reviewItems = new List<ItemReview>(input.Length);
         var progress = context.Items.ToDictionary(i => i.Requirement.Id, i => i.VerifiedQuantity);
@@ -326,7 +355,8 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
                     Code = ""
                 };
                 asset.Code = $"INV-{asset.Id:N}";
-                var metadata = new AssetMetadata("BulkQuantity", item.Requirement.Quantity, null, null, null, item.Requirement.Unit);
+                var metadata = new AssetMetadata("BulkQuantity", item.Requirement.Quantity,
+                    choice.UnitCost, null, null, item.Requirement.Unit);
                 newAssets.Add(new(asset, metadata, "Owner confirmed configured asset group"));
                 linked = new(asset, metadata);
             }
@@ -335,6 +365,23 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
                 // Existing unmatched/ambiguous physical assets are never silently linked or duplicated.
                 issues = true;
                 continue;
+            }
+
+            // A verified acquisition price is a historic snapshot. Rechecking
+            // an existing priced asset never reprices it, including a posted
+            // ledger entry or a free (0 VND) acquisition.
+            if (linked.Metadata.PurchaseCost is { } recordedPrice &&
+                choice.UnitCost is { } requestedPrice && recordedPrice != requestedPrice)
+                throw new PropertyException(409, "asset_acquisition_price_locked");
+            if (newAssets.Any(asset => asset.Asset.Id == linked.Asset.Id) ||
+                linked.Metadata.PurchaseCost is null && choice.UnitCost.HasValue)
+            {
+                var metadata = linked.Metadata with { PurchaseCost = choice.UnitCost };
+                var before = priorMetadata.GetValueOrDefault(linked.Asset.Id);
+                metadataWrites.Add(new(linked.Asset.Id, "AssetMetadata", "Recorded",
+                    InventoryAcquisitionPrice.MetadataSnapshot(metadata), before?.Version ?? 0));
+                if (!newAssets.Any(asset => asset.Asset.Id == linked.Asset.Id))
+                    metadataUpdates.Add((linked.Asset.Id, metadata));
             }
 
             if (linked.Metadata.Quantity != item.Requirement.Quantity || linked.Asset.Status != AssetStatus.Active)
@@ -385,14 +432,17 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
                 desiredAfter = PreviewDocument(location, desiredWrite, Actor);
             }
         }
-        var physicalAfter = context.Physical.Concat(newAssets.Select(x => new Physical(x.Asset, x.Metadata))).ToArray();
+        var updatedMetadata = metadataUpdates.ToDictionary(update => update.AssetId, update => update.Metadata);
+        var physicalAfter = context.Physical.Select(p =>
+            updatedMetadata.TryGetValue(p.Asset.Id, out var updated) ? p with { Metadata = updated } : p)
+            .Concat(newAssets.Select(x => new Physical(x.Asset, x.Metadata))).ToArray();
         var mappingsById = context.Mappings.ToDictionary(mapping => mapping.Document.Id);
         foreach (var mapping in newMappings) mappingsById[mapping.Document.Id] = mapping;
         var mappingsAfter = mappingsById.Values.ToArray();
         var baseline = Baseline(context.Room, true, context.InvalidConfiguration, context.Assignment,
             context.Provenance, context.Template, desiredAfter, physicalAfter, mappingsAfter);
         return new(context, state, issues, reviewItems.ToArray(), physicalAfter,
-            mappingWrites.ToArray(), desiredWrite, baseline);
+            mappingWrites.ToArray(), metadataWrites.ToArray(), metadataUpdates.ToArray(), desiredWrite, baseline);
     }
 
     private static bool SameEvidence(SetupDocument document, Guid[] evidenceIds)
@@ -409,12 +459,13 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
         var items = pending.Items.Select(item =>
         {
             var docs = item.EvidenceIds.Where(evidence.ContainsKey).Select(id => EvidenceView(evidence[id])).ToArray();
+            var requirement = context.Items.Single(i => i.Requirement.Id == item.ItemId).Requirement;
+            var pricedPhysical = pending.PhysicalAfter.FirstOrDefault(a =>
+                a.Asset.Name == requirement.Name && a.Asset.Category == requirement.Category &&
+                a.Asset.RoomId == context.Room.Id);
             return new RoomInventoryReviewItem(item.ItemId,
-                context.Items.Single(i => i.Requirement.Id == item.ItemId).Requirement.Name,
-                context.Items.Single(i => i.Requirement.Id == item.ItemId).Requirement.Category,
-                context.Items.Single(i => i.Requirement.Id == item.ItemId).Requirement.Unit,
-                context.Items.Single(i => i.Requirement.Id == item.ItemId).Requirement.Quantity,
-                item.Checked, docs);
+                requirement.Name, requirement.Category, requirement.Unit, requirement.Quantity,
+                item.Checked, docs, requirement.ReferencePrice, pricedPhysical?.Metadata.PurchaseCost);
         }).ToArray();
         var checkedCount = items.Count(i => i.Checked);
         var desired = pending.DesiredWrite is null
@@ -483,7 +534,10 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
                     ?? throw new PropertyException(404, "resource_not_found");
                 var items = ValidateRoom(context, roomInput);
                 if (context.Configuration is null) continue; // A room without configured groups stays NotChecked.
-                if (context.View.State == "Matched" && items.All(item => item.Checked && item.EvidenceIds.Length == 0)) continue;
+                if (context.View.State == "Matched" && items.All(item =>
+                    item.Checked && item.EvidenceIds.Length == 0 &&
+                    (item.UnitCost is null || context.Items.Single(c => c.Requirement.Id == item.ItemId)
+                        .Linked.SingleOrDefault()?.Metadata.PurchaseCost == item.UnitCost))) continue;
                 foreach (var item in items.Where(i => i.Checked))
                     foreach (var evidenceId in item.EvidenceIds)
                     {
@@ -494,15 +548,23 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
                 selected.Add((context, items));
             }
 
-            var pending = selected.Select(entry => PrepareRoom(location, entry.Context, entry.Items, input.RequestId, snapshot.Evidence)).ToArray();
-            var newAssets = pending.SelectMany(p => p.PhysicalAfter.Except(p.Context.Physical)
+            var pending = selected.Select(entry => PrepareRoom(location, entry.Context, entry.Items,
+                input.RequestId, snapshot.Evidence, snapshot.AssetMetadataDocuments)).ToArray();
+            // A metadata-only price update produces a new Physical record value
+            // for an existing Asset. Compare identity, not record equality, or a
+            // priced existing Asset gets inserted a second time.
+            var newAssets = pending.SelectMany(p => p.PhysicalAfter
+                .Where(x => !p.Context.Physical.Any(existing => existing.Asset.Id == x.Asset.Id))
                 .Select(x => new AssetInventoryCreation(x.Asset, x.Metadata, "Owner confirmed configured asset group")))
                 .DistinctBy(x => x.Asset.Id).ToArray();
             newAssetCount = newAssets.Length;
             await Store.SaveInventoryAssetsAsync(location, newAssets, actor, t);
+            foreach (var update in pending.SelectMany(room => room.MetadataUpdates))
+                await Store.SaveAssetMetadataAsync(update.AssetId, update.Metadata, t);
 
             var writes = new List<SetupDocumentWrite>();
             writes.AddRange(pending.SelectMany(p => p.MappingWrites));
+            writes.AddRange(pending.SelectMany(p => p.MetadataWrites));
             writes.AddRange(pending.Where(p => p.DesiredWrite is not null).Select(p => p.DesiredWrite!));
             foreach (var review in pending)
             {

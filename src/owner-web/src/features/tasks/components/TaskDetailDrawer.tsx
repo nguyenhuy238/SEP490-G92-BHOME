@@ -38,6 +38,7 @@ import {
   useTaskAction,
 } from '../useOperationalTasksApi';
 import { TaskEvidenceGallery } from './TaskEvidenceGallery';
+import { MoveInInventoryReport } from './MoveInInventoryReport';
 
 export function TaskStatus({ task }: { task: OwnerTask }) {
   return (
@@ -180,7 +181,12 @@ export function TaskDetailDrawer({
                 Thời hạn: {task.dueAt ? formatInstant(task.dueAt) : 'Chưa có hạn'}
               </Typography>
               <Typography>
-                Loại: {task.kind === 'AdHoc' ? 'Công việc vận hành' : 'Ghi điện nước'}
+                Loại:{' '}
+                {task.kind === 'MoveInInventory'
+                  ? 'Kiểm kê tài sản trước bàn giao'
+                  : task.kind === 'AdHoc'
+                    ? 'Công việc vận hành'
+                    : 'Ghi điện nước'}
               </Typography>
               {!task.responsibilityAvailable && (
                 <Alert severity="warning">
@@ -210,6 +216,9 @@ export function TaskDetailDrawer({
                 </Typography>
               )}
             </Box>
+            {task.kind === 'MoveInInventory' && (
+              <MoveInInventoryReport taskId={task.id} evidence={evidence.data} />
+            )}
             <Box>
               <Typography variant="h6" sx={{ fontSize: 16, mb: 1 }}>
                 Bằng chứng công việc

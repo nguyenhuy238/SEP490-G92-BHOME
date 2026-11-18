@@ -29,14 +29,28 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
     }
     public Task<BillingAutomationPlan?> ForPeriodAsync(Guid locationId, DateOnly period, CancellationToken t) => db.Set<BillingAutomationPlan>().AsNoTracking()
         .Where(p => p.LocationId == locationId && p.EffectiveFrom <= period).OrderByDescending(p => p.EffectiveFrom).ThenByDescending(p => p.Version).FirstOrDefaultAsync(t);
+    private static Task<BillingAutomationPlan?> LatestAsync(BHomePersistenceContext context, Guid locationId, CancellationToken t) =>
+        context.Set<BillingAutomationPlan>().AsNoTracking().Where(p => p.LocationId == locationId)
+            .OrderByDescending(p => p.Version).FirstOrDefaultAsync(t);
+    internal static async Task<BillingSchedule?> ResolveCalendarAsync(BHomePersistenceContext context, Guid locationId, DateOnly period, CancellationToken t)
+    {
+        var plan = await context.Set<BillingAutomationPlan>().AsNoTracking()
+            .Where(p => p.LocationId == locationId && p.EffectiveFrom <= period)
+            .OrderByDescending(p => p.EffectiveFrom).ThenByDescending(p => p.Version).FirstOrDefaultAsync(t);
+        if (plan is not null) return BillingAutomationService.Calendar(plan);
+        var fallback = await context.Set<BillingSchedule>().AsNoTracking().SingleOrDefaultAsync(s => s.LocationId == locationId, t);
+        return fallback is null ? null : BillingAutomationService.FallbackCalendar(fallback, await LatestAsync(context, locationId, t));
+    }
     public async Task<IReadOnlyList<BillingAutomationPlan>> HistoryAsync(Guid locationId, CancellationToken t) => await db.Set<BillingAutomationPlan>().AsNoTracking().Where(p => p.LocationId == locationId).OrderByDescending(p => p.Version).Take(100).ToArrayAsync(t);
     public async Task<BillingAutomationPlan> SaveAsync(BillingAutomationWrite x, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         await using var tx = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({x.LocationId.ToString()},0))", t);
         if (!await db.Locations.AnyAsync(l => l.Id == x.LocationId && l.IsActive, t)) throw new InvoiceException(404, "billing_location_not_found");
-        var version = await db.Set<BillingAutomationPlan>().Where(p => p.LocationId == x.LocationId).Select(p => (int?)p.Version).MaxAsync(t) ?? 0;
+        var latest = await LatestAsync(db, x.LocationId, t);
+        var version = latest?.Version ?? 0;
         var schedule = await db.Set<BillingSchedule>().SingleOrDefaultAsync(s => s.LocationId == x.LocationId, t);
+        var creatingSchedule = schedule is null;
         if (version != x.ExpectedVersion || (schedule?.Version ?? 0) != x.ExpectedBillingScheduleVersion)
             throw new InvoiceException(409, "billing_automation_changed");
         if (schedule is null)
@@ -61,16 +75,23 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
             db.Add(schedule);
             db.SecurityAudit.Add(new() { UserId = actor, Event = "BillingScheduleConfigured", TargetType = "BillingSchedule", TargetId = schedule.Id, Succeeded = true, OccurredAt = now });
         }
-        else if (x.InitialSchedule is { } desired &&
-                 (schedule.RateDate != desired.RateDate || schedule.PartialMonth != desired.PartialMonth || schedule.Rounding != desired.Rounding))
+        // Detach the preserved value: the tracked legacy schedule may be mutated
+        // below and must never also rewrite the baseline captured in this plan.
+        var preserved = creatingSchedule ? null : BillingAutomationService.FallbackCalendar(schedule, latest);
+        var baseline = preserved is null ? null : JsonSerializer.Deserialize<BillingSchedule>(JsonSerializer.Serialize(preserved));
+        // Inherit from the requested period rather than the most recently written
+        // future plan. Explicit legacy PUT remains the default for a new period.
+        var selected = await ForPeriodAsync(x.LocationId, x.EffectiveFrom, t);
+        var samePeriod = selected?.EffectiveFrom == x.EffectiveFrom;
+        var legacyChanged = latest is not null && latest.BillingScheduleVersion != schedule.Version;
+        var defaults = selected is not null && !legacyChanged
+            ? BillingAutomationService.Calendar(selected) : baseline;
+        if (defaults is null)
         {
-            // Preserve RentSource and calendar defaults from legacy /pricing schedules.
-            // The previous automation plans retain their immutable BillingSnapshot.
-            schedule.RateDate = desired.RateDate;
-            schedule.PartialMonth = desired.PartialMonth;
-            schedule.Rounding = desired.Rounding;
-            schedule.Version++;
-            db.SecurityAudit.Add(new() { UserId = actor, Event = "BillingScheduleConfigured", TargetType = "BillingSchedule", TargetId = schedule.Id, Succeeded = true, OccurredAt = now });
+            if (x.InitialSchedule is null || x.DraftDay is null || x.DraftMonthOffset is null ||
+                x.FinalDay is null || x.FinalMonthOffset is null || x.DueDay is null || x.DueMonthOffset is null)
+                throw new InvoiceException(409, "billing_initial_schedule_required");
+            defaults = schedule;
         }
         // Freeze period-specific invoice dates in this immutable plan. Do not modify the
         // location-wide fallback schedule: periods before EffectiveFrom retain their calendar.
@@ -78,16 +99,16 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
         {
             LocationId = schedule.LocationId,
             Version = schedule.Version,
-            RateDate = schedule.RateDate,
-            RentSource = schedule.RentSource,
-            PartialMonth = schedule.PartialMonth,
-            Rounding = schedule.Rounding,
-            DraftDay = x.DraftDay ?? schedule.DraftDay,
-            DraftMonthOffset = x.DraftMonthOffset ?? schedule.DraftMonthOffset,
-            FinalDay = x.FinalDay ?? schedule.FinalDay,
-            FinalMonthOffset = x.FinalMonthOffset ?? schedule.FinalMonthOffset,
-            DueDay = x.DueDay ?? schedule.DueDay,
-            DueMonthOffset = x.DueMonthOffset ?? schedule.DueMonthOffset
+            RateDate = x.InitialSchedule?.RateDate ?? defaults.RateDate,
+            RentSource = defaults.RentSource,
+            PartialMonth = x.InitialSchedule?.PartialMonth ?? defaults.PartialMonth,
+            Rounding = x.InitialSchedule?.Rounding ?? defaults.Rounding,
+            DraftDay = x.DraftDay ?? defaults.DraftDay,
+            DraftMonthOffset = x.DraftMonthOffset ?? defaults.DraftMonthOffset,
+            FinalDay = x.FinalDay ?? defaults.FinalDay,
+            FinalMonthOffset = x.FinalMonthOffset ?? defaults.FinalMonthOffset,
+            DueDay = x.DueDay ?? defaults.DueDay,
+            DueMonthOffset = x.DueMonthOffset ?? defaults.DueMonthOffset
         };
         try
         {
@@ -97,6 +118,30 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
                     throw new InvoiceException(400, "invalid_billing_calendar_order");
         }
         catch (ArgumentOutOfRangeException) { throw new InvoiceException(400, "invalid_billing_automation"); }
+        if (samePeriod && selected!.AuthorizedByUserId == actor && selected.Enabled == x.Enabled &&
+            selected.AuthorizeAutomaticFinalization == x.AuthorizeAutomaticFinalization &&
+            selected.MeterDay == x.MeterDay && selected.MeterDueDay == x.MeterDueDay &&
+            selected.MeterDueMonthOffset == x.MeterDueMonthOffset && selected.TimeZone == x.TimeZone &&
+            BillingAutomationService.SameCalendarTerms(BillingAutomationService.Calendar(selected), effectiveCalendar))
+        {
+            await tx.CommitAsync(t);
+            return selected;
+        }
+        // Preserve legacy GET/PUT version and values for existing consumers, but
+        // carry the pre-change fallback in every immutable plan snapshot.
+        if (x.InitialSchedule is { } desired &&
+            (schedule.RateDate != desired.RateDate || schedule.PartialMonth != desired.PartialMonth || schedule.Rounding != desired.Rounding))
+        {
+            schedule.RateDate = desired.RateDate;
+            schedule.PartialMonth = desired.PartialMonth;
+            schedule.Rounding = desired.Rounding;
+            schedule.Version++;
+            db.SecurityAudit.Add(new() { UserId = actor, Event = "BillingScheduleConfigured", TargetType = "BillingSchedule", TargetId = schedule.Id, Succeeded = true, OccurredAt = now });
+        }
+        // The legacy version is a write concurrency token. A meter-only change
+        // must not rewrite the effective calendar version of an earlier plan.
+        effectiveCalendar.Version = BillingAutomationService.SameCalendarTerms(defaults, effectiveCalendar)
+            ? defaults.Version : schedule.Version;
         var plan = new BillingAutomationPlan
         {
             LocationId = x.LocationId,
@@ -109,7 +154,7 @@ internal sealed class BillingAutomationSchedules(BHomePersistenceContext db) : I
             MeterDueMonthOffset = x.MeterDueMonthOffset,
             TimeZone = x.TimeZone,
             BillingScheduleVersion = schedule.Version,
-            BillingSnapshot = JsonSerializer.Serialize(effectiveCalendar),
+            BillingSnapshot = BillingAutomationService.Snapshot(effectiveCalendar, baseline),
             AuthorizedByUserId = actor,
             RecordedAt = now
         };

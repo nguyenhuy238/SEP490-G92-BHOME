@@ -10,7 +10,7 @@ export interface TaskPage<T> {
 export interface OperationalTask {
   id: string;
   locationId: string;
-  kind: 'AdHoc' | 'MeterReading';
+  kind: 'AdHoc' | 'MeterReading' | 'MoveInInventory';
   title: string;
   requirements: string;
   priority: 'Normal' | 'High';
@@ -154,11 +154,16 @@ export function operationalTasks(api: MobileApi) {
       command<OperationalTask>(root, { locationId: guid(locationId), work }, key),
     update: (id: string, version: number, work: TaskWork, reason: string, key: string) =>
       command<OperationalTask>(path(id), { version, work, reason }, key, 'PUT'),
-    upload: (id: string, bytes: Uint8Array<ArrayBuffer>, key: string) =>
+    upload: (
+      id: string,
+      bytes: Uint8Array<ArrayBuffer>,
+      key: string,
+      contentType: 'image/jpeg' | 'image/png' = 'image/jpeg',
+    ) =>
       api.request<TaskEvidence>(`${path(id)}/evidence`, {
         method: 'PUT',
         body: bytes,
-        headers: { 'Content-Type': 'image/jpeg', 'Idempotency-Key': guid(key) },
+        headers: { 'Content-Type': contentType, 'Idempotency-Key': guid(key) },
       }),
     notifications: (page: number, signal?: AbortSignal) =>
       api.request<TaskPage<TaskNotification>>(`${root}/notifications?page=${page}&pageSize=20`, {

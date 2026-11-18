@@ -33,7 +33,19 @@ function AuthenticatedPortalScope({ children }: { children: ReactNode }) {
 }
 function PortalScope({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 10000 } } }),
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: false,
+            staleTime: 10000,
+            // The Owner uses a localhost API through the Vite proxy. The OS/browser
+            // can report `offline` while localhost still works; React Query's
+            // default online-only mode would silently pause all first loads.
+            networkMode: 'always',
+          },
+        },
+      }),
   );
   useEffect(() => () => queryClient.clear(), [queryClient]);
   const [locationId, setLocationId] = useState('all');

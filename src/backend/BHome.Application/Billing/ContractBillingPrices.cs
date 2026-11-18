@@ -26,18 +26,31 @@ public static class ContractBillingPrices
         foreach (var c in snapshot.Charges)
         {
             var category = (ChargeCategory)c.Category;
-            if (category == ChargeCategory.Rent) continue;
+            if (c.PolicyLocationId.HasValue && (c.PolicyLocationId != locationId ||
+                c.PolicyRoomId.HasValue && c.PolicyRoomId != contract.RoomId ||
+                c.PolicyRoomId.HasValue && c.PolicyRoomTypeId.HasValue) ||
+                !c.PolicyLocationId.HasValue && (c.PolicyRoomId.HasValue || c.PolicyRoomTypeId.HasValue))
+            { missing.Add("contract_price_snapshot_invalid"); return []; }
+            // Rent may have been negotiated independently of the advertised policy. Keep
+            // the signed-contract billing reference, including for historical finalized
+            // invoices whose cumulative coverage already uses that reference.
+            if (category == ChargeCategory.Rent)
+            {
+                if (c.PolicyId == Guid.Empty ? c.Version != 0 : c.Version < 1)
+                { missing.Add("contract_price_snapshot_invalid"); return []; }
+                charges.Add(new(Guid.Empty, locationId, contract.RoomId, category, "RENT", "Tiền thuê theo hợp đồng đại diện",
+                    ChargingMethod.FixedPerRoomPerMonth, snapshot.AgreedRent, contract.StartDate, contract.EndDate, 0));
+                continue;
+            }
             if (!Enum.IsDefined(category) || !Enum.IsDefined((ChargingMethod)c.Method) ||
                 c.Rate < 0 || c.Version < 1 || c.PolicyId == Guid.Empty || string.IsNullOrWhiteSpace(c.ChargeCode))
             { missing.Add("contract_price_snapshot_invalid"); return []; }
             var method = (ChargingMethod)c.Method;
             if (!PropertyRules.ValidCharge(category, method, c.ChargeCode))
             { missing.Add("contract_price_snapshot_invalid"); return []; }
-            charges.Add(new(c.PolicyId, locationId, contract.RoomId, category, c.ChargeCode, string.IsNullOrWhiteSpace(c.Name) ? c.ChargeCode : c.Name,
-                method, c.Rate, c.EffectiveFrom, c.EffectiveTo, c.Version));
+            charges.Add(new(c.PolicyId, locationId, c.PolicyLocationId.HasValue ? c.PolicyRoomId : contract.RoomId, category, c.ChargeCode, string.IsNullOrWhiteSpace(c.Name) ? c.ChargeCode : c.Name,
+                method, c.Rate, c.EffectiveFrom, c.EffectiveTo, c.Version, RoomTypeId: c.PolicyRoomTypeId));
         }
-        charges.Add(new(Guid.Empty, locationId, contract.RoomId, ChargeCategory.Rent, "RENT", "Tiền thuê theo hợp đồng đại diện",
-            ChargingMethod.FixedPerRoomPerMonth, snapshot.AgreedRent, contract.StartDate, contract.EndDate, 0));
         if (charges.GroupBy(c => c.ChargeCode, StringComparer.OrdinalIgnoreCase).Any(g => g.Count() != 1))
         { missing.Add("contract_price_snapshot_invalid"); return []; }
         foreach (var category in new[] { ChargeCategory.Electricity, ChargeCategory.Water })

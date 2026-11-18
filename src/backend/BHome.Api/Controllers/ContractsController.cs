@@ -22,6 +22,8 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<ContractWorkflowConfiguration> Configuration(CancellationToken t) => service.ConfigurationAsync(t);
     [HttpGet("holding-settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
     public Task<HoldingSettings?> HoldingSettings(Guid locationId, CancellationToken t) => service.HoldingSettingsAsync(locationId, t);
+    [HttpGet("holding-settings/{locationId:guid}/versions"), Authorize(Roles = Roles.Owner)]
+    public Task<IReadOnlyList<HoldingSettings>> HoldingSettingsHistory(Guid locationId, CancellationToken t) => service.HoldingSettingsHistoryAsync(locationId, t);
     [HttpPut("holding-settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
     public async Task<IActionResult> HoldingSettings(Guid locationId, HoldingSettingsInput input, CancellationToken t)
     { await service.SetHoldingSettingsAsync(locationId, input, t); return NoContent(); }

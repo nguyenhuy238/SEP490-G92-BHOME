@@ -197,6 +197,11 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PropertyManagement.IRoomInsightsRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresRoomInsightsRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();
+        // RoomInventoryReviewService is used by ContractService and ContractHandoverRepository,
+        // while PropertyService also depends on ContractService for readiness checks. Resolve
+        // PropertyService only in the inventory operation that actually needs it, not during DI.
+        services.AddScoped(p => new Lazy<BHome.Application.PropertyManagement.PropertyService>(
+            () => p.GetRequiredService<BHome.Application.PropertyManagement.PropertyService>()));
         services.AddScoped<BHome.Application.PropertyManagement.ISetupWorkspaceStore,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SetupWorkspaceStore>();
         services.AddScoped<BHome.Application.PropertyManagement.ISharedConfigurationStore,
@@ -208,6 +213,7 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PropertyManagement.LocationSetupService>();
         services.AddScoped<BHome.Application.PropertyManagement.AssetInventoryService>();
         services.AddScoped<BHome.Application.PropertyManagement.RoomInventoryReviewService>();
+        services.AddScoped<BHome.Application.PropertyManagement.CommonAssetInventoryReviewService>();
         services.AddScoped<BHome.Application.Contracts.IHandoverInventory>(p => p.GetRequiredService<BHome.Application.PropertyManagement.RoomInventoryReviewService>());
         services.AddScoped<BHome.Application.PropertyManagement.AssetCountObservationService>();
         services.AddScoped<BHome.Application.PropertyManagement.SetupEvidenceService>();
@@ -275,6 +281,15 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IHoldingSettingsData, BHome.Infrastructure.Contracts.HoldingSettingsData>();
         services.AddScoped<BHome.Application.Finance.IExpenseRepository, BHome.Infrastructure.Finance.ExpenseRepository>();
         services.AddScoped<BHome.Application.Finance.ExpenseService>();
+        services.AddScoped<BHome.Application.Finance.ICapitalAssetRepository, BHome.Infrastructure.Finance.CapitalAssetRepository>();
+        services.AddScoped<BHome.Application.Finance.CapitalAssetService>();
+        services.AddScoped<BHome.Application.Finance.RecurringExpenseService>();
+        services.AddScoped<BHome.Infrastructure.Finance.RecurringExpenseJob>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Finance.RecurringExpenseJob>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Finance.RecurringExpenseJob>());
+        services.AddScoped<BHome.Infrastructure.Finance.AssetCapitalSyncJob>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Finance.AssetCapitalSyncJob>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Finance.AssetCapitalSyncJob>());
         services.AddScoped<BHome.Application.Finance.IExpenseEvidenceRepository, BHome.Infrastructure.Finance.ExpenseEvidenceRepository>();
         services.AddScoped<BHome.Application.Finance.ExpenseEvidenceService>();
         services.AddScoped<BHome.Application.Finance.IFinancialReportRepository, BHome.Infrastructure.Finance.FinancialReportRepository>();

@@ -94,8 +94,8 @@ const navGroups = [
   [
     'Thư viện cấu hình dùng chung',
     [
-      'configuration/room-types',
       'configuration/assets',
+      'configuration/room-types',
       'configuration/pricing-fees',
       'configuration/policies',
       'configuration/holding-contracts',
@@ -116,7 +116,7 @@ const navLabels: Record<string, string> = {
   account: 'Tài khoản',
   notifications: 'Thông báo',
   locations: 'Cơ sở',
-  'configuration/room-types': 'Mẫu loại phòng',
+  'configuration/room-types': 'Loại phòng mẫu',
   'configuration/assets': 'Tài sản mẫu',
   'configuration/pricing-fees': 'Mẫu giá & biểu phí',
   'configuration/policies': 'Nội quy & chính sách',
@@ -127,7 +127,7 @@ const navLabels: Record<string, string> = {
   'asset-allocation': 'Cấp phát tài sản',
   pricing: 'Giá thuê & Biểu phí',
   staff: 'Nhân viên',
-  'staff-assignments': 'Phân công cơ sở',
+  'staff-assignments': 'Phân công nhân viên cho từng cơ sở',
   tasks: 'Công việc vận hành',
   'operational-tasks': 'Công việc vận hành',
   tenants: 'Khách thuê',

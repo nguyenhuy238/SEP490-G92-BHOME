@@ -9,7 +9,7 @@ namespace BHome.Api.Controllers.PropertyManagement;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None), RequestSizeLimit(131072)]
 public sealed class SharedConfigurationController(SharedConfigurationService service) : ControllerBase
 {
-    [HttpGet] public Task<SharedPage> List(string resource, CancellationToken t, [FromQuery] string search = "", [FromQuery] string status = "", [FromQuery] int page = 1, [FromQuery] int pageSize = 20) => service.ListAsync(resource, search, status, page, pageSize, t);
+    [HttpGet] public Task<SharedPage> List(string resource, CancellationToken t, [FromQuery] string search = "", [FromQuery] string status = "", [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] bool latestOnly = false) => service.ListAsync(resource, search, status, page, pageSize, t, latestOnly);
     [HttpGet("{id:guid}")] public Task<SharedDocument> Get(string resource, Guid id, CancellationToken t) => service.GetAsync(resource, id, t);
     [HttpPost] public Task<SharedDocument> Create(string resource, SharedWrite input, CancellationToken t) => service.SaveAsync(resource, null, input, t);
     [HttpPut("{id:guid}")] public Task<SharedDocument> Update(string resource, Guid id, SharedWrite input, CancellationToken t) => service.SaveAsync(resource, id, input, t);
