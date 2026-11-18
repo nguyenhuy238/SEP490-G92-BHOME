@@ -37,7 +37,7 @@ public sealed class RoomInventoryReviewServiceTests
             var repository = Substitute.For<IPropertyRepository>();
             repository.FindAsync<Location>(Location.Id, Arg.Any<CancellationToken>()).Returns(Location);
             var properties = new PropertyService(repository, user, new PermissionAccess(user, access), TimeProvider.System);
-            Service = new(store, user, access, properties, NullLogger<RoomInventoryReviewService>.Instance, shared);
+            Service = new(store, user, access, new Lazy<PropertyService>(() => properties), NullLogger<RoomInventoryReviewService>.Instance, shared);
 
             store.ReviewRoomsAsync(Location.Id, Arg.Any<CancellationToken>()).Returns(_ => rooms.ToArray());
             store.ReviewRoomAssetsAsync(Location.Id, Arg.Any<CancellationToken>()).Returns(_ =>

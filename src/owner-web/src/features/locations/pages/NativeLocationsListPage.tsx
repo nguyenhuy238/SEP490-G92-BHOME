@@ -50,17 +50,41 @@ export function NativeLocationsListPage() {
   const [selectedSource, setSelectedSource] = useState('');
   const locations = useQuery({
     queryKey: ['property-setup', 'native-locations', session?.userId, page, search, status],
-    queryFn: ({ signal }) =>
-      api.request<Page<LocationConfiguration>>(
-        '/api/v1/locations?' +
-          new URLSearchParams({
-            page: String(page),
-            pageSize: '20',
-            ...(search.trim() ? { search: search.trim() } : {}),
-            ...(status ? { isActive: status } : {}),
-          }),
-        { signal },
-      ),
+    queryFn: async ({ signal }) => {
+      // A pending proxy/backend request must not leave the Owner stuck behind
+      // a loading bar forever. Even token refresh can stall while waiting for
+      // a browser cookie lock, so aborting the fetch alone is insufficient.
+      const timeout = AbortSignal.timeout(20_000);
+      const timedOut = () =>
+        new Error(
+          'Máy chủ phản hồi danh sách cơ sở quá lâu (20 giây). Kiểm tra Backend tại /health/ready và thử lại.',
+        );
+      let abortTimeout: () => void = () => {};
+      const deadline = new Promise<never>((_, reject) => {
+        abortTimeout = () => reject(timedOut());
+        timeout.addEventListener('abort', abortTimeout, { once: true });
+      });
+      try {
+        return await Promise.race([
+          api.request<Page<LocationConfiguration>>(
+            '/api/v1/locations?' +
+              new URLSearchParams({
+                page: String(page),
+                pageSize: '20',
+                ...(search.trim() ? { search: search.trim() } : {}),
+                ...(status ? { isActive: status } : {}),
+              }),
+            { signal: AbortSignal.any([signal, timeout]) },
+          ),
+          deadline,
+        ]);
+      } catch (error) {
+        if (timeout.aborted && !signal.aborted) throw timedOut();
+        throw error;
+      } finally {
+        timeout.removeEventListener('abort', abortTimeout);
+      }
+    },
   });
   // Source selector uses the full scoped list rather than the current filtered page.
   const sources = useQuery({

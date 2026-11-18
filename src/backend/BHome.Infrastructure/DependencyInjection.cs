@@ -197,6 +197,11 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PropertyManagement.IRoomInsightsRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresRoomInsightsRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();
+        // RoomInventoryReviewService is used by ContractService and ContractHandoverRepository,
+        // while PropertyService also depends on ContractService for readiness checks. Resolve
+        // PropertyService only in the inventory operation that actually needs it, not during DI.
+        services.AddScoped(p => new Lazy<BHome.Application.PropertyManagement.PropertyService>(
+            () => p.GetRequiredService<BHome.Application.PropertyManagement.PropertyService>()));
         services.AddScoped<BHome.Application.PropertyManagement.ISetupWorkspaceStore,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SetupWorkspaceStore>();
         services.AddScoped<BHome.Application.PropertyManagement.ISharedConfigurationStore,

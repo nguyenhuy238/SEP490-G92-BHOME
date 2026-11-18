@@ -30,7 +30,7 @@ public sealed record RoomInventoryReviewConfirm(Guid RequestId, RoomInventoryRev
 /// The configured quantity remains authoritative; only checked groups create/link one physical Asset.
 /// </summary>
 public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access,
-    PropertyService properties, ILogger<RoomInventoryReviewService> logger,
+    Lazy<PropertyService> properties, ILogger<RoomInventoryReviewService> logger,
     ISharedConfigurationStore? shared = null) : SetupWorkspaceService(store, user, access)
 {
     private const string ReviewKind = "RoomInventoryChecklistReview";
@@ -273,7 +273,7 @@ public sealed partial class RoomInventoryReviewService(ISetupWorkspaceStore stor
         Owner();
         var started = Stopwatch.GetTimestamp();
         await Scope(location, false, t);
-        var target = await properties.GetLocationAsync(location, t);
+        var target = await properties.Value.GetLocationAsync(location, t);
         var snapshot = await SnapshotAsync(location, target.IsActive, [], t);
         logger.LogInformation("Room inventory GET completed: rooms={RoomCount}, databaseReads={DatabaseReads}, elapsedMs={ElapsedMs:F1}",
             snapshot.Rooms.Length, 1 + 3 + (snapshot.EvidenceRead ? 1 : 0), Stopwatch.GetElapsedTime(started).TotalMilliseconds);
