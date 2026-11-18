@@ -1,3 +1,4 @@
+import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
@@ -139,6 +140,12 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
       await reload();
     } catch (e) {
       setError(refundError(e));
+      if ((e as { status?: number })?.status === 409) {
+        setReviewedSource(null);
+        setBeneficiarySource(null);
+        setZeroDeductionSource(null);
+        await reload();
+      }
     } finally {
       lock.current = false;
       setBusy(false);
@@ -315,7 +322,10 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                   />
                 </>
               )}
-              <Button
+              <ConfirmActionButton
+                title="Tạo yêu cầu hoàn tiền"
+                description={`${source.data.beneficiaries.find((p) => p.id === person)?.label ?? source.data.externalBeneficiary?.label ?? 'Người nhận đã xác minh'} · ${amount ? formatContractMoney(amount) : 'Chưa có số tiền'} · ${reason}. Bước này tạo yêu cầu; tiền chưa được chuyển cho người nhận.`}
+                confirmationKey={JSON.stringify([source.data, person, amount, reason, checked])}
                 disabled={
                   busy ||
                   source.isFetching ||
@@ -333,10 +343,10 @@ function RefundPanelContent({ sourceId, sourceKind = 'Receipt', onChanged }: Ref
                   source.data.availableAmount === null ||
                   /^0(?:\.0+)?$/.test(source.data.availableAmount)
                 }
-                onClick={() => void create()}
+                onConfirm={create}
               >
                 Lập yêu cầu hoàn tiền
-              </Button>
+              </ConfirmActionButton>
             </>
           )}
           {source.data.requests.map((row) => (
@@ -547,21 +557,38 @@ function RefundItem({
             />
             {row.status === 'REQUESTED' ? (
               <Stack direction="row" spacing={1}>
-                <Button
+                <ConfirmActionButton
+                  title="Duyệt yêu cầu hoàn tiền"
+                  description={`${row.beneficiaryLabel} · ${formatContractMoney(row.amount)} · ${reason}. Owner cần chuyển khoản bên ngoài và lưu chứng từ để hoàn tất.`}
+                  confirmationKey={JSON.stringify([row, reason, checked])}
                   disabled={busy || blocked || !checked || !reason.trim()}
-                  onClick={() => void perform(true)}
+                  onConfirm={() => perform(true)}
                 >
                   Duyệt yêu cầu hoàn
-                </Button>
-                <Button
+                </ConfirmActionButton>
+                <ConfirmActionButton
+                  title="Từ chối hoàn tiền"
+                  description={`${row.beneficiaryLabel} · ${formatContractMoney(row.amount)}. Lý do từ chối hoàn: ${reason}`}
+                  confirmationKey={JSON.stringify([row, reason, checked])}
                   disabled={busy || !checked || !reason.trim()}
-                  onClick={() => void perform(false)}
+                  onConfirm={() => perform(false)}
                 >
                   Từ chối hoàn
-                </Button>
+                </ConfirmActionButton>
               </Stack>
             ) : (
-              <Button
+              <ConfirmActionButton
+                title="Ghi nhận đã chuyển tiền hoàn"
+                description={`${row.beneficiaryLabel} · ${formatContractMoney(row.amount)} · tham chiếu ${reference} · ${date} (giờ Việt Nam). Chỉ xác nhận sau khi đã chuyển tiền thực tế và kiểm tra ảnh chứng từ.`}
+                confirmationKey={JSON.stringify([
+                  row,
+                  reason,
+                  checked,
+                  reference,
+                  date,
+                  file?.name,
+                  file?.size,
+                ])}
                 disabled={
                   busy ||
                   blocked ||
@@ -571,10 +598,10 @@ function RefundItem({
                   !file ||
                   (!date && !row.executionIntent)
                 }
-                onClick={() => void perform()}
+                onConfirm={() => perform()}
               >
                 Ghi nhận giao dịch hoàn đã thực hiện
-              </Button>
+              </ConfirmActionButton>
             )}
           </>
         )}

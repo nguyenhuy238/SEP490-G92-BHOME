@@ -409,6 +409,7 @@ public static class DependencyInjection
         services.AddHostedService<MeterEvidenceCleanup>();
         services.AddOptions<IdentityProtectionOptions>().Bind(configuration.GetSection("IdentityProtection"));
         services.AddSingleton<IIdentityProtection, IdentityProtection>();
+        services.AddScoped<IHouseholdProfiles, HouseholdProfiles>();
         services.AddOptions<ObjectStorageOptions>().Bind(configuration.GetSection(ObjectStorageOptions.Section));
         services.AddScoped<IObjectStorage, MinioObjectStorage>();
         services.AddOptions<JobWorkerOptions>().Bind(configuration.GetSection("Jobs"))

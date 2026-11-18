@@ -46,6 +46,20 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 t.ThrowIfCancellationRequested();
                 var original = string.Concat(p.Descendants(W + "t").Select(n => n.Value)).Trim();
                 string? replacement = null;
+                if (original.StartsWith("ĐẠI DIỆN BÊN B") && original.Contains("ĐẠI DIỆN BÊN A"))
+                {
+                    var signatureFont = p.Elements(W + "r").Select(r => r.Element(W + "rPr")).FirstOrDefault(r => r is not null);
+                    XElement Cell(string title) => new(W + "tc", new XElement(W + "tcPr", new XElement(W + "tcW", new XAttribute(W + "w", "2500"), new XAttribute(W + "type", "pct"))),
+                        new XElement(W + "p", new XElement(W + "pPr", new XElement(W + "jc", new XAttribute(W + "val", "center")), new XElement(W + "keepNext")),
+                            new XElement(W + "r", signatureFont is null ? new XElement(W+"rPr", new XElement(W+"rFonts",new XAttribute(W+"ascii","Times New Roman"),new XAttribute(W+"hAnsi","Times New Roman"))) : new XElement(signatureFont), new XElement(W + "t", title))));
+                    var table = new XElement(W + "tbl", new XElement(W + "tblPr", new XElement(W + "tblW", new XAttribute(W + "w", "5000"), new XAttribute(W + "type", "pct"))),
+                        new XElement(W + "tr", new XElement(W + "trPr", new XElement(W + "cantSplit")), Cell("ĐẠI DIỆN BÊN B"), Cell("ĐẠI DIỆN BÊN A")),
+                        new XElement(W + "tr", new XElement(W + "trPr", new XElement(W + "cantSplit"), new XElement(W + "trHeight", new XAttribute(W + "val", "2800"), new XAttribute(W + "hRule", "atLeast"))), Cell(""), Cell("")));
+                    p.ReplaceWith(table);
+                    table.ElementsAfterSelf().TakeWhile(e => e.Name == W + "p" && !e.Descendants(W + "sectPr").Any() &&
+                        string.IsNullOrWhiteSpace(string.Concat(e.Descendants(W + "t").Select(n => n.Value)))).ToArray().Remove();
+                    continue;
+                }
                 if (original.StartsWith("1.Đại diện")) side = 1;
                 if (original.StartsWith("2. Bên thuê")) side = 2;
                 if (original.StartsWith("Hôm nay ngày")) replacement = $"Hôm nay ngày {clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)):dd/MM/yyyy}; tại địa chỉ: {data.Address}";
@@ -67,7 +81,9 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                 {
                     var extra = charges.Where(c => c.ChargeCode is not ("RENT" or "ELECTRICITY" or "WATER")).Select(c => $"{c.Name}: {Money(c.Rate)} đ/{(c.Method == BHome.Domain.PropertyManagement.ChargingMethod.FixedPerPersonPerMonth ? "người" : "phòng")}/tháng.");
                     var occupants = data.Occupants is { Length: > 0 } ? "Thành viên cùng ở: " + string.Join(", ", data.Occupants) : "";
-                    var text = string.Join("\n", extra.Append(occupants).Append(data.Contract.Terms).Where(x => !string.IsNullOrWhiteSpace(x)));
+                    var terms = System.Text.RegularExpressions.Regex.Replace(data.Contract.Terms,
+                        @"(?m)^NỘI QUY ĐƯỢC THỎA THUẬN [0-9a-fA-F-]{36} / phiên bản [0-9]+ / SHA256 [a-fA-F0-9]{64}\r?\n", "");
+                    var text = string.Join("\n", extra.Append(occupants).Append(terms).Where(x => !string.IsNullOrWhiteSpace(x)));
                     if (text.Length > 0)
                     {
                         var body = xml.Descendants(W + "p").First(q => string.Concat(q.Descendants(W + "t").Select(n => n.Value)).StartsWith("Giá thuê:"));
@@ -78,7 +94,7 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
                         p.AddBeforeSelf(extraParagraph);
                     }
                 }
-                if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ")
+                if (original == "HỢP ĐỒNG THUÊ PHÒNG TRỌ" && (!data.SigningReview || data.Contract.IsDevelopmentDemo))
                 {
                     var notice = new XElement(p);
                     Text(notice, data.SigningReview ? "TÀI LIỆU KIỂM THỬ – MẪU CHƯA ĐƯỢC DUYỆT CHO PRODUCTION" : $"BẢN NHÁP – {data.Contract.Id}");
@@ -96,6 +112,6 @@ internal sealed class MainDraftRenderer(IConfiguration configuration, TimeProvid
             configuration["MainDraft:LibreOfficePath"], null,
             ["-env:UserInstallation={profile}", "--headless", "--convert-to", "pdf", "--outdir", "{work}", "{work}/draft.docx"], t);
         if (!bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8)) throw new ContractException(503, "contract_pdf_conversion_failed");
-        return bytes;
+        return MainTemplateSignatureSlots.Add(bytes);
     }
 }

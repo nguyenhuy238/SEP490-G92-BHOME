@@ -1,13 +1,16 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Button, Icon, IconButton, Text, TextInput } from 'react-native-paper';
+import { Button, IconButton, Text } from 'react-native-paper';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { colors as c, staffColors as s } from '../../theme/theme';
 import { identityStatusLabels, type HouseholdMode, type OnboardingPerson } from './onboarding';
 
 interface Props {
+  inline?: boolean;
   mode: HouseholdMode;
   people: readonly OnboardingPerson[];
+  maxPeople: number;
+  rosterLocked?: boolean;
   representative: string;
   editing: string;
   created: boolean;
@@ -26,7 +29,6 @@ interface Props {
 
 // Presentation only: the parent retains the draft, validation and navigation rules.
 export function OnboardingPeopleStep(props: Props) {
-  const person = props.people.find((item) => item.key === props.editing);
   return (
     <View style={styles.content}>
       <View style={styles.section}>
@@ -36,21 +38,23 @@ export function OnboardingPeopleStep(props: Props) {
           disabled={props.created}
           options={[
             { id: 'family', label: 'Hộ gia đình' },
-            { id: 'individual', label: 'Cá nhân / Nhóm bạn' },
+            { id: 'individual', label: 'Cá nhân' },
           ]}
           onChange={(value) => props.onModeChange(value as HouseholdMode)}
         />
         <Text style={styles.description}>
           {props.mode === 'family'
             ? 'Một người đại diện và các thành viên cùng ở.'
-            : 'Mỗi người có hồ sơ riêng để chuẩn bị hợp đồng phù hợp.'}
+            : 'Một người thuê trên một hợp đồng. Chọn Hộ gia đình để thêm thành viên cùng ở.'}
         </Text>
       </View>
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Danh sách người ở</Text>
-          <Text style={styles.count}>{props.people.length} người</Text>
+          <Text style={styles.count}>
+            {props.people.length}/{props.maxPeople} người
+          </Text>
         </View>
         <View style={styles.list}>
           {props.people.map((item, index) => {
@@ -58,7 +62,10 @@ export function OnboardingPeopleStep(props: Props) {
             const representative = item.key === props.representative;
             const selected = item.key === props.editing;
             const canDelete =
-              !item.residentId && props.people.length > 1 && !(props.created && representative);
+              !props.rosterLocked &&
+              props.people.length > 1 &&
+              (!item.residentId || (props.mode === 'family' && !representative)) &&
+              !(props.created && representative);
             return (
               <View key={item.key} style={[styles.person, selected && styles.selected]}>
                 <View style={styles.personHeader}>
@@ -78,7 +85,7 @@ export function OnboardingPeopleStep(props: Props) {
                       size={20}
                       style={styles.iconButton}
                       iconColor={s.navy}
-                      disabled={!!item.residentId}
+                      disabled={props.rosterLocked || (!!item.residentId && representative)}
                       accessibilityLabel={`Chỉnh sửa ${name}`}
                       onPress={() => props.onEdit(item.key)}
                     />
@@ -96,7 +103,9 @@ export function OnboardingPeopleStep(props: Props) {
                 </View>
                 {item.residentId && (
                   <Text style={item.status === 'confirmed' ? styles.confirmed : styles.statusText}>
-                    {identityStatusLabels[item.status]}
+                    {props.mode === 'family' && !representative && item.member
+                      ? 'Đã lưu thông tin'
+                      : identityStatusLabels[item.status]}
                   </Text>
                 )}
                 {!props.created && !representative && (
@@ -123,78 +132,52 @@ export function OnboardingPeopleStep(props: Props) {
           style={styles.addButton}
           contentStyle={styles.touch}
           onPress={props.onAdd}
+          disabled={
+            props.rosterLocked ||
+            props.people.length >= props.maxPeople ||
+            (props.mode === 'individual' && props.people.length >= 1)
+          }
         >
           Thêm người ở
         </Button>
-      </View>
-
-      <View style={styles.profileSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Thông tin hồ sơ</Text>
-          <Icon source="file-account-outline" size={22} color={s.navy} />
-        </View>
-        {person && (
-          <>
-            <Text style={styles.profileCaption}>
-              {person.label || `Người ở ${props.people.indexOf(person) + 1}`}
-            </Text>
-            <TextInput
-              mode="outlined"
-              label="Tên gọi hồ sơ *"
-              accessibilityLabel="Tên gọi hồ sơ"
-              placeholder="Ví dụ: Người thuê 01"
-              value={person.label}
-              maxLength={150}
-              disabled={!!person.residentId}
-              style={styles.input}
-              outlineColor={c.border}
-              activeOutlineColor={s.blue}
-              outlineStyle={styles.inputOutline}
-              onChangeText={(label) => props.onLabelChange(person.key, label)}
-            />
-            <View style={styles.helperRow}>
-              <Text style={styles.helper}>
-                Tên gọi giúp phân biệt người ở. Không nhập số CCCD tại đây.
-              </Text>
-              <Text style={styles.counter}>{person.label.length}/150</Text>
-            </View>
-            <Text style={styles.helper}>Email sẽ được nhập khi gửi lời mời ký hợp đồng.</Text>
-          </>
-        )}
-        <Text style={styles.note}>
-          Hình thức thuê và người đại diện đang lưu tạm trong phiên tiếp nhận.
+        <Text
+          accessibilityRole={props.people.length > props.maxPeople ? 'alert' : undefined}
+          style={styles.description}
+        >
+          {props.maxPeople <= 0
+            ? 'Phòng không còn chỗ hoặc chưa tải được sức chứa. Vui lòng chọn lại phòng.'
+            : props.people.length > props.maxPeople
+              ? `Danh sách vượt giới hạn ${props.maxPeople} người. Hãy bớt người ở trước khi tiếp tục.`
+              : `Tối đa ${props.maxPeople} người theo số chỗ còn lại của phòng.`}
         </Text>
-        {props.created && (
-          <Text style={styles.note}>
-            Hồ sơ đã tạo có thể được bổ sung thông tin ở bước CCCD; không xóa hồ sơ đó tại bước này.
-          </Text>
-        )}
       </View>
 
-      <View style={styles.actions}>
-        <Button
-          mode="outlined"
-          icon="arrow-left"
-          textColor={s.navy}
-          style={styles.backButton}
-          contentStyle={styles.touch}
-          disabled={props.backDisabled}
-          onPress={props.onBack}
-        >
-          Quay lại
-        </Button>
-        <Button
-          mode="contained"
-          buttonColor={s.blue}
-          style={styles.continueButton}
-          contentStyle={styles.touch}
-          disabled={!props.canContinue}
-          accessibilityLabel="Tiếp tục đến CCCD"
-          onPress={props.onContinue}
-        >
-          Tiếp tục
-        </Button>
-      </View>
+      {!props.inline && (
+        <View style={styles.actions}>
+          <Button
+            mode="outlined"
+            icon="arrow-left"
+            textColor={s.navy}
+            style={styles.backButton}
+            contentStyle={styles.touch}
+            disabled={props.backDisabled}
+            onPress={props.onBack}
+          >
+            Quay lại
+          </Button>
+          <Button
+            mode="contained"
+            buttonColor={s.blue}
+            style={styles.continueButton}
+            contentStyle={styles.touch}
+            disabled={!props.canContinue}
+            accessibilityLabel="Tiếp tục đến CCCD"
+            onPress={props.onContinue}
+          >
+            Tiếp tục
+          </Button>
+        </View>
+      )}
     </View>
   );
 }

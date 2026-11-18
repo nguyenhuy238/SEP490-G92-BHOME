@@ -30,6 +30,8 @@ export interface MainDraftPreparation {
     dateOfIssue: string | null;
     representative: boolean;
     phone?: string | null;
+    dateOfBirth?: string | null;
+    relationship?: string | null;
     email?: string | null;
   }[];
   charges: { id: string; name: string; chargeCode: string; rate: string; version: number }[];
@@ -148,6 +150,8 @@ export function mainDraftClient(request: MainDraftRequest) {
   };
 }
 export const mainDraftMessages: Record<string, string> = {
+  room_capacity_exceeded:
+    'Số người ở vượt sức chứa của phòng. Hãy bớt người ở hoặc chọn phòng khác.',
   verified_contract_signer_required:
     'Hồ sơ bên thuê không khớp hợp đồng. Hãy tải lại hoặc kiểm tra hồ sơ đại diện.',
   verified_residents_with_email_required:

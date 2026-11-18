@@ -77,6 +77,20 @@ public sealed partial class Compact24NotificationMvpTests
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var active = await db.Set<Contract>().SingleAsync(c => c.Id == w.Contracts[0]);
+            active.InitialPaymentRequired = false; // This seeded legacy tenancy has no initial-payment order.
+            active.RequiredDeposit = 1000000;
+            await db.SaveChangesAsync();
+            var payment = Guid.NewGuid(); var allocation = Guid.NewGuid(); var operation = Guid.NewGuid();
+            var reference = "SYNTHETIC-MAIN-" + payment.ToString("N"); var now = DateTimeOffset.UtcNow;
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO payments(id,provider_code,receiving_account_key,transaction_reference,effect_key,received_at,amount,currency,status,verification_method,verified_by_user_id,verified_at)
+                VALUES({payment},'SYNTHETIC','test',{reference},{reference},{now},1000000,'VND','VERIFIED','MANUAL',{w.Owner.Id},{now})
+                """);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO payment_allocations(id,source_payment_id,target_deposit_contract_id,amount,operation_key,line_number,created_by_user_id,allocated_at,reason)
+                VALUES({allocation},{payment},{w.Contracts[0]},1000000,{operation},1,{w.Owner.Id},{now},'Synthetic verified Main deposit')
+                """);
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET email_confirmed=false,reset_token_hash={new string('A', 64)},reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)},reset_consumed_at=NULL WHERE id={w.Tenants[0].Id}");
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET contact_email={w.Tenants[0].Email} WHERE id={w.Residents[0]}");
             var queue = scope.ServiceProvider.GetRequiredService<IBackgroundJobQueue>();
@@ -88,6 +102,16 @@ public sealed partial class Compact24NotificationMvpTests
         while (!probe.Messages.Any(m => m.Destination == w.Tenants[0].Email && m.EventType == "ACCOUNT_INVITATION")) await Task.Delay(100, deadline.Token);
         var mail = Assert.Single(probe.Messages, m => m.EventType == "ACCOUNT_INVITATION");
         Assert.Equal(w.Tenants[0].Email, mail.Destination);
+        Assert.Contains("Hợp đồng thuê của bạn đã hoạt động", mail.Body);
+        Assert.Contains("1.000.000", mail.Body);
+        Assert.Contains("Trạng thái tài khoản: Đang hoạt động", mail.Body);
+        Assert.Contains(w.Contracts[0].ToString("D"), mail.Body);
+        Assert.Contains("tự đặt mật khẩu", mail.Body);
+        var attachment = Assert.Single(mail.Attachments!);
+        Assert.Equal("application/pdf", attachment.ContentType);
+        Assert.Equal("%PDF-1.7 SYNTHETIC MAIN BOTH SIGNED"u8.ToArray(), attachment.Content);
+        Assert.Contains(w.Contracts[0].ToString("N"), attachment.FileName);
+        Assert.NotNull(mail.ActionUrl);
         using var owner = await Client(w.Owner, host);
         ResidentAdministrationView? detail;
         do

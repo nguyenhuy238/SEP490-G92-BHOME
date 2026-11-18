@@ -184,6 +184,36 @@ function fill() {
     target: { value: 'Người thuê mới' },
   });
 }
+it('opens Holding CCCD directly using the selected room label and reuses the same Resident', async () => {
+  const create = vi.fn().mockResolvedValue({ id: 'holding-resident' });
+  const props = {
+    api: { createHoldingResident: create } as unknown as ContractClient,
+    roomId: 'room',
+    role: 'Staff',
+    onCreated: vi.fn(),
+    onConfirmed: vi.fn(),
+  };
+  const view = render(
+    <HoldingNewTenant {...props} context="holding" stage="identity" initialName="P101" />,
+  );
+  expect(screen.queryByLabelText('Họ và tên *')).toBeNull();
+  fireEvent.click(screen.getByText('Nhập thủ công'));
+  await screen.findByRole('dialog', { name: 'Nhập thủ công CCCD' });
+  expect(create).toHaveBeenCalledExactlyOnceWith('room', 'P101');
+  fireEvent.click(screen.getByText('Đóng nhập thông tin'));
+  view.rerender(
+    <HoldingNewTenant
+      {...props}
+      context="holding"
+      stage="identity"
+      initialName="P101"
+      initialResidentId="holding-resident"
+    />,
+  );
+  fireEvent.click(screen.getByText('Nhập thủ công'));
+  await screen.findByRole('dialog', { name: 'Nhập thủ công CCCD' });
+  expect(create).toHaveBeenCalledTimes(1);
+});
 it('creates one real resident before opening manual identity entry and reuses that profile on reopen', async () => {
   const { create, created, confirmed, busy } = setup();
   fill();

@@ -49,6 +49,14 @@ internal static class Compact24DomainModel
 
         var contract = model.Entity<Contract>();
         model.Entity<Resident>().Property(x => x.ContactEmail).HasMaxLength(256);
+        model.Entity<Resident>().Property(x => x.HouseholdRepresentativeId);
+        model.Entity<Resident>().Property(x => x.HouseholdClientKey);
+        model.Entity<Resident>().Property(x => x.HouseholdProfile);
+        model.Entity<Resident>().Property(x => x.HouseholdConfirmedAt);
+        model.Entity<Resident>().Property(x => x.HouseholdConfirmedByUserId);
+        model.Entity<Resident>().Property(x => x.HouseholdVersion);
+        model.Entity<Resident>().Property(x => x.HouseholdRequestKey);
+        model.Entity<Resident>().Property(x => x.HouseholdRequestHash);
         contract.Property(x => x.SigningMode);
         contract.Property(x => x.InternalAcceptance);
         contract.Property(x => x.InitialPaymentRequired);

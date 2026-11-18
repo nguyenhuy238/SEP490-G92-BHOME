@@ -15,6 +15,24 @@ function New-Network([string]$Address, [int]$Index, [int]$Metric = 10, [string]$
         IPv4Address = @([pscustomobject]@{ IPAddress = $Address; SkipAsSource = $false })
     }
 }
+# Exercise host updates without running certificate, user-secret or database setup.
+$prepareAst = [Management.Automation.Language.Parser]::ParseFile(
+    (Join-Path $repositoryRoot 'scripts/Prepare-OcrMobile.ps1'), [ref]$null, [ref]$null)
+$hostStatements = $prepareAst.EndBlock.Statements | Where-Object {
+    $_.Extent.Text -match '^\$configuredHosts\s*=' -or $_.Extent.Text -match "^Set-Setting 'AllowedHosts'"
+}
+Assert-Equal $hostStatements.Count 2 'locate actual host configuration statements'
+$hostUpdate = [scriptblock]::Create(($hostStatements.Extent.Text -join "`n"))
+& {
+    function Set-Setting($key, $value) { $script:preparedHosts = $value }
+    $LanIp = '192.168.1.8'; $developmentHost = 'desktop.example.invalid'
+    $configText = 'AllowedHosts=localhost;payments.example.invalid;mail.example.invalid'
+    . $hostUpdate
+    Assert-Equal $script:preparedHosts 'localhost;127.0.0.1;192.168.1.8;desktop.example.invalid;payments.example.invalid;mail.example.invalid' 'retain payment and email tunnel hosts without duplicate localhost'
+    $configText = ''
+    . $hostUpdate
+    Assert-Equal $script:preparedHosts 'localhost;127.0.0.1;192.168.1.8;desktop.example.invalid' 'missing allowlist retains explicit LAN defaults'
+}
 $tlsSettings = Get-MobileHttpsSniSettings 'synthetic-mobile.pfx' 'synthetic-password' 'synthetic-localhost.pfx'
 Assert-Equal $tlsSettings['Kestrel:Endpoints:MobileHttps:Sni:*:Certificate:Path'] 'synthetic-mobile.pfx' 'LAN and no-SNI clients retain mobile certificate'
 Assert-Equal $tlsSettings['Kestrel:Endpoints:MobileHttps:Sni:localhost:Certificate:Path'] 'synthetic-localhost.pfx' 'localhost uses the trusted development certificate'

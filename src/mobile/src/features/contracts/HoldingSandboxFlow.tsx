@@ -148,11 +148,11 @@ export function HoldingSandboxFlow({
         />
         <HoldingInfoRow label="Tiền giữ chỗ" value={formatContractMoney(state.required)} />
       </HoldingSectionCard>
-      {!c.approvedAt && !state.onHold && (
-        <HoldingSectionCard title="Chờ Owner phê duyệt">
-          <HoldingStatusBadge label="Bản nháp đang chờ phê duyệt" tone="warning" />
+      {!showQr && !state.onHold && (
+        <HoldingSectionCard title="Chờ hoàn tất chữ ký">
+          <HoldingStatusBadge label="Cần đủ chữ ký Owner và Tenant" tone="warning" />
           <Text style={ui.muted}>
-            Owner cần xem và phê duyệt hợp đồng trên Web trước khi gửi lời mời ký.
+            Owner xem và ký hợp đồng trên Web. Owner hoặc Tenant đều có thể ký trước.
           </Text>
           <Button
             mode="contained"
@@ -175,15 +175,9 @@ export function HoldingSandboxFlow({
             Tải lại trạng thái
           </Button>
           <Text style={ui.muted}>Trạng thái cũng tự cập nhật mỗi 10 giây.</Text>
-          <Button mode="outlined" disabled>
-            Mô phỏng người giữ chỗ đã ký
-          </Button>
-          <Text style={ui.muted}>
-            Nút mô phỏng Tenant sẽ bật sau khi Owner phê duyệt. Kết quả được lưu qua API Sandbox.
-          </Text>
         </HoldingSectionCard>
       )}
-      {!!c.approvedAt && !showQr && !state.onHold && (
+      {!showQr && !state.onHold && (
         <HoldingSigningConfirmation
           key={`${c.id}:${c.snapshotHash}`}
           api={api}

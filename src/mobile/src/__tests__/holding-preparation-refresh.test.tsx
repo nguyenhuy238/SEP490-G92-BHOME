@@ -54,6 +54,9 @@ function Harness({ selectedRoom = '' }: { selectedRoom?: string }) {
         {q.loading ? 'Loading' : q.data?.rooms.map((x) => x.label).join(',') || 'No eligible rooms'}
       </span>
       <span>{q.data?.blockedRooms.flatMap((x) => x.codes).join(',')}</span>
+      <span>{q.error}</span>
+      <span>Catalog {q.catalogLoading ? 'loading' : 'ready'}</span>
+      <span>{q.selectionBlocked ? 'Selected room blocked' : ''}</span>
     </>
   );
 }
@@ -64,14 +67,17 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 afterEach(cleanup);
-it('retains backend blockers instead of presenting missing rent as missing room data', async () => {
-  render(<Harness />);
+it('retains selected-room backend blockers without checking every room in the catalog', async () => {
+  render(<Harness selectedRoom="room" />);
   await screen.findByText('RENT_POLICY_MISSING');
-  expect(screen.getByText('No eligible rooms')).toBeTruthy();
+  expect(screen.getByText('J09-102')).toBeTruthy();
+  expect(screen.getByText(/Owner cần cập nhật giá phòng/)).toBeTruthy();
+  expect(api.holdingRoomReadiness).toHaveBeenCalledOnce();
 });
 it('refreshes eligibility on foreground without reloading the application', async () => {
   render(<Harness />);
-  await screen.findByText('RENT_POLICY_MISSING');
+  await screen.findByText('J09-102');
+  expect(api.holdingRoomReadiness).not.toHaveBeenCalled();
   expect(rooms).toHaveBeenCalledOnce();
   act(() => events.listener?.('background'));
   expect(rooms).toHaveBeenCalledOnce();
@@ -83,7 +89,7 @@ it('refreshes eligibility on foreground without reloading the application', asyn
 });
 it('refreshes on navigation focus and removes the foreground listener on unmount', async () => {
   const view = render(<Harness />);
-  await screen.findByText('RENT_POLICY_MISSING');
+  await screen.findByText('J09-102');
   ready = true;
   events.focusEpoch++;
   view.rerender(<Harness />);
@@ -103,5 +109,49 @@ it('refreshes only the selected room when returning from the camera, keeping the
   await waitFor(() => expect(api.preparation).toHaveBeenCalledTimes(2));
   await screen.findByText('J09-102');
   expect(rooms).toHaveBeenCalledOnce();
+  expect(api.holdingRoomReadiness).toHaveBeenCalledTimes(2);
+});
+
+it('shows 100 available rooms without waiting for a single readiness request', async () => {
+  const candidates = Array.from({ length: 100 }, (_, i) => ({
+    id: `room-${i}`,
+    locationId: 'location',
+    roomNumber: `R${i}`,
+    status: 0,
+  }));
+  rooms.mockResolvedValueOnce({ items: candidates, totalCount: candidates.length });
+  render(<Harness />);
+  await screen.findByText('Catalog ready');
+  expect(screen.getByText(candidates.map((r) => r.roomNumber).join(','))).toBeTruthy();
+  expect(rooms).toHaveBeenCalledOnce();
+  expect(api.preparation).not.toHaveBeenCalled();
+  expect(api.holdingRoomReadiness).not.toHaveBeenCalled();
+  expect(api.holdingRoomReady).not.toHaveBeenCalled();
+});
+
+it('explains a protected pending contract and finishes checking only the selected room', async () => {
+  vi.mocked(api.holdingRoomReadiness).mockResolvedValueOnce({
+    roomId: 'room',
+    purpose: 'Holding',
+    status: 'Blocked',
+    isReady: false,
+    blockers: [{ code: 'PROTECTED_PENDING_CONTRACT', message: 'Protected contract' }],
+    unverifiedConditions: [],
+  });
+  render(<Harness selectedRoom="room" />);
+  await screen.findByText(/Phòng đã có hợp đồng đang xử lý có chữ ký hoặc tiền cọc/);
+  expect(screen.getByText('Selected room blocked')).toBeTruthy();
+  expect(screen.queryByText('Loading')).toBeNull();
+  expect(api.holdingRoomReadiness).toHaveBeenCalledWith('room', expect.any(AbortSignal));
   expect(api.holdingRoomReadiness).toHaveBeenCalledOnce();
+});
+
+it('keeps the catalog usable while the selected room is being checked', async () => {
+  vi.mocked(api.holdingRoomReadiness).mockImplementationOnce(() => new Promise(() => {}));
+  const view = render(<Harness />);
+  await screen.findByText('J09-102');
+  view.rerender(<Harness selectedRoom="room" />);
+  await waitFor(() => expect(api.holdingRoomReadiness).toHaveBeenCalledOnce());
+  expect(screen.getByText('Loading')).toBeTruthy();
+  expect(screen.getByText('Catalog ready')).toBeTruthy();
 });

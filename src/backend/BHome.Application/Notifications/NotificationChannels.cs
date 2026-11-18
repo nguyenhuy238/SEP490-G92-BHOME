@@ -32,7 +32,9 @@ public interface IDevelopmentEmailTest
 {
     Task<EmailTestResult> SendAsync(CancellationToken t);
 }
-public sealed record ChannelMessage(string IdempotencyKey, string Channel, string Destination, string EventType, string Title, string Body, string? ActionUrl = null);
+public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);
+public sealed record ChannelMessage(string IdempotencyKey, string Channel, string Destination, string EventType, string Title, string Body, string? ActionUrl = null,
+    IReadOnlyList<EmailAttachment>? Attachments = null);
 public interface INotificationChannelProvider
 {
     bool IsConfigured(string channel);

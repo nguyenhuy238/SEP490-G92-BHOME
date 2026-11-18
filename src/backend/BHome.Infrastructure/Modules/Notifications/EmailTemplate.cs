@@ -4,7 +4,8 @@ namespace BHome.Infrastructure.Modules.Notifications;
 
 internal static class EmailTemplate
 {
-    internal static string Subject(string title) => "[BHOME] " + title.Replace('\r', ' ').Replace('\n', ' ');
+    internal static string Subject(string title, string? eventType = null) =>
+        (eventType == "HOLDING_CONFIRMED" ? "" : "[BHOME] ") + title.Replace('\r', ' ').Replace('\n', ' ');
 
     internal static string ActionLabel(string eventType) => eventType switch
     {

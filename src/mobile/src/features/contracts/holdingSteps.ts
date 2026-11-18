@@ -3,7 +3,7 @@ export const holdingSteps = [
   { key: 'applicant', label: 'Người giữ chỗ' },
   { key: 'identity', label: 'CCCD' },
   { key: 'confirm', label: 'Xác nhận' },
-  { key: 'draft', label: 'Bản nháp & phê duyệt' },
+  { key: 'draft', label: 'Gửi Owner ký' },
   { key: 'signing', label: 'Ký hợp đồng' },
   { key: 'deposit', label: 'QR chuyển khoản' },
   { key: 'activation', label: 'Cọc & giữ chỗ' },

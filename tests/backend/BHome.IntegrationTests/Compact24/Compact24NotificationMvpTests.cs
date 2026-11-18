@@ -27,6 +27,7 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
     private const string Password = "Synthetic!Notification-927";
+    private readonly Compact24WorkflowFixture.TestObjectStorage confirmationStorage = new();
     private sealed record Workspace(ApplicationUser Owner, ApplicationUser Staff, ApplicationUser[] Tenants, Guid Location, Guid Room, Guid[] Contracts, Guid[] Residents);
     private static DateOnly Today => BHome.Application.Billing.BillingAutomationDates.BusinessDate(DateTimeOffset.UtcNow);
     private async Task<Workspace> Seed()
@@ -61,6 +62,16 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
                 Terms = "Synthetic terms",
                 Residents = [new ContractResident { ResidentId = resident.Id, ResidenceFrom = Today.AddMonths(-1) }]
             };
+            // Active tenancies have immutable signing evidence available for activation emails.
+            var signed = "%PDF-1.7 SYNTHETIC MAIN BOTH SIGNED"u8.ToArray();
+            var key = $"contracts/{c.Id:N}/internal/synthetic-accepted.pdf";
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(signed));
+            using var bytes = new MemoryStream(signed);
+            await confirmationStorage.PutAsync(key, bytes, bytes.Length, "application/pdf", default);
+            c.SigningMode = BHome.Application.Contracts.ContractSigningModes.Internal;
+            c.InternalAcceptance = JsonSerializer.Serialize(new BHome.Application.Contracts.InternalAcceptanceEvidence(Guid.NewGuid(), resident.Id,
+                c.SnapshotHash, "synthetic-source", "synthetic-stroke", key, hash, DateTimeOffset.UtcNow,
+                owner.Id, DateTimeOffset.UtcNow, key, hash));
             db.Add(c); contracts.Add(c.Id); residents.Add(resident.Id);
         }
         await db.SaveChangesAsync(); return new(owner, staff, tenants, location.Id, room.Id, contracts.ToArray(), residents.ToArray());

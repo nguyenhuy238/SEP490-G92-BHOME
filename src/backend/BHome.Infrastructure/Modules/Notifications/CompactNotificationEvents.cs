@@ -53,7 +53,8 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             SELECT n.id,n.notification_type,COALESCE(n.related_entity_id,(n.event_data->'state'->>'targetId')::uuid,(n.event_data->'state'->>'targetUserId')::uuid),n.event_at
             FROM notifications n WHERE n.record_kind='AUDIT' AND COALESCE((n.event_data->'state'->>'succeeded')::boolean,(n.event_data->>'succeeded')::boolean,(n.event_data->>'Succeeded')::boolean,true)
             AND n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated','InvoiceDraftGenerated',
-              'ContractSigningInitiated','ContractSigningPrepared','ContractSigningRequested','InternalSigningInvitationApproved','ContractActivated','ContractRenewalPrepared','OperatingPolicyAmendmentCancelled','OperatingPolicyAmendmentApplied')
+              'ContractSigningInitiated','ContractSigningPrepared','ContractSigningRequested','InternalSigningInvitationApproved','ContractActivated','ContractRenewalPrepared','OperatingPolicyAmendmentCancelled','OperatingPolicyAmendmentApplied',
+              'HoldingSigningSubmitted','MainSigningSubmitted','HoldingActivated','Automatic:HoldingActivated','Automatic:ContractActivated')
             AND (NOT @authenticationOnly OR n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated'))
             AND NOT EXISTS(SELECT 1 FROM notifications p WHERE p.record_kind='OUTBOX' AND p.event_data->>'recordType'='NotificationPublication'
               AND p.event_data->'state'->>'eventKey'='extended-audit:'||n.id::text) ORDER BY n.event_at,n.id LIMIT 50
@@ -79,6 +80,38 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                 foreach (var r in await Roles([e.Target], t)) count += await sql.Emit(r.Id, r.Role, null, key,
                     eventType, "Account", title, $"{title}.\nThời điểm: {at:HH:mm dd/MM/yyyy} (giờ Việt Nam).\nNếu không phải bạn hoặc không được thông báo về thay đổi này, hãy liên hệ Owner ngay để kiểm tra tài khoản.",
                     "Account", r.Id, t, channels: e.Event == "StaffCreated" ? ["IN_APP"] : ["IN_APP", "EMAIL"]);
+            }
+            else if (e.Event is "HoldingSigningSubmitted" or "MainSigningSubmitted" or "HoldingActivated" or "Automatic:HoldingActivated")
+            {
+                var holding = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).ThenInclude(r => r.Location)
+                    .SingleOrDefaultAsync(c => c.Id == e.Target && (c.Kind == ContractKind.Holding || c.Kind == ContractKind.Main), t);
+                if (holding is not null && e.Event is "HoldingSigningSubmitted" or "MainSigningSubmitted")
+                    count += await sql.Emit(holding.OwnerSignerId, "Owner", holding.Room.LocationId,
+                        $"{(holding.Kind == ContractKind.Holding ? "holding" : "main")}-owner-signing:{holding.Id}:{holding.SnapshotHash}",
+                        holding.Kind == ContractKind.Holding ? "HOLDING_OWNER_SIGNING_REQUIRED" : "MAIN_OWNER_SIGNING_REQUIRED", "Contract",
+                        holding.Kind == ContractKind.Holding ? "Hợp đồng giữ chỗ cần ký" : "Hợp đồng thuê cần ký",
+                        $"Bạn có hợp đồng {(holding.Kind == ContractKind.Holding ? "giữ chỗ" : "thuê")} phòng {holding.Room.RoomNumber} tại {holding.Room.Location.Name} đang chờ ký.",
+                        "Contract", holding.Id, t, channels: ["IN_APP"]);
+                else if (holding is not null && !holding.IsDevelopmentDemo && holding.Status == ContractStatus.Active && holding.Room.Status == BHome.Domain.PropertyManagement.RoomStatus.OnHold)
+                {
+                    count += await sql.Emit(holding.OwnerSignerId, "Owner", holding.Room.LocationId,
+                        $"holding-activated:{holding.Id:N}", "HOLDING_ACTIVATED", "Contract",
+                        "Giữ chỗ đã được kích hoạt",
+                        $"Phòng {holding.Room.RoomNumber} tại {holding.Room.Location.Name} đã giữ chỗ thành công. Tiền giữ chỗ đã được xác minh.",
+                        "Contract", holding.Id, t, channels: ["IN_APP"]);
+                    // This publisher sees only committed activation audits. All activation paths share this key.
+                    // Anonymous signers need no user account: delivery resolves the accepted invitation's email.
+                    var payload = System.Text.Json.JsonSerializer.Serialize(new {
+                        schemaVersion = 1, recordType = "ChannelDelivery", notificationId = Guid.Empty,
+                        recipient = holding.OwnerSignerId, role = "Owner", channel = "EMAIL", eventType = "HOLDING_CONFIRMED",
+                        holdingContractId = holding.Id
+                    }, CompactNotificationWriter.Json);
+                    count += await sql.Execute("""
+                        INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
+                        VALUES(@id,'OUTBOX',@key,'CHANNEL_DELIVERY',@data::jsonb,@now,'Pending',@now)
+                        ON CONFLICT(record_kind,event_key) WHERE record_kind IN ('OUTBOX','AUDIT') DO NOTHING
+                        """, t, ("id", Guid.NewGuid()), ("key", $"holding-confirmed:{holding.Id:N}"), ("data", payload), ("now", sql.Now));
+                }
             }
             else if (e.Event == "ContractSigningRequested")
             {
@@ -115,7 +148,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                 if (contract is not null)
                 {
                     var eventType = e.Event.StartsWith("OperatingPolicyAmendment", StringComparison.Ordinal) ? e.Event == "OperatingPolicyAmendmentApplied" ? "OPERATING_POLICY_AMENDMENT_APPLIED" : "OPERATING_POLICY_AMENDMENT_CANCELLED" :
-                        e.Event == "ContractActivated" ? "CONTRACT_ACTIVATED" : e.Event == "ContractRenewalPrepared" ? "CONTRACT_RENEWAL_ACTION_REQUIRED" : "CONTRACT_SIGNING_REQUIRED";
+                        e.Event is "ContractActivated" or "Automatic:ContractActivated" ? "CONTRACT_ACTIVATED" : e.Event == "ContractRenewalPrepared" ? "CONTRACT_RENEWAL_ACTION_REQUIRED" : "CONTRACT_SIGNING_REQUIRED";
                     foreach (var r in await Roles(new[] { contract.OwnerSignerId, contract.TenantUserId ?? Guid.Empty }, t))
                         count += await sql.Emit(r.Id, r.Role, contract.Room.LocationId, "contract-state:" + contract.Id + ":" + eventType, eventType, "Contract",
                             eventType == "CONTRACT_ACTIVATED" ? "Hợp đồng đã được kích hoạt" : "Hợp đồng có bước cần thực hiện",

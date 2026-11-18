@@ -16,6 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BHome.Infrastructure.Contracts;
 
@@ -201,6 +202,8 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         {
             var text = $"Ký điện tử bởi: {name}\nNgày ký: {now.ToOffset(VietnamOffset):dd/MM/yyyy HH:mm:ss}";
             var picture = appearance.UsePicture && pictures is not null ? await pictures.FindAsync(Actor, t) : null;
+            ContractSignatureSlots.RequireSeparatePartyBoxes(source, placement, document.OwnerSignerId == Actor,
+                picture is null ? null : (double)picture.Height / picture.Width);
             visible = new VisibleSignature(placement.Page, placement.X, placement.Y, placement.Width, text, picture?.Content, CaptionUnderImage: true);
         }
         PreparedSignature prepared;
@@ -292,8 +295,10 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
 // Emails the next party once a signature completes ("Bạn có hợp đồng cần ký"), and both parties once it is fully signed.
 // Best effort: a delivery failure never undoes a verified signature.
 internal sealed class ContractSigningNotifier(SigningPartyDirectory parties, INotificationChannelProvider channel,
-    IOptions<ContractSigningOptions> options, ILogger<ContractSigningNotifier> logger) : IContractSigningNotifier
+    IOptions<ContractSigningOptions> options, ILogger<ContractSigningNotifier> logger, IServiceProvider? services = null) : IContractSigningNotifier
 {
+    public Task HoldingOwnerSignedAsync(Guid contractId, CancellationToken t) => services is null ? Task.CompletedTask :
+        services.GetRequiredService<AnonymousContractSigningService>().DispatchHoldingInvitationAsync(contractId, t);
     public async Task SignatureCompletedAsync(ContractSigningProgress progress, CancellationToken t)
     {
         if (!channel.IsConfigured("EMAIL")) return;

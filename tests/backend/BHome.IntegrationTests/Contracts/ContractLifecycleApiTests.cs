@@ -632,7 +632,10 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var main = (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), conversion, conversionKey))).Id;
         Assert.Equal(main, (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), conversion, conversionKey))).Id);
         Assert.Equal("Active", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(holding)))!.Status);
-        await Signed(w, main); await Deposit(w, main, 2000000); await Success<ContractView>(await Post(w.Owner, Path(main, "activate")));
+        var inherited = (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(main)))!;
+        Assert.Equal(activeHolding.RequiredDeposit, inherited.RequiredDeposit);
+        Assert.Equal(inherited.RequiredDeposit, inherited.AppliedHoldingDeposit);
+        await Signed(w, main); await Success<ContractView>(await Post(w.Owner, Path(main, "activate")));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Set<Contract>().CountAsync(c => c.HoldingContractId == holding));
         Assert.Equal(1, await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().CountAsync(a => a.SourceDepositContractId == holding));

@@ -27,6 +27,7 @@ namespace BHome.IntegrationTests.Compact24;
 
 public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
+    private static readonly string IdentityTestKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     internal string? LiveRecipient { get; init; }
     private sealed class Diagnostic : Microsoft.AspNetCore.Diagnostics.IExceptionHandler
     {
@@ -156,6 +157,13 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
     [CompactPostgresFact]
     public async Task AnonymousOtpDrawnAcceptanceRequiresExactPdfThenOwnerAndDepositBeforeAtomicAccountsAndOneTimePassword()
         => await AnonymousMainWorkflow();
+    [CompactPostgresFact]
+    public async Task HouseholdMemberWithoutCccdPersistsThroughSigningActivationAndRepresentativeLoginWithoutAnotherAccount()
+    {
+        await using var isolated = new Compact24Fixture();
+        await isolated.InitializeAsync();
+        await new AnonymousSigningTests(isolated).AnonymousMainWorkflow(householdMembers: true);
+    }
 
     [CompactPostgresFact]
     public async Task MainOwnerSessionSignsAcceptedPdfWithoutAnotherOtp()
@@ -173,13 +181,16 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         await new AnonymousSigningTests(isolated).AnonymousMainWorkflow(ownerSession: true, deferredContacts: true);
     }
 
-    private async Task AnonymousMainWorkflow(bool ownerSession = false, bool deferredContacts = false)
+    private async Task AnonymousMainWorkflow(bool ownerSession = false, bool deferredContacts = false, bool householdMembers = false)
     {
         var delivery = new Delivery();
         using var host = fixture.Factory!.WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local",
+                ["IdentityProtection:ActiveEncryptionVersion"] = "test",
+                ["IdentityProtection:EncryptionKeys:test"] = IdentityTestKey,
                 ["AnonymousSigning:OtpHmacKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
                 // Development can keep other notifications in Sandbox while SMTP is configured.
                 // Delivery below is explicitly replaced; these synthetic credentials never leave the test host.
@@ -225,16 +236,49 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>(); usersBefore = await db.Users.CountAsync();
             var first = new Resident { RoomId = Compact24SampleSeed.Id(41), OwnerUserId = Compact24SampleSeed.Id(1), DisplayLabel = "Synthetic representative", ContactEmail = deferredContacts ? null : email, VerificationStatus = IdentityVerificationStatus.Verified };
             var second = new Resident { RoomId = first.RoomId, OwnerUserId = first.OwnerUserId, DisplayLabel = "Synthetic family", ContactEmail = deferredContacts ? null : familyEmail, ResidentType = ResidentType.CoOccupant, VerificationStatus = IdentityVerificationStatus.Verified };
-            db.AddRange(first, second); await db.SaveChangesAsync(); representative = first.Id; coOccupant = second.Id;
+            foreach (var person in new[] { first, second })
+            {
+                var identity = new BHome.Application.Ocr.IdentityConfirmation(true,"000000000009",person.DisplayLabel,new(2000,1,1),
+                    "Synthetic tenant address",null,null,null,new(2021,1,1),null);
+                var plain = JsonSerializer.SerializeToUtf8Bytes(identity);
+                person.IdentityData = JsonSerializer.Serialize(scope.ServiceProvider.GetRequiredService<BHome.Application.Ocr.IIdentityProtection>()
+                    .Encrypt(plain,new(person.OwnerUserId,person.Id)));
+                System.Security.Cryptography.CryptographicOperations.ZeroMemory(plain);
+            }
+            db.Add(first); if (!householdMembers) db.Add(second);
+            await db.SaveChangesAsync(); representative = first.Id; coOccupant = second.Id;
+            var mainData = scope.ServiceProvider.GetRequiredService<IMainDraftData>();
+            if (await mainData.OwnerSettingsAsync(Compact24SampleSeed.Id(10), default) is null)
+                await mainData.SetSettingsAsync(Compact24SampleSeed.Id(10),new(Compact24SampleSeed.Id(1),Today.AddDays(-1),null,990000,
+                    "Synthetic bank transfer terms","",new("SYNTHETIC OWNER",new(1980,1,1),"000000000008",new(2020,1,1),
+                        "Synthetic issuing authority","Synthetic owner address","0900000000"),0),Compact24SampleSeed.Id(1),default);
+        }
+        if (householdMembers) {
+            var requestKey = Guid.NewGuid().ToString();
+            var familyInput = new BHome.Application.Ocr.HouseholdSaveInput(0,true,[new("child-1","SYNTHETIC HOUSEHOLD CHILD",new(2015,1,1),"Con")]);
+            async Task<BHome.Application.Ocr.HouseholdView> SaveFamily() {
+                var message = new HttpRequestMessage(HttpMethod.Put,$"/api/v1/capture/residents/{representative}/household") { Content=JsonContent.Create(familyInput) };
+                message.Headers.Add("Idempotency-Key",requestKey);
+                return await Result<BHome.Application.Ocr.HouseholdView>(await staff.SendAsync(message));
+            }
+            var family = await SaveFamily();
+            coOccupant = Assert.Single(family.Members).ResidentId;
+            Assert.Equal(coOccupant,Assert.Single((await SaveFamily()).Members).ResidentId);
+            var reload = await staff.GetFromJsonAsync<BHome.Application.Ocr.HouseholdView>($"/api/v1/capture/residents/{representative}/household");
+            Assert.Equal("Con",Assert.Single(reload!.Members).Relationship);
+            await using var check = host.Services.CreateAsyncScope();
+            var db = check.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var savedMember = await db.Set<Resident>().AsNoTracking().SingleAsync(r=>r.Id==coOccupant);
+            Assert.Equal(representative,savedMember.HouseholdRepresentativeId);
+            Assert.DoesNotContain("SYNTHETIC HOUSEHOLD CHILD",savedMember.HouseholdProfile);
+            Assert.Equal(IdentityVerificationStatus.Pending,savedMember.VerificationStatus);
+            Assert.Null(savedMember.TenantUserId);
         }
         var draft = await Result<ContractId>(await Post(staff, "/api/v1/contracts", new ContractDraftInput(Compact24SampleSeed.Id(41), Compact24SampleSeed.Id(1), null,
             representative, [representative, coOccupant], Today, Today.AddMonths(6), 3000000, 1000000, "SYNTHETIC ACCEPTANCE TERMS")));
         var root = $"/api/v1/contracts/{draft.Id}";
         var view = await owner.GetFromJsonAsync<ContractView>(root);
         Assert.Null(view!.TenantUserId); Assert.Equal(ContractSigningModes.Internal, view.SigningMode);
-        var premature = await Post(owner, root + "/signing", new SigningInput(Guid.Empty, Method: SigningMethods.Otp));
-        Assert.Equal(HttpStatusCode.Conflict, premature.StatusCode);
-        Assert.Contains("tenant_acceptance_required", await premature.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.NotFound, (await Post(owner, $"/api/v1/residents/{representative}/invitation", new TenantInvitationRequest(email))).StatusCode);
         var invitationInput = new SigningInvitationInput(DateTimeOffset.UtcNow.AddHours(1), view.SnapshotHash,
             deferredContacts ? email : null, deferredContacts ? [new(representative, email), new(coOccupant, familyEmail)] : null);
@@ -244,6 +288,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         }
         Assert.Equal(HttpStatusCode.OK, (await Post(staff, root + "/signing-invitations", invitationInput)).StatusCode);
         var firstInvite = await Result<SigningInvitationResult>(await Post(owner, root + "/signing-invitations", invitationInput));
+        // Replaying the Staff-created invitation deliberately does not disclose its bearer token.
+        firstInvite = firstInvite with { Token = Regex.Match(delivery.Messages.Last().Body, @"\b[A-F0-9]{64}\b").Value };
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
@@ -269,7 +315,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             await db.SaveChangesAsync();
         }
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(anonymous, "/api/v1/contract-signing/verify", new AnonymousOtpInput(invite.Token!, otp))).StatusCode);
-        invite = await Result<SigningInvitationResult>(await Post(owner, root + "/signing-invitations", invitationInput));
+        var currentToken = invite.Token;
+        invite = (await Result<SigningInvitationResult>(await Post(owner, root + "/signing-invitations", invitationInput))) with { Token = currentToken };
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
@@ -283,6 +330,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         for (var n = 0; n < 5; n++)
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(anonymous, "/api/v1/contract-signing/verify", new AnonymousOtpInput(invite.Token!, wrong))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(anonymous, "/api/v1/contract-signing/verify", new AnonymousOtpInput(invite.Token!, otp))).StatusCode);
+        (await owner.DeleteAsync(root + "/signing-invitations/" + invite.Id)).EnsureSuccessStatusCode();
         invite = await Result<SigningInvitationResult>(await Post(owner, root + "/signing-invitations", invitationInput));
         Assert.Contains("Mã OTP của bạn:", delivery.Messages.Last().Body);
         otp = Regex.Match(delivery.Messages.Last().Body, @"\b[0-9]{6}\b").Value;
@@ -306,7 +354,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         {
             await using var scope = host.Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-            Assert.All(await db.Set<Resident>().Where(r => r.Id == representative || r.Id == coOccupant).ToArrayAsync(), r => Assert.Null(r.ContactEmail));
+            Assert.Equal(email,(await db.Set<Resident>().SingleAsync(r=>r.Id==representative)).ContactEmail);
+            Assert.Null((await db.Set<Resident>().SingleAsync(r=>r.Id==coOccupant)).ContactEmail);
             Assert.Equal(usersBefore, await db.Users.CountAsync());
         }
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, root + "/activate", new { })).StatusCode);
@@ -319,17 +368,18 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-            Assert.Equal(usersBefore + 2, await db.Users.CountAsync());
+            Assert.Equal(usersBefore + 1, await db.Users.CountAsync());
             var people = await db.Set<Resident>().Where(r => r.Id == representative || r.Id == coOccupant).ToArrayAsync();
-            Assert.All(people, p => Assert.NotNull(p.TenantUserId));
-            Assert.All(people, p => Assert.False(string.IsNullOrWhiteSpace(p.ContactEmail)));
+            Assert.NotNull(people.Single(p=>p.Id==representative).TenantUserId);
+            Assert.Null(people.Single(p=>p.Id==coOccupant).TenantUserId);
+            Assert.False(string.IsNullOrWhiteSpace(people.Single(p=>p.Id==representative).ContactEmail));
             Assert.Equal(view.SnapshotHash, (await db.Set<Contract>().SingleAsync(c => c.Id == draft.Id)).SnapshotHash);
             var stored = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == invite.Id);
             Assert.Null(stored.OtpHash); Assert.NotEqual(invite.Token, stored.TokenHash); Assert.NotEqual(access.Session, stored.SessionHash);
             var rows = await db.Database.SqlQueryRaw<DispatchRow>("SELECT id AS \"Id\",task_data->>'idempotencyKey' AS \"Key\",(task_data->'payload')::text AS \"Payload\" FROM operational_tasks WHERE task_type='SYSTEM_JOB' AND task_data->>'name'='post-activation-account-invitation'").ToArrayAsync();
             dispatches.AddRange(rows.Select(r => (r.Id, r.Key, r.Payload)));
         }
-        Assert.Equal(2, dispatches.Count);
+        Assert.Single(dispatches);
         foreach (var job in dispatches)
         {
             await using var scope = host.Services.CreateAsyncScope();
@@ -337,8 +387,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             await handler.ExecuteAsync(new(job.Id, job.Key, job.Payload), default);
             await handler.ExecuteAsync(new(job.Id, job.Key, job.Payload), default);
         }
-        Assert.Equal(2, delivery.AccountTokens.Count);
-        Assert.Equal(2, delivery.AccountSendCount);
+        Assert.Single(delivery.AccountTokens);
+        Assert.Equal(1, delivery.AccountSendCount);
         var accountToken = delivery.AccountTokens[active.TenantUserId!.Value];
         var password = "Synthetic!NewPassword-493";
         var setup = new AcceptInvitationRequest(email, accountToken, password);
@@ -346,6 +396,13 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", setup)).StatusCode);
         await Login(anonymous, email, password);
         (await anonymous.GetAsync(root)).EnsureSuccessStatusCode();
+        if (householdMembers) {
+            var family = await anonymous.GetFromJsonAsync<BHome.Application.Ocr.HouseholdView>(root+"/household");
+            Assert.Equal("SYNTHETIC HOUSEHOLD CHILD",Assert.Single(family!.Members).FullName);
+            Assert.Null(family.Members[0].CitizenNumber);
+            Assert.Equal("Con",family.Members[0].Relationship);
+            Assert.Equal(representative,family.RepresentativeResidentId);
+        }
         await using (var cleanup = host.Services.CreateAsyncScope())
             await BHome.Infrastructure.Contracts.ContractFileCleanup.CleanupAsync(
                 cleanup.ServiceProvider.GetRequiredService<Compact24DbContext>(), cleanup.ServiceProvider.GetRequiredService<IObjectStorage>(),
@@ -355,7 +412,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         // Repeated activation cannot duplicate Users or dispatch intents.
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, root + "/activate", new { })).StatusCode);
         await using var final = host.Services.CreateAsyncScope();
-        Assert.Equal(usersBefore + 2, await final.ServiceProvider.GetRequiredService<Compact24DbContext>().Users.CountAsync());
+        Assert.Equal(usersBefore + 1, await final.ServiceProvider.GetRequiredService<Compact24DbContext>().Users.CountAsync());
     }
     public sealed class DispatchRow { public Guid Id { get; set; } public string Key { get; set; } = ""; public string Payload { get; set; } = ""; }
 
@@ -414,6 +471,9 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             }));
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["MainDraft:LibreOfficeContainerImage"] = "bhome/contract-converter:local",
+                ["IdentityProtection:ActiveEncryptionVersion"] = "test",
+                ["IdentityProtection:EncryptionKeys:test"] = IdentityTestKey,
                 ["AnonymousSigning:OtpHmacKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
                 ["ContractPdf:TemplateId"] = "main-contract-development-v1",
                 ["ContractSigning:Methods:Otp"] = "true",
@@ -505,7 +565,18 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 DisplayLabel = "Synthetic holding",
                 VerificationStatus = IdentityVerificationStatus.Verified
             };
+            var identity = new BHome.Application.Ocr.IdentityConfirmation(true,"000000000009","SYNTHETIC HOLDING TENANT",new(2000,1,1),
+                "Synthetic tenant address",null,null,null,new(2021,1,1),null);
+            var plain = JsonSerializer.SerializeToUtf8Bytes(identity);
+            person.IdentityData = JsonSerializer.Serialize(scope.ServiceProvider.GetRequiredService<BHome.Application.Ocr.IIdentityProtection>()
+                .Encrypt(plain,new(person.OwnerUserId,person.Id)));
+            System.Security.Cryptography.CryptographicOperations.ZeroMemory(plain);
             db.Add(person); await db.SaveChangesAsync(); residentId = person.Id;
+            var mainData = scope.ServiceProvider.GetRequiredService<IMainDraftData>();
+            if (await mainData.OwnerSettingsAsync(Compact24SampleSeed.Id(10), default) is null)
+                await mainData.SetSettingsAsync(Compact24SampleSeed.Id(10),new(Compact24SampleSeed.Id(1),Today.AddDays(-1),null,990000,
+                    "Synthetic bank transfer terms","",new("SYNTHETIC OWNER",new(1980,1,1),"000000000008",new(2020,1,1),
+                        "Synthetic issuing authority","Synthetic owner address","0900000000"),0),Compact24SampleSeed.Id(1),default);
             if (qrPreview)
             {
                 db.Add(new BHome.Domain.PropertyManagement.BillingPolicy { LocationId = Compact24SampleSeed.Id(10), ChargeCode = "SYN_INTERNET", Name = "Synthetic Internet", Category = BHome.Domain.PropertyManagement.ChargeCategory.ServiceFee, Method = BHome.Domain.PropertyManagement.ChargingMethod.FixedPerRoomPerMonth, Rate = 50000, EffectiveFrom = Today });
@@ -545,11 +616,24 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 Assert.Equal(64, inviteToken.Length);
                 var staffStatus = await assignedStaff.GetFromJsonAsync<InternalSigningStatus>(path + "/internal-signing");
                 Assert.Null(staffStatus!.DocumentHash); Assert.Contains("***", staffStatus.MaskedEmail!); Assert.False(staffStatus.CanContinue);
-                Assert.Equal(HttpStatusCode.Conflict, (await Post(assignedStaff, path + "/signing-invitations", new SigningInvitationInput(DateTimeOffset.UtcNow.AddHours(1), view.SnapshotHash))).StatusCode);
+                var sentCount = delivery.Messages.Count;
+                var retry = await Result<SigningInvitationResult>(await Post(assignedStaff, path + "/signing-invitations", new SigningInvitationInput(DateTimeOffset.UtcNow.AddHours(1), view.SnapshotHash)));
+                Assert.Equal(sent.Id, retry.Id); Assert.Equal(sentCount, delivery.Messages.Count);
             }
             Assert.Contains("Mã OTP của bạn:", delivery.Messages.Last().Body);
             var otp = Regex.Match(delivery.Messages.Last().Body, @"\b[0-9]{6}\b").Value;
             var access = await Result<AnonymousSigningAccess>(await Post(guest, "/api/v1/contract-signing/verify", new AnonymousOtpInput(inviteToken, otp)));
+            if (path != root)
+            {
+                var preview = await Result<ContractDocumentView>(await Post(owner, path + "/previews", new { }));
+                var ownerPdf = await owner.GetByteArrayAsync(path + $"/previews/{preview.Id}");
+                var tenantDocument = await Post(guest, "/api/v1/contract-signing/document", new AnonymousSigningSession(inviteToken, access.Session));
+                tenantDocument.EnsureSuccessStatusCode();
+                Assert.Equal(ownerPdf, await tenantDocument.Content.ReadAsByteArrayAsync());
+                Assert.Equal(access.DocumentHash, Convert.ToHexString(SHA256.HashData(ownerPdf)));
+                using var pdf = new PdfDocument(new PdfReader(new MemoryStream(ownerPdf)));
+                Assert.Equal("main-tenancy-docx-v1", pdf.GetDocumentInfo().GetMoreInfo("BHomeSourceTemplate"));
+            }
             if (path == root)
             {
                 var otpOnly = await assignedStaff.GetFromJsonAsync<InternalSigningStatus>(path + "/internal-signing");
@@ -598,7 +682,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == Compact24SampleSeed.Id(40))).Status);
             Assert.Equal(usersBefore, await db.Users.CountAsync());
             Assert.Null((await db.Set<Resident>().SingleAsync(r => r.Id == residentId)).TenantUserId);
-            if (deferredContacts) Assert.Null((await db.Set<Resident>().SingleAsync(r => r.Id == residentId)).ContactEmail);
+            if (deferredContacts) Assert.Equal(deliveryEmail, (await db.Set<Resident>().SingleAsync(r => r.Id == residentId)).ContactEmail);
         }
         if (cancellationCause is { } cause)
         {
@@ -663,10 +747,16 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, root + "/holding-conversion", new HoldingConversionInput(200000))).StatusCode);
             return;
         }
-        var main = await Result<ContractId>(await Post(owner, root + "/holding-conversion", new HoldingConversionInput(200000, RequireInitialPayment: qrPreview)));
-        var convertedAgain = await Result<ContractId>(await Post(owner, root + "/holding-conversion", new HoldingConversionInput(200000, RequireInitialPayment: qrPreview)));
+        var main = await Result<ContractId>(await Post(owner, root + "/holding-conversion", new HoldingConversionInput(RequireInitialPayment: qrPreview)));
+        var convertedAgain = await Result<ContractId>(await Post(owner, root + "/holding-conversion", new HoldingConversionInput(RequireInitialPayment: qrPreview)));
         Assert.Equal(main.Id, convertedAgain.Id);
         var mainRoot = $"/api/v1/contracts/{main.Id}";
+        var preview = await Result<ContractDocumentView>(await Post(assignedStaff, mainRoot + "/previews", new { }));
+        var previews = await assignedStaff.GetFromJsonAsync<ContractDocumentView[]>(mainRoot + "/previews");
+        Assert.Contains(previews!, p => p.Id == preview.Id);
+        var previewPdf = await assignedStaff.GetByteArrayAsync(mainRoot + $"/previews/{preview.Id}");
+        Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(previewPdf));
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, (await assignedStaff.GetAsync(mainRoot + "/deposit-verifications")).StatusCode);
         await Sign(mainRoot);
         if (qrPreview)
         {
@@ -691,7 +781,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal(usersBefore + 1, await db.Users.CountAsync());
             Assert.Equal(ContractStatus.Converted, (await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).Status);
             Assert.Equal(BHome.Domain.PropertyManagement.RoomStatus.Occupied, (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == activated.RoomId)).Status);
-            Assert.Equal(2, await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().CountAsync(a => a.TransferId != null && (a.TargetDepositContractId == main.Id || a.TargetInitialContractId == main.Id)));
+            Assert.Equal(1, await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().CountAsync(a => a.TransferId != null && (a.TargetDepositContractId == main.Id || a.TargetInitialContractId == main.Id)));
             return;
         }
         if (LiveRecipient is not null)
@@ -699,9 +789,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal("PendingActivation", (await owner.GetFromJsonAsync<ContractView>(mainRoot))!.Status);
             return; // Live SMTP smoke stops before account provisioning; all data is disposable.
         }
-        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, mainRoot + "/activate", new { })).StatusCode);
-        (await Post(owner, mainRoot + "/deposit-verifications", new DepositInput("MAIN-SYNTHETIC-" + Guid.NewGuid(), 100000, "Synthetic difference verified"))).EnsureSuccessStatusCode();
         var active = await Result<ContractView>(await Post(owner, mainRoot + "/activate", new { }));
+        Assert.Equal(100000, active.RequiredDeposit);
         Assert.Equal("Active", active.Status); Assert.Equal(100000, active.AppliedHoldingDeposit);
         await using var final = host.Services.CreateAsyncScope();
         var context = final.ServiceProvider.GetRequiredService<Compact24DbContext>();

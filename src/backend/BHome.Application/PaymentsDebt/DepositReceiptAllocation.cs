@@ -40,7 +40,7 @@ public sealed partial class PaymentService
         if (!await repository.VerifiedReceiptAsync(transferId, token)) problems.Add("verified_bank_receipt_required");
         if (contract.Kind is not (ContractKind.Main or ContractKind.Holding) || contract.PreviousContractId is not null ||
             contract.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Active)) problems.Add("deposit_not_payable");
-        if (contract.Kind == ContractKind.Holding && (contract.ApprovedAt is null || contract.HoldingExpiryAt is null || contract.HoldingExpiryAt <= Now)) problems.Add("holding_deposit_requires_manual_review");
+        if (contract.Kind == ContractKind.Holding && ((contract.ApprovedAt is null && !BHome.Application.Contracts.AnonymousContractSigningService.HoldingOwnerHasSigned(contract)) || contract.HoldingExpiryAt is null || contract.HoldingExpiryAt <= Now)) problems.Add("holding_deposit_requires_manual_review");
         if (!contract.Room.Location.IsActive) problems.Add("location_inactive");
         if (transfer.IsDevelopmentDemo != BHome.Application.Contracts.ContractPaymentModes.IsTest(contract) || transfer.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) problems.Add("development_payment_unavailable");
         if (await repository.AllocationAsync(transferId, token) is not null) problems.Add("bank_transaction_already_allocated");

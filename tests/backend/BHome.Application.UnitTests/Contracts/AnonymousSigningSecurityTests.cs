@@ -10,6 +10,60 @@ namespace BHome.Application.UnitTests.Contracts;
 
 public sealed class AnonymousSigningSecurityTests
 {
+    [Fact]
+    public async Task DuplicateEmailCannotRequestAnotherOtpOrMutateTheInvitation()
+    {
+        var r = new Rig(); r.Security.EmailConfigured.Returns(true);
+        r.Invites.IsEmailInUseAsync(r.Contract.Id, r.Invite.ResidentId, r.Invite.RecipientEmail, default).Returns(true);
+        r.Contracts.InTransactionAsync(Arg.Any<Guid>(), Arg.Any<Func<Task<(Guid, string, string, int)>>>(), default)
+            .Returns(call => call.Arg<Func<Task<(Guid, string, string, int)>>>()());
+        var hash = r.Invite.OtpHash;
+        var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestOtpAsync(Rig.Token, default));
+        Assert.Equal("signing_email_already_in_use", error.Code); Assert.Equal(hash, r.Invite.OtpHash);
+        Assert.Equal(0, r.Invite.OtpSendCount);
+        await r.Security.DidNotReceiveWithAnyArgs().SendAsync(default!, default!, default!, default!, default);
+    }
+    [Fact]
+    public async Task HoldingTenantCanOpenInvitationAndVerifyOtpBeforeOwnerSigns()
+    {
+        var r = new Rig(); r.Contract.Kind = ContractKind.Holding;
+        var info = await r.Service.InfoAsync(Rig.Token, default);
+        Assert.False(info.Accepted);
+        var access = await r.Service.VerifyOtpAsync(new(Rig.Token, "123456"), default);
+        Assert.Equal(r.Invite.DocumentHash, access.DocumentHash);
+        Assert.Null(r.Invite.AcceptedAt);
+        Assert.False(AnonymousContractSigningService.Complete(r.Contract));
+    }
+
+    [Fact]
+    public async Task HoldingTenantRejectsOwnerSignatureForDifferentReviewDocument()
+    {
+        var r = new Rig(); r.Contract.Kind = ContractKind.Holding;
+        r.Contract.Signatures.Add(new ContractSignature { SignerUserId = r.Contract.OwnerSignerId,
+            Status = SignatureStatus.Signed, SnapshotHash = r.Contract.SnapshotHash, SignedAt = r.Time.Now,
+            SourceHash = "DIFFERENT", SignedHash = "OTHER", SignedObjectKey = "test", ProviderReference = "test" });
+        var error = await Assert.ThrowsAsync<ContractException>(() => r.Service.AcceptAsync(
+            new(Rig.Token, Rig.Session, r.Invite.DocumentHash, ContractSigningModes.InternalConsent, true,
+                [[new(.1, .1), new(.8, .8)]]), default));
+        Assert.Equal("signing_evidence_integrity_failed", error.Code);
+        Assert.Null(r.Invite.AcceptedAt);
+        Assert.Equal("{}", r.Contract.InternalAcceptance);
+    }
+
+    [Fact]
+    public void HoldingCannotTreatPendingOrWrongSnapshotAsOwnerSignature()
+    {
+        var r = new Rig(); r.Contract.Kind = ContractKind.Holding;
+        var s = new ContractSignature { SignerUserId = r.Contract.OwnerSignerId, Status = SignatureStatus.Pending,
+            SnapshotHash = r.Contract.SnapshotHash, SignedAt = r.Time.Now, SignedObjectKey = "test", SignedHash = "test", ProviderReference = "test" };
+        r.Contract.Signatures.Add(s);
+        Assert.False(AnonymousContractSigningService.HoldingOwnerHasSigned(r.Contract));
+        s.Status = SignatureStatus.Signed; s.SnapshotHash = "different";
+        Assert.False(AnonymousContractSigningService.HoldingOwnerHasSigned(r.Contract));
+        s.SnapshotHash = r.Contract.SnapshotHash;
+        Assert.True(AnonymousContractSigningService.HoldingOwnerHasSigned(r.Contract));
+    }
+
     private sealed class Clock : TimeProvider { public DateTimeOffset Now { get; set; } = new(2026, 11, 11, 1, 0, 0, TimeSpan.Zero); public override DateTimeOffset GetUtcNow() => Now; }
     private sealed class Rig
     {

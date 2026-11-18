@@ -5,7 +5,6 @@ import { staffColors as s, colors as c } from '../../theme/theme';
 
 export const mainContractSteps = [
   { key: 'room', label: 'Chọn phòng' },
-  { key: 'people', label: 'Người ở' },
   { key: 'identity', label: 'CCCD' },
   { key: 'draft', label: 'Bản nháp' },
   { key: 'preview', label: 'Xem hợp đồng' },
@@ -15,7 +14,7 @@ export const mainContractSteps = [
 ] as const;
 
 export function MainContractProgress({ current }: { current: number }) {
-  const step = Math.max(0, Math.min(current, mainContractSteps.length - 1));
+  const step = Math.max(0, Math.min(current > 0 ? current - 1 : 0, mainContractSteps.length - 1));
   return (
     <View style={{ gap: 8 }} accessibilityLabel={`Bước ${step + 1}/${mainContractSteps.length}`}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>

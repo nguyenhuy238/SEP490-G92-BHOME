@@ -33,11 +33,13 @@ export function ChoiceField({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const visibleOptions = options.filter(
-    (item) =>
-      !searchable ||
-      item.label.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi')),
-  );
+  const visibleOptions = open
+    ? options.filter(
+        (item) =>
+          !searchable ||
+          item.label.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi')),
+      )
+    : [];
   return (
     <View style={{ gap: 4 }}>
       <Text variant="labelMedium">{label}</Text>
@@ -60,43 +62,45 @@ export function ChoiceField({
         {options.find((item) => item.id === value)?.label ?? placeholder}
       </Button>
       <Portal>
-        <Dialog visible={open} onDismiss={() => setOpen(false)} style={{ maxHeight: '80%' }}>
-          <Dialog.Title>{label}</Dialog.Title>
-          {searchable && (
-            <TextInput
-              label="Tìm kiếm"
-              value={search}
-              onChangeText={setSearch}
-              mode="outlined"
-              style={{ marginHorizontal: 24, marginBottom: 12 }}
-            />
-          )}
-          <Dialog.ScrollArea>
-            <ScrollView>
-              {visibleOptions.map((item) => (
-                <RadioButton.Item
-                  key={item.id}
-                  label={item.label}
-                  value={item.id}
-                  status={value === item.id ? 'checked' : 'unchecked'}
-                  onPress={() => {
-                    onChange(item.id);
-                    setOpen(false);
-                  }}
-                />
-              ))}
-              {!options.length && (
-                <Text style={{ padding: 20 }}>Không có lựa chọn trong phạm vi được phép.</Text>
-              )}
-              {!!options.length && !visibleOptions.length && (
-                <Text style={{ padding: 20 }}>Không tìm thấy lựa chọn phù hợp.</Text>
-              )}
-            </ScrollView>
-          </Dialog.ScrollArea>
-          <Dialog.Actions>
-            <Button onPress={() => setOpen(false)}>Đóng</Button>
-          </Dialog.Actions>
-        </Dialog>
+        {open && (
+          <Dialog visible={open} onDismiss={() => setOpen(false)} style={{ maxHeight: '80%' }}>
+            <Dialog.Title>{label}</Dialog.Title>
+            {searchable && (
+              <TextInput
+                label="Tìm kiếm"
+                value={search}
+                onChangeText={setSearch}
+                mode="outlined"
+                style={{ marginHorizontal: 24, marginBottom: 12 }}
+              />
+            )}
+            <Dialog.ScrollArea>
+              <ScrollView>
+                {visibleOptions.map((item) => (
+                  <RadioButton.Item
+                    key={item.id}
+                    label={item.label}
+                    value={item.id}
+                    status={value === item.id ? 'checked' : 'unchecked'}
+                    onPress={() => {
+                      onChange(item.id);
+                      setOpen(false);
+                    }}
+                  />
+                ))}
+                {!options.length && (
+                  <Text style={{ padding: 20 }}>Không có lựa chọn trong phạm vi được phép.</Text>
+                )}
+                {!!options.length && !visibleOptions.length && (
+                  <Text style={{ padding: 20 }}>Không tìm thấy lựa chọn phù hợp.</Text>
+                )}
+              </ScrollView>
+            </Dialog.ScrollArea>
+            <Dialog.Actions>
+              <Button onPress={() => setOpen(false)}>Đóng</Button>
+            </Dialog.Actions>
+          </Dialog>
+        )}
       </Portal>
     </View>
   );

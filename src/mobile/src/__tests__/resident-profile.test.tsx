@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   back: vi.fn(),
   verified: 1,
   related: false,
+  family: false,
 }));
 vi.mock('expo-router', () => ({ router: { canGoBack: () => true, back: state.back } }));
 vi.mock('../lib/SessionProvider', () => {
@@ -80,7 +81,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.verified = 1;
   state.related = false;
+  state.family = false;
   state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/household'))
+      return {
+        representativeResidentId: residentId,
+        version: 1,
+        members: state.family ? [{ residentId: 'saved-child' }] : [],
+      };
     if (path === '/api/v1/capture/locations') return [{ id: locationId, label: 'Cơ sở kiểm thử' }];
     if (path.endsWith('/residents'))
       return [
@@ -174,6 +182,18 @@ it('passes only reference IDs to preparation when no related contract exists', a
       roomId,
       representativeResidentId: residentId,
       residentIds: JSON.stringify([residentId]),
+    }),
+  );
+});
+it('restores saved household members from the backend when reopening preparation', async () => {
+  state.family = true;
+  render(<ResidentProfile residentId={residentId} locationId={locationId} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Xem / chuẩn bị hợp đồng' }));
+  await waitFor(() =>
+    expect(state.go).toHaveBeenCalledWith('prepare-contract', {
+      roomId,
+      representativeResidentId: residentId,
+      residentIds: JSON.stringify([residentId, 'saved-child']),
     }),
   );
 });

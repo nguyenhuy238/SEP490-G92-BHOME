@@ -22,6 +22,7 @@ import {
   paymentClient,
   type ContractDepositInstructions,
 } from '../../../../../packages/client-core/src/payments';
+import { holdingSandboxClient } from '../../../../../packages/client-core/src/holdingSandbox';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Heading, ui } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
@@ -107,15 +108,13 @@ export function HoldingContractFlow({
   const sandbox = useHoldingSandbox(api, c, role !== 'Owner' && c.isDevelopmentDemo);
   const operations =
     step === 5
-      ? ['holding-approval']
+      ? []
       : step === 6 && !internal && c.isDevelopmentDemo
         ? ['signing', 'signing/sync', 'signing/recover']
         : step >= 7 && signed(c)
           ? [
               'holding-activation',
-              ...(c.approvedAt &&
-              readiness &&
-              !readiness.blockers.includes('verified_signature_evidence_required')
+              ...(readiness && !readiness.blockers.includes('verified_signature_evidence_required')
                 ? ['deposit-verifications']
                 : []),
             ]
@@ -139,7 +138,7 @@ export function HoldingContractFlow({
         <HoldingStatusBadge
           label={
             step === 5
-              ? 'Bản nháp đang chờ duyệt'
+              ? 'Bản nháp chờ gửi Owner ký'
               : c.status === 'PendingActivation' && depositVerified
                 ? 'Đã xác minh tiền cọc · Đang tự động kích hoạt'
                 : holdingStageLabel(c) || 'Đang xử lý hợp đồng'
@@ -163,15 +162,16 @@ export function HoldingContractFlow({
         <Text style={ui.red}>Hợp đồng minh họa · Không dùng để ký hoặc thanh toán thực tế.</Text>
       )}
       {step === 5 && owner && <HoldingDraftDocument api={api} contract={c} role={role} />}
-      {step === 5 && !owner && (
-        <HoldingSectionCard title="Bản nháp & phê duyệt">
-          <HoldingStatusBadge label="Chờ Owner phê duyệt" tone="warning" />
+      {step === 5 && !owner && c.isDevelopmentDemo && (
+        <HoldingSectionCard title="Yêu cầu ký của Owner">
+          <HoldingStatusBadge label="Gửi Owner ký" tone="warning" />
           <Text style={ui.muted}>
-            Đang chờ Owner phê duyệt hợp đồng. Sau khi duyệt, Owner sẽ gửi lời mời ký.
+            Nhập email người giữ chỗ để gửi lời mời ký. Owner và Tenant đều có thể ký trước; cần đủ
+            chữ ký hai bên để tiếp tục thanh toán.
           </Text>
         </HoldingSectionCard>
       )}
-      {step === 6 && !c.isDevelopmentDemo && (
+      {(step === 5 || step === 6) && !c.isDevelopmentDemo && (
         <ContractSigningStep
           key={`${c.id}:${c.snapshotHash}`}
           api={api}
@@ -309,9 +309,9 @@ function HoldingDraftDocument({
   const current = previews?.filter((p) => p.snapshotHash === c.snapshotHash);
   return (
     <HoldingSectionCard title="Bản nháp hợp đồng">
-      <Text style={ui.muted}>Xem nội dung PDF trước khi phê duyệt và gửi lời mời ký.</Text>
+      <Text style={ui.muted}>Xem nội dung PDF trước khi ký và gửi lời mời ký.</Text>
       {role !== 'Owner' ? (
-        <Text>Owner sẽ kiểm tra và phê duyệt bản hợp đồng.</Text>
+        <Text>Owner sẽ xem và ký bản hợp đồng.</Text>
       ) : (
         <>
           {!previews && !error && <Text>Đang tải tài liệu…</Text>}
@@ -636,28 +636,41 @@ function HoldingPayment({
   const [reference, setReference] = useState<string | null>(null);
   const [qr, setQr] = useState<ContractDepositInstructions | null>(null);
   const [qrError, setQrError] = useState('');
+  const [qrErrorCode, setQrErrorCode] = useState('');
+  const [previewContractId, setPreviewContractId] = useState<string | null>(null);
   const [qrRevision, setQrRevision] = useState(0);
+  const previewRequested = previewContractId === c.id;
   useEffect(() => {
     const controller = new AbortController();
     if (c.status !== 'Active')
-      void paymentClient(api.transport)
-        .depositInstructions(c.id, controller.signal)
+      void (
+        previewRequested
+          ? holdingSandboxClient(api.transport, c.id).qr(controller.signal)
+          : paymentClient(api.transport).depositInstructions(c.id, controller.signal)
+      )
         .then((result) => {
           if (!controller.signal.aborted) {
             setQr(result);
             setQrError('');
+            setQrErrorCode('');
           }
         })
         .catch((e) => {
-          if (!controller.signal.aborted)
+          if (!controller.signal.aborted) {
+            const problem = e as { status?: number; code?: string; problem?: { code?: string } };
+            const code = problem.code ?? problem.problem?.code ?? '';
+            setQrErrorCode(code);
             setQrError(
-              (e as { status?: number }).status === 404
-                ? 'QR chưa khả dụng cho cơ sở này. Owner kiểm tra cấu hình tài khoản nhận tiền.'
-                : contractError(e),
+              !previewRequested && code === 'sepay_environment_mismatch'
+                ? 'Chế độ thanh toán của hợp đồng không khớp cấu hình SePay trên máy chủ. Tải lại QR không thay đổi chế độ thanh toán.'
+                : problem.status === 404
+                  ? 'QR chưa khả dụng cho cơ sở này. Owner kiểm tra cấu hình tài khoản nhận tiền.'
+                  : contractError(e),
             );
+          }
         });
     return () => controller.abort();
-  }, [api, c.id, c.status, qrRevision]);
+  }, [api, c.id, c.status, previewRequested, qrRevision]);
   const [error, setError] = useState('');
   const refreshedPayment = useRef('');
   useEffect(() => {
@@ -715,6 +728,11 @@ function HoldingPayment({
   }, [api, c.id, c.roomId, c.status, owner, onChanged, onDepositVerified]);
   const success = c.status === 'Active' && data?.room === 1;
   const testPayment = (qr?.mode ?? c.paymentMode) === 'Test';
+  const canPreview =
+    !previewRequested &&
+    qrErrorCode === 'sepay_environment_mismatch' &&
+    (c.paymentMode ?? (c.isDevelopmentDemo ? 'Test' : 'Live')) === 'Live' &&
+    ['Owner', 'Staff'].includes(role);
   return (
     <>
       <HoldingSectionCard title={success ? 'Giữ chỗ thành công' : 'Tiền giữ chỗ'}>
@@ -805,6 +823,26 @@ function HoldingPayment({
               {qrError}
             </Text>
           )}
+          {canPreview && (
+            <>
+              <Text style={ui.muted}>
+                Có thể xem QR thử nghiệm nếu máy chủ đã cấu hình sandbox. Giao dịch Test không thanh
+                toán hoặc kích hoạt hợp đồng Live này.
+              </Text>
+              <Button
+                mode="outlined"
+                contentStyle={{ minHeight: 44 }}
+                onPress={() => {
+                  setQr(null);
+                  setQrError('');
+                  setQrErrorCode('');
+                  setPreviewContractId(c.id);
+                }}
+              >
+                Xem QR thử nghiệm
+              </Button>
+            </>
+          )}
           <Button
             mode="outlined"
             contentStyle={{ minHeight: 44 }}
@@ -828,9 +866,11 @@ function HoldingPayment({
         )}
       {!success && role === 'Staff' && (
         <Text style={ui.muted}>
-          {data?.deposit.status === 'Verified'
-            ? 'Đã xác minh đủ tiền cọc. Hệ thống đang tự động kích hoạt và cập nhật trạng thái phòng.'
-            : 'Hệ thống tự động kích hoạt khi đủ chữ ký, thanh toán và các điều kiện hợp đồng.'}
+          {qr?.previewOnly
+            ? 'Đây là bản xem thử QR sandbox. Hợp đồng Live vẫn cần thanh toán đúng môi trường trước khi kích hoạt.'
+            : data?.deposit.status === 'Verified'
+              ? 'Đã xác minh đủ tiền cọc. Hệ thống đang tự động kích hoạt và cập nhật trạng thái phòng.'
+              : 'Hệ thống tự động kích hoạt khi đủ chữ ký, thanh toán và các điều kiện hợp đồng.'}
         </Text>
       )}
       {owner && readiness && !success && (

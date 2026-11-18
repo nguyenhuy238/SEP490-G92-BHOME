@@ -2,11 +2,16 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+vi.mock('../features/contracts/ContractLoading', () => ({
+  ContractLoading: ({ label }: { label: string }) => <div role="progressbar">{label}</div>,
+}));
 import {
   contractClient,
   type ContractRequest,
 } from '../../../../packages/client-core/src/contracts';
 vi.mock('react-native', () => ({
+  StyleSheet: { create: (styles: unknown) => styles },
+  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Image: ({ accessibilityLabel }: { accessibilityLabel: string }) => (
     <span>{accessibilityLabel}</span>
   ),
@@ -60,8 +65,13 @@ afterEach(cleanup);
 it('uses backend total and Holding credit, generating only one total QR without claiming payment', async () => {
   render(<MainInitialPaymentCard api={api} contractId="main" onPaid={paid} />);
   const button = await screen.findByRole('button', { name: 'Tạo QR thanh toán tổng' });
-  expect(screen.getByText(/Cọc Holding đã áp dụng:/).textContent).toMatch(/3.000.000/);
-  expect(screen.getByText(/Còn phải trả:/).textContent).toMatch(/3.050.000/);
+  expect(screen.getByText('Tiền giữ chỗ đã áp dụng')).toBeTruthy();
+  expect(screen.getByText(/3.000.000/)).toBeTruthy();
+  expect(screen.getByText(/3.050.000/)).toBeTruthy();
+  expect(screen.queryByText('Internet')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết khoản thu' }));
+  expect(screen.getByText('Internet')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Thu gọn chi tiết' }));
   fireEvent.click(button);
   await screen.findByText('QR thanh toán ban đầu');
   expect(
@@ -79,7 +89,7 @@ it('only reports paid after the backend returns paid true', async () => {
     availability: 'Settled',
   }));
   render(<MainInitialPaymentCard api={api} contractId="main" onPaid={paid} />);
-  await screen.findByText('Backend đã xác nhận thanh toán đủ.');
+  await screen.findByText('Thanh toán đã được xác nhận. Tiếp tục bước kích hoạt hợp đồng.');
   expect(paid).toHaveBeenCalledOnce();
   expect(screen.queryByRole('button', { name: 'Tạo QR thanh toán tổng' })).toBeNull();
 });

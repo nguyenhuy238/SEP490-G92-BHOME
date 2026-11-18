@@ -10,6 +10,7 @@ import { Box, Heading } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { MainDraftScreen } from './MainDraftScreen';
 import { router } from 'expo-router';
+import { HoldingMainStart } from './HoldingMainStart';
 
 // Standalone entry for already-onboarded Residents. The onboarding handoff supplies these IDs directly.
 export function MainDraftStart({
@@ -33,6 +34,7 @@ export function MainDraftStart({
   const [people, setPeople] = useState<string[]>([]),
     [open, setOpen] = useState(false);
   const [draftId, setDraftId] = useState('');
+  const [mode, setMode] = useState<'individual' | 'family'>('individual');
   const [data, setData] = useState<Preparation | null>(null),
     [error, setError] = useFeedbackState(),
     [loading, setLoading] = useState(true);
@@ -76,6 +78,30 @@ export function MainDraftStart({
       />
     );
   const residents = data?.residents.filter((r) => r.roomId === room && r.verified) ?? [];
+  if (data?.rooms.find((r) => r.id === room)?.status === 'OnHold')
+    return (
+      <Box>
+        <Heading title="Tạo hợp đồng từ phòng đang giữ chỗ" />
+        <ChoiceField
+          label="Phòng"
+          value={room}
+          options={data.rooms}
+          disabled={loading}
+          onChange={(value) => {
+            setRoom(value);
+            setPeople([]);
+            setRepresentative('');
+          }}
+        />
+        <HoldingMainStart
+          api={api}
+          locationId={location}
+          roomId={room}
+          onConverted={(id) => onReleased?.(id)}
+        />
+        <Button onPress={onCancel}>Quay lại danh sách</Button>
+      </Box>
+    );
   return (
     <Box>
       <Heading
@@ -121,6 +147,22 @@ export function MainDraftStart({
           }}
         />
       )}
+      <ChoiceField
+        label="Hình thức thuê"
+        value={mode}
+        disabled={!!draftId}
+        options={[
+          { id: 'individual', label: 'Cá nhân' },
+          { id: 'family', label: 'Hộ gia đình' },
+        ]}
+        onChange={(next) => {
+          if (next === 'individual' && people.length > 1) {
+            setError('Bỏ chọn thành viên trước khi chuyển sang Cá nhân.');
+            return;
+          }
+          setMode(next as 'individual' | 'family');
+        }}
+      />
       {owner && (
         <Text>
           Mỗi người thuê đại diện lập hợp đồng riêng. Chỉ thêm thành viên cùng ở đã xác nhận vào hợp
@@ -133,7 +175,13 @@ export function MainDraftStart({
             key={person.id}
             label={person.label}
             status={people.includes(person.id) ? 'checked' : 'unchecked'}
-            disabled={!!draftId || (owner && !representative)}
+            disabled={
+              !!draftId ||
+              (owner && !representative) ||
+              (mode === 'individual' &&
+                !people.includes(person.id) &&
+                (owner || people.length >= 1))
+            }
             onPress={() => {
               setPeople((before) =>
                 before.includes(person.id)

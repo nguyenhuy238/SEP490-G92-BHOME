@@ -40,8 +40,10 @@ it('requires source review and a reason and preserves the operation key for a re
     screen.getByLabelText('Tôi đã đối chiếu biên bản và xác nhận danh sách khoản thu đầy đủ'),
   );
   fireEvent.click(button);
+  await confirmPendingAction();
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
+  await confirmPendingAction();
   await waitFor(() =>
     expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2),
   );
@@ -60,3 +62,8 @@ it('does not accept an incomplete set of mandatory utility charges', async () =>
   ).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Xác nhận đủ khoản thu' })).toBeDisabled();
 });
+
+async function confirmPendingAction() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+}

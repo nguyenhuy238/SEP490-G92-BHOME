@@ -3,6 +3,14 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ContractView, Readiness } from '../../../../packages/client-core/src/contracts';
+vi.mock('../features/contracts/ContractSigningStep', () => ({
+  ContractSigningStep: ({ onChanged }: { onChanged: () => void }) => (
+    <>
+      <span>Chấp thuận nội bộ</span>
+      <button onClick={onChanged}>Refresh internal evidence</button>
+    </>
+  ),
+}));
 const state = vi.hoisted(() => ({
   mode: 'MYSIGN',
   accepted: false,
@@ -205,7 +213,7 @@ it('keeps activation blocked even when local signature/deposit indicators are co
   const r = { ...readiness(true), ready: false, blockers: ['room_contract_conflict'] };
   mount(contract, r);
   expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
-  expect(screen.getByText('Phòng có hợp đồng đang xung đột.')).toBeTruthy();
+  expect(screen.getByText('Phòng đã đủ chỗ hoặc có hợp đồng đang xung đột.')).toBeTruthy();
   expect(screen.queryByText('Máy chủ đã xác nhận hợp đồng đang hiệu lực')).toBeNull();
 });
 it('reflects Active only after the backend updates the contract, without a manual activation request', () => {

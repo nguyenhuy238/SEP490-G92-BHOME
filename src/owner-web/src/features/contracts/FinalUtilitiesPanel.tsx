@@ -1,3 +1,4 @@
+import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { useRef, useState } from 'react';
 import { Alert, Button, Checkbox, FormControlLabel, Paper, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -44,6 +45,8 @@ export function FinalUtilitiesPanel({
     const row = query.data?.find((item) => item.utilityType === type);
     if (
       lock.current ||
+      query.isFetching ||
+      !!query.error ||
       !row ||
       confirmed[type] !== row.reference ||
       row.missingInputs.length ||
@@ -67,6 +70,11 @@ export function FinalUtilitiesPanel({
       await saved();
     } catch (e) {
       setError(contractError(e));
+      if ((e as { status?: number })?.status === 409) {
+        setConfirmed({});
+        await query.refetch();
+        await saved();
+      }
     } finally {
       lock.current = false;
       setBusy(false);
@@ -148,7 +156,7 @@ export function FinalUtilitiesPanel({
                     control={
                       <Checkbox
                         checked={checked}
-                        disabled={busy || blocked}
+                        disabled={busy || query.isFetching || !!query.error || blocked}
                         onChange={(_, value) =>
                           setConfirmed((current) => ({
                             ...current,
@@ -159,12 +167,15 @@ export function FinalUtilitiesPanel({
                     }
                     label={`Tôi xác nhận mốc đã tính tiền, chỉ số chốt và chính sách giá áp dụng cho ${name}`}
                   />
-                  <Button
-                    disabled={busy || blocked || !checked}
-                    onClick={() => void approve(row.utilityType)}
+                  <ConfirmActionButton
+                    title="Duyệt điện nước cuối kỳ"
+                    description={`Xác nhận khoản chốt ${name} theo chỉ số và đơn giá đã đối chiếu. Chưa xác nhận đã thanh toán.`}
+                    confirmationKey={`${row.reference}:${checked}`}
+                    disabled={busy || query.isFetching || !!query.error || blocked || !checked}
+                    onConfirm={() => approve(row.utilityType)}
                   >
                     Duyệt khoản chốt {name}
-                  </Button>
+                  </ConfirmActionButton>
                 </>
               )}
             </Stack>

@@ -24,12 +24,8 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
         mail.From.Add(new MailboxAddress(Encoding.UTF8, config.FromName, config.FromEmail));
         mail.To.Add(new MailboxAddress("", message.Destination));
         mail.MessageId = $"{key}@bhome.notification";
-        mail.Subject = EmailTemplate.Subject(message.Title);
-        mail.Body = new BodyBuilder
-        {
-            TextBody = message.Body + (message.ActionUrl is null ? "" : "\n\n" + message.ActionUrl),
-            HtmlBody = EmailTemplate.Html(message.Title, message.Body, message.ActionUrl, EmailTemplate.ActionLabel(message.EventType))
-        }.ToMessageBody();
+        mail.Subject = EmailTemplate.Subject(message.Title, message.EventType);
+        mail.Body = BuildBody(message);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t);
         timeout.CancelAfter(TimeSpan.FromSeconds(config.TimeoutSeconds));
         using var client = new SmtpClient { Timeout = config.TimeoutSeconds * 1000 };
@@ -63,6 +59,28 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
                 catch (Exception e) when (e is IOException or SmtpProtocolException or OperationCanceledException or SmtpCommandException) { }
             }
         }
+    }
+
+    internal static MimeEntity BuildBody(ChannelMessage message)
+    {
+        var body = new BodyBuilder {
+            TextBody = message.Body + (message.ActionUrl is null ? "" : "\n\n" + message.ActionUrl),
+            HtmlBody = EmailTemplate.Html(message.Title, message.Body, message.ActionUrl, EmailTemplate.ActionLabel(message.EventType))
+        };
+        if (message.Attachments is { } attachments)
+        {
+            if (attachments.Count > 2) throw new ChannelDeliveryException("email_attachments_invalid");
+            foreach (var attachment in attachments)
+            {
+                if (string.IsNullOrWhiteSpace(attachment.FileName) || attachment.FileName.Length > 150 ||
+                    attachment.FileName.IndexOfAny(['\r', '\n', '/', '\\']) >= 0 ||
+                    attachment.ContentType != "application/pdf" || attachment.Content.Length is < 5 or > 10_485_760 ||
+                    !attachment.Content.AsSpan(0, 5).SequenceEqual("%PDF-"u8))
+                    throw new ChannelDeliveryException("email_attachments_invalid");
+                body.Attachments.Add(attachment.FileName, attachment.Content, ContentType.Parse(attachment.ContentType));
+            }
+        }
+        return body.ToMessageBody();
     }
 
     internal static ChannelDeliveryException Classify(Exception error, bool submitting) => error switch

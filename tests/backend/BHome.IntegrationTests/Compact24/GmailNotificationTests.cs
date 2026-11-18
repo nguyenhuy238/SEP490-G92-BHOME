@@ -169,7 +169,10 @@ public sealed partial class Compact24NotificationMvpTests
             ["Email:AppPassword"] = "SYNTHETIC_TEST_SECRET",
             ["Email:TestRecipient"] = "configured@example.invalid"
         }));
-        b.ConfigureServices(s => s.AddSingleton<INotificationChannelProvider>(provider));
+        b.ConfigureServices(s => {
+            s.AddSingleton<INotificationChannelProvider>(provider);
+            s.AddSingleton<BHome.Application.Storage.IObjectStorage>(confirmationStorage);
+        });
     });
 
     private async Task<(Guid Notice, Guid Delivery)> EmailNotice(Workspace w, WebApplicationFactory<Program> host)
