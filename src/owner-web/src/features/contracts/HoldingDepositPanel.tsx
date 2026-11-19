@@ -33,7 +33,6 @@ export function HoldingDepositPanel({
           {c.holdingExpiresAt
             ? new Date(c.holdingExpiresAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
             : 'Chưa có'}{' '}
-          · Duyệt: {c.approvedAt ? 'Đã duyệt' : 'Chưa duyệt'}
         </Typography>
         {q.data && (
           <>

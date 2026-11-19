@@ -37,6 +37,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         if (c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation))
             throw ContractException.Conflict("contract_not_open_for_signing");
     }
+    public static bool AllowsEitherSigningOrder(Contract c) => c.Kind is ContractKind.Holding or ContractKind.Main;
     private bool TestHolding(Contract c) => c.Kind == ContractKind.Holding && c.IsDevelopmentDemo && testScope?.Allows(c.Room.LocationId) == true;
     private bool TestMain(Contract c) => c.Kind == ContractKind.Main && c.SigningMode == ContractSigningModes.Internal && c.TenantUserId is null &&
         testScope?.Allows(c.Room.LocationId) == true;
@@ -49,7 +50,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         if (TestMain(c)) return c;
         if (c.Kind is ContractKind.Main or ContractKind.Renewal && c.SigningMode == ContractSigningModes.Internal)
             return c;
-        if (c.Kind != ContractKind.Holding || c.ApprovedAt is null) throw new ContractException(403, "holding_owner_approval_required");
+        if (c.Kind != ContractKind.Holding) throw new ContractException(403, "invitation_owner_required");
         return c;
     }
     public async Task<InternalSigningStatus> StatusAsync(Guid id, CancellationToken t)
@@ -63,14 +64,14 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         }
         var simulation = TestHolding(c) ? SandboxSignatures.Read(c) : null;
         var simulated = evidence is null && simulation?.TenantAt is not null;
-        var ownerAt = evidence?.OwnerAcceptedAt ?? (simulation?.OwnerConfirmed(c) == true ? simulation.OwnerConfirmedAt : null);
+        var ownerAt = evidence?.OwnerAcceptedAt ?? (AllowsEitherSigningOrder(c) ? VerifiedOwnerSignature(c)?.SignedAt : null) ?? (simulation?.OwnerConfirmed(c) == true ? simulation.OwnerConfirmedAt : null);
         var rows = await invitations.ListAsync(id, t);
         var email = rows.FirstOrDefault()?.RecipientEmail;
         if (email is null)
             email = (await contracts.ResidentsAsync(c.RoomId, [c.RepresentativeResidentId], t)).FirstOrDefault()?.ContactEmail;
         var masked = email is { Length: > 0 } && email.Contains('@') ? email[..1] + "***" + email[email.IndexOf('@')..] : null;
         return new(c.SigningMode, ownerAt is not null ? "OwnerConfirmed" : evidence is not null ? "TenantAccepted" : "AwaitingAcceptance",
-            actor.IsInRole(Roles.Owner) ? evidence?.SourceHash ?? (simulation is not null ? c.SnapshotHash : null) : null,
+            actor.IsInRole(Roles.Owner) ? evidence?.SourceHash ?? (c.Kind == ContractKind.Holding || simulation is not null ? c.SnapshotHash : null) : null,
             evidence?.AcceptedAt, ownerAt,
             rows.Select(i => new SigningInvitationResult(i.Id,
                 i.RevokedAt is not null ? "Revoked" : i.AcceptedAt is not null ? "Accepted" : i.ExpiresAt <= Now ? "Expired" : i.DeliveryStatus, i.ExpiresAt)).ToArray(),
@@ -86,14 +87,16 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         _ = security.OtpHash(Guid.Empty, "", "");
         string recipient = "";
         string? invitationOtp = null;
+        var attempt = 0;
         var result = await contracts.InTransactionAsync(before.RoomId, async () =>
         {
             var c = await SigningOperator(id, t); Intact(c);
-            if (c.Signatures.Any(s => s.Status != SignatureStatus.Failed))
+            if (c.Signatures.Any(s => s.Status != SignatureStatus.Failed &&
+                !(AllowsEitherSigningOrder(c) && s.SignerUserId == c.OwnerSignerId && s.SnapshotHash == c.SnapshotHash)))
                 throw ContractException.Conflict("signing_already_started");
             if (input.SnapshotHash != c.SnapshotHash || Evidence(c) is not null) throw ContractException.Conflict("signing_review_changed");
-            if (c.Kind == ContractKind.Holding && (c.ApprovedAt is null || c.HoldingExpiryAt <= Now))
-                throw ContractException.Conflict("holding_owner_approval_required");
+            if (c.Kind == ContractKind.Holding && c.HoldingExpiryAt <= Now)
+                throw ContractException.Conflict("holding_expired");
             if (c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft) throw ContractException.Conflict("main_draft_review_required");
             if (c.Kind is ContractKind.Main or ContractKind.Renewal or ContractKind.Holding)
             {
@@ -101,55 +104,87 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
                     checkProfile: c.Status == ContractStatus.Draft && c.Kind != ContractKind.Holding && !c.PriceLockedAt.HasValue);
                 if (c.Status == ContractStatus.Draft) ContractChargeSnapshot.MarkMainBound(c, Now);
             }
-            if (actor.IsInRole(Roles.Staff) && (await invitations.ListAsync(id, t)).Any(i => i.RevokedAt is null && i.AcceptedAt is null && i.ExpiresAt > Now))
+            if (!AllowsEitherSigningOrder(c) && actor.IsInRole(Roles.Staff) && (await invitations.ListAsync(id, t)).Any(i => i.RevokedAt is null && i.AcceptedAt is null && i.ExpiresAt > Now))
                 throw ContractException.Conflict("signing_invitation_already_active");
             var people = await contracts.ResidentsAsync(c.RoomId, c.Residents.Select(r => r.ResidentId).ToArray(), t);
-            if (people.Count != c.Residents.Count || people.Any(r => r.VerificationStatus != IdentityVerificationStatus.Verified))
+            if (people.Count != c.Residents.Count || people.Any(r => !BHome.Application.Ocr.ContractResidentEligibility.Ready(r, c.RepresentativeResidentId)))
                 throw ContractException.Conflict("verified_residents_required");
             if (input.Contacts is { } supplied && (supplied.Select(p => p.ResidentId).Distinct().Count() != supplied.Count ||
                 supplied.Any(p => people.All(r => r.Id != p.ResidentId))))
                 throw ContractException.Invalid("signing_contacts_invalid");
-            var contacts = people.ToDictionary(r => r.Id, r =>
+            var heldInvitation = AllowsEitherSigningOrder(c) ? (await invitations.ListAsync(id, t))
+                .FirstOrDefault(i => i.RevokedAt is null && i.AcceptedAt is null && i.ExpiresAt > Now) : null;
+            var heldContacts = SigningContacts.Read(heldInvitation);
+            var contacts = people.Where(r => r.Id == c.RepresentativeResidentId).ToDictionary(r => r.Id, r =>
                 (r.Id == c.RepresentativeResidentId ? input.RecipientEmail : null)?.Trim().ToLowerInvariant() ??
                 input.Contacts?.SingleOrDefault(p => p.ResidentId == r.Id)?.Email?.Trim().ToLowerInvariant() ??
-                r.ContactEmail?.Trim().ToLowerInvariant() ?? "");
+                (heldContacts.TryGetValue(r.Id, out var heldEmail) ? heldEmail : null) ?? r.ContactEmail?.Trim().ToLowerInvariant() ?? "");
             if (contacts.Values.Any(email => email.Length > 256 || !MailAddress.TryCreate(email, out _)) ||
-                contacts.Values.Distinct().Count() != people.Count)
+                contacts.Values.Distinct().Count() != contacts.Count)
                 throw ContractException.Invalid("signing_contacts_required");
+            if (AllowsEitherSigningOrder(c))
+                foreach (var contact in contacts.OrderBy(p => p.Value, StringComparer.Ordinal))
+                    if (await invitations.IsEmailInUseAsync(c.Id, contact.Key, contact.Value, t))
+                        throw ContractException.Conflict("signing_email_already_in_use");
+            var pending = AllowsEitherSigningOrder(c) ? (await invitations.ListAsync(id, t))
+                .FirstOrDefault(i => i.RevokedAt is null && i.AcceptedAt is null && i.ExpiresAt > Now) : null;
+            if (pending is not null && pending.DeliveryStatus != "AwaitingOwnerSignature")
+            {
+                if (pending.SnapshotHash != input.SnapshotHash || (!input.Resend &&
+                    (pending.RecipientEmail != contacts[c.RepresentativeResidentId] ||
+                    !SigningContacts.Read(pending).OrderBy(x => x.Key).SequenceEqual(contacts.OrderBy(x => x.Key)))))
+                    throw ContractException.Conflict("signing_invitation_already_active");
+                // A correction only changes the representative's pending delivery address.
+                if (!input.Resend) return new SigningInvitationResult(pending.Id, pending.DeliveryStatus, pending.ExpiresAt);
+                if (!security.EmailConfigured) throw new ContractException(503, "signing_email_not_configured");
+                if (pending.OtpSendCount >= 5 || pending.OtpSentAt > Now.AddMinutes(-1))
+                    throw new ContractException(429, "signing_otp_retry_later");
+            }
+            if (input.Resend && pending is null) throw ContractException.Conflict("signing_invitation_not_active");
             var token = Secret(); var person = people.Single(r => r.Id == c.RepresentativeResidentId);
             recipient = contacts[person.Id];
             var document = ContractService.Document(c);
-            var pdf = await source.ReadAsync(document, t) ?? await renderer.RenderAsync(document, t);
+            var ownerSignature = AllowsEitherSigningOrder(c) ? VerifiedOwnerSignature(c) : null;
+            var pdf = input.Resend && pending is not null
+                ? await Read(pending.DocumentObjectKey, pending.DocumentHash, t)
+                : ownerSignature is not null
+                ? await Read(ownerSignature.SignedObjectKey!, ownerSignature.SignedHash!, t)
+                : await source.ReadAsync(document, t) ?? await renderer.RenderAsync(document, t);
+            var pendingOwner = AllowsEitherSigningOrder(c) ? c.Signatures.FirstOrDefault(s =>
+                s.SignerUserId == c.OwnerSignerId && s.Status != SignatureStatus.Failed && s.SnapshotHash == c.SnapshotHash) : null;
+            if (!input.Resend && ownerSignature is null && pendingOwner is not null && Hash(pdf) != pendingOwner.SourceHash)
+                pdf = await Read($"contracts/{id:N}/signatures/{pendingOwner.Id:N}/source.pdf", pendingOwner.SourceHash!, t);
             if (pdf.Length < 5 || !pdf.AsSpan(0, 5).SequenceEqual("%PDF-"u8)) throw ContractException.Conflict("contract_document_integrity_failed");
-            foreach (var old in await invitations.ListAsync(id, t)) { old.RevokedAt ??= Now; old.OtpHash = null; old.SessionHash = null; }
-            var invite = new ContractSigningInvitation
-            {
-                ContractId = id,
-                ResidentId = person.Id,
-                ApprovedByUserId = c.OwnerSignerId,
-                TokenHash = Hash(token),
-                SnapshotHash = c.SnapshotHash,
-                RecipientEmail = recipient,
-                ContactEmails = JsonSerializer.Serialize(contacts),
-                DocumentHash = Hash(pdf),
-                ExpiresAt = input.ExpiresAt,
-                DeliveryStatus = "OwnerApprovedLink"
-            };
+            foreach (var old in (await invitations.ListAsync(id, t)).Where(i => i.Id != pending?.Id)) { old.RevokedAt ??= Now; old.OtpHash = null; old.SessionHash = null; }
+            var invite = pending ?? new ContractSigningInvitation();
+            invite.ContractId = id;
+            invite.ResidentId = person.Id;
+            invite.ApprovedByUserId = actor.UserId!.Value;
+            invite.TokenHash = Hash(token);
+            invite.SnapshotHash = c.SnapshotHash;
+            invite.RecipientEmail = recipient;
+            invite.ContactEmails = JsonSerializer.Serialize(contacts);
+            invite.DocumentHash = Hash(pdf);
+            invite.ExpiresAt = input.Resend && pending is not null ? pending.ExpiresAt : input.ExpiresAt;
+            invite.DeliveryStatus = "OwnerApprovedLink";
             if (security.EmailConfigured) invitationOtp = NewOtp(invite);
+            attempt = invite.OtpSendCount;
             invite.DocumentObjectKey = $"contracts/{id:N}/internal/{invite.Id:N}/review.pdf";
             await files.PutAsync(c.RoomId, invite.DocumentObjectKey, pdf, "application/pdf", t);
-            invitations.Add(invite); c.Status = ContractStatus.PendingSigning;
-            contracts.Audit(actor.UserId!.Value, "InternalSigningInvitationApproved", id, Now);
+            if (pending is null) invitations.Add(invite);
+            c.Status = ContractStatus.PendingSigning;
+            if (!input.Resend && AllowsEitherSigningOrder(c)) contracts.Audit(actor.UserId!.Value, c.Kind == ContractKind.Holding ? "HoldingSigningSubmitted" : "MainSigningSubmitted", id, Now);
+            contracts.Audit(actor.UserId!.Value, input.Resend ? "InternalSigningInvitationResent" : "InternalSigningInvitationApproved", id, Now);
             // A one-time Owner-visible copy link is a supported manual handoff. Raw tokens never enter persistence.
             return new SigningInvitationResult(invite.Id, invite.DeliveryStatus, invite.ExpiresAt, token);
         }, t);
-        if (!security.EmailConfigured) return result;
+        if (!security.EmailConfigured || result.Token is null) return result;
         var deliveryStatus = "InvitationAcceptedByProvider";
         try
         {
-            await security.SendAsync(recipient, $"internal-signing-invitation:{result.Id:N}", "BHOME — Lời mời ký hợp đồng",
+            await security.SendAsync(recipient, input.Resend ? $"internal-signing-invitation:{result.Id:N}:resend:{attempt}" : $"internal-signing-invitation:{result.Id:N}", "BHOME — Lời mời ký hợp đồng",
                 $"Mã OTP của bạn: {invitationOtp}. Mã có hiệu lực 5 phút. Không chia sẻ mã này.\n" +
-                "Owner đã duyệt lời mời. Mở liên kết dưới đây, nhập mã OTP trong email này, đọc PDF và đồng ý trước khi ký nội bộ. " +
+                "Bạn được mời ký hợp đồng. Mở liên kết dưới đây, nhập mã OTP trong email này, đọc PDF và đồng ý trước khi ký nội bộ. " +
                 (security.InvitationUrl(result.Token!) is { } url ? "Mở liên kết: " + url :
                     "Mở BHOME Mobile > Mở lời mời ký hợp đồng và dán mã: " + result.Token) +
                 $"\nLời mời hết hạn lúc {result.ExpiresAt:O}. Đây không phải chữ ký số CA.", t);
@@ -158,6 +193,23 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         await WithToken(result.Token!, (invite, _) => { invite.DeliveryStatus = deliveryStatus; return Task.FromResult(true); }, t);
         return result with { Status = deliveryStatus, Token = actor.IsInRole(Roles.Owner) ? result.Token : null };
     }
+    public async Task DispatchHoldingInvitationAsync(Guid id, CancellationToken t)
+    {
+        var c = await OwnerContract(id, t);
+        if (!AllowsEitherSigningOrder(c)) return;
+        var pending = (await invitations.ListAsync(id, t)).FirstOrDefault(i =>
+            i.RevokedAt is null && i.AcceptedAt is null && i.ExpiresAt > Now &&
+            i.DeliveryStatus == "AwaitingOwnerSignature");
+        if (pending is null) return;
+        await InviteAsync(id, new(pending.ExpiresAt, pending.SnapshotHash, pending.RecipientEmail,
+            SigningContacts.Read(pending).Select(p => new SigningResidentEmail(p.Key, p.Value)).ToArray()), t);
+    }
+    private static ContractSignature? VerifiedOwnerSignature(Contract c) => c.Signatures.FirstOrDefault(s =>
+        s.SignerUserId == c.OwnerSignerId && s.SnapshotHash == c.SnapshotHash && s.SignedAt is not null &&
+        (s.Status == SignatureStatus.Signed && !c.IsDevelopmentDemo || s.Status == SignatureStatus.Simulated && c.IsDevelopmentDemo) &&
+        !string.IsNullOrWhiteSpace(s.SignedObjectKey) && !string.IsNullOrWhiteSpace(s.SignedHash) && !string.IsNullOrWhiteSpace(s.ProviderReference));
+    public static bool HoldingOwnerHasSigned(Contract c) => c.Kind == ContractKind.Holding &&
+        (VerifiedOwnerSignature(c) is not null || Complete(c) || c.IsDevelopmentDemo && SandboxSignatures.Read(c).OwnerConfirmed(c));
     public async Task RevokeAsync(Guid id, Guid invitationId, CancellationToken t)
     {
         var before = await OwnerContract(id, t);
@@ -213,13 +265,15 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
     public async Task RequestOtpAsync(string token, CancellationToken t)
     {
         if (!security.EmailConfigured) throw new ContractException(503, "signing_email_not_configured");
-        var pending = await WithToken(token, (i, _) =>
+        var pending = await WithToken(token, async (i, c) =>
         {
             if (i.AcceptedAt is not null || i.OtpSendCount >= 5 || i.OtpSentAt > Now.AddMinutes(-1))
                 throw new ContractException(429, "signing_otp_retry_later");
+            if (AllowsEitherSigningOrder(c) && await invitations.IsEmailInUseAsync(c.Id, i.ResidentId, i.RecipientEmail, t))
+                throw ContractException.Conflict("signing_email_already_in_use");
             var otp = NewOtp(i);
             i.DeliveryStatus = "OtpPendingDelivery";
-            return Task.FromResult((i.Id, i.RecipientEmail, otp, i.OtpSendCount));
+            return (i.Id, i.RecipientEmail, otp, i.OtpSendCount);
         }, t);
         try
         {
@@ -296,15 +350,34 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             if (i.SignatureHash != strokeHash) throw ContractException.Conflict("acceptance_already_recorded");
             return true;
         }
-        var bytes = await Read(i.DocumentObjectKey, i.DocumentHash, t);
-        var accepted = evidenceRenderer.Accept(bytes, strokes, i.ResidentId, Now, i.DocumentHash);
+        var ownerSignature = AllowsEitherSigningOrder(c) ? VerifiedOwnerSignature(c) : null;
+        if (ownerSignature is not null && ownerSignature.SignedHash != i.DocumentHash && ownerSignature.SourceHash != i.DocumentHash)
+            throw ContractException.Conflict("signing_evidence_integrity_failed");
+        var bytes = ownerSignature is not null
+            ? await Read(ownerSignature.SignedObjectKey!, ownerSignature.SignedHash!, t)
+            : await Read(i.DocumentObjectKey, i.DocumentHash, t);
+        var resident = (await contracts.ResidentsAsync(c.RoomId, [i.ResidentId], t)).SingleOrDefault()
+            ?? throw ContractException.Conflict("contract_residents_changed");
+        if (AllowsEitherSigningOrder(c) && await invitations.IsEmailInUseAsync(c.Id, i.ResidentId, i.RecipientEmail, t))
+            throw ContractException.Conflict("signing_email_already_in_use");
+        var accepted = evidenceRenderer.Accept(bytes, strokes, i.ResidentId, Now, i.DocumentHash, preserveSignatures: AllowsEitherSigningOrder(c));
         i.SignatureObjectKey = $"contracts/{c.Id:N}/internal/{i.Id:N}/signature.png";
         i.AcceptedDocumentObjectKey = $"contracts/{c.Id:N}/internal/{i.Id:N}/accepted.pdf";
         await files.PutAsync(c.RoomId, i.SignatureObjectKey, accepted.SignaturePng, "image/png", t);
         await files.PutAsync(c.RoomId, i.AcceptedDocumentObjectKey, accepted.Pdf, "application/pdf", t);
         i.SignatureHash = strokeHash; i.AcceptedDocumentHash = Hash(accepted.Pdf); i.AcceptedAt = Now; i.DeliveryStatus = "Accepted";
+        // Only OTP-verified, completed acceptance promotes the invitation address to the profile.
+        resident.ContactEmail = i.RecipientEmail;
         c.InternalAcceptance = JsonSerializer.Serialize(new InternalAcceptanceEvidence(i.Id, i.ResidentId, c.SnapshotHash, i.DocumentHash,
-            Hash(accepted.SignaturePng), i.AcceptedDocumentObjectKey, i.AcceptedDocumentHash, Now));
+            Hash(accepted.SignaturePng), i.AcceptedDocumentObjectKey, i.AcceptedDocumentHash, Now,
+            ownerSignature is null ? null : c.OwnerSignerId, ownerSignature?.SignedAt,
+            ownerSignature is null ? null : i.AcceptedDocumentObjectKey, ownerSignature is null ? null : i.AcceptedDocumentHash));
+        if (ownerSignature is not null)
+        {
+            c.Status = ContractStatus.PendingActivation;
+            if (c.Kind == ContractKind.Holding) await (lifecycle ?? throw new ContractException(503, "holding_workflow_unavailable"))
+                .CompleteInternalHoldingSigningAsync(c, t, anonymousTenant: true);
+        }
         contracts.AuditAnonymous("InternalTenantAcceptanceRecorded", c.Id, Now);
         return true;
     }, t);
@@ -366,8 +439,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             if (e is null && TestHolding(c))
             {
                 var simulated = SandboxSignatures.Read(c);
-                if (c.ApprovedAt is null || c.HoldingExpiryAt <= Now)
-                    throw ContractException.Conflict("holding_owner_approval_required");
+                if (c.HoldingExpiryAt <= Now) throw ContractException.Conflict("holding_expired");
                 if (!input.Consent || input.ConsentVersion != ContractSigningModes.InternalConsent || input.DocumentHash != c.SnapshotHash)
                     throw ContractException.Invalid("exact_document_consent_required");
                 if (!simulated.OwnerConfirmed(c))

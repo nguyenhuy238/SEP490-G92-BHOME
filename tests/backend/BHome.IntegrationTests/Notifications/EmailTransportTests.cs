@@ -12,6 +12,20 @@ namespace BHome.IntegrationTests.Notifications;
 
 public sealed class EmailTransportTests
 {
+    [Fact]
+    public void ConfirmationMimeContainsBothOriginalPdfAttachmentsAndRejectsUnsafeFiles()
+    {
+        var contract = new EmailAttachment("Hop-dong.pdf", "application/pdf", "%PDF-1.7 SYNTHETIC SIGNED"u8.ToArray());
+        var receipt = new EmailAttachment("Bien-nhan.pdf", "application/pdf", "%PDF-1.7 SYNTHETIC RECEIPT"u8.ToArray());
+        var message = new ChannelMessage("synthetic", "EMAIL", "tenant@example.invalid", "HOLDING_CONFIRMED", "Xác nhận", "Đã thanh toán", Attachments: [contract, receipt]);
+        using var mime = new MimeKit.MimeMessage { Body = MailKitEmailSender.BuildBody(message) };
+        var parts = mime.Attachments.Cast<MimeKit.MimePart>().ToArray(); Assert.Equal(2, parts.Length);
+        using var original = new MemoryStream(); parts[0].Content!.DecodeTo(original);
+        Assert.Equal(contract.Content, original.ToArray()); Assert.Equal("Hop-dong.pdf", parts[0].FileName);
+        Assert.Contains("Đã thanh toán", mime.TextBody);
+        Assert.Throws<ChannelDeliveryException>(() => MailKitEmailSender.BuildBody(message with { Attachments = [contract with { FileName = "bad\r\nBcc: attacker" }] }));
+        Assert.Throws<ChannelDeliveryException>(() => MailKitEmailSender.BuildBody(message with { Attachments = [contract with { Content = "not pdf"u8.ToArray() }] }));
+    }
     private sealed class SigningChannel(bool configured) : INotificationChannelProvider
     {
         public bool IsConfigured(string channel) => configured && channel == "EMAIL";
@@ -99,6 +113,14 @@ public sealed class EmailTransportTests
         Assert.DoesNotContain("<script>", html); Assert.DoesNotContain("<img", html);
         Assert.Contains("<br>", html);
         Assert.Equal("[BHOME] Hóa đơn  Bcc: injected", EmailTemplate.Subject("Hóa đơn\r\nBcc: injected"));
+    }
+
+    [Fact]
+    public void HoldingConfirmationKeepsRequestedSubjectAndStillSanitizesHeaders()
+    {
+        Assert.Equal("BHOME – Xác nhận giữ chỗ thành công", EmailTemplate.Subject("BHOME – Xác nhận giữ chỗ thành công", "HOLDING_CONFIRMED"));
+        Assert.Equal("Holding  Bcc: injected", EmailTemplate.Subject("Holding\r\nBcc: injected", "HOLDING_CONFIRMED"));
+        Assert.Equal("[BHOME] Other", EmailTemplate.Subject("Other", "CONTRACT_SIGNING_INVITATION"));
     }
 
     [Theory]

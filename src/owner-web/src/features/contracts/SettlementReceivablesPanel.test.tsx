@@ -79,11 +79,13 @@ it('approves damage above the deposit as a separate receivable and preserves the
     ),
   );
   fireEvent.click(button);
+  await confirmPendingAction();
   await waitFor(() =>
     expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1),
   );
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
+  await confirmPendingAction();
   await waitFor(() =>
     expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2),
   );
@@ -112,6 +114,7 @@ it('requires a separate source-specific confirmation for a deposit offset', asyn
   expect(button).toBeDisabled();
   fireEvent.click(screen.getByLabelText('Tôi xác nhận nguồn cọc, khoản đích và số tiền cấn trừ'));
   fireEvent.click(button);
+  await confirmPendingAction();
   await waitFor(() =>
     expect(
       request.mock.calls.some(
@@ -128,3 +131,8 @@ it('requires a separate source-specific confirmation for a deposit offset', asyn
     humanConfirmed: true,
   });
 });
+
+async function confirmPendingAction() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+}

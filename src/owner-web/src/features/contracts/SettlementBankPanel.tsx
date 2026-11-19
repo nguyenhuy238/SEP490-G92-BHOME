@@ -1,3 +1,4 @@
+import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -61,8 +62,10 @@ export function SettlementBankPanel({
   });
   const [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
   const lock = useRef(false);
+  const sourceUnavailable =
+    transfers.isFetching || !!transfers.error || instructions.isFetching || !!instructions.error;
   async function allocate() {
-    if (lock.current || !target || !transfer || !checked) return;
+    if (lock.current || sourceUnavailable || !target || !transfer || !checked) return;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -90,6 +93,12 @@ export function SettlementBankPanel({
       await saved();
     } catch (e) {
       setError(contractError(e));
+      if ((e as { status?: number })?.status === 409) {
+        setChecked(false);
+        await transfers.refetch();
+        await history.refetch();
+        await saved();
+      }
     } finally {
       lock.current = false;
       setBusy(false);
@@ -99,9 +108,9 @@ export function SettlementBankPanel({
     <Stack spacing={2}>
       <Typography variant="subtitle1">Đối soát tiền ngân hàng cho khoản phải thu</Typography>
       <Alert severity="info">
-        Chọn khoản tiền đã được xác minh từ sao kê tại mục Thanh toán. Backend kiểm tra nội dung
-        chuyển khoản, giao dịch trùng, số còn nợ và giữ tiền dư để xử lý hoàn tiền. Khoản dư chỉ có
-        thể hoàn khi đã xác minh được người nhận đủ điều kiện.
+        Chọn khoản tiền đã được xác minh từ sao kê tại mục Thanh toán. Đối chiếu nội dung chuyển
+        khoản, giao dịch trùng, số còn nợ và phần tiền dư cần hoàn. Khoản dư chỉ có thể hoàn khi đã
+        xác minh được người nhận đủ điều kiện.
       </Alert>
       {(error || transfers.error || history.error || instructions.error) && (
         <Alert severity="error">
@@ -165,18 +174,22 @@ export function SettlementBankPanel({
         }
         label="Tôi đã kiểm tra giao dịch ngân hàng và khoản phải thu theo sao kê"
       />
-      <Button
+      <ConfirmActionButton
+        title="Đối soát tiền ngân hàng"
+        description="Xác nhận đúng sao kê, nội dung chuyển khoản và khoản phải thu. Kết quả phân bổ sẽ được máy chủ đối chiếu lại; phần dư phải được xử lý riêng."
+        confirmationKey={JSON.stringify([data.reference, target, transfer, checked])}
         disabled={
           busy ||
+          sourceUnavailable ||
           !checked ||
           !transfer ||
           !target ||
           data.receivables.find((r) => r.charge.id === target)?.status === 'Paid'
         }
-        onClick={() => void allocate()}
+        onConfirm={allocate}
       >
         Xác nhận phân bổ tiền ngân hàng
-      </Button>
+      </ConfirmActionButton>
       {transfer && target && (
         <ReceiptExcessPanel
           key={`${transfer}:${target}`}

@@ -630,7 +630,18 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
     }
 
     [CompactPostgresFact]
-    public async Task HoldingDepositPreservesApprovalExpiryAndOwnerActivationRules()
+    public async Task HoldingDepositAcceptsOwnerSigningWithoutLegacyApprovalAndPreservesIdempotency()
+    {
+        await HoldingDepositPreservesApprovalExpiryAndOwnerActivationRules(ownerSigned: true);
+    }
+
+    [CompactPostgresFact]
+    public async Task HoldingDepositPreservesLegacyApprovalExpiryAndOwnerActivationRules()
+    {
+        await HoldingDepositPreservesApprovalExpiryAndOwnerActivationRules(ownerSigned: false);
+    }
+
+    private async Task HoldingDepositPreservesApprovalExpiryAndOwnerActivationRules(bool ownerSigned)
     {
         await using var scenario = await Create();
         await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
@@ -659,11 +670,32 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         (await scenario.Send(40000, code: code)).EnsureSuccessStatusCode();
         Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.TargetDepositContractId == holding.Id).ToArrayAsync());
         db.ChangeTracker.Clear(); var approved = await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id);
-        approved.ApprovedAt = DateTimeOffset.UtcNow; approved.ApprovedByUserId = scenario.Owner; approved.ApprovalReason = "Synthetic approval";
+        if (ownerSigned)
+        {
+            db.Add(new ContractSignature
+            {
+                ContractId = holding.Id,
+                SignerUserId = scenario.Owner,
+                Status = SignatureStatus.Simulated,
+                SnapshotHash = approved.SnapshotHash,
+                SignedAt = DateTimeOffset.UtcNow,
+                ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+                SignedObjectKey = "synthetic-owner.pdf",
+                SignedHash = "synthetic-owner-hash",
+                ProviderReference = "synthetic-provider"
+            });
+        }
+        else { approved.ApprovedAt = DateTimeOffset.UtcNow; approved.ApprovedByUserId = scenario.Owner; approved.ApprovalReason = "Synthetic approval"; }
         await db.SaveChangesAsync();
-        (await scenario.Send(100000, code: code)).EnsureSuccessStatusCode();
+        var reference = "HOLD-" + Guid.NewGuid().ToString("N"); var eventId = Guid.NewGuid().ToString();
+        (await scenario.Send(100000, reference, code, eventId: eventId)).EnsureSuccessStatusCode();
+        (await scenario.Send(100000, reference, code, eventId: eventId)).EnsureSuccessStatusCode();
         Assert.Equal(100000, (await db.Set<PaymentAllocation>().SingleAsync(a => a.TargetDepositContractId == holding.Id)).Amount);
+        using var owner = await scenario.Client(scenario.Owner);
+        var deposits = await owner.GetFromJsonAsync<DepositVerificationView[]>($"/api/v1/contracts/{holding.Id}/deposit-verifications");
+        Assert.Single(deposits!); Assert.Null(deposits![0].VerifiedByUserId); Assert.Equal(100000, deposits[0].Amount);
         db.ChangeTracker.Clear(); Assert.Equal(ContractStatus.PendingSigning, (await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).Status);
+        if (ownerSigned) Assert.Null((await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).ApprovedAt);
         Assert.Equal(RoomStatus.Available, (await db.Set<Room>().SingleAsync(r => r.Id == room.Id)).Status);
     }
 

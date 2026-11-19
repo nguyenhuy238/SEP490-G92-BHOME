@@ -17,6 +17,7 @@ export function signingInvitationLabel(status: string) {
   return (
     (
       {
+        AwaitingOwnerSignature: 'Đã gửi Owner ký · Chưa gửi email Tenant',
         OwnerApprovedLink: 'Đã tạo lời mời · Chưa xác nhận gửi email',
         InvitationAcceptedByProvider: 'Đã gửi email · Chờ ký',
         InvitationPendingManualDelivery: 'Chưa gửi được email · Owner cần kiểm tra',
@@ -73,6 +74,7 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
       expiresAt: string,
       recipientEmail?: string,
       contacts?: { residentId: string; email: string }[],
+      resend = false,
     ) =>
       post<{ id: string; token?: string | null; status: string; expiresAt: string }>(
         '/api/v1/contracts/' + id + '/signing-invitations',
@@ -81,6 +83,7 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
           expiresAt,
           ...(recipientEmail?.trim() ? { recipientEmail: recipientEmail.trim() } : {}),
           ...(contacts?.length ? { contacts } : {}),
+          ...(resend ? { resend: true } : {}),
         },
       ),
     revoke: (id: string, invitationId: string) =>
@@ -118,8 +121,18 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
 export function signingMessage(error: unknown) {
   const value = error as { code?: string; problem?: { code?: string } };
   const code = value?.code ?? value?.problem?.code;
+  if (code === 'signing_invitation_already_active')
+    return 'Hợp đồng đang có lời mời ký còn hiệu lực. Làm mới trạng thái, rồi dùng Gửi lại email để đổi địa chỉ nhận.';
+  if (code === 'signing_otp_retry_later')
+    return 'Vui lòng chờ ít nhất 1 phút giữa các lần gửi. Mỗi lời mời được gửi tối đa 5 lần.';
+  if (code === 'signing_invitation_not_active')
+    return 'Lời mời đã hết hạn, bị thu hồi hoặc đã ký. Hãy làm mới trạng thái trước khi gửi tiếp.';
+  if (code === 'holding_owner_signature_required')
+    return 'Cần chữ ký Owner hợp lệ để hoàn tất hợp đồng giữ chỗ.';
+  if (code === 'signing_email_already_in_use')
+    return 'Email này đã được sử dụng trong hồ sơ/hợp đồng chính thức hoặc tài khoản nhân viên. Vui lòng nhập email khác.';
   if (code === 'signing_contacts_required')
-    return 'Nhập email hợp lệ, riêng biệt cho từng người ở trước khi gửi lời mời ký.';
+    return 'Nhập email hợp lệ của người đại diện thuê trước khi gửi lời mời ký.';
   if (code === 'signing_contacts_invalid')
     return 'Danh sách email không khớp người ở trong hợp đồng. Hãy tải lại và kiểm tra.';
   if (code === 'holding_owner_approval_required')

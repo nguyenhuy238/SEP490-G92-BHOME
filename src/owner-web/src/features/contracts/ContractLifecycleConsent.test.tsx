@@ -27,6 +27,7 @@ vi.mock('../../../../../packages/client-core/src/useContractLifecycle', async (o
     useContractLifecycle: () => ({
       loading: false,
       error: '',
+      sectionErrors: {},
       reload: state.reload,
       summary: null,
       preparation: null,
@@ -53,8 +54,10 @@ it('requires a new Owner Tenant-exception consent when the inspection version ch
   const contract = {
     id: '00000000-0000-0000-0000-000000000001',
     locationId: 'synthetic',
+    startDate: '2026-10-01',
+    endDate: '2026-11-30',
   } as ContractView;
-  const moveOut = { status: 'Inspected' } as MoveOut;
+  const moveOut = { status: 'Inspected', proposedDate: '2026-11-16' } as MoveOut;
   const cache = new QueryClient();
   const changed = vi.fn();
   const view = () => (
@@ -81,6 +84,7 @@ it('requires a new Owner Tenant-exception consent when the inspection version ch
   expect(api.mutate).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('checkbox', { name: label }));
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận biên bản kiểm tra' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
   await waitFor(() =>
     expect(api.mutate).toHaveBeenCalledWith(
       contract.id,

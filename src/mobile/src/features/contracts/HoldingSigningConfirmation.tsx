@@ -63,8 +63,7 @@ export function HoldingSigningConfirmation({
   );
   const tenantSimulated = !!status?.tenantSimulated || !!simulation?.tenantSimulated;
   const tenantSigned = !!status?.tenantAcceptedAt;
-  const canInvite =
-    !!status && !!c.approvedAt && !invitation && !tenantSigned && !tenantSimulated && !uncertain;
+  const canInvite = !!status && !invitation && !tenantSigned && !tenantSimulated && !uncertain;
   const canContinue = !!status?.canContinue && (!simulation || simulation.canShowQr);
   async function run(kind: 'invite' | 'simulate') {
     if (lock.current) return;
@@ -90,6 +89,8 @@ export function HoldingSigningConfirmation({
         setUncertain(false);
         if (result.status === 'InvitationAcceptedByProvider')
           setSuccess('Dịch vụ email đã tiếp nhận lời mời ký.');
+        else if (result.status === 'AwaitingOwnerSignature')
+          setSuccess('Lời mời cũ đang chờ gửi. Nhờ Owner gửi lời mời qua email trên Web.');
         else setError('Chưa gửi được email. Nhờ Owner kiểm tra cấu hình và lời mời trên Web.');
       } else if (simulation) {
         await simulation.simulate();
@@ -116,11 +117,13 @@ export function HoldingSigningConfirmation({
     ? 'Đã ký'
     : tenantSimulated
       ? 'Đã xác nhận mô phỏng'
-      : invitation?.status === 'InvitationAcceptedByProvider'
-        ? 'Đã gửi email · Chờ ký'
-        : invitation
-          ? 'Chờ ký'
-          : 'Chưa gửi lời mời';
+      : invitation?.status === 'AwaitingOwnerSignature'
+        ? 'Lời mời cũ đang chờ gửi'
+        : invitation?.status === 'InvitationAcceptedByProvider'
+          ? 'Đã gửi email · Chờ ký'
+          : invitation
+            ? 'Chờ ký'
+            : 'Chưa gửi lời mời';
   return (
     <HoldingSectionCard title="Xác nhận ký hợp đồng">
       {!status && !error && <Text style={ui.muted}>Đang tải trạng thái ký…</Text>}
@@ -165,7 +168,9 @@ export function HoldingSigningConfirmation({
           Gửi email thất bại. Owner cần kiểm tra và thu hồi lời mời trước khi gửi lại.
         </Text>
       )}
-      {!c.approvedAt && <Text>Chờ Owner phê duyệt hợp đồng trước khi gửi lời mời.</Text>}
+      {!status?.ownerAcceptedAt && (
+        <Text>Owner hoặc Tenant đều có thể ký trước. Cần đủ chữ ký hai bên để tiếp tục.</Text>
+      )}
       {uncertain && (
         <Text style={ui.red}>
           Chưa xác định kết quả gửi. Kiểm tra lời mời trên Owner Web trước khi gửi lại.
@@ -191,7 +196,7 @@ export function HoldingSigningConfirmation({
             mode="outlined"
             contentStyle={{ minHeight: 44 }}
             loading={busy === 'simulate'}
-            disabled={!!busy || !status || !c.approvedAt || tenantSimulated}
+            disabled={!!busy || !status || tenantSimulated}
             onPress={() => void run('simulate')}
           >
             {tenantSimulated ? '✓ Người giữ chỗ đã ký (mô phỏng)' : 'Mô phỏng người giữ chỗ đã ký'}

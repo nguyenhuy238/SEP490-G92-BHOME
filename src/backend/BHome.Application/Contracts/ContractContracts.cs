@@ -18,7 +18,7 @@ public sealed record HoldingDraftInput(Guid RoomId, Guid OwnerSignerId, Guid? Te
     [Required, StringLength(12000, MinimumLength = 1)] string Terms, short? ReservedCapacity = null, int? SettingsVersion = null);
 public sealed record HoldingDecisionInput([Required, StringLength(2000, MinimumLength = 1)] string Reason);
 public sealed record HoldingConversionInput(
-    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal RequiredSecurityDeposit, bool RequireInitialPayment = true);
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal? RequiredSecurityDeposit = null, bool RequireInitialPayment = true);
 public sealed record HoldingPriceCharge(Guid PolicyId, string ChargeCode, int Category, int Method,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Rate,
     DateOnly EffectiveFrom, DateOnly? EffectiveTo, int Version)

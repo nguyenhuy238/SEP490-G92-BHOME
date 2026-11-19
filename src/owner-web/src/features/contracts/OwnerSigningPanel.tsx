@@ -402,7 +402,6 @@ function OtpStart({
         value={choice}
         onChange={setChoice}
         disabled={busy}
-        caption="Ký điện tử bởi: Chủ trọ"
       />
       <Typography variant="subtitle2">Chữ ký của bạn</Typography>
       <DrawPad onChange={setDrawing} disabled={busy} />

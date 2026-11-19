@@ -1,3 +1,4 @@
+import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -46,6 +47,8 @@ export function FinalChargeReviewPanel({
   async function approve() {
     if (
       lock.current ||
+      query.isFetching ||
+      !!query.error ||
       !validData ||
       validData.missingInputs.length ||
       validData.isCurrent ||
@@ -69,6 +72,11 @@ export function FinalChargeReviewPanel({
       await saved();
     } catch (e) {
       setError(contractError(e));
+      if ((e as { status?: number })?.status === 409) {
+        setConfirmation('');
+        await query.refetch();
+        await saved();
+      }
     } finally {
       lock.current = false;
       setBusy(false);
@@ -116,23 +124,30 @@ export function FinalChargeReviewPanel({
               control={
                 <Checkbox
                   checked={confirmation === validData.reference}
-                  disabled={busy || !!validData.missingInputs.length}
+                  disabled={
+                    busy || query.isFetching || !!query.error || !!validData.missingInputs.length
+                  }
                   onChange={(_, checked) => setConfirmation(checked ? validData.reference : '')}
                 />
               }
               label="Tôi đã đối chiếu biên bản và xác nhận danh sách khoản thu đầy đủ"
             />
-            <Button
+            <ConfirmActionButton
+              title="Xác nhận đủ khoản thu"
+              description="Xác nhận đã rà soát toàn bộ chi phí cuối kỳ theo biên bản. Thao tác không xóa nợ và không ghi nhận đã nhận tiền."
+              confirmationKey={`${validData.reference}:${reason}:${confirmation}`}
               disabled={
                 busy ||
+                query.isFetching ||
+                !!query.error ||
                 !!validData.missingInputs.length ||
                 confirmation !== validData.reference ||
                 !reason.trim()
               }
-              onClick={() => void approve()}
+              onConfirm={approve}
             >
               Xác nhận đủ khoản thu
-            </Button>
+            </ConfirmActionButton>
           </>
         )
       )}

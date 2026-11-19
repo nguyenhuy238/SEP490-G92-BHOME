@@ -13,7 +13,7 @@ vi.mock('./SignaturePlacementPicker', () => ({
 afterEach(cleanup);
 
 it.each(['Holding', 'Main'])(
-  'real %s signs immediately with Owner session after invitation acceptance',
+  'real %s signs with Owner session in its required order',
   async (kind) => {
     const c = {
       ...contract,
@@ -30,7 +30,7 @@ it.each(['Holding', 'Main'])(
       if (path.endsWith('/internal-signing'))
         return {
           invitations: [],
-          tenantAcceptedAt: '2026-11-15T00:00:00Z',
+          tenantAcceptedAt: null,
           ownerAcceptedAt: null,
           canContinue: false,
         };
@@ -52,6 +52,12 @@ it.each(['Holding', 'Main'])(
       </QueryClientProvider>,
     );
     const button = await screen.findByRole('button', { name: 'Ký hợp đồng' });
+    if (kind === 'Holding') {
+      expect(screen.queryByRole('button', { name: 'Gửi lời mời ký qua email' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Phê duyệt hợp đồng giữ chỗ' })).toBeNull();
+    }
+    expect(screen.queryByLabelText(/Email nhận lời mời/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Xem PDF hợp đồng' })).toBeEnabled();
     expect(button).toBeDisabled();
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(button);

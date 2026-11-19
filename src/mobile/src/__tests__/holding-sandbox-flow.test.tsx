@@ -140,12 +140,12 @@ it('opens the QR preview through the Sandbox API without simulating a signature'
   );
   expect(request.mock.calls.some(([path]) => path.endsWith('/simulation/signatures'))).toBe(false);
 });
-it('shows Tenant simulation before approval but prevents calling the API until approval', async () => {
+it('allows Tenant simulation after Owner confirmation without a separate approval', async () => {
   render(<Harness contract={{ ...c, approvedAt: null }} />);
   const button = await screen.findByRole('button', { name: 'Mô phỏng người giữ chỗ đã ký' });
-  expect(button).toHaveProperty('disabled', true);
+  await waitFor(() => expect(button).toHaveProperty('disabled', false));
   fireEvent.click(button);
-  expect(request.mock.calls.some(([path]) => path.endsWith('/simulation/signatures'))).toBe(false);
+  expect(request.mock.calls.some(([path]) => path.endsWith('/simulation/signatures'))).toBe(true);
 });
 it('reloads the contract approval and reveals Tenant signing without reopening the screen', async () => {
   let approved = false;
@@ -240,7 +240,7 @@ it('Tenant simulation cannot enable QR until the actual Owner confirmation comes
     ),
   );
   fireEvent.click(screen.getByText('Mô phỏng người giữ chỗ đã ký'));
-  await screen.findByText('✓ Người giữ chỗ đã ký (mô phỏng)');
+  await waitFor(() => expect(state.tenantSimulated).toBe(true));
   expect((screen.getByText('Tiếp tục: tạo QR') as HTMLButtonElement).disabled).toBe(true);
   expect(
     request.mock.calls.some(

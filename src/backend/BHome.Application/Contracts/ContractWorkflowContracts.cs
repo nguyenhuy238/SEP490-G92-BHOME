@@ -25,7 +25,7 @@ public sealed record ContractDocumentView(Guid Id, Guid ContractId, string Kind,
 public sealed record ContractHistoryView(string Action, Guid? ActorId, DateTimeOffset OccurredAt);
 public sealed record DepositVerificationView(Guid Id, string BankTransactionReference,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Amount, string VerificationReason,
-    Guid VerifiedByUserId, DateTimeOffset VerifiedAt);
+    Guid? VerifiedByUserId, DateTimeOffset VerifiedAt);
 
 public interface IContractWorkflowRepository
 {

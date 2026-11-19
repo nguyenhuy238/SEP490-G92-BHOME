@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { RefundPanel } from './RefundPanel';
@@ -139,6 +139,7 @@ it('uses the agreed Security Deposit recipient, requires Owner consent, and rese
   fireEvent.click(screen.getByLabelText(deductions));
   expect(create).toBeEnabled();
   fireEvent.click(create);
+  await confirmPendingAction();
   await screen.findByText('Chưa ghi nhận hoàn tất. Tải lại để kiểm tra trước khi thử lại.');
   const first = request.mock.calls.find(([, init]) => init?.method === 'POST')!;
   expect(first[0]).toBe('/api/v1/contracts/source/deposit-refunds');
@@ -162,6 +163,7 @@ it('uses the agreed Security Deposit recipient, requires Owner consent, and rese
   for (const label of [general, depositor, deductions])
     fireEvent.click(screen.getByLabelText(label));
   fireEvent.click(create);
+  await confirmPendingAction();
   await vi.waitFor(() =>
     expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2),
   );
@@ -235,6 +237,7 @@ it('binds a remainder refund to the approved deduction instead of claiming there
   ])
     fireEvent.click(screen.getByLabelText(label));
   fireEvent.click(screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' }));
+  await confirmPendingAction();
   await vi.waitFor(() =>
     expect(request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
   );
@@ -277,6 +280,7 @@ it('requires confirmation of source-specific deposit offsets before refunding th
   ])
     fireEvent.click(screen.getByLabelText(label));
   fireEvent.click(screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' }));
+  await confirmPendingAction();
   await vi.waitFor(() =>
     expect(request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
   );
@@ -338,8 +342,10 @@ it('requires human confirmation and keeps an ambiguous create retry on the same 
     screen.getByLabelText('Tôi xác nhận nguồn tiền và người nhận hoàn theo bằng chứng'),
   );
   fireEvent.click(create);
+  await confirmPendingAction();
   await screen.findByText('Chưa ghi nhận hoàn tất. Tải lại để kiểm tra trước khi thử lại.');
   fireEvent.click(create);
+  await confirmPendingAction();
   await vi.waitFor(() =>
     expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2),
   );
@@ -368,6 +374,7 @@ it('requires a fresh human decision and does not show Completed after approval f
     screen.getByLabelText('Tôi đã kiểm tra nguồn, số tiền và người nhận trước khi quyết định'),
   );
   fireEvent.click(approve);
+  await confirmPendingAction();
   await screen.findByText('Yêu cầu đã thay đổi hoặc chưa ở bước phù hợp. Hãy tải lại.');
   expect(
     screen.queryByRole('button', { name: 'Tải xuống Chứng từ hoàn tiền' }),
@@ -401,6 +408,7 @@ it('refreshes approval and completion only from the server and sends execution a
     screen.getByLabelText('Tôi đã kiểm tra nguồn, số tiền và người nhận trước khi quyết định'),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Duyệt yêu cầu hoàn' }));
+  await confirmPendingAction();
   await screen.findByText('Đã duyệt, chờ ghi nhận hoàn · 20.000 ₫ · Synthetic actual payer');
   fireEvent.change(screen.getByLabelText('Lý do quyết định / xác minh hoàn'), {
     target: { value: 'Statement checked' },
@@ -426,6 +434,7 @@ it('refreshes approval and completion only from the server and sends execution a
     ),
   );
   fireEvent.click(execute);
+  await confirmPendingAction();
   await screen.findByText('Đã ghi nhận hoàn · 20.000 ₫ · Synthetic actual payer');
   expect(screen.getByRole('button', { name: 'Tải xuống Chứng từ hoàn tiền' })).toBeInTheDocument();
 });
@@ -551,6 +560,7 @@ it('requests a refund to the verified outside payer without inventing a Resident
     screen.getByLabelText('Tôi xác nhận nguồn tiền và người nhận hoàn theo bằng chứng'),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Lập yêu cầu hoàn tiền' }));
+  await confirmPendingAction();
   await vi.waitFor(() =>
     expect(request).toHaveBeenCalledWith(
       '/api/v1/payment-transactions/source/refunds',
@@ -567,3 +577,8 @@ it('requests a refund to the verified outside payer without inventing a Resident
     ),
   );
 });
+
+async function confirmPendingAction() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+}

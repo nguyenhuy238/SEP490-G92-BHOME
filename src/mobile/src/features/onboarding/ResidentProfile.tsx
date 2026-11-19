@@ -7,6 +7,7 @@ import {
   contractClient,
   type ContractSummary,
 } from '../../../../../packages/client-core/src/contracts';
+import { householdClient } from '../../../../../packages/client-core/src/households';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { useSession } from '../../lib/SessionProvider';
@@ -126,10 +127,17 @@ export function ResidentProfile({
             : { contractId: related.id },
         );
       } else if (data.resident.residentType === 0) {
+        const household = await householdClient((path, init, type) =>
+          api.request(path, init, type),
+        ).get(residentId, controller.signal);
+        if (controller.signal.aborted) return;
         go('prepare-contract', {
           roomId: data.resident.roomId,
           representativeResidentId: residentId,
-          residentIds: JSON.stringify([residentId]),
+          residentIds: JSON.stringify([
+            residentId,
+            ...household.members.map((member) => member.residentId),
+          ]),
         });
       } else {
         // Co-occupants cannot become representatives by opening this screen.
