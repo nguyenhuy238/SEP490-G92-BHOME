@@ -1,0 +1,42 @@
+﻿services:
+  api:
+    environment:
+      # Gmail SMTP
+      Email__Enabled: "true"
+      Email__Host: smtp.gmail.com
+      Email__Port: "587"
+      Email__Username: "${BHOME_EMAIL_USERNAME:?}"
+      Email__AppPassword: "${BHOME_EMAIL_APP_PASSWORD:?}"
+      Email__FromEmail: "${BHOME_EMAIL_USERNAME:?}"
+      Email__FromName: BHOME
+      Email__UseStartTls: "true"
+      Email__TestEnabled: "false"
+
+      # Notification email
+      NotificationChannels__Enabled: "true"
+      NotificationChannels__AutomationEnabled: "true"
+      NotificationChannels__Mode: Unconfigured
+
+      # Account invitation and recovery
+      AuthenticationEmail__WebResetUrl: "https://${OWNER_HOST}/reset-password"
+      AuthenticationEmail__WebInvitationUrl: "https://${OWNER_HOST}/accept-invitation"
+      AuthenticationEmail__WebVerificationUrl: "https://${OWNER_HOST}/confirm-email"
+
+      # Mobile deep links
+      AuthenticationEmail__MobileResetUrl: "bhome://reset-password"
+      AuthenticationEmail__MobileInvitationUrl: "bhome://accept-invitation"
+      AuthenticationEmail__MobileVerificationUrl: "bhome://confirm-email"
+
+      # Trusted callback origins
+      AuthenticationEmail__TrustedOrigins__0: "https://${OWNER_HOST}"
+      AuthenticationEmail__TrustedOrigins__1: "bhome://reset-password"
+      AuthenticationEmail__TrustedOrigins__2: "bhome://accept-invitation"
+      AuthenticationEmail__TrustedOrigins__3: "bhome://confirm-email"
+
+      # Internal contract signing via OTP
+      AnonymousSigning__OtpHmacKey: "${BHOME_ANON_HMAC_BASE64:?}"
+      AnonymousSigning__PublicSigningUrl: "https://${OWNER_HOST}/contract-signing"
+
+      # Existing-account contract signing
+      ContractSigning__InvitationLink__MobileAppUrl: "bhome://sign-contract"
+      ContractSigning__InvitationLink__PublicOpenUrl: "https://${API_HOST}/open/sign-contract"
