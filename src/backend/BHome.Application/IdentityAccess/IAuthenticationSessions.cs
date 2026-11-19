@@ -30,6 +30,9 @@ public interface IPasswordResetDelivery
     // Durable adapters validate callbacks independently of SMTP readiness and other operations.
     bool IsAvailableFor(string kind) => IsAvailable;
     bool IsDurable => false;
+    // Owner invitations may report destination policy before issuing a grant.
+    // Public password recovery retains its generic response and must not call this preflight.
+    void ValidateInvitationRecipient(string destination) { }
     // Called inside the grant transaction before account lookup, including unknown identifiers.
     Task EnsureQueueWritableAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     Task SendAsync(Guid userId, string destination, string token, CancellationToken cancellationToken);

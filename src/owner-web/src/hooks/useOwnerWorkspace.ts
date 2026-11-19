@@ -36,6 +36,8 @@ export function ownerError(error: unknown) {
       .flat()
       .join(' ');
     const codes: Record<string, string> = {
+      email_recipient_not_allowed:
+        'Địa chỉ nhận chưa được cho phép trong môi trường thử nghiệm. Liên hệ người quản trị môi trường trước khi gửi lại.',
       identity_retention_review_changed:
         'Metadata hoặc nghĩa vụ đã thay đổi. Tải lại và xác nhận lại trước khi lưu.',
       identity_retention_key_conflict: 'Yêu cầu rà soát đã dùng với nội dung khác. Tải lại hồ sơ.',

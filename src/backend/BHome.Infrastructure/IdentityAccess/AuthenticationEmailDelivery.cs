@@ -19,8 +19,14 @@ namespace BHome.Infrastructure.IdentityAccess;
 internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, CompactNotificationWriter sql,
     IDataProtectionProvider protection, IOptions<AuthenticationEmailOptions> options,
     IHostEnvironment environment, IOptions<SessionOptions> sessions, IOptions<NotificationChannelOptions> channels,
-    UserManager<ApplicationUser> users, NotificationEmailContent contractEmail) : IPasswordResetDelivery
+    UserManager<ApplicationUser> users, NotificationEmailContent contractEmail,
+    IOptions<EmailOptions> email) : IPasswordResetDelivery
 {
+    public void ValidateInvitationRecipient(string destination)
+    {
+        if (email.Value.Enabled && !email.Value.RecipientAllowed(destination))
+            throw new NotificationException(503, "email_recipient_not_allowed");
+    }
     private IDataProtector Protector => protection.CreateProtector("BHome.AuthenticationEmail.v1");
     public bool IsAvailable => IsAvailableFor("PasswordReset");
     public bool IsAvailableFor(string kind) => channels.Value.Enabled && kind switch
