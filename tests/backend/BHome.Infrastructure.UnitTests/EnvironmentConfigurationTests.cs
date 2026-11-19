@@ -8,6 +8,21 @@ namespace BHome.Infrastructure.UnitTests;
 
 public sealed class EnvironmentConfigurationTests
 {
+    [Theory]
+    [InlineData("AuthenticationEmail:WebInvitationUrl", "https://old.ngrok-free.dev/accept-invitation")]
+    [InlineData("AuthenticationEmail:WebResetUrl", "https://old.trycloudflare.com/reset-password")]
+    [InlineData("AuthenticationEmail:WebVerificationUrl", "https://old.ngrok-free.app/confirm-email")]
+    [InlineData("AuthenticationEmail:TrustedOrigins:0", "https://old.ngrok-free.dev")]
+    [InlineData("Cors:AllowedOrigins:0", "https://old.ngrok-free.dev")]
+    [InlineData("AnonymousSigning:PublicSigningUrl", "https://old.ngrok-free.dev/contract-signing")]
+    public void DevelopmentRejectsObsoleteTunnelConfigurationBeforeItCanIssueLinks(string key,string value)
+    {
+        var c = new ConfigurationManager();
+        c["ConnectionStrings:Database"] = "Host=localhost;Database=synthetic";
+        c[key] = value;
+        Assert.Contains(EnvironmentConfiguration.Errors(c, "Development"), error => error.Contains(key.Split(':')[0]) && error.Contains("Initialize-LocalUrls.ps1"));
+        Assert.DoesNotContain(value, string.Join(" ", EnvironmentConfiguration.Errors(c, "Development")));
+    }
     [Fact]
     public void PublicWebsiteCannotBecomeACookieAuthenticationOrigin()
     {
