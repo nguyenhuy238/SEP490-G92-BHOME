@@ -27,6 +27,13 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
         if (filter.To is { } to) query = query.Where(e => e.OccurredOn <= to);
         if (filter.ExpenseType is { } type) query = query.Where(e => e.ExpenseType == type);
         if (filter.Category is { } category) query = query.Where(e => e.Category == category);
+        // The "other investments" workspace must not show physical-asset capital
+        // snapshots. Include pre-source-key manual entries, but exclude any
+        // asset/task-linked or capital-sync events before paging. Older manual
+        // investments can have a null or nonstandard source_key.
+        if (filter.OnlyOtherInvestments)
+            query = query.Where(e => e.AssetId == null && e.TaskId == null &&
+                (e.SourceKey == null || !e.SourceKey.StartsWith("asset-capital:")));
         var total = await query.LongCountAsync(token);
         var rows = await query.OrderByDescending(e => e.OccurredOn).ThenBy(e => e.Id)
             .Skip(checked((filter.Page - 1) * filter.PageSize)).Take(filter.PageSize).ToArrayAsync(token);
@@ -59,6 +66,42 @@ public sealed class ExpenseRepository(BHomePersistenceContext db) : IExpenseRepo
             """, token);
         await tx.CommitAsync(token);
         return (await GetAsync(id, token))!;
+    }
+    public async Task<IReadOnlyList<ExpenseView>> CreateInvestmentsAsync(IReadOnlyList<ExpenseInput> items,
+        Guid actor, Guid key, DateTimeOffset now, CancellationToken token)
+    {
+        var prefix = $"expense:batch:{actor}:{key}:";
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(items)));
+        await using var tx = await db.Database.BeginTransactionAsync(token);
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({prefix},0))", token);
+        var existing = await Rows.Where(e => e.SourceKey != null && e.SourceKey.StartsWith(prefix))
+            .OrderBy(e => e.SourceKey).ToArrayAsync(token);
+        if (existing.Length != 0)
+        {
+            if (existing.Length != items.Count || existing.Any(row => row.Fingerprint != fingerprint))
+                throw new FinanceException(409, "expense_idempotency_conflict");
+            await tx.CommitAsync(token);
+            return existing.Select(View).ToArray();
+        }
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({items[0].LocationId.ToString()},0))", token);
+        if (!await ValidScopeAsync(items[0].LocationId, null, token))
+            throw new FinanceException(404, "expense_scope_not_found");
+        var results = new List<Guid>(items.Count);
+        for (var i = 0; i < items.Count; ++i)
+        {
+            var item = items[i];
+            var id = Guid.NewGuid();
+            var source = prefix + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture);
+            var history = JsonSerializer.Serialize(new[] { new { action = "Created", actorId = actor, occurredAt = now, fingerprint, after = item } });
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO expenses(id,location_id,room_id,asset_id,task_id,incident_report_id,expense_type,category,amount,occurred_on,note,source_key,recorded_by_user_id,history)
+                VALUES({id},{item.LocationId},NULL,NULL,NULL,NULL,'INITIAL_INVESTMENT',{item.Category},{item.Amount},{item.OccurredOn},{item.Note},{source},{actor},{history}::jsonb)
+                """, token);
+            results.Add(id);
+        }
+        await tx.CommitAsync(token);
+        return (await Rows.Where(e => results.Contains(e.Id)).OrderBy(e => e.SourceKey).ToArrayAsync(token))
+            .Select(View).ToArray();
     }
     public async Task<ExpenseView> UpdateAsync(Guid id, ExpenseUpdate input, Guid actor, DateTimeOffset now, CancellationToken token)
     {

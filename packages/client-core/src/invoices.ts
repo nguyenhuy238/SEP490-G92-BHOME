@@ -132,8 +132,27 @@ export interface Policy {
   effectiveFrom: string;
   effectiveTo: string | null;
   version: number;
+  firstUsedAt?: string | null;
+  lastContractEndDate?: string | null;
+  familyId?: string;
+  edition?: number;
+  bindingContractCount?: number;
+  canEditInPlace?: boolean;
+  previousPolicyId?: string | null;
 }
-export type PolicyInput = Omit<Policy, 'id' | 'version' | 'rate'> & {
+export type PolicyInput = Omit<
+  Policy,
+  | 'id'
+  | 'version'
+  | 'rate'
+  | 'firstUsedAt'
+  | 'lastContractEndDate'
+  | 'familyId'
+  | 'edition'
+  | 'bindingContractCount'
+  | 'canEditInPlace'
+  | 'previousPolicyId'
+> & {
   rate: string;
   reason: string;
 };
@@ -220,6 +239,10 @@ const messages: Record<string, string> = {
   invoice_period_already_exists: 'Phòng đã có hóa đơn kỳ này với hợp đồng đại diện khác.',
   room_pricing_locked_by_contract:
     'Phòng đang có hợp đồng ràng buộc giá. Không thể sửa trực tiếp giá này khi hợp đồng còn ràng buộc.',
+  utility_tariff_locked_by_contract:
+    'Biểu giá đang được cấu hình cho phòng có hợp đồng ràng buộc. Chưa thể thay thế biểu giá này khi hợp đồng còn ràng buộc.',
+  profile_replacement_conflict:
+    'Cấu hình phòng đã thay đổi hoặc đã có phiên bản kế tiếp. Hãy tải lại trước khi lưu.',
   contract_price_snapshot_required_for_successor:
     'Chưa đủ dữ liệu giá đã chốt của hợp đồng hiện tại. Cần kiểm tra hợp đồng trước khi tạo giá dịch vụ kế tiếp.',
   billing_policy_overlap:
@@ -229,6 +252,17 @@ const messages: Record<string, string> = {
   replacement_scope_mismatch: 'Giá kế tiếp phải giữ nguyên phạm vi, loại và mã khoản thu.',
   invalid_asset_observation: 'Kiểm tra số lượng thực tế, bằng chứng và phiên bản định mức.',
   asset_already_verified: 'Tài sản này đã được liên kết với định mức, không thể xác minh trùng.',
+  duplicate_shared_name:
+    'Tên mẫu đã tồn tại. Hãy chọn tên khác hoặc sử dụng mẫu đã có (kể cả mẫu lưu trữ).',
+  shared_draft_already_exists: 'Mẫu này đã có bản nháp. Hãy tiếp tục chỉnh sửa bản nháp hiện có.',
+  shared_catalog_stale_or_unpublished:
+    'Mẫu tài sản tham chiếu đã thay đổi hoặc được lưu trữ. Hãy bỏ mục cũ và chọn lại tài sản đang sử dụng.',
+  shared_source_stale_or_unpublished:
+    'Mẫu nguồn đã thay đổi hoặc được lưu trữ. Tải lại thư viện và chọn lại mẫu trước khi lưu.',
+  stale_or_immutable_shared_version:
+    'Phiên bản mẫu đã thay đổi hoặc không còn chỉnh sửa được. Tải lại để chọn phiên bản mới nhất.',
+  policy_successor_date_invalid:
+    'Chọn ngày hiệu lực mới không trước hôm nay và sau ngày bắt đầu của phiên bản cũ.',
 };
 export function invoiceError(error: unknown): string {
   const value = error as { status?: number; code?: string; problem?: { code?: string } };

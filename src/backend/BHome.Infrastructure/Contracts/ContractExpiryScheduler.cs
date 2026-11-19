@@ -10,6 +10,8 @@ internal sealed class ContractExpiryScheduler(IServiceScopeFactory scopes, IOpti
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Daily scheduling may need database access; never block HTTP startup.
+        await Task.Yield();
         if (!options.Value.Enabled) return;
         DateOnly? lastDay = null;
         while (!stoppingToken.IsCancellationRequested)

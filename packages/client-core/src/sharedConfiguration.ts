@@ -70,6 +70,7 @@ export interface SharedWrite {
   description: string;
   data: SharedData;
   expectedVersion: number;
+  publishImmediately?: boolean;
 }
 export interface SharedPage {
   items: SharedDocument[];
@@ -160,9 +161,10 @@ export function sharedConfigurationClient(
       page = 1,
       pageSize = 20,
       signal?: AbortSignal,
+      latestOnly = false,
     ) =>
       request<SharedPage>(
-        `${route(resource)}?${new URLSearchParams({ search, status, page: String(page), pageSize: String(pageSize) })}`,
+        `${route(resource)}?${new URLSearchParams({ search, status, page: String(page), pageSize: String(pageSize), ...(latestOnly ? { latestOnly: 'true' } : {}) })}`,
         { signal },
       ),
     get: (resource: SharedResource, id: string, signal?: AbortSignal) =>
@@ -171,12 +173,28 @@ export function sharedConfigurationClient(
       write<SharedDocument>(route(resource, id ?? undefined), input, id ? 'PUT' : 'POST'),
     publish: (resource: SharedResource, id: string, expectedVersion: number) =>
       write<SharedDocument>(route(resource, id) + '/publish', { expectedVersion }),
-    archive: (resource: SharedResource, id: string, expectedVersion: number) =>
-      write<SharedDocument>(route(resource, id) + '/archive', { expectedVersion }),
-    restore: (resource: SharedResource, id: string, expectedVersion: number) =>
-      write<SharedDocument>(route(resource, id) + '/restore', { expectedVersion }),
-    duplicate: (resource: SharedResource, id: string, name: string, expectedVersion: number) =>
-      write<SharedDocument>(route(resource, id) + '/duplicate', { name, expectedVersion }),
+    archive: (resource: SharedResource, id: string, expectedVersion: number, wholeFamily = false) =>
+      write<SharedDocument>(route(resource, id) + '/archive', {
+        expectedVersion,
+        ...(wholeFamily ? { wholeFamily } : {}),
+      }),
+    restore: (resource: SharedResource, id: string, expectedVersion: number, wholeFamily = false) =>
+      write<SharedDocument>(route(resource, id) + '/restore', {
+        expectedVersion,
+        ...(wholeFamily ? { wholeFamily } : {}),
+      }),
+    duplicate: (
+      resource: SharedResource,
+      id: string,
+      name: string,
+      expectedVersion: number,
+      publishImmediately = false,
+    ) =>
+      write<SharedDocument>(route(resource, id) + '/duplicate', {
+        name,
+        expectedVersion,
+        ...(publishImmediately ? { publishImmediately } : {}),
+      }),
     edition: (resource: SharedResource, id: string, expectedVersion: number) =>
       write<SharedDocument>(route(resource, id) + '/versions', { expectedVersion }),
     versions: (resource: SharedResource, id: string, signal?: AbortSignal) =>
@@ -204,7 +222,7 @@ export function sharedConfigurationClient(
       const items: SharedDocument[] = [];
       for (let page = 1; ; page++) {
         const result = await request<SharedPage>(
-          `${route('asset-catalog')}?status=Published&page=${page}&pageSize=100`,
+          `${route('asset-catalog')}?status=Published&page=${page}&pageSize=100&latestOnly=true`,
           { signal },
         );
         items.push(...result.items);

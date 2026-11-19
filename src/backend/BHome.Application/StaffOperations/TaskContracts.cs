@@ -53,6 +53,8 @@ public sealed record TaskEvidenceView(Guid Id, string ContentType, long Length, 
 public sealed record TaskNotificationView(Guid Id, Guid TaskId, string Event, DateTimeOffset CreatedAt, DateTimeOffset? ReadAt);
 public sealed record TaskResponsibility(Guid AssignmentId, Guid StaffUserId);
 public sealed record TaskLocation(Guid Id, bool IsActive);
+public sealed record TaskIncidentTarget(Guid Id, Guid LocationId, Guid? RoomId, Guid? AssetId,
+    Guid ReporterId, bool IsValidReport);
 
 public sealed class OperationalTaskException(int status, string code) : Exception(code)
 {
@@ -85,6 +87,9 @@ public interface IOperationalTaskRepository
     Task<IReadOnlyList<string>> CommonAreasAsync(Guid locationId, CancellationToken t);
     Task<TaskPage<TaskTargetOption>> TargetAssetsAsync(Guid locationId, Guid? roomId, string? commonArea, string? search, int page, int pageSize, CancellationToken t);
     Task<OperationalTask?> FindAsync(Guid id, CancellationToken t);
+    Task<IReadOnlyList<TaskIncidentTarget>> IncidentTargetsAsync(Guid[] incidentIds, CancellationToken t);
+    Task<bool> IncidentsResolvedAsync(Guid[] incidentIds, CancellationToken t);
+    Task NotifyMoveInInventoryCompletedAsync(OperationalTask task, Guid actor, CancellationToken t);
     Task<TaskResponsibility?> ResponsibilityAsync(Guid locationId, DateOnly date, CancellationToken t);
     Task<TaskPage<TaskView>> ListAsync(TaskQuery query, Guid? staffId, DateOnly date, DateTimeOffset now, CancellationToken t);
     Task<TaskPage<TaskHistoryView>> HistoryAsync(Guid taskId, int page, int size, CancellationToken t);

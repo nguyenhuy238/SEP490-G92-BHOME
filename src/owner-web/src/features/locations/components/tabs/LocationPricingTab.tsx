@@ -351,7 +351,7 @@ export function LocationPricingTab({ db, location }: LocationPricingTabProps) {
               Cơ chế phân cấp định giá phòng
             </Typography>
             <Typography variant="body2">
-              Các phòng tự động thừa hưởng đơn giá thuê từ <strong>Mẫu loại phòng</strong> đã cấu
+              Các phòng tự động thừa hưởng đơn giá thuê từ <strong>Loại phòng mẫu</strong> đã cấu
               hình. Chủ cơ sở có thể đặt giá thuê riêng cho từng phòng đặc thù (phòng góc, view
               thoáng, có ban công lớn) mà không làm thay đổi giá chuẩn của loại phòng chung.
             </Typography>

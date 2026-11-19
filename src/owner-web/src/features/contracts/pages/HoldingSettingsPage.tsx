@@ -4,6 +4,10 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   MenuItem,
   Paper,
   Stack,
@@ -58,6 +62,9 @@ function LiveHoldingSettingsPage() {
   const [error, setError] = useState(''),
     [success, setSuccess] = useState('');
   const [preview, setPreview] = useState<HoldingPreparation | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<HoldingSettings[] | null>(null);
+  const [historyError, setHistoryError] = useState('');
   const lock = useRef(false);
   useEffect(() => {
     const abort = new AbortController();
@@ -79,6 +86,8 @@ function LiveHoldingSettingsPage() {
     setPreview(null);
     setSuccess('');
     setError('');
+    setHistoryOpen(false);
+    setHistory(null);
     setLoading(!!next);
     setLocation(next);
   }
@@ -117,6 +126,19 @@ function LiveHoldingSettingsPage() {
       });
     return () => abort.abort();
   }, [api, room, settings]);
+  useEffect(() => {
+    if (!historyOpen || !location) return;
+    const abort = new AbortController();
+    void api
+      .versions(location, abort.signal)
+      .then((value) => {
+        if (!abort.signal.aborted) setHistory(value);
+      })
+      .catch((e) => {
+        if (!abort.signal.aborted) setHistoryError(contractError(e));
+      });
+    return () => abort.abort();
+  }, [api, historyOpen, location, settings?.version]);
   async function save() {
     if (lock.current || !location) return;
     const count = Number(months),
@@ -227,6 +249,29 @@ function LiveHoldingSettingsPage() {
               </Button>
               {settings && (
                 <>
+                  <Stack
+                    direction="row"
+                    sx={{
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: 1,
+                    }}
+                  >
+                    <Typography variant="body2" color="text.secondary">
+                      Phiên bản hiện tại: {settings.version}
+                    </Typography>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setHistory(null);
+                        setHistoryError('');
+                        setHistoryOpen(true);
+                      }}
+                    >
+                      Lịch sử phiên bản
+                    </Button>
+                  </Stack>
                   <TextField
                     select
                     label="Xem mức cọc theo phòng (cấu hình đã lưu)"
@@ -257,6 +302,44 @@ function LiveHoldingSettingsPage() {
           )}
         </Stack>
       </Paper>
+      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Lịch sử cấu hình giữ chỗ</DialogTitle>
+        <DialogContent>
+          {historyError ? (
+            <Alert severity="error">{historyError}</Alert>
+          ) : history === null ? (
+            <CircularProgress size={24} />
+          ) : (
+            <Stack spacing={2}>
+              {history.length === 0 && (
+                <Typography color="text.secondary">Chưa có lịch sử.</Typography>
+              )}
+              {history.map((revision) => (
+                <Stack
+                  key={revision.version}
+                  spacing={0.5}
+                  sx={{ borderBottom: '1px solid', borderColor: 'divider', pb: 1.5 }}
+                >
+                  <Typography sx={{ fontWeight: 700 }}>Phiên bản {revision.version}</Typography>
+                  <Typography variant="body2">
+                    {revision.holdingMonths} tháng · Tiền giữ chỗ bằng {revision.depositRentMonths}{' '}
+                    tháng tiền thuê
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                  >
+                    {revision.terms}
+                  </Typography>
+                </Stack>
+              ))}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHistoryOpen(false)}>Đóng</Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }

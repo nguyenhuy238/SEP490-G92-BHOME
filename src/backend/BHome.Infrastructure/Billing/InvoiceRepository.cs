@@ -5,6 +5,7 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Modules.Billing.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -13,6 +14,8 @@ namespace BHome.Infrastructure.Billing;
 internal sealed class InvoiceRepository(BHomePersistenceContext db) : IInvoiceRepository
 {
     public Task<BillingSchedule?> ScheduleAsync(Guid locationId, CancellationToken t) => db.Set<BillingSchedule>().SingleOrDefaultAsync(s => s.LocationId == locationId, t);
+    public Task<BillingSchedule?> ScheduleForPeriodAsync(Guid locationId, DateOnly period, CancellationToken t) =>
+        BillingAutomationSchedules.ResolveCalendarAsync(db, locationId, period, t);
     public Task<Room?> RoomAsync(Guid roomId, CancellationToken t) => db.Set<Room>().Include(r => r.Location).SingleOrDefaultAsync(r => r.Id == roomId, t);
     public async Task<T> WithRoomLockAsync<T>(Guid roomId, Func<Task<T>> action, CancellationToken t)
     {

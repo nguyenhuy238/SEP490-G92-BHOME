@@ -125,6 +125,7 @@ public sealed partial class ContractService
         if (staff)
         {
             if (h.TenantConfirmedVersion != h.Version || h.Status != ContractHandoverStatus.Draft) throw ContractException.Conflict("tenant_handover_confirmation_required");
+            if (!await Handovers.InventoryReadyAsync(id, t)) throw ContractException.Conflict("move_in_inventory_required");
             var snapshot = Snapshot(h);
             if (handoverInventory is not null)
             {

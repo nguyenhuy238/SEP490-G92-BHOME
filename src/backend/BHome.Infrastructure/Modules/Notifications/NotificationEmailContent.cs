@@ -4,6 +4,7 @@ using BHome.Domain.Billing;
 using BHome.Domain.Locations;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.Persistence.Compact24;
+using BHome.Infrastructure.IdentityAccess;
 using Microsoft.EntityFrameworkCore;
 using BHome.Application.Contracts;
 using BHome.Application.Storage;
@@ -15,11 +16,15 @@ using iText.Kernel.Geom;
 using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace BHome.Infrastructure.Modules.Notifications;
 
 // Called only after the worker rechecks recipient scope and target entitlement.
-internal sealed class NotificationEmailContent(Compact24DbContext db, BHome.Application.Ocr.IIdentityProtection? identity = null,
+internal sealed class NotificationEmailContent(Compact24DbContext db,
+    IOptions<AuthenticationEmailOptions> authentication, IHostEnvironment environment,
+    BHome.Application.Ocr.IIdentityProtection? identity = null,
     BHome.Application.PaymentsDebt.IMainInitialPaymentLedger? initialPayments = null, IObjectStorage? storage = null)
 {
     internal async Task<(string Title, string Body)?> MainConfirmationAsync(Guid id, Guid? tenant, CancellationToken t)
@@ -171,6 +176,17 @@ internal sealed class NotificationEmailContent(Compact24DbContext db, BHome.Appl
         if (notice.EventType == "CONTRACT_ACTIVATED" && notice.RelatedObjectType == "Contract" &&
             await MainConfirmationAsync(notice.RelatedObjectId, null, t) is { } main)
             return main;
+        if (notice.EventType is "STAFF_ASSIGNMENT_CREATED" or "STAFF_ASSIGNMENT_UPDATED" or
+            "STAFF_ASSIGNMENT_CANCELLED" or "STAFF_ASSIGNMENT_REMOVED" or
+            "STAFF_ASSIGNMENT_ACTIVATED" or "STAFF_ASSIGNMENT_ENDED")
+        {
+            // Never build a login link from the request host, database or user-controlled input.
+            var portal = authentication.Value.StaffPortalUrl;
+            if (string.IsNullOrWhiteSpace(portal)) return (notice.Title, notice.Summary);
+            if (!authentication.Value.Trusted(portal, environment.IsDevelopment()))
+                throw new InvalidOperationException("staff_portal_url_invalid");
+            return (notice.Title, $"{notice.Summary}\n\nCổng đăng nhập Staff: {portal}");
+        }
         if (notice.RelatedObjectType is "Invoice" or "Debt" && notice.EventType is
             "INVOICE_FINALIZED" or "INVOICE_DUE_SOON" or "INVOICE_OVERDUE" or "INVOICE_FULLY_PAID" or "PAYMENT_PARTIALLY_CONFIRMED")
         {

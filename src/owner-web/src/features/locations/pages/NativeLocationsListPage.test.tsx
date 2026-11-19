@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@mui/material';
 import { MemoryRouter } from 'react-router';
@@ -64,6 +64,22 @@ function mount() {
     </QueryClientProvider>,
   );
 }
+
+it('shows a retryable error if the location API never responds instead of loading indefinitely', async () => {
+  const deadline = new AbortController();
+  const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+  // Simulate an API client stuck in cookie refresh (not listening to fetch abort).
+  state.request.mockImplementation(() => new Promise(() => {}));
+  try {
+    mount();
+    expect(screen.getByRole('status', { name: 'Đang tải danh sách cơ sở' })).toBeVisible();
+    await act(async () => deadline.abort());
+    expect(await screen.findByText(/Máy chủ phản hồi danh sách cơ sở quá lâu/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeVisible();
+  } finally {
+    timeout.mockRestore();
+  }
+});
 
 it('requires an explicit source for top-level copy and loads source options beyond the filtered page', async () => {
   mount();

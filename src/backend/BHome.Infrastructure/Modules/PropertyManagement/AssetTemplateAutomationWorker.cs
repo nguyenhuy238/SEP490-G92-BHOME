@@ -13,6 +13,9 @@ internal sealed class AssetTemplateAutomationWorker(IServiceScopeFactory scopes,
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // First-run asset synchronization is background work, not an API
+        // readiness prerequisite.
+        await Task.Yield();
         if (!configuration.GetValue<bool>("OwnerSetup:AssetSyncEnabled") || jobs.Value.Enabled) return;
         while (!stoppingToken.IsCancellationRequested)
         {

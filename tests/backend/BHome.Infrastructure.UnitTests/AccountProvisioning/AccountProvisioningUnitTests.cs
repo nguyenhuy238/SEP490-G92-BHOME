@@ -238,14 +238,21 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
         Assert.Equal(1, await world.AuditCountAsync("AccountInvitationCreated"));
     }
 
-    [Fact(DisplayName = "UTC11 - InviteStaffAsync: staff1 da kich hoat (EmailConfirmed) -> 409 account_not_eligible_for_invitation, khong gui")]
-    public async Task UTC11_InviteStaffAsync_AlreadyActivated_Rejected()
+    [Fact(DisplayName = "UTC11 - InviteStaffAsync: Staff da kich hoat nhan lien ket reset dung mot lan va khong thay mat khau cho den khi xac nhan")]
+    public async Task UTC11_InviteStaffAsync_AlreadyActivated_OffersOneTimePasswordReset()
     {
         await world.AddUserAsync(Staff1Id, "staff1@gmail.com", Roles.Staff, "Staff123456@", emailConfirmed: true);
 
-        await AssertRejected(() => Invitations.InviteStaffAsync(Staff1Id, default), 409, "account_not_eligible_for_invitation");
-
-        Assert.Empty(world.Email.Sent);
+        var result = await Invitations.InviteStaffAsync(Staff1Id, default);
+        Assert.Equal("AcceptedByProvider", result.DeliveryState);
+        var message = Assert.Single(world.Email.Sent, item => item.Destination == "staff1@gmail.com");
+        var manager = world.Get<UserManager<ApplicationUser>>();
+        var staff = (await manager.FindByIdAsync(Staff1Id.ToString()))!;
+        Assert.True(await manager.CheckPasswordAsync(staff, "Staff123456@"));
+        Assert.True(await world.Get<IPasswordService>().ResetAsync(staff.Email!, message.Token, ValidPassword, default));
+        Assert.False(await world.Get<IPasswordService>().ResetAsync(staff.Email!, message.Token, ValidPassword, default));
+        Assert.True(await manager.CheckPasswordAsync((await manager.FindByIdAsync(Staff1Id.ToString()))!, ValidPassword));
+        Assert.Equal(1, await world.AuditCountAsync("PasswordResetRequested"));
     }
 
     // ===================== InviteAsync(Guid residentId, TenantInvitationRequest request) =====================

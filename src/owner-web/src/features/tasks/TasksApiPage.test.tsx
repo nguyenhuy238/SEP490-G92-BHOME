@@ -215,3 +215,60 @@ it('keeps task status, due date and review action visible in the compact table',
   fireEvent.click(within(row).getByRole('button', { name: 'Xem chi tiết' }));
   expect(await screen.findByRole('button', { name: 'Nghiệm thu' })).toBeVisible();
 });
+
+it('shows Staff-completed move-in inventory and linked BF-07 incident with no Owner approval', async () => {
+  const base = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation((path: string, init?: RequestInit) => {
+    if (path === '/api/v1/operational-tasks/task')
+      return Promise.resolve({
+        ...task,
+        kind: 'MoveInInventory',
+        status: 'Completed',
+        title: 'Kiểm kê P.101',
+      });
+    if (path === '/api/v1/operational-tasks/task/move-in-inventory')
+      return Promise.resolve({
+        taskId: 'task',
+        contractId: 'contract',
+        locationId: 'location',
+        roomId: 'room',
+        status: 'Completed',
+        version: 5,
+        completedAt: '2026-11-18T05:00:00Z',
+        items: [
+          {
+            id: 'item-1',
+            assetId: 'asset-1',
+            name: 'Giường đơn',
+            expectedQuantity: 2,
+            actualQuantity: 2,
+            condition: 'Good',
+            notes: '',
+            evidenceIds: [],
+            incidentId: null,
+          },
+          {
+            id: 'item-2',
+            assetId: 'asset-2',
+            name: 'Bàn học',
+            expectedQuantity: 2,
+            actualQuantity: 1,
+            condition: 'Missing',
+            notes: 'Thiếu một bàn',
+            evidenceIds: [],
+            incidentId: 'incident-1',
+          },
+        ],
+      });
+    return base(path, init);
+  });
+  mount('/operational-tasks?taskId=task');
+  const drawer = await screen.findByRole('dialog', { name: 'Chi tiết công việc' });
+  expect(await within(drawer).findByText('Báo cáo kiểm kê trước bàn giao')).toBeInTheDocument();
+  expect(within(drawer).getByText(/2\/2 loại đã kiểm tra/)).toBeInTheDocument();
+  expect(within(drawer).getByText(/Loại:\s*Kiểm kê tài sản trước bàn giao/)).toBeInTheDocument();
+  expect(within(drawer).queryByRole('button', { name: 'Nghiệm thu' })).not.toBeInTheDocument();
+  fireEvent.click(within(drawer).getByText('Bàn học'));
+  const incident = await within(drawer).findByRole('link', { name: 'Xem báo cáo sự cố BF-07' });
+  expect(incident).toHaveAttribute('href', '/incidents?locationId=location&incidentId=incident-1');
+});

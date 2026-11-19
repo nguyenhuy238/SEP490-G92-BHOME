@@ -60,7 +60,9 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         await using (var cmd = await sql.Command("""
             SELECT id,(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1 FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'recordType'='ChannelDelivery'
               AND (NOT @authenticationOnly OR event_data ? 'protectedAuthenticationEmail' OR event_data->>'eventType' IN
-                ('PASSWORD_CHANGED','PASSWORD_RESET_COMPLETED','ACCOUNT_ACTIVATED','ACCOUNT_DEACTIVATED','ACCOUNT_SETUP_COMPLETED','ACCOUNT_ACCESS_CHANGED','ACCOUNT_LOCKED'))
+                ('PASSWORD_CHANGED','PASSWORD_RESET_COMPLETED','ACCOUNT_ACTIVATED','ACCOUNT_DEACTIVATED','ACCOUNT_SETUP_COMPLETED','ACCOUNT_ACCESS_CHANGED','ACCOUNT_LOCKED',
+                 'STAFF_ASSIGNMENT_CREATED','STAFF_ASSIGNMENT_UPDATED','STAFF_ASSIGNMENT_CANCELLED','STAFF_ASSIGNMENT_REMOVED',
+                 'STAFF_ASSIGNMENT_ACTIVATED','STAFF_ASSIGNMENT_ENDED'))
               AND ((delivery_status='Pending' AND next_delivery_at<=@now) OR (delivery_status='Processing' AND locked_until<=@now))
             ORDER BY event_at,id LIMIT 50
             """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly)))
@@ -157,7 +159,17 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                             var destinations = new List<(string Id, string Value)>();
                             if (claim.Channel == "EMAIL")
                             {
-                                var email = auth?.Destination ?? await sql.Scalar<string>("SELECT email FROM users WHERE id=@id AND email_confirmed AND (is_active OR @security)", t, ("id", claim.Recipient), ("security", notice.Category == "Account"));
+                                // Owner-provisioned Staff may still be completing their invitation.
+                                // Assignment notice is safe to send to the account's stored address;
+                                // all other regular notices still require confirmed email.
+                                var assignmentNotice = claim.Role == "Staff" && notice.EventType is
+                                    ("STAFF_ASSIGNMENT_CREATED" or "STAFF_ASSIGNMENT_UPDATED" or
+                                    "STAFF_ASSIGNMENT_CANCELLED" or "STAFF_ASSIGNMENT_REMOVED" or
+                                    "STAFF_ASSIGNMENT_ACTIVATED" or "STAFF_ASSIGNMENT_ENDED");
+                                var email = auth?.Destination ?? await sql.Scalar<string>("""
+                                    SELECT email FROM users WHERE id=@id AND (email_confirmed OR (@assignment AND 'Staff'=ANY(roles)))
+                                      AND (is_active OR (@security AND NOT @assignment))
+                                    """, t, ("id", claim.Recipient), ("security", notice.Category == "Account"), ("assignment", assignmentNotice));
                                 if (!EmailOptions.ValidAddress(email)) throw new ChannelDeliveryException("email_recipient_unavailable");
                                 destinations.Add(("email", email!));
                             }
