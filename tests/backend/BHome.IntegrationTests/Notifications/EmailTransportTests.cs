@@ -12,6 +12,23 @@ namespace BHome.IntegrationTests.Notifications;
 
 public sealed class EmailTransportTests
 {
+    [Fact]
+    public void ExistingSmtpWithoutAllowlistReportsTheExactMissingKeyAndMigrationCommand()
+    {
+        using var factory = new ApiFactory();
+        using var host = factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Email:Enabled"] = "true", ["Email:Username"] = "sender@example.invalid",
+            ["Email:FromEmail"] = "sender@example.invalid", ["Email:AppPassword"] = "SYNTHETIC_PRIVATE_PASSWORD",
+            ["Email:TestRecipient"] = "existing-test@example.invalid"
+        })));
+        var error = Assert.Throws<OptionsValidationException>(() => host.CreateClient());
+        Assert.Single(error.Failures);
+        Assert.Contains("Email:AllowedRecipients:0", error.Message);
+        Assert.Contains("Initialize-LocalEmail.ps1", error.Message);
+        Assert.DoesNotContain("SYNTHETIC_PRIVATE_PASSWORD", error.Message);
+        Assert.DoesNotContain("existing-test@example.invalid", error.Message);
+    }
     [Theory]
     [InlineData("http://localhost:5173/accept-invitation", "#")]
     [InlineData("http://localhost:5173/reset-password", "#")]

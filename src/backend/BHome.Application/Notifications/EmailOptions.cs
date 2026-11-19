@@ -20,9 +20,13 @@ public sealed class EmailOptions
     public string[] AllowedRecipients { get; set; } = [];
 
     public bool LocalCapture => DeliveryMode == "Capture" && Host is "localhost" or "127.0.0.1" or "::1";
-    public bool ValidForEnvironment(string environment) => Valid() && (!Enabled ||
-        (DeliveryMode == "Capture" ? LocalCapture && environment is "Development" or "Testing" :
-            environment is not ("Development" or "Testing" or "Staging") || AllowedRecipients.Length > 0));
+    public bool CaptureAllowed(string environment) => !Enabled || DeliveryMode != "Capture" ||
+        LocalCapture && environment is "Development" or "Testing";
+
+    public bool RecipientsConfigured(string environment) => !Enabled || DeliveryMode != "Smtp" ||
+        environment is not ("Development" or "Testing" or "Staging") || AllowedRecipients.Length > 0;
+
+    public bool ValidForEnvironment(string environment) => Valid() && CaptureAllowed(environment) && RecipientsConfigured(environment);
 
     public bool RecipientAllowed(string destination) => AllowedRecipients.Length == 0 ||
         AllowedRecipients.Contains(destination, StringComparer.OrdinalIgnoreCase);
