@@ -190,3 +190,16 @@ Kết quả kiểm tra bổ sung thực sự đã chạy:
 
 Phiên API kiểm tra đã đóng, không dừng API/debugger có sẵn. Cần restart Visual Studio để process mới
 nạp cấu hình đã sửa. Kiểm tra từ máy phát triển không thay thế E2E trên iPhone hoặc gửi Gmail thật.
+
+## Bổ sung: người nhận lời mời bị allowlist chặn (19/11/2026)
+
+Hàng đợi Staff ghi nhận `PermanentlyFailed` với mã `email_recipient_not_allowed`.
+Lời mời do Owner thực hiện nay kiểm tra chính sách người nhận trước khi đổi grant hoặc ghi email
+vào hàng đợi; địa chỉ bị chặn trả HTTP 503 với mã này và thông báo tiếng Việt trên Owner Web.
+Luồng khôi phục mật khẩu công khai giữ nguyên phản hồi tổng quát để tránh lộ tài khoản.
+
+Release build PASS; 48 test backend gồm regression không đổi grant/hàng đợi khi bị chặn,
+retry sau khi cho phép và khôi phục mật khẩu PASS. Staff UI 12 tests, typecheck và lint PASS
+(lint còn warning có sẵn ở DigitalSigningPage.test.tsx). Kiểm tra kết nối/xác thực SMTP không gửi thư PASS.
+Địa chỉ đang thử đã được thêm riêng vào Development user-secrets; dữ liệu này không nằm trong Git.
+Các lần gửi cũ đã thất bại không tự chạy lại. Chưa xác nhận một thư mới đã đến inbox người nhận.

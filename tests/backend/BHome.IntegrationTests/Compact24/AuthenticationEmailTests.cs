@@ -9,11 +9,39 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace BHome.IntegrationTests.Compact24;
 
 public sealed partial class Compact24NotificationMvpTests
 {
+    [CompactPostgresFact]
+    public async Task OwnerInvitationRejectsBlockedRecipientBeforeChangingGrantOrQueueAndAllowsApprovedRetry()
+    {
+        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
+        using var owner = await Client(w.Owner, host);
+        var email = $"blocked-{Guid.NewGuid():N}@example.invalid";
+        var created = await owner.PostAsJsonAsync("/api/v1/staff", new BHome.Application.Operations.StaffCreate(email,
+            "Synthetic allowlist staff", null, Password, new(null, "PartTime", Today, null, null, null, "Active")));
+        created.EnsureSuccessStatusCode(); var staff = (await created.Content.ReadFromJsonAsync<BHome.Application.Operations.StaffView>())!;
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var before = await db.Database.SqlQuery<string>($"SELECT reset_token_hash AS \"Value\" FROM users WHERE id={staff.UserId}").SingleAsync();
+        var path = $"/api/v1/staff/{staff.UserId}/invitation";
+        using var anonymous = host.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync(path, null)).StatusCode);
+        var blocked = await owner.PostAsync(path, null);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, blocked.StatusCode);
+        Assert.Equal("email_recipient_not_allowed", System.Text.Json.JsonDocument.Parse(await blocked.Content.ReadAsStringAsync()).RootElement.GetProperty("code").GetString());
+        Assert.Equal(before, await db.Database.SqlQuery<string>($"SELECT reset_token_hash AS \"Value\" FROM users WHERE id={staff.UserId}").SingleAsync());
+        Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE event_data ? 'protectedAuthenticationEmail' AND event_data->>'recipient'={staff.UserId.ToString()}) AS \"Value\"").SingleAsync());
+        Assert.Empty(probe.Messages);
+        host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [email];
+        (await owner.PostAsync(path, null)).EnsureSuccessStatusCode();
+        await SendEmail(host, await AuthenticationDelivery(host, staff.UserId));
+        Assert.Equal(email, Assert.Single(probe.Messages).Destination);
+    }
+
     private WebApplicationFactory<Program> AuthenticationHost(SmtpProbe probe) => EmailHost(probe).WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) =>
         c.AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -144,6 +172,7 @@ public sealed partial class Compact24NotificationMvpTests
         var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
         using var owner = await Client(w.Owner, host);
         var email = Guid.NewGuid().ToString("N") + "@example.invalid";
+        host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [email];
         var created = await owner.PostAsJsonAsync("/api/v1/staff", new BHome.Application.Operations.StaffCreate(email, "Synthetic invited staff", null, Password,
             new(null, "PartTime", Today, null, null, null, "Active")));
         created.EnsureSuccessStatusCode(); var staff = (await created.Content.ReadFromJsonAsync<BHome.Application.Operations.StaffView>())!;
@@ -221,6 +250,7 @@ public sealed partial class Compact24NotificationMvpTests
         await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET user_id=NULL,contact_email={"invited-" + Guid.NewGuid().ToString("N") + "@example.invalid"} WHERE id={w.Residents[0]}");
         var email = await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == w.Residents[0]).Select(r => r.ContactEmail).SingleAsync();
+        host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [email!];
         using var staff = await Client(w.Staff, host);
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.PostAsJsonAsync($"/api/v1/residents/{w.Residents[0]}/invitation", new TenantInvitationRequest(email!))).StatusCode);
         using var owner = await Client(w.Owner, host);
@@ -249,6 +279,7 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
         var email = "invited-" + Guid.NewGuid().ToString("N") + "@example.invalid";
+        host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [email];
         await using var scope = host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE residents SET user_id=NULL,contact_email={email} WHERE id={w.Residents[0]}");
