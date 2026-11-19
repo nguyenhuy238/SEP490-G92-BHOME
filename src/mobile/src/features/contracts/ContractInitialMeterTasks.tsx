@@ -3,7 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { Text } from 'react-native-paper';
 import type { ContractView } from '../../../../../packages/client-core/src/contracts';
 import type { MeterTask } from '../../../../../packages/client-core/src/meter';
-import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
+import { Action, Box, Heading, Row, Pill, ui } from '../../components/WorkspaceKit';
 import { useWorkspace } from '../workspace/WorkspaceProvider';
 import { useSession } from '../../lib/SessionProvider';
 import { conciseMessage } from '../../lib/toast';
@@ -12,7 +12,10 @@ import { errorMessage } from '../../lib/api';
 type TaskResult = { key: string; tasks: MeterTask[]; error: string };
 
 /** Move-in baselines belong to the contract, including when its meters were used before. */
-export function ContractInitialMeterTasks({ contract }: { contract: ContractView }) {
+export function ContractInitialMeterTasks({
+  contract,
+  integrated = false,
+}: { contract: ContractView; integrated?: boolean }) {
   const { api, session } = useSession();
   const { staffLocationId } = useWorkspace();
   const [revision, setRevision] = useState(0);
@@ -72,12 +75,12 @@ export function ContractInitialMeterTasks({ contract }: { contract: ContractView
   }, [allowed, api, contract.id, contract.locationId, contract.roomId, key, revision]);
 
   const current = allowed && result?.key === key ? result : null;
-  return (
-    <Box>
-      <Heading
+  const content = (
+    <>
+      {!integrated && <Heading
         title="Chụp chỉ số khởi tạo hợp đồng"
         detail="Chụp ảnh thực tế và xác nhận lại cả công tơ đang dùng tiếp. Ảnh và chỉ số của hợp đồng cũ không được dùng thay thế."
-      />
+      />}
       {!staffLocationId && <Text>Chọn cơ sở được phân công trên trang chủ để xem nhiệm vụ.</Text>}
       {!!staffLocationId && staffLocationId !== contract.locationId && (
         <Text>Hãy chọn đúng cơ sở của hợp đồng trên trang chủ để xem nhiệm vụ.</Text>
@@ -91,8 +94,15 @@ export function ContractInitialMeterTasks({ contract }: { contract: ContractView
           const matches = current.tasks.filter((task) => task.utilityType === type);
           const task = matches.length === 1 ? matches[0] : null;
           return (
-            <Box key={type}>
-              <Text>{`Chỉ số khởi tạo ${label.toLowerCase()}`}</Text>
+            <React.Fragment key={type}>
+              {integrated ? (
+                <Row spread>
+                  <Text>{label}</Text>
+                  <Pill tone={task?.status === 2 ? 'green' : 'amber'}>
+                    {task?.status === 2 ? 'Đã xác nhận' : 'Chưa xác nhận'}
+                  </Pill>
+                </Row>
+              ) : <Text>{`Chỉ số khởi tạo ${label.toLowerCase()}`}</Text>}
               {matches.length > 1 && (
                 <Text style={ui.red}>Có nhiều nhiệm vụ cho cùng hợp đồng. Cần Owner kiểm tra.</Text>
               )}
@@ -101,13 +111,13 @@ export function ContractInitialMeterTasks({ contract }: { contract: ContractView
               )}
               {task && (
                 <>
-                  <Text>
+                  {!integrated && <Text>
                     {task.status === 2
                       ? 'Đã chụp và xác nhận'
                       : task.status === 3
                         ? 'Nhiệm vụ đã hủy'
                         : 'Chờ chụp và xác nhận'}
-                  </Text>
+                  </Text>}
                   {task.status !== 3 && (
                     <Action
                       secondary={task.status === 2}
@@ -122,14 +132,15 @@ export function ContractInitialMeterTasks({ contract }: { contract: ContractView
                   )}
                 </>
               )}
-            </Box>
+            </React.Fragment>
           );
         })}
       {allowed && (
         <Action secondary onPress={() => setRevision((value) => value + 1)}>
-          Tải lại nhiệm vụ khởi tạo
+          {integrated ? 'Cập nhật trạng thái điện nước' : 'Tải lại nhiệm vụ khởi tạo'}
         </Action>
       )}
-    </Box>
+    </>
   );
+  return integrated ? content : <Box>{content}</Box>;
 }

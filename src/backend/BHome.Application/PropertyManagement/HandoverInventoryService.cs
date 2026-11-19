@@ -46,6 +46,21 @@ public sealed partial class RoomInventoryReviewService : IHandoverInventory
     public async Task<HandoverInventory> PrepareAsync(Guid roomId, CancellationToken t) =>
         await HandoverInventory(await HandoverContext(roomId, t), t);
 
+    public async Task<HandoverInventory> PrepareForContractAsync(Guid roomId, Guid? tenantUserId, CancellationToken t)
+    {
+        // Normal room-inventory operations are Owner/Staff-only. Tenant may
+        // inspect the *same* scoped snapshot only through an authorized
+        // contract, without exposing the underlying Owner configuration APIs.
+        var location = await Store.RoomLocationAsync(roomId, t)
+            ?? throw new PropertyException(404, "resource_not_found");
+        if (!await Access.CanAccessAsync(new(location, tenantUserId),
+                [Roles.Owner, Roles.Staff, Roles.Tenant], t))
+            throw new PropertyException(404, "resource_not_found");
+        var context = (await SnapshotAsync(location, true, [], t)).Rooms.SingleOrDefault(r => r.Room.Id == roomId)
+            ?? throw new PropertyException(404, "resource_not_found");
+        return await HandoverInventory(context, t);
+    }
+
     public async Task<HandoverInventory> ConfirmNoAssetsAsync(Guid roomId, RoomNoAssetsConfirmation input, CancellationToken t)
     {
         var location = await RoomScope(roomId, true, t);

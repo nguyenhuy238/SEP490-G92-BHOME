@@ -184,6 +184,9 @@ export function MeterTasksScreen() {
     if (!assignedLocation) return [];
     const raw = currentData ?? [];
     return raw.filter((task) => {
+      // Main move-in Initial readings are steps within the contract handover job.
+      // Keep their exact /meter?taskId route available from ContractInitialMeterTasks.
+      if (task.purpose === 0 && !!task.contractId) return false;
       if (task.locationId && task.locationId !== assignedLocation.id) return false;
       if (!task.locationId && task.location && task.location !== assignedLocation.label)
         return false;

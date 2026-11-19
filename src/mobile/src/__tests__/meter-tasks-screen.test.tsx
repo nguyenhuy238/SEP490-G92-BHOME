@@ -273,7 +273,7 @@ it('lets Staff switch between every assigned Location and scopes room/task reque
   await screen.findByText('Phòng 101');
 
   const locationPicker = screen.getByLabelText('Cơ sở') as HTMLSelectElement;
-  expect([...locationPicker.options].map((option) => option.text)).toEqual([
+  expect(Array.from(locationPicker.options, (option) => option.text)).toEqual([
     sampleLocation.label,
     secondLocation.label,
   ]);
@@ -462,6 +462,21 @@ it('displays 0/2 đã ghi, 1/2 đã ghi, and Hoàn thành progress badges with c
     pathname: '/meter',
     params: { taskId: 'task-e-101' },
   });
+});
+
+it('keeps contract-linked Initial readings inside move-in handover while retaining ordinary meter jobs', async () => {
+  tasksResponse = [
+    { ...baseElectric, id: 'initial-contract-electric', purpose: 0, contractId: 'main-contract-1', room: '102', roomId: 'room-102' },
+    { ...baseWater, id: 'initial-contract-water', purpose: 0, contractId: 'main-contract-1', room: '102', roomId: 'room-102' },
+    { ...baseElectric, id: 'initial-standalone', purpose: 0, contractId: undefined, room: '103', roomId: 'room-103' },
+    { ...baseWater, id: 'periodic-water', purpose: 1, room: '101', roomId: 'room-101' },
+  ];
+  render(<MeterTasksScreen />);
+  await screen.findByText('Phòng được phân công (2)');
+  expect(screen.getByText('Phòng 103')).toBeTruthy();
+  expect(screen.getByText('Phòng 101')).toBeTruthy();
+  expect(screen.queryByText('Phòng 102')).toBeNull();
+  expect(screen.queryByText('initial-contract-electric')).toBeNull();
 });
 
 it('shows Quá hạn indicator only when a pending task is actually overdue', async () => {

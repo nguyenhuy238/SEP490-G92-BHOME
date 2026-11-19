@@ -16,6 +16,20 @@ namespace BHome.Infrastructure.Contracts;
 internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOperationalTaskRepository tasks, CompactNotificationWriter? inbox = null) : IContractHandoverRepository
 {
     private static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
+    public async Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId,
+        Guid? staffUserId, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return null;
+        var task = await db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(x =>
+            x.Id == Key($"contract-move-in:{contractId:N}") && x.ContractId == contractId &&
+            x.TargetRoomId == roomId && x.Kind == OperationalTaskKind.AdHoc, t);
+        if (task is null) return null;
+        // Expose the native task status, with a separate permission-safe
+        // indication of whether this Staff actor may inspect at this moment.
+        return new HandoverMoveInTask(task.Id, task.Status.ToString(), task.Version,
+            task.Status == MeterTaskStatus.InProgress && staffUserId is not null &&
+            task.AssignedStaffUserId == staffUserId);
+    }
     public async Task EnsureMoveInTaskAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
@@ -89,7 +103,11 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (inbox is not null)
             foreach (var party in new[] { (c.TenantUserId, Roles.Tenant), (responsible?.StaffUserId, Roles.Staff), ((Guid?)c.OwnerSignerId, Roles.Owner) }.Where(p => p.Item1 is not null).Distinct())
                 await inbox.Emit(party.Item1!.Value, party.Item2, c.Room.LocationId, $"move-in:{c.Id:N}:{party.Item1:N}", "MOVE_IN_PENDING", "Contract",
-                    "Bàn giao nhận phòng chưa hoàn tất", "Hợp đồng đã kích hoạt. Theo dõi kiểm tra và xác nhận bàn giao trong hợp đồng.", "Contract", c.Id, t);
+                    "Bàn giao nhận phòng chưa hoàn tất",
+                    c.Status == ContractStatus.Active
+                        ? "Hợp đồng đã kích hoạt. Theo dõi kiểm tra và xác nhận bàn giao trong hợp đồng."
+                        : "Biên bản bàn giao nháp đã được tạo. Có thể chuẩn bị kiểm kê và chụp chỉ số điện nước ban đầu; việc vào ở chính thức vẫn phụ thuộc các bước duyệt hợp đồng.",
+                    "Contract", c.Id, t);
     }
     public async Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {

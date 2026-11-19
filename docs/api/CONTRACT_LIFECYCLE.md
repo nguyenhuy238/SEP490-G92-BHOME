@@ -28,6 +28,8 @@ Staff Mobile mở **Bàn giao nhận phòng → Chỉ số khởi tạo hợp đ
 
 `GET /api/v1/contracts/{id}/handover/choices` chỉ trả chỉ số Initial `Completed` có ảnh hợp lệ và `ContractId` trùng hợp đồng đang bàn giao. Khi **lập/sửa** biên bản mới không được lấy lại ảnh hoặc chỉ số Periodic/Initial của hợp đồng khác hay mốc cũ của công tơ. Biên bản **đã lưu từ trước** vẫn được phép Staff hoàn tất trên đúng phiên bản Tenant đã xác nhận nếu đọc lại được bằng chứng cũ với hash và dữ liệu bất biến; điều này không mở lại quyền dùng ảnh cũ để lưu biên bản mới. Tenant vẫn xác nhận đúng phiên bản biên bản, sau đó Staff mới hoàn tất nhiệm vụ. Không có endpoint hay migration mới; `GET /api/v1/capture/meter-tasks` tiếp tục trả `contractId` để client lọc. Các hợp đồng đã Active trước khi thay đổi này không tự động backfill nhiệm vụ: cần phương án dữ liệu riêng được kiểm tra trước khi áp dụng cho dữ liệu lịch sử.
 
+**Cập nhật 19/11/2026 — Draft bàn giao ngay khi tạo Main:** đối với hợp đồng Main **mới**, nhiệm vụ bàn giao và Initial meter được tạo ở transaction tạo hợp đồng (trước Active), cùng biên bản `handover.preparation`; activation gọi lại với khóa deterministic nên không tạo trùng. Nhiệm vụ không có nghĩa đã chụp/xác nhận thành công. Quy tắc xác minh payment/signature để Active và `RoomStatus=Occupied` vẫn giữ nguyên; Owner Ready và Tenant xác nhận theo quy trình riêng. Các hợp đồng lịch sử đã có `ContractHandover` dùng legacy workflow. Chi tiết: [Move-in Handover Draft](MOVE_IN_HANDOVER_DRAFT.md).
+
 Truy vết: BF-03B/BF-04A, FE-03, UC-15/16/19, GBR-01/02/04/18, DBR-02/03.
 Các mutation, state, idempotency và giới hạn provider/ledger giữ theo
 [bàn giao backend](../development/CONTRACT_LIFECYCLE_DELIVERY.md).

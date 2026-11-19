@@ -67,7 +67,8 @@ public sealed partial class ContractService
             using var image = new MemoryStream(); await storage.CopyToAsync(current.EvidenceObjectKey, image, t);
             if (FileHash(image.ToArray()) != current.EvidenceHash) throw ContractException.Conflict("handover_evidence_integrity_failed");
         }
-        foreach (var evidenceId in snapshot.EvidenceIds.Concat(snapshot.Assets.SelectMany(a => a.EvidenceIds ?? [])).Distinct())
+        foreach (var evidenceId in snapshot.EvidenceIds.Concat(snapshot.Assets.SelectMany(a => a.EvidenceIds ?? []))
+                     .Concat((snapshot.RoomChecks ?? []).SelectMany(check => check.EvidenceIds)).Distinct())
         {
             var f = await Workflow.FileAsync(c.Id, evidenceId, t) ?? throw ContractException.Invalid("invalid_handover_evidence");
             if (f.Kind != ContractFileKind.HandoverEvidence) throw ContractException.Invalid("invalid_handover_evidence");
@@ -77,6 +78,7 @@ public sealed partial class ContractService
     public Task<HandoverView> SaveHandoverAsync(Guid id, HandoverInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Staff], async c =>
     {
         HandoverActive(c);
+        await RequireLegacyHandoverCompatibility(c, t);
         if (c.PreviousContractId is not null && (await Baseline(c, t)).Handover is not null) throw ContractException.Conflict("renewal_inherits_handover_baseline");
         var h = await Handovers.GetAsync(id, t);
         if (await Replay(key, "handover-save", new { id, x }, t) is not null) return HandoverView(h ?? throw ContractException.Missing());
@@ -110,7 +112,8 @@ public sealed partial class ContractService
     }, t);
     public Task<HandoverView> ReviewHandoverAsync(Guid id, HandoverOwnerReview x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
     {
-        HandoverActive(c); var h = await Handovers.GetAsync(id, t) ?? throw ContractException.Missing();
+        HandoverActive(c); await RequireLegacyHandoverCompatibility(c, t);
+        var h = await Handovers.GetAsync(id, t) ?? throw ContractException.Missing();
         if (await Replay(key, "handover-owner-review", new { id, x }, t) is not null) return HandoverView(h);
         if (h.Version != x.Version || h.Status == ContractHandoverStatus.Confirmed) throw ContractException.Conflict("handover_version_changed");
         var reason = HandoverText(x.Reason, 2000); var plan = HandoverText(x.HandlingPlan, 2000);
@@ -127,7 +130,8 @@ public sealed partial class ContractService
     }, t);
     public Task<HandoverView> DecideHandoverAsync(Guid id, HandoverDecision x, Guid key, bool dispute, bool staff, CancellationToken t) => Mutate(id, staff ? [Roles.Staff] : [Roles.Tenant], async c =>
     {
-        HandoverActive(c); var h = await Handovers.GetAsync(id, t) ?? throw ContractException.Missing();
+        HandoverActive(c); await RequireLegacyHandoverCompatibility(c, t);
+        var h = await Handovers.GetAsync(id, t) ?? throw ContractException.Missing();
         var operation = staff ? "handover-staff" : dispute ? "handover-dispute" : "handover-tenant";
         if (await Replay(key, operation, new { id, x }, t) is not null) return HandoverView(h);
         if (h.Version != x.Version) throw ContractException.Conflict("handover_version_changed");
@@ -169,6 +173,7 @@ public sealed partial class ContractService
         return await Mutate(id, [Roles.Staff], async c =>
         {
             HandoverActive(c);
+            await RequireLegacyHandoverCompatibility(c, t);
             if ((await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Count >= 200) throw ContractException.Conflict("handover_evidence_limit");
             var f = new ContractDocumentFile { ContractId = id, Kind = ContractFileKind.HandoverEvidence, SnapshotHash = c.SnapshotHash, DevelopmentOnly = c.IsDevelopmentDemo, ContentType = type, Length = bytes.Length, FileHash = FileHash(bytes), RecordedByUserId = Actor, RecordedAt = clock.GetUtcNow() };
             f.ObjectKey = $"contracts/{id:N}/handover/{f.Id:N}"; await files.PutAsync(c.RoomId, f.ObjectKey, bytes, type, t); repository.Add(f); Audit("ContractHandoverEvidenceAdded", id); return new ContractId(f.Id);

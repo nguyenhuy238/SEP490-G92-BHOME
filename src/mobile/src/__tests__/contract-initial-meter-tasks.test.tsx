@@ -94,6 +94,32 @@ it('loads all room pages, shows only this contract’s fresh initial readings, a
   expect(router.push).toHaveBeenCalledWith({ pathname: '/meter', params: { taskId: 'water-new' } });
 });
 
+it.each(['PendingSigning', 'PendingActivation'])(
+  'opens newly created Main initial tasks while the contract is %s',
+  async (status) => {
+    request.mockResolvedValue([
+      task('electric-before-active', 0),
+      task('water-before-active', 1),
+      task('old-electric', 0, { contractId: 'contract-previous', status: 2 }),
+      task('periodic', 0, { purpose: 1 }),
+    ]);
+    render(<ContractInitialMeterTasks contract={{ ...contract, status }} />);
+    const electricity = await screen.findByRole('button', { name: 'Chụp chỉ số điện' });
+    const water = screen.getByRole('button', { name: 'Chụp chỉ số nước' });
+    fireEvent.click(electricity);
+    fireEvent.click(water);
+    expect(router.push).toHaveBeenNthCalledWith(1, {
+      pathname: '/meter',
+      params: { taskId: 'electric-before-active' },
+    });
+    expect(router.push).toHaveBeenNthCalledWith(2, {
+      pathname: '/meter',
+      params: { taskId: 'water-before-active' },
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+  },
+);
+
 it('blocks the request when Staff is viewing a contract outside their selected Location', () => {
   locationId = 'location-2';
   render(<ContractInitialMeterTasks contract={contract} />);

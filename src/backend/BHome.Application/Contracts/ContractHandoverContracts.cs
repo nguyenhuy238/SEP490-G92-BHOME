@@ -32,7 +32,9 @@ public sealed record HandoverSnapshot(DateOnly Date, string RoomNumber, string R
     string? InventoryToken = null, string? InventoryState = null, bool NoAssetsConfirmed = false,
     HandoverOwnerAcceptance? OwnerAcceptance = null, HandoverFeedback? TenantFeedback = null,
     string? MissingBaselineReason = null, bool OtherTenantsRemain = false,
-    IReadOnlyDictionary<Guid, string>? EvidenceHashes = null, string? ProposedCompensation = null);
+    IReadOnlyDictionary<Guid, string>? EvidenceHashes = null, string? ProposedCompensation = null,
+    HandoverRoomCheck[]? RoomChecks = null, HandoverAccessItem[]? AccessItems = null,
+    HandoverOutstandingIssue[]? OutstandingIssues = null);
 public sealed record HandoverView(int Version, string Status, HandoverSnapshot Snapshot, int? TenantConfirmedVersion,
     DateTimeOffset? TenantConfirmedAt, DateTimeOffset? StaffConfirmedAt, Guid? SourceContractId = null);
 public sealed record HandoverHistoryView(int Version, string Action, Guid ActorId, DateTimeOffset OccurredAt, string Note, HandoverSnapshot Snapshot);
@@ -42,6 +44,10 @@ public sealed record HandoverChoices(IReadOnlyList<HandoverAsset> Assets, IReadO
 public interface IHandoverInventory
 {
     Task<HandoverInventory> PrepareAsync(Guid roomId, CancellationToken t);
+    // The calling contract service has already authorized this specific contract.
+    // Recheck the same Owner/assigned-Staff/own-Tenant scope before exposing
+    // operational asset quantities to Tenant; never expose setup finance data.
+    Task<HandoverInventory> PrepareForContractAsync(Guid roomId, Guid? tenantUserId, CancellationToken t);
     Task MarkForReviewAsync(Guid roomId, Guid contractId, int version, Guid actor, CancellationToken t);
     Task SynchronizeAsync(Guid roomId, Guid contractId, int version, HandoverSnapshot snapshot, Guid actor, CancellationToken t);
 }
@@ -56,6 +62,7 @@ public interface IContractHandoverRepository
     Task<bool> HistoryContainsEvidenceAsync(Guid contractId, Guid evidenceId, CancellationToken t);
     Task<string?> HistoryForReadingAsync(Guid contractId, Guid readingId, CancellationToken t);
     Task EnsureMoveInTaskAsync(Contract contract, Guid actor, DateTimeOffset now, CancellationToken t);
+    Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId, Guid? staffUserId, CancellationToken t);
     Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t);
     Task NotifyAsync(Contract contract, string action, Guid actor, int version, CancellationToken t);
     Task<IReadOnlyList<AssetChangeParty>> ActivePartiesAsync(Guid roomId, CancellationToken t);

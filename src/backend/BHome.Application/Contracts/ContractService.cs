@@ -26,7 +26,8 @@ public sealed partial class ContractService(IContractRepository repository, ICur
     IAnonymousSigningRepository? signingInvitations = null,
     BHome.Application.PaymentsDebt.SePay.SePayOptions? paymentOptions = null,
     IHandoverInventory? handoverInventory = null, IHandoverDocumentRenderer? handoverDocuments = null,
-    ISetupWorkspaceStore? contractSetup = null) : IAdministrativeContractReadiness
+    ISetupWorkspaceStore? contractSetup = null,
+    IHandoverDraftRepository? handoverDrafts = null, IHandoverDraftPdfRenderer? handoverDraftPdf = null) : IAdministrativeContractReadiness
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);

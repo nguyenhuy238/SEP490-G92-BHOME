@@ -1,6 +1,6 @@
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { Image, Platform } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -22,6 +22,8 @@ export function ContractEvidence({
   number,
   label,
   handoverDocumentId,
+  draftHandoverPdf = false,
+  draftHandoverEvidence = false,
   assetChangeId,
 }: {
   api: ContractClient;
@@ -34,13 +36,60 @@ export function ContractEvidence({
   number?: number;
   label?: string;
   handoverDocumentId?: string;
+  draftHandoverPdf?: boolean;
+  draftHandoverEvidence?: boolean;
   assetChangeId?: string;
 }) {
   const [busy, setBusy] = useState(false),
-    [error, setError] = useFeedbackState();
+    [error, setError] = useFeedbackState(),
+    [previewUri, setPreviewUri] = useState('');
   const lock = useRef(false),
-    abort = useRef<AbortController | null>(null);
-  useEffect(() => () => abort.current?.abort(), []);
+    abort = useRef<AbortController | null>(null),
+    previewUrl = useRef<string | null>(null);
+  useEffect(() => () => {
+    abort.current?.abort();
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+  }, []);
+  function closePreview() {
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+    previewUrl.current = null;
+    setPreviewUri('');
+  }
+  async function showDraftImage() {
+    if (Platform.OS !== 'web' || !draftHandoverEvidence || !evidenceId || lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    const controller = new AbortController();
+    abort.current = controller;
+    try {
+      // Authorize on every preview; never embed or expose an object-storage URL.
+      const blob = await api.transport<Blob>(
+        `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/evidence/${encodeURIComponent(evidenceId)}`,
+        { signal: controller.signal },
+        'blob',
+      );
+      if (controller.signal.aborted) return;
+      const magic = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+      const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => magic[i] === byte);
+      const jpeg = magic[0] === 255 && magic[1] === 216 && magic[2] === 255;
+      if (!png && !jpeg) throw new Error('Tệp ảnh bằng chứng không phải PNG hoặc JPEG hợp lệ.');
+      const url = URL.createObjectURL(new Blob([blob], { type: png ? 'image/png' : 'image/jpeg' }));
+      if (controller.signal.aborted) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      closePreview();
+      previewUrl.current = url;
+      setPreviewUri(url);
+    } catch (cause) {
+      if (!controller.signal.aborted)
+        setError(cause instanceof Error && !('status' in cause) ? cause.message : contractError(cause));
+    } finally {
+      lock.current = false;
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  }
   async function download() {
     if (lock.current) return;
     lock.current = true;
@@ -51,7 +100,19 @@ export function ContractEvidence({
     abort.current = controller;
     try {
       if (Platform.OS === 'web') {
-        const blob = handoverDocumentId
+        const blob = draftHandoverEvidence
+          ? await api.transport<Blob>(
+              `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/evidence/${encodeURIComponent(evidenceId!)}`,
+              { signal: controller.signal },
+              'blob',
+            )
+          : draftHandoverPdf
+          ? await api.transport<Blob>(
+              `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/pdf`,
+              { signal: controller.signal },
+              'blob',
+            )
+          : handoverDocumentId
           ? await api.handoverDocument(contractId, handoverDocumentId, controller.signal)
           : assetChangeId
             ? await api.assetChangeEvidence(
@@ -73,7 +134,7 @@ export function ContractEvidence({
         const url = URL.createObjectURL(blob),
           link = document.createElement('a');
         link.href = url;
-        link.download = handoverDocumentId
+        link.download = draftHandoverPdf || handoverDocumentId
           ? 'bien-ban-ban-giao.pdf'
           : pdf
             ? 'hop-dong.pdf'
@@ -85,7 +146,19 @@ export function ContractEvidence({
           setError('Thiết bị chưa hỗ trợ mở hoặc lưu tài liệu.');
           return;
         }
-        const bytes = handoverDocumentId
+        const bytes = draftHandoverEvidence
+          ? await api.transport<Uint8Array>(
+              `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/evidence/${encodeURIComponent(evidenceId!)}`,
+              { signal: controller.signal },
+              'bytes',
+            )
+          : draftHandoverPdf
+          ? await api.transport<Uint8Array>(
+              `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/pdf`,
+              { signal: controller.signal },
+              'bytes',
+            )
+          : handoverDocumentId
           ? await api.handoverDocumentBytes(contractId, handoverDocumentId, controller.signal)
           : assetChangeId
             ? await api.assetChangeEvidenceBytes(
@@ -109,18 +182,18 @@ export function ContractEvidence({
         // Unpredictable app-cache name; never a public URL or a file from the photo library.
         temporary = new File(
           directory,
-          `${randomUUID()}.${pdf || handoverDocumentId ? 'pdf' : bytes[0] === 137 ? 'png' : 'jpg'}`,
+          `${randomUUID()}.${pdf || handoverDocumentId || draftHandoverPdf ? 'pdf' : bytes[0] === 137 ? 'png' : 'jpg'}`,
         );
         temporary.create();
         temporary.write(bytes);
         await Sharing.shareAsync(temporary.uri, {
           mimeType:
-            pdf || handoverDocumentId
+            pdf || handoverDocumentId || draftHandoverPdf
               ? 'application/pdf'
               : bytes[0] === 137
                 ? 'image/png'
                 : 'image/jpeg',
-          dialogTitle: handoverDocumentId
+          dialogTitle: draftHandoverPdf || handoverDocumentId
             ? 'Mở hoặc lưu biên bản bàn giao'
             : pdf
               ? 'Mở hoặc lưu hợp đồng'
@@ -137,16 +210,33 @@ export function ContractEvidence({
   }
   return (
     <>
-      <Button disabled={busy} loading={busy} onPress={() => void download()}>
-        {label ??
-          (readingId
-            ? 'Mở hoặc lưu ảnh chỉ số bàn giao'
-            : previewId
-              ? 'Mở hoặc lưu PDF xem trước'
-              : pdf
-                ? 'Mở hoặc lưu tài liệu ký'
-                : `Mở hoặc lưu ảnh hiện trạng ${number ?? ''}`)}
-      </Button>
+      {draftHandoverEvidence && Platform.OS === 'web' ? (
+        <>
+          <Button disabled={busy} loading={busy} onPress={() => previewUri ? closePreview() : void showDraftImage()}>
+            {previewUri ? 'Đóng ảnh' : (label ?? 'Xem ảnh hiện trạng')}
+          </Button>
+          {previewUri && (
+            <Image
+              source={{ uri: previewUri }}
+              accessibilityLabel={label ?? 'Ảnh bằng chứng bàn giao'}
+              resizeMode="contain"
+              style={{ width: '100%', height: 260 }}
+            />
+          )}
+          <Button disabled={busy} onPress={() => void download()}>Tải ảnh</Button>
+        </>
+      ) : (
+        <Button disabled={busy} loading={busy} onPress={() => void download()}>
+          {label ??
+            (readingId
+              ? 'Mở hoặc lưu ảnh chỉ số bàn giao'
+              : previewId
+                ? 'Mở hoặc lưu PDF xem trước'
+                : pdf
+                  ? 'Mở hoặc lưu tài liệu ký'
+                  : `Mở hoặc lưu ảnh hiện trạng ${number ?? ''}`)}
+        </Button>
+      )}
       {!!error && <Text style={ui.red}>{error}</Text>}
     </>
   );

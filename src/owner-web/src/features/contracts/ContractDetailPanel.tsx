@@ -528,8 +528,13 @@ export function ContractDetailPanel({
         />
       )}
 
-      {c.kind !== 'Holding' && ['Active', 'Terminated', 'Superseded'].includes(c.status) && (
-        <ContractHandoverPanel api={api} id={c.id} />
+      {c.kind !== 'Holding' && (
+        <ContractHandoverPanel
+          api={api}
+          id={c.id}
+          contractStatus={c.status}
+          showDraft={c.kind === 'Main' && !c.previousContractId && !['Cancelled', 'Terminated', 'Expired'].includes(c.status)}
+        />
       )}
       {m && (
         <ChartCard title="Trả phòng và quyết toán" subtitle={text(m.status)}>

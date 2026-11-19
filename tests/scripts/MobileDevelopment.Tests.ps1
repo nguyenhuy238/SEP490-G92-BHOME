@@ -157,6 +157,7 @@ $global:LASTEXITCODE = 2
         if ($ArgumentList[0] -notlike '*Start-ExpoMobile.cjs*') { throw 'Metro must use the checked Expo launcher.' }
         if ($ArgumentList -notcontains '--metro-only') { throw 'Supervisor must not recursively launch another supervisor.' }
         if ($env:EXPO_PUBLIC_DEV_SERVER_ID -ne $global:serverId) { throw 'Missing developer server binding.' }
+        if ($env:EXPO_PUBLIC_API_BASE_URL -ne 'https://localhost:7240') { throw 'Local launcher must ignore a stale public/tunnel API override.' }
         $expectedIp = @('192.168.1.8', '10.33.59.31')[$global:started - 1]
         $expectedHost = if (-not $global:hostnameMode -or $global:noHostname -or -not $global:computerName) { $expectedIp } else { $global:computerName }
         if ($env:EXPO_PUBLIC_DEV_API_BASE_URL -ne "https://${expectedHost}:7240") { throw 'Incorrect API address for this workstation/network.' }
@@ -185,7 +186,10 @@ $global:LASTEXITCODE = 2
     $global:computerName = 'synthetic-pc.local'; $global:serverId = 'SYNTHETIC-CA-A'; $global:modelDownloads = 0; $global:hostnameChecks = 0; $global:metroChecks = 0
     $global:databaseChecks = 0; $global:databaseProfiles = @(); $global:failDatabaseProbe = $false
     $global:addressCalls = 0; $global:prepared = @(); $global:started = 0; $global:stopped = @()
+    $originalPublicApiUrl = $env:EXPO_PUBLIC_API_BASE_URL
+    $env:EXPO_PUBLIC_API_BASE_URL = 'https://stale-tunnel.example.invalid'
     & (Join-Path $testRoot 'scripts/Start-OcrMobileApp.ps1') | Out-Null
+    Assert-Equal $env:EXPO_PUBLIC_API_BASE_URL 'https://stale-tunnel.example.invalid' 'local launcher restores the caller public API setting'
     Assert-Equal ($global:prepared -join ',') '192.168.1.8,10.33.59.31' 'prepare initial and changed IP automatically'
     Assert-Equal $global:started 2 'restart Metro after network change, tolerate temporary disconnect'
     Assert-Equal ($global:stopped -join ',') '901' 'stop only owned old Metro, preserve debugger API'
@@ -342,6 +346,7 @@ $global:LASTEXITCODE = 2
     } finally { $env:ConnectionStrings__Database = $savedConnection; $env:DOTNET_ENVIRONMENT = $savedDatabaseEnvironment }
     Write-Output "PASS $checks mobile network/launcher assertions."
 } finally {
+    if (Get-Variable originalPublicApiUrl -ErrorAction SilentlyContinue) { $env:EXPO_PUBLIC_API_BASE_URL = $originalPublicApiUrl }
     $resolvedTestRoot = [IO.Path]::GetFullPath($testRoot)
     $allowedRoot = [IO.Path]::GetFullPath((Join-Path $repositoryRoot '.tools')) + [IO.Path]::DirectorySeparatorChar
     if (-not $resolvedTestRoot.StartsWith($allowedRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe test cleanup target.' }

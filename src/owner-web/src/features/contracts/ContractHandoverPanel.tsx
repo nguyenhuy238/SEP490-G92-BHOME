@@ -3,7 +3,6 @@ import { Alert, Button, LinearProgress, Stack, TextField, Typography } from '@mu
 import {
   contractError,
   mutationKeys,
-  displayContractDate,
   text,
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
@@ -11,10 +10,30 @@ import { useContractHandover } from '../../../../../packages/client-core/src/use
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { ChartCard } from '../../components/common/PortalUI';
 import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
-import { handoverAssetSummary } from '../../../../../packages/client-core/src/handoverForm';
 import { ContractAssetChangesPanel } from './ContractAssetChangesPanel';
+import { HandoverDocumentPreview } from './HandoverDocumentPreview';
+import { OwnerHandoverDraftPanel } from './OwnerHandoverDraftPanel';
 
-export function ContractHandoverPanel({ api, id }: { api: ContractClient; id: string }) {
+export function ContractHandoverPanel({
+  api,
+  id,
+  contractStatus,
+  showDraft = true,
+}: {
+  api: ContractClient;
+  id: string;
+  contractStatus?: string;
+  showDraft?: boolean;
+}) {
+  return (
+    <Stack spacing={2}>
+      {showDraft && <OwnerHandoverDraftPanel api={api} id={id} contractStatus={contractStatus} />}
+      <LegacyContractHandoverPanel api={api} id={id} />
+    </Stack>
+  );
+}
+
+function LegacyContractHandoverPanel({ api, id }: { api: ContractClient; id: string }) {
   const query = useContractHandover(api, id, false);
   const h = query.data?.record;
   const [reason, setReason] = useState(''),
@@ -43,10 +62,18 @@ export function ContractHandoverPanel({ api, id }: { api: ContractClient; id: st
       setBusy(false);
     }
   }
+  if (
+    typeof api.transport === 'function' &&
+    !query.loading &&
+    !query.error &&
+    !h &&
+    !query.data?.documents?.length &&
+    !query.data?.history?.length
+  ) return null;
   return (
     <ChartCard
-      title="Bàn giao nhận phòng (UC-17)"
-      subtitle="Staff ghi nhận · Tenant xác nhận phiên bản · Staff hoàn tất"
+      title="Lịch sử và bằng chứng bàn giao (UC-17)"
+      subtitle="Các biên bản và quyết định đã được ghi nhận trước đây"
     >
       <Stack spacing={1}>
         {query.loading && <LinearProgress />}
@@ -54,38 +81,34 @@ export function ContractHandoverPanel({ api, id }: { api: ContractClient; id: st
         {!!error && <Alert severity="error">{error}</Alert>}
         {!query.loading && !query.error && !h && (
           <Typography>
-            Chưa có biên bản nhận phòng. Staff được phân công lập biên bản trên Mobile sau khi hợp
-            đồng Active.
+            Chưa có bản nháp bàn giao cho hợp đồng này. Kiểm tra lại sau khi hợp đồng được tạo và
+            đồng bộ với máy chủ.
           </Typography>
         )}
         {h && (
           <>
-            <Typography>
-              Phiên bản {h.version} · {text(h.status)} · Ngày {displayContractDate(h.snapshot.date)}
+            <Typography variant="body2" color="text.secondary">
+              Trạng thái máy chủ: {text(h.status)}
             </Typography>
-            <Typography>
-              Phòng {h.snapshot.roomNumber}: {h.snapshot.roomCondition}
-            </Typography>
-            <Typography>Chìa khóa / quyền truy cập: {h.snapshot.keysAndAccess}</Typography>
-            <Typography>{h.snapshot.notes}</Typography>
-            {h.snapshot.assets.map((a) => (
-              <Typography key={a.id}>{handoverAssetSummary(a)}</Typography>
-            ))}
-            {h.snapshot.noAssetsConfirmed && (
-              <Alert severity="info">Owner đã xác nhận phòng không có tài sản bàn giao.</Alert>
-            )}
-            {h.snapshot.ownerAcceptance && (
+            <HandoverDocumentPreview record={h} />
+            {h.snapshot?.ownerAcceptance && (
               <Alert severity="info">
                 Ngoại lệ đã duyệt: {h.snapshot.ownerAcceptance.reason} · Phương án:{' '}
                 {h.snapshot.ownerAcceptance.handlingPlan}
               </Alert>
             )}
-            {h.status !== 'Confirmed' && (
+            {h.snapshot?.tenantFeedback?.confirmed === false && (
+              <Alert severity="warning">
+                Tenant yêu cầu điều chỉnh: {h.snapshot.tenantFeedback.reason}
+              </Alert>
+            )}
+            {h.status !== 'Confirmed' && h.status !== 'Ready' && (
               <>
-                <Alert severity="warning">
-                  Bàn giao chưa hoàn tất; Tenant có thể ở phòng trong khi chờ xử lý. Mỗi quyết định
-                  tạo phiên bản mới và cần Tenant xác nhận lại.
-                </Alert>
+                <Typography variant="subtitle2">Xem xét ngoại lệ hiện trạng</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Nếu kết quả kiểm kê có sai khác, Owner có thể chấp nhận kèm lý do và phương án xử lý,
+                  hoặc yêu cầu Staff kiểm tra lại. Mỗi quyết định tạo phiên bản mới.
+                </Typography>
                 <TextField
                   label="Lý do quyết định ngoại lệ bàn giao"
                   value={reason}
@@ -116,18 +139,7 @@ export function ContractHandoverPanel({ api, id }: { api: ContractClient; id: st
                 </Stack>
               </>
             )}
-            <Typography>
-              Điện: {h.snapshot.electricity.value} · Nước: {h.snapshot.water.value} · chỉ số đã xác
-              nhận ngày {displayContractDate(h.snapshot.date)}
-            </Typography>
-            <Typography>
-              Tenant:{' '}
-              {h.tenantConfirmedAt
-                ? formatInstant(h.tenantConfirmedAt)
-                : 'Chưa xác nhận phiên bản này'}{' '}
-              · Staff: {h.staffConfirmedAt ? formatInstant(h.staffConfirmedAt) : 'Chưa hoàn tất'}
-            </Typography>
-            {h.snapshot.evidenceIds.map((fileId, i) => (
+            {(h.snapshot?.evidenceIds ?? []).map((fileId, i) => (
               <PrivateEvidenceViewer
                 key={fileId}
                 label={`Ảnh bàn giao ${i + 1}`}
@@ -136,7 +148,7 @@ export function ContractHandoverPanel({ api, id }: { api: ContractClient; id: st
                 errorMessage={contractError}
               />
             ))}
-            {h.snapshot.assets.flatMap((a) =>
+            {(h.snapshot?.assets ?? []).flatMap((a) =>
               (a.evidenceIds ?? []).map((fileId, index) => (
                 <PrivateEvidenceViewer
                   key={`${a.id}-${fileId}`}
@@ -147,7 +159,7 @@ export function ContractHandoverPanel({ api, id }: { api: ContractClient; id: st
                 />
               )),
             )}
-            {[h.snapshot.electricity, h.snapshot.water].map((reading, i) => (
+            {[h.snapshot?.electricity, h.snapshot?.water].filter((reading) => !!reading?.id).map((reading, i) => (
               <PrivateEvidenceViewer
                 key={reading.id}
                 label={`Ảnh chỉ số ${i === 0 ? 'điện' : 'nước'}`}

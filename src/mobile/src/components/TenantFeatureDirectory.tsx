@@ -117,6 +117,7 @@ export function TenantFeatureDirectory({
           title: 'Tiện ích cư dân',
           items: [
             tenantFeatureGroups[0].items[0],
+            tenantFeatureGroups[0].items[2],
             tenantFeatureGroups[1].items[0],
             ...tenantFeatureGroups[2].items,
           ],

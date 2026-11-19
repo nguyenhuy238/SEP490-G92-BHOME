@@ -1,0 +1,157 @@
+// @vitest-environment jsdom
+import React from 'react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { ContractClient } from '../../../../packages/client-core/src/contracts';
+
+const state = vi.hoisted(() => ({
+  platform: 'web',
+  transport: vi.fn(),
+  handoverDocument: vi.fn(),
+  handoverDocumentBytes: vi.fn(),
+  sharingAvailable: vi.fn(),
+  share: vi.fn(),
+  write: vi.fn(),
+  remove: vi.fn(),
+}));
+
+vi.mock('react-native', () => ({
+  Platform: { get OS() { return state.platform; } },
+  Image: ({ source, accessibilityLabel }: { source: { uri: string }; accessibilityLabel: string }) => (
+    <img src={source.uri} alt={accessibilityLabel} />
+  ),
+}));
+vi.mock('react-native-paper', () => ({
+  Button: ({ children, disabled, onPress }: { children: React.ReactNode; disabled?: boolean; onPress: () => void }) => (
+    <button disabled={disabled} onClick={onPress}>{children}</button>
+  ),
+  Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+}));
+vi.mock('../components/WorkspaceKit', () => ({ ui: { red: {} } }));
+vi.mock('../lib/randomUUID', () => ({ randomUUID: () => '60000000-0000-4000-8000-000000000001' }));
+vi.mock('../lib/useFeedbackState', () => ({ useFeedbackState: () => React.useState('') }));
+vi.mock('expo-sharing', () => ({
+  isAvailableAsync: state.sharingAvailable,
+  shareAsync: state.share,
+}));
+vi.mock('expo-file-system', () => ({
+  Paths: { cache: '/private-cache' },
+  Directory: class {
+    create() { /* no-op: test private cache */ }
+  },
+  File: class {
+    uri = 'file:///private-cache/temporary.pdf';
+    exists = true;
+    create() { /* no-op */ }
+    write(bytes: Uint8Array) { state.write(bytes); }
+    delete() { state.remove(); }
+  },
+}));
+
+import { ContractEvidence } from '../features/contracts/ContractEvidence';
+
+const contractId = '00000000-0000-4000-8000-000000000001';
+const evidenceId = '20000000-0000-4000-8000-000000000002';
+const documentId = '30000000-0000-4000-8000-000000000003';
+const api = {
+  transport: state.transport,
+  handoverDocument: state.handoverDocument,
+  handoverDocumentBytes: state.handoverDocumentBytes,
+} as unknown as ContractClient;
+
+// jsdom's Blob does not implement arrayBuffer(), unlike browser Blob.
+function browserBlob(bytes: Uint8Array, type: string) {
+  const supportedBytes = new Uint8Array(new ArrayBuffer(bytes.byteLength));
+  supportedBytes.set(bytes);
+  const blob = new Blob([supportedBytes], { type });
+  Object.defineProperty(blob, 'slice', {
+    value: () => ({ arrayBuffer: async () => supportedBytes.buffer }),
+  });
+  return blob;
+}
+
+beforeEach(() => {
+  state.platform = 'web';
+  state.sharingAvailable.mockResolvedValue(true);
+  state.share.mockResolvedValue(undefined);
+  state.transport.mockResolvedValue(browserBlob(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), 'image/png'));
+  state.handoverDocument.mockResolvedValue(new Blob([new Uint8Array([37, 80, 68, 70])], { type: 'application/pdf' }));
+  state.handoverDocumentBytes.mockResolvedValue(new Uint8Array([37, 80, 68, 70]));
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:private-test') });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
+});
+
+it('previews and downloads an authenticated draft photo, revoking its private blob URL on close', async () => {
+  render(<ContractEvidence api={api} contractId={contractId} draftHandoverEvidence evidenceId={evidenceId} label="Xem ảnh riêng tư" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh riêng tư' }));
+  await waitFor(() => expect(state.transport).toHaveBeenCalledWith(
+    `/api/v1/contracts/${contractId}/handover/draft/evidence/${evidenceId}`,
+    { signal: expect.any(AbortSignal) },
+    'blob',
+  ));
+  const image = await screen.findByRole('img', { name: 'Xem ảnh riêng tư' });
+  expect(image.getAttribute('src')).toBe('blob:private-test');
+  expect(URL.createObjectURL).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng ảnh' }));
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
+  expect(screen.queryByRole('img')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Tải ảnh' }));
+  await waitFor(() => expect(state.transport).toHaveBeenCalledTimes(2));
+  expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledOnce();
+  expect(state.handoverDocument).not.toHaveBeenCalled();
+});
+
+it('opens the immutable PDF via authenticated final document endpoint on web', async () => {
+  render(<ContractEvidence api={api} contractId={contractId} handoverDocumentId={documentId} label="PDF cuối cùng" />);
+  fireEvent.click(screen.getByRole('button', { name: 'PDF cuối cùng' }));
+  await waitFor(() => expect(state.handoverDocument).toHaveBeenCalledWith(
+    contractId,
+    documentId,
+    expect.any(AbortSignal),
+  ));
+  expect(state.transport).not.toHaveBeenCalled();
+  expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledOnce();
+});
+
+it('shares protected image bytes on native and deletes the temporary file', async () => {
+  state.platform = 'ios';
+  const bytes = new Uint8Array([137, 80, 78, 71]);
+  state.transport.mockResolvedValue(bytes);
+  render(<ContractEvidence api={api} contractId={contractId} draftHandoverEvidence evidenceId={evidenceId} label="Mở ảnh" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Mở ảnh' }));
+  await waitFor(() => expect(state.transport).toHaveBeenCalledWith(
+    `/api/v1/contracts/${contractId}/handover/draft/evidence/${evidenceId}`,
+    { signal: expect.any(AbortSignal) },
+    'bytes',
+  ));
+  await waitFor(() => expect(state.share).toHaveBeenCalledWith(
+    'file:///private-cache/temporary.pdf',
+    expect.objectContaining({ mimeType: 'image/png' }),
+  ));
+  expect(state.write).toHaveBeenCalledWith(bytes);
+  expect(state.remove).toHaveBeenCalledOnce();
+});
+
+it('reports restricted evidence without opening a preview or sharing private bytes', async () => {
+  state.transport.mockRejectedValue({ status: 403, code: 'forbidden' });
+  render(<ContractEvidence api={api} contractId={contractId} draftHandoverEvidence evidenceId={evidenceId} label="Xem ảnh riêng tư" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh riêng tư' }));
+  await waitFor(() => expect(state.transport).toHaveBeenCalledOnce());
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+  expect(state.share).not.toHaveBeenCalled();
+});
+
+it('rejects HTML masquerading as a private image instead of rendering it inline', async () => {
+  state.transport.mockResolvedValue(browserBlob(new TextEncoder().encode('<script>alert(1)</script>'), 'text/html'));
+  render(<ContractEvidence api={api} contractId={contractId} draftHandoverEvidence evidenceId={evidenceId} label="Xem ảnh riêng tư" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh riêng tư' }));
+  expect(await screen.findByText(/không phải PNG hoặc JPEG hợp lệ/)).toBeTruthy();
+  expect(screen.queryByRole('img')).toBeNull();
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+});
