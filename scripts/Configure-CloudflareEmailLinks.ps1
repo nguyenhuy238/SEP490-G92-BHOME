@@ -1,4 +1,5 @@
 # Set the public account-email callbacks and contract signing page in an existing ignored .env.
+# Legacy opt-in helper. Standard onboarding uses Initialize-TeamEnvironment.ps1 and VPS Staging.
 # This script does not create a tunnel, send emails, or modify SMTP credentials.
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(

@@ -6,19 +6,21 @@ using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using MimeKit;
 
 namespace BHome.Infrastructure.Modules.Notifications;
 
-internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger<MailKitEmailSender> logger)
+internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger<MailKitEmailSender> logger, IHostEnvironment environment)
 {
-    internal bool IsConfigured => options.Value.Enabled && options.Value.Valid();
+    internal bool IsConfigured => options.Value.Enabled && options.Value.ValidForEnvironment(environment.EnvironmentName);
 
     internal async Task<string> SendAsync(ChannelMessage message, CancellationToken t)
     {
         var config = options.Value;
         if (!IsConfigured) throw new ChannelDeliveryException("email_configuration_invalid");
         if (!EmailOptions.ValidAddress(message.Destination)) throw new ChannelDeliveryException("email_recipient_invalid");
+        if (!config.RecipientAllowed(message.Destination)) throw new ChannelDeliveryException("email_recipient_not_allowed");
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(message.IdempotencyKey))).ToLowerInvariant();
         using var mail = new MimeMessage();
         mail.From.Add(new MailboxAddress(Encoding.UTF8, config.FromName, config.FromEmail));
@@ -32,9 +34,12 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
         var submitting = false;
         try
         {
-            // STARTTLS is mandatory. Never downgrade or disable certificate validation.
-            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls, timeout.Token);
-            await client.AuthenticateAsync(config.Username, config.AppPassword.Replace(" ", ""), timeout.Token);
+            // Only the validated loopback capture sink is plaintext and unauthenticated.
+            // Real SMTP always requires STARTTLS with normal certificate validation.
+            await client.ConnectAsync(config.Host, config.Port,
+                config.LocalCapture ? SecureSocketOptions.None : SecureSocketOptions.StartTls, timeout.Token);
+            if (!config.LocalCapture)
+                await client.AuthenticateAsync(config.Username, config.AppPassword.Replace(" ", ""), timeout.Token);
             submitting = true;
             await client.SendAsync(mail, timeout.Token);
             logger.LogInformation("SMTP accepted notification {DeliveryKey}; inbox delivery is not confirmed", key);

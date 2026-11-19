@@ -1,5 +1,8 @@
 # Local development
 
+Team onboarding Local / Staging / Production: [BHOME_TEAM_ENVIRONMENT_SETUP.md](BHOME_TEAM_ENVIRONMENT_SETUP.md).
+The standard local profile is independent and needs no tunnel. Public email/signing and SePay callbacks use Staging.
+
 Use .NET 8 SDK, Node 22.13+ (22.x) and npm 10+. `global.json` intentionally does not use .NET
 9/10 even if those SDKs are present. Native Android development also requires Android Studio/JDK;
 iOS requires macOS and Xcode. Native tools are not needed for browser development.

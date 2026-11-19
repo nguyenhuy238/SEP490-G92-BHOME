@@ -2,6 +2,10 @@
 
 BHOME - Nền tảng quản lý và vận hành chuỗi nhà trọ thông minh.
 
+**Thiết lập môi trường cho team:** dùng [BHOME_TEAM_ENVIRONMENT_SETUP](docs/development/BHOME_TEAM_ENVIRONMENT_SETUP.md)
+cho Local / Staging / Production. Local chạy độc lập, không cần Cloudflare/ngrok;
+luồng email/ký từ Internet và SePay Sandbox dùng VPS Staging riêng.
+
 Project hiện có nền tảng backend ASP.NET Core 8, ba ứng dụng React/TypeScript và API đăng nhập
 Identity/JWT cho tài khoản đã tồn tại, phiên phía server, refresh xoay vòng, đăng xuất và đổi mật khẩu.
 Owner Web/Mobile có màn hình đăng nhập. Các luồng nghiệp vụ, tạo/kích hoạt tài khoản và tích hợp
@@ -77,7 +81,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-Local.ps1
 ```
 
 Script tạo `.env` từ `.env.example`, sinh mật khẩu PostgreSQL, MinIO và JWT key ngẫu nhiên,
-đồng thời điền thông tin tương ứng cho backend. Script từ chối ghi đè nếu `.env` đã tồn tại.
+đồng thời điền thông tin tương ứng cho backend. Script giữ nguyên nếu `.env` đã tồn tại.
 Mỗi thành viên dùng cấu hình local riêng; không cần nhận file `.env` của người khác.
 
 Có thể tự copy `.env.example` thành `.env` thay cho script, nhưng phải thay các placeholder
@@ -198,7 +202,7 @@ Mỗi frontend cần chạy dùng **một terminal riêng**, tại thư mục g�
 
 ```powershell
 # Terminal Owner Web
-npm.cmd run dev --workspace @bhome/owner-web
+npm.cmd run dev --workspace ./src/owner-web
 ```
 
 ```powershell
@@ -208,7 +212,7 @@ npm.cmd run mobile:dev
 
 ```powershell
 # Terminal Public Web
-npm.cmd run dev --workspace @bhome/public-web
+npm.cmd run dev --workspace ./src/public-web
 ```
 
 Mobile dùng Expo Router, đã kết nối đăng nhập email và luồng OCR với backend.
@@ -242,7 +246,7 @@ thiết bị truy cập được và chứng chỉ được tin cậy; `localhos
 | API readiness | https://localhost:7240/health/ready | HTTP 200 khi PostgreSQL kết nối được và schema Compact24 đúng phiên bản |
 | Owner Web     | http://localhost:5173               | Mở được ứng dụng                                                        |
 | Mobile Expo   | Địa chỉ và mã QR trong terminal     | Expo Go tải được ứng dụng demo                                          |
-| Public Web    | http://localhost:5175               | Mở được ứng dụng                                                        |
+| Public Web    | http://localhost:5174               | Mở được ứng dụng                                                        |
 | MinIO Console | http://localhost:9001               | Đăng nhập được và có bucket private `bhome-private`                     |
 
 API hỗ trợ login/refresh/logout/logout-all/me/change-password và lõi reset mật khẩu.

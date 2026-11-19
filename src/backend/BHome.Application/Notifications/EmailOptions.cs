@@ -15,10 +15,22 @@ public sealed class EmailOptions
     public int TimeoutSeconds { get; set; } = 30;
     public bool TestEnabled { get; set; }
     public string TestRecipient { get; set; } = "";
+    // Capture is plaintext SMTP to a loopback Mailpit only, allowed by the host in Development/Testing.
+    public string DeliveryMode { get; set; } = "Smtp";
+    public string[] AllowedRecipients { get; set; } = [];
+
+    public bool LocalCapture => DeliveryMode == "Capture" && Host is "localhost" or "127.0.0.1" or "::1";
+    public bool ValidForEnvironment(string environment) => Valid() && (!Enabled ||
+        (DeliveryMode == "Capture" ? LocalCapture && environment is "Development" or "Testing" :
+            environment is not ("Development" or "Testing" or "Staging") || AllowedRecipients.Length > 0));
+
+    public bool RecipientAllowed(string destination) => AllowedRecipients.Length == 0 ||
+        AllowedRecipients.Contains(destination, StringComparer.OrdinalIgnoreCase);
 
     public bool Valid() => !Enabled || (!string.IsNullOrWhiteSpace(Host) && Port is >= 1 and <= 65535 &&
-        ValidAddress(Username) && ValidAddress(FromEmail) && !string.IsNullOrWhiteSpace(AppPassword) &&
-        UseStartTls && TimeoutSeconds is >= 1 and <= 45 && !FromName.Contains('\r') && !FromName.Contains('\n') &&
+        ValidAddress(FromEmail) &&
+        (LocalCapture || DeliveryMode == "Smtp" && ValidAddress(Username) && !string.IsNullOrWhiteSpace(AppPassword) && UseStartTls) &&
+        AllowedRecipients.All(ValidAddress) && TimeoutSeconds is >= 1 and <= 45 && !FromName.Contains('\r') && !FromName.Contains('\n') &&
         (!TestEnabled || ValidAddress(TestRecipient)));
 
     public static bool ValidAddress(string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= 254 &&

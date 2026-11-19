@@ -1,5 +1,8 @@
 # Cloudflare HTTPS URL cho email tài khoản BHOME
 
+Tài liệu quy trình cũ. Từ 19/11/2026, dùng [thiết lập môi trường team](BHOME_TEAM_ENVIRONMENT_SETUP.md):
+Local độc lập không tunnel; email/ký từ Internet dùng bộ FE/BE/database Staging riêng.
+
 ## Cấu hình hiện có
 
 Backend không tự lấy hostname từ email hay request HTTP. Nó ghép một lần token vào fragment của các callback đã khai báo:

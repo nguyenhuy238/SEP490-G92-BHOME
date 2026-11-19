@@ -35,6 +35,10 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
     internal sealed record Content(string Destination, string Title, string Body, string ActionUrl,
         IReadOnlyList<EmailAttachment>? Attachments = null);
 
+    internal static string CallbackLink(string callback, string userName, string token) =>
+        callback + (new Uri(callback).Scheme == "bhome" ? "?" : "#") +
+        "userName=" + Uri.EscapeDataString(userName) + "&token=" + Uri.EscapeDataString(token);
+
     public async Task EnsureQueueWritableAsync(CancellationToken t)
     {
         var transaction = db.Database.CurrentTransaction ?? throw new InvalidOperationException("Authentication email requires the grant transaction.");
@@ -118,8 +122,7 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
         var url = verification ? owner ? options.Value.WebVerificationUrl : options.Value.MobileVerificationUrl :
             reset ? owner ? options.Value.WebResetUrl : options.Value.MobileResetUrl : owner ? options.Value.WebInvitationUrl : options.Value.MobileInvitationUrl;
         if (!options.Value.Trusted(url, environment.IsDevelopment())) throw new ChannelDeliveryException("authentication_email_url_invalid");
-        string Link(string callback) => callback + (new Uri(callback).Scheme == "bhome" ? "?" : "#") +
-            "userName=" + Uri.EscapeDataString(user.UserName!) + "&token=" + Uri.EscapeDataString(request.Token);
+        string Link(string callback) => CallbackLink(callback, user.UserName!, request.Token);
         var nativeLink = new Uri(url).Scheme == "bhome" ? Link(url) : null;
         // Mail clients may remove custom-scheme anchors. Existing anonymous Web pages
         // accept the same token for every role; retain the native link as an alternative.

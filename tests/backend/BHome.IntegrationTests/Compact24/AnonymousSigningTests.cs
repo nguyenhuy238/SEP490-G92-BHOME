@@ -199,6 +199,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 ["Email:Username"] = "sender@example.invalid",
                 ["Email:FromEmail"] = "sender@example.invalid",
                 ["Email:AppPassword"] = "synthetic-password",
+                // The injected fake delivery captures messages; SMTP cannot send outside this sentinel allowlist.
+                ["Email:AllowedRecipients:0"] = "sender@example.invalid",
                 ["ContractPdf:TemplateId"] = "main-contract-development-v1",
                 ["ContractSigning:Methods:Otp"] = "true"
             }));

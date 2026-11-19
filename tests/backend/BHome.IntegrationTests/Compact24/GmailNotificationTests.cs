@@ -167,6 +167,12 @@ public sealed partial class Compact24NotificationMvpTests
             ["Email:Username"] = "sender@example.invalid",
             ["Email:FromEmail"] = "sender@example.invalid",
             ["Email:AppPassword"] = "SYNTHETIC_TEST_SECRET",
+            ["Email:AllowedRecipients:0"] = "configured@example.invalid",
+            ["Deployment:Environment"] = environment,
+            ["Deployment:OwnerOrigin"] = environment == "Production" ? "https://owner.example.invalid" : null,
+            ["Deployment:ApiOrigin"] = environment == "Production" ? "https://api.example.invalid" : null,
+            ["AllowedHosts"] = "localhost;owner.example.invalid;api.example.invalid",
+            ["SePay:Mode"] = environment == "Production" ? "Live" : "Test",
             ["Email:TestRecipient"] = "configured@example.invalid"
         }));
         b.ConfigureServices(s =>

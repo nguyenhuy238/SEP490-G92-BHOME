@@ -12,6 +12,40 @@ namespace BHome.IntegrationTests.Notifications;
 
 public sealed class EmailTransportTests
 {
+    [Theory]
+    [InlineData("http://localhost:5173/accept-invitation", "#")]
+    [InlineData("http://localhost:5173/reset-password", "#")]
+    [InlineData("http://localhost:5173/confirm-email", "#")]
+    [InlineData("https://owner.103.146.23.157.sslip.io/accept-invitation", "#")]
+    [InlineData("https://owner.103.146.23.157.sslip.io/reset-password", "#")]
+    [InlineData("https://owner.103.146.23.157.sslip.io/confirm-email", "#")]
+    [InlineData("bhome://accept-invitation", "?")]
+    [InlineData("bhome://reset-password", "?")]
+    [InlineData("bhome://confirm-email", "?")]
+    public void AuthenticationLinksKeepConfiguredEnvironmentAndEscapeTokens(string callback, string separator)
+    {
+        var link = BHome.Infrastructure.IdentityAccess.AuthenticationEmailDelivery.CallbackLink(callback, "synthetic+user", "synthetic+/&token");
+        Assert.Equal(callback + separator + "userName=synthetic%2Buser&token=synthetic%2B%2F%26token", link);
+        if (separator == "#") Assert.Empty(new Uri(link).Query);
+    }
+
+    [Theory]
+    [InlineData("https://localhost:5176/contract-signing")]
+    [InlineData("https://owner.103.146.23.157.sslip.io/contract-signing")]
+    [InlineData("https://api-sepay-test.103.146.23.157.sslip.io/contract-signing")]
+    public void SigningInvitationStaysOnConfiguredHostAndKeepsTokenInFragment(string url)
+    {
+        var sender = new MailKitEmailSender(Options.Create(new EmailOptions()), NullLogger<MailKitEmailSender>.Instance, ProductionEnvironment());
+        var security = new BHome.Infrastructure.Contracts.AnonymousSigningSecurity(
+            Options.Create(new BHome.Infrastructure.Contracts.AnonymousSigningOptions { PublicSigningUrl = url }),
+            new SigningChannel(false), Options.Create(new NotificationChannelOptions()), sender);
+        Assert.Equal(url + "#token=synthetic%2B%2F%26", security.InvitationUrl("synthetic+/&"));
+    }
+    private static Microsoft.Extensions.Hosting.IHostEnvironment ProductionEnvironment()
+    {
+        var environment = new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { EnvironmentName = "Production" };
+        return environment;
+    }
     [Fact]
     public void ConfirmationMimeContainsBothOriginalPdfAttachmentsAndRejectsUnsafeFiles()
     {
@@ -47,7 +81,7 @@ public sealed class EmailTransportTests
             Username = "sender@example.invalid",
             FromEmail = "sender@example.invalid",
             AppPassword = "synthetic-password"
-        }), NullLogger<MailKitEmailSender>.Instance);
+        }), NullLogger<MailKitEmailSender>.Instance, ProductionEnvironment());
         var security = new BHome.Infrastructure.Contracts.AnonymousSigningSecurity(
             Options.Create(new BHome.Infrastructure.Contracts.AnonymousSigningOptions()), new SigningChannel(channel),
             Options.Create(new NotificationChannelOptions { Mode = mode }), email);
@@ -95,7 +129,7 @@ public sealed class EmailTransportTests
     {
         var options = new EmailOptions { Enabled = true, Username = "sender@example.invalid", FromEmail = "sender@example.invalid" };
         Assert.False(options.Valid());
-        var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance);
+        var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance, ProductionEnvironment());
         var message = new ChannelMessage("synthetic-key", "EMAIL", "invalid", "TEST", "Tiếng Việt", "Nội dung");
         Assert.Equal("email_configuration_invalid", (await Assert.ThrowsAsync<ChannelDeliveryException>(() => sender.SendAsync(message, default))).Code);
         options.AppPassword = "SYNTHETIC_TEST_SECRET";

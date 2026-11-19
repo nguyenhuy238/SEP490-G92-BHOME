@@ -151,7 +151,8 @@ public static class DependencyInjection
                     o.FromEmail = legacy.FromAddress ?? ""; o.UseStartTls = legacy.SmtpUseTls;
                 }
             })
-            .Validate(o => o.Valid(), "Email configuration invalid: check Email host, port, username, sender, STARTTLS, timeout and Email:AppPassword in secrets.").ValidateOnStart();
+            .Validate<IHostEnvironment>((o, env) => o.ValidForEnvironment(env.EnvironmentName),
+                "Email configuration invalid: check Email:AppPassword/STARTTLS for SMTP, loopback Capture only in Development/Testing, and Email:AllowedRecipients for non-Production SMTP.").ValidateOnStart();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
         services.AddScoped<BHome.Application.Notifications.IDevelopmentEmailTest, BHome.Infrastructure.Modules.Notifications.DevelopmentEmailTest>();

@@ -1,5 +1,9 @@
 # SePay cho team BHOME
 
+Quy trình chuẩn hiện tại: [Local / Staging / Production](BHOME_TEAM_ENVIRONMENT_SETUP.md).
+Local mặc định tắt SePay; Sandbox Internet dùng webhook VPS Staging cố định. Các bước profile/fixture
+bên dưới chỉ dành cho thử nghiệm local riêng có chủ đích, không bắt buộc mọi thành viên chạy polling/tunnel.
+
 Phạm vi chuẩn hoá: BF-06, UC-22/23/25, GBR-10/18 và JOB-03. Tái sử dụng webhook,
 polling, registry BH, QR và ledger hiện có. Chỉ thêm công cụ tạo fixture tổng hợp trên
 database Sandbox riêng; không đổi chính sách tiền, quyền hoặc schema.

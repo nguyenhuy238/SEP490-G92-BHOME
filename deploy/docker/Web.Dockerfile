@@ -14,7 +14,7 @@ ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN test "$APP" = "owner-web" -o "$APP" = "public-web" \
     && test -n "$VITE_API_BASE_URL" \
-    && npm run build --workspace @bhome/$APP \
+    && npm run build --workspace ./src/$APP \
     && cp -r src/$APP/dist /web
 
 FROM nginxinc/nginx-unprivileged:stable-alpine
