@@ -151,8 +151,13 @@ public static class DependencyInjection
                     o.FromEmail = legacy.FromAddress ?? ""; o.UseStartTls = legacy.SmtpUseTls;
                 }
             })
-            .Validate<IHostEnvironment>((o, env) => o.ValidForEnvironment(env.EnvironmentName),
-                "Email configuration invalid: check Email:AppPassword/STARTTLS for SMTP, loopback Capture only in Development/Testing, and Email:AllowedRecipients for non-Production SMTP.").ValidateOnStart();
+            .Validate(o => o.Valid(),
+                "Email configuration invalid: check Email:Host/Port/FromEmail, Email:AppPassword and STARTTLS for SMTP, or the syntax of Email:AllowedRecipients.")
+            .Validate<IHostEnvironment>((o, env) => o.CaptureAllowed(env.EnvironmentName),
+                "Email:DeliveryMode=Capture requires a loopback Email:Host and Development/Testing; deployed SMTP must use STARTTLS.")
+            .Validate<IHostEnvironment>((o, env) => o.RecipientsConfigured(env.EnvironmentName),
+                "SMTP requires Email:AllowedRecipients:0 (and optional :1, :2, ...) in Development/Testing/Staging. For an existing local test mailbox, run scripts/Initialize-LocalEmail.ps1 -UseConfiguredTestRecipient, then restart the API. Email:TestRecipient alone is not an allowlist.")
+            .ValidateOnStart();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
         services.AddScoped<BHome.Application.Notifications.IDevelopmentEmailTest, BHome.Infrastructure.Modules.Notifications.DevelopmentEmailTest>();

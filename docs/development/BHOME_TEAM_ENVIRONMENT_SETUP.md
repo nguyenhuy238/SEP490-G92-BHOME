@@ -174,6 +174,24 @@ Không cấu hình wildcard. Người nhận ngoài allowlist bị từ chối *
 không tự chuyển hướng thư chứa token của người khác vào mailbox test.
 `Email__TestRecipient` chỉ thuộc endpoint thử thư, không thay thế allowlist của mọi email.
 
+Nếu máy đã cấu hình Gmail trước khi pull bản chuẩn hóa, API có thể dừng vì thiếu
+`Email:AllowedRecipients:0`; Web nhận 502 và Mobile báo ECONNREFUSED vì API chưa mở cổng.
+Với mailbox thử nghiệm đã được xác định trong `Email:TestRecipient`, chủ động chuyển đổi bằng:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-LocalEmail.ps1 -UseConfiguredTestRecipient
+```
+
+Script chỉ thêm mailbox test có sẵn vào Development user-secrets khi chưa có allowlist;
+giữ nguyên allowlist đã có, mật khẩu/credential và `.env`. Không gửi thư, không suy ra người nhận
+từ địa chỉ SMTP sender, không tự chuyển sang SMTP nếu profile đang chọn Mailpit Capture.
+Thiếu mailbox test hợp lệ thì script dừng. Không dùng script này để cấu hình Staging/Production.
+Profile local riêng có thể chọn bằng `-EnvironmentFile .env.local`.
+
+Sau khi chuyển đổi: **Shift+F5 rồi F5 trong Visual Studio**, chờ API mở cổng 7240,
+reload Owner Web rồi chạy lại `npm.cmd run mobile`. Đừng mở thêm một API khi Visual Studio đang chạy.
+Nếu không còn cookie hợp lệ thì đăng nhập lại; HTTP 401 khi thử refresh không có cookie là bình thường.
+
 Production dùng Gmail SMTP theo credential hiện có. Không thay mật khẩu/key đang sử dụng.
 Test tự động mặc định dùng địa chỉ `.invalid`/capture/fake provider, không gửi thư thật.
 

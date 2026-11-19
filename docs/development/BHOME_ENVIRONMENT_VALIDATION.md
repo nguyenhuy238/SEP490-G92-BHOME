@@ -157,3 +157,36 @@ Không trỏ backend local đến database VPS. Luồng người nhận Internet
 VPS: chỉ người vận hành mới áp dụng anchors/environment/allowlist và thêm frontend Staging sau review;
 dùng `config --quiet` và `caddy validate` trong guide. Giữ hai project, webhook, data, volumes,
 DataProtection/HMAC/JWT keys; không reset/seed/rotate secrets hoặc tự bật Live.
+
+## Bổ sung: sửa startup SMTP trên máy có cấu hình cũ (19/11/2026)
+
+Sau commit chuẩn hóa, cấu hình Gmail cũ trên máy vẫn có Enabled/Username/AppPassword/STARTTLS
+và TestRecipient nhưng không có AllowedRecipients. Validation đúng chủ đích đã dừng API;
+thông báo gộp nhiều nguyên nhân khiến việc chuyển đổi chưa rõ. Web 502 và Mobile ECONNREFUSED
+là hệ quả API chưa bind cổng, không phải lỗi session hoặc chứng chỉ trong tình huống này.
+
+Đã tách thông báo validation theo cấu hình SMTP, giới hạn Capture và allowlist; thiếu allowlist
+sẽ nêu đúng `Email:AllowedRecipients:0` và lệnh chuyển đổi. Thêm `Initialize-LocalEmail.ps1`
+với lựa chọn tường minh `-UseConfiguredTestRecipient`; không tự cho phép toàn bộ người nhận
+và không bỏ guard khi khởi động. Script đã được chạy trên máy này: thêm đúng mailbox test đã có
+vào user-secrets, xác nhận mọi giá trị secret trước đó và hash `.env` giữ nguyên. Không gửi email.
+
+Kết quả kiểm tra bổ sung thực sự đã chạy:
+
+- Release solution build: PASS, 0 warnings/errors.
+- Integration `EmailTransportTests|EmailCaptureTests|EnvironmentStartupTests`: 41 PASS;
+  gồm regression thiếu allowlist báo chính xác khóa/lệnh và không làm lộ secret.
+- Infrastructure `EnvironmentConfigurationTests`: 21 PASS; Capture/Staging/Production và guard SMTP giữ nguyên.
+- `tests/scripts/LocalEmail.Tests.ps1`: PASS; migration, bảo toàn credential/env, chạy lại không ghi đè,
+  cần lựa chọn tường minh, thiếu mailbox và từ chối profile Staging. Dùng UserSecretsId tổng hợp riêng để test.
+- API thật chạy ở Development với worker SMTP/jobs/polling SePay tắt bằng biến process trong phiên kiểm tra.
+  Postman CLI 1.80.0 chạy duy nhất folder Health từ collection hiện có, target HTTPS LAN,
+  CA Mobile hiện tại dạng PEM: 2 requests / 2 assertions PASS, exit 0, `--no-report-events`.
+  Không đăng nhập hoặc xuất report lên Postman. Lượt localhost ban đầu thất bại do chọn CA khác
+  certificate đang được phục vụ; không dùng `--insecure` để vượt TLS.
+- `Diagnose-MobileApi.cjs`: live=200, ready=200, contracts=401 cho request chưa đăng nhập;
+  TLS authorized=true, CA không tin cậy và hostname sai đều bị từ chối đúng.
+- Owner Web `POST /api/v1/auth/refresh` qua Vite không kèm cookie: HTTP 401, không còn 502.
+
+Phiên API kiểm tra đã đóng, không dừng API/debugger có sẵn. Cần restart Visual Studio để process mới
+nạp cấu hình đã sửa. Kiểm tra từ máy phát triển không thay thế E2E trên iPhone hoặc gửi Gmail thật.
