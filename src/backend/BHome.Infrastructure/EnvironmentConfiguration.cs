@@ -61,9 +61,10 @@ public static class EnvironmentConfiguration
                 uri.Query.Length > 0 || uri.Fragment.Length > 0 ||
                 (originOnly && uri.AbsolutePath != "/") ||
                 ((https || !development) && uri.Scheme != "https") ||
-                (deployed && (uri.IsLoopback || TemporaryHost(uri.Host))))
+                (deployed && uri.IsLoopback) ||
+                ((deployed || environment == "Development") && TemporaryHost(uri.Host)))
             {
-                errors.Add($"{key} must be a trusted absolute {(https || !development ? "HTTPS" : "HTTP(S)")} URL without credentials, query or fragment; deployed URLs cannot use loopback or temporary tunnels.");
+                errors.Add($"{key} must be a trusted absolute {(https || !development ? "HTTPS" : "HTTP(S)")} URL without credentials, query or fragment; temporary tunnels are not supported. Migrate old local URL settings with scripts/Initialize-LocalUrls.ps1 -Apply; deployed URLs cannot use loopback.");
                 return false;
             }
             return true;

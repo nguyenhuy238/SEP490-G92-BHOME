@@ -335,7 +335,28 @@ không chỉ đổi link email của backend local sang hostname VPS.
 | Build còn chọn API local        | Set VITE_API_BASE_URL bằng origin deploy ở terminal build; không dùng chung terminal có biến cũ |
 
 Chuyển cấu hình cũ: dừng tunnel của chính mình khi không còn dùng; giữ nguyên file private;
-sửa URL runtime trong `.env` theo template Local, giữ credential local cũ. Kiểm tra các override
+chạy preview rồi áp dụng migration URL có kiểm soát:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-LocalUrls.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-LocalUrls.ps1 -Apply
+```
+
+Script chỉ sửa các khóa URL trong `.env` được chọn và Development user-secrets; bỏ origin
+ngrok/trycloudflare cũ, bổ sung các origin local cần thiết. Giữ database, SMTP/JWT/HMAC keys,
+origin LAN hợp lệ và deep link Mobile. Không copy đè template lên file có secrets.
+Muốn chọn cổng local khác, truyền `-OwnerOrigin`, `-ApiOrigin`, `-SigningOrigin` tương ứng;
+API và signing vẫn phải HTTPS. Profile Staging/Production bị từ chối.
+
+Sau đó Shift+F5 rồi F5 trong Visual Studio. Development cũng chặn URL callback/origin
+ngrok/trycloudflare ngay lúc startup để không tiếp tục phát link tunnel cũ.
+**Email đã gửi không tự đổi nội dung**: yêu cầu lời mời mới sau khi restart, dùng email mới nhất;
+không tái sử dụng token từ ảnh chụp hoặc tự chuyển URL sang API/database khác.
+
+Local callbacks chỉ mở được trên chính máy đang chạy Vite. Để người nhận ở máy khác hoặc qua
+Internet mở được link, dùng bộ frontend/backend/database Staging cùng môi trường như mục 12–14.
+
+Nếu tự sửa cấu hình, đối chiếu URL runtime theo template Local và giữ credential local cũ. Kiểm tra các override
 trong user-secrets/process/F5 và frontend `.env*`; không xuất toàn bộ user-secrets ra terminal/log.
 Xóa các override URL cũ có chủ đích rồi khởi động lại API/Vite. Script doctor báo tên khóa có tunnel
 nhưng không in giá trị. Các script `Configure-CloudflareEmailLinks.ps1`, `Set-PublicDevelopmentUrls.ps1`

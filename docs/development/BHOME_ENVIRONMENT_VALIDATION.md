@@ -203,3 +203,30 @@ retry sau khi cho phép và khôi phục mật khẩu PASS. Staff UI 12 tests, t
 (lint còn warning có sẵn ở DigitalSigningPage.test.tsx). Kiểm tra kết nối/xác thực SMTP không gửi thư PASS.
 Địa chỉ đang thử đã được thêm riêng vào Development user-secrets; dữ liệu này không nằm trong Git.
 Các lần gửi cũ đã thất bại không tự chạy lại. Chưa xác nhận một thư mới đã đến inbox người nhận.
+
+## Bổ sung: thư còn trỏ ngrok offline (19/11/2026)
+
+Thư đã đến mailbox nhưng URL tài khoản bị override bằng domain ngrok cũ trong cả `.env`
+và Development user-secrets. Ngrok báo `ERR_NGROK_3200` vì endpoint đó offline. Đây là lỗi
+đích callback; thay URL của backend local sang Production sẽ làm token trỏ sai database.
+
+Thêm `Initialize-LocalUrls.ps1`: mặc định preview, `-Apply` chỉ chuyển các khóa callback,
+public signing/open URL và origin tunnel cũ trong hai nguồn cấu hình. Giữ database,
+credentials, keys, native deep links và các origin LAN hợp lệ. Có regression cho trường hợp
+hai nguồn có giá trị khác nhau ở cùng một chỉ số origin. Profile Production/Staging bị từ chối.
+Development startup cũng từ chối các URL/origin ngrok/trycloudflare đã biết và chỉ rõ lệnh migration.
+Hostname HTTPS riêng và sslip.io vẫn được hỗ trợ theo cấu hình.
+
+Đã áp dụng migration trên máy phát triển và so sánh toàn bộ nhóm cấu hình nhạy cảm trước/sau:
+giữ nguyên. Đã restart đúng phiên debug Visual Studio, không bật tunnel hoặc sửa VPS.
+Các callback tài khoản mới dùng Owner local 5173; link ký vẫn yêu cầu HTTPS 5176.
+
+Kiểm chứng thực tế: Release build PASS (0 warnings/errors); 37 test cấu hình/deep-link,
+41 test startup/email/capture và script LocalUrls.Tests.ps1 PASS. API live/ready HTTP 200
+với TLS được xác minh bằng các chứng chỉ development hiện có; ba route tài khoản local HTTP 200;
+Owner proxy refresh không cookie trả 401 đúng. Probe chỉ dùng CA Mobile riêng ban đầu không
+khớp certificate SNI localhost; đã dùng bộ certificate development tương ứng, không tắt TLS.
+
+Email cũ không được sửa hoặc gửi lại tự động. Cần yêu cầu một lời mời mới sau khi restart.
+Localhost chỉ phục vụ chính máy phát triển; người nhận qua Internet cần bộ Staging riêng.
+Chưa gửi một email mới hoặc xác nhận thao tác chấp nhận lời mời trên thiết bị người nhận ở lần sửa này.
