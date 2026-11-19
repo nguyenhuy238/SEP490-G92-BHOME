@@ -34,6 +34,7 @@ Thumbs.db
 !.env.neon.example
 !.env.sepay.example
 !**/.env.example
+!**/.env.*.example
 **/appsettings.Local.json
 **/secrets.json
 # Private database exports and recovery artifacts.

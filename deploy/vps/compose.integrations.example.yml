@@ -1,6 +1,12 @@
-﻿services:
+services:
   api:
     environment:
+      # Environment-bound URL anchors; choose the selected stack's own hosts.
+      Deployment__Environment: "${ASPNETCORE_ENVIRONMENT:-Production}"
+      Deployment__OwnerOrigin: "https://${OWNER_HOST}"
+      Deployment__ApiOrigin: "https://${API_HOST}"
+      AuthWeb__AllowedOrigins__0: "https://${OWNER_HOST}"
+      Cors__AllowedOrigins__0: "https://${OWNER_HOST}"
       # Gmail SMTP
       Email__Enabled: "true"
       Email__Host: smtp.gmail.com

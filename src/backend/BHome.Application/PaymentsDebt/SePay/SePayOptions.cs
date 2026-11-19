@@ -15,13 +15,13 @@ public sealed class SePayOptions
     public int PollIntervalSeconds { get; set; } = 60;
     public List<SePayReceivingAccount> ReceivingAccounts { get; set; } = [];
 
-    public bool TestingAvailable(string environment) => Enabled && Mode == "Test" && environment is "Development" or "Testing";
+    public bool TestingAvailable(string environment) => Enabled && Mode == "Test" && environment is "Development" or "Testing" or "Staging";
 
     public bool Valid(string environment)
     {
         if (!Enabled) return true;
         var expectedApi = Mode == "Test" ? "https://userapi-sandbox.sepay.vn/v2" : "https://userapi.sepay.vn/v2";
-        return Mode is "Test" or "Live" && (Mode == "Test") == (environment is "Development" or "Testing") &&
+        return (Mode == "Test" && environment is "Development" or "Testing" or "Staging" || Mode == "Live" && environment == "Production") &&
             ApiBaseUrl.TrimEnd('/') == expectedApi && WebhookPath == WebhookRoute && PaymentCodePrefix == "BH" &&
             WebhookSecret is { Length: >= 32 } && !WebhookSecret.Contains("replace", StringComparison.OrdinalIgnoreCase) &&
             (string.IsNullOrEmpty(ApiToken) || !ApiToken.Contains("replace", StringComparison.OrdinalIgnoreCase) && !ApiToken.Contains('\r') && !ApiToken.Contains('\n')) &&
