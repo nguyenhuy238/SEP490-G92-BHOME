@@ -151,7 +151,9 @@ function RoomMeterScreen({ taskId, staffLocationId }: { taskId: string; staffLoc
   );
 }
 
-function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () => void }) {
+export function MeterTaskScreen({ taskId, onReturn, embedded = false }: {
+  taskId: string; onReturn: () => void; embedded?: boolean;
+}) {
   const { api } = useSession();
   const [task, setTask] = useState<MeterTask | null>(null);
   const [reading, setReading] = useState('');
@@ -329,9 +331,9 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
       if (mounted.current) setBusy(false);
     }
   }
-  return (
-    <WorkspaceShell screen="meter-reading" onBack={back} backDisabled={busy} contentRevision={step}>
-      <Heading title="Ghi chỉ số điện nước" detail="Quản lý ghi chỉ số theo phòng" />
+  const content = (
+    <>
+      {!embedded && <Heading title="Ghi chỉ số điện nước" detail="Quản lý ghi chỉ số theo phòng" />}
       {loading && <ActivityIndicator accessibilityLabel="Đang tải tác vụ" />}
       {!!error && (
         <Text accessibilityRole="alert" style={styles.error}>
@@ -482,6 +484,11 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
           </>
         )
       )}
+    </>
+  );
+  return embedded ? content : (
+    <WorkspaceShell screen="meter-reading" onBack={back} backDisabled={busy} contentRevision={step}>
+      {content}
     </WorkspaceShell>
   );
 }

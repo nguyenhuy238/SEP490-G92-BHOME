@@ -73,6 +73,7 @@ public sealed partial class OperationalTaskService
                 var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
                 await AccessAsync(task, t, true);
                 if (task.Kind != OperationalTaskKind.MoveInInventory) throw OperationalTaskException.Missing();
+                await EnsureMoveInMainWorkStartedAsync(task, t);
                 if (task.Version != input.Version) throw OperationalTaskException.Conflict("stale_version");
                 if (task.Status != MeterTaskStatus.InProgress)
                     throw OperationalTaskException.Conflict("move_in_inventory_not_in_progress");
@@ -132,6 +133,7 @@ public sealed partial class OperationalTaskService
                 var task = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
                 await AccessAsync(task, t, true);
                 if (task.Kind != OperationalTaskKind.MoveInInventory) throw OperationalTaskException.Missing();
+                await EnsureMoveInMainWorkStartedAsync(task, t);
                 if (task.Version != input.Version) throw OperationalTaskException.Conflict("stale_version");
                 if (task.Status != MeterTaskStatus.InProgress)
                     throw OperationalTaskException.Conflict("move_in_inventory_not_in_progress");

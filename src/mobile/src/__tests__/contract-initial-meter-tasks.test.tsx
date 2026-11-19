@@ -26,6 +26,8 @@ vi.mock('../components/WorkspaceKit', () => ({
     <button onClick={onPress}>{children}</button>
   ),
   Box: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Heading: ({ title, detail }: { title: string; detail?: string }) => (
     <section>
       <h2>{title}</h2>
@@ -148,4 +150,22 @@ it('does not open an ambiguous duplicate initial task for the same contract and 
   expect(screen.queryByRole('button', { name: 'Chụp chỉ số điện' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Chụp chỉ số nước' })).toBeTruthy();
   await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+});
+
+it('updates both meter statuses from the server after OCR returns without a manual refresh button', async () => {
+  let confirmed = false;
+  request.mockImplementation(async () => [
+    task('electric', 0, { status: confirmed ? 2 : 0 }),
+    task('water', 1, { status: confirmed ? 2 : 0 }),
+  ]);
+  const page = render(<ContractInitialMeterTasks contract={contract} integrated refreshRevision={0} />);
+  expect(await screen.findByRole('button', { name: 'Chụp chỉ số điện' })).toBeTruthy();
+  expect(screen.getAllByText('Chưa xác nhận')).toHaveLength(2);
+  expect(screen.queryByRole('button', { name: /Cập nhật trạng thái điện nước|Tải lại nhiệm vụ khởi tạo/ })).toBeNull();
+  confirmed = true;
+  page.rerender(<ContractInitialMeterTasks contract={contract} integrated refreshRevision={1} />);
+  expect(await screen.findByRole('button', { name: 'Xem chỉ số điện' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Xem chỉ số nước' })).toBeTruthy();
+  expect(screen.getAllByText('Đã xác nhận')).toHaveLength(2);
+  expect(request).toHaveBeenCalledTimes(2);
 });

@@ -600,17 +600,6 @@ function LiveContractDetail({
       {section === 'overview' && !rental && !holding && !ownerMain && c.kind !== 'Holding' && (
         <ContractProgress contract={c} readiness={r} />
       )}
-      {!holding && (
-        <Button
-          disabled={uploading}
-          onPress={() => {
-            setSelectedAction('');
-            detail.reload();
-          }}
-        >
-          Tải lại trạng thái
-        </Button>
-      )}
       {!!notice && <Text style={ui.blue}>{notice}</Text>}
       {section === 'overview' && !rental && !holding && !ownerMain && (
         <>
@@ -941,7 +930,7 @@ function LiveContractDetail({
           }}
           onSuccess={(next) => {
             setSelectedAction('');
-            setNotice('Máy chủ đã ghi nhận thao tác. Trạng thái đã được yêu cầu tải lại.');
+            setNotice('Máy chủ đã ghi nhận thao tác. Trạng thái đang được đồng bộ tự động.');
             detail.reload();
             if (next) onNext(next);
           }}

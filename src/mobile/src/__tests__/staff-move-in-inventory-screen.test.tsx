@@ -62,6 +62,9 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
 vi.mock('../features/workspace/useWorkspaceQuery', () => ({
   useWorkspaceQuery: () => ({ data: state.data, loading: false, error: '', reload: state.reload }),
 }));
+vi.mock('../theme/theme', () => ({
+  colors: { blue: '#1052cf', border: '#e2e8f0', tint: '#e8edff' },
+}));
 vi.mock('../components/WorkspaceKit', () => ({
   ui: {},
   Box: ({ children }: C) => <section>{children}</section>,
@@ -86,6 +89,27 @@ vi.mock('react-native-paper', () => ({
       <button onClick={onPress}>{label}</button>
     ),
   },
+  RadioButton: {
+    Item: ({ label, status, disabled, onPress }: { label: string; status: string; disabled: boolean; onPress: () => void }) => (
+      <button role="radio" aria-label={label} aria-checked={status === 'checked'} disabled={disabled} onClick={onPress}>
+        {label}
+      </button>
+    ),
+  },
+  SegmentedButtons: ({ value, onValueChange, buttons }: {
+    value: string;
+    onValueChange: (value: string) => void;
+    buttons: { value: string; label: string; disabled?: boolean }[];
+  }) => (
+    <div role="group" aria-label="Tình trạng tài sản">
+      {buttons.map((button) => (
+        <button key={button.value} aria-pressed={value === button.value}
+          disabled={button.disabled} onClick={() => onValueChange(button.value)}>
+          {button.label}
+        </button>
+      ))}
+    </div>
+  ),
 }));
 vi.mock('../components/WorkflowControls', () => ({
   Input: ({
@@ -105,33 +129,6 @@ vi.mock('../components/WorkflowControls', () => ({
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
     />
-  ),
-  ChoiceField: ({
-    label,
-    value,
-    disabled,
-    options,
-    onChange,
-  }: {
-    label: string;
-    value: string;
-    disabled: boolean;
-    options: { id: string; label: string }[];
-    onChange: (s: string) => void;
-  }) => (
-    <select
-      aria-label={label}
-      disabled={disabled}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      <option value="">Chọn tình trạng</option>
-      {options.map((o) => (
-        <option key={o.id} value={o.id}>
-          {o.label}
-        </option>
-      ))}
-    </select>
   ),
 }));
 vi.mock('../components/IncidentEvidencePicker', () => ({
@@ -196,9 +193,11 @@ afterEach(cleanup);
 
 it('starts a server-assigned inventory task before allowing edits', async () => {
   const view = render(<StaffMoveInInventoryScreen />);
+  expect(screen.queryByText('Tải lại kiểm kê')).toBeNull();
   expect(screen.queryByLabelText('Số lượng thực tế – Giường đơn')).toBeNull();
   fireEvent.click(screen.getByText('Kiểm tra'));
   expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty('disabled', true);
+  fireEvent.click(screen.getByText('Về danh sách tài sản'));
   fireEvent.click(screen.getByText('Bắt đầu kiểm kê'));
   await waitFor(() =>
     expect(
@@ -209,7 +208,70 @@ it('starts a server-assigned inventory task before allowing edits', async () => 
     ).toBe(true),
   );
   view.rerender(<StaffMoveInInventoryScreen />);
+  fireEvent.click(screen.getByText('Kiểm tra'));
   expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toHaveProperty('disabled', false);
+  expect(state.reload).toHaveBeenCalled();
+});
+
+it('shows only the selected asset on mobile, keeps unsaved input and resets the modal scroll', () => {
+  state.data = inventory('InProgress');
+  const paneChange = vi.fn();
+  state.data.items.push({
+    ...state.data.items[0]!, id: '77777777-7777-4777-8777-777777777777',
+    assetId: null, name: 'Bàn học', expectedQuantity: 1,
+  });
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} onPaneChange={paneChange} />);
+  expect(screen.getByText('Giường đơn')).toBeTruthy();
+  expect(screen.getByText('Bàn học')).toBeTruthy();
+  expect(screen.queryByLabelText('Số lượng thực tế – Giường đơn')).toBeNull();
+  fireEvent.click(screen.getAllByText('Kiểm tra')[1]!);
+  expect(screen.queryByText('Giường đơn')).toBeNull();
+  expect(screen.getByLabelText('Số lượng thực tế – Bàn học')).toBeTruthy();
+  expect(screen.queryByLabelText('Số lượng thực tế – Giường đơn')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Bàn học'), { target: { value: '2' } });
+  fireEvent.click(screen.getByText('Về danh sách tài sản'));
+  expect(screen.getByText('Chưa lưu')).toBeTruthy();
+  fireEvent.click(screen.getAllByText('Kiểm tra')[1]!);
+  expect(screen.getByLabelText('Số lượng thực tế – Bàn học')).toHaveProperty('value', '2');
+  expect(paneChange).toHaveBeenCalledTimes(3);
+});
+
+it('returns to the inventory list only after saving a single item on the server', async () => {
+  state.data = inventory('InProgress');
+  const paneChange = vi.fn();
+  const view = render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} onPaneChange={paneChange} />);
+  fireEvent.click(screen.getByText('Kiểm tra'));
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), { target: { value: '2' } });
+  fireEvent.click(screen.getByText('Đạt'));
+  fireEvent.click(screen.getByText('Chụp ảnh tài sản'));
+  fireEvent.click(screen.getByText('Lưu mục này'));
+  await waitFor(() => expect(state.request.mock.calls.some(([path, init]) =>
+    path.includes('/move-in-inventory/items/') && init?.method === 'PUT')).toBe(true));
+  await waitFor(() => expect(screen.queryByLabelText('Số lượng thực tế – Giường đơn')).toBeNull());
+  view.rerender(<StaffMoveInInventoryScreen embeddedTaskId={taskId} onPaneChange={paneChange} />);
+  expect(screen.getByText('Đạt')).toBeTruthy();
+  expect(state.data!.items[0]!.condition).toBe('Good');
+  expect(paneChange).toHaveBeenCalledTimes(2);
+});
+
+it('opens a compact one-asset screen, without expanding fields under the list', () => {
+  state.data = inventory('InProgress');
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  expect(screen.queryByLabelText('Số lượng thực tế – Giường đơn')).toBeNull();
+  fireEvent.click(screen.getByText('Kiểm tra'));
+  expect(screen.getByText('Về danh sách tài sản')).toBeTruthy();
+  expect(screen.getByLabelText('Số lượng thực tế – Giường đơn')).toBeTruthy();
+  expect(screen.getByRole('group', { name: 'Tình trạng tài sản' }).querySelectorAll('button')).toHaveLength(3);
+  expect(screen.queryByRole('combobox')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Hư hỏng' }));
+  expect(screen.getByRole('button', { name: 'Hư hỏng' }).getAttribute('aria-pressed')).toBe('true');
+  expect(screen.getByLabelText('Ghi chú – Giường đơn')).toBeTruthy();
+  expect(state.request).not.toHaveBeenCalledWith(expect.stringContaining('/items/'), expect.anything());
+  fireEvent.click(screen.getByRole('button', { name: 'Về danh sách tài sản' }));
+  expect(screen.queryByLabelText('Số lượng thực tế – Giường đơn')).toBeNull();
+  expect(screen.getByText('Chưa lưu')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra' }));
+  expect(screen.getByRole('button', { name: 'Hư hỏng' }).getAttribute('aria-pressed')).toBe('true');
 });
 
 it('saves missing count and item evidence, then opens existing BF-07 form prefilled', async () => {
@@ -219,9 +281,7 @@ it('saves missing count and item evidence, then opens existing BF-07 form prefil
   fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), {
     target: { value: '1' },
   });
-  fireEvent.change(screen.getByLabelText('Tình trạng – Giường đơn'), {
-    target: { value: 'Missing' },
-  });
+  fireEvent.click(screen.getByRole('button', { name: 'Thiếu' }));
   fireEvent.change(screen.getByLabelText('Ghi chú – Giường đơn'), {
     target: { value: 'Thiếu một giường' },
   });

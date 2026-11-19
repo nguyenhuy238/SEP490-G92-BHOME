@@ -38,7 +38,7 @@ export interface InventoryItemUpdate {
 export const inventoryStatusLabels: Record<InventoryCondition, string> = {
   Good: 'Đạt',
   Missing: 'Thiếu',
-  Damaged: 'Hư hỏng cần sửa chữa',
+  Damaged: 'Hư hỏng',
 };
 
 export function validateInventoryItem(

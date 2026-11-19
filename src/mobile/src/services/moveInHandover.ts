@@ -51,6 +51,8 @@ export interface MoveInWorkTask {
   version: number;
   status: 'Assigned' | 'InProgress' | 'PendingVerification' | 'Completed' | 'Cancelled';
   canInspect: boolean;
+  inventoryTaskId?: string | null;
+  inventoryStatus?: 'Assigned' | 'InProgress' | 'Completed' | 'Cancelled' | null;
 }
 
 export interface MoveInChangeRequest {
@@ -183,7 +185,7 @@ const missingMessages: Record<string, string> = {
   room_checklist: 'Chưa hoàn thành đủ 7 nhóm kiểm tra hiện trạng phòng.',
   room_issue_evidence: 'Mục có vấn đề cần ghi chú và gắn ảnh bằng chứng trực tiếp.',
   access_inventory: 'Chưa kê khai số lượng chìa khóa, thẻ hoặc quyền truy cập bàn giao.',
-  outstanding_issues: 'Vấn đề tồn đọng cần người chịu trách nhiệm, nội dung và hạn xử lý.',
+  outstanding_issues: 'Vấn đề tồn đọng cần Owner xem xét và quyết định phương án xử lý.',
   handover_task_not_started: 'Bấm Bắt đầu công việc trước khi kiểm kê và ghi nhận hiện trạng.',
   handover_task: 'Nhiệm vụ bàn giao chưa sẵn sàng. Hãy nhờ Owner kiểm tra.',
   contract_changed: 'Thông tin hợp đồng đã thay đổi; cần cập nhật biên bản.',

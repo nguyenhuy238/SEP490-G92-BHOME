@@ -43,6 +43,16 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         if ((!Owner || requireAssigned) && (responsible is null || responsible.StaffUserId != Actor)) throw OperationalTaskException.Missing();
         return responsible;
     }
+    private async Task EnsureMoveInMainWorkStartedAsync(OperationalTask task, CancellationToken t)
+    {
+        if (task.Kind != OperationalTaskKind.MoveInInventory || task.ContractId is not { } contractId) return;
+        // Existing legacy inventory records without a main handover retain
+        // their original workflow. A paired contract move-in inventory may
+        // only be started or edited after Staff starts the main job.
+        var mainStatus = await repository.MoveInMainTaskStatusAsync(contractId, t);
+        if (mainStatus is not null && mainStatus != MeterTaskStatus.InProgress)
+            throw OperationalTaskException.Conflict("move_in_handover_task_not_started");
+    }
     private static TaskView View(OperationalTask task, TaskResponsibility? responsible) => new(task.Id, task.LocationId,
         task.Kind.ToString(), task.Title, task.Requirements, task.Priority.ToString(), task.DueAt, task.EvidenceRequired,
         task.Status.ToString(), false, responsible?.StaffUserId, task.AssignedStaffUserId, responsible is not null,
@@ -240,6 +250,8 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             var responsible = await AccessAsync(task, t, executing);
             if (task.Kind == OperationalTaskKind.MoveInInventory && action is not ("start" or "assign"))
                 throw OperationalTaskException.Conflict("move_in_inventory_workflow_required");
+            if (task.Kind == OperationalTaskKind.MoveInInventory && action == "start")
+                await EnsureMoveInMainWorkStartedAsync(task, t);
             if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory))
                 throw OperationalTaskException.Conflict("meter_workflow_required");
             if (task.Version != version) throw OperationalTaskException.Conflict("stale_version");

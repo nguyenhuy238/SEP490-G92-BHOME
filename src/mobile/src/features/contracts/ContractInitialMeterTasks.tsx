@@ -15,7 +15,15 @@ type TaskResult = { key: string; tasks: MeterTask[]; error: string };
 export function ContractInitialMeterTasks({
   contract,
   integrated = false,
-}: { contract: ContractView; integrated?: boolean }) {
+  onOpenTask,
+  refreshRevision = 0,
+}: {
+  contract: ContractView;
+  integrated?: boolean;
+  onOpenTask?: (taskId: string, label: string) => void;
+  /** Reload confirmed readings when a nested OCR task returns successfully. */
+  refreshRevision?: number;
+}) {
   const { api, session } = useSession();
   const { staffLocationId } = useWorkspace();
   const [revision, setRevision] = useState(0);
@@ -26,7 +34,7 @@ export function ContractInitialMeterTasks({
     !!staffLocationId &&
     staffLocationId === contract.locationId &&
     !!contract.roomId;
-  const key = `${contract.id}:${contract.locationId}:${contract.roomId}:${staffLocationId}:${revision}`;
+  const key = `${contract.id}:${contract.locationId}:${contract.roomId}:${staffLocationId}:${revision}:${refreshRevision}`;
 
   useFocusEffect(
     useCallback(() => {
@@ -121,9 +129,9 @@ export function ContractInitialMeterTasks({
                   {task.status !== 3 && (
                     <Action
                       secondary={task.status === 2}
-                      onPress={() =>
-                        router.push({ pathname: '/meter', params: { taskId: task.id } })
-                      }
+                      onPress={() => onOpenTask
+                        ? onOpenTask(task.id, label)
+                        : router.push({ pathname: '/meter', params: { taskId: task.id } })}
                     >
                       {task.status === 2
                         ? `Xem chỉ số ${label.toLowerCase()}`
@@ -135,11 +143,6 @@ export function ContractInitialMeterTasks({
             </React.Fragment>
           );
         })}
-      {allowed && (
-        <Action secondary onPress={() => setRevision((value) => value + 1)}>
-          {integrated ? 'Cập nhật trạng thái điện nước' : 'Tải lại nhiệm vụ khởi tạo'}
-        </Action>
-      )}
     </>
   );
   return integrated ? content : <Box>{content}</Box>;

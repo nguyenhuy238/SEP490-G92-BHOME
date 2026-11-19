@@ -1,10 +1,10 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { Button, Checkbox, Text } from 'react-native-paper';
+import { Button, Checkbox, SegmentedButtons, Text } from 'react-native-paper';
 import { formatInstant } from '../../../../packages/client-core/src/localization';
 import { mutationKeys } from '../../../../packages/client-core/src/contracts';
 import { Action, Box, Heading, Pill, Row, ui } from '../components/WorkspaceKit';
-import { ChoiceField, Input } from '../components/WorkflowControls';
+import { Input } from '../components/WorkflowControls';
 import { IncidentEvidencePicker } from '../components/IncidentEvidencePicker';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
@@ -23,8 +23,27 @@ import {
   type MoveInInventoryItem,
 } from '../services/moveInInventory';
 import type { IncidentPhoto } from '../services/incidents';
+import { colors } from '../theme/theme';
 
 const guidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
+const inventoryStyles = {
+  embeddedSection: {
+    paddingHorizontal: 0, paddingVertical: 12, borderWidth: 0, borderBottomWidth: 1,
+    borderBottomColor: colors.border, borderRadius: 0, backgroundColor: 'transparent',
+  },
+  itemTitle: { flex: 1, minWidth: 0 },
+  selector: { padding: 0, borderWidth: 0, backgroundColor: 'transparent', borderRadius: 0, gap: 8 },
+  summaryRow: {
+    paddingHorizontal: 0, paddingVertical: 10, gap: 7,
+    borderWidth: 0, borderBottomWidth: 1, borderBottomColor: colors.border,
+    borderRadius: 0, backgroundColor: 'transparent',
+  },
+};
+const conditions: { value: InventoryCondition; label: string }[] = [
+  { value: 'Good', label: 'Đạt' },
+  { value: 'Missing', label: 'Thiếu' },
+  { value: 'Damaged', label: 'Hư hỏng' },
+];
 type ItemDraft = {
   quantity: string;
   condition: InventoryCondition | '';
@@ -42,14 +61,19 @@ function fromItem(item: MoveInInventoryItem): ItemDraft {
   };
 }
 
-export function StaffMoveInInventoryScreen() {
+export function StaffMoveInInventoryScreen({ embeddedTaskId, onPaneChange }: {
+  embeddedTaskId?: string;
+  onPaneChange?: () => void;
+}) {
   const { taskId } = useLocalSearchParams<{ taskId?: string }>();
   const { role, preview } = useWorkspace();
   const { session } = useSession();
   if (role !== 'Staff' || preview || !session?.roles.includes('Staff'))
     return <Text>Đăng nhập tài khoản Staff để kiểm kê trước nhận phòng.</Text>;
-  return taskId && guidPattern.test(taskId) ? (
-    <InventoryDetail key={taskId} taskId={taskId} />
+  const selectedTaskId = embeddedTaskId ?? taskId;
+  return selectedTaskId && guidPattern.test(selectedTaskId) ? (
+    <InventoryDetail key={selectedTaskId} taskId={selectedTaskId}
+      embedded={!!embeddedTaskId} onPaneChange={onPaneChange} />
   ) : (
     <InventoryTaskList />
   );
@@ -63,8 +87,8 @@ function InventoryTaskList() {
       <Box>
         <Text>Kiểm kê được tạo tự động khi hợp đồng thuê chính bắt đầu có hiệu lực.</Text>
         <Text style={ui.muted}>
-          Mở Công việc vận hành, chọn nhiệm vụ “Kiểm kê trước nhận phòng” ở trang tương ứng. Danh
-          sách Công việc hiển thị đầy đủ các nhiệm vụ được phân công.
+          Mở công việc “Bàn giao vào phòng”, chọn mục “Kiểm kê tài sản” rồi mở
+          phiếu “Đối chiếu kiểm kê đầu vào”. Đây là một bước nội bộ của cùng công việc bàn giao.
         </Text>
         <Action onPress={() => go('work-orders')}>Mở danh sách công việc</Action>
       </Box>
@@ -72,9 +96,13 @@ function InventoryTaskList() {
   );
 }
 
-function InventoryDetail({ taskId }: { taskId: string }) {
+function InventoryDetail({ taskId, embedded = false, onPaneChange }: {
+  taskId: string;
+  embedded?: boolean;
+  onPaneChange?: () => void;
+}) {
   const { api } = useSession();
-  const { go } = useWorkspace();
+  const { go, resetScroll } = useWorkspace();
   const [drafts, setDrafts] = useState<Record<string, ItemDraft>>({});
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -90,6 +118,11 @@ function InventoryDetail({ taskId }: { taskId: string }) {
   );
   const data = query.data;
   const reload = query.reload;
+  function openItem(itemId: string | null) {
+    setSelectedItemId(itemId);
+    if (embedded) onPaneChange?.();
+    else resetScroll?.();
+  }
   useFocusEffect(
     useCallback(() => {
       reload();
@@ -185,6 +218,7 @@ function InventoryDetail({ taskId }: { taskId: string }) {
       reload();
       setNotice('Đã lưu kết quả kiểm kê vào máy chủ.');
       showSuccess('Đã lưu kết quả kiểm kê.');
+      if (itemId && !openReport) openItem(null);
       if (itemId && openReport) {
         const item = view.items.find((entry) => entry.id === itemId);
         if (!item || !item.condition || item.condition === 'Good')
@@ -200,7 +234,7 @@ function InventoryDetail({ taskId }: { taskId: string }) {
             roomId: view.roomId,
             ...(item.assetId ? { assetId: item.assetId } : {}),
             description:
-              `Kiểm kê trước nhận phòng: ${item.name}. Dự kiến ${item.expectedQuantity}, thực tế ${item.actualQuantity ?? 0}. Tình trạng: ${item.condition === 'Damaged' ? (item.actualQuantity !== null && item.actualQuantity < item.expectedQuantity ? 'Thiếu số lượng và có tài sản hư hỏng cần sửa chữa' : 'Hư hỏng cần sửa chữa') : 'Thiếu'}. ${item.notes ?? ''}`.trim(),
+              `Kiểm kê trước nhận phòng: ${item.name}. Dự kiến ${item.expectedQuantity}, thực tế ${item.actualQuantity ?? 0}. Tình trạng: ${item.condition === 'Damaged' ? (item.actualQuantity !== null && item.actualQuantity < item.expectedQuantity ? 'Thiếu số lượng và có tài sản hư hỏng' : 'Hư hỏng') : 'Thiếu'}. ${item.notes ?? ''}`.trim(),
           });
         }
       }
@@ -277,20 +311,20 @@ function InventoryDetail({ taskId }: { taskId: string }) {
   }
   const completed = data?.status === 'Completed' || !!data?.completedAt;
   const editable = data?.status === 'InProgress' && !completed;
+  const selectedItem = data?.items.find((item) => item.id === selectedItemId);
   return (
     <>
-      <Heading
+      {!embedded && <Heading
         title="Kiểm kê trước nhận phòng"
         detail="Kiểm tra số lượng và tình trạng trước khi Tenant nhận phòng"
-      />
-      <Button
-        disabled={busy || query.loading}
-        loading={query.loading}
-        icon="refresh"
-        onPress={reload}
-      >
-        Tải lại kiểm kê
-      </Button>
+      />}
+      {selectedItem && (
+        <Button icon="arrow-left" mode="text" disabled={busy}
+          contentStyle={{ justifyContent: 'flex-start', minHeight: 44 }}
+          onPress={() => openItem(null)}>
+          Về danh sách tài sản
+        </Button>
+      )}
       {query.loading && <Text>Đang tải danh sách tài sản…</Text>}
       {!!query.error && (
         <Text accessibilityRole="alert" style={ui.red}>
@@ -307,9 +341,9 @@ function InventoryDetail({ taskId }: { taskId: string }) {
           {notice}
         </Text>
       )}
-      {data && (
+      {data && !selectedItem && (
         <>
-          <Box>
+          <Box style={embedded ? inventoryStyles.embeddedSection : undefined}>
             <Row spread>
               <Text variant="titleMedium">Phòng cần kiểm kê</Text>
               <Pill tone={completed ? 'green' : 'blue'}>
@@ -343,18 +377,15 @@ function InventoryDetail({ taskId }: { taskId: string }) {
           </Box>
           {data.items.map((item) => {
             const draft = drafts[item.id] ?? fromItem(item);
-            const issued = draft.condition === 'Missing' || draft.condition === 'Damaged';
-            const defect = issued && !!item.incidentId;
-            const expanded = selectedItemId === item.id;
             const status = draft.dirty
               ? 'Chưa lưu'
               : item.condition
                 ? inventoryStatusLabels[item.condition]
                 : 'Chưa kiểm kê';
             return (
-              <Box key={item.id}>
+              <Box key={item.id} style={embedded ? inventoryStyles.summaryRow : undefined}>
                 <Row spread>
-                  <Text variant="titleMedium" style={ui.grow}>
+                  <Text variant="titleMedium" style={inventoryStyles.itemTitle}>
                     {item.name}
                   </Text>
                   <Pill
@@ -363,7 +394,7 @@ function InventoryDetail({ taskId }: { taskId: string }) {
                         ? 'amber'
                         : item.condition === 'Good'
                           ? 'green'
-                          : issued
+                          : item.condition === 'Missing' || item.condition === 'Damaged'
                             ? 'red'
                             : 'neutral'
                     }
@@ -371,95 +402,20 @@ function InventoryDetail({ taskId }: { taskId: string }) {
                     {status}
                   </Pill>
                 </Row>
-                <Row spread>
-                  <Text style={ui.muted}>
-                    Dự kiến {item.expectedQuantity} · Thực tế{' '}
-                    {draft.quantity === '' ? 'chưa ghi' : draft.quantity}
-                    {draft.dirty ? ' (chưa lưu)' : ''}
-                  </Text>
-                  <Button
-                    compact
-                    disabled={busy}
-                    onPress={() => setSelectedItemId(expanded ? null : item.id)}
-                    icon={expanded ? 'chevron-up' : 'chevron-down'}
-                  >
-                    {expanded ? 'Thu gọn' : item.condition ? 'Xem phiếu kiểm tra' : 'Kiểm tra'}
-                  </Button>
-                </Row>
-                {expanded && (
-                  <>
-                    <Input
-                      label={`Số lượng thực tế – ${item.name}`}
-                      numeric
-                      value={draft.quantity}
-                      disabled={busy || !editable}
-                      onChange={(quantity) => update(item.id, { quantity })}
-                    />
-                    <ChoiceField
-                      label={`Tình trạng – ${item.name}`}
-                      value={draft.condition}
-                      disabled={busy || !editable}
-                      options={[
-                        { id: 'Good', label: 'Đạt' },
-                        { id: 'Missing', label: 'Thiếu' },
-                        { id: 'Damaged', label: 'Hư hỏng cần sửa chữa' },
-                      ]}
-                      onChange={(value) =>
-                        update(item.id, { condition: value as InventoryCondition })
-                      }
-                    />
-                    {draft.condition === 'Damaged' &&
-                      draft.quantity !== '' &&
-                      Number(draft.quantity) < item.expectedQuantity && (
-                        <Text style={ui.red}>
-                          Có cả tài sản thiếu và tài sản hư hỏng. Nội dung này sẽ được chuyển sang
-                          báo cáo sự cố.
-                        </Text>
-                      )}
-                    <Input
-                      label={`Ghi chú – ${item.name}`}
-                      value={draft.notes}
-                      disabled={busy || !editable}
-                      multiline
-                      onChange={(notes) => update(item.id, { notes })}
-                    />
-                    <Text style={ui.muted}>
-                      Ảnh đã lưu: {(item.evidenceIds ?? []).length} · Ảnh mới chọn:{' '}
-                      {draft.photos.length}
-                    </Text>
-                    {editable && (item.evidenceIds ?? []).length < 5 && (
-                      <IncidentEvidencePicker
-                        value={draft.photos}
-                        disabled={busy}
-                        onChange={(photos) => update(item.id, { photos })}
-                      />
-                    )}
-                    {draft.dirty && editable && (
-                      <Action secondary disabled={busy} onPress={() => void runSave(item.id)}>
-                        Lưu mục này
-                      </Action>
-                    )}
-                    {issued && (
-                      <>
-                        <Pill tone={defect ? 'amber' : 'red'}>
-                          {defect ? 'Đã liên kết báo cáo sự cố' : 'Cần báo cáo sự cố BF-07'}
-                        </Pill>
-                        <Action
-                          secondary
-                          disabled={busy || !editable}
-                          onPress={() => void runSave(item.id, true)}
-                        >
-                          {defect ? 'Xem báo cáo sự cố' : 'Báo cáo sự cố'}
-                        </Action>
-                      </>
-                    )}
-                  </>
-                )}
+                <Text style={ui.muted}>
+                  Dự kiến {item.expectedQuantity} · Thực tế {draft.quantity === '' ? 'chưa ghi' : draft.quantity}
+                  {draft.dirty ? ' (chưa lưu)' : ''}
+                </Text>
+                <Button compact disabled={busy} mode="text" icon="chevron-right"
+                  contentStyle={{ minHeight: 44, justifyContent: 'flex-end' }}
+                  onPress={() => openItem(item.id)}>
+                  {item.condition ? 'Xem kiểm kê' : 'Kiểm tra'}
+                </Button>
               </Box>
             );
           })}
           {!data.items.length && (
-            <Box>
+            <Box style={embedded ? inventoryStyles.embeddedSection : undefined}>
               <Text>
                 Phòng chưa có tài sản được cấu hình để kiểm kê. Xác nhận rằng phòng không có tài sản
                 trước khi hoàn thành.
@@ -475,7 +431,7 @@ function InventoryDetail({ taskId }: { taskId: string }) {
             </Box>
           )}
           {editable && (
-            <Box>
+            <Box style={embedded ? inventoryStyles.embeddedSection : undefined}>
               <Input
                 label="Thông tin hoàn thành gửi Owner (tùy chọn)"
                 value={note}
@@ -508,16 +464,67 @@ function InventoryDetail({ taskId }: { taskId: string }) {
             </Box>
           )}
           {completed && (
-            <Box>
+            <Box style={embedded ? inventoryStyles.embeddedSection : undefined}>
               <Pill tone="green">Đã hoàn thành, không chờ Owner duyệt</Pill>
               <Text>Kết quả đã được lưu và Owner có thể xem thông tin hoàn thành.</Text>
             </Box>
           )}
         </>
       )}
-      <Action secondary disabled={busy} onPress={() => go('work-orders')}>
+      {data && selectedItem && (() => {
+        const item = selectedItem;
+        const draft = drafts[item.id] ?? fromItem(item);
+        const issued = draft.condition === 'Missing' || draft.condition === 'Damaged';
+        const defect = issued && !!item.incidentId;
+        return (
+          <Box style={embedded ? inventoryStyles.embeddedSection : undefined}>
+            <Text variant="titleMedium">{item.name}</Text>
+            <Text style={ui.muted}>Dự kiến {item.expectedQuantity} · Kết quả chỉ hoàn tất sau khi lưu lên máy chủ.</Text>
+            <Input label={`Số lượng thực tế – ${item.name}`} numeric
+              value={draft.quantity} disabled={busy || !editable}
+              onChange={(quantity) => update(item.id, { quantity })} />
+            <Box style={inventoryStyles.selector}>
+              <Text variant="labelMedium">Tình trạng – {item.name}</Text>
+              <SegmentedButtons density="small" value={draft.condition}
+                onValueChange={(value) => update(item.id, { condition: value as InventoryCondition })}
+                buttons={conditions.map(({ value, label }) => ({ value, label, disabled: busy || !editable }))} />
+            </Box>
+            {draft.condition === 'Damaged' && draft.quantity !== '' &&
+              Number(draft.quantity) < item.expectedQuantity && (
+                <Text style={ui.red}>Có cả tài sản thiếu và hư hỏng. Cần ghi nhận trong báo cáo sự cố.</Text>
+              )}
+            <Input label={`Ghi chú – ${item.name}`} value={draft.notes}
+              disabled={busy || !editable} multiline
+              onChange={(notes) => update(item.id, { notes })} />
+            <Text style={ui.muted}>
+              Ảnh đã lưu: {(item.evidenceIds ?? []).length} · Ảnh mới chọn: {draft.photos.length}
+            </Text>
+            {editable && (item.evidenceIds ?? []).length < 5 && (
+              <IncidentEvidencePicker value={draft.photos} disabled={busy}
+                onChange={(photos) => update(item.id, { photos })} />
+            )}
+            {draft.dirty && editable && (
+              <Action secondary disabled={busy} onPress={() => void runSave(item.id)}>
+                Lưu mục này
+              </Action>
+            )}
+            {draft.dirty && <Text style={ui.muted}>Chưa lưu. Có thể quay lại danh sách và mở lại tài sản này để tiếp tục.</Text>}
+            {issued && (
+              <>
+                <Pill tone={defect ? 'amber' : 'red'}>
+                  {defect ? 'Đã liên kết báo cáo sự cố' : 'Cần báo cáo sự cố BF-07'}
+                </Pill>
+                <Action secondary disabled={busy || !editable} onPress={() => void runSave(item.id, true)}>
+                  {defect ? 'Xem báo cáo sự cố' : 'Báo cáo sự cố'}
+                </Action>
+              </>
+            )}
+          </Box>
+        );
+      })()}
+      {!embedded && <Action secondary disabled={busy} onPress={() => go('work-orders')}>
         Về danh sách công việc
-      </Action>
+      </Action>}
     </>
   );
 }

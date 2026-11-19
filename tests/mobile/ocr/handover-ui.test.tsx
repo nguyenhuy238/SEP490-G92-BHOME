@@ -254,14 +254,14 @@ function setup() {
 }
 it('requires new consent when the server returns a newer handover version', async () => {
   const api = setup();
-  render(<ContractHandoverPanel api={api} contract={contract} role="Tenant" />);
+  render(<ContractHandoverPanel api={api} contract={contract} role="Tenant" autoRefreshMs={30} />);
   await screen.findByLabelText('Tôi đã kiểm tra nội dung phiên bản 1');
   fireEvent.click(screen.getByRole('checkbox'));
   expect(
     (screen.getByRole('button', { name: 'Xác nhận nhận phòng' }) as HTMLButtonElement).disabled,
   ).toBe(false);
   vi.mocked(api.handover).mockResolvedValue(record(2));
-  fireEvent.click(screen.getByRole('button', { name: 'Tải lại bàn giao' }));
+  expect(screen.queryByRole('button', { name: 'Tải lại bàn giao' })).toBeNull();
   await screen.findByLabelText('Tôi đã kiểm tra nội dung phiên bản 2');
   expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
   expect(
@@ -296,7 +296,7 @@ it('hides old evidence and consent immediately when changing Contract and the ne
 });
 it('does not allow Staff completion until Tenant has confirmed the displayed version', async () => {
   const api = setup();
-  render(<ContractHandoverPanel api={api} contract={contract} role="Staff" />);
+  render(<ContractHandoverPanel api={api} contract={contract} role="Staff" autoRefreshMs={30} />);
   await screen.findByRole('button', { name: 'Staff xác nhận hoàn tất bàn giao' });
   fireEvent.click(screen.getByRole('checkbox'));
   expect(
@@ -308,7 +308,7 @@ it('does not allow Staff completion until Tenant has confirmed the displayed ver
     tenantConfirmedVersion: 1,
     tenantConfirmedAt: '2026-11-06T02:00:00Z',
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Tải lại bàn giao' }));
+  expect(screen.queryByRole('button', { name: 'Tải lại bàn giao' })).toBeNull();
   await waitFor(() =>
     expect(
       (

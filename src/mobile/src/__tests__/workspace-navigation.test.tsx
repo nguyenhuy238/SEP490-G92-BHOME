@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
   replace: vi.fn(),
   canGoBack: vi.fn(),
   renderTabBar: false,
+  viewportWidth: 390,
 }));
 vi.mock('expo-router', () => ({
   useSegments: () => state.segments,
@@ -94,6 +95,7 @@ vi.mock('react-native', () => {
   return {
     View,
     Platform: { OS: 'android' },
+    useWindowDimensions: () => ({ width: state.viewportWidth, height: 730 }),
     StyleSheet: { create: (s: unknown) => s },
     KeyboardAvoidingView: View,
     RefreshControl: ({ refreshing, onRefresh }: { refreshing: boolean; onRefresh: () => void }) => (
@@ -219,6 +221,7 @@ beforeEach(() => {
   state.segments = ['workspace', '[screen]'];
   state.params = {};
   state.renderTabBar = false;
+  state.viewportWidth = 390;
   vi.clearAllMocks();
   state.canGoBack.mockReturnValue(false);
   state.navigation.isFocused.mockReturnValue(true);
@@ -322,6 +325,22 @@ it('keeps the Staff task title, refresh, back and four bottom tabs in the shell'
   fireEvent.click(screen.getByRole('button', { name: 'Tải lại công việc' }));
   expect(refresh).toHaveBeenCalledOnce();
   expect(screen.getAllByRole('tab')).toHaveLength(4);
+});
+it('keeps a compact Staff header and scrollable move-in content at 320px', () => {
+  state.viewportWidth = 320;
+  const view = render(
+    <WorkspaceProvider>
+      <WorkspaceShell screen="move-in">
+        <span>Đối chiếu kiểm kê đầu vào</span>
+      </WorkspaceShell>
+    </WorkspaceProvider>,
+  );
+  expect(screen.getByText('BHOME Nhân viên')).toBeTruthy();
+  expect(screen.getByText('Đối chiếu kiểm kê đầu vào')).toBeTruthy();
+  expect(screen.getByTestId('shell-scroll')).toBeTruthy();
+  expect(screen.getAllByRole('tab')).toHaveLength(4);
+  expect(view.container.querySelector('main')?.getAttribute('data-edges')).toBe('top,left,right');
+  expect(screen.getByText('BHOME Nhân viên').parentElement?.parentElement?.parentElement?.style.width).not.toBe('0px');
 });
 function ProfileEditFooterProbe() {
   useWorkspaceHeaderRefresh(state.leave, false, {

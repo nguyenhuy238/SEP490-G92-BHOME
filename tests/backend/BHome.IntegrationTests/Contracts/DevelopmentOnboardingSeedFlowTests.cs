@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
+using BHome.Application.StaffOperations;
 using BHome.Domain.PropertyManagement;
 using BHome.Infrastructure.Development;
 using BHome.Infrastructure.Persistence.Compact24;
@@ -62,6 +63,34 @@ public sealed partial class Compact24OwnerSetupTests
         var draft = await staff.GetFromJsonAsync<HandoverDraftView>(
             $"/api/v1/contracts/{created.ContractId}/handover/draft");
         Assert.NotNull(draft);
+        // The Staff sees one move-in work card. Its required pre-handover
+        // inventory checkpoint is embedded in the Assets section.
+        Assert.NotNull(draft.MoveInTask);
+        Assert.NotNull(draft.MoveInTask.InventoryTaskId);
+        Assert.Equal("Assigned", draft.MoveInTask.InventoryStatus);
+        var workPage = await staff.GetFromJsonAsync<TaskPage<TaskView>>(
+            $"/api/v1/operational-tasks?locationId={w.Location}&page=1&pageSize=100");
+        Assert.NotNull(workPage);
+        var visibleMoveIn = Assert.Single(workPage.Items, item => item.Target?.ContractId == created.ContractId);
+        Assert.Equal("AdHoc", visibleMoveIn.Kind);
+        Assert.DoesNotContain(workPage.Items, item =>
+            item.Target?.ContractId == created.ContractId && item.Kind == "MoveInInventory");
+        async Task<HttpResponseMessage> StartWork(Guid taskId, int version)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post,
+                $"/api/v1/operational-tasks/{taskId}/start")
+            {
+                Content = JsonContent.Create(new TaskAction(version))
+            };
+            request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            return await staff.SendAsync(request);
+        }
+        using (var refused = await StartWork(draft.MoveInTask.InventoryTaskId!.Value, 1))
+            Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        using (var started = await StartWork(draft.MoveInTask.Id, draft.MoveInTask.Version))
+            Assert.Equal(HttpStatusCode.OK, started.StatusCode);
+        using (var inventoryStarted = await StartWork(draft.MoveInTask.InventoryTaskId!.Value, 1))
+            Assert.Equal(HttpStatusCode.OK, inventoryStarted.StatusCode);
         Assert.Equal(DevelopmentOnboardingSeedService.SampleInventory.Length, draft.Assets.Length);
         Assert.False(draft.NoAssetsConfirmed);
         Assert.All(draft.Assets, asset =>

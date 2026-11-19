@@ -32,16 +32,14 @@ export function ContractHandoverPanel({
   api,
   contract,
   role,
+  autoRefreshMs = 10000,
 }: {
   api: ContractClient;
   contract: ContractView;
   role: string;
+  autoRefreshMs?: number;
 }) {
   const staff = role === 'Staff' && contract.status === 'Active' && contract.kind === 'Main';
-  const query = useContractHandover(api, contract.id, staff),
-    h = query.data?.record,
-    choices = query.data?.choices;
-  const sourceId = h?.sourceContractId ?? contract.id;
   const [editing, setEditing] = useState(false),
     [values, setValues] = useState<Record<string, string>>({}),
     [selected, setSelected] = useState<string[]>([]);
@@ -49,6 +47,10 @@ export function ContractHandoverPanel({
     [error, setError] = useFeedbackState(),
     [notice, setNotice] = useFeedbackState('success'),
     [safePhoto, setSafePhoto] = useState(false);
+  const query = useContractHandover(api, contract.id, staff, !editing && !busy ? autoRefreshMs : 0),
+    h = query.data?.record,
+    choices = query.data?.choices;
+  const sourceId = h?.sourceContractId ?? contract.id;
   const confirmationKey = `${contract.id}:${h?.version ?? ''}`;
   const [confirmation, setConfirmation] = useState({ key: '', checked: false, note: '' });
   const checked = confirmation.key === confirmationKey && confirmation.checked;
@@ -430,9 +432,6 @@ export function ContractHandoverPanel({
       )}
       {!!error && <Text style={ui.red}>{error}</Text>}
       {!!notice && <Text style={ui.green}>{notice}</Text>}
-      <Action secondary disabled={query.loading || busy} onPress={query.reload}>
-        Tải lại bàn giao
-      </Action>
     </Box>
   );
 }

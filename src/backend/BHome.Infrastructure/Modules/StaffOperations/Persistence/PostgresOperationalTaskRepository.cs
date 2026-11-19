@@ -52,6 +52,13 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         return new(items, page, pageSize, total);
     }
     public Task<OperationalTask?> FindAsync(Guid id, CancellationToken t) => db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, t);
+    public Task<MeterTaskStatus?> MoveInMainTaskStatusAsync(Guid contractId, CancellationToken t) =>
+        db.Set<OperationalTask>().AsNoTracking()
+            .Where(task => task.ContractId == contractId && task.Kind == OperationalTaskKind.AdHoc &&
+                task.Title.StartsWith("Bàn giao vào phòng"))
+            .OrderBy(task => task.CreatedAt).ThenBy(task => task.Id)
+            .Select(task => (MeterTaskStatus?)task.Status)
+            .FirstOrDefaultAsync(t);
     public async Task<IReadOnlyList<TaskIncidentTarget>> IncidentTargetsAsync(Guid[] ids, CancellationToken t) =>
         await db.Set<IncidentReport>().AsNoTracking().Where(x => ids.Contains(x.Id))
             .Select(x => new TaskIncidentTarget(x.Id, x.LocationId, x.RoomId, x.AssetId, x.ReporterId,
@@ -92,6 +99,19 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
     {
         // Meter-specific actions remain on capture APIs; expose only the UC-10..12 work list here.
         var rows = Visible(staffId, date).Where(x => x.Kind == OperationalTaskKind.AdHoc || x.Kind == OperationalTaskKind.MoveInInventory);
+        if (staffId is not null)
+        {
+            // Keep the original inventory checkpoint (history, incident links and
+            // completion gates) but expose it to Staff inside the canonical
+            // "Bàn giao vào phòng" job. Filter BEFORE Count/Skip/Take so a page
+            // never appears empty because it contained only hidden checkpoints.
+            // Owner management queries still see both underlying records.
+            rows = rows.Where(task => task.Kind != OperationalTaskKind.MoveInInventory ||
+                task.ContractId == null || !db.Set<OperationalTask>().Any(moveIn =>
+                    moveIn.ContractId == task.ContractId &&
+                    moveIn.Kind == OperationalTaskKind.AdHoc &&
+                    moveIn.Title.StartsWith("Bàn giao vào phòng")));
+        }
         if (query.LocationId is { } location) rows = rows.Where(x => x.LocationId == location);
         if (query.RecordedStaffUserId is { } recorded) rows = rows.Where(x => x.AssignedStaffUserId == recorded);
         if (query.HasResponsibility is { } available) rows = rows.Where(task =>

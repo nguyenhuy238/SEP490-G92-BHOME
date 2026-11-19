@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ContractClient, ContractView } from '../../../../packages/client-core/src/contracts';
 import type { MoveInDraft } from '../services/moveInHandover';
+import type { MoveInInventory } from '../services/moveInInventory';
 import { roomHandoverChecks } from '../services/moveInHandover';
 
 const state = vi.hoisted(() => ({
@@ -12,6 +13,9 @@ const state = vi.hoisted(() => ({
   documents: vi.fn(),
   updated: vi.fn(),
   draft: {} as MoveInDraft,
+  inventory: null as MoveInInventory | null,
+  viewportWidth: 320,
+  resetScroll: vi.fn(),
 }));
 
 vi.mock('expo-router', () => ({
@@ -19,14 +23,19 @@ vi.mock('expo-router', () => ({
 }));
 vi.mock('react-native', () => ({
   Platform: { OS: 'web' },
+  useWindowDimensions: () => ({ width: state.viewportWidth, height: 730 }),
   StyleSheet: { create: (styles: object) => styles },
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ScrollView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  KeyboardAvoidingView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Modal: ({ children, visible }: { children: React.ReactNode; visible: boolean }) => visible
+    ? <div role="dialog">{children}</div> : null,
 }));
 vi.mock('../theme/theme', () => ({
   colors: { blue: '#1052cf', border: '#e2e8f0', tint: '#e8edff' },
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ staffLocationId: state.location }),
+  useWorkspace: () => ({ staffLocationId: state.location, resetScroll: state.resetScroll }),
 }));
 vi.mock('../lib/randomUUID', () => ({
   randomUUID: () => '10000000-0000-4000-8000-000000000001',
@@ -46,6 +55,10 @@ vi.mock('../components/WorkspaceKit', () => ({
 }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  Icon: () => null,
+  TouchableRipple: ({ children, onPress, disabled, accessibilityLabel }: {
+    children: React.ReactNode; onPress: () => void; disabled?: boolean; accessibilityLabel?: string;
+  }) => <button aria-label={accessibilityLabel} disabled={disabled} onClick={onPress}>{children}</button>,
   ProgressBar: ({ progress }: { progress: number }) => <div role="progressbar" aria-valuenow={progress * 100} />,
   Button: ({ children, onPress, disabled }: { children: React.ReactNode; onPress: () => void; disabled?: boolean }) => (
     <button disabled={disabled} onClick={onPress}>{children}</button>
@@ -65,6 +78,9 @@ vi.mock('react-native-paper', () => ({
   Checkbox: { Item: ({ label, status, onPress, disabled }: { label: string; status: string; onPress: () => void; disabled?: boolean }) => (
     <button aria-label={label} aria-pressed={status === 'checked'} disabled={disabled} onClick={onPress}>{label}</button>
   ) },
+  RadioButton: { Item: ({ label, status, onPress, disabled }: { label: string; status: string; onPress: () => void; disabled?: boolean }) => (
+    <button role="radio" aria-label={label} aria-checked={status === 'checked'} disabled={disabled} onClick={onPress}>{label}</button>
+  ) },
 }));
 vi.mock('../components/WorkflowControls', () => ({
   Input: ({ label, value, onChange, disabled }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) => (
@@ -77,9 +93,32 @@ vi.mock('../components/CameraCapture', () => ({
   ),
 }));
 vi.mock('../features/contracts/ContractInitialMeterTasks', () => ({
-  ContractInitialMeterTasks: ({ integrated }: { integrated?: boolean }) => (
-    <span>{integrated ? 'Chụp điện nước trong công việc' : 'Nhiệm vụ chỉ số điện nước ban đầu'}</span>
+  ContractInitialMeterTasks: ({ integrated, refreshRevision, onOpenTask }: {
+    integrated?: boolean;
+    refreshRevision?: number;
+    onOpenTask?: (taskId: string, label: string) => void;
+  }) => (
+    <>
+      <span>{integrated ? 'Chụp điện nước trong công việc' : 'Nhiệm vụ chỉ số điện nước ban đầu'}</span>
+      {integrated && <>
+        <span data-testid="meter-refresh-version">{refreshRevision}</span>
+        <button onClick={() => onOpenTask?.('50000000-0000-4000-8000-000000000001', 'Điện')}>
+          Mở OCR công tơ điện
+        </button>
+      </>}
+    </>
   ),
+}));
+vi.mock('../app/meter', () => ({
+  MeterTaskScreen: ({ onReturn }: { onReturn: () => void }) => (
+    <>
+      <span>Biểu mẫu OCR điện nước</span>
+      <button onClick={onReturn}>Đã xác nhận chỉ số trong OCR</button>
+    </>
+  ),
+}));
+vi.mock('../screens/StaffMoveInInventoryScreen', () => ({
+  StaffMoveInInventoryScreen: () => <span>Phiếu kiểm kê nội bộ</span>,
 }));
 vi.mock('../features/contracts/ContractEvidence', () => ({
   ContractEvidence: ({ label, handoverDocumentId, draftHandoverPdf, draftHandoverEvidence }: {
@@ -151,18 +190,115 @@ function draft(status: MoveInDraft['status'], missing: string[] = []): MoveInDra
 
 beforeEach(() => {
   state.location = contract.locationId;
+  state.viewportWidth = 320;
   state.draft = draft('Draft', ['Chưa xác nhận điện']);
+  state.inventory = null;
   state.documents.mockResolvedValue([]);
   state.transport.mockImplementation(async (path: string) => {
     if (path.endsWith('/handover/draft/evidence')) return { id: '30000000-0000-4000-8000-000000000001' };
+    if (path.endsWith('/move-in-inventory')) return state.inventory;
     if (path.endsWith('/handover/draft')) return state.draft;
     return { ...state.draft };
   });
 });
+
+function linkedInventory(status: string, checked = false): MoveInInventory {
+  return {
+    taskId: '60000000-0000-4000-8000-000000000001',
+    contractId: contract.id,
+    roomId: '70000000-0000-4000-8000-000000000001',
+    locationId: contract.locationId,
+    status,
+    version: 2,
+    dueAt: null,
+    completedAt: status === 'Completed' ? '2026-11-20T00:00:00Z' : null,
+    readyForHandover: false,
+    items: [{
+      id: state.draft.assets[0]!.id,
+      assetId: null,
+      name: state.draft.assets[0]!.name,
+      expectedQuantity: 1,
+      actualQuantity: checked ? 1 : null,
+      condition: checked ? 'Good' : null,
+      notes: '',
+      evidenceIds: checked ? ['30000000-0000-4000-8000-000000000001'] : [],
+      incidentId: null,
+    }],
+  };
+}
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+});
+
+function openSection(index: 1 | 2 | 3 | 4) {
+  const titles = [
+    'Ghi chỉ số điện nước', 'Kiểm tra hiện trạng phòng',
+    'Kiểm kê tài sản', 'Chìa khóa và ảnh bàn giao',
+  ];
+  fireEvent.click(screen.getByRole('button', { name: `${index}. ${titles[index - 1]}` }));
+}
+function openWork(name: string) {
+  fireEvent.click(screen.getByRole('button', { name }));
+}
+function closeWork() {
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+}
+function home() {
+  fireEvent.click(screen.getByRole('button', { name: 'Về 4 mục bàn giao' }));
+}
+function saveWork() {
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ' }));
+}
+
+it('automatically refreshes the embedded meter list when the OCR task returns', async () => {
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '1. Ghi chỉ số điện nước' });
+  openSection(1);
+  expect(screen.getByTestId('meter-refresh-version').textContent).toBe('1');
+  expect(screen.queryByRole('button', { name: 'Cập nhật trạng thái điện nước' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Mở OCR công tơ điện' }));
+  expect(screen.getByText('Biểu mẫu OCR điện nước')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đã xác nhận chỉ số trong OCR' }));
+  expect(await screen.findByTestId('meter-refresh-version')).toBeTruthy();
+  await waitFor(() => expect(screen.getByTestId('meter-refresh-version').textContent).toBe('2'));
+  expect(state.transport.mock.calls.filter(([path]) => path.endsWith('/handover/draft')).length).toBeGreaterThan(1);
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Về 4 mục bàn giao' })).toBeTruthy();
+});
+
+it('at 320px selects room condition inline and resets outer scroll when switching sections', async () => {
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  expect(screen.getByRole('progressbar')).toBeTruthy();
+  openSection(2);
+  expect(state.resetScroll).toHaveBeenCalledTimes(1);
+  // The section has its own compact header: no duplicate progress/multi-line
+  // explanation pushing the first work row under text at phone widths.
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  openWork('Tường, trần và sàn');
+  const options = screen.getAllByRole('radio');
+  expect(options).toHaveLength(3);
+  fireEvent.click(screen.getByRole('radio', { name: 'Có vấn đề' }));
+  expect(screen.getByRole('radio', { name: 'Có vấn đề' }).getAttribute('aria-checked')).toBe('true');
+  expect(screen.getByLabelText('Ghi chú · Tường, trần và sàn')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Có vấn đề' })).toBeNull();
+  closeWork();
+  home();
+  expect(state.resetScroll).toHaveBeenCalledTimes(2);
+});
+
+it('keeps the existing segmented room choices at desktop widths', async () => {
+  state.viewportWidth = 720;
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  openSection(2);
+  expect(state.resetScroll).not.toHaveBeenCalled();
+  openWork('Tường, trần và sàn');
+  expect(screen.queryByRole('radio')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  expect(screen.queryByLabelText('Ghi chú · Tường, trần và sàn')).toBeNull();
 });
 
 it('allows Tenant to view Draft but hides both actions until Owner marks Ready', async () => {
@@ -262,7 +398,7 @@ it('requires a successful server start before showing meter capture, inventory o
   });
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
   expect(await screen.findByRole('button', { name: 'Bắt đầu công việc' })).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Tiếp tục kiểm tra' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '1. Ghi chỉ số điện nước' })).toBeNull();
   expect(screen.queryByText('Chụp điện nước trong công việc')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Chụp ảnh hiện trạng' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu công việc' }));
@@ -274,39 +410,54 @@ it('requires a successful server start before showing meter capture, inventory o
       headers: { 'Idempotency-Key': expect.any(String) },
     }),
   ));
-  expect(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: '1. Ghi chỉ số điện nước' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: '4. Chìa khóa và ảnh bàn giao' })).toBeTruthy();
+  openSection(1);
   expect(screen.getByText('Chụp điện nước trong công việc')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục kiểm tra' }));
-  expect(screen.getAllByRole('button', { name: 'Đạt' })).toHaveLength(7);
+  home();
+  openSection(2);
+  openWork('Tường, trần và sàn');
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  expect(screen.getAllByRole('radio', { name: 'Đạt' })).toHaveLength(1);
 });
 
-it('guides Staff through one step at a time and preserves unsaved input while navigating', async () => {
+it('keeps four selectable sections and preserves unsaved input while switching inspection modals', async () => {
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
-  expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0');
+  openSection(2);
+  openWork('Hiện trạng tổng quan');
   expect(screen.getByLabelText('Hiện trạng phòng')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Đã kiểm kê Quạt' })).toBeNull();
   expect(screen.queryByLabelText('Chìa khóa / quyền truy cập')).toBeNull();
   fireEvent.change(screen.getByLabelText('Hiện trạng phòng'), {
     target: { value: 'Trần và sàn đã kiểm tra' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp theo: Kiểm kê tài sản' }));
+  closeWork();
+  home();
+  openSection(3);
+  openWork('Quạt');
   expect(screen.getByRole('button', { name: 'Đã kiểm kê Quạt' })).toBeTruthy();
   expect(screen.queryByLabelText('Hiện trạng phòng')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp theo: Chìa khóa và ảnh bàn giao' }));
+  closeWork();
+  home();
+  openSection(4);
+  openWork('Ghi chú bàn giao');
   expect(screen.getByLabelText('Chìa khóa / quyền truy cập')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Đã kiểm kê Quạt' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  closeWork();
+  home();
+  openSection(2);
+  openWork('Hiện trạng tổng quan');
   expect((screen.getByLabelText('Hiện trạng phòng') as HTMLInputElement).value).toBe('Trần và sàn đã kiểm tra');
   expect(state.transport.mock.calls.some(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST')).toBe(false);
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  saveWork();
   await waitFor(() => expect(state.transport.mock.calls.some(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST')).toBe(true));
 });
 
-it('resumes Staff at the first unfinished wizard step using saved server progress', async () => {
+it('suggests the first unfinished section based on saved server progress', async () => {
   state.draft.electricity = {
     id: 'reading-e', meterCode: 'ELEC-01', utilityType: 0,
     date: '2026-11-20', value: '4', evidenceId: 'photo-e', evidenceHash: 'hash-e',
@@ -319,11 +470,140 @@ it('resumes Staff at the first unfinished wizard step using saved server progres
     code, status: 'Passed', notes: '', evidenceIds: [],
   }));
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  expect(await screen.findByText('Kiểm kê tài sản')).toBeTruthy();
-  expect(screen.getByText('BƯỚC 3 / 4')).toBeTruthy();
+  expect(await screen.findByRole('button', { name: '3. Kiểm kê tài sản' })).toBeTruthy();
+  expect(screen.getByText(/Gợi ý tiếp theo: Kiểm kê tài sản/)).toBeTruthy();
   expect(screen.queryByText('Chụp điện nước trong công việc')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục kiểm tra' }));
+  openSection(3);
+  openWork('Quạt');
   expect(screen.getByRole('button', { name: 'Đã kiểm kê Quạt' })).toBeTruthy();
+});
+
+it('keeps Assets as the next required section until its embedded inventory checkpoint completes', async () => {
+  state.draft.electricity = {
+    id: 'reading-e', meterCode: 'ELEC-01', utilityType: 0,
+    date: '2026-11-20', value: '4', evidenceId: 'photo-e', evidenceHash: 'hash-e',
+  };
+  state.draft.water = {
+    id: 'reading-w', meterCode: 'WATER-01', utilityType: 1,
+    date: '2026-11-20', value: '5', evidenceId: 'photo-w', evidenceHash: 'hash-w',
+  };
+  state.draft.roomCondition = 'Đạt';
+  state.draft.roomChecks = roomHandoverChecks.map(({ code }) => ({
+    code, status: 'Passed', notes: '', evidenceIds: [],
+  }));
+  state.draft.assets[0]!.checked = true;
+  state.draft.moveInTask = {
+    ...state.draft.moveInTask!,
+    inventoryTaskId: '60000000-0000-4000-8000-000000000001',
+    inventoryStatus: 'Assigned',
+  };
+  state.inventory = linkedInventory('InProgress', true);
+  const page = render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  expect(await screen.findByText(/Gợi ý tiếp theo: Kiểm kê tài sản/)).toBeTruthy();
+  expect(screen.getByText('2/4 đã ghi nhận')).toBeTruthy();
+  page.unmount();
+  state.draft.moveInTask = { ...state.draft.moveInTask!, inventoryStatus: 'Completed' };
+  state.inventory = linkedInventory('Completed', true);
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  expect(await screen.findByText(/Gợi ý tiếp theo: Chìa khóa và ảnh bàn giao/)).toBeTruthy();
+  expect(screen.getByText('3/4 đã ghi nhận')).toBeTruthy();
+});
+
+it('shows linked assets as a read-only list with ticks only for server-saved inventory items', async () => {
+  state.draft.moveInTask = {
+    ...state.draft.moveInTask!, inventoryTaskId: '60000000-0000-4000-8000-000000000001',
+    inventoryStatus: 'InProgress',
+  };
+  const secondId = '20000000-0000-4000-8000-000000000002';
+  state.draft.assets.push({
+    id: secondId, name: 'Bàn', configuredQuantity: 2, checked: true,
+    inventoryCondition: 'Tốt', observedCondition: 'Tốt',
+  });
+  state.inventory = linkedInventory('InProgress', true);
+  state.inventory.items.push({
+    id: secondId, assetId: null, name: 'Bàn', expectedQuantity: 2,
+    actualQuantity: null, condition: null, notes: null, evidenceIds: [], incidentId: null,
+  });
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '3. Kiểm kê tài sản' });
+  openSection(3);
+  expect(screen.getByRole('button', { name: 'Đối chiếu kiểm kê đầu vào' })).toBeTruthy();
+  expect(screen.getByText('Quạt')).toBeTruthy();
+  expect(screen.getByText('Bàn')).toBeTruthy();
+  expect(screen.getByText('Đã kiểm kê · Đạt')).toBeTruthy();
+  expect(screen.getByText('Chưa kiểm kê')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Quạt' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Bàn' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Đã kiểm kê Quạt' })).toBeNull();
+  expect(screen.getByText('Dự kiến 1 · Thực tế 1')).toBeTruthy();
+  expect(screen.getByText('Dự kiến 2 · Thực tế chưa ghi')).toBeTruthy();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  // Even though the old handover flag on Bàn is true, the internal server
+  // inventory has not saved that item's observation, so it remains unchecked.
+  home();
+  expect(screen.getByText('1/2 nhóm tài sản đã kiểm tra')).toBeTruthy();
+  expect(state.transport.mock.calls.filter(([path, init]) =>
+    path.endsWith('/handover/draft') && init?.method === 'POST')).toHaveLength(0);
+});
+
+it('reloads saved inventory ticks after the internal inventory modal closes', async () => {
+  state.draft.moveInTask = {
+    ...state.draft.moveInTask!, inventoryTaskId: '60000000-0000-4000-8000-000000000001',
+    inventoryStatus: 'InProgress',
+  };
+  state.inventory = linkedInventory('InProgress');
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '3. Kiểm kê tài sản' });
+  openSection(3);
+  expect(screen.getByText('Chưa kiểm kê')).toBeTruthy();
+  openWork('Đối chiếu kiểm kê đầu vào');
+  expect(screen.getByText('Phiếu kiểm kê nội bộ')).toBeTruthy();
+  state.inventory = linkedInventory('InProgress', true);
+  closeWork();
+  expect(await screen.findByText('Đã kiểm kê · Đạt')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Về 4 mục bàn giao' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Quạt' })).toBeNull();
+});
+
+it('does not mislabel assets as inspected when the internal inventory request fails', async () => {
+  state.draft.assets[0]!.checked = true;
+  state.draft.moveInTask = {
+    ...state.draft.moveInTask!, inventoryTaskId: '60000000-0000-4000-8000-000000000001',
+    inventoryStatus: 'Completed',
+  };
+  state.transport.mockImplementation(async (path: string) => {
+    if (path.endsWith('/move-in-inventory')) throw { status: 403, code: 'forbidden' };
+    return state.draft;
+  });
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '3. Kiểm kê tài sản' });
+  openSection(3);
+  expect(screen.getByText(/Không tải được trạng thái kiểm kê/)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Tải lại kết quả kiểm kê' })).toBeNull();
+  expect(screen.getByText('Chưa kiểm kê')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Quạt' })).toBeNull();
+  expect(screen.queryByText('Đã kiểm kê · Đạt')).toBeNull();
+});
+
+it('shows a finished message instead of recommending another section when all four sections are saved', async () => {
+  state.draft.electricity = {
+    id: 'reading-e', meterCode: 'ELEC-01', utilityType: 0,
+    date: '2026-11-20', value: '4', evidenceId: 'photo-e', evidenceHash: 'hash-e',
+  };
+  state.draft.water = {
+    id: 'reading-w', meterCode: 'WATER-01', utilityType: 1,
+    date: '2026-11-20', value: '5', evidenceId: 'photo-w', evidenceHash: 'hash-w',
+  };
+  state.draft.roomChecks = roomHandoverChecks.map(({ code }) => ({
+    code, status: 'Passed', notes: '', evidenceIds: [],
+  }));
+  state.draft.assets[0]!.checked = true;
+  state.draft.accessItems = [{ type: 'RoomKey', quantity: 1, notes: '' }];
+  state.draft.evidenceIds = ['30000000-0000-4000-8000-000000000001'];
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  expect(await screen.findByText('4/4 đã ghi nhận')).toBeTruthy();
+  expect(screen.getByText(/Đã lưu đủ 4 mục kiểm tra/)).toBeTruthy();
+  expect(screen.queryByText(/Gợi ý tiếp theo:/)).toBeNull();
 });
 
 it('does not call a room issue finished when its required inspection photo is missing', async () => {
@@ -340,8 +620,10 @@ it('does not call a room issue finished when its required inspection photo is mi
     notes: index === 0 ? 'Tường bị ẩm' : '', evidenceIds: [],
   }));
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  expect(await screen.findByText('BƯỚC 2 / 4')).toBeTruthy();
-  expect(screen.getByText('Cần kiểm tra')).toBeTruthy();
+  expect(await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' })).toBeTruthy();
+  expect(screen.getByText(/Gợi ý tiếp theo: Kiểm tra hiện trạng phòng/)).toBeTruthy();
+  openSection(2);
+  expect(screen.getByText('Có vấn đề')).toBeTruthy();
   expect(screen.queryByText('Chụp điện nước trong công việc')).toBeNull();
 });
 
@@ -361,20 +643,22 @@ it('keeps all inspection and meter steps locked on failed start or mismatched re
   fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu công việc' }));
   await waitFor(() => expect(state.transport.mock.calls.some(([path, options]) =>
     path.endsWith('/start') && options?.method === 'POST')).toBe(true));
-  expect(screen.queryByRole('button', { name: 'Tiếp tục kiểm tra' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '1. Ghi chỉ số điện nước' })).toBeNull();
   expect(screen.queryByText('Chụp điện nước trong công việc')).toBeNull();
   page.unmount();
   state.draft.moveInTask = { ...state.draft.moveInTask!, status: 'InProgress', canInspect: false };
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
   expect(await screen.findByText(/Chưa thể ghi nhận/)).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Tiếp tục kiểm tra' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '1. Ghi chỉ số điện nước' })).toBeNull();
 });
 
 it('Staff updates condition without altering meter baselines or contract creation', async () => {
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  openSection(2);
+  openWork('Hiện trạng tổng quan');
   fireEvent.change(screen.getByLabelText('Hiện trạng phòng'), { target: { value: 'Đã vệ sinh và kiểm tra' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  saveWork();
   await waitFor(() => expect(state.transport).toHaveBeenCalledWith(
     `/api/v1/contracts/${contract.id}/handover/draft`,
     expect.objectContaining({
@@ -399,8 +683,9 @@ it('blocks Staff edits while the Owner reviews a Tenant change request', async (
 
 it('preserves uploaded photo assignment to an asset when saving the draft', async () => {
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp theo: Kiểm kê tài sản' }));
+  await screen.findByRole('button', { name: '3. Kiểm kê tài sản' });
+  openSection(3);
+  openWork('Quạt');
   fireEvent.click(screen.getByRole('button', { name: 'Ảnh không có giấy tờ cá nhân hoặc thông tin riêng tư' }));
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh hiện trạng' }));
   await waitFor(() => expect(state.transport).toHaveBeenCalledWith(
@@ -408,7 +693,7 @@ it('preserves uploaded photo assignment to an asset when saving the draft', asyn
     expect.objectContaining({ method: 'POST', headers: { 'Content-Type': 'image/jpeg' } }),
   ));
   fireEvent.click(await screen.findByRole('button', { name: 'Đã kiểm kê Quạt' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  saveWork();
   await waitFor(() => expect(state.transport.mock.calls.some(
     ([path, init]) => path.endsWith('/handover/draft') && init.method === 'POST',
   )).toBe(true));
@@ -440,33 +725,90 @@ it('saves asset groups across separate Staff visits without resetting the first 
     return state.draft;
   });
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp theo: Kiểm kê tài sản' }));
+  await screen.findByRole('button', { name: '3. Kiểm kê tài sản' });
+  openSection(3);
+  openWork('Quạt');
   fireEvent.click(screen.getByRole('button', { name: 'Đã kiểm kê Quạt' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  saveWork();
   await waitFor(() => expect(submissions).toHaveLength(1));
   expect(submissions[0].assets.map((asset) => asset.id)).toEqual([state.draft.assets[0]!.id]);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
+  // Saving an asset should close only its modal, not take Staff back to the
+  // four-section home. Staff can inspect the next item immediately.
+  expect(await screen.findByRole('button', { name: 'Bàn' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Về 4 mục bàn giao' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: '3. Kiểm kê tài sản' })).toBeNull();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  openWork('Bàn');
   fireEvent.click(screen.getByRole('button', { name: 'Đã kiểm kê Bàn' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  saveWork();
   await waitFor(() => expect(submissions).toHaveLength(2));
   expect(submissions[1].version).toBe(8);
   expect(state.draft.assets.map((asset) => asset.checked)).toEqual([true, true]);
   expect(state.draft.version).toBe(9);
 });
 
+it('stays in the seven-room-check list after each successful save and uses the refreshed server version', async () => {
+  const savedVersions: number[] = [];
+  state.transport.mockImplementation(async (path: string, init?: { method?: string; body?: string }) => {
+    if (path.endsWith('/handover/draft') && init?.method === 'POST') {
+      const body = JSON.parse(init.body!);
+      savedVersions.push(body.version);
+      const touched = new Set((body.roomChecks ?? []).map((check: { code: string }) => check.code));
+      state.draft = {
+        ...state.draft,
+        version: state.draft.version + 1,
+        roomChecks: [
+          ...state.draft.roomChecks.filter((check) => !touched.has(check.code)),
+          ...(body.roomChecks ?? []),
+        ],
+      };
+      return state.draft;
+    }
+    return state.draft;
+  });
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" onUpdated={state.updated} />);
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  openSection(2);
+  openWork('Tường, trần và sàn');
+  fireEvent.click(screen.getByRole('radio', { name: 'Đạt' }));
+  saveWork();
+  await waitFor(() => expect(savedVersions).toEqual([7]));
+  expect(await screen.findByRole('button', { name: 'Cửa, cửa sổ và ổ khóa' })).toBeTruthy();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Về 4 mục bàn giao' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: '2. Kiểm tra hiện trạng phòng' })).toBeNull();
+  openWork('Cửa, cửa sổ và ổ khóa');
+  fireEvent.click(screen.getByRole('radio', { name: 'Đạt' }));
+  saveWork();
+  await waitFor(() => expect(savedVersions).toEqual([7, 8]));
+  expect(await screen.findByRole('button', { name: 'Hệ thống điện, đèn và ổ cắm' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Về 4 mục bàn giao' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: '2. Kiểm tra hiện trạng phòng' })).toBeNull();
+  expect(state.draft.roomChecks.map((check) => check.code)).toEqual([
+    'walls_ceiling_floor', 'doors_windows_locks',
+  ]);
+  expect(state.updated).toHaveBeenCalledTimes(2);
+  // Only the explicit Back action returns to the four-section menu.
+  home();
+  expect(screen.getByRole('button', { name: '2. Kiểm tra hiện trạng phòng' })).toBeTruthy();
+});
+
 it('saves only the room checks edited during this visit and requires a reason when not applicable', async () => {
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
-  fireEvent.click(screen.getAllByRole('button', { name: 'Đạt' })[0]!);
-  fireEvent.click(screen.getAllByRole('button', { name: 'Không áp dụng' })[1]!);
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  openSection(2);
+  openWork('Tường, trần và sàn');
+  fireEvent.click(screen.getByRole('radio', { name: 'Đạt' }));
+  closeWork();
+  openWork('Cửa, cửa sổ và ổ khóa');
+  fireEvent.click(screen.getByRole('radio', { name: 'Không áp dụng' }));
+  saveWork();
   expect(await screen.findByText(/Hãy ghi lý do cho mục "Cửa, cửa sổ và ổ khóa"/)).toBeTruthy();
   expect(state.transport.mock.calls.filter(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST')).toHaveLength(0);
   fireEvent.change(screen.getByLabelText('Ghi chú · Cửa, cửa sổ và ổ khóa'),
     { target: { value: 'Không có cửa sổ ở phòng này' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  saveWork();
   await waitFor(() => expect(state.transport.mock.calls.some(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST')).toBe(true));
   const mutation = state.transport.mock.calls.find(([path, options]) =>
@@ -483,11 +825,14 @@ it('saves only the room checks edited during this visit and requires a reason wh
 it('sends the seven exact server-required room checklist codes without replacing existing asset inspections', async () => {
   state.draft.assets[0]!.checked = true;
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
-  const passButtons = screen.getAllByRole('button', { name: 'Đạt' });
-  expect(passButtons).toHaveLength(7);
-  passButtons.forEach((button) => fireEvent.click(button));
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  openSection(2);
+  for (const { label } of roomHandoverChecks) {
+    openWork(label);
+    fireEvent.click(screen.getByRole('radio', { name: 'Đạt' }));
+    if (label !== roomHandoverChecks[roomHandoverChecks.length - 1]?.label) closeWork();
+  }
+  saveWork();
   await waitFor(() => expect(state.transport.mock.calls.some(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST')).toBe(true));
   const mutation = state.transport.mock.calls.find(([path, options]) =>
@@ -525,18 +870,20 @@ it('Tenant can review seven room inspections, attached Issue image, access items
 
 it('saves a room problem as a factual inspection with notes and photo, without assigning repairs', async () => {
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
-  fireEvent.click(screen.getAllByRole('button', { name: 'Có vấn đề' })[2]!);
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  openSection(2);
+  openWork('Hệ thống điện, đèn và ổ cắm');
+  fireEvent.click(screen.getByRole('radio', { name: 'Có vấn đề' }));
   fireEvent.change(screen.getByLabelText('Ghi chú · Hệ thống điện, đèn và ổ cắm'),
     { target: { value: 'Ổ cắm bên trái không có điện' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  saveWork();
   expect(await screen.findByText(/cần gắn ít nhất một ảnh bằng chứng riêng/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Ảnh không có giấy tờ cá nhân hoặc thông tin riêng tư' }));
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh hiện trạng' }));
   await waitFor(() => expect(state.transport.mock.calls.some(([path]) =>
     path.endsWith('/handover/draft/evidence'))).toBe(true));
-  fireEvent.click(await screen.findByRole('button', { name: 'Gắn ảnh 1 cho Hệ thống điện, đèn và ổ cắm' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  expect((await screen.findByRole('button', { name: 'Gắn ảnh 1' })).getAttribute('aria-pressed')).toBe('true');
+  saveWork();
   await waitFor(() => expect(state.transport.mock.calls.some(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST')).toBe(true));
   const mutation = state.transport.mock.calls.find(([path, options]) =>
@@ -548,6 +895,7 @@ it('saves a room problem as a factual inspection with notes and photo, without a
     notes: 'Ổ cắm bên trái không có điện',
     evidenceIds: ['30000000-0000-4000-8000-000000000001'],
   }]);
+  expect(body.evidenceIds).not.toContain('30000000-0000-4000-8000-000000000001');
   expect(body).not.toHaveProperty('outstandingIssues');
   expect(screen.queryByLabelText('Nội dung cần xử lý · Hệ thống điện, đèn và ổ cắm')).toBeNull();
   expect(screen.queryByLabelText('Hạn xử lý Hệ thống điện, đèn và ổ cắm (dd/MM/yyyy)')).toBeNull();
@@ -555,17 +903,19 @@ it('saves a room problem as a factual inspection with notes and photo, without a
 
 it('replaces access items only when edited and validates digital access with quantity zero', async () => {
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp theo: Kiểm kê tài sản' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp theo: Chìa khóa và ảnh bàn giao' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm chìa khóa phòng' }));
-  fireEvent.change(screen.getByLabelText('Số lượng bàn giao 1'), { target: { value: '2' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm quyền truy cập số' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  await screen.findByRole('button', { name: '4. Chìa khóa và ảnh bàn giao' });
+  openSection(4);
+  openWork('Thêm chìa khóa / thẻ / quyền truy cập');
+  fireEvent.click(screen.getByRole('button', { name: 'Chìa khóa phòng' }));
+  fireEvent.change(screen.getByLabelText('Số lượng bàn giao'), { target: { value: '2' } });
+  closeWork();
+  openWork('Thêm chìa khóa / thẻ / quyền truy cập');
+  fireEvent.click(screen.getByRole('button', { name: 'Quyền truy cập số' }));
+  saveWork();
   expect(await screen.findByText(/quyền truy cập số có thể bằng 0 nếu có ghi chú/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Ghi chú quyền ra vào 2'),
+  fireEvent.change(screen.getByLabelText('Ghi chú / cách sử dụng'),
     { target: { value: 'Cấp mã cổng theo tài khoản Tenant' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  saveWork();
   await waitFor(() => expect(state.transport.mock.calls.some(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST')).toBe(true));
   const mutation = state.transport.mock.calls.find(([path, options]) =>
@@ -574,6 +924,32 @@ it('replaces access items only when edited and validates digital access with qua
     { type: 'RoomKey', quantity: 2, notes: '' },
     { type: 'DigitalAccess', quantity: 0, notes: 'Cấp mã cổng theo tài khoản Tenant' },
   ]);
+});
+
+it('offers photo capture inside each access item modal and saves it as shared handover evidence', async () => {
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '4. Chìa khóa và ảnh bàn giao' });
+  openSection(4);
+  openWork('Thêm chìa khóa / thẻ / quyền truy cập');
+  fireEvent.click(screen.getByRole('button', { name: 'Chìa khóa phòng' }));
+  expect(screen.getByText(/không gắn riêng từng loại quyền truy cập/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Ảnh không có giấy tờ cá nhân hoặc thông tin riêng tư' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh hiện trạng' }));
+  await waitFor(() => expect(state.transport.mock.calls.some(([path]) =>
+    path.endsWith('/handover/draft/evidence'))).toBe(true));
+  expect(await screen.findByText('Đã tải ảnh hiện trạng lên máy chủ.')).toBeTruthy();
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Số lượng bàn giao'), { target: { value: '2' } });
+  saveWork();
+  await waitFor(() => expect(state.transport.mock.calls.some(([path, options]) =>
+    path.endsWith('/handover/draft') && options?.method === 'POST')).toBe(true));
+  const mutation = state.transport.mock.calls.find(([path, options]) =>
+    path.endsWith('/handover/draft') && options?.method === 'POST');
+  const body = JSON.parse(mutation![1].body);
+  expect(body.accessItems).toEqual([{ type: 'RoomKey', quantity: 2, notes: '' }]);
+  expect(body.evidenceIds).toContain('30000000-0000-4000-8000-000000000001');
+  expect(body).not.toHaveProperty('roomChecks');
+  expect(body).not.toHaveProperty('assets');
 });
 
 it('does not modify previous Owner plans when Staff changes the factual inspection result', async () => {
@@ -586,9 +962,11 @@ it('does not modify previous Owner plans when Staff changes the factual inspecti
     { code: 'other', description: 'Đối chiếu vật dụng', responsibleParty: 'Staff', dueDate: '2026-11-27' },
   ];
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
-  fireEvent.click(screen.getAllByRole('button', { name: 'Đạt' })[0]!);
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ bàn giao' }));
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  openSection(2);
+  openWork('Tường, trần và sàn');
+  fireEvent.click(screen.getByRole('radio', { name: 'Đạt' }));
+  saveWork();
   await waitFor(() => expect(state.transport.mock.calls.some(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST')).toBe(true));
   const mutation = state.transport.mock.calls.find(([path, options]) =>
@@ -604,11 +982,15 @@ it('shows a synthetic JPEG upload button only for a development demo contract on
   const testContract = { ...contract, isDevelopmentDemo: true };
   const liveContract = { ...contract, isDevelopmentDemo: false };
   const first = render(<MoveInDraftHandoverPanel api={api} contract={liveContract} role="Staff" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
+  await screen.findByRole('button', { name: '4. Chìa khóa và ảnh bàn giao' });
+  openSection(4);
+  openWork('Ảnh bàn giao chung');
   expect(screen.queryByRole('button', { name: 'Ảnh giả lập DEV – không dùng làm bằng chứng thực tế' })).toBeNull();
   first.unmount();
   render(<MoveInDraftHandoverPanel api={api} contract={testContract} role="Staff" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Tiếp tục kiểm tra' }));
+  await screen.findByRole('button', { name: '4. Chìa khóa và ảnh bàn giao' });
+  openSection(4);
+  openWork('Ảnh bàn giao chung');
   const sample = screen.getByRole('button', { name: 'Ảnh giả lập DEV – không dùng làm bằng chứng thực tế' });
   expect((sample as HTMLButtonElement).disabled).toBe(true);
   const sampleJpeg = [0xff, 0xd8, 0xff, ...Array(140).fill(0)];

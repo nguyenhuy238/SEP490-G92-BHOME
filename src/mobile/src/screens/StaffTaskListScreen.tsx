@@ -14,6 +14,9 @@ import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { queryPolicies } from '../lib/queryPolicies';
 import {
+  isEmbeddedInitialMeterTask,
+  isEmbeddedMoveInInventory,
+  isMainMoveInWork,
   taskStatusLabels,
   type OperationalTask,
   type TaskPage,
@@ -37,7 +40,8 @@ export function StaffTaskListScreen() {
   );
   const inHeader = useWorkspaceHeaderRefresh(query.reload, query.fetching);
   const data = staffLocationId ? query.data : null;
-  const items = data?.items ?? [];
+  const items = (data?.items ?? []).filter((task) =>
+    !isEmbeddedMoveInInventory(task) && !isEmbeddedInitialMeterTask(task));
   return (
     <>
       {!inHeader && (
@@ -68,7 +72,7 @@ export function StaffTaskListScreen() {
           setPage(1);
         }}
       />
-      {data && <TaskSummaryBar data={data} filtered={!!status} />}
+      {data && <TaskSummaryBar totalCount={data.totalCount} visibleItems={items} filtered={!!status} />}
       {query.fetching && (
         <View
           style={styles.loading}
@@ -99,7 +103,9 @@ export function StaffTaskListScreen() {
           key={task.id}
           task={task}
           onPress={() =>
-            task.kind === 'MeterReading'
+            isMainMoveInWork(task)
+              ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+              : task.kind === 'MeterReading'
               ? go('meter-reading')
               : task.kind === 'MoveInInventory'
                 ? go('move-in-inventory', { taskId: task.id })
@@ -186,20 +192,23 @@ function TaskFilterBar({
 }
 
 function TaskSummaryBar({
-  data,
+  totalCount,
+  visibleItems,
   filtered,
 }: {
-  data: TaskPage<OperationalTask>;
+  totalCount: number;
+  visibleItems: OperationalTask[];
   filtered: boolean;
 }) {
-  // totalCount belongs to this server filter; the other counts describe only loaded items.
-  const overdue = data.items.filter((task) => task.isOverdue).length;
-  const assigned = data.items.filter((task) => task.status === 'Assigned').length;
+  // The API already excludes embedded inventory checkpoints for Staff before
+  // pagination; its total count is authoritative across all pages.
+  const overdue = visibleItems.filter((task) => task.isOverdue).length;
+  const assigned = visibleItems.filter((task) => task.status === 'Assigned').length;
   return (
     <View style={{ gap: 4 }}>
       <View style={styles.summary}>
         <Text variant="labelLarge" style={styles.title}>
-          {data.totalCount} công việc{filtered ? ' phù hợp' : ''}
+          {totalCount} công việc{filtered ? ' phù hợp' : ''}
         </Text>
         {overdue > 0 && (
           <Text variant="bodySmall" style={styles.overdue}>
@@ -212,11 +221,6 @@ function TaskSummaryBar({
           </Text>
         )}
       </View>
-      {data.totalCount > data.items.length && (
-        <Text variant="labelSmall" style={styles.muted}>
-          Số quá hạn và cần làm tính trên trang đang xem.
-        </Text>
-      )}
     </View>
   );
 }

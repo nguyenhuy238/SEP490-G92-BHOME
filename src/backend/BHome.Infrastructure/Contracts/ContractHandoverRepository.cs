@@ -29,9 +29,15 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (task is null) return null;
         // Expose the native task status, with a separate permission-safe
         // indication of whether this Staff actor may inspect at this moment.
+        var isResponsibleStaff = staffUserId is not null && task.AssignedStaffUserId == staffUserId;
+        var inventoryTask = isResponsibleStaff
+            ? await db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(x =>
+                x.Id == Key($"contract-pre-move-in-inventory:{contractId:N}") &&
+                x.Kind == OperationalTaskKind.MoveInInventory && x.ContractId == contractId, t)
+            : null;
         return new HandoverMoveInTask(task.Id, task.Status.ToString(), task.Version,
-            task.Status == MeterTaskStatus.InProgress && staffUserId is not null &&
-            task.AssignedStaffUserId == staffUserId);
+            task.Status == MeterTaskStatus.InProgress && isResponsibleStaff,
+            inventoryTask?.Id, inventoryTask?.Status.ToString());
     }
     public async Task EnsureMoveInTaskAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
     {

@@ -16,7 +16,10 @@ public sealed record HandoverOutstandingIssue(string Code, string Description, s
     DateOnly? DueDate);
 // Status is sourced from the existing authorized OperationalTask workflow, not
 // inferred from draft contents. Start via /api/v1/operational-tasks/{id}/start.
-public sealed record HandoverMoveInTask(Guid Id, string Status, int Version, bool CanInspect);
+// The legacy pre-handover inventory remains a backend checkpoint, but is surfaced
+// as a subsection of the single Staff move-in job rather than a second work card.
+public sealed record HandoverMoveInTask(Guid Id, string Status, int Version, bool CanInspect,
+    Guid? InventoryTaskId = null, string? InventoryStatus = null);
 
 public sealed record HandoverDraftState(
     int Version, string Status, string ContractSnapshotHash, DateTimeOffset CreatedAt,

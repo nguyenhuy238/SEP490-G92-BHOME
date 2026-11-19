@@ -14,6 +14,7 @@ export function HandoverAssetFields({
   quantities = true,
   showCheckWithoutQuantities = false,
   compact = false,
+  embedded = false,
 }: {
   asset: HandoverAsset;
   values: Record<string, string>;
@@ -23,9 +24,10 @@ export function HandoverAssetFields({
   quantities?: boolean;
   showCheckWithoutQuantities?: boolean;
   compact?: boolean;
+  embedded?: boolean;
 }) {
   const a = asset;
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(embedded);
   const [adjustDetails, setAdjustDetails] = useState(false);
   // Keep the UI choice in the parent form, so Wizard navigation does not
   // discard the selected inspection mode while unsaved quantities remain.
@@ -68,11 +70,11 @@ export function HandoverAssetFields({
         Kiểm kê: {a.inventoryCondition || 'Chưa có'} ·{' '}
         {a.ownerChecked ? 'Owner đã kiểm tra' : 'Chưa được Owner kiểm tra đủ'}
       </Text>
-      <Action secondary disabled={disabled} onPress={() => setExpanded(!expanded)}>
+      {!embedded && <Action secondary disabled={disabled} onPress={() => setExpanded(!expanded)}>
         {expanded
           ? `Thu gọn ${a.name}`
           : `${values[`${a.id}.checked`] === 'true' ? 'Đã kiểm tra' : 'Kiểm tra'} ${a.name}`}
-      </Action>
+      </Action>}
       {expanded && (
         <>
           {compact ? (
