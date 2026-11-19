@@ -15,6 +15,7 @@ import { Action, Box, Heading, Pill, ui } from '../../components/WorkspaceKit';
 import { useWorkspaceQuery } from '../workspace/useWorkspaceQuery';
 import { ownerQueuePolicy } from './ownerQueryPolicy';
 import { OwnerHoldingSigning } from './OwnerHoldingSigning';
+import { ContractSigningStep } from '../contracts/ContractSigningStep';
 import { RentalContractStepper } from '../contracts/RentalContractStepper';
 import { rentalContractState } from '../contracts/rentalContractState';
 import { ContractActionForm, SigningCertificates } from '../contracts/ContractActionForm';
@@ -126,7 +127,20 @@ export function OwnerMainContractFlow({
               </Text>
             )}
           </Box>
-          {internal && (
+          {internal && !contract.isDevelopmentDemo && (
+            <ContractSigningStep
+              api={api}
+              contract={contract}
+              role="Owner"
+              actorId={actorId}
+              onChanged={() => {
+                consent.reload();
+                setSelectedStep(null);
+                onChanged();
+              }}
+            />
+          )}
+          {internal && contract.isDevelopmentDemo && (
             <OwnerHoldingSigning
               api={api}
               contract={contract}

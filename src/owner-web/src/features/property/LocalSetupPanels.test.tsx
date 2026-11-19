@@ -81,7 +81,7 @@ function reads(path: string) {
       metadata: {},
     };
   if (path.includes('operating-policies?')) return [policy];
-  if (path.endsWith('/versions')) return [policy];
+  if (path.endsWith('/versions') || path.endsWith('/family-versions')) return [policy];
   return undefined;
 }
 beforeEach(() => {
@@ -182,27 +182,26 @@ async function room() {
   await screen.findByText('Tài sản được cấu hình');
 }
 
-it('publishes a local Draft using its loaded version and shows per-Room sync outcomes', async () => {
+it('saves a local Draft as usable without implicitly synchronizing rooms', async () => {
   state.request.mockImplementation(async (path: string) => {
-    if (path.endsWith('/publish'))
-      return {
-        templateId: 'template',
-        templateVersion: 4,
-        rooms: [
-          { roomId: 'room', status: 'Applied' },
-          { roomId: 'other', status: 'SkippedNotEligible' },
-        ],
-      };
+    if (path.endsWith('/ready')) return { ...template, status: 'Published', version: 4 };
     return path.includes('asset-templates?') ? [{ ...template, status: 'Draft' }] : reads(path);
   });
   mount(<LocalAssetSetup locationId="location" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Công bố bộ mẫu' }));
-  await screen.findByText(/A101: Đã cập nhật định mức/);
-  await screen.findByText(/Chưa đủ điều kiện đồng bộ/);
-  expect(state.request).toHaveBeenCalledWith('/api/v1/asset-templates/template/publish', {
-    method: 'POST',
-    body: JSON.stringify({ expectedVersion: 3 }),
-  });
+  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      '/api/v1/asset-templates/template/ready',
+      expect.objectContaining({
+        method: 'PUT',
+        body: expect.stringContaining('"expectedVersion":3'),
+      }),
+    ),
+  );
+  expect(
+    state.request.mock.calls.some(([path]) => path.endsWith('/publish') || path.endsWith('/sync')),
+  ).toBe(false);
   expect(
     state.request.mock.calls.some(
       ([path, init]) => path === '/api/v1/assets' && init?.method === 'POST',
@@ -249,12 +248,18 @@ it('edits the existing type requirements and applies only to the chosen type thr
   fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa tài sản Studio' }));
   fireEvent.change(screen.getByLabelText(/Số lượng 1/), { target: { value: '3' } });
   fireEvent.click(
-    screen.getByRole('checkbox', { name: 'Áp dụng cho các phòng hiện có thuộc loại này' }),
+    screen.getByRole('checkbox', { name: 'Áp dụng cho các phòng hiện có đủ điều kiện' }),
   );
   fireEvent.change(screen.getByLabelText(/Lý do thay đổi/), {
     target: { value: 'Updated requirements' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Lưu và áp dụng' }));
+  expect(
+    state.request.mock.calls.some(
+      ([path, init]) => path.endsWith('/asset-requirements') && init?.method === 'POST',
+    ),
+  ).toBe(false);
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
   await screen.findByText(/1 phòng đã áp dụng · 1 bỏ qua/);
   expect(state.request).toHaveBeenCalledWith(
     '/api/v1/locations/location/room-defaults/type/asset-requirements',
@@ -352,24 +357,28 @@ it('records a physical shortage without creating or retiring physical assets', a
     ),
   ).toBe(false);
 });
-it('publishes OperatingPolicy without overwriting a Contract and requests policy-specific history', async () => {
+it('saves OperatingPolicy ready without overwriting a Contract and requests family history', async () => {
   mount(<OperatingPoliciesPanel locationId="location" />);
   fireEvent.click(await screen.findByRole('button', { name: 'Lịch sử sửa đổi' }));
   await waitFor(() =>
     expect(state.request).toHaveBeenCalledWith(
-      '/api/v1/operating-policies/policy/versions',
+      '/api/v1/operating-policies/policy/family-versions',
       expect.anything(),
     ),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Công bố nội quy' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      '/api/v1/operating-policies/policy/ready',
+      expect.objectContaining({
+        method: 'PUT',
+        body: expect.stringContaining('"expectedVersion":2'),
+      }),
+    ),
+  );
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/publish'))).toBe(false);
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
-  await screen.findByText('Máy chủ đã công bố nội quy. Hợp đồng đã ký được giữ nguyên.');
-  expect(state.request).toHaveBeenCalledWith('/api/v1/operating-policies/policy/publish', {
-    method: 'POST',
-    body: JSON.stringify({ expectedVersion: 2 }),
-  });
   expect(
     state.request.mock.calls.some(([path, init]) => path.includes('/contracts/') && init?.method),
   ).toBe(false);
@@ -380,11 +389,11 @@ it('retains edited policy content after a stale-version rejection', async () => 
     return reads(path);
   });
   mount(<OperatingPoliciesPanel locationId="location" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Sửa nội quy nháp' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Chỉnh sửa' }));
   fireEvent.change(screen.getByLabelText(/Nội dung nội quy/), {
     target: { value: 'Reviewed content' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu nội quy nháp' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
   await screen.findByText(/Cấu hình đã thay đổi/);
   expect(screen.getByLabelText(/Nội dung nội quy/)).toHaveValue('Reviewed content');
   expect(screen.queryByText('Máy chủ đã lưu bản nháp nội quy.')).toBeNull();

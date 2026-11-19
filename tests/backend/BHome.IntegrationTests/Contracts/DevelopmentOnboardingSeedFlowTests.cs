@@ -28,6 +28,8 @@ public sealed partial class Compact24OwnerSetupTests
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
+                    ["AnonymousSigning:PublicSigningUrl"] = "https://localhost:5173/contract-signing",
+                    ["Email:Enabled"] = "false",
                     ["DevelopmentContractSeed:Enabled"] = "true",
                     ["DevelopmentContractSeed:TenantPassword"] = "Synthetic!DevSeed-493"
                 }));

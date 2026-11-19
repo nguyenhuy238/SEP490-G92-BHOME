@@ -9,8 +9,8 @@ Owner lưu ngày giao/chốt nhiệm vụ ghi số điện, nước và các m�
 phiên bản này, không phải lựa chọn một tháng cụ thể để lập hóa đơn. Các kỳ sau
 tiếp tục dùng phiên bản mới nhất có ngày hiệu lực không vượt quá kỳ đang xử lý.
 Tháng ngắn tự co ngày 29–31 về ngày cuối tháng; mốc Draft không được sau Final,
-Final không được sau hạn thanh toán. Lịch được ghi trong `BillingSnapshot` của
-plan và không thay thế `BillingSchedule` toàn cục hoặc snapshot đã phát hành.
+Final không được sau hạn thanh toán. Lịch áp dụng theo kỳ được ghi trong
+`BillingSnapshot` của plan; snapshot hóa đơn đã tạo không bị thay đổi.
 
 `PUT /api/v1/billing-automation` giữ contract và concurrency version hiện có,
 thêm sáu số nguyên **tùy chọn**: `draftDay`, `draftMonthOffset`, `finalDay`,
@@ -55,12 +55,38 @@ meterDueDay,meterDueMonthOffset,timeZone,expectedVersion,expectedBillingSchedule
   cùng EffectiveFrom lấy Version mới nhất. Chưa có plan trả null/204.
 - GET `{locationId}/history`: tối đa 100 version gần nhất.
 
-Lưu financial calendar qua `/api/v1/billing-schedules` hiện có rồi lưu automation plan với
-ExpectedBillingScheduleVersion. Plan snapshot toàn bộ BillingSchedule trong transaction
-Location lock chung với cấu hình giá/lịch, append-only và có actor/time. Version stale 409.
-Không có plan thì manual invoice vẫn dùng calendar hiện có; có plan cho kỳ thì manual và
-scheduled Generate cùng dùng snapshot của kỳ đó. Invoice đã tạo giữ ScheduleSnapshot riêng.
+Lưu financial calendar qua `/api/v1/billing-schedules` hiện có hoặc cung cấp
+`initialSchedule` khi lưu automation plan với ExpectedBillingScheduleVersion.
+Plan snapshot toàn bộ BillingSchedule trong transaction Location lock chung với
+cấu hình giá/lịch, append-only và có actor/time. Version stale 409, kể cả request
+không đổi nội dung. Cùng effectiveFrom, cùng actor, không đổi lịch/quy tắc tính tiền
+và ủy quyền thì trả lại plan hiện có, không tăng version hoặc ghi audit mới.
+
+Phase 7 (BF-05/UC-20/21, JOB-09/10): lịch tính phí theo kỳ và cấu hình legacy
+`GET/PUT /api/v1/billing-schedules` có mục đích khác nhau. Khi lưu automation plan
+mới, `BillingSnapshot.FallbackSchedule` giữ bản sao lịch fallback trước thay đổi
+tài chính, hoặc null nếu chưa có lịch. API legacy vẫn giữ response/version hiện có.
+Manual invoice, JOB-10 và quyết toán chưa có hóa đơn chọn plan áp dụng theo kỳ;
+nếu kỳ chưa có plan, dùng fallback đã bảo toàn, không lấy quy tắc tài chính của
+plan tương lai. Nếu fallback chưa từng được cấu hình, kỳ cũ không tự có lịch mới.
+PUT legacy rõ ràng vẫn thay đổi fallback cho những kỳ chưa có plan; các plan và
+invoice snapshot đã lưu không thay đổi. Plan cũ chưa có trường FallbackSchedule
+không thể khôi phục lịch fallback đã mất trước Phase 7; giữ lịch hiện có cho các
+lần lưu tiếp theo. Invoice đã tạo luôn dùng ScheduleSnapshot riêng.
 Tự động Final mặc định chưa được ủy quyền ở dữ liệu cũ; phải Owner chọn rõ trong plan.
+
+### Giới hạn Utility Profile nâng cao
+
+Biểu giá bậc thang, định mức và đối soát được lưu theo phiên bản trong workspace điện
+nước. `InvoiceService` và quyết toán khi trả phòng hiện dùng đơn giá metered từ
+snapshot hợp đồng; không tự chuyển sang Utility Profile. Chưa mở khóa thay đổi
+profile ở phòng có hợp đồng ràng buộc; hợp đồng mới có thời hạn giao với profile
+cũng bị chặn (`contract_utility_profile_requires_review`) cho tới khi có snapshot nâng cao đầy đủ và
+quy tắc xử lý nhiều hợp đồng trong cùng kỳ. Thay thế tariff đang được profile của
+phòng ràng buộc sử dụng cũng bị chặn (`utility_tariff_locked_by_contract`) nếu làm
+ngắn thời hạn sử dụng của profile. Request không đổi hoặc retry đúng phiên bản
+đã lưu không ghi thêm lịch sử. Không dùng dữ liệu cấu hình hiện tại để dựng lại
+snapshot của hợp đồng hoặc hóa đơn lịch sử.
 
 JOB-09 handler `billing-meter` nhận `{planId,billingPeriod}` từ queue hiện có. Scheduler
 JOB-02 được mở rộng bằng contributors, không thêm scheduler/queue thứ hai; expiry vẫn daily.

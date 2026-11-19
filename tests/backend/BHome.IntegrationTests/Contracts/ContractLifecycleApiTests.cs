@@ -137,6 +137,24 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
                 new RoomNoAssetsConfirmation(choices.InventoryToken, "Owner checked synthetic empty room")));
             choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
         }
+        // Compact24 provisions a separate pre-handover inventory task upon activation.
+        // Complete the explicit no-assets checklist through the Staff API before the
+        // legacy contract scenarios proceed to the handover confirmations.
+        var tasks = await Success<BHome.Application.StaffOperations.TaskPage<BHome.Application.StaffOperations.TaskView>>(
+            await w.Staff.Client.GetAsync($"/api/v1/operational-tasks?locationId={w.Location}&pageSize=100"));
+        var inventory = tasks.Items.SingleOrDefault(task =>
+            task.Kind == "MoveInInventory" && task.Target?.ContractId == id);
+        if (inventory is not null)
+        {
+            var started = await Success<BHome.Application.StaffOperations.TaskView>(await Post(w.Staff,
+                $"/api/v1/operational-tasks/{inventory.Id}/start",
+                new BHome.Application.StaffOperations.TaskAction(inventory.Version)));
+            var completed = await Success<BHome.Application.StaffOperations.MoveInInventoryView>(await Post(w.Staff,
+                $"/api/v1/operational-tasks/{inventory.Id}/move-in-inventory/complete",
+                new BHome.Application.StaffOperations.MoveInInventoryComplete(started.Version,
+                    "Synthetic empty room physically checked", ConfirmNoAssets: true)));
+            Assert.True(completed.ReadyForHandover);
+        }
         return choices;
     }
 
@@ -144,13 +162,15 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     {
         var w = await Setup();
         var meters = await InstallHandoverMeters(w);
-        var id = await Draft(w);
         if (!assigned)
         {
             await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
             foreach (var assignment in await db.StaffLocationAssignments.Where(a => a.LocationId == w.Location).ToArrayAsync()) assignment.ChangePeriod(Today.AddYears(-1), Today.AddDays(-1));
             await db.SaveChangesAsync();
         }
+        // Draft creation now provisions these tasks before activation as well.
+        var id = (await Success<ContractId>(await Post(assigned ? w.Staff : w.Owner,
+            "/api/v1/contracts", Input(w)))).Id;
         await Signed(w, id); await Deposit(w, id);
         var key = Guid.NewGuid();
         await Success<ContractView>(await Post(w.Owner, Path(id, "activate"), null, key));
@@ -169,6 +189,16 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, meterTask.AssignedStaffUserId);
             Assert.Equal(MeterTaskStatus.Assigned, meterTask.Status);
         });
+        var inventory = Assert.Single(await store.Set<OperationalTask>().Where(task => task.ContractId == id &&
+            task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.MoveInInventory).ToArrayAsync());
+        Assert.Equal(w.Room, inventory.TargetRoomId);
+        Assert.Equal(assigned ? w.Staff.Id : (Guid?)null, inventory.AssignedStaffUserId);
+        Assert.NotNull(inventory.DueAt);
+        Assert.Equal(BHome.Domain.Billing.MeterTaskStatus.Assigned, inventory.Status);
+        var checklist = System.Text.Json.JsonSerializer.Deserialize<BHome.Application.StaffOperations.MoveInInventorySnapshot>(
+            inventory.MoveInInventoryJson);
+        Assert.NotNull(checklist);
+        Assert.NotNull(checklist.Items);
     }
 
     internal async Task ReusedMetersRequireFreshContractInitialReadingsBeforeMoveInHandover()
@@ -222,13 +252,14 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         // Same physical meters still need new evidence for this contract.
         var choices = await EmptyRoomHandoverChoices(second, secondId);
         Assert.Empty(choices.Readings);
-        using var oldPhoto = new ByteArrayContent(Image()); oldPhoto.Headers.ContentType = new("image/png");
-        var photo = await Success<ContractId>(await w.Staff.Client.PostAsync(Path(secondId, "handover/evidence"), oldPhoto));
+        var pendingDraft = await Success<HandoverDraftView>(await w.Staff.Client.GetAsync(Path(secondId, "handover/draft")));
+        Assert.Null(pendingDraft.Electricity);
+        Assert.Null(pendingDraft.Water);
         var stale = new HandoverInput(0, firstTasks[0].ReadingDate, "Synthetic room", "Synthetic keys", "", [],
-            firstReadings[0].Id, firstReadings[1].Id, [photo.Id], choices.InventoryToken);
+            firstReadings[0].Id, firstReadings[1].Id, [], choices.InventoryToken);
         var staleResponse = await Post(w.Staff, Path(secondId, "handover"), stale);
-        Assert.Equal(HttpStatusCode.BadRequest, staleResponse.StatusCode);
-        Assert.Contains("confirmed_handover_readings_required", await staleResponse.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.Conflict, staleResponse.StatusCode);
+        Assert.Contains("handover_draft_workflow_required", await staleResponse.Content.ReadAsStringAsync());
 
         // Staff cannot issue extra tasks, and Owner cannot bypass the per-contract uniqueness key.
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks",
@@ -255,14 +286,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var original = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(firstId, "handover/choices")));
         Assert.Equal(firstReadings.Select(reading => reading.Id).Order().ToArray(), original.Readings.Select(reading => reading.Id).Order().ToArray());
 
-        var recorded = await Success<HandoverView>(await Post(w.Staff, Path(secondId, "handover"), stale with
-        {
-            Date = secondTasks[0].ReadingDate,
-            ElectricityReadingId = secondReadings[0].Id,
-            WaterReadingId = secondReadings[1].Id
-        }));
-        Assert.Equal(secondReadings[0].Id, recorded.Snapshot.Electricity.Id);
-        Assert.Equal(secondReadings[1].Id, recorded.Snapshot.Water.Id);
+        var recorded = await Success<HandoverDraftView>(await w.Staff.Client.GetAsync(Path(secondId, "handover/draft")));
+        Assert.Equal(secondReadings[0].Id, recorded.Electricity!.Id);
+        Assert.Equal(secondReadings[1].Id, recorded.Water!.Id);
     }
 
     [Fact]
@@ -321,7 +347,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal(preview.Id, replay.Id); Assert.True(preview.DevelopmentOnly);
         var pdf = await tenant.Client.GetByteArrayAsync(Path(id, $"previews/{preview.Id}"));
         Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(pdf));
-        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync(Path(id, "previews"))).StatusCode);
+        Assert.Equal(preview.Id, Assert.Single(await Success<ContractDocumentView[]>(await staff.Client.GetAsync(Path(id, "previews")))).Id);
+        Assert.Equal(pdf, await staff.Client.GetByteArrayAsync(Path(id, $"previews/{preview.Id}")));
+        Assert.Equal(HttpStatusCode.NotFound, (await outside.Staff.Client.GetAsync(Path(id, $"previews/{preview.Id}"))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await outside.Tenant.Client.GetAsync(Path(id, $"previews/{preview.Id}"))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, Path(id, "activate"))).StatusCode);
         foreach (var actor in new[] { owner, tenant })
@@ -336,6 +364,8 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, Path(id, "activate"))).StatusCode);
         var active = await Success<ContractView>(await Post(owner, Path(id, "activate")));
         Assert.Equal("Active", active.Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync(Path(id, "previews"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync(Path(id, $"previews/{preview.Id}"))).StatusCode);
         Assert.Single(await Success<DepositVerificationView[]>(await owner.Client.GetAsync(Path(id, "deposit-verifications"))));
         Assert.Contains(await Success<ContractHistoryView[]>(await tenant.Client.GetAsync(Path(id, "history"))), a => a.Action == "ContractSignatureSimulated");
         await using var scope = host.Services.CreateAsyncScope();
@@ -791,7 +821,10 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var main = (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), conversion, conversionKey))).Id;
         Assert.Equal(main, (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), conversion, conversionKey))).Id);
         Assert.Equal("Active", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(holding)))!.Status);
-        await Signed(w, main); await Deposit(w, main, 2000000); await Success<ContractView>(await Post(w.Owner, Path(main, "activate")));
+        var inherited = (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(main)))!;
+        Assert.Equal(activeHolding.RequiredDeposit, inherited.RequiredDeposit);
+        Assert.Equal(inherited.RequiredDeposit, inherited.AppliedHoldingDeposit);
+        await Signed(w, main); await Success<ContractView>(await Post(w.Owner, Path(main, "activate")));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Set<Contract>().CountAsync(c => c.HoldingContractId == holding));
         Assert.Equal(1, await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().CountAsync(a => a.SourceDepositContractId == holding));

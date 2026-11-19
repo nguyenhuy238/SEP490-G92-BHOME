@@ -5,6 +5,7 @@ import {
   contractClient,
   type ContractRequest,
   type ContractView,
+  type FinalInspection,
   type MoveOut,
   type SettlementSummary,
 } from '../../../../../packages/client-core/src/contracts';
@@ -19,8 +20,21 @@ vi.mock('../payments/RefundPanel', () => ({
 }));
 
 const id = '00000000-0000-0000-0000-000000000001';
-const contract = { id, locationId: id } as ContractView;
-const moveOut = { status: 'PendingSettlement', version: 4 } as MoveOut;
+const contract = {
+  id,
+  locationId: id,
+  startDate: '2026-01-01',
+  endDate: '2026-11-30',
+  status: 'Active',
+  roomNumber: 'TEST',
+  locationName: 'Synthetic building',
+} as ContractView;
+const moveOut = {
+  status: 'PendingSettlement',
+  version: 4,
+  proposedDate: '2026-11-30',
+  reason: 'Synthetic move-out',
+} as MoveOut;
 const summary: SettlementSummary = {
   contractId: id,
   depositContractId: id,
@@ -95,6 +109,7 @@ it('shows unallocated shared debt and unknown refund, submits the displayed fing
   });
   fireEvent.click(screen.getByLabelText('Tôi đã đọc số liệu và các nghĩa vụ còn chờ xử lý'));
   fireEvent.click(screen.getByText('Lưu xem xét quyết toán'));
+  await confirmPendingAction();
   await waitFor(() =>
     expect(request).toHaveBeenCalledWith(
       expect.stringContaining('/move-out/settlement'),
@@ -107,8 +122,8 @@ it('shows unallocated shared debt and unknown refund, submits the displayed fing
       }),
     ),
   );
-  expect(changed).not.toHaveBeenCalled();
-  expect(await screen.findByRole('button', { name: 'Lưu xem xét quyết toán' })).toBeEnabled();
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(await screen.findByRole('button', { name: 'Lưu xem xét quyết toán' })).toBeDisabled();
 });
 it('does not fetch financial settlement data for Staff or inspection preparation for Tenant', async () => {
   const { api, request } = setup();
@@ -167,6 +182,7 @@ it('invalidates the current Contract deposit source after a decision even within
   });
   fireEvent.click(screen.getByLabelText('Tôi đã đọc số liệu và các nghĩa vụ còn chờ xử lý'));
   fireEvent.click(screen.getByRole('button', { name: 'Lưu xem xét quyết toán' }));
+  await confirmPendingAction();
   await waitFor(() => expect(cache.getQueryState(key)?.isInvalidated).toBe(true));
   expect(cache.getQueryState(other)?.isInvalidated).toBe(false);
   expect(cache.getQueryState(receipt)?.isInvalidated).toBe(false);
@@ -217,3 +233,100 @@ it('hides Owner financial data immediately when switching to Staff', async () =>
   await waitFor(() => expect(hook.result.current.loading).toBe(false));
   expect(hook.result.current.summary).toBeNull();
 });
+
+it('keeps financial review available after physical move-out completion', async () => {
+  const { api, request } = setup();
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ContractLifecyclePanel
+        api={api}
+        contract={{ ...contract, status: 'Terminated' }}
+        moveOut={{ ...moveOut, status: 'Completed' }}
+        onChanged={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText(/Đã hoàn tất bàn giao vật lý/)).toBeVisible();
+  fireEvent.change(await screen.findByLabelText('Lý do / căn cứ của Owner'), {
+    target: { value: 'Tiếp tục đối chiếu khoản nợ sau bàn giao' },
+  });
+  fireEvent.click(screen.getByLabelText('Tôi đã đọc số liệu và các nghĩa vụ còn chờ xử lý'));
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu xem xét quyết toán' }));
+  expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  await confirmPendingAction();
+  expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+});
+
+it('retains independently loaded inspection data on a financial-source failure but clears it on lost authorization', async () => {
+  const { api } = setup();
+  vi.spyOn(api, 'settlementSummary').mockRejectedValue({ status: 503 });
+  const inspection = { id: 'synthetic-inspection', version: 2 };
+  vi.spyOn(api, 'inspections').mockResolvedValue([inspection] as Awaited<
+    ReturnType<typeof api.inspections>
+  >);
+  const hook = renderHook(() => useContractLifecycle(api, id, 'Owner'));
+  await waitFor(() => expect(hook.result.current.loading).toBe(false));
+  expect(hook.result.current.summary).toBeNull();
+  expect(hook.result.current.inspections).toEqual([inspection]);
+  expect(hook.result.current.sectionErrors.summary).toBeTruthy();
+  vi.spyOn(api, 'settlementSummary').mockRejectedValue({ status: 403 });
+  act(() => hook.result.current.reload());
+  await waitFor(() => expect(hook.result.current.loading).toBe(false));
+  expect(hook.result.current.inspections).toEqual([]);
+  expect(hook.result.current.preparation).toBeNull();
+});
+
+it('opens baseline evidence through its original handover and final-meter evidence through Capture', async () => {
+  const { api } = setup();
+  const reading = { id: 'final-electric', value: '100', date: '2026-11-16' };
+  const snapshot = {
+    roomCondition: 'Tốt',
+    keysAndAccess: 'Đủ',
+    assets: [],
+    electricity: reading,
+    water: { ...reading, id: '' },
+    evidenceIds: ['opening-photo'],
+  };
+  vi.spyOn(api, 'inspections').mockResolvedValue([
+    {
+      id: 'inspection',
+      version: 2,
+      baselineContractId: 'original-contract',
+      baselineVersion: 1,
+      baseline: snapshot,
+      observed: { ...snapshot, evidenceIds: [] },
+      inspectedAt: '2026-11-16T03:00:00Z',
+      ownerDecision: null,
+    },
+  ] as unknown as FinalInspection[]);
+  const baseline = vi.spyOn(api, 'handoverEvidence').mockRejectedValue({ status: 403 });
+  const final = vi.spyOn(api, 'readingEvidence').mockRejectedValue({ status: 403 });
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ContractLifecyclePanel api={api} contract={contract} moveOut={moveOut} onChanged={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Xem ảnh nhận phòng 1 phiên bản 1' }));
+  await waitFor(() =>
+    expect(baseline).toHaveBeenCalledWith(
+      'original-contract',
+      'opening-photo',
+      expect.any(AbortSignal),
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh chỉ số điện chốt phiên bản 2' }));
+  await waitFor(() =>
+    expect(final).toHaveBeenCalledWith('final-electric', expect.any(AbortSignal)),
+  );
+});
+
+async function confirmPendingAction() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+}

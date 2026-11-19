@@ -11,9 +11,12 @@ using System.Security.Cryptography;
 using System.Text;
 using BHome.Infrastructure.Modules.Notifications;
 using BHome.Domain.IdentityAccess;
+using BHome.Domain.IncidentMaintenance;
+using BHome.Application.PropertyManagement;
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOperationalTaskRepository tasks, CompactNotificationWriter? inbox = null) : IContractHandoverRepository
+internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOperationalTaskRepository tasks,
+    CompactNotificationWriter? inbox = null, RoomInventoryReviewService? inventory = null) : IContractHandoverRepository
 {
     private static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
     public async Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId,
@@ -33,6 +36,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     public async Task EnsureMoveInTaskAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
+        await EnsureInventoryTaskAsync(c, actor, now, t);
         var id = Key($"contract-move-in:{c.Id:N}");
         var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
         var responsible = await tasks.ResponsibilityAsync(c.Room.LocationId, date, t);
@@ -108,6 +112,98 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
                         ? "Hợp đồng đã kích hoạt. Theo dõi kiểm tra và xác nhận bàn giao trong hợp đồng."
                         : "Biên bản bàn giao nháp đã được tạo. Có thể chuẩn bị kiểm kê và chụp chỉ số điện nước ban đầu; việc vào ở chính thức vẫn phụ thuộc các bước duyệt hợp đồng.",
                     "Contract", c.Id, t);
+    }
+
+    private async Task EnsureInventoryTaskAsync(Contract c, Guid actor, DateTimeOffset now, CancellationToken t)
+    {
+        var id = Key($"contract-pre-move-in-inventory:{c.Id:N}");
+        if (await db.Set<OperationalTask>().AnyAsync(x => x.Id == id, t)) return;
+        var source = inventory is null ? throw ContractException.Conflict("move_in_inventory_unavailable") :
+            await inventory.PrepareForMoveInTaskAsync(c.RoomId, t);
+        var items = source.Groups.Select(group =>
+        {
+            var physical = group.PhysicalAssets ?? [];
+            var assetId = physical.Length == 1 ? physical[0].Id : group.ConfiguredQuantity is null ? group.Id : (Guid?)null;
+            var expected = group.ConfiguredQuantity ?? physical.Sum(p => p.Quantity);
+            return new MoveInInventoryItem(group.Id, assetId, group.Name, expected);
+        }).ToArray();
+        if (items.Select(i => i.Id).Distinct().Count() != items.Length)
+            throw ContractException.Conflict("move_in_inventory_ambiguous_assets");
+        var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(now, "Asia/Ho_Chi_Minh").DateTime);
+        var responsible = await tasks.ResponsibilityAsync(c.Room.LocationId, date, t);
+        // Due just before the scheduled first day. A late activation remains visibly overdue,
+        // while the actual handover stays guarded until inventory is completed.
+        var localBoundary = c.StartDate.ToDateTime(TimeOnly.MinValue);
+        var tz = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+        var due = new DateTimeOffset(localBoundary, tz.GetUtcOffset(localBoundary)).AddTicks(-1).ToUniversalTime();
+        var task = new OperationalTask
+        {
+            Kind = OperationalTaskKind.MoveInInventory,
+            LocationId = c.Room.LocationId,
+            ContractId = c.Id,
+            TargetRoomId = c.RoomId,
+            TargetLabel = c.Room.RoomNumber,
+            Title = $"Kiểm kê trước nhận phòng {c.Room.RoomNumber}",
+            Requirements = "Kiểm tra từng nhóm tài sản trước khi Tenant nhận phòng. Nếu thiếu hoặc hỏng, gửi báo cáo BF-07 và liên kết sự cố trước khi hoàn thành.",
+            AssignedStaffUserId = responsible?.StaffUserId,
+            AssignmentId = responsible?.AssignmentId,
+            AssignedAt = responsible is null ? null : now,
+            DueAt = due,
+            EvidenceRequired = false,
+            Status = MeterTaskStatus.Assigned,
+            ReadingDate = c.StartDate,
+            MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot(source.StateToken, items))
+        };
+        db.Entry(task).Property(x => x.Id).CurrentValue = id;
+        db.Add(task);
+        var history = new OperationalTaskHistory
+        {
+            TaskId = id,
+            ActorId = actor,
+            Action = "MoveInInventoryCreated",
+            OccurredAt = now,
+            TaskVersion = 1,
+            ResponsibleStaffUserId = responsible?.StaffUserId,
+            Note = responsible is null ? "AwaitingAssignment" : ""
+        };
+        db.Add(history);
+        foreach (var owner in (await tasks.OwnersAsync(t)).Concat(responsible is null ? [] : [responsible.StaffUserId]).Distinct())
+            db.Add(new OperationalTaskNotification
+            {
+                TaskId = id,
+                RecipientUserId = owner,
+                EventId = history.Id,
+                Event = responsible is null ? "MoveInInventoryAwaitingAssignment" : "MoveInInventoryAssigned"
+            });
+        if (inbox is not null)
+            foreach (var party in new[] { (Id: (Guid?)c.OwnerSignerId, Role: Roles.Owner), (Id: responsible?.StaffUserId, Role: Roles.Staff) }.Where(x => x.Id.HasValue))
+                await inbox.Emit(party.Id!.Value, party.Role, c.Room.LocationId,
+                    $"move-in-inventory:{c.Id:N}:{party.Id:N}", "MOVE_IN_INVENTORY_PENDING", "OperationalTask",
+                    "Cần kiểm kê trước khi nhận phòng", $"Phòng {c.Room.RoomNumber} đang chờ kiểm kê tài sản trước bàn giao.",
+                    "OperationalTask", id, t, channels: party.Role == Roles.Staff
+                        ? ["IN_APP", "PUSH", "EMAIL"] : ["IN_APP", "PUSH"]);
+    }
+
+    public async Task<bool> InventoryReadyAsync(Guid contractId, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return true;
+        // Existing activated contracts with no generated inventory keep their historic handover.
+        // New Main activations are always provisioned together with this task.
+        var task = await db.Set<OperationalTask>().AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == Key($"contract-pre-move-in-inventory:{contractId:N}"), t);
+        if (task is null) return true;
+        if (task.Kind != OperationalTaskKind.MoveInInventory || task.Status != MeterTaskStatus.Completed)
+            return false;
+        MoveInInventorySnapshot? snapshot;
+        try { snapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(task.MoveInInventoryJson); }
+        catch (JsonException) { return false; }
+        if (snapshot?.Items is null || snapshot.Items.Any(i => i.Condition is null ||
+            (i.Condition is "Missing" or "Damaged") && i.IncidentId is null))
+            return false;
+        var incidentIds = snapshot.Items.Where(i => i.Condition is "Missing" or "Damaged")
+            .Select(i => i.IncidentId!.Value).Distinct().ToArray();
+        return incidentIds.Length == 0 || await db.Set<IncidentReport>().AsNoTracking()
+            .CountAsync(i => incidentIds.Contains(i.Id) && i.Status == IncidentStatus.Resolved, t) == incidentIds.Length;
     }
     public async Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {

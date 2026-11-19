@@ -176,7 +176,7 @@ export function SetupTemplatePicker({
               <Typography color="text.secondary" variant="body2">
                 {items.length
                   ? 'Không tìm thấy mẫu phù hợp với bộ lọc.'
-                  : (empty ?? 'Chưa có mẫu đã công bố. Thêm mới để sử dụng tại đây.')}
+                  : (empty ?? 'Chưa có mẫu có thể áp dụng. Thêm mới để sử dụng tại đây.')}
               </Typography>
             )}
           </Stack>

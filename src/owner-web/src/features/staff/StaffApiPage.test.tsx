@@ -175,18 +175,20 @@ it('uses server totals and server pagination, resetting the page for search', as
 it('keeps invitation errors visible and allows a successful retry', async () => {
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Gửi thông tin tài khoản' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Thiết lập mật khẩu mới và gửi cho nhân viên' }),
+  );
   const original = mocks.request.getMockImplementation()!;
   let failInvitation = true;
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path.endsWith('/invitation') && init?.method === 'POST' && failInvitation) {
       failInvitation = false;
-      throw new ApiError(503, { detail: 'Synthetic unavailable' });
+      throw new ApiError(503, { code: 'email_recipient_not_allowed' });
     }
     return original(path, init);
   });
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
-  expect(await screen.findByRole('alert')).toBeInTheDocument();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Địa chỉ nhận chưa được cho phép');
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
   await waitFor(() =>
     expect(screen.queryByRole('button', { name: 'Xác nhận' })).not.toBeInTheDocument(),

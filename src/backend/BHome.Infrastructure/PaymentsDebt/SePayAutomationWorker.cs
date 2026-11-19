@@ -12,6 +12,9 @@ internal sealed class SePayAutomationWorker(IServiceScopeFactory scopes, SePayOp
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Do not hold up Kestrel startup while the first payment/activation
+        // scheduling query initializes or waits for external persistence.
+        await Task.Yield();
         while (!stoppingToken.IsCancellationRequested)
         {
             try

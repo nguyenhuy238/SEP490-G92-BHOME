@@ -45,6 +45,7 @@ public sealed class InvoiceException(int status, string code) : Exception("Billi
 public interface IInvoiceRepository
 {
     Task<BillingSchedule?> ScheduleAsync(Guid locationId, CancellationToken t);
+    Task<BillingSchedule?> ScheduleForPeriodAsync(Guid locationId, DateOnly period, CancellationToken t);
     Task<T> WithRoomLockAsync<T>(Guid roomId, Func<Task<T>> action, CancellationToken t);
     Task<T> WithLocationLockAsync<T>(Guid locationId, Func<Task<T>> action, CancellationToken t);
     Task<Room?> RoomAsync(Guid roomId, CancellationToken t);

@@ -383,7 +383,7 @@ export function StaffDetailDrawer({
             Chỉnh sửa hồ sơ
           </Button>
           <Button variant="outlined" disabled={actionBusy || !staff.isActive} onClick={invite}>
-            Gửi thông tin tài khoản
+            Thiết lập mật khẩu mới và gửi cho nhân viên
           </Button>
           {!staff.isActive && (
             <Typography sx={{ fontSize: 12 }} color="text.secondary">

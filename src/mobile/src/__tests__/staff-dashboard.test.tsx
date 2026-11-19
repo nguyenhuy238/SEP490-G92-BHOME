@@ -11,7 +11,7 @@ const state = vi.hoisted(() => ({
   selectedId: 'loc',
   locations: [{ id: 'loc', label: 'Cơ sở kiểm thử' }],
   tasks: null as null | { totalCount: number },
-  overdue: [] as { id: string; title: string; locationId: string; status: string }[],
+  overdue: [] as { id: string; title: string; locationId: string; status: string; kind?: string }[],
   failed: false,
 }));
 vi.mock('expo-router', () => ({ router: { push: state.push } }));
@@ -143,11 +143,11 @@ it('opens the actual overdue task and offers retry on partial failure', () => {
   fireEvent.click(screen.getByText('Chưa tải đủ tác vụ ưu tiên · Thử lại'));
   expect(state.reload).toHaveBeenCalledOnce();
 });
-it('exposes all 15 Staff functions and keeps maintenance separate from operational tasks', () => {
+it('exposes all 16 Staff functions including inventory and keeps maintenance separate from operational tasks', () => {
   render(<StaffDashboard />);
   expect(screen.queryByText('TIẾP NHẬN & HỢP ĐỒNG')).toBeNull();
-  fireEvent.click(screen.getByText('Xem tất cả chức năng (15)'));
-  expect(staffFeatureGroups.reduce((total, group) => total + group.items.length, 0)).toBe(15);
+  fireEvent.click(screen.getByText('Xem tất cả chức năng (16)'));
+  expect(staffFeatureGroups.reduce((total, group) => total + group.items.length, 0)).toBe(16);
   for (const group of staffFeatureGroups) {
     expect(screen.getByText(group.title)).toBeTruthy();
     for (const item of group.items) {
@@ -157,12 +157,28 @@ it('exposes all 15 Staff functions and keeps maintenance separate from operation
   }
   fireEvent.click(screen.getByText('Xử lý sự cố'));
   expect(state.go).toHaveBeenLastCalledWith('staff-maintenance');
+  fireEvent.click(screen.getByText('Kiểm kê trước nhận phòng'));
+  expect(state.go).toHaveBeenLastCalledWith('move-in-inventory');
   fireEvent.click(screen.getByText('Hóa đơn'));
   expect(state.go).toHaveBeenLastCalledWith('staff-invoices');
   fireEvent.click(screen.getByText('Tạo hợp đồng giữ chỗ'));
   expect(state.go).toHaveBeenLastCalledWith('prepare-contract', { kind: 'Holding' });
   fireEvent.click(screen.getByText('Thu gọn chức năng'));
   expect(screen.queryByText('SỰ CỐ & BẢO TRÌ')).toBeNull();
+});
+it('opens overdue inventory task directly in the Staff checklist', () => {
+  state.overdue = [
+    {
+      id: 'inventory-task',
+      title: 'Kiểm kê trước nhận phòng',
+      locationId: 'loc',
+      status: 'Assigned',
+      kind: 'MoveInInventory',
+    },
+  ];
+  render(<StaffDashboard />);
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm kê trước nhận phòng, Cơ sở kiểm thử' }));
+  expect(state.go).toHaveBeenLastCalledWith('move-in-inventory', { taskId: 'inventory-task' });
 });
 it('offers both move-in and move-out from the handover action', () => {
   render(<StaffDashboard />);

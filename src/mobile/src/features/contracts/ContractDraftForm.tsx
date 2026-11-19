@@ -25,6 +25,7 @@ import { HoldingNewTenant } from './HoldingNewTenant';
 import { HoldingProgress } from './HoldingProgress';
 import { staffColors } from '../../theme/theme';
 import { HoldingSectionCard, HoldingStatusBadge } from './HoldingUi';
+import { ContractLoading } from './ContractLoading';
 
 export function ContractDraftForm({
   api,
@@ -194,7 +195,7 @@ export function ContractDraftForm({
   function back() {
     if (busy) return;
     setError('');
-    if (step > 0) setStep((value) => value - 1);
+    if (step > 0) setStep((value) => (value === 2 ? 0 : value - 1));
     else onCancel();
   }
   function next() {
@@ -204,7 +205,7 @@ export function ContractDraftForm({
         validateSelection();
       }
       setError('');
-      setStep((value) => value + 1);
+      setStep((value) => (value === 0 ? 2 : value + 1));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -221,8 +222,13 @@ export function ContractDraftForm({
           <Text style={styles.description}>Hoàn tất thông tin theo từng bước.</Text>
         )}
       </View>
-      <HoldingProgress current={step} />
-      <View style={styles.panel}>
+      <HoldingProgress current={busy && step === 3 ? 4 : step} />
+      {busy && step === 3 && <ContractLoading label="Đang tạo hợp đồng và chuẩn bị gửi ký…" />}
+      <View
+        style={[styles.panel, busy && step === 3 && { display: 'none' }]}
+        accessibilityElementsHidden={busy && step === 3}
+        importantForAccessibility={busy && step === 3 ? 'no-hide-descendants' : 'auto'}
+      >
         {step === 0 && (
           <HoldingSectionCard title="Chọn phòng giữ chỗ">
             <Text style={styles.description}>Chọn phòng còn trống để bắt đầu.</Text>
@@ -233,7 +239,7 @@ export function ContractDraftForm({
               searchable
               value={values.roomId ?? ''}
               options={roomOptions}
-              disabled={busy || query.loading || !!values.representativeResidentId}
+              disabled={busy || query.catalogLoading || !!values.representativeResidentId}
               onChange={(roomId) => {
                 setValues((before) => ({
                   ...before,
@@ -246,7 +252,7 @@ export function ContractDraftForm({
                 setError('');
               }}
             />
-            {room && !query.loading && (
+            {room && !query.catalogLoading && (
               <View style={styles.roomSummary}>
                 <View style={styles.roomIcon}>
                   <Icon source="door-open" size={22} color={staffColors.navy} />
@@ -258,15 +264,33 @@ export function ContractDraftForm({
                   </Text>
                 </View>
                 <HoldingStatusBadge
-                  label={roomValid ? 'Đủ điều kiện' : 'Đang kiểm tra'}
-                  tone={roomValid ? 'success' : 'warning'}
+                  label={
+                    query.loading
+                      ? 'Đang kiểm tra'
+                      : roomValid
+                        ? 'Đủ điều kiện'
+                        : query.selectionBlocked
+                          ? 'Không đủ điều kiện'
+                          : 'Chưa xác nhận'
+                  }
+                  tone={
+                    query.loading
+                      ? 'neutral'
+                      : roomValid
+                        ? 'success'
+                        : query.selectionBlocked
+                          ? 'error'
+                          : 'warning'
+                  }
                 />
               </View>
             )}
             {query.loading && (
               <View style={styles.refreshStatus}>
                 <ActivityIndicator size="small" accessibilityLabel="Đang kiểm tra phòng giữ chỗ" />
-                <Text style={styles.description}>Đang tải các phòng có thể giữ chỗ…</Text>
+                <Text style={styles.description}>
+                  {room ? 'Đang kiểm tra phòng đã chọn…' : 'Đang tải danh sách phòng trống…'}
+                </Text>
               </View>
             )}
             {!query.loading && !query.error && !roomOptions.length && (
@@ -291,29 +315,23 @@ export function ContractDraftForm({
             )}
           </HoldingSectionCard>
         )}
-        {(step === 1 || step === 2) && (
-          <View style={step === 1 ? styles.formCard : styles.identityStage}>
-            <Text style={styles.sectionTitle}>
-              {step === 1 ? 'Thông tin người giữ chỗ' : 'CCCD của người giữ chỗ'}
-            </Text>
+        {!!room && (
+          <View style={[styles.identityStage, step !== 2 && { display: 'none' }]}>
+            <Text style={styles.sectionTitle}>CCCD của người giữ chỗ</Text>
             <Text style={styles.description}>
-              {step === 1
-                ? 'Nhập thông tin của người đăng ký giữ chỗ.'
-                : 'Quét CCCD hoặc nhập thủ công, sau đó xác nhận thông tin.'}
+              Quét CCCD hoặc nhập thủ công, sau đó xác nhận thông tin.
             </Text>
             {!!room && (
               <HoldingNewTenant
-                key={`${room.id}:${step}`}
+                key={room.id}
                 api={api}
                 roomId={room.id}
                 role={role ?? ''}
                 context="holding"
-                stage={step === 1 ? 'details' : 'identity'}
-                disabled={busy || (step === 1 && (!roomValid || !owner))}
-                onContinue={() => setStep(2)}
-                onBack={back}
+                stage="identity"
+                disabled={busy}
                 initialResidentId={values.representativeResidentId}
-                initialName={values.applicantFullName || values.tenantName}
+                initialName={values.applicantFullName || values.tenantName || room.label}
                 initialEmail={values.tenantEmail}
                 initialConfirmed={!!representative?.verified}
                 onCreated={(id, name, email) => {
@@ -448,7 +466,7 @@ export function ContractDraftForm({
               labelStyle={styles.buttonLabel}
               style={styles.footerPrimary}
             >
-              Tạo hợp đồng giữ chỗ và tiếp tục bước 5
+              Tạo bản nháp và tiếp tục
             </Button>
             <Button
               mode="text"

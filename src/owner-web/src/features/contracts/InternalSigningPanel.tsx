@@ -1,22 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Alert,
-  Button,
-  Checkbox,
-  FormControlLabel,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Button, Checkbox, FormControlLabel, Stack, Typography } from '@mui/material';
 import type {
   ContractClient,
   ContractView,
 } from '../../../../../packages/client-core/src/contracts';
 import { contractActions, mutationKeys } from '../../../../../packages/client-core/src/contracts';
 import { OwnerSigningPanel } from './OwnerSigningPanel';
-import { useSigningApi, useSigningMethods } from './useContractsApi';
-import { SignaturePlacementPicker } from './SignaturePlacementPicker';
+import { useSigningMethods } from './useContractsApi';
+import { OwnerContractPreview } from './OwnerContractPreview';
 import { ContractActionDialog } from './ContractActionDialog';
 import {
   internalSigningClient,
@@ -44,8 +36,7 @@ export function InternalSigningPanel({
     queryFn: () => service.status(contract.id),
     refetchInterval: 5000,
   });
-  const [link, setLink] = useState(''),
-    [error, setError] = useState(''),
+  const [error, setError] = useState(''),
     [reviewed, setReviewed] = useState(false),
     [sandboxReviewed, setSandboxReviewed] = useState(false),
     [busy, setBusy] = useState(false);
@@ -57,7 +48,6 @@ export function InternalSigningPanel({
       setError('');
       setReviewed(false);
       setSandboxReviewed(false);
-      setLink('');
     });
     return () => {
       active = false;
@@ -162,7 +152,6 @@ export function InternalSigningPanel({
                 disabled={
                   busy ||
                   !sandboxReviewed ||
-                  !contract.approvedAt ||
                   !contract.snapshotHash ||
                   !['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status)
                 }
@@ -173,29 +162,6 @@ export function InternalSigningPanel({
                 {busy ? 'Đang xác nhận…' : 'Xác nhận chữ ký Owner (Sandbox)'}
               </Button>
             </>
-          )}
-          {!contract.approvedAt && (
-            <Stack spacing={1}>
-              <Typography>
-                Hợp đồng chưa được phê duyệt. Phê duyệt trước, sau đó xác nhận chữ ký Owner.
-              </Typography>
-              <Button
-                variant="outlined"
-                disabled={busy || contract.status !== 'Draft'}
-                onClick={() =>
-                  void run(async () => {
-                    await api.mutate(
-                      contract.id,
-                      'holding-approval',
-                      { reason: 'Owner phê duyệt hợp đồng giữ chỗ trên Web' },
-                      crypto.randomUUID(),
-                    );
-                  })
-                }
-              >
-                Phê duyệt hợp đồng giữ chỗ
-              </Button>
-            </Stack>
           )}
           <Typography>
             {status.data.tenantAcceptedAt
@@ -229,33 +195,6 @@ export function InternalSigningPanel({
           <Checkbox checked={reviewed} onChange={(_, v) => setReviewed(v)} disabled={busy} />
         }
       />
-      {['Draft', 'PendingSigning'].includes(contract.status) && !status.data?.tenantAcceptedAt && (
-        <Button
-          disabled={
-            busy ||
-            !reviewed ||
-            !contract.snapshotHash ||
-            !!liveInvitation ||
-            (contract.kind === 'Holding' && !contract.approvedAt)
-          }
-          onClick={() =>
-            void run(async () => {
-              const issued = await service.invite(
-                contract.id,
-                contract.snapshotHash!,
-                new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-              );
-              setLink(
-                window.location.origin +
-                  '/contract-signing#token=' +
-                  encodeURIComponent(issued.token ?? ''),
-              );
-            })
-          }
-        >
-          Duyệt và tạo lời mời ký
-        </Button>
-      )}
       {liveInvitation && (
         <Alert
           severity={liveInvitation.status === 'InvitationPendingManualDelivery' ? 'error' : 'info'}
@@ -269,14 +208,6 @@ export function InternalSigningPanel({
                 : 'Đã tạo lời mời. Chưa xác nhận gửi email hoặc đang chờ người giữ chỗ ký.'}
         </Alert>
       )}
-      {link && (
-        <TextField
-          label="Liên kết gửi riêng cho người đại diện"
-          value={link}
-          slotProps={{ input: { readOnly: true } }}
-          helperText="Chỉ hiển thị lần này. Liên kết mới sẽ thu hồi lời mời cũ chưa chấp thuận."
-        />
-      )}
       {status.data?.invitations
         .filter((i) => !['Accepted', 'Revoked', 'Expired'].includes(i.status))
         .map((i) => (
@@ -286,7 +217,6 @@ export function InternalSigningPanel({
             onClick={() =>
               void run(async () => {
                 await service.revoke(contract.id, i.id);
-                setLink('');
               })
             }
           >
@@ -328,7 +258,6 @@ function RealInternalSigning({
   onChanged: () => void;
 }) {
   const service = internalSigningClient(api.transport);
-  const signing = useSigningApi(api);
   const methods = useSigningMethods(api);
   const query = useQuery({
     queryKey: ['real-internal-signing', contract.id, contract.snapshotHash],
@@ -339,8 +268,6 @@ function RealInternalSigning({
     refetchInterval: 5000,
   });
   const [operation, setOperation] = useState('');
-  const [uncertainInvitation, setUncertainInvitation] = useState(false);
-  const [emails, setEmails] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
@@ -351,7 +278,7 @@ function RealInternalSigning({
     (i) => !['Accepted', 'Revoked', 'Expired'].includes(i.status),
   );
   const actions =
-    status?.tenantAcceptedAt && methods
+    (status?.tenantAcceptedAt || ['Holding', 'Main'].includes(c.kind)) && methods
       ? contractActions(c, null, 'Owner', c.ownerSignerId, methods.methods).filter((a) =>
           a.operation.startsWith('signing'),
         )
@@ -377,8 +304,10 @@ function RealInternalSigning({
     <Stack spacing={2}>
       <Typography variant="h6">Ký hợp đồng · Owner và đại diện người thuê</Typography>
       <Alert severity="info">
-        Người thuê xác minh OTP và ký qua lời mời trước. Owner ký tiếp trên PDF đó. OTP và dấu BHOME
-        không phải chữ ký số cá nhân được CA chứng thực.
+        {['Holding', 'Main'].includes(c.kind)
+          ? 'Xem PDF và ký phần Chủ nhà. Staff gửi lời mời ký cho người thuê trên Mobile; hai bên có thể ký theo bất kỳ thứ tự nào.'
+          : 'Người thuê xác minh OTP và ký qua lời mời trước. Owner ký tiếp trên PDF đó.'}{' '}
+        OTP và dấu BHOME không phải chữ ký số cá nhân được CA chứng thực.
       </Alert>
       <Typography>
         Người thuê: {status?.tenantAcceptedAt ? `Đã ký · ${status.tenantAcceptedAt}` : 'Chờ ký'}
@@ -389,110 +318,9 @@ function RealInternalSigning({
       {(error || query.error) && (
         <Alert severity="error">{error || signingMessage(query.error)}</Alert>
       )}
-      {!status?.tenantAcceptedAt && (
-        <>
-          {!live &&
-            (c.occupants?.length
-              ? c.occupants
-              : [{ id: c.representativeResidentId, label: 'Người đại diện', representative: true }]
-            ).map((person) => (
-              <TextField
-                key={person.id}
-                label={`Email nhận lời mời · ${person.label}`}
-                type="email"
-                value={emails[person.id] ?? ''}
-                onChange={(e) =>
-                  setEmails((before) => ({ ...before, [person.id]: e.target.value }))
-                }
-                disabled={busy}
-              />
-            ))}
-          {!live && (
-            <Typography variant="body2">
-              Email chỉ dùng cho phiên ký này; tài khoản Tenant được tạo sau khi kích hoạt hợp đồng
-              chính thức.
-            </Typography>
-          )}
-          <SignaturePlacementPicker
-            signing={signing}
-            contractId={c.id}
-            value={{ placement: null, usePicture: false }}
-            onChange={() => {}}
-            disabled
-          />
-          {live && (
-            <Typography>
-              Lời mời: {live.status} · {status?.maskedEmail}
-            </Typography>
-          )}
-          {live &&
-            ['OwnerApprovedLink', 'InvitationPendingManualDelivery'].includes(live.status) && (
-              <Alert severity="warning">
-                Chưa xác nhận gửi email thành công. Kiểm tra cấu hình và thu hồi lời mời trước khi
-                gửi lại.
-              </Alert>
-            )}
-          {uncertainInvitation && !live && (
-            <Alert severity="warning">
-              Chưa xác định kết quả gửi. Kiểm tra trạng thái lời mời trước khi thao tác lại.
-            </Alert>
-          )}
-          <Button
-            disabled={
-              busy ||
-              uncertainInvitation ||
-              !status ||
-              !!live ||
-              !c.snapshotHash ||
-              (c.kind === 'Holding' && !c.approvedAt)
-            }
-            onClick={() =>
-              void run(async () => {
-                const latest = await service.status(c.id);
-                if (
-                  latest.tenantAcceptedAt ||
-                  latest.invitations.some(
-                    (i) => !['Accepted', 'Revoked', 'Expired'].includes(i.status),
-                  )
-                )
-                  return;
-                setUncertainInvitation(true);
-                await service.invite(
-                  c.id,
-                  c.snapshotHash!,
-                  new Date(
-                    Math.min(
-                      Date.now() + 3600000,
-                      Date.parse(c.holdingExpiresAt ?? '') || Infinity,
-                    ),
-                  ).toISOString(),
-                  emails[c.representativeResidentId],
-                  Object.entries(emails)
-                    .filter(([, email]) => email.trim())
-                    .map(([residentId, email]) => ({ residentId, email })),
-                );
-                setUncertainInvitation(false);
-              })
-            }
-          >
-            Gửi lời mời ký qua email
-          </Button>
-          {live && (
-            <Button
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  await service.revoke(c.id, live.id);
-                  setUncertainInvitation(false);
-                })
-              }
-            >
-              Thu hồi lời mời chưa ký
-            </Button>
-          )}
-        </>
-      )}
-      {!!status?.tenantAcceptedAt && (
+      <OwnerContractPreview api={api} contract={c} accepted={!!status?.tenantAcceptedAt} />
+      {live && <Typography>{status?.maskedEmail}</Typography>}
+      {(!!status?.tenantAcceptedAt || ['Holding', 'Main'].includes(c.kind)) && (
         <OwnerSigningPanel
           api={api}
           contract={c}

@@ -110,7 +110,7 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             outstanding = Math.Max(0, contract.RequiredDeposit - await payments.DepositAllocatedAsync(contract.Id, token));
             if (contract.Kind == ContractKind.Holding)
             {
-                if (contract.ApprovedAt is null || contract.HoldingExpiryAt is null || contract.HoldingExpiryAt <= clock.GetUtcNow())
+                if ((contract.ApprovedAt is null && !BHome.Application.Contracts.AnonymousContractSigningService.HoldingOwnerHasSigned(contract)) || contract.HoldingExpiryAt is null || contract.HoldingExpiryAt <= clock.GetUtcNow())
                     return await Review("holding_deposit_requires_manual_review");
                 try
                 {

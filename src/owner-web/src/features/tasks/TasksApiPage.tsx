@@ -493,6 +493,13 @@ export function TasksApiPage() {
                             sx={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}
                           >
                             {task.title}{' '}
+                            {task.kind === 'MoveInInventory' && (
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label="Kiểm kê trước bàn giao"
+                              />
+                            )}
                             {task.priority === 'High' && (
                               <Chip size="small" label="Ưu tiên cao" color="warning" />
                             )}

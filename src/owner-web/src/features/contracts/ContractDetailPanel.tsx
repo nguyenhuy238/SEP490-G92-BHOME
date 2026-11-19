@@ -39,7 +39,6 @@ import {
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { formatBillingDecimal } from '../../../../../packages/client-core/src/invoices';
 import { ChartCard, StatusChip } from '../../components/common/PortalUI';
-import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceViewer';
 import { ContractActionDialog } from './ContractActionDialog';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
@@ -122,6 +121,7 @@ export function ContractDetailPanel({
   const actions = contractActions(c, m, 'Owner', actorId, signingMethods?.methods).filter(
     (a) =>
       !['move-out/settlement', 'move-out/schedule'].includes(a.operation) &&
+      !(c.kind === 'Holding' && a.operation === 'holding-approval') &&
       !(c.signingMode === 'INTERNAL_OTP_DRAWN' && a.operation.startsWith('signing')),
   );
   const signer = c.ownerSignerId === actorId;
@@ -260,7 +260,7 @@ export function ContractDetailPanel({
 
       {!!error && <Alert severity="error">{error}</Alert>}
       {!!notice && <Alert severity="success">{notice}</Alert>}
-      {c.kind === 'Holding' && c.signingMode === 'INTERNAL_OTP_DRAWN' && c.isDevelopmentDemo && (
+      {c.signingMode === 'INTERNAL_OTP_DRAWN' && (
         <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
           <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
         </Paper>
@@ -512,9 +512,6 @@ export function ContractDetailPanel({
           </Box>
         </AccordionDetails>
       </Accordion>
-      {c.signingMode === 'INTERNAL_OTP_DRAWN' && !(c.kind === 'Holding' && c.isDevelopmentDemo) && (
-        <InternalSigningPanel api={api} contract={c} onChanged={detail.reload} />
-      )}
       <ContractWorkflowPanel api={api} contract={c} />
       {c.kind !== 'Holding' && typeof api.transport === 'function' && (
         <ContractPolicyPanel
@@ -536,68 +533,61 @@ export function ContractDetailPanel({
           showDraft={c.kind === 'Main' && !c.previousContractId && !['Cancelled', 'Terminated', 'Expired'].includes(c.status)}
         />
       )}
-      {m && (
-        <ChartCard title="Trả phòng và quyết toán" subtitle={text(m.status)}>
-          <Stack spacing={1}>
-            <Typography>Ngày đề nghị: {displayContractDate(m.proposedDate)}</Typography>
-            <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-              Lý do: {m.reason}
-            </Typography>
-            {m.inspectionScheduledAt && (
-              <Typography>
-                Lịch kiểm tra: {formatInstant(m.inspectionScheduledAt)} (giờ Việt Nam)
-              </Typography>
-            )}
-            {!!m.pendingReason && <Alert severity="warning">{text(m.pendingReason)}</Alert>}
-            {m.inspectedAt && (
-              <>
-                <Typography>Biên bản: {formatInstant(m.inspectedAt)}</Typography>
-                <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                  {m.inspectionNotes}
-                </Typography>
-                <Typography>Mã chỉ số điện: {m.electricityReadingId}</Typography>
-                <Typography>Mã chỉ số nước: {m.waterReadingId}</Typography>
-              </>
-            )}
-            {(m.evidenceIds ?? []).map((e, i) => (
-              <PrivateEvidenceViewer
-                key={e}
-                label={`Ảnh hiện trạng ${i + 1}`}
-                filename={`hien-trang-${i + 1}.jpg`}
-                fetchBlob={(signal) => api.evidence(id, e, signal)}
-                errorMessage={contractError}
-              />
-            ))}
-            {m.status === 'Approved' && (
-              <FinalMeterTask
-                api={api}
-                id={id}
-                roomId={c.roomId}
-                locationId={c.locationId || locationId}
-                proposedDate={m.proposedDate}
-              />
-            )}
-            {!!history.length && (
-              <>
-                <Divider />
-                <Typography variant="subtitle2">Lịch sử xem xét quyết toán</Typography>
-                {history.map((h) => (
-                  <Paper variant="outlined" key={h.id} sx={{ p: 1.5 }}>
-                    <Typography variant="caption">
-                      {formatInstant(h.reviewedAt)} ·{' '}
-                      {h.settled ? 'Đã xác minh quyết toán' : 'Còn chờ đối chiếu'}
-                    </Typography>
-                    <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                      {h.decision}
-                    </Typography>
-                  </Paper>
-                ))}
-              </>
-            )}
-          </Stack>
+      {!m && c.kind !== 'Holding' && c.status === 'Active' && (
+        <ChartCard title="Kết thúc hợp đồng">
+          <Typography color="text.secondary">
+            Chưa có hồ sơ trả phòng. Chọn “Lập yêu cầu trả phòng khi hết hạn” trong các thao tác hợp
+            đồng để bắt đầu. Không tạo thêm nếu các bên đang xử lý gia hạn.
+          </Typography>
         </ChartCard>
       )}
-      {m && <ContractLifecyclePanel api={api} contract={c} moveOut={m} onChanged={detail.reload} />}
+      {m && (
+        <>
+          {m.status === 'Approved' && (
+            <FinalMeterTask
+              api={api}
+              id={id}
+              roomId={c.roomId}
+              locationId={c.locationId || locationId}
+              proposedDate={m.proposedDate}
+            />
+          )}
+          <ContractLifecyclePanel
+            api={api}
+            contract={c}
+            moveOut={m}
+            onChanged={() => {
+              detail.reload();
+              onChanged();
+            }}
+          />
+          {detail.data.historyError && (
+            <Alert severity="warning">
+              Không tải được lịch sử quyết toán: {detail.data.historyError}
+            </Alert>
+          )}
+          {!!history.length && (
+            <ChartCard title="Lịch sử xem xét quyết toán">
+              <Stack spacing={1}>
+                {history.map((review) => (
+                  <Box
+                    key={review.id}
+                    sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1 }}
+                  >
+                    <Typography variant="caption">
+                      {formatInstant(review.reviewedAt)} ·{' '}
+                      {review.settled ? 'Đã xác minh quyết toán' : 'Còn chờ đối chiếu'}
+                    </Typography>
+                    <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                      {review.decision}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+            </ChartCard>
+          )}
+        </>
+      )}
       {action && (
         <ContractActionDialog
           api={api}
@@ -605,6 +595,10 @@ export function ContractDetailPanel({
           action={action}
           keys={keys}
           actorId={actorId}
+          onConflict={() => {
+            detail.reload();
+            onChanged();
+          }}
           onClose={() => {
             setAction(null);
             detail.reload();
@@ -631,6 +625,18 @@ function ContractNavigation({ id }: { id: string }) {
       </Button>
       <Button component={RouterLink} to="/temporary-residence">
         Theo dõi tạm trú
+      </Button>
+      <Button
+        onClick={() =>
+          document
+            .getElementById(`move-out-${id}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      >
+        Kết thúc hợp đồng
+      </Button>
+      <Button component={RouterLink} to="/maintenance">
+        Bảo trì sau bàn giao
       </Button>
     </Stack>
   );
@@ -709,8 +715,8 @@ function FinalMeterTask({
           setBusy(true);
           setMessage('');
           try {
-            const result = await api.finalTask(id, meterId, dateOnly(date));
-            setMessage('Đã tạo tác vụ: ' + result.id);
+            await api.finalTask(id, meterId, dateOnly(date));
+            setMessage('Đã tạo tác vụ chốt. Staff xem trong danh sách công việc được phân công.');
           } catch (e) {
             setMessage(contractError(e));
           } finally {

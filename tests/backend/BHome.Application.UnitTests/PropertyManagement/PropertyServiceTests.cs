@@ -27,9 +27,15 @@ public sealed class PropertyServiceTests
     private static readonly DateTimeOffset BeforeVietnamMidnight = new(2026, 10, 29, 16, 59, 59, TimeSpan.Zero);
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ServiceFeeSuccessorPreservesSealedContractPricesAndRejectsMissingSnapshot(bool intact)
+    [InlineData(ChargeCategory.Rent, true, false)]
+    [InlineData(ChargeCategory.Electricity, true, false)]
+    [InlineData(ChargeCategory.Water, true, true)]
+    [InlineData(ChargeCategory.ServiceFee, true, true)]
+    [InlineData(ChargeCategory.Rent, false, false)]
+    [InlineData(ChargeCategory.Electricity, false, true)]
+    [InlineData(ChargeCategory.Water, false, false)]
+    [InlineData(ChargeCategory.ServiceFee, false, true)]
+    public async Task FlatPriceSuccessorPreservesSealedContractPricesAndRejectsMissingSnapshot(ChargeCategory category, bool intact, bool locationScope)
     {
         var (service, repository) = Create(Roles.Owner, BeforeVietnamMidnight);
         var location = new Location("Synthetic") { Address = "Synthetic Address", IsActive = true };
@@ -37,12 +43,12 @@ public sealed class PropertyServiceTests
         var old = new BillingPolicy
         {
             LocationId = location.Id,
-            RoomId = room.Id,
-            Category = ChargeCategory.ServiceFee,
-            ChargeCode = "INTERNET",
-            Name = "Internet",
-            Method = ChargingMethod.FixedPerRoomPerMonth,
-            Rate = 100000,
+            RoomId = locationScope ? null : room.Id,
+            Category = category,
+            ChargeCode = category == ChargeCategory.ServiceFee ? "INTERNET" : category.ToString().ToUpperInvariant(),
+            Name = category.ToString(),
+            Method = category is ChargeCategory.Electricity or ChargeCategory.Water ? ChargingMethod.Metered : ChargingMethod.FixedPerRoomPerMonth,
+            Rate = category == ChargeCategory.Rent ? 3000000 : category == ChargeCategory.Electricity ? 3500 : category == ChargeCategory.Water ? 15000 : 100000,
             EffectiveFrom = new(2026, 1, 1)
         };
         var contract = new Contract
@@ -59,10 +65,13 @@ public sealed class PropertyServiceTests
         };
         HoldingPriceCharge Charge(Guid id, ChargeCategory category, string code, ChargingMethod method, decimal rate) =>
             new(id, code, (int)category, (int)method, rate, contract.StartDate, null, 1) { Name = code };
-        HoldingPriceCharge[] charges = [Charge(Guid.NewGuid(), ChargeCategory.Rent, "RENT", ChargingMethod.FixedPerRoomPerMonth, contract.MonthlyRent),
+        HoldingPriceCharge[] defaults = [Charge(Guid.NewGuid(), ChargeCategory.Rent, "RENT", ChargingMethod.FixedPerRoomPerMonth, contract.MonthlyRent),
             Charge(Guid.NewGuid(), ChargeCategory.Electricity, "ELECTRICITY", ChargingMethod.Metered, 3500),
             Charge(Guid.NewGuid(), ChargeCategory.Water, "WATER", ChargingMethod.Metered, 15000),
-            Charge(old.Id, old.Category, old.ChargeCode, old.Method, old.Rate)];
+            Charge(Guid.NewGuid(), ChargeCategory.ServiceFee, "INTERNET", ChargingMethod.FixedPerRoomPerMonth, 100000)];
+        var charges = defaults.Select(c => c.Category == (int)category
+            ? Charge(old.Id, old.Category, old.ChargeCode, old.Method, old.Rate) with { PolicyLocationId = location.Id, PolicyRoomId = old.RoomId }
+            : c).ToArray();
         if (intact)
         {
             contract.AgreedPriceSnapshot = System.Text.Json.JsonSerializer.Serialize(new HoldingPriceSnapshot(contract.MonthlyRent, 0, contract.StartDate, contract.EndDate, default, "Synthetic", BeforeVietnamMidnight, charges) { SnapshotVersion = 1 });
@@ -76,8 +85,11 @@ public sealed class PropertyServiceTests
         repository.AnyAsync<Room>(Arg.Any<System.Linq.Expressions.Expression<Func<Room, bool>>>(), default).Returns(true);
         repository.HasBindingPriceContractAsync(room.Id, default).Returns(true);
         repository.BindingPriceContractsAsync(room.Id, default).Returns(new[] { contract });
+        repository.BindingPriceContractsForLocationsAsync(Arg.Any<Guid[]>(), default)
+            .Returns(new[] { new ScopedPriceContract(location.Id, null, contract) });
+        repository.PolicyLineagesAsync(Arg.Any<Guid[]>(), default).Returns(new Dictionary<Guid, PolicyLineage>());
         repository.WithLocationLockAsync(location.Id, Arg.Any<Func<Task<PolicyDto>>>(), default).Returns(call => call.Arg<Func<Task<PolicyDto>>>()());
-        var input = new PolicyWrite(location.Id, room.Id, old.Category, old.ChargeCode, old.Name, old.Method, 150000, new(2026, 11, 1), null);
+        var input = new PolicyWrite(location.Id, old.RoomId, old.Category, old.ChargeCode, old.Name, old.Method, old.Rate + 500, new(2026, 11, 1), null);
         if (!intact)
         {
             Assert.Equal("contract_price_snapshot_required_for_successor", (await Assert.ThrowsAsync<PropertyException>(() => service.ReplacePolicyAsync(old.Id, new(input, 1), default))).Code);
@@ -87,11 +99,15 @@ public sealed class PropertyServiceTests
         else
         {
             var result = await service.ReplacePolicyAsync(old.Id, new(input, 1), default);
-            Assert.Equal(150000, result.Rate); Assert.Equal(new DateOnly(2026, 10, 31), old.EffectiveTo);
+            Assert.Equal(input.Rate, result.Rate); Assert.Equal(new DateOnly(2026, 10, 31), old.EffectiveTo);
+            Assert.Equal(old.Id, result.FamilyId); Assert.Equal(2, result.Edition); Assert.Equal(old.Id, result.PreviousPolicyId);
             Assert.Equal(snapshot, contract.AgreedPriceSnapshot);
             var missing = new List<string>();
-            Assert.Equal(100000, ContractBillingPrices.Read(contract, location.Id, missing).Single(x => x.ChargeCode == "INTERNET").Rate);
+            Assert.Equal(old.Rate, ContractBillingPrices.Read(contract, location.Id, missing).Single(x => x.ChargeCode == old.ChargeCode).Rate);
             Assert.Empty(missing);
+            var persisted = await service.GetPolicyAsync(old.Id, default);
+            Assert.Equal(contract.EndDate, persisted.LastContractEndDate); Assert.Equal(1, persisted.BindingContractCount);
+            Assert.False(persisted.CanEditInPlace);
         }
     }
 
@@ -246,7 +262,7 @@ public sealed class PropertyServiceTests
             var error = await Assert.ThrowsAsync<PropertyException>(() => service.CreatePolicyAsync(input, default));
             Assert.Equal("room_pricing_locked_by_contract", error.Code);
             Assert.Equal("room_pricing_locked_by_contract", (await Assert.ThrowsAsync<PropertyException>(() => service.UpdateFuturePolicyAsync(existing.Id, new(input, 1), default))).Code);
-            Assert.Equal("room_pricing_locked_by_contract", (await Assert.ThrowsAsync<PropertyException>(() => service.ReplacePolicyAsync(existing.Id, new(input with { EffectiveFrom = new(2026, 11, 1) }, 1), default))).Code);
+            Assert.Equal("contract_price_snapshot_required_for_successor", (await Assert.ThrowsAsync<PropertyException>(() => service.ReplacePolicyAsync(existing.Id, new(input with { EffectiveFrom = new(2026, 11, 1) }, 1), default))).Code);
             Assert.Equal("room_pricing_locked_by_contract", (await Assert.ThrowsAsync<PropertyException>(() => service.EndPolicyAsync(existing.Id, new(new(2026, 11, 1), 1, "Synthetic reason"), default))).Code);
             Assert.Equal(10000, existing.Rate);
             Assert.Equal(1, existing.Version);

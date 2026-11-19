@@ -18,7 +18,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
 {
     public string Name => "notification-channels";
     private sealed record Work(Guid Id, int Sequence);
-    private sealed record Claim(Guid Id, Guid Lease, Guid Notice, Guid Recipient, string Role, string Channel, string EventType, int Attempt, string? ProtectedAuthenticationEmail, DateTimeOffset CreatedAt);
+    private sealed record Claim(Guid Id, Guid Lease, Guid Notice, Guid Recipient, string Role, string Channel, string EventType, int Attempt, string? ProtectedAuthenticationEmail, DateTimeOffset CreatedAt, Guid? HoldingContractId);
     public async Task EnqueueDueAsync(CancellationToken t)
     {
         foreach (var work in await DueAsync(t)) await queue.EnqueueAsync(new(Name, $"channel/{work.Id}/{work.Sequence}/{sql.Now:yyyyMMddHHmm}", JsonSerializer.Serialize(work.Id)), t);
@@ -60,7 +60,9 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         await using (var cmd = await sql.Command("""
             SELECT id,(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1 FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'recordType'='ChannelDelivery'
               AND (NOT @authenticationOnly OR event_data ? 'protectedAuthenticationEmail' OR event_data->>'eventType' IN
-                ('PASSWORD_CHANGED','PASSWORD_RESET_COMPLETED','ACCOUNT_ACTIVATED','ACCOUNT_DEACTIVATED','ACCOUNT_SETUP_COMPLETED','ACCOUNT_ACCESS_CHANGED','ACCOUNT_LOCKED'))
+                ('PASSWORD_CHANGED','PASSWORD_RESET_COMPLETED','ACCOUNT_ACTIVATED','ACCOUNT_DEACTIVATED','ACCOUNT_SETUP_COMPLETED','ACCOUNT_ACCESS_CHANGED','ACCOUNT_LOCKED',
+                 'STAFF_ASSIGNMENT_CREATED','STAFF_ASSIGNMENT_UPDATED','STAFF_ASSIGNMENT_CANCELLED','STAFF_ASSIGNMENT_REMOVED',
+                 'STAFF_ASSIGNMENT_ACTIVATED','STAFF_ASSIGNMENT_ENDED'))
               AND ((delivery_status='Pending' AND next_delivery_at<=@now) OR (delivery_status='Processing' AND locked_until<=@now))
             ORDER BY event_at,id LIMIT 50
             """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly)))
@@ -77,7 +79,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         {
             await using var cmd = await sql.Command("""
                 SELECT (event_data->>'notificationId')::uuid,(event_data->>'recipient')::uuid,event_data->>'role',event_data->>'channel',
-                  COALESCE(event_data->>'eventType',''),(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1,delivery_status,event_data->>'protectedAuthenticationEmail',event_at
+                  COALESCE(event_data->>'eventType',''),(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1,delivery_status,event_data->>'protectedAuthenticationEmail',event_at,(event_data->>'holdingContractId')::uuid
                 FROM notifications WHERE id=@id AND event_data->>'recordType'='ChannelDelivery' AND
                  ((delivery_status='Pending' AND next_delivery_at<=@now) OR (delivery_status='Processing' AND locked_until<=@now)) FOR UPDATE SKIP LOCKED
                 """, t, ("id", id), ("now", sql.Now));
@@ -85,7 +87,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
             await using (var reader = await cmd.ExecuteReaderAsync(t))
             {
                 if (!await reader.ReadAsync(t)) return;
-                claim = new(id, Guid.NewGuid(), reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetInt32(5), reader.IsDBNull(7) ? null : reader.GetString(7), reader.GetFieldValue<DateTimeOffset>(8)); previous = reader.GetString(6);
+                claim = new(id, Guid.NewGuid(), reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetInt32(5), reader.IsDBNull(7) ? null : reader.GetString(7), reader.GetFieldValue<DateTimeOffset>(8), reader.IsDBNull(9) ? null : reader.GetGuid(9)); previous = reader.GetString(6);
             }
             if (!provider.IsConfigured(claim.Channel)) return;
             if (previous == "Processing" && !provider.SupportsIdempotency(claim.Channel))
@@ -104,60 +106,96 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         {
             if (terminalState is null)
             {
-                var scope = new NotificationScope(claim.Recipient, claim.Role == "Owner", claim.Role == "Staff", claim.Role == "Tenant", BillingAutomationDates.BusinessDate(sql.Now));
-                var notice = await inbox.GetAsync(scope, claim.Notice, t);
-                var eligible = await sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM users WHERE id=@id AND @role=ANY(roles) AND (is_active OR @security))", t,
-                    ("id", claim.Recipient), ("role", claim.Role), ("security", notice?.Category == "Account"));
-                if (!eligible || notice is null || await inbox.TargetAsync(scope, claim.Notice, t) is null || !await Relevant(notice, t)) state = "Suppressed";
-                else if (claim.Channel == "SMS")
+                if (claim.EventType == "HOLDING_CONFIRMED" && claim.HoldingContractId is { } holding)
                 {
-                    var template = SmsNotificationPolicy.Template(notice.EventType, claim.Role);
-                    var variables = await smsContent.BuildAsync(notice, claim.Recipient, t);
-                    var phone = VietnameseSmsPhone.Normalize(await sql.Scalar<string>("SELECT phone FROM users WHERE id=@id AND is_active AND phone_confirmed", t, ("id", claim.Recipient)));
-                    if (template is null || !smsOptions.Value.EnabledTemplates.Contains(template) || variables is null || phone is null ||
-                        !await sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM notifications d JOIN notifications n ON n.id=@notice WHERE d.id=@id AND d.event_key='sms:'||md5(n.event_key||':'||@phone))", t,
-                            ("id", claim.Id), ("notice", claim.Notice), ("phone", phone))) state = "Suppressed";
+                    var confirmation = await content.HoldingConfirmationAsync(holding, claim.Recipient, t);
+                    if (confirmation is null) state = "Suppressed";
                     else
                     {
-                        // RequestId is stable across retries and independent of provider acceptance.
-                        var key = $"channel/{claim.Id}/sms";
-                        var submitted = JsonSerializer.Serialize(new { recordType = "SmsSubmission", requestId = SmsGateway.RequestId(key), at = sql.Now }, CompactNotificationWriter.Json);
-                        await sql.Execute("UPDATE notifications SET delivery_history=delivery_history||jsonb_build_array(@history::jsonb) WHERE id=@id AND lease_token=@lease", t,
-                            ("history", submitted), ("id", claim.Id), ("lease", claim.Lease));
-                        var receipt = await sms.SendAsync(new(claim.Recipient, phone, template, variables, key), t);
-                        state = receipt.Status; providerReference = receipt.ProviderReference;
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t);
+                        timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutSeconds));
+                        providerReference = await provider.SendAsync(new($"channel/{claim.Id}/email", "EMAIL",
+                            confirmation.Value.Destination, claim.EventType, confirmation.Value.Title, confirmation.Value.Body,
+                            Attachments: confirmation.Value.Attachments), timeout.Token);
+                        if (string.IsNullOrWhiteSpace(providerReference) || providerReference.Length > 200)
+                            throw new ChannelDeliveryException("email_submission_outcome_unknown", outcomeUnknown: true);
                     }
                 }
                 else
                 {
-                    var auth = claim.ProtectedAuthenticationEmail is null ? null : await authenticationEmail.ResolveAsync(claim.Recipient, claim.ProtectedAuthenticationEmail, t);
-                    if (claim.ProtectedAuthenticationEmail is not null && auth is null) state = "Suppressed";
-                    else
+                    var scope = new NotificationScope(claim.Recipient, claim.Role == "Owner", claim.Role == "Staff", claim.Role == "Tenant", BillingAutomationDates.BusinessDate(sql.Now));
+                    var notice = await inbox.GetAsync(scope, claim.Notice, t);
+                    var eligible = await sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM users WHERE id=@id AND @role=ANY(roles) AND (is_active OR @security))", t,
+                        ("id", claim.Recipient), ("role", claim.Role), ("security", notice?.Category == "Account"));
+                    if (!eligible || notice is null || await inbox.TargetAsync(scope, claim.Notice, t) is null || !await Relevant(notice, t)) state = "Suppressed";
+                    else if (claim.Channel == "EMAIL" && claim.Role == "Tenant" && notice.EventType == "CONTRACT_ACTIVATED" &&
+                        !await sql.Scalar<bool>("SELECT email_confirmed FROM users WHERE id=@id", t, ("id", claim.Recipient)))
+                        state = "Suppressed"; // The durable account-setup email contains the same activation confirmation and password link.
+                    else if (claim.Channel == "SMS")
                     {
-                        var destinations = new List<(string Id, string Value)>();
-                        if (claim.Channel == "EMAIL")
-                        {
-                            var email = auth?.Destination ?? await sql.Scalar<string>("SELECT email FROM users WHERE id=@id AND email_confirmed AND (is_active OR @security)", t, ("id", claim.Recipient), ("security", notice.Category == "Account"));
-                            if (!EmailOptions.ValidAddress(email)) throw new ChannelDeliveryException("email_recipient_unavailable");
-                            destinations.Add(("email", email!));
-                        }
+                        var template = SmsNotificationPolicy.Template(notice.EventType, claim.Role);
+                        var variables = await smsContent.BuildAsync(notice, claim.Recipient, t);
+                        var phone = VietnameseSmsPhone.Normalize(await sql.Scalar<string>("SELECT phone FROM users WHERE id=@id AND is_active AND phone_confirmed", t, ("id", claim.Recipient)));
+                        if (template is null || !smsOptions.Value.EnabledTemplates.Contains(template) || variables is null || phone is null ||
+                            !await sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM notifications d JOIN notifications n ON n.id=@notice WHERE d.id=@id AND d.event_key='sms:'||md5(n.event_key||':'||@phone))", t,
+                                ("id", claim.Id), ("notice", claim.Notice), ("phone", phone))) state = "Suppressed";
                         else
                         {
-                            await using var cmd = await sql.Command("""
-                                SELECT d.id,d.task_data->>'pushToken' FROM operational_tasks d JOIN users u ON u.id=d.assigned_user_id
-                                WHERE d.assigned_user_id=@id AND d.task_data->>'recordType'='PushDevice' AND d.status='Active' AND u.is_active AND d.task_data ? 'pushToken'
-                                """, t, ("id", claim.Recipient));
-                            await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) destinations.Add((reader.GetGuid(0).ToString("N"), reader.GetString(1)));
-                            if (destinations.Count == 0) throw new InvalidOperationException("push_device_unavailable");
+                            // RequestId is stable across retries and independent of provider acceptance.
+                            var key = $"channel/{claim.Id}/sms";
+                            var submitted = JsonSerializer.Serialize(new { recordType = "SmsSubmission", requestId = SmsGateway.RequestId(key), at = sql.Now }, CompactNotificationWriter.Json);
+                            await sql.Execute("UPDATE notifications SET delivery_history=delivery_history||jsonb_build_array(@history::jsonb) WHERE id=@id AND lease_token=@lease", t,
+                                ("history", submitted), ("id", claim.Id), ("lease", claim.Lease));
+                            var receipt = await sms.SendAsync(new(claim.Recipient, phone, template, variables, key), t);
+                            state = receipt.Status; providerReference = receipt.ProviderReference;
                         }
-                        var emailContent = auth is not null ? (auth.Title, auth.Body) : claim.Channel == "EMAIL" ? await content.BuildAsync(notice, t) : (notice.Title, notice.Summary);
-                        foreach (var destination in destinations)
+                    }
+                    else
+                    {
+                        var auth = claim.ProtectedAuthenticationEmail is null ? null : await authenticationEmail.ResolveAsync(claim.Recipient, claim.ProtectedAuthenticationEmail, t);
+                        if (claim.ProtectedAuthenticationEmail is not null && auth is null) state = "Suppressed";
+                        else
                         {
-                            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t); timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutSeconds));
-                            // Stable per-device key protects fanout retries after a partial provider failure.
-                            var receipt = await provider.SendAsync(new($"channel/{claim.Id}/{destination.Id}", claim.Channel, destination.Value, notice.EventType, emailContent.Item1, emailContent.Item2, auth?.ActionUrl), timeout.Token);
-                            if (string.IsNullOrWhiteSpace(receipt) || receipt.Length > 200) throw new InvalidOperationException("invalid_provider_receipt");
-                            providerReference = receipt;
+                            var destinations = new List<(string Id, string Value)>();
+                            if (claim.Channel == "EMAIL")
+                            {
+                                // Owner-provisioned Staff may still be completing their invitation.
+                                // Assignment notice is safe to send to the account's stored address;
+                                // all other regular notices still require confirmed email.
+                                var assignmentNotice = claim.Role == "Staff" && notice.EventType is
+                                    ("STAFF_ASSIGNMENT_CREATED" or "STAFF_ASSIGNMENT_UPDATED" or
+                                    "STAFF_ASSIGNMENT_CANCELLED" or "STAFF_ASSIGNMENT_REMOVED" or
+                                    "STAFF_ASSIGNMENT_ACTIVATED" or "STAFF_ASSIGNMENT_ENDED");
+                                var email = auth?.Destination ?? await sql.Scalar<string>("""
+                                    SELECT email FROM users WHERE id=@id AND (email_confirmed OR (@assignment AND 'Staff'=ANY(roles)))
+                                      AND (is_active OR (@security AND NOT @assignment))
+                                    """, t, ("id", claim.Recipient), ("security", notice.Category == "Account"), ("assignment", assignmentNotice));
+                                if (!EmailOptions.ValidAddress(email)) throw new ChannelDeliveryException("email_recipient_unavailable");
+                                destinations.Add(("email", email!));
+                            }
+                            else
+                            {
+                                await using var cmd = await sql.Command("""
+                                    SELECT d.id,d.task_data->>'pushToken' FROM operational_tasks d JOIN users u ON u.id=d.assigned_user_id
+                                    WHERE d.assigned_user_id=@id AND d.task_data->>'recordType'='PushDevice' AND d.status='Active' AND u.is_active AND d.task_data ? 'pushToken'
+                                    """, t, ("id", claim.Recipient));
+                                await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) destinations.Add((reader.GetGuid(0).ToString("N"), reader.GetString(1)));
+                                if (destinations.Count == 0) throw new InvalidOperationException("push_device_unavailable");
+                            }
+                            var emailContent = auth is not null ? (auth.Title, auth.Body) : claim.Channel == "EMAIL" ? await content.BuildAsync(notice, t) : (notice.Title, notice.Summary);
+                            var attachments = auth?.Attachments;
+                            if (auth is null && claim.Channel == "EMAIL" && claim.Role == "Tenant" &&
+                                notice.EventType == "CONTRACT_ACTIVATED" && notice.RelatedObjectType == "Contract" &&
+                                await content.MainConfirmationAsync(notice.RelatedObjectId, claim.Recipient, t) is not null)
+                                attachments = await content.MainAttachmentsAsync(notice.RelatedObjectId, claim.Recipient, t);
+                            foreach (var destination in destinations)
+                            {
+                                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t); timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutSeconds));
+                                // Stable per-device key protects fanout retries after a partial provider failure.
+                                var receipt = await provider.SendAsync(new($"channel/{claim.Id}/{destination.Id}", claim.Channel, destination.Value, notice.EventType, emailContent.Item1, emailContent.Item2, auth?.ActionUrl, attachments), timeout.Token);
+                                if (string.IsNullOrWhiteSpace(receipt) || receipt.Length > 200) throw new InvalidOperationException("invalid_provider_receipt");
+                                providerReference = receipt;
+                            }
                         }
                     }
                 }
@@ -183,7 +221,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
             WHERE id=@id AND lease_token=@lease AND delivery_status='Processing'
             """, t, ("id", claim.Id), ("lease", claim.Lease), ("state", state), ("history", history),
             ("next", sql.Now.Add(options.Value.RetryDelay(claim.Attempt))));
-        if (updated == 1)
+        if (updated == 1 && claim.Notice != Guid.Empty)
         {
             var aggregate = await sql.Scalar<string>("""
                 SELECT CASE WHEN bool_and(delivery_status='Suppressed') THEN 'Suppressed'

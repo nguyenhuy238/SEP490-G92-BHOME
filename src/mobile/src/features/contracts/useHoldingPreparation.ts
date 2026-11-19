@@ -15,6 +15,18 @@ interface HoldingRooms {
   blockedRooms: { id: string; label: string; codes: string[] }[];
 }
 
+const holdingRoomBlockers: Record<string, string> = {
+  RENT_POLICY_MISSING: 'Phòng chưa cấu hình giá thuê. Owner cần cập nhật giá phòng.',
+  PROTECTED_PENDING_CONTRACT:
+    'Phòng đã có hợp đồng đang xử lý có chữ ký hoặc tiền cọc. Hãy mở hợp đồng đó để tiếp tục.',
+  ACTIVE_TENANCY_CONFLICT: 'Phòng đã có hợp đồng đang hiệu lực hoặc đang được giữ chỗ.',
+  RESIDENT_OBLIGATION: 'Phòng đang có người ở. Chưa thể tạo giữ chỗ mới.',
+  ASSET_MAINTENANCE_REQUIRED:
+    'Phòng có tài sản cần sửa chữa. Owner cần kiểm tra trước khi giữ chỗ.',
+  ROOM_UNAVAILABLE: 'Phòng hiện không khả dụng để giữ chỗ.',
+  LOCATION_INACTIVE: 'Cơ sở hiện không hoạt động.',
+};
+
 export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') {
   const [data, setData] = useState<HoldingRooms | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,6 +42,7 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
     preparation?: Preparation;
     error?: string;
     loading: boolean;
+    codes?: string[];
     revision?: number;
     selectionRevision?: number;
   }>({ roomId: '', loading: false });
@@ -49,14 +62,15 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
       setLoading(true);
       setError('');
       try {
-        const [configuration, locations] = await Promise.all([
+        const [configuration, locations, firstPage] = await Promise.all([
           api.configuration(controller.signal),
           api.locations(controller.signal),
+          api.holdingRooms(1, controller.signal),
         ]);
         const candidates: Preparation['rooms'] = [];
         let loaded = 0;
         for (let page = 1; ; page++) {
-          const result = await api.holdingRooms(page, controller.signal);
+          const result = page === 1 ? firstPage : await api.holdingRooms(page, controller.signal);
           if (!active) return;
           candidates.push(
             ...result.items
@@ -75,46 +89,9 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
           loaded += result.items.length;
           if (!result.items.length || loaded >= result.totalCount) break;
         }
-        const rooms: Preparation['rooms'] = [];
-        const blockedRooms: HoldingRooms['blockedRooms'] = [];
-        for (let offset = 0; offset < candidates.length; offset += 4) {
-          const batch = candidates.slice(offset, offset + 4);
-          const ready = await Promise.all(
-            batch.map(async (room) => {
-              if (!api.holdingRoomReadiness)
-                return {
-                  ready: await api.holdingRoomReady(room.id, controller.signal),
-                  codes: [],
-                };
-              const result = await api.holdingRoomReadiness(room.id, controller.signal);
-              return {
-                ready:
-                  result.roomId === room.id &&
-                  result.purpose === 'Holding' &&
-                  result.status === 'Ready' &&
-                  result.isReady === true &&
-                  Array.isArray(result.blockers) &&
-                  !result.blockers.length &&
-                  Array.isArray(result.unverifiedConditions) &&
-                  !result.unverifiedConditions.length,
-                codes: [...(result.blockers ?? []), ...(result.unverifiedConditions ?? [])].map(
-                  (finding) => finding.code,
-                ),
-              };
-            }),
-          );
-          if (!active) return;
-          rooms.push(...batch.filter((_, index) => ready[index]?.ready));
-          batch.forEach((room, index) => {
-            if (!ready[index]?.ready)
-              blockedRooms.push({
-                id: room.id,
-                label: room.label,
-                codes: ready[index]?.codes ?? [],
-              });
-          });
-        }
-        if (active) setData({ configuration, locations, rooms, blockedRooms });
+        // Listing available rooms must not wait for N readiness requests.
+        // Validate only the selected room below; creation rechecks eligibility on the server.
+        if (active) setData({ configuration, locations, rooms: candidates, blockedRooms: [] });
       } catch (e) {
         if (active) {
           // Keep the current wizard mounted on a failed background refresh.
@@ -149,10 +126,29 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
     let active = true;
     void Promise.all([
       api.preparation(locationId, controller.signal),
-      api.holdingRoomReady(selectedRoomId, controller.signal),
+      api.holdingRoomReadiness
+        ? api.holdingRoomReadiness(selectedRoomId, controller.signal)
+        : api.holdingRoomReady(selectedRoomId, controller.signal),
     ])
       .then(([preparation, ready]) => {
         if (!active) return;
+        const eligible =
+          typeof ready === 'boolean'
+            ? ready
+            : ready.roomId === selectedRoomId &&
+              ready.purpose === 'Holding' &&
+              ready.status === 'Ready' &&
+              ready.isReady === true &&
+              Array.isArray(ready.blockers) &&
+              !ready.blockers.length &&
+              Array.isArray(ready.unverifiedConditions) &&
+              !ready.unverifiedConditions.length;
+        const codes =
+          typeof ready === 'boolean'
+            ? []
+            : [...(ready.blockers ?? []), ...(ready.unverifiedConditions ?? [])].map(
+                (finding) => finding.code,
+              );
         const validRoom = preparation.rooms.some(
           (item) =>
             item.id === selectedRoomId &&
@@ -160,11 +156,17 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
             item.status === 'Available',
         );
         setSelection(
-          ready && validRoom
+          eligible && validRoom
             ? { roomId: selectedRoomId, preparation, loading: false, revision, selectionRevision }
             : {
                 roomId: selectedRoomId,
-                error: 'Phòng không còn đủ điều kiện giữ chỗ. Vui lòng chọn lại phòng.',
+                error:
+                  codes
+                    .map((code) => holdingRoomBlockers[code])
+                    .filter(Boolean)
+                    .join('\n') ||
+                  'Phòng không còn đủ điều kiện giữ chỗ. Owner cần kiểm tra điều kiện sử dụng phòng.',
+                codes,
                 loading: false,
                 revision,
                 selectionRevision,
@@ -195,7 +197,18 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
   const byLocation: Record<string, Preparation> =
     current?.preparation && locationId ? { [locationId]: current.preparation } : {};
   return {
-    data: data ? { ...data, byLocation } : null,
+    data: data
+      ? {
+          ...data,
+          byLocation,
+          blockedRooms:
+            room && current?.codes?.length
+              ? [{ id: room.id, label: room.label, codes: current.codes }]
+              : [],
+        }
+      : null,
+    catalogLoading: loading,
+    selectionBlocked: !!current?.error && current.codes !== undefined,
     loading: loading || (!!room && (!current || current.loading)),
     error: error || (room ? (current?.error ?? '') : ''),
     reload: () => setRevision((value) => value + 1),

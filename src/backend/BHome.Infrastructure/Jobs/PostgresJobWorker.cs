@@ -13,6 +13,8 @@ internal sealed class PostgresJobWorker(IServiceScopeFactory scopeFactory, IOpti
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Job claiming is not part of the API startup critical path.
+        await Task.Yield();
         if (!options.Value.Enabled) return;
         logger.LogInformation("Background worker started");
         while (!stoppingToken.IsCancellationRequested)

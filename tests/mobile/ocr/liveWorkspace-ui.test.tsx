@@ -2257,8 +2257,11 @@ it('uses the residence API empty state without unsupported draft fields', async 
 });
 it('uses the account profile endpoint without exposing identifiers and confirms logout', async () => {
   mocks.role = 'Tenant';
-  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () =>
-    json({
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
+    const { pathname } = new URL(String(url));
+    if (pathname === '/api/v1/contracts') return json(page([]));
+    if (pathname !== '/api/v1/account/profile') return json({}, 404);
+    return json({
       roles: ['Tenant'],
       userId: 'PRIVATE-USER',
       fullName: 'Synthetic Tenant',
@@ -2267,8 +2270,8 @@ it('uses the account profile endpoint without exposing identifiers and confirms 
       isActive: true,
       version: 'PRIVATE-VERSION',
       sessionId: 'PRIVATE-SESSION',
-    }),
-  );
+    });
+  });
   setApi(fetcher);
   render(<TenantProfileScreen />);
   await screen.findByText('Tài khoản đang hoạt động');

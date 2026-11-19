@@ -8,8 +8,8 @@ The authenticated endpoint `POST /api/v1/development/onboarding-seed` requires t
 
 - The backend environment is `Development`.
 - The PostgreSQL connection Host is `localhost`, `127.0.0.1` or `::1`, and the database name starts with `bhome_`.
-- `DevelopmentContractSeed__Enabled=true` is explicitly configured.
-- `DevelopmentContractSeed__TenantPassword` contains a valid synthetic Tenant password, configured **only in the local, ignored `.env` file or user-secrets**. Do not commit or log this value.
+- `DevelopmentContractSeed:Enabled=true` is explicitly configured through local user-secrets or the process environment (`DevelopmentContractSeed__Enabled`).
+- `DevelopmentContractSeed:TenantPassword` contains a valid synthetic Tenant password, configured **only in local user-secrets or the process environment** (`DevelopmentContractSeed__TenantPassword`). Do not commit or log this value. The Develop environment-file loader does not import the `DevelopmentContractSeed` prefix from `.env`.
 
 After changing the local environment, restart `scripts/Start-Api.ps1` (restarting only Expo does not restart the backend).
 

@@ -13,6 +13,7 @@ export interface ContractDetail {
   moveOut: MoveOut | null;
   readiness: Readiness | null;
   history: SettlementReview[];
+  historyError?: string;
 }
 export function useContractDetail(
   client: ContractClient,
@@ -84,16 +85,24 @@ export function useContractDetail(
               });
         const financial = role === 'Owner' || role === 'Tenant';
         const canReadReadiness = financial || (role === 'Staff' && contract.kind === 'Main');
+        let historyError = '';
         const [readiness, history] = await Promise.all([
           canReadReadiness &&
           ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status)
             ? client.readiness(id, signal)
             : Promise.resolve(null),
-          financial && moveOut ? client.history(id, signal) : Promise.resolve([]),
+          financial && moveOut
+            ? client.history(id, signal).catch((error: unknown) => {
+                if ([401, 403, 404].includes((error as { status?: number })?.status ?? 0))
+                  throw error;
+                historyError = contractError(error);
+                return [];
+              })
+            : Promise.resolve([]),
         ]);
         if (!signal.aborted) {
           setRefreshError('');
-          const data = { contract, moveOut, readiness, history };
+          const data = { contract, moveOut, readiness, history, historyError };
           cached.current = { client, id, role, data };
           setState((previous) =>
             previous.id === id &&

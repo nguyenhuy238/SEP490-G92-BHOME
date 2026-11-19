@@ -89,7 +89,7 @@ it.each([
   ['Sự cố khẩn cấp', 'staff-emergencies'],
 ])('opens %s from the authenticated dashboard', (label, destination) => {
   render(<StaffDashboard />);
-  fireEvent.click(screen.getByText('Xem tất cả chức năng (15)'));
+  fireEvent.click(screen.getByText('Xem tất cả chức năng (16)'));
   fireEvent.click(screen.getAllByRole('button', { name: label }).at(-1)!);
   expect(state.go).toHaveBeenCalledWith(destination);
 });
@@ -115,7 +115,7 @@ it('does not present sample identity, shift or counts to a signed-in account', (
 
 it('shows the complete function catalogue including rooms, assets and Staff invoices', () => {
   render(<StaffDashboard />);
-  fireEvent.click(screen.getByText('Xem tất cả chức năng (15)'));
+  fireEvent.click(screen.getByText('Xem tất cả chức năng (16)'));
   for (const title of [
     'Tiếp nhận người thuê',
     'Tạo hợp đồng giữ chỗ',
@@ -124,6 +124,7 @@ it('shows the complete function catalogue including rooms, assets and Staff invo
     'Lịch làm việc',
     'Ghi điện nước',
     'Bàn giao / Trả phòng',
+    'Kiểm kê trước nhận phòng',
     'Báo cáo sự cố',
     'Xử lý sự cố',
     'Công nợ',

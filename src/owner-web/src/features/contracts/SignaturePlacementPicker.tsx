@@ -237,8 +237,10 @@ export function SignaturePlacementPicker({
             borderColor: 'primary.main',
             bgcolor: 'rgba(25,118,210,0.08)',
             cursor: disabled ? 'default' : 'move',
-            display: 'flex',
-            flexDirection: 'column',
+            display: 'grid',
+            gridTemplateRows:
+              value.usePicture && shownPicture && pictureUrl ? 'minmax(0, 1fr) auto' : '1fr',
+            boxSizing: 'border-box',
             overflow: 'hidden',
             p: '2px',
           }}
@@ -249,7 +251,13 @@ export function SignaturePlacementPicker({
               src={pictureUrl}
               alt="Ảnh chữ ký"
               draggable={false}
-              sx={{ width: '100%', pointerEvents: 'none' }}
+              sx={{
+                width: '100%',
+                height: '100%',
+                minHeight: 0,
+                objectFit: 'contain',
+                pointerEvents: 'none',
+              }}
             />
           )}
           <Typography
@@ -265,7 +273,7 @@ export function SignaturePlacementPicker({
               <>
                 Ký bởi: {layout.data.signerName || 'tên trên chứng thư'}
                 <br />
-                Ngày ký: lúc xác nhận trên MySign
+                Ngày ký: khi hoàn tất ký
               </>
             )}
           </Typography>

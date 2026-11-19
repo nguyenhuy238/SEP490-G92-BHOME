@@ -20,14 +20,22 @@ interface AssetPage {
   pageSize: number;
 }
 
-export function useStaffIncidentScope(enabled: boolean) {
+export function useStaffIncidentScope(
+  enabled: boolean,
+  initial?: { locationId?: string; roomId?: string },
+) {
   const { staffLocationId, selectStaffLocation } = useWorkspace();
-  const [area, setArea] = useState('');
+  const [area, setArea] = useState(initial?.roomId ?? '');
   const [assetId, setAssetId] = useState('');
   const [page, setPage] = useState(1);
   const locations = useWorkspaceQuery<Named[]>(enabled ? '/api/v1/capture/locations' : null);
+  // An inventory report stays on its source task's Location. Normal reporting
+  // follows the shared Staff selection; both require a current assignment.
+  const requestedLocation = initial?.locationId || staffLocationId;
   const location =
-    enabled && locations.data?.some((item) => item.id === staffLocationId) ? staffLocationId : '';
+    enabled && locations.data?.some((item) => item.id === requestedLocation)
+      ? requestedLocation
+      : '';
   const rooms = useWorkspaceQuery<Named[]>(
     location ? `/api/v1/capture/locations/${encodeURIComponent(location)}/rooms` : null,
   );

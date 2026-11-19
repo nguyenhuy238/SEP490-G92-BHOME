@@ -9,7 +9,7 @@ using BHome.Domain.StaffOperations;
 
 namespace BHome.Application.StaffOperations;
 
-public sealed class OperationalTaskService(IOperationalTaskRepository repository, ICurrentUser user,
+public sealed partial class OperationalTaskService(IOperationalTaskRepository repository, ICurrentUser user,
     PermissionAccess permissions, ITaskEvidenceFiles files, TaskEvidenceLimits limits, TimeProvider clock)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new OperationalTaskException(401, "authentication_required");
@@ -238,7 +238,10 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
         {
             var task = await repository.FindAsync(id, t) ?? throw OperationalTaskException.Missing();
             var responsible = await AccessAsync(task, t, executing);
-            if (task.Kind != OperationalTaskKind.AdHoc) throw OperationalTaskException.Conflict("meter_workflow_required");
+            if (task.Kind == OperationalTaskKind.MoveInInventory && action is not ("start" or "assign"))
+                throw OperationalTaskException.Conflict("move_in_inventory_workflow_required");
+            if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory))
+                throw OperationalTaskException.Conflict("meter_workflow_required");
             if (task.Version != version) throw OperationalTaskException.Conflict("stale_version");
             repository.Track(task);
             var routingChanged = await SynchronizeResponsibilityAsync(task, responsible, t);
@@ -272,7 +275,7 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
             TaskVersion = action == "created" ? task.Version : task.Version + 1
         };
         repository.Add(history);
-        if (action is "created" or "updated" or "assign" or "responsibility_changed" or "submit" or "verify" or "rework" or "cancel" or "blockers" or "coordinate")
+        if (action is "created" or "updated" or "assign" or "responsibility_changed" or "submit" or "verify" or "rework" or "cancel" or "blockers" or "coordinate" or "move_in_inventory_completed")
             foreach (var recipient in recipients.Distinct().Where(x => x != Actor)) repository.Add(new OperationalTaskNotification
             { TaskId = task.Id, RecipientUserId = recipient, EventId = history.Id, Event = action });
         if (action is "created" or "updated" or "responsibility_changed" or "verify" or "rework" or "cancel")
@@ -333,9 +336,15 @@ public sealed class OperationalTaskService(IOperationalTaskRepository repository
                 {
                     var task = await repository.FindAsync(id, t) ?? throw OperationalTaskException.Missing();
                     var responsible = await AccessAsync(task, t, true);
-                    if (task.Kind != OperationalTaskKind.AdHoc) throw OperationalTaskException.Conflict("meter_workflow_required");
+                    if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory))
+                        throw OperationalTaskException.Conflict("meter_workflow_required");
                     if (task.Status != MeterTaskStatus.InProgress) throw OperationalTaskException.Conflict("task_not_in_progress");
-                    if ((await repository.EvidenceAsync(id, t)).Count >= limits.MaximumFilesPerTask) throw OperationalTaskException.Conflict("task_evidence_limit");
+                    // Every inventory group may attach up to five photos. The general
+                    // task limit (often 10) is too small for rooms with many assets.
+                    var inventoryLimit = task.Kind == OperationalTaskKind.MoveInInventory
+                        ? checked(Inventory(task).Items.Length * 5) : limits.MaximumFilesPerTask;
+                    if ((await repository.EvidenceAsync(id, t)).Count >= inventoryLimit)
+                        throw OperationalTaskException.Conflict("task_evidence_limit");
                     repository.Track(task);
                     await SynchronizeResponsibilityAsync(task, responsible, t);
                     var evidence = new OperationalTaskEvidence

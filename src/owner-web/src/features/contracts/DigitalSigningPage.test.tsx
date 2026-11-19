@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import DigitalSigningPage from './pages/DigitalSigningPage';
 import ContractsPage from './pages/ContractsPage';
@@ -95,4 +95,32 @@ it('keeps the real contract identity, status, rent and review action visible on 
   fireEvent.click(within(table).getByRole('button', { name: 'Chi tiết' }));
   expect(await screen.findByText('Reviewed contract')).toBeVisible();
   expect(mocks.list).toHaveBeenCalledWith(1, '', '', expect.any(AbortSignal));
+});
+
+it('opens deep links, reacts to browser history and removes only detail parameters on close', async () => {
+  let navigate!: ReturnType<typeof useNavigate>;
+  function HistoryProbe() {
+    navigate = useNavigate();
+    return <output data-testid="query">{useLocation().search}</output>;
+  }
+  render(
+    <MemoryRouter initialEntries={['/contracts?contractId=first&filter=keep']}>
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <HistoryProbe />
+        <ContractsPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText('Reviewed first')).toBeVisible();
+  await act(async () => navigate('/contracts?contractId=second&filter=keep'));
+  expect(await screen.findByText('Reviewed second')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  await waitFor(() => expect(screen.getByTestId('query')).toHaveTextContent('?filter=keep'));
+  expect(screen.getByTestId('query')).not.toHaveTextContent('contractId');
+  await act(async () => navigate(-1));
+  expect(await screen.findByText('Reviewed second')).toBeVisible();
+  await act(async () => navigate(-1));
+  expect(await screen.findByText('Reviewed first')).toBeVisible();
 });

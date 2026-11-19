@@ -30,6 +30,7 @@ import { OwnerResidenceScreen } from '../../screens/OwnerResidenceScreen';
 import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens';
 import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
 import { StaffScheduleScreen } from '../../screens/StaffScheduleScreen';
+import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
 import {
   StaffIncidentReportScreen,
   StaffMaintenanceScreen,
@@ -121,6 +122,7 @@ const screens = {
   'prepare-contract': ContractPreparation,
   'move-out': Inspection,
   'report-incident': StaffIncidentReportScreen,
+  'move-in-inventory': StaffMoveInInventoryScreen,
   'move-in': MoveIn,
   residence: ResidenceTracking,
   adjustment: InvoiceAdjustment,
@@ -295,6 +297,7 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
         case 'onboarding':
         case 'shifts':
         case 'report-incident':
+        case 'move-in-inventory':
         case 'staff-maintenance':
         case 'staff-emergencies':
         case 'rooms':

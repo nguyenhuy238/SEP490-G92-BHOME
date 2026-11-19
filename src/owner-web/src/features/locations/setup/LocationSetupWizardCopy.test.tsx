@@ -260,7 +260,7 @@ it('copies a room type with its linked asset template and keeps rent in the sing
     await screen.findByText(/Một số thư viện chưa tải được: danh mục tài sản/),
   ).toBeInTheDocument();
   fill(/Tên cơ sở/, 'Synthetic copy');
-  fill(/Mã cơ sở/, 'COPY-1');
+  expect(screen.getByRole('textbox', { name: /Mã cơ sở \(tự động\)/ })).toHaveValue('SC');
   fill(/Địa chỉ/, 'Synthetic address');
   fill(/Số điện thoại liên hệ/, '0908123456');
   fireEvent.click(screen.getByRole('checkbox', { name: /Kích hoạt cơ sở/ }));
@@ -274,9 +274,6 @@ it('copies a room type with its linked asset template and keeps rent in the sing
   fill(/Giá thuê mặc định/, '2500000');
   fireEvent.click(screen.getByRole('button', { name: 'Lưu loại phòng' }));
   next();
-  fill('Số lượng phòng', '1');
-  fireEvent.click(screen.getByRole('button', { name: 'Sinh phòng xem trước' }));
-  next();
   expect(
     within(screen.getByRole('list', { name: 'Tài sản đã chọn' })).getByText('Synthetic desk'),
   ).toBeVisible();
@@ -286,6 +283,10 @@ it('copies a room type with its linked asset template and keeps rent in the sing
   fireEvent.click(screen.getByRole('button', { name: 'Tài sản chung cơ sở' }));
   expect(screen.getByText('Synthetic camera')).toBeVisible();
   expect(screen.getByLabelText(/Khu vực sử dụng/)).toHaveValue('Hành lang');
+  next();
+  fill('Số lượng phòng', '1');
+  fireEvent.click(screen.getByRole('button', { name: 'Sinh phòng xem trước' }));
+  await waitFor(() => expect(screen.getByText('Danh sách phòng nháp (1)')).toBeInTheDocument());
   next();
   expect(screen.queryByLabelText(/Giá thuê\/tháng/)).not.toBeInTheDocument();
   expect(screen.getByText('Điện thư viện')).toBeVisible();

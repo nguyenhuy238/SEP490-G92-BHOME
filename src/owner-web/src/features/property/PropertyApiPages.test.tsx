@@ -490,7 +490,7 @@ it('includes rooms past the room options limit without preloading their assets',
   const lastRoom = await screen.findByRole('button', { name: 'Phòng 100' });
   expect(state.request.mock.calls.some(([path]) => path.startsWith('/api/v1/assets?'))).toBe(false);
   fireEvent.click(lastRoom);
-  await screen.findByText('Vị trí này chưa có tài sản thực tế.');
+  await screen.findByText('Vị trí này chưa có tài sản thực tế được ghi nhận sau kiểm kê.');
   expect(state.request).toHaveBeenCalledWith(
     '/api/v1/assets?locationId=location&page=1&pageSize=20&roomId=room-100',
     expect.anything(),

@@ -33,6 +33,7 @@ public sealed class GmailAuthenticationSmokeTests(Compact24Fixture fixture, ITes
             ["Email:Username"] = secrets["Email:Username"],
             ["Email:FromEmail"] = secrets["Email:FromEmail"],
             ["Email:AppPassword"] = secrets["Email:AppPassword"],
+            ["Email:AllowedRecipients:0"] = secrets["Email:TestRecipient"],
             ["Email:TestEnabled"] = "false",
             ["NotificationChannels:Enabled"] = "true",
             ["NotificationChannels:AutomationEnabled"] = "false",

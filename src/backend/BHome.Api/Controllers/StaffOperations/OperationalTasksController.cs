@@ -26,6 +26,15 @@ public sealed class OperationalTasksController(OperationalTaskService service) :
         service.TargetAssetsAsync(locationId, roomId, commonArea, search, page, pageSize, t);
     [HttpGet("{id:guid}")]
     public Task<TaskView> Get(Guid id, CancellationToken t) => service.GetAsync(id, t);
+    [HttpGet("{id:guid}/move-in-inventory")]
+    public Task<MoveInInventoryView> MoveInInventory(Guid id, CancellationToken t) => service.MoveInInventoryAsync(id, t);
+    [HttpPut("{id:guid}/move-in-inventory/items/{itemId:guid}"), Authorize(Policy = Permissions.OperationalTasks.Execute)]
+    public Task<MoveInInventoryView> UpdateMoveInInventoryItem(Guid id, Guid itemId,
+        MoveInInventoryItemWrite input, CancellationToken t) =>
+        service.UpdateInventoryItemAsync(id, itemId, input, Key(), t);
+    [HttpPost("{id:guid}/move-in-inventory/complete"), Authorize(Policy = Permissions.OperationalTasks.Execute)]
+    public Task<MoveInInventoryView> CompleteMoveInInventory(Guid id, MoveInInventoryComplete input, CancellationToken t) =>
+        service.CompleteMoveInInventoryAsync(id, input, Key(), t);
     [HttpPut("{id:guid}"), Authorize(Policy = Permissions.OperationalTasks.Manage)]
     public Task<TaskView> Update(Guid id, TaskUpdate input, CancellationToken t) => service.UpdateAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/assign"), Authorize(Policy = Permissions.OperationalTasks.Manage)]

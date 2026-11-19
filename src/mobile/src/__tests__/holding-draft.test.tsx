@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
 import React from 'react';
+vi.mock('../features/contracts/ContractLoading', () => ({
+  ContractLoading: ({ label }: { label: string }) => (
+    <div role="progressbar" aria-label={label}>
+      {label}
+    </div>
+  ),
+}));
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
@@ -12,7 +19,9 @@ import { type MainDraftPreparation } from '../../../../packages/client-core/src/
 
 const ids = Array.from({ length: 5 }, (_, i) => `00000000-0000-4000-8000-00000000000${i + 1}`);
 vi.mock('../features/contracts/HoldingProgress', () => ({
-  HoldingProgress: ({ current }: { current: number }) => <span>Bước {current + 1}/8</span>,
+  HoldingProgress: ({ current }: { current: number }) => (
+    <span>Bước {current > 1 ? current : 1}/7</span>
+  ),
 }));
 const state = vi.hoisted(() => ({
   role: 'Staff',
@@ -49,6 +58,9 @@ vi.mock('../features/contracts/HoldingNewTenant', () => ({
     disabled?: boolean;
   }) => (
     <div data-testid="applicant-form" data-resident={initialResidentId ?? ''}>
+      {stage === 'identity' && !initialResidentId && (
+        <button onClick={() => onCreated(ids[2], 'Synthetic applicant', '')}>Open identity</button>
+      )}
       {stage === 'details' ? (
         <button
           disabled={disabled}
@@ -264,24 +276,22 @@ async function chooseRoom() {
   fireEvent.change(screen.getByLabelText('Phòng giữ chỗ *'), { target: { value: ids[1] } });
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(continueButton());
-  expect(screen.getByText(/2\/8/)).toBeTruthy();
+  expect(screen.getByText(/2\/7/)).toBeTruthy();
 }
 async function confirmApplicant() {
   await chooseRoom();
-  fireEvent.click(continueButton());
-  expect(screen.getByText(/3\/8/)).toBeTruthy();
+  fireEvent.click(screen.getByText('Open identity'));
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(screen.getByText('Xác nhận CCCD từ backend'));
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(continueButton());
-  expect(screen.getByText(/4\/8/)).toBeTruthy();
+  expect(screen.getByText(/3\/7/)).toBeTruthy();
 }
-const submit = () =>
-  screen.getByRole('button', { name: 'Tạo hợp đồng giữ chỗ và tiếp tục bước 5' });
+const submit = () => screen.getByRole('button', { name: 'Tạo bản nháp và tiếp tục' });
 it('starts at room selection without a duplicate header, refresh icon or location selector', async () => {
   const { api } = mount();
   await screen.findByText('P101 · Cơ sở A');
-  expect(screen.getByText(/1\/8/)).toBeTruthy();
+  expect(screen.getByText(/1\/7/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Tải lại lựa chọn' })).toBeNull();
   expect(screen.queryByLabelText('Cơ sở')).toBeNull();
@@ -291,9 +301,9 @@ it('loads preparation and readiness for the selected room/location, without any 
   const { api } = mount();
   await chooseRoom();
   expect(api.preparation).toHaveBeenCalledWith(ids[0], expect.any(AbortSignal));
-  expect(api.holdingRoomReady).toHaveBeenCalledTimes(2);
-  expect(screen.getByText('Thông tin người giữ chỗ')).toBeTruthy();
-  expect(screen.getByText('Nhập thông tin của người đăng ký giữ chỗ.')).toBeTruthy();
+  expect(api.holdingRoomReady).toHaveBeenCalledOnce();
+  expect(screen.getByText('CCCD của người giữ chỗ')).toBeTruthy();
+  expect(screen.queryByText('Thông tin người giữ chỗ')).toBeNull();
   expect(screen.queryByRole('combobox')).toBeNull();
   expect(api.tenantAccounts).not.toHaveBeenCalled();
   expect(api.linkTenant).not.toHaveBeenCalled();
@@ -301,8 +311,6 @@ it('loads preparation and readiness for the selected room/location, without any 
 it('requires the new applicant to be verified before continuing, but does not require a Tenant account', async () => {
   const { api } = mount();
   await chooseRoom();
-  expect(screen.queryByText('CCCD của người giữ chỗ')).toBeNull();
-  fireEvent.click(continueButton());
   expect(screen.getByText('CCCD của người giữ chỗ')).toBeTruthy();
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(continueButton());
@@ -310,6 +318,7 @@ it('requires the new applicant to be verified before continuing, but does not re
     screen.getByText('Nhập và xác minh thông tin người giữ chỗ trước khi tiếp tục.'),
   ).toBeTruthy();
   expect(api.mutate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('Open identity'));
   fireEvent.click(screen.getByText('Xác nhận CCCD từ backend'));
   await waitFor(() => expect((continueButton() as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(continueButton());
@@ -352,7 +361,7 @@ it('reviews verified applicant data and keeps confirmation entirely read-only', 
   const { api, prepare } = mount();
   await confirmApplicant();
   expect(screen.getByText('Họ tên đã xác minh')).toBeTruthy();
-  expect(screen.getByText('applicant@example.test')).toBeTruthy();
+  expect(screen.queryByText('applicant@example.test')).toBeNull();
   expect(screen.getByText('20/05/1995')).toBeTruthy();
   expect(screen.getByText('Đã xác minh')).toBeTruthy();
   expect(screen.queryAllByRole('textbox')).toHaveLength(0);
@@ -372,7 +381,7 @@ it('does not invent dates or money and does not query a date-dependent configura
   expect(
     screen.getByText('Chưa có thời hạn giữ chỗ từ hệ thống. Chưa thể tạo hợp đồng.'),
   ).toBeTruthy();
-  expect(screen.getAllByText('Chưa có dữ liệu')).toHaveLength(3);
+  expect(screen.getAllByText('Chưa có dữ liệu')).toHaveLength(4);
   expect(screen.queryByText(/1 tháng|Tạm dùng|00:00/)).toBeNull();
   expect(prepare).not.toHaveBeenCalled();
   expect(api.mutate).not.toHaveBeenCalled();
@@ -414,6 +423,45 @@ it('uses the room location Holding quote for dates, deposit and configuration ve
     ),
   );
   expect(prepare).not.toHaveBeenCalled();
+});
+it('shows step 4 skeleton during creation and restores the verified form after an error', async () => {
+  let rejectSave!: (reason: unknown) => void;
+  const save = vi.fn(
+    () =>
+      new Promise((_resolve, reject) => {
+        rejectSave = reject;
+      }),
+  );
+  const api = makeApi(save);
+  api.holdingPreparation = vi.fn().mockResolvedValue({
+    roomId: ids[1],
+    locationId: ids[0],
+    settingsVersion: 2,
+    holdingMonths: 2,
+    startDate: '2099-01-01',
+    endDate: '2099-03-01',
+    expiresAt: '2099-02-28T17:00:00Z',
+    monthlyRent: '3000000',
+    holdingDeposit: '1500000',
+    terms: 'Điều khoản giữ chỗ riêng',
+  });
+  const { created } = mount(api);
+  await confirmApplicant();
+  await waitFor(() => expect((submit() as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(submit());
+  expect(
+    await screen.findByRole('progressbar', { name: 'Đang tạo hợp đồng và chuẩn bị gửi ký…' }),
+  ).toBeTruthy();
+  expect(screen.getByText(/4\/7/)).toBeTruthy();
+  await waitFor(() => expect(save).toHaveBeenCalledOnce());
+  fireEvent.click(submit());
+  expect(save).toHaveBeenCalledOnce();
+  expect(created).not.toHaveBeenCalled();
+  rejectSave({ status: 409, code: 'room_contract_conflict' });
+  await waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull());
+  expect(screen.getByText(/3\/7/)).toBeTruthy();
+  expect(screen.getByText('Họ tên đã xác minh')).toBeTruthy();
+  expect(screen.getByTestId('applicant-form').getAttribute('data-resident')).toBe(ids[2]);
 });
 it('retains the verified resident when returning from confirmation', async () => {
   mount();

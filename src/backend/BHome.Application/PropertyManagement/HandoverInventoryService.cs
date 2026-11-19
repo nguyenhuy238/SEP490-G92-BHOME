@@ -61,6 +61,16 @@ public sealed partial class RoomInventoryReviewService : IHandoverInventory
         return await HandoverInventory(context, t);
     }
 
+    // Trusted contract activation job has no signed-in actor. Resolve only the
+    // inventory snapshot; external HTTP callers must continue through RoomScope.
+    public async Task<HandoverInventory> PrepareForMoveInTaskAsync(Guid roomId, CancellationToken t)
+    {
+        var location = await Store.RoomLocationAsync(roomId, t) ?? throw new PropertyException(404, "resource_not_found");
+        var room = (await SnapshotAsync(location, true, [], t)).Rooms.SingleOrDefault(r => r.Room.Id == roomId)
+            ?? throw new PropertyException(404, "resource_not_found");
+        return await HandoverInventory(room, t);
+    }
+
     public async Task<HandoverInventory> ConfirmNoAssetsAsync(Guid roomId, RoomNoAssetsConfirmation input, CancellationToken t)
     {
         var location = await RoomScope(roomId, true, t);

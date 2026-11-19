@@ -60,8 +60,10 @@ it('requires the Owner to verify signed terms and retries the same approval afte
     ),
   );
   fireEvent.click(button);
+  await confirmPendingAction();
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
+  await confirmPendingAction();
   await waitFor(() =>
     expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2),
   );
@@ -95,3 +97,8 @@ it('shows the approved adjustment without collecting the original rent again', a
   await screen.findByText(/Đã đối chiếu phần giảm Owner duyệt: 1.500.000/);
   expect(screen.getByText('Phải thu thêm: 0 ₫')).toBeTruthy();
 });
+
+async function confirmPendingAction() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+}

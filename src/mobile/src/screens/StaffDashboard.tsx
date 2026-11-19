@@ -57,7 +57,10 @@ export function StaffDashboard() {
               data.locations.data?.find((location) => location.id === task.locationId)?.label ??
               'Cơ sở được phân công',
             status: 'Quá hạn',
-            open: () => go('task-detail', { taskId: task.id }),
+            open: () =>
+              go(task.kind === 'MoveInInventory' ? 'move-in-inventory' : 'task-detail', {
+                taskId: task.id,
+              }),
           })),
         ...selectedInspections
           .filter((item) => item.status === 'Approved')

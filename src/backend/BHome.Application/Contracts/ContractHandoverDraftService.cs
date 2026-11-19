@@ -343,6 +343,8 @@ public sealed partial class ContractService
             prior.StaffPreparedBy is null || prior.StaffPreparedAt is null || prior.Version != input.Version ||
             prior.Requests.Any(r => r.Status == "Pending"))
             throw ContractException.Conflict("owner_ready_handover_required");
+        if (!await Handovers.InventoryReadyAsync(id, token))
+            throw ContractException.Conflict("move_in_inventory_required");
         var view = await DraftView(contract, prior, token);
         if (view.Missing.Length != 0) throw ContractException.Conflict("handover_draft_changed_since_review");
         if (view.Electricity?.Id != prior.ApprovedElectricityReadingId ||

@@ -10,6 +10,8 @@ using BHome.Domain.Billing;
 using BHome.Domain.IncidentMaintenance;
 using BHome.Domain.TenantContracts;
 using BHome.Domain.StaffOperations;
+using BHome.Domain.Locations;
+using BHome.Infrastructure.Modules.Notifications;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
@@ -55,6 +57,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(clock.GetUtcNow(), "Asia/Ho_Chi_Minh").DateTime);
         if (start <= today && end >= today)
             await ReconcileLocationAsync(locationId, entry, actor, entry.RecordedAt, "Location responsibility assigned", token);
+        await NotifyAssignmentAsync(locationId, entry, "STAFF_ASSIGNMENT_CREATED", token);
         await tx.CommitAsync(token);
         return new(CreateAssignmentStatus.Created, new(entry.Id, entry.StaffUserId, entry.StartDate, entry.EndDate));
     }
@@ -165,6 +168,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             """, token);
         if (!cancelling && changed.StartDate <= today && changed.EndDate >= today)
             await ReconcileLocationAsync(locationId, changed, actor, now, reason.Trim(), token);
+        await NotifyAssignmentAsync(locationId, changed, cancelling ? "STAFF_ASSIGNMENT_CANCELLED" : "STAFF_ASSIGNMENT_UPDATED", token, version + 1);
         await tx.CommitAsync(token);
         return new(UpdateAssignmentPeriodStatus.Changed,
             new(changed.Id, changed.StaffUserId, changed.StartDate, changed.EndDate), version + 1);
@@ -197,6 +201,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         var assignments = (JsonSerializer.Deserialize<Assignment[]>(stored, Json) ?? throw new InvalidOperationException("Invalid assignment data.")).ToList();
         var current = assignments.SingleOrDefault(a => a.StartDate <= today && a.EndDate >= today);
         if (current is null) return new(ChangeAssignmentStatus.NoCurrentAssignment);
+        if (nextStaff == current.StaffUserId) return new(ChangeAssignmentStatus.Invalid);
         assignments.Remove(current);
         if (current.StartDate < effectiveFrom) assignments.Add(current with { EndDate = effectiveFrom.AddDays(-1) });
         var now = clock.GetUtcNow(); Assignment? added = null;
@@ -217,6 +222,8 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
               history=history||CAST({history} AS jsonb) WHERE id={locationId}
             """, token);
         await ReconcileLocationAsync(locationId, added, actor, now, reason.Trim(), token, current.StaffUserId, blockSpecialists: true);
+        await NotifyAssignmentAsync(locationId, current, "STAFF_ASSIGNMENT_REMOVED", token, version + 1);
+        if (added is not null) await NotifyAssignmentAsync(locationId, added, "STAFF_ASSIGNMENT_CREATED", token, version + 1);
         await tx.CommitAsync(token);
         return new(ChangeAssignmentStatus.Changed,
             added is null ? null : new(added.Id, added.StaffUserId, added.StartDate, added.EndDate), version + 1);
@@ -285,14 +292,16 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         var previous = assignments.Where(a => a.StartDate <= today && a.Id != next?.Id)
             .OrderByDescending(a => a.EndDate).FirstOrDefault();
         await ReconcileLocationAsync(locationId, next, Guid.Empty, now,
-            "Effective Location responsibility changed", token, previous?.StaffUserId);
+            "Effective Location responsibility changed", token, previous?.StaffUserId,
+            effectiveAssignments: assignments);
         await tx.CommitAsync(token);
     }
 
     private sealed record ReconciledResponsibility(Guid? AssignmentId, Guid? StaffUserId, Guid EventId);
 
     private async Task ReconcileLocationAsync(Guid locationId, Assignment? next, Guid actor,
-        DateTimeOffset now, string reason, CancellationToken token, Guid? previousStaff = null, bool blockSpecialists = false)
+        DateTimeOffset now, string reason, CancellationToken token, Guid? previousStaff = null,
+        bool blockSpecialists = false, Assignment[]? effectiveAssignments = null)
     {
         var tasks = await db.Set<OperationalTask>().Where(task => task.LocationId == locationId &&
             task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled)
@@ -389,6 +398,20 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
                 .Where(x => x.HasValue).Select(x => x!.Value).Distinct())
                 await NotifyAsync(locationId, recipient, actor, eventId, "STAFF_ASSIGNMENT_CHANGED", "Staff",
                     "Phân công cơ sở đã thay đổi", "Trách nhiệm phụ trách cơ sở của bạn đã thay đổi.", now, token);
+            // Scheduled rollover has no Owner request to emit an assignment email.
+            // The same persisted reconciliation marker prevents duplicate notices on retries.
+            if (actor == Guid.Empty && effectiveAssignments is not null)
+            {
+                var ended = previous?.AssignmentId is { } prior
+                    ? effectiveAssignments.FirstOrDefault(a => a.Id == prior)
+                    : null;
+                if (ended is not null)
+                    await NotifyAssignmentAsync(locationId, ended, "STAFF_ASSIGNMENT_ENDED", token,
+                        reconciliationEventId: eventId);
+                if (next is not null)
+                    await NotifyAssignmentAsync(locationId, next, "STAFF_ASSIGNMENT_ACTIVATED", token,
+                        reconciliationEventId: eventId);
+            }
         }
         if (next is null && (tasks.Length > 0 || orders.Length > 0 || inspections.Length > 0))
         {
@@ -399,6 +422,37 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
                     "Cơ sở chưa có nhân viên phụ trách",
                     "Cơ sở có công việc chưa hoàn tất. Hãy phân công nhân viên đủ điều kiện để tiếp tục xử lý.", now, token);
         }
+    }
+
+    // The notification and its EMAIL channel are persisted in the assignment transaction.
+    // JOB-04 delivers after commit; provider failure cannot roll back a Staff assignment.
+    // Category Account deliberately preserves access to this personal assignment notice
+    // for future dates and after a Location's Staff access has been revoked.
+    private async Task NotifyAssignmentAsync(Guid locationId, Assignment assignment, string eventType,
+        CancellationToken token, int? locationVersion = null, Guid? reconciliationEventId = null)
+    {
+        var location = await db.Set<Location>().AsNoTracking().Where(l => l.Id == locationId)
+            .Select(l => new { l.Name, l.Address }).SingleAsync(token);
+        var staff = await db.Users.AsNoTracking().Where(u => u.Id == assignment.StaffUserId)
+            .Select(u => new { u.Email, Name = EF.Property<string>(u, "full_name") }).SingleAsync(token);
+        var action = eventType switch
+        {
+            "STAFF_ASSIGNMENT_CREATED" => "Bạn đã được phân công phụ trách cơ sở",
+            "STAFF_ASSIGNMENT_UPDATED" => "Thời gian phân công cơ sở đã được cập nhật",
+            "STAFF_ASSIGNMENT_CANCELLED" => "Phân công cơ sở sắp tới đã bị hủy",
+            "STAFF_ASSIGNMENT_ACTIVATED" => "Phân công phụ trách cơ sở của bạn đã bắt đầu hiệu lực",
+            "STAFF_ASSIGNMENT_ENDED" => "Trách nhiệm phụ trách cơ sở của bạn đã kết thúc",
+            _ => "Bạn đã được thôi phân công phụ trách cơ sở"
+        };
+        var message = $"Xin chào {(string.IsNullOrWhiteSpace(staff.Name) ? "nhân viên" : staff.Name.Trim())},\n\n{action}.\n" +
+            $"Cơ sở: {location.Name}\nĐịa chỉ: {location.Address}\n" +
+            $"Vai trò: Nhân viên phụ trách cơ sở (Staff)\nEmail đăng nhập: {staff.Email}\n" +
+            $"Thời gian phân công: {assignment.StartDate:dd/MM/yyyy} – {assignment.EndDate:dd/MM/yyyy}.";
+        var discriminator = reconciliationEventId is { } transitionId ? transitionId.ToString("N") : locationVersion?.ToString() ?? "created";
+        var key = $"staff-assignment-email:{assignment.Id:N}:{eventType}:{discriminator}";
+        await new CompactNotificationWriter(db, clock).Emit(assignment.StaffUserId, Roles.Staff, locationId,
+            key, eventType, "Account", action, message, "Account", assignment.StaffUserId, token,
+            channels: ["IN_APP", "EMAIL"]);
     }
 
     private async Task NotifyAsync(Guid locationId, Guid recipient, Guid actor, Guid eventId,

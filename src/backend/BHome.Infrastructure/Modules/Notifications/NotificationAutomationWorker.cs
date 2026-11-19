@@ -14,8 +14,37 @@ internal sealed class NotificationAutomationWorker(IServiceScopeFactory scopes, 
     IOptions<BHome.Infrastructure.IdentityAccess.AuthenticationEmailOptions> authentication,
     IHostEnvironment environment, IOptions<BHome.Application.IdentityAccess.SmsRecoveryOptions> recovery) : BackgroundService
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.WhenAll(
+        DeliverAuthenticationAsync(stoppingToken), PublishNotificationsAsync(stoppingToken));
+
+    private async Task DeliverAuthenticationAsync(CancellationToken stoppingToken)
     {
+        if (jobs.Value.Enabled) return;
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            // Committed authentication emails must still drain if publishing an
+            // unrelated domain notification fails. Use a separate DbContext scope.
+            try
+            {
+                await using var deliveryScope = scopes.CreateAsyncScope();
+                await deliveryScope.ServiceProvider.GetRequiredService<PostgresJobWorker>()
+                    .ProcessAllowedAsync(stoppingToken, [AccountInvitationJob.JobName, SmsPasswordRecovery.JobName]);
+                await deliveryScope.ServiceProvider.GetRequiredService<NotificationChannelWorker>()
+                    .ProcessPendingAsync(stoppingToken, authenticationOnly: true);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (Exception e) { logger.LogWarning("Notification delivery deferred with {ErrorCode}", e.GetType().Name); }
+            try { await Task.Delay(TimeSpan.FromSeconds(Math.Max(1, jobs.Value.PollSeconds)), stoppingToken); }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+        }
+    }
+
+    private async Task PublishNotificationsAsync(CancellationToken stoppingToken)
+    {
+        // BackgroundService.StartAsync runs synchronously until the first incomplete
+        // await. Resolving notification/job persistence can block startup for minutes;
+        // allow Kestrel to start independently of the notification delivery loop.
+        await Task.Yield();
         var authenticationOnly = !options.Value.AutomationEnabled;
         if (jobs.Value.Enabled || authenticationOnly && !authentication.Value.AnyConfigured(environment.IsDevelopment()) && !recovery.Value.Enabled) return;
         while (!stoppingToken.IsCancellationRequested)
@@ -29,7 +58,7 @@ internal sealed class NotificationAutomationWorker(IServiceScopeFactory scopes, 
                     .ProcessAllowedAsync(stoppingToken, [AccountInvitationJob.JobName, SmsPasswordRecovery.JobName]);
                 if (!authenticationOnly) await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(stoppingToken);
                 else await scope.ServiceProvider.GetRequiredService<CompactNotificationEvents>().PublishAuthenticationAsync(stoppingToken);
-                await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().ProcessPendingAsync(stoppingToken, authenticationOnly);
+                if (!authenticationOnly) await scope.ServiceProvider.GetRequiredService<NotificationChannelWorker>().ProcessPendingAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception e) { logger.LogWarning("Notification automation deferred with {ErrorCode}", e.GetType().Name); }

@@ -8,20 +8,21 @@ public sealed record SharedDocument(Guid Id, string Resource, Guid FamilyId, int
     DateTimeOffset CreatedAt, Guid UpdatedBy, DateTimeOffset UpdatedAt,
     [property: JsonConverter(typeof(ExactSetupDataConverter))] JsonElement Data);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SharedWrite(string Name, string Description, [property: JsonRequired] JsonElement Data, int ExpectedVersion = 0);
+public sealed record SharedWrite(string Name, string Description, [property: JsonRequired] JsonElement Data, int ExpectedVersion = 0, bool PublishImmediately = false);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SharedVersion(int ExpectedVersion);
+public sealed record SharedVersion(int ExpectedVersion, bool WholeFamily = false);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record SharedDuplicate(string Name, int ExpectedVersion);
+public sealed record SharedDuplicate(string Name, int ExpectedVersion, bool PublishImmediately = false);
 public sealed record SharedPage(IReadOnlyList<SharedDocument> Items, long Total, int Page, int PageSize);
 public interface ISharedConfigurationStore
 {
     Task<T> TransactionAsync<T>(Guid[] locations, Func<Task<T>> work, CancellationToken t, bool validateActiveLocations = true);
     Task<SharedDocument?> GetAsync(Guid id, string resource, CancellationToken t);
-    Task<SharedPage> ListAsync(string resource, string search, string status, int page, int pageSize, CancellationToken t);
+    Task<SharedPage> ListAsync(string resource, string search, string status, int page, int pageSize, CancellationToken t, bool latestOnly = false);
     Task<IReadOnlyList<SharedDocument>> FamilyAsync(Guid family, string resource, CancellationToken t);
     Task<IReadOnlyList<SharedDocument>> HistoryAsync(Guid id, CancellationToken t);
-    Task<bool> NameExistsAsync(string resource, string name, Guid family, CancellationToken t);
+    Task<bool> NameExistsAsync(string resource, string name, Guid family, CancellationToken t, bool includeArchived = true);
+    Task<bool> IsUsedAsync(Guid id, string resource, CancellationToken t);
     Task SaveAsync(SharedDocument document, int expected, CancellationToken t);
     Task<IReadOnlyList<PolicyDto>> PoliciesAsync(Guid location, CancellationToken t);
     Task<IReadOnlyList<PolicyDto>> SetupCopyPoliciesAsync(Guid location, CancellationToken t);

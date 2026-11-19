@@ -83,6 +83,7 @@ export interface LocalAssetItem {
   trackingMode: 'Serialized' | 'BulkQuantity';
   quantity: number;
   unit?: string | null;
+  referencePrice?: string | number | null;
 }
 export interface LocalAssetTemplate {
   locationId: string;
@@ -91,6 +92,8 @@ export interface LocalAssetTemplate {
   expectedVersion?: number;
   scoped?: boolean;
   scopeRoomId?: string | null;
+  familyId?: string;
+  edition?: number;
 }
 export interface DesiredAssets {
   templateId: string;
@@ -133,6 +136,8 @@ export interface RoomInventoryReviewItem {
   quantity: number;
   checked: boolean;
   evidence: RoomInventoryReviewEvidence[];
+  referenceUnitCost?: string | number | null;
+  acquisitionUnitCost?: string | number | null;
 }
 export interface RoomInventoryReviewRow {
   noAssetsConfirmed?: boolean;
@@ -160,8 +165,30 @@ export interface RoomInventoryConfirmation {
     desiredId: string | null;
     desiredVersion: number;
     stateToken: string;
-    items: { itemId: string; checked: boolean; evidenceIds: string[] }[];
+    items: { itemId: string; checked: boolean; evidenceIds: string[]; unitCost?: string | null }[];
   }[];
+}
+export interface CommonAssetInventoryItem extends RoomInventoryReviewItem {
+  commonArea: string;
+  blockedReason: string | null;
+}
+export interface CommonAssetInventoryReview {
+  requirementsId: string | null;
+  requirementsVersion: number;
+  stateToken: string;
+  state: 'NotChecked' | 'PartiallyChecked' | 'Matched' | 'NeedsReview';
+  checkedCount: number;
+  totalCount: number;
+  reviewedAt: string | null;
+  items: CommonAssetInventoryItem[];
+}
+export interface CommonAssetInventoryConfirmation {
+  requestId: string;
+  requirementsId: string;
+  requirementsVersion: number;
+  stateToken: string;
+  confirmed: true;
+  items: { itemId: string; checked: boolean; evidenceIds: string[]; unitCost?: string | null }[];
 }
 export interface OperatingPolicyInput {
   locationId: string;
@@ -169,6 +196,9 @@ export interface OperatingPolicyInput {
   content: string;
   effectiveFrom: string;
   expectedVersion?: number;
+  familyId?: string;
+  edition?: number;
+  previousVersionId?: string | null;
 }
 export interface PolicyBinding {
   policyId: string;
@@ -343,6 +373,16 @@ export function propertySetupClient(request: SetupRequest) {
         `/api/v1/locations/${encodeURIComponent(locationId)}/room-inventory-review/confirm`,
         input,
       ),
+    commonAssetInventoryReview: (locationId: string, signal?: AbortSignal) =>
+      request<CommonAssetInventoryReview>(
+        `/api/v1/locations/${encodeURIComponent(locationId)}/common-asset-inventory-review`,
+        { signal },
+      ),
+    confirmCommonAssetInventory: (locationId: string, input: CommonAssetInventoryConfirmation) =>
+      write<CommonAssetInventoryReview>(
+        `/api/v1/locations/${encodeURIComponent(locationId)}/common-asset-inventory-review/confirm`,
+        input,
+      ),
     locationOptions: (signal?: AbortSignal) =>
       request<{ id: string; label: string }[]>('/api/v1/capture/locations', { signal }),
     saveLocation: (id: string | null, input: LocationInput) =>
@@ -390,6 +430,12 @@ export function propertySetupClient(request: SetupRequest) {
     saveTemplate: (id: string | null, input: LocalAssetTemplate) =>
       write<SetupDocument<LocalAssetTemplate>>(
         `/api/v1/asset-templates${id ? '/' + encodeURIComponent(id) + '/draft' : ''}`,
+        input,
+        id ? 'PUT' : 'POST',
+      ),
+    saveReadyTemplate: (id: string | null, input: LocalAssetTemplate) =>
+      write<SetupDocument<LocalAssetTemplate>>(
+        `/api/v1/asset-templates${id ? '/' + encodeURIComponent(id) : ''}/ready`,
         input,
         id ? 'PUT' : 'POST',
       ),
@@ -453,6 +499,17 @@ export function propertySetupClient(request: SetupRequest) {
         `/api/v1/operating-policies${id ? '/' + encodeURIComponent(id) + '/draft' : ''}`,
         input,
         id ? 'PUT' : 'POST',
+      ),
+    saveReadyPolicy: (id: string | null, input: OperatingPolicyInput) =>
+      write<SetupDocument<OperatingPolicyInput>>(
+        `/api/v1/operating-policies${id ? '/' + encodeURIComponent(id) : ''}/ready`,
+        input,
+        id ? 'PUT' : 'POST',
+      ),
+    policyFamilyRevisions: (id: string, signal?: AbortSignal) =>
+      request<SetupDocument<OperatingPolicyInput>[]>(
+        `/api/v1/operating-policies/${encodeURIComponent(id)}/family-versions`,
+        { signal },
       ),
     publishPolicy: (id: string, expectedVersion: number) =>
       write<SetupDocument<OperatingPolicyInput>>(

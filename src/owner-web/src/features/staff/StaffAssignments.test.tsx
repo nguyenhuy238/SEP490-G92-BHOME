@@ -129,6 +129,42 @@ it('opens a location drawer without selecting staff and updates the selected ass
   );
   expect(mocks.request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 });
+it('keeps immediate replacement and schedules future work through the main create action', async () => {
+  wrap(<StaffAssignments />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
+  const drawer = await screen.findByRole('dialog', { name: 'Chi tiết phân công' });
+  expect(within(drawer).getByRole('button', { name: 'Thay người phụ trách' })).toBeVisible();
+  expect(
+    within(drawer).queryByRole('button', { name: 'Lên lịch phân công' }),
+  ).not.toBeInTheDocument();
+  expect(within(drawer).queryByRole('button', { name: 'Tạo phân công' })).not.toBeInTheDocument();
+
+  fireEvent.click(within(drawer).getByRole('button', { name: 'Đóng chi tiết' }));
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'Chi tiết phân công' })).not.toBeInTheDocument(),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo phân công' }));
+  await pick('Cơ sở', 'Cơ sở mẫu');
+  await ready();
+  await pick('Nhân viên phụ trách', 'Other synthetic · other@example.invalid');
+  fireEvent.change(screen.getByLabelText(/Ngày bắt đầu/), { target: { value: '2028-01-01' } });
+  fireEvent.change(screen.getByLabelText(/Ngày kết thúc/), { target: { value: '2028-02-01' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo phân công' }));
+  await waitFor(() =>
+    expect(mocks.request).toHaveBeenCalledWith(
+      '/api/v1/staff-location-assignments',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          locationId: 'location',
+          staffUserId: 'other',
+          startDate: '2028-01-01',
+          endDate: '2028-02-01',
+        }),
+      }),
+    ),
+  );
+});
 it('keeps staff and the assignment action visible in the compact table', async () => {
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: query.includes('max-width:599px'),

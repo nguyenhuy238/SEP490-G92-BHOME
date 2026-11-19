@@ -1,3 +1,4 @@
+import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -26,6 +27,7 @@ import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceVi
 import { FinalUtilitiesPanel } from './FinalUtilitiesPanel';
 import { FinalFixedChargesPanel } from './FinalFixedChargesPanel';
 import { FinalChargeReviewPanel } from './FinalChargeReviewPanel';
+import { offsetAmountError } from './termination';
 
 export function SettlementReceivablesPanel({
   api,
@@ -58,6 +60,12 @@ export function SettlementReceivablesPanel({
   const [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
   const lock = useRef(false);
   const data = query.data;
+  const targetOutstanding = target.startsWith('charge:')
+    ? data?.receivables.find((r) => r.charge.id === target.slice(7))?.outstanding
+    : data?.invoices?.find((i) => i.id === target.slice(8))?.outstanding;
+  const offsetError = data
+    ? offsetAmountError(offsetAmount, data.availableDeposit, targetOutstanding ?? null)
+    : null;
   const checked = !!data && chargeConfirmation === data.reference;
   const offsetChecked = !!data && offsetConfirmation === data.reference;
   const setChecked = (value: boolean) =>
@@ -65,7 +73,14 @@ export function SettlementReceivablesPanel({
   const setOffsetChecked = (value: boolean) =>
     setOffsetConfirmation(value ? (data?.reference ?? null) : null);
   async function submit(kind: 'damage' | 'offset') {
-    if (lock.current || !data) return;
+    if (
+      lock.current ||
+      query.isFetching ||
+      !!query.error ||
+      !data ||
+      (kind === 'offset' && offsetError)
+    )
+      return;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -107,6 +122,12 @@ export function SettlementReceivablesPanel({
       await saved();
     } catch (e) {
       setError(contractError(e));
+      if ((e as { status?: number })?.status === 409) {
+        setChecked(false);
+        setOffsetChecked(false);
+        await query.refetch();
+        await saved();
+      }
     } finally {
       lock.current = false;
       setBusy(false);
@@ -246,12 +267,30 @@ export function SettlementReceivablesPanel({
                   }
                   label="Tôi xác nhận thiệt hại, chứng từ và khoản này chưa được tính trên hóa đơn hoặc khoản phải thu khác"
                 />
-                <Button
-                  disabled={busy || !checked || !amount || !description.trim() || !proofs.length}
-                  onClick={() => void submit('damage')}
+                <ConfirmActionButton
+                  title="Duyệt bồi thường"
+                  description={`Ghi nhận ${amount ? formatContractMoney(amount) : 'chưa nhập số tiền'} cho ${description}. Kiểm tra khoản bồi thường bảo trì liên quan để tránh thu trùng.`}
+                  confirmationKey={JSON.stringify([
+                    data.reference,
+                    asset,
+                    amount,
+                    description,
+                    proofs,
+                    checked,
+                  ])}
+                  disabled={
+                    busy ||
+                    query.isFetching ||
+                    !!query.error ||
+                    !checked ||
+                    !amount ||
+                    !description.trim() ||
+                    !proofs.length
+                  }
+                  onConfirm={() => submit('damage')}
                 >
                   Duyệt khoản phải thu thiệt hại
-                </Button>
+                </ConfirmActionButton>
               </>
             )}
             <Typography variant="subtitle1">Duyệt cấn trừ từ cọc</Typography>
@@ -282,6 +321,8 @@ export function SettlementReceivablesPanel({
             </TextField>
             <MoneyField
               label="Số tiền cấn trừ (VND)"
+              error={!!offsetError}
+              helperText={offsetError}
               value={offsetAmount}
               disabled={busy}
               onValueChange={(raw) => {
@@ -308,12 +349,32 @@ export function SettlementReceivablesPanel({
               }
               label="Tôi xác nhận nguồn cọc, khoản đích và số tiền cấn trừ"
             />
-            <Button
-              disabled={busy || !offsetChecked || !target || !offsetAmount || !reason.trim()}
-              onClick={() => void submit('offset')}
+            <ConfirmActionButton
+              title="Duyệt sử dụng tiền cọc"
+              description={`Dùng ${offsetAmount ? formatContractMoney(offsetAmount) : 'chưa nhập số tiền'} từ cọc để thanh toán khoản đích đã chọn. Căn cứ: ${reason}.`}
+              confirmationKey={JSON.stringify([
+                data.reference,
+                target,
+                offsetAmount,
+                reason,
+                offsetChecked,
+              ])}
+              disabled={
+                busy ||
+                query.isFetching ||
+                !!query.error ||
+                query.isFetching ||
+                !!query.error ||
+                !!offsetError ||
+                !offsetChecked ||
+                !target ||
+                !offsetAmount ||
+                !reason.trim()
+              }
+              onConfirm={() => submit('offset')}
             >
               Duyệt cấn trừ
-            </Button>
+            </ConfirmActionButton>
             <Button disabled={busy} onClick={() => void query.refetch()}>
               Tải lại sổ phải thu
             </Button>

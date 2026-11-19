@@ -134,13 +134,14 @@ public sealed partial class Compact24OwnerSetupTests
                 """).SingleAsync();
             Assert.Contains("synthetic-signed-terms-hash", json);
             Assert.Contains("\"version\": 1", json);
-            // Creating the contract must also populate the Staff's move-in and
+            // Creating the contract populates handover, inventory and the
             // contract-scoped initial electricity/water tasks before activation.
             var tasks = await db.Set<OperationalTask>().AsNoTracking()
                 .Where(task => task.ContractId == contract.Id).ToArrayAsync();
-            Assert.Equal(3, tasks.Length);
+            Assert.Equal(4, tasks.Length);
             Assert.Equal(2, tasks.Count(task => task.MeterId is not null && task.Purpose == ReadingPurpose.Initial));
-            Assert.Single(tasks, task => task.TargetRoomId == w.Room);
+            Assert.Single(tasks, task => task.TargetRoomId == w.Room && task.Kind == OperationalTaskKind.AdHoc);
+            Assert.Single(tasks, task => task.TargetRoomId == w.Room && task.Kind == OperationalTaskKind.MoveInInventory);
         }
         using var owner = await Client(w.Owner, host);
         var read = await owner.GetFromJsonAsync<HandoverDraftView>($"/api/v1/contracts/{contract.Id}/handover/draft");
@@ -299,6 +300,49 @@ public sealed partial class Compact24OwnerSetupTests
             new HandoverDraftCorrectionDecision(request.Version, false, "Đã kiểm tra lại, ảnh phản ánh đúng")));
         Assert.Equal("Ready", decision.Status);
         Assert.Equal("Rejected", Assert.Single(decision.Requests).Status);
+        // The draft completion path must enforce Develop's inventory gate too.
+        var inventoryTaskId = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(
+            $"contract-pre-move-in-inventory:{contractId:N}")).AsSpan(0, 16));
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var task = new OperationalTask
+            {
+                ContractId = contractId, LocationId = w.Location, TargetRoomId = w.Room,
+                Kind = OperationalTaskKind.MoveInInventory, Status = MeterTaskStatus.InProgress,
+                AssignedStaffUserId = w.Staff.Id, Title = "Synthetic inventory gate regression",
+                MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot("synthetic", []))
+            };
+            db.Entry(task).Property(x => x.Id).CurrentValue = inventoryTaskId;
+            db.Add(task);
+            await db.SaveChangesAsync();
+        }
+        var blocked = await HandoverPost(tenant, contractId, "handover/draft/tenant-confirmation",
+            new HandoverDraftTenantConfirmation(decision.Version));
+        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+        Assert.Contains("move_in_inventory_required", await blocked.Content.ReadAsStringAsync());
+        Assert.Equal("Ready", (await tenant.GetFromJsonAsync<HandoverDraftView>(route))!.Status);
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var task = await db.Set<OperationalTask>().SingleAsync(x => x.Id == inventoryTaskId);
+            task.Status = MeterTaskStatus.Completed;
+            task.MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot("synthetic",
+                [new MoveInInventoryItem(asset.Id, null, asset.Name, 4, 0, "Missing", IncidentId: Guid.NewGuid())]));
+            await db.SaveChangesAsync();
+        }
+        var unresolved = await HandoverPost(tenant, contractId, "handover/draft/tenant-confirmation",
+            new HandoverDraftTenantConfirmation(decision.Version));
+        Assert.Equal(HttpStatusCode.Conflict, unresolved.StatusCode);
+        Assert.Contains("move_in_inventory_required", await unresolved.Content.ReadAsStringAsync());
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var task = await db.Set<OperationalTask>().SingleAsync(x => x.Id == inventoryTaskId);
+            task.MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot("synthetic",
+                [new MoveInInventoryItem(asset.Id, null, asset.Name, 4, 4, "Good")]));
+            await db.SaveChangesAsync();
+        }
         var confirmed = await Read<HandoverDraftView>(await HandoverPost(tenant, contractId,
             "handover/draft/tenant-confirmation", new HandoverDraftTenantConfirmation(decision.Version, "Đã đối chiếu hiện trạng")));
         Assert.Equal("Confirmed", confirmed.Status);

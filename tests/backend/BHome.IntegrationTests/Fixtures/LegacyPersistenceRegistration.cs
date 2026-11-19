@@ -1,11 +1,14 @@
 using BHome.Application.Billing;
+using BHome.Application.Finance;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Jobs;
 using BHome.Application.Locations;
 using BHome.Application.Notifications;
+using BHome.Application.Ocr;
 using BHome.Application.Operations;
 using BHome.Application.PropertyManagement;
 using BHome.Infrastructure.IdentityAccess;
+using BHome.Infrastructure.Finance;
 using BHome.Infrastructure.Jobs;
 using BHome.Infrastructure.Locations;
 using BHome.Infrastructure.Modules.Operations;
@@ -34,6 +37,7 @@ internal static class LegacyPersistenceRegistration
                     options.JsonSerializerOptions.Converters.RemoveAt(i);
         });
         services.RemoveAll<Compact24DbContext>(); services.RemoveAll<DbContextOptions<Compact24DbContext>>();
+        services.RemoveAll<IHouseholdProfiles>();
         services.RemoveAll<CompactJobPersistence>(); services.RemoveAll<CompactLocationAssignments>();
         services.RemoveAll<AssignmentReconciliationJob>();
         // Compose the source-schema handlers explicitly. Registration order is not a schema boundary:
@@ -52,6 +56,7 @@ internal static class LegacyPersistenceRegistration
         services.RemoveAll<LocationSetupService>();
         services.RemoveAll<AssetInventoryService>();
         services.RemoveAll<RoomInventoryReviewService>();
+        services.RemoveAll<CommonAssetInventoryReviewService>();
         services.RemoveAll<BHome.Application.Contracts.IHandoverInventory>();
         // The archived source host has neither Compact24 workspaces nor its notification writer.
         services.AddScoped<BHome.Application.Contracts.IContractHandoverRepository>(p =>
@@ -65,6 +70,16 @@ internal static class LegacyPersistenceRegistration
         services.RemoveAll<OperatingPolicyService>();
         services.RemoveAll<IOperatingPolicyWorkflow>();
         services.RemoveAll<IPropertyLifecycleChecks>();
+        // The source-schema regression host has no Compact24 asset workspaces.
+        // These financial projections depend on those workspaces and are not part
+        // of the legacy persistence contract exercised by this test host.
+        services.RemoveAll<ICapitalAssetRepository>();
+        services.RemoveAll<CapitalAssetService>();
+        services.RemoveAll<RecurringExpenseService>();
+        services.RemoveAll<AssetCapitalSyncJob>();
+        services.RemoveAll<IFinancialReportRepository>();
+        services.RemoveAll<FinancialReportService>();
+        services.RemoveAll<FinancialScenarioService>();
         foreach (var worker in services.Where(s => s.ServiceType == typeof(IHostedService) &&
             s.ImplementationType == typeof(BHome.Infrastructure.Modules.PropertyManagement.AssetTemplateAutomationWorker)).ToArray()) services.Remove(worker);
         services.AddScoped<IBackgroundJobHandler, BHome.Infrastructure.Modules.IncidentMaintenance.IncidentNotificationDelivery>();

@@ -28,7 +28,7 @@ internal sealed class PostActivationTenantProvisioning(BHomePersistenceContext d
         var invitation = evidence is null ? null : await db.Set<ContractSigningInvitation>()
             .SingleOrDefaultAsync(i => i.Id == evidence.InvitationId && i.ContractId == contract.Id && i.AcceptedAt != null, t);
         var contacts = SigningContacts.Read(invitation);
-        foreach (var resident in residents)
+        foreach (var resident in residents.Where(r => r.Id == contract.RepresentativeResidentId))
         {
             ApplicationUser account;
             var existingLink = resident.TenantUserId ?? (resident.Id == contract.RepresentativeResidentId ? contract.TenantUserId : null);

@@ -36,6 +36,7 @@ export function ContractActionDialog({
   actorId,
   onClose,
   onSuccess,
+  onConflict,
 }: {
   api: ContractClient;
   contract: ContractView;
@@ -44,11 +45,13 @@ export function ContractActionDialog({
   actorId: string;
   onClose: () => void;
   onSuccess: (id?: string) => void;
+  onConflict?: () => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const lock = useRef(false);
+  const [conflicted, setConflicted] = useState(false);
   const signing = useSigningApi(api);
   const remoteSigning = action.operation === 'signing' && !contract.isDevelopmentDemo;
   const [choice, setChoice] = useState<PlacementChoice>({ placement: null, usePicture: true });
@@ -59,7 +62,7 @@ export function ContractActionDialog({
     enabled: action.operation === 'signing' && !contract.isDevelopmentDemo,
   });
   async function submit() {
-    if (lock.current) return;
+    if (lock.current || conflicted) return;
     if (
       action.operation === 'signing' &&
       !contract.isDevelopmentDemo &&
@@ -96,6 +99,13 @@ export function ContractActionDialog({
       );
     } catch (e) {
       setError(contractError(e));
+      if (
+        (e as { status?: number })?.status === 409 &&
+        (action.operation.startsWith('move-out/') || action.operation === 'expiry-move-out')
+      ) {
+        setConflicted(true);
+        onConflict?.();
+      }
     } finally {
       lock.current = false;
       setBusy(false);
@@ -112,7 +122,7 @@ export function ContractActionDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
-            Hợp đồng {contract.id}
+            Hồ sơ phòng {contract.roomNumber || 'đang xem'}
           </Typography>
           <Alert severity="warning">{action.warning}</Alert>
           {action.fields.map((field) =>
@@ -251,6 +261,11 @@ export function ContractActionDialog({
             />
           )}
           {!!error && <Alert severity="error">{error}</Alert>}
+          {conflicted && (
+            <Alert severity="warning">
+              Đóng cửa sổ này và xem lại hồ sơ mới nhất trước khi xác nhận lại.
+            </Alert>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -261,6 +276,7 @@ export function ContractActionDialog({
           variant="contained"
           disabled={
             busy ||
+            conflicted ||
             (action.operation === 'signing' &&
               !contract.isDevelopmentDemo &&
               (certs.isFetching ||

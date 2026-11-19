@@ -71,8 +71,10 @@ it('shows billed and final readings, requires review and retries the exact sourc
     ),
   );
   fireEvent.click(button);
+  await confirmPendingAction();
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
+  await confirmPendingAction();
   await waitFor(() =>
     expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2),
   );
@@ -106,3 +108,8 @@ it('offers private view and download for the initial and final meter evidence', 
     ),
   );
 });
+
+async function confirmPendingAction() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+}

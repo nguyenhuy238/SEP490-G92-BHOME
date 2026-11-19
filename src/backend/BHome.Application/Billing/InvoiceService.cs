@@ -112,7 +112,7 @@ public sealed class InvoiceService(IInvoiceRepository repository, ICurrentUser u
                 if (plan?.Id != expected || !await automation!.AuthorizedAsync(plan, Actor, x.BillingPeriod, false, t)) throw new InvoiceException(409, "automation_authorization_changed");
                 if (selection is null && eligible!.Count != 1 || selection is not null && selection.ContractId != representativeId) throw new InvoiceException(409, "representative_selection_required");
             }
-            var schedule = plan is null ? await repository.ScheduleAsync(room.LocationId, t) ?? throw new InvoiceException(409, "billing_schedule_required") : BillingAutomationService.Calendar(plan);
+            var schedule = plan is null ? await repository.ScheduleForPeriodAsync(room.LocationId, x.BillingPeriod, t) ?? throw new InvoiceException(409, "billing_schedule_required") : BillingAutomationService.Calendar(plan);
             if (Today < InvoiceMath.CalendarDate(x.BillingPeriod, schedule.DraftDay, schedule.DraftMonthOffset))
                 throw new InvoiceException(409, "draft_date_not_reached");
             var invoice = new Invoice

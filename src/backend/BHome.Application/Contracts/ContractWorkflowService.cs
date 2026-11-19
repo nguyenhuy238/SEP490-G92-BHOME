@@ -22,7 +22,7 @@ public sealed partial class ContractService
                 throw new ContractException(403, "contract_signer_required");
             if (contract.IsDevelopmentDemo || MainSandboxAcceptance.Read(contract) is not null)
                 throw ContractException.Conflict("signing_mode_mismatch");
-            if (AnonymousContractSigningService.AcceptedEvidence(contract) is null)
+            if (!AnonymousContractSigningService.AllowsEitherSigningOrder(contract) && AnonymousContractSigningService.AcceptedEvidence(contract) is null)
                 throw ContractException.Conflict("tenant_acceptance_required");
             return;
         }
@@ -57,8 +57,9 @@ public sealed partial class ContractService
         f.SnapshotHash, f.TemplateId, f.TemplateVersion, f.DevelopmentOnly, f.RecordedAt);
 
     public Task<ContractDocumentView> GeneratePreviewAsync(Guid id, Guid key, CancellationToken t) =>
-        Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
+        Mutate(id, [Roles.Owner, Roles.Staff, Roles.Tenant], async c =>
         {
+            RequirePreviewAccess(c);
             if (!Intact(c)) throw ContractException.Conflict("signed_terms_changed");
             if (await Replay(key, "preview", id, t) is { } prior)
                 return DocumentView(await Workflow.FileAsync(id, prior, t) ?? throw ContractException.Missing());
@@ -68,6 +69,13 @@ public sealed partial class ContractService
                     ?? throw ContractException.Conflict("signing_source_document_required");
                 await CopyVerifiedFile(reviewed, Stream.Null, t);
                 Remember(key, "preview", id, reviewed.Id); return DocumentView(reviewed);
+            }
+            if (c.Kind == ContractKind.Main && signingDocuments is not null && await signingDocuments.ReadAsync(Document(c), t) is { } canonical)
+            {
+                var hash = FileHash(canonical);
+                var sourceFile = (await Workflow.FilesAsync(id, ContractFileKind.Preview, t)).FirstOrDefault(f => f.SnapshotHash == c.SnapshotHash &&
+                    f.TemplateId == "main-tenancy-docx-v1" && f.FileHash == hash) ?? throw ContractException.Conflict("signing_source_document_required");
+                Remember(key, "preview", id, sourceFile.Id); return DocumentView(sourceFile);
             }
             var template = await Renderer.ConfigurationAsync(t);
             await Renderer.ValidateAsync(Document(c), t);
@@ -100,16 +108,32 @@ public sealed partial class ContractService
 
     public async Task<IReadOnlyList<ContractDocumentView>> PreviewDocumentsAsync(Guid id, CancellationToken t)
     {
-        await Load(id, [Roles.Owner, Roles.Tenant], t);
-        return (await Workflow.FilesAsync(id, ContractFileKind.Preview, t)).Select(DocumentView).ToArray();
+        var c = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
+        RequirePreviewAccess(c);
+        return (await Workflow.FilesAsync(id, ContractFileKind.Preview, t))
+            .Where(f => !StaffPreviewOnly(c) || f.SnapshotHash == c.SnapshotHash).Select(DocumentView).ToArray();
     }
 
     public async Task CopyPreviewAsync(Guid id, Guid fileId, Stream output, CancellationToken t)
     {
-        await Load(id, [Roles.Owner, Roles.Tenant], t);
+        var c = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
+        RequirePreviewAccess(c);
         var file = await Workflow.FileAsync(id, fileId, t) ?? throw ContractException.Missing();
         if (file.Kind != ContractFileKind.Preview) throw ContractException.Missing();
+        if (StaffPreviewOnly(c) && file.SnapshotHash != c.SnapshotHash)
+            throw ContractException.Conflict("signed_terms_changed");
         await CopyVerifiedFile(file, output, t);
+    }
+
+    private bool StaffPreviewOnly(Contract c) => user.IsInRole(Roles.Staff) &&
+        !(user.IsInRole(Roles.Owner) && c.OwnerSignerId == Actor) &&
+        !(user.IsInRole(Roles.Tenant) && c.TenantUserId == Actor);
+
+    private void RequirePreviewAccess(Contract c)
+    {
+        if (StaffPreviewOnly(c) && (c.Kind != ContractKind.Main ||
+            c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning)))
+            throw new ContractException(403, "contract_role_forbidden");
     }
 
     private async Task CopyVerifiedFile(ContractDocumentFile file, Stream output, CancellationToken t)

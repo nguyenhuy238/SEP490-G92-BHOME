@@ -22,6 +22,8 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<ContractWorkflowConfiguration> Configuration(CancellationToken t) => service.ConfigurationAsync(t);
     [HttpGet("holding-settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
     public Task<HoldingSettings?> HoldingSettings(Guid locationId, CancellationToken t) => service.HoldingSettingsAsync(locationId, t);
+    [HttpGet("holding-settings/{locationId:guid}/versions"), Authorize(Roles = Roles.Owner)]
+    public Task<IReadOnlyList<HoldingSettings>> HoldingSettingsHistory(Guid locationId, CancellationToken t) => service.HoldingSettingsHistoryAsync(locationId, t);
     [HttpPut("holding-settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
     public async Task<IActionResult> HoldingSettings(Guid locationId, HoldingSettingsInput input, CancellationToken t)
     { await service.SetHoldingSettingsAsync(locationId, input, t); return NoContent(); }
@@ -58,11 +60,11 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<ContractSettlementSummary> SettlementSummary(Guid id, CancellationToken t) => service.SettlementSummaryAsync(id, t);
     [HttpGet("{id:guid}/deposit-verifications"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
     public Task<IReadOnlyList<DepositVerificationView>> Deposits(Guid id, CancellationToken t) => service.DepositsAsync(id, t);
-    [HttpGet("{id:guid}/previews"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    [HttpGet("{id:guid}/previews"), Authorize(Roles = Roles.Owner + "," + Roles.Staff + "," + Roles.Tenant)]
     public Task<IReadOnlyList<ContractDocumentView>> Previews(Guid id, CancellationToken t) => service.PreviewDocumentsAsync(id, t);
-    [HttpPost("{id:guid}/previews"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    [HttpPost("{id:guid}/previews"), Authorize(Roles = Roles.Owner + "," + Roles.Staff + "," + Roles.Tenant)]
     public Task<ContractDocumentView> GeneratePreview(Guid id, CancellationToken t) => service.GeneratePreviewAsync(id, Key(), t);
-    [HttpGet("{id:guid}/previews/{fileId:guid}"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]
+    [HttpGet("{id:guid}/previews/{fileId:guid}"), Authorize(Roles = Roles.Owner + "," + Roles.Staff + "," + Roles.Tenant)]
     public async Task<IActionResult> PreviewFile(Guid id, Guid fileId, CancellationToken t)
     { var buffer = new MemoryStream(); await service.CopyPreviewAsync(id, fileId, buffer, t); buffer.Position = 0; return File(buffer, "application/pdf", "ban-xem-truoc.pdf"); }
 

@@ -12,6 +12,10 @@ builder.Services.AddApiFoundation(builder.Configuration);
 var app = builder.Build();
 if (app.Environment.IsDevelopment() && app.Configuration.GetValue("Api:ReadDevelopmentEnvironmentFile", true))
     DevelopmentEnvironmentFile.Load(builder.Configuration, app.Environment.ContentRootPath);
+EnvironmentConfiguration.ApplyDeploymentDefaults(builder.Configuration);
+var environmentErrors = EnvironmentConfiguration.Errors(app.Configuration, app.Environment.EnvironmentName);
+if (environmentErrors.Count > 0)
+    throw new Microsoft.Extensions.Options.OptionsValidationException("Environment", typeof(EnvironmentConfiguration), environmentErrors);
 if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("DevelopmentDatabase:InitializeOnStartup"))
 {
     var prepared = await Compact24DevelopmentDatabase.PrepareAsync(app.Environment.EnvironmentName,

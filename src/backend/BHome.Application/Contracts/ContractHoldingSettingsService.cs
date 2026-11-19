@@ -11,6 +11,12 @@ public sealed partial class ContractService
         if (!await access.CanAccessAsync(new(locationId, null), [Roles.Owner], t)) throw ContractException.Missing();
         return await HoldingSettingsData.GetAsync(locationId, t);
     }
+    public async Task<IReadOnlyList<HoldingSettings>> HoldingSettingsHistoryAsync(Guid locationId, CancellationToken t)
+    {
+        Role(Roles.Owner);
+        if (!await access.CanAccessAsync(new(locationId, null), [Roles.Owner], t)) throw ContractException.Missing();
+        return await HoldingSettingsData.HistoryAsync(locationId, t);
+    }
     public async Task SetHoldingSettingsAsync(Guid locationId, HoldingSettingsInput input, CancellationToken t)
     {
         Role(Roles.Owner); Validate(input);

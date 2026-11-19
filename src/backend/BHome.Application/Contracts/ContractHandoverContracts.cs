@@ -64,6 +64,7 @@ public interface IContractHandoverRepository
     Task EnsureMoveInTaskAsync(Contract contract, Guid actor, DateTimeOffset now, CancellationToken t);
     Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId, Guid? staffUserId, CancellationToken t);
     Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t);
+    Task<bool> InventoryReadyAsync(Guid contractId, CancellationToken t);
     Task NotifyAsync(Contract contract, string action, Guid actor, int version, CancellationToken t);
     Task<IReadOnlyList<AssetChangeParty>> ActivePartiesAsync(Guid roomId, CancellationToken t);
     Task<IReadOnlyList<AssetChangeSource>> ChangeSourcesAsync(Guid roomId, CancellationToken t);
