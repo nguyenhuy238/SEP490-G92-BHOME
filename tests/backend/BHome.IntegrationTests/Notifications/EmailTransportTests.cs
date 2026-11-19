@@ -18,8 +18,10 @@ public sealed class EmailTransportTests
         using var factory = new ApiFactory();
         using var host = factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Email:Enabled"] = "true", ["Email:Username"] = "sender@example.invalid",
-            ["Email:FromEmail"] = "sender@example.invalid", ["Email:AppPassword"] = "SYNTHETIC_PRIVATE_PASSWORD",
+            ["Email:Enabled"] = "true",
+            ["Email:Username"] = "sender@example.invalid",
+            ["Email:FromEmail"] = "sender@example.invalid",
+            ["Email:AppPassword"] = "SYNTHETIC_PRIVATE_PASSWORD",
             ["Email:TestRecipient"] = "existing-test@example.invalid"
         })));
         var error = Assert.Throws<OptionsValidationException>(() => host.CreateClient());

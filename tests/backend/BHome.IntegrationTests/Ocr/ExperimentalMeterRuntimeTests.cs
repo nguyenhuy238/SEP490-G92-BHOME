@@ -169,7 +169,7 @@ public sealed class ExperimentalMeterRuntimeTests
     {
         var receiptPath = Path.Combine(directory, ".tools/ocr-runtime-focus/classifier-cv2/report.json");
         var sha = hash ?? (File.Exists(receiptPath) ? JsonDocument.Parse(File.ReadAllText(receiptPath)).RootElement.GetProperty("modelSha256").GetString() : new string('0', 64));
-        return root.WithWebHostBuilder(builder => builder.UseEnvironment(environment)
+        return root.WithWebHostBuilder(builder => builder.UseTestEnvironment(environment)
             .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["MobileDevelopment:Enabled"] = mobile.ToString(),

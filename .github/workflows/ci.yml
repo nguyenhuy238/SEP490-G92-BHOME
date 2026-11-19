@@ -64,7 +64,7 @@ jobs:
       # too large for the Actions job-log download endpoint.
       - name: Upload backend test results
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: backend-trx-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/bhome-backend-trx/*.trx

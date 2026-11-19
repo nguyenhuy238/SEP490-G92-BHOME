@@ -235,7 +235,12 @@ public sealed partial class Compact24NotificationMvpTests
     {
         var w = await Seed(); var probe = new SmtpProbe(); using var configured = AuthenticationHost(probe);
         using var host = configured.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
-        { ["AuthenticationEmail:WebResetUrl"] = "", ["AuthenticationEmail:MobileResetUrl"] = "" })));
+        {
+            ["AuthenticationEmail:WebResetUrl"] = "",
+            ["AuthenticationEmail:MobileResetUrl"] = "",
+            ["Email:AllowedRecipients:1"] = w.Staff.Email,
+            ["Email:AllowedRecipients:2"] = w.Tenants[0].Email
+        })));
         await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         await db.Users.Where(u => u.Id == w.Tenants[0].Id || u.Id == w.Staff.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.EmailConfirmed, false));
         using var anonymous = host.CreateClient();
