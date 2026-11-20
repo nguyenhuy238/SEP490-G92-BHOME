@@ -238,11 +238,17 @@ Link ký ẩn danh yêu cầu HTTPS. Owner mặc định HTTP 5173 vẫn phục 
 chạy thêm một terminal cho trang ký HTTPS, cùng mã nguồn và cùng API local:
 
 ```powershell
-$env:BHOME_WEB_HTTPS='true'
-npm.cmd run dev --workspace ./src/owner-web
+npm.cmd run signing:dev
 ```
 
-Mở `https://localhost:5176/contract-signing`; chứng chỉ/key được export ở bước 4.
+Mở `https://localhost:5176/contract-signing`. Giữ terminal này chạy trong lúc
+người dùng bấm liên kết ký. Script dùng `.tools/team-tls/localhost.pem` hoặc
+`localhost.crt` cùng `localhost.key` (cặp chứng chỉ HTTPS local đã chuẩn bị),
+không hạ xuống HTTP. Owner Web ở cổng 5173 **không tự mở cổng ký 5176**.
+Link `localhost` **chỉ truy cập được trên chính máy đang chạy Web**; nếu người nhận
+mở email từ điện thoại hoặc máy khác, cấu hình
+`AnonymousSigning__PublicSigningUrl` thành URL HTTPS public có thật và
+đảm bảo trang Web đó được triển khai/truy cập được trước khi gửi email mời mới.
 Mặc định `AnonymousSigning__PublicSigningUrl=https://localhost:5176/contract-signing`.
 Thư mời mang token ở fragment `#token=...`, không đưa token lên URL query của web server.
 Luồng tài khoản dùng `/accept-invitation`, `/reset-password`, `/confirm-email` ở HTTP 5173;
