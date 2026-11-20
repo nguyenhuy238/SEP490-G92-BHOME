@@ -93,7 +93,7 @@ internal static class Compact24Records
 
         var task = Root("OperationalTask", "operational_tasks", "LocationId:location_id MeterId:meter_id ContractId:contract_id AssignedStaffUserId:assigned_user_id BillingPeriod:billing_period Title:title Requirements:description AssignedAt:assigned_at DueAt:due_at VerifiedByUserId:verified_by_user_id VerifiedAt:verified_at Version:version");
         task.Where = "t.task_type IN ('METER_READ','GENERAL')";
-        task.Map("Kind", "task_type", "CASE WHEN t.task_data->'state'->>'kind'='2' THEN 2 WHEN t.task_type='GENERAL' THEN 1 ELSE 0 END", "CASE WHEN (@state::jsonb->>'kind')::int IN (1,2) THEN 'GENERAL' ELSE 'METER_READ' END");
+        task.Map("Kind", "task_type", "CASE WHEN t.task_data->'state'->>'kind'='3' THEN 3 WHEN t.task_data->'state'->>'kind'='2' THEN 2 WHEN t.task_type='GENERAL' THEN 1 ELSE 0 END", "CASE WHEN (@state::jsonb->>'kind')::int IN (1,2,3) THEN 'GENERAL' ELSE 'METER_READ' END");
         task.Map("Status", "status", "t.status::integer"); task.Map("Priority", "priority", "t.priority::integer");
         task.Write["task_data"] = "jsonb_build_object('schemaVersion',1,'recordType','OperationalTask','state',@state::jsonb)";
         task.Write["room_id"] = "(SELECT room_id FROM meters WHERE id=(@state::jsonb->>'meterId')::uuid)";

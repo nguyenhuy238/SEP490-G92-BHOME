@@ -12,6 +12,7 @@ public interface IAccountInvitations
 {
     Task<TenantInvitationResult> InviteAsync(Guid residentId, TenantInvitationRequest request, CancellationToken t);
     Task<TenantInvitationResult> InviteStaffAsync(Guid userId, CancellationToken t);
+    Task<TenantInvitationResult> IssueStaffPasswordAsync(Guid userId, CancellationToken t);
     Task<bool> AcceptAsync(AcceptInvitationRequest request, CancellationToken t);
     Task<InvitationValidationResult> ValidateAsync(InvitationValidationRequest request, CancellationToken t);
 }

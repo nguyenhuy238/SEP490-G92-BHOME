@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TasksApiPage } from './TasksApiPage';
+import { TaskStatus } from './components/TaskDetailDrawer';
+import type { OwnerTask } from './taskContracts';
 import { ApiError } from '../../../../../packages/client-core/src/api';
 const mocks = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('../meters/useMeterApi', () => ({ useMeterApi: () => ({ request: mocks.request }) }));
@@ -271,4 +273,63 @@ it('shows Staff-completed move-in inventory and linked BF-07 incident with no Ow
   fireEvent.click(within(drawer).getByText('Bàn học'));
   const incident = await within(drawer).findByRole('link', { name: 'Xem báo cáo sự cố BF-07' });
   expect(incident).toHaveAttribute('href', '/incidents?locationId=location&incidentId=incident-1');
+});
+
+it('labels an archived prior-Staff handover as Đã chuyển giao in task history', async () => {
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation((path: string, init?: RequestInit) => {
+    if (path === '/api/v1/operational-tasks/task/history?page=1&pageSize=20')
+      return Promise.resolve({
+        items: [
+          {
+            id: 'history-superseded',
+            actorId: 'owner',
+            action: 'responsibility_superseded',
+            note: 'Đã lưu trữ checklist của đợt phân công trước.',
+            occurredAt: '2026-11-20T04:00:00Z',
+            taskVersion: 10,
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        totalCount: 1,
+      });
+    return original(path, init);
+  });
+  mount('/operational-tasks?taskId=task');
+  const drawer = await screen.findByRole('dialog', { name: 'Chi tiết công việc' });
+  expect(await within(drawer).findByText('Đã chuyển giao')).toBeInTheDocument();
+});
+
+it('labels inherited checklist progress as Kế thừa tiến độ kiểm kê in task history', async () => {
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation((path: string, init?: RequestInit) => {
+    if (path === '/api/v1/operational-tasks/task/history?page=1&pageSize=20')
+      return Promise.resolve({
+        items: [
+          {
+            id: 'history-inherited',
+            actorId: 'owner',
+            action: 'location_asset_inventory_progress_inherited',
+            note: 'Đã đối chiếu và kế thừa một phần checklist.',
+            occurredAt: '2026-11-20T05:00:00Z',
+            taskVersion: 2,
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        totalCount: 1,
+      });
+    return original(path, init);
+  });
+  mount('/operational-tasks?taskId=task');
+  const drawer = await screen.findByRole('dialog', { name: 'Chi tiết công việc' });
+  expect(await within(drawer).findByText('Kế thừa tiến độ kiểm kê')).toBeInTheDocument();
+});
+
+it('shows a superseded whole-Location handover as Đã chuyển giao instead of Đã hủy', () => {
+  const archived = { ...task, kind: 'LocationAssetHandover', status: 'Cancelled' } as OwnerTask;
+  render(<TaskStatus task={archived} />);
+  expect(screen.getByText('Đã chuyển giao')).toBeInTheDocument();
+  expect(screen.queryByText('Đã hủy')).not.toBeInTheDocument();
 });

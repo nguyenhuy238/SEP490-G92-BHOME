@@ -106,7 +106,10 @@ export function useStaffTaskDetail(id: string) {
             !(task.target?.contractId && action === 'submit'),
         )
       : [];
-  const canUpload = allowed.includes('submit');
+  const canUpload =
+    allowed.includes('submit') ||
+    (task?.kind === 'LocationAssetHandover' &&
+      (allowed.includes('progress') || allowed.includes('blockers')));
   const reloadDetail = detail.reload,
     reloadEvidence = evidence.reload,
     reloadHistory = history.reload;

@@ -21,6 +21,7 @@ import { useIncidentMutation, useIncidentQuery } from './useIncidentData';
 import { TenantIncidentReportForm } from './TenantIncidentReportForm';
 import { operationalTasks } from '../../services/operationalTasks';
 import { moveInInventoryClient } from '../../services/moveInInventory';
+import { locationAssetInventoryClient } from '../../services/locationAssetInventory';
 import { randomUUID } from '../../lib/randomUUID';
 import { errorMessage } from '../../lib/api';
 
@@ -45,7 +46,9 @@ function ReportForm() {
     description?: string;
     inventoryTaskId?: string;
     inventoryItemId?: string;
+    locationAssetInventoryItemId?: string;
     inventoryEvidenceIds?: string;
+    commonArea?: string;
   }>();
   const fromInventory =
     role === 'Staff' &&
@@ -53,28 +56,38 @@ function ReportForm() {
     idPattern.test(params.inventoryTaskId) &&
     !!params.inventoryItemId &&
     idPattern.test(params.inventoryItemId);
+  const fromLocationInventory =
+    role === 'Staff' &&
+    !!params.inventoryTaskId &&
+    idPattern.test(params.inventoryTaskId) &&
+    !!params.locationAssetInventoryItemId &&
+    idPattern.test(params.locationAssetInventoryItemId) &&
+    !!params.locationId &&
+    idPattern.test(params.locationId);
+  const fromAnyInventory = fromInventory || fromLocationInventory;
   const initialLocation =
-    fromInventory && params.locationId && idPattern.test(params.locationId)
+    fromAnyInventory && params.locationId && idPattern.test(params.locationId)
       ? params.locationId
       : '';
   const initialRoom =
-    fromInventory && params.roomId && idPattern.test(params.roomId) ? params.roomId : '';
+    fromAnyInventory && params.roomId && idPattern.test(params.roomId) ? params.roomId : '';
   const enabled = !preview && !!session && (role === 'Staff' || role === 'Tenant');
   const staff = useStaffIncidentScope(enabled && role === 'Staff', {
     locationId: initialLocation,
     roomId: initialRoom,
+    commonArea: fromLocationInventory ? params.commonArea : undefined,
   });
   const [roomPage, setRoomPage] = useState(1),
     [assetPage, setAssetPage] = useState(1);
   const [tenantRoom, setTenantRoom] = useState(''),
     [assetId, setAssetId] = useState(
-      fromInventory && params.assetId && idPattern.test(params.assetId) ? params.assetId : '',
+      fromAnyInventory && params.assetId && idPattern.test(params.assetId) ? params.assetId : '',
     );
-  const [common, setCommon] = useState(false),
-    [commonArea, setCommonArea] = useState('');
+  const [common, setCommon] = useState(fromLocationInventory && !!params.commonArea),
+    [commonArea, setCommonArea] = useState(fromLocationInventory ? (params.commonArea ?? '') : '');
   const [severity, setSeverity] = useState('Normal'),
     [description, setDescription] = useState(
-      fromInventory ? (params.description ?? '').slice(0, 8000) : '',
+      fromAnyInventory ? (params.description ?? '').slice(0, 8000) : '',
     );
   const [photos, setPhotos] = useState<IncidentPhoto[]>([]);
   const [prefillMessage, setPrefillMessage] = useState(
@@ -151,12 +164,12 @@ function ReportForm() {
   // The assigned room may have more than 100 assets. The item's trusted
   // backend snapshot supplies the exact AssetId even if this page omits it.
   const initialAsset =
-    fromInventory &&
+    fromAnyInventory &&
     params.assetId &&
     idPattern.test(params.assetId) &&
     locationId === initialLocation &&
     roomId === initialRoom &&
-    !common
+    (!common || (fromLocationInventory && commonName === params.commonArea))
       ? params.assetId
       : '';
   const assetOptions =
@@ -170,10 +183,41 @@ function ReportForm() {
     description.trim().length >= 10 &&
     description.trim().length <= 8000;
   async function linkInventoryIncident(incidentId: string) {
-    if (!api || !fromInventory || linking) return;
+    if (!api || !fromAnyInventory || linking) return;
     setLinking(true);
     setLinkError('');
     try {
+      if (fromLocationInventory) {
+        const client = locationAssetInventoryClient(api);
+        const view = await client.get(params.inventoryTaskId!);
+        const item = view.items.find((entry) => entry.id === params.locationAssetInventoryItemId);
+        if (
+          !item ||
+          view.locationId !== locationId ||
+          item.roomId !== (roomId || null) ||
+          item.commonArea !== (common ? commonName : null) ||
+          item.assetId !== (selectedAsset || null)
+        )
+          throw new Error('Phạm vi sự cố khác mục kiểm kê. Kiểm tra lại trước khi liên kết.');
+        if (item.inherited) throw new Error('Không thể sửa mục kiểm kê kế thừa Tenant.');
+        if (item.incidentId && item.incidentId !== incidentId)
+          throw new Error('Mục này đã liên kết với báo cáo sự cố khác.');
+        if (!item.incidentId) {
+          await client.updateItem(
+            params.inventoryTaskId!,
+            item.id,
+            {
+              version: view.version,
+              checked: item.checked,
+              note: (item.note?.trim() || description.trim()).slice(0, 2000),
+              incidentId,
+            },
+            randomUUID(),
+          );
+        }
+        go('task-detail', { taskId: params.inventoryTaskId! });
+        return;
+      }
       const client = moveInInventoryClient(api);
       const view = await client.get(params.inventoryTaskId!);
       const item = view.items.find((entry) => entry.id === params.inventoryItemId);
@@ -235,7 +279,7 @@ function ReportForm() {
     );
     if (result) {
       setPhotos([]);
-      if (fromInventory) {
+      if (fromAnyInventory) {
         setPendingIncidentId(result.incidentId);
         await linkInventoryIncident(result.incidentId);
       } else {
@@ -246,7 +290,7 @@ function ReportForm() {
   return (
     <>
       <Heading title="Báo cáo sự cố" detail="Phòng, thiết bị hoặc khu vực chung" />
-      {fromInventory && (
+      {fromAnyInventory && (
         <Box>
           <Text>
             Thông tin cơ sở, phòng, tài sản và tình trạng đã lấy từ mục kiểm kê. Kiểm tra lại trước
@@ -270,7 +314,7 @@ function ReportForm() {
               label="Cơ sở"
               value={staff.location}
               options={staff.locations.data ?? []}
-              disabled={mutation.busy || !enabled || fromInventory}
+              disabled={mutation.busy || !enabled || fromAnyInventory}
               onChange={(id) => {
                 changedScope.current = true;
                 staff.selectLocation(id);
@@ -284,7 +328,7 @@ function ReportForm() {
               label="Phòng"
               value={common ? '' : staff.area}
               options={staff.rooms.data ?? []}
-              disabled={common || mutation.busy || !enabled || fromInventory}
+              disabled={common || mutation.busy || !enabled || fromAnyInventory}
               onChange={(id) => {
                 changedScope.current = true;
                 staff.selectArea(id);
@@ -328,7 +372,7 @@ function ReportForm() {
         <ChoiceField
           label="Phạm vi sự cố"
           value={common ? 'common' : 'room'}
-          disabled={mutation.busy || fromInventory}
+          disabled={mutation.busy || fromAnyInventory}
           options={[
             { id: 'room', label: 'Trong phòng' },
             { id: 'common', label: 'Khu vực chung' },
@@ -349,7 +393,7 @@ function ReportForm() {
               setCommonArea(value);
               setAssetId('');
             }}
-            disabled={mutation.busy}
+            disabled={mutation.busy || fromAnyInventory}
           />
         )}
         {!!locationId && (
@@ -358,7 +402,7 @@ function ReportForm() {
             <ChoiceField
               label="Tài sản liên quan (tùy chọn)"
               value={selectedAsset}
-              disabled={mutation.busy || fromInventory}
+              disabled={mutation.busy || fromAnyInventory}
               options={[{ id: '', label: 'Không chọn tài sản' }, ...assetOptions]}
               onChange={setAssetId}
             />
@@ -425,7 +469,7 @@ function ReportForm() {
       >
         Gửi báo cáo sự cố
       </Action>
-      {!!pendingIncidentId && fromInventory && (
+      {!!pendingIncidentId && fromAnyInventory && (
         <Box>
           <Text style={ui.green}>Báo cáo sự cố đã được tạo. Mã: {pendingIncidentId}</Text>
           <Text style={ui.muted}>Cần liên kết báo cáo với mục kiểm kê để hoàn tất công việc.</Text>

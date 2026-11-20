@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../../../packages/client-core/src/api';
 import { StaffAssignments } from './StaffAssignments';
 import { AssignmentDialog, type AssignmentIntent } from './components/AssignmentDialog';
+import { AssignmentDetailDrawer } from './components/AssignmentDetailDrawer';
 import {
   assignmentDate,
   assignmentState,
@@ -297,6 +298,10 @@ it('replaces even when canRemove is false, using current Vietnam date and latest
   dialog({ mode: 'replace', locationId: 'location' });
   await ready();
   expect(screen.getByText('unrecognized_code: 2')).toBeInTheDocument();
+  expect(screen.queryByText(/Chưa thể gỡ/)).not.toBeInTheDocument();
+  expect(screen.getByText(/Công việc chưa hoàn tất sẽ chuyển cho nhân viên mới/)).toBeVisible();
+  expect(screen.getByText(/nhân viên mới nhận checklist kiểm kê riêng/)).toBeVisible();
+  expect(screen.getByText(/checklist chưa hoàn tất của nhân viên cũ được lưu trữ/)).toBeVisible();
   await pick('Nhân viên thay thế', 'Other synthetic · other@example.invalid');
   expect(screen.getByRole('button', { name: 'Xác nhận' })).toBeDisabled();
   fireEvent.change(screen.getByLabelText(/Lý do thay đổi/), { target: { value: 'Thay người' } });
@@ -316,10 +321,41 @@ it('replaces even when canRemove is false, using current Vietnam date and latest
   );
   expect(mocks.request.mock.calls.some(([path]) => path.includes('operational-tasks'))).toBe(false);
 });
+it('warns that an expired employment cannot own Location work while keeping replacement available', () => {
+  const act = vi.fn();
+  const endedStaff = {
+    ...staff,
+    employment: {
+      id: 'employment-ended',
+      contractNumber: 'ENDED-01',
+      employmentType: 'FullTime',
+      startDate: '2026-01-01',
+      endDate: '2026-11-11',
+      salaryType: 'Monthly',
+      baseRate: 5000000,
+      status: 'Ended',
+    },
+  };
+  wrap(
+    <AssignmentDetailDrawer
+      row={{ location, assignments: [assignment] }}
+      staff={[endedStaff, replacement]}
+      today="2026-11-12"
+      close={close}
+      act={act}
+    />,
+  );
+  expect(screen.getByText(/Hợp đồng lao động của nhân viên này đã kết thúc/)).toBeVisible();
+  expect(screen.getByText(staff.fullName)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Thay người phụ trách' }));
+  expect(act).toHaveBeenCalledWith({ mode: 'replace', locationId: 'location' });
+});
 it('blocks removal when responsibilities remain', async () => {
   canRemove = false;
   dialog({ mode: 'remove', locationId: 'location' });
   await ready();
+  expect(screen.getByText(/Chưa thể gỡ/)).toBeInTheDocument();
+  expect(screen.queryByText(/nhân viên mới nhận checklist kiểm kê riêng/)).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText(/Lý do thay đổi/), { target: { value: 'Gỡ' } });
   expect(screen.getByRole('button', { name: 'Xác nhận' })).toBeDisabled();
   expect(mocks.request.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);

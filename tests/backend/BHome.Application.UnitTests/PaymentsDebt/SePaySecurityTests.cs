@@ -48,8 +48,10 @@ public sealed class SePaySecurityTests
     public void ConfigurationSeparatesEnvironmentAndCredentials()
     {
         var options = new SePayOptions { Enabled = true, WebhookSecret = Secret, ReceivingAccounts = [new() { LocationId = Guid.NewGuid(), BankIdentifier = "970416", Gateway = "ACB", AccountNumber = "0000001234" }] };
-        Assert.True(options.Valid("Testing")); Assert.False(options.Valid("Production"));
+        Assert.True(options.Valid("Testing")); Assert.True(options.Valid("Staging")); Assert.False(options.Valid("Production"));
         options.ApiBaseUrl = "https://userapi.sepay.vn/v2"; Assert.False(options.Valid("Testing"));
+        options.Mode = "Live";
+        Assert.False(options.Valid("Staging")); Assert.True(options.Valid("Production"));
         options.Enabled = false; Assert.True(options.Valid("Production"));
     }
 

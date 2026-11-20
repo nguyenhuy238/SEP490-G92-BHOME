@@ -980,33 +980,42 @@ it('Tenant retains visible excess after a downward paid adjustment without a ref
 });
 
 it('uses server list, pagination and role navigation instead of preview work orders', async () => {
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockImplementation(async (url) =>
-      json(
-        page([{ ...task, title: String(url).includes('page=2') ? 'Trang hai' : task.title }], 21),
-      ),
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
+    if (String(url).endsWith('/locations/assigned-to-me'))
+      return json([{ id, name: 'Cơ sở kiểm thử' }]);
+    return json(
+      page([{ ...task, title: String(url).includes('page=2') ? 'Trang hai' : task.title }], 21),
     );
+  });
   setApi(fetcher);
   render(<OperationalTasksScreen />);
   await screen.findByText(task.title);
+  await screen.findByText('Cơ sở: Cơ sở kiểm thử');
   expect(screen.queryByText(/CV-1042/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: `Xem chi tiết: ${task.title}` }));
   expect(mocks.go).toHaveBeenCalledWith('task-detail', { taskId: id });
   fireEvent.click(screen.getByRole('button', { name: 'Trang công việc sau' }));
   await screen.findByText('Trang hai');
-  expect(fetcher.mock.calls[1]![0]).toContain('page=2');
+  const listCalls = fetcher.mock.calls.filter(([url]) =>
+    String(url).includes('/operational-tasks?'),
+  );
+  expect(listCalls).toHaveLength(2);
+  expect(listCalls[1]![0]).toContain('page=2');
 });
 it('does not show stale records after a forbidden reload or failed filter', async () => {
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(json(page([task])))
-    .mockResolvedValueOnce(json({}, 403));
+  let listRequests = 0;
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
+    if (String(url).endsWith('/locations/assigned-to-me'))
+      return json([{ id, name: 'Cơ sở kiểm thử' }]);
+    listRequests += 1;
+    return listRequests === 1 ? json(page([task])) : json({}, 403);
+  });
   setApi(fetcher);
   render(<OperationalTasksScreen />);
   await screen.findByText(task.title);
   fireEvent.click(screen.getByRole('button', { name: 'Tải lại công việc' }));
   await screen.findByText(/Tài khoản không được phép/);
+  expect(listRequests).toBe(2);
   expect(screen.queryByRole('button', { name: `Xem chi tiết: ${task.title}` })).toBeNull();
 });
 it('shows compact previews, optional result/evidence and the server overdue flag in Vietnam time', async () => {
@@ -1058,19 +1067,22 @@ it('shows loading then an empty list without fabricating summary counts', async 
   expect(screen.getByText('0 công việc')).toBeTruthy();
 });
 it('filters on the server, resets pagination and clears the filter from an empty state', async () => {
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockImplementation(async (url) =>
-      json(String(url).includes('status=Assigned') ? page([]) : page([task], 21)),
-    );
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url) => {
+    if (String(url).endsWith('/locations/assigned-to-me'))
+      return json([{ id, name: 'Cơ sở kiểm thử' }]);
+    return json(String(url).includes('status=Assigned') ? page([]) : page([task], 21));
+  });
+  const listCalls = () =>
+    fetcher.mock.calls.filter(([url]) => String(url).includes('/operational-tasks?'));
   setApi(fetcher);
   render(<OperationalTasksScreen />);
   await screen.findByText(task.title);
   fireEvent.click(screen.getByRole('button', { name: 'Trang công việc sau' }));
-  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(listCalls()).toHaveLength(2));
   fireEvent.click(screen.getByRole('tab', { name: 'Cần làm' }));
   await screen.findByText('Không có công việc phù hợp');
-  expect(String(fetcher.mock.calls[2]![0])).toContain('page=1&pageSize=20&status=Assigned');
+  expect(listCalls()).toHaveLength(3);
+  expect(String(listCalls()[2]![0])).toContain('page=1&pageSize=20&status=Assigned');
   expect(screen.queryByText(task.title)).toBeNull();
   expect(screen.getByRole('tab', { name: 'Cần làm' }).getAttribute('aria-selected')).toBe('true');
   fireEvent.click(screen.getByText('Xem tất cả'));
@@ -1079,16 +1091,18 @@ it('filters on the server, resets pagination and clears the filter from an empty
 });
 it('keeps loaded tasks during refresh, reports a transient failure and permits retry', async () => {
   let finish!: (response: Response) => void;
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(json(page([task])))
-    .mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
-    )
-    .mockResolvedValueOnce(json(page([{ ...task, title: 'Danh sách đã cập nhật' }])));
+  let listRequests = 0;
+  const fetcher = vi.fn<typeof fetch>().mockImplementation((url) => {
+    if (String(url).endsWith('/locations/assigned-to-me'))
+      return Promise.resolve(json([{ id, name: 'Cơ sở kiểm thử' }]));
+    listRequests += 1;
+    if (listRequests === 1) return Promise.resolve(json(page([task])));
+    if (listRequests === 2)
+      return new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+    return Promise.resolve(json(page([{ ...task, title: 'Danh sách đã cập nhật' }])));
+  });
   setApi(fetcher);
   render(<OperationalTasksScreen />);
   await screen.findByText(task.title);
@@ -1101,6 +1115,7 @@ it('keeps loaded tasks during refresh, reports a transient failure and permits r
   expect(screen.getByText(task.title)).toBeTruthy();
   fireEvent.click(screen.getByText('Thử lại'));
   await screen.findByText('Danh sách đã cập nhật');
+  expect(listRequests).toBe(3);
   expect(screen.queryByText('Chưa cập nhật được danh sách')).toBeNull();
 });
 it('requires result and evidence before Staff submits, blocks duplicates, and uses the current version', async () => {
@@ -1746,7 +1761,8 @@ it('validates password confirmation and keeps the session when the server reject
     target: { value: 'Synthetic-New!2026' },
   });
   fireEvent.click(screen.getByText('Đổi mật khẩu & Đăng xuất'));
-  await screen.findByText(/Không thể đổi mật khẩu/);
+  await screen.findByText(/Mật khẩu hiện tại không đúng hoặc mật khẩu mới chưa đáp ứng yêu cầu/);
+  expect(fetcher).toHaveBeenCalledTimes(1);
   expect(mocks.logout).not.toHaveBeenCalled();
   expect(mocks.replace).not.toHaveBeenCalled();
 });

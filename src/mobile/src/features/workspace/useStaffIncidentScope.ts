@@ -21,10 +21,10 @@ interface AssetPage {
 
 export function useStaffIncidentScope(
   enabled: boolean,
-  initial?: { locationId?: string; roomId?: string },
+  initial?: { locationId?: string; roomId?: string; commonArea?: string },
 ) {
   const [locationId, setLocationId] = useState(initial?.locationId ?? '');
-  const [area, setArea] = useState(initial?.roomId ?? '');
+  const [area, setArea] = useState(initial?.roomId ?? (initial?.commonArea ? 'common' : ''));
   const [assetId, setAssetId] = useState('');
   const [page, setPage] = useState(1);
   const locations = useWorkspaceQuery<Named[]>(enabled ? '/api/v1/capture/locations' : null);

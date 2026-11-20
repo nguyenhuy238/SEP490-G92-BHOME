@@ -716,7 +716,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             JOIN users u ON u.id=(a->>'staffUserId')::uuid WHERE l.id=@id AND (a->>'startDate')::date<=@today
               AND (a->>'endDate')::date>=@today AND u.is_active AND 'Staff'=ANY(u.roles) LIMIT 1
             """); command.Parameters.AddWithValue("id", locationId); command.Parameters.AddWithValue("today", today);
-        var value = await command.ExecuteScalarAsync(t); return value is Guid id ? id : null;
+        var value = await command.ExecuteScalarAsync(t);
+        return value is Guid id && await StaffEmploymentEligibility.IsEligibleAsync(db, id, today, t) ? id : null;
     }
 
     private async Task<bool> InsertRecurringTask(RecurringTaskTemplateView template, DateTimeOffset scheduled, Guid? assignee,

@@ -13,6 +13,8 @@ public sealed class AccountInvitationsController(IAccountInvitations invitations
     public Task<TenantInvitationResult> Invite(Guid id, TenantInvitationRequest input, CancellationToken t) => invitations.InviteAsync(id, input, t);
     [HttpPost("api/v1/staff/{id:guid}/invitation"), Authorize(Roles = Roles.Owner)]
     public Task<TenantInvitationResult> InviteStaff(Guid id, CancellationToken t) => invitations.InviteStaffAsync(id, t);
+    [HttpPost("api/v1/staff/{id:guid}/issue-password"), Authorize(Roles = Roles.Owner)]
+    public Task<TenantInvitationResult> IssueStaffPassword(Guid id, CancellationToken t) => invitations.IssueStaffPasswordAsync(id, t);
     [HttpPost("api/v1/auth/accept-invitation"), AllowAnonymous]
     public async Task<IActionResult> Accept(AcceptInvitationRequest input, CancellationToken t) => await invitations.AcceptAsync(input, t)
         ? NoContent() : Problem(statusCode: 400, title: "Lời mời không khả dụng.");

@@ -2,6 +2,28 @@
 
 Backend — BF-02 / FE-01 / UC-10–12 / DBR-01 / GBR-01..03,18.
 
+## Chuyển trách nhiệm giữa nhân viên phụ trách cơ sở (20/11/2026)
+
+- Công việc thuộc Location. Khi thay phân công, công việc thông thường chưa hoàn tất giữ Task ID,
+  tiến độ, bằng chứng, thời hạn và lịch sử; Staff kế nhiệm được xử lý, Staff cũ bị thu hồi quyền.
+- Staff có hợp đồng lao động chỉ đủ điều kiện khi đúng một kỳ hợp đồng bao phủ ngày nghiệp vụ ở
+  Asia/Ho_Chi_Minh và kỳ đó có trạng thái Active. Kỳ đã Ended, hết hạn, trống hoặc chồng lấn
+  bị từ chối. Với tài khoản legacy chưa có bất kỳ kỳ hợp đồng nào, hệ thống vẫn giữ điều kiện
+  tài khoản Staff đang hoạt động và phân công cơ sở còn hiệu lực để tương thích dữ liệu cũ.
+- Kiểm kê/bàn giao tài sản toàn cơ sở có biên bản và Task ID riêng theo từng kỳ phân công. Khi
+  xuất hiện một Assignment ID kế nhiệm khác, checklist cũ chưa hoàn tất được đóng với lịch sử
+  responsibility_superseded và giao diện hiển thị “Đã chuyển giao”. Không xóa tiến độ, bằng
+  chứng, biên bản hay chữ ký cũ.
+- Checklist mới chỉ kế thừa kết quả kiểm tra có định danh tài sản/phòng và thông số trùng khớp
+  nguồn Owner xác nhận. Hai trường PriorStaffTaskId / PriorStaffUserId lưu nguồn kiểm tra trước.
+  Không tự kế thừa chữ ký; mục không khớp phải kiểm tra lại. Kiểm tra lại trực tiếp sẽ ghi nhận
+  người kiểm tra mới và xóa đánh dấu kế thừa cho mục đó.
+- Khi chưa có Staff đủ điều kiện, checklist cũ giữ nguyên nhưng người không đủ quyền không
+  được thao tác. Nếu hợp đồng được gia hạn trong cùng kỳ phân công thì checklist có thể tiếp tục.
+  Chỉ khi có kỳ phân công khác thực sự tiếp nhận mới đóng checklist cũ và lập checklist mới.
+- Trong Development, đối soát phân công Location độc lập được bật mặc định 60 giây/lần khi
+  Jobs:Enabled=false. Nó không kích hoạt các job hóa đơn, thanh toán hay hợp đồng khác.
+
 Cập nhật runtime **06/11/2026**: [bàn giao](API_IMPLEMENTATION_STATUS.md),
 [danh mục route hiện tại](API_RUNTIME_ROUTES.md). Contract Task bên dưới vẫn được dùng;
 persistence đã chuyển sang Compact24. Tên entity CLR không phải tên bảng vật lý.

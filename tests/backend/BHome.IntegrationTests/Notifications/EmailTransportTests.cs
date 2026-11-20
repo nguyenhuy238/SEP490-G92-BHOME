@@ -6,7 +6,9 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Configuration;
 using BHome.Api.Configuration;
 using System.Net;
+using System.Net.Sockets;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Hosting.Internal;
 
 namespace BHome.IntegrationTests.Notifications;
 
@@ -155,6 +157,89 @@ public sealed class EmailTransportTests
         Assert.True(options.Valid());
         Assert.Equal("email_recipient_invalid", (await Assert.ThrowsAsync<ChannelDeliveryException>(() => sender.SendAsync(message, default))).Code);
         options.UseStartTls = false; Assert.False(options.Valid());
+    }
+
+    [Theory]
+    [InlineData("localhost", true)]
+    [InlineData("127.0.0.1", true)]
+    [InlineData("::1", true)]
+    [InlineData("mailpit", false)]
+    [InlineData("mailpit.example.com", false)]
+    [InlineData("0.0.0.0", false)]
+    [InlineData("192.168.1.1", false)]
+    public void CaptureRequiresLoopbackAndNeverEnablesInProduction(string host, bool valid)
+    {
+        var options = new EmailOptions
+        {
+            Enabled = true,
+            DeliveryMode = "Capture",
+            Host = host,
+            Port = 1025,
+            UseStartTls = false,
+            FromEmail = "bhome@example.invalid",
+            Username = "stale@example.invalid",
+            AppPassword = "LOCAL_SYNTHETIC_ONLY"
+        };
+        Assert.Equal(valid, options.Valid());
+        var development = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance, new HostingEnvironment { EnvironmentName = "Development" });
+        var production = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance, new HostingEnvironment { EnvironmentName = "Production" });
+        Assert.Equal(valid, development.IsConfigured);
+        Assert.False(production.IsConfigured);
+        // Local Capture always uses a plaintext loopback socket, independent of the
+        // SMTP-only UseStartTls switch. This matches the develop environment template.
+        options.UseStartTls = true;
+        Assert.Equal(valid, options.Valid());
+    }
+
+    [Fact]
+    public async Task CaptureUsesLocalPlainSmtpWithoutAuthenticationOrStartTls()
+    {
+        using var server = new TcpListener(IPAddress.Loopback, 0);
+        server.Start();
+        var port = ((IPEndPoint)server.LocalEndpoint).Port;
+        var transcript = new List<string>();
+        var probe = Task.Run(async () =>
+        {
+            using var connection = await server.AcceptTcpClientAsync();
+            using var stream = connection.GetStream();
+            using var reader = new StreamReader(stream);
+            using var writer = new StreamWriter(stream) { AutoFlush = true, NewLine = "\r\n" };
+            await writer.WriteLineAsync("220 local-smtp ready");
+            var inData = false;
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                if (inData)
+                {
+                    if (line == ".") { inData = false; await writer.WriteLineAsync("250 accepted"); }
+                    continue;
+                }
+                transcript.Add(line);
+                if (line.StartsWith("EHLO ", StringComparison.OrdinalIgnoreCase)) await writer.WriteLineAsync("250 local-smtp");
+                else if (line.StartsWith("MAIL FROM:", StringComparison.OrdinalIgnoreCase)) await writer.WriteLineAsync("250 ok");
+                else if (line.StartsWith("RCPT TO:", StringComparison.OrdinalIgnoreCase)) await writer.WriteLineAsync("250 ok");
+                else if (line == "DATA") { inData = true; await writer.WriteLineAsync("354 send message"); }
+                else if (line == "QUIT") { await writer.WriteLineAsync("221 bye"); break; }
+                else { await writer.WriteLineAsync("500 unsupported"); break; }
+            }
+        });
+        var options = new EmailOptions
+        {
+            Enabled = true,
+            DeliveryMode = "Capture",
+            Host = "127.0.0.1",
+            Port = port,
+            UseStartTls = false,
+            FromEmail = "bhome@example.invalid",
+            FromName = "BHOME"
+        };
+        var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance, new HostingEnvironment { EnvironmentName = "Testing" });
+        var receipt = await sender.SendAsync(new ChannelMessage("local-capture", "EMAIL", "tenant@example.invalid",
+            "ACCOUNT_INVITATION", "Test", "Synthetic content"), CancellationToken.None);
+        await probe.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.StartsWith("smtp-accepted:", receipt);
+        Assert.Contains(transcript, line => line.StartsWith("RCPT TO:", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(transcript, line => line.StartsWith("AUTH", StringComparison.OrdinalIgnoreCase) ||
+            line.StartsWith("STARTTLS", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
