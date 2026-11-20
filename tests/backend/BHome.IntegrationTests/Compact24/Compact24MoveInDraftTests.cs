@@ -308,9 +308,13 @@ public sealed partial class Compact24OwnerSetupTests
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             var task = new OperationalTask
             {
-                ContractId = contractId, LocationId = w.Location, TargetRoomId = w.Room,
-                Kind = OperationalTaskKind.MoveInInventory, Status = MeterTaskStatus.InProgress,
-                AssignedStaffUserId = w.Staff.Id, Title = "Synthetic inventory gate regression",
+                ContractId = contractId,
+                LocationId = w.Location,
+                TargetRoomId = w.Room,
+                Kind = OperationalTaskKind.MoveInInventory,
+                Status = MeterTaskStatus.InProgress,
+                AssignedStaffUserId = w.Staff.Id,
+                Title = "Synthetic inventory gate regression",
                 MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot("synthetic", []))
             };
             db.Entry(task).Property(x => x.Id).CurrentValue = inventoryTaskId;

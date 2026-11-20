@@ -1,4 +1,9 @@
-import { guid, type ContractClient, type HandoverAsset, type HandoverReading } from '../../../../packages/client-core/src/contracts';
+import {
+  guid,
+  type ContractClient,
+  type HandoverAsset,
+  type HandoverReading,
+} from '../../../../packages/client-core/src/contracts';
 
 export type MoveInDraftStatus = 'Draft' | 'Ready' | 'ChangesRequested' | 'Confirmed';
 
@@ -139,8 +144,7 @@ export function moveInHandover(api: ContractClient) {
       body: JSON.stringify(body),
     });
   return {
-    get: (id: string, signal?: AbortSignal) =>
-      request<MoveInDraft>(endpoint(id), { signal }),
+    get: (id: string, signal?: AbortSignal) => request<MoveInDraft>(endpoint(id), { signal }),
     uploadEvidence: (id: string, bytes: BodyInit, contentType: 'image/png' | 'image/jpeg') =>
       request<{ id: string }>(`${endpoint(id)}/evidence`, {
         method: 'POST',
@@ -166,9 +170,11 @@ export function canTenantRespondToMoveIn(draft: MoveInDraft | null): boolean {
 }
 
 export function canStaffEditMoveIn(draft: MoveInDraft | null): boolean {
-  return draft?.status === 'Draft' &&
+  return (
+    draft?.status === 'Draft' &&
     draft.moveInTask?.status === 'InProgress' &&
-    draft.moveInTask.canInspect === true;
+    draft.moveInTask.canInspect === true
+  );
 }
 
 const missingMessages: Record<string, string> = {
@@ -181,7 +187,8 @@ const missingMessages: Record<string, string> = {
   keys_and_access: 'Chưa ghi nhận số lượng chìa khóa bàn giao.',
   room_evidence: 'Chưa có ảnh bằng chứng hiện trạng phòng.',
   assets: 'Chưa kiểm kê đầy đủ các nhóm tài sản.',
-  asset_quantities_or_evidence: 'Số lượng, tình trạng hoặc ảnh bằng chứng tài sản chưa hợp lệ; Staff cần kiểm tra lại.',
+  asset_quantities_or_evidence:
+    'Số lượng, tình trạng hoặc ảnh bằng chứng tài sản chưa hợp lệ; Staff cần kiểm tra lại.',
   inventory_changed: 'Danh sách tài sản đã thay đổi; cần tải lại và kiểm kê theo danh sách mới.',
   staff_inspection: 'Staff chưa lưu kết quả kiểm tra bàn giao.',
   room_checklist: 'Chưa hoàn thành đủ 7 nhóm kiểm tra hiện trạng phòng.',
@@ -194,5 +201,7 @@ const missingMessages: Record<string, string> = {
 };
 
 export function moveInMissingMessage(code: string): string {
-  return missingMessages[code] ?? 'Còn điều kiện bàn giao chưa đạt; vui lòng tải lại hoặc liên hệ Owner.';
+  return (
+    missingMessages[code] ?? 'Còn điều kiện bàn giao chưa đạt; vui lòng tải lại hoặc liên hệ Owner.'
+  );
 }

@@ -8,7 +8,12 @@ import {
   type PreviewDocument,
 } from './contracts';
 
-export function useContractHandover(api: ContractClient, id: string, staff: boolean, autoRefreshMs = 0) {
+export function useContractHandover(
+  api: ContractClient,
+  id: string,
+  staff: boolean,
+  autoRefreshMs = 0,
+) {
   const [data, setData] = useState<{
     api: ContractClient;
     id: string;
@@ -23,7 +28,10 @@ export function useContractHandover(api: ContractClient, id: string, staff: bool
     [error, setError] = useState(''),
     [revision, setRevision] = useState(0);
   const latestData = useRef(data);
-  latestData.current = data;
+  // Update the polling snapshot after commit, never by mutating a ref in render.
+  useEffect(() => {
+    latestData.current = data;
+  }, [data]);
   const reload = useCallback(() => setRevision((value) => value + 1), []);
   useEffect(() => {
     const c = new AbortController();
@@ -60,18 +68,37 @@ export function useContractHandover(api: ContractClient, id: string, staff: bool
       const previous = latestData.current;
       // A completed handover is immutable. Do not poll an empty or unrelated
       // contract, or interrupt Staff while they are editing a form.
-      if (checking || !previous || previous.api !== api || previous.id !== id ||
-          previous.revision !== revision ||
-          previous.record?.status === 'Confirmed') return;
+      if (
+        checking ||
+        !previous ||
+        previous.api !== api ||
+        previous.id !== id ||
+        previous.revision !== revision ||
+        previous.record?.status === 'Confirmed'
+      )
+        return;
       checking = true;
-      void api.handover(id, controller.signal).then((record) => {
-        if (!controller.signal.aborted && latestData.current === previous &&
-            JSON.stringify(previous.record) !== JSON.stringify(record)) reload();
-      }).catch((failure: unknown) => {
-        // An access change must not leave a stale authorized handover visible.
-        if (!controller.signal.aborted && [401, 403, 404].includes(
-          (failure as { status?: number })?.status ?? 0)) reload();
-      }).finally(() => { checking = false; });
+      void api
+        .handover(id, controller.signal)
+        .then((record) => {
+          if (
+            !controller.signal.aborted &&
+            latestData.current === previous &&
+            JSON.stringify(previous.record) !== JSON.stringify(record)
+          )
+            reload();
+        })
+        .catch((failure: unknown) => {
+          // An access change must not leave a stale authorized handover visible.
+          if (
+            !controller.signal.aborted &&
+            [401, 403, 404].includes((failure as { status?: number })?.status ?? 0)
+          )
+            reload();
+        })
+        .finally(() => {
+          checking = false;
+        });
     }, autoRefreshMs);
     return () => {
       controller.abort();

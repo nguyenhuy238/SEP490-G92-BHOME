@@ -16,11 +16,19 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
 vi.mock('../features/workspace/useWorkspaceQuery', () => ({
   useWorkspaceQuery: (path: string | null) => {
     state.query(path);
-    const data = path === null ? undefined : path === '/api/v1/capture/locations'
-      ? state.assigned.map((id) => ({ id, label: id }))
-      : path?.endsWith('/rooms')
-        ? [{ id: path.includes('inventory-location') ? 'inventory-room' : 'working-room', label: 'Room' }]
-        : { items: [] };
+    const data =
+      path === null
+        ? undefined
+        : path === '/api/v1/capture/locations'
+          ? state.assigned.map((id) => ({ id, label: id }))
+          : path?.endsWith('/rooms')
+            ? [
+                {
+                  id: path.includes('inventory-location') ? 'inventory-room' : 'working-room',
+                  label: 'Room',
+                },
+              ]
+            : { items: [] };
     return { data, reload: state.reload };
   },
 }));
@@ -40,32 +48,45 @@ it('uses the shared Staff Location for ordinary incident reporting', () => {
 });
 
 it('keeps inventory reporting on the assigned source Location and Room', () => {
-  const { result } = renderHook(() => useStaffIncidentScope(true, {
-    locationId: 'inventory-location', roomId: 'inventory-room',
-  }));
+  const { result } = renderHook(() =>
+    useStaffIncidentScope(true, {
+      locationId: 'inventory-location',
+      roomId: 'inventory-room',
+    }),
+  );
   expect(result.current.location).toBe('inventory-location');
   expect(result.current.area).toBe('inventory-room');
   expect(state.query).toHaveBeenCalledWith('/api/v1/capture/locations/inventory-location/rooms');
 });
 
 it('stops scoped queries when the source Location assignment is revoked', () => {
-  const { result, rerender } = renderHook(() => useStaffIncidentScope(true, {
-    locationId: 'inventory-location', roomId: 'inventory-room',
-  }));
+  const { result, rerender } = renderHook(() =>
+    useStaffIncidentScope(true, {
+      locationId: 'inventory-location',
+      roomId: 'inventory-room',
+    }),
+  );
   state.assigned = ['working-location'];
   state.query.mockClear();
   rerender();
   expect(result.current.location).toBe('');
   expect(result.current.area).toBe('');
   expect(state.query.mock.calls.map(([path]) => path)).toEqual([
-    '/api/v1/capture/locations', null, null,
+    '/api/v1/capture/locations',
+    null,
+    null,
   ]);
 });
 
 it('does not select a Room outside the source Location or query when disabled', () => {
-  const { result, rerender } = renderHook(({ enabled }) => useStaffIncidentScope(enabled, {
-    locationId: 'inventory-location', roomId: 'working-room',
-  }), { initialProps: { enabled: true } });
+  const { result, rerender } = renderHook(
+    ({ enabled }) =>
+      useStaffIncidentScope(enabled, {
+        locationId: 'inventory-location',
+        roomId: 'working-room',
+      }),
+    { initialProps: { enabled: true } },
+  );
   expect(result.current.area).toBe('');
   state.query.mockClear();
   rerender({ enabled: false });

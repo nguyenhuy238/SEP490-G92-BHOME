@@ -466,9 +466,30 @@ it('displays 0/2 đã ghi, 1/2 đã ghi, and Hoàn thành progress badges with c
 
 it('keeps contract-linked Initial readings inside move-in handover while retaining ordinary meter jobs', async () => {
   tasksResponse = [
-    { ...baseElectric, id: 'initial-contract-electric', purpose: 0, contractId: 'main-contract-1', room: '102', roomId: 'room-102' },
-    { ...baseWater, id: 'initial-contract-water', purpose: 0, contractId: 'main-contract-1', room: '102', roomId: 'room-102' },
-    { ...baseElectric, id: 'initial-standalone', purpose: 0, contractId: undefined, room: '103', roomId: 'room-103' },
+    {
+      ...baseElectric,
+      id: 'initial-contract-electric',
+      purpose: 0,
+      contractId: 'main-contract-1',
+      room: '102',
+      roomId: 'room-102',
+    },
+    {
+      ...baseWater,
+      id: 'initial-contract-water',
+      purpose: 0,
+      contractId: 'main-contract-1',
+      room: '102',
+      roomId: 'room-102',
+    },
+    {
+      ...baseElectric,
+      id: 'initial-standalone',
+      purpose: 0,
+      contractId: undefined,
+      room: '103',
+      roomId: 'room-103',
+    },
     { ...baseWater, id: 'periodic-water', purpose: 1, room: '101', roomId: 'room-101' },
   ];
   render(<MeterTasksScreen />);

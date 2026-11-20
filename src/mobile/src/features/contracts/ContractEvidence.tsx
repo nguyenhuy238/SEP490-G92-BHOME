@@ -49,15 +49,19 @@ export function ContractEvidence({
     [previewUri, setPreviewUri] = useState(''),
     [thumbnailState, setThumbnailState] = useState({ key: '', uri: '', error: '' });
   const thumbnailKey = `${contractId}:${evidenceId ?? ''}`;
-  const thumbnailUri = localThumbnailUri || (thumbnailState.key === thumbnailKey ? thumbnailState.uri : '');
+  const thumbnailUri =
+    localThumbnailUri || (thumbnailState.key === thumbnailKey ? thumbnailState.uri : '');
   const thumbnailError = thumbnailState.key === thumbnailKey ? thumbnailState.error : '';
   const lock = useRef(false),
     abort = useRef<AbortController | null>(null),
     previewUrl = useRef<string | null>(null);
-  useEffect(() => () => {
-    abort.current?.abort();
-    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
-  }, []);
+  useEffect(
+    () => () => {
+      abort.current?.abort();
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+    },
+    [],
+  );
   useEffect(() => {
     if (!thumbnail || localThumbnailUri || !draftHandoverEvidence || !evidenceId) return;
     const controller = new AbortController();
@@ -75,10 +79,16 @@ export function ContractEvidence({
           const jpeg = signature[0] === 255 && signature[1] === 216 && signature[2] === 255;
           if (!png && !jpeg) throw new Error('Ảnh không phải PNG/JPEG hợp lệ.');
           if (controller.signal.aborted) return;
-          objectUrl = URL.createObjectURL(new Blob([blob], { type: png ? 'image/png' : 'image/jpeg' }));
+          objectUrl = URL.createObjectURL(
+            new Blob([blob], { type: png ? 'image/png' : 'image/jpeg' }),
+          );
           setThumbnailState({ key: thumbnailKey, uri: objectUrl, error: '' });
         } else {
-          const bytes = await api.transport<Uint8Array>(path, { signal: controller.signal }, 'bytes');
+          const bytes = await api.transport<Uint8Array>(
+            path,
+            { signal: controller.signal },
+            'bytes',
+          );
           if (controller.signal.aborted) return;
           if (bytes.length > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
           const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => bytes[i] === byte);
@@ -96,7 +106,8 @@ export function ContractEvidence({
           setThumbnailState({ key: thumbnailKey, uri: cachedPhoto.uri, error: '' });
         }
       } catch (cause) {
-        if (!controller.signal.aborted) setThumbnailState({ key: thumbnailKey, uri: '', error: contractError(cause) });
+        if (!controller.signal.aborted)
+          setThumbnailState({ key: thumbnailKey, uri: '', error: contractError(cause) });
       }
     })();
     return () => {
@@ -104,7 +115,15 @@ export function ContractEvidence({
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       if (cachedPhoto?.exists) cachedPhoto.delete();
     };
-  }, [api, contractId, evidenceId, draftHandoverEvidence, thumbnail, thumbnailKey, localThumbnailUri]);
+  }, [
+    api,
+    contractId,
+    evidenceId,
+    draftHandoverEvidence,
+    thumbnail,
+    thumbnailKey,
+    localThumbnailUri,
+  ]);
   function closePreview() {
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     previewUrl.current = null;
@@ -139,7 +158,9 @@ export function ContractEvidence({
       setPreviewUri(url);
     } catch (cause) {
       if (!controller.signal.aborted)
-        setError(cause instanceof Error && !('status' in cause) ? cause.message : contractError(cause));
+        setError(
+          cause instanceof Error && !('status' in cause) ? cause.message : contractError(cause),
+        );
     } finally {
       lock.current = false;
       if (!controller.signal.aborted) setBusy(false);
@@ -162,38 +183,39 @@ export function ContractEvidence({
               'blob',
             )
           : draftHandoverPdf
-          ? await api.transport<Blob>(
-              `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/pdf`,
-              { signal: controller.signal },
-              'blob',
-            )
-          : handoverDocumentId
-          ? await api.handoverDocument(contractId, handoverDocumentId, controller.signal)
-          : assetChangeId
-            ? await api.assetChangeEvidence(
-                contractId,
-                assetChangeId,
-                evidenceId!,
-                controller.signal,
+            ? await api.transport<Blob>(
+                `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/pdf`,
+                { signal: controller.signal },
+                'blob',
               )
-            : readingId
-              ? await api.handoverMeterEvidence(contractId, readingId, controller.signal)
-              : handover
-                ? await api.handoverEvidence(contractId, evidenceId!, controller.signal)
-                : previewId
-                  ? await api.preview(contractId, previewId, controller.signal)
-                  : pdf
-                    ? await api.document(contractId, controller.signal)
-                    : await api.evidence(contractId, evidenceId!, controller.signal);
+            : handoverDocumentId
+              ? await api.handoverDocument(contractId, handoverDocumentId, controller.signal)
+              : assetChangeId
+                ? await api.assetChangeEvidence(
+                    contractId,
+                    assetChangeId,
+                    evidenceId!,
+                    controller.signal,
+                  )
+                : readingId
+                  ? await api.handoverMeterEvidence(contractId, readingId, controller.signal)
+                  : handover
+                    ? await api.handoverEvidence(contractId, evidenceId!, controller.signal)
+                    : previewId
+                      ? await api.preview(contractId, previewId, controller.signal)
+                      : pdf
+                        ? await api.document(contractId, controller.signal)
+                        : await api.evidence(contractId, evidenceId!, controller.signal);
         if (controller.signal.aborted) return;
         const url = URL.createObjectURL(blob),
           link = document.createElement('a');
         link.href = url;
-        link.download = draftHandoverPdf || handoverDocumentId
-          ? 'bien-ban-ban-giao.pdf'
-          : pdf
-            ? 'hop-dong.pdf'
-            : 'hien-trang.jpg';
+        link.download =
+          draftHandoverPdf || handoverDocumentId
+            ? 'bien-ban-ban-giao.pdf'
+            : pdf
+              ? 'hop-dong.pdf'
+              : 'hien-trang.jpg';
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } else {
@@ -208,29 +230,29 @@ export function ContractEvidence({
               'bytes',
             )
           : draftHandoverPdf
-          ? await api.transport<Uint8Array>(
-              `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/pdf`,
-              { signal: controller.signal },
-              'bytes',
-            )
-          : handoverDocumentId
-          ? await api.handoverDocumentBytes(contractId, handoverDocumentId, controller.signal)
-          : assetChangeId
-            ? await api.assetChangeEvidenceBytes(
-                contractId,
-                assetChangeId,
-                evidenceId!,
-                controller.signal,
+            ? await api.transport<Uint8Array>(
+                `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/pdf`,
+                { signal: controller.signal },
+                'bytes',
               )
-            : readingId
-              ? await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
-              : handover
-                ? await api.handoverEvidenceBytes(contractId, evidenceId!, controller.signal)
-                : previewId
-                  ? await api.previewBytes(contractId, previewId, controller.signal)
-                  : pdf
-                    ? await api.documentBytes(contractId, controller.signal)
-                    : await api.evidenceBytes(contractId, evidenceId!, controller.signal);
+            : handoverDocumentId
+              ? await api.handoverDocumentBytes(contractId, handoverDocumentId, controller.signal)
+              : assetChangeId
+                ? await api.assetChangeEvidenceBytes(
+                    contractId,
+                    assetChangeId,
+                    evidenceId!,
+                    controller.signal,
+                  )
+                : readingId
+                  ? await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
+                  : handover
+                    ? await api.handoverEvidenceBytes(contractId, evidenceId!, controller.signal)
+                    : previewId
+                      ? await api.previewBytes(contractId, previewId, controller.signal)
+                      : pdf
+                        ? await api.documentBytes(contractId, controller.signal)
+                        : await api.evidenceBytes(contractId, evidenceId!, controller.signal);
         if (controller.signal.aborted) return;
         const directory = new Directory(Paths.cache, 'bhome-contract-downloads');
         directory.create({ idempotent: true, intermediates: true });
@@ -248,11 +270,12 @@ export function ContractEvidence({
               : bytes[0] === 137
                 ? 'image/png'
                 : 'image/jpeg',
-          dialogTitle: draftHandoverPdf || handoverDocumentId
-            ? 'Mở hoặc lưu biên bản bàn giao'
-            : pdf
-              ? 'Mở hoặc lưu hợp đồng'
-              : 'Mở hoặc lưu ảnh hiện trạng',
+          dialogTitle:
+            draftHandoverPdf || handoverDocumentId
+              ? 'Mở hoặc lưu biên bản bàn giao'
+              : pdf
+                ? 'Mở hoặc lưu hợp đồng'
+                : 'Mở hoặc lưu ảnh hiện trạng',
         });
       }
     } catch (e) {
@@ -266,10 +289,16 @@ export function ContractEvidence({
   return (
     <>
       {thumbnail ? (
-        <View style={{ width: '100%', height: 110, justifyContent: 'center', alignItems: 'center' }}>
+        <View
+          style={{ width: '100%', height: 110, justifyContent: 'center', alignItems: 'center' }}
+        >
           {thumbnailUri ? (
-            <Image source={{ uri: thumbnailUri }} accessibilityLabel={label ?? 'Ảnh hiện trạng'}
-              resizeMode="cover" style={{ width: '100%', height: 110, borderRadius: 9 }} />
+            <Image
+              source={{ uri: thumbnailUri }}
+              accessibilityLabel={label ?? 'Ảnh hiện trạng'}
+              resizeMode="cover"
+              style={{ width: '100%', height: 110, borderRadius: 9 }}
+            />
           ) : (
             <Text variant="bodySmall" style={ui.muted}>
               {thumbnailError ? 'Không xem được ảnh' : 'Đang tải ảnh…'}
@@ -277,36 +306,42 @@ export function ContractEvidence({
           )}
         </View>
       ) : (
-      <>
-      {draftHandoverEvidence && Platform.OS === 'web' ? (
         <>
-          <Button disabled={busy} loading={busy} onPress={() => previewUri ? closePreview() : void showDraftImage()}>
-            {previewUri ? 'Đóng ảnh' : (label ?? 'Xem ảnh hiện trạng')}
-          </Button>
-          {previewUri && (
-            <Image
-              source={{ uri: previewUri }}
-              accessibilityLabel={label ?? 'Ảnh bằng chứng bàn giao'}
-              resizeMode="contain"
-              style={{ width: '100%', height: 260 }}
-            />
+          {draftHandoverEvidence && Platform.OS === 'web' ? (
+            <>
+              <Button
+                disabled={busy}
+                loading={busy}
+                onPress={() => (previewUri ? closePreview() : void showDraftImage())}
+              >
+                {previewUri ? 'Đóng ảnh' : (label ?? 'Xem ảnh hiện trạng')}
+              </Button>
+              {previewUri && (
+                <Image
+                  source={{ uri: previewUri }}
+                  accessibilityLabel={label ?? 'Ảnh bằng chứng bàn giao'}
+                  resizeMode="contain"
+                  style={{ width: '100%', height: 260 }}
+                />
+              )}
+              <Button disabled={busy} onPress={() => void download()}>
+                Tải ảnh
+              </Button>
+            </>
+          ) : (
+            <Button disabled={busy} loading={busy} onPress={() => void download()}>
+              {label ??
+                (readingId
+                  ? 'Mở hoặc lưu ảnh chỉ số bàn giao'
+                  : previewId
+                    ? 'Mở hoặc lưu PDF xem trước'
+                    : pdf
+                      ? 'Mở hoặc lưu tài liệu ký'
+                      : `Mở hoặc lưu ảnh hiện trạng ${number ?? ''}`)}
+            </Button>
           )}
-          <Button disabled={busy} onPress={() => void download()}>Tải ảnh</Button>
+          {!!error && <Text style={ui.red}>{error}</Text>}
         </>
-      ) : (
-        <Button disabled={busy} loading={busy} onPress={() => void download()}>
-          {label ??
-            (readingId
-              ? 'Mở hoặc lưu ảnh chỉ số bàn giao'
-              : previewId
-                ? 'Mở hoặc lưu PDF xem trước'
-                : pdf
-                  ? 'Mở hoặc lưu tài liệu ký'
-                  : `Mở hoặc lưu ảnh hiện trạng ${number ?? ''}`)}
-        </Button>
-      )}
-      {!!error && <Text style={ui.red}>{error}</Text>}
-      </>
       )}
     </>
   );

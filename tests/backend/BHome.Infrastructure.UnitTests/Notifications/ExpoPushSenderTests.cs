@@ -143,11 +143,12 @@ public sealed class ExpoPushSenderTests
     {
         var handler = new StubHandler(_ => Task.FromResult(Json(HttpStatusCode.OK,
             $$$"""{"data":{"status":"ok","id":"{{{Ticket}}}"}}""")));
-        var email = new MailKitEmailSender(Options.Create(new EmailOptions()), NullLogger<MailKitEmailSender>.Instance);
         var sms = Substitute.For<ISmsSender>();
         sms.IsConfigured.Returns(false);
         var production = Substitute.For<IHostEnvironment>();
         production.EnvironmentName.Returns(Environments.Production);
+        var email = new MailKitEmailSender(Options.Create(new EmailOptions()),
+            NullLogger<MailKitEmailSender>.Instance, production);
         var disabledPush = Sender(handler, false);
         var channel = new NotificationChannelProvider(Options.Create(new NotificationChannelOptions()), production,
             email, disabledPush, sms);

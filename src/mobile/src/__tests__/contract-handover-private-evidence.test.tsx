@@ -16,15 +16,33 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('react-native', () => ({
-  Platform: { get OS() { return state.platform; } },
+  Platform: {
+    get OS() {
+      return state.platform;
+    },
+  },
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Image: ({ source, accessibilityLabel }: { source: { uri: string }; accessibilityLabel: string }) => (
-    <img src={source.uri} alt={accessibilityLabel} />
-  ),
+  Image: ({
+    source,
+    accessibilityLabel,
+  }: {
+    source: { uri: string };
+    accessibilityLabel: string;
+  }) => <img src={source.uri} alt={accessibilityLabel} />,
 }));
 vi.mock('react-native-paper', () => ({
-  Button: ({ children, disabled, onPress }: { children: React.ReactNode; disabled?: boolean; onPress: () => void }) => (
-    <button disabled={disabled} onClick={onPress}>{children}</button>
+  Button: ({
+    children,
+    disabled,
+    onPress,
+  }: {
+    children: React.ReactNode;
+    disabled?: boolean;
+    onPress: () => void;
+  }) => (
+    <button disabled={disabled} onClick={onPress}>
+      {children}
+    </button>
   ),
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -38,14 +56,22 @@ vi.mock('expo-sharing', () => ({
 vi.mock('expo-file-system', () => ({
   Paths: { cache: '/private-cache' },
   Directory: class {
-    create() { /* no-op: test private cache */ }
+    create() {
+      /* no-op: test private cache */
+    }
   },
   File: class {
     uri = 'file:///private-cache/temporary.pdf';
     exists = true;
-    create() { /* no-op */ }
-    write(bytes: Uint8Array) { state.write(bytes); }
-    delete() { state.remove(); }
+    create() {
+      /* no-op */
+    }
+    write(bytes: Uint8Array) {
+      state.write(bytes);
+    }
+    delete() {
+      state.remove();
+    }
   },
 }));
 
@@ -75,10 +101,17 @@ beforeEach(() => {
   state.platform = 'web';
   state.sharingAvailable.mockResolvedValue(true);
   state.share.mockResolvedValue(undefined);
-  state.transport.mockResolvedValue(browserBlob(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), 'image/png'));
-  state.handoverDocument.mockResolvedValue(new Blob([new Uint8Array([37, 80, 68, 70])], { type: 'application/pdf' }));
+  state.transport.mockResolvedValue(
+    browserBlob(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), 'image/png'),
+  );
+  state.handoverDocument.mockResolvedValue(
+    new Blob([new Uint8Array([37, 80, 68, 70])], { type: 'application/pdf' }),
+  );
   state.handoverDocumentBytes.mockResolvedValue(new Uint8Array([37, 80, 68, 70]));
-  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:private-test') });
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value: vi.fn(() => 'blob:private-test'),
+  });
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
 });
@@ -89,13 +122,23 @@ afterEach(() => {
 });
 
 it('previews and downloads an authenticated draft photo, revoking its private blob URL on close', async () => {
-  render(<ContractEvidence api={api} contractId={contractId} draftHandoverEvidence evidenceId={evidenceId} label="Xem ảnh riêng tư" />);
+  render(
+    <ContractEvidence
+      api={api}
+      contractId={contractId}
+      draftHandoverEvidence
+      evidenceId={evidenceId}
+      label="Xem ảnh riêng tư"
+    />,
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh riêng tư' }));
-  await waitFor(() => expect(state.transport).toHaveBeenCalledWith(
-    `/api/v1/contracts/${contractId}/handover/draft/evidence/${evidenceId}`,
-    { signal: expect.any(AbortSignal) },
-    'blob',
-  ));
+  await waitFor(() =>
+    expect(state.transport).toHaveBeenCalledWith(
+      `/api/v1/contracts/${contractId}/handover/draft/evidence/${evidenceId}`,
+      { signal: expect.any(AbortSignal) },
+      'blob',
+    ),
+  );
   const image = await screen.findByRole('img', { name: 'Xem ảnh riêng tư' });
   expect(image.getAttribute('src')).toBe('blob:private-test');
   expect(URL.createObjectURL).toHaveBeenCalledOnce();
@@ -109,13 +152,22 @@ it('previews and downloads an authenticated draft photo, revoking its private bl
 });
 
 it('shows a real private photo thumbnail without public URLs and cleans the browser blob on unmount', async () => {
-  const { unmount } = render(<ContractEvidence api={api} contractId={contractId}
-    draftHandoverEvidence evidenceId={evidenceId} thumbnail label="Ảnh khu vực" />);
+  const { unmount } = render(
+    <ContractEvidence
+      api={api}
+      contractId={contractId}
+      draftHandoverEvidence
+      evidenceId={evidenceId}
+      thumbnail
+      label="Ảnh khu vực"
+    />,
+  );
   const image = await screen.findByRole('img', { name: 'Ảnh khu vực' });
   expect(image.getAttribute('src')).toBe('blob:private-test');
   expect(state.transport).toHaveBeenCalledWith(
     `/api/v1/contracts/${contractId}/handover/draft/evidence/${evidenceId}`,
-    { signal: expect.any(AbortSignal) }, 'blob',
+    { signal: expect.any(AbortSignal) },
+    'blob',
   );
   expect(screen.queryByRole('button', { name: 'Tải ảnh' })).toBeNull();
   unmount();
@@ -123,9 +175,20 @@ it('shows a real private photo thumbnail without public URLs and cleans the brow
 });
 
 it('shows an unsaved photo immediately from the local preview without fetching a not-yet-linked private file', () => {
-  render(<ContractEvidence api={api} contractId={contractId} draftHandoverEvidence
-    evidenceId={evidenceId} thumbnail localThumbnailUri="blob:unsaved-photo" label="Ảnh vừa chụp" />);
-  expect(screen.getByRole('img', { name: 'Ảnh vừa chụp' }).getAttribute('src')).toBe('blob:unsaved-photo');
+  render(
+    <ContractEvidence
+      api={api}
+      contractId={contractId}
+      draftHandoverEvidence
+      evidenceId={evidenceId}
+      thumbnail
+      localThumbnailUri="blob:unsaved-photo"
+      label="Ảnh vừa chụp"
+    />,
+  );
+  expect(screen.getByRole('img', { name: 'Ảnh vừa chụp' }).getAttribute('src')).toBe(
+    'blob:unsaved-photo',
+  );
   expect(state.transport).not.toHaveBeenCalled();
 });
 
@@ -133,12 +196,21 @@ it('uses an ephemeral private cached file for native thumbnails and deletes it o
   state.platform = 'android';
   const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
   state.transport.mockResolvedValue(bytes);
-  const { unmount } = render(<ContractEvidence api={api} contractId={contractId}
-    draftHandoverEvidence evidenceId={evidenceId} thumbnail label="Ảnh trên điện thoại" />);
+  const { unmount } = render(
+    <ContractEvidence
+      api={api}
+      contractId={contractId}
+      draftHandoverEvidence
+      evidenceId={evidenceId}
+      thumbnail
+      label="Ảnh trên điện thoại"
+    />,
+  );
   expect(await screen.findByRole('img', { name: 'Ảnh trên điện thoại' })).toBeTruthy();
   expect(state.transport).toHaveBeenCalledWith(
     `/api/v1/contracts/${contractId}/handover/draft/evidence/${evidenceId}`,
-    { signal: expect.any(AbortSignal) }, 'bytes',
+    { signal: expect.any(AbortSignal) },
+    'bytes',
   );
   expect(state.write).toHaveBeenCalledWith(bytes);
   unmount();
@@ -146,13 +218,22 @@ it('uses an ephemeral private cached file for native thumbnails and deletes it o
 });
 
 it('opens the immutable PDF via authenticated final document endpoint on web', async () => {
-  render(<ContractEvidence api={api} contractId={contractId} handoverDocumentId={documentId} label="PDF cuối cùng" />);
+  render(
+    <ContractEvidence
+      api={api}
+      contractId={contractId}
+      handoverDocumentId={documentId}
+      label="PDF cuối cùng"
+    />,
+  );
   fireEvent.click(screen.getByRole('button', { name: 'PDF cuối cùng' }));
-  await waitFor(() => expect(state.handoverDocument).toHaveBeenCalledWith(
-    contractId,
-    documentId,
-    expect.any(AbortSignal),
-  ));
+  await waitFor(() =>
+    expect(state.handoverDocument).toHaveBeenCalledWith(
+      contractId,
+      documentId,
+      expect.any(AbortSignal),
+    ),
+  );
   expect(state.transport).not.toHaveBeenCalled();
   expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledOnce();
 });
@@ -161,24 +242,44 @@ it('shares protected image bytes on native and deletes the temporary file', asyn
   state.platform = 'ios';
   const bytes = new Uint8Array([137, 80, 78, 71]);
   state.transport.mockResolvedValue(bytes);
-  render(<ContractEvidence api={api} contractId={contractId} draftHandoverEvidence evidenceId={evidenceId} label="Mở ảnh" />);
+  render(
+    <ContractEvidence
+      api={api}
+      contractId={contractId}
+      draftHandoverEvidence
+      evidenceId={evidenceId}
+      label="Mở ảnh"
+    />,
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Mở ảnh' }));
-  await waitFor(() => expect(state.transport).toHaveBeenCalledWith(
-    `/api/v1/contracts/${contractId}/handover/draft/evidence/${evidenceId}`,
-    { signal: expect.any(AbortSignal) },
-    'bytes',
-  ));
-  await waitFor(() => expect(state.share).toHaveBeenCalledWith(
-    'file:///private-cache/temporary.pdf',
-    expect.objectContaining({ mimeType: 'image/png' }),
-  ));
+  await waitFor(() =>
+    expect(state.transport).toHaveBeenCalledWith(
+      `/api/v1/contracts/${contractId}/handover/draft/evidence/${evidenceId}`,
+      { signal: expect.any(AbortSignal) },
+      'bytes',
+    ),
+  );
+  await waitFor(() =>
+    expect(state.share).toHaveBeenCalledWith(
+      'file:///private-cache/temporary.pdf',
+      expect.objectContaining({ mimeType: 'image/png' }),
+    ),
+  );
   expect(state.write).toHaveBeenCalledWith(bytes);
   expect(state.remove).toHaveBeenCalledOnce();
 });
 
 it('reports restricted evidence without opening a preview or sharing private bytes', async () => {
   state.transport.mockRejectedValue({ status: 403, code: 'forbidden' });
-  render(<ContractEvidence api={api} contractId={contractId} draftHandoverEvidence evidenceId={evidenceId} label="Xem ảnh riêng tư" />);
+  render(
+    <ContractEvidence
+      api={api}
+      contractId={contractId}
+      draftHandoverEvidence
+      evidenceId={evidenceId}
+      label="Xem ảnh riêng tư"
+    />,
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh riêng tư' }));
   await waitFor(() => expect(state.transport).toHaveBeenCalledOnce());
   expect(URL.createObjectURL).not.toHaveBeenCalled();
@@ -186,8 +287,18 @@ it('reports restricted evidence without opening a preview or sharing private byt
 });
 
 it('rejects HTML masquerading as a private image instead of rendering it inline', async () => {
-  state.transport.mockResolvedValue(browserBlob(new TextEncoder().encode('<script>alert(1)</script>'), 'text/html'));
-  render(<ContractEvidence api={api} contractId={contractId} draftHandoverEvidence evidenceId={evidenceId} label="Xem ảnh riêng tư" />);
+  state.transport.mockResolvedValue(
+    browserBlob(new TextEncoder().encode('<script>alert(1)</script>'), 'text/html'),
+  );
+  render(
+    <ContractEvidence
+      api={api}
+      contractId={contractId}
+      draftHandoverEvidence
+      evidenceId={evidenceId}
+      label="Xem ảnh riêng tư"
+    />,
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Xem ảnh riêng tư' }));
   expect(await screen.findByText(/không phải PNG hoặc JPEG hợp lệ/)).toBeTruthy();
   expect(screen.queryByRole('img')).toBeNull();

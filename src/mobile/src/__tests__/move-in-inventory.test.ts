@@ -43,7 +43,9 @@ it('checks exact quantities and requires descriptions of damaged/absent assets f
       3,
     ),
   ).toBe('');
-  expect(validateInventoryItem({ actualQuantity: 2, condition: 'Damaged', notes: '' }, 3)).toMatch(/Ghi rõ/);
+  expect(validateInventoryItem({ actualQuantity: 2, condition: 'Damaged', notes: '' }, 3)).toMatch(
+    /Ghi rõ/,
+  );
   expect(
     validateInventoryItem({ actualQuantity: -1, condition: 'Missing', notes: 'Thiếu' }, 3),
   ).toMatch(/không âm/);
@@ -68,15 +70,25 @@ it('allows Good without photo and issues with photos/notes without requiring Sta
       { ...item, condition: 'Missing', actualQuantity: 2, notes: 'Thiếu một chiếc', incidentId },
     ]),
   ).toBe(true);
-  expect(readyToComplete([
-    { ...item, condition: 'Missing', actualQuantity: 2, notes: 'Thiếu một chiếc', evidenceIds: [] },
-  ])).toBe(false);
+  expect(
+    readyToComplete([
+      {
+        ...item,
+        condition: 'Missing',
+        actualQuantity: 2,
+        notes: 'Thiếu một chiếc',
+        evidenceIds: [],
+      },
+    ]),
+  ).toBe(false);
   expect(
     readyToComplete([{ ...item, condition: 'Damaged', notes: 'Gãy chân giường', incidentId }]),
   ).toBe(true);
-  expect(readyToComplete([
-    { ...item, condition: 'Damaged', notes: 'Gãy chân giường', evidenceIds: [], incidentId },
-  ])).toBe(false);
+  expect(
+    readyToComplete([
+      { ...item, condition: 'Damaged', notes: 'Gãy chân giường', evidenceIds: [], incidentId },
+    ]),
+  ).toBe(false);
   expect(readyToComplete([{ ...item, condition: 'Damaged', notes: '' }])).toBe(false);
   // Empty configured asset list uses a separate explicit confirmNoAssets checkbox.
   expect(readyToComplete([])).toBe(true);

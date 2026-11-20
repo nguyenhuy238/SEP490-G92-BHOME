@@ -340,7 +340,9 @@ it('keeps a compact Staff header and scrollable move-in content at 320px', () =>
   expect(screen.getByTestId('shell-scroll')).toBeTruthy();
   expect(screen.getAllByRole('tab')).toHaveLength(4);
   expect(view.container.querySelector('main')?.getAttribute('data-edges')).toBe('top,left,right');
-  expect(screen.getByText('BHOME Nhân viên').parentElement?.parentElement?.parentElement?.style.width).not.toBe('0px');
+  expect(
+    screen.getByText('BHOME Nhân viên').parentElement?.parentElement?.parentElement?.style.width,
+  ).not.toBe('0px');
 });
 function ProfileEditFooterProbe() {
   useWorkspaceHeaderRefresh(state.leave, false, {

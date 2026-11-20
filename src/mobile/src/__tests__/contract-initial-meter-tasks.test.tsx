@@ -158,10 +158,16 @@ it('updates both meter statuses from the server after OCR returns without a manu
     task('electric', 0, { status: confirmed ? 2 : 0 }),
     task('water', 1, { status: confirmed ? 2 : 0 }),
   ]);
-  const page = render(<ContractInitialMeterTasks contract={contract} integrated refreshRevision={0} />);
+  const page = render(
+    <ContractInitialMeterTasks contract={contract} integrated refreshRevision={0} />,
+  );
   expect(await screen.findByRole('button', { name: 'Chụp chỉ số điện' })).toBeTruthy();
   expect(screen.getAllByText('Chưa xác nhận')).toHaveLength(2);
-  expect(screen.queryByRole('button', { name: /Cập nhật trạng thái điện nước|Tải lại nhiệm vụ khởi tạo/ })).toBeNull();
+  expect(
+    screen.queryByRole('button', {
+      name: /Cập nhật trạng thái điện nước|Tải lại nhiệm vụ khởi tạo/,
+    }),
+  ).toBeNull();
   confirmed = true;
   page.rerender(<ContractInitialMeterTasks contract={contract} integrated refreshRevision={1} />);
   expect(await screen.findByRole('button', { name: 'Xem chỉ số điện' })).toBeTruthy();

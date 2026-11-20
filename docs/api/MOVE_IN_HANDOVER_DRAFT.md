@@ -23,38 +23,38 @@ Khi hợp đồng có tác vụ `MoveInInventory`, Owner chỉ có thể đánh 
 
 ## Mẫu biên bản và nguồn dữ liệu
 
-| Mục trong PDF | Nguồn dữ liệu |
-| --- | --- |
-| Cơ sở, địa chỉ, phòng | Contract → Room → Location |
-| Thời hạn, tiền thuê, cọc, điều khoản | Snapshot/thông tin hợp đồng đã lưu |
-| Chỉ số điện/nước khởi tạo | MeterReading của task `Initial` *đúng Contract*, ảnh/hashes đã xác nhận |
-| Nhóm tài sản, số dự kiến/số thực giao, tình trạng và ghi chú | RoomInventoryReview + Staff inspection theo group ID/physical ID, không đoán từ tên |
-| Tình trạng phòng, ảnh kiểm tra khu vực | Staff cập nhật Draft, evidence private theo từng `roomChecks[].evidenceIds` |
-| Checklist tường/trần/sàn; cửa/khóa; điện/đèn/ổ cắm; nước/thoát nước; nhà vệ sinh; vệ sinh; thiết bị an toàn | `roomChecks[]` với `code`, `status=Passed/Issue/NotApplicable`, `notes`, `evidenceIds`; không suy đoán từ ô ghi chú chung |
-| Một loại chìa khóa bàn giao (số lượng thực tế) | `accessItems:[{type:"RoomKey",quantity,notes}]`; số lượng từ 0–100, ghi chú tùy chọn (bắt buộc ghi lý do nếu số lượng là 0) |
-| Ảnh chìa khóa bàn giao | `keyEvidenceIds[]` tùy chọn từ evidence private (0–5 ảnh), không lẫn với ảnh hiện trạng/kiểm kê |
-| Phát hiện bất thường | `roomChecks[]` status `Issue` + mô tả/ảnh thật từ Staff. Owner quyết định ngoại lệ qua `reason` và `handlingPlan` khi Ready; trường `outstandingIssues` cũ chỉ giữ để đọc biên bản lịch sử |
-| Chủ thể xác nhận, thời điểm, ngoại lệ, yêu cầu sửa | Owner/Tenant actor + version/audit events |
-| Chữ ký | **Chưa triển khai**; không giả lập chữ ký số |
+| Mục trong PDF                                                                                               | Nguồn dữ liệu                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cơ sở, địa chỉ, phòng                                                                                       | Contract → Room → Location                                                                                                                                                                 |
+| Thời hạn, tiền thuê, cọc, điều khoản                                                                        | Snapshot/thông tin hợp đồng đã lưu                                                                                                                                                         |
+| Chỉ số điện/nước khởi tạo                                                                                   | MeterReading của task `Initial` _đúng Contract_, ảnh/hashes đã xác nhận                                                                                                                    |
+| Nhóm tài sản, số dự kiến/số thực giao, tình trạng và ghi chú                                                | RoomInventoryReview + Staff inspection theo group ID/physical ID, không đoán từ tên                                                                                                        |
+| Tình trạng phòng, ảnh kiểm tra khu vực                                                                      | Staff cập nhật Draft, evidence private theo từng `roomChecks[].evidenceIds`                                                                                                                |
+| Checklist tường/trần/sàn; cửa/khóa; điện/đèn/ổ cắm; nước/thoát nước; nhà vệ sinh; vệ sinh; thiết bị an toàn | `roomChecks[]` với `code`, `status=Passed/Issue/NotApplicable`, `notes`, `evidenceIds`; không suy đoán từ ô ghi chú chung                                                                  |
+| Một loại chìa khóa bàn giao (số lượng thực tế)                                                              | `accessItems:[{type:"RoomKey",quantity,notes}]`; số lượng từ 0–100, ghi chú tùy chọn (bắt buộc ghi lý do nếu số lượng là 0)                                                                |
+| Ảnh chìa khóa bàn giao                                                                                      | `keyEvidenceIds[]` tùy chọn từ evidence private (0–5 ảnh), không lẫn với ảnh hiện trạng/kiểm kê                                                                                            |
+| Phát hiện bất thường                                                                                        | `roomChecks[]` status `Issue` + mô tả/ảnh thật từ Staff. Owner quyết định ngoại lệ qua `reason` và `handlingPlan` khi Ready; trường `outstandingIssues` cũ chỉ giữ để đọc biên bản lịch sử |
+| Chủ thể xác nhận, thời điểm, ngoại lệ, yêu cầu sửa                                                          | Owner/Tenant actor + version/audit events                                                                                                                                                  |
+| Chữ ký                                                                                                      | **Chưa triển khai**; không giả lập chữ ký số                                                                                                                                               |
 
 ## API
 
 Tất cả đường dẫn dưới `/api/v1/contracts/{id}/`. GET có Bearer và object scope; POST JSON cần `Idempotency-Key: <uuid>` đúng chuẩn hợp đồng. Sai role 403, ngoài scope 404, stale version/điều kiện 409, input sai 400, ảnh >5 MB 413.
 
-| Method | Đường dẫn | Vai trò / chức năng |
-| --- | --- | --- |
-| GET | `handover/draft` | Owner/Staff/Tenant được phép: DTO snapshot, `status`, `version`, `missing[]`, `requests[]`, `moveInTask?: {id,status,version,canInspect}`. `canInspect=true` chỉ khi Staff đang được giao đã bắt đầu nhiệm vụ |
-| GET | `handover/draft/pdf` | Bản PDF **nháp**, xem/tải authenticated |
-| POST | `handover/draft` | Staff chỉ khi `moveInTask.canInspect`: `{version,roomCondition?,notes?,assets?,evidenceIds?,keyEvidenceIds?,inventoryToken?,roomChecks?,accessItems?}`. `roomChecks` merge theo code, `accessItems` thay cả danh sách (chỉ một `RoomKey`); `keyEvidenceIds` tối đa 5 ảnh private, không trùng ảnh phòng/tài sản; `outstandingIssues:[]` từ client cũ chỉ xóa dữ liệu đề xuất cũ, gửi phần tử mới bị từ chối `staff_repair_decision_forbidden` |
-| POST | `handover/draft/evidence` | Staff chỉ khi `moveInTask.canInspect`: raw PNG/JPEG, tối đa 5 MB; trả `{id}` |
-| POST | `/api/v1/operational-tasks/{moveInTask.id}/start` | Staff đã được giao: `{version:moveInTask.version}` + Idempotency-Key. Phải bắt đầu trước kiểm kê/tải ảnh; không thay phiên bản Draft |
-| GET | `handover/draft/evidence/{fileId}` | Xem ảnh đã gắn vào đúng Draft, kiểm file, scope và hash |
-| POST | `handover/draft/ready` | Owner: `{version,reason?,handlingPlan?}`; hai trường sau bắt buộc nếu có ngoại lệ |
-| POST | `handover/draft/requests` | Tenant: `{version,reason}` |
-| POST | `handover/draft/requests/{requestId}/decision` | Owner: `{version,accepted,reason}` |
-| POST | `handover/draft/tenant-confirmation` | Tenant: `{version,note?}`; lưu final PDF đúng phiên bản |
-| GET | `handover/documents` | Bản final `kind=MoveInReport` trong các tài liệu hợp đồng |
-| GET | `handover/documents/{documentId}` | PDF bất biến, kiểm quyền + hash/length (giữ endpoint hiện có) |
+| Method | Đường dẫn                                         | Vai trò / chức năng                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `handover/draft`                                  | Owner/Staff/Tenant được phép: DTO snapshot, `status`, `version`, `missing[]`, `requests[]`, `moveInTask?: {id,status,version,canInspect}`. `canInspect=true` chỉ khi Staff đang được giao đã bắt đầu nhiệm vụ                                                                                                                                                                                                                                 |
+| GET    | `handover/draft/pdf`                              | Bản PDF **nháp**, xem/tải authenticated                                                                                                                                                                                                                                                                                                                                                                                                       |
+| POST   | `handover/draft`                                  | Staff chỉ khi `moveInTask.canInspect`: `{version,roomCondition?,notes?,assets?,evidenceIds?,keyEvidenceIds?,inventoryToken?,roomChecks?,accessItems?}`. `roomChecks` merge theo code, `accessItems` thay cả danh sách (chỉ một `RoomKey`); `keyEvidenceIds` tối đa 5 ảnh private, không trùng ảnh phòng/tài sản; `outstandingIssues:[]` từ client cũ chỉ xóa dữ liệu đề xuất cũ, gửi phần tử mới bị từ chối `staff_repair_decision_forbidden` |
+| POST   | `handover/draft/evidence`                         | Staff chỉ khi `moveInTask.canInspect`: raw PNG/JPEG, tối đa 5 MB; trả `{id}`                                                                                                                                                                                                                                                                                                                                                                  |
+| POST   | `/api/v1/operational-tasks/{moveInTask.id}/start` | Staff đã được giao: `{version:moveInTask.version}` + Idempotency-Key. Phải bắt đầu trước kiểm kê/tải ảnh; không thay phiên bản Draft                                                                                                                                                                                                                                                                                                          |
+| GET    | `handover/draft/evidence/{fileId}`                | Xem ảnh đã gắn vào đúng Draft, kiểm file, scope và hash                                                                                                                                                                                                                                                                                                                                                                                       |
+| POST   | `handover/draft/ready`                            | Owner: `{version,reason?,handlingPlan?}`; hai trường sau bắt buộc nếu có ngoại lệ                                                                                                                                                                                                                                                                                                                                                             |
+| POST   | `handover/draft/requests`                         | Tenant: `{version,reason}`                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| POST   | `handover/draft/requests/{requestId}/decision`    | Owner: `{version,accepted,reason}`                                                                                                                                                                                                                                                                                                                                                                                                            |
+| POST   | `handover/draft/tenant-confirmation`              | Tenant: `{version,note?}`; lưu final PDF đúng phiên bản                                                                                                                                                                                                                                                                                                                                                                                       |
+| GET    | `handover/documents`                              | Bản final `kind=MoveInReport` trong các tài liệu hợp đồng                                                                                                                                                                                                                                                                                                                                                                                     |
+| GET    | `handover/documents/{documentId}`                 | PDF bất biến, kiểm quyền + hash/length (giữ endpoint hiện có)                                                                                                                                                                                                                                                                                                                                                                                 |
 
 Ví dụ Staff lưu tiến độ từng mục:
 
@@ -62,13 +62,31 @@ Ví dụ Staff lưu tiến độ từng mục:
 {
   "version": 3,
   "roomCondition": "Tường và sàn đã kiểm tra, cửa hoạt động tốt",
-  "assets": [{"id": "<group-uuid>", "condition": "Tốt", "checked": true,
-    "observedQuantity": 2, "handedOverQuantity": 2,
-    "goodQuantity": 2, "wornQuantity": 0, "damagedQuantity": 0,
-    "missingQuantity": 0, "notes": "Đã đối chiếu thực tế", "evidenceIds": []}],
+  "assets": [
+    {
+      "id": "<group-uuid>",
+      "condition": "Tốt",
+      "checked": true,
+      "observedQuantity": 2,
+      "handedOverQuantity": 2,
+      "goodQuantity": 2,
+      "wornQuantity": 0,
+      "damagedQuantity": 0,
+      "missingQuantity": 0,
+      "notes": "Đã đối chiếu thực tế",
+      "evidenceIds": []
+    }
+  ],
   "inventoryToken": "<token-from-GET>",
-  "roomChecks": [{"code":"walls_ceiling_floor","status":"Passed","notes":"Không ghi nhận nứt/vỡ","evidenceIds":[]}],
-  "accessItems": [{"type":"RoomKey","quantity":2,"notes":"Đã kiểm đếm"}],
+  "roomChecks": [
+    {
+      "code": "walls_ceiling_floor",
+      "status": "Passed",
+      "notes": "Không ghi nhận nứt/vỡ",
+      "evidenceIds": []
+    }
+  ],
+  "accessItems": [{ "type": "RoomKey", "quantity": 2, "notes": "Đã kiểm đếm" }],
   "keyEvidenceIds": ["<key-photo-uuid>"]
 }
 ```

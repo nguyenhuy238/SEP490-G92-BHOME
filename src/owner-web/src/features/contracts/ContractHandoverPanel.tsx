@@ -69,7 +69,8 @@ function LegacyContractHandoverPanel({ api, id }: { api: ContractClient; id: str
     !h &&
     !query.data?.documents?.length &&
     !query.data?.history?.length
-  ) return null;
+  )
+    return null;
   return (
     <ChartCard
       title="Lịch sử và bằng chứng bàn giao (UC-17)"
@@ -106,8 +107,8 @@ function LegacyContractHandoverPanel({ api, id }: { api: ContractClient; id: str
               <>
                 <Typography variant="subtitle2">Xem xét ngoại lệ hiện trạng</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Nếu kết quả kiểm kê có sai khác, Owner có thể chấp nhận kèm lý do và phương án xử lý,
-                  hoặc yêu cầu Staff kiểm tra lại. Mỗi quyết định tạo phiên bản mới.
+                  Nếu kết quả kiểm kê có sai khác, Owner có thể chấp nhận kèm lý do và phương án xử
+                  lý, hoặc yêu cầu Staff kiểm tra lại. Mỗi quyết định tạo phiên bản mới.
                 </Typography>
                 <TextField
                   label="Lý do quyết định ngoại lệ bàn giao"
@@ -159,15 +160,17 @@ function LegacyContractHandoverPanel({ api, id }: { api: ContractClient; id: str
                 />
               )),
             )}
-            {[h.snapshot?.electricity, h.snapshot?.water].filter((reading) => !!reading?.id).map((reading, i) => (
-              <PrivateEvidenceViewer
-                key={reading.id}
-                label={`Ảnh chỉ số ${i === 0 ? 'điện' : 'nước'}`}
-                filename={`chi-so-ban-giao-${i + 1}.jpg`}
-                fetchBlob={(signal) => api.handoverMeterEvidence(sourceId, reading.id, signal)}
-                errorMessage={contractError}
-              />
-            ))}
+            {[h.snapshot?.electricity, h.snapshot?.water]
+              .filter((reading) => !!reading?.id)
+              .map((reading, i) => (
+                <PrivateEvidenceViewer
+                  key={reading.id}
+                  label={`Ảnh chỉ số ${i === 0 ? 'điện' : 'nước'}`}
+                  filename={`chi-so-ban-giao-${i + 1}.jpg`}
+                  fetchBlob={(signal) => api.handoverMeterEvidence(sourceId, reading.id, signal)}
+                  errorMessage={contractError}
+                />
+              ))}
           </>
         )}
         {query.data?.history.map((event, i) => (

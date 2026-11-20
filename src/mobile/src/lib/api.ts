@@ -150,9 +150,12 @@ export function errorMessage(error: unknown): string {
       requestDiagnostic(error)
     );
   const messages: Record<string, string> = {
-    development_seed_unavailable: 'Tính năng sinh hợp đồng mẫu chỉ dùng được trên Backend Development với DB local và đã bật cấu hình kiểm thử.',
-    development_seed_password_not_configured: 'Backend chưa cấu hình mật khẩu Tenant mẫu trong môi trường Development local.',
-    development_seed_account_creation_failed: 'Không tạo được tài khoản Tenant mẫu. Hãy kiểm tra cấu hình mật khẩu trong Backend.',
+    development_seed_unavailable:
+      'Tính năng sinh hợp đồng mẫu chỉ dùng được trên Backend Development với DB local và đã bật cấu hình kiểm thử.',
+    development_seed_password_not_configured:
+      'Backend chưa cấu hình mật khẩu Tenant mẫu trong môi trường Development local.',
+    development_seed_account_creation_failed:
+      'Không tạo được tài khoản Tenant mẫu. Hãy kiểm tra cấu hình mật khẩu trong Backend.',
     resident_email_already_associated:
       'Email này đã gắn với một hồ sơ người ở. Hãy kiểm tra hồ sơ đã có hoặc sửa email nếu nhập nhầm.',
     resident_email_required: 'Mỗi người ở cần một email riêng hợp lệ.',

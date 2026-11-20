@@ -77,7 +77,8 @@ export function MoveInInventoryReport({
           Báo cáo kiểm kê trước bàn giao
         </Typography>
         <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-          Staff ghi nhận số lượng, tình trạng và ảnh. Owner xem kết quả để quyết định phương án xử lý khi duyệt bàn giao.
+          Staff ghi nhận số lượng, tình trạng và ảnh. Owner xem kết quả để quyết định phương án xử
+          lý khi duyệt bàn giao.
         </Typography>
       </Box>
       <OwnerFeedback busy={report.isFetching} error={report.error} />
@@ -120,7 +121,8 @@ export function MoveInInventoryReport({
           </Stack>
           {issues.length > 0 && (
             <Alert severity="warning" variant="outlined">
-              Có tài sản thiếu hoặc hư hỏng. Owner cần xem ảnh, ghi chú và đưa ra quyết định xử lý khi duyệt bàn giao.
+              Có tài sản thiếu hoặc hư hỏng. Owner cần xem ảnh, ghi chú và đưa ra quyết định xử lý
+              khi duyệt bàn giao.
             </Alert>
           )}
           {data.items.length === 0 && (
@@ -180,7 +182,9 @@ export function MoveInInventoryReport({
                       </Button>
                     )}
                     {hasIssue && !item.incidentId && (
-                      <Alert severity="info">Vấn đề đã được Staff ghi nhận trong biên bản để Owner xem xét.</Alert>
+                      <Alert severity="info">
+                        Vấn đề đã được Staff ghi nhận trong biên bản để Owner xem xét.
+                      </Alert>
                     )}
                     <Box>
                       <Typography sx={{ fontWeight: 600, fontSize: 13, mb: 1 }}>

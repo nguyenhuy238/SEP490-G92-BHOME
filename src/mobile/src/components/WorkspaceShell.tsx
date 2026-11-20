@@ -173,7 +173,13 @@ export function WorkspaceShell({
       edges={['top', 'left', 'right']}
     >
       <StatusBar style="light" />
-      <View style={[styles.header, tenantHomeLayout && styles.tenantHeader, narrowStaff && styles.narrowHeader]}>
+      <View
+        style={[
+          styles.header,
+          tenantHomeLayout && styles.tenantHeader,
+          narrowStaff && styles.narrowHeader,
+        ]}
+      >
         <TouchableRipple
           onPress={() =>
             go(
@@ -191,11 +197,25 @@ export function WorkspaceShell({
           style={ui.grow}
         >
           <View style={ui.row}>
-            <View style={[styles.logo, tenantHomeLayout && styles.tenantLogo, narrowStaff && styles.narrowLogo]}>
-              <Icon source="home-roof" size={tenantHomeLayout ? 24 : narrowStaff ? 26 : 32} color={s.blue} />
+            <View
+              style={[
+                styles.logo,
+                tenantHomeLayout && styles.tenantLogo,
+                narrowStaff && styles.narrowLogo,
+              ]}
+            >
+              <Icon
+                source="home-roof"
+                size={tenantHomeLayout ? 24 : narrowStaff ? 26 : 32}
+                color={s.blue}
+              />
             </View>
             <View style={ui.grow}>
-              <Text variant={tenantHomeLayout || narrowStaff ? 'titleMedium' : 'titleLarge'} numberOfLines={1} style={ui.white}>
+              <Text
+                variant={tenantHomeLayout || narrowStaff ? 'titleMedium' : 'titleLarge'}
+                numberOfLines={1}
+                style={ui.white}
+              >
                 {tenantHomeLayout
                   ? 'BHOME'
                   : `BHOME ${staff ? 'Nhân viên' : role === 'Tenant' ? 'Khách thuê' : 'Chủ cơ sở'}`}
@@ -290,7 +310,12 @@ export function WorkspaceShell({
               tenantInvoice && { gap: 12, paddingTop: 8 },
               tenantHomeLayout && { gap: 20, paddingTop: 12 },
               screen === 'meter-reading' && { gap: 12, paddingTop: 8 },
-              staff && screen === 'move-in' && { gap: 12, paddingTop: 12, paddingHorizontal: width <= 380 ? 10 : 16 },
+              staff &&
+                screen === 'move-in' && {
+                  gap: 12,
+                  paddingTop: 12,
+                  paddingHorizontal: width <= 380 ? 10 : 16,
+                },
               screen === 'rooms' && { gap: 12, paddingTop: 8, paddingBottom: 100 },
             ]}
             keyboardShouldPersistTaps="handled"

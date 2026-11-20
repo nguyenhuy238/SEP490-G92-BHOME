@@ -34,7 +34,7 @@ public sealed class HandoverDraftStateTests
         var keyPhoto = Guid.NewGuid();
         var initial = HandoverDraftState.Create(new Contract { SnapshotHash = "first" },
             new DateTimeOffset(2026, 11, 19, 5, 0, 0, TimeSpan.Zero)) with
-            { KeyEvidenceIds = [keyPhoto] };
+        { KeyEvidenceIds = [keyPhoto] };
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var json = JsonSerializer.Serialize(initial, options);
         var deserialized = JsonSerializer.Deserialize<HandoverDraftState>(json, options);

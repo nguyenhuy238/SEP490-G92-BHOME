@@ -10,7 +10,10 @@ import { MainDraftScreen } from '../features/contracts/MainDraftScreen';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useSession } from '../lib/SessionProvider';
 import { captureService } from '../services/captureService';
-import { seedDevelopmentContract, type DevelopmentOnboardingSeedResult } from '../services/developmentSeedService';
+import {
+  seedDevelopmentContract,
+  type DevelopmentOnboardingSeedResult,
+} from '../services/developmentSeedService';
 import { errorMessage, MobileApiError } from '../lib/api';
 import { useCaptureScope } from '../features/onboarding/useCaptureScope';
 import { IdentityPersonCard } from '../features/onboarding/IdentityPersonCard';
@@ -377,19 +380,25 @@ function NewResidentOnboarding() {
             <View style={styles.seedPanel}>
               <Text variant="titleMedium">Tạo nhanh dữ liệu kiểm thử</Text>
               <Text style={ui.muted}>
-                Tạo phòng mới, tài khoản Tenant mẫu và hợp đồng đang hiệu lực tại cơ sở này.
-                Hệ thống sẽ giao nhiệm vụ ghi chỉ số điện/nước ban đầu cho Staff.
+                Tạo phòng mới, tài khoản Tenant mẫu và hợp đồng đang hiệu lực tại cơ sở này. Hệ
+                thống sẽ giao nhiệm vụ ghi chỉ số điện/nước ban đầu cho Staff.
               </Text>
               <Button
                 mode="outlined"
                 icon="auto-fix"
                 loading={seedBusy}
-                disabled={seedBusy || busy || !scope.location || scope.loading || !!scope.error || created}
+                disabled={
+                  seedBusy || busy || !scope.location || scope.loading || !!scope.error || created
+                }
                 onPress={() => void createSyntheticContract()}
               >
                 Sinh hợp đồng mẫu
               </Button>
-              {!!seedError && <Text accessibilityRole="alert" style={ui.red}>{seedError}</Text>}
+              {!!seedError && (
+                <Text accessibilityRole="alert" style={ui.red}>
+                  {seedError}
+                </Text>
+              )}
               {seedResult && (
                 <View style={styles.seedResult}>
                   <Text variant="titleMedium">Đã tạo hợp đồng mẫu thành công</Text>
@@ -398,18 +407,33 @@ function NewResidentOnboarding() {
                   <Text>Khách thuê: {seedResult.tenantName}</Text>
                   <Text selectable>Tài khoản Tenant: {seedResult.tenantEmail}</Text>
                   <Text selectable>Mật khẩu Tenant test: {seedResult.tenantPassword}</Text>
-                  <Text>{seedResult.initialMeterTasks} nhiệm vụ khởi tạo điện/nước đang chờ Staff thực hiện.</Text>
-                  <Text style={ui.muted}>Chỉ dùng dữ liệu giả lập trên DB Development local. Không có chữ ký hoặc thanh toán thật.</Text>
-                  <Button mode="contained" onPress={() => {
-                    dirtyRef.current = false;
-                    setFinished(true);
-                    go('meter-reading');
-                  }}>Mở nhiệm vụ ghi chỉ số</Button>
-                  <Button onPress={() => {
-                    dirtyRef.current = false;
-                    setFinished(true);
-                    go('move-in', { contractId: seedResult.contractId, section: 'handover' });
-                  }}>Mở nhiệm vụ bàn giao phòng</Button>
+                  <Text>
+                    {seedResult.initialMeterTasks} nhiệm vụ khởi tạo điện/nước đang chờ Staff thực
+                    hiện.
+                  </Text>
+                  <Text style={ui.muted}>
+                    Chỉ dùng dữ liệu giả lập trên DB Development local. Không có chữ ký hoặc thanh
+                    toán thật.
+                  </Text>
+                  <Button
+                    mode="contained"
+                    onPress={() => {
+                      dirtyRef.current = false;
+                      setFinished(true);
+                      go('meter-reading');
+                    }}
+                  >
+                    Mở nhiệm vụ ghi chỉ số
+                  </Button>
+                  <Button
+                    onPress={() => {
+                      dirtyRef.current = false;
+                      setFinished(true);
+                      go('move-in', { contractId: seedResult.contractId, section: 'handover' });
+                    }}
+                  >
+                    Mở nhiệm vụ bàn giao phòng
+                  </Button>
                 </View>
               )}
             </View>

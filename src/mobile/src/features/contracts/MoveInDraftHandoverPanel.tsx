@@ -1,8 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { Directory, File, Paths } from 'expo-file-system';
-import { Button, Checkbox, Icon, IconButton, ProgressBar, RadioButton, SegmentedButtons, Text, TouchableRipple } from 'react-native-paper';
+import {
+  Button,
+  Checkbox,
+  Icon,
+  IconButton,
+  ProgressBar,
+  RadioButton,
+  SegmentedButtons,
+  Text,
+  TouchableRipple,
+} from 'react-native-paper';
 import {
   contractError,
   displayContractDate,
@@ -43,7 +61,11 @@ import { ContractEvidence } from './ContractEvidence';
 import { HandoverAssetFields } from './HandoverAssetFields';
 import { MeterTaskScreen } from '../../app/meter';
 import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
-import { inventoryStatusLabels, type MoveInInventory, type MoveInInventoryItem } from '../../services/moveInInventory';
+import {
+  inventoryStatusLabels,
+  type MoveInInventory,
+  type MoveInInventoryItem,
+} from '../../services/moveInInventory';
 import { colors } from '../../theme/theme';
 
 const statusLabels = {
@@ -60,10 +82,23 @@ const roomStatusLabels: Record<MoveInRoomCheckStatus, string> = {
 };
 
 const staffSteps = [
-  { title: 'Ghi chỉ số điện nước', detail: 'Chụp từng công tơ, kiểm tra OCR và xác nhận chỉ số thật.' },
-  { title: 'Kiểm tra hiện trạng phòng', detail: 'Chọn kết quả thực tế cho 7 khu vực. Có vấn đề thì ghi chú và chụp ảnh.' },
-  { title: 'Kiểm kê tài sản', detail: 'Kiểm kê một lần trong Đối chiếu đầu vào; danh sách bên dưới chỉ hiển thị kết quả đã lưu.' },
-  { title: 'Chìa khóa bàn giao', detail: 'Ghi số lượng chìa khóa thực giao và chụp ảnh chìa khóa.' },
+  {
+    title: 'Ghi chỉ số điện nước',
+    detail: 'Chụp từng công tơ, kiểm tra OCR và xác nhận chỉ số thật.',
+  },
+  {
+    title: 'Kiểm tra hiện trạng phòng',
+    detail: 'Chọn kết quả thực tế cho 7 khu vực. Có vấn đề thì ghi chú và chụp ảnh.',
+  },
+  {
+    title: 'Kiểm kê tài sản',
+    detail:
+      'Kiểm kê một lần trong Đối chiếu đầu vào; danh sách bên dưới chỉ hiển thị kết quả đã lưu.',
+  },
+  {
+    title: 'Chìa khóa bàn giao',
+    detail: 'Ghi số lượng chìa khóa thực giao và chụp ảnh chìa khóa.',
+  },
 ] as const;
 
 const wizardStyles = StyleSheet.create({
@@ -75,29 +110,48 @@ const wizardStyles = StyleSheet.create({
   divider: { height: 1, backgroundColor: colors.border },
   workList: { gap: 8 },
   workRow: {
-    borderWidth: 1, borderColor: colors.border, backgroundColor: '#ffffff',
-    borderRadius: 12, padding: 14, minHeight: 66, flexShrink: 0,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 14,
+    minHeight: 66,
+    flexShrink: 0,
   },
   rowContent: { flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
   rowText: { flex: 1, minWidth: 0, gap: 3 },
   rowTitle: { fontWeight: '700', color: '#14213d' },
   rowDetail: { color: '#5a6a84', lineHeight: 19, flexShrink: 1 },
   modalOverlay: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
-    backgroundColor: 'rgba(13, 26, 49, 0.62)', padding: 12,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(13, 26, 49, 0.62)',
+    padding: 12,
   },
   modalCard: {
-    width: '100%', maxWidth: 620, maxHeight: '93%', borderRadius: 16,
-    backgroundColor: '#ffffff', overflow: 'hidden',
+    width: '100%',
+    maxWidth: 620,
+    maxHeight: '93%',
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    overflow: 'hidden',
   },
   modalHeader: {
-    paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.border, gap: 8,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: 8,
   },
   modalBody: { padding: 18, paddingBottom: 30, gap: 14 },
   modalFooter: {
-    flexDirection: 'row', gap: 8, padding: 12,
-    borderTopWidth: 1, borderTopColor: colors.border,
+    flexDirection: 'row',
+    gap: 8,
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   phoneRoot: { padding: 12, gap: 12, minWidth: 0 },
   phoneWorkRow: { padding: 10, minHeight: 62 },
@@ -115,41 +169,70 @@ const wizardStyles = StyleSheet.create({
   conditionSelected: { backgroundColor: colors.tint, borderColor: colors.blue },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   photoTile: {
-    width: '47%', minWidth: 116, maxWidth: 210, flexGrow: 1,
-    borderRadius: 12, borderWidth: 1, borderColor: colors.border,
-    backgroundColor: '#ffffff', padding: 4, overflow: 'hidden',
+    width: '47%',
+    minWidth: 116,
+    maxWidth: 210,
+    flexGrow: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#ffffff',
+    padding: 4,
+    overflow: 'hidden',
   },
   removePhoto: {
-    position: 'absolute', top: 2, right: 2, margin: 0, width: 36, height: 36,
-    backgroundColor: '#ffffff', borderRadius: 18,
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    margin: 0,
+    width: 36,
+    height: 36,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
   },
 });
 
 function hasCompleteRoomInspection(value: MoveInDraft): boolean {
-  return !!value.roomCondition?.trim() && roomHandoverChecks.every(({ code }) => {
-    const matches = (value.roomChecks ?? []).filter((check) => check.code === code);
-    if (matches.length !== 1) return false;
-    const check = matches[0]!;
-    return check.status === 'Passed' ||
-      (check.status === 'NotApplicable' && !!check.notes?.trim()) ||
-      (check.status === 'Issue' && !!check.notes?.trim() && (check.evidenceIds ?? []).length > 0);
-  });
+  return (
+    !!value.roomCondition?.trim() &&
+    roomHandoverChecks.every(({ code }) => {
+      const matches = (value.roomChecks ?? []).filter((check) => check.code === code);
+      if (matches.length !== 1) return false;
+      const check = matches[0]!;
+      return (
+        check.status === 'Passed' ||
+        (check.status === 'NotApplicable' && !!check.notes?.trim()) ||
+        (check.status === 'Issue' && !!check.notes?.trim() && (check.evidenceIds ?? []).length > 0)
+      );
+    })
+  );
 }
 
 function hasCompleteAssetInspection(value: MoveInDraft): boolean {
-  return value.noAssetsConfirmed || (value.assets.length > 0 && value.assets.every((asset) => asset.checked));
+  return (
+    value.noAssetsConfirmed ||
+    (value.assets.length > 0 && value.assets.every((asset) => asset.checked))
+  );
 }
 
 function hasSavedInventoryItem(item: MoveInInventoryItem): boolean {
-  return item.condition !== null && item.actualQuantity !== null &&
-    (item.condition === 'Good' || (item.evidenceIds ?? []).length > 0);
+  return (
+    item.condition !== null &&
+    item.actualQuantity !== null &&
+    (item.condition === 'Good' || (item.evidenceIds ?? []).length > 0)
+  );
 }
 
 function hasCompleteAssetSection(value: MoveInDraft, inventory: MoveInInventory | null): boolean {
   if (!value.moveInTask?.inventoryTaskId) return hasCompleteAssetInspection(value);
-  return inventory?.status === 'Completed' && inventory.contractId === value.contractId &&
+  return (
+    inventory?.status === 'Completed' &&
+    inventory.contractId === value.contractId &&
     inventory.items.length === value.assets.length &&
-    value.assets.every((asset) => inventory.items.some((item) => item.id === asset.id && hasSavedInventoryItem(item)));
+    value.assets.every((asset) =>
+      inventory.items.some((item) => item.id === asset.id && hasSavedInventoryItem(item)),
+    )
+  );
 }
 
 function firstUnfinishedStep(value: MoveInDraft, inventory: MoveInInventory | null = null): number {
@@ -233,14 +316,19 @@ export function MoveInDraftHandoverPanel({
   const lock = useRef(false);
   const [keys] = useState(() => mutationKeys(randomUUID));
 
-  useEffect(() => () => {
-    for (const preview of previewFiles.current.values()) preview.dispose();
-    previewFiles.current.clear();
-  }, [contract.id]);
+  useEffect(
+    () => () => {
+      for (const preview of previewFiles.current.values()) preview.dispose();
+      previewFiles.current.clear();
+    },
+    [contract.id],
+  );
 
-  useFocusEffect(useCallback(() => {
-    setRevision((value) => value + 1);
-  }, []));
+  useFocusEffect(
+    useCallback(() => {
+      setRevision((value) => value + 1);
+    }, []),
+  );
 
   const key = `${contract.id}:${contract.locationId}:${role}:${revision}`;
   const current = response?.key === key ? response : null;
@@ -251,16 +339,20 @@ export function MoveInDraftHandoverPanel({
   const started = canStaffEditMoveIn(draft);
   const checkedRooms = (draft?.roomChecks ?? []).length;
   const checkedAssets = draft?.moveInTask?.inventoryTaskId
-    ? draft.assets.filter((asset) => inventory?.items.some((item) => item.id === asset.id && hasSavedInventoryItem(item))).length
+    ? draft.assets.filter((asset) =>
+        inventory?.items.some((item) => item.id === asset.id && hasSavedInventoryItem(item)),
+      ).length
     : (draft?.assets ?? []).filter((asset) => asset.checked).length;
   const inspectionIssues = (draft?.roomChecks ?? []).filter((check) => check.status === 'Issue');
-  const savedWizardSteps = draft ? [
-    !!draft.electricity && !!draft.water,
-    hasCompleteRoomInspection(draft),
-    hasCompleteAssetSection(draft, inventory),
-    // Saving the key quantity completes this step; key photos are optional.
-    (draft.accessItems ?? []).length === 1 && draft.accessItems[0]?.type === 'RoomKey',
-  ] : [false, false, false, false];
+  const savedWizardSteps = draft
+    ? [
+        !!draft.electricity && !!draft.water,
+        hasCompleteRoomInspection(draft),
+        hasCompleteAssetSection(draft, inventory),
+        // Saving the key quantity completes this step; key photos are optional.
+        (draft.accessItems ?? []).length === 1 && draft.accessItems[0]?.type === 'RoomKey',
+      ]
+    : [false, false, false, false];
   const recommendedStep = draft ? firstUnfinishedStep(draft, inventory) : 0;
   const availableEvidence = [
     ...new Set([
@@ -271,7 +363,9 @@ export function MoveInDraftHandoverPanel({
       ...(draft?.roomChecks ?? []).flatMap((check) => check.evidenceIds ?? []),
     ]),
   ];
-  const canUploadSample = staff && contract.isDevelopmentDemo === true &&
+  const canUploadSample =
+    staff &&
+    contract.isDevelopmentDemo === true &&
     canUseLocalMeterDemo(
       typeof __DEV__ !== 'undefined' && __DEV__,
       Platform.OS,
@@ -287,7 +381,7 @@ export function MoveInDraftHandoverPanel({
   };
   const setRoomCheck = (code: MoveInRoomCheckCode, field: string, value: string) => {
     setValues((previous) => ({ ...previous, [`roomCheck.${code}.${field}`]: value }));
-    setRoomChecksTouched((previous) => previous.includes(code) ? previous : [...previous, code]);
+    setRoomChecksTouched((previous) => (previous.includes(code) ? previous : [...previous, code]));
   };
 
   useEffect(() => {
@@ -302,14 +396,18 @@ export function MoveInDraftHandoverPanel({
           try {
             const taskId = guid(value.moveInTask.inventoryTaskId);
             const result = await api.transport<MoveInInventory>(
-              `/api/v1/operational-tasks/${taskId}/move-in-inventory`, { signal: controller.signal });
+              `/api/v1/operational-tasks/${taskId}/move-in-inventory`,
+              { signal: controller.signal },
+            );
             if (result.taskId !== taskId || result.contractId !== contract.id)
               throw new Error('Kết quả kiểm kê không thuộc hợp đồng này.');
             inventory = result;
           } catch (cause) {
             if (controller.signal.aborted) return;
-            inventoryError = cause instanceof Error && !('status' in cause)
-              ? cause.message : conciseMessage(contractError(cause));
+            inventoryError =
+              cause instanceof Error && !('status' in cause)
+                ? cause.message
+                : conciseMessage(contractError(cause));
           }
         }
         if (staff && loadedWizardContract.current !== contract.id) {
@@ -332,11 +430,24 @@ export function MoveInDraftHandoverPanel({
           }
         }
         if (!controller.signal.aborted) {
-          setResponse({ key, record: value, error: '', notFound: false, documents, documentsError, inventory, inventoryError });
+          setResponse({
+            key,
+            record: value,
+            error: '',
+            notFound: false,
+            documents,
+            documentsError,
+            inventory,
+            inventoryError,
+          });
         }
       } catch (cause) {
         if (!controller.signal.aborted) {
-          const notFound = typeof cause === 'object' && cause !== null && 'status' in cause && cause.status === 404;
+          const notFound =
+            typeof cause === 'object' &&
+            cause !== null &&
+            'status' in cause &&
+            cause.status === 404;
           setResponse({
             key,
             record: null,
@@ -385,7 +496,11 @@ export function MoveInDraftHandoverPanel({
       }
       return true;
     } catch (cause) {
-      setActionError(cause instanceof Error && !('status' in cause) ? cause.message : conciseMessage(contractError(cause)));
+      setActionError(
+        cause instanceof Error && !('status' in cause)
+          ? cause.message
+          : conciseMessage(contractError(cause)),
+      );
       // CameraCapture must retain its preview for retry after a failed private upload.
       return false;
     } finally {
@@ -400,26 +515,36 @@ export function MoveInDraftHandoverPanel({
       roomCondition: draft.roomCondition || '',
       keysAndAccess: draft.keysAndAccess || '',
       notes: draft.notes || '',
-      ...Object.fromEntries((draft.roomChecks ?? []).flatMap((check) => [
-        [`roomCheck.${check.code}.status`, check.status],
-        [`roomCheck.${check.code}.notes`, check.notes || ''],
-        ...(check.evidenceIds ?? []).map((id) => [`roomCheck.${check.code}.evidence.${id}`, 'true']),
-      ])),
-      ...Object.fromEntries(draft.assets.flatMap((asset) => [
-        [`asset-${asset.id}`, asset.observedCondition || ''],
-        ...quantityFields.map(([name]) => [
-          `${asset.id}.${name}`,
-          asset[name] == null ? '' : String(asset[name]),
+      ...Object.fromEntries(
+        (draft.roomChecks ?? []).flatMap((check) => [
+          [`roomCheck.${check.code}.status`, check.status],
+          [`roomCheck.${check.code}.notes`, check.notes || ''],
+          ...(check.evidenceIds ?? []).map((id) => [
+            `roomCheck.${check.code}.evidence.${id}`,
+            'true',
+          ]),
         ]),
-        [`${asset.id}.checked`, asset.checked ? 'true' : 'false'],
-        [`${asset.id}.notes`, asset.notes || ''],
-        ...(asset.evidenceIds ?? []).map((id) => [`${asset.id}.evidence.${id}`, 'true']),
-        ...(asset.physicalObservations ?? []).flatMap((item) => [
-          [`${item.id}.physicalQuantity`, String(item.quantity)],
-          [`${item.id}.physicalCondition`, item.condition],
-          [`${item.id}.physicalHandedOverQuantity`, item.handedOverQuantity == null ? '' : String(item.handedOverQuantity)],
+      ),
+      ...Object.fromEntries(
+        draft.assets.flatMap((asset) => [
+          [`asset-${asset.id}`, asset.observedCondition || ''],
+          ...quantityFields.map(([name]) => [
+            `${asset.id}.${name}`,
+            asset[name] == null ? '' : String(asset[name]),
+          ]),
+          [`${asset.id}.checked`, asset.checked ? 'true' : 'false'],
+          [`${asset.id}.notes`, asset.notes || ''],
+          ...(asset.evidenceIds ?? []).map((id) => [`${asset.id}.evidence.${id}`, 'true']),
+          ...(asset.physicalObservations ?? []).flatMap((item) => [
+            [`${item.id}.physicalQuantity`, String(item.quantity)],
+            [`${item.id}.physicalCondition`, item.condition],
+            [
+              `${item.id}.physicalHandedOverQuantity`,
+              item.handedOverQuantity == null ? '' : String(item.handedOverQuantity),
+            ],
+          ]),
         ]),
-      ])),
+      ),
     });
     setSelectedEvidence(draft.evidenceIds ?? []);
     setSelectedKeyEvidence(draft.keyEvidenceIds ?? []);
@@ -441,24 +566,29 @@ export function MoveInDraftHandoverPanel({
 
   async function saveDraft() {
     if (!draft || !canStaffEditMoveIn(draft)) return;
-    const touchedChecks = roomHandoverChecks.filter((check) => roomChecksTouched.includes(check.code));
-    const roomChecks: NonNullable<MoveInDraftInput['roomChecks']> = touchedChecks.map(({ code, label }) => {
-      const status = values[`roomCheck.${code}.status`] as MoveInRoomCheckStatus | undefined;
-      const notes = (values[`roomCheck.${code}.notes`] ?? '').trim();
-      const evidenceIds = availableEvidence.filter((id) =>
-        values[`roomCheck.${code}.evidence.${id}`] === 'true');
-      if (!status) throw new Error(`Hãy chọn kết quả kiểm tra: ${label}.`);
-      if (status !== 'Passed' && !notes) {
-        throw new Error(`Hãy ghi lý do cho mục "${label}".`);
-      }
-      if (status === 'Issue' && !evidenceIds.length) {
-        throw new Error(`Mục "${label}" có vấn đề cần gắn ít nhất một ảnh bằng chứng riêng.`);
-      }
-      if (evidenceIds.length > 5) {
-        throw new Error(`Mục "${label}" chỉ được gắn tối đa 5 ảnh.`);
-      }
-      return { code, status, notes, evidenceIds };
-    });
+    const touchedChecks = roomHandoverChecks.filter((check) =>
+      roomChecksTouched.includes(check.code),
+    );
+    const roomChecks: NonNullable<MoveInDraftInput['roomChecks']> = touchedChecks.map(
+      ({ code, label }) => {
+        const status = values[`roomCheck.${code}.status`] as MoveInRoomCheckStatus | undefined;
+        const notes = (values[`roomCheck.${code}.notes`] ?? '').trim();
+        const evidenceIds = availableEvidence.filter(
+          (id) => values[`roomCheck.${code}.evidence.${id}`] === 'true',
+        );
+        if (!status) throw new Error(`Hãy chọn kết quả kiểm tra: ${label}.`);
+        if (status !== 'Passed' && !notes) {
+          throw new Error(`Hãy ghi lý do cho mục "${label}".`);
+        }
+        if (status === 'Issue' && !evidenceIds.length) {
+          throw new Error(`Mục "${label}" có vấn đề cần gắn ít nhất một ảnh bằng chứng riêng.`);
+        }
+        if (evidenceIds.length > 5) {
+          throw new Error(`Mục "${label}" chỉ được gắn tối đa 5 ảnh.`);
+        }
+        return { code, status, notes, evidenceIds };
+      },
+    );
     let validatedAccessItems: MoveInAccessItem[] | undefined;
     if (keysTouched) {
       const quantity = Number(keyQuantity);
@@ -476,15 +606,19 @@ export function MoveInDraftHandoverPanel({
       notes: values.notes?.trim(),
       ...(touchedChecks.length ? { roomChecks } : {}),
       ...(validatedAccessItems ? { accessItems: validatedAccessItems } : {}),
-      ...(checkedAssets.length ? {
-        assets: checkedAssets.map((asset) => ({
-          ...assetInspectionInput(asset, values, availableEvidence, !!draft.inventoryToken),
-          checked: true,
-          notes: values[`${asset.id}.notes`] ?? '',
-          evidenceIds: availableEvidence.filter((id) => values[`${asset.id}.evidence.${id}`] === 'true'),
-        })),
-        inventoryToken: draft.inventoryToken,
-      } : {}),
+      ...(checkedAssets.length
+        ? {
+            assets: checkedAssets.map((asset) => ({
+              ...assetInspectionInput(asset, values, availableEvidence, !!draft.inventoryToken),
+              checked: true,
+              notes: values[`${asset.id}.notes`] ?? '',
+              evidenceIds: availableEvidence.filter(
+                (id) => values[`${asset.id}.evidence.${id}`] === 'true',
+              ),
+            })),
+            inventoryToken: draft.inventoryToken,
+          }
+        : {}),
       evidenceIds: selectedEvidence,
       keyEvidenceIds: selectedKeyEvidence,
     };
@@ -532,7 +666,11 @@ export function MoveInDraftHandoverPanel({
     if (legacyInventory) setRevision((value) => value + 1);
   }
 
-  async function uploadInspectionPhoto(bytes: Uint8Array<ArrayBuffer>, kind: 'room' | 'asset' | 'keys', targetId?: string) {
+  async function uploadInspectionPhoto(
+    bytes: Uint8Array<ArrayBuffer>,
+    kind: 'room' | 'asset' | 'keys',
+    targetId?: string,
+  ) {
     if (!started) throw new Error('Hãy bắt đầu công việc trước khi chụp ảnh kiểm kê.');
     if (bytes.byteLength > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
     const file = await client.uploadEvidence(contract.id, bytes, 'image/jpeg');
@@ -549,7 +687,12 @@ export function MoveInDraftHandoverPanel({
       const cached = new File(directory, `${randomUUID()}.jpg`);
       cached.create();
       await cached.write(bytes);
-      preview = { uri: cached.uri, dispose: () => { if (cached.exists) cached.delete(); } };
+      preview = {
+        uri: cached.uri,
+        dispose: () => {
+          if (cached.exists) cached.delete();
+        },
+      };
     }
     previewFiles.current.get(file.id)?.dispose();
     previewFiles.current.set(file.id, preview);
@@ -557,8 +700,7 @@ export function MoveInDraftHandoverPanel({
     setEvidencePool((items) => [...new Set([...items, file.id])]);
     // A photo taken for a specific room/asset check stays attached to that
     // check, not also counted as an unrelated general handover photo.
-    if (kind === 'keys')
-      setSelectedKeyEvidence((items) => [...new Set([...items, file.id])]);
+    if (kind === 'keys') setSelectedKeyEvidence((items) => [...new Set([...items, file.id])]);
     // When a specific inspection form opened the camera, link the uploaded
     // evidence to that same form immediately. Staff must not hunt through a
     // shared image pool or accidentally attach it to another asset.
@@ -568,11 +710,12 @@ export function MoveInDraftHandoverPanel({
   }
 
   function photoIdsFor(kind: 'room' | 'asset' | 'keys', targetId?: string) {
-    const belongsToThisItem = (id: string) => kind === 'asset' && targetId
-      ? values[`${targetId}.evidence.${id}`] === 'true'
-      : kind === 'room' && targetId
-        ? values[`roomCheck.${targetId}.evidence.${id}`] === 'true'
-        : kind === 'keys' && selectedKeyEvidence.includes(id);
+    const belongsToThisItem = (id: string) =>
+      kind === 'asset' && targetId
+        ? values[`${targetId}.evidence.${id}`] === 'true'
+        : kind === 'room' && targetId
+          ? values[`roomCheck.${targetId}.evidence.${id}`] === 'true'
+          : kind === 'keys' && selectedKeyEvidence.includes(id);
     return availableEvidence.filter(belongsToThisItem);
   }
 
@@ -582,15 +725,23 @@ export function MoveInDraftHandoverPanel({
     if (!photos.length) return null;
     const remove = (id: string) => {
       if (kind === 'asset' && targetId) set(`${targetId}.evidence.${id}`, 'false');
-      if (kind === 'room' && targetId) setRoomCheck(targetId as MoveInRoomCheckCode, `evidence.${id}`, 'false');
+      if (kind === 'room' && targetId)
+        setRoomCheck(targetId as MoveInRoomCheckCode, `evidence.${id}`, 'false');
       if (kind === 'keys') setSelectedKeyEvidence((ids) => ids.filter((value) => value !== id));
       // No server-side file DELETE exists: remove this inspection's attachment
       // on the next Save, preserving any other area's existing references.
-      const linkedElsewhere = selectedEvidence.includes(id) ||
-        kind !== 'keys' && selectedKeyEvidence.includes(id) ||
-        Object.entries(values).some(([field, value]) => value === 'true' &&
-          field.endsWith(`.evidence.${id}`) &&
-          field !== (kind === 'room' && targetId ? `roomCheck.${targetId}.evidence.${id}` : `${targetId}.evidence.${id}`));
+      const linkedElsewhere =
+        selectedEvidence.includes(id) ||
+        (kind !== 'keys' && selectedKeyEvidence.includes(id)) ||
+        Object.entries(values).some(
+          ([field, value]) =>
+            value === 'true' &&
+            field.endsWith(`.evidence.${id}`) &&
+            field !==
+              (kind === 'room' && targetId
+                ? `roomCheck.${targetId}.evidence.${id}`
+                : `${targetId}.evidence.${id}`),
+        );
       if (linkedElsewhere) return;
       setEvidencePool((ids) => ids.filter((value) => value !== id));
       const localPreview = previewFiles.current.get(id);
@@ -608,12 +759,23 @@ export function MoveInDraftHandoverPanel({
       <View style={wizardStyles.photoGrid}>
         {photos.map((id, index) => (
           <View key={id} style={wizardStyles.photoTile}>
-            <ContractEvidence api={api} contractId={contract.id} evidenceId={id}
-              draftHandoverEvidence thumbnail localThumbnailUri={photoPreviewUris[id]}
-              label={`${kind === 'keys' ? 'Ảnh chìa khóa' : 'Ảnh hiện trạng'} ${index + 1}`} />
-            <IconButton icon="close" size={20} disabled={busy}
+            <ContractEvidence
+              api={api}
+              contractId={contract.id}
+              evidenceId={id}
+              draftHandoverEvidence
+              thumbnail
+              localThumbnailUri={photoPreviewUris[id]}
+              label={`${kind === 'keys' ? 'Ảnh chìa khóa' : 'Ảnh hiện trạng'} ${index + 1}`}
+            />
+            <IconButton
+              icon="close"
+              size={20}
+              disabled={busy}
               accessibilityLabel={`Xóa ${kind === 'keys' ? 'ảnh chìa khóa' : 'ảnh hiện trạng'} ${index + 1}`}
-              style={wizardStyles.removePhoto} onPress={() => remove(id)} />
+              style={wizardStyles.removePhoto}
+              onPress={() => remove(id)}
+            />
           </View>
         ))}
       </View>
@@ -629,32 +791,50 @@ export function MoveInDraftHandoverPanel({
     const photoCount = photoIdsFor(kind, targetId).length;
     return (
       <View style={wizardStyles.section}>
-        {itemPhoto ? <Text variant="labelMedium" style={{ color: colors.navy }}>
-          {kind === 'keys' ? 'Ảnh chìa khóa bàn giao (không bắt buộc):' : 'Ảnh minh chứng:'}
-        </Text> : null}
+        {itemPhoto ? (
+          <Text variant="labelMedium" style={{ color: colors.navy }}>
+            {kind === 'keys' ? 'Ảnh chìa khóa bàn giao (không bắt buộc):' : 'Ảnh minh chứng:'}
+          </Text>
+        ) : null}
         <CameraCapture
           label="Chụp ảnh"
           presentation="evidence"
           reviewBeforeSubmit
           reviewActionLabel="Dùng ảnh này"
           disabled={busy || photoCount >= photoLimit}
-          onCapture={(bytes) => run(
-            () => uploadInspectionPhoto(bytes, kind, targetId),
-            kind === 'keys' ? 'Đã tải ảnh chìa khóa; bấm Lưu để gắn vào biên bản.' : assetPhoto ? 'Đã tải và gắn ảnh vào phiếu tài sản.' : 'Đã tải ảnh hiện trạng lên máy chủ.',
-            false,
-          )}
+          onCapture={(bytes) =>
+            run(
+              () => uploadInspectionPhoto(bytes, kind, targetId),
+              kind === 'keys'
+                ? 'Đã tải ảnh chìa khóa; bấm Lưu để gắn vào biên bản.'
+                : assetPhoto
+                  ? 'Đã tải và gắn ảnh vào phiếu tài sản.'
+                  : 'Đã tải ảnh hiện trạng lên máy chủ.',
+              false,
+            )
+          }
         />
         {canUploadSample && (
-          <Button mode="outlined" icon="flask-outline" disabled={busy || photoCount >= photoLimit}
-            onPress={() => void run(async () => {
-              if (!canUploadSample) return;
-              const bytes = handoverDemoJpeg();
-              try {
-                await uploadInspectionPhoto(bytes, kind, targetId);
-              } finally {
-                bytes.fill(0);
-              }
-            }, 'Đã tải ảnh giả lập DEV lên biên bản test.', false)}>
+          <Button
+            mode="outlined"
+            icon="flask-outline"
+            disabled={busy || photoCount >= photoLimit}
+            onPress={() =>
+              void run(
+                async () => {
+                  if (!canUploadSample) return;
+                  const bytes = handoverDemoJpeg();
+                  try {
+                    await uploadInspectionPhoto(bytes, kind, targetId);
+                  } finally {
+                    bytes.fill(0);
+                  }
+                },
+                'Đã tải ảnh giả lập DEV lên biên bản test.',
+                false,
+              )
+            }
+          >
             Thêm ảnh mẫu DEV
           </Button>
         )}
@@ -664,27 +844,62 @@ export function MoveInDraftHandoverPanel({
   }
 
   function workEntry(
-    id: string, title: string, detail: string, status: string,
-    onPress: () => void, done = false,
-    indicator: 'passed' | 'issue' | 'not-applicable' | 'unreviewed' = done ? 'passed' : 'unreviewed',
+    id: string,
+    title: string,
+    detail: string,
+    status: string,
+    onPress: () => void,
+    done = false,
+    indicator: 'passed' | 'issue' | 'not-applicable' | 'unreviewed' = done
+      ? 'passed'
+      : 'unreviewed',
   ) {
-    const source = indicator === 'passed' ? 'check-circle-outline'
-      : indicator === 'issue' ? 'alert-circle-outline'
-        : indicator === 'not-applicable' ? 'minus-circle-outline' : 'clipboard-text-outline';
-    const color = indicator === 'passed' ? colors.green
-      : indicator === 'issue' ? colors.amber
-        : indicator === 'not-applicable' ? colors.muted : colors.blue;
+    const source =
+      indicator === 'passed'
+        ? 'check-circle-outline'
+        : indicator === 'issue'
+          ? 'alert-circle-outline'
+          : indicator === 'not-applicable'
+            ? 'minus-circle-outline'
+            : 'clipboard-text-outline';
+    const color =
+      indicator === 'passed'
+        ? colors.green
+        : indicator === 'issue'
+          ? colors.amber
+          : indicator === 'not-applicable'
+            ? colors.muted
+            : colors.blue;
     return (
-      <TouchableRipple key={id} accessibilityRole="button"
-        accessibilityLabel={title} disabled={busy} onPress={onPress}
-        style={[wizardStyles.workRow, compactPhone && wizardStyles.phoneWorkRow]}>
+      <TouchableRipple
+        key={id}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        disabled={busy}
+        onPress={onPress}
+        style={[wizardStyles.workRow, compactPhone && wizardStyles.phoneWorkRow]}
+      >
         <View style={wizardStyles.rowContent}>
           <Icon source={source} size={23} color={color} />
           <View style={wizardStyles.rowText}>
-            <Text variant="titleSmall" style={wizardStyles.rowTitle}>{title}</Text>
-            <Text variant="bodySmall" style={wizardStyles.rowDetail}>{detail}</Text>
-            <Text variant="labelSmall" style={indicator === 'passed' ? ui.green :
-              indicator === 'issue' ? { color: colors.amber } : ui.muted}>{status}</Text>
+            <Text variant="titleSmall" style={wizardStyles.rowTitle}>
+              {title}
+            </Text>
+            <Text variant="bodySmall" style={wizardStyles.rowDetail}>
+              {detail}
+            </Text>
+            <Text
+              variant="labelSmall"
+              style={
+                indicator === 'passed'
+                  ? ui.green
+                  : indicator === 'issue'
+                    ? { color: colors.amber }
+                    : ui.muted
+              }
+            >
+              {status}
+            </Text>
           </View>
           <Icon source="chevron-right" size={22} color={colors.blue} />
         </View>
@@ -693,15 +908,22 @@ export function MoveInDraftHandoverPanel({
   }
 
   const selectedRoomCode = activeItem?.startsWith('room:')
-    ? activeItem.slice(5) as MoveInRoomCheckCode : null;
+    ? (activeItem.slice(5) as MoveInRoomCheckCode)
+    : null;
   const selectedRoomCheck = roomHandoverChecks.find((check) => check.code === selectedRoomCode);
   const selectedAsset = activeItem?.startsWith('asset:')
-    ? draft?.assets.find((asset) => asset.id === activeItem.slice(6)) : undefined;
-  const modalTitle = activeItem === 'meter' ? `Ghi chỉ số ${meterTask?.label.toLocaleLowerCase('vi') ?? 'công tơ'}` :
-    activeItem === 'legacy-inventory' ? 'Kiểm kê đầu vào của hợp đồng' :
-    activeItem === 'room-summary' ? 'Hiện trạng tổng quan' :
-      selectedRoomCheck?.label ?? selectedAsset?.name ??
-      (activeItem === 'keys' ? 'Chìa khóa bàn giao' : '');
+    ? draft?.assets.find((asset) => asset.id === activeItem.slice(6))
+    : undefined;
+  const modalTitle =
+    activeItem === 'meter'
+      ? `Ghi chỉ số ${meterTask?.label.toLocaleLowerCase('vi') ?? 'công tơ'}`
+      : activeItem === 'legacy-inventory'
+        ? 'Kiểm kê đầu vào của hợp đồng'
+        : activeItem === 'room-summary'
+          ? 'Hiện trạng tổng quan'
+          : (selectedRoomCheck?.label ??
+            selectedAsset?.name ??
+            (activeItem === 'keys' ? 'Chìa khóa bàn giao' : ''));
 
   if (!allowed) return <Text>Không thể mở biên bản của cơ sở hoặc tài khoản này.</Text>;
   if (current?.notFound && legacyFallback) return <>{legacyFallback}</>;
@@ -713,12 +935,24 @@ export function MoveInDraftHandoverPanel({
           <Text variant="titleMedium" style={wizardStyles.compactTitle}>
             Kiểm tra bàn giao · phòng {draft?.roomNumber ?? contract.roomNumber ?? ''}
           </Text>
-          <Text variant="bodySmall" style={ui.muted}>Điện nước, hiện trạng, tài sản và chìa khóa</Text>
+          <Text variant="bodySmall" style={ui.muted}>
+            Điện nước, hiện trạng, tài sản và chìa khóa
+          </Text>
         </View>
-      ) : <Heading
-        title={staff ? `Kiểm tra bàn giao · phòng ${draft?.roomNumber ?? contract.roomNumber ?? ''}` : 'Biên bản bàn giao phòng'}
-        detail={staff ? 'Một công việc: điện nước, hiện trạng, tài sản và chìa khóa' : 'Tổng hợp từ hợp đồng, công tơ và kiểm kê thực tế'}
-      />}
+      ) : (
+        <Heading
+          title={
+            staff
+              ? `Kiểm tra bàn giao · phòng ${draft?.roomNumber ?? contract.roomNumber ?? ''}`
+              : 'Biên bản bàn giao phòng'
+          }
+          detail={
+            staff
+              ? 'Một công việc: điện nước, hiện trạng, tài sản và chìa khóa'
+              : 'Tổng hợp từ hợp đồng, công tơ và kiểm kê thực tế'
+          }
+        />
+      )}
       {loading && <Text>Đang tải biên bản bàn giao…</Text>}
       {!loading && !draft && !error && (
         <Text>Chưa tìm thấy biên bản nháp cho hợp đồng này. Hãy yêu cầu Owner kiểm tra.</Text>
@@ -726,7 +960,11 @@ export function MoveInDraftHandoverPanel({
       {staff && draft && (
         <View style={wizardStyles.section}>
           <View style={wizardStyles.compactSummaryRow}>
-            <Pill tone={draft.status === 'Confirmed' ? 'green' : draft.status === 'Ready' ? 'blue' : 'amber'}>
+            <Pill
+              tone={
+                draft.status === 'Confirmed' ? 'green' : draft.status === 'Ready' ? 'blue' : 'amber'
+              }
+            >
               {statusLabels[draft.status] ?? draft.status}
             </Pill>
             <Text style={[ui.muted, wizardStyles.compactLocation]}>{draft.locationName}</Text>
@@ -734,26 +972,44 @@ export function MoveInDraftHandoverPanel({
           {draft.status === 'Draft' && draft.moveInTask?.status === 'Assigned' && (
             <>
               <Text variant="titleMedium">Chưa bắt đầu công việc</Text>
-              <Text style={ui.muted}>Bắt đầu một lần để mở 4 mục kiểm tra. Bạn được chọn mục cần làm, ghi nhận thực tế và lưu riêng từng lần. Owner chịu trách nhiệm quyết định xử lý.</Text>
-              <Action disabled={busy || loading} onPress={() => void run(beginWork, 'Đã bắt đầu công việc. Bạn có thể kiểm tra phòng và công tơ.')}>
+              <Text style={ui.muted}>
+                Bắt đầu một lần để mở 4 mục kiểm tra. Bạn được chọn mục cần làm, ghi nhận thực tế và
+                lưu riêng từng lần. Owner chịu trách nhiệm quyết định xử lý.
+              </Text>
+              <Action
+                disabled={busy || loading}
+                onPress={() =>
+                  void run(beginWork, 'Đã bắt đầu công việc. Bạn có thể kiểm tra phòng và công tơ.')
+                }
+              >
                 Bắt đầu công việc
               </Action>
             </>
           )}
           {draft.status === 'Draft' && !started && draft.moveInTask?.status !== 'Assigned' && (
-            <Text style={ui.muted}>Chưa thể ghi nhận. Nhiệm vụ bàn giao cần được phân công và bắt đầu đúng trạng thái.</Text>
+            <Text style={ui.muted}>
+              Chưa thể ghi nhận. Nhiệm vụ bàn giao cần được phân công và bắt đầu đúng trạng thái.
+            </Text>
           )}
-          {!!error && !activeItem && <Text accessibilityRole="alert" style={ui.red}>{error}</Text>}
+          {!!error && !activeItem && (
+            <Text accessibilityRole="alert" style={ui.red}>
+              {error}
+            </Text>
+          )}
           {!!notice && !activeItem && <Text style={ui.green}>{notice}</Text>}
           {started && (
             <View style={wizardStyles.step}>
               {sectionOpen && (
-                <Button icon="arrow-left" mode="text" disabled={busy}
+                <Button
+                  icon="arrow-left"
+                  mode="text"
+                  disabled={busy}
                   style={{ alignSelf: 'flex-start' }}
                   onPress={() => {
                     setSectionOpen(false);
                     if (compactPhone) resetScroll?.();
-                  }}>
+                  }}
+                >
                   Về 4 mục bàn giao
                 </Button>
               )}
@@ -768,8 +1024,11 @@ export function MoveInDraftHandoverPanel({
                 </View>
                 {!sectionOpen && (
                   <>
-                    <ProgressBar progress={savedWizardSteps.filter(Boolean).length / staffSteps.length}
-                      color={colors.blue} style={wizardStyles.progress} />
+                    <ProgressBar
+                      progress={savedWizardSteps.filter(Boolean).length / staffSteps.length}
+                      color={colors.blue}
+                      style={wizardStyles.progress}
+                    />
                     <Text variant="bodySmall" style={[ui.muted, { lineHeight: 20 }]}>
                       {savedWizardSteps.every(Boolean)
                         ? 'Đã lưu đủ 4 mục kiểm tra. Owner sẽ tiếp tục xem xét các điều kiện bàn giao.'
@@ -780,64 +1039,101 @@ export function MoveInDraftHandoverPanel({
               </View>
               {!sectionOpen ? (
                 <View style={wizardStyles.workList}>
-                  {staffSteps.map((step, index) => workEntry(
-                    `section-${index}`,
-                    `${index + 1}. ${step.title}`,
-                    index === 0 ? `${Number(!!draft.electricity) + Number(!!draft.water)}/2 công tơ đã xác nhận` :
-                      index === 1 ? `${checkedRooms}/7 khu vực đã kiểm tra` :
-                        index === 2 ? `${checkedAssets}/${draft.assets.length} nhóm tài sản đã kiểm tra` :
-                          `${draft.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ?? 'Chưa ghi'} chìa khóa · ${(draft.keyEvidenceIds ?? []).length} ảnh chìa khóa`,
-                    savedWizardSteps[index]
-                      ? index === 1 && inspectionIssues.length ? `Đã ghi nhận · ${inspectionIssues.length} khu vực có vấn đề` : 'Đã lưu đủ'
-                      : index === recommendedStep ? 'Nên làm tiếp' : 'Chưa hoàn tất',
-                    () => goToStep(index),
-                    savedWizardSteps[index],
-                    index === 1 && inspectionIssues.length ? 'issue' : undefined,
-                  ))}
+                  {staffSteps.map((step, index) =>
+                    workEntry(
+                      `section-${index}`,
+                      `${index + 1}. ${step.title}`,
+                      index === 0
+                        ? `${Number(!!draft.electricity) + Number(!!draft.water)}/2 công tơ đã xác nhận`
+                        : index === 1
+                          ? `${checkedRooms}/7 khu vực đã kiểm tra`
+                          : index === 2
+                            ? `${checkedAssets}/${draft.assets.length} nhóm tài sản đã kiểm tra`
+                            : `${draft.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ?? 'Chưa ghi'} chìa khóa · ${(draft.keyEvidenceIds ?? []).length} ảnh chìa khóa`,
+                      savedWizardSteps[index]
+                        ? index === 1 && inspectionIssues.length
+                          ? `Đã ghi nhận · ${inspectionIssues.length} khu vực có vấn đề`
+                          : 'Đã lưu đủ'
+                        : index === recommendedStep
+                          ? 'Nên làm tiếp'
+                          : 'Chưa hoàn tất',
+                      () => goToStep(index),
+                      savedWizardSteps[index],
+                      index === 1 && inspectionIssues.length ? 'issue' : undefined,
+                    ),
+                  )}
                 </View>
               ) : (
                 <View style={wizardStyles.section}>
                   {wizardStep === 0 && (
                     <>
-                      <ContractInitialMeterTasks contract={contract} integrated refreshRevision={revision}
+                      <ContractInitialMeterTasks
+                        contract={contract}
+                        integrated
+                        refreshRevision={revision}
                         onOpenTask={(id, label) => {
-                        setMeterTask({ id, label });
-                        setActiveItem('meter');
-                      }} />
+                          setMeterTask({ id, label });
+                          setActiveItem('meter');
+                        }}
+                      />
                       <Text variant="bodySmall" style={ui.muted}>
-                        Mở từng công tơ để chụp OCR, đối chiếu và xác nhận. Bạn có thể làm các mục khác trước; Owner chỉ duyệt khi điện nước đủ.
+                        Mở từng công tơ để chụp OCR, đối chiếu và xác nhận. Bạn có thể làm các mục
+                        khác trước; Owner chỉ duyệt khi điện nước đủ.
                       </Text>
                     </>
                   )}
                   {wizardStep === 1 && (
                     <View style={wizardStyles.workList}>
-                      {workEntry('room-condition', 'Hiện trạng tổng quan',
-                        draft.roomCondition || 'Ghi mô tả chung về phòng', 'Mở phiếu ghi nhận',
-                        () => setActiveItem('room-summary'), !!draft.roomCondition)}
+                      {workEntry(
+                        'room-condition',
+                        'Hiện trạng tổng quan',
+                        draft.roomCondition || 'Ghi mô tả chung về phòng',
+                        'Mở phiếu ghi nhận',
+                        () => setActiveItem('room-summary'),
+                        !!draft.roomCondition,
+                      )}
                       {roomHandoverChecks.map(({ code, label }) => {
                         const check = (draft.roomChecks ?? []).find((item) => item.code === code);
-                        return workEntry(code, label, check?.notes || 'Kiểm tra thực tế và chụp ảnh nếu có vấn đề',
+                        return workEntry(
+                          code,
+                          label,
+                          check?.notes || 'Kiểm tra thực tế và chụp ảnh nếu có vấn đề',
                           check ? roomStatusLabels[check.status] : 'Chưa kiểm tra',
-                          () => setActiveItem(`room:${code}`), !!check,
-                          check?.status === 'Issue' ? 'issue'
-                            : check?.status === 'NotApplicable' ? 'not-applicable' : undefined);
+                          () => setActiveItem(`room:${code}`),
+                          !!check,
+                          check?.status === 'Issue'
+                            ? 'issue'
+                            : check?.status === 'NotApplicable'
+                              ? 'not-applicable'
+                              : undefined,
+                        );
                       })}
                       {inspectionIssues.length > 0 && (
-                        <Text style={ui.red}>{inspectionIssues.length} khu vực có vấn đề. Owner xem ghi chú và ảnh để quyết định xử lý.</Text>
+                        <Text style={ui.red}>
+                          {inspectionIssues.length} khu vực có vấn đề. Owner xem ghi chú và ảnh để
+                          quyết định xử lý.
+                        </Text>
                       )}
                     </View>
                   )}
                   {wizardStep === 2 && (
                     <View style={wizardStyles.workList}>
-                      {draft.moveInTask?.inventoryTaskId && workEntry('legacy-inventory',
-                        'Đối chiếu kiểm kê đầu vào',
-                        'Chọn từng tài sản để kiểm tra và lưu kết quả.',
-                        draft.moveInTask.inventoryStatus === 'Completed'
-                          ? 'Đã hoàn tất' : 'Cần hoàn thành',
-                        () => setActiveItem('legacy-inventory'),
-                        draft.moveInTask.inventoryStatus === 'Completed')}
+                      {draft.moveInTask?.inventoryTaskId &&
+                        workEntry(
+                          'legacy-inventory',
+                          'Đối chiếu kiểm kê đầu vào',
+                          'Chọn từng tài sản để kiểm tra và lưu kết quả.',
+                          draft.moveInTask.inventoryStatus === 'Completed'
+                            ? 'Đã hoàn tất'
+                            : 'Cần hoàn thành',
+                          () => setActiveItem('legacy-inventory'),
+                          draft.moveInTask.inventoryStatus === 'Completed',
+                        )}
                       {draft.moveInTask?.inventoryTaskId && (
-                        <Text variant="bodySmall" style={[ui.muted, { lineHeight: 20, flexShrink: 0 }]}>
+                        <Text
+                          variant="bodySmall"
+                          style={[ui.muted, { lineHeight: 20, flexShrink: 0 }]}
+                        >
                           Bên dưới chỉ theo dõi kết quả đã lưu trên máy chủ.
                         </Text>
                       )}
@@ -849,57 +1145,103 @@ export function MoveInDraftHandoverPanel({
                         </View>
                       )}
                       {draft.assets.length === 0 && (
-                        <Text style={ui.muted}>{draft.noAssetsConfirmed
-                          ? 'Owner đã xác nhận phòng không có tài sản.'
-                          : 'Chưa có danh sách tài sản; cần Owner kiểm tra cấu hình.'}</Text>
+                        <Text style={ui.muted}>
+                          {draft.noAssetsConfirmed
+                            ? 'Owner đã xác nhận phòng không có tài sản.'
+                            : 'Chưa có danh sách tài sản; cần Owner kiểm tra cấu hình.'}
+                        </Text>
                       )}
-                      {draft.moveInTask?.inventoryTaskId ? (
-                        draft.assets.map((asset) => {
-                          const item = inventory?.items.find((entry) => entry.id === asset.id);
-                          const saved = !!item && hasSavedInventoryItem(item);
-                          const passed = saved && item?.condition === 'Good';
-                          const problem = saved && (item?.condition === 'Missing' || item?.condition === 'Damaged');
-                          return (
-                            <View key={asset.id} style={[wizardStyles.workRow, compactPhone && wizardStyles.phoneWorkRow]}>
-                              <View style={wizardStyles.rowContent}>
-                                <Icon source={passed ? 'check-circle-outline' : problem ? 'alert-circle-outline' : 'checkbox-blank-circle-outline'}
-                                  size={23} color={passed ? colors.green : problem ? colors.amber : colors.blue} />
-                                <View style={wizardStyles.rowText}>
-                                  <Text variant="titleSmall" style={wizardStyles.rowTitle}>{asset.name}</Text>
-                                  <Text variant="bodySmall" style={wizardStyles.rowDetail}>
-                                    {item
-                                      ? `Dự kiến ${item.expectedQuantity} · Thực tế ${item.actualQuantity ?? 'chưa ghi'}`
-                                      : `Dự kiến ${asset.configuredQuantity ?? 'chưa rõ'} ${asset.unit ?? 'đơn vị'}`}
-                                  </Text>
-                                  <Text variant="labelSmall" style={passed ? ui.green : problem ? { color: colors.amber } : ui.muted}>
-                                    {saved
-                                      ? `Đã kiểm kê · ${inventoryStatusLabels[item!.condition!]}`
-                                      : 'Chưa kiểm kê'}
-                                  </Text>
+                      {draft.moveInTask?.inventoryTaskId
+                        ? draft.assets.map((asset) => {
+                            const item = inventory?.items.find((entry) => entry.id === asset.id);
+                            const saved = !!item && hasSavedInventoryItem(item);
+                            const passed = saved && item?.condition === 'Good';
+                            const problem =
+                              saved &&
+                              (item?.condition === 'Missing' || item?.condition === 'Damaged');
+                            return (
+                              <View
+                                key={asset.id}
+                                style={[
+                                  wizardStyles.workRow,
+                                  compactPhone && wizardStyles.phoneWorkRow,
+                                ]}
+                              >
+                                <View style={wizardStyles.rowContent}>
+                                  <Icon
+                                    source={
+                                      passed
+                                        ? 'check-circle-outline'
+                                        : problem
+                                          ? 'alert-circle-outline'
+                                          : 'checkbox-blank-circle-outline'
+                                    }
+                                    size={23}
+                                    color={
+                                      passed ? colors.green : problem ? colors.amber : colors.blue
+                                    }
+                                  />
+                                  <View style={wizardStyles.rowText}>
+                                    <Text variant="titleSmall" style={wizardStyles.rowTitle}>
+                                      {asset.name}
+                                    </Text>
+                                    <Text variant="bodySmall" style={wizardStyles.rowDetail}>
+                                      {item
+                                        ? `Dự kiến ${item.expectedQuantity} · Thực tế ${item.actualQuantity ?? 'chưa ghi'}`
+                                        : `Dự kiến ${asset.configuredQuantity ?? 'chưa rõ'} ${asset.unit ?? 'đơn vị'}`}
+                                    </Text>
+                                    <Text
+                                      variant="labelSmall"
+                                      style={
+                                        passed
+                                          ? ui.green
+                                          : problem
+                                            ? { color: colors.amber }
+                                            : ui.muted
+                                      }
+                                    >
+                                      {saved
+                                        ? `Đã kiểm kê · ${inventoryStatusLabels[item!.condition!]}`
+                                        : 'Chưa kiểm kê'}
+                                    </Text>
+                                  </View>
                                 </View>
                               </View>
-                            </View>
-                          );
-                        })
-                      ) : draft.assets.map((asset) => workEntry(asset.id, asset.name,
-                        asset.configuredQuantity == null ? 'Đối chiếu tình trạng thực tế' :
-                          `Cần đối chiếu ${asset.configuredQuantity} ${asset.unit ?? 'đơn vị'}`,
-                        asset.checked ? 'Đã kiểm tra' : 'Chưa kiểm tra',
-                        () => setActiveItem(`asset:${asset.id}`), asset.checked))}
+                            );
+                          })
+                        : draft.assets.map((asset) =>
+                            workEntry(
+                              asset.id,
+                              asset.name,
+                              asset.configuredQuantity == null
+                                ? 'Đối chiếu tình trạng thực tế'
+                                : `Cần đối chiếu ${asset.configuredQuantity} ${asset.unit ?? 'đơn vị'}`,
+                              asset.checked ? 'Đã kiểm tra' : 'Chưa kiểm tra',
+                              () => setActiveItem(`asset:${asset.id}`),
+                              asset.checked,
+                            ),
+                          )}
                     </View>
                   )}
                   {wizardStep === 3 && (
                     <View style={wizardStyles.workList}>
-                      {workEntry('keys', 'Chìa khóa bàn giao',
+                      {workEntry(
+                        'keys',
+                        'Chìa khóa bàn giao',
                         `${draft.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ?? 'Chưa ghi'} chiếc · ${(draft.keyEvidenceIds ?? []).length} ảnh chìa khóa (tùy chọn)`,
-                        (draft.accessItems ?? []).length === 1 && draft.accessItems?.[0]?.type === 'RoomKey'
-                          ? 'Đã ghi nhận' : 'Chưa hoàn tất',
+                        (draft.accessItems ?? []).length === 1 &&
+                          draft.accessItems?.[0]?.type === 'RoomKey'
+                          ? 'Đã ghi nhận'
+                          : 'Chưa hoàn tất',
                         () => setActiveItem('keys'),
-                        (draft.accessItems ?? []).length === 1 && draft.accessItems?.[0]?.type === 'RoomKey')}
+                        (draft.accessItems ?? []).length === 1 &&
+                          draft.accessItems?.[0]?.type === 'RoomKey',
+                      )}
                     </View>
                   )}
                   <Text variant="bodySmall" style={ui.muted}>
-                    Thông tin chỉ được lưu trên máy chủ sau khi bấm Lưu trong phiếu. Chuyển mục không tự phát hành biên bản.
+                    Thông tin chỉ được lưu trên máy chủ sau khi bấm Lưu trong phiếu. Chuyển mục
+                    không tự phát hành biên bản.
                   </Text>
                 </View>
               )}
@@ -910,68 +1252,152 @@ export function MoveInDraftHandoverPanel({
       {draft && !editing && tenant && (
         <>
           <Row spread>
-            <Pill tone={draft.status === 'Confirmed' ? 'green' : draft.status === 'Ready' ? 'blue' : 'amber'}>
+            <Pill
+              tone={
+                draft.status === 'Confirmed' ? 'green' : draft.status === 'Ready' ? 'blue' : 'amber'
+              }
+            >
               {statusLabels[draft.status] ?? draft.status}
             </Pill>
             <Text>Phiên bản {draft.version}</Text>
           </Row>
-          <Text>Phòng {draft.roomNumber} · {draft.locationName}</Text>
+          <Text>
+            Phòng {draft.roomNumber} · {draft.locationName}
+          </Text>
           {!!draft.locationAddress && <Text>{draft.locationAddress}</Text>}
-          <Text>Hợp đồng: {displayContractDate(draft.startDate)} – {displayContractDate(draft.endDate)}</Text>
+          <Text>
+            Hợp đồng: {displayContractDate(draft.startDate)} – {displayContractDate(draft.endDate)}
+          </Text>
           {tenant && (
-            <Text>Giá thuê: {formatContractMoney(String(draft.monthlyRent))} / tháng · Cọc: {formatContractMoney(String(draft.requiredDeposit))}</Text>
+            <Text>
+              Giá thuê: {formatContractMoney(String(draft.monthlyRent))} / tháng · Cọc:{' '}
+              {formatContractMoney(String(draft.requiredDeposit))}
+            </Text>
           )}
           {tenant && !!draft.terms && <Text>Điều khoản: {draft.terms}</Text>}
           <Text>Hiện trạng phòng: {draft.roomCondition || 'Chưa kiểm tra'}</Text>
-          <Text>Chìa khóa bàn giao: {draft.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ?? 'Chưa kiểm đếm'} chiếc</Text>
+          <Text>
+            Chìa khóa bàn giao:{' '}
+            {draft.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ??
+              'Chưa kiểm đếm'}{' '}
+            chiếc
+          </Text>
           {!!draft.notes && <Text>Ghi chú: {draft.notes}</Text>}
-          <Heading title="Kiểm tra hiện trạng (7 mục)" detail="Ghi nhận kết quả, ghi chú và ảnh của từng khu vực" />
+          <Heading
+            title="Kiểm tra hiện trạng (7 mục)"
+            detail="Ghi nhận kết quả, ghi chú và ảnh của từng khu vực"
+          />
           {roomHandoverChecks.map(({ code, label }) => {
             const check = (draft.roomChecks ?? []).find((item) => item.code === code);
             return (
               <Box key={code} style={ui.soft}>
                 <Row spread>
                   <Text>{label}</Text>
-                  <Pill tone={check?.status === 'Passed' ? 'green' : check?.status === 'Issue' ? 'red' : 'neutral'}>
+                  <Pill
+                    tone={
+                      check?.status === 'Passed'
+                        ? 'green'
+                        : check?.status === 'Issue'
+                          ? 'red'
+                          : 'neutral'
+                    }
+                  >
                     {check ? roomStatusLabels[check.status] : 'Chưa kiểm tra'}
                   </Pill>
                 </Row>
                 {!!check?.notes && <Text>{check.notes}</Text>}
                 {(check?.evidenceIds ?? []).map((id, index) => (
-                  <ContractEvidence key={id} api={api} contractId={contract.id}
-                    evidenceId={id} draftHandoverEvidence label={`Xem ảnh ${label} · ${index + 1}`} />
+                  <ContractEvidence
+                    key={id}
+                    api={api}
+                    contractId={contract.id}
+                    evidenceId={id}
+                    draftHandoverEvidence
+                    label={`Xem ảnh ${label} · ${index + 1}`}
+                  />
                 ))}
               </Box>
             );
           })}
           <Heading title="Ảnh chìa khóa bàn giao" />
           {(draft.keyEvidenceIds ?? []).map((id, index) => (
-            <ContractEvidence key={`keys-${id}`} api={api} contractId={contract.id} evidenceId={id}
-              draftHandoverEvidence label={`Xem ảnh chìa khóa ${index + 1}`} />
+            <ContractEvidence
+              key={`keys-${id}`}
+              api={api}
+              contractId={contract.id}
+              evidenceId={id}
+              draftHandoverEvidence
+              label={`Xem ảnh chìa khóa ${index + 1}`}
+            />
           ))}
           {!!draft.accessItems?.find((item) => item.type === 'RoomKey')?.notes && (
-            <Text>Ghi chú chìa khóa: {draft.accessItems.find((item) => item.type === 'RoomKey')!.notes}</Text>
+            <Text>
+              Ghi chú chìa khóa: {draft.accessItems.find((item) => item.type === 'RoomKey')!.notes}
+            </Text>
           )}
           {(draft.outstandingIssues ?? []).length > 0 && <Heading title="Ghi nhận liên quan" />}
-          {(draft.outstandingIssues ?? []).length ? (draft.outstandingIssues ?? []).map((issue, index) => (
-            <Text key={`${issue.code}-${index}`}>
-              {roomHandoverChecks.find((check) => check.code === issue.code)?.label ?? issue.code}:
-              {' '}{issue.description}
-            </Text>
-          )) : null}
-          <Text>Điện khởi tạo: {draft.electricity ? `${draft.electricity.value} kWh` : 'Chưa xác nhận'}</Text>
+          {(draft.outstandingIssues ?? []).length
+            ? (draft.outstandingIssues ?? []).map((issue, index) => (
+                <Text key={`${issue.code}-${index}`}>
+                  {roomHandoverChecks.find((check) => check.code === issue.code)?.label ??
+                    issue.code}
+                  : {issue.description}
+                </Text>
+              ))
+            : null}
+          <Text>
+            Điện khởi tạo: {draft.electricity ? `${draft.electricity.value} kWh` : 'Chưa xác nhận'}
+          </Text>
           <Text>Nước khởi tạo: {draft.water ? `${draft.water.value} m³` : 'Chưa xác nhận'}</Text>
-          {draft.electricity && <ContractEvidence api={api} contractId={contract.id} readingId={draft.electricity.id} label="Mở hoặc lưu ảnh công tơ điện" />}
-          {draft.water && <ContractEvidence api={api} contractId={contract.id} readingId={draft.water.id} label="Mở hoặc lưu ảnh công tơ nước" />}
+          {draft.electricity && (
+            <ContractEvidence
+              api={api}
+              contractId={contract.id}
+              readingId={draft.electricity.id}
+              label="Mở hoặc lưu ảnh công tơ điện"
+            />
+          )}
+          {draft.water && (
+            <ContractEvidence
+              api={api}
+              contractId={contract.id}
+              readingId={draft.water.id}
+              label="Mở hoặc lưu ảnh công tơ nước"
+            />
+          )}
           <Heading title={`Tài sản bàn giao (${draft.assets.length})`} />
-          {draft.assets.map((asset) => <Text key={asset.id}>{handoverAssetSummary(asset)}</Text>)}
-          {draft.assets.flatMap((asset) => (asset.evidenceIds ?? []).map((id, index) => (
-            <ContractEvidence key={`${asset.id}-${id}`} api={api} contractId={contract.id} evidenceId={id} draftHandoverEvidence label={`Mở ảnh ${asset.name} · ${index + 1}`} />
-          )))}
-          {draft.evidenceIds.map((id, index) => (
-            <ContractEvidence key={id} api={api} contractId={contract.id} evidenceId={id} draftHandoverEvidence label={`Mở ảnh hiện trạng ${index + 1}`} />
+          {draft.assets.map((asset) => (
+            <Text key={asset.id}>{handoverAssetSummary(asset)}</Text>
           ))}
-          {!draft.assets.length && <Text>{draft.noAssetsConfirmed ? 'Owner xác nhận phòng không có tài sản.' : 'Chưa kiểm kê tài sản.'}</Text>}
+          {draft.assets.flatMap((asset) =>
+            (asset.evidenceIds ?? []).map((id, index) => (
+              <ContractEvidence
+                key={`${asset.id}-${id}`}
+                api={api}
+                contractId={contract.id}
+                evidenceId={id}
+                draftHandoverEvidence
+                label={`Mở ảnh ${asset.name} · ${index + 1}`}
+              />
+            )),
+          )}
+          {draft.evidenceIds.map((id, index) => (
+            <ContractEvidence
+              key={id}
+              api={api}
+              contractId={contract.id}
+              evidenceId={id}
+              draftHandoverEvidence
+              label={`Mở ảnh hiện trạng ${index + 1}`}
+            />
+          ))}
+          {!draft.assets.length && (
+            <Text>
+              {draft.noAssetsConfirmed
+                ? 'Owner xác nhận phòng không có tài sản.'
+                : 'Chưa kiểm kê tài sản.'}
+            </Text>
+          )}
           {draft.missing.length > 0 && (
             <>
               <Heading title="Còn thiếu để bàn giao" />
@@ -982,10 +1408,19 @@ export function MoveInDraftHandoverPanel({
               ))}
             </>
           )}
-          {draft.ownerReadyAt && <Text>Owner xác nhận sẵn sàng: {formatInstant(draft.ownerReadyAt)}</Text>}
-          {draft.tenantConfirmedAt && <Text>Tenant xác nhận: {formatInstant(draft.tenantConfirmedAt)}</Text>}
+          {draft.ownerReadyAt && (
+            <Text>Owner xác nhận sẵn sàng: {formatInstant(draft.ownerReadyAt)}</Text>
+          )}
+          {draft.tenantConfirmedAt && (
+            <Text>Tenant xác nhận: {formatInstant(draft.tenantConfirmedAt)}</Text>
+          )}
           {draft.status !== 'Confirmed' && (
-            <ContractEvidence api={api} contractId={contract.id} draftHandoverPdf label="Xem PDF biên bản nháp" />
+            <ContractEvidence
+              api={api}
+              contractId={contract.id}
+              draftHandoverPdf
+              label="Xem PDF biên bản nháp"
+            />
           )}
           {current?.documents.map((document) => (
             <ContractEvidence
@@ -1001,19 +1436,31 @@ export function MoveInDraftHandoverPanel({
               Không tải được PDF bàn giao cuối cùng: {current.documentsError}
             </Text>
           )}
-          {draft.status === 'Confirmed' && !current?.documentsError && !current?.documents.length && (
-            <Text style={ui.muted}>
-              Biên bản đã xác nhận nhưng PDF cuối cùng chưa có. Hãy tải lại hoặc liên hệ Owner để kiểm tra tài liệu.
-            </Text>
-          )}
+          {draft.status === 'Confirmed' &&
+            !current?.documentsError &&
+            !current?.documents.length && (
+              <Text style={ui.muted}>
+                Biên bản đã xác nhận nhưng PDF cuối cùng chưa có. Hãy tải lại hoặc liên hệ Owner để
+                kiểm tra tài liệu.
+              </Text>
+            )}
           {draft.requests.length > 0 && (
             <>
               <Heading title="Yêu cầu sửa biên bản" />
               {draft.requests.map((request) => (
                 <Box key={request.id}>
-                  <Text>Phiên bản {request.version} · {request.status === 'Pending' ? 'Chờ Owner xử lý' : request.status === 'Approved' ? 'Owner đã chấp nhận' : 'Owner từ chối'}</Text>
+                  <Text>
+                    Phiên bản {request.version} ·{' '}
+                    {request.status === 'Pending'
+                      ? 'Chờ Owner xử lý'
+                      : request.status === 'Approved'
+                        ? 'Owner đã chấp nhận'
+                        : 'Owner từ chối'}
+                  </Text>
                   <Text>{request.reason}</Text>
-                  {!!request.decisionReason && <Text>Phản hồi Owner: {request.decisionReason}</Text>}
+                  {!!request.decisionReason && (
+                    <Text>Phản hồi Owner: {request.decisionReason}</Text>
+                  )}
                 </Box>
               ))}
             </>
@@ -1025,45 +1472,71 @@ export function MoveInDraftHandoverPanel({
         <Text>Owner đã đánh dấu sẵn sàng. Tenant có thể xem và xác nhận biên bản.</Text>
       )}
       {staff && draft?.status === 'ChangesRequested' && (
-        <Text>Đã có yêu cầu sửa từ Tenant. Chờ Owner quyết định trước khi Staff cập nhật biên bản.</Text>
+        <Text>
+          Đã có yêu cầu sửa từ Tenant. Chờ Owner quyết định trước khi Staff cập nhật biên bản.
+        </Text>
       )}
       {staff && draft && started && (
-        <Modal visible={!!activeItem} transparent animationType="slide"
-          onRequestClose={closeItem}>
-          <KeyboardAvoidingView style={[wizardStyles.modalOverlay, compactPhone && wizardStyles.phoneModalOverlay]}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Modal visible={!!activeItem} transparent animationType="slide" onRequestClose={closeItem}>
+          <KeyboardAvoidingView
+            style={[wizardStyles.modalOverlay, compactPhone && wizardStyles.phoneModalOverlay]}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
             <View style={[wizardStyles.modalCard, compactPhone && wizardStyles.phoneModalCard]}>
-              <View style={[wizardStyles.modalHeader, compactPhone && wizardStyles.phoneModalHeader]}>
+              <View
+                style={[wizardStyles.modalHeader, compactPhone && wizardStyles.phoneModalHeader]}
+              >
                 <Row spread>
                   <View style={wizardStyles.rowText}>
                     <Text variant="titleMedium" style={wizardStyles.rowTitle}>
                       {modalTitle}
                     </Text>
-                    {activeItem === 'meter' && <Text variant="bodySmall" style={ui.muted}>
-                      Chụp ảnh, kiểm tra kết quả OCR và tự xác nhận chỉ số.
-                    </Text>}
+                    {activeItem === 'meter' && (
+                      <Text variant="bodySmall" style={ui.muted}>
+                        Chụp ảnh, kiểm tra kết quả OCR và tự xác nhận chỉ số.
+                      </Text>
+                    )}
                   </View>
-                  <Button mode="text" disabled={busy} onPress={closeItem}>Đóng</Button>
+                  <Button mode="text" disabled={busy} onPress={closeItem}>
+                    Đóng
+                  </Button>
                 </Row>
               </View>
-              <ScrollView ref={modalScroll} style={{ flexShrink: 1 }} contentContainerStyle={[wizardStyles.modalBody, compactPhone && wizardStyles.phoneModalBody]}
-                keyboardShouldPersistTaps="handled">
+              <ScrollView
+                ref={modalScroll}
+                style={{ flexShrink: 1 }}
+                contentContainerStyle={[
+                  wizardStyles.modalBody,
+                  compactPhone && wizardStyles.phoneModalBody,
+                ]}
+                keyboardShouldPersistTaps="handled"
+              >
                 {activeItem === 'meter' && meterTask && (
-                  <MeterTaskScreen embedded taskId={meterTask.id} onReturn={() => {
-                    setActiveItem(null);
-                    setMeterTask(null);
-                    setRevision((value) => value + 1);
-                  }} />
+                  <MeterTaskScreen
+                    embedded
+                    taskId={meterTask.id}
+                    onReturn={() => {
+                      setActiveItem(null);
+                      setMeterTask(null);
+                      setRevision((value) => value + 1);
+                    }}
+                  />
                 )}
                 {activeItem === 'legacy-inventory' && draft.moveInTask?.inventoryTaskId && (
-                  <StaffMoveInInventoryScreen embeddedTaskId={draft.moveInTask.inventoryTaskId}
+                  <StaffMoveInInventoryScreen
+                    embeddedTaskId={draft.moveInTask.inventoryTaskId}
                     developmentDemo={contract.isDevelopmentDemo === true}
-                    onPaneChange={() => modalScroll.current?.scrollTo({ y: 0, animated: false })} />
+                    onPaneChange={() => modalScroll.current?.scrollTo({ y: 0, animated: false })}
+                  />
                 )}
                 {activeItem === 'room-summary' && (
-                  <Input label="Hiện trạng phòng" value={values.roomCondition ?? ''}
-                    disabled={busy} multiline
-                    onChange={(value) => set('roomCondition', value)} />
+                  <Input
+                    label="Hiện trạng phòng"
+                    value={values.roomCondition ?? ''}
+                    disabled={busy}
+                    multiline
+                    onChange={(value) => set('roomCondition', value)}
+                  />
                 )}
                 {selectedRoomCode && selectedRoomCheck && (
                   <View style={wizardStyles.section}>
@@ -1072,32 +1545,54 @@ export function MoveInDraftHandoverPanel({
                     </Text>
                     {compactPhone ? (
                       <View style={wizardStyles.conditionOptions}>
-                        {([
-                          ['Passed', 'Đạt'], ['Issue', 'Có vấn đề'], ['NotApplicable', 'Không áp dụng'],
-                        ] as const).map(([value, label]) => (
-                          <RadioButton.Item key={value} label={label} value={value}
-                            status={values['roomCheck.' + selectedRoomCode + '.status'] === value ? 'checked' : 'unchecked'}
+                        {(
+                          [
+                            ['Passed', 'Đạt'],
+                            ['Issue', 'Có vấn đề'],
+                            ['NotApplicable', 'Không áp dụng'],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <RadioButton.Item
+                            key={value}
+                            label={label}
+                            value={value}
+                            status={
+                              values['roomCheck.' + selectedRoomCode + '.status'] === value
+                                ? 'checked'
+                                : 'unchecked'
+                            }
                             onPress={() => setRoomCheck(selectedRoomCode, 'status', value)}
-                            disabled={busy} mode="android" color={colors.blue}
-                            style={[wizardStyles.conditionOption,
-                              values['roomCheck.' + selectedRoomCode + '.status'] === value && wizardStyles.conditionSelected]} />
+                            disabled={busy}
+                            mode="android"
+                            color={colors.blue}
+                            style={[
+                              wizardStyles.conditionOption,
+                              values['roomCheck.' + selectedRoomCode + '.status'] === value &&
+                                wizardStyles.conditionSelected,
+                            ]}
+                          />
                         ))}
                       </View>
-                    ) : <SegmentedButtons
-                      value={values['roomCheck.' + selectedRoomCode + '.status'] ?? ''}
-                      onValueChange={(value) => setRoomCheck(selectedRoomCode, 'status', value)}
-                      density="small"
-                      buttons={[
-                        { value: 'Passed', label: 'Đạt', disabled: busy },
-                        { value: 'Issue', label: 'Có vấn đề', disabled: busy },
-                        { value: 'NotApplicable', label: 'Không áp dụng', disabled: busy },
-                      ]}
-                    />}
+                    ) : (
+                      <SegmentedButtons
+                        value={values['roomCheck.' + selectedRoomCode + '.status'] ?? ''}
+                        onValueChange={(value) => setRoomCheck(selectedRoomCode, 'status', value)}
+                        density="small"
+                        buttons={[
+                          { value: 'Passed', label: 'Đạt', disabled: busy },
+                          { value: 'Issue', label: 'Có vấn đề', disabled: busy },
+                          { value: 'NotApplicable', label: 'Không áp dụng', disabled: busy },
+                        ]}
+                      />
+                    )}
                     {values['roomCheck.' + selectedRoomCode + '.status'] !== 'Passed' && (
-                      <Input label={'Ghi chú · ' + selectedRoomCheck.label}
+                      <Input
+                        label={'Ghi chú · ' + selectedRoomCheck.label}
                         value={values['roomCheck.' + selectedRoomCode + '.notes'] ?? ''}
-                        disabled={busy} multiline
-                        onChange={(value) => setRoomCheck(selectedRoomCode, 'notes', value)} />
+                        disabled={busy}
+                        multiline
+                        onChange={(value) => setRoomCheck(selectedRoomCode, 'notes', value)}
+                      />
                     )}
                     {values['roomCheck.' + selectedRoomCode + '.status'] === 'Issue' && (
                       <>
@@ -1111,36 +1606,69 @@ export function MoveInDraftHandoverPanel({
                 )}
                 {selectedAsset && (
                   <View style={wizardStyles.section}>
-                    <HandoverAssetFields asset={selectedAsset} values={values} set={set}
-                      evidenceIds={availableEvidence} disabled={busy}
-                      quantities={!!draft.inventoryToken} showCheckWithoutQuantities compact embedded hideEvidenceChoices />
+                    <HandoverAssetFields
+                      asset={selectedAsset}
+                      values={values}
+                      set={set}
+                      evidenceIds={availableEvidence}
+                      disabled={busy}
+                      quantities={!!draft.inventoryToken}
+                      showCheckWithoutQuantities
+                      compact
+                      embedded
+                      hideEvidenceChoices
+                    />
                     {photoCapture('asset', selectedAsset.id)}
                   </View>
                 )}
                 {activeItem === 'keys' && (
                   <View style={wizardStyles.section}>
-                    <Input label="Số lượng chìa khóa bàn giao" numeric
-                      value={keyQuantity} disabled={busy}
-                      onChange={(value) => { setKeyQuantity(value); setKeysTouched(true); }} />
-                    <Input label="Ghi chú chìa khóa (nếu có)" multiline
-                      value={keyNotes} disabled={busy}
-                      onChange={(value) => { setKeyNotes(value); setKeysTouched(true); }} />
+                    <Input
+                      label="Số lượng chìa khóa bàn giao"
+                      numeric
+                      value={keyQuantity}
+                      disabled={busy}
+                      onChange={(value) => {
+                        setKeyQuantity(value);
+                        setKeysTouched(true);
+                      }}
+                    />
+                    <Input
+                      label="Ghi chú chìa khóa (nếu có)"
+                      multiline
+                      value={keyNotes}
+                      disabled={busy}
+                      onChange={(value) => {
+                        setKeyNotes(value);
+                        setKeysTouched(true);
+                      }}
+                    />
                     {photoCapture('keys')}
                   </View>
                 )}
-                {!!error && <Text accessibilityRole="alert" style={ui.red}>{error}</Text>}
+                {!!error && (
+                  <Text accessibilityRole="alert" style={ui.red}>
+                    {error}
+                  </Text>
+                )}
                 {!!notice && <Text style={ui.green}>{notice}</Text>}
               </ScrollView>
               {activeItem !== 'meter' && activeItem !== 'legacy-inventory' && (
-                <View style={[wizardStyles.modalFooter, compactPhone && wizardStyles.phoneModalFooter]}>
+                <View
+                  style={[wizardStyles.modalFooter, compactPhone && wizardStyles.phoneModalFooter]}
+                >
                   <View style={{ flex: 1 }}>
                     <Button mode="outlined" disabled={busy} onPress={closeItem}>
                       Để sau
                     </Button>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Button mode="contained" loading={busy} disabled={busy || loading}
-                      onPress={() => void run(saveDraft, 'Đã lưu kết quả kiểm tra trên máy chủ.')}>
+                    <Button
+                      mode="contained"
+                      loading={busy}
+                      disabled={busy || loading}
+                      onPress={() => void run(saveDraft, 'Đã lưu kết quả kiểm tra trên máy chủ.')}
+                    >
                       Lưu tiến độ
                     </Button>
                   </View>
@@ -1155,24 +1683,57 @@ export function MoveInDraftHandoverPanel({
         <>
           {canTenantRespondToMoveIn(draft) ? (
             <>
-              <Input label="Ghi chú / nội dung cần sửa" multiline value={note} disabled={busy} onChange={setNote} />
+              <Input
+                label="Ghi chú / nội dung cần sửa"
+                multiline
+                value={note}
+                disabled={busy}
+                onChange={setNote}
+              />
               <Checkbox.Item
                 label={`Tôi đã kiểm tra nội dung biên bản phiên bản ${draft.version}`}
                 status={acknowledged ? 'checked' : 'unchecked'}
                 disabled={busy}
                 onPress={() => setAcknowledged(!acknowledged)}
               />
-              {contract.status !== 'Active' && <Text style={ui.muted}>Chờ hợp đồng được kích hoạt để xác nhận nhận phòng.</Text>}
-              <Action disabled={busy || !acknowledged || contract.status !== 'Active'} onPress={() => void run(() => tenantDecision(false), 'Đã xác nhận bàn giao; vui lòng kiểm tra PDF cuối cùng đã lưu.')}>Xác nhận biên bản bàn giao</Action>
-              <Action secondary disabled={busy || !acknowledged || !note.trim()} onPress={() => void run(() => tenantDecision(true), 'Đã gửi yêu cầu sửa biên bản cho Owner.')}>Gửi yêu cầu chỉnh sửa</Action>
+              {contract.status !== 'Active' && (
+                <Text style={ui.muted}>Chờ hợp đồng được kích hoạt để xác nhận nhận phòng.</Text>
+              )}
+              <Action
+                disabled={busy || !acknowledged || contract.status !== 'Active'}
+                onPress={() =>
+                  void run(
+                    () => tenantDecision(false),
+                    'Đã xác nhận bàn giao; vui lòng kiểm tra PDF cuối cùng đã lưu.',
+                  )
+                }
+              >
+                Xác nhận biên bản bàn giao
+              </Action>
+              <Action
+                secondary
+                disabled={busy || !acknowledged || !note.trim()}
+                onPress={() =>
+                  void run(() => tenantDecision(true), 'Đã gửi yêu cầu sửa biên bản cho Owner.')
+                }
+              >
+                Gửi yêu cầu chỉnh sửa
+              </Action>
               <Text style={ui.muted}>Chưa cần ký biên bản ở bước này.</Text>
             </>
           ) : (
-            <Text>Biên bản đang được Staff và Owner chuẩn bị hoặc xử lý yêu cầu sửa. Bạn sẽ xác nhận khi Owner đánh dấu sẵn sàng.</Text>
+            <Text>
+              Biên bản đang được Staff và Owner chuẩn bị hoặc xử lý yêu cầu sửa. Bạn sẽ xác nhận khi
+              Owner đánh dấu sẵn sàng.
+            </Text>
           )}
         </>
       )}
-      {(!staff || !draft) && !!error && <Text accessibilityRole="alert" style={ui.red}>{error}</Text>}
+      {(!staff || !draft) && !!error && (
+        <Text accessibilityRole="alert" style={ui.red}>
+          {error}
+        </Text>
+      )}
       {(!staff || !draft) && !!notice && <Text style={ui.green}>{notice}</Text>}
     </Box>
   );

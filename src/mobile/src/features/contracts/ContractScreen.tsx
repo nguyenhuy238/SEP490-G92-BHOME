@@ -725,7 +725,9 @@ function LiveContractDetail({
           ['Active', 'Terminated', 'Superseded'].includes(c.status) ? (
             <ContractHandoverPanel api={api} contract={c} role={role} />
           ) : (
-            <Box><Text>Owner kiểm tra và duyệt biên bản bàn giao nháp tại Web Chủ cơ sở.</Text></Box>
+            <Box>
+              <Text>Owner kiểm tra và duyệt biên bản bàn giao nháp tại Web Chủ cơ sở.</Text>
+            </Box>
           )
         ) : (
           <MoveInDraftHandoverPanel
@@ -750,11 +752,11 @@ function LiveContractDetail({
             'Terminated',
             'Superseded',
           ].includes(c.status)) && (
-        <Box>
-          <Heading title="Bàn giao nhận phòng" />
-          <Text>Biên bản bàn giao chỉ áp dụng cho hợp đồng thuê chính đủ điều kiện.</Text>
-        </Box>
-      )}
+          <Box>
+            <Heading title="Bàn giao nhận phòng" />
+            <Text>Biên bản bàn giao chỉ áp dụng cho hợp đồng thuê chính đủ điều kiện.</Text>
+          </Box>
+        )}
       {section === 'signing' && !rental && !holding && role === 'Staff' && (
         <Text style={ui.muted}>
           Staff chuẩn bị và theo dõi hồ sơ. Owner/Tenant thực hiện ký; Owner xác minh cọc và kích

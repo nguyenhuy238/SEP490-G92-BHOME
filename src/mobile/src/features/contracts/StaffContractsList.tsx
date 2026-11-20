@@ -123,12 +123,14 @@ export function StaffContractsList({
   // Main move-in inspection may still be open after activation. The contract
   // list does not expose handover status, so this is a neutral entry point,
   // not a claim that every Active contract is unfinished.
-  const handoverQueue = contracts.filter(
-    (contract) =>
-      contract.kind === 'Main' &&
-      !contract.onboardingDraft &&
-      ['PendingSigning', 'PendingActivation', 'Active'].includes(contract.status),
-  ).sort((a, b) => Number(a.status === 'Active') - Number(b.status === 'Active'));
+  const handoverQueue = contracts
+    .filter(
+      (contract) =>
+        contract.kind === 'Main' &&
+        !contract.onboardingDraft &&
+        ['PendingSigning', 'PendingActivation', 'Active'].includes(contract.status),
+    )
+    .sort((a, b) => Number(a.status === 'Active') - Number(b.status === 'Active'));
   const error = !loading ? snapshot.error : '';
   const schedules = !loading ? snapshot.schedules : [];
   const scheduleError = !loading ? snapshot.scheduleError : '';
@@ -171,7 +173,8 @@ export function StaffContractsList({
         <View style={styles.scheduleDetails}>
           <Text variant="titleMedium">Công việc bàn giao phòng ({handoverQueue.length})</Text>
           <Text style={ui.muted}>
-            Mở từng phòng để bắt đầu hoặc xem tiến độ. Công việc gồm điện nước, hiện trạng và tài sản.
+            Mở từng phòng để bắt đầu hoặc xem tiến độ. Công việc gồm điện nước, hiện trạng và tài
+            sản.
           </Text>
           {handoverQueue.slice(0, 5).map((contract) => (
             <Button
@@ -180,11 +183,14 @@ export function StaffContractsList({
               icon="clipboard-text-outline"
               onPress={() => go('move-in', { contractId: contract.id, section: 'handover' })}
             >
-              {contract.status === 'Active' ? 'Xem bàn giao' : 'Mở bàn giao'} phòng {contract.roomNumber}
+              {contract.status === 'Active' ? 'Xem bàn giao' : 'Mở bàn giao'} phòng{' '}
+              {contract.roomNumber}
             </Button>
           ))}
           {handoverQueue.length > 5 && (
-            <Text style={ui.muted}>Còn {handoverQueue.length - 5} hồ sơ; xem tiếp trong danh sách hợp đồng.</Text>
+            <Text style={ui.muted}>
+              Còn {handoverQueue.length - 5} hồ sơ; xem tiếp trong danh sách hợp đồng.
+            </Text>
           )}
         </View>
       )}

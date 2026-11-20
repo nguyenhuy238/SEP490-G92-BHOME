@@ -35,30 +35,48 @@ function SavedThumbnail({ api, taskId, id }: { api: MobileApi; taskId: string; i
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     const abort = new AbortController();
-    void operationalTasks(api).imageBytes(taskId, id, abort.signal)
+    void operationalTasks(api)
+      .imageBytes(taskId, id, abort.signal)
       .then((bytes) => {
         try {
-          if (!abort.signal.aborted && !validateIncidentPhoto(bytes)) setUri(incidentPhotoUri(bytes));
+          if (!abort.signal.aborted && !validateIncidentPhoto(bytes))
+            setUri(incidentPhotoUri(bytes));
           else if (!abort.signal.aborted) setFailed(true);
         } finally {
           bytes.fill(0);
         }
       })
-      .catch(() => { if (!abort.signal.aborted) setFailed(true); });
+      .catch(() => {
+        if (!abort.signal.aborted) setFailed(true);
+      });
     return () => abort.abort();
   }, [api, taskId, id]);
-  return uri
-    ? <Image source={{ uri }} resizeMode="cover" accessibilityLabel="Ảnh minh chứng đã lưu"
-        style={{ width: '100%', height: 110, borderRadius: 10 }} />
-    : <View style={{ height: 110, alignItems: 'center', justifyContent: 'center' }}>
-        <Text variant="bodySmall" style={{ color: colors.muted }}>
-          {failed ? 'Không xem được ảnh' : 'Đang tải ảnh…'}
-        </Text>
-      </View>;
+  return uri ? (
+    <Image
+      source={{ uri }}
+      resizeMode="cover"
+      accessibilityLabel="Ảnh minh chứng đã lưu"
+      style={{ width: '100%', height: 110, borderRadius: 10 }}
+    />
+  ) : (
+    <View style={{ height: 110, alignItems: 'center', justifyContent: 'center' }}>
+      <Text variant="bodySmall" style={{ color: colors.muted }}>
+        {failed ? 'Không xem được ảnh' : 'Đang tải ảnh…'}
+      </Text>
+    </View>
+  );
 }
 
-export function InventoryPhotoCapture({ api, taskId, savedIds, photos, disabled,
-  onChange, onRemoveSaved, error, developmentDemo = false,
+export function InventoryPhotoCapture({
+  api,
+  taskId,
+  savedIds,
+  photos,
+  disabled,
+  onChange,
+  onRemoveSaved,
+  error,
+  developmentDemo = false,
 }: {
   api: MobileApi;
   taskId: string;
@@ -72,12 +90,14 @@ export function InventoryPhotoCapture({ api, taskId, savedIds, photos, disabled,
 }) {
   const [captureError, setCaptureError] = useState('');
   const count = savedIds.length + photos.length;
-  const canUseSample = developmentDemo && canUseLocalMeterDemo(
-    typeof __DEV__ !== 'undefined' && __DEV__,
-    Platform.OS,
-    globalThis.location?.hostname,
-    globalThis.location?.port,
-  );
+  const canUseSample =
+    developmentDemo &&
+    canUseLocalMeterDemo(
+      typeof __DEV__ !== 'undefined' && __DEV__,
+      Platform.OS,
+      globalThis.location?.hostname,
+      globalThis.location?.port,
+    );
   return (
     <View style={{ gap: 8 }}>
       <Text variant="labelMedium" style={{ color: error ? colors.red : colors.navy }}>
@@ -98,13 +118,23 @@ export function InventoryPhotoCapture({ api, taskId, savedIds, photos, disabled,
           // CameraCapture clears its input buffer after the callback; keep a
           // private in-memory copy only until the explicit Save operation.
           const copy = Uint8Array.from(bytes);
-          onChange([...photos, { id: randomUUID(), bytes: copy, contentType: copy[0] === 137 ? 'image/png' : 'image/jpeg' }]);
+          onChange([
+            ...photos,
+            {
+              id: randomUUID(),
+              bytes: copy,
+              contentType: copy[0] === 137 ? 'image/png' : 'image/jpeg',
+            },
+          ]);
           setCaptureError('');
           return true;
         }}
       />
       {canUseSample && (
-        <Button mode="outlined" icon="flask-outline" disabled={disabled || count >= 5}
+        <Button
+          mode="outlined"
+          icon="flask-outline"
+          disabled={disabled || count >= 5}
           onPress={() => {
             if (!canUseSample || disabled || count >= 5) return;
             try {
@@ -114,36 +144,74 @@ export function InventoryPhotoCapture({ api, taskId, savedIds, photos, disabled,
               onChange([...photos, { id: randomUUID(), bytes, contentType: 'image/jpeg' }]);
               setCaptureError('');
             } catch (failure) {
-              setCaptureError(failure instanceof Error ? failure.message : 'Không tạo được ảnh mẫu DEV.');
+              setCaptureError(
+                failure instanceof Error ? failure.message : 'Không tạo được ảnh mẫu DEV.',
+              );
             }
-          }}>
+          }}
+        >
           Thêm ảnh mẫu DEV
         </Button>
       )}
       {(error || captureError) && (
-        <Text accessibilityRole="alert" style={{ color: colors.red }}>{error || captureError}</Text>
+        <Text accessibilityRole="alert" style={{ color: colors.red }}>
+          {error || captureError}
+        </Text>
       )}
       {count > 0 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
           {savedIds.map((id, index) => (
             <View key={id} style={{ width: '47%', minWidth: 104, maxWidth: 175, flexGrow: 1 }}>
               <SavedThumbnail api={api} taskId={taskId} id={id} />
-              {!disabled && <IconButton icon="close" size={18} accessibilityLabel={`Xóa ảnh minh chứng ${index + 1}`}
-                onPress={() => onRemoveSaved(id)}
-                style={{ position: 'absolute', top: 0, right: 0, margin: 2,
-                  width: 36, height: 36, borderRadius: 18, backgroundColor: '#ffffff' }} />}
+              {!disabled && (
+                <IconButton
+                  icon="close"
+                  size={18}
+                  accessibilityLabel={`Xóa ảnh minh chứng ${index + 1}`}
+                  onPress={() => onRemoveSaved(id)}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    margin: 2,
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: '#ffffff',
+                  }}
+                />
+              )}
             </View>
           ))}
           {photos.map((photo, index) => (
-            <View key={photo.id} style={{ width: '47%', minWidth: 104, maxWidth: 175, flexGrow: 1 }}>
-              <Image source={{ uri: incidentPhotoUri(photo.bytes) }} resizeMode="cover"
+            <View
+              key={photo.id}
+              style={{ width: '47%', minWidth: 104, maxWidth: 175, flexGrow: 1 }}
+            >
+              <Image
+                source={{ uri: incidentPhotoUri(photo.bytes) }}
+                resizeMode="cover"
                 accessibilityLabel={`Ảnh minh chứng mới ${index + 1}`}
-                style={{ width: '100%', height: 110, borderRadius: 10 }} />
-              {!disabled && <IconButton icon="close" size={18}
-                accessibilityLabel={`Xóa ảnh minh chứng ${savedIds.length + index + 1}`}
-                onPress={() => onChange(photos.filter((entry) => entry.id !== photo.id))}
-                style={{ position: 'absolute', top: 0, right: 0, margin: 2,
-                  width: 36, height: 36, borderRadius: 18, backgroundColor: '#ffffff' }} />}
+                style={{ width: '100%', height: 110, borderRadius: 10 }}
+              />
+              {!disabled && (
+                <IconButton
+                  icon="close"
+                  size={18}
+                  accessibilityLabel={`Xóa ảnh minh chứng ${savedIds.length + index + 1}`}
+                  onPress={() => onChange(photos.filter((entry) => entry.id !== photo.id))}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    margin: 2,
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: '#ffffff',
+                  }}
+                />
+              )}
             </View>
           ))}
         </View>

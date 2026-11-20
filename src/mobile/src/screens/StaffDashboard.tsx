@@ -9,7 +9,11 @@ import { useStaffDashboard } from '../features/workspace/useStaffDashboard';
 import { type WorkspaceScreen } from '../features/workspace/navigation';
 import { colors as c, staffColors as s } from '../theme/theme';
 import { typography } from '../theme/typography';
-import { isEmbeddedInitialMeterTask, isEmbeddedMoveInInventory, isMainMoveInWork } from '../services/operationalTasks';
+import {
+  isEmbeddedInitialMeterTask,
+  isEmbeddedMoveInInventory,
+  isMainMoveInWork,
+} from '../services/operationalTasks';
 
 export function StaffDashboard() {
   const {
@@ -60,11 +64,12 @@ export function StaffDashboard() {
               data.locations.data?.find((location) => location.id === task.locationId)?.label ??
               'Cơ sở được phân công',
             status: 'Quá hạn',
-            open: () => isMainMoveInWork(task)
-              ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
-              : go(task.kind === 'MoveInInventory' ? 'move-in-inventory' : 'task-detail', {
-                  taskId: task.id,
-                }),
+            open: () =>
+              isMainMoveInWork(task)
+                ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+                : go(task.kind === 'MoveInInventory' ? 'move-in-inventory' : 'task-detail', {
+                    taskId: task.id,
+                  }),
           })),
         ...selectedInspections
           .filter((item) => item.status === 'Approved')

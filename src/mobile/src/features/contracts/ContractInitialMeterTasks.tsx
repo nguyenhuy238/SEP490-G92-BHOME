@@ -85,10 +85,12 @@ export function ContractInitialMeterTasks({
   const current = allowed && result?.key === key ? result : null;
   const content = (
     <>
-      {!integrated && <Heading
-        title="Chụp chỉ số khởi tạo hợp đồng"
-        detail="Chụp ảnh thực tế và xác nhận lại cả công tơ đang dùng tiếp. Ảnh và chỉ số của hợp đồng cũ không được dùng thay thế."
-      />}
+      {!integrated && (
+        <Heading
+          title="Chụp chỉ số khởi tạo hợp đồng"
+          detail="Chụp ảnh thực tế và xác nhận lại cả công tơ đang dùng tiếp. Ảnh và chỉ số của hợp đồng cũ không được dùng thay thế."
+        />
+      )}
       {!staffLocationId && <Text>Chọn cơ sở được phân công trên trang chủ để xem nhiệm vụ.</Text>}
       {!!staffLocationId && staffLocationId !== contract.locationId && (
         <Text>Hãy chọn đúng cơ sở của hợp đồng trên trang chủ để xem nhiệm vụ.</Text>
@@ -110,7 +112,9 @@ export function ContractInitialMeterTasks({
                     {task?.status === 2 ? 'Đã xác nhận' : 'Chưa xác nhận'}
                   </Pill>
                 </Row>
-              ) : <Text>{`Chỉ số khởi tạo ${label.toLowerCase()}`}</Text>}
+              ) : (
+                <Text>{`Chỉ số khởi tạo ${label.toLowerCase()}`}</Text>
+              )}
               {matches.length > 1 && (
                 <Text style={ui.red}>Có nhiều nhiệm vụ cho cùng hợp đồng. Cần Owner kiểm tra.</Text>
               )}
@@ -119,19 +123,23 @@ export function ContractInitialMeterTasks({
               )}
               {task && (
                 <>
-                  {!integrated && <Text>
-                    {task.status === 2
-                      ? 'Đã chụp và xác nhận'
-                      : task.status === 3
-                        ? 'Nhiệm vụ đã hủy'
-                        : 'Chờ chụp và xác nhận'}
-                  </Text>}
+                  {!integrated && (
+                    <Text>
+                      {task.status === 2
+                        ? 'Đã chụp và xác nhận'
+                        : task.status === 3
+                          ? 'Nhiệm vụ đã hủy'
+                          : 'Chờ chụp và xác nhận'}
+                    </Text>
+                  )}
                   {task.status !== 3 && (
                     <Action
                       secondary={task.status === 2}
-                      onPress={() => onOpenTask
-                        ? onOpenTask(task.id, label)
-                        : router.push({ pathname: '/meter', params: { taskId: task.id } })}
+                      onPress={() =>
+                        onOpenTask
+                          ? onOpenTask(task.id, label)
+                          : router.push({ pathname: '/meter', params: { taskId: task.id } })
+                      }
                     >
                       {task.status === 2
                         ? `Xem chỉ số ${label.toLowerCase()}`

@@ -10,15 +10,29 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('react-native', () => ({
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Image: ({ accessibilityLabel, source }: { accessibilityLabel: string; source: { uri: string } }) => (
-    <img alt={accessibilityLabel} src={source.uri} />
-  ),
+  Image: ({
+    accessibilityLabel,
+    source,
+  }: {
+    accessibilityLabel: string;
+    source: { uri: string };
+  }) => <img alt={accessibilityLabel} src={source.uri} />,
 }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-  IconButton: ({ accessibilityLabel, onPress, disabled }: {
-    accessibilityLabel: string; onPress: () => void; disabled?: boolean;
-  }) => <button aria-label={accessibilityLabel} onClick={onPress} disabled={disabled}>×</button>,
+  IconButton: ({
+    accessibilityLabel,
+    onPress,
+    disabled,
+  }: {
+    accessibilityLabel: string;
+    onPress: () => void;
+    disabled?: boolean;
+  }) => (
+    <button aria-label={accessibilityLabel} onClick={onPress} disabled={disabled}>
+      ×
+    </button>
+  ),
 }));
 vi.mock('../theme/theme', () => ({
   colors: { white: '#ffffff', navy: '#001637', muted: '#64748b', red: '#ba1a1a' },
@@ -27,12 +41,25 @@ vi.mock('../components/IncidentEvidencePicker', () => ({
   incidentPhotoUri: () => 'data:image/png;base64,iVBORw0KGgo=',
 }));
 vi.mock('../components/CameraCapture', () => ({
-  CameraCapture: ({ label, disabled, onCapture }: {
-    label: string; disabled?: boolean; onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<boolean>;
-  }) => <button disabled={disabled} onClick={() => {
-    const source = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
-    void onCapture(source).then(() => source.fill(0));
-  }}>{label}</button>,
+  CameraCapture: ({
+    label,
+    disabled,
+    onCapture,
+  }: {
+    label: string;
+    disabled?: boolean;
+    onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<boolean>;
+  }) => (
+    <button
+      disabled={disabled}
+      onClick={() => {
+        const source = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+        void onCapture(source).then(() => source.fill(0));
+      }}
+    >
+      {label}
+    </button>
+  ),
 }));
 vi.mock('../lib/randomUUID', () => ({
   randomUUID: () => `00000000-0000-4000-8000-${String(++state.uuid).padStart(12, '0')}`,
@@ -42,16 +69,27 @@ vi.mock('../services/operationalTasks', () => ({
 }));
 import { InventoryPhotoCapture } from '../components/InventoryPhotoCapture';
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); state.uuid = 0; });
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+  state.uuid = 0;
+});
 const api = { request: vi.fn() } as never;
 
 function Fixture({ saved = [] as string[] }: { saved?: string[] }) {
   const [photos, setPhotos] = useState<IncidentPhoto[]>([]);
   const [savedIds, setSavedIds] = useState(saved);
-  return <InventoryPhotoCapture api={api}
-    taskId="11111111-1111-4111-8111-111111111111"
-    savedIds={savedIds} photos={photos} disabled={false}
-    onChange={setPhotos} onRemoveSaved={(id) => setSavedIds(ids => ids.filter(x => x !== id))} />;
+  return (
+    <InventoryPhotoCapture
+      api={api}
+      taskId="11111111-1111-4111-8111-111111111111"
+      savedIds={savedIds}
+      photos={photos}
+      disabled={false}
+      onChange={setPhotos}
+      onRemoveSaved={(id) => setSavedIds((ids) => ids.filter((x) => x !== id))}
+    />
+  );
 }
 
 it('has only a camera action, appends immediate image previews, caps at 5 and removes them with X', async () => {
@@ -75,7 +113,9 @@ it('loads stored photos through authenticated task evidence and unlinks by X', a
   render(<Fixture saved={[savedId]} />);
   expect(await screen.findByRole('img', { name: 'Ảnh minh chứng đã lưu' })).toBeTruthy();
   expect(state.imageBytes).toHaveBeenCalledWith(
-    '11111111-1111-4111-8111-111111111111', savedId, expect.any(AbortSignal),
+    '11111111-1111-4111-8111-111111111111',
+    savedId,
+    expect.any(AbortSignal),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Xóa ảnh minh chứng 1' }));
   expect(screen.queryByRole('img', { name: 'Ảnh minh chứng đã lưu' })).toBeNull();

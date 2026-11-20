@@ -530,7 +530,11 @@ export function ContractDetailPanel({
           api={api}
           id={c.id}
           contractStatus={c.status}
-          showDraft={c.kind === 'Main' && !c.previousContractId && !['Cancelled', 'Terminated', 'Expired'].includes(c.status)}
+          showDraft={
+            c.kind === 'Main' &&
+            !c.previousContractId &&
+            !['Cancelled', 'Terminated', 'Expired'].includes(c.status)
+          }
         />
       )}
       {!m && c.kind !== 'Holding' && c.status === 'Active' && (

@@ -44,7 +44,9 @@ export function HandoverDocumentPreview({ record }: { record: HandoverView }) {
           <Typography variant="subtitle2">I. Thông tin bàn giao</Typography>
           <Typography variant="body2">Phòng: {field(snapshot?.roomNumber)}</Typography>
           <Typography variant="body2">Ngày bàn giao: {date(snapshot?.date)}</Typography>
-          <Typography variant="body2">Tình trạng phòng: {field(snapshot?.roomCondition)}</Typography>
+          <Typography variant="body2">
+            Tình trạng phòng: {field(snapshot?.roomCondition)}
+          </Typography>
           <Typography variant="body2">
             Chìa khóa và quyền truy cập: {field(snapshot?.keysAndAccess)}
           </Typography>
@@ -68,7 +70,9 @@ export function HandoverDocumentPreview({ record }: { record: HandoverView }) {
         <Stack spacing={0.75}>
           <Typography variant="subtitle2">III. Kiểm kê tài sản</Typography>
           {snapshot?.noAssetsConfirmed ? (
-            <Typography variant="body2">Owner đã xác nhận phòng không có tài sản bàn giao.</Typography>
+            <Typography variant="body2">
+              Owner đã xác nhận phòng không có tài sản bàn giao.
+            </Typography>
           ) : assets.length ? (
             assets.map((asset) => (
               <Typography key={asset.id} variant="body2" sx={{ overflowWrap: 'anywhere' }}>
@@ -86,14 +90,17 @@ export function HandoverDocumentPreview({ record }: { record: HandoverView }) {
         <Stack spacing={0.75}>
           <Typography variant="subtitle2">IV. Xác nhận bàn giao</Typography>
           <Typography variant="body2">
-            Tenant: {record.tenantConfirmedAt ? formatInstant(record.tenantConfirmedAt) : 'Chưa xác nhận'}
+            Tenant:{' '}
+            {record.tenantConfirmedAt ? formatInstant(record.tenantConfirmedAt) : 'Chưa xác nhận'}
           </Typography>
           <Typography variant="body2">
-            Staff: {record.staffConfirmedAt ? formatInstant(record.staffConfirmedAt) : 'Chưa hoàn tất'}
+            Staff:{' '}
+            {record.staffConfirmedAt ? formatInstant(record.staffConfirmedAt) : 'Chưa hoàn tất'}
           </Typography>
           {!confirmed && (
             <Typography variant="caption" color="text.secondary">
-              Nội dung được cập nhật từ dữ liệu máy chủ. Bản chính thức chỉ có hiệu lực sau các bước xác nhận theo quy trình.
+              Nội dung được cập nhật từ dữ liệu máy chủ. Bản chính thức chỉ có hiệu lực sau các bước
+              xác nhận theo quy trình.
             </Typography>
           )}
         </Stack>

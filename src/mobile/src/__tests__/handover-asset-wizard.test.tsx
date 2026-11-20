@@ -6,38 +6,76 @@ import type { HandoverAsset } from '../../../../packages/client-core/src/contrac
 
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-  SegmentedButtons: ({ value, onValueChange, buttons }: {
+  SegmentedButtons: ({
+    value,
+    onValueChange,
+    buttons,
+  }: {
     value: string;
     onValueChange: (next: string) => void;
     buttons: { value: string; label: string; disabled?: boolean }[];
   }) => (
-    <div>{buttons.map((button) => (
-      <button key={button.value} aria-pressed={value === button.value}
-        disabled={button.disabled} onClick={() => onValueChange(button.value)}>
-        {button.label}
-      </button>
-    ))}</div>
+    <div>
+      {buttons.map((button) => (
+        <button
+          key={button.value}
+          aria-pressed={value === button.value}
+          disabled={button.disabled}
+          onClick={() => onValueChange(button.value)}
+        >
+          {button.label}
+        </button>
+      ))}
+    </div>
   ),
-  Checkbox: { Item: ({ label, status, onPress, disabled }: {
-    label: string;
-    status: string;
-    onPress: () => void;
-    disabled?: boolean;
-  }) => <button aria-pressed={status === 'checked'} onClick={onPress} disabled={disabled}>{label}</button> },
+  Checkbox: {
+    Item: ({
+      label,
+      status,
+      onPress,
+      disabled,
+    }: {
+      label: string;
+      status: string;
+      onPress: () => void;
+      disabled?: boolean;
+    }) => (
+      <button aria-pressed={status === 'checked'} onClick={onPress} disabled={disabled}>
+        {label}
+      </button>
+    ),
+  },
 }));
 vi.mock('../components/WorkflowControls', () => ({
-  Input: ({ label, value, onChange }: {
+  Input: ({
+    label,
+    value,
+    onChange,
+  }: {
     label: string;
     value: string;
     onChange: (next: string) => void;
-  }) => <label>{label}<input aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} /></label>,
+  }) => (
+    <label>
+      {label}
+      <input aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  ),
 }));
 vi.mock('../components/WorkspaceKit', () => ({
-  Action: ({ children, onPress, disabled }: {
+  Action: ({
+    children,
+    onPress,
+    disabled,
+  }: {
     children: React.ReactNode;
     onPress: () => void;
     disabled?: boolean;
-  }) => <button disabled={disabled} onClick={onPress}>{children}</button>,
+  }) => (
+    <button disabled={disabled} onClick={onPress}>
+      {children}
+    </button>
+  ),
 }));
 
 import { HandoverAssetFields } from '../features/contracts/HandoverAssetFields';
@@ -61,13 +99,7 @@ function InspectionHarness() {
     <>
       <button onClick={() => setVisible((current) => !current)}>Chuyển bước</button>
       {visible && (
-        <HandoverAssetFields
-          asset={asset}
-          values={values}
-          set={set}
-          evidenceIds={[]}
-          compact
-        />
+        <HandoverAssetFields asset={asset} values={values} set={set} evidenceIds={[]} compact />
       )}
       <output data-testid="inspection-values">{JSON.stringify(values)}</output>
     </>
@@ -75,7 +107,10 @@ function InspectionHarness() {
 }
 
 function inspectionValues(): Record<string, string> {
-  return JSON.parse(screen.getByTestId('inspection-values').textContent ?? '{}') as Record<string, string>;
+  return JSON.parse(screen.getByTestId('inspection-values').textContent ?? '{}') as Record<
+    string,
+    string
+  >;
 }
 
 afterEach(cleanup);
@@ -93,10 +128,20 @@ it('clears autofilled exact counts and the checked flag when Staff switches to a
   const values = inspectionValues();
   expect(values['asset-1.quantityMode']).toBe('difference');
   expect(values['asset-1.checked']).toBe('false');
-  for (const key of ['observedQuantity', 'handedOverQuantity', 'goodQuantity', 'wornQuantity', 'damagedQuantity']) {
+  for (const key of [
+    'observedQuantity',
+    'handedOverQuantity',
+    'goodQuantity',
+    'wornQuantity',
+    'damagedQuantity',
+  ]) {
     expect(values[`asset-1.${key}`]).toBe('');
   }
-  expect((screen.getByRole('button', { name: 'Có chênh lệch' }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('true');
+  expect(
+    (screen.getByRole('button', { name: 'Có chênh lệch' }) as HTMLButtonElement).getAttribute(
+      'aria-pressed',
+    ),
+  ).toBe('true');
   expect((screen.getByLabelText('Quạt · Số lượng thực tế') as HTMLInputElement).value).toBe('');
 });
 
@@ -109,6 +154,10 @@ it('retains the selected discrepancy mode and entered counts when Wizard unmount
   expect(screen.queryByRole('button', { name: 'Có chênh lệch' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Chuyển bước' }));
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra Quạt' }));
-  expect((screen.getByRole('button', { name: 'Có chênh lệch' }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('true');
+  expect(
+    (screen.getByRole('button', { name: 'Có chênh lệch' }) as HTMLButtonElement).getAttribute(
+      'aria-pressed',
+    ),
+  ).toBe('true');
   expect((screen.getByLabelText('Quạt · Số lượng thực tế') as HTMLInputElement).value).toBe('1');
 });

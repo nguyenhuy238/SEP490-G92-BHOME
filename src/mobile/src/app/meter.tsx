@@ -151,8 +151,14 @@ function RoomMeterScreen({ taskId, staffLocationId }: { taskId: string; staffLoc
   );
 }
 
-export function MeterTaskScreen({ taskId, onReturn, embedded = false }: {
-  taskId: string; onReturn: () => void; embedded?: boolean;
+export function MeterTaskScreen({
+  taskId,
+  onReturn,
+  embedded = false,
+}: {
+  taskId: string;
+  onReturn: () => void;
+  embedded?: boolean;
 }) {
   const { api } = useSession();
   const [task, setTask] = useState<MeterTask | null>(null);
@@ -486,7 +492,9 @@ export function MeterTaskScreen({ taskId, onReturn, embedded = false }: {
       )}
     </>
   );
-  return embedded ? content : (
+  return embedded ? (
+    content
+  ) : (
     <WorkspaceShell screen="meter-reading" onBack={back} backDisabled={busy} contentRevision={step}>
       {content}
     </WorkspaceShell>

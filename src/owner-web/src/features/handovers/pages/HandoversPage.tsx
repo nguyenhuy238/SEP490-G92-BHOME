@@ -77,10 +77,15 @@ function HandoverLookup() {
           key={contract}
           api={api}
           id={contract}
-          contractStatus={history.data?.periods.find((period) => period.contractId === contract)?.contractStatus}
-          showDraft={!['Cancelled', 'Terminated', 'Expired'].includes(
-            history.data?.periods.find((period) => period.contractId === contract)?.contractStatus ?? '',
-          )}
+          contractStatus={
+            history.data?.periods.find((period) => period.contractId === contract)?.contractStatus
+          }
+          showDraft={
+            !['Cancelled', 'Terminated', 'Expired'].includes(
+              history.data?.periods.find((period) => period.contractId === contract)
+                ?.contractStatus ?? '',
+            )
+          }
         />
       )}
     </Stack>

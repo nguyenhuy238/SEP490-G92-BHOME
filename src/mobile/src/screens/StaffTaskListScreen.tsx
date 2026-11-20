@@ -40,8 +40,9 @@ export function StaffTaskListScreen() {
   );
   const inHeader = useWorkspaceHeaderRefresh(query.reload, query.fetching);
   const data = staffLocationId ? query.data : null;
-  const items = (data?.items ?? []).filter((task) =>
-    !isEmbeddedMoveInInventory(task) && !isEmbeddedInitialMeterTask(task));
+  const items = (data?.items ?? []).filter(
+    (task) => !isEmbeddedMoveInInventory(task) && !isEmbeddedInitialMeterTask(task),
+  );
   return (
     <>
       {!inHeader && (
@@ -72,7 +73,9 @@ export function StaffTaskListScreen() {
           setPage(1);
         }}
       />
-      {data && <TaskSummaryBar totalCount={data.totalCount} visibleItems={items} filtered={!!status} />}
+      {data && (
+        <TaskSummaryBar totalCount={data.totalCount} visibleItems={items} filtered={!!status} />
+      )}
       {query.fetching && (
         <View
           style={styles.loading}
@@ -106,10 +109,10 @@ export function StaffTaskListScreen() {
             isMainMoveInWork(task)
               ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
               : task.kind === 'MeterReading'
-              ? go('meter-reading')
-              : task.kind === 'MoveInInventory'
-                ? go('move-in-inventory', { taskId: task.id })
-                : go('task-detail', { taskId: task.id })
+                ? go('meter-reading')
+                : task.kind === 'MoveInInventory'
+                  ? go('move-in-inventory', { taskId: task.id })
+                  : go('task-detail', { taskId: task.id })
           }
         />
       ))}
