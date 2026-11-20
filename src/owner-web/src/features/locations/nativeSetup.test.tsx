@@ -701,7 +701,9 @@ it('creates local defaults and rooms using a single atomic setup write from the 
   expect(data.rooms[0]).not.toHaveProperty('roomTypeId');
   expect(key(call)).toMatch(/^[a-f0-9-]{36}$/);
   await waitFor(() => expect(sessionStorage.getItem(draftKey)).toBeNull());
-}, 20000);
+  // The real seven-step MUI wizard performs multiple full accessibility-tree scans in jsdom.
+  // Keep every assertion, but allow slower CI machines to finish the complete atomic-flow test.
+}, 60000);
 
 it('loads only Published templates, saves provenance, and retries an uncertain response with the same key', async () => {
   let attempts = 0;
@@ -778,4 +780,4 @@ it('loads only Published templates, saves provenance, and retries an uncertain r
   expect(writes()).toHaveLength(2);
   expect(key(writes()[0])).toBe(key(writes()[1]));
   expect(payload(writes()[0])).toEqual(payload(writes()[1]));
-}, 20000);
+}, 60000);

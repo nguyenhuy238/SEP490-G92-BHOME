@@ -179,6 +179,43 @@ Không cấu hình wildcard. Người nhận ngoài allowlist bị từ chối *
 không tự chuyển hướng thư chứa token của người khác vào mailbox test.
 `Email__TestRecipient` chỉ thuộc endpoint thử thư, không thay thế allowlist của mọi email.
 
+**Máy Development muốn gửi ra Gmail thật (tùy chọn, không thay đổi mặc định của nhóm):**
+chạy `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Configure-LocalGmail.ps1`.
+Nhập địa chỉ Gmail gửi, các địa chỉ nhận được phê duyệt (cách nhau bằng dấu phẩy),
+và **Gmail App Password** tại dấu nhắc ẩn. Không nhập mật khẩu Gmail thường và
+không gửi App Password qua chat, commit, `.env` hay tham số command line. Script
+chỉ cập nhật `.NET User Secrets` Development, giữ nguyên `.env`/database, bật
+STARTTLS và giới hạn email ra ngoài theo allowlist; không tự gửi thư.
+Sau đó dừng Backend đang chạy, khởi động lại bằng `scripts/Start-Api.ps1`, chạy
+`scripts/Configure-LocalGmail.ps1 -CheckOnly`, đăng nhập tài khoản Owner và
+thử endpoint `POST /api/v1/notifications/email-test` để gửi một email tổng hợp
+đến người nhận đầu tiên trong allowlist. Phản hồi `SmtpAccepted` chỉ xác nhận
+máy chủ SMTP đã nhận, **không chứng minh email đã vào Inbox**; kiểm tra cả Spam.
+Địa chỉ của Staff/Tenant cần thực sự nhận email cũng phải có trong allowlist;
+chỉ bật cho địa chỉ đã được phê duyệt. Chạy lại công cụ cần giữ nguyên allowlist
+đã duyệt; khi muốn đổi danh sách, chủ động rà soát User Secrets trước.
+
+**Chủ động gửi mọi địa chỉ email hợp lệ trong Development:** nếu Owner thực sự
+cần gửi trực tiếp từ BHOME tới email Staff/Tenant ngoài danh sách thử nghiệm,
+chạy `scripts/Configure-LocalGmail.ps1 -AllowAnyRecipient`. Không phải nhập
+`Approved test recipients`, nhưng phải nhập Gmail sender và App Password mới
+qua dấu nhắc ẩn. Tùy chọn này lưu `Email:AllowAnyRecipientInDevelopment=true`
+vào User Secrets, ưu tiên hơn allowlist cũ **chỉ trong Development SMTP**;
+Testing/Staging vẫn bắt buộc allowlist. Kiểm tra với
+`scripts/Configure-LocalGmail.ps1 -AllowAnyRecipient -CheckOnly`.
+Các email được tạo từ dữ liệu thực sẽ đi ra Internet; kiểm tra người nhận,
+trạng thái thông báo và tránh dùng dữ liệu nhạy cảm chưa được phép trước khi
+gửi. Thư đã được ghi nhận `Sent` trong Mailpit không tự gửi lại khi đổi SMTP:
+cần tạo lời mời mới. Không đưa tùy chọn này vào cấu hình chung/version control.
+
+**Khi chạy Mobile:** `Prepare-OcrMobile.ps1`/`Start-OcrMobileApp.ps1`
+không đồng bộ các khóa `Email:*` từ `.env` vào .NET User Secrets nữa.
+Điều này tránh vô tình ghi đè Gmail SMTP bằng Mailpit `Capture` của `.env` chung.
+`Start-OcrMobile.ps1` cũng không nhập `Email__*` từ `.env` thành process
+environment (mức ưu tiên cao hơn User Secrets). Hai bước phải cùng tránh ghi đè.
+Sau khi thay đổi SMTP, xác minh bằng `Configure-LocalGmail.ps1 -CheckOnly`
+(thêm `-AllowAnyRecipient` nếu cần gửi mọi địa chỉ), rồi khởi động lại API.
+
 Nếu máy đã cấu hình Gmail trước khi pull bản chuẩn hóa, API có thể dừng vì thiếu
 `Email:AllowedRecipients:0`; Web nhận 502 và Mobile báo ECONNREFUSED vì API chưa mở cổng.
 Với mailbox thử nghiệm đã được xác định trong `Email:TestRecipient`, chủ động chuyển đổi bằng:

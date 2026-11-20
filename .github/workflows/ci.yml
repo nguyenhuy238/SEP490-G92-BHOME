@@ -116,3 +116,54 @@ jobs:
       deployments: read
     uses: ./.github/workflows/release.yml
     secrets: inherit
+  build-staging-images:
+    if: github.event_name == 'pull_request' && github.base_ref == 'develop'
+    needs: [backend, frontend]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    concurrency:
+      group: bhome-staging-images
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Validate API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Api.Release.Dockerfile
+          target: api
+          push: false
+          tags: ghcr.io/${{ github.repository_owner }}/bhome-api:sha-${{ github.sha }}
+          cache-from: type=gha,scope=staging-api
+          cache-to: type=gha,mode=max,scope=staging-api
+      - name: Validate Owner Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Web.Dockerfile
+          push: false
+          build-args: |
+            APP=owner-web
+            VITE_API_BASE_URL=https://api-staging.103.146.23.157.sslip.io
+            VITE_DEPLOYMENT_ENVIRONMENT=Staging
+            BHOME_REVISION=${{ github.sha }}
+          tags: ghcr.io/${{ github.repository_owner }}/bhome-owner-web:sha-${{ github.sha }}
+          cache-from: type=gha,scope=staging-owner-web
+          cache-to: type=gha,mode=max,scope=staging-owner-web
+      - name: Validate Public Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Web.Dockerfile
+          push: false
+          build-args: |
+            APP=public-web
+            VITE_API_BASE_URL=https://api-staging.103.146.23.157.sslip.io
+            VITE_DEPLOYMENT_ENVIRONMENT=Staging
+            BHOME_REVISION=${{ github.sha }}
+          tags: ghcr.io/${{ github.repository_owner }}/bhome-public-web:sha-${{ github.sha }}
+          cache-from: type=gha,scope=staging-public-web
+          cache-to: type=gha,mode=max,scope=staging-public-web

@@ -39,19 +39,24 @@ import {
 } from '../useOperationalTasksApi';
 import { TaskEvidenceGallery } from './TaskEvidenceGallery';
 import { MoveInInventoryReport } from './MoveInInventoryReport';
+import { LocationAssetInventoryReport } from './LocationAssetInventoryReport';
+import { LocationAssetHandoverPanel } from './LocationAssetHandoverPanel';
 
 export function TaskStatus({ task }: { task: OwnerTask }) {
+  const superseded = task.kind === 'LocationAssetHandover' && task.status === 'Cancelled';
   return (
     <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
       <Chip
         size="small"
-        label={taskStatus[task.status] ?? task.status}
+        label={superseded ? 'Đã chuyển giao' : (taskStatus[task.status] ?? task.status)}
         color={
-          task.status === 'Completed'
-            ? 'success'
-            : task.status === 'PendingVerification'
-              ? 'warning'
-              : 'default'
+          superseded
+            ? 'info'
+            : task.status === 'Completed'
+              ? 'success'
+              : task.status === 'PendingVerification'
+                ? 'warning'
+                : 'default'
         }
         sx={{ height: 28, fontSize: 12 }}
       />
@@ -80,8 +85,16 @@ const historyNames: Record<string, string> = {
   coordinate: 'Ghi chú phối hợp',
   assign: 'Đồng bộ người phụ trách',
   responsibility_changed: 'Thay đổi trách nhiệm',
+  responsibility_superseded: 'Đã chuyển giao',
+  location_asset_inventory_progress_inherited: 'Kế thừa tiến độ kiểm kê',
   'assignment-replaced': 'Thay đổi phân công cơ sở',
   evidence_uploaded: 'Tải bằng chứng',
+  location_asset_inventory_created: 'Tạo kiểm kê tài sản toàn cơ sở',
+  location_asset_inventory_item_checked: 'Cập nhật xác nhận tài sản',
+  location_asset_handover_approved: 'Owner đã duyệt biên bản',
+  location_asset_handover_owner_signed: 'Owner đã ký xác nhận',
+  location_asset_handover_rework_requested: 'Owner yêu cầu kiểm tra lại',
+  location_asset_handover_completed: 'Hai bên hoàn tất ký bàn giao',
 };
 export function TaskDetailDrawer({
   id,
@@ -102,6 +115,7 @@ export function TaskDetailDrawer({
 }) {
   const [page, setPage] = useState(1);
   const [operation, setOperation] = useState(initialOperation);
+  const [reworkItemIds, setReworkItemIds] = useState<string[]>([]);
   const detail = useOwnerQuery<OwnerTask>(['task', id], `${taskRoot}/${id}`);
   const history = useOwnerQuery<OwnerPage<TaskHistory>>(
     ['task-history', id, page],
@@ -182,11 +196,13 @@ export function TaskDetailDrawer({
               </Typography>
               <Typography>
                 Loại:{' '}
-                {task.kind === 'MoveInInventory'
-                  ? 'Kiểm kê tài sản trước bàn giao'
-                  : task.kind === 'AdHoc'
-                    ? 'Công việc vận hành'
-                    : 'Ghi điện nước'}
+                {task.kind === 'LocationAssetHandover'
+                  ? 'Kiểm kê và bàn giao tài sản toàn cơ sở'
+                  : task.kind === 'MoveInInventory'
+                    ? 'Kiểm kê tài sản trước bàn giao'
+                    : task.kind === 'AdHoc'
+                      ? 'Công việc vận hành'
+                      : 'Ghi điện nước'}
               </Typography>
               {!task.responsibilityAvailable && (
                 <Alert severity="warning">
@@ -218,6 +234,25 @@ export function TaskDetailDrawer({
             </Box>
             {task.kind === 'MoveInInventory' && (
               <MoveInInventoryReport taskId={task.id} evidence={evidence.data} />
+            )}
+            {task.kind === 'LocationAssetHandover' && (
+              <>
+                <LocationAssetInventoryReport
+                  taskId={task.id}
+                  selectable={task.status === 'PendingVerification'}
+                  selectedIds={reworkItemIds}
+                  onSelectedIdsChange={setReworkItemIds}
+                />
+                <LocationAssetHandoverPanel
+                  task={task}
+                  notify={notify}
+                  reworkItemIds={reworkItemIds}
+                  onReworked={() => {
+                    setReworkItemIds([]);
+                    void refresh();
+                  }}
+                />
+              </>
             )}
             <Box>
               <Typography variant="h6" sx={{ fontSize: 16, mb: 1 }}>

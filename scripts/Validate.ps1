@@ -16,6 +16,7 @@ try {
     powershell -NoProfile -ExecutionPolicy Bypass -File tests/scripts/MobileDevelopment.Tests.ps1; Assert-Success
     powershell -NoProfile -ExecutionPolicy Bypass -File tests/scripts/TeamEnvironment.Tests.ps1; Assert-Success
     powershell -NoProfile -ExecutionPolicy Bypass -File tests/scripts/LocalEmail.Tests.ps1; Assert-Success
+    powershell -NoProfile -ExecutionPolicy Bypass -File tests/scripts/LocalGmail.Tests.ps1; Assert-Success
     powershell -NoProfile -ExecutionPolicy Bypass -File tests/scripts/LocalUrls.Tests.ps1; Assert-Success
     # Build-time, browser-visible validation URL only.
     if (-not $env:VITE_API_BASE_URL) { $env:VITE_API_BASE_URL = 'https://owner.example.invalid' }

@@ -29,12 +29,32 @@ export function AccountSecurityScreen() {
     return () => listener.remove();
   }, []);
   async function changePassword() {
-    if (!api || lock.current) return;
-    if (!current || !password || password !== confirm) {
-      setError('Nhập mật khẩu hiện tại và xác nhận mật khẩu mới khớp nhau.');
+    if (lock.current) return;
+    if (!api) {
+      setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để đổi mật khẩu.');
       return;
     }
-    if (current.length > 1024 || password.length < 12 || password.length > 1024) {
+    if (!current) {
+      setError('Vui lòng nhập mật khẩu hiện tại.');
+      return;
+    }
+    if (!password) {
+      setError('Vui lòng nhập mật khẩu mới.');
+      return;
+    }
+    if (!confirm) {
+      setError('Vui lòng xác nhận mật khẩu mới.');
+      return;
+    }
+    if (password !== confirm) {
+      setError('Xác nhận mật khẩu mới không khớp.');
+      return;
+    }
+    if (current.length > 1024) {
+      setError('Mật khẩu hiện tại vượt quá độ dài cho phép.');
+      return;
+    }
+    if (password.length < 12 || password.length > 1024) {
       setError('Mật khẩu mới phải từ 12 đến 1024 ký tự.');
       return;
     }
@@ -69,7 +89,7 @@ export function AccountSecurityScreen() {
     } catch (e) {
       setError(
         e instanceof MobileApiError && e.status === 400
-          ? 'Không thể đổi mật khẩu. Vui lòng kiểm tra mật khẩu hiện tại và bảo đảm mật khẩu mới đáp ứng yêu cầu bên dưới. Nếu vẫn lỗi, hãy đăng nhập lại rồi thử lại.'
+          ? 'Mật khẩu hiện tại không đúng hoặc mật khẩu mới chưa đáp ứng yêu cầu. Vui lòng kiểm tra và thử lại.'
           : errorMessage(e),
       );
     } finally {
