@@ -16,7 +16,6 @@ docker build -f deploy/docker/Web.Dockerfile --build-arg APP=owner-web --build-a
 docker build -f deploy/docker/Web.Dockerfile --build-arg APP=public-web --build-arg VITE_API_BASE_URL=https://api.example.com -t bhome-public-web .
 ```
 
-
 `Api.Release.Dockerfile` is the release runtime used by VPS Staging and Production image builds.
 It includes the LibreOffice Writer, Poppler and font packages required by contract document/PDF
 workflows, plus the `schema-output` and `seed` targets retained for separately reviewed operations.
