@@ -12,7 +12,8 @@ public sealed record SigningResidentEmail(Guid ResidentId, [Required, EmailAddre
 public sealed record SigningInvitationInput(DateTimeOffset ExpiresAt, [Required] string SnapshotHash,
     [EmailAddress, StringLength(256)] string? RecipientEmail = null, IReadOnlyList<SigningResidentEmail>? Contacts = null,
     bool Resend = false);
-public sealed record SigningInvitationResult(Guid Id, string Status, DateTimeOffset ExpiresAt, string? Token = null);
+public sealed record SigningInvitationResult(Guid Id, string Status, DateTimeOffset ExpiresAt, string? Token = null,
+    string? Url = null);
 public static class SigningContacts
 {
     public static IReadOnlyDictionary<Guid, string> Read(ContractSigningInvitation? invitation)

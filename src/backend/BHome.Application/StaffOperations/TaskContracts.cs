@@ -87,6 +87,7 @@ public interface IOperationalTaskRepository
     Task<IReadOnlyList<string>> CommonAreasAsync(Guid locationId, CancellationToken t);
     Task<TaskPage<TaskTargetOption>> TargetAssetsAsync(Guid locationId, Guid? roomId, string? commonArea, string? search, int page, int pageSize, CancellationToken t);
     Task<OperationalTask?> FindAsync(Guid id, CancellationToken t);
+    Task<LocationAssetInventorySnapshot> OwnerConfirmedInventoryAsync(OperationalTask task, CancellationToken t);
     Task<IReadOnlyList<TaskIncidentTarget>> IncidentTargetsAsync(Guid[] incidentIds, CancellationToken t);
     Task<bool> IncidentsResolvedAsync(Guid[] incidentIds, CancellationToken t);
     Task NotifyMoveInInventoryCompletedAsync(OperationalTask task, Guid actor, CancellationToken t);

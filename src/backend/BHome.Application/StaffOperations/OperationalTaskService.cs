@@ -41,6 +41,12 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         var location = await repository.LocationAsync(task.LocationId, t) ?? throw OperationalTaskException.Missing();
         var responsible = location.IsActive ? await repository.ResponsibilityAsync(task.LocationId, Today, t) : null;
         if ((!Owner || requireAssigned) && (responsible is null || responsible.StaffUserId != Actor)) throw OperationalTaskException.Missing();
+        // Successors may audit a closed predecessor checklist at the same Location,
+        // but only the Staff owning a live assignment may mutate a handover task.
+        if (task.Kind == OperationalTaskKind.LocationAssetHandover && (!Owner || requireAssigned) &&
+            task.AssignmentId != responsible?.AssignmentId &&
+            (requireAssigned || task.Status != MeterTaskStatus.Cancelled))
+            throw OperationalTaskException.Missing();
         return responsible;
     }
     private static TaskView View(OperationalTask task, TaskResponsibility? responsible) => new(task.Id, task.LocationId,
@@ -185,6 +191,8 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             throw OperationalTaskException.Invalid("task_note_required");
         return MutateAsync(id, input.Version, key, action, input, async (task, responsible) =>
         {
+            if (task.Kind == OperationalTaskKind.LocationAssetHandover && action == "submit")
+                await ValidateLocationAssetInventorySubmissionAsync(task, t);
             if (task.ContractId is not null && action is "submit" or "verify" or "cancel")
                 throw OperationalTaskException.Conflict("contract_handover_workflow_required");
             if (action == "assign")
@@ -240,7 +248,9 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             var responsible = await AccessAsync(task, t, executing);
             if (task.Kind == OperationalTaskKind.MoveInInventory && action is not ("start" or "assign"))
                 throw OperationalTaskException.Conflict("move_in_inventory_workflow_required");
-            if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory))
+            if (task.Kind == OperationalTaskKind.LocationAssetHandover && action is not ("start" or "progress" or "blockers" or "submit"))
+                throw OperationalTaskException.Conflict("location_asset_handover_workflow_required");
+            if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover))
                 throw OperationalTaskException.Conflict("meter_workflow_required");
             if (task.Version != version) throw OperationalTaskException.Conflict("stale_version");
             repository.Track(task);
@@ -275,10 +285,10 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             TaskVersion = action == "created" ? task.Version : task.Version + 1
         };
         repository.Add(history);
-        if (action is "created" or "updated" or "assign" or "responsibility_changed" or "submit" or "verify" or "rework" or "cancel" or "blockers" or "coordinate" or "move_in_inventory_completed")
+        if (action is "created" or "updated" or "assign" or "responsibility_changed" or "submit" or "verify" or "rework" or "cancel" or "blockers" or "coordinate" or "move_in_inventory_completed" or "location_asset_inventory_owner_reconciled")
             foreach (var recipient in recipients.Distinct().Where(x => x != Actor)) repository.Add(new OperationalTaskNotification
             { TaskId = task.Id, RecipientUserId = recipient, EventId = history.Id, Event = action });
-        if (action is "created" or "updated" or "responsibility_changed" or "verify" or "rework" or "cancel")
+        if (action is "created" or "updated" or "responsibility_changed" or "verify" or "rework" or "cancel" or "location_asset_inventory_owner_reconciled")
             repository.Audit(Actor, "Task_" + action, task.Id, Now);
         return Task.CompletedTask;
     }
@@ -336,13 +346,17 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
                 {
                     var task = await repository.FindAsync(id, t) ?? throw OperationalTaskException.Missing();
                     var responsible = await AccessAsync(task, t, true);
-                    if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory))
+                    if (task.Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover))
                         throw OperationalTaskException.Conflict("meter_workflow_required");
                     if (task.Status != MeterTaskStatus.InProgress) throw OperationalTaskException.Conflict("task_not_in_progress");
                     // Every inventory group may attach up to five photos. The general
                     // task limit (often 10) is too small for rooms with many assets.
-                    var inventoryLimit = task.Kind == OperationalTaskKind.MoveInInventory
-                        ? checked(Inventory(task).Items.Length * 5) : limits.MaximumFilesPerTask;
+                    var inventoryLimit = task.Kind switch
+                    {
+                        OperationalTaskKind.MoveInInventory => checked(Inventory(task).Items.Length * 5),
+                        OperationalTaskKind.LocationAssetHandover => checked(LocationInventory(task).Items.Length * 5),
+                        _ => limits.MaximumFilesPerTask
+                    };
                     if ((await repository.EvidenceAsync(id, t)).Count >= inventoryLimit)
                         throw OperationalTaskException.Conflict("task_evidence_limit");
                     repository.Track(task);

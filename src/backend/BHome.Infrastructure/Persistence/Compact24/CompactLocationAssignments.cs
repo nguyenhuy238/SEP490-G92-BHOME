@@ -11,11 +11,13 @@ using BHome.Domain.IncidentMaintenance;
 using BHome.Domain.TenantContracts;
 using BHome.Domain.StaffOperations;
 using BHome.Domain.Locations;
+using BHome.Application.PropertyManagement;
 using BHome.Infrastructure.Modules.Notifications;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProvider clock) : ILocationAssignments, IStaffLocationAccess
+internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProvider clock,
+    ISetupWorkspaceStore? workspace = null) : ILocationAssignments, IStaffLocationAccess
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private sealed record Assignment(Guid Id, Guid StaffUserId,
@@ -42,7 +44,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         var owner = await db.Users.AnyAsync(u => u.Id == actor && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Owner), token);
         if (!owner) throw new UnauthorizedAccessException("Owner authorization is required.");
         await LockStaffAsync(staffId, token);
-        if (!await db.Users.AnyAsync(u => u.Id == staffId && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Staff), token))
+        if (!await StaffEmploymentEligibility.IsEligibleAsync(db, staffId, start, token))
             return new(CreateAssignmentStatus.StaffUnavailable);
         var assignments = JsonSerializer.Deserialize<Assignment[]>(stored, Json) ?? throw new InvalidOperationException("Invalid assignment data.");
         if (assignments.Any(a => a.Id == Guid.Empty || a.StaffUserId == Guid.Empty || a.StartDate > a.EndDate))
@@ -152,7 +154,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
                 current && start != old.StartDate || !current && start < today)
                 return new(UpdateAssignmentPeriodStatus.Invalid);
             await LockStaffAsync(old.StaffUserId, token);
-            if (!await StaffAvailableAsync(old.StaffUserId, token)) return new(UpdateAssignmentPeriodStatus.StaffUnavailable);
+            if (!await StaffAvailableAsync(old.StaffUserId, start!.Value <= today ? today : start.Value, token)) return new(UpdateAssignmentPeriodStatus.StaffUnavailable);
             if (assignments.Any(a => a.Id != assignmentId && a.StartDate <= end && start <= a.EndDate))
                 return new(UpdateAssignmentPeriodStatus.DateRangeOverlaps);
             changed = old with { StartDate = start!.Value, EndDate = end!.Value };
@@ -196,7 +198,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             throw new UnauthorizedAccessException("Owner authorization is required.");
         if (nextStaff.HasValue && !active) return new(ChangeAssignmentStatus.Invalid);
         if (nextStaff is { } lockedStaff) await LockStaffAsync(lockedStaff, token);
-        if (nextStaff is { } staff && !await db.Users.AnyAsync(u => u.Id == staff && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Staff), token))
+        if (nextStaff is { } staff && !await StaffAvailableAsync(staff, today, token))
             return new(ChangeAssignmentStatus.StaffUnavailable);
         var assignments = (JsonSerializer.Deserialize<Assignment[]>(stored, Json) ?? throw new InvalidOperationException("Invalid assignment data.")).ToList();
         var current = assignments.SingleOrDefault(a => a.StartDate <= today && a.EndDate >= today);
@@ -287,7 +289,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         if (next is not null)
         {
             await LockStaffAsync(next.StaffUserId, token);
-            if (!await StaffAvailableAsync(next.StaffUserId, token)) next = null;
+            if (!await StaffAvailableAsync(next.StaffUserId, today, token)) next = null;
         }
         var previous = assignments.Where(a => a.StartDate <= today && a.Id != next?.Id)
             .OrderByDescending(a => a.EndDate).FirstOrDefault();
@@ -305,7 +307,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
     {
         var tasks = await db.Set<OperationalTask>().Where(task => task.LocationId == locationId &&
             task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled)
-            .Select(task => new { task.Id, task.AssignedStaffUserId, task.AssignmentId, task.AssignedAt, task.DueAt, task.Version }).ToArrayAsync(token);
+            .Select(task => new { task.Id, task.Kind, task.AssignedStaffUserId, task.AssignmentId, task.AssignedAt, task.DueAt, task.Version }).ToArrayAsync(token);
         var orders = await db.Set<MaintenanceWorkOrder>().Where(w => w.LocationId == locationId &&
             w.Status != WorkOrderStatus.Verified && w.Status != WorkOrderStatus.Cancelled).ToArrayAsync(token);
         var inspections = await db.Set<ContractMoveOut>().Where(m => m.InspectionStaffId != null &&
@@ -321,6 +323,47 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         var nextAssignment = next?.Id;
         foreach (var task in tasks)
         {
+            // An unfinished handover belongs to its original assignment. Close it with an
+            // explicit supersession audit, preserving the frozen inventory and evidence;
+            // a successor receives a newly snapshotted task, never the old checklist.
+            if (task.Kind == OperationalTaskKind.LocationAssetHandover)
+            {
+                // No eligible Staff yet is a temporary responsibility gap, not a
+                // replacement: retain unfinished work for possible renewal of the
+                // SAME assignment. Staff ACL already rejects the ineligible user.
+                // Supersede only after a different assignment becomes effective.
+                if (nextAssignment is null) continue;
+                if (task.AssignmentId == nextAssignment) continue;
+                var closed = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE operational_tasks SET status='3',version=version+1,
+                      task_data=jsonb_set(task_data,ARRAY['state'],COALESCE(task_data->'state',jsonb_build_object())||
+                        jsonb_build_object('status',3,'updatedAt',{now},'version',version+1),true)
+                    WHERE id={task.Id} AND version={task.Version} AND status NOT IN ('2','3')
+                    """, token);
+                if (closed != 1) throw new DbUpdateConcurrencyException("Handover changed during responsibility supersession.");
+                db.Add(new OperationalTaskHistory
+                {
+                    TaskId = task.Id,
+                    ActorId = actor,
+                    Action = "responsibility_superseded",
+                    Note = reason,
+                    OccurredAt = now,
+                    WasOverdue = task.DueAt < now,
+                    ResponsibleStaffUserId = task.AssignedStaffUserId,
+                    TaskVersion = task.Version + 1,
+                    ChangesJson = JsonSerializer.Serialize(new
+                    {
+                        previousStaffUserId = task.AssignedStaffUserId,
+                        previousAssignmentId = task.AssignmentId,
+                        newStaffUserId = nextStaff,
+                        newAssignmentId = nextAssignment,
+                        previousStatus = "open",
+                        status = "Cancelled",
+                        reason
+                    }, Json)
+                });
+                continue;
+            }
             if (task.AssignedStaffUserId == nextStaff && task.AssignmentId == nextAssignment) continue;
             // Compact24 maps both the scalar columns and the state JSON to this row.
             // Mutate once, then append one typed history record (no second root write).
@@ -380,6 +423,9 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             });
         }
         await db.SaveChangesAsync(token);
+        if (next is not null)
+            await LocationAssetInventoryTaskFactory.EnsureAsync(db, workspace, locationId, next.Id,
+                next.StaffUserId, next.StartDate, actor == Guid.Empty ? next.ActorId : actor, now, token);
         await using var marker = Command("""
             SELECT h::text FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.history) WITH ORDINALITY a(h,n)
             WHERE l.id=@location AND h->>'action'='StaffResponsibilityReconciled' ORDER BY n DESC LIMIT 1
@@ -471,6 +517,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
 
     public async Task<IReadOnlyList<LocationSummary>> ListAssignedLocationsAsync(Guid staffId, DateOnly date, CancellationToken token)
     {
+        if (!await StaffAvailableAsync(staffId, date, token)) return [];
         await db.Database.OpenConnectionAsync(token);
         await using var query = Command("""
             SELECT l.id,l.name FROM locations l
@@ -489,6 +536,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
     public async Task<bool> IsAssignedAsync(Guid staffId, Guid locationId, CancellationToken token)
     {
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
+        if (!await StaffAvailableAsync(staffId, today, token)) return false;
         await db.Database.OpenConnectionAsync(token);
         await using var query = Command("""
             SELECT EXISTS(SELECT 1 FROM locations l WHERE l.id=@location AND l.is_active
@@ -506,6 +554,6 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         await using var command = Command("SELECT id FROM users WHERE id=@id FOR SHARE"); command.Parameters.AddWithValue("id", staff);
         await command.ExecuteScalarAsync(t);
     }
-    private Task<bool> StaffAvailableAsync(Guid staff, CancellationToken token) =>
-        db.Users.AnyAsync(u => u.Id == staff && u.IsActive && EF.Property<string[]>(u, "roles").Contains(Roles.Staff), token);
+    private Task<bool> StaffAvailableAsync(Guid staff, DateOnly date, CancellationToken token) =>
+        StaffEmploymentEligibility.IsEligibleAsync(db, staff, date, token);
 }

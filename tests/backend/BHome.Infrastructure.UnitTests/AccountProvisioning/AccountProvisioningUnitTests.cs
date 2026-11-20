@@ -255,6 +255,92 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
         Assert.Equal(1, await world.AuditCountAsync("PasswordResetRequested"));
     }
 
+    [Fact(DisplayName = "IssueStaffPasswordAsync: Owner cap mat khau ngau nhien dung 12 ky tu; hash, thu hoi phien va chi queue thong tin email")]
+    public async Task IssueStaffPasswordAsync_ConfirmedStaff_QueuesCredentialAndRevokesSessions()
+    {
+        world.Email.IsDurable = true;
+        await world.AddUserAsync(Staff1Id, "staff1@gmail.com", Roles.Staff, "Staff123456@", emailConfirmed: true);
+        var users = world.Get<UserManager<ApplicationUser>>();
+        var staff = (await users.FindByIdAsync(Staff1Id.ToString()))!;
+        var stamp = await users.GetSecurityStampAsync(staff);
+        var session = await world.Get<IAuthenticationSessions>().CreateAsync(
+            new VerifiedIdentity(Staff1Id, [Roles.Staff], stamp), "test-device", default);
+        Assert.NotNull(session);
+
+        var result = await Invitations.IssueStaffPasswordAsync(Staff1Id, default);
+        var mail = Assert.Single(world.Email.Queued);
+        Assert.Equal("Queued", result.DeliveryState);
+        Assert.Equal(Staff1Id, result.UserId);
+        Assert.Equal("StaffCredentials", mail.Kind);
+        Assert.Equal("staff1@gmail.com", mail.Destination);
+        Assert.Equal(12, mail.Token.Length);
+        Assert.Contains(mail.Token, c => char.IsUpper(c));
+        Assert.Contains(mail.Token, c => char.IsLower(c));
+        Assert.Contains(mail.Token, c => char.IsDigit(c));
+        Assert.Contains(mail.Token, c => !char.IsLetterOrDigit(c));
+        Assert.DoesNotContain(mail.Token, System.Text.Json.JsonSerializer.Serialize(result));
+        Assert.Empty(world.Email.Sent);
+        Assert.False(await users.CheckPasswordAsync((await users.FindByIdAsync(Staff1Id.ToString()))!, "Staff123456@"));
+        Assert.True(await users.CheckPasswordAsync((await users.FindByIdAsync(Staff1Id.ToString()))!, mail.Token));
+        Assert.Null(await world.Get<IAuthenticationSessions>().RefreshAsync(session!.RefreshToken!, default));
+        Assert.Equal(1, await world.AuditCountAsync("StaffPasswordIssued"));
+        Assert.False(await world.ScalarAsync<bool>(
+            "select exists(select 1 from notifications where position(@secret in event_data::text) > 0)", ("secret", mail.Token)));
+
+        // A double-click is not allowed to silently replace the credential again.
+        var repeat = await Invitations.IssueStaffPasswordAsync(Staff1Id, default);
+        Assert.Equal("ExistingRequestPreserved", repeat.DeliveryState);
+        Assert.Single(world.Email.Queued);
+    }
+
+    [Fact(DisplayName = "IssueStaffPasswordAsync: queue loi -> password cu va session cu con hop le")]
+    public async Task IssueStaffPasswordAsync_DeliveryQueueFails_RollsBackPassword()
+    {
+        world.Email.IsDurable = true;
+        world.Email.FailQueue = true;
+        await world.AddUserAsync(Staff1Id, "staff1@gmail.com", Roles.Staff, "Staff123456@", emailConfirmed: true);
+        var oldHash = await world.ScalarAsync<string>("select password_hash from users where id=@id", ("id", Staff1Id));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Invitations.IssueStaffPasswordAsync(Staff1Id, default));
+
+        Assert.Equal(oldHash, await world.ScalarAsync<string>("select password_hash from users where id=@id", ("id", Staff1Id)));
+        Assert.Equal(0, await world.AuditCountAsync("StaffPasswordIssued"));
+        Assert.Empty(world.Email.Queued);
+    }
+
+    [Fact(DisplayName = "IssueStaffPasswordAsync: Staff chua kich hoat phai nhan invitation, khong cap password")]
+    public async Task IssueStaffPasswordAsync_UnconfirmedStaff_RejectedWithoutMutation()
+    {
+        world.Email.IsDurable = true;
+        await world.AddUserAsync(Staff1Id, "staff1@gmail.com", Roles.Staff, "Staff123456@", emailConfirmed: false);
+
+        await AssertRejected(() => Invitations.IssueStaffPasswordAsync(Staff1Id, default), 409, "staff_account_requires_invitation");
+        Assert.Empty(world.Email.Queued);
+        Assert.Equal(0, await world.AuditCountAsync("StaffPasswordIssued"));
+    }
+
+    [Fact(DisplayName = "IssueStaffPasswordAsync: khong phai Owner hoac khong phai Staff thi bi tu choi")]
+    public async Task IssueStaffPasswordAsync_UnauthorizedOrWrongRole_Rejected()
+    {
+        world.Email.IsDurable = true;
+        await world.AddUserAsync(Staff1Id, "staff1@gmail.com", Roles.Staff, "Staff123456@", emailConfirmed: true);
+        await world.AddUserAsync(TenantSampleId, "tenant.sample@example.invalid", Roles.Tenant, "TenantSample123@");
+        world.CurrentUser.Set(Staff1Id, Roles.Staff);
+        await AssertRejected(() => Invitations.IssueStaffPasswordAsync(Staff1Id, default), 403, "staff_password_owner_required");
+        world.SignInAsOwner();
+        await AssertRejected(() => Invitations.IssueStaffPasswordAsync(TenantSampleId, default), 404, "staff_not_found");
+        Assert.Empty(world.Email.Queued);
+    }
+
+    [Fact(DisplayName = "IssueStaffPasswordAsync: outbox hoac email chua cau hinh thi khong doi mat khau")]
+    public async Task IssueStaffPasswordAsync_DeliveryNotAvailable_DoesNotChangePassword()
+    {
+        await world.AddUserAsync(Staff1Id, "staff1@gmail.com", Roles.Staff, "Staff123456@", emailConfirmed: true);
+        var oldHash = await world.ScalarAsync<string>("select password_hash from users where id=@id", ("id", Staff1Id));
+        await Assert.ThrowsAnyAsync<Exception>(() => Invitations.IssueStaffPasswordAsync(Staff1Id, default));
+        Assert.Equal(oldHash, await world.ScalarAsync<string>("select password_hash from users where id=@id", ("id", Staff1Id)));
+    }
+
     // ===================== InviteAsync(Guid residentId, TenantInvitationRequest request) =====================
 
     [Fact(DisplayName = "UTC12 - InviteAsync: nguoi o cung Nguyen Thi Mai trong hop dong Active, chua co tai khoan -> tao Tenant Inactive va gui moi")]

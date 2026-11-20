@@ -5,6 +5,7 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Microsoft.Extensions.Logging;
@@ -14,11 +15,16 @@ namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<ContractRepository> logger, ISetupWorkspaceStore? setup = null) : IContractRepository
 {
+    private IQueryable<Guid> EligibleStaff(DateOnly date) => db is Compact24DbContext compact
+        ? StaffEmploymentEligibility.EligibleIds(compact, date)
+        : db.Users.Where(user => user.IsActive).Select(user => user.Id);
+
     public async Task<ContractPage> ListAsync(ContractListScope scope, int page, int pageSize, Guid? locationId, ContractStatus? status, CancellationToken t)
     {
         var query = db.Set<Contract>().AsNoTracking().Where(c => scope.Owner ||
             (scope.Tenant && c.TenantUserId == scope.ActorId) ||
-            (scope.Staff && db.StaffLocationAssignments.Any(a => a.StaffUserId == scope.ActorId &&
+            (scope.Staff && EligibleStaff(scope.Today).Contains(scope.ActorId) &&
+                db.StaffLocationAssignments.Any(a => a.StaffUserId == scope.ActorId &&
                 a.LocationId == c.Room.LocationId && a.StartDate <= scope.Today && a.EndDate >= scope.Today)));
         if (locationId is { } location) query = query.Where(c => c.Room.LocationId == location);
         if (status is { } state) query = query.Where(c => c.Status == state);
@@ -50,12 +56,15 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
          join e in db.Set<MeterEvidence>() on r.EvidenceId equals e.Id
          where task.ContractId == contractId && meter.RoomId == roomId && meter.IsActive && task.Purpose == ReadingPurpose.Final && task.ReadingDate == today && task.Status == MeterTaskStatus.Completed && e.IsUploaded && e.IsLinked
          select new HandoverReading(r.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate, r.ConfirmedValue, e.Id, e.ObjectKey, e.ImageHash)).ToArrayAsync(t);
-    public Task<bool> StaffAssignedAsync(Guid staffId, Guid locationId, DateOnly today, CancellationToken t) => db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == staffId && a.LocationId == locationId && a.StartDate <= today && a.EndDate >= today, t);
+    public Task<bool> StaffAssignedAsync(Guid staffId, Guid locationId, DateOnly today, CancellationToken t) =>
+        db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == staffId && a.LocationId == locationId &&
+            a.StartDate <= today && a.EndDate >= today && EligibleStaff(today).Contains(staffId), t);
     public async Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId, CancellationToken t) => await db.Set<ContractMoveOutHistory>().AsNoTracking().Where(h => h.ContractId == contractId).OrderByDescending(h => h.Version).Take(100).ToArrayAsync(t);
     public async Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId, DateOnly today, CancellationToken t) => await
         (from m in db.Set<ContractMoveOut>().AsNoTracking()
          join c in db.Set<Contract>() on m.ContractId equals c.Id
          where m.InspectionStaffId == staffId && m.Status != MoveOutStatus.Completed && m.InspectionScheduledAt != null && c.Room.Location.IsActive &&
+           EligibleStaff(today).Contains(staffId) &&
            db.StaffLocationAssignments.Any(a => a.StaffUserId == staffId && a.LocationId == c.Room.LocationId && a.StartDate <= today && a.EndDate >= today)
          orderby m.InspectionScheduledAt
          select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt!.Value, m.Version)).Take(100).ToArrayAsync(t);

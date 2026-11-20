@@ -184,7 +184,8 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             if (!input.Resend && AllowsEitherSigningOrder(c)) contracts.Audit(actor.UserId!.Value, c.Kind == ContractKind.Holding ? "HoldingSigningSubmitted" : "MainSigningSubmitted", id, Now);
             contracts.Audit(actor.UserId!.Value, input.Resend ? "InternalSigningInvitationResent" : "InternalSigningInvitationApproved", id, Now);
             // A one-time Owner-visible copy link is a supported manual handoff. Raw tokens never enter persistence.
-            return new SigningInvitationResult(invite.Id, invite.DeliveryStatus, invite.ExpiresAt, token);
+            return new SigningInvitationResult(invite.Id, invite.DeliveryStatus, invite.ExpiresAt, token,
+                security.InvitationUrl(token));
         }, t);
         if (!security.EmailConfigured || result.Token is null) return result;
         var deliveryStatus = "InvitationAcceptedByProvider";
@@ -195,13 +196,19 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             await security.SendAsync(recipient, input.Resend ? $"internal-signing-invitation:{result.Id:N}:resend:{attempt}" : $"internal-signing-invitation:{result.Id:N}", subject,
                 $"Mã OTP của bạn: {invitationOtp}. Mã có hiệu lực 5 phút. Không chia sẻ mã này.\n" +
                 $"Bạn được mời ký {contractLabel}. Mở liên kết dưới đây, nhập mã OTP trong email này, đọc PDF và đồng ý trước khi ký nội bộ. " +
-                (security.InvitationUrl(result.Token!) is { } url ? "Mở liên kết: " + url :
+                (result.Url is { } url ? "Mở liên kết: " + url :
                     "Mở BHOME Mobile > Mở lời mời ký hợp đồng và dán mã: " + result.Token) +
                 $"\nLời mời hết hạn lúc {result.ExpiresAt:O}. Đây không phải chữ ký số CA.", t);
         }
         catch (Exception e) when (e is not OperationCanceledException) { deliveryStatus = "InvitationPendingManualDelivery"; }
         await WithToken(result.Token!, (invite, _) => { invite.DeliveryStatus = deliveryStatus; return Task.FromResult(true); }, t);
-        return result with { Status = deliveryStatus, Token = actor.IsInRole(Roles.Owner) ? result.Token : null };
+        var ownerCanCopyLink = actor.IsInRole(Roles.Owner);
+        return result with
+        {
+            Status = deliveryStatus,
+            Token = ownerCanCopyLink ? result.Token : null,
+            Url = ownerCanCopyLink ? result.Url : null
+        };
     }
     public async Task DispatchHoldingInvitationAsync(Guid id, CancellationToken t)
     {

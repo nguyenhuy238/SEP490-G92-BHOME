@@ -167,4 +167,32 @@ public sealed class EnvironmentConfigurationTests
         Assert.True(o.RecipientAllowed("RECIPIENT@example.invalid")); Assert.False(o.RecipientAllowed("other@example.invalid"));
         o.UseStartTls = false; Assert.False(o.ValidForEnvironment("Staging"));
     }
+
+    [Fact]
+    public void AnyRecipientOptInWorksOnlyForDevelopmentSmtp()
+    {
+        var o = new EmailOptions
+        {
+            Enabled = true,
+            DeliveryMode = "Smtp",
+            Host = "smtp.gmail.com",
+            Username = "sender@example.invalid",
+            FromEmail = "sender@example.invalid",
+            AppPassword = "synthetic",
+            AllowedRecipients = ["test@example.invalid"]
+        };
+        Assert.False(o.RecipientAllowed("staff@example.invalid", "Development"));
+        o.AllowAnyRecipientInDevelopment = true;
+        Assert.True(o.ValidForEnvironment("Development"));
+        Assert.True(o.RecipientAllowed("staff@example.invalid", "Development"));
+        Assert.False(o.RecipientAllowed("staff@example.invalid", "Staging"));
+        Assert.False(o.ValidForEnvironment("Staging"));
+        Assert.False(o.ValidForEnvironment("Testing"));
+        Assert.False(o.ValidForEnvironment("Production"));
+        o.AllowedRecipients = [];
+        Assert.True(o.ValidForEnvironment("Development"));
+        Assert.False(o.ValidForEnvironment("Staging"));
+        o.DeliveryMode = "Capture"; o.Host = "localhost"; o.Port = 1025;
+        Assert.False(o.ValidForEnvironment("Development"));
+    }
 }

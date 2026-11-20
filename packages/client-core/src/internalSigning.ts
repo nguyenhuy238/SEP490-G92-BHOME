@@ -76,16 +76,19 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
       contacts?: { residentId: string; email: string }[],
       resend = false,
     ) =>
-      post<{ id: string; token?: string | null; status: string; expiresAt: string }>(
-        '/api/v1/contracts/' + id + '/signing-invitations',
-        {
-          snapshotHash,
-          expiresAt,
-          ...(recipientEmail?.trim() ? { recipientEmail: recipientEmail.trim() } : {}),
-          ...(contacts?.length ? { contacts } : {}),
-          ...(resend ? { resend: true } : {}),
-        },
-      ),
+      post<{
+        id: string;
+        token?: string | null;
+        url?: string | null;
+        status: string;
+        expiresAt: string;
+      }>('/api/v1/contracts/' + id + '/signing-invitations', {
+        snapshotHash,
+        expiresAt,
+        ...(recipientEmail?.trim() ? { recipientEmail: recipientEmail.trim() } : {}),
+        ...(contacts?.length ? { contacts } : {}),
+        ...(resend ? { resend: true } : {}),
+      }),
     revoke: (id: string, invitationId: string) =>
       request<void>('/api/v1/contracts/' + id + '/signing-invitations/' + invitationId, {
         method: 'DELETE',

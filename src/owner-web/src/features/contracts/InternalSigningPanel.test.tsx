@@ -182,3 +182,59 @@ it('retains unconfirmed state when backend rejects the Owner action', async () =
   await waitFor(() => expect(button).toBeEnabled());
   expect(screen.queryByText(/Owner đã xác nhận:/)).toBeNull();
 });
+
+it.each([
+  [
+    'configured HTTPS link',
+    'https://localhost:5176/contract-signing#token=test-once',
+    'InvitationAcceptedByProvider',
+    'Dịch vụ email đã tiếp nhận lời mời. Chờ người giữ chỗ mở email và ký.',
+  ],
+  [
+    'missing HTTPS link',
+    null,
+    'InvitationPendingManualDelivery',
+    'Gửi email thất bại. Kiểm tra cấu hình, thu hồi lời mời rồi gửi lại.',
+  ],
+])(
+  'shows the server delivery status for %s without exposing invitation URLs or tokens',
+  async (_label, url, invitationStatus, message) => {
+    const request = vi.fn(async (path: string) => {
+      if (!path.endsWith('/internal-signing')) throw new Error(path);
+      return {
+        state: 'AwaitingTenant',
+        invitations: [
+          {
+            id: 'invite',
+            token: 'test-once',
+            url,
+            status: invitationStatus,
+            expiresAt: '2026-11-20T00:00:00Z',
+          },
+        ],
+        tenantAcceptedAt: null,
+        ownerAcceptedAt: null,
+        sandboxAvailable: false,
+      };
+    });
+    const { container } = render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <InternalSigningPanel
+          api={contractClient(request as ContractRequest)}
+          contract={{ ...contract, isDevelopmentDemo: true }}
+          onChanged={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.getByText('Trạng thái: AwaitingTenant')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thu hồi lời mời chưa ký' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Duyệt và tạo lời mời ký' })).toBeNull();
+    expect(container.textContent).not.toContain('test-once');
+    expect(container.innerHTML).not.toContain('contract-signing#token');
+    expect(container.querySelector('input[value="test-once"]')).toBeNull();
+    expect(request.mock.calls.every(([path]) => path.endsWith('/internal-signing'))).toBe(true);
+  },
+);

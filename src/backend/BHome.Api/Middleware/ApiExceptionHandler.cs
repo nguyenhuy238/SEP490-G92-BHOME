@@ -17,7 +17,18 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
     {
         var schemaMismatch = exception is PostgresException { SqlState: "42703" or "42P01" or "42883" } or
             DbUpdateException { InnerException: PostgresException { SqlState: "42703" or "42P01" or "42883" } };
-        var status = schemaMismatch ? StatusCodes.Status503ServiceUnavailable : exception switch
+        // A disconnected PostgreSQL endpoint is an infrastructure outage (503), not an
+        // application fault (500). Keep server-side SQL errors (PostgresException)
+        // separate: invalid queries must not be presented as transient unavailability.
+        // EF Core's retry strategy wraps transport failures in InvalidOperationException.
+        // Walk only the causal chain, and never misclassify PostgreSQL SQL errors as outages.
+        var databaseUnavailable = false;
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException) break;
+            if (current is NpgsqlException) { databaseUnavailable = true; break; }
+        }
+        var status = schemaMismatch || databaseUnavailable ? StatusCodes.Status503ServiceUnavailable : exception switch
         {
             BHome.Application.Operations.OperationsException operations => operations.Status,
             BHome.Application.Finance.FinanceException finance => finance.Status,
@@ -60,7 +71,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             "Request {CorrelationId} failed with {ErrorCode}", context.TraceIdentifier, exception.GetType().Name);
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/problem+json";
-        var code = schemaMismatch ? "database_schema_incompatible" : exception switch
+        var code = schemaMismatch ? "database_schema_incompatible" : databaseUnavailable ? "database_temporarily_unavailable" : exception switch
         {
             BHome.Application.Operations.OperationsException operations => operations.Code,
             BHome.Application.Finance.FinanceException finance => finance.Code,
