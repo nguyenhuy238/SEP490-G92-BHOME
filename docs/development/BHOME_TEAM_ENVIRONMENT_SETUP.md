@@ -1,20 +1,25 @@
 # Thiết lập môi trường BHOME cho toàn team
 
+Checkpoint hostname 20/11/2026: dùng `owner-staging`, `public-staging`, `api-staging`
+trên VPS. Các hostname `sepay-test` cũ chỉ là compatibility; không đặt trong bundle
+Staging mới. Xem [biên bản chuyển đổi](BHOME_STAGING_HOSTNAME_MIGRATION_2026-11-20.md).
+
 Ngày chuẩn hóa: 19/11/2026. Chạy lệnh PowerShell tại thư mục gốc repository.
 Đọc cùng [audit và kết quả kiểm thử](BHOME_ENVIRONMENT_VALIDATION.md).
 
 ## 1. Mô hình thống nhất
 
-| Môi trường            | Frontend / API                                                                                                                         | Dữ liệu                           | Email                                   | SePay                                              |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | --------------------------------------- | -------------------------------------------------- |
-| Local (`Development`) | Owner `http://localhost:5173`, API `https://localhost:7240`                                                                            | PostgreSQL và MinIO riêng mỗi máy | Mailpit loopback, không gửi ra Internet | Tắt mặc định                                       |
-| VPS `Staging`         | Portal và API `https://api-sepay-test.103.146.23.157.sslip.io`                                                                         | Database/storage Staging riêng    | SMTP STARTTLS, chỉ allowlist            | Sandbox API, `Mode=Test`                           |
-| VPS `Production`      | Owner `https://owner.103.146.23.157.sslip.io`, API `https://api.103.146.23.157.sslip.io`, Public `https://www.103.146.23.157.sslip.io` | Database/storage Production riêng | Gmail SMTP STARTTLS                     | Tắt; cấu hình `Mode=Live` chưa đồng nghĩa bật Live |
+| Môi trường            | Frontend / API                                                                                                                                                    | Dữ liệu                                       | Email                                   | SePay                                              |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------------- | -------------------------------------------------- |
+| Local (`Development`) | Owner `http://localhost:5173`, API `https://localhost:7240`                                                                                                       | PostgreSQL và MinIO riêng mỗi máy             | Mailpit loopback, không gửi ra Internet | Tắt mặc định                                       |
+| VPS `Staging`         | Owner `https://owner-staging.103.146.23.157.sslip.io`, API `https://api-staging.103.146.23.157.sslip.io`, Public `https://public-staging.103.146.23.157.sslip.io` | Database và MinIO/bucket/volume Staging riêng | Email tắt; SMTP cần allowlist           | Sandbox API, `Mode=Test`                           |
+| VPS `Production`      | Owner `https://owner.103.146.23.157.sslip.io`, API `https://api.103.146.23.157.sslip.io`, Public `https://www.103.146.23.157.sslip.io`                            | Database/storage Production riêng             | Gmail SMTP STARTTLS                     | Tắt; cấu hình `Mode=Live` chưa đồng nghĩa bật Live |
 
 Không có Integration Hub. Không yêu cầu developer dùng chung backend/database hoặc tạo tunnel.
 `sslip.io` hiện là hostname deployment hợp lệ. Đổi tên miền bằng cấu hình và build lại frontend.
-Các hostname Staging hiện có API; để mở trang ký trên cùng host, người vận hành cần bổ sung
-frontend Staging và route Caddy như mục 12. Không gửi link đến Owner Production cho dữ liệu Staging.
+Owner Web và API Staging đã được triển khai qua HTTPS ngày 20/11/2026. Cấu hình VPS thực tế,
+thứ tự Compose và CI/CD nằm trong [runbook Staging](BHOME_STAGING_DEPLOYMENT.md).
+Không gửi link đến Owner Production cho dữ liệu Staging.
 
 ## 2. Phần mềm cần cài
 
@@ -266,7 +271,7 @@ Staging giữ project `bhome-sepay-stage`, `SePay__Enabled=true`, `Mode=Test`,
 `ApiBaseUrl=https://userapi-sandbox.sepay.vn/v2`; webhook giữ nguyên:
 
 ```text
-https://api-sepay-test.103.146.23.157.sslip.io/api/v1/integrations/sepay/webhook
+https://api-staging.103.146.23.157.sslip.io/api/v1/integrations/sepay/webhook
 ```
 
 Không thay HMAC, tài khoản nhận, ledger, fixture hoặc database đang chạy. Source chỉ mở hỗ trợ
@@ -291,25 +296,45 @@ Build Production từ PowerShell, không thay `.env.local` đang dùng:
 
 ```powershell
 $env:VITE_API_MODE='api'
+$env:VITE_DEPLOYMENT_ENVIRONMENT='Production'
 $env:VITE_API_BASE_URL='https://owner.103.146.23.157.sslip.io'
 $env:VITE_DEPLOYMENT_ORIGIN=$env:VITE_API_BASE_URL
 npm.cmd run build --workspace ./src/owner-web
 ```
 
-Build Staging thay API base/deployment origin bằng `https://api-sepay-test.103.146.23.157.sslip.io`.
+Build Staging đặt environment `Staging` và API base/deployment origin bằng `https://api-staging.103.146.23.157.sslip.io`.
 Build nhúng URL lúc compile; đổi hostname cần build lại. Xóa các biến process này hoặc mở terminal mới
 trước khi quay về local. `.env.local` luôn được Vite nạp, biến process có ưu tiên cao nhất.
 `VITE_DEPLOYMENT_ORIGIN` là guard tùy chọn cho cùng origin; nên đặt trong CI để chặn nhầm đích.
 
-VPS cần người vận hành review:
+Checkpoint CI/CD 20/11/2026 đã thêm Public Staging và storage riêng. API dùng namespace
+riêng với PostgreSQL trên backend Staging; Caddy chỉ nối edge với alias duy nhất do
+`connect-staging-edge.py` quản lý. Không gắn edge trực tiếp qua Compose service aliases.
+Ưu tiên [cấu hình vận hành đã kiểm chứng](BHOME_STAGING_DEPLOYMENT.md).
+
+Release: PR develop chạy CI rồi build/deploy Staging; PR main chạy CI rồi build
+Production, chờ environment approval trước SSH. Main hiện chỉ có README, cần review/
+merge source trước release. Workflows mới chưa được review/push. Hai SSH secrets
+Staging và flag CD đã thiết lập; secrets/commissioning Production còn thiếu.
+Không coi CD đã nghiệm thu trước run thật. Xem [biên bản mới](BHOME_STAGING_HOSTNAME_MIGRATION_2026-11-20.md).
+
+Rotate credentials theo từng môi trường: tạo key/credential thay thế riêng, nhập qua
+private config/Settings, kiểm bằng tài khoản tổng hợp, rồi mới thu hồi credential cũ.
+SSH giữ forced command và verified known-hosts; JWT rotation phải có kế hoạch hết
+phiên; bank/provider rotation theo provider và approval riêng. Không tự rotate key
+Production hoặc copy secret Staging. Thành viên mới chỉ cần local profile/ports/
+certificates riêng và PR; không cần Cloudflare Tunnel, không dùng database Production.
+
+Danh sách thiết kế ban đầu cần người vận hành review khi dựng một stack khác:
 
 1. Thêm các khóa `Deployment__*` vào cấu hình riêng theo đúng project; giữ nguyên credential/DB.
 2. Production: `SePay__Enabled=false`, `SePay__Mode=Live`; không bật Live.
 3. Staging: chuyển host environment sang `Staging`, giữ SePay Sandbox và thêm allowlist email.
 4. Bổ sung Owner frontend Staging. Caddy trên hostname staging chuyển `/api/*`, `/open/*`
    sang API Staging, các page route sang frontend Staging; API webhook không đổi đường dẫn/đích.
-5. Tham khảo `deploy/vps/Caddyfile.example`; alias `bhome-sepay-stage-api` và
-   `bhome-sepay-stage-owner` phải được khai báo trên network proxy của stack Staging trước khi dùng.
+5. Tham khảo `deploy/vps/Caddyfile.example`; các alias `bhome-stage-api`,
+   `bhome-owner-stage`, `bhome-public-stage` do `connect-staging-edge.py` gắn riêng;
+   hai alias legacy được giữ tách biệt. Không gắn edge bằng implicit Compose aliases.
    Chỉ API/frontend nối network proxy; không nối PostgreSQL/MinIO.
 6. `deploy/vps/compose.environment.example.yml` là overlay tùy chọn cho stack đã review.
    `BHOME_API_ENV_FILE` trỏ file private tuyệt đối; `BHOME_OWNER_ORIGIN` là origin frontend tương ứng.

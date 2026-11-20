@@ -1,0 +1,25 @@
+# Keep pinned old web bundles on legacy hostnames while host-only refresh cookies
+# and previously issued links remain in use. No database/storage networks or ports.
+services:
+  owner-web-legacy:
+    image: ${BHOME_STAGE_LEGACY_OWNER_IMAGE:?Pinned pre-migration Owner image}
+    container_name: bhome-staging-owner-legacy
+    volumes:
+      - ${BHOME_STAGE_LEGACY_OWNER_INDEX:?Existing sanitized legacy index}:/usr/share/nginx/html/index.html:ro
+    networks: [frontend]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+  public-web-legacy:
+    image: ${BHOME_STAGE_LEGACY_PUBLIC_IMAGE:?Pinned pre-migration Public image}
+    container_name: bhome-staging-public-legacy
+    networks: [frontend]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
