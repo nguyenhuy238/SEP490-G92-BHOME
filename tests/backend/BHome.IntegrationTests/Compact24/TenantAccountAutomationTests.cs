@@ -70,7 +70,12 @@ public sealed partial class Compact24NotificationMvpTests
         using var host = configured.WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
-            { ["NotificationChannels:AutomationEnabled"] = "false", ["Jobs:Enabled"] = "false", ["Jobs:PollSeconds"] = "1" }));
+            {
+                ["NotificationChannels:AutomationEnabled"] = "false",
+                ["Jobs:Enabled"] = "false",
+                ["Jobs:PollSeconds"] = "1",
+                ["Email:AllowedRecipients:1"] = w.Tenants[0].Email
+            }));
             b.ConfigureServices(s => { s.AddSingleton<IBackgroundJobHandler>(business); s.AddHostedService<NotificationAutomationWorker>(); });
         });
         var key = "auth-worker-tenant:" + w.Residents[0];

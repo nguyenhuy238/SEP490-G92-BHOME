@@ -110,6 +110,7 @@ public sealed class OcrApiTests
 
     [Theory]
     [InlineData("Production", true)]
+    [InlineData("Staging", true)]
     [InlineData("Development", false)]
     public async Task AutomaticDiagnosticsRemainsDevelopmentOptIn(string environment, bool enabled)
     {
@@ -220,6 +221,7 @@ public sealed class OcrApiTests
 
     [Theory]
     [InlineData("Production", true)]
+    [InlineData("Staging", true)]
     [InlineData("Testing", true)]
     [InlineData("Development", false)]
     public async Task DiagnosticsCannotBeEnabledOutsideOptedInDevelopment(string environment, bool enabled)
@@ -347,7 +349,7 @@ public sealed class OcrApiTests
 
     private static Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> Configure(ApiFactory root, TestResources resources, TestAssignments assignments,
         string environment = "Testing", bool diagnosticEnabled = false, IOcrEngine? engine = null)
-        => root.WithWebHostBuilder(builder => builder.UseEnvironment(environment)
+        => root.WithWebHostBuilder(builder => builder.UseTestEnvironment(environment)
         .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         { ["MobileDevelopment:Enabled"] = diagnosticEnabled.ToString() }))
         .ConfigureTestServices(services =>
