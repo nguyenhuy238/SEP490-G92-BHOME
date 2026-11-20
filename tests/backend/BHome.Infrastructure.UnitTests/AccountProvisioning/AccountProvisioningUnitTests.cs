@@ -125,6 +125,13 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
 
         Assert.True(result.IsActive);
         Assert.Equal(1, await world.UserCountAsync("annguyen@bhome.test"));
+        Assert.True(await world.ScalarAsync<bool>(
+            "select email_confirmed from users where id=@id", ("id", result.UserId)));
+        Assert.False(await world.ScalarAsync<bool>(
+            "select exists(select 1 from users where id=@id and reset_token_hash is not null)", ("id", result.UserId)));
+        var staff = (await world.Get<UserManager<ApplicationUser>>().FindByIdAsync(result.UserId.ToString()))!;
+        Assert.False(await world.Get<UserManager<ApplicationUser>>().CheckPasswordAsync(staff, "StaffPass123@"));
+        Assert.Empty(world.Email.Queued);
         Assert.Equal(1, await world.AuditCountAsync("StaffCreated"));
     }
 
@@ -308,15 +315,37 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
         Assert.Empty(world.Email.Queued);
     }
 
-    [Fact(DisplayName = "IssueStaffPasswordAsync: Staff chua kich hoat phai nhan invitation, khong cap password")]
-    public async Task IssueStaffPasswordAsync_UnconfirmedStaff_RejectedWithoutMutation()
+    [Fact(DisplayName = "IssueStaffPasswordAsync: Staff cu chua kich hoat van nhan mat khau moi, khong can invitation")]
+    public async Task IssueStaffPasswordAsync_LegacyUnconfirmedStaff_IsProvisionedWithoutInvitation()
     {
         world.Email.IsDurable = true;
         await world.AddUserAsync(Staff1Id, "staff1@gmail.com", Roles.Staff, "Staff123456@", emailConfirmed: false);
 
-        await AssertRejected(() => Invitations.IssueStaffPasswordAsync(Staff1Id, default), 409, "staff_account_requires_invitation");
+        var result = await Invitations.IssueStaffPasswordAsync(Staff1Id, default);
+        var mail = Assert.Single(world.Email.Queued);
+        Assert.Equal("Queued", result.DeliveryState);
+        Assert.Equal("StaffCredentials", mail.Kind);
+        Assert.True(await world.ScalarAsync<bool>(
+            "select email_confirmed from users where id=@id", ("id", Staff1Id)));
+        Assert.Equal(1, await world.AuditCountAsync("StaffPasswordIssued"));
+        var user = (await world.Get<UserManager<ApplicationUser>>().FindByIdAsync(Staff1Id.ToString()))!;
+        Assert.True(await world.Get<UserManager<ApplicationUser>>().CheckPasswordAsync(user, mail.Token));
+        Assert.False(await world.Get<UserManager<ApplicationUser>>().CheckPasswordAsync(user, "Staff123456@"));
+    }
+
+    [Fact(DisplayName = "IssueStaffPasswordAsync: neu queue that bai, Staff cu van chua active va mat khau cu duoc giu")]
+    public async Task IssueStaffPasswordAsync_LegacyUnconfirmedStaff_QueueFailureRollsBackActivation()
+    {
+        world.Email.IsDurable = true;
+        world.Email.FailQueue = true;
+        await world.AddUserAsync(Staff1Id, "staff1@gmail.com", Roles.Staff, "Staff123456@", emailConfirmed: false);
+        var oldHash = await world.ScalarAsync<string>("select password_hash from users where id=@id", ("id", Staff1Id));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Invitations.IssueStaffPasswordAsync(Staff1Id, default));
+        Assert.False(await world.ScalarAsync<bool>(
+            "select email_confirmed from users where id=@id", ("id", Staff1Id)));
+        Assert.Equal(oldHash, await world.ScalarAsync<string>("select password_hash from users where id=@id", ("id", Staff1Id)));
         Assert.Empty(world.Email.Queued);
-        Assert.Equal(0, await world.AuditCountAsync("StaffPasswordIssued"));
     }
 
     [Fact(DisplayName = "IssueStaffPasswordAsync: khong phai Owner hoac khong phai Staff thi bi tu choi")]
