@@ -1,5 +1,7 @@
 name: CI
 on:
+  push:
+    branches: [develop, main]
   pull_request:
     branches: [main, develop, 'release/**']
   workflow_dispatch:
@@ -7,7 +9,7 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   backend:
     runs-on: ubuntu-24.04
@@ -100,3 +102,17 @@ jobs:
       - run: npm run format:check
       - run: docker compose --env-file .env.example config --quiet
       - run: docker compose --project-name bhome-sepay-ci --env-file .env.sepay.example -f deploy/compose.sepay.yml config --quiet
+      - name: Validate Staging deployment guards
+        run: |
+          for file in deploy/vps/*.sh; do bash -n "$file"; done
+          python3 -m unittest discover -s tests/deployment -p 'test_*.py' -v
+          node --test tests/deployment/*.test.cjs
+  release:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    needs: [backend, frontend]
+    permissions:
+      contents: read
+      packages: write
+      deployments: read
+    uses: ./.github/workflows/release.yml
+    secrets: inherit

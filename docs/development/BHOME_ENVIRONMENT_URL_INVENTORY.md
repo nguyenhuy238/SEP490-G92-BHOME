@@ -1,3 +1,21 @@
+# Hostname đang có hiệu lực sau migration Staging
+
+Cập nhật 20/11/2026. [Biên bản triển khai](BHOME_STAGING_HOSTNAME_MIGRATION_2026-11-20.md).
+
+| Môi trường            | Owner                                         | Public                                         | API                                         |
+| --------------------- | --------------------------------------------- | ---------------------------------------------- | ------------------------------------------- |
+| Staging canonical     | https://owner-staging.103.146.23.157.sslip.io | https://public-staging.103.146.23.157.sslip.io | https://api-staging.103.146.23.157.sslip.io |
+| Production giữ nguyên | https://owner.103.146.23.157.sslip.io         | https://www.103.146.23.157.sslip.io            | https://api.103.146.23.157.sslip.io         |
+
+Compatibility giữ owner-sepay-test, public-sepay-test và api-sepay-test trên cùng
+suffix 103.146.23.157.sslip.io. Chỉ legacy web bundles, legacy allowlists và Caddy
+aliases dùng các hostname này. Bundle mới, workflow/build/smoke và Deployment anchors
+phải dùng canonical. Không đổi tên SePay integration hoặc Docker/database/volume
+identifiers đang giữ dữ liệu. Không gắn implicit Compose service aliases vào edge.
+
+Bảng quét ngày 19/11 phía dưới là chỉ mục lịch sử; giữ nguyên line references và
+nội dung, không xem các ví dụ/historical URLs trong đó là cấu hình runtime mới.
+
 # Danh mục tham chiếu URL/cấu hình BHOME
 
 Ngày quét: 19/11/2026. Quét file text tracked và file mới không bị ignore; bỏ binary,

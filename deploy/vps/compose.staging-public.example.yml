@@ -1,0 +1,69 @@
+# Apply after the existing Staging API/Web overlays, before the release image overlay.
+# Secrets are interpolated from a root-only stage-storage.env; never commit it.
+services:
+  api:
+    network_mode: !reset null
+    networks:
+      default: {}
+    environment:
+      ConnectionStrings__Database: ${BHOME_STAGE_DATABASE:?Existing Staging connection with Host=postgres}
+      Deployment__OwnerOrigin: https://owner-staging.103.146.23.157.sslip.io
+      Deployment__ApiOrigin: https://api-staging.103.146.23.157.sslip.io
+      Deployment__PublicOrigin: https://public-staging.103.146.23.157.sslip.io
+      # Compatibility anchors only accept this approved old/new Staging pair.
+      Deployment__LegacyOwnerOrigin: https://owner-sepay-test.103.146.23.157.sslip.io
+      Deployment__LegacyApiOrigin: https://api-sepay-test.103.146.23.157.sslip.io
+      Deployment__LegacyPublicOrigin: https://public-sepay-test.103.146.23.157.sslip.io
+      AllowedHosts: localhost;127.0.0.1;api-staging.103.146.23.157.sslip.io;owner-staging.103.146.23.157.sslip.io;public-staging.103.146.23.157.sslip.io;api-sepay-test.103.146.23.157.sslip.io;owner-sepay-test.103.146.23.157.sslip.io;public-sepay-test.103.146.23.157.sslip.io
+      Cors__AllowedOrigins__0: https://owner-staging.103.146.23.157.sslip.io
+      Cors__AllowedOrigins__1: https://public-staging.103.146.23.157.sslip.io
+      Cors__AllowedOrigins__2: https://owner-sepay-test.103.146.23.157.sslip.io
+      Cors__AllowedOrigins__3: https://public-sepay-test.103.146.23.157.sslip.io
+      AuthWeb__AllowedOrigins__0: https://owner-staging.103.146.23.157.sslip.io
+      AuthWeb__AllowedOrigins__1: https://owner-sepay-test.103.146.23.157.sslip.io
+      Jwt__Issuer: BHome.Staging
+      Jwt__Audience: BHome.Staging.Clients
+      ObjectStorage__Endpoint: stage-minio:9000
+      ObjectStorage__Bucket: bhome-staging-private
+      ObjectStorage__AccessKey: ${BHOME_STAGE_STORAGE_USER:?Private Staging storage identity}
+      ObjectStorage__SecretKey: ${BHOME_STAGE_STORAGE_PASSWORD:?Private Staging storage credential}
+      ObjectStorage__UseSsl: 'false'
+  owner-web:
+    networks: !override
+      frontend: {}
+  public-web:
+    image: ${BHOME_STAGE_PUBLIC_IMAGE:?Pinned Staging Public candidate or release image}
+    container_name: bhome-sepay-stage-public
+    networks:
+      frontend: {}
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:8080/']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+  stage-minio:
+    image: bhome/minio-local:2025-10-15
+    container_name: bhome-sepay-stage-minio
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: ${BHOME_STAGE_STORAGE_USER:?Private Staging identity}
+      MINIO_ROOT_PASSWORD: ${BHOME_STAGE_STORAGE_PASSWORD:?Private Staging credential}
+    volumes:
+      - stage-storage:/data
+    networks: [default]
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:9000/minio/health/live']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+networks:
+  frontend: {}
+volumes:
+  stage-storage:

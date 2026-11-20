@@ -1,4 +1,16 @@
+> Checkpoint mới nhất: [migration hostname Staging 20/11/2026](BHOME_STAGING_HOSTNAME_MIGRATION_2026-11-20.md). Canonical dùng owner-staging/public-staging/api-staging; secrets Staging đã thiết lập. Bằng chứng cũ bên dưới được giữ nguyên theo thời điểm kiểm tra.
+
 # Báo cáo chuẩn hóa cấu hình BHOME — 19/11/2026
+
+Checkpoint CI/CD mới nhất 20/11/2026: [nghiệm thu develop/main](BHOME_CICD_ACCEPTANCE_2026-11-20.md).
+Public Staging và storage private riêng đã chạy; API đã tách namespace PostgreSQL,
+Caddy dùng edge aliases riêng để tránh Docker DNS chọn nhầm môi trường. Các mô tả
+topology cũ phía dưới chỉ là lịch sử. Workflow mới chưa push/run; không đánh dấu CD
+hoàn tất. Production chưa deploy; authenticated Production smoke còn PENDING.
+
+Checkpoint VPS mới ngày 20/11/2026: [biên bản triển khai và kiểm thử thực tế](BHOME_VPS_DEPLOYMENT_ACCEPTANCE_2026-11-20.md),
+[vận hành Staging](BHOME_STAGING_DEPLOYMENT.md), [chuẩn bị Production](BHOME_PRODUCTION_RELEASE_RUNBOOK.md).
+Các mục NOT TESTED VPS bên dưới là kết quả lịch sử của phiên 19/11; trạng thái mới xem biên bản trên.
 
 Hướng dẫn vận hành: [BHOME_TEAM_ENVIRONMENT_SETUP.md](BHOME_TEAM_ENVIRONMENT_SETUP.md).
 Phạm vi là source/config/scripts/tests; không đăng nhập hoặc thay đổi VPS.

@@ -23,7 +23,20 @@ try
     var result = upgradeProperty ? await Compact24PropertyUpgrade.ApplyAsync(environment, connection) : await Compact24DevelopmentDatabase.PrepareAsync(
         Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
         Environment.GetEnvironmentVariable("ConnectionStrings__Database") ?? "", archiveLegacy, checkOnly);
-    Console.WriteLine($"Compact24: {result.State}; schema {Compact24Schema.Version}; 24 tables, 383 columns, 83 foreign keys when ready.");
+    Console.WriteLine($"Compact24: {result.State}; schema {Compact24Schema.Version}.");
+    if (result.State == "READY")
+    {
+        await using var verifiedConnection = new Npgsql.NpgsqlConnection(connection);
+        await verifiedConnection.OpenAsync();
+        await using var counts = new Npgsql.NpgsqlCommand("""
+            SELECT (SELECT count(*) FROM pg_tables WHERE schemaname='public'),
+                   (SELECT count(*) FROM information_schema.columns WHERE table_schema='public'),
+                   (SELECT count(*) FROM pg_constraint WHERE connamespace='public'::regnamespace AND contype='f')
+            """, verifiedConnection);
+        await using var reader = await counts.ExecuteReaderAsync();
+        await reader.ReadAsync();
+        Console.WriteLine($"Verified public catalog: {reader.GetInt64(0)} tables, {reader.GetInt64(1)} columns, {reader.GetInt64(2)} foreign keys.");
+    }
     if (result.BackupDatabase is not null)
         Console.WriteLine($"Preserved complete legacy database as {result.BackupDatabase}. No tables dropped or old accounts imported.");
     return result.State is "MISSING" or "EMPTY" or "LEGACY_REQUIRES_RECREATE" or "PROPERTY_UPGRADE_REQUIRED" ? 2 : 0;
