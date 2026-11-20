@@ -10,6 +10,9 @@ export default tseslint.config(
       '**/dist/**',
       '**/coverage/**',
       '**/node_modules/**',
+      // Git worktrees are independent checkouts and must not be linted as
+      // part of the primary workspace (their TSConfig roots are ambiguous).
+      '.worktrees/**',
       '.tools/**',
       '.tmp/**',
       '.codex/skills/impeccable/**',

@@ -193,9 +193,12 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         catch (Exception e) when (e is not OperationCanceledException) { deliveryStatus = "InvitationPendingManualDelivery"; }
         await WithToken(result.Token!, (invite, _) => { invite.DeliveryStatus = deliveryStatus; return Task.FromResult(true); }, t);
         var ownerCanCopyLink = actor.IsInRole(Roles.Owner);
-        return result with { Status = deliveryStatus,
+        return result with
+        {
+            Status = deliveryStatus,
             Token = ownerCanCopyLink ? result.Token : null,
-            Url = ownerCanCopyLink ? result.Url : null };
+            Url = ownerCanCopyLink ? result.Url : null
+        };
     }
     public async Task DispatchHoldingInvitationAsync(Guid id, CancellationToken t)
     {

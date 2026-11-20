@@ -66,7 +66,8 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
     { cache: queryPolicies.rooms, notifyError: false },
   );
   const locationName = (Array.isArray(assignedLocations.data) ? assignedLocations.data : [])
-    .find((location) => location.id === task?.locationId)?.label.trim();
+    .find((location) => location.id === task?.locationId)
+    ?.label.trim();
   const [expanded, setExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [inventoryReady, setInventoryReady] = useState(false);
@@ -148,8 +149,11 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
         {task.kind === 'LocationAssetHandover' && (
           <View style={{ gap: 8 }}>
             <Text variant="titleMedium" style={styles.title}>
-              Cơ sở phân công: {locationName || (assignedLocations.loading
-                ? 'Đang tải tên cơ sở…' : 'Chưa xác định được tên cơ sở')}
+              Cơ sở phân công:{' '}
+              {locationName ||
+                (assignedLocations.loading
+                  ? 'Đang tải tên cơ sở…'
+                  : 'Chưa xác định được tên cơ sở')}
             </Text>
             {!locationName && !assignedLocations.loading && (
               <Text variant="bodySmall" style={styles.muted}>
@@ -157,10 +161,14 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
               </Text>
             )}
             <Text variant="bodySmall" style={styles.muted}>
-              Kiểm kê tất cả phòng và tài sản khu vực chung theo phân công hiện tại.
-              Cập nhật tiến độ hoặc báo vướng mắc trong công việc này để Owner theo dõi.
+              Kiểm kê tất cả phòng và tài sản khu vực chung theo phân công hiện tại. Cập nhật tiến
+              độ hoặc báo vướng mắc trong công việc này để Owner theo dõi.
             </Text>
-            <Button mode="outlined" icon="alert-circle-outline" onPress={() => go('report-incident')}>
+            <Button
+              mode="outlined"
+              icon="alert-circle-outline"
+              onPress={() => go('report-incident')}
+            >
               Báo cáo sự cố tài sản
             </Button>
           </View>
@@ -461,9 +469,11 @@ function TaskActionSheet({
   };
   const action = sheet && sheet !== 'choose' ? sheet : null;
   const form = action ? forms[action] : null;
-  const canSend = action && (pendingAction ||
-    (model.allowed.includes(action) &&
-      !(action === 'submit' && task?.kind === 'LocationAssetHandover' && !inventoryReady)));
+  const canSend =
+    action &&
+    (pendingAction ||
+      (model.allowed.includes(action) &&
+        !(action === 'submit' && task?.kind === 'LocationAssetHandover' && !inventoryReady)));
   const selected = model.selected.filter((id) =>
     model.evidence.data?.some((file) => file.id === id),
   );
@@ -497,7 +507,11 @@ function TaskActionSheet({
                   <Button
                     key={value}
                     mode={value === 'submit' ? 'contained' : 'outlined'}
-                    disabled={value === 'submit' && task?.kind === 'LocationAssetHandover' && !inventoryReady}
+                    disabled={
+                      value === 'submit' &&
+                      task?.kind === 'LocationAssetHandover' &&
+                      !inventoryReady
+                    }
                     onPress={() => {
                       model.clearError();
                       setSheet(value);

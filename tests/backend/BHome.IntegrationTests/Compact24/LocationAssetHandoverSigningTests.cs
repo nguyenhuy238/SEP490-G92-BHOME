@@ -54,8 +54,11 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
             await db.SaveChangesAsync();
             var physical = new Asset
             {
-                LocationId = locationId, RoomId = room.Id, Name = "Synthetic chair",
-                Category = "Furniture", Status = AssetStatus.Active
+                LocationId = locationId,
+                RoomId = room.Id,
+                Name = "Synthetic chair",
+                Category = "Furniture",
+                Status = AssetStatus.Active
             };
             db.Add(physical);
             await db.SaveChangesAsync();
@@ -69,14 +72,21 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
             await workspace.SaveAsync(Guid.NewGuid(), locationId, "AssetVerification",
                 "Verified", new
                 {
-                    roomId = room.Id, templateId, itemId = item.Id, assetId = physical.Id,
-                    quantity = 1, source = "OwnerAttestation"
+                    roomId = room.Id,
+                    templateId,
+                    itemId = item.Id,
+                    assetId = physical.Id,
+                    quantity = 1,
+                    source = "OwnerAttestation"
                 }, 0, owner.Id, default);
             await workspace.SaveAsync(Guid.NewGuid(), locationId, "RoomInventoryChecklistReview",
                 "Matched", new
                 {
-                    roomId = room.Id, desiredId = desired.Id, desiredVersion = desired.Version,
-                    baseline = "synthetic-owner-baseline", state = "Matched",
+                    roomId = room.Id,
+                    desiredId = desired.Id,
+                    desiredVersion = desired.Version,
+                    baseline = "synthetic-owner-baseline",
+                    state = "Matched",
                     requestId = Guid.NewGuid(),
                     items = new[] { new
                     {
@@ -240,10 +250,15 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
         var id = Guid.NewGuid();
         var user = new ApplicationUser
         {
-            Id = id, UserName = id.ToString(), NormalizedUserName = id.ToString().ToUpperInvariant(),
-            Email = $"{id:N}@example.invalid", NormalizedEmail = $"{id:N}@example.invalid".ToUpperInvariant(),
-            SecurityStamp = Guid.NewGuid().ToString(), ConcurrencyStamp = Guid.NewGuid().ToString(),
-            LockoutEnabled = true, IsActive = true
+            Id = id,
+            UserName = id.ToString(),
+            NormalizedUserName = id.ToString().ToUpperInvariant(),
+            Email = $"{id:N}@example.invalid",
+            NormalizedEmail = $"{id:N}@example.invalid".ToUpperInvariant(),
+            SecurityStamp = Guid.NewGuid().ToString(),
+            ConcurrencyStamp = Guid.NewGuid().ToString(),
+            LockoutEnabled = true,
+            IsActive = true
         };
         user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<ApplicationUser>>()
             .HashPassword(user, Password);

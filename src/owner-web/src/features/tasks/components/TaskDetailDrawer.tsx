@@ -43,17 +43,20 @@ import { LocationAssetInventoryReport } from './LocationAssetInventoryReport';
 import { LocationAssetHandoverPanel } from './LocationAssetHandoverPanel';
 
 export function TaskStatus({ task }: { task: OwnerTask }) {
+  const superseded = task.kind === 'LocationAssetHandover' && task.status === 'Cancelled';
   return (
     <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
       <Chip
         size="small"
-        label={taskStatus[task.status] ?? task.status}
+        label={superseded ? 'Đã chuyển giao' : (taskStatus[task.status] ?? task.status)}
         color={
-          task.status === 'Completed'
-            ? 'success'
-            : task.status === 'PendingVerification'
-              ? 'warning'
-              : 'default'
+          superseded
+            ? 'info'
+            : task.status === 'Completed'
+              ? 'success'
+              : task.status === 'PendingVerification'
+                ? 'warning'
+                : 'default'
         }
         sx={{ height: 28, fontSize: 12 }}
       />
@@ -82,6 +85,8 @@ const historyNames: Record<string, string> = {
   coordinate: 'Ghi chú phối hợp',
   assign: 'Đồng bộ người phụ trách',
   responsibility_changed: 'Thay đổi trách nhiệm',
+  responsibility_superseded: 'Đã chuyển giao',
+  location_asset_inventory_progress_inherited: 'Kế thừa tiến độ kiểm kê',
   'assignment-replaced': 'Thay đổi phân công cơ sở',
   evidence_uploaded: 'Tải bằng chứng',
   location_asset_inventory_created: 'Tạo kiểm kê tài sản toàn cơ sở',
@@ -194,10 +199,10 @@ export function TaskDetailDrawer({
                 {task.kind === 'LocationAssetHandover'
                   ? 'Kiểm kê và bàn giao tài sản toàn cơ sở'
                   : task.kind === 'MoveInInventory'
-                  ? 'Kiểm kê tài sản trước bàn giao'
-                  : task.kind === 'AdHoc'
-                    ? 'Công việc vận hành'
-                    : 'Ghi điện nước'}
+                    ? 'Kiểm kê tài sản trước bàn giao'
+                    : task.kind === 'AdHoc'
+                      ? 'Công việc vận hành'
+                      : 'Ghi điện nước'}
               </Typography>
               {!task.responsibilityAvailable && (
                 <Alert severity="warning">

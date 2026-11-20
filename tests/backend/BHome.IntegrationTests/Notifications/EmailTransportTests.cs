@@ -171,8 +171,14 @@ public sealed class EmailTransportTests
     {
         var options = new EmailOptions
         {
-            Enabled = true, DeliveryMode = "Capture", Host = host, Port = 1025, UseStartTls = false,
-            FromEmail = "bhome@example.invalid", Username = "stale@example.invalid", AppPassword = "LOCAL_SYNTHETIC_ONLY"
+            Enabled = true,
+            DeliveryMode = "Capture",
+            Host = host,
+            Port = 1025,
+            UseStartTls = false,
+            FromEmail = "bhome@example.invalid",
+            Username = "stale@example.invalid",
+            AppPassword = "LOCAL_SYNTHETIC_ONLY"
         };
         Assert.Equal(valid, options.Valid());
         var development = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance, new HostingEnvironment { EnvironmentName = "Development" });
@@ -216,8 +222,16 @@ public sealed class EmailTransportTests
                 else { await writer.WriteLineAsync("500 unsupported"); break; }
             }
         });
-        var options = new EmailOptions { Enabled = true, DeliveryMode = "Capture", Host = "127.0.0.1",
-            Port = port, UseStartTls = false, FromEmail = "bhome@example.invalid", FromName = "BHOME" };
+        var options = new EmailOptions
+        {
+            Enabled = true,
+            DeliveryMode = "Capture",
+            Host = "127.0.0.1",
+            Port = port,
+            UseStartTls = false,
+            FromEmail = "bhome@example.invalid",
+            FromName = "BHOME"
+        };
         var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance, new HostingEnvironment { EnvironmentName = "Testing" });
         var receipt = await sender.SendAsync(new ChannelMessage("local-capture", "EMAIL", "tenant@example.invalid",
             "ACCOUNT_INVITATION", "Test", "Synthetic content"), CancellationToken.None);

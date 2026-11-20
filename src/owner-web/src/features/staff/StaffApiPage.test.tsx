@@ -179,7 +179,7 @@ it('uses server totals and server pagination, resetting the page for search', as
   expect(screen.queryByText(/100 hồ sơ đầu/)).not.toBeInTheDocument();
 });
 
-it('keeps invitation errors visible and allows a successful retry', async () => {
+it('requests a 12-character password email without a reset link, preserving errors for retry', async () => {
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
   fireEvent.click(
@@ -188,12 +188,16 @@ it('keeps invitation errors visible and allows a successful retry', async () => 
   const dialog = await screen.findByRole('dialog', {
     name: 'Thiết lập mật khẩu mới và gửi cho nhân viên',
   });
+  expect(within(dialog).getByText('Email nhận: staff@example.invalid')).toBeInTheDocument();
+  expect(within(dialog).getByText(/mật khẩu ngẫu nhiên 12 ký tự/)).toBeInTheDocument();
+  expect(within(dialog).getByText(/Hồ sơ → Bảo mật/)).toBeInTheDocument();
+  expect(within(dialog).queryByText(/liên kết dùng một lần/)).not.toBeInTheDocument();
   const confirm = within(dialog).getByRole('button', { name: 'Xác nhận' });
   const original = mocks.request.getMockImplementation()!;
-  let failInvitation = true;
+  let failPasswordIssue = true;
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
-    if (path.endsWith('/invitation') && init?.method === 'POST' && failInvitation) {
-      failInvitation = false;
+    if (path.endsWith('/issue-password') && init?.method === 'POST' && failPasswordIssue) {
+      failPasswordIssue = false;
       throw new ApiError(503, { code: 'email_recipient_not_allowed' });
     }
     return original(path, init);
@@ -206,12 +210,16 @@ it('keeps invitation errors visible and allows a successful retry', async () => 
   // the whole MUI page's accessibility tree on a busy CI runner.
   await waitForElementToBeRemoved(dialog, { timeout: 5000 });
   expect(mocks.request).toHaveBeenCalledWith(
-    '/api/v1/staff/staff/invitation',
+    '/api/v1/staff/staff/issue-password',
     expect.objectContaining({ method: 'POST' }),
   );
+  const issued = mocks.request.mock.calls.find(
+    ([path, init]) => path.endsWith('/issue-password') && init?.method === 'POST',
+  )!;
+  expect(issued[1]).not.toHaveProperty('body');
   expect(
     mocks.request.mock.calls.filter(
-      ([path, init]) => path.endsWith('/invitation') && init?.method === 'POST',
+      ([path, init]) => path.endsWith('/issue-password') && init?.method === 'POST',
     ),
   ).toHaveLength(2);
 });

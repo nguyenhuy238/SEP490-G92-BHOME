@@ -26,6 +26,63 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         context.Entry(user).Property("reset_consumed_at").CurrentValue = null;
     }
 
+    // Exactly 12 characters with all four Identity-required classes. The selection and
+    // shuffle use a cryptographic RNG; no generated password is stored or returned to Owner.
+    internal static string NewStaffPassword()
+    {
+        const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        const string lower = "abcdefghijkmnopqrstuvwxyz";
+        const string digits = "23456789";
+        const string symbols = "!@#$%&*?";
+        const string alphabet = upper + lower + digits + symbols;
+        var chars = new char[12];
+        chars[0] = upper[RandomNumberGenerator.GetInt32(upper.Length)];
+        chars[1] = lower[RandomNumberGenerator.GetInt32(lower.Length)];
+        chars[2] = digits[RandomNumberGenerator.GetInt32(digits.Length)];
+        chars[3] = symbols[RandomNumberGenerator.GetInt32(symbols.Length)];
+        for (var i = 4; i < chars.Length; i++) chars[i] = alphabet[RandomNumberGenerator.GetInt32(alphabet.Length)];
+        for (var i = chars.Length - 1; i > 0; i--)
+        {
+            var j = RandomNumberGenerator.GetInt32(i + 1);
+            (chars[i], chars[j]) = (chars[j], chars[i]);
+        }
+        return new string(chars);
+    }
+
+    public async Task<TenantInvitationResult> IssueStaffPasswordAsync(Guid userId, CancellationToken t)
+    {
+        if (actor.UserId is null || !actor.IsInRole(Roles.Owner)) throw new NotificationException(403, "staff_password_owner_required");
+        if (!delivery.IsDurable || !delivery.IsAvailableFor("StaffCredentials"))
+            throw new BHome.Application.Common.IntegrationUnavailableException("Staff credential email delivery is not configured.");
+        await using var tx = await identity.BeginTransactionAsync(t);
+        var user = await security.LockUserAsync(userId, t);
+        if (user is null || !user.IsActive || !(await security.RolesAsync(userId, t)).Contains(Roles.Staff))
+            throw new NotificationException(404, "staff_not_found");
+        if (!user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email))
+            throw new NotificationException(409, "staff_account_requires_invitation");
+        delivery.ValidateInvitationRecipient(user.Email);
+        // Row locking serializes concurrent requests for the same Staff; a rapid retry
+        // preserves the queued credential rather than silently replacing it again.
+        var recentlyIssued = await sql.Scalar<bool>("""
+            SELECT EXISTS(SELECT 1 FROM notifications WHERE record_kind='AUDIT'
+              AND related_entity_id=@user AND notification_type='StaffPasswordIssued' AND event_at>@since)
+            """, t, ("user", user.Id), ("since", sql.Now.AddSeconds(-emailOptions.Value.ResendCooldownSeconds)));
+        if (recentlyIssued) return new(user.Id, "ExistingRequestPreserved");
+
+        var password = NewStaffPassword();
+        var result = await users.ResetPasswordAsync(user, await users.GeneratePasswordResetTokenAsync(user), password);
+        if (!result.Succeeded) throw new NotificationException(409, "staff_password_update_failed");
+        await security.RevokeAllAsync(user.Id, "StaffPasswordIssued", t);
+        await identity.ConsumeResetGrantsAsync(user.Id, sql.Now, t);
+        security.Audit("StaffPasswordIssued", true, user.Id);
+        // Atomic hashed-password update + protected outbox enqueue. SMTP failure leaves a
+        // visible, retryable delivery rather than an untracked changed credential.
+        await delivery.QueueAsync(new(user.Id, user.Email, password, sql.Now.AddDays(7), "StaffCredentials"), t);
+        await identity.SaveChangesAsync(t);
+        await tx.CommitAsync(t);
+        return new(user.Id, "Queued");
+    }
+
     public async Task<TenantInvitationResult> InviteStaffAsync(Guid userId, CancellationToken t)
     {
         if (actor.UserId is null || !actor.IsInRole(Roles.Owner)) throw new NotificationException(403, "invitation_owner_required");

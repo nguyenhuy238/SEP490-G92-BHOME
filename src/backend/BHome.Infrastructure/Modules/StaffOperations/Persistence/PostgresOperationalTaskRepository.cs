@@ -85,13 +85,19 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         (from assignment in db.StaffLocationAssignments.AsNoTracking()
          join staff in db.Users on assignment.StaffUserId equals staff.Id
          where assignment.LocationId == locationId && assignment.StartDate <= date && assignment.EndDate >= date && staff.IsActive &&
-             db.UserRoles.Any(ur => ur.UserId == staff.Id && db.Roles.Any(role => role.Id == ur.RoleId && role.Name == Roles.Staff))
+             db.UserRoles.Any(ur => ur.UserId == staff.Id && db.Roles.Any(role => role.Id == ur.RoleId && role.Name == Roles.Staff)) &&
+             EligibleStaff(date).Contains(staff.Id)
          select new TaskResponsibility(assignment.Id, staff.Id)).SingleOrDefaultAsync(t);
+
+    private IQueryable<Guid> EligibleStaff(DateOnly date) => db is Compact24DbContext compact
+        ? StaffEmploymentEligibility.EligibleIds(compact, date)
+        : db.Users.Where(u => u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id &&
+            db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))).Select(u => u.Id);
 
     private IQueryable<OperationalTask> Visible(Guid? staffId, DateOnly date)
     {
         var rows = db.Set<OperationalTask>().AsNoTracking();
-        if (staffId is { } staff) rows = rows.Where(task => task.Location.IsActive &&
+        if (staffId is { } staff) rows = rows.Where(task => task.Location.IsActive && EligibleStaff(date).Contains(staff) &&
             db.StaffLocationAssignments.Any(a => a.LocationId == task.LocationId && a.StaffUserId == staff && a.StartDate <= date && a.EndDate >= date) &&
             db.Users.Any(u => u.Id == staff && u.IsActive && db.UserRoles.Any(ur => ur.UserId == staff && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))));
         return rows;
@@ -107,7 +113,7 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         if (query.RecordedStaffUserId is { } recorded) rows = rows.Where(x => x.AssignedStaffUserId == recorded);
         if (query.HasResponsibility is { } available) rows = rows.Where(task =>
             (task.Location.IsActive && db.StaffLocationAssignments.Any(a => a.LocationId == task.LocationId && a.StartDate <= date && a.EndDate >= date &&
-                db.Users.Any(u => u.Id == a.StaffUserId && u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))))) == available);
+                db.Users.Any(u => u.Id == a.StaffUserId && u.IsActive && EligibleStaff(date).Contains(u.Id) && db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))))) == available);
         if (query.Status is { } status) rows = rows.Where(x => x.Status == status);
         if (query.Priority is { } priority) rows = rows.Where(x => x.Priority == priority);
         if (query.DueFrom is { } from) rows = rows.Where(x => x.DueAt >= from);
@@ -119,7 +125,7 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
             {
                 Task = task,
                 Responsible = db.StaffLocationAssignments.Where(a => task.Location.IsActive && a.LocationId == task.LocationId && a.StartDate <= date && a.EndDate >= date &&
-                    db.Users.Any(u => u.Id == a.StaffUserId && u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))))
+                    db.Users.Any(u => u.Id == a.StaffUserId && u.IsActive && EligibleStaff(date).Contains(u.Id) && db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))))
                     .Select(a => (Guid?)a.StaffUserId).SingleOrDefault()
             }).ToArrayAsync(t);
         return new(items.Select(x => new TaskView(x.Task.Id, x.Task.LocationId, x.Task.Kind.ToString(), x.Task.Title, x.Task.Requirements,

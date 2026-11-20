@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
@@ -12,7 +12,6 @@ import { formatInstant } from '../../../../packages/client-core/src/localization
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
-import type { Named } from '../lib/api';
 import { queryPolicies } from '../lib/queryPolicies';
 import {
   taskStatusLabels,
@@ -25,6 +24,7 @@ const filters = [
   { id: '', label: 'Tất cả' },
   ...Object.entries(taskStatusLabels).map(([id, label]) => ({ id, label })),
 ];
+type AssignedLocation = { id: string; name: string };
 
 export function StaffTaskListScreen() {
   const { go } = useWorkspace();
@@ -34,20 +34,35 @@ export function StaffTaskListScreen() {
     `/api/v1/operational-tasks?page=${page}&pageSize=20${status ? `&status=${status}` : ''}`,
     { cache: queryPolicies.tasks, notifyError: false },
   );
-  // Resolve Location labels only when a property-wide handover task is on this
-  // page. Ordinary task-list reads must not introduce an unrelated network
-  // request or interfere with their independently retried/paginated results.
-  const needsLocationLabels = query.data?.items.some(
-    (task) => task.kind === 'LocationAssetHandover',
-  ) ?? false;
-  const locations = useWorkspaceQuery<Named[]>(
-    needsLocationLabels ? '/api/v1/capture/locations' : null, {
-    cache: queryPolicies.rooms,
-    notifyError: false,
-  });
+  // The directory is fetched once through the shared query cache. Page
+  // transitions can unsubscribe briefly without losing the cached names.
+  const needsLocationLabels = (query.data?.items.length ?? 0) > 0;
+  // This endpoint returns every currently assigned Location. The capture
+  // directory is capped at 100 results and could omit names for visible tasks.
+  const locations = useWorkspaceQuery<AssignedLocation[]>(
+    needsLocationLabels ? '/api/v1/locations/assigned-to-me' : null,
+    {
+      cache: queryPolicies.rooms,
+      notifyError: false,
+    },
+  );
   const inHeader = useWorkspaceHeaderRefresh(query.reload, query.fetching);
   const data = query.data;
   const items = data?.items ?? [];
+  const locationNames = useMemo(
+    () =>
+      new Map(
+        (Array.isArray(locations.data) ? locations.data : [])
+          .filter((location) => location.id && location.name?.trim())
+          .map((location) => [location.id, location.name.trim()] as const),
+      ),
+    [locations.data],
+  );
+  const missingLocationName = locations.fetching
+    ? 'Đang tải tên cơ sở…'
+    : locations.error
+      ? 'Chưa tải được tên cơ sở'
+      : 'Chưa xác định tên cơ sở';
   return (
     <>
       {!inHeader && (
@@ -99,12 +114,21 @@ export function StaffTaskListScreen() {
           </Button>
         </View>
       )}
+      {!!locations.error && items.length > 0 && (
+        <View style={styles.state}>
+          <Text accessibilityRole="alert" variant="bodySmall" style={styles.muted}>
+            Không tải được tên cơ sở: {locations.error}
+          </Text>
+          <Button compact mode="text" onPress={locations.reload} disabled={locations.fetching}>
+            Tải lại tên cơ sở
+          </Button>
+        </View>
+      )}
       {items.map((task) => (
         <TaskCard
           key={task.id}
           task={task}
-          locationName={(Array.isArray(locations.data) ? locations.data : [])
-            .find((location) => location.id === task.locationId)?.label}
+          locationName={locationNames.get(task.locationId) ?? missingLocationName}
           onPress={() =>
             task.kind === 'MeterReading'
               ? go('meter-reading')
@@ -228,7 +252,11 @@ function TaskSummaryBar({
   );
 }
 
-export function TaskCard({ task, onPress, locationName }: {
+export function TaskCard({
+  task,
+  onPress,
+  locationName,
+}: {
   task: OperationalTask;
   onPress: () => void;
   locationName?: string;
@@ -264,14 +292,12 @@ export function TaskCard({ task, onPress, locationName }: {
           </Text>
           <TaskBadge status={task.status} label={status} />
         </View>
-        {(task.kind === 'LocationAssetHandover' || !!locationName) && (
-          <View style={styles.dueRow}>
-            <Icon source="map-marker-outline" size={15} color={c.muted} />
-            <Text variant="bodySmall" style={styles.title}>
-              Cơ sở: {locationName?.trim() || 'Chưa xác định tên cơ sở'}
-            </Text>
-          </View>
-        )}
+        <View style={styles.dueRow}>
+          <Icon source="map-marker-outline" size={15} color={c.muted} />
+          <Text variant="bodySmall" style={styles.title}>
+            Cơ sở: {locationName?.trim() || 'Chưa xác định tên cơ sở'}
+          </Text>
+        </View>
         <View style={styles.dueRow}>
           <Icon
             source={task.isOverdue ? 'clock-alert-outline' : 'clock-outline'}

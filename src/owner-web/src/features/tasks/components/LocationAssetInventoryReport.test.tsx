@@ -21,11 +21,13 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../hooks/useOwnerWorkspace', () => ({
-  useOwnerQuery: (key: unknown[], _path: string) =>
+  useOwnerQuery: (key: unknown[]) =>
     key[0] === 'task-location-asset-inventory-reconcile-preview'
       ? {
           data: state.preview,
-          isFetching: false, error: null, refetch: state.refetchPreview,
+          isFetching: false,
+          error: null,
+          refetch: state.refetchPreview,
         }
       : {
           data: {
@@ -33,13 +35,20 @@ vi.mock('../../../hooks/useOwnerWorkspace', () => ({
             locationId: '22222222-2222-4222-8222-222222222222',
             assignmentId: '33333333-3333-4333-8333-333333333333',
             status: 'InProgress',
-            version: 2, totalCount: 42, checkedCount: 0,
-            items: [], pendingOwnerRooms: ['P.201', 'P.202'], pendingOwnerCommonAssets: true,
+            version: 2,
+            totalCount: 42,
+            checkedCount: 0,
+            items: [],
+            pendingOwnerRooms: ['P.201', 'P.202'],
+            pendingOwnerCommonAssets: true,
           },
-          isFetching: false, error: null, refetch: state.refetchInventory,
+          isFetching: false,
+          error: null,
+          refetch: state.refetchInventory,
         },
   useOwnerAction: () => ({
-    busy: false, error: '',
+    busy: false,
+    error: '',
     run: async (work: () => Promise<unknown>) => {
       await work();
       return true;
@@ -70,10 +79,13 @@ it('requires explicit Owner confirmation before replacing an old 42-item task wi
   fireEvent.click(screen.getByLabelText(/Tôi đã đối chiếu và đồng ý cập nhật danh sách/));
   expect(action).toBeEnabled();
   fireEvent.click(action);
-  await waitFor(() => expect(state.command).toHaveBeenCalledWith(
-    '/api/v1/operational-tasks/' + state.preview.taskId + '/location-asset-inventory/reconcile',
-    'POST', { version: 2, confirmed: true },
-  ));
+  await waitFor(() =>
+    expect(state.command).toHaveBeenCalledWith(
+      '/api/v1/operational-tasks/' + state.preview.taskId + '/location-asset-inventory/reconcile',
+      'POST',
+      { version: 2, confirmed: true },
+    ),
+  );
   expect(state.refetchInventory).toHaveBeenCalledTimes(1);
   expect(state.refetchPreview).toHaveBeenCalledTimes(1);
 });

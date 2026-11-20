@@ -41,8 +41,12 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
         var location = await repository.LocationAsync(task.LocationId, t) ?? throw OperationalTaskException.Missing();
         var responsible = location.IsActive ? await repository.ResponsibilityAsync(task.LocationId, Today, t) : null;
         if ((!Owner || requireAssigned) && (responsible is null || responsible.StaffUserId != Actor)) throw OperationalTaskException.Missing();
+        // Successors may audit a closed predecessor checklist at the same Location,
+        // but only the Staff owning a live assignment may mutate a handover task.
         if (task.Kind == OperationalTaskKind.LocationAssetHandover && (!Owner || requireAssigned) &&
-            task.AssignmentId != responsible?.AssignmentId) throw OperationalTaskException.Missing();
+            task.AssignmentId != responsible?.AssignmentId &&
+            (requireAssigned || task.Status != MeterTaskStatus.Cancelled))
+            throw OperationalTaskException.Missing();
         return responsible;
     }
     private static TaskView View(OperationalTask task, TaskResponsibility? responsible) => new(task.Id, task.LocationId,

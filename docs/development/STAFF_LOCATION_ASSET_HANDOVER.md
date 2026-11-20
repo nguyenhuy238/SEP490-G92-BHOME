@@ -19,16 +19,16 @@ chỉ sau khi Owner và Staff xác nhận đúng cùng một biên bản, theo �
 
 ## API
 
-| Method | Đường dẫn sau /api/v1/operational-tasks/{id} | Tác dụng |
-|---|---|---|
-| GET | /location-asset-inventory | Checklist + tiến độ |
-| PUT | /location-asset-inventory/items/{itemId} | Staff xác nhận và liên kết sự cố |
-| POST | /start, /progress, /blockers, /submit | Workflow công việc chuẩn |
-| GET | /location-asset-handover | Biên bản đã đối soát |
-| POST | /location-asset-handover/rework | Owner trả mục {taskVersion,itemIds,note} |
-| POST | /location-asset-handover/approve | Owner duyệt {taskVersion,exceptionDecision?} |
-| POST | /location-asset-handover/sign | Owner rồi Staff ký {revision,snapshotSha256,confirmed:true} |
-| GET | /location-asset-handover/document | Tải PDF đã kiểm tra mã băm |
+| Method | Đường dẫn sau /api/v1/operational-tasks/{id} | Tác dụng                                                    |
+| ------ | -------------------------------------------- | ----------------------------------------------------------- |
+| GET    | /location-asset-inventory                    | Checklist + tiến độ                                         |
+| PUT    | /location-asset-inventory/items/{itemId}     | Staff xác nhận và liên kết sự cố                            |
+| POST   | /start, /progress, /blockers, /submit        | Workflow công việc chuẩn                                    |
+| GET    | /location-asset-handover                     | Biên bản đã đối soát                                        |
+| POST   | /location-asset-handover/rework              | Owner trả mục {taskVersion,itemIds,note}                    |
+| POST   | /location-asset-handover/approve             | Owner duyệt {taskVersion,exceptionDecision?}                |
+| POST   | /location-asset-handover/sign                | Owner rồi Staff ký {revision,snapshotSha256,confirmed:true} |
+| GET    | /location-asset-handover/document            | Tải PDF đã kiểm tra mã băm                                  |
 
 Backend giữ checklist trong JSON state của task trong Compact24, không thêm
 bảng dữ liệu song song. PDF và snapshot được lưu private object storage, kèm

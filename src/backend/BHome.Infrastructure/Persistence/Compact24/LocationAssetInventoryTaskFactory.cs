@@ -57,6 +57,50 @@ internal static class LocationAssetInventoryTaskFactory
         var taskId = TaskId(assignmentId);
         if (await db.Set<OperationalTask>().AsNoTracking().AnyAsync(t => t.Id == taskId, token)) return;
         var baseline = await BuildConfirmedSnapshotAsync(db, workspace, locationId, assignmentId, effectiveFrom, now, token);
+        var prior = await db.Set<OperationalTask>().AsNoTracking()
+            .Where(t => t.LocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover &&
+                t.AssignmentId != assignmentId && t.Status == MeterTaskStatus.Cancelled &&
+                db.Set<OperationalTaskHistory>().Any(h => h.TaskId == t.Id && h.Action == "responsibility_superseded"))
+            .OrderByDescending(t => t.AssignedAt).ThenByDescending(t => t.Id).FirstOrDefaultAsync(token);
+        var carried = 0;
+        if (prior is not null && !string.IsNullOrWhiteSpace(prior.LocationAssetInventoryJson))
+        {
+            LocationAssetInventorySnapshot? older;
+            try { older = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(prior.LocationAssetInventoryJson, Json); }
+            catch (JsonException) { older = null; }
+            if (older?.Items is { } sourceItems && older.AssignmentId == prior.AssignmentId &&
+                sourceItems.Select(i => i.Id).Distinct().Count() == sourceItems.Length)
+            {
+                // Stable physical identity, not assignment-scoped checklist item ID.
+                // Ambiguous or Owner-modified rows are never copied as checked.
+                var unique = sourceItems.GroupBy(i => (i.RoomId, i.AssetId))
+                    .Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.Single());
+                var targetCounts = baseline.Items.GroupBy(i => (i.RoomId, i.AssetId))
+                    .ToDictionary(g => g.Key, g => g.Count());
+                var updated = baseline.Items.Select(item =>
+                {
+                    if (targetCounts[(item.RoomId, item.AssetId)] != 1 ||
+                        !unique.TryGetValue((item.RoomId, item.AssetId), out var old) ||
+                        old.Quantity != item.Quantity || old.Name != item.Name ||
+                        old.CommonArea != item.CommonArea || old.RoomNumber != item.RoomNumber ||
+                        old.Inherited != item.Inherited || old.SourceHandoverContractId != item.SourceHandoverContractId ||
+                        !(item.AssetId.HasValue || item.RoomId.HasValue && item.Quantity == 0) ||
+                        (!old.Checked && old.IncidentId is null && string.IsNullOrWhiteSpace(old.Note))) return item;
+                    if (old.Checked && !item.Checked) carried++;
+                    return item with
+                    {
+                        Checked = item.Checked || old.Checked,
+                        Note = old.Note,
+                        IncidentId = old.IncidentId,
+                        // A second replacement keeps the original checker, not the
+                        // intermediate successor who merely inherited the prior check.
+                        PriorStaffTaskId = old.PriorStaffTaskId ?? prior.Id,
+                        PriorStaffUserId = old.PriorStaffUserId ?? prior.AssignedStaffUserId
+                    };
+                }).ToArray();
+                baseline = baseline with { Items = updated };
+            }
+        }
         var task = new OperationalTask
         {
             Kind = OperationalTaskKind.LocationAssetHandover,
@@ -82,11 +126,36 @@ internal static class LocationAssetInventoryTaskFactory
             OccurredAt = now,
             ResponsibleStaffUserId = staffId,
             TaskVersion = 1,
-            ChangesJson = JsonSerializer.Serialize(new { assignmentId, effectiveFrom,
-                total = baseline.Items.Length, inherited = baseline.Items.Count(item => item.Inherited),
-                source = "OwnerConfirmedInventory" })
+            ChangesJson = JsonSerializer.Serialize(new
+            {
+                assignmentId,
+                effectiveFrom,
+                total = baseline.Items.Length,
+                inherited = baseline.Items.Count(item => item.Inherited),
+                source = "OwnerConfirmedInventory"
+            })
         };
         db.Add(history);
+        if (carried > 0 && prior is not null)
+            db.Add(new OperationalTaskHistory
+            {
+                TaskId = taskId,
+                ActorId = actor,
+                Action = "location_asset_inventory_progress_inherited",
+                OccurredAt = now,
+                ResponsibleStaffUserId = staffId,
+                TaskVersion = 1,
+                Note = "Tiếp nhận các hạng mục đã kiểm tra phù hợp từ phân công trước",
+                ChangesJson = JsonSerializer.Serialize(new
+                {
+                    sourceTaskId = prior.Id,
+                    sourceStaffUserId = prior.AssignedStaffUserId,
+                    sourceAssignmentId = prior.AssignmentId,
+                    carriedChecked = carried,
+                    checkedTotal = baseline.Items.Count(item => item.Checked),
+                    total = baseline.Items.Length
+                })
+            });
         var ownerIds = await db.Users.AsNoTracking().Where(u => u.IsActive &&
             EF.Property<string[]>(u, "roles").Contains("Owner")).Select(u => u.Id).ToArrayAsync(token);
         foreach (var recipient in ownerIds.Append(staffId).Distinct())
@@ -111,8 +180,16 @@ internal static class LocationAssetInventoryTaskFactory
             .OrderBy(r => r.RoomNumber).ThenBy(r => r.Id)
             .Select(r => new { r.Id, r.RoomNumber, r.Status }).ToArrayAsync(token);
         var assets = await db.Set<Asset>().AsNoTracking().Where(a => a.LocationId == locationId && a.Status != AssetStatus.Retired)
-            .Select(a => new { a.Id, a.RoomId, a.CommonArea, a.Name, a.Category, a.Status,
-                PurchaseInfo = EF.Property<string>(a, "PurchaseInfo") }).ToArrayAsync(token);
+            .Select(a => new
+            {
+                a.Id,
+                a.RoomId,
+                a.CommonArea,
+                a.Name,
+                a.Category,
+                a.Status,
+                PurchaseInfo = EF.Property<string>(a, "PurchaseInfo")
+            }).ToArrayAsync(token);
         // Query Owner's durable inventory verification documents once per Location.
         var setup = await workspace.ReviewDocumentsAsync(locationId,
             assets.Select(asset => asset.Id).ToArray(), token);
@@ -151,8 +228,16 @@ internal static class LocationAssetInventoryTaskFactory
         // occupant's signed handover must never automatically confirm the new Staff's checklist.
         var contracts = await db.Set<Contract>().AsNoTracking().Where(c => c.Room.LocationId == locationId &&
                 (c.Kind == ContractKind.Main || c.Kind == ContractKind.Renewal))
-            .Select(c => new { c.Id, c.RoomId, c.Status, c.TenantUserId, c.PreviousContractId,
-                c.StartDate, c.EndDate })
+            .Select(c => new
+            {
+                c.Id,
+                c.RoomId,
+                c.Status,
+                c.TenantUserId,
+                c.PreviousContractId,
+                c.StartDate,
+                c.EndDate
+            })
             .ToArrayAsync(token);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now,
             TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
@@ -252,9 +337,12 @@ internal static class LocationAssetInventoryTaskFactory
                 var currentDesired = setup.Where(d => d.Kind == "DesiredAssets" &&
                     d.Data.TryGetProperty("roomId", out var id) && id.GetGuid() == room.Id)
                     .OrderByDescending(d => d.RecordedAt).ThenByDescending(d => d.Version).FirstOrDefault();
-                var expected = Fingerprint(new { Id = room.Id,
+                var expected = Fingerprint(new
+                {
+                    Id = room.Id,
                     assignment = assignment is null ? null : new { assignment.Id, assignment.Version },
-                    desired = currentDesired is null ? null : new { currentDesired.Id, currentDesired.Version } });
+                    desired = currentDesired is null ? null : new { currentDesired.Id, currentDesired.Version }
+                });
                 if (confirmation is not null && confirmation.Data.TryGetProperty("baseline", out var baselineHash) &&
                     baselineHash.GetString() == expected)
                 {

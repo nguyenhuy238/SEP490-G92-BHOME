@@ -8,7 +8,10 @@ import { errorMessage, MobileApiError, type MobileApi } from '../lib/api';
 import { randomUUID } from '../lib/randomUUID';
 import { useSession } from '../lib/SessionProvider';
 import { showSuccess } from '../lib/toast';
-import { locationAssetHandoverClient, type LocationAssetHandoverReport } from '../services/locationAssetHandover';
+import {
+  locationAssetHandoverClient,
+  type LocationAssetHandoverReport,
+} from '../services/locationAssetHandover';
 
 const loadReport = async (api: MobileApi, path: string, signal: AbortSignal) => {
   try {
@@ -44,8 +47,15 @@ export function LocationAssetHandoverSigning({
   const confirmed = !!signingKey && confirmedKey === signingKey;
 
   const sign = useCallback(async () => {
-    if (!api || !data || !confirmed || lock.current || data.status !== 'PendingStaffSignature' ||
-      data.staffId !== session?.userId) return;
+    if (
+      !api ||
+      !data ||
+      !confirmed ||
+      lock.current ||
+      data.status !== 'PendingStaffSignature' ||
+      data.staffId !== session?.userId
+    )
+      return;
     lock.current = true;
     setBusy(true);
     setError('');
@@ -99,8 +109,11 @@ export function LocationAssetHandoverSigning({
         }
       }
     } catch (failure) {
-      setError(failure instanceof Error && failure.message === 'Thiết bị không hỗ trợ mở hoặc lưu PDF.'
-        ? failure.message : errorMessage(failure));
+      setError(
+        failure instanceof Error && failure.message === 'Thiết bị không hỗ trợ mở hoặc lưu PDF.'
+          ? failure.message
+          : errorMessage(failure),
+      );
     } finally {
       setDownloadBusy(false);
     }
@@ -115,11 +128,17 @@ export function LocationAssetHandoverSigning({
       {query.loading && <ActivityIndicator accessibilityLabel="Đang tải biên bản bàn giao" />}
       {!!query.error && (
         <View style={{ gap: 6 }}>
-          <Text accessibilityRole="alert" style={ui.red}>{query.error}</Text>
+          <Text accessibilityRole="alert" style={ui.red}>
+            {query.error}
+          </Text>
           <Button onPress={reload}>Tải lại biên bản</Button>
         </View>
       )}
-      {!!error && <Text accessibilityRole="alert" style={ui.red}>{error}</Text>}
+      {!!error && (
+        <Text accessibilityRole="alert" style={ui.red}>
+          {error}
+        </Text>
+      )}
       {!query.loading && !query.error && !data && (
         <Text style={ui.muted}>
           {taskStatus === 'PendingVerification'
@@ -129,19 +148,27 @@ export function LocationAssetHandoverSigning({
       )}
       {data && (
         <View style={{ gap: 10 }}>
-          <Text>Phiên bản: {data.revision} · {data.totalItems} mục tài sản</Text>
+          <Text>
+            Phiên bản: {data.revision} · {data.totalItems} mục tài sản
+          </Text>
           <Text style={ui.muted}>
             Tự kiểm tra: {data.directItems} · Kế thừa bàn giao Tenant: {data.inheritedItems}
           </Text>
           <Text style={ui.muted}>Đã đối soát: {formatInstant(data.approvedAt)}</Text>
           <Text style={ui.muted}>Mã nội dung SHA-256: {data.snapshotSha256}</Text>
           {!!data.exceptionDecision && <Text>Quyết định Owner: {data.exceptionDecision}</Text>}
-          <Button mode="outlined" disabled={downloadBusy} loading={downloadBusy}
-            onPress={() => void download()}>
+          <Button
+            mode="outlined"
+            disabled={downloadBusy}
+            loading={downloadBusy}
+            onPress={() => void download()}
+          >
             Xem / lưu biên bản PDF
           </Button>
           {data.status === 'Superseded' && (
-            <Text style={ui.red}>Biên bản đã bị thay thế do cập nhật dữ liệu. Liên hệ Owner để đối soát lại.</Text>
+            <Text style={ui.red}>
+              Biên bản đã bị thay thế do cập nhật dữ liệu. Liên hệ Owner để đối soát lại.
+            </Text>
           )}
           {data.status === 'PendingOwnerSignature' && (
             <Text style={ui.muted}>Owner đang xem và ký xác nhận biên bản.</Text>
@@ -149,7 +176,8 @@ export function LocationAssetHandoverSigning({
           {data.status === 'PendingStaffSignature' && (
             <>
               <Text style={ui.green}>
-                Owner đã ký xác nhận. Staff cần kiểm tra PDF và cùng xác nhận nội dung đúng phiên bản.
+                Owner đã ký xác nhận. Staff cần kiểm tra PDF và cùng xác nhận nội dung đúng phiên
+                bản.
               </Text>
               <Checkbox.Item
                 label="Tôi đã xem PDF và đồng ý nhận bàn giao tài sản, trách nhiệm quản lý cơ sở"
@@ -157,21 +185,26 @@ export function LocationAssetHandoverSigning({
                 onPress={() => setConfirmedKey(confirmed ? null : signingKey)}
                 disabled={busy || data.staffId !== session?.userId}
               />
-              <Button mode="contained" disabled={!confirmed || busy ||
-                data.staffId !== session?.userId} loading={busy}
-                onPress={() => void sign()}>
+              <Button
+                mode="contained"
+                disabled={!confirmed || busy || data.staffId !== session?.userId}
+                loading={busy}
+                onPress={() => void sign()}
+              >
                 Staff ký xác nhận
               </Button>
             </>
           )}
-          {data.ownerSignature && <Text style={ui.muted}>
-            Owner đã ký: {formatInstant(data.ownerSignature.signedAt)}
-          </Text>}
-          {data.staffSignature && <Text style={ui.muted}>
-            Staff đã ký: {formatInstant(data.staffSignature.signedAt)}
-          </Text>}
+          {data.ownerSignature && (
+            <Text style={ui.muted}>Owner đã ký: {formatInstant(data.ownerSignature.signedAt)}</Text>
+          )}
+          {data.staffSignature && (
+            <Text style={ui.muted}>Staff đã ký: {formatInstant(data.staffSignature.signedAt)}</Text>
+          )}
           {data.status === 'Completed' && (
-            <Text style={ui.green}>Hai bên đã ký. Biên bản bàn giao hoàn thành, có thể lưu PDF cuối cùng.</Text>
+            <Text style={ui.green}>
+              Hai bên đã ký. Biên bản bàn giao hoàn thành, có thể lưu PDF cuối cùng.
+            </Text>
           )}
         </View>
       )}

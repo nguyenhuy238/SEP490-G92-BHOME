@@ -46,7 +46,6 @@ export function locationAssetHandoverClient(api: MobileApi) {
       }),
     documentBytes: (taskId: string) =>
       api.request<Uint8Array<ArrayBuffer>>(`${path(taskId)}/document`, {}, 'bytes'),
-    documentBlob: (taskId: string) =>
-      api.request<Blob>(`${path(taskId)}/document`, {}, 'blob'),
+    documentBlob: (taskId: string) => api.request<Blob>(`${path(taskId)}/document`, {}, 'blob'),
   };
 }

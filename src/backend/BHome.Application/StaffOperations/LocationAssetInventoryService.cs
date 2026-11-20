@@ -112,7 +112,9 @@ public sealed partial class OperationalTaskService
                         {
                             Checked = item.Checked || previous.Checked,
                             Note = previous.Note,
-                            IncidentId = previous.IncidentId
+                            IncidentId = previous.IncidentId,
+                            PriorStaffTaskId = previous.PriorStaffTaskId,
+                            PriorStaffUserId = previous.PriorStaffUserId
                         }
                         : item).ToArray()
                 };
@@ -122,9 +124,15 @@ public sealed partial class OperationalTaskService
                 repository.Track(task);
                 task.LocationAssetInventoryJson = JsonSerializer.Serialize(merged);
                 await RecordAsync(task, "location_asset_inventory_owner_reconciled", "Owner xác nhận lại phạm vi kiểm kê",
-                    new { previousCount = preview.CurrentCount, ownerConfirmedCount = preview.OwnerConfirmedCount,
-                        removedCount = preview.RemovedCount, addedCount = preview.AddedCount,
-                        preservedChecks = preview.PreservedChecks, source = "OwnerConfirmedInventory" },
+                    new
+                    {
+                        previousCount = preview.CurrentCount,
+                        ownerConfirmedCount = preview.OwnerConfirmedCount,
+                        removedCount = preview.RemovedCount,
+                        addedCount = preview.AddedCount,
+                        preservedChecks = preview.PreservedChecks,
+                        source = "OwnerConfirmedInventory"
+                    },
                     task.AssignedStaffUserId is { } staff ? [staff] : [], t);
                 task.Version++;
                 return LocationInventoryView(task, merged);
@@ -171,7 +179,10 @@ public sealed partial class OperationalTaskService
                 {
                     Checked = input.Checked,
                     Note = input.Note?.Trim(),
-                    IncidentId = input.IncidentId
+                    IncidentId = input.IncidentId,
+                    // A direct successor check supersedes previously inherited progress.
+                    PriorStaffTaskId = null,
+                    PriorStaffUserId = null
                 };
                 task.LocationAssetInventoryJson = JsonSerializer.Serialize(snapshot);
                 await RecordAsync(task, "location_asset_inventory_item_checked", input.Note?.Trim() ?? "",

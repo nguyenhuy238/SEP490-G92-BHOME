@@ -33,12 +33,13 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
     {
         "PasswordReset" => options.Value.PasswordResetConfigured(environment.IsDevelopment()),
         "StaffInvitation" or "TenantInvitation" => options.Value.InvitationConfigured(environment.IsDevelopment()),
+        "StaffCredentials" => email.Value.Enabled && email.Value.ValidForEnvironment(environment.EnvironmentName),
         "EmailConfirmation" => options.Value.VerificationConfigured(environment.IsDevelopment()),
         _ => false
     };
     public bool IsDurable => true;
     private sealed record Envelope(AuthenticationEmailRequest Request);
-    internal sealed record Content(string Destination, string Title, string Body, string ActionUrl,
+    internal sealed record Content(string Destination, string Title, string Body, string? ActionUrl,
         IReadOnlyList<EmailAttachment>? Attachments = null);
 
     internal static string CallbackLink(string callback, string userName, string token) =>
@@ -75,9 +76,10 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
         var hash = IdentitySecurityStore.Hash(request.Token);
         var key = $"authentication-email:{request.Kind}:{user.Id}:{hash}";
         var verification = request.Kind == "EmailConfirmation";
-        var eventType = verification ? "EMAIL_CONFIRMATION_REQUESTED" : request.Kind == "PasswordReset" ? "PASSWORD_RESET_REQUESTED" : "ACCOUNT_INVITATION";
-        await sql.Emit(user.Id, role, null, key, eventType, "Account", verification ? "Xác nhận email BHOME" : "Hướng dẫn thiết lập mật khẩu",
-            "Kiểm tra email của chính bạn để hoàn tất yêu cầu; không chia sẻ liên kết xác nhận.",
+        var credentials = request.Kind == "StaffCredentials";
+        var eventType = verification ? "EMAIL_CONFIRMATION_REQUESTED" : request.Kind == "PasswordReset" ? "PASSWORD_RESET_REQUESTED" : credentials ? "STAFF_PASSWORD_ISSUED" : "ACCOUNT_INVITATION";
+        await sql.Emit(user.Id, role, null, key, eventType, "Account", verification ? "Xác nhận email BHOME" : credentials ? "Mật khẩu Staff mới" : "Hướng dẫn thiết lập mật khẩu",
+            credentials ? "Owner đã cấp mật khẩu mới cho tài khoản Staff. Kiểm tra email cá nhân để đăng nhập." : "Kiểm tra email của chính bạn để hoàn tất yêu cầu; không chia sẻ liên kết xác nhận.",
             "Account", user.Id, t, channels: ["IN_APP", "EMAIL"]);
         var notice = await sql.Scalar<Guid>("SELECT id FROM notifications WHERE record_kind='INBOX' AND recipient_user_id=@user AND event_key=@key", t, ("user", user.Id), ("key", key));
         var payload = JsonSerializer.Serialize(new
@@ -109,6 +111,21 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
         catch (Exception e) when (e is CryptographicException or JsonException or FormatException)
         { throw new ChannelDeliveryException("authentication_email_protection_unavailable"); }
         if (request.UserId != recipient || request.ExpiresAt <= sql.Now) return null;
+        if (request.Kind == "StaffCredentials")
+        {
+            var staff = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == recipient, t);
+            if (staff is null || !staff.IsActive || !staff.EmailConfirmed ||
+                !string.Equals(staff.Email, request.Destination, StringComparison.OrdinalIgnoreCase) ||
+                !((await db.Users.Where(u => u.Id == recipient).Select(u => EF.Property<string[]>(u, "roles")).SingleAsync(t)).Contains("Staff")) ||
+                staff.PasswordHash is null || users.PasswordHasher.VerifyHashedPassword(staff, staff.PasswordHash, request.Token) == PasswordVerificationResult.Failed)
+                return null;
+            var staffName = await db.Users.Where(u => u.Id == recipient).Select(u => EF.Property<string>(u, "full_name")).SingleAsync(t);
+            var credentialBody = $"Xin chào {staffName ?? "bạn"},\n\nOwner đã thiết lập mật khẩu mới cho tài khoản Staff của bạn.\n" +
+                $"Tài khoản: {staff.UserName}\nEmail: {request.Destination}\nMật khẩu mới: {request.Token}\n\n" +
+                "Bạn có thể đăng nhập ứng dụng BHOME bằng mật khẩu này và đổi mật khẩu tại Hồ sơ cá nhân. " +
+                "Không chia sẻ mật khẩu qua tin nhắn hoặc cho người khác. Nếu không nhận ra thao tác này, hãy liên hệ Owner.";
+            return new(request.Destination, "Mật khẩu mới cho tài khoản Staff BHOME", credentialBody, null);
+        }
         var verification = request.Kind == "EmailConfirmation";
         var hash = IdentitySecurityStore.Hash(request.Token);
         var eligible = verification ? await EmailVerificationService.CurrentAsync(sql, recipient, request.Destination, request.Token, t) : await sql.Scalar<bool>("""

@@ -81,7 +81,8 @@ export function LocationAssetHandoverPanel({
     },
   });
   const data = report.data;
-  const needsApproval = task.status === 'PendingVerification' && (!data || data.status === 'Superseded');
+  const needsApproval =
+    task.status === 'PendingVerification' && (!data || data.status === 'Superseded');
   const reviewed = reviewedVersion === task.version;
   const signatureKey = data ? `${data.revision}:${data.snapshotSha256}:${data.status}` : '';
   const confirmed = !!signatureKey && confirmedKey === signatureKey;
@@ -89,10 +90,11 @@ export function LocationAssetHandoverPanel({
   async function approve() {
     if (!reviewed || !needsApproval || action.busy) return;
     const ok = await action.run(
-      () => action.command(path + '/approve', 'POST', {
-        taskVersion: task.version,
-        exceptionDecision: decision.trim() || null,
-      }),
+      () =>
+        action.command(path + '/approve', 'POST', {
+          taskVersion: task.version,
+          exceptionDecision: decision.trim() || null,
+        }),
       'Đã đối soát và tạo biên bản bàn giao.',
     );
     if (ok) {
@@ -105,11 +107,12 @@ export function LocationAssetHandoverPanel({
   async function sign() {
     if (!data || data.status !== 'PendingOwnerSignature' || !confirmed || action.busy) return;
     const ok = await action.run(
-      () => action.command(path + '/sign', 'POST', {
-        revision: data.revision,
-        snapshotSha256: data.snapshotSha256,
-        confirmed: true,
-      }),
+      () =>
+        action.command(path + '/sign', 'POST', {
+          revision: data.revision,
+          snapshotSha256: data.snapshotSha256,
+          confirmed: true,
+        }),
       'Đã ký xác nhận điện tử biên bản.',
     );
     if (ok) {
@@ -121,14 +124,21 @@ export function LocationAssetHandoverPanel({
 
   async function requestRework() {
     const note = reworkNote.trim();
-    if (task.status !== 'PendingVerification' || !reworkItemIds.length ||
-        note.length < 10 || action.busy || data?.staffSignature) return;
+    if (
+      task.status !== 'PendingVerification' ||
+      !reworkItemIds.length ||
+      note.length < 10 ||
+      action.busy ||
+      data?.staffSignature
+    )
+      return;
     const ok = await action.run(
-      () => action.command(path + '/rework', 'POST', {
-        taskVersion: task.version,
-        itemIds: reworkItemIds,
-        note,
-      }),
+      () =>
+        action.command(path + '/rework', 'POST', {
+          taskVersion: task.version,
+          itemIds: reworkItemIds,
+          note,
+        }),
       'Đã yêu cầu Staff kiểm tra lại các mục được chọn.',
     );
     if (ok) {
@@ -168,36 +178,47 @@ export function LocationAssetHandoverPanel({
       <Typography variant="h6" sx={{ fontSize: 16 }}>
         Duyệt và ký biên bản bàn giao tài sản
       </Typography>
-      <Button onClick={() => void report.refetch()} sx={{ alignSelf: 'flex-start' }}
-        disabled={report.isFetching || action.busy}>
+      <Button
+        onClick={() => void report.refetch()}
+        sx={{ alignSelf: 'flex-start' }}
+        disabled={report.isFetching || action.busy}
+      >
         Tải lại biên bản
       </Button>
       <OwnerFeedback busy={report.isFetching || action.busy} error={report.error || action.error} />
       {report.error && <Button onClick={() => void report.refetch()}>Tải lại biên bản</Button>}
       {!report.isPending && !report.error && needsApproval && (
         <Stack spacing={1.5}>
-            <Typography sx={{ fontSize: 14 }}>
-              Staff đã nộp kết quả kiểm kê. Kiểm tra checklist và lịch sử báo cáo ở trên trước khi duyệt.
-            </Typography>
-            <TextField
-              multiline
-              minRows={2}
-              label="Quyết định ngoại lệ / cách xử lý vướng mắc (khi cần)"
-              value={decision}
-              onChange={(event) => setDecision(event.target.value)}
-              slotProps={{ htmlInput: { maxLength: 2000 } }}
-              disabled={action.busy}
-              helperText="Cần ghi quyết định nếu có sự cố chưa xử lý xong hoặc danh sách kiểm kê trống."
-            />
-            <FormControlLabel
-              label="Tôi đã đối chiếu đầy đủ tài sản, hồ sơ Tenant và các vướng mắc"
-              control={<Checkbox checked={reviewed} onChange={(_, value) =>
-                setReviewedVersion(value ? task.version : null)} />}
-            />
-            <Button variant="contained" disabled={!reviewed || action.busy}
-              onClick={() => void approve()}>
-              Duyệt và lập biên bản
-            </Button>
+          <Typography sx={{ fontSize: 14 }}>
+            Staff đã nộp kết quả kiểm kê. Kiểm tra checklist và lịch sử báo cáo ở trên trước khi
+            duyệt.
+          </Typography>
+          <TextField
+            multiline
+            minRows={2}
+            label="Quyết định ngoại lệ / cách xử lý vướng mắc (khi cần)"
+            value={decision}
+            onChange={(event) => setDecision(event.target.value)}
+            slotProps={{ htmlInput: { maxLength: 2000 } }}
+            disabled={action.busy}
+            helperText="Cần ghi quyết định nếu có sự cố chưa xử lý xong hoặc danh sách kiểm kê trống."
+          />
+          <FormControlLabel
+            label="Tôi đã đối chiếu đầy đủ tài sản, hồ sơ Tenant và các vướng mắc"
+            control={
+              <Checkbox
+                checked={reviewed}
+                onChange={(_, value) => setReviewedVersion(value ? task.version : null)}
+              />
+            }
+          />
+          <Button
+            variant="contained"
+            disabled={!reviewed || action.busy}
+            onClick={() => void approve()}
+          >
+            Duyệt và lập biên bản
+          </Button>
         </Stack>
       )}
       {!report.isPending && !report.error && !data && !needsApproval && (
@@ -224,8 +245,12 @@ export function LocationAssetHandoverPanel({
           <Button
             variant="outlined"
             color="warning"
-            disabled={action.busy || !reworkItemIds.length || reworkNote.trim().length < 10 ||
-              !!data?.staffSignature}
+            disabled={
+              action.busy ||
+              !reworkItemIds.length ||
+              reworkNote.trim().length < 10 ||
+              !!data?.staffSignature
+            }
             onClick={() => void requestRework()}
           >
             Gửi yêu cầu kiểm tra lại
@@ -237,15 +262,20 @@ export function LocationAssetHandoverPanel({
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
             <Typography sx={{ fontSize: 14 }}>Phiên bản biên bản: {data.revision}</Typography>
             <Typography sx={{ fontSize: 14 }}>
-              Tài sản: {data.totalItems} mục (tự kiểm tra {data.directItems}; kế thừa {data.inheritedItems})
+              Tài sản: {data.totalItems} mục (tự kiểm tra {data.directItems}; kế thừa{' '}
+              {data.inheritedItems})
             </Typography>
           </Stack>
           <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
             Chủ cơ sở duyệt: {formatInstant(data.approvedAt)}
           </Typography>
           <Box sx={{ overflowWrap: 'anywhere' }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>Mã đối chiếu nội dung SHA-256</Typography>
-            <Typography sx={{ fontSize: 12, fontFamily: 'monospace' }}>{data.snapshotSha256}</Typography>
+            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+              Mã đối chiếu nội dung SHA-256
+            </Typography>
+            <Typography sx={{ fontSize: 12, fontFamily: 'monospace' }}>
+              {data.snapshotSha256}
+            </Typography>
           </Box>
           {data.exceptionDecision && (
             <Alert severity="info">Quyết định ngoại lệ: {data.exceptionDecision}</Alert>
@@ -256,7 +286,8 @@ export function LocationAssetHandoverPanel({
           {!!downloadError && <Alert severity="error">{downloadError}</Alert>}
           {data.status === 'Superseded' && (
             <Alert severity="warning">
-              Phân công hoặc dữ liệu đã đổi sau khi lập biên bản. Tải lại công việc và kiểm tra phiên bản mới.
+              Phân công hoặc dữ liệu đã đổi sau khi lập biên bản. Tải lại công việc và kiểm tra
+              phiên bản mới.
             </Alert>
           )}
           {data.status === 'PendingOwnerSignature' && (
@@ -266,11 +297,20 @@ export function LocationAssetHandoverPanel({
               </Typography>
               <FormControlLabel
                 label="Tôi đã xem biên bản phiên bản này và đồng ý ký xác nhận bằng tài khoản Owner đang đăng nhập"
-                control={<Checkbox checked={confirmed} onChange={(_, value) =>
-                  setConfirmedKey(value ? signatureKey : null)} />}
+                control={
+                  <Checkbox
+                    checked={confirmed}
+                    onChange={(_, value) => setConfirmedKey(value ? signatureKey : null)}
+                  />
+                }
               />
-              <Button variant="contained" disabled={!confirmed || action.busy}
-                onClick={() => void sign()}>Owner ký xác nhận</Button>
+              <Button
+                variant="contained"
+                disabled={!confirmed || action.busy}
+                onClick={() => void sign()}
+              >
+                Owner ký xác nhận
+              </Button>
             </Stack>
           )}
           {data.ownerSignature && (
@@ -289,7 +329,9 @@ export function LocationAssetHandoverPanel({
             </Typography>
           )}
           {data.status === 'Completed' && (
-            <Alert severity="success">Hai bên đã xác nhận bàn giao. PDF cuối cùng đã sẵn sàng lưu trữ.</Alert>
+            <Alert severity="success">
+              Hai bên đã xác nhận bàn giao. PDF cuối cùng đã sẵn sàng lưu trữ.
+            </Alert>
           )}
         </Stack>
       )}

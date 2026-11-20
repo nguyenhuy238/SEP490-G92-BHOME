@@ -160,9 +160,13 @@ public sealed class EnvironmentConfigurationTests
     {
         var o = new EmailOptions
         {
-            Enabled = true, DeliveryMode = "Smtp", Host = "smtp.gmail.com",
-            Username = "sender@example.invalid", FromEmail = "sender@example.invalid",
-            AppPassword = "synthetic", AllowedRecipients = ["test@example.invalid"]
+            Enabled = true,
+            DeliveryMode = "Smtp",
+            Host = "smtp.gmail.com",
+            Username = "sender@example.invalid",
+            FromEmail = "sender@example.invalid",
+            AppPassword = "synthetic",
+            AllowedRecipients = ["test@example.invalid"]
         };
         Assert.False(o.RecipientAllowed("staff@example.invalid", "Development"));
         o.AllowAnyRecipientInDevelopment = true;

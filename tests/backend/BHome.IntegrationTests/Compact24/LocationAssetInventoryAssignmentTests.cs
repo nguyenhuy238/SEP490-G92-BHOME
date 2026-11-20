@@ -7,6 +7,7 @@ using BHome.Application.IdentityAccess;
 using BHome.Application.Locations;
 using BHome.Application.PropertyManagement;
 using BHome.Application.StaffOperations;
+using BHome.Application.Operations;
 using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
 using BHome.Domain.StaffOperations;
@@ -42,9 +43,13 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         var id = Guid.NewGuid();
         var user = new ApplicationUser
         {
-            Id = id, UserName = id.ToString(), NormalizedUserName = id.ToString().ToUpperInvariant(),
-            Email = $"{id:N}@example.invalid", NormalizedEmail = $"{id:N}@example.invalid".ToUpperInvariant(),
-            SecurityStamp = Guid.NewGuid().ToString(), ConcurrencyStamp = Guid.NewGuid().ToString(),
+            Id = id,
+            UserName = id.ToString(),
+            NormalizedUserName = id.ToString().ToUpperInvariant(),
+            Email = $"{id:N}@example.invalid",
+            NormalizedEmail = $"{id:N}@example.invalid".ToUpperInvariant(),
+            SecurityStamp = Guid.NewGuid().ToString(),
+            ConcurrencyStamp = Guid.NewGuid().ToString(),
             LockoutEnabled = true
         };
         user.PasswordHash = scope.ServiceProvider.GetRequiredService<IPasswordHasher<ApplicationUser>>()
@@ -112,54 +117,93 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             db.Add(asset);
             await db.SaveChangesAsync();
             assetId = asset.Id;
-            var commonAsset = new Asset { LocationId = location, RoomId = null, CommonArea = "Sảnh",
-                Name = "Synthetic common fire extinguisher", Category = "Safety", Status = AssetStatus.Active };
+            var commonAsset = new Asset
+            {
+                LocationId = location,
+                RoomId = null,
+                CommonArea = "Sảnh",
+                Name = "Synthetic common fire extinguisher",
+                Category = "Safety",
+                Status = AssetStatus.Active
+            };
             db.Add(commonAsset);
             await db.SaveChangesAsync();
             commonAssetId = commonAsset.Id;
             var resident = new Resident
             {
-                RoomId = roomId, OwnerUserId = owner.Id, TenantUserId = tenant.Id,
-                DisplayLabel = "Synthetic Resident", VerificationStatus = IdentityVerificationStatus.Verified
+                RoomId = roomId,
+                OwnerUserId = owner.Id,
+                TenantUserId = tenant.Id,
+                DisplayLabel = "Synthetic Resident",
+                VerificationStatus = IdentityVerificationStatus.Verified
             };
             db.Add(resident);
             await db.SaveChangesAsync();
             var contract = new Contract
             {
-                RoomId = roomId, OwnerSignerId = owner.Id, TenantUserId = tenant.Id,
+                RoomId = roomId,
+                OwnerSignerId = owner.Id,
+                TenantUserId = tenant.Id,
                 RepresentativeResidentId = resident.Id,
-                Kind = ContractKind.Main, Status = ContractStatus.Active,
-                StartDate = Today.AddDays(-3), EndDate = Today.AddMonths(3), Terms = "Synthetic terms",
-                ActivatedAt = DateTimeOffset.UtcNow, ActivatedByUserId = owner.Id
+                Kind = ContractKind.Main,
+                Status = ContractStatus.Active,
+                StartDate = Today.AddDays(-3),
+                EndDate = Today.AddMonths(3),
+                Terms = "Synthetic terms",
+                ActivatedAt = DateTimeOffset.UtcNow,
+                ActivatedByUserId = owner.Id
             };
             db.Add(contract);
             await db.SaveChangesAsync();
             var readings = new Dictionary<UtilityType, MeterReading>();
             foreach (var utility in new[] { UtilityType.Electricity, UtilityType.Water })
             {
-                var meter = new Meter { RoomId = roomId, Code = "SYNT-HANDOVER-" + utility,
-                    UtilityType = utility, InstalledOn = Today.AddDays(-10) };
+                var meter = new Meter
+                {
+                    RoomId = roomId,
+                    Code = "SYNT-HANDOVER-" + utility,
+                    UtilityType = utility,
+                    InstalledOn = Today.AddDays(-10)
+                };
                 db.Add(meter);
                 await db.SaveChangesAsync();
-                var capture = new OperationalTask { LocationId = location, MeterId = meter.Id,
-                    Kind = OperationalTaskKind.MeterReading, ReadingDate = Today.AddDays(-3),
-                    Purpose = ReadingPurpose.Initial, Status = MeterTaskStatus.Completed,
-                    CompletedAt = DateTimeOffset.UtcNow };
+                var capture = new OperationalTask
+                {
+                    LocationId = location,
+                    MeterId = meter.Id,
+                    Kind = OperationalTaskKind.MeterReading,
+                    ReadingDate = Today.AddDays(-3),
+                    Purpose = ReadingPurpose.Initial,
+                    Status = MeterTaskStatus.Completed,
+                    CompletedAt = DateTimeOffset.UtcNow
+                };
                 db.Add(capture);
                 await db.SaveChangesAsync();
                 var image = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0 };
-                var evidence = new MeterEvidence { TaskId = capture.Id, UploadedByUserId = staff.Id,
-                    ContentType = "image/png", Length = image.Length,
+                var evidence = new MeterEvidence
+                {
+                    TaskId = capture.Id,
+                    UploadedByUserId = staff.Id,
+                    ContentType = "image/png",
+                    Length = image.Length,
                     ObjectKey = $"synthetic/{Guid.NewGuid():N}.png",
                     ImageHash = Convert.ToHexString(SHA256.HashData(image)),
-                    IsUploaded = true, IsLinked = true };
+                    IsUploaded = true,
+                    IsLinked = true
+                };
                 // The disposable fixture only needs the confirmed reading FK and JSON
                 // metadata. No image download or MinIO behavior is part of this test.
                 db.Add(evidence);
                 await db.SaveChangesAsync();
-                var reading = new MeterReading { MeterId = meter.Id, TaskId = capture.Id,
-                    EvidenceId = evidence.Id, ConfirmedByUserId = staff.Id,
-                    ConfirmedAt = DateTimeOffset.UtcNow, ConfirmedValue = 100 };
+                var reading = new MeterReading
+                {
+                    MeterId = meter.Id,
+                    TaskId = capture.Id,
+                    EvidenceId = evidence.Id,
+                    ConfirmedByUserId = staff.Id,
+                    ConfirmedAt = DateTimeOffset.UtcNow,
+                    ConfirmedValue = 100
+                };
                 db.Add(reading);
                 await db.SaveChangesAsync();
                 readings.Add(utility, reading);
@@ -169,12 +213,16 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
                 null!, null!, [], NoAssetsConfirmed: false);
             db.Add(new ContractHandover
             {
-                ContractId = contract.Id, Status = ContractHandoverStatus.Confirmed,
-                Version = 2, TenantConfirmedVersion = 2,
+                ContractId = contract.Id,
+                Status = ContractHandoverStatus.Confirmed,
+                Version = 2,
+                TenantConfirmedVersion = 2,
                 ElectricityReadingId = readings[UtilityType.Electricity].Id,
                 WaterReadingId = readings[UtilityType.Water].Id,
-                TenantConfirmedBy = tenant.Id, StaffConfirmedBy = staff.Id,
-                TenantConfirmedAt = DateTimeOffset.UtcNow, StaffConfirmedAt = DateTimeOffset.UtcNow,
+                TenantConfirmedBy = tenant.Id,
+                StaffConfirmedBy = staff.Id,
+                TenantConfirmedAt = DateTimeOffset.UtcNow,
+                StaffConfirmedAt = DateTimeOffset.UtcNow,
                 Snapshot = JsonSerializer.Serialize(snapshot)
             });
             await db.SaveChangesAsync();
@@ -188,26 +236,50 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             var desiredDocument = await store.SaveAsync(Guid.NewGuid(), location, "DesiredAssets", "PendingVerification",
                 new DesiredAssets(templateId, 1, roomId, roomExpected, "PendingVerification"), 0, owner.Id, default);
             await store.SaveAsync(Guid.NewGuid(), location, "AssetVerification", "Verified",
-                new { roomId, templateId, itemId = roomExpected[0].Id, assetId, quantity = 1,
-                    source = "OwnerAttestation" }, 0, owner.Id, default);
+                new
+                {
+                    roomId,
+                    templateId,
+                    itemId = roomExpected[0].Id,
+                    assetId,
+                    quantity = 1,
+                    source = "OwnerAttestation"
+                }, 0, owner.Id, default);
             await store.SaveAsync(Guid.NewGuid(), location, "RoomInventoryChecklistReview", "PartiallyChecked",
-                new { roomId, desiredId = desiredDocument.Id, desiredVersion = desiredDocument.Version,
-                    baseline = "synthetic-reviewed", state = "PartiallyChecked", requestId = Guid.NewGuid(),
+                new
+                {
+                    roomId,
+                    desiredId = desiredDocument.Id,
+                    desiredVersion = desiredDocument.Version,
+                    baseline = "synthetic-reviewed",
+                    state = "PartiallyChecked",
+                    requestId = Guid.NewGuid(),
                     items = new[] { new { itemId = roomExpected[0].Id, @checked = true, evidenceIds = Array.Empty<Guid>() },
                         new { itemId = roomExpected[1].Id, @checked = false, evidenceIds = Array.Empty<Guid>() } },
-                    unlinkedAssetIds = Array.Empty<Guid>() }, 0, owner.Id, default);
+                    unlinkedAssetIds = Array.Empty<Guid>()
+                }, 0, owner.Id, default);
             var commonRequirement = new SetupCommonAssetRequirement(Guid.NewGuid(), "Synthetic common fire extinguisher",
                 "Safety", "BulkQuantity", 1, "Sảnh");
             await store.SaveAsync(Guid.NewGuid(), location, "CommonAssetRequirements", "Configured",
                 new CommonAssetRequirementsWrite([commonRequirement]), 0, owner.Id, default);
             var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
             {
-                commonRequirement.Id, commonRequirement.Name, commonRequirement.Category,
-                commonRequirement.CommonArea, commonRequirement.Quantity, commonRequirement.Unit
+                commonRequirement.Id,
+                commonRequirement.Name,
+                commonRequirement.Category,
+                commonRequirement.CommonArea,
+                commonRequirement.Quantity,
+                commonRequirement.Unit
             }, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
             await store.SaveAsync(Guid.NewGuid(), location, "CommonAssetInventoryVerification", "Verified",
-                new { itemId = commonRequirement.Id, assetId = (Guid?)commonAssetId, fingerprint,
-                    evidenceIds = Array.Empty<Guid>(), requestId = Guid.NewGuid() }, 0, owner.Id, default);
+                new
+                {
+                    itemId = commonRequirement.Id,
+                    assetId = (Guid?)commonAssetId,
+                    fingerprint,
+                    evidenceIds = Array.Empty<Guid>(),
+                    requestId = Guid.NewGuid()
+                }, 0, owner.Id, default);
         }
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
@@ -322,7 +394,9 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             emptyRoomId = empty.Id;
             var baseline = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
             {
-                Id = empty.Id, assignment = (object?)null, desired = (object?)null
+                Id = empty.Id,
+                assignment = (object?)null,
+                desired = (object?)null
             }, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
             var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
             await store.SaveAsync(Guid.NewGuid(), location, "RoomNoAssets", "Confirmed",
@@ -348,5 +422,156 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
         Assert.Contains("Not-owner-reviewed", view.PendingOwnerRooms!);
         Assert.DoesNotContain("Empty-confirmed", view.PendingOwnerRooms!);
         Assert.False(view.PendingOwnerCommonAssets);
+    }
+
+    [CompactPostgresFact]
+    public async Task ReplacementSupersedes25Of42ChecklistAndSuccessorContinues17WithoutLosingProvenance()
+    {
+        var owner = await User("Owner");
+        var first = await User("Staff");
+        var successor = await User("Staff");
+        var location = await Location();
+        await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var room = new Room { LocationId = location, RoomNumber = "TRANSFER-42" };
+            db.Add(room);
+            await db.SaveChangesAsync();
+            var expected = Enumerable.Range(1, 42).Select(n =>
+                new AssetTemplateItem(Guid.NewGuid(), $"Verified asset {n:00}", "Furniture", "BulkQuantity", 1)).ToArray();
+            var assets = expected.Select(x => new Asset
+            {
+                LocationId = location,
+                RoomId = room.Id,
+                Name = x.Name,
+                Category = x.Category,
+                Status = AssetStatus.Active
+            }).ToArray();
+            db.AddRange(assets);
+            await db.SaveChangesAsync();
+            var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+            var templateId = Guid.NewGuid();
+            var desired = await store.SaveAsync(Guid.NewGuid(), location, "DesiredAssets", "PendingVerification",
+                new DesiredAssets(templateId, 1, room.Id, expected, "PendingVerification"), 0, owner.Id, default);
+            for (var i = 0; i < expected.Length; i++)
+                await store.SaveAsync(Guid.NewGuid(), location, "AssetVerification", "Verified",
+                    new
+                    {
+                        roomId = room.Id,
+                        templateId,
+                        itemId = expected[i].Id,
+                        assetId = assets[i].Id,
+                        quantity = 1,
+                        source = "OwnerAttestation"
+                    }, 0, owner.Id, default);
+            await store.SaveAsync(Guid.NewGuid(), location, "RoomInventoryChecklistReview", "Matched",
+                new
+                {
+                    roomId = room.Id,
+                    desiredId = desired.Id,
+                    desiredVersion = desired.Version,
+                    items = expected.Select(x => new
+                    {
+                        itemId = x.Id,
+                        @checked = true,
+                        evidenceIds = Array.Empty<Guid>()
+                    }).ToArray(),
+                    unlinkedAssetIds = Array.Empty<Guid>()
+                },
+                0, owner.Id, default);
+        }
+        Guid firstAssignment;
+        await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+        {
+            var assignment = await scope.ServiceProvider.GetRequiredService<ILocationAssignments>()
+                .CreateAssignmentAsync(owner.Id, location, first.Id, Today, Today.AddDays(14), default);
+            Assert.Equal(CreateAssignmentStatus.Created, assignment.Status);
+            firstAssignment = assignment.Assignment!.Id;
+        }
+        var oldTaskId = LocationAssetInventoryTaskFactory.TaskId(firstAssignment);
+        var oldRoute = $"/api/v1/operational-tasks/{oldTaskId}";
+        using var firstClient = await Client(first);
+        using var ownerClient = await Client(owner);
+        using var successorClient = await Client(successor);
+        var initial = (await firstClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            oldRoute + "/location-asset-inventory"))!;
+        Assert.Equal(42, initial.TotalCount);
+        Assert.Equal(0, initial.CheckedCount);
+        Assert.Empty(initial.PendingOwnerRooms!);
+        var started = await Action(firstClient, oldRoute + "/start", new { version = initial.Version });
+        Assert.Equal(HttpStatusCode.OK, started.StatusCode);
+        var version = (await started.Content.ReadFromJsonAsync<TaskView>())!.Version;
+        foreach (var item in initial.Items.Take(25))
+            version = (await Check(firstClient, oldRoute, item.Id, version)).Version;
+        var partiallyChecked = (await firstClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            oldRoute + "/location-asset-inventory"))!;
+        Assert.Equal(25, partiallyChecked.CheckedCount);
+
+        Guid successorAssignment;
+        await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var versionBefore = await db.Locations.Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
+            var change = await scope.ServiceProvider.GetRequiredService<ILocationAssignments>()
+                .ReplaceAssignmentAsync(owner.Id, location, successor.Id, Today, versionBefore,
+                    "Synthetic handover transfer A to B", default);
+            Assert.Equal(ChangeAssignmentStatus.Changed, change.Status);
+            successorAssignment = change.Assignment!.Id;
+        }
+        var successorTaskId = LocationAssetInventoryTaskFactory.TaskId(successorAssignment);
+        var successorRoute = $"/api/v1/operational-tasks/{successorTaskId}";
+        var oldInventory = (await ownerClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            oldRoute + "/location-asset-inventory"))!;
+        Assert.Equal("Cancelled", oldInventory.Status);
+        Assert.Equal(25, oldInventory.CheckedCount);
+        Assert.All(oldInventory.Items.Take(25), item => Assert.True(item.Checked));
+        Assert.Equal(HttpStatusCode.NotFound, (await firstClient.GetAsync(oldRoute)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await firstClient.GetAsync(oldRoute + "/history")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await successorClient.GetAsync(oldRoute + "/history")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Action(successorClient, oldRoute + "/start",
+            new { version = oldInventory.Version })).StatusCode);
+        using (var attempt = new HttpRequestMessage(HttpMethod.Put,
+            oldRoute + "/location-asset-inventory/items/" + oldInventory.Items[0].Id)
+        { Content = JsonContent.Create(new LocationAssetInventoryItemWrite(oldInventory.Version, false)) })
+        {
+            attempt.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            Assert.Equal(HttpStatusCode.NotFound, (await successorClient.SendAsync(attempt)).StatusCode);
+        }
+        var history = (await ownerClient.GetFromJsonAsync<TaskPage<TaskHistoryView>>(oldRoute + "/history"))!;
+        Assert.Single(history.Items, h => h.Action == "responsibility_superseded");
+        var fresh = (await successorClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            successorRoute + "/location-asset-inventory"))!;
+        Assert.Equal("Assigned", fresh.Status);
+        Assert.Equal(42, fresh.TotalCount);
+        Assert.Equal(25, fresh.CheckedCount);
+        Assert.Equal(17, fresh.TotalCount - fresh.CheckedCount);
+        var inherited = fresh.Items.Where(i => i.PriorStaffTaskId == oldTaskId).ToArray();
+        Assert.Equal(25, inherited.Length);
+        Assert.All(inherited, i =>
+        {
+            Assert.True(i.Checked);
+            Assert.Equal(first.Id, i.PriorStaffUserId);
+        });
+        await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(h =>
+                h.TaskId == oldTaskId && h.Action == "responsibility_superseded"));
+            Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(h =>
+                h.TaskId == successorTaskId && h.Action == "location_asset_inventory_progress_inherited"));
+            Assert.Empty(await db.Set<OperationalTask>().Where(t => t.LocationId == location &&
+                t.Kind == OperationalTaskKind.LocationAssetHandover && t.Status == MeterTaskStatus.InProgress).ToArrayAsync());
+        }
+        var responsibilities = (await ownerClient.GetFromJsonAsync<StaffResponsibilitiesView>(
+            $"/api/v1/staff/{first.Id}/responsibilities"))!;
+        Assert.True(responsibilities.CanDeactivate);
+        // Re-running the same scheduler reconciliation must neither duplicate history nor reset B.
+        await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+        {
+            var jobs = scope.ServiceProvider.GetRequiredService<AssignmentReconciliationJob>();
+            await jobs.ExecuteAsync(new(Guid.NewGuid(), "synthetic-transfer-retry", "{}"), default);
+        }
+        Assert.Equal(25, (await successorClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            successorRoute + "/location-asset-inventory"))!.CheckedCount);
     }
 }

@@ -174,6 +174,9 @@ public static class DependencyInjection
         services.AddScoped<AssignmentReconciliationJob>();
         services.AddScoped<IBackgroundJobHandler>(provider => provider.GetRequiredService<AssignmentReconciliationJob>());
         services.AddScoped<IJobScheduleContributor>(provider => provider.GetRequiredService<AssignmentReconciliationJob>());
+        // The standalone Location-only runner is an opt-in fallback when Jobs:Enabled is false.
+        // It cannot accidentally activate billing or contract-expiry jobs.
+        services.AddHostedService<StaffAssignmentReconciliationWorker>();
         services.AddScoped<CaptureScope>();
         services.AddScoped<ResourceAccess>();
         services.AddScoped<PermissionAccess>();

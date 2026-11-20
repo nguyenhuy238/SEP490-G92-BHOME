@@ -7,7 +7,13 @@ namespace BHome.Application.StaffOperations;
 public sealed record LocationAssetInventoryItem(Guid Id, Guid? RoomId, string? RoomNumber,
     Guid? AssetId, string Name, int Quantity, string? CommonArea,
     bool Checked = false, bool Inherited = false, Guid? SourceHandoverContractId = null,
-    string? Note = null, Guid? IncidentId = null);
+    string? Note = null, Guid? IncidentId = null)
+{
+    // Audit provenance when a successor continues matching checks from a superseded task.
+    // This does not make a prior Staff's signature the successor's signature.
+    public Guid? PriorStaffTaskId { get; init; }
+    public Guid? PriorStaffUserId { get; init; }
+}
 
 public sealed record LocationAssetInventorySnapshot(Guid AssignmentId, DateOnly EffectiveFrom,
     LocationAssetInventoryItem[] Items)

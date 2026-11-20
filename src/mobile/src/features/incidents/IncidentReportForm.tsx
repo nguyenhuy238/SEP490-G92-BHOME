@@ -203,12 +203,17 @@ function ReportForm() {
         if (item.incidentId && item.incidentId !== incidentId)
           throw new Error('Mục này đã liên kết với báo cáo sự cố khác.');
         if (!item.incidentId) {
-          await client.updateItem(params.inventoryTaskId!, item.id, {
-            version: view.version,
-            checked: item.checked,
-            note: (item.note?.trim() || description.trim()).slice(0, 2000),
-            incidentId,
-          }, randomUUID());
+          await client.updateItem(
+            params.inventoryTaskId!,
+            item.id,
+            {
+              version: view.version,
+              checked: item.checked,
+              note: (item.note?.trim() || description.trim()).slice(0, 2000),
+              incidentId,
+            },
+            randomUUID(),
+          );
         }
         go('task-detail', { taskId: params.inventoryTaskId! });
         return;

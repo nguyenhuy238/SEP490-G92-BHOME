@@ -1,8 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import {
-  availableTaskActions,
-  type OperationalTask,
-} from '../services/operationalTasks';
+import { availableTaskActions, type OperationalTask } from '../services/operationalTasks';
 import {
   inventoryGroups,
   inventoryReady,
@@ -48,7 +45,11 @@ const view = {
 
 it('groups actual rooms and common assets, preserving inherited Tenant records', () => {
   const common = { ...item, id: room, roomId: null, roomNumber: null, commonArea: 'Hành lang' };
-  const result = inventoryGroups([common, item, { ...item, id: location, roomNumber: '101', checked: true }]);
+  const result = inventoryGroups([
+    common,
+    item,
+    { ...item, id: location, roomNumber: '101', checked: true },
+  ]);
   expect(result.map((group) => group.title)).toEqual(['Phòng 101', 'Khu vực chung · Hành lang']);
   expect(result[0].items).toHaveLength(2);
   expect(result[1].items[0].id).toBe(room);
@@ -56,7 +57,11 @@ it('groups actual rooms and common assets, preserving inherited Tenant records',
 
 it('only enables Staff submission for a wholly checked inventory while task is in progress', () => {
   expect(inventoryReady(view)).toBe(false);
-  const finished = { ...view, checkedCount: 2, items: view.items.map((entry) => ({ ...entry, checked: true })) };
+  const finished = {
+    ...view,
+    checkedCount: 2,
+    items: view.items.map((entry) => ({ ...entry, checked: true })),
+  };
   expect(inventoryReady(finished)).toBe(true);
   expect(inventoryReady({ ...finished, status: 'PendingVerification' })).toBe(false);
   expect(inventoryReady({ ...finished, checkedCount: 1 })).toBe(false);

@@ -14,6 +14,9 @@ export interface LocationAssetInventoryItem {
   sourceHandoverContractId: string | null;
   note: string | null;
   incidentId: string | null;
+  /** Read-only provenance of a matching check carried from the prior Staff's task. */
+  priorStaffTaskId?: string | null;
+  priorStaffUserId?: string | null;
 }
 
 export interface LocationAssetInventory {
@@ -31,10 +34,17 @@ export interface LocationAssetInventory {
 }
 
 export function inventoryReady(view: LocationAssetInventory | null): boolean {
-  return !!view && view.status === 'InProgress' &&
-    view.totalCount > 0 && !view.pendingOwnerRooms?.length && !view.pendingOwnerCommonAssets &&
-    Array.isArray(view.items) && view.items.length === view.totalCount &&
-    view.checkedCount === view.totalCount && view.items.every((item) => item.checked);
+  return (
+    !!view &&
+    view.status === 'InProgress' &&
+    view.totalCount > 0 &&
+    !view.pendingOwnerRooms?.length &&
+    !view.pendingOwnerCommonAssets &&
+    Array.isArray(view.items) &&
+    view.items.length === view.totalCount &&
+    view.checkedCount === view.totalCount &&
+    view.items.every((item) => item.checked)
+  );
 }
 
 export function inventoryGroups(items: LocationAssetInventoryItem[]) {
@@ -43,17 +53,20 @@ export function inventoryGroups(items: LocationAssetInventoryItem[]) {
     const key = item.roomId ? `room:${item.roomId}` : `common:${item.commonArea ?? ''}`;
     if (!groups.has(key)) {
       groups.set(key, {
-        title: item.roomId ? `Phòng ${item.roomNumber || 'chưa rõ số'}` :
-          `Khu vực chung${item.commonArea ? ` · ${item.commonArea}` : ''}`,
+        title: item.roomId
+          ? `Phòng ${item.roomNumber || 'chưa rõ số'}`
+          : `Khu vực chung${item.commonArea ? ` · ${item.commonArea}` : ''}`,
         items: [],
       });
     }
     groups.get(key)!.items.push(item);
   }
-  return [...groups.entries()].sort(([a, av], [b, bv]) => {
-    if (a.startsWith('room:') !== b.startsWith('room:')) return a.startsWith('room:') ? -1 : 1;
-    return av.title.localeCompare(bv.title, 'vi', { numeric: true });
-  }).map(([, value]) => value);
+  return [...groups.entries()]
+    .sort(([a, av], [b, bv]) => {
+      if (a.startsWith('room:') !== b.startsWith('room:')) return a.startsWith('room:') ? -1 : 1;
+      return av.title.localeCompare(bv.title, 'vi', { numeric: true });
+    })
+    .map(([, value]) => value);
 }
 
 export function locationAssetInventoryClient(api: MobileApi) {

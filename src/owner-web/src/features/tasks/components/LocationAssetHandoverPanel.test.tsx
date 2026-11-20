@@ -67,34 +67,36 @@ beforeEach(() => {
   state.request.mockReset();
   state.notify.mockReset();
   state.report = null;
-  state.request.mockImplementation(async (route: string, init?: { method?: string; body?: string }) => {
-    if (route === path && !init?.method) {
-      if (!state.report) throw new ApiError(404);
-      return state.report;
-    }
-    if (route === path + '/approve') {
-      state.report = { ...approvedReport };
-      return state.report;
-    }
-    if (route === path + '/sign') {
-      state.report = {
-        ...approvedReport,
-        status: 'PendingStaffSignature',
-        ownerSignature: {
-          actorId: 'owner',
-          signedAt: '2026-11-19T06:10:00Z',
-          method: 'AuthenticatedSessionAcceptance',
-          snapshotSha256: approvedReport.snapshotSha256,
-        },
-      };
-      return state.report;
-    }
-    if (route === path + '/rework') {
-      state.report = null;
-      return { taskId: task.id, status: 'InProgress' };
-    }
-    throw new Error('Unexpected API request: ' + route);
-  });
+  state.request.mockImplementation(
+    async (route: string, init?: { method?: string; body?: string }) => {
+      if (route === path && !init?.method) {
+        if (!state.report) throw new ApiError(404);
+        return state.report;
+      }
+      if (route === path + '/approve') {
+        state.report = { ...approvedReport };
+        return state.report;
+      }
+      if (route === path + '/sign') {
+        state.report = {
+          ...approvedReport,
+          status: 'PendingStaffSignature',
+          ownerSignature: {
+            actorId: 'owner',
+            signedAt: '2026-11-19T06:10:00Z',
+            method: 'AuthenticatedSessionAcceptance',
+            snapshotSha256: approvedReport.snapshotSha256,
+          },
+        };
+        return state.report;
+      }
+      if (route === path + '/rework') {
+        state.report = null;
+        return { taskId: task.id, status: 'InProgress' };
+      }
+      throw new Error('Unexpected API request: ' + route);
+    },
+  );
 });
 afterEach(cleanup);
 
@@ -110,28 +112,39 @@ it('requires review then approves a pending task, and signs the exact server dig
   fireEvent.click(screen.getByLabelText(/Tôi đã đối chiếu đầy đủ tài sản/));
   expect(approve).toBeEnabled();
   fireEvent.click(approve);
-  await waitFor(() => expect(state.request).toHaveBeenCalledWith(
-    path + '/approve',
-    expect.objectContaining({ method: 'POST', body: JSON.stringify({
-      taskVersion: 9, exceptionDecision: null,
-    }) }),
-  ));
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      path + '/approve',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          taskVersion: 9,
+          exceptionDecision: null,
+        }),
+      }),
+    ),
+  );
   const sign = await screen.findByRole('button', { name: 'Owner ký xác nhận' });
   expect(sign).toBeDisabled();
   expect(screen.getByText('A'.repeat(64))).toBeTruthy();
   fireEvent.click(screen.getByLabelText(/Tôi đã xem biên bản phiên bản này/));
   expect(sign).toBeEnabled();
   fireEvent.click(sign);
-  await waitFor(() => expect(state.request).toHaveBeenCalledWith(
-    path + '/sign',
-    expect.objectContaining({ method: 'POST', body: JSON.stringify({
-      revision: 3, snapshotSha256: 'A'.repeat(64), confirmed: true,
-    }) }),
-  ));
-  expect(await screen.findByText(/Staff cần đọc và ký xác nhận/)).toBeTruthy();
-  expect(state.notify).toHaveBeenCalledWith(
-    'Owner đã ký. Đang chờ Staff xác nhận cùng phiên bản.',
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      path + '/sign',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          revision: 3,
+          snapshotSha256: 'A'.repeat(64),
+          confirmed: true,
+        }),
+      }),
+    ),
   );
+  expect(await screen.findByText(/Staff cần đọc và ký xác nhận/)).toBeTruthy();
+  expect(state.notify).toHaveBeenCalledWith('Owner đã ký. Đang chờ Staff xác nhận cùng phiên bản.');
 });
 
 it('requests rework only for selected checklist items with a meaningful explanation', async () => {
@@ -154,17 +167,19 @@ it('requests rework only for selected checklist items with a meaningful explanat
   });
   expect(rework).toBeEnabled();
   fireEvent.click(rework);
-  await waitFor(() => expect(state.request).toHaveBeenCalledWith(
-    path + '/rework',
-    expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({
-        taskVersion: 9,
-        itemIds: ['22222222-2222-4222-8222-222222222222'],
-        note: 'Giường phòng 101 cần kiểm tra lại số lượng thực tế.',
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      path + '/rework',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          taskVersion: 9,
+          itemIds: ['22222222-2222-4222-8222-222222222222'],
+          note: 'Giường phòng 101 cần kiểm tra lại số lượng thực tế.',
+        }),
       }),
-    }),
-  ));
+    ),
+  );
   await waitFor(() => expect(onReworked).toHaveBeenCalledTimes(1));
 });
 
@@ -180,8 +195,12 @@ it('allows a new Owner approval after the previous handover report became supers
   expect(approve).toBeDisabled();
   fireEvent.click(screen.getByLabelText(/Tôi đã đối chiếu đầy đủ tài sản/));
   fireEvent.click(approve);
-  await waitFor(() => expect(state.request).toHaveBeenCalledWith(
-    path + '/approve',
-    expect.objectContaining({ body: JSON.stringify({ taskVersion: 9, exceptionDecision: null }) }),
-  ));
+  await waitFor(() =>
+    expect(state.request).toHaveBeenCalledWith(
+      path + '/approve',
+      expect.objectContaining({
+        body: JSON.stringify({ taskVersion: 9, exceptionDecision: null }),
+      }),
+    ),
+  );
 });

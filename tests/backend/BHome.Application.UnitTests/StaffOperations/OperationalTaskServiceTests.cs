@@ -293,8 +293,11 @@ public sealed class OperationalTaskServiceTests
             null, "Configured only, not confirmed", 1, null);
         var task = new OperationalTask
         {
-            Kind = OperationalTaskKind.LocationAssetHandover, Status = MeterTaskStatus.InProgress,
-            LocationId = rig.Location, AssignmentId = assignment, AssignedStaffUserId = rig.Staff,
+            Kind = OperationalTaskKind.LocationAssetHandover,
+            Status = MeterTaskStatus.InProgress,
+            LocationId = rig.Location,
+            AssignmentId = assignment,
+            AssignedStaffUserId = rig.Staff,
             LocationAssetInventoryJson = JsonSerializer.Serialize(new LocationAssetInventorySnapshot(
                 assignment, new DateOnly(2026, 10, 31), [staffChecked, legacy]))
         };
@@ -336,8 +339,11 @@ public sealed class OperationalTaskServiceTests
             Guid.NewGuid(), "Staff checked bed", 1, null, Checked: true, Note: "Đã kiểm tra");
         var task = new OperationalTask
         {
-            Kind = OperationalTaskKind.LocationAssetHandover, Status = MeterTaskStatus.InProgress,
-            LocationId = rig.Location, AssignmentId = assignment, AssignedStaffUserId = rig.Staff,
+            Kind = OperationalTaskKind.LocationAssetHandover,
+            Status = MeterTaskStatus.InProgress,
+            LocationId = rig.Location,
+            AssignmentId = assignment,
+            AssignedStaffUserId = rig.Staff,
             LocationAssetInventoryJson = JsonSerializer.Serialize(new LocationAssetInventorySnapshot(
                 assignment, new DateOnly(2026, 10, 31), [checkedItem]))
         };

@@ -501,11 +501,7 @@ export function TasksApiPage() {
                               />
                             )}
                             {task.kind === 'LocationAssetHandover' && (
-                              <Chip
-                                size="small"
-                                variant="outlined"
-                                label="Kiểm kê toàn cơ sở"
-                              />
+                              <Chip size="small" variant="outlined" label="Kiểm kê toàn cơ sở" />
                             )}
                             {task.priority === 'High' && (
                               <Chip size="small" label="Ưu tiên cao" color="warning" />

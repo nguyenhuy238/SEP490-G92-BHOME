@@ -378,8 +378,17 @@ public sealed class LocationAssetHandoverService(
         var sources = inherited.Select(x => x.SourceHandoverContractId!.Value).Distinct().ToArray();
         var contracts = await db.Set<Contract>().AsNoTracking()
             .Where(c => c.Room.LocationId == task.LocationId)
-            .Select(c => new { c.Id, c.RoomId, c.Kind, c.Status, c.StartDate, c.EndDate,
-                c.PreviousContractId, c.TenantUserId }).ToArrayAsync(token);
+            .Select(c => new
+            {
+                c.Id,
+                c.RoomId,
+                c.Kind,
+                c.Status,
+                c.StartDate,
+                c.EndDate,
+                c.PreviousContractId,
+                c.TenantUserId
+            }).ToArrayAsync(token);
         var index = contracts.ToDictionary(x => x.Id);
         var handovers = await db.Set<ContractHandover>().AsNoTracking()
             .Where(h => sources.Contains(h.ContractId) &&
@@ -559,8 +568,11 @@ public sealed class LocationAssetHandoverService(
                 // immutable history and previously frozen PDF revisions.
                 snapshot.Items[i] = item with
                 {
-                    Checked = false, Inherited = false, SourceHandoverContractId = null,
-                    IncidentId = null, Note = null
+                    Checked = false,
+                    Inherited = false,
+                    SourceHandoverContractId = null,
+                    IncidentId = null,
+                    Note = null
                 };
             }
         }
