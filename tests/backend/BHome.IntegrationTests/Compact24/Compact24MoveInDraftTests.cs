@@ -344,7 +344,7 @@ public sealed partial class Compact24OwnerSetupTests
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             var task = await db.Set<OperationalTask>().SingleAsync(x => x.Id == inventoryTaskId);
             task.MoveInInventoryJson = JsonSerializer.Serialize(new MoveInInventorySnapshot("synthetic",
-                [new MoveInInventoryItem(asset.Id, null, asset.Name, 4, 4, "Good")]));
+                [new MoveInInventoryItem(asset.Id, null, asset.Name, 4, 4, "Good", EvidenceIds: [])]));
             await db.SaveChangesAsync();
         }
         var confirmed = await Read<HandoverDraftView>(await HandoverPost(tenant, contractId,
@@ -379,7 +379,7 @@ public sealed partial class Compact24OwnerSetupTests
             Assert.Contains("Chỉ số điện lần đầu", captions);
             Assert.Contains("Chỉ số nước lần đầu", captions);
             Assert.Contains("CHECKLIST HIỆN TRẠNG NHẬN PHÒNG", captions);
-            Assert.Contains("CHÌA KHÓA VÀ QUYỀN TRUY CẬP ĐÃ GIAO", captions);
+            Assert.Contains("CHÌA KHÓA ĐÃ GIAO", captions);
         }
     }
 

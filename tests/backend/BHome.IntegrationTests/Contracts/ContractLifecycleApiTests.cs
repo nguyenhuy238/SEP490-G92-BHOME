@@ -128,6 +128,17 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         return scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>() is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext;
     }
 
+    // These regression scenarios exercise the archived handover endpoints.
+    // New Main contracts now start with a Draft, so explicitly model an older
+    // persisted contract without that Draft instead of bypassing production guards.
+    private async Task PrepareHistoricalHandoverFixture(Guid contractId)
+    {
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET handover=handover-'preparation' WHERE id={contractId}");
+    }
+
     private static async Task<HandoverChoices> EmptyRoomHandoverChoices(Workspace w, Guid id)
     {
         var choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
@@ -445,6 +456,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             var reading = await ConfirmInitialTask(w, taskId, 100);
             readingIds.Add(reading.Id);
         }
+        await PrepareHistoricalHandoverFixture(id);
         using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
         var picture = await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), photo));
         var choices = await EmptyRoomHandoverChoices(w, id);
@@ -676,6 +688,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var choices = await EmptyRoomHandoverChoices(w, id);
         var openingElectricity = choices.Readings.First(r => r.UtilityType == 0);
         var openingWater = choices.Readings.First(r => r.UtilityType == 1);
+        await PrepareHistoricalHandoverFixture(id);
         using var openingPhoto = new ByteArrayContent(Image()); openingPhoto.Headers.ContentType = new("image/png");
         var openingFile = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), openingPhoto))).Id;
         await Success<HandoverView>(await Post(w.Staff, Path(id, "handover"), new HandoverInput(0, openingElectricity.Date,

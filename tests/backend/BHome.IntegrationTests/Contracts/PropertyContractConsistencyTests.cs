@@ -77,6 +77,7 @@ public sealed partial class ContractLifecycleApiTests
         var water = await FinalReading(w, id, BHome.Domain.Billing.UtilityType.Water);
         var choices = await EmptyRoomHandoverChoices(w, id);
         var openingElectricity = choices.Readings.First(r => r.UtilityType == 0); var openingWater = choices.Readings.First(r => r.UtilityType == 1);
+        await PrepareHistoricalHandoverFixture(id);
         using var openingPhoto = new ByteArrayContent(Image()); openingPhoto.Headers.ContentType = new("image/png");
         var openingFile = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "handover/evidence"), openingPhoto))).Id;
         await Success<HandoverView>(await Post(w.Staff, Path(id, "handover"), new HandoverInput(0, openingElectricity.Date,

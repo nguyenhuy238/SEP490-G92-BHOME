@@ -32,7 +32,11 @@ public sealed partial class Compact24OwnerSetupTests
                     ["AnonymousSigning:PublicSigningUrl"] = "https://localhost:5173/contract-signing",
                     ["Email:Enabled"] = "false",
                     ["DevelopmentContractSeed:Enabled"] = "true",
-                    ["DevelopmentContractSeed:TenantPassword"] = "Synthetic!DevSeed-493"
+                    ["DevelopmentContractSeed:TenantPassword"] = "Synthetic!DevSeed-493",
+                    ["IdentityProtection:ActiveEncryptionVersion"] = "synthetic-seed",
+                    ["IdentityProtection:ActiveHmacVersion"] = "synthetic-seed",
+                    ["IdentityProtection:EncryptionKeys:synthetic-seed"] = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)),
+                    ["IdentityProtection:HmacKeys:synthetic-seed"] = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
                 }));
         });
         using var staff = await Client(w.Staff, host);

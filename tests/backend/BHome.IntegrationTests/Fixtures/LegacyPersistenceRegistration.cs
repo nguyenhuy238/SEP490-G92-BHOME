@@ -48,6 +48,9 @@ internal static class LegacyPersistenceRegistration
         // The explicit legacy regression host must not resolve those adapters through ordinary
         // controllers such as InvoiceService; their constructor ports are optional there.
         services.RemoveAll<ISetupWorkspaceStore>();
+        // This Development-only Compact24 seed depends on the removed workspace.
+        // Do not validate it in the archived source-schema test host.
+        services.RemoveAll<BHome.Infrastructure.Development.DevelopmentOnboardingSeedService>();
         services.RemoveAll<ISharedConfigurationStore>();
         services.RemoveAll<ISharedDataValidator>();
         services.RemoveAll<SharedConfigurationService>();
