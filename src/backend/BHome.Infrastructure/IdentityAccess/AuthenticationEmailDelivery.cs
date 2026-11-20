@@ -24,7 +24,7 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
 {
     public void ValidateInvitationRecipient(string destination)
     {
-        if (email.Value.Enabled && !email.Value.RecipientAllowed(destination))
+        if (email.Value.Enabled && !email.Value.RecipientAllowed(destination, environment.EnvironmentName))
             throw new NotificationException(503, "email_recipient_not_allowed");
     }
     private IDataProtector Protector => protection.CreateProtector("BHome.AuthenticationEmail.v1");

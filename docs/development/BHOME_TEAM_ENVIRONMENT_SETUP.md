@@ -190,6 +190,19 @@ máy chủ SMTP đã nhận, **không chứng minh email đã vào Inbox**; ki�
 chỉ bật cho địa chỉ đã được phê duyệt. Chạy lại công cụ cần giữ nguyên allowlist
 đã duyệt; khi muốn đổi danh sách, chủ động rà soát User Secrets trước.
 
+**Chủ động gửi mọi địa chỉ email hợp lệ trong Development:** nếu Owner thực sự
+cần gửi trực tiếp từ BHOME tới email Staff/Tenant ngoài danh sách thử nghiệm,
+chạy `scripts/Configure-LocalGmail.ps1 -AllowAnyRecipient`. Không phải nhập
+`Approved test recipients`, nhưng phải nhập Gmail sender và App Password mới
+qua dấu nhắc ẩn. Tùy chọn này lưu `Email:AllowAnyRecipientInDevelopment=true`
+vào User Secrets, ưu tiên hơn allowlist cũ **chỉ trong Development SMTP**;
+Testing/Staging vẫn bắt buộc allowlist. Kiểm tra với
+`scripts/Configure-LocalGmail.ps1 -AllowAnyRecipient -CheckOnly`.
+Các email được tạo từ dữ liệu thực sẽ đi ra Internet; kiểm tra người nhận,
+trạng thái thông báo và tránh dùng dữ liệu nhạy cảm chưa được phép trước khi
+gửi. Thư đã được ghi nhận `Sent` trong Mailpit không tự gửi lại khi đổi SMTP:
+cần tạo lời mời mới. Không đưa tùy chọn này vào cấu hình chung/version control.
+
 Nếu máy đã cấu hình Gmail trước khi pull bản chuẩn hóa, API có thể dừng vì thiếu
 `Email:AllowedRecipients:0`; Web nhận 502 và Mobile báo ECONNREFUSED vì API chưa mở cổng.
 Với mailbox thử nghiệm đã được xác định trong `Email:TestRecipient`, chủ động chuyển đổi bằng:

@@ -19,17 +19,25 @@ public sealed class EmailOptions
     public bool TestEnabled { get; set; }
     public string TestRecipient { get; set; } = "";
     public string[] AllowedRecipients { get; set; } = [];
+    // Explicit opt-in for local Development only; Testing and Staging retain an allowlist.
+    public bool AllowAnyRecipientInDevelopment { get; set; }
 
     public bool LocalCapture => DeliveryMode == "Capture" && Host is "localhost" or "127.0.0.1" or "::1";
     public bool CaptureAllowed(string environment) => !Enabled || DeliveryMode != "Capture" ||
         LocalCapture && environment is "Development" or "Testing";
 
     public bool RecipientsConfigured(string environment) => !Enabled || DeliveryMode != "Smtp" ||
-        environment is not ("Development" or "Testing" or "Staging") || AllowedRecipients.Length > 0;
+        environment is not ("Development" or "Testing" or "Staging") || AllowedRecipients.Length > 0 ||
+        environment == "Development" && AllowAnyRecipientInDevelopment;
 
-    public bool ValidForEnvironment(string environment) => Valid() && CaptureAllowed(environment) && RecipientsConfigured(environment);
+    public bool AnyRecipientOverrideAllowed(string environment) => !AllowAnyRecipientInDevelopment ||
+        environment == "Development" && DeliveryMode == "Smtp";
 
-    public bool RecipientAllowed(string destination) => AllowedRecipients.Length == 0 ||
+    public bool ValidForEnvironment(string environment) => Valid() && CaptureAllowed(environment) &&
+        AnyRecipientOverrideAllowed(environment) && RecipientsConfigured(environment);
+
+    public bool RecipientAllowed(string destination, string environment = "Production") =>
+        environment == "Development" && AllowAnyRecipientInDevelopment || AllowedRecipients.Length == 0 ||
         AllowedRecipients.Contains(destination, StringComparer.OrdinalIgnoreCase);
 
     public bool Valid() => !Enabled || (!string.IsNullOrWhiteSpace(Host) && Port is >= 1 and <= 65535 &&
