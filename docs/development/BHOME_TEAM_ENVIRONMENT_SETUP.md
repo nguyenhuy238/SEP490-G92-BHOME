@@ -203,6 +203,12 @@ trạng thái thông báo và tránh dùng dữ liệu nhạy cảm chưa đư�
 gửi. Thư đã được ghi nhận `Sent` trong Mailpit không tự gửi lại khi đổi SMTP:
 cần tạo lời mời mới. Không đưa tùy chọn này vào cấu hình chung/version control.
 
+**Khi chạy Mobile:** `Prepare-OcrMobile.ps1`/`Start-OcrMobileApp.ps1`
+không đồng bộ các khóa `Email:*` từ `.env` vào .NET User Secrets nữa.
+Điều này tránh vô tình ghi đè Gmail SMTP bằng Mailpit `Capture` của `.env` chung.
+Sau khi thay đổi SMTP, xác minh bằng `Configure-LocalGmail.ps1 -CheckOnly`
+(thêm `-AllowAnyRecipient` nếu cần gửi mọi địa chỉ), rồi khởi động lại API.
+
 Nếu máy đã cấu hình Gmail trước khi pull bản chuẩn hóa, API có thể dừng vì thiếu
 `Email:AllowedRecipients:0`; Web nhận 502 và Mobile báo ECONNREFUSED vì API chưa mở cổng.
 Với mailbox thử nghiệm đã được xác định trong `Email:TestRecipient`, chủ động chuyển đổi bằng:

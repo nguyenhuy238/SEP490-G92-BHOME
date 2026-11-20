@@ -71,6 +71,11 @@ DevelopmentDatabase__InitializeOnStartup=false
 DevelopmentDatabase__AllowPreviousPropertySchema=false
 MainDraft__SigningProvider=synthetic-provider
 IdentityProtection__EncryptionKeys__local-v1=synthetic-identity-key
+Email__DeliveryMode=Capture
+Email__Host=localhost
+Email__Username=synthetic-mobile-would-overwrite-smtp
+Email__AppPassword=synthetic-mobile-would-overwrite-gmail-password
+Email__AllowedRecipients__0=synthetic@example.invalid
 EXPO_PUBLIC_API_BASE_URL=https://other-machine.local:7240
 UNRELATED_SECRET=synthetic-unrelated
 # Jwt__SigningKey=ignored-comment
@@ -85,6 +90,7 @@ Assert-Equal $syntheticSettings['DevelopmentDatabase:InitializeOnStartup'] 'fals
 Assert-Equal $syntheticSettings['DevelopmentDatabase:AllowPreviousPropertySchema'] 'false' 'preserve the selected database compatibility setting'
 Assert-Equal $syntheticSettings['MainDraft:SigningProvider'] 'synthetic-provider' 'preserve selected contract configuration'
 Assert-Equal $syntheticSettings['IdentityProtection:EncryptionKeys:local-v1'] 'synthetic-identity-key' 'preserve identity settings'
+Assert-Equal @($syntheticSettings.Keys | Where-Object { $_ -like 'Email:*' }).Count 0 'Mobile preparation never overwrites SMTP, recipients, or App Password in User Secrets'
 Assert-Equal $syntheticSettings.ContainsKey('UNRELATED_SECRET') $false 'do not import unknown settings'
 Assert-Equal $syntheticSettings.ContainsKey('EXPO_PUBLIC_API_BASE_URL') $false 'do not import client workstation configuration'
 Assert-Equal $syntheticSettings['Api:PublicBaseUrl'] '$(throw ''must-not-evaluate'')' 'parse env values as data without shell evaluation'
