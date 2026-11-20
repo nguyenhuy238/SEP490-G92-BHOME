@@ -12,7 +12,7 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ role: state.role, preview: state.preview }),
+  useWorkspace: () => ({ role: state.role, preview: state.preview, staffLocationId: 'loc-1' }),
 }));
 vi.mock('../lib/SessionProvider', () => ({ useSession: () => ({ api: state.api }) }));
 import { useStaffDashboard } from '../features/workspace/useStaffDashboard';

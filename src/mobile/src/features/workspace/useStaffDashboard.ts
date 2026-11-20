@@ -10,6 +10,7 @@ import { useWorkspaceQuery } from './useWorkspaceQuery';
 
 export interface MoveOutAssignment {
   contractId: string;
+  roomId: string;
   roomNumber: string;
   locationName: string;
   scheduledAt: string;
@@ -17,24 +18,30 @@ export interface MoveOutAssignment {
 }
 
 export function useStaffDashboard() {
-  const { role, preview } = useWorkspace();
+  const { role, preview, staffLocationId } = useWorkspace();
   const enabled = role === 'Staff' && !preview;
+  const scoped = enabled && !!staffLocationId;
+  const locationQuery = `locationId=${encodeURIComponent(staffLocationId)}`;
   const today = businessToday();
   const locations = useWorkspaceQuery<Named[]>(enabled ? '/api/v1/capture/locations' : null, {
     cache: queryPolicies.rooms,
   });
   const tasks = useWorkspaceQuery<TaskPage<OperationalTask>>(
-    enabled
-      ? `/api/v1/operational-tasks?page=1&pageSize=1&dueFrom=${today}T00:00:00%2B07:00&dueTo=${today}T23:59:59.999%2B07:00`
+    scoped
+      ? `/api/v1/operational-tasks?page=1&pageSize=1&${locationQuery}&dueFrom=${today}T00:00:00%2B07:00&dueTo=${today}T23:59:59.999%2B07:00`
       : null,
     { cache: queryPolicies.tasks },
   );
   const overdueAssigned = useWorkspaceQuery<TaskPage<OperationalTask>>(
-    enabled ? '/api/v1/operational-tasks?page=1&pageSize=3&isOverdue=true&status=Assigned' : null,
+    scoped
+      ? `/api/v1/operational-tasks?page=1&pageSize=3&${locationQuery}&isOverdue=true&status=Assigned`
+      : null,
     { cache: queryPolicies.tasks },
   );
   const overdueProgress = useWorkspaceQuery<TaskPage<OperationalTask>>(
-    enabled ? '/api/v1/operational-tasks?page=1&pageSize=3&isOverdue=true&status=InProgress' : null,
+    scoped
+      ? `/api/v1/operational-tasks?page=1&pageSize=3&${locationQuery}&isOverdue=true&status=InProgress`
+      : null,
     { cache: queryPolicies.tasks },
   );
   // PendingVerification needs Owner action. Query the two actionable states separately
@@ -56,19 +63,37 @@ export function useStaffDashboard() {
     loading: overdueAssigned.loading || overdueProgress.loading,
   };
   const inspections = useWorkspaceQuery<MoveOutAssignment[]>(
-    enabled ? '/api/v1/contracts/move-out-assignments' : null,
+    scoped ? '/api/v1/contracts/move-out-assignments' : null,
     { cache: queryPolicies.contracts },
   );
+  const rooms = useWorkspaceQuery<Named[]>(
+    scoped ? `/api/v1/capture/locations/${encodeURIComponent(staffLocationId)}/rooms` : null,
+    { cache: queryPolicies.rooms },
+  );
+  const authorizedRoomIds = new Set((rooms.data ?? []).map((room) => room.id));
+  // The move-out assignment DTO has RoomId but not LocationId, and its endpoint is
+  // account-wide. Join it against rooms fetched for this selected authorized Location.
+  // Never use potentially duplicated LocationName labels as a security/scope key.
+  const scopedInspections = {
+    ...inspections,
+    data:
+      scoped && rooms.data && inspections.data
+        ? inspections.data.filter((entry) => authorizedRoomIds.has(entry.roomId))
+        : null,
+    error: inspections.error || rooms.error,
+    loading: inspections.loading || rooms.loading,
+    fetching: inspections.fetching || rooms.fetching,
+  };
   const meters = useWorkspaceQuery<MeterTask[]>(
-    enabled ? '/api/v1/capture/meter-tasks?page=1&status=0' : null,
+    scoped ? `/api/v1/capture/meter-tasks?page=1&status=0&${locationQuery}` : null,
     { cache: queryPolicies.meters },
   );
   const submittedIncidents = useWorkspaceQuery<IncidentPage<Incident>>(
-    enabled ? `${incidentRoot}?status=Submitted&page=1&pageSize=1` : null,
+    scoped ? `${incidentRoot}?status=Submitted&page=1&pageSize=1&${locationQuery}` : null,
     { cache: queryPolicies.incidents },
   );
   const processingIncidents = useWorkspaceQuery<IncidentPage<Incident>>(
-    enabled ? `${incidentRoot}?status=InProgress&page=1&pageSize=1` : null,
+    scoped ? `${incidentRoot}?status=InProgress&page=1&pageSize=1&${locationQuery}` : null,
     { cache: queryPolicies.incidents },
   );
   const incidents = {
@@ -86,6 +111,7 @@ export function useStaffDashboard() {
   const reloadOverdueAssigned = overdueAssigned.reload;
   const reloadOverdueProgress = overdueProgress.reload;
   const reloadInspections = inspections.reload;
+  const reloadRooms = rooms.reload;
   const reloadMeters = meters.reload;
   const reload = useCallback(() => {
     reloadLocations();
@@ -93,6 +119,7 @@ export function useStaffDashboard() {
     reloadOverdueAssigned();
     reloadOverdueProgress();
     reloadInspections();
+    reloadRooms();
     reloadMeters();
     reloadSubmittedIncidents();
     reloadProcessingIncidents();
@@ -102,6 +129,7 @@ export function useStaffDashboard() {
     reloadOverdueAssigned,
     reloadOverdueProgress,
     reloadInspections,
+    reloadRooms,
     reloadMeters,
     reloadSubmittedIncidents,
     reloadProcessingIncidents,
@@ -114,10 +142,11 @@ export function useStaffDashboard() {
       overdueAssigned,
       overdueProgress,
       inspections,
+      rooms,
       meters,
       submittedIncidents,
       processingIncidents,
     ].some((query) => query.fetching),
   );
-  return { locations, tasks, overdue, inspections, meters, incidents, reload };
+  return { locations, tasks, overdue, inspections: scopedInspections, meters, incidents, reload };
 }

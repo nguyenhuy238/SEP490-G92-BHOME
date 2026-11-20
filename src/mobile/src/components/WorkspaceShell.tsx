@@ -6,6 +6,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Badge, Button, Icon, IconButton, Text, TouchableRipple } from 'react-native-paper';
@@ -29,22 +30,20 @@ import { ui } from './WorkspaceKit';
 import { NotificationBadge } from './NotificationBadge';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { queryPolicies } from '../lib/queryPolicies';
-import type { Named } from '../lib/api';
 import { WorkspaceHeaderContext, type WorkspaceHeaderAction } from './WorkspaceHeaderContext';
 import { WorkspaceFooterContext } from './WorkspaceFooter';
 
 function StaffLocationSubtitle() {
-  const locations = useWorkspaceQuery<Named[]>('/api/v1/capture/locations', {
-    cache: queryPolicies.rooms,
-  });
+  const { staffLocationId, staffLocations, staffLocationsLoading, staffLocationsError } =
+    useWorkspace();
+  const selected = staffLocations.find((location) => location.id === staffLocationId);
   return (
     <Text variant="labelSmall" numberOfLines={2} style={styles.staffSubtitle}>
-      {locations.loading
+      {staffLocationsLoading
         ? 'Đang tải cơ sở…'
-        : locations.data?.length
-          ? locations.data.map((item) => item.label).join(' · ') +
-            (locations.error ? ' · Chưa cập nhật được' : '')
-          : locations.error
+        : selected
+          ? selected.label + (staffLocationsError ? ' · Chưa cập nhật được' : '')
+          : staffLocationsError
             ? 'Chưa tải được cơ sở'
             : 'Chưa có cơ sở được phân công'}
     </Text>
@@ -82,6 +81,8 @@ export function WorkspaceShell({
   contentRevision?: number;
 }) {
   const { role, preview, go, leavePreview, scrollRevision, requestNavigation } = useWorkspace();
+  const { width } = useWindowDimensions();
+  const narrowStaff = role === 'Staff' && width <= 360;
   const insideTabs = useContext(WorkspaceTabsContext);
   const navigation = useNavigation();
   const [focused, setFocused] = useState(() => navigation.isFocused());
@@ -172,7 +173,13 @@ export function WorkspaceShell({
       edges={['top', 'left', 'right']}
     >
       <StatusBar style="light" />
-      <View style={[styles.header, tenantHomeLayout && styles.tenantHeader]}>
+      <View
+        style={[
+          styles.header,
+          tenantHomeLayout && styles.tenantHeader,
+          narrowStaff && styles.narrowHeader,
+        ]}
+      >
         <TouchableRipple
           onPress={() =>
             go(
@@ -190,11 +197,25 @@ export function WorkspaceShell({
           style={ui.grow}
         >
           <View style={ui.row}>
-            <View style={[styles.logo, tenantHomeLayout && styles.tenantLogo]}>
-              <Icon source="home-roof" size={tenantHomeLayout ? 24 : 32} color={s.blue} />
+            <View
+              style={[
+                styles.logo,
+                tenantHomeLayout && styles.tenantLogo,
+                narrowStaff && styles.narrowLogo,
+              ]}
+            >
+              <Icon
+                source="home-roof"
+                size={tenantHomeLayout ? 24 : narrowStaff ? 26 : 32}
+                color={s.blue}
+              />
             </View>
             <View style={ui.grow}>
-              <Text variant={tenantHomeLayout ? 'titleMedium' : 'titleLarge'} style={ui.white}>
+              <Text
+                variant={tenantHomeLayout || narrowStaff ? 'titleMedium' : 'titleLarge'}
+                numberOfLines={1}
+                style={ui.white}
+              >
                 {tenantHomeLayout
                   ? 'BHOME'
                   : `BHOME ${staff ? 'Nhân viên' : role === 'Tenant' ? 'Khách thuê' : 'Chủ cơ sở'}`}
@@ -237,7 +258,8 @@ export function WorkspaceShell({
           <IconButton
             icon="bell-outline"
             iconColor={c.white}
-            size={tenantHomeLayout ? 20 : 22}
+            size={tenantHomeLayout || narrowStaff ? 20 : 22}
+            style={narrowStaff ? styles.narrowHeaderButton : undefined}
             onPress={() => go('notifications')}
             accessibilityLabel="Thông báo"
           />
@@ -248,7 +270,8 @@ export function WorkspaceShell({
           <IconButton
             icon="account-circle-outline"
             iconColor={c.white}
-            size={24}
+            size={narrowStaff ? 21 : 24}
+            style={narrowStaff ? styles.narrowHeaderButton : undefined}
             onPress={() => go('profile')}
             accessibilityLabel="Mở tài khoản cá nhân"
           />
@@ -287,6 +310,12 @@ export function WorkspaceShell({
               tenantInvoice && { gap: 12, paddingTop: 8 },
               tenantHomeLayout && { gap: 20, paddingTop: 12 },
               screen === 'meter-reading' && { gap: 12, paddingTop: 8 },
+              staff &&
+                screen === 'move-in' && {
+                  gap: 12,
+                  paddingTop: 12,
+                  paddingHorizontal: width <= 380 ? 10 : 16,
+                },
               screen === 'rooms' && { gap: 12, paddingTop: 8, paddingBottom: 100 },
             ]}
             keyboardShouldPersistTaps="handled"
@@ -427,6 +456,9 @@ export function WorkspaceShell({
 const styles = StyleSheet.create({
   tenantHeader: { minHeight: 64, paddingLeft: 16 },
   tenantLogo: { width: 32, height: 32, borderRadius: 10 },
+  narrowHeader: { paddingLeft: 12, paddingRight: 0, minHeight: 64 },
+  narrowLogo: { width: 34, height: 34, borderRadius: 10 },
+  narrowHeaderButton: { margin: 0 },
   root: { flex: 1, backgroundColor: s.navy },
   staffSubtitle: { color: '#d5e4ff', marginTop: 3 },
   staffBody: {

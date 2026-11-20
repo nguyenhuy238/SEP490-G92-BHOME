@@ -11,7 +11,9 @@ export function useCaptureScope({
   initialLocationId = '',
 } = {}) {
   const { api } = useSession();
-  const { preview } = useWorkspace();
+  const { preview, role, staffLocationId, selectStaffLocation } = useWorkspace();
+  const isStaff = role === 'Staff' && !preview;
+  const preferredLocationId = isStaff ? staffLocationId : initialLocationId;
   const [location, setLocation] = useState('');
   const [room, setRoom] = useState('');
   const [locations, setLocations] = useState<Named[]>([]);
@@ -38,13 +40,15 @@ export function useCaptureScope({
         if (!active) return;
         setLocations(next);
         setLocation((current) =>
-          next.some((item) => item.id === current)
-            ? current
-            : next.some((item) => item.id === initialLocationId)
-              ? initialLocationId
-              : autoSelectAssignedLocation && next.length === 1
-                ? next[0].id
-                : '',
+          next.some((item) => item.id === preferredLocationId)
+            ? preferredLocationId
+            : isStaff
+              ? ''
+              : next.some((item) => item.id === current)
+                ? current
+                : autoSelectAssignedLocation && next.length === 1
+                  ? next[0].id
+                  : '',
         );
       } catch (e) {
         if (active) {
@@ -63,7 +67,15 @@ export function useCaptureScope({
       active = false;
       controller.abort();
     };
-  }, [api, preview, revision, autoSelectAssignedLocation, inlineErrors, initialLocationId]);
+  }, [
+    api,
+    preview,
+    revision,
+    autoSelectAssignedLocation,
+    inlineErrors,
+    preferredLocationId,
+    isStaff,
+  ]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -130,12 +142,16 @@ export function useCaptureScope({
     };
   }, [api, preview, location, revision, inlineErrors]);
 
-  const selectLocation = useCallback((id: string) => {
-    setLocation(id);
-    setRoom('');
-    setRooms([]);
-    setResidents([]);
-  }, []);
+  const selectLocation = useCallback(
+    (id: string) => {
+      if (isStaff) selectStaffLocation(id);
+      else setLocation(id);
+      setRoom('');
+      setRooms([]);
+      setResidents([]);
+    },
+    [isStaff, selectStaffLocation],
+  );
   const reload = useCallback(() => setRevision((value) => value + 1), []);
   return {
     location,

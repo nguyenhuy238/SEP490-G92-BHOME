@@ -114,7 +114,43 @@ public sealed class MoveInInventoryServiceTests
     }
 
     [Fact]
-    public async Task CannotCompleteUncheckedAssetOrMissingIssueReport()
+    public async Task GoodInventoryCanBeSavedAndCompletedWithoutReasonOrPhoto()
+    {
+        var r = new Rig();
+        var item = r.Items.Single();
+        var saved = await r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
+            new(r.Task.Version, item.ExpectedQuantity, "Good", null, [], null), Guid.NewGuid(), default);
+        Assert.Equal("Good", Assert.Single(saved.Items).Condition);
+        Assert.Empty(Assert.Single(saved.Items).EvidenceIds!);
+        Assert.Null(Assert.Single(saved.Items).IncidentId);
+        var completed = await r.Service.CompleteMoveInInventoryAsync(r.Task.Id,
+            new(r.Task.Version), Guid.NewGuid(), default);
+        Assert.Equal("Completed", completed.Status);
+        Assert.True(completed.ReadyForHandover);
+    }
+
+    [Theory]
+    [InlineData("Missing", 1)]
+    [InlineData("Damaged", 2)]
+    public async Task MissingOrDamagedStillRequirePhotosAndReason(string condition, int actualQuantity)
+    {
+        var r = new Rig();
+        var item = r.Items.Single();
+        var withoutPhoto = await Assert.ThrowsAsync<OperationalTaskException>(() =>
+            r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
+                new(r.Task.Version, actualQuantity, condition, "Hiện trạng bất thường", [], null),
+                Guid.NewGuid(), default));
+        Assert.Equal("invalid_move_in_inventory_item", withoutPhoto.Code);
+
+        var withoutReason = await Assert.ThrowsAsync<OperationalTaskException>(() =>
+            r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
+                new(r.Task.Version, actualQuantity, condition, "", [r.Evidence()], null),
+                Guid.NewGuid(), default));
+        Assert.Equal("invalid_move_in_inventory_item", withoutReason.Code);
+    }
+
+    [Fact]
+    public async Task CannotCompleteUncheckedOrIssueWithoutDescriptionAndPhoto()
     {
         var r = new Rig();
         var incomplete = await Assert.ThrowsAsync<OperationalTaskException>(() =>
@@ -122,12 +158,30 @@ public sealed class MoveInInventoryServiceTests
         Assert.Equal("move_in_inventory_checklist_incomplete", incomplete.Code);
 
         var snapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(r.Task.MoveInInventoryJson)!;
-        snapshot.Items[0] = snapshot.Items[0] with { ActualQuantity = 1, Condition = "Missing", EvidenceIds = [r.Evidence()] };
+        snapshot.Items[0] = snapshot.Items[0] with { ActualQuantity = 1, Condition = "Missing", Notes = "Thiếu giường", EvidenceIds = [] };
         r.Task.MoveInInventoryJson = JsonSerializer.Serialize(snapshot);
         var missing = await Assert.ThrowsAsync<OperationalTaskException>(() =>
             r.Service.CompleteMoveInInventoryAsync(r.Task.Id, new(r.Task.Version), Guid.NewGuid(), default));
-        Assert.Equal("move_in_inventory_incident_required", missing.Code);
+        Assert.Equal("move_in_inventory_checklist_incomplete", missing.Code);
         Assert.Equal(MeterTaskStatus.InProgress, r.Task.Status);
+    }
+
+    [Theory]
+    [InlineData("Missing", 1)]
+    [InlineData("Damaged", 2)]
+    public async Task StaffCanCompleteIssueWithPhotoWithoutCreatingAnIncident(string condition, int quantity)
+    {
+        var r = new Rig();
+        var item = r.Items.Single();
+        var evidence = r.Evidence();
+        var saved = await r.Service.UpdateInventoryItemAsync(r.Task.Id, item.Id,
+            new(r.Task.Version, quantity, condition, "Hiện trạng do Staff ghi nhận", [evidence]), Guid.NewGuid(), default);
+        Assert.Null(Assert.Single(saved.Items).IncidentId);
+        var completed = await r.Service.CompleteMoveInInventoryAsync(r.Task.Id,
+            new(r.Task.Version), Guid.NewGuid(), default);
+        Assert.Equal("Completed", completed.Status);
+        Assert.Equal(condition, completed.Outcome);
+        Assert.False(completed.ReadyForHandover); // Owner must review/decide, not Staff
     }
 
     [Fact]

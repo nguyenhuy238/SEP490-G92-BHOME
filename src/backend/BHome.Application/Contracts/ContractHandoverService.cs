@@ -39,24 +39,37 @@ public sealed partial class ContractService
         if (handoverInventory is not null)
         {
             var inventory = await handoverInventory.PrepareAsync(c.RoomId, t);
-            return new(inventory.Groups, await Handovers.ReadingsAsync(c.RoomId, c.StartDate, t),
+            return new(inventory.Groups, await Handovers.ReadingsAsync(c.Id, c.RoomId, c.StartDate, t),
                 (await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Select(DocumentView).ToArray(),
                 inventory.StateToken, inventory.State, inventory.NoAssetsConfirmed);
         }
         return new((await Handovers.AssetsAsync(c.RoomId, t)).Select(a => new HandoverAsset(a.Id, a.Name, a.Condition, "")).ToArray(),
-            await Handovers.ReadingsAsync(c.RoomId, c.StartDate, t), (await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Select(DocumentView).ToArray());
+            await Handovers.ReadingsAsync(c.Id, c.RoomId, c.StartDate, t), (await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Select(DocumentView).ToArray());
     }
-    private async Task ValidateHandoverEvidence(Contract c, HandoverSnapshot snapshot, CancellationToken t)
+    private async Task ValidateHandoverEvidence(Contract c, HandoverSnapshot snapshot, CancellationToken t, bool existingSnapshot = false)
     {
-        var readings = await Handovers.ReadingsAsync(c.RoomId, c.StartDate, t);
+        var readings = await Handovers.ReadingsAsync(c.Id, c.RoomId, c.StartDate, t);
         foreach (var reading in new[] { snapshot.Electricity, snapshot.Water })
         {
-            var current = readings.SingleOrDefault(r => r.Id == reading.Id && r.Date == snapshot.Date && r.UtilityType == reading.UtilityType && r.Value == reading.Value && r.EvidenceHash == reading.EvidenceHash)
-                ?? throw ContractException.Invalid("confirmed_handover_readings_required");
+            var current = readings.SingleOrDefault(r => r.Id == reading.Id && r.Date == snapshot.Date && r.UtilityType == reading.UtilityType && r.Value == reading.Value && r.EvidenceHash == reading.EvidenceHash);
+            if (current is null && existingSnapshot)
+            {
+                // Preserve already-recorded handovers created before the
+                // contract-specific Initial task rule. This is ONLY called for
+                // Staff confirmation of an existing immutable snapshot; new
+                // SaveHandover requests may never select another tenant's photo.
+                var historical = await Handovers.ReadingAsync(c.RoomId, reading.Id, t);
+                if (historical is not null && historical.Date == snapshot.Date && historical.UtilityType == reading.UtilityType &&
+                    historical.Value == reading.Value && historical.EvidenceHash == reading.EvidenceHash)
+                    current = historical;
+            }
+            if (current is null) throw ContractException.Invalid("confirmed_handover_readings_required");
             using var image = new MemoryStream(); await storage.CopyToAsync(current.EvidenceObjectKey, image, t);
             if (FileHash(image.ToArray()) != current.EvidenceHash) throw ContractException.Conflict("handover_evidence_integrity_failed");
         }
-        foreach (var evidenceId in snapshot.EvidenceIds.Concat(snapshot.Assets.SelectMany(a => a.EvidenceIds ?? [])).Distinct())
+        foreach (var evidenceId in snapshot.EvidenceIds.Concat(snapshot.Assets.SelectMany(a => a.EvidenceIds ?? []))
+                     .Concat((snapshot.RoomChecks ?? []).SelectMany(check => check.EvidenceIds))
+                     .Concat(snapshot.KeyEvidenceIds ?? []).Distinct())
         {
             var f = await Workflow.FileAsync(c.Id, evidenceId, t) ?? throw ContractException.Invalid("invalid_handover_evidence");
             if (f.Kind != ContractFileKind.HandoverEvidence) throw ContractException.Invalid("invalid_handover_evidence");
@@ -66,6 +79,7 @@ public sealed partial class ContractService
     public Task<HandoverView> SaveHandoverAsync(Guid id, HandoverInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Staff], async c =>
     {
         HandoverActive(c);
+        await RequireLegacyHandoverCompatibility(c, t);
         if (c.PreviousContractId is not null && (await Baseline(c, t)).Handover is not null) throw ContractException.Conflict("renewal_inherits_handover_baseline");
         var h = await Handovers.GetAsync(id, t);
         if (await Replay(key, "handover-save", new { id, x }, t) is not null) return HandoverView(h ?? throw ContractException.Missing());
@@ -80,7 +94,7 @@ public sealed partial class ContractService
         var assets = inventory?.Groups ?? (await Handovers.AssetsAsync(c.RoomId, t)).Select(a => new HandoverAsset(a.Id, a.Name, a.Condition, "")).ToArray();
         var inspected = HandoverChecklist.Inspect(assets, x.Assets, inventory is not null);
         HandoverChecklist.RequireSeparateEvidence(x.EvidenceIds, inspected);
-        var readings = await Handovers.ReadingsAsync(c.RoomId, c.StartDate, t);
+        var readings = await Handovers.ReadingsAsync(c.Id, c.RoomId, c.StartDate, t);
         var electricity = readings.SingleOrDefault(r => r.Id == x.ElectricityReadingId && r.UtilityType == 0 && r.Date == x.Date);
         var water = readings.SingleOrDefault(r => r.Id == x.WaterReadingId && r.UtilityType == 1 && r.Date == x.Date);
         if (electricity is null || water is null) throw ContractException.Invalid("confirmed_handover_readings_required");
@@ -99,7 +113,8 @@ public sealed partial class ContractService
     }, t);
     public Task<HandoverView> ReviewHandoverAsync(Guid id, HandoverOwnerReview x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
     {
-        HandoverActive(c); var h = await Handovers.GetAsync(id, t) ?? throw ContractException.Missing();
+        HandoverActive(c); await RequireLegacyHandoverCompatibility(c, t);
+        var h = await Handovers.GetAsync(id, t) ?? throw ContractException.Missing();
         if (await Replay(key, "handover-owner-review", new { id, x }, t) is not null) return HandoverView(h);
         if (h.Version != x.Version || h.Status == ContractHandoverStatus.Confirmed) throw ContractException.Conflict("handover_version_changed");
         var reason = HandoverText(x.Reason, 2000); var plan = HandoverText(x.HandlingPlan, 2000);
@@ -116,7 +131,8 @@ public sealed partial class ContractService
     }, t);
     public Task<HandoverView> DecideHandoverAsync(Guid id, HandoverDecision x, Guid key, bool dispute, bool staff, CancellationToken t) => Mutate(id, staff ? [Roles.Staff] : [Roles.Tenant], async c =>
     {
-        HandoverActive(c); var h = await Handovers.GetAsync(id, t) ?? throw ContractException.Missing();
+        HandoverActive(c); await RequireLegacyHandoverCompatibility(c, t);
+        var h = await Handovers.GetAsync(id, t) ?? throw ContractException.Missing();
         var operation = staff ? "handover-staff" : dispute ? "handover-dispute" : "handover-tenant";
         if (await Replay(key, operation, new { id, x }, t) is not null) return HandoverView(h);
         if (h.Version != x.Version) throw ContractException.Conflict("handover_version_changed");
@@ -134,7 +150,7 @@ public sealed partial class ContractService
                 if (HandoverChecklist.RequiresOwner(snapshot) && snapshot.OwnerAcceptance?.Version != h.Version)
                     throw ContractException.Conflict("owner_handover_exception_required");
             }
-            await ValidateHandoverEvidence(c, snapshot, t);
+            await ValidateHandoverEvidence(c, snapshot, t, existingSnapshot: true);
             h.StaffConfirmedBy = Actor; h.StaffConfirmedAt = clock.GetUtcNow(); h.Status = ContractHandoverStatus.Confirmed;
             await Handovers.CompleteMoveInTaskAsync(id, Actor, clock.GetUtcNow(), t);
             if (handoverDocuments is not null) await PersistHandoverDocument(c, h, t);
@@ -159,6 +175,7 @@ public sealed partial class ContractService
         return await Mutate(id, [Roles.Staff], async c =>
         {
             HandoverActive(c);
+            await RequireLegacyHandoverCompatibility(c, t);
             if ((await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, t)).Count >= 200) throw ContractException.Conflict("handover_evidence_limit");
             var f = new ContractDocumentFile { ContractId = id, Kind = ContractFileKind.HandoverEvidence, SnapshotHash = c.SnapshotHash, DevelopmentOnly = c.IsDevelopmentDemo, ContentType = type, Length = bytes.Length, FileHash = FileHash(bytes), RecordedByUserId = Actor, RecordedAt = clock.GetUtcNow() };
             f.ObjectKey = $"contracts/{id:N}/handover/{f.Id:N}"; await files.PutAsync(c.RoomId, f.ObjectKey, bytes, type, t); repository.Add(f); Audit("ContractHandoverEvidenceAdded", id); return new ContractId(f.Id);

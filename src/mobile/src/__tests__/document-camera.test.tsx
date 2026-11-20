@@ -20,6 +20,7 @@ const native = vi.hoisted(() => ({
   mounts: 0,
   props: {} as CameraViewProps,
   lenses: vi.fn(),
+  allowMeterDemo: false,
 }));
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
@@ -95,6 +96,11 @@ vi.mock('react-native-safe-area-context', () => ({
 }));
 vi.mock('../components/Controls', () => ({ styles: {} }));
 vi.mock('../lib/captureFiles', () => ({ ownCapture: (uri: string) => uri }));
+vi.mock('../lib/meterDemoCapture', () => ({
+  canUseLocalMeterDemo: () => native.allowMeterDemo,
+  createMeterDemoJpeg: () => 'data:image/jpeg;base64,/9j/AAECAw==',
+  meterDemoJpegBytes: () => new Uint8Array([0xff, 0xd8, 0xff, 0, 1, 2, 3]),
+}));
 vi.mock('expo-camera', () => ({
   useCameraPermissions: () => [{ granted: native.granted }, native.request],
   CameraView: forwardRef(function Camera(props: CameraViewProps, ref) {
@@ -148,6 +154,7 @@ beforeEach(() => {
   native.granted = true;
   native.platform = 'android';
   native.autoReady = true;
+  native.allowMeterDemo = false;
   native.mounts = 0;
   native.lenses.mockResolvedValue([]);
   native.files.clear();
@@ -205,6 +212,69 @@ it('handles denied permission when opening the selected meter camera automatical
   await screen.findByText(/Cần cấp quyền camera/);
   expect(native.take).not.toHaveBeenCalled();
   expect(capture).not.toHaveBeenCalled();
+});
+it('uses a synthetic JPEG without camera permission only in local web meter testing', async () => {
+  native.platform = 'web';
+  native.granted = false;
+  native.allowMeterDemo = true;
+  const captured: number[][] = [];
+  const capture = vi.fn(async (bytes: Uint8Array) => {
+    captured.push([...bytes]);
+  });
+  const view = render(
+    <CameraCapture
+      label="Chụp công tơ điện"
+      disabled={false}
+      presentation="meter"
+      autoOpen
+      retainPreview
+      reviewBeforeSubmit
+      onCapture={capture}
+    />,
+  );
+  const demo = screen.getByRole('button', { name: 'Dùng ảnh mẫu để test' });
+  expect(demo).toBeTruthy();
+  fireEvent.click(demo);
+  await waitFor(() => expect(capture).toHaveBeenCalledOnce());
+  expect(captured).toEqual([[0xff, 0xd8, 0xff, 0, 1, 2, 3]]);
+  expect(native.take).not.toHaveBeenCalled();
+  expect(screen.getByAltText('Ảnh công tơ đã chụp')).toBeTruthy();
+  view.rerender(
+    <CameraCapture
+      label="Chụp công tơ điện"
+      disabled={false}
+      presentation="meter"
+      meterStep={2}
+      retainPreview
+      reviewBeforeSubmit
+      onCapture={capture}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Thử lại OCR' }));
+  await waitFor(() => expect(capture).toHaveBeenCalledTimes(2));
+  expect(captured[1]).toEqual(captured[0]);
+  expect(native.files.size).toBe(0);
+});
+it('hides local meter demo on ordinary mobile capture and disables it while busy', async () => {
+  native.allowMeterDemo = false;
+  native.platform = 'android';
+  const view = render(
+    <CameraCapture
+      label="Chụp công tơ"
+      disabled={false}
+      presentation="meter"
+      onCapture={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole('button', { name: 'Dùng ảnh mẫu để test' })).toBeNull();
+  native.allowMeterDemo = true;
+  view.rerender(
+    <CameraCapture label="Chụp công tơ" disabled presentation="meter" onCapture={vi.fn()} />,
+  );
+  expect(screen.getByRole('button', { name: 'Dùng ảnh mẫu để test' })).toHaveProperty(
+    'disabled',
+    true,
+  );
 });
 it('shares camera controls with meters and keeps a compact preview during review', async () => {
   const capture = vi.fn().mockResolvedValue(undefined);

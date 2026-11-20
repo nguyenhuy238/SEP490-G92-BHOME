@@ -16,6 +16,7 @@ import { ChoiceField, Input } from '../components/WorkflowControls';
 import { groupRoomMeterTasks, meterRoundLabel } from '../features/workspace/roomMeterTasks';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
+import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { errorMessage, type MeterTask, type Named } from '../lib/api';
 import { conciseMessage } from '../lib/toast';
 import { displayContractDate } from '../../../../packages/client-core/src/contracts';
@@ -59,8 +60,17 @@ function matchesStatusFilter(group: MeterTask[], status: string): boolean {
 
 export function MeterTasksScreen() {
   const { api, session } = useSession();
+  const {
+    staffLocationId,
+    staffLocations,
+    staffLocationsLoading,
+    staffLocationsError,
+    selectStaffLocation,
+    reloadStaffLocations,
+  } = useWorkspace();
   const staff = session?.roles.includes('Staff');
   const currentUserId = session?.userId;
+  const [filterLocationId, setFilterLocationId] = useState('');
   const [room, setRoom] = useState('');
   const [period, setPeriod] = useState('');
   const [due, setDue] = useState('');
@@ -76,11 +86,33 @@ export function MeterTasksScreen() {
   } | null>(null);
   const [readings, setReadings] = useState<Record<string, ConfirmedReading>>({});
 
-  const locations = useWorkspaceQuery<Named[]>(staff ? '/api/v1/capture/locations' : null, {
-    notifyError: false,
-  });
-  const assignedLocation = locations.data?.[0] ?? null;
+  const locations = useMemo(
+    () => ({
+      data: staffLocations,
+      loading: staffLocationsLoading,
+      error: staffLocationsError,
+      reload: reloadStaffLocations,
+    }),
+    [staffLocations, staffLocationsLoading, staffLocationsError, reloadStaffLocations],
+  );
+  const assignedLocation = staffLocations.find((item) => item.id === staffLocationId) ?? null;
   const assignedLocationId = assignedLocation?.id ?? '';
+  // A refreshed assignment may revoke the selected Location. The fallback must not
+  // carry that Location's room/period or page into a different authorized scope.
+  const selectionRevoked = !!filterLocationId && filterLocationId !== assignedLocationId;
+  const scopedRoom = selectionRevoked ? '' : room;
+  const scopedPeriod = selectionRevoked ? '' : period;
+  const scopedPage = selectionRevoked ? 1 : page;
+
+  const changeLocation = (id: string) => {
+    if (id === assignedLocationId || !staffLocations.some((item) => item.id === id)) return;
+    setFilterLocationId(id);
+    selectStaffLocation(id);
+    setRoom('');
+    setPeriod('');
+    setPage(1);
+    setFilterOpen(false);
+  };
 
   const rooms = useWorkspaceQuery<Named[]>(
     staff && assignedLocationId
@@ -96,7 +128,7 @@ export function MeterTasksScreen() {
       new Date(due).toISOString().slice(0, 10) === due);
   const params = new URLSearchParams();
   if (assignedLocationId) params.set('locationId', assignedLocationId);
-  if (room) params.set('roomId', room);
+  if (scopedRoom) params.set('roomId', scopedRoom);
   if (due && validDue) params.set('dueDate', due);
   const scope = params.toString();
   const key = `${assignedLocationId}:${scope}:${revision}`;
@@ -152,6 +184,9 @@ export function MeterTasksScreen() {
     if (!assignedLocation) return [];
     const raw = currentData ?? [];
     return raw.filter((task) => {
+      // Main move-in Initial readings are steps within the contract handover job.
+      // Keep their exact /meter?taskId route available from ContractInitialMeterTasks.
+      if (task.purpose === 0 && !!task.contractId) return false;
       if (task.locationId && task.locationId !== assignedLocation.id) return false;
       if (!task.locationId && task.location && task.location !== assignedLocation.label)
         return false;
@@ -173,12 +208,12 @@ export function MeterTasksScreen() {
   const filtered = useMemo(
     () =>
       groupRoomMeterTasks(
-        scopedTasks.filter((task) => !period || task.billingPeriod === period),
+        scopedTasks.filter((task) => !scopedPeriod || task.billingPeriod === scopedPeriod),
       ).filter((group) => matchesStatusFilter(group, status)),
-    [period, scopedTasks, status],
+    [scopedPeriod, scopedTasks, status],
   );
 
-  const visiblePage = Math.min(page, Math.max(1, Math.ceil(filtered.length / 20)));
+  const visiblePage = Math.min(scopedPage, Math.max(1, Math.ceil(filtered.length / 20)));
   const items = useMemo(
     () => filtered.slice((visiblePage - 1) * 20, visiblePage * 20),
     [filtered, visiblePage],
@@ -230,9 +265,10 @@ export function MeterTasksScreen() {
     setPage(1);
   };
 
-  const hasActiveFilters = Boolean(room || period || due || status);
-  const advancedFilterCount = (room ? 1 : 0) + (period ? 1 : 0) + (due ? 1 : 0) + (status ? 1 : 0);
-  const selectedRoomLabel = rooms.data?.find((item) => item.id === room)?.label ?? room;
+  const hasActiveFilters = Boolean(scopedRoom || scopedPeriod || due || status);
+  const advancedFilterCount =
+    (scopedRoom ? 1 : 0) + (scopedPeriod ? 1 : 0) + (due ? 1 : 0) + (status ? 1 : 0);
+  const selectedRoomLabel = rooms.data?.find((item) => item.id === scopedRoom)?.label ?? scopedRoom;
 
   if (!staff) return <Text>Chỉ Staff được phép ghi chỉ số điện nước.</Text>;
 
@@ -257,7 +293,17 @@ export function MeterTasksScreen() {
         />
       </View>
 
-      {assignedLocation && (
+      {assignedLocation && (locations.data?.length ?? 0) > 1 && (
+        <ChoiceField
+          label="Cơ sở"
+          value={assignedLocationId}
+          options={locations.data ?? []}
+          onChange={changeLocation}
+          searchable
+        />
+      )}
+
+      {assignedLocation && (locations.data?.length ?? 0) === 1 && (
         <View style={styles.locationBadge}>
           <Icon source="map-marker-outline" size={15} color={c.primary} />
           <Text variant="labelLarge" style={styles.locationText} numberOfLines={1}>
@@ -359,7 +405,7 @@ export function MeterTasksScreen() {
 
           {hasActiveFilters && (
             <View style={styles.activeChipsRow}>
-              {!!room && (
+              {!!scopedRoom && (
                 <TouchableRipple
                   accessibilityRole="button"
                   accessibilityLabel={`Xóa lọc phòng ${selectedRoomLabel}`}
@@ -374,16 +420,16 @@ export function MeterTasksScreen() {
                   </View>
                 </TouchableRipple>
               )}
-              {!!period && (
+              {!!scopedPeriod && (
                 <TouchableRipple
                   accessibilityRole="button"
-                  accessibilityLabel={`Xóa lọc kỳ ${displayContractDate(period)}`}
+                  accessibilityLabel={`Xóa lọc kỳ ${displayContractDate(scopedPeriod)}`}
                   onPress={() => changeFilter(setPeriod, '')}
                   style={styles.activeChip}
                 >
                   <View style={styles.activeChipInner}>
                     <Text variant="labelSmall" style={styles.activeChipText}>
-                      Kỳ: {displayContractDate(period)}
+                      Kỳ: {displayContractDate(scopedPeriod)}
                     </Text>
                     <Icon source="close" size={14} color={c.primary} />
                   </View>
@@ -647,7 +693,7 @@ export function MeterTasksScreen() {
                 <View style={styles.sheetBodyContent}>
                   <ChoiceField
                     label="Phòng"
-                    value={room}
+                    value={scopedRoom}
                     disabled={rooms.loading}
                     options={[{ id: '', label: 'Tất cả phòng' }, ...(rooms.data ?? [])]}
                     onChange={(v) => changeFilter(setRoom, v)}
@@ -664,7 +710,7 @@ export function MeterTasksScreen() {
                   )}
                   <ChoiceField
                     label="Kỳ ghi chỉ số"
-                    value={period}
+                    value={scopedPeriod}
                     options={[
                       { id: '', label: 'Tất cả kỳ ghi' },
                       ...periods.map((p) => ({ id: p, label: displayContractDate(p) })),

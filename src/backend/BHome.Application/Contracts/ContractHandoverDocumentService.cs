@@ -8,9 +8,9 @@ namespace BHome.Application.Contracts;
 public sealed partial class ContractService
 {
     private static Guid HandoverKey(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
-    private async Task PersistHandoverDocument(Contract c, ContractHandover h, CancellationToken t) =>
+    private async Task PersistHandoverDocument(Contract c, ContractHandover h, CancellationToken t, string[]? decisions = null) =>
         await PersistReport(c, "MoveIn", h.Version, Snapshot(h), null, h.StaffConfirmedBy!.Value, h.TenantConfirmedAt,
-            h.StaffConfirmedAt!.Value, [], [], t);
+            h.StaffConfirmedAt!.Value, [], decisions ?? [], t);
 
     private async Task<ContractDocumentView> PersistReport(Contract c, string type, int version, HandoverSnapshot snapshot,
         HandoverSnapshot? baseline, Guid staffId, DateTimeOffset? tenantAt, DateTimeOffset confirmedAt,
@@ -23,7 +23,9 @@ public sealed partial class ContractService
         var fileRecord = new ContractDocumentFile();
         var documentId = fileRecord.Id;
         var photos = new List<HandoverDocumentPhoto>();
-        foreach (var id in snapshot.EvidenceIds.Concat(snapshot.Assets.SelectMany(a => a.EvidenceIds ?? [])).Distinct())
+        foreach (var id in snapshot.EvidenceIds.Concat(snapshot.Assets.SelectMany(a => a.EvidenceIds ?? []))
+                     .Concat((snapshot.RoomChecks ?? []).SelectMany(check => check.EvidenceIds))
+                     .Concat(snapshot.KeyEvidenceIds ?? []).Distinct())
         {
             using var bytes = new MemoryStream();
             if (type == "MoveOut")
@@ -41,8 +43,43 @@ public sealed partial class ContractService
                 await CopyVerifiedFile(file, bytes, t);
             }
             if (bytes.Length > 5 * 1024 * 1024) throw ContractException.Invalid("inspection_image_too_large");
-            var groups = snapshot.Assets.Where(a => a.EvidenceIds?.Contains(id) == true).Select(a => a.Name).Distinct().ToArray();
+            var groups = snapshot.Assets.Where(a => a.EvidenceIds?.Contains(id) == true).Select(a => a.Name)
+                .Concat((snapshot.RoomChecks ?? []).Where(check => check.EvidenceIds.Contains(id))
+                    .Select(check => HandoverRoomChecklist.Labels[check.Code]))
+                .Concat((snapshot.KeyEvidenceIds ?? []).Contains(id) ? ["Chìa khóa bàn giao"] : [])
+                .Distinct().ToArray();
             photos.Add(new(id, $"{snapshot.Date:dd/MM/yyyy} · {(groups.Length == 0 ? "Toàn cảnh phòng" : string.Join(", ", groups))}", bytes.ToArray()));
+        }
+        if (type == "MoveIn")
+        {
+            // Include the actual photographed first electricity/water readings
+            // in the immutable final report, not merely their textual values.
+            // Object storage keys are deliberately omitted from serialized
+            // snapshots, so resolve them via contract-scoped verified readings.
+            var readings = await Handovers.ReadingsAsync(c.Id, c.RoomId, c.StartDate, t);
+            foreach (var accepted in new[] { snapshot.Electricity, snapshot.Water })
+            {
+                var recorded = readings.SingleOrDefault(r => r.Id == accepted.Id &&
+                    r.EvidenceHash == accepted.EvidenceHash && r.Date == accepted.Date);
+                if (recorded is null)
+                {
+                    // Historical confirmed legacy snapshots can carry readings
+                    // from before contract-specific Initial tasks existed. Keep
+                    // their original retry/export behavior without inventing an
+                    // image from another tenant. New Draft workflows always
+                    // require their own verified meter photos.
+                    if (handoverDrafts is not null && await Drafts.GetAsync(c.Id, t) is not null)
+                        throw ContractException.Conflict("confirmed_handover_readings_required");
+                    continue;
+                }
+                using var image = new MemoryStream();
+                await storage.CopyToAsync(recorded.EvidenceObjectKey, image, t);
+                if (image.Length > 5 * 1024 * 1024 || FileHash(image.ToArray()) != accepted.EvidenceHash)
+                    throw ContractException.Conflict("handover_evidence_integrity_failed");
+                photos.Add(new(recorded.EvidenceId,
+                    $"Chỉ số {(recorded.UtilityType == 0 ? "điện" : "nước")} lần đầu · " +
+                    $"{recorded.Value} · {recorded.MeterCode} · {recorded.Date:dd/MM/yyyy}", image.ToArray()));
+            }
         }
         var report = new HandoverDocumentReport(documentId, c.Id, type, version, c.Room.Location.Name,
             c.Room.Location.Address, c.OwnerSignerId, c.TenantUserId, staffId, tenantAt, confirmedAt, snapshot, baseline, references, decisions, photos.ToArray());

@@ -2,7 +2,8 @@ import type { MeterTask } from '../../lib/api';
 import { displayContractDate } from '../../../../../packages/client-core/src/contracts';
 
 export function meterRoundLabel(task: MeterTask) {
-  if (task.purpose === 0) return `Chỉ số ban đầu · ${displayContractDate(task.readingDate)}`;
+  if (task.purpose === 0)
+    return `${task.contractId ? 'Khởi tạo cho hợp đồng' : 'Chỉ số ban đầu'} · ${displayContractDate(task.readingDate)}`;
   if (task.purpose === 2) return `Chốt trả phòng · ${displayContractDate(task.readingDate)}`;
   return `Kỳ ${displayContractDate(task.billingPeriod ?? task.readingDate)}`;
 }

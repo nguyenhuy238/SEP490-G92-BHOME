@@ -11,7 +11,7 @@ using iText.Layout.Properties;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer
+internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer, IHandoverDraftPdfRenderer
 {
     private static readonly Lazy<byte[]> Font = new(() =>
     {
@@ -19,6 +19,92 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer
             ?? throw new ContractException(503, "contract_pdf_font_not_available");
         using var bytes = new MemoryStream(); stream.CopyTo(bytes); return bytes.ToArray();
     });
+    public Task<byte[]> RenderDraftAsync(HandoverDraftView r, CancellationToken t)
+    {
+        t.ThrowIfCancellationRequested();
+        using var output = new MemoryStream();
+        using (var pdf = new PdfDocument(new PdfWriter(output)))
+        using (var doc = new Document(pdf, PageSize.A4))
+        {
+            var font = PdfFontFactory.CreateFont(Font.Value, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.FORCE_EMBEDDED);
+            doc.SetFont(font).SetFontSize(10).SetMargins(35, 35, 40, 35);
+            pdf.GetDocumentInfo().SetTitle("BHOME - Biên bản bàn giao phòng - Bản nháp").SetCreator("BHOME");
+            doc.Add(new Paragraph("BIÊN BẢN BÀN GIAO PHÒNG VÀ TÀI SẢN")
+                .SetFontSize(16).SetTextAlignment(TextAlignment.CENTER));
+            doc.Add(new Paragraph("BẢN NHÁP - CHƯA XÁC NHẬN / KHÔNG PHẢI CHỮ KÝ")
+                .SetTextAlignment(TextAlignment.CENTER));
+            doc.Add(new Paragraph($"Hợp đồng: {r.ContractId} · Phiên bản nháp {r.Version} · {r.Status}"));
+            doc.Add(new Paragraph($"Cơ sở: {r.LocationName}\nĐịa chỉ: {r.LocationAddress}\nPhòng: {r.RoomNumber}"));
+            doc.Add(new Paragraph($"Thời hạn thuê: {r.StartDate:dd/MM/yyyy} - {r.EndDate:dd/MM/yyyy}\n" +
+                $"Tiền thuê: {r.MonthlyRent:N0} VND/tháng · Tiền cọc: {r.RequiredDeposit:N0} VND"));
+            doc.Add(new Paragraph("Điều khoản hợp đồng tham chiếu: " + r.Terms));
+            doc.Add(new Paragraph("1. KIỂM TRA ĐIỆN NƯỚC"));
+            doc.Add(new Paragraph("Điện: " + (r.Electricity is null ? "Chưa có ảnh và chỉ số khởi tạo đã xác nhận" :
+                $"{r.Electricity.Value} kWh · {r.Electricity.MeterCode} · {r.Electricity.Date:dd/MM/yyyy}")));
+            doc.Add(new Paragraph("Nước: " + (r.Water is null ? "Chưa có ảnh và chỉ số khởi tạo đã xác nhận" :
+                $"{r.Water.Value} m³ · {r.Water.MeterCode} · {r.Water.Date:dd/MM/yyyy}")));
+            doc.Add(new Paragraph("2. KIỂM KÊ TÀI SẢN"));
+            if (r.Assets.Length == 0) doc.Add(new Paragraph(r.NoAssetsConfirmed
+                ? "Owner đã xác nhận phòng không có tài sản bàn giao."
+                : "Chưa có kiểm kê tài sản bàn giao."));
+            else
+            {
+                var table = new Table(UnitValue.CreatePercentArray([35f, 15f, 15f, 35f])).UseAllAvailableWidth();
+                foreach (var heading in new[] { "Tài sản", "Dự kiến", "Thực giao", "Tình trạng / ghi chú" })
+                    table.AddHeaderCell(new Cell().Add(new Paragraph(heading)));
+                foreach (var asset in r.Assets)
+                {
+                    foreach (var cell in new[] { asset.Name, asset.ConfiguredQuantity?.ToString() ?? "—",
+                        asset.HandedOverQuantity?.ToString() ?? "Chưa kiểm", asset.Checked
+                            ? asset.ObservedCondition + "\n" + asset.Notes : "Chưa kiểm kê" })
+                        table.AddCell(new Cell().Add(new Paragraph(cell ?? "")));
+                }
+                doc.Add(table);
+            }
+            doc.Add(new Paragraph("3. HIỆN TRẠNG PHÒNG, CHÌA KHÓA VÀ BẰNG CHỨNG"));
+            doc.Add(new Paragraph("Tình trạng phòng: " + (string.IsNullOrWhiteSpace(r.RoomCondition) ? "Chưa kiểm tra" : r.RoomCondition)));
+            if (r.KeyEvidenceIds is null)
+            {
+                doc.Add(new Paragraph("Chìa khóa / thẻ / quyền truy cập: " +
+                    (string.IsNullOrWhiteSpace(r.KeysAndAccess) ? "Chưa kiểm tra" : r.KeysAndAccess)));
+                doc.Add(new Paragraph("Ảnh minh chứng kèm theo: " + r.EvidenceIds.Length));
+            }
+            else
+            {
+                doc.Add(new Paragraph("Chìa khóa bàn giao: " +
+                    (r.AccessItems?.FirstOrDefault(item => item.Type == "RoomKey")?.Quantity.ToString() ?? "Chưa kiểm đếm")));
+                doc.Add(new Paragraph("Ảnh chìa khóa bàn giao: " + r.KeyEvidenceIds.Length));
+            }
+            doc.Add(new Paragraph("Ghi chú: " + r.Notes));
+            doc.Add(new Paragraph("4. CHECKLIST HIỆN TRẠNG CHI TIẾT"));
+            foreach (var code in HandoverRoomChecklist.RequiredCodes)
+            {
+                var check = (r.RoomChecks ?? []).SingleOrDefault(item => item.Code == code);
+                doc.Add(new Paragraph($"{HandoverRoomChecklist.Labels[code]}: " +
+                    (check is null ? "Chưa kiểm tra" : $"{RoomCheckStatus(check.Status)} · {check.Notes} · {check.EvidenceIds.Length} ảnh")));
+            }
+            doc.Add(new Paragraph(r.KeyEvidenceIds is null
+                ? "5. CHÌA KHÓA / QUYỀN TRUY CẬP THỰC GIAO" : "5. CHÌA KHÓA BÀN GIAO"));
+            foreach (var item in r.AccessItems ?? [])
+                doc.Add(new Paragraph($"{(r.KeyEvidenceIds is not null && item.Type == "RoomKey" ? "Chìa khóa bàn giao" : AccessTypeLabel(item.Type))}: {item.Quantity} · {item.Notes}"));
+            if (r.AccessItems is not { Length: > 0 }) doc.Add(new Paragraph("Chưa kiểm đếm chìa khóa"));
+            doc.Add(new Paragraph("6. VẤN ĐỀ TỒN TẠI VÀ PHƯƠNG ÁN KHẮC PHỤC"));
+            foreach (var issue in r.OutstandingIssues ?? [])
+                doc.Add(new Paragraph($"{(HandoverRoomChecklist.Labels.TryGetValue(issue.Code, out var label) ? label : issue.Code)}: " +
+                    $"{issue.Description} · Người xử lý: {issue.ResponsibleParty} · Hạn: {issue.DueDate:dd/MM/yyyy}"));
+            if (r.OutstandingIssues is not { Length: > 0 }) doc.Add(new Paragraph("Chưa ghi nhận vấn đề cần khắc phục"));
+            doc.Add(new Paragraph("7. THEO DÕI DUYỆT VÀ XÁC NHẬN"));
+            doc.Add(new Paragraph("Owner sẵn sàng bàn giao: " + (r.OwnerReadyAt?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa duyệt")));
+            doc.Add(new Paragraph("Tenant xác nhận: " + (r.TenantConfirmedAt?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa xác nhận")));
+            foreach (var request in r.Requests)
+                doc.Add(new Paragraph($"Yêu cầu sửa {request.CreatedAt:dd/MM/yyyy}: {request.Reason}\n" +
+                    $"Trạng thái: {request.Status} · {request.DecisionReason}"));
+            if (r.Missing.Length != 0) doc.Add(new Paragraph("Hạng mục chưa hoàn tất: " + string.Join(", ", r.Missing)));
+            doc.Add(new Paragraph("Tài liệu này tự cập nhật theo dữ liệu xác nhận trên BHOME. " +
+                "Chỉ biên bản hoàn tất được lưu riêng dưới dạng PDF có kiểm tra toàn vẹn."));
+        }
+        return Task.FromResult(output.ToArray());
+    }
     public Task<byte[]> RenderAsync(HandoverDocumentReport r, CancellationToken t)
     {
         t.ThrowIfCancellationRequested();
@@ -64,8 +150,32 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer
             if (r.Type != "AssetChange")
             {
                 Text("Hiện trạng phòng: " + r.Snapshot.RoomCondition);
-                Text("Chìa khóa / thẻ / quyền truy cập: " + r.Snapshot.KeysAndAccess);
+                Text(r.Type == "MoveIn" && r.Snapshot.KeyEvidenceIds is not null
+                    ? "Chìa khóa bàn giao: " + (r.Snapshot.AccessItems?.FirstOrDefault(item => item.Type == "RoomKey")?.Quantity.ToString() ?? "Chưa kiểm đếm") + " chiếc"
+                    : "Chìa khóa / thẻ / quyền truy cập: " + r.Snapshot.KeysAndAccess);
                 Text($"Chỉ số điện đã xác nhận: {r.Snapshot.Electricity.Value} ({r.Snapshot.Electricity.MeterCode}, {r.Snapshot.Electricity.Id})\nChỉ số nước đã xác nhận: {r.Snapshot.Water.Value} ({r.Snapshot.Water.MeterCode}, {r.Snapshot.Water.Id})");
+                if (r.Type == "MoveIn" && r.Snapshot.RoomChecks is { Length: > 0 })
+                {
+                    Text("CHECKLIST HIỆN TRẠNG NHẬN PHÒNG");
+                    foreach (var check in r.Snapshot.RoomChecks)
+                        Text($"{(HandoverRoomChecklist.Labels.TryGetValue(check.Code, out var label) ? label : check.Code)}: " +
+                            $"{RoomCheckStatus(check.Status)} · {check.Notes} · {check.EvidenceIds.Length} ảnh");
+                }
+                if (r.Type == "MoveIn" && r.Snapshot.AccessItems is { Length: > 0 })
+                {
+                    Text(r.Snapshot.KeyEvidenceIds is null ? "CHÌA KHÓA VÀ QUYỀN TRUY CẬP ĐÃ GIAO" : "CHÌA KHÓA ĐÃ GIAO");
+                    foreach (var access in r.Snapshot.AccessItems)
+                        Text($"{(r.Snapshot.KeyEvidenceIds is not null && access.Type == "RoomKey" ? "Chìa khóa bàn giao" : AccessTypeLabel(access.Type))}: {access.Quantity} · {access.Notes}");
+                    if (r.Snapshot.KeyEvidenceIds is not null)
+                        Text($"Ảnh chìa khóa bàn giao: {r.Snapshot.KeyEvidenceIds.Length}");
+                }
+                if (r.Type == "MoveIn" && r.Snapshot.OutstandingIssues is { Length: > 0 })
+                {
+                    Text("VẤN ĐỀ TỒN TẠI VÀ THỜI HẠN XỬ LÝ");
+                    foreach (var issue in r.Snapshot.OutstandingIssues)
+                        Text($"{(HandoverRoomChecklist.Labels.TryGetValue(issue.Code, out var label) ? label : issue.Code)}: " +
+                            $"{issue.Description} · Người xử lý: {issue.ResponsibleParty} · Hạn: {issue.DueDate:dd/MM/yyyy}");
+                }
             }
             Text("Ghi chú: " + r.Snapshot.Notes);
             if (!string.IsNullOrWhiteSpace(r.Snapshot.ProposedCompensation)) Text("Đề xuất của Staff, chưa phải khoản phải thu: " + r.Snapshot.ProposedCompensation);
@@ -100,4 +210,23 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer
         if (bytes.Length > 100 * 1024 * 1024) throw new ContractException(413, "handover_document_too_large");
         return Task.FromResult(bytes);
     }
+
+    private static string RoomCheckStatus(string status) => status switch
+    {
+        "Passed" => "Đạt",
+        "Issue" => "Cần xử lý",
+        "NotApplicable" => "Không áp dụng",
+        _ => status
+    };
+
+    private static string AccessTypeLabel(string type) => type switch
+    {
+        "RoomKey" => "Chìa khóa phòng",
+        "GateKey" => "Chìa khóa cổng",
+        "AccessCard" => "Thẻ từ",
+        "Remote" => "Điều khiển",
+        "DigitalAccess" => "Quyền ra vào điện tử",
+        "Other" => "Quyền truy cập khác",
+        _ => type
+    };
 }

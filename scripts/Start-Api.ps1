@@ -22,3 +22,8 @@ $env:ASPNETCORE_ENVIRONMENT = 'Development'
 Push-Location $repositoryRoot
 try { dotnet run --project src/backend/BHome.Api; exit $LASTEXITCODE }
 finally { Pop-Location }
+AuthenticationEmail__WebVerificationUrl=http://localhost:5173/confirm-email
+ContractSigning__InvitationLink__PublicOpenUrl=https://localhost:7240/open/sign-contract
+AnonymousSigning__PublicSigningUrl=https://localhost:5176/contract-signing
+AuthenticationEmail__WebResetUrl=http://localhost:5173/reset-password
+AuthenticationEmail__WebInvitationUrl=http://localhost:5173/accept-invitation
