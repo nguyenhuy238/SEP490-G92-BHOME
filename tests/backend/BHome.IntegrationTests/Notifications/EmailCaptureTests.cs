@@ -38,8 +38,14 @@ public sealed class EmailCaptureTests
                 else await writer.WriteLineAsync("250 ok");
             }
         }, timeout.Token);
-        var options = new EmailOptions { Enabled = true, DeliveryMode = "Capture", Host = "127.0.0.1",
-            Port = ((IPEndPoint)listener.LocalEndpoint).Port, FromEmail = "sender@example.invalid" };
+        var options = new EmailOptions
+        {
+            Enabled = true,
+            DeliveryMode = "Capture",
+            Host = "127.0.0.1",
+            Port = ((IPEndPoint)listener.LocalEndpoint).Port,
+            FromEmail = "sender@example.invalid"
+        };
         var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance,
             new HostingEnvironment { EnvironmentName = "Testing" });
         var result = await sender.SendAsync(new("synthetic-capture", "EMAIL", "recipient@example.invalid", "TEST",
@@ -55,8 +61,15 @@ public sealed class EmailCaptureTests
     [Fact]
     public async Task StagingRecipientOutsideAllowlistIsRejectedBeforeNetwork()
     {
-        var options = new EmailOptions { Enabled = true, Host = "smtp.example.invalid", Username = "sender@example.invalid",
-            FromEmail = "sender@example.invalid", AppPassword = "synthetic", AllowedRecipients = ["allowed@example.invalid"] };
+        var options = new EmailOptions
+        {
+            Enabled = true,
+            Host = "smtp.example.invalid",
+            Username = "sender@example.invalid",
+            FromEmail = "sender@example.invalid",
+            AppPassword = "synthetic",
+            AllowedRecipients = ["allowed@example.invalid"]
+        };
         var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance,
             new HostingEnvironment { EnvironmentName = "Staging" });
         var error = await Assert.ThrowsAsync<ChannelDeliveryException>(() => sender.SendAsync(

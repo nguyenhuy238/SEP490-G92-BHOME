@@ -15,7 +15,7 @@ public sealed class EnvironmentConfigurationTests
     [InlineData("AuthenticationEmail:TrustedOrigins:0", "https://old.ngrok-free.dev")]
     [InlineData("Cors:AllowedOrigins:0", "https://old.ngrok-free.dev")]
     [InlineData("AnonymousSigning:PublicSigningUrl", "https://old.ngrok-free.dev/contract-signing")]
-    public void DevelopmentRejectsObsoleteTunnelConfigurationBeforeItCanIssueLinks(string key,string value)
+    public void DevelopmentRejectsObsoleteTunnelConfigurationBeforeItCanIssueLinks(string key, string value)
     {
         var c = new ConfigurationManager();
         c["ConnectionStrings:Database"] = "Host=localhost;Database=synthetic";
@@ -125,8 +125,13 @@ public sealed class EnvironmentConfigurationTests
     [Fact]
     public void SandboxSePayIsAcceptedOnlyInNonProductionAndCannotUseLiveApi()
     {
-        var o = new SePayOptions { Enabled = true, WebhookSecret = new string('x', 40), ReceivingAccounts =
-            [new() { LocationId = Guid.NewGuid(), BankIdentifier = "970416", Gateway = "ACB", AccountNumber = "0000001234" }] };
+        var o = new SePayOptions
+        {
+            Enabled = true,
+            WebhookSecret = new string('x', 40),
+            ReceivingAccounts =
+            [new() { LocationId = Guid.NewGuid(), BankIdentifier = "970416", Gateway = "ACB", AccountNumber = "0000001234" }]
+        };
         Assert.True(o.Valid("Staging")); Assert.True(o.Valid("Development")); Assert.False(o.Valid("Production"));
         o.ApiBaseUrl = "https://userapi.sepay.vn/v2"; Assert.False(o.Valid("Staging"));
         o.Mode = "Live"; Assert.False(o.Valid("Staging")); Assert.True(o.Valid("Production"));

@@ -230,3 +230,98 @@ khớp certificate SNI localhost; đã dùng bộ certificate development tươn
 Email cũ không được sửa hoặc gửi lại tự động. Cần yêu cầu một lời mời mới sau khi restart.
 Localhost chỉ phục vụ chính máy phát triển; người nhận qua Internet cần bộ Staging riêng.
 Chưa gửi một email mới hoặc xác nhận thao tác chấp nhận lời mời trên thiết bị người nhận ở lần sửa này.
+
+## Bổ sung: sửa CI run 44497210467 (20/11/2026)
+
+Phạm vi: CI/NFR và fixture hồi quy; không đổi BF/UC, API, phân quyền hay dữ liệu triển khai.
+Đối chiếu workflow `.github/workflows/ci.yml`, startup guard `EnvironmentConfiguration`,
+`EnvironmentStartupTests`, chính sách người nhận email và artifact `backend-trx-attempt-1`
+của run được báo lỗi. Các assertion bảo vệ OCR, tài khoản, nội dung ký và SMS vẫn được giữ.
+
+Artifact ghi nhận 8 test thất bại trong IntegrationTests:
+
+- 6 test đổi host sang Production nhưng chưa cung cấp deployment anchors, callbacks,
+  trusted origins và CORS tương ứng. Thêm `TestDeploymentConfiguration.UseTestEnvironment`
+  dùng domain tổng hợp `.example.invalid`; áp dụng cho OCR, Main Draft và Demo SMS.
+  Thêm hai trường hợp Staging để kiểm tra OCR diagnostics vẫn trả 404 dù bật cờ Development.
+  Test startup từ chối cấu hình sai vẫn dùng cấu hình riêng và giữ nguyên assertion.
+- Worker gửi lời mời Tenant hết thời gian chờ và lời mời Staff trả 503 vì fixture chưa
+  cho phép địa chỉ email tổng hợp của chính scenario. Bổ sung đúng địa chỉ trong allowlist
+  trước khi host khởi động; giữ test người nhận bị chặn, không đổi grant/hàng đợi và retry.
+
+Sửa Prettier cho `deploy/vps/compose.integrations.example.yml` và URL inventory.
+Kiểm tra tiếp phát hiện lỗi whitespace trong `Notifications/EmailCaptureTests.cs`,
+`Notifications/EmailTransportTests.cs` và Infrastructure `EnvironmentConfigurationTests.cs`;
+chỉ định dạng lại ba file này. Workflow dùng `actions/upload-artifact@v6`
+([runtime Node.js 24](https://github.com/actions/upload-artifact/releases/tag/v6.0.0)),
+giữ nguyên tên, đường dẫn và thời hạn artifact. Không bỏ test hoặc nới runsettings.
+
+Khi chạy lại toàn bộ frontend trên Node.js 22, test lời mời Staff có một lần không chờ
+được dialog đóng trong giới hạn mặc định 1 giây. Sửa riêng `StaffApiPage.test.tsx`:
+chờ nút được bật trước khi retry, chờ đúng dialog đã mở được gỡ khỏi DOM (tối đa 5 giây)
+thay vì quét lại accessibility tree toàn trang, và xác nhận có đúng hai POST lời mời.
+Không đổi hành vi UI, timeout chung hoặc assertion về thông báo lỗi.
+
+File thay đổi:
+
+| Nhóm            | File                                                                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Workflow        | `.github/workflows/ci.yml`                                                                                                                                                                                   |
+| Prettier        | `deploy/vps/compose.integrations.example.yml`, `docs/development/BHOME_ENVIRONMENT_URL_INVENTORY.md`                                                                                                         |
+| Host test       | `tests/backend/BHome.IntegrationTests/TestDeploymentConfiguration.cs`, `Ocr/OcrApiTests.cs`, `Ocr/ExperimentalMeterRuntimeTests.cs`, `Contracts/MainDraftReleaseTests.cs`, `Compact24/DemoSmsAccessTests.cs` |
+| Email fixture   | Integration `Compact24/PasswordRecoveryRegressionTests.cs`, `Compact24/TenantAccountAutomationTests.cs`                                                                                                      |
+| .NET whitespace | Integration `Notifications/EmailCaptureTests.cs`, `Notifications/EmailTransportTests.cs`; Infrastructure `EnvironmentConfigurationTests.cs`                                                                  |
+| Frontend test   | `src/owner-web/src/features/staff/StaffApiPage.test.tsx`                                                                                                                                                     |
+| Báo cáo         | `docs/development/BHOME_ENVIRONMENT_VALIDATION.md`                                                                                                                                                           |
+
+Thư mục `.tools/ci-repair` lưu log/TRX cục bộ, bị Git ignore. File untracked có sẵn
+`VPS_DEMO_UBUNTU_24.md` được giữ nguyên; Prettier trên toàn working tree báo file này,
+nên kiểm tra CI trên bản source sạch chỉ chứa file tracked và thay đổi của task.
+
+### Kiểm chứng bản sửa CI
+
+Các kiểm tra frontend chạy trên bản source sạch trong Linux với Node.js 22.23.4;
+backend dùng .NET SDK 8.0.427 và PostgreSQL 16 disposable, cùng image MinIO/converter có sẵn.
+Không gọi provider hoặc gửi email thật. Test filter trong `ci.runsettings` giữ nguyên.
+
+| Kiểm tra đã chạy                                                            | Kết quả                                                          |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Release solution build, Windows và Linux                                    | PASS, 0 warnings/errors                                          |
+| Nhóm hồi quy chứa toàn bộ 8 failure GitHub, startup guard âm và Staging OCR | PASS 20/20 trong cùng một lượt Windows                           |
+| `npm ci --no-fund --no-audit`, `npm run lint`, Mobile typecheck             | PASS trên Linux/Node.js 22                                       |
+| `npm test`                                                                  | PASS: Owner 807/807, Mobile 1358/1358                            |
+| `npm run build`, Expo web export đúng biến môi trường CI                    | PASS                                                             |
+| `npm run format:check` trên source sạch                                     | PASS                                                             |
+| `dotnet format ... --verify-no-changes --no-restore`                        | PASS trên Windows và Linux; sửa thêm ba file whitespace nêu trên |
+| `scripts/Test-SePaySandboxScripts.ps1`                                      | PASS bằng PowerShell Core trên Linux                             |
+| Digital signing unit suite riêng                                            | PASS 41/41 trên Linux                                            |
+| Hai lệnh `docker compose ... config --quiet` trong workflow                 | PASS                                                             |
+| `actionlint -shellcheck= .github/workflows/ci.yml`, `git diff --check`      | PASS; không chạy ShellCheck riêng                                |
+
+Giới hạn môi trường kiểm thử cục bộ:
+
+Kết quả toàn bộ solution với đúng CI runsettings:
+
+- Windows: Application 640 PASS, Domain 114 PASS, Infrastructure 69 PASS, Digital Signing
+  41 PASS. Integration: 1292 PASS / 1 FAIL collector / 27 SKIP. Plan Integration: 142 SKIP.
+  Lệnh full solution trả exit code 1 do collector; test lỗi được chạy riêng lại PASS 1/1
+  như mô tả dưới đây. Sau lượt chạy lại, cả 1293 integration case thực thi đã có kết quả PASS;
+  không gọi lượt full solution ban đầu là PASS.
+- Linux trong Docker Desktop: cùng 864 unit test PASS; Integration 1290 PASS / 3 FAIL
+  guard loopback / 27 SKIP; Plan Integration 142 SKIP. Full solution trả exit code 1.
+  Ba failure loopback không xuất hiện trong lượt Windows và đều PASS trong artifact GitHub gốc.
+- Các test SKIP cần model, browser, API hoặc credential opt-in theo cấu hình hiện có;
+  không tính chúng là PASS. Không đo coverage hoặc hiệu năng trong task này.
+
+- Lượt Linux chạy trong container trên Docker Desktop cần `host.docker.internal` để truy cập
+  các cổng Testcontainers. Ba test công cụ tạo database/account chỉ cho phép loopback từ chối
+  hostname này: một test `SharedDevelopmentSetupTests` và hai test `LocalTestAccountsTests`.
+  Giữ nguyên guard và chạy toàn bộ suite bằng Windows với địa chỉ loopback.
+- Collector PowerShell của lượt Windows ghi log PostgreSQL chậm hơn tiến trình test, khiến
+  `Compact24IndependenceTests` chưa thấy log database mới. Chạy riêng lại với collector ghi
+  trực tiếp ra file: PASS 1/1, giữ nguyên test và assertion. Đây không phải sửa production.
+- Các lượt chuẩn bị container ban đầu gặp cấu hình Docker endpoint/thư mục tạm không chia sẻ
+  với converter; đã sửa môi trường kiểm thử và xác nhận riêng scenario Production Main Draft
+  trên Linux PASS. Không nới startup validation hoặc sửa code converter.
+- Bản sửa chưa được commit/push hoặc chạy trên GitHub Actions mới. Kết quả runner GitHub
+  chỉ được xác nhận sau khi push; không gọi việc kiểm chứng cục bộ là CI remote đã xanh.
