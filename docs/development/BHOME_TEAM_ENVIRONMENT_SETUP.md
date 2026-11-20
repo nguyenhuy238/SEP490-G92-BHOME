@@ -206,6 +206,8 @@ cần tạo lời mời mới. Không đưa tùy chọn này vào cấu hình ch
 **Khi chạy Mobile:** `Prepare-OcrMobile.ps1`/`Start-OcrMobileApp.ps1`
 không đồng bộ các khóa `Email:*` từ `.env` vào .NET User Secrets nữa.
 Điều này tránh vô tình ghi đè Gmail SMTP bằng Mailpit `Capture` của `.env` chung.
+`Start-OcrMobile.ps1` cũng không nhập `Email__*` từ `.env` thành process
+environment (mức ưu tiên cao hơn User Secrets). Hai bước phải cùng tránh ghi đè.
 Sau khi thay đổi SMTP, xác minh bằng `Configure-LocalGmail.ps1 -CheckOnly`
 (thêm `-AllowAnyRecipient` nếu cần gửi mọi địa chỉ), rồi khởi động lại API.
 

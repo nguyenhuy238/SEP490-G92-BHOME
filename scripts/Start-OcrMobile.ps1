@@ -17,7 +17,10 @@ Get-ChildItem Env: | Where-Object { $_.Name -match '^(Kestrel__|MobileDevelopmen
 $configurationPath = if ([IO.Path]::IsPathRooted($EnvironmentFile)) { $EnvironmentFile } else { Join-Path $repo $EnvironmentFile }
 $env:BHOME_ENV_FILE = [IO.Path]::GetFullPath($configurationPath)
 foreach ($line in Get-Content -LiteralPath $configurationPath) {
-    if ($line -match '^((ConnectionStrings|Jwt|Sessions|AuthRateLimit|AuthWeb|AuthenticationEmail|Email|ObjectStorage|Jobs|Cors|BankIntegration|SePay|NotificationIntegration|NotificationChannels|OwnerSetup|ElectronicContractIntegration|Ocr|IdentityProtection|Capture|Api|MainDraft|DevelopmentDatabase|DigitalSigning|AnonymousSigning|HoldingTesting)__[^=]+)=(.*)$') {
+    # Email transport is configured independently in the API's Development User Secrets.
+    # This import has higher precedence than User Secrets: loading Email__* from the
+    # shared .env here would turn an explicitly configured Gmail SMTP back into Mailpit.
+    if ($line -match '^((ConnectionStrings|Jwt|Sessions|AuthRateLimit|AuthWeb|AuthenticationEmail|ObjectStorage|Jobs|Cors|BankIntegration|SePay|NotificationIntegration|NotificationChannels|OwnerSetup|ElectronicContractIntegration|Ocr|IdentityProtection|Capture|Api|MainDraft|DevelopmentDatabase|DigitalSigning|AnonymousSigning|HoldingTesting)__[^=]+)=(.*)$') {
         if ($Matches[1] -eq 'AnonymousSigning__OtpHmacKey' -and [string]::IsNullOrWhiteSpace($Matches[3])) { continue }
         [Environment]::SetEnvironmentVariable($Matches[1], $Matches[3], 'Process')
     }
