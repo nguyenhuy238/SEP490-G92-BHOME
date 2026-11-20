@@ -26,7 +26,12 @@ import { KeyboardFormScrollView } from '../components/KeyboardFormScrollView';
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 import { useStaffTaskDetail, taskDetailError } from '../features/workspace/useStaffTaskDetail';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
+import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import type { Named } from '../lib/api';
+import { queryPolicies } from '../lib/queryPolicies';
 import { taskActionLabels, type TaskEvidence } from '../services/operationalTasks';
+import { LocationAssetInventoryChecklist } from './LocationAssetInventoryChecklist';
+import { LocationAssetHandoverSigning } from './LocationAssetHandoverSigning';
 import { colors as c } from '../theme/theme';
 
 type DetailModel = ReturnType<typeof useStaffTaskDetail>;
@@ -58,8 +63,16 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
   const { task, detail, busy, allowed, setSheet } = model;
   const inSelectedLocation =
     role !== 'Staff' || (!!staffLocationId && (!task || task.locationId === staffLocationId));
+  const assignedLocations = useWorkspaceQuery<Named[]>(
+    task?.kind === 'LocationAssetHandover' ? '/api/v1/capture/locations' : null,
+    { cache: queryPolicies.rooms, notifyError: false },
+  );
+  const locationName = (Array.isArray(assignedLocations.data) ? assignedLocations.data : [])
+    .find((location) => location.id === task?.locationId)
+    ?.label.trim();
   const [expanded, setExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [inventoryReady, setInventoryReady] = useState(false);
   const refresh = model.reload;
   useFocusEffect(
     useCallback(() => {
@@ -145,6 +158,33 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
         <Text variant="titleLarge" numberOfLines={3} style={styles.title}>
           {task.title || 'Công việc vận hành'}
         </Text>
+        {task.kind === 'LocationAssetHandover' && (
+          <View style={{ gap: 8 }}>
+            <Text variant="titleMedium" style={styles.title}>
+              Cơ sở phân công:{' '}
+              {locationName ||
+                (assignedLocations.loading
+                  ? 'Đang tải tên cơ sở…'
+                  : 'Chưa xác định được tên cơ sở')}
+            </Text>
+            {!locationName && !assignedLocations.loading && (
+              <Text variant="bodySmall" style={styles.muted}>
+                {assignedLocations.error || 'Tên cơ sở chưa có trong danh sách được phân công.'}
+              </Text>
+            )}
+            <Text variant="bodySmall" style={styles.muted}>
+              Kiểm kê tất cả phòng và tài sản khu vực chung theo phân công hiện tại. Cập nhật tiến
+              độ hoặc báo vướng mắc trong công việc này để Owner theo dõi.
+            </Text>
+            <Button
+              mode="outlined"
+              icon="alert-circle-outline"
+              onPress={() => go('report-incident')}
+            >
+              Báo cáo sự cố tài sản
+            </Button>
+          </View>
+        )}
         {task.target?.contractId && (
           <Button
             mode="contained"
@@ -216,6 +256,22 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
           </Button>
         )}
       </View>
+      {task.kind === 'LocationAssetHandover' && (
+        <>
+          <LocationAssetInventoryChecklist
+            key={task.id}
+            taskId={task.id}
+            locationName={locationName}
+            onTaskRefresh={refresh}
+            onReadinessChange={setInventoryReady}
+          />
+          <LocationAssetHandoverSigning
+            taskId={task.id}
+            taskStatus={task.status}
+            onTaskRefresh={refresh}
+          />
+        </>
+      )}
       {!!task.result && (
         <View style={styles.section}>
           <Text variant="titleMedium" style={styles.title}>
@@ -360,7 +416,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
         )}
       </View>
       {!inShell && footer}
-      <TaskActionSheet model={model} />
+      <TaskActionSheet model={model} inventoryReady={inventoryReady} />
     </>
   );
 }
@@ -412,14 +468,24 @@ function TaskDetailSkeleton() {
   );
 }
 
-function TaskActionSheet({ model }: { model: DetailModel }) {
+function TaskActionSheet({
+  model,
+  inventoryReady,
+}: {
+  model: DetailModel;
+  inventoryReady: boolean;
+}) {
   const { sheet, setSheet, task, busy, notes, pendingAction } = model;
   const close = () => {
     if (!busy) setSheet(null);
   };
   const action = sheet && sheet !== 'choose' ? sheet : null;
   const form = action ? forms[action] : null;
-  const canSend = action && (pendingAction || model.allowed.includes(action));
+  const canSend =
+    action &&
+    (pendingAction ||
+      (model.allowed.includes(action) &&
+        !(action === 'submit' && task?.kind === 'LocationAssetHandover' && !inventoryReady)));
   const selected = model.selected.filter((id) =>
     model.evidence.data?.some((file) => file.id === id),
   );
@@ -453,6 +519,11 @@ function TaskActionSheet({ model }: { model: DetailModel }) {
                   <Button
                     key={value}
                     mode={value === 'submit' ? 'contained' : 'outlined'}
+                    disabled={
+                      value === 'submit' &&
+                      task?.kind === 'LocationAssetHandover' &&
+                      !inventoryReady
+                    }
                     onPress={() => {
                       model.clearError();
                       setSheet(value);
@@ -462,6 +533,11 @@ function TaskActionSheet({ model }: { model: DetailModel }) {
                     {value === 'submit' ? 'Gửi kết quả' : forms[value].title}
                   </Button>
                 ))}
+            {sheet === 'choose' && task?.kind === 'LocationAssetHandover' && !inventoryReady && (
+              <Text variant="bodySmall" style={styles.muted}>
+                Chỉ gửi kết quả sau khi xác nhận đủ các mục kiểm kê toàn cơ sở.
+              </Text>
+            )}
             {action && form && (
               <>
                 <TextInput

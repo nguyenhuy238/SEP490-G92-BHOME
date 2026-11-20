@@ -1,0 +1,56 @@
+name: Production release plan (no deployment)
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full main commit SHA that passed CI (never a develop release)
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+  packages: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify release commit and CI evidence
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$RELEASE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$RELEASE_SHA&branch=main&event=push&status=success" \
+            --jq '.workflow_runs | length > 0' | grep -qx true
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.release_sha }}
+          persist-credentials: false
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Record API digest and approval boundary
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bhome-api:sha-$RELEASE_SHA"
+          docker pull "$image"
+          printf 'Release SHA: %s\n' "$RELEASE_SHA" > production-plan.txt
+          docker image inspect "$image" --format '{{json .RepoDigests}}' >> production-plan.txt
+          for repo in bhome-owner-web-production bhome-public-web-production; do
+            docker pull "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/$repo:sha-$RELEASE_SHA"
+            docker image inspect "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/$repo:sha-$RELEASE_SHA" --format '{{json .RepoDigests}}' >> production-plan.txt
+          done
+          printf '%s\n' \
+            'NO VPS CONNECTION OR PRODUCTION DEPLOYMENT PERFORMED.' \
+            'All three images originate from main; confirm OCI revision and release manifest.' \
+            'Staging web images cannot be promoted unchanged to Production.' \
+            'Follow docs/development/BHOME_PRODUCTION_RELEASE_RUNBOOK.md; separate owner approval is required.' >> production-plan.txt
+      - uses: actions/upload-artifact@v6
+        with:
+          name: production-plan-${{ inputs.release_sha }}
+          path: production-plan.txt
+          retention-days: 30

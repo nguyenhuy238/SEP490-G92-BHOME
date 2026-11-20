@@ -4,7 +4,11 @@ import { Link } from 'react-router';
 export default function HomePage() {
   return (
     <Box sx={{ textAlign: 'center', py: 8 }}>
-      <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
+      <Typography
+        variant="h3"
+        component="h1"
+        sx={{ fontWeight: 'bold', fontSize: { xs: '2rem', md: '3rem' } }}
+      >
         Chào mừng đến với BHOME
       </Typography>
 

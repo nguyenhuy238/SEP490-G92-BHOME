@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [develop]
+    branches: [develop, main]
   pull_request:
     branches: [main, develop, 'release/**']
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   backend:
     runs-on: ubuntu-24.04
@@ -102,15 +102,26 @@ jobs:
       - run: npm run format:check
       - run: docker compose --env-file .env.example config --quiet
       - run: docker compose --project-name bhome-sepay-ci --env-file .env.sepay.example -f deploy/compose.sepay.yml config --quiet
+      - name: Validate Staging deployment guards
+        run: |
+          for file in deploy/vps/*.sh; do bash -n "$file"; done
+          python3 -m unittest discover -s tests/deployment -p 'test_*.py' -v
+          node --test tests/deployment/*.test.cjs
+  release:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    needs: [backend, frontend]
+    permissions:
+      contents: read
+      packages: write
+      deployments: read
+    uses: ./.github/workflows/release.yml
+    secrets: inherit
   build-staging-images:
-    if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
-      (github.event_name == 'pull_request' && github.base_ref == 'develop')
+    if: github.event_name == 'pull_request' && github.base_ref == 'develop'
     needs: [backend, frontend]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      packages: write
     concurrency:
       group: bhome-staging-images
       cancel-in-progress: false
@@ -118,32 +129,41 @@ jobs:
       - uses: actions/checkout@v5
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Log in to GitHub Container Registry
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and publish API image
+      - name: Validate API image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: deploy/docker/Api.Release.Dockerfile
           target: api
-          push: ${{ github.event_name == 'push' }}
+          push: false
           tags: ghcr.io/${{ github.repository_owner }}/bhome-api:sha-${{ github.sha }}
           cache-from: type=gha,scope=staging-api
           cache-to: type=gha,mode=max,scope=staging-api
-      - name: Build and publish Owner Web image
+      - name: Validate Owner Web image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: deploy/docker/Web.Dockerfile
-          push: ${{ github.event_name == 'push' }}
+          push: false
           build-args: |
             APP=owner-web
-            VITE_API_BASE_URL=${{ vars.BHOME_STAGING_API_ORIGIN || 'https://api-sepay-test.103.146.23.157.sslip.io' }}
+            VITE_API_BASE_URL=https://api-staging.103.146.23.157.sslip.io
+            VITE_DEPLOYMENT_ENVIRONMENT=Staging
+            BHOME_REVISION=${{ github.sha }}
           tags: ghcr.io/${{ github.repository_owner }}/bhome-owner-web:sha-${{ github.sha }}
           cache-from: type=gha,scope=staging-owner-web
           cache-to: type=gha,mode=max,scope=staging-owner-web
+      - name: Validate Public Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Web.Dockerfile
+          push: false
+          build-args: |
+            APP=public-web
+            VITE_API_BASE_URL=https://api-staging.103.146.23.157.sslip.io
+            VITE_DEPLOYMENT_ENVIRONMENT=Staging
+            BHOME_REVISION=${{ github.sha }}
+          tags: ghcr.io/${{ github.repository_owner }}/bhome-public-web:sha-${{ github.sha }}
+          cache-from: type=gha,scope=staging-public-web
+          cache-to: type=gha,mode=max,scope=staging-public-web

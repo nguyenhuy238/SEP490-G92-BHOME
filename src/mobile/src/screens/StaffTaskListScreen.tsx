@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
@@ -27,6 +27,7 @@ const filters = [
   { id: '', label: 'Tất cả' },
   ...Object.entries(taskStatusLabels).map(([id, label]) => ({ id, label })),
 ];
+type AssignedLocation = { id: string; name: string };
 
 export function StaffTaskListScreen() {
   const { go, staffLocationId } = useWorkspace();
@@ -38,11 +39,37 @@ export function StaffTaskListScreen() {
       : null,
     { cache: queryPolicies.tasks, notifyError: false },
   );
+  // The directory is fetched once through the shared query cache. Page
+  // transitions can unsubscribe briefly without losing the cached names.
+  const needsLocationLabels = (query.data?.items.length ?? 0) > 0;
+  // This endpoint returns every currently assigned Location. The capture
+  // directory is capped at 100 results and could omit names for visible tasks.
+  const locations = useWorkspaceQuery<AssignedLocation[]>(
+    needsLocationLabels ? '/api/v1/locations/assigned-to-me' : null,
+    {
+      cache: queryPolicies.rooms,
+      notifyError: false,
+    },
+  );
   const inHeader = useWorkspaceHeaderRefresh(query.reload, query.fetching);
   const data = staffLocationId ? query.data : null;
   const items = (data?.items ?? []).filter(
     (task) => !isEmbeddedMoveInInventory(task) && !isEmbeddedInitialMeterTask(task),
   );
+  const locationNames = useMemo(
+    () =>
+      new Map(
+        (Array.isArray(locations.data) ? locations.data : [])
+          .filter((location) => location.id && location.name?.trim())
+          .map((location) => [location.id, location.name.trim()] as const),
+      ),
+    [locations.data],
+  );
+  const missingLocationName = locations.fetching
+    ? 'Đang tải tên cơ sở…'
+    : locations.error
+      ? 'Chưa tải được tên cơ sở'
+      : 'Chưa xác định tên cơ sở';
   return (
     <>
       {!inHeader && (
@@ -101,10 +128,21 @@ export function StaffTaskListScreen() {
           </Button>
         </View>
       )}
+      {!!locations.error && items.length > 0 && (
+        <View style={styles.state}>
+          <Text accessibilityRole="alert" variant="bodySmall" style={styles.muted}>
+            Không tải được tên cơ sở: {locations.error}
+          </Text>
+          <Button compact mode="text" onPress={locations.reload} disabled={locations.fetching}>
+            Tải lại tên cơ sở
+          </Button>
+        </View>
+      )}
       {items.map((task) => (
         <TaskCard
           key={task.id}
           task={task}
+          locationName={locationNames.get(task.locationId) ?? missingLocationName}
           onPress={() =>
             isMainMoveInWork(task)
               ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
@@ -228,14 +266,24 @@ function TaskSummaryBar({
   );
 }
 
-export function TaskCard({ task, onPress }: { task: OperationalTask; onPress: () => void }) {
+export function TaskCard({
+  task,
+  onPress,
+  locationName,
+}: {
+  task: OperationalTask;
+  onPress: () => void;
+  locationName?: string;
+}) {
   const title =
     task.title ||
     (task.kind === 'MeterReading'
       ? 'Ghi chỉ số đồng hồ'
       : task.kind === 'MoveInInventory'
         ? 'Kiểm kê trước nhận phòng'
-        : 'Công việc');
+        : task.kind === 'LocationAssetHandover'
+          ? 'Kiểm kê và nhận bàn giao cơ sở'
+          : 'Công việc');
   const status = taskStatusLabels[task.status] ?? task.status;
   const due =
     task.dueAt && Number.isFinite(Date.parse(task.dueAt)) ? formatInstant(task.dueAt) : null;
@@ -259,6 +307,12 @@ export function TaskCard({ task, onPress }: { task: OperationalTask; onPress: ()
           <TaskBadge status={task.status} label={status} />
         </View>
         <View style={styles.dueRow}>
+          <Icon source="map-marker-outline" size={15} color={c.muted} />
+          <Text variant="bodySmall" style={styles.title}>
+            Cơ sở: {locationName?.trim() || 'Chưa xác định tên cơ sở'}
+          </Text>
+        </View>
+        <View style={styles.dueRow}>
           <Icon
             source={task.isOverdue ? 'clock-alert-outline' : 'clock-outline'}
             size={15}
@@ -272,6 +326,11 @@ export function TaskCard({ task, onPress }: { task: OperationalTask; onPress: ()
         {!!task.requirements && (
           <Text variant="bodySmall" numberOfLines={2} ellipsizeMode="tail" style={styles.preview}>
             {task.requirements}
+          </Text>
+        )}
+        {task.kind === 'LocationAssetHandover' && (
+          <Text variant="labelMedium" style={styles.link}>
+            Kiểm kê toàn bộ phòng và tài sản chung
           </Text>
         )}
         {!!task.result && (

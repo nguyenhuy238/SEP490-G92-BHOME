@@ -4,32 +4,81 @@
     encode gzip
     @backend path /api/* /open/*
     handle @backend {
-        reverse_proxy api:8080
+        reverse_proxy bhome-vps-api-1:8080
     }
     handle {
-        reverse_proxy owner-web:8080
+        reverse_proxy bhome-vps-owner-web-1:8080
     }
 }
 {$PUBLIC_HOST} {
-    reverse_proxy public-web:8080
+    handle /api/* {
+        respond 404
+    }
+    handle {
+        reverse_proxy bhome-vps-public-web-1:8080
+    }
 }
 {$API_HOST} {
     @health path /health/*
     respond @health 404
-    reverse_proxy api:8080
+    reverse_proxy bhome-vps-api-1:8080
 }
 # Staging services must be reachable on a dedicated shared proxy network;
 # neither postgres nor MinIO should join that network or expose public ports.
-{$STAGING_HOST} {
+owner-staging.103.146.23.157.sslip.io {
     @health path /health/*
     handle @health {
         respond 404
     }
     @backend path /api/* /open/*
     handle @backend {
-        reverse_proxy bhome-sepay-stage-api:8080
+        reverse_proxy bhome-stage-api:8080
     }
     handle {
-        reverse_proxy bhome-sepay-stage-owner:8080
+        reverse_proxy bhome-owner-stage:8080
     }
+}
+# Use connect-staging-edge.py; implicit Compose aliases must not reach Caddy's edge.
+public-staging.103.146.23.157.sslip.io {
+    handle /api/v1/public/* {
+        reverse_proxy bhome-stage-api:8080
+    }
+    handle /api/* {
+        respond 404
+    }
+    handle {
+        reverse_proxy bhome-public-stage:8080
+    }
+}
+api-staging.103.146.23.157.sslip.io {
+    @health path /health/*
+    respond @health 404
+    reverse_proxy bhome-stage-api:8080
+}
+# Explicit legacy compatibility: no redirect for SePay webhook POSTs and no
+# cookie-domain widening. Pinned legacy web bundles preserve existing sessions.
+owner-sepay-test.103.146.23.157.sslip.io {
+    @backend path /api/* /open/*
+    handle @backend {
+        reverse_proxy bhome-stage-api:8080
+    }
+    handle {
+        reverse_proxy bhome-owner-legacy:8080
+    }
+}
+public-sepay-test.103.146.23.157.sslip.io {
+    handle /api/v1/public/* {
+        reverse_proxy bhome-stage-api:8080
+    }
+    handle /api/* {
+        respond 404
+    }
+    handle {
+        reverse_proxy bhome-public-legacy:8080
+    }
+}
+api-sepay-test.103.146.23.157.sslip.io {
+    @health path /health/*
+    respond @health 404
+    reverse_proxy bhome-stage-api:8080
 }

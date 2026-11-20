@@ -3,16 +3,23 @@ using BHome.Domain.IdentityAccess;
 using BHome.Domain.TenantContracts;
 using BHome.Domain.PropertyManagement;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 
 namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ContractWorkflowRepository(BHomePersistenceContext db) : IContractWorkflowRepository
 {
+    private IQueryable<Guid> EligibleStaff(DateOnly date) => db is Compact24DbContext compact
+        ? StaffEmploymentEligibility.EligibleIds(compact, date)
+        : db.Users.Where(user => user.IsActive).Select(user => user.Id);
+
     public async Task<ContractPreparation> PreparationAsync(ContractListScope scope, Guid? locationId, CancellationToken t)
     {
-        var locations = db.Locations.AsNoTracking().Where(l => l.IsActive && (scope.Owner || db.StaffLocationAssignments.Any(a =>
-            a.LocationId == l.Id && a.StaffUserId == scope.ActorId && a.StartDate <= scope.Today && a.EndDate >= scope.Today)));
+        var locations = db.Locations.AsNoTracking().Where(l => l.IsActive &&
+            (scope.Owner || scope.Staff && EligibleStaff(scope.Today).Contains(scope.ActorId) &&
+             db.StaffLocationAssignments.Any(a => a.LocationId == l.Id && a.StaffUserId == scope.ActorId &&
+                a.StartDate <= scope.Today && a.EndDate >= scope.Today)));
         var choices = await locations.OrderBy(l => l.Name).Take(100).Select(l => new ContractChoice(l.Id, l.Name)).ToArrayAsync(t);
         if (locationId is not null && !await locations.AnyAsync(l => l.Id == locationId, t)) throw ContractException.Missing();
         var rooms = await db.Set<Room>().AsNoTracking().Where(r => locationId != null && r.LocationId == locationId &&

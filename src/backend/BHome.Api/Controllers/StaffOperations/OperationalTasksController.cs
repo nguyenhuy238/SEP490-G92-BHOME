@@ -35,6 +35,18 @@ public sealed class OperationalTasksController(OperationalTaskService service) :
     [HttpPost("{id:guid}/move-in-inventory/complete"), Authorize(Policy = Permissions.OperationalTasks.Execute)]
     public Task<MoveInInventoryView> CompleteMoveInInventory(Guid id, MoveInInventoryComplete input, CancellationToken t) =>
         service.CompleteMoveInInventoryAsync(id, input, Key(), t);
+    [HttpGet("{id:guid}/location-asset-inventory")]
+    public Task<LocationAssetInventoryView> LocationAssetInventory(Guid id, CancellationToken t) => service.LocationAssetInventoryAsync(id, t);
+    [HttpGet("{id:guid}/location-asset-inventory/reconcile-preview"), Authorize(Policy = Permissions.OperationalTasks.Manage)]
+    public Task<LocationAssetInventoryReconcilePreview> LocationInventoryReconcilePreview(Guid id, CancellationToken t) =>
+        service.PreviewLocationAssetInventoryReconciliationAsync(id, t);
+    [HttpPost("{id:guid}/location-asset-inventory/reconcile"), Authorize(Policy = Permissions.OperationalTasks.Manage)]
+    public Task<LocationAssetInventoryView> ReconcileLocationInventory(Guid id, LocationAssetInventoryReconcileCommand input, CancellationToken t) =>
+        service.ReconcileLocationAssetInventoryAsync(id, input, Key(), t);
+    [HttpPut("{id:guid}/location-asset-inventory/items/{itemId:guid}"), Authorize(Policy = Permissions.OperationalTasks.Execute)]
+    public Task<LocationAssetInventoryView> UpdateLocationAssetInventoryItem(Guid id, Guid itemId,
+        LocationAssetInventoryItemWrite input, CancellationToken t) =>
+        service.UpdateLocationAssetInventoryItemAsync(id, itemId, input, Key(), t);
     [HttpPut("{id:guid}"), Authorize(Policy = Permissions.OperationalTasks.Manage)]
     public Task<TaskView> Update(Guid id, TaskUpdate input, CancellationToken t) => service.UpdateAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/assign"), Authorize(Policy = Permissions.OperationalTasks.Manage)]

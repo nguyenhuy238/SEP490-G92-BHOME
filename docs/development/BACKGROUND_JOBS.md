@@ -1,5 +1,16 @@
 # Background processing and reliability
 
+## Location Staff responsibility rollover
+
+Location-centric open work is reconciled by the `staff-assignment-reconciliation` job when the
+general `Jobs:Enabled` scheduler/worker is enabled. Development also opts into a **Location-only**
+hosted fallback (`StaffAssignments:AutoReconcileEnabled=true`, poll every 60 seconds) when general
+jobs are disabled. The fallback directly invokes the same transaction-safe and idempotent
+Location reconciliation; it never processes expiry, billing, financial, or notification jobs.
+For other environments the fallback is opt-in; configure one of the runners and verify it is
+actually running before promising scheduled handoff. Owner-triggered assignment replacement
+reconciles within the assignment transaction irrespective of either runner.
+
 This is a durable processing foundation, not a completed business scheduler. `Jobs:Enabled=false`
 by default. Enable it only after applying migrations and registering real handlers with scoped DI:
 `services.AddScoped<IBackgroundJobHandler, YourHandler>()`. A handler's stable `Name` identifies its

@@ -46,4 +46,26 @@ public sealed class OperationalTaskRulesTests
         Assert.Throws<InvalidOperationException>(() => new OperationalTask().ApplyAction("start", Now, Guid.NewGuid()));
         Assert.Equal(2, (int)MeterTaskStatus.Completed); Assert.Equal(3, (int)MeterTaskStatus.Cancelled);
     }
+    [Fact]
+    public void LocationAssetHandoverRequiresExplicitSigningAfterStaffSubmits()
+    {
+        var staff = Guid.NewGuid();
+        var owner = Guid.NewGuid();
+        var task = new OperationalTask { Kind = OperationalTaskKind.LocationAssetHandover };
+        Assert.Equal(3, (int)OperationalTaskKind.LocationAssetHandover);
+        Assert.Throws<InvalidOperationException>(() => task.ApplyAction("submit", Now, staff));
+        task.ApplyAction("start", Now, staff);
+        task.ApplyAction("progress", Now, staff);
+        task.ApplyAction("blockers", Now, staff);
+        task.ApplyAction("submit", Now, staff);
+        Assert.Equal(MeterTaskStatus.PendingVerification, task.Status);
+        foreach (var action in new[] { "verify", "rework", "cancel" })
+        {
+            Assert.Equal("location_asset_handover_workflow_required",
+                Assert.Throws<InvalidOperationException>(() => task.ApplyAction(action, Now, owner)).Message);
+        }
+        Assert.Null(task.CompletedAt);
+        Assert.Null(task.VerifiedByUserId);
+        Assert.Null(task.VerifiedAt);
+    }
 }

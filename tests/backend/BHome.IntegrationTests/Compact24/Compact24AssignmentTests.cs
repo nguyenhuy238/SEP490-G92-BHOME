@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Locations;
+using BHome.Application.PropertyManagement;
 using BHome.Application.Notifications;
 using BHome.Application.Jobs;
 using BHome.Domain.Billing;
@@ -243,7 +244,8 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         var today = new DateOnly(2035, 1, 1);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        var repository = new CompactLocationAssignments(db, clock);
+        var repository = new CompactLocationAssignments(db, clock,
+            scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>());
         var job = new AssignmentReconciliationJob(repository, scope.ServiceProvider.GetRequiredService<IBackgroundJobQueue>(), clock);
         var run = new JobExecution(Guid.NewGuid(), "synthetic-reconcile", "{}");
         var initial = await repository.CreateAssignmentAsync(owner.Id, location, first.Id, today, today, default);
@@ -325,7 +327,8 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         var today = new DateOnly(2035, 1, 1);
         await using var scope = fixture.Factory!.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
-        var repository = new CompactLocationAssignments(db, clock);
+        var repository = new CompactLocationAssignments(db, clock,
+            scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>());
         var current = (await repository.CreateAssignmentAsync(owner.Id, location, staff.Id, today, today, default)).Assignment!;
         var future = (await repository.CreateAssignmentAsync(owner.Id, location, staff.Id, today.AddDays(1), today.AddDays(2), default)).Assignment!;
         // Simulate a record written by the existing Compact24 EF adapter.
@@ -400,5 +403,75 @@ public sealed class Compact24AssignmentTests(Compact24Fixture fixture) : IClassF
         Assert.Equal(ChangeAssignmentStatus.StaleVersion,
             (await repo.RemoveAssignmentAsync(owner.Id, location, today, version, "Stale removal retry", default)).Status);
         Assert.Equal(1, await EmailNotices(db, location, employee.Id, "STAFF_ASSIGNMENT_REMOVED"));
+    }
+
+    [CompactPostgresFact]
+    public async Task EmploymentEndedExpiredOrOverlappingRevokesLocationAccessAndReconcilesPendingWork()
+    {
+        var owner = await User("Owner");
+        var staff = await User("Staff");
+        var next = await User("Staff");
+        var location = await Location();
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+            DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var assignments = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
+        var initialAssignment = await assignments.CreateAssignmentAsync(
+            owner.Id, location, staff.Id, today, today.AddDays(10), default);
+        Assert.Equal(CreateAssignmentStatus.Created, initialAssignment.Status);
+        var initialHandoverId = LocationAssetInventoryTaskFactory.TaskId(initialAssignment.Assignment!.Id);
+        var taskId = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO operational_tasks(id,task_type,location_id,assigned_user_id,title,status)
+            VALUES ({taskId},'GENERAL',{location},{staff.Id},'Employment pending work','1')
+            """);
+        var access = scope.ServiceProvider.GetRequiredService<IStaffLocationAccess>();
+        Assert.True(await access.IsAssignedAsync(staff.Id, location, default)); // No employment row: seeded Staff fallback.
+
+        var firstPeriod = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO staff_employments(id,staff_user_id,start_date,end_date,status)
+            VALUES ({firstPeriod},{staff.Id},{today.AddDays(-5)},{today.AddDays(5)},'Active')
+            """);
+        Assert.True(await access.IsAssignedAsync(staff.Id, location, default));
+        var overlap = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO staff_employments(id,staff_user_id,start_date,end_date,status)
+            VALUES ({overlap},{staff.Id},{today.AddDays(-1)},{today.AddDays(2)},'Active')
+            """);
+        Assert.False(await access.IsAssignedAsync(staff.Id, location, default)); // Ambiguous periods fail closed.
+        // Compact24 preserves employment history: close the synthetic overlap rather than deleting it.
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE staff_employments SET end_date={today.AddDays(-1)},status='Ended' WHERE id={overlap}");
+        Assert.True(await access.IsAssignedAsync(staff.Id, location, default));
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE staff_employments SET status='Ended' WHERE id={firstPeriod}");
+        Assert.False(await access.IsAssignedAsync(staff.Id, location, default));
+        Assert.Empty(await assignments.ListAssignedLocationsAsync(staff.Id, today, default));
+
+        await scope.ServiceProvider.GetRequiredService<AssignmentReconciliationJob>()
+            .ExecuteAsync(new JobExecution(Guid.NewGuid(), "synthetic-ended-employment", "{}"), default);
+        Assert.Null(await db.Database.SqlQuery<Guid?>($"SELECT assigned_user_id AS \"Value\" FROM operational_tasks WHERE id={taskId}").SingleAsync());
+        Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(h =>
+            h.TaskId == taskId && h.Action == "responsibility_changed"));
+        Assert.Equal(MeterTaskStatus.Assigned, (await db.Set<OperationalTask>().AsNoTracking()
+            .SingleAsync(t => t.Id == initialHandoverId)).Status);
+        // Restoring the SAME still-current assignment after a short employment gap must
+        // not strand a deterministic, immutable handover task in Cancelled state.
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE staff_employments SET status='Active' WHERE id={firstPeriod}");
+        Assert.True(await access.IsAssignedAsync(staff.Id, location, default));
+        Assert.Equal(MeterTaskStatus.Assigned, (await db.Set<OperationalTask>().AsNoTracking()
+            .SingleAsync(t => t.Id == initialHandoverId)).Status);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE staff_employments SET status='Ended' WHERE id={firstPeriod}");
+
+        var version = await db.Locations.Where(x => x.Id == location).Select(x => x.Version).SingleAsync();
+        var changed = await assignments.ReplaceAssignmentAsync(owner.Id, location, next.Id, today, version,
+            "Ended employment successor", default);
+        Assert.Equal(ChangeAssignmentStatus.Changed, changed.Status);
+        Assert.True(await access.IsAssignedAsync(next.Id, location, default));
+        Assert.Equal(next.Id, await db.Database.SqlQuery<Guid>($"SELECT assigned_user_id AS \"Value\" FROM operational_tasks WHERE id={taskId}").SingleAsync());
+
+        // An active-looking contract with its calendar end already passed also fails closed.
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE staff_employments SET status='Active',end_date={today.AddDays(-1)} WHERE id={firstPeriod}");
+        Assert.False(await access.IsAssignedAsync(staff.Id, location, default));
     }
 }

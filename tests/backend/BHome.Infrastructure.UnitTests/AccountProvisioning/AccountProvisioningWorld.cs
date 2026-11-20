@@ -176,7 +176,16 @@ internal sealed class FakeCurrentUser : ICurrentUser
 internal sealed class FakeEmailDelivery : IPasswordResetDelivery
 {
     public bool IsAvailable { get; set; } = true;
+    public bool IsDurable { get; set; }
+    public bool FailQueue { get; set; }
     public List<(Guid UserId, string Destination, string Token)> Sent { get; } = [];
+    public List<AuthenticationEmailRequest> Queued { get; } = [];
+    public Task QueueAsync(AuthenticationEmailRequest request, CancellationToken cancellationToken)
+    {
+        if (FailQueue) throw new InvalidOperationException("Test email outbox is unavailable.");
+        Queued.Add(request);
+        return Task.CompletedTask;
+    }
     public Task SendAsync(Guid userId, string destination, string token, CancellationToken cancellationToken)
     {
         Sent.Add((userId, destination, token));

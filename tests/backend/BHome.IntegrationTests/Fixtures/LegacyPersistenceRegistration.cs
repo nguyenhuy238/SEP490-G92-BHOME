@@ -37,6 +37,9 @@ internal static class LegacyPersistenceRegistration
                     options.JsonSerializerOptions.Converters.RemoveAt(i);
         });
         services.RemoveAll<Compact24DbContext>(); services.RemoveAll<DbContextOptions<Compact24DbContext>>();
+        // The archived source-schema regression host intentionally has no Compact24
+        // context: its per-assignment asset handover/signature service is Compact24-only.
+        services.RemoveAll<BHome.Infrastructure.StaffOperations.LocationAssetHandoverService>();
         services.RemoveAll<IHouseholdProfiles>();
         services.RemoveAll<CompactJobPersistence>(); services.RemoveAll<CompactLocationAssignments>();
         services.RemoveAll<AssignmentReconciliationJob>();

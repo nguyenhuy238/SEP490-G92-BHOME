@@ -41,7 +41,13 @@ const titles = {
   remove: 'Gỡ người phụ trách',
   cancelFuture: 'Hủy phân công sắp tới',
 };
-export function ResponsibilityPreview({ preview }: { preview: StaffChangePreview }) {
+export function ResponsibilityPreview({
+  preview,
+  mode,
+}: {
+  preview: StaffChangePreview;
+  mode: 'replace' | 'remove';
+}) {
   const labels: Record<string, string> = {
     GENERAL: 'Công việc vận hành',
     METER_READ: 'Ghi chỉ số điện nước',
@@ -80,9 +86,15 @@ export function ResponsibilityPreview({ preview }: { preview: StaffChangePreview
             </Stack>
           ))
         : 'Không có trách nhiệm đang mở.'}
-      {!preview.canRemove && (
+      {!preview.canRemove && mode === 'remove' && (
         <Typography sx={{ fontSize: 13 }}>
           Chưa thể gỡ. Hãy xử lý trách nhiệm hoặc thay người phụ trách.
+        </Typography>
+      )}
+      {mode === 'replace' && (
+        <Typography sx={{ fontSize: 13 }}>
+          Thay người phụ trách vẫn được thực hiện khi còn công việc đang mở. Công việc chưa hoàn tất
+          sẽ chuyển cho nhân viên mới, giữ nguyên tiến độ, bằng chứng và lịch sử xử lý.
         </Typography>
       )}
     </Alert>
@@ -414,7 +426,21 @@ export function AssignmentDialog({
           {cancelInvalid && (
             <Alert severity="warning">Chỉ có thể hủy phân công chưa đến ngày hiệu lực.</Alert>
           )}
-          {needsPreview && preview.data && <ResponsibilityPreview preview={preview.data} />}
+          {needsPreview && preview.data && (
+            <ResponsibilityPreview
+              preview={preview.data}
+              mode={intent.mode === 'replace' ? 'replace' : 'remove'}
+            />
+          )}
+          {intent.mode === 'replace' && (
+            <Alert severity="info">
+              Kiểm kê và bàn giao tài sản toàn cơ sở là ngoại lệ: nhân viên mới nhận checklist kiểm
+              kê riêng cho đợt phân công mới; checklist chưa hoàn tất của nhân viên cũ được lưu trữ
+              với trạng thái đã chuyển giao. Những mục đã kiểm tra phù hợp có thể được kế thừa có
+              đối chiếu, các mục khác cần kiểm tra lại. Biên bản và chữ ký đã hoàn tất vẫn thuộc về
+              đúng người ký, không tự chuyển sang nhân viên mới.
+            </Alert>
+          )}
           {intent.mode !== 'create' && (
             <TextField
               required
