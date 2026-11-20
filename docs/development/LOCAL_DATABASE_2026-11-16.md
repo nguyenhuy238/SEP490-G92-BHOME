@@ -1,5 +1,11 @@
 # PostgreSQL local và tài khoản demo — 16/11/2026
 
+> Tài liệu lịch sử. Từ develop ngày 20/11/2026, cấu hình môi trường và callback
+> theo [hướng dẫn chung](BHOME_TEAM_ENVIRONMENT_SETUP.md). Các bước tunnel ngrok,
+> URL public local và cấu hình SePay local bên dưới không còn là hướng dẫn hiện hành.
+> `Start-LocalPublicLinks.ps1` hiện chỉ chạy portal HTTPS local và giữ nguyên cấu hình;
+> Internet callbacks dùng Staging. Xem [rà soát tương thích](BHOME_DEVELOP_COMPATIBILITY_2026-11-20.md).
+
 Theo yêu cầu trực tiếp của người dùng, backend mặc định đã chuyển từ Neon sang PostgreSQL 18.6 đang cài trên máy. Database mới được tạo bằng toàn bộ migration `Compact24DbContext` của checkout hiện tại; không thay đổi schema hoặc dữ liệu trên Neon.
 
 ## Mở trong pgAdmin 4

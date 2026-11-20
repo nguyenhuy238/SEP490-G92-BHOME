@@ -22,11 +22,14 @@ trình duyệt được phép gửi yêu cầu đăng nhập.
 `Cors:AllowedOrigins:3` là `http://localhost:8081`; đặt URL ngrok tại
 `Cors__AllowedOrigins__3` trong `.env`, user-secrets hoặc biến môi trường sẽ ghi đè
 origin này. Giữ các chỉ số 0–6 theo `.env.example`, thêm origin tùy chỉnh từ chỉ số
-7 trở đi. Kiểm tra cả profile `.env.local` nếu dùng nó để chạy backend.
-Script `scripts/Start-LocalPublicLinks.ps1` dành sẵn các chỉ số CORS trong cấu hình
-Development trước khi thêm URL tunnel. Nếu user-secrets đã chứa origin tunnel tại
-chỉ số 3 từ lần chạy cũ, chuyển origin đó sang chỉ số trống từ 7 trở đi và khôi phục
-origin Mobile Web tại chỉ số 3.
+8 trở đi; chỉ số 7 giữ HTTPS signing tại `https://localhost:5176`. Kiểm tra cả
+profile `.env.local` nếu dùng nó để chạy backend.
+Theo cấu hình develop ngày 20/11/2026, tunnel ngrok/trycloudflare không còn được
+API chấp nhận. Nếu profile hoặc user-secrets còn URL tunnel, dùng
+`scripts/Initialize-LocalUrls.ps1` để xem trước và `-Apply` để chuyển về URL local
+theo [hướng dẫn môi trường](BHOME_TEAM_ENVIRONMENT_SETUP.md). Kiểm tra lại các
+origin Mobile Web sau khi chuyển. `Start-LocalPublicLinks.ps1` hiện chỉ chạy portal
+HTTPS local, không cập nhật callback hoặc user-secrets.
 
 Sau khi sửa, khởi động lại API. Nếu chạy bằng Visual Studio, dừng phiên debug cũ
 trước khi F5 lại; nếu chạy bằng terminal, dùng `scripts/Start-Api.ps1`. Tải lại
