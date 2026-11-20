@@ -139,7 +139,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET handover=handover-'preparation' WHERE id={contractId}");
     }
 
-    private static async Task<HandoverChoices> EmptyRoomHandoverChoices(Workspace w, Guid id)
+    private async Task<HandoverChoices> EmptyRoomHandoverChoices(Workspace w, Guid id)
     {
         var choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
         if (choices.InventoryToken is not null && !choices.NoAssetsConfirmed)
@@ -148,23 +148,40 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
                 new RoomNoAssetsConfirmation(choices.InventoryToken, "Owner checked synthetic empty room")));
             choices = await Success<HandoverChoices>(await w.Staff.Client.GetAsync(Path(id, "handover/choices")));
         }
-        // Compact24 provisions a separate pre-handover inventory task upon activation.
-        // Complete the explicit no-assets checklist through the Staff API before the
-        // legacy contract scenarios proceed to the handover confirmations.
+        // Staff's operational-task list intentionally hides inventory checkpoints
+        // behind the main move-in job. Find both from the Owner's full task list,
+        // then exercise the real Staff start/complete APIs rather than bypassing
+        // the inventory requirement for these legacy handover regressions.
         var tasks = await Success<BHome.Application.StaffOperations.TaskPage<BHome.Application.StaffOperations.TaskView>>(
-            await w.Staff.Client.GetAsync($"/api/v1/operational-tasks?locationId={w.Location}&pageSize=100"));
+            await w.Owner.Client.GetAsync($"/api/v1/operational-tasks?locationId={w.Location}&pageSize=100"));
+        var main = tasks.Items.SingleOrDefault(task =>
+            task.Kind == "AdHoc" && task.Target?.ContractId == id &&
+            task.Title.StartsWith("Bàn giao vào phòng", StringComparison.Ordinal));
         var inventory = tasks.Items.SingleOrDefault(task =>
             task.Kind == "MoveInInventory" && task.Target?.ContractId == id);
+        if (await UsesCompact24())
+        {
+            Assert.NotNull(main);
+            Assert.NotNull(inventory);
+        }
         if (inventory is not null)
         {
-            var started = await Success<BHome.Application.StaffOperations.TaskView>(await Post(w.Staff,
-                $"/api/v1/operational-tasks/{inventory.Id}/start",
-                new BHome.Application.StaffOperations.TaskAction(inventory.Version)));
-            var completed = await Success<BHome.Application.StaffOperations.MoveInInventoryView>(await Post(w.Staff,
-                $"/api/v1/operational-tasks/{inventory.Id}/move-in-inventory/complete",
-                new BHome.Application.StaffOperations.MoveInInventoryComplete(started.Version,
-                    "Synthetic empty room physically checked", ConfirmNoAssets: true)));
-            Assert.True(completed.ReadyForHandover);
+            if (main?.Status == "Assigned")
+                await Success<BHome.Application.StaffOperations.TaskView>(await Post(w.Staff,
+                    $"/api/v1/operational-tasks/{main.Id}/start",
+                    new BHome.Application.StaffOperations.TaskAction(main.Version)));
+            if (inventory.Status != "Completed")
+            {
+                var started = inventory.Status == "InProgress" ? inventory :
+                    await Success<BHome.Application.StaffOperations.TaskView>(await Post(w.Staff,
+                        $"/api/v1/operational-tasks/{inventory.Id}/start",
+                        new BHome.Application.StaffOperations.TaskAction(inventory.Version)));
+                var completed = await Success<BHome.Application.StaffOperations.MoveInInventoryView>(await Post(w.Staff,
+                    $"/api/v1/operational-tasks/{inventory.Id}/move-in-inventory/complete",
+                    new BHome.Application.StaffOperations.MoveInInventoryComplete(started.Version,
+                        "Synthetic empty room physically checked", ConfirmNoAssets: true)));
+                Assert.True(completed.ReadyForHandover);
+            }
         }
         return choices;
     }
