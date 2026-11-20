@@ -300,8 +300,8 @@ export function StaffEditor({
                 {!staff && (
                   <Alert severity="info">
                     Tài khoản nhân viên được kích hoạt ngay khi tạo, không cần lời mời kích hoạt.
-                    Sau khi tạo, mở chi tiết nhân viên và chọn gửi tài khoản cùng mật khẩu ngẫu nhiên
-                    đến email đã nhập. Nhân viên nên đổi mật khẩu sau khi đăng nhập.
+                    Sau khi tạo, mở chi tiết nhân viên và chọn gửi tài khoản cùng mật khẩu ngẫu
+                    nhiên đến email đã nhập. Nhân viên nên đổi mật khẩu sau khi đăng nhập.
                   </Alert>
                 )}
                 {staff && (

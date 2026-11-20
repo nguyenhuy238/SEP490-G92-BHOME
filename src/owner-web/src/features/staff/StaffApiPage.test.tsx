@@ -84,7 +84,12 @@ it('creates Staff without asking for or transmitting an initial password', async
   expect(JSON.parse(call[1].body).employment.baseRate).toBe('9007199254740993');
 });
 it('opens newly created active Staff so Owner can send credentials immediately', async () => {
-  const created = { ...staff, userId: 'new-staff', fullName: 'New active Staff', email: 'new-staff@example.invalid' };
+  const created = {
+    ...staff,
+    userId: 'new-staff',
+    fullName: 'New active Staff',
+    email: 'new-staff@example.invalid',
+  };
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path === '/api/v1/staff' && init?.method === 'POST') return created;
     if (path === '/api/v1/staff/new-staff') return created;
@@ -99,7 +104,9 @@ it('opens newly created active Staff so Owner can send credentials immediately',
   fireEvent.change(screen.getByLabelText(/Loại công việc/), { target: { value: 'PartTime' } });
   fireEvent.submit(document.getElementById('staff-editor')!);
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
-  expect(await screen.findByRole('button', { name: 'Gửi tài khoản và mật khẩu mới' })).toBeInTheDocument();
+  expect(
+    await screen.findByRole('button', { name: 'Gửi tài khoản và mật khẩu mới' }),
+  ).toBeInTheDocument();
   expect(mocks.request).not.toHaveBeenCalledWith(
     expect.stringMatching(/\/invitation$/),
     expect.anything(),
@@ -204,9 +211,7 @@ it('uses server totals and server pagination, resetting the page for search', as
 it('requests a 12-character password email without a reset link, preserving errors for retry', async () => {
   mount();
   fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Gửi tài khoản và mật khẩu mới' }),
-  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Gửi tài khoản và mật khẩu mới' }));
   const dialog = await screen.findByRole('dialog', {
     name: 'Gửi tài khoản và mật khẩu mới',
   });
@@ -262,6 +267,9 @@ it('retains edited values after a stale-version error', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
   const staleDialog = await screen.findByRole('dialog', { name: 'Dữ liệu đã thay đổi' });
   fireEvent.click(within(staleDialog).getByRole('button', { name: 'Hủy' }));
+  // MUI keeps the underlying editor aria-hidden during dialog exit animation.
+  // Wait for the portal to close before searching the editor's accessible UI.
+  await waitForElementToBeRemoved(staleDialog, { timeout: 5000 });
   expect(await screen.findByRole('button', { name: 'Tải hồ sơ mới' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled();
   expect(screen.getByLabelText(/Họ tên/)).toHaveValue('Updated synthetic');

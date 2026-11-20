@@ -14,6 +14,9 @@ import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { queryPolicies } from '../lib/queryPolicies';
 import {
+  isEmbeddedInitialMeterTask,
+  isEmbeddedMoveInInventory,
+  isMainMoveInWork,
   taskStatusLabels,
   type OperationalTask,
   type TaskPage,
@@ -27,11 +30,13 @@ const filters = [
 type AssignedLocation = { id: string; name: string };
 
 export function StaffTaskListScreen() {
-  const { go } = useWorkspace();
+  const { go, staffLocationId } = useWorkspace();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
   const query = useWorkspaceQuery<TaskPage<OperationalTask>>(
-    `/api/v1/operational-tasks?page=${page}&pageSize=20${status ? `&status=${status}` : ''}`,
+    staffLocationId
+      ? `/api/v1/operational-tasks?page=${page}&pageSize=20&locationId=${encodeURIComponent(staffLocationId)}${status ? `&status=${status}` : ''}`
+      : null,
     { cache: queryPolicies.tasks, notifyError: false },
   );
   // The directory is fetched once through the shared query cache. Page
@@ -47,8 +52,10 @@ export function StaffTaskListScreen() {
     },
   );
   const inHeader = useWorkspaceHeaderRefresh(query.reload, query.fetching);
-  const data = query.data;
-  const items = data?.items ?? [];
+  const data = staffLocationId ? query.data : null;
+  const items = (data?.items ?? []).filter(
+    (task) => !isEmbeddedMoveInInventory(task) && !isEmbeddedInitialMeterTask(task),
+  );
   const locationNames = useMemo(
     () =>
       new Map(
@@ -79,8 +86,13 @@ export function StaffTaskListScreen() {
         </View>
       )}
       <Text variant="bodySmall" style={styles.muted}>
-        Công việc trong cơ sở đang được phân công
+        Công việc thuộc cơ sở đang chọn trên trang chủ
       </Text>
+      {!staffLocationId && (
+        <Text accessibilityRole="alert" variant="bodySmall" style={styles.muted}>
+          Chưa có cơ sở được phân công để xem công việc.
+        </Text>
+      )}
       <TaskFilterBar
         status={status}
         onChange={(next) => {
@@ -88,7 +100,9 @@ export function StaffTaskListScreen() {
           setPage(1);
         }}
       />
-      {data && <TaskSummaryBar data={data} filtered={!!status} />}
+      {data && (
+        <TaskSummaryBar totalCount={data.totalCount} visibleItems={items} filtered={!!status} />
+      )}
       {query.fetching && (
         <View
           style={styles.loading}
@@ -130,11 +144,13 @@ export function StaffTaskListScreen() {
           task={task}
           locationName={locationNames.get(task.locationId) ?? missingLocationName}
           onPress={() =>
-            task.kind === 'MeterReading'
-              ? go('meter-reading')
-              : task.kind === 'MoveInInventory'
-                ? go('move-in-inventory', { taskId: task.id })
-                : go('task-detail', { taskId: task.id })
+            isMainMoveInWork(task)
+              ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+              : task.kind === 'MeterReading'
+                ? go('meter-reading')
+                : task.kind === 'MoveInInventory'
+                  ? go('move-in-inventory', { taskId: task.id })
+                  : go('task-detail', { taskId: task.id })
           }
         />
       ))}
@@ -217,20 +233,23 @@ function TaskFilterBar({
 }
 
 function TaskSummaryBar({
-  data,
+  totalCount,
+  visibleItems,
   filtered,
 }: {
-  data: TaskPage<OperationalTask>;
+  totalCount: number;
+  visibleItems: OperationalTask[];
   filtered: boolean;
 }) {
-  // totalCount belongs to this server filter; the other counts describe only loaded items.
-  const overdue = data.items.filter((task) => task.isOverdue).length;
-  const assigned = data.items.filter((task) => task.status === 'Assigned').length;
+  // The API already excludes embedded inventory checkpoints for Staff before
+  // pagination; its total count is authoritative across all pages.
+  const overdue = visibleItems.filter((task) => task.isOverdue).length;
+  const assigned = visibleItems.filter((task) => task.status === 'Assigned').length;
   return (
     <View style={{ gap: 4 }}>
       <View style={styles.summary}>
         <Text variant="labelLarge" style={styles.title}>
-          {data.totalCount} công việc{filtered ? ' phù hợp' : ''}
+          {totalCount} công việc{filtered ? ' phù hợp' : ''}
         </Text>
         {overdue > 0 && (
           <Text variant="bodySmall" style={styles.overdue}>
@@ -243,11 +262,6 @@ function TaskSummaryBar({
           </Text>
         )}
       </View>
-      {data.totalCount > data.items.length && (
-        <Text variant="labelSmall" style={styles.muted}>
-          Số quá hạn và cần làm tính trên trang đang xem.
-        </Text>
-      )}
     </View>
   );
 }

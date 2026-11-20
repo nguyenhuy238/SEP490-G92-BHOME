@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React, { useEffect } from 'react';
+import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { canOpenScreen } from '../features/workspace/navigation';
@@ -11,16 +11,27 @@ const state = vi.hoisted(() => ({
   request: vi.fn(),
   go: vi.fn(),
   toast: vi.fn(),
+  selectedId: '',
+  locations: [] as { id: string; label: string }[],
+  loading: false,
+  error: '',
+  reload: vi.fn(),
 }));
 const api = { request: state.request };
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ api, session: { roles: state.roles } }),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ role: state.role, preview: state.preview, go: state.go }),
-}));
-vi.mock('expo-router', () => ({
-  useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),
+  useWorkspace: () => ({
+    role: state.role,
+    preview: state.preview,
+    go: state.go,
+    staffLocationId: state.selectedId,
+    staffLocations: state.locations,
+    staffLocationsLoading: state.loading,
+    staffLocationsError: state.error,
+    reloadStaffLocations: state.reload,
+  }),
 }));
 vi.mock('../lib/toast', () => ({
   conciseMessage: (value: string) => value,
@@ -88,51 +99,49 @@ beforeEach(() => {
   state.role = 'Staff';
   state.roles = ['Staff'];
   state.preview = false;
+  state.selectedId = '';
+  state.locations = [];
+  state.loading = false;
+  state.error = '';
   state.request.mockResolvedValue([]);
 });
 afterEach(cleanup);
 
-it('shows an honest unavailable state and only requests the authorized location API', async () => {
+it('shows an honest unavailable state without a duplicate Location request', async () => {
   render(<StaffScheduleScreen />);
   await waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull());
   expect(screen.getByText('Chưa có dữ liệu lịch làm việc')).toBeTruthy();
   expect(screen.getByText('Lịch ca trực hiện chưa có dữ liệu để hiển thị.')).toBeTruthy();
   expect(screen.queryByRole('combobox')).toBeNull();
-  expect(state.request.mock.calls.every(([path]) => path === '/api/v1/capture/locations')).toBe(
-    true,
-  );
+  expect(state.request).not.toHaveBeenCalled();
   expect(screen.queryByText(/07:30|Đã điều chỉnh|Hôm nay|Dữ liệu mẫu/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Mở công việc được giao' }));
   expect(state.go).toHaveBeenCalledWith('work-orders');
 });
 
 it('displays one authorized location without a dropdown', async () => {
-  state.request.mockResolvedValue([{ id: 'a', label: 'Cơ sở A' }]);
+  state.locations = [{ id: 'a', label: 'Cơ sở A' }];
+  state.selectedId = 'a';
   render(<StaffScheduleScreen />);
   expect(await screen.findByText('Cơ sở A')).toBeTruthy();
   expect(screen.queryByRole('combobox')).toBeNull();
 });
 
-it('selects only returned locations and clears revoked selections on refresh', async () => {
-  state.request.mockResolvedValue([
+it('uses the selected Staff Home Location without another selector', async () => {
+  state.locations = [
     { id: 'a', label: 'Cơ sở A' },
     { id: 'b', label: 'Cơ sở B' },
-  ]);
+  ];
+  state.selectedId = 'b';
   render(<StaffScheduleScreen />);
-  const filter = await screen.findByRole('combobox');
-  fireEvent.change(filter, { target: { value: 'b' } });
-  expect((filter as HTMLSelectElement).value).toBe('b');
-  state.request.mockResolvedValue([
-    { id: 'a', label: 'Cơ sở A' },
-    { id: 'c', label: 'Cơ sở C' },
-  ]);
+  expect(await screen.findByText('Cơ sở B')).toBeTruthy();
+  expect(screen.queryByRole('combobox')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Tải lại cơ sở được phân công' }));
-  await waitFor(() => expect(screen.queryByText('Cơ sở B')).toBeNull());
-  expect(((await screen.findByRole('combobox')) as HTMLSelectElement).value).toBe('');
+  expect(state.reload).toHaveBeenCalledTimes(1);
 });
 
 it('handles loading, errors, and retry without hiding the task shortcut', async () => {
-  state.request.mockReturnValue(new Promise(() => {}));
+  state.loading = true;
   render(<StaffScheduleScreen />);
   expect(screen.getByRole('progressbar')).toBeTruthy();
   expect(
@@ -140,12 +149,18 @@ it('handles loading, errors, and retry without hiding the task shortcut', async 
       .disabled,
   ).toBe(true);
   cleanup();
-  state.request.mockRejectedValue(new Error('Mất kết nối'));
+  state.loading = false;
+  state.error = 'Mất kết nối';
   render(<StaffScheduleScreen />);
-  expect(await screen.findByRole('alert')).toBeTruthy();
+  expect((await screen.findAllByRole('alert')).length).toBeGreaterThan(0);
   expect(screen.getByRole('button', { name: 'Mở công việc được giao' })).toBeTruthy();
-  state.request.mockResolvedValue([{ id: 'a', label: 'Cơ sở A' }]);
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+  expect(state.reload).toHaveBeenCalledTimes(1);
+  cleanup();
+  state.error = '';
+  state.locations = [{ id: 'a', label: 'Cơ sở A' }];
+  state.selectedId = 'a';
+  render(<StaffScheduleScreen />);
   expect(await screen.findByText('Cơ sở A')).toBeTruthy();
   expect(screen.queryByRole('alert')).toBeNull();
 });

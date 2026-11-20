@@ -39,7 +39,7 @@ export function ContractDraftForm({
   initialRoomId?: string;
   prepareDefaults?: ReturnType<typeof mainDraftClient>['prepare'];
 }) {
-  const { role } = useWorkspace();
+  const { role, staffLocationId } = useWorkspace();
   const [values, setValues] = useState<Record<string, string>>({ roomId: initialRoomId });
   const [defaults, setDefaults] = useState<{
     key: string;
@@ -54,7 +54,10 @@ export function ContractDraftForm({
   const lock = useRef(false),
     [keys] = useState(() => mutationKeys(randomUUID));
   const query = useHoldingPreparation(api, values.roomId);
-  const room = query.data?.rooms.find((item) => item.id === values.roomId);
+  const room = query.data?.rooms.find(
+    (item) =>
+      item.id === values.roomId && (role !== 'Staff' || item.locationId === staffLocationId),
+  );
   const p = room ? query.data?.byLocation[room.locationId] : undefined;
   const eligible = (p?.residents ?? []).filter(
     (r) => r.roomId === room?.id && r.verified && r.residentType !== 'CoOccupant',
@@ -80,10 +83,12 @@ export function ContractDraftForm({
     owners.length > 1
       ? 'Chưa xác định được Owner ký hợp đồng: cơ sở có nhiều Owner hợp lệ. Vui lòng liên hệ quản trị viên.'
       : 'Chưa xác định được Owner ký hợp đồng cho cơ sở này. Vui lòng liên hệ quản trị viên.';
-  const roomOptions = (query.data?.rooms ?? []).map((item) => ({
-    id: item.id,
-    label: `${item.label} · ${query.data?.locations.find((location) => location.id === item.locationId)?.label ?? ''}`,
-  }));
+  const roomOptions = (query.data?.rooms ?? [])
+    .filter((item) => role !== 'Staff' || item.locationId === staffLocationId)
+    .map((item) => ({
+      id: item.id,
+      label: `${item.label} · ${query.data?.locations.find((location) => location.id === item.locationId)?.label ?? ''}`,
+    }));
   const roomValid = !!room && !!p && !query.loading && !query.error;
   const preparationAvailable = typeof api.holdingPreparation === 'function';
   const defaultsKey = `${values.roomId}:${defaultsRevision}`;

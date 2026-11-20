@@ -78,6 +78,10 @@ public sealed class PlanSettings
         baseUrl = Environment.GetEnvironmentVariable("BHOME_IT_BASE_URL") ?? baseUrl;
         database = Environment.GetEnvironmentVariable("BHOME_IT_DB") ?? database;
         if (bool.TryParse(Environment.GetEnvironmentVariable("BHOME_IT_INSECURE_TLS"), out var envInsecure)) insecure = envInsecure;
-        return new PlanSettings(new Uri(baseUrl.TrimEnd('/') + "/"), insecure, string.IsNullOrWhiteSpace(database) ? null : database, accounts);
+        // A malformed optional URL must not crash normal CI discovery before the
+        // execution gate gets a chance to skip this external black-box suite.
+        if (!Uri.TryCreate(baseUrl.TrimEnd('/') + "/", UriKind.Absolute, out var parsedBaseUrl))
+            parsedBaseUrl = new Uri("https://localhost:7240/");
+        return new PlanSettings(parsedBaseUrl, insecure, string.IsNullOrWhiteSpace(database) ? null : database, accounts);
     }
 }

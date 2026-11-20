@@ -235,6 +235,44 @@ public sealed class OperationalTaskServiceTests
         Assert.Contains(r.Added.OfType<OperationalTaskHistory>(), h => h.Action == "created" && h.ResponsibleStaffUserId == r.Staff);
         Assert.Contains(r.Added.OfType<OperationalTaskHistory>(), h => h.Action == "responsibility_changed" && h.ResponsibleStaffUserId == next);
     }
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(MeterTaskStatus.Assigned, false)]
+    [InlineData(MeterTaskStatus.InProgress, true)]
+    [InlineData(MeterTaskStatus.PendingVerification, false)]
+    [InlineData(MeterTaskStatus.Completed, false)]
+    [InlineData(MeterTaskStatus.Cancelled, false)]
+    public async Task MoveInInventoryStartPreservesMainHandoverGate(MeterTaskStatus? mainStatus, bool allowed)
+    {
+        var rig = new Rig();
+        var contractId = Guid.NewGuid();
+        var task = new OperationalTask
+        {
+            Kind = OperationalTaskKind.MoveInInventory,
+            LocationId = rig.Location,
+            ContractId = contractId,
+            AssignmentId = rig.Responsibility!.AssignmentId,
+            AssignedStaffUserId = rig.Staff
+        };
+        rig.Added.Add(task);
+        rig.Repo.MoveInMainTaskStatusAsync(contractId, default).Returns(Task.FromResult(mainStatus));
+        rig.AsStaff();
+
+        if (allowed)
+        {
+            var result = await rig.Service.ActAsync(task.Id, "start", new(task.Version), Guid.NewGuid(), default);
+            Assert.Equal("InProgress", result.Status);
+        }
+        else
+        {
+            var error = await Assert.ThrowsAsync<OperationalTaskException>(() =>
+                rig.Service.ActAsync(task.Id, "start", new(task.Version), Guid.NewGuid(), default));
+            Assert.Equal("move_in_handover_task_not_started", error.Code);
+            Assert.Equal(MeterTaskStatus.Assigned, task.Status);
+            Assert.Empty(rig.Added.OfType<OperationalTaskCommand>());
+        }
+    }
+
     [Fact]
     public async Task LocationAssetInventoryRequiresAllChecksAndPreservesInheritedEvidence()
     {

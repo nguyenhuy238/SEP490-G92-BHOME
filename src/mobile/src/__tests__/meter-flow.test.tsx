@@ -16,6 +16,9 @@ const api = { request: state.request, image: state.image, json: state.json };
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ api, session: { roles: [state.role] } }),
 }));
+vi.mock('../features/workspace/WorkspaceProvider', () => ({
+  useWorkspace: () => ({ staffLocationId: 'location-a' }),
+}));
 vi.mock('expo-router', () => ({
   Redirect: () => <span>Đăng nhập</span>,
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback]),

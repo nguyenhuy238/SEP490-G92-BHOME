@@ -22,7 +22,7 @@ vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ api: state.api, session: { userId: state.actor, roles: [state.role] } }),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ role: state.role, preview: false }),
+  useWorkspace: () => ({ role: state.role, preview: false, staffLocationId: 'loc' }),
 }));
 vi.mock('../lib/toast', () => ({ conciseMessage: (text: string) => text, showError: vi.fn() }));
 vi.mock('../screens/TenantDashboard', () => ({
@@ -155,7 +155,7 @@ function StaffProbe() {
   const locations = useWorkspaceQuery('/api/v1/capture/locations', { cache: queryPolicies.rooms });
   return <output>{JSON.stringify({ data, locations })}</output>;
 }
-it('measures Staff Home plus header as eight reads and reuses them on remount', async () => {
+it('measures Staff Home plus header as nine scoped reads and reuses them on remount', async () => {
   state.role = 'Staff';
   const transport = vi
     .fn<typeof fetch>()
@@ -171,14 +171,17 @@ it('measures Staff Home plus header as eight reads and reuses them on remount', 
   await waitFor(() =>
     expect(JSON.parse(screen.getByRole('status').textContent!).data.meters.loading).toBe(false),
   );
-  expect(transport).toHaveBeenCalledTimes(8);
+  expect(transport).toHaveBeenCalledTimes(9);
   expect(
     transport.mock.calls.filter(([url]) => String(url).endsWith('/capture/locations')),
   ).toHaveLength(1);
+  expect(
+    transport.mock.calls.some(([url]) => String(url).includes('/capture/locations/loc/rooms')),
+  ).toBe(true);
   view.unmount();
   render(<StaffProbe />);
   await act(async () => {});
-  expect(transport).toHaveBeenCalledTimes(8);
+  expect(transport).toHaveBeenCalledTimes(9);
 });
 it('keeps Tenant Home visible on stale background refetch and refreshes only expired resources', async () => {
   let now = Date.now();

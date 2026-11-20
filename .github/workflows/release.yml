@@ -1,0 +1,221 @@
+name: Build and deploy branch release
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  images:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      api: ${{ steps.api.outputs.digest }}
+      owner: ${{ steps.owner.outputs.digest }}
+      public: ${{ steps.public.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Resolve environment from the triggering branch
+        id: target
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            {
+              echo 'environment=Production'
+              echo 'suffix=-production'
+              echo 'owner=https://owner.103.146.23.157.sslip.io'
+              echo 'public=https://api.103.146.23.157.sslip.io'
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo 'environment=Staging'
+              echo 'suffix='
+              echo 'owner=https://api-staging.103.146.23.157.sslip.io'
+              echo 'public=https://api-staging.103.146.23.157.sslip.io'
+            } >> "$GITHUB_OUTPUT"
+          fi
+          echo "registry=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build API from the exact triggering commit
+        id: api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Api.Release.Dockerfile
+          target: api
+          push: true
+          tags: ${{ steps.target.outputs.registry }}/bhome-api:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=release-api
+          cache-to: type=gha,mode=max,scope=release-api
+      - name: Build the environment-specific Owner Web
+        id: owner
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Web.Dockerfile
+          push: true
+          build-args: |
+            APP=owner-web
+            VITE_API_BASE_URL=${{ steps.target.outputs.owner }}
+            VITE_DEPLOYMENT_ENVIRONMENT=${{ steps.target.outputs.environment }}
+            BHOME_REVISION=${{ github.sha }}
+          tags: ${{ steps.target.outputs.registry }}/bhome-owner-web${{ steps.target.outputs.suffix }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=owner-${{ steps.target.outputs.environment }}
+          cache-to: type=gha,mode=max,scope=owner-${{ steps.target.outputs.environment }}
+      - name: Build the environment-specific Public Web
+        id: public
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Web.Dockerfile
+          push: true
+          build-args: |
+            APP=public-web
+            VITE_API_BASE_URL=${{ steps.target.outputs.public }}
+            VITE_DEPLOYMENT_ENVIRONMENT=${{ steps.target.outputs.environment }}
+            BHOME_REVISION=${{ github.sha }}
+          tags: ${{ steps.target.outputs.registry }}/bhome-public-web${{ steps.target.outputs.suffix }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=public-${{ steps.target.outputs.environment }}
+          cache-to: type=gha,mode=max,scope=public-${{ steps.target.outputs.environment }}
+      - name: Record immutable release manifest
+        env:
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          OWNER_DIGEST: ${{ steps.owner.outputs.digest }}
+          PUBLIC_DIGEST: ${{ steps.public.outputs.digest }}
+          TARGET: ${{ steps.target.outputs.environment }}
+          SUFFIX: ${{ steps.target.outputs.suffix }}
+          REGISTRY: ${{ steps.target.outputs.registry }}
+        run: |
+          python3 - <<'PY'
+          import json,os,re
+          e=os.environ
+          images={name: e['REGISTRY']+'/'+repo+':sha-'+e['GITHUB_SHA']+'@'+e[key] for name,repo,key in [('api','bhome-api','API_DIGEST'),('owner-web','bhome-owner-web'+e['SUFFIX'],'OWNER_DIGEST'),('public-web','bhome-public-web'+e['SUFFIX'],'PUBLIC_DIGEST')]}
+          assert all(re.fullmatch(r'sha256:[0-9a-f]{64}',e[k]) for k in ('API_DIGEST','OWNER_DIGEST','PUBLIC_DIGEST'))
+          with open('release-manifest.json','w') as f: json.dump({'environment':e['TARGET'],'sha':e['GITHUB_SHA'],'run':e['GITHUB_RUN_ID']+'-'+e['GITHUB_RUN_ATTEMPT'],'images':images},f,indent=2)
+          PY
+      - uses: actions/upload-artifact@v6
+        with:
+          name: release-${{ github.sha }}-${{ github.run_attempt }}
+          path: release-manifest.json
+          if-no-files-found: error
+          retention-days: 30
+  production-policy:
+    if: github.ref == 'refs/heads/main' && vars.BHOME_PRODUCTION_CD_ENABLED == 'true'
+    needs: images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - run: node scripts/Verify-ProductionGate.cjs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v6
+        with:
+          name: production-gate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: production-gate.json
+  staging:
+    if: github.ref == 'refs/heads/develop' && vars.BHOME_STAGING_CD_ENABLED == 'true'
+    needs: images
+    runs-on: ubuntu-24.04
+    environment: staging
+    concurrency:
+      group: bhome-staging-deployment
+      cancel-in-progress: false
+    timeout-minutes: 30
+    steps:
+      - name: Install environment-specific pinned SSH identity
+        env:
+          SSH_KEY: ${{ secrets.BHOME_STAGING_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.BHOME_STAGING_SSH_KNOWN_HOSTS }}
+        run: |
+          test -n "$SSH_KEY" && test -n "$SSH_KNOWN_HOSTS" || { echo 'Missing Staging SSH secrets.' >&2; exit 1; }
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/bhome-release"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+      - name: Deploy exactly the digests produced by this run
+        env:
+          API: ${{ needs.images.outputs.api }}
+          OWNER: ${{ needs.images.outputs.owner }}
+          PUBLIC: ${{ needs.images.outputs.public }}
+          SSH_HOST: ${{ vars.BHOME_STAGING_SSH_HOST || '103.146.23.157' }}
+        run: |
+          ssh -i "$HOME/.ssh/bhome-release" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 "root@$SSH_HOST" \
+            "/opt/bhome-deploy/staging/run-staging-release.sh $GITHUB_SHA $GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT $API $OWNER $PUBLIC"
+      - name: Remove ephemeral SSH key
+        if: always()
+        run: rm -f "$HOME/.ssh/bhome-release"
+  production:
+    if: github.ref == 'refs/heads/main' && vars.BHOME_PRODUCTION_CD_ENABLED == 'true'
+    needs: [images, production-policy]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
+    # GitHub pauses here BEFORE exposing environment secrets or executing steps.
+    environment: production
+    concurrency:
+      group: bhome-production-deployment
+      cancel-in-progress: false
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Recheck approval policy after the job is approved
+        run: node scripts/Verify-ProductionGate.cjs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Production-only pinned SSH identity
+        env:
+          SSH_KEY: ${{ secrets.BHOME_PRODUCTION_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.BHOME_PRODUCTION_SSH_KNOWN_HOSTS }}
+        run: |
+          test -n "$SSH_KEY" && test -n "$SSH_KNOWN_HOSTS" || { echo 'Missing Production SSH secrets.' >&2; exit 1; }
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/bhome-release"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+      - name: Deploy the approved main artifacts
+        env:
+          API: ${{ needs.images.outputs.api }}
+          OWNER: ${{ needs.images.outputs.owner }}
+          PUBLIC: ${{ needs.images.outputs.public }}
+          SSH_HOST: ${{ vars.BHOME_PRODUCTION_SSH_HOST || '103.146.23.157' }}
+        run: |
+          ssh -i "$HOME/.ssh/bhome-release" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 "root@$SSH_HOST" \
+            "/opt/bhome-deploy/production/run-production-release.sh $GITHUB_SHA $GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT $API $OWNER $PUBLIC"
+      - name: Remove ephemeral SSH key
+        if: always()
+        run: rm -f "$HOME/.ssh/bhome-release"

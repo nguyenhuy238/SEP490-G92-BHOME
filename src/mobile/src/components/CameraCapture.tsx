@@ -1,6 +1,6 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Image, View } from 'react-native';
+import { AppState, Image, Platform, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File, Paths } from 'expo-file-system';
 import { Button, Text } from 'react-native-paper';
@@ -11,6 +11,11 @@ import { DocumentCameraGuide, DocumentCameraView } from './DocumentCameraView';
 import { MeterCameraView } from './MeterCameraView';
 import { TaskEvidenceCameraView } from './TaskEvidenceCameraView';
 import { useFocusEffect } from 'expo-router';
+import {
+  canUseLocalMeterDemo,
+  createMeterDemoJpeg,
+  meterDemoJpegBytes,
+} from '../lib/meterDemoCapture';
 
 // Only URIs created by this component in the application's cache are accepted for deletion.
 function remove(uri: string) {
@@ -82,6 +87,14 @@ export function CameraCapture({
     clearCallback.current = onPhotoCleared;
   }, [onPhotoCleared]);
   const [requestingPermission, setRequestingPermission] = useState(false);
+  const localMeterDemo =
+    presentation === 'meter' &&
+    canUseLocalMeterDemo(
+      typeof __DEV__ !== 'undefined' && __DEV__,
+      Platform.OS,
+      globalThis.location?.hostname,
+      globalThis.location?.port,
+    );
   useEffect(() => {
     permissionAccess.current = { permission, requestPermission };
   }, [permission, requestPermission]);
@@ -174,11 +187,14 @@ export function CameraCapture({
     };
   }, [clearFiles]);
   useEffect(() => {
-    if (presentation !== 'document' && !(presentation === 'meter' && autoOpen)) return;
+    // Local Web testers must be able to choose the demo photo without a camera
+    // permission prompt racing with/clearing the generated preview.
+    if (presentation !== 'document' && !(presentation === 'meter' && autoOpen && !localMeterDemo))
+      return;
     // Let the modal mount before requesting the native camera permission/view.
     const start = setTimeout(() => void openCamera(), 0);
     return () => clearTimeout(start);
-  }, [presentation, openCamera, autoOpen]);
+  }, [presentation, openCamera, autoOpen, localMeterDemo]);
   const take = async () => {
     if (!camera.current || workingLock.current || disabled || !readyAccess.current) return;
     workingLock.current = true;
@@ -248,7 +264,9 @@ export function CameraCapture({
     setError('');
     let confirmed = false;
     try {
-      const bytes = await new File(uri).bytes();
+      const bytes = uri.startsWith('data:image/jpeg;base64,')
+        ? meterDemoJpegBytes(uri)
+        : await new File(uri).bytes();
       try {
         if (alive.current && epoch === generation.current) {
           const result = await onCapture(bytes);
@@ -323,6 +341,29 @@ export function CameraCapture({
     setError('');
     setOpen(true);
   };
+  const selectDemoMeterPhoto = async () => {
+    if (!localMeterDemo || disabled || workingLock.current) return;
+    workingLock.current = true;
+    setWorking(true);
+    setError('');
+    let bytes: Uint8Array<ArrayBuffer> | null = null;
+    try {
+      const uri = createMeterDemoJpeg();
+      bytes = meterDemoJpegBytes(uri);
+      closeCamera();
+      clearFiles();
+      setPreview(uri);
+      pending.current = uri;
+      onPhotoCaptured?.();
+      await onCapture(bytes);
+    } catch {
+      if (alive.current) setError('Không tạo hoặc xử lý được ảnh mẫu. Hãy thử lại.');
+    } finally {
+      bytes?.fill(0);
+      workingLock.current = false;
+      if (alive.current) setWorking(false);
+    }
+  };
   if (presentation === 'evidence') {
     const close = () => {
       if (workingLock.current) return;
@@ -378,6 +419,7 @@ export function CameraCapture({
         onClose={closeCamera}
         onUse={() => void submitPending()}
         onRetake={retake}
+        onUseDemo={localMeterDemo && !preview ? () => void selectDemoMeterPhoto() : undefined}
       />
     );
   if (presentation === 'document')

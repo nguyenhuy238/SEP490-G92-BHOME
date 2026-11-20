@@ -97,7 +97,7 @@ internal static class Compact24Records
         task.Map("Status", "status", "t.status::integer"); task.Map("Priority", "priority", "t.priority::integer");
         task.Write["task_data"] = "jsonb_build_object('schemaVersion',1,'recordType','OperationalTask','state',@state::jsonb)";
         task.Write["room_id"] = "(SELECT room_id FROM meters WHERE id=(@state::jsonb->>'meterId')::uuid)";
-        task.Write["source_key"] = "CASE WHEN @state::jsonb->>'kind'='0' AND @state::jsonb->>'status'<>'3' THEN CASE @state::jsonb->>'purpose' WHEN '0' THEN 'meter-initial:'||(@state::jsonb->>'meterId') WHEN '1' THEN 'meter-period:'||(@state::jsonb->>'billingRoomId')||':'||(@state::jsonb->>'billingUtilityType')||':'||(@state::jsonb->>'billingPeriod') WHEN '2' THEN 'meter-final:'||(@state::jsonb->>'meterId')||':'||(@state::jsonb->>'contractId') END END";
+        task.Write["source_key"] = "CASE WHEN @state::jsonb->>'kind'='0' AND @state::jsonb->>'status'<>'3' THEN CASE @state::jsonb->>'purpose' WHEN '0' THEN CASE WHEN @state::jsonb->>'contractId' IS NOT NULL THEN 'meter-contract-initial:'||(@state::jsonb->>'meterId')||':'||(@state::jsonb->>'contractId') ELSE 'meter-initial:'||(@state::jsonb->>'meterId') END WHEN '1' THEN 'meter-period:'||(@state::jsonb->>'billingRoomId')||':'||(@state::jsonb->>'billingUtilityType')||':'||(@state::jsonb->>'billingPeriod') WHEN '2' THEN 'meter-final:'||(@state::jsonb->>'meterId')||':'||(@state::jsonb->>'contractId') END END";
         task.CustomFrom = "operational_tasks t"; task.CustomState = "t.task_data->'state'";
         foreach (var name in new[] { "OperationalTaskEvidence", "MeterEvidence" })
             Array(name, "operational_tasks", "evidence", "TaskId").Where = $"e.data->>'recordType'='{name}'";

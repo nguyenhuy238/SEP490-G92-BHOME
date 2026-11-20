@@ -57,6 +57,8 @@ const issueLabel: Record<string, string> = {
   draft_missing_inputs: 'Bản nháp còn thiếu dữ liệu bắt buộc',
   confirmed_billing_inputs_required: 'Chưa đủ giá hoặc chỉ số hợp lệ để phát hành',
   draft_invoice_required: 'Chưa có hóa đơn nháp',
+  invoice_adjustment_pending:
+    'Có yêu cầu điều chỉnh đang chờ Owner duyệt hoặc từ chối; chưa thể phát hành',
   meter_replacement_review_required: 'Cần Owner kiểm tra việc thay đồng hồ trong kỳ',
   cancelled_period_requires_review: 'Tác vụ kỳ này đã hủy, cần Owner kiểm tra',
   automation_authorization_changed: 'Quyền hoặc lịch đã thay đổi, cần kiểm tra lại',

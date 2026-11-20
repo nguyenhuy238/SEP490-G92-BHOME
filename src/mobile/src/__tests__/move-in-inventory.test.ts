@@ -26,7 +26,7 @@ const item: MoveInInventoryItem = {
   incidentId: null,
 };
 
-it('checks exact quantities and requires issue details for prefilled BF-07 reporting', () => {
+it('checks exact quantities and requires descriptions of damaged/absent assets for Owner review', () => {
   expect(validateInventoryItem({ actualQuantity: 3, condition: 'Good', notes: '' }, 3)).toBe('');
   expect(validateInventoryItem({ actualQuantity: 2, condition: 'Good', notes: '' }, 3)).toMatch(
     /đủ số lượng/,
@@ -44,7 +44,7 @@ it('checks exact quantities and requires issue details for prefilled BF-07 repor
     ),
   ).toBe('');
   expect(validateInventoryItem({ actualQuantity: 2, condition: 'Damaged', notes: '' }, 3)).toMatch(
-    /Mô tả/,
+    /Ghi rõ/,
   );
   expect(
     validateInventoryItem({ actualQuantity: -1, condition: 'Missing', notes: 'Thiếu' }, 3),
@@ -54,25 +54,42 @@ it('checks exact quantities and requires issue details for prefilled BF-07 repor
   );
 });
 
-it('requires per-item evidence and linked incidents before enabling direct Staff completion', () => {
+it('allows Good without photo and issues with photos/notes without requiring Staff to create BF-07', () => {
   expect(readyToComplete([item])).toBe(true);
-  expect(readyToComplete([{ ...item, evidenceIds: null }])).toBe(false);
+  expect(readyToComplete([{ ...item, evidenceIds: null }])).toBe(true);
+  expect(readyToComplete([{ ...item, evidenceIds: [] }])).toBe(true);
   expect(readyToComplete([{ ...item, condition: null }])).toBe(false);
   expect(readyToComplete([{ ...item, actualQuantity: null }])).toBe(false);
   expect(
     readyToComplete([
       { ...item, condition: 'Missing', actualQuantity: 2, notes: 'Thiếu một chiếc' },
     ]),
-  ).toBe(false);
+  ).toBe(true);
   expect(
     readyToComplete([
       { ...item, condition: 'Missing', actualQuantity: 2, notes: 'Thiếu một chiếc', incidentId },
     ]),
   ).toBe(true);
   expect(
+    readyToComplete([
+      {
+        ...item,
+        condition: 'Missing',
+        actualQuantity: 2,
+        notes: 'Thiếu một chiếc',
+        evidenceIds: [],
+      },
+    ]),
+  ).toBe(false);
+  expect(
     readyToComplete([{ ...item, condition: 'Damaged', notes: 'Gãy chân giường', incidentId }]),
   ).toBe(true);
-  expect(readyToComplete([{ ...item, condition: 'Damaged', notes: '', incidentId }])).toBe(false);
+  expect(
+    readyToComplete([
+      { ...item, condition: 'Damaged', notes: 'Gãy chân giường', evidenceIds: [], incidentId },
+    ]),
+  ).toBe(false);
+  expect(readyToComplete([{ ...item, condition: 'Damaged', notes: '' }])).toBe(false);
   // Empty configured asset list uses a separate explicit confirmNoAssets checkbox.
   expect(readyToComplete([])).toBe(true);
 });

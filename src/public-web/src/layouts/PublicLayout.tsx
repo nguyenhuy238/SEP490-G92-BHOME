@@ -21,7 +21,7 @@ export default function PublicLayout() {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, md: 6 }, minHeight: '70vh' }}>
         <Outlet />
       </Container>
 

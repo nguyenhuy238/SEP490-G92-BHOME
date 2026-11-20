@@ -223,8 +223,8 @@ export function StaffApiPage() {
             Email nhận: {detail.data.email}
           </Typography>
         )}
-        Tài khoản nhân viên đã được kích hoạt khi tạo, không cần nhận lời mời kích hoạt trước.
-        Hệ thống tạo mật khẩu ngẫu nhiên 12 ký tự và gửi tài khoản đăng nhập cùng mật khẩu mới đến
+        Tài khoản nhân viên đã được kích hoạt khi tạo, không cần nhận lời mời kích hoạt trước. Hệ
+        thống tạo mật khẩu ngẫu nhiên 12 ký tự và gửi tài khoản đăng nhập cùng mật khẩu mới đến
         email của nhân viên. Mật khẩu cũ sẽ không còn hiệu lực. Nhân viên có thể đổi mật khẩu trong
         Hồ sơ → Bảo mật và mật khẩu trên ứng dụng Mobile. Vì mật khẩu được gửi qua email, nên đổi
         lại ngay sau khi đăng nhập.

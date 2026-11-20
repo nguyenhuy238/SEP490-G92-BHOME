@@ -14,6 +14,18 @@ it.each(['localhost', '127.0.0.1', '[::1]'])(
     expect(resolveApiEndpoint(input)).toBe('https://192.168.1.8:7240');
   },
 );
+it('routes the local launcher sentinel to localhost for Web and the verified LAN API for Expo Go', () => {
+  const launcher = {
+    development: true,
+    hostUri: '10.33.58.13:8081',
+    configuredUrl: 'https://localhost:7240',
+    developmentUrl: 'https://10.33.58.13:7240',
+  };
+  expect(resolveApiEndpoint({ ...launcher, browserHostname: 'localhost' })).toBe(
+    'https://localhost:7240',
+  );
+  expect(resolveApiEndpoint(launcher)).toBe('https://10.33.58.13:7240');
+});
 it('honors public API, release configuration and explicit development ports in the browser', () => {
   const browser = { browserHostname: 'localhost', developmentUrl: 'https://192.168.1.8:7443' };
   expect(resolveApiEndpoint({ ...browser, development: true })).toBe('https://localhost:7443');

@@ -47,18 +47,19 @@ Staff/Tenant khác và Owner browser mở đúng Contract từ thông báo closu
 22 nhóm có phí/21 nhóm không phí; no duplicate publication. Worker vẫn tắt, DeliveryState giữ
 Unconfigured; không suy kết quả này thành kiểm chứng lịch worker, email/push hoặc native UI.
 
-| Source                                           | Recipients / safe links                                                                                                                              |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| InvoiceIssuedEvents                              | Owner phụ trách/phát hành + InvoiceRecipients; Invoice                                                                                               |
-| PaymentConfirmedEvents + verified allocation     | Owner phụ trách + Owner verifier + InvoiceRecipients; Invoice; không có bank/payer data                                                              |
-| Adjustment requested                             | Owner phụ trách; Adjustment                                                                                                                          |
-| Adjustment decided                               | Requester xem kết quả riêng; Approved mới báo viewers khác bằng link Invoice/generic balance update                                                  |
-| ContractExpiryNotices JOB-02                     | Recipient Owner/Tenant sẵn có; không thêm expiry job hoặc Staff authority                                                                            |
-| OperationalTaskNotifications                     | Đúng recipient active/current Staff assignment hoặc Owner; MeterTask/OperationalTask                                                                 |
-| Automation execution PendingInputs               | Owner đã cấu hình; AutomationExecution; không phát lặp từng retry                                                                                    |
-| ContractMoveOutHistory đã commit                 | Owner signer + Tenant có entitlement Contract; yêu cầu/review/lịch/inspection/settlement/closure, category Contract                                  |
-| DepositDeductionV1                               | Owner signer + Tenant Contract; quyết định khấu trừ. Link Contract, không gửi Staff/co-occupant chỉ vì cùng phòng                                    |
-| SecurityDepositRefundV1 / HoldingDepositRefundV1 | Owner signer mở Contract; đúng beneficiary Tenant mở Refund history. Requested/APPROVED/REJECTED/Completed; không suy beneficiary từ Tenant đại diện |
+| Source                                           | Recipients / safe links                                                                                                                                                                               |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| InvoiceIssuedEvents                              | Owner phụ trách/phát hành + InvoiceRecipients; Invoice                                                                                                                                                |
+| PaymentConfirmedEvents + verified allocation     | Owner phụ trách + Owner verifier + InvoiceRecipients; Invoice; không có bank/payer data                                                                                                               |
+| Adjustment requested                             | Owner phụ trách; Adjustment                                                                                                                                                                           |
+| Adjustment decided                               | Requester xem kết quả riêng; Approved mới báo viewers khác bằng link Invoice/generic balance update                                                                                                   |
+| Draft đến hạn Final còn adjustment Pending       | Owner lập Draft nhận link Adjustment để duyệt/từ chối; mọi InvoiceRecipients nhận thông báo chung/link Invoice; key `invoice-finalization-held:{invoiceId}` tránh spam; không tiết lộ reason/evidence |
+| ContractExpiryNotices JOB-02                     | Recipient Owner/Tenant sẵn có; không thêm expiry job hoặc Staff authority                                                                                                                             |
+| OperationalTaskNotifications                     | Đúng recipient active/current Staff assignment hoặc Owner; MeterTask/OperationalTask                                                                                                                  |
+| Automation execution PendingInputs               | Owner đã cấu hình; AutomationExecution; không phát lặp từng retry                                                                                                                                     |
+| ContractMoveOutHistory đã commit                 | Owner signer + Tenant có entitlement Contract; yêu cầu/review/lịch/inspection/settlement/closure, category Contract                                                                                   |
+| DepositDeductionV1                               | Owner signer + Tenant Contract; quyết định khấu trừ. Link Contract, không gửi Staff/co-occupant chỉ vì cùng phòng                                                                                     |
+| SecurityDepositRefundV1 / HoldingDepositRefundV1 | Owner signer mở Contract; đúng beneficiary Tenant mở Refund history. Requested/APPROVED/REJECTED/Completed; không suy beneficiary từ Tenant đại diện                                                  |
 
 Receipt-excess refund mới chưa có event consumer riêng; không suy notification hoàn tiền đã tồn tại
 từ payment-confirmed. Browser finance/refund harness tắt worker, nên kết quả browser đó không chứng minh
@@ -68,6 +69,11 @@ Role/account được kiểm tra từ DB trước publish, nguồn không đủ 
 xử lý với recipient count phù hợp. Không broadcast đến mọi Owner/Staff. Private adjustment
 reason/evidence không đưa vào title/summary. Payment chưa allocation không phát payment-confirmed.
 POST `process-events` chỉ Owner + Development/Testing, gọi cùng publisher; production 403.
+Luồng chặn Final này không phụ thuộc billing auto bật/tắt: publisher đọc các Draft
+đã đến ngày Final và request đang Pending được commit, không gửi khi Final transaction
+bị từ chối/rollback. Thông báo được phát trong lượt `notification-publish` kế tiếp;
+nếu toàn bộ notification worker đang tắt, inbox không tự xuất hiện cho đến khi bật
+worker hoặc Owner dùng action process-events tại Development/Testing.
 
 ## JOB-04 external delivery
 

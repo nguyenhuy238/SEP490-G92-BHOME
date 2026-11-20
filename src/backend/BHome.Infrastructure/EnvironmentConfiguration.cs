@@ -27,8 +27,12 @@ public static class EnvironmentConfiguration
             ["AuthenticationEmail:MobileVerificationUrl"] = "bhome://confirm-email"
         };
         if (!config.GetSection("AuthenticationEmail:TrustedOrigins").GetChildren().Any())
+        {
             foreach (var (value, index) in new[] { owner, "bhome://reset-password", "bhome://accept-invitation", "bhome://confirm-email" }.Select((v, i) => (v, i)))
                 defaults[$"AuthenticationEmail:TrustedOrigins:{index}"] = value;
+            if (config["Deployment:LegacyOwnerOrigin"] is { Length: > 0 } legacyOwner)
+                defaults["AuthenticationEmail:TrustedOrigins:4"] = legacyOwner;
+        }
         if (!config.GetSection("AuthWeb:AllowedOrigins").GetChildren().Any()) defaults["AuthWeb:AllowedOrigins:0"] = owner;
         if (!config.GetSection("Cors:AllowedOrigins").GetChildren().Any())
         {
@@ -73,6 +77,22 @@ public static class EnvironmentConfiguration
         if (api is { Length: > 0 }) Check("Deployment:ApiOrigin", api, originOnly: true);
         if (config["Deployment:PublicOrigin"] is { Length: > 0 } publicSite)
             Check("Deployment:PublicOrigin", publicSite, originOnly: true);
+        // A narrowly scoped, opt-in bridge for the approved Staging hostname rename.
+        // Generated links still use canonical anchors; compatibility only accepts old origins.
+        var legacy = new Dictionary<string, string?>();
+        foreach (var role in new[] { "Owner", "Api", "Public" })
+        {
+            var key = $"Deployment:Legacy{role}Origin";
+            if (config[key] is not { Length: > 0 } value) continue;
+            var host = role.ToLowerInvariant();
+            var canonical = $"https://{host}-staging.103.146.23.157.sslip.io";
+            var previous = $"https://{host}-sepay-test.103.146.23.157.sslip.io";
+            if (environment != "Staging" || config[$"Deployment:{role}Origin"] != canonical || value != previous)
+                errors.Add($"{key} is only permitted for the approved Staging hostname transition.");
+            else
+                legacy[role] = value;
+        }
+        var ownerOrigins = new[] { owner, legacy.GetValueOrDefault("Owner") }.Where(v => !string.IsNullOrWhiteSpace(v)).ToArray();
         void Match(string key, string? value, string? expected)
         {
             if (Uri.TryCreate(value, UriKind.Absolute, out var u) && Uri.TryCreate(expected, UriKind.Absolute, out var e) &&
@@ -96,8 +116,9 @@ public static class EnvironmentConfiguration
             {
                 if (!auth.Trusted(trusted, development)) errors.Add("AuthenticationEmail:TrustedOrigins contains an unsupported Mobile callback.");
             }
-            else if (Check("AuthenticationEmail:TrustedOrigins", trusted, originOnly: true) && deployed)
-                Match("AuthenticationEmail:TrustedOrigins", trusted, owner);
+            else if (Check("AuthenticationEmail:TrustedOrigins", trusted, originOnly: true) && deployed &&
+                     !ownerOrigins.Contains(trusted, StringComparer.OrdinalIgnoreCase))
+                errors.Add("AuthenticationEmail:TrustedOrigins must belong to its configured Deployment origin.");
         }
         foreach (var key in new[] { "MobileResetUrl", "MobileInvitationUrl", "MobileVerificationUrl" })
             if (config["AuthenticationEmail:" + key] is { Length: > 0 } value && !auth.Trusted(value, development))
@@ -113,7 +134,7 @@ public static class EnvironmentConfiguration
                 if (development && value == "capacitor://localhost") continue;
                 if (Check(key, value, originOnly: true) && deployed)
                 {
-                    var permitted = (key == "AuthWeb:AllowedOrigins" ? new[] { owner } : new[] { owner, config["Deployment:PublicOrigin"] })
+                    var permitted = (key == "AuthWeb:AllowedOrigins" ? ownerOrigins : ownerOrigins.Concat(new[] { config["Deployment:PublicOrigin"], legacy.GetValueOrDefault("Public") }))
                         .Where(v => !string.IsNullOrWhiteSpace(v));
                     if (!permitted.Contains(value, StringComparer.OrdinalIgnoreCase))
                         errors.Add($"{key} must use an origin from this deployment.");
@@ -128,7 +149,7 @@ public static class EnvironmentConfiguration
         if (deployed)
         {
             var hosts = (config["AllowedHosts"] ?? "").Split(';', StringSplitOptions.TrimEntries);
-            foreach (var origin in new[] { owner, api })
+            foreach (var origin in new[] { owner, api }.Concat(legacy.Values))
                 if (Uri.TryCreate(origin, UriKind.Absolute, out var target) && !hosts.Contains(target.Host, StringComparer.OrdinalIgnoreCase))
                     errors.Add("AllowedHosts must include the configured Owner and API hostnames for this deployment.");
         }

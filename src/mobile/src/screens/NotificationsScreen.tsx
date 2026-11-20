@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { ActivityIndicator, Button, Icon, IconButton, Menu, Text } from 'react-native-paper';
@@ -14,6 +14,7 @@ import { useNotificationActions } from '../features/notifications/useNotificatio
 import { NotificationRow } from '../features/notifications/NotificationRow';
 import { colors, staffColors } from '../theme/theme';
 import type { NotificationFilter } from '../services/notificationInbox';
+import { registerPushDevice, unregisterPushDevice } from '../services/pushRegistration';
 
 const keyForItem = (item: NotificationItem) => item.id;
 const Separator = () => <View style={{ height: 8 }} />;
@@ -35,11 +36,35 @@ function Inbox({
   category: (value: string) => void;
   unread: (value: boolean) => void;
 }) {
-  const { api, session } = useSession();
+  const { api, session, baseUrl } = useSession();
   const { role, go, requestNavigation } = useWorkspace();
   const inbox = useNotificationInbox(filter);
   const actions = useNotificationActions(inbox);
   const [menu, setMenu] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState('');
+  const pushLock = useRef(false);
+  const configurePush = async (enable: boolean) => {
+    if (!api || !session || pushLock.current) return;
+    pushLock.current = true;
+    setPushBusy(true);
+    setPushMessage('');
+    try {
+      const identity = { userId: session.userId, baseUrl };
+      const result = enable
+        ? await registerPushDevice(api, identity)
+        : await unregisterPushDevice(api, identity);
+      setPushMessage(result.message);
+    } catch {
+      // Never surface a push token or an external provider response to the UI.
+      setPushMessage(
+        'Chưa xác nhận được thay đổi đăng ký thông báo đẩy. Hãy kiểm tra mạng và thử lại.',
+      );
+    } finally {
+      pushLock.current = false;
+      setPushBusy(false);
+    }
+  };
   const refresh = inbox.refresh;
   const refreshCount = inbox.refreshCount;
   const reload = useCallback(() => {
@@ -121,6 +146,34 @@ function Inbox({
               >
                 Đọc tất cả
               </Button>
+            )}
+          </View>
+          <View style={styles.pushSetup}>
+            <Text variant="labelLarge">Thông báo đẩy trên điện thoại</Text>
+            <Text style={styles.muted}>
+              Chỉ đăng ký thiết bị khi bạn chọn bật. Thông báo trong ứng dụng vẫn hoạt động độc lập.
+            </Text>
+            <Button
+              compact
+              mode="outlined"
+              disabled={!api || pushBusy}
+              loading={pushBusy}
+              onPress={() => void configurePush(true)}
+            >
+              Bật thông báo đẩy
+            </Button>
+            <Button
+              compact
+              mode="text"
+              disabled={!api || pushBusy}
+              onPress={() => void configurePush(false)}
+            >
+              Tắt thông báo đẩy trên thiết bị này
+            </Button>
+            {!!pushMessage && (
+              <Text accessibilityRole="alert" style={styles.muted}>
+                {pushMessage}
+              </Text>
             )}
           </View>
           <View style={styles.filters}>
@@ -272,6 +325,7 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
   filters: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
+  pushSetup: { gap: 6, padding: 12, borderRadius: 12, backgroundColor: colors.soft },
   activeFilter: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
   muted: { color: colors.muted, fontSize: 13, lineHeight: 20 },
   error: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },

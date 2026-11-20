@@ -66,7 +66,7 @@ public sealed partial class Compact24OwnerSetupTests
         foreach (var utility in new[] { UtilityType.Electricity, UtilityType.Water })
         {
             var meter = new Meter { RoomId = w.Room, Code = "SYN-" + utility, UtilityType = utility, InstalledOn = Today.AddDays(-20) }; db.Add(meter); await db.SaveChangesAsync();
-            var task = new OperationalTask { LocationId = w.Location, MeterId = meter.Id, Kind = BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading, ReadingDate = Today, Purpose = ReadingPurpose.Initial, Status = MeterTaskStatus.Completed, CompletedAt = DateTimeOffset.UtcNow };
+            var task = new OperationalTask { LocationId = w.Location, ContractId = c.Id, MeterId = meter.Id, Kind = BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading, ReadingDate = Today, Purpose = ReadingPurpose.Initial, Status = MeterTaskStatus.Completed, CompletedAt = DateTimeOffset.UtcNow };
             db.Add(task); await db.SaveChangesAsync();
             var evidence = new MeterEvidence { TaskId = task.Id, UploadedByUserId = w.Staff.Id, ContentType = "image/png", Length = image.Length, ObjectKey = $"synthetic/{Guid.NewGuid():N}.png", ImageHash = Convert.ToHexString(SHA256.HashData(image)), IsUploaded = true, IsLinked = true };
             using var bytes = new MemoryStream(image); await storage.PutAsync(evidence.ObjectKey, bytes, bytes.Length, "image/png", default);
@@ -75,6 +75,54 @@ public sealed partial class Compact24OwnerSetupTests
             db.Add(reading); await db.SaveChangesAsync(); readings.Add(reading.Id);
         }
         return (c.Id, readings.ToArray());
+    }
+    private static async Task<Guid[]> SeedAdditionalContractOpeningReadings(Workspace w, IServiceProvider services, Guid contractId)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var storage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
+        var readings = new List<Guid>();
+        var bytes = ReviewEvidenceImage();
+        foreach (var meter in await db.Set<Meter>().Where(m => m.RoomId == w.Room && m.IsActive).OrderBy(m => m.UtilityType).ToArrayAsync())
+        {
+            var task = new OperationalTask
+            {
+                LocationId = w.Location,
+                ContractId = contractId,
+                MeterId = meter.Id,
+                Kind = BHome.Domain.StaffOperations.OperationalTaskKind.MeterReading,
+                ReadingDate = Today,
+                Purpose = ReadingPurpose.Initial,
+                Status = MeterTaskStatus.Completed,
+                CompletedAt = DateTimeOffset.UtcNow
+            };
+            db.Add(task); await db.SaveChangesAsync();
+            var evidence = new MeterEvidence
+            {
+                TaskId = task.Id,
+                UploadedByUserId = w.Staff.Id,
+                ContentType = "image/png",
+                Length = bytes.Length,
+                ObjectKey = $"synthetic/{Guid.NewGuid():N}.png",
+                ImageHash = Convert.ToHexString(SHA256.HashData(bytes)),
+                IsUploaded = true,
+                IsLinked = true
+            };
+            using (var image = new MemoryStream(bytes)) await storage.PutAsync(evidence.ObjectKey, image, image.Length, "image/png", default);
+            db.Add(evidence); await db.SaveChangesAsync();
+            var reading = new MeterReading
+            {
+                TaskId = task.Id,
+                MeterId = meter.Id,
+                EvidenceId = evidence.Id,
+                PreviousValue = 100,
+                ConfirmedValue = 100,
+                ConfirmedByUserId = w.Staff.Id,
+                ConfirmedAt = DateTimeOffset.UtcNow
+            };
+            db.Add(reading); await db.SaveChangesAsync(); readings.Add(reading.Id);
+        }
+        return readings.ToArray();
     }
     private static async Task<Guid> HandoverPhoto(HttpClient client, Guid contract, bool moveOut = false)
     {
@@ -382,12 +430,13 @@ public sealed partial class Compact24OwnerSetupTests
         }
         var choices = (await staff.GetFromJsonAsync<HandoverChoices>($"/api/v1/contracts/{seeded.Contract}/handover/choices"))!;
         await Read<HandoverInventory>(await owner.PostAsJsonAsync(ReviewRoute(w.Location) + $"/{w.Room}/no-assets", new RoomNoAssetsConfirmation(choices.InventoryToken!, "Owner inspected synthetic empty shared room")));
-        var parties = new[] { (Id: seeded.Contract, Tenant: tenant), (Id: secondId, Tenant: secondTenant) };
+        var secondOpeningReadings = await SeedAdditionalContractOpeningReadings(w, host.Services, secondId);
+        var parties = new[] { (Id: seeded.Contract, Tenant: tenant, Readings: seeded.Readings), (Id: secondId, Tenant: secondTenant, Readings: secondOpeningReadings) };
         foreach (var party in parties)
         {
             var opening = (await staff.GetFromJsonAsync<HandoverChoices>($"/api/v1/contracts/{party.Id}/handover/choices"))!;
             var photo = await HandoverPhoto(staff, party.Id);
-            await Read<HandoverView>(await HandoverPost(staff, party.Id, "handover", new HandoverInput(0, Today, "Synthetic shared room", "Private key", "No initial assets", [], seeded.Readings[0], seeded.Readings[1], [photo], opening.InventoryToken)));
+            await Read<HandoverView>(await HandoverPost(staff, party.Id, "handover", new HandoverInput(0, Today, "Synthetic shared room", "Private key", "No initial assets", [], party.Readings[0], party.Readings[1], [photo], opening.InventoryToken)));
             await Read<HandoverView>(await HandoverPost(party.Tenant, party.Id, "handover/tenant-confirmation", new HandoverDecision(1, "")));
             await Read<HandoverView>(await HandoverPost(staff, party.Id, "handover/staff-confirmation", new HandoverDecision(1, "")));
         }

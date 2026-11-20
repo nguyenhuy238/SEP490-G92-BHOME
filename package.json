@@ -16,6 +16,7 @@
   "scripts": {
     "mobile:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-OcrMobileApp.ps1",
     "signing:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-LocalSigningWeb.ps1",
+    "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-DevStack.ps1",
     "mobile": "npm run start --workspace ./src/mobile --",
     "lint": "eslint . --max-warnings 0",
     "test": "npm run test --workspaces --if-present -- --run",

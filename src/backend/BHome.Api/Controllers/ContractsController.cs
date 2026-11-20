@@ -137,6 +137,33 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     { var result = await service.RenewAsync(id, x, Key(), t); return CreatedAtAction(nameof(Get), new { id = result.Id }, result); }
     [HttpGet("{id:guid}/handover")]
     public Task<HandoverView> Handover(Guid id, CancellationToken t) => service.GetHandoverAsync(id, t);
+    [HttpGet("{id:guid}/handover/draft")]
+    public Task<HandoverDraftView> HandoverDraft(Guid id, CancellationToken t) => service.GetHandoverDraftAsync(id, t);
+    [HttpGet("{id:guid}/handover/draft/pdf"), ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> HandoverDraftPdf(Guid id, CancellationToken t)
+    { var pdf = await service.HandoverDraftPdfAsync(id, t); return File(pdf, "application/pdf", "bien-ban-ban-giao-draft.pdf"); }
+    [HttpGet("{id:guid}/handover/draft/evidence/{fileId:guid}")]
+    public async Task<IActionResult> HandoverDraftEvidence(Guid id, Guid fileId, CancellationToken t)
+    { var file = new MemoryStream(); await service.CopyHandoverDraftEvidenceAsync(id, fileId, file, t); file.Position = 0; return File(file, "application/octet-stream", "anh-bang-chung-ban-giao"); }
+    [HttpPost("{id:guid}/handover/draft"), Authorize(Roles = Roles.Staff)]
+    public Task<HandoverDraftView> SaveHandoverDraft(Guid id, HandoverDraftWrite input, CancellationToken t)
+        => service.SaveHandoverDraftAsync(id, input, Key(), t);
+    [HttpPost("{id:guid}/handover/draft/evidence"), Authorize(Roles = Roles.Staff), Consumes("image/png", "image/jpeg"), RequestSizeLimit(5 * 1024 * 1024)]
+    public Task<ContractId> UploadHandoverDraftEvidence(Guid id, CancellationToken t)
+        => service.UploadHandoverDraftEvidenceAsync(id, Request.Body, t);
+    [HttpPost("{id:guid}/handover/draft/ready"), Authorize(Roles = Roles.Owner)]
+    public Task<HandoverDraftView> ReadyHandoverDraft(Guid id, HandoverDraftReady input, CancellationToken t)
+        => service.ReadyHandoverDraftAsync(id, input, Key(), t);
+    [HttpPost("{id:guid}/handover/draft/requests"), Authorize(Roles = Roles.Tenant)]
+    public Task<HandoverDraftView> RequestHandoverDraftCorrection(Guid id, HandoverDraftCorrection input, CancellationToken t)
+        => service.RequestHandoverDraftChangeAsync(id, input, Key(), t);
+    [HttpPost("{id:guid}/handover/draft/requests/{requestId:guid}/decision"), Authorize(Roles = Roles.Owner)]
+    public Task<HandoverDraftView> DecideHandoverDraftCorrection(Guid id, Guid requestId,
+        HandoverDraftCorrectionDecision input, CancellationToken t)
+        => service.DecideHandoverDraftChangeAsync(id, requestId, input, Key(), t);
+    [HttpPost("{id:guid}/handover/draft/tenant-confirmation"), Authorize(Roles = Roles.Tenant)]
+    public Task<HandoverDraftView> ConfirmHandoverDraft(Guid id, HandoverDraftTenantConfirmation input, CancellationToken t)
+        => service.ConfirmHandoverDraftAsync(id, input, Key(), t);
     [HttpGet("{id:guid}/handover/history")]
     public Task<IReadOnlyList<HandoverHistoryView>> HandoverHistory(Guid id, CancellationToken t) => service.HandoverHistoryAsync(id, t);
     [HttpGet("{id:guid}/handover/choices"), Authorize(Roles = Roles.Staff)]
