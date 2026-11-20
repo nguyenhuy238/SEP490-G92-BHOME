@@ -85,6 +85,7 @@ export interface MoveInDraft {
   evidenceIds: string[];
   roomChecks: MoveInRoomCheck[];
   accessItems: MoveInAccessItem[];
+  keyEvidenceIds?: string[];
   outstandingIssues: MoveInOutstandingIssue[];
   moveInTask?: MoveInWorkTask | null;
   inventoryToken?: string | null;
@@ -120,6 +121,7 @@ export interface MoveInDraftInput {
     }[];
   }[];
   evidenceIds?: string[];
+  keyEvidenceIds?: string[];
   inventoryToken?: string | null;
   roomChecks?: MoveInRoomCheck[];
   accessItems?: MoveInAccessItem[];
@@ -176,7 +178,7 @@ const missingMessages: Record<string, string> = {
   water: 'Chưa có chỉ số nước khởi tạo đã xác nhận.',
   meter_readings_same_day: 'Chỉ số điện và nước phải được xác nhận cùng ngày bàn giao.',
   room_condition: 'Chưa ghi nhận hiện trạng phòng.',
-  keys_and_access: 'Chưa ghi nhận chìa khóa và quyền ra vào.',
+  keys_and_access: 'Chưa ghi nhận số lượng chìa khóa bàn giao.',
   room_evidence: 'Chưa có ảnh bằng chứng hiện trạng phòng.',
   assets: 'Chưa kiểm kê đầy đủ các nhóm tài sản.',
   asset_quantities_or_evidence: 'Số lượng, tình trạng hoặc ảnh bằng chứng tài sản chưa hợp lệ; Staff cần kiểm tra lại.',
@@ -184,7 +186,7 @@ const missingMessages: Record<string, string> = {
   staff_inspection: 'Staff chưa lưu kết quả kiểm tra bàn giao.',
   room_checklist: 'Chưa hoàn thành đủ 7 nhóm kiểm tra hiện trạng phòng.',
   room_issue_evidence: 'Mục có vấn đề cần ghi chú và gắn ảnh bằng chứng trực tiếp.',
-  access_inventory: 'Chưa kê khai số lượng chìa khóa, thẻ hoặc quyền truy cập bàn giao.',
+  access_inventory: 'Chưa ghi nhận số lượng chìa khóa bàn giao.',
   outstanding_issues: 'Vấn đề tồn đọng cần Owner xem xét và quyết định phương án xử lý.',
   handover_task_not_started: 'Bấm Bắt đầu công việc trước khi kiểm kê và ghi nhận hiện trạng.',
   handover_task: 'Nhiệm vụ bàn giao chưa sẵn sàng. Hãy nhờ Owner kiểm tra.',

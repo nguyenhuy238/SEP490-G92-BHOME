@@ -46,17 +46,28 @@ public static class HandoverRoomChecklist
     public static HandoverAccessItem[] NormalizeAccess(HandoverAccessItem[]? items)
     {
         if (items is null) return [];
-        if (items.Length > 10 || items.Any(item => item is null) ||
-            items.Select(item => item.Type).Distinct(StringComparer.Ordinal).Count() != items.Length)
+        // Staff hands over a single counted bundle of keys. Historical access
+        // types remain deserializable in already-confirmed legacy snapshots.
+        if (items.Length != 1 || items[0] is null || items[0].Type != "RoomKey")
             throw ContractException.Invalid("invalid_handover_access_items");
         return items.Select(item =>
         {
-            if (item.Type is not ("RoomKey" or "GateKey" or "AccessCard" or "Remote" or "DigitalAccess" or "Other") ||
+            if (item.Type != "RoomKey" ||
                 item.Quantity is < 0 or > 100 || item.Notes is null || item.Notes.Length > 500 ||
-                item.Quantity == 0 && (item.Type != "DigitalAccess" || string.IsNullOrWhiteSpace(item.Notes)))
+                item.Quantity == 0 && string.IsNullOrWhiteSpace(item.Notes))
                 throw ContractException.Invalid("invalid_handover_access_items");
             return item with { Notes = item.Notes.Trim() };
         }).ToArray();
+    }
+
+    public static void RequireSeparateKeyEvidence(Guid[]? keys, Guid[] overall,
+        HandoverRoomCheck[] rooms, HandoverAssetInput[] assets)
+    {
+        var photos = keys ?? [];
+        if (photos.Intersect(overall).Any() ||
+            photos.Intersect(rooms.SelectMany(room => room.EvidenceIds)).Any() ||
+            photos.Intersect(assets.SelectMany(asset => asset.EvidenceIds ?? [])).Any())
+            throw ContractException.Invalid("key_evidence_must_be_separate");
     }
 
     // The legacy type remains readable for historical PDFs. Staff no longer
@@ -78,7 +89,7 @@ public static class HandoverRoomChecklist
             result.Add("room_checklist");
         if (all.Any(item => item.Status == "Issue" && item.EvidenceIds.Length == 0))
             result.Add("room_issue_evidence");
-        if (access is not { Length: > 0 }) result.Add("access_inventory");
+        if (access is not { Length: 1 } || access[0].Type != "RoomKey") result.Add("access_inventory");
         // An Issue requires a factual observation and photograph only. The
         // Owner decides whether/how to repair it at the separate Ready step.
         return result.ToArray();

@@ -79,6 +79,12 @@ vi.mock('../components/WorkspaceKit', () => ({
 }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: C) => <span>{children}</span>,
+  TextInput: React.forwardRef<HTMLInputElement, {
+    label: string; value: string; disabled: boolean; error?: boolean;
+    onChangeText: (value: string) => void;
+  }>((props, ref) => <input ref={ref} aria-label={props.label}
+    aria-invalid={!!props.error} value={props.value} disabled={props.disabled}
+    onChange={(event) => props.onChangeText(event.target.value)} />),
   Button: ({ children, disabled, onPress }: C & { disabled: boolean; onPress: () => void }) => (
     <button disabled={disabled} onClick={onPress}>
       {children}
@@ -131,22 +137,20 @@ vi.mock('../components/WorkflowControls', () => ({
     />
   ),
 }));
-vi.mock('../components/IncidentEvidencePicker', () => ({
-  IncidentEvidencePicker: ({ onChange }: { onChange: (photos: unknown[]) => void }) => (
-    <button
-      onClick={() =>
-        onChange([
-          {
-            id: evidenceId,
-            bytes: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
-            contentType: 'image/png',
-          },
-        ])
-      }
-    >
-      Chụp ảnh tài sản
-    </button>
-  ),
+vi.mock('../components/InventoryPhotoCapture', () => ({
+  InventoryPhotoCapture: ({ savedIds, photos, error, onChange, onRemoveSaved }: {
+    savedIds: string[]; photos: { id: string; bytes: Uint8Array; contentType: string }[];
+    error?: string;
+    onChange: (photos: unknown[]) => void; onRemoveSaved: (id: string) => void;
+  }) => <section>
+    <span>Ảnh minh chứng:</span>
+    <button onClick={() => onChange([...photos, {
+      id: evidenceId, bytes: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), contentType: 'image/png',
+    }])}>Chụp ảnh</button>
+    {savedIds.map((id) => <button key={id} onClick={() => onRemoveSaved(id)}>Xóa ảnh đã lưu</button>)}
+    {photos.map((photo) => <button key={photo.id} onClick={() => onChange(photos.filter((x) => x.id !== photo.id))}>Xóa ảnh mới</button>)}
+    {error && <span role="alert">{error}</span>}
+  </section>,
 }));
 vi.mock('../lib/toast', () => ({ showSuccess: vi.fn() }));
 import { StaffMoveInInventoryScreen } from '../screens/StaffMoveInInventoryScreen';
@@ -164,15 +168,11 @@ beforeEach(() => {
       if (path.endsWith('/evidence')) return { id: evidenceId };
       if (path.includes('/items/') && init?.method === 'PUT') {
         const body = JSON.parse(init.body);
+        const changedItemId = path.split('/').at(-1);
         state.data = {
           ...state.data!,
           version: state.data!.version + 1,
-          items: [
-            {
-              ...state.data!.items[0],
-              ...body,
-            },
-          ],
+          items: state.data!.items.map((item) => item.id === changedItemId ? { ...item, ...body } : item),
         };
         return { ...state.data };
       }
@@ -181,7 +181,7 @@ beforeEach(() => {
           ...state.data!,
           status: 'Completed',
           completedAt: '2026-11-18T00:00:00Z',
-          version: 2,
+          version: state.data!.version + 1,
         };
         return { ...state.data };
       }
@@ -236,17 +236,25 @@ it('shows only the selected asset on mobile, keeps unsaved input and resets the 
   expect(paneChange).toHaveBeenCalledTimes(3);
 });
 
-it('returns to the inventory list only after saving a single item on the server', async () => {
+it('saves a Good asset without any reason, photo upload or BF-07 report and returns to the list', async () => {
   state.data = inventory('InProgress');
   const paneChange = vi.fn();
   const view = render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} onPaneChange={paneChange} />);
   fireEvent.click(screen.getByText('Kiểm tra'));
   fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), { target: { value: '2' } });
   fireEvent.click(screen.getByText('Đạt'));
-  fireEvent.click(screen.getByText('Chụp ảnh tài sản'));
-  fireEvent.click(screen.getByText('Lưu mục này'));
+  expect(screen.queryByLabelText('Lý do / ghi chú – Giường đơn')).toBeNull();
+  expect(screen.queryByText('Chụp ảnh')).toBeNull();
+  expect(screen.queryByText('Báo cáo sự cố')).toBeNull();
+  fireEvent.click(screen.getByText('Lưu'));
   await waitFor(() => expect(state.request.mock.calls.some(([path, init]) =>
     path.includes('/move-in-inventory/items/') && init?.method === 'PUT')).toBe(true));
+  const saved = state.request.mock.calls.find(([path, init]) =>
+    path.includes('/move-in-inventory/items/') && init?.method === 'PUT');
+  expect(JSON.parse(saved![1].body)).toMatchObject({
+    condition: 'Good', actualQuantity: 2, notes: '', evidenceIds: [], incidentId: null,
+  });
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/evidence'))).toBe(false);
   await waitFor(() => expect(screen.queryByLabelText('Số lượng thực tế – Giường đơn')).toBeNull());
   view.rerender(<StaffMoveInInventoryScreen embeddedTaskId={taskId} onPaneChange={paneChange} />);
   expect(screen.getByText('Đạt')).toBeTruthy();
@@ -265,7 +273,8 @@ it('opens a compact one-asset screen, without expanding fields under the list', 
   expect(screen.queryByRole('combobox')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Hư hỏng' }));
   expect(screen.getByRole('button', { name: 'Hư hỏng' }).getAttribute('aria-pressed')).toBe('true');
-  expect(screen.getByLabelText('Ghi chú – Giường đơn')).toBeTruthy();
+  expect(screen.getByLabelText('Lý do / ghi chú – Giường đơn')).toBeTruthy();
+  expect(screen.getByText('Chụp ảnh')).toBeTruthy();
   expect(state.request).not.toHaveBeenCalledWith(expect.stringContaining('/items/'), expect.anything());
   fireEvent.click(screen.getByRole('button', { name: 'Về danh sách tài sản' }));
   expect(screen.queryByLabelText('Số lượng thực tế – Giường đơn')).toBeNull();
@@ -274,7 +283,7 @@ it('opens a compact one-asset screen, without expanding fields under the list', 
   expect(screen.getByRole('button', { name: 'Hư hỏng' }).getAttribute('aria-pressed')).toBe('true');
 });
 
-it('saves missing count and item evidence, then opens existing BF-07 form prefilled', async () => {
+it('saves missing count and captured evidence without asking Staff to file BF-07', async () => {
   state.data = inventory('InProgress');
   render(<StaffMoveInInventoryScreen />);
   fireEvent.click(screen.getByText('Kiểm tra'));
@@ -282,25 +291,14 @@ it('saves missing count and item evidence, then opens existing BF-07 form prefil
     target: { value: '1' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Thiếu' }));
-  fireEvent.change(screen.getByLabelText('Ghi chú – Giường đơn'), {
+  fireEvent.change(screen.getByLabelText('Lý do / ghi chú – Giường đơn'), {
     target: { value: 'Thiếu một giường' },
   });
-  fireEvent.click(screen.getByText('Chụp ảnh tài sản'));
-  fireEvent.click(screen.getByText('Báo cáo sự cố'));
-  await waitFor(() =>
-    expect(state.go).toHaveBeenCalledWith(
-      'report-incident',
-      expect.objectContaining({
-        inventoryTaskId: taskId,
-        inventoryItemId: itemId,
-        locationId,
-        roomId,
-        assetId,
-        inventoryEvidenceIds: evidenceId,
-        description: expect.stringContaining('Thiếu'),
-      }),
-    ),
-  );
+  fireEvent.click(screen.getByText('Chụp ảnh'));
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() => expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(true));
+  expect(screen.queryByText('Báo cáo sự cố')).toBeNull();
+  expect(state.go).not.toHaveBeenCalledWith('report-incident', expect.anything());
   const write = state.request.mock.calls.find(
     ([path, init]) => path.includes('/move-in-inventory/items/') && init.method === 'PUT',
   );
@@ -312,18 +310,160 @@ it('saves missing count and item evidence, then opens existing BF-07 form prefil
   });
 });
 
-it('completes directly from Staff without any Owner verification action', async () => {
-  state.data = inventory('InProgress', 2, 'Good', [evidenceId]);
+it('requires a reason and a photo for Missing or Damaged, without sending an invalid write', async () => {
+  state.data = inventory('InProgress');
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  fireEvent.click(screen.getByText('Kiểm tra'));
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Thiếu' }));
+  expect(screen.getByLabelText('Lý do / ghi chú – Giường đơn')).toBeTruthy();
+  expect(screen.getByText('Chụp ảnh')).toBeTruthy();
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(await screen.findByText(/Mô tả tình trạng thiếu hoặc hư hỏng/)).toBeTruthy();
+  expect(screen.getByLabelText('Lý do / ghi chú – Giường đơn').getAttribute('aria-invalid')).toBe('true');
+  expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(false);
+  fireEvent.change(screen.getByLabelText('Lý do / ghi chú – Giường đơn'), {
+    target: { value: 'Thiếu một giường' },
+  });
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(await screen.findByText(/Chụp ít nhất 1 ảnh minh chứng/)).toBeTruthy();
+  await waitFor(() => expect(screen.getByText('Lưu')).toHaveProperty('disabled', false));
+  expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Hư hỏng' }));
+  expect(screen.getByText(/Hư hỏng: mô tả vị trí/)).toBeTruthy();
+  await waitFor(() => expect(screen.getByText('Lưu')).toHaveProperty('disabled', false));
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(await screen.findByText(/Chụp ít nhất 1 ảnh minh chứng/)).toBeTruthy();
+  expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(false);
+});
+
+it('changing an unsaved issue to Good does not upload the issue photo or submit its reason', async () => {
+  state.data = inventory('InProgress');
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  fireEvent.click(screen.getByText('Kiểm tra'));
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Thiếu' }));
+  fireEvent.change(screen.getByLabelText('Lý do / ghi chú – Giường đơn'), { target: { value: 'Thiếu một chiếc' } });
+  fireEvent.click(screen.getByText('Chụp ảnh'));
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), { target: { value: '2' } });
+  expect(screen.queryByLabelText('Lý do / ghi chú – Giường đơn')).toBeNull();
+  expect(screen.queryByText('Chụp ảnh')).toBeNull();
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() => expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(true));
+  const saved = state.request.mock.calls.find(([path]) => path.includes('/items/'));
+  expect(JSON.parse(saved![1].body)).toMatchObject({
+    condition: 'Good', actualQuantity: 2, notes: '', evidenceIds: [], incidentId: null,
+  });
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/evidence'))).toBe(false);
+});
+
+it('highlights and focuses the missing quantity, then highlights condition without writing to server', async () => {
+  state.data = inventory('InProgress');
+  const view = render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  fireEvent.click(screen.getByText('Kiểm tra'));
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(await screen.findByText(/Nhập số lượng thực tế/)).toBeTruthy();
+  const quantity = screen.getByLabelText('Số lượng thực tế – Giường đơn');
+  expect(quantity.getAttribute('aria-invalid')).toBe('true');
+  await waitFor(() => expect(document.activeElement).toBe(quantity));
+  view.unmount();
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  fireEvent.click(screen.getByText('Kiểm tra'));
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), { target: { value: '2' } });
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(await screen.findByText(/Chọn tình trạng của tài sản/)).toBeTruthy();
+  expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(false);
+});
+
+it('unlinks an existing saved image only when Save is confirmed', async () => {
+  const previousId = '77777777-7777-4777-8777-777777777777';
+  state.data = inventory('InProgress', 1, 'Missing', [previousId]);
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  fireEvent.click(screen.getByText('Xem kiểm kê'));
+  expect(screen.getByText('Xóa ảnh đã lưu')).toBeTruthy();
+  fireEvent.click(screen.getByText('Xóa ảnh đã lưu'));
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(await screen.findByText(/Chụp ít nhất 1 ảnh minh chứng/)).toBeTruthy();
+  expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(false);
+  fireEvent.click(screen.getByText('Chụp ảnh'));
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() => expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(true));
+  const saved = state.request.mock.calls.find(([path]) => path.includes('/items/'));
+  expect(JSON.parse(saved![1].body).evidenceIds).toEqual([evidenceId]);
+});
+
+it('hides the three global completion controls and automatically finishes after saving the last item', async () => {
+  state.data = inventory('InProgress');
   const view = render(<StaffMoveInInventoryScreen />);
-  fireEvent.click(screen.getByText('Hoàn thành kiểm kê'));
-  await waitFor(() =>
-    expect(
-      state.request.mock.calls.some(
-        ([path, init]) => path.endsWith('/complete') && init.method === 'POST',
-      ),
-    ).toBe(true),
-  );
+  expect(screen.queryByLabelText(/Thông tin hoàn thành gửi Owner/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Lưu nháp tất cả' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Hoàn thành kiểm kê' })).toBeNull();
+  fireEvent.click(screen.getByText('Kiểm tra'));
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), { target: { value: '2' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() => expect(state.request.mock.calls.some(([path, init]) =>
+    path.endsWith('/complete') && init.method === 'POST')).toBe(true));
+  const saveIndex = state.request.mock.calls.findIndex(([path]) => path.includes('/items/'));
+  const completeIndex = state.request.mock.calls.findIndex(([path]) => path.endsWith('/complete'));
+  expect(completeIndex).toBeGreaterThan(saveIndex);
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/verify'))).toBe(false);
   view.rerender(<StaffMoveInInventoryScreen />);
   expect(screen.getByText('Đã hoàn thành, không chờ Owner duyệt')).toBeTruthy();
+});
+
+it('does not mark the inventory complete until all separate assets have been saved', async () => {
+  state.data = inventory('InProgress');
+  state.data.items.push({ ...state.data.items[0]!, id: '77777777-7777-4777-8777-777777777777',
+    name: 'Bàn học', assetId: null, expectedQuantity: 1 });
+  const view = render(<StaffMoveInInventoryScreen />);
+  fireEvent.click(screen.getAllByText('Kiểm tra')[0]!);
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), { target: { value: '2' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() => expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(true));
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(false);
+  view.rerender(<StaffMoveInInventoryScreen />);
+  fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra' }));
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Bàn học'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() => expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(true));
+});
+
+it('allows an empty room to be confirmed without adding a separate global completion button', async () => {
+  state.data = { ...inventory('InProgress'), items: [] };
+  render(<StaffMoveInInventoryScreen />);
+  expect(screen.queryByRole('button', { name: 'Hoàn thành kiểm kê' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận phòng không có tài sản cần kiểm kê' }));
+  await waitFor(() => expect(state.request.mock.calls.some(([path, init]) =>
+    path.endsWith('/complete') && JSON.parse(init.body).confirmNoAssets === true)).toBe(true));
+});
+
+it('preserves a saved asset and offers only an error retry if automatic completion fails', async () => {
+  state.data = inventory('InProgress');
+  const originalRequest = state.request.getMockImplementation()!;
+  let failOnce = true;
+  state.request.mockImplementation(async (path: string, init?: { method: string; body: string }) => {
+    if (path.endsWith('/complete') && failOnce) {
+      failOnce = false;
+      throw new Error('Mất kết nối khi hoàn tất');
+    }
+    return originalRequest(path, init);
+  });
+  const view = render(<StaffMoveInInventoryScreen />);
+  fireEvent.click(screen.getByText('Kiểm tra'));
+  fireEvent.change(screen.getByLabelText('Số lượng thực tế – Giường đơn'), { target: { value: '2' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(await screen.findByText(/Đã lưu tài sản nhưng chưa đồng bộ hoàn tất kiểm kê/)).toBeTruthy();
+  expect(state.data!.items[0]!.condition).toBe('Good');
+  expect(state.data!.status).toBe('InProgress');
+  fireEvent.click(screen.getByRole('button', { name: 'Thử gửi lại kết quả đã lưu' }));
+  await waitFor(() => expect(state.data!.status).toBe('Completed'));
+  view.rerender(<StaffMoveInInventoryScreen />);
+  expect(screen.queryByRole('button', { name: 'Thử gửi lại kết quả đã lưu' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Hoàn thành kiểm kê' })).toBeNull();
 });

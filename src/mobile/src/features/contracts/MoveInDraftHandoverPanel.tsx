@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { Button, Checkbox, Icon, ProgressBar, RadioButton, SegmentedButtons, Text, TouchableRipple } from 'react-native-paper';
+import { Directory, File, Paths } from 'expo-file-system';
+import { Button, Checkbox, Icon, IconButton, ProgressBar, RadioButton, SegmentedButtons, Text, TouchableRipple } from 'react-native-paper';
 import {
   contractError,
   displayContractDate,
@@ -30,14 +31,12 @@ import {
   canTenantRespondToMoveIn,
   moveInMissingMessage,
   moveInHandover,
-  moveInAccessKinds,
   roomHandoverChecks,
   type MoveInDraft,
   type MoveInDraftInput,
   type MoveInRoomCheckCode,
   type MoveInRoomCheckStatus,
   type MoveInAccessItem,
-  type MoveInAccessType,
 } from '../../services/moveInHandover';
 import { ContractInitialMeterTasks } from './ContractInitialMeterTasks';
 import { ContractEvidence } from './ContractEvidence';
@@ -60,13 +59,11 @@ const roomStatusLabels: Record<MoveInRoomCheckStatus, string> = {
   NotApplicable: 'Không áp dụng',
 };
 
-type AccessRow = { type: MoveInAccessType; quantity: string; notes: string };
-
 const staffSteps = [
   { title: 'Ghi chỉ số điện nước', detail: 'Chụp từng công tơ, kiểm tra OCR và xác nhận chỉ số thật.' },
   { title: 'Kiểm tra hiện trạng phòng', detail: 'Chọn kết quả thực tế cho 7 khu vực. Có vấn đề thì ghi chú và chụp ảnh.' },
   { title: 'Kiểm kê tài sản', detail: 'Kiểm kê một lần trong Đối chiếu đầu vào; danh sách bên dưới chỉ hiển thị kết quả đã lưu.' },
-  { title: 'Chìa khóa và ảnh bàn giao', detail: 'Đếm chìa khóa, thẻ ra vào và bổ sung ảnh toàn cảnh trước khi lưu.' },
+  { title: 'Chìa khóa bàn giao', detail: 'Ghi số lượng chìa khóa thực giao và chụp ảnh chìa khóa.' },
 ] as const;
 
 const wizardStyles = StyleSheet.create({
@@ -116,6 +113,16 @@ const wizardStyles = StyleSheet.create({
   conditionOptions: { gap: 6 },
   conditionOption: { borderWidth: 1, borderRadius: 10, borderColor: colors.border, minHeight: 44 },
   conditionSelected: { backgroundColor: colors.tint, borderColor: colors.blue },
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  photoTile: {
+    width: '47%', minWidth: 116, maxWidth: 210, flexGrow: 1,
+    borderRadius: 12, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: '#ffffff', padding: 4, overflow: 'hidden',
+  },
+  removePhoto: {
+    position: 'absolute', top: 2, right: 2, margin: 0, width: 36, height: 36,
+    backgroundColor: '#ffffff', borderRadius: 18,
+  },
 });
 
 function hasCompleteRoomInspection(value: MoveInDraft): boolean {
@@ -134,7 +141,8 @@ function hasCompleteAssetInspection(value: MoveInDraft): boolean {
 }
 
 function hasSavedInventoryItem(item: MoveInInventoryItem): boolean {
-  return item.condition !== null && item.actualQuantity !== null && (item.evidenceIds ?? []).length > 0;
+  return item.condition !== null && item.actualQuantity !== null &&
+    (item.condition === 'Good' || (item.evidenceIds ?? []).length > 0);
 }
 
 function hasCompleteAssetSection(value: MoveInDraft, inventory: MoveInInventory | null): boolean {
@@ -214,13 +222,21 @@ export function MoveInDraftHandoverPanel({
   const [values, setValues] = useState<Record<string, string>>({});
   const [evidencePool, setEvidencePool] = useState<string[]>([]);
   const [selectedEvidence, setSelectedEvidence] = useState<string[]>([]);
+  const [selectedKeyEvidence, setSelectedKeyEvidence] = useState<string[]>([]);
+  const [photoPreviewUris, setPhotoPreviewUris] = useState<Record<string, string>>({});
+  const previewFiles = useRef(new Map<string, { uri: string; dispose: () => void }>());
   const [roomChecksTouched, setRoomChecksTouched] = useState<string[]>([]);
-  const [accessItems, setAccessItems] = useState<AccessRow[]>([]);
-  const [accessItemsTouched, setAccessItemsTouched] = useState(false);
-  const [photoSafe, setPhotoSafe] = useState(false);
+  const [keyQuantity, setKeyQuantity] = useState('');
+  const [keyNotes, setKeyNotes] = useState('');
+  const [keysTouched, setKeysTouched] = useState(false);
   const [feedback, setFeedback] = useState({ version: -1, note: '', acknowledged: false });
   const lock = useRef(false);
   const [keys] = useState(() => mutationKeys(randomUUID));
+
+  useEffect(() => () => {
+    for (const preview of previewFiles.current.values()) preview.dispose();
+    previewFiles.current.clear();
+  }, [contract.id]);
 
   useFocusEffect(useCallback(() => {
     setRevision((value) => value + 1);
@@ -242,27 +258,19 @@ export function MoveInDraftHandoverPanel({
     !!draft.electricity && !!draft.water,
     hasCompleteRoomInspection(draft),
     hasCompleteAssetSection(draft, inventory),
-    !!draft.keysAndAccess?.trim() && (draft.accessItems ?? []).length > 0 && (draft.evidenceIds ?? []).length > 0,
+    // Saving the key quantity completes this step; key photos are optional.
+    (draft.accessItems ?? []).length === 1 && draft.accessItems[0]?.type === 'RoomKey',
   ] : [false, false, false, false];
   const recommendedStep = draft ? firstUnfinishedStep(draft, inventory) : 0;
   const availableEvidence = [
     ...new Set([
       ...selectedEvidence,
+      ...selectedKeyEvidence,
       ...evidencePool,
       ...(draft?.assets.flatMap((asset) => asset.evidenceIds ?? []) ?? []),
       ...(draft?.roomChecks ?? []).flatMap((check) => check.evidenceIds ?? []),
     ]),
   ];
-  const assetEvidence = new Set([
-    ...(draft?.assets.flatMap((asset) => asset.evidenceIds ?? []) ?? []),
-    ...availableEvidence.filter((id) =>
-      draft?.assets.some((asset) => values[`${asset.id}.evidence.${id}`] === 'true')),
-  ]);
-  const attachedEvidence = new Set([
-    ...(draft?.evidenceIds ?? []),
-    ...(draft?.assets.flatMap((asset) => asset.evidenceIds ?? []) ?? []),
-    ...(draft?.roomChecks ?? []).flatMap((check) => check.evidenceIds ?? []),
-  ]);
   const canUploadSample = staff && contract.isDevelopmentDemo === true &&
     canUseLocalMeterDemo(
       typeof __DEV__ !== 'undefined' && __DEV__,
@@ -280,11 +288,6 @@ export function MoveInDraftHandoverPanel({
   const setRoomCheck = (code: MoveInRoomCheckCode, field: string, value: string) => {
     setValues((previous) => ({ ...previous, [`roomCheck.${code}.${field}`]: value }));
     setRoomChecksTouched((previous) => previous.includes(code) ? previous : [...previous, code]);
-  };
-  const updateAccessItem = (index: number, field: keyof AccessRow, value: string) => {
-    setAccessItems((previous) => previous.map((item, position) =>
-      position === index ? { ...item, [field]: value } : item));
-    setAccessItemsTouched(true);
   };
 
   useEffect(() => {
@@ -366,7 +369,7 @@ export function MoveInDraftHandoverPanel({
     }));
 
   async function run(command: () => Promise<unknown>, success: string, refresh = true) {
-    if (lock.current) return;
+    if (lock.current) return false;
     lock.current = true;
     setBusy(true);
     setActionError('');
@@ -380,8 +383,11 @@ export function MoveInDraftHandoverPanel({
         setRevision((value) => value + 1);
         onUpdated?.();
       }
+      return true;
     } catch (cause) {
       setActionError(cause instanceof Error && !('status' in cause) ? cause.message : conciseMessage(contractError(cause)));
+      // CameraCapture must retain its preview for retry after a failed private upload.
+      return false;
     } finally {
       lock.current = false;
       setBusy(false);
@@ -416,21 +422,20 @@ export function MoveInDraftHandoverPanel({
       ])),
     });
     setSelectedEvidence(draft.evidenceIds ?? []);
+    setSelectedKeyEvidence(draft.keyEvidenceIds ?? []);
     setEvidencePool([
       ...new Set([
         ...(draft.evidenceIds ?? []),
+        ...(draft.keyEvidenceIds ?? []),
         ...draft.assets.flatMap((asset) => asset.evidenceIds ?? []),
         ...(draft.roomChecks ?? []).flatMap((check) => check.evidenceIds ?? []),
       ]),
     ]);
     setRoomChecksTouched([]);
-    setAccessItems((draft.accessItems ?? []).map((item) => ({
-      type: item.type,
-      quantity: String(item.quantity),
-      notes: item.notes || '',
-    })));
-    setAccessItemsTouched(false);
-    setPhotoSafe(false);
+    const recordedKeys = (draft.accessItems ?? []).find((item) => item.type === 'RoomKey');
+    setKeyQuantity(recordedKeys ? String(recordedKeys.quantity) : '');
+    setKeyNotes(recordedKeys?.notes ?? '');
+    setKeysTouched(false);
     setEditing(true);
   }
 
@@ -455,29 +460,19 @@ export function MoveInDraftHandoverPanel({
       return { code, status, notes, evidenceIds };
     });
     let validatedAccessItems: MoveInAccessItem[] | undefined;
-    if (accessItemsTouched) {
-      validatedAccessItems = accessItems.map((item, index) => {
-        const type = item.type;
-        const notes = item.notes.trim();
-        const quantity = Number(item.quantity);
-        if (!moveInAccessKinds.some((kind) => kind.type === type) || !item.quantity.trim() ||
-          !Number.isInteger(quantity) || quantity < 0 || quantity > 100 ||
-          (quantity === 0 && (type !== 'DigitalAccess' || !notes)) ||
-          (type === 'Other' && !notes)) {
-          throw new Error(`Dòng bàn giao quyền ra vào ${index + 1}: số lượng phải từ 1–100; quyền truy cập số có thể bằng 0 nếu có ghi chú, và loại khác cần mô tả.`);
-        }
-        return { type, quantity, notes };
-      });
-      if (new Set(validatedAccessItems.map((item) => item.type)).size !== validatedAccessItems.length) {
-        throw new Error('Mỗi loại chìa khóa, thẻ hoặc quyền ra vào chỉ được kê một dòng.');
-      }
+    if (keysTouched) {
+      const quantity = Number(keyQuantity);
+      if (!keyQuantity.trim() || !Number.isInteger(quantity) || quantity < 0 || quantity > 100)
+        throw new Error('Số lượng chìa khóa bàn giao phải là số nguyên từ 0 đến 100.');
+      if (quantity === 0 && !keyNotes.trim())
+        throw new Error('Nếu không bàn giao chìa khóa, hãy ghi rõ lý do.');
+      validatedAccessItems = [{ type: 'RoomKey', quantity, notes: keyNotes.trim() }];
     }
     // Unchecked groups remain untouched. Each checked group can be saved separately.
     const checkedAssets = draft.assets.filter((asset) => values[`${asset.id}.checked`] === 'true');
     const input: MoveInDraftInput = {
       version: draft.version,
       roomCondition: values.roomCondition?.trim(),
-      keysAndAccess: values.keysAndAccess?.trim(),
       notes: values.notes?.trim(),
       ...(touchedChecks.length ? { roomChecks } : {}),
       ...(validatedAccessItems ? { accessItems: validatedAccessItems } : {}),
@@ -491,6 +486,7 @@ export function MoveInDraftHandoverPanel({
         inventoryToken: draft.inventoryToken,
       } : {}),
       evidenceIds: selectedEvidence,
+      keyEvidenceIds: selectedKeyEvidence,
     };
     const key = keys.get('draft', input);
     await client.save(contract.id, input, key);
@@ -536,96 +532,133 @@ export function MoveInDraftHandoverPanel({
     if (legacyInventory) setRevision((value) => value + 1);
   }
 
-  async function uploadInspectionPhoto(bytes: Uint8Array<ArrayBuffer>, assetPhoto: boolean, targetId?: string) {
+  async function uploadInspectionPhoto(bytes: Uint8Array<ArrayBuffer>, kind: 'room' | 'asset' | 'keys', targetId?: string) {
     if (!started) throw new Error('Hãy bắt đầu công việc trước khi chụp ảnh kiểm kê.');
     if (bytes.byteLength > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
     const file = await client.uploadEvidence(contract.id, bytes, 'image/jpeg');
+    // Newly uploaded private files cannot be GET-previewed until Save links them
+    // into the draft. Retain a short-lived local preview instead of weakening
+    // the server's evidence authorization or auto-saving an unfinished form.
+    let preview: { uri: string; dispose: () => void };
+    if (Platform.OS === 'web') {
+      const uri = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
+      preview = { uri, dispose: () => URL.revokeObjectURL(uri) };
+    } else {
+      const directory = new Directory(Paths.cache, 'bhome-handover-unsaved-photos');
+      directory.create({ idempotent: true, intermediates: true });
+      const cached = new File(directory, `${randomUUID()}.jpg`);
+      cached.create();
+      await cached.write(bytes);
+      preview = { uri: cached.uri, dispose: () => { if (cached.exists) cached.delete(); } };
+    }
+    previewFiles.current.get(file.id)?.dispose();
+    previewFiles.current.set(file.id, preview);
+    setPhotoPreviewUris((items) => ({ ...items, [file.id]: preview.uri }));
     setEvidencePool((items) => [...new Set([...items, file.id])]);
     // A photo taken for a specific room/asset check stays attached to that
     // check, not also counted as an unrelated general handover photo.
-    if (!assetPhoto && !targetId)
-      setSelectedEvidence((items) => [...new Set([...items, file.id])]);
+    if (kind === 'keys')
+      setSelectedKeyEvidence((items) => [...new Set([...items, file.id])]);
     // When a specific inspection form opened the camera, link the uploaded
     // evidence to that same form immediately. Staff must not hunt through a
     // shared image pool or accidentally attach it to another asset.
-    if (assetPhoto && targetId) set(`${targetId}.evidence.${file.id}`, 'true');
-    if (!assetPhoto && targetId)
+    if (kind === 'asset' && targetId) set(`${targetId}.evidence.${file.id}`, 'true');
+    if (kind === 'room' && targetId)
       setRoomCheck(targetId as MoveInRoomCheckCode, 'evidence.' + file.id, 'true');
-    setPhotoSafe(false);
+  }
+
+  function photoIdsFor(kind: 'room' | 'asset' | 'keys', targetId?: string) {
+    const belongsToThisItem = (id: string) => kind === 'asset' && targetId
+      ? values[`${targetId}.evidence.${id}`] === 'true'
+      : kind === 'room' && targetId
+        ? values[`roomCheck.${targetId}.evidence.${id}`] === 'true'
+        : kind === 'keys' && selectedKeyEvidence.includes(id);
+    return availableEvidence.filter(belongsToThisItem);
+  }
+
+  function photoGallery(kind: 'room' | 'asset' | 'keys', targetId?: string) {
+    // Every thumbnail belongs to this inspection; no cross-room image choices.
+    const photos = photoIdsFor(kind, targetId);
+    if (!photos.length) return null;
+    const remove = (id: string) => {
+      if (kind === 'asset' && targetId) set(`${targetId}.evidence.${id}`, 'false');
+      if (kind === 'room' && targetId) setRoomCheck(targetId as MoveInRoomCheckCode, `evidence.${id}`, 'false');
+      if (kind === 'keys') setSelectedKeyEvidence((ids) => ids.filter((value) => value !== id));
+      // No server-side file DELETE exists: remove this inspection's attachment
+      // on the next Save, preserving any other area's existing references.
+      const linkedElsewhere = selectedEvidence.includes(id) ||
+        kind !== 'keys' && selectedKeyEvidence.includes(id) ||
+        Object.entries(values).some(([field, value]) => value === 'true' &&
+          field.endsWith(`.evidence.${id}`) &&
+          field !== (kind === 'room' && targetId ? `roomCheck.${targetId}.evidence.${id}` : `${targetId}.evidence.${id}`));
+      if (linkedElsewhere) return;
+      setEvidencePool((ids) => ids.filter((value) => value !== id));
+      const localPreview = previewFiles.current.get(id);
+      if (localPreview) {
+        localPreview.dispose();
+        previewFiles.current.delete(id);
+        setPhotoPreviewUris((items) => {
+          const updated = { ...items };
+          delete updated[id];
+          return updated;
+        });
+      }
+    };
+    return (
+      <View style={wizardStyles.photoGrid}>
+        {photos.map((id, index) => (
+          <View key={id} style={wizardStyles.photoTile}>
+            <ContractEvidence api={api} contractId={contract.id} evidenceId={id}
+              draftHandoverEvidence thumbnail localThumbnailUri={photoPreviewUris[id]}
+              label={`${kind === 'keys' ? 'Ảnh chìa khóa' : 'Ảnh hiện trạng'} ${index + 1}`} />
+            <IconButton icon="close" size={20} disabled={busy}
+              accessibilityLabel={`Xóa ${kind === 'keys' ? 'ảnh chìa khóa' : 'ảnh hiện trạng'} ${index + 1}`}
+              style={wizardStyles.removePhoto} onPress={() => remove(id)} />
+          </View>
+        ))}
+      </View>
+    );
   }
 
   // The returned camera callback only reads the mutation lock after the user
   // confirms a capture; this helper is evaluated during render, not the callback.
-  function photoCapture(kind: 'room' | 'asset' | 'general' | 'access', targetId?: string) {
+  function photoCapture(kind: 'room' | 'asset' | 'keys', targetId?: string) {
     const assetPhoto = kind === 'asset';
+    const itemPhoto = kind === 'keys' || !!targetId;
+    const photoLimit = 5;
+    const photoCount = photoIdsFor(kind, targetId).length;
     return (
       <View style={wizardStyles.section}>
-        <Heading
-          title={assetPhoto ? 'Ảnh kiểm kê tài sản' : kind === 'room' ? 'Ảnh hiện trạng phòng' : kind === 'access' ? 'Ảnh chìa khóa / quyền ra vào' : 'Ảnh bàn giao chung'}
-          detail={assetPhoto
-            ? 'Ảnh tải lên tại phiếu này sẽ được gắn ngay vào đúng tài sản.'
-            : kind === 'room'
-              ? 'Ảnh chụp trong phiếu khu vực được tự động gắn vào khu vực đang kiểm tra.'
-              : kind === 'access'
-                ? 'Ảnh này được lưu trong bằng chứng bàn giao chung, không gắn riêng từng loại quyền truy cập.'
-                : 'Chụp ít nhất một ảnh toàn cảnh, rõ phòng và không có giấy tờ cá nhân.'}
-        />
-        <Checkbox.Item
-          label="Ảnh không có giấy tờ cá nhân hoặc thông tin riêng tư"
-          status={photoSafe ? 'checked' : 'unchecked'}
-          onPress={() => setPhotoSafe((value) => !value)}
-          disabled={busy}
-        />
+        {itemPhoto ? <Text variant="labelMedium" style={{ color: colors.navy }}>
+          {kind === 'keys' ? 'Ảnh chìa khóa bàn giao (không bắt buộc):' : 'Ảnh minh chứng:'}
+        </Text> : null}
         <CameraCapture
-          label={assetPhoto ? 'Chụp ảnh tài sản' : kind === 'access' ? 'Chụp ảnh chìa khóa / thẻ' : 'Chụp ảnh hiện trạng bàn giao'}
+          label="Chụp ảnh"
+          presentation="evidence"
           reviewBeforeSubmit
-          reviewActionLabel="Dùng ảnh này làm bằng chứng bàn giao"
-          reviewNotice="Kiểm tra đúng phòng, đủ rõ và không chứa giấy tờ cá nhân trước khi tải lên."
-          disabled={busy || !photoSafe || availableEvidence.length >= 10}
+          reviewActionLabel="Dùng ảnh này"
+          disabled={busy || photoCount >= photoLimit}
           onCapture={(bytes) => run(
-            () => uploadInspectionPhoto(bytes, assetPhoto, targetId),
-            assetPhoto ? 'Đã tải và gắn ảnh vào phiếu tài sản.' : 'Đã tải ảnh hiện trạng lên máy chủ.',
+            () => uploadInspectionPhoto(bytes, kind, targetId),
+            kind === 'keys' ? 'Đã tải ảnh chìa khóa; bấm Lưu để gắn vào biên bản.' : assetPhoto ? 'Đã tải và gắn ảnh vào phiếu tài sản.' : 'Đã tải ảnh hiện trạng lên máy chủ.',
             false,
           )}
         />
         {canUploadSample && (
-          <Action secondary disabled={busy || !photoSafe || availableEvidence.length >= 10}
+          <Button mode="outlined" icon="flask-outline" disabled={busy || photoCount >= photoLimit}
             onPress={() => void run(async () => {
               if (!canUploadSample) return;
               const bytes = handoverDemoJpeg();
               try {
-                await uploadInspectionPhoto(bytes, assetPhoto, targetId);
+                await uploadInspectionPhoto(bytes, kind, targetId);
               } finally {
                 bytes.fill(0);
               }
             }, 'Đã tải ảnh giả lập DEV lên biên bản test.', false)}>
-            Ảnh giả lập DEV – không dùng làm bằng chứng thực tế
-          </Action>
+            Thêm ảnh mẫu DEV
+          </Button>
         )}
-        {kind === 'general' && availableEvidence.length > 0 && (
-          <View style={wizardStyles.section}>
-            <Text variant="titleSmall">Ảnh đã tải lên</Text>
-            {availableEvidence.map((id, index) => (
-              <View key={id} style={wizardStyles.section}>
-                {attachedEvidence.has(id) ? (
-                  <ContractEvidence api={api} contractId={contract.id} evidenceId={id}
-                    draftHandoverEvidence label={`Xem ảnh hiện trạng ${index + 1}`} />
-                ) : (
-                  <Text style={ui.muted}>Ảnh {index + 1} đã tải lên. Lưu tiến độ để gắn vào biên bản.</Text>
-                )}
-                <Checkbox.Item
-                  label={assetEvidence.has(id)
-                    ? `Ảnh ${index + 1} đã gắn riêng cho tài sản`
-                    : `Dùng ảnh ${index + 1} làm ảnh bàn giao chung`}
-                  status={selectedEvidence.includes(id) ? 'checked' : 'unchecked'}
-                  disabled={busy || assetEvidence.has(id)}
-                  onPress={() => setSelectedEvidence((items) =>
-                    items.includes(id) ? items.filter((item) => item !== id) : [...items, id])}
-                />
-              </View>
-            ))}
-          </View>
-        )}
+        {photoGallery(kind, targetId)}
       </View>
     );
   }
@@ -633,18 +666,25 @@ export function MoveInDraftHandoverPanel({
   function workEntry(
     id: string, title: string, detail: string, status: string,
     onPress: () => void, done = false,
+    indicator: 'passed' | 'issue' | 'not-applicable' | 'unreviewed' = done ? 'passed' : 'unreviewed',
   ) {
+    const source = indicator === 'passed' ? 'check-circle-outline'
+      : indicator === 'issue' ? 'alert-circle-outline'
+        : indicator === 'not-applicable' ? 'minus-circle-outline' : 'clipboard-text-outline';
+    const color = indicator === 'passed' ? colors.green
+      : indicator === 'issue' ? colors.amber
+        : indicator === 'not-applicable' ? colors.muted : colors.blue;
     return (
       <TouchableRipple key={id} accessibilityRole="button"
         accessibilityLabel={title} disabled={busy} onPress={onPress}
         style={[wizardStyles.workRow, compactPhone && wizardStyles.phoneWorkRow]}>
         <View style={wizardStyles.rowContent}>
-          <Icon source={done ? 'check-circle-outline' : 'clipboard-text-outline'}
-            size={23} color={done ? colors.green : colors.blue} />
+          <Icon source={source} size={23} color={color} />
           <View style={wizardStyles.rowText}>
             <Text variant="titleSmall" style={wizardStyles.rowTitle}>{title}</Text>
             <Text variant="bodySmall" style={wizardStyles.rowDetail}>{detail}</Text>
-            <Text variant="labelSmall" style={done ? ui.green : ui.muted}>{status}</Text>
+            <Text variant="labelSmall" style={indicator === 'passed' ? ui.green :
+              indicator === 'issue' ? { color: colors.amber } : ui.muted}>{status}</Text>
           </View>
           <Icon source="chevron-right" size={22} color={colors.blue} />
         </View>
@@ -657,19 +697,11 @@ export function MoveInDraftHandoverPanel({
   const selectedRoomCheck = roomHandoverChecks.find((check) => check.code === selectedRoomCode);
   const selectedAsset = activeItem?.startsWith('asset:')
     ? draft?.assets.find((asset) => asset.id === activeItem.slice(6)) : undefined;
-  const selectedAccessType = activeItem?.startsWith('access:') ? activeItem.slice(7) : null;
-  const selectedAccessIndex = selectedAccessType
-    ? accessItems.findIndex((item) => item.type === selectedAccessType) : -1;
-  const selectedAccess = selectedAccessIndex >= 0 ? accessItems[selectedAccessIndex] : null;
   const modalTitle = activeItem === 'meter' ? `Ghi chỉ số ${meterTask?.label.toLocaleLowerCase('vi') ?? 'công tơ'}` :
     activeItem === 'legacy-inventory' ? 'Kiểm kê đầu vào của hợp đồng' :
     activeItem === 'room-summary' ? 'Hiện trạng tổng quan' :
       selectedRoomCheck?.label ?? selectedAsset?.name ??
-      (activeItem === 'access-summary' ? 'Thông tin bàn giao' :
-        activeItem === 'add-access' ? 'Chọn loại quyền ra vào' :
-          selectedAccessType ? moveInAccessKinds.find((kind) => kind.type === selectedAccessType)?.label ?? 'Quyền ra vào' :
-            activeItem === 'room-photo' ? 'Ảnh hiện trạng phòng' :
-              activeItem === 'general-photo' ? 'Ảnh bàn giao chung' : '');
+      (activeItem === 'keys' ? 'Chìa khóa bàn giao' : '');
 
   if (!allowed) return <Text>Không thể mở biên bản của cơ sở hoặc tài khoản này.</Text>;
   if (current?.notFound && legacyFallback) return <>{legacyFallback}</>;
@@ -754,10 +786,13 @@ export function MoveInDraftHandoverPanel({
                     index === 0 ? `${Number(!!draft.electricity) + Number(!!draft.water)}/2 công tơ đã xác nhận` :
                       index === 1 ? `${checkedRooms}/7 khu vực đã kiểm tra` :
                         index === 2 ? `${checkedAssets}/${draft.assets.length} nhóm tài sản đã kiểm tra` :
-                          `${(draft.accessItems ?? []).length} loại quyền ra vào · ${draft.evidenceIds.length} ảnh chung`,
-                    savedWizardSteps[index] ? 'Đã lưu đủ' : index === recommendedStep ? 'Nên làm tiếp' : 'Chưa hoàn tất',
+                          `${draft.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ?? 'Chưa ghi'} chìa khóa · ${(draft.keyEvidenceIds ?? []).length} ảnh chìa khóa`,
+                    savedWizardSteps[index]
+                      ? index === 1 && inspectionIssues.length ? `Đã ghi nhận · ${inspectionIssues.length} khu vực có vấn đề` : 'Đã lưu đủ'
+                      : index === recommendedStep ? 'Nên làm tiếp' : 'Chưa hoàn tất',
                     () => goToStep(index),
                     savedWizardSteps[index],
+                    index === 1 && inspectionIssues.length ? 'issue' : undefined,
                   ))}
                 </View>
               ) : (
@@ -783,11 +818,10 @@ export function MoveInDraftHandoverPanel({
                         const check = (draft.roomChecks ?? []).find((item) => item.code === code);
                         return workEntry(code, label, check?.notes || 'Kiểm tra thực tế và chụp ảnh nếu có vấn đề',
                           check ? roomStatusLabels[check.status] : 'Chưa kiểm tra',
-                          () => setActiveItem(`room:${code}`), !!check);
+                          () => setActiveItem(`room:${code}`), !!check,
+                          check?.status === 'Issue' ? 'issue'
+                            : check?.status === 'NotApplicable' ? 'not-applicable' : undefined);
                       })}
-                      {workEntry('room-photo', 'Ảnh hiện trạng phòng',
-                        'Chụp và gắn bằng chứng cho mục có vấn đề', 'Mở máy ảnh',
-                        () => setActiveItem('room-photo'))}
                       {inspectionIssues.length > 0 && (
                         <Text style={ui.red}>{inspectionIssues.length} khu vực có vấn đề. Owner xem ghi chú và ảnh để quyết định xử lý.</Text>
                       )}
@@ -823,11 +857,13 @@ export function MoveInDraftHandoverPanel({
                         draft.assets.map((asset) => {
                           const item = inventory?.items.find((entry) => entry.id === asset.id);
                           const saved = !!item && hasSavedInventoryItem(item);
+                          const passed = saved && item?.condition === 'Good';
+                          const problem = saved && (item?.condition === 'Missing' || item?.condition === 'Damaged');
                           return (
                             <View key={asset.id} style={[wizardStyles.workRow, compactPhone && wizardStyles.phoneWorkRow]}>
                               <View style={wizardStyles.rowContent}>
-                                <Icon source={saved ? 'check-circle-outline' : 'checkbox-blank-circle-outline'}
-                                  size={23} color={saved ? colors.green : colors.blue} />
+                                <Icon source={passed ? 'check-circle-outline' : problem ? 'alert-circle-outline' : 'checkbox-blank-circle-outline'}
+                                  size={23} color={passed ? colors.green : problem ? colors.amber : colors.blue} />
                                 <View style={wizardStyles.rowText}>
                                   <Text variant="titleSmall" style={wizardStyles.rowTitle}>{asset.name}</Text>
                                   <Text variant="bodySmall" style={wizardStyles.rowDetail}>
@@ -835,7 +871,7 @@ export function MoveInDraftHandoverPanel({
                                       ? `Dự kiến ${item.expectedQuantity} · Thực tế ${item.actualQuantity ?? 'chưa ghi'}`
                                       : `Dự kiến ${asset.configuredQuantity ?? 'chưa rõ'} ${asset.unit ?? 'đơn vị'}`}
                                   </Text>
-                                  <Text variant="labelSmall" style={saved ? ui.green : ui.muted}>
+                                  <Text variant="labelSmall" style={passed ? ui.green : problem ? { color: colors.amber } : ui.muted}>
                                     {saved
                                       ? `Đã kiểm kê · ${inventoryStatusLabels[item!.condition!]}`
                                       : 'Chưa kiểm kê'}
@@ -854,20 +890,12 @@ export function MoveInDraftHandoverPanel({
                   )}
                   {wizardStep === 3 && (
                     <View style={wizardStyles.workList}>
-                      {workEntry('access-summary', 'Ghi chú bàn giao',
-                        draft.keysAndAccess || 'Tình trạng chìa khóa, quyền ra vào', 'Mở phiếu ghi nhận',
-                        () => setActiveItem('access-summary'), !!draft.keysAndAccess)}
-                      {accessItems.map((item) => workEntry(item.type,
-                        moveInAccessKinds.find((kind) => kind.type === item.type)?.label ?? item.type,
-                        `Số lượng ${item.quantity || 'chưa nhập'} · ${item.notes || 'Chưa có ghi chú'}`,
-                        'Mở để chỉnh sửa', () => setActiveItem(`access:${item.type}`)))}
-                      {workEntry('add-access', 'Thêm chìa khóa / thẻ / quyền truy cập',
-                        'Chọn loại và ghi nhận số lượng bàn giao', 'Thêm loại',
-                        () => setActiveItem('add-access'))}
-                      {workEntry('general-photo', 'Ảnh bàn giao chung',
-                        `${draft.evidenceIds.length} ảnh đã lưu trên biên bản`,
-                        'Mở phiếu ảnh', () => setActiveItem('general-photo'),
-                        draft.evidenceIds.length > 0)}
+                      {workEntry('keys', 'Chìa khóa bàn giao',
+                        `${draft.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ?? 'Chưa ghi'} chiếc · ${(draft.keyEvidenceIds ?? []).length} ảnh chìa khóa (tùy chọn)`,
+                        (draft.accessItems ?? []).length === 1 && draft.accessItems?.[0]?.type === 'RoomKey'
+                          ? 'Đã ghi nhận' : 'Chưa hoàn tất',
+                        () => setActiveItem('keys'),
+                        (draft.accessItems ?? []).length === 1 && draft.accessItems?.[0]?.type === 'RoomKey')}
                     </View>
                   )}
                   <Text variant="bodySmall" style={ui.muted}>
@@ -895,7 +923,7 @@ export function MoveInDraftHandoverPanel({
           )}
           {tenant && !!draft.terms && <Text>Điều khoản: {draft.terms}</Text>}
           <Text>Hiện trạng phòng: {draft.roomCondition || 'Chưa kiểm tra'}</Text>
-          <Text>Chìa khóa / quyền ra vào: {draft.keysAndAccess || 'Chưa kiểm tra'}</Text>
+          <Text>Chìa khóa bàn giao: {draft.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ?? 'Chưa kiểm đếm'} chiếc</Text>
           {!!draft.notes && <Text>Ghi chú: {draft.notes}</Text>}
           <Heading title="Kiểm tra hiện trạng (7 mục)" detail="Ghi nhận kết quả, ghi chú và ảnh của từng khu vực" />
           {roomHandoverChecks.map(({ code, label }) => {
@@ -916,10 +944,14 @@ export function MoveInDraftHandoverPanel({
               </Box>
             );
           })}
-          <Heading title="Vật dụng và quyền ra vào" />
-          {(draft.accessItems ?? []).length ? (draft.accessItems ?? []).map((item, index) => (
-            <Text key={index}>{moveInAccessKinds.find((kind) => kind.type === item.type)?.label ?? item.type}: {item.quantity} · {item.notes || 'Không có ghi chú'}</Text>
-          )) : <Text>Chưa kê khai chìa khóa, thẻ hay quyền truy cập.</Text>}
+          <Heading title="Ảnh chìa khóa bàn giao" />
+          {(draft.keyEvidenceIds ?? []).map((id, index) => (
+            <ContractEvidence key={`keys-${id}`} api={api} contractId={contract.id} evidenceId={id}
+              draftHandoverEvidence label={`Xem ảnh chìa khóa ${index + 1}`} />
+          ))}
+          {!!draft.accessItems?.find((item) => item.type === 'RoomKey')?.notes && (
+            <Text>Ghi chú chìa khóa: {draft.accessItems.find((item) => item.type === 'RoomKey')!.notes}</Text>
+          )}
           {(draft.outstandingIssues ?? []).length > 0 && <Heading title="Ghi nhận liên quan" />}
           {(draft.outstandingIssues ?? []).length ? (draft.outstandingIssues ?? []).map((issue, index) => (
             <Text key={`${issue.code}-${index}`}>
@@ -1007,10 +1039,8 @@ export function MoveInDraftHandoverPanel({
                     <Text variant="titleMedium" style={wizardStyles.rowTitle}>
                       {modalTitle}
                     </Text>
-                    {activeItem !== 'legacy-inventory' && <Text variant="bodySmall" style={ui.muted}>
-                      {activeItem === 'meter'
-                        ? 'Chụp ảnh, kiểm tra kết quả OCR và tự xác nhận chỉ số.'
-                        : 'Chỉ ghi nhận thực tế. Owner quyết định xử lý các vấn đề.'}
+                    {activeItem === 'meter' && <Text variant="bodySmall" style={ui.muted}>
+                      Chụp ảnh, kiểm tra kết quả OCR và tự xác nhận chỉ số.
                     </Text>}
                   </View>
                   <Button mode="text" disabled={busy} onPress={closeItem}>Đóng</Button>
@@ -1027,6 +1057,7 @@ export function MoveInDraftHandoverPanel({
                 )}
                 {activeItem === 'legacy-inventory' && draft.moveInTask?.inventoryTaskId && (
                   <StaffMoveInInventoryScreen embeddedTaskId={draft.moveInTask.inventoryTaskId}
+                    developmentDemo={contract.isDevelopmentDemo === true}
                     onPaneChange={() => modalScroll.current?.scrollTo({ y: 0, animated: false })} />
                 )}
                 {activeItem === 'room-summary' && (
@@ -1073,13 +1104,6 @@ export function MoveInDraftHandoverPanel({
                         <Text variant="bodySmall" style={ui.muted}>
                           Gắn riêng ít nhất một ảnh minh chứng cho khu vực này.
                         </Text>
-                        {availableEvidence.map((id, index) => (
-                          <Checkbox.Item key={id} label={'Gắn ảnh ' + (index + 1)}
-                            status={values['roomCheck.' + selectedRoomCode + '.evidence.' + id] === 'true' ? 'checked' : 'unchecked'}
-                            disabled={busy}
-                            onPress={() => setRoomCheck(selectedRoomCode, 'evidence.' + id,
-                              values['roomCheck.' + selectedRoomCode + '.evidence.' + id] === 'true' ? 'false' : 'true')} />
-                        ))}
                         {photoCapture('room', selectedRoomCode)}
                       </>
                     )}
@@ -1089,62 +1113,25 @@ export function MoveInDraftHandoverPanel({
                   <View style={wizardStyles.section}>
                     <HandoverAssetFields asset={selectedAsset} values={values} set={set}
                       evidenceIds={availableEvidence} disabled={busy}
-                      quantities={!!draft.inventoryToken} showCheckWithoutQuantities compact embedded />
+                      quantities={!!draft.inventoryToken} showCheckWithoutQuantities compact embedded hideEvidenceChoices />
                     {photoCapture('asset', selectedAsset.id)}
                   </View>
                 )}
-                {activeItem === 'access-summary' && (
-                  <>
-                    <Input label="Chìa khóa / quyền truy cập"
-                      value={values.keysAndAccess ?? ''} disabled={busy} multiline
-                      onChange={(value) => set('keysAndAccess', value)} />
-                    <Input label="Ghi chú bàn giao"
-                      value={values.notes ?? ''} disabled={busy} multiline
-                      onChange={(value) => set('notes', value)} />
-                  </>
-                )}
-                {activeItem === 'add-access' && (
+                {activeItem === 'keys' && (
                   <View style={wizardStyles.section}>
-                    <Text variant="bodySmall" style={ui.muted}>
-                      Chọn loại chưa kê khai. Mỗi loại chỉ có một dòng bàn giao.
-                    </Text>
-                    {moveInAccessKinds.map(({ type, label }) => (
-                      <Button key={type} mode="outlined"
-                        disabled={busy || accessItems.some((item) => item.type === type)}
-                        onPress={() => {
-                          setAccessItems((previous) => [...previous, {
-                            type, quantity: type === 'DigitalAccess' ? '0' : '1', notes: '',
-                          }]);
-                          setAccessItemsTouched(true);
-                          setActiveItem('access:' + type);
-                        }}>
-                        {label}
-                      </Button>
-                    ))}
+                    <Input label="Số lượng chìa khóa bàn giao" numeric
+                      value={keyQuantity} disabled={busy}
+                      onChange={(value) => { setKeyQuantity(value); setKeysTouched(true); }} />
+                    <Input label="Ghi chú chìa khóa (nếu có)" multiline
+                      value={keyNotes} disabled={busy}
+                      onChange={(value) => { setKeyNotes(value); setKeysTouched(true); }} />
+                    {photoCapture('keys')}
                   </View>
                 )}
-                {selectedAccess && selectedAccessIndex >= 0 && (
-                  <View style={wizardStyles.section}>
-                    <Input label="Số lượng bàn giao" numeric
-                      value={selectedAccess.quantity} disabled={busy}
-                      onChange={(value) => updateAccessItem(selectedAccessIndex, 'quantity', value)} />
-                    <Input label="Ghi chú / cách sử dụng" multiline
-                      value={selectedAccess.notes} disabled={busy}
-                      onChange={(value) => updateAccessItem(selectedAccessIndex, 'notes', value)} />
-                    {photoCapture('access')}
-                    <Button mode="text" disabled={busy} onPress={() => {
-                      setAccessItems((previous) => previous.filter((_, position) => position !== selectedAccessIndex));
-                      setAccessItemsTouched(true);
-                      setActiveItem(null);
-                    }}>Bỏ loại quyền ra vào này</Button>
-                  </View>
-                )}
-                {activeItem === 'room-photo' && photoCapture('room')}
-                {activeItem === 'general-photo' && photoCapture('general')}
                 {!!error && <Text accessibilityRole="alert" style={ui.red}>{error}</Text>}
                 {!!notice && <Text style={ui.green}>{notice}</Text>}
               </ScrollView>
-              {activeItem !== 'meter' && activeItem !== 'add-access' && activeItem !== 'legacy-inventory' && (
+              {activeItem !== 'meter' && activeItem !== 'legacy-inventory' && (
                 <View style={[wizardStyles.modalFooter, compactPhone && wizardStyles.phoneModalFooter]}>
                   <View style={{ flex: 1 }}>
                     <Button mode="outlined" disabled={busy} onPress={closeItem}>

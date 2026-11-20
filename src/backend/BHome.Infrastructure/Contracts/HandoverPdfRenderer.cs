@@ -63,8 +63,18 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer, IHandover
             }
             doc.Add(new Paragraph("3. HIỆN TRẠNG PHÒNG, CHÌA KHÓA VÀ BẰNG CHỨNG"));
             doc.Add(new Paragraph("Tình trạng phòng: " + (string.IsNullOrWhiteSpace(r.RoomCondition) ? "Chưa kiểm tra" : r.RoomCondition)));
-            doc.Add(new Paragraph("Chìa khóa / thẻ / quyền truy cập: " + (string.IsNullOrWhiteSpace(r.KeysAndAccess) ? "Chưa kiểm tra" : r.KeysAndAccess)));
-            doc.Add(new Paragraph("Ảnh minh chứng kèm theo: " + r.EvidenceIds.Length));
+            if (r.KeyEvidenceIds is null)
+            {
+                doc.Add(new Paragraph("Chìa khóa / thẻ / quyền truy cập: " +
+                    (string.IsNullOrWhiteSpace(r.KeysAndAccess) ? "Chưa kiểm tra" : r.KeysAndAccess)));
+                doc.Add(new Paragraph("Ảnh minh chứng kèm theo: " + r.EvidenceIds.Length));
+            }
+            else
+            {
+                doc.Add(new Paragraph("Chìa khóa bàn giao: " +
+                    (r.AccessItems?.FirstOrDefault(item => item.Type == "RoomKey")?.Quantity.ToString() ?? "Chưa kiểm đếm")));
+                doc.Add(new Paragraph("Ảnh chìa khóa bàn giao: " + r.KeyEvidenceIds.Length));
+            }
             doc.Add(new Paragraph("Ghi chú: " + r.Notes));
             doc.Add(new Paragraph("4. CHECKLIST HIỆN TRẠNG CHI TIẾT"));
             foreach (var code in HandoverRoomChecklist.RequiredCodes)
@@ -73,10 +83,11 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer, IHandover
                 doc.Add(new Paragraph($"{HandoverRoomChecklist.Labels[code]}: " +
                     (check is null ? "Chưa kiểm tra" : $"{RoomCheckStatus(check.Status)} · {check.Notes} · {check.EvidenceIds.Length} ảnh")));
             }
-            doc.Add(new Paragraph("5. CHÌA KHÓA / QUYỀN TRUY CẬP THỰC GIAO"));
+            doc.Add(new Paragraph(r.KeyEvidenceIds is null
+                ? "5. CHÌA KHÓA / QUYỀN TRUY CẬP THỰC GIAO" : "5. CHÌA KHÓA BÀN GIAO"));
             foreach (var item in r.AccessItems ?? [])
-                doc.Add(new Paragraph($"{AccessTypeLabel(item.Type)}: {item.Quantity} · {item.Notes}"));
-            if (r.AccessItems is not { Length: > 0 }) doc.Add(new Paragraph("Chưa kiểm đếm quyền truy cập"));
+                doc.Add(new Paragraph($"{(r.KeyEvidenceIds is not null && item.Type == "RoomKey" ? "Chìa khóa bàn giao" : AccessTypeLabel(item.Type))}: {item.Quantity} · {item.Notes}"));
+            if (r.AccessItems is not { Length: > 0 }) doc.Add(new Paragraph("Chưa kiểm đếm chìa khóa"));
             doc.Add(new Paragraph("6. VẤN ĐỀ TỒN TẠI VÀ PHƯƠNG ÁN KHẮC PHỤC"));
             foreach (var issue in r.OutstandingIssues ?? [])
                 doc.Add(new Paragraph($"{(HandoverRoomChecklist.Labels.TryGetValue(issue.Code, out var label) ? label : issue.Code)}: " +
@@ -139,7 +150,9 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer, IHandover
             if (r.Type != "AssetChange")
             {
                 Text("Hiện trạng phòng: " + r.Snapshot.RoomCondition);
-                Text("Chìa khóa / thẻ / quyền truy cập: " + r.Snapshot.KeysAndAccess);
+                Text(r.Type == "MoveIn" && r.Snapshot.KeyEvidenceIds is not null
+                    ? "Chìa khóa bàn giao: " + (r.Snapshot.AccessItems?.FirstOrDefault(item => item.Type == "RoomKey")?.Quantity.ToString() ?? "Chưa kiểm đếm") + " chiếc"
+                    : "Chìa khóa / thẻ / quyền truy cập: " + r.Snapshot.KeysAndAccess);
                 Text($"Chỉ số điện đã xác nhận: {r.Snapshot.Electricity.Value} ({r.Snapshot.Electricity.MeterCode}, {r.Snapshot.Electricity.Id})\nChỉ số nước đã xác nhận: {r.Snapshot.Water.Value} ({r.Snapshot.Water.MeterCode}, {r.Snapshot.Water.Id})");
                 if (r.Type == "MoveIn" && r.Snapshot.RoomChecks is { Length: > 0 })
                 {
@@ -150,9 +163,11 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer, IHandover
                 }
                 if (r.Type == "MoveIn" && r.Snapshot.AccessItems is { Length: > 0 })
                 {
-                    Text("CHÌA KHÓA VÀ QUYỀN TRUY CẬP ĐÃ GIAO");
+                    Text(r.Snapshot.KeyEvidenceIds is null ? "CHÌA KHÓA VÀ QUYỀN TRUY CẬP ĐÃ GIAO" : "CHÌA KHÓA ĐÃ GIAO");
                     foreach (var access in r.Snapshot.AccessItems)
-                        Text($"{AccessTypeLabel(access.Type)}: {access.Quantity} · {access.Notes}");
+                        Text($"{(r.Snapshot.KeyEvidenceIds is not null && access.Type == "RoomKey" ? "Chìa khóa bàn giao" : AccessTypeLabel(access.Type))}: {access.Quantity} · {access.Notes}");
+                    if (r.Snapshot.KeyEvidenceIds is not null)
+                        Text($"Ảnh chìa khóa bàn giao: {r.Snapshot.KeyEvidenceIds.Length}");
                 }
                 if (r.Type == "MoveIn" && r.Snapshot.OutstandingIssues is { Length: > 0 })
                 {

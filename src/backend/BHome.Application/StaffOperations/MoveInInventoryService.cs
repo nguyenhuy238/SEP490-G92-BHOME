@@ -58,7 +58,8 @@ public sealed partial class OperationalTaskService
         Validate(input);
         if (itemId == Guid.Empty || input.ActualQuantity < 0 ||
             input.Condition is not ("Good" or "Missing" or "Damaged") ||
-            input.EvidenceIds is null || input.EvidenceIds.Length is < 1 or > 5 ||
+            input.EvidenceIds is null || input.EvidenceIds.Length > 5 ||
+            ((input.Condition is "Missing" or "Damaged") && input.EvidenceIds.Length == 0) ||
             input.EvidenceIds.Any(x => x == Guid.Empty) ||
             input.EvidenceIds.Distinct().Count() != input.EvidenceIds.Length ||
             input.IncidentId == Guid.Empty || input.Notes?.Length > 2000 ||
@@ -109,7 +110,7 @@ public sealed partial class OperationalTaskService
                     Condition = input.Condition,
                     Notes = input.Notes?.Trim(),
                     EvidenceIds = input.EvidenceIds,
-                    IncidentId = input.IncidentId
+                    IncidentId = input.Condition == "Good" ? null : input.IncidentId
                 };
                 task.MoveInInventoryJson = JsonSerializer.Serialize(snapshot);
                 await RecordAsync(task, "move_in_inventory_item_checked", input.Notes?.Trim() ?? "",
@@ -141,18 +142,21 @@ public sealed partial class OperationalTaskService
                 if (snapshot.Items.Length == 0 && !input.ConfirmNoAssets)
                     throw OperationalTaskException.Conflict("move_in_inventory_no_assets_confirmation_required");
                 if (snapshot.Items.Any(i => i.Condition is null || i.ActualQuantity is null ||
-                    i.EvidenceIds is null || i.EvidenceIds.Length == 0))
+                    i.EvidenceIds is null ||
+                    ((i.Condition is "Missing" or "Damaged") &&
+                        (i.EvidenceIds.Length == 0 || string.IsNullOrWhiteSpace(i.Notes)))))
                     throw OperationalTaskException.Conflict("move_in_inventory_checklist_incomplete");
-                if (snapshot.Items.Any(i => (i.Condition is "Missing" or "Damaged") && i.IncidentId is null))
-                    throw OperationalTaskException.Conflict("move_in_inventory_incident_required");
                 var evidence = (await repository.EvidenceAsync(taskId, t)).Select(e => e.Id).ToHashSet();
                 if (snapshot.Items.SelectMany(i => i.EvidenceIds ?? []).Any(id => !evidence.Contains(id)))
                     throw OperationalTaskException.Conflict("move_in_inventory_evidence_missing");
-                var incidentIds = snapshot.Items.Where(i => i.Condition is "Missing" or "Damaged")
+                // Staff records facts and evidence only. Owner chooses the
+                // remediation plan during handover review; a BF-07 report is
+                // not a prerequisite for completing this inspection.
+                var incidentIds = snapshot.Items.Where(i => i.IncidentId.HasValue)
                     .Select(i => i.IncidentId!.Value).Distinct().ToArray();
                 var incidents = (await repository.IncidentTargetsAsync(incidentIds, t))
                     .ToDictionary(i => i.Id);
-                foreach (var item in snapshot.Items.Where(i => i.Condition is "Missing" or "Damaged"))
+                foreach (var item in snapshot.Items.Where(i => i.IncidentId.HasValue))
                 {
                     if (!incidents.TryGetValue(item.IncidentId!.Value, out var incident) ||
                         incident.LocationId != task.LocationId ||

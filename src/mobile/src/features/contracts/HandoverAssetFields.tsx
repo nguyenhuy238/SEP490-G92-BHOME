@@ -15,6 +15,7 @@ export function HandoverAssetFields({
   showCheckWithoutQuantities = false,
   compact = false,
   embedded = false,
+  hideEvidenceChoices = false,
 }: {
   asset: HandoverAsset;
   values: Record<string, string>;
@@ -25,6 +26,7 @@ export function HandoverAssetFields({
   showCheckWithoutQuantities?: boolean;
   compact?: boolean;
   embedded?: boolean;
+  hideEvidenceChoices?: boolean;
 }) {
   const a = asset;
   const [expanded, setExpanded] = useState(embedded);
@@ -162,7 +164,7 @@ export function HandoverAssetFields({
                 multiline
               />
               <Text>Ảnh riêng cho {a.name} (bắt buộc khi thiếu, hỏng hoặc sai lệch):</Text>
-              {evidenceIds.map((id, index) => (
+              {!hideEvidenceChoices && evidenceIds.map((id, index) => (
                 <Checkbox.Item
                   key={id}
                   label={`${a.name} · Ảnh ${index + 1}`}

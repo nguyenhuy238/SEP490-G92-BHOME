@@ -66,12 +66,6 @@ const roomCheckLabels: Record<string, string> = {
   safety_equipment: 'Thiết bị an toàn được trang bị',
 };
 
-const accessLabels: Record<string, string> = {
-  RoomKey: 'Chìa khóa phòng', GateKey: 'Chìa khóa cổng',
-  AccessCard: 'Thẻ từ', Remote: 'Điều khiển',
-  DigitalAccess: 'Quyền ra vào điện tử', Other: 'Quyền truy cập khác',
-};
-
 /** GET /api/v1/contracts/{id}/handover/draft; kept local to Owner Web. */
 interface OwnerHandoverDraft {
   version: number;
@@ -92,8 +86,16 @@ interface OwnerHandoverDraft {
   keysAndAccess: string;
   notes: string;
   evidenceIds: string[];
+  keyEvidenceIds?: string[];
   inventoryToken?: string | null;
   noAssetsConfirmed: boolean;
+  inventoryHasIssues?: boolean;
+  moveInTask?: {
+    id: string;
+    status: string;
+    inventoryTaskId: string | null;
+    inventoryStatus: string | null;
+  } | null;
   ownerReadyAt?: string | null;
   tenantConfirmedAt?: string | null;
   requests: HandoverChangeRequest[];
@@ -119,12 +121,13 @@ const missingLabel: Record<string, string> = {
   water: 'Chưa có chỉ số nước ban đầu được xác nhận, kèm ảnh',
   meter_readings_same_day: 'Chỉ số điện và nước cần được ghi nhận cùng ngày',
   room_condition: 'Staff chưa ghi nhận hiện trạng phòng',
-  keys_and_access: 'Chưa kiểm kê chìa khóa và quyền truy cập',
+  keys_and_access: 'Chưa ghi nhận số lượng chìa khóa bàn giao',
   room_evidence: 'Chưa có ảnh chứng minh tình trạng phòng',
   room_checklist: 'Staff chưa hoàn tất 7 hạng mục kiểm tra hiện trạng phòng',
   room_issue_evidence: 'Hạng mục hiện trạng có vấn đề nhưng thiếu ảnh bằng chứng riêng',
-  access_inventory: 'Chưa kiểm kê số lượng chìa khóa, thẻ và quyền ra vào thực giao',
+  access_inventory: 'Chưa ghi nhận số lượng chìa khóa bàn giao',
   assets: 'Kiểm kê tài sản chưa hoàn tất',
+  move_in_inventory: 'Staff chưa lưu/hoàn thành phiếu đối chiếu kiểm kê đầu vào',
   asset_quantities_or_evidence: 'Số lượng, đối chiếu tài sản hoặc ảnh bằng chứng kiểm kê chưa hợp lệ; Staff cần kiểm tra và bổ sung',
   inventory_changed: 'Danh sách tài sản đã thay đổi, cần Staff kiểm kê lại',
   staff_inspection: 'Staff chưa hoàn tất các nội dung kiểm tra bàn giao',
@@ -134,6 +137,7 @@ const missingLabel: Record<string, string> = {
 // Match HandoverChecklist.RequiresOwner/Problem: an exceptional inventory
 // requires an explicit Owner reason and handling plan before marking Ready.
 function requiresOwnerException(draft: OwnerHandoverDraft): boolean {
+  if (draft.inventoryHasIssues) return true;
   if (draft.roomChecks?.some((check) => check.status === 'Issue')) return true;
   if (draft.noAssetsConfirmed) return false;
   if (!draft.assets?.length) return true;
@@ -154,6 +158,119 @@ function maybe(value: string | null | undefined) {
 
 function printedDate(value: string | null | undefined) {
   return value ? displayContractDate(value) : 'Chờ cập nhật';
+}
+
+interface ActualInventoryItem {
+  id: string;
+  name: string;
+  expectedQuantity: number;
+  actualQuantity: number | null;
+  condition: 'Good' | 'Missing' | 'Damaged' | null;
+  notes: string | null;
+  evidenceIds: string[] | null;
+}
+interface ActualInventoryView {
+  taskId: string;
+  status: string;
+  items: ActualInventoryItem[];
+}
+const inventoryConditionLabels: Record<string, string> = {
+  Good: 'Đạt', Missing: 'Thiếu', Damaged: 'Hư hỏng',
+};
+
+/** Read the exact Staff inventory task, not the older handover-draft asset fields. */
+function OwnerInventoryResults({ api, taskId, polling }: {
+  api: ContractClient;
+  taskId: string;
+  polling: boolean;
+}) {
+  const [response, setResponse] = useState<{
+    api: ContractClient; taskId: string; data: ActualInventoryView | null; error: string;
+  } | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    let checking = false;
+    async function load() {
+      if (checking) return;
+      checking = true;
+      try {
+        const data = await api.transport<ActualInventoryView>(
+          `/api/v1/operational-tasks/${encodeURIComponent(taskId)}/move-in-inventory`,
+          { signal: controller.signal },
+        );
+        if (!controller.signal.aborted) setResponse({ api, taskId, data, error: '' });
+      } catch (failure) {
+        if (!controller.signal.aborted) setResponse((previous) => ({
+          api, taskId,
+          data: previous?.api === api && previous.taskId === taskId ? previous.data : null,
+          error: contractError(failure),
+        }));
+      } finally {
+        checking = false;
+      }
+    }
+    void load();
+    const timer = polling ? window.setInterval(() => {
+      if (document.visibilityState !== 'hidden') void load();
+    }, 10000) : null;
+    return () => {
+      controller.abort();
+      if (timer !== null) window.clearInterval(timer);
+    };
+  }, [api, taskId, polling]);
+  const current = response?.api === api && response.taskId === taskId ? response : null;
+  if (!current) return <LinearProgress aria-label="Đang tải kiểm kê thực tế từ Staff" />;
+  if (current.error && !current.data) return (
+    <Alert severity="warning">Chưa tải được kết quả kiểm kê thực tế: {current.error}</Alert>
+  );
+  const inventory = current.data;
+  if (!inventory) return null;
+  const checked = inventory.items.filter((item) => item.condition !== null).length;
+  return (
+    <Stack spacing={1}>
+      {!!current.error && <Alert severity="warning">Tạm thời chưa đồng bộ được kết quả mới: {current.error}</Alert>}
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+        <Chip size="small" variant="outlined" label={`Đã kiểm kê ${checked}/${inventory.items.length}`} />
+        <Chip size="small" color={inventory.status === 'Completed' ? 'success' : 'default'}
+          label={inventory.status === 'Completed' ? 'Staff đã hoàn tất' : 'Staff đang thực hiện'} />
+      </Stack>
+      {inventory.items.length === 0 && (
+        <Typography variant="body2" color="text.secondary">Phòng không có tài sản cần kiểm kê.</Typography>
+      )}
+      {inventory.items.map((item) => {
+        const issue = item.condition === 'Missing' || item.condition === 'Damaged';
+        return (
+          <Box key={item.id} sx={{ py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.name}</Typography>
+              <Chip size="small" variant="outlined"
+                color={issue ? 'warning' : item.condition === 'Good' ? 'success' : 'default'}
+                label={inventoryConditionLabels[item.condition ?? ''] ?? 'Chưa kiểm tra'} />
+            </Stack>
+            <Typography variant="body2" color="text.secondary">
+              Dự kiến {item.expectedQuantity} · Thực tế {item.actualQuantity ?? 'Chưa ghi nhận'}
+            </Typography>
+            {!!item.notes?.trim() && <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{item.notes}</Typography>}
+            {!!item.evidenceIds?.length && (
+              <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: 'wrap' }}>
+                {item.evidenceIds.map((id, index) => (
+                  <PrivateEvidenceViewer key={id}
+                    label={`${item.name} · Ảnh minh chứng ${index + 1}`}
+                    filename={`kiem-ke-${index + 1}.jpg`}
+                    fetchBlob={(signal) => api.transport<Blob>(
+                      `/api/v1/operational-tasks/${encodeURIComponent(taskId)}/evidence/${encodeURIComponent(id)}`,
+                      { signal }, 'blob',
+                    )}
+                    errorMessage={contractError}
+                  />
+                ))}
+              </Stack>
+            )}
+          </Box>
+        );
+      })}
+    </Stack>
+  );
 }
 
 /** After confirmation, use the immutable server-stored MoveInReport, never the draft-watermarked PDF. */
@@ -211,7 +328,7 @@ function ConfirmedHandoverDocuments({ api, id }: { api: ContractClient; id: stri
   );
 }
 
-function DraftDocument({ draft }: { draft: OwnerHandoverDraft }) {
+function DraftDocument({ draft, api }: { draft: OwnerHandoverDraft; api: ContractClient }) {
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>
       <Stack spacing={2}>
@@ -238,9 +355,8 @@ function DraftDocument({ draft }: { draft: OwnerHandoverDraft }) {
         </Stack>
         <Divider />
         <Stack spacing={0.5}>
-          <Typography variant="subtitle2">II. Hiện trạng phòng và quyền truy cập</Typography>
+          <Typography variant="subtitle2">II. Hiện trạng phòng</Typography>
           <Typography variant="body2">Hiện trạng phòng: {maybe(draft.roomCondition)}</Typography>
-          <Typography variant="body2">Chìa khóa / quyền truy cập: {maybe(draft.keysAndAccess)}</Typography>
           <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
             Ghi chú: {draft.notes?.trim() || 'Chưa có ghi chú'}
           </Typography>
@@ -254,7 +370,15 @@ function DraftDocument({ draft }: { draft: OwnerHandoverDraft }) {
         <Divider />
         <Stack spacing={0.5}>
           <Typography variant="subtitle2">IV. Kiểm kê tài sản</Typography>
-          {draft.noAssetsConfirmed ? (
+          {draft.inventoryHasIssues && (
+            <Alert severity="warning" variant="outlined">
+              Staff ghi nhận tài sản thiếu hoặc hư hỏng trong phiếu kiểm kê. Owner cần đối chiếu ảnh và ghi chú
+              trước khi quyết định lý do chấp thuận và phương án xử lý bàn giao.
+            </Alert>
+          )}
+          {draft.status !== 'Confirmed' && draft.moveInTask?.inventoryTaskId ? (
+            <OwnerInventoryResults api={api} taskId={draft.moveInTask.inventoryTaskId} polling />
+          ) : draft.noAssetsConfirmed ? (
             <Typography variant="body2">Owner xác nhận phòng không có tài sản bàn giao.</Typography>
           ) : draft.assets?.length ? (
             draft.assets.map((asset) => (
@@ -286,12 +410,12 @@ function DraftDocument({ draft }: { draft: OwnerHandoverDraft }) {
         </Stack>
         <Divider />
         <Stack spacing={0.5}>
-          <Typography variant="subtitle2">VI. Chìa khóa và quyền ra vào thực giao</Typography>
-          {draft.accessItems?.length ? draft.accessItems.map((item) => (
-            <Typography variant="body2" key={item.type}>
-              {accessLabels[item.type] ?? item.type}: {item.quantity} · {item.notes || 'Không có ghi chú'}
-            </Typography>
-          )) : <Typography variant="body2" color="text.secondary">Chưa kiểm đếm quyền ra vào.</Typography>}
+          <Typography variant="subtitle2">VI. Chìa khóa bàn giao</Typography>
+          <Typography variant="body2">Số lượng thực giao: {draft.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ?? 'Chưa kiểm đếm'}</Typography>
+          {!!draft.accessItems?.find((item) => item.type === 'RoomKey')?.notes && (
+            <Typography variant="body2">Ghi chú: {draft.accessItems.find((item) => item.type === 'RoomKey')!.notes}</Typography>
+          )}
+          <Typography variant="body2">Ảnh chìa khóa: {(draft.keyEvidenceIds ?? []).length}</Typography>
         </Stack>
         <Divider />
         <Stack spacing={0.5}>
@@ -353,17 +477,28 @@ export function OwnerHandoverDraftPanel({
   const [decisionRequest, setDecisionRequest] = useState('');
   const lock = useRef(false);
   const [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
+  const draftStatusRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    draftStatusRef.current = result?.api === api && result.id === id ? result.data?.status ?? null : null;
+  }, [api, id, result]);
 
   useEffect(() => {
     if (typeof api.transport !== 'function') return;
     const controller = new AbortController();
+    let checking = false;
     async function load() {
+      if (checking) return;
+      checking = true;
       try {
         const draft = await api.transport<OwnerHandoverDraft>(
           `${base}/${encodeURIComponent(id)}/handover/draft`,
           { signal: controller.signal },
         );
-        if (!controller.signal.aborted) setResult({ api, id, revision, data: draft });
+        if (!controller.signal.aborted) {
+          setResult({ api, id, revision, data: draft });
+          setLoadError(null);
+        }
       } catch (error) {
         if (controller.signal.aborted) return;
         if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
@@ -371,10 +506,27 @@ export function OwnerHandoverDraftPanel({
         } else {
           setLoadError({ api, id, revision, message: contractError(error) });
         }
+      } finally {
+        checking = false;
       }
     }
     void load();
-    return () => controller.abort();
+    // Staff and Owner work in separate browser sessions. Refresh the server
+    // draft without discarding Owner's unsaved decision fields or resetting
+    // the visible document while polling.
+    const timer = window.setInterval(() => {
+      if (!lock.current && draftStatusRef.current !== 'Confirmed' &&
+          document.visibilityState !== 'hidden') void load();
+    }, 12000);
+    const onFocus = () => {
+      if (!lock.current && draftStatusRef.current !== 'Confirmed') void load();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [api, id, revision]);
 
   if (typeof api.transport !== 'function') return null;
@@ -438,7 +590,7 @@ export function OwnerHandoverDraftPanel({
           {draft.status === 'Confirmed' && (
             <ConfirmedHandoverDocuments key={`${id}-${revision}`} api={api} id={id} />
           )}
-          <DraftDocument draft={draft} />
+          <DraftDocument draft={draft} api={api} />
           {draft.status !== 'Confirmed' && (
             <PrivateEvidenceViewer
               label="PDF bản nháp bàn giao (chưa xác nhận)"
@@ -457,6 +609,18 @@ export function OwnerHandoverDraftPanel({
                 `${base}/${encodeURIComponent(id)}/handover/draft/evidence/${encodeURIComponent(fileId)}`,
                 { signal },
                 'blob',
+              )}
+              errorMessage={contractError}
+            />
+          ))}
+          {(draft.keyEvidenceIds ?? []).map((fileId, index) => (
+            <PrivateEvidenceViewer
+              key={`key-${fileId}`}
+              label={`Ảnh chìa khóa bàn giao ${index + 1}`}
+              filename={`chìa-khóa-bàn-giao-${index + 1}.jpg`}
+              fetchBlob={(signal) => api.transport<Blob>(
+                `${base}/${encodeURIComponent(id)}/handover/draft/evidence/${encodeURIComponent(fileId)}`,
+                { signal }, 'blob',
               )}
               errorMessage={contractError}
             />

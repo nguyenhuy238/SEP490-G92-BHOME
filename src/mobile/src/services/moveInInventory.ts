@@ -57,7 +57,7 @@ export function validateInventoryItem(
     return 'Chọn Thiếu khi số lượng thực tế nhỏ hơn dự kiến.';
   if (!['Good', 'Missing', 'Damaged'].includes(input.condition)) return 'Chọn tình trạng tài sản.';
   if (input.condition !== 'Good' && !input.notes.trim())
-    return 'Mô tả tài sản thiếu hoặc hư hỏng để tự điền báo cáo sự cố.';
+    return 'Ghi rõ tài sản thiếu hoặc hư hỏng để Owner xem xét.';
   if (input.notes.length > 2000) return 'Ghi chú không quá 2000 ký tự.';
   return '';
 }
@@ -67,12 +67,11 @@ export function readyToComplete(items: MoveInInventoryItem[]) {
     (item) =>
       item.actualQuantity !== null &&
       !!item.condition &&
-      (item.evidenceIds ?? []).length > 0 &&
+      (item.condition === 'Good' || (item.evidenceIds ?? []).length > 0) &&
       !validateInventoryItem(
         { actualQuantity: item.actualQuantity, condition: item.condition, notes: item.notes ?? '' },
         item.expectedQuantity,
-      ) &&
-      (item.condition === 'Good' || !!item.incidentId),
+      ),
   );
 }
 

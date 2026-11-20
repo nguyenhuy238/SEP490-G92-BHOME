@@ -68,7 +68,8 @@ public sealed partial class ContractService
             if (FileHash(image.ToArray()) != current.EvidenceHash) throw ContractException.Conflict("handover_evidence_integrity_failed");
         }
         foreach (var evidenceId in snapshot.EvidenceIds.Concat(snapshot.Assets.SelectMany(a => a.EvidenceIds ?? []))
-                     .Concat((snapshot.RoomChecks ?? []).SelectMany(check => check.EvidenceIds)).Distinct())
+                     .Concat((snapshot.RoomChecks ?? []).SelectMany(check => check.EvidenceIds))
+                     .Concat(snapshot.KeyEvidenceIds ?? []).Distinct())
         {
             var f = await Workflow.FileAsync(c.Id, evidenceId, t) ?? throw ContractException.Invalid("invalid_handover_evidence");
             if (f.Kind != ContractFileKind.HandoverEvidence) throw ContractException.Invalid("invalid_handover_evidence");

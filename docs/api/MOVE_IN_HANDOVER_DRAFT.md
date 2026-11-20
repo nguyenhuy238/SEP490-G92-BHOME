@@ -5,15 +5,21 @@ Triển khai **phần bàn giao bên cạnh quy trình tạo/ký/kích hoạt h�
 
 ## Luồng vận hành
 
-Khi hợp đồng có tác vụ `MoveInInventory`, bước Tenant chốt biên bản nháp phải kiểm tra cùng điều kiện với luồng bàn giao cũ: kiểm kê đã `Completed`, các mục thiếu/hỏng có sự cố liên kết và mọi sự cố đó đã `Resolved`. Chưa đạt trả `409 move_in_inventory_required`, giữ nguyên bản nháp `Ready`, không tạo PDF final hoặc đóng tác vụ bàn giao. Hợp đồng lịch sử chưa có tác vụ kiểm kê giữ cách xử lý tương thích hiện có.
+Khi hợp đồng có tác vụ `MoveInInventory`, Owner chỉ có thể đánh dấu Ready sau khi kiểm kê đã `Completed`. Staff **không phải lập sự cố BF-07** để lưu/hoàn thành kiểm kê. Nếu thiếu hoặc hỏng, Staff ghi chú và ảnh riêng; Owner xem xét phiếu kiểm kê và **bắt buộc ghi lý do, phương án xử lý** trong bước Ready. Tenant chỉ xác nhận sau Ready hợp lệ; nếu kiểm kê chưa hoàn thành trả `409 move_in_inventory_required`. Hợp đồng lịch sử không có tác vụ kiểm kê giữ cách xử lý tương thích hiện có.
+
+**Kiểm kê tài sản trong cùng công việc:** Staff luôn xác nhận số lượng thực tế và một trong ba kết quả `Good` (Đạt), `Missing` (Thiếu), `Damaged` (Hư hỏng). `Good` chỉ hợp lệ khi đủ số lượng dự kiến; **không bắt buộc ghi chú hoặc ảnh riêng của tài sản**. `Missing`/`Damaged` bắt buộc mô tả hiện trạng và ít nhất một ảnh riêng (tối đa 5). Staff chụp trực tiếp trong ứng dụng, ảnh mới chưa lưu có thể bỏ bằng ×; ảnh đã lưu có thể bỏ liên kết bằng × rồi nhấn Lưu, ảnh gốc vẫn được bảo vệ để phục vụ kiểm toán. Không có bước Staff chủ động tạo BF-07 tại phiếu kiểm kê. Ảnh hiện trạng phòng, ảnh công tơ và chứng cứ cho checklist phòng có vấn đề vẫn áp dụng quy tắc riêng, không bị bỏ yêu cầu bởi thay đổi này.
+
+**Hoàn tất kiểm kê:** Staff chỉ cần nhấn **Lưu** lần lượt tại từng tài sản; không có ô ghi chú hoàn thành, nút lưu hàng loạt hay nút hoàn thành riêng. Khi tất cả mục đã lưu và hợp lệ, Mobile tự gọi endpoint hoàn thành nhiệm vụ kiểm kê với phiên bản máy chủ mới nhất (vẫn qua kiểm tra quyền, phiên bản, idempotency, bằng chứng). Nếu đồng bộ hoàn tất thất bại sau khi đã lưu tài sản, giao diện phân biệt rõ kết quả đã lưu và chỉ cho phép thử gửi lại kết quả server-authoritative. Phòng không có tài sản vẫn phải được Staff xác nhận riêng trước khi tự hoàn tất.
+
+**Đọc kiểm kê trên Owner Web:** `GET /api/v1/contracts/{id}/handover/draft` trả `moveInTask.inventoryTaskId` cho Owner và Staff được phân công, không lộ ID nhiệm vụ nội bộ cho Tenant. Mục IV ở màn Owner Bàn giao phòng dùng nhiệm vụ kiểm kê `GET /api/v1/operational-tasks/{taskId}/move-in-inventory` làm dữ liệu thực tế, tự đồng bộ khi đang xem (10 giây) và tải ảnh theo route evidence private của task. Không nhầm danh sách tài sản bản nháp legacy với kết quả Staff đã lưu. Biên bản nháp hợp đồng vẫn giữ quy tắc validation và bằng chứng riêng; không giả mạo rằng kết quả kiểm kê đã xác nhận pháp lý khi Staff chỉ vừa lưu tài sản.
 
 1. Khi Main Contract **mới** được ghi vào transaction hợp đồng, Backend tự khởi tạo duy nhất một `handover.preparation` tại JSONB của bản ghi hợp đồng, trạng thái `Draft`, version 1, gắn `snapshotHash` hợp đồng. Main phát sinh từ Holding cũng được xử lý; Renewal/Addendum/Holding không tạo baseline mới. Không có migration bảng mới.
 2. Cùng transaction, backend gọi công việc bàn giao đang có: một tác vụ phòng `AdHoc` và các tác vụ công tơ `Initial` cho công tơ điện/nước đang hoạt động. ID từ Contract và Meter cố định; gọi lại khi activation không tạo trùng. Staff **phải chủ động bấm Bắt đầu công việc** qua `POST /api/v1/operational-tasks/{moveInTask.id}/start` với `TaskAction {version:moveInTask.version}` và `Idempotency-Key`; API Task kiểm phân quyền, tăng version nhiệm vụ và ghi lịch sử. Backend không tự bắt đầu công việc. Công tơ Initial vẫn có các tác vụ độc lập để bảo toàn kiểm toán/OCR, nhưng Mobile hiển thị chung trong một thẻ công việc bàn giao.
 3. Chỉ khi tác vụ phòng ở trạng thái `InProgress` **và đúng Staff được giao**, Backend mới cho `POST handover/draft` hoặc `POST handover/draft/evidence`. Staff chỉ **kiểm tra và ghi nhận** tình trạng phòng, 7 hạng mục, chìa khóa, từng nhóm/physical asset, số lượng tốt/hao mòn/hỏng/thiếu, ghi chú và ảnh riêng tư; không được giao sửa chữa, chỉ định người thực hiện, đề xuất phương án hay ấn định hạn sửa. Tình trạng bất thường ghi `roomChecks[].status=Issue`, `notes` và ảnh; **Owner** quyết định có sửa hay không và phương án xử lý qua bước Ready. Mỗi POST `draft` có thể chỉ chứa **các nhóm tài sản hoặc mục kiểm tra đã làm**; Backend giữ nguyên các mục đã lưu trước đó.
 4. `GET handover/draft` và `GET handover/draft/pdf` cập nhật theo dữ liệu hợp đồng, chỉ số `Initial` đã xác nhận, kiểm kê và evidence hiện tại. PDF này luôn là **bản nháp**; không được dùng làm biên bản đã ký.
-5. Owner đọc lại checklist và ảnh/PDF, tick xác nhận và `POST handover/draft/ready`. Chỉ cho phép khi hợp đồng Active và đủ các mục bắt buộc: Tenant gắn đúng hợp đồng, điện/nước cùng ngày có ảnh/chỉ số đã xác minh, ảnh phòng, 7 mục kiểm tra hiện trạng, chìa khóa/thẻ thực giao, mọi nhóm tài sản được kiểm, inventory token còn hiệu lực, Staff đã ghi nhận. Mục hiện trạng `Issue` phải có ghi chú và **ảnh riêng**; **không cần** Staff khai `outstandingIssues`, `responsibleParty` hay `dueDate`. Nếu tài sản hoặc hiện trạng có vấn đề, chỉ **Owner** cung cấp **lý do quyết định và phương án xử lý** (hai trường bắt buộc) khi Ready. Backend xác thực lại toàn bộ file/hash và phiên bản.
+5. Owner đọc lại checklist và ảnh/PDF, tick xác nhận và `POST handover/draft/ready`. Chỉ cho phép khi hợp đồng Active và đủ các mục bắt buộc: Tenant gắn đúng hợp đồng, điện/nước cùng ngày có ảnh/chỉ số đã xác minh, 7 mục kiểm tra hiện trạng, một số lượng chìa khóa bàn giao (ảnh chìa khóa có thể bổ sung, không bắt buộc), mọi nhóm tài sản được kiểm, inventory token còn hiệu lực, Staff đã ghi nhận. Mục hiện trạng `Issue` phải có ghi chú và **ảnh riêng**; **không cần** Staff khai `outstandingIssues`, `responsibleParty` hay `dueDate`. Nếu tài sản hoặc hiện trạng có vấn đề, chỉ **Owner** cung cấp **lý do quyết định và phương án xử lý** (hai trường bắt buộc) khi Ready. Backend xác thực lại toàn bộ file/hash và phiên bản.
 6. Tenant của đúng hợp đồng xem biên bản `Ready` trong Mobile. Tenant có thể `POST .../requests` nêu lý do cần sửa; trạng thái `ChangesRequested` tạm khóa Staff chỉnh sửa, Tenant xác nhận. Owner `POST .../requests/{requestId}/decision` chấp thuận (quay về Draft để Staff sửa rồi Owner duyệt lại) hoặc từ chối có lý do (quay về Ready nếu dữ liệu không thay đổi). Mỗi quyết định tăng version và lưu lịch sử trong bản nháp.
-7. Tenant xác nhận **đúng version đã được Owner duyệt** qua `POST .../tenant-confirmation`. Backend kiểm chứng đọc/chụp/đồ vật và quyền lần cuối rồi khóa snapshot `ContractHandover` ở `Confirmed`, đóng task bàn giao, render **PDF final bất biến** với ảnh phòng, ảnh tài sản, ảnh công tơ điện/nước đầu kỳ và lịch sử yêu cầu sửa/duyệt. ID tài khoản Tenant xác nhận (`actorId`), thời điểm và ghi chú tùy chọn được lưu trong `TenantFeedback` của snapshot. PDF lưu private với content hash/length; Tenant và Owner xem/tải qua endpoint tài liệu đã có. Hiện xác nhận bằng thao tác trong app; phần chữ ký điện tử để tích hợp sau, **không hiển thị như chữ ký số hợp lệ**.
+7. Tenant xác nhận **đúng version đã được Owner duyệt** qua `POST .../tenant-confirmation`. Backend kiểm chứng đọc/chụp/đồ vật và quyền lần cuối rồi khóa snapshot `ContractHandover` ở `Confirmed`, đóng task bàn giao, render **PDF final bất biến** với ảnh kiểm tra phòng, ảnh chìa khóa nếu có, ảnh tài sản, ảnh công tơ điện/nước đầu kỳ và lịch sử yêu cầu sửa/duyệt. ID tài khoản Tenant xác nhận (`actorId`), thời điểm và ghi chú tùy chọn được lưu trong `TenantFeedback` của snapshot. PDF lưu private với content hash/length; Tenant và Owner xem/tải qua endpoint tài liệu đã có. Hiện xác nhận bằng thao tác trong app; phần chữ ký điện tử để tích hợp sau, **không hiển thị như chữ ký số hợp lệ**.
 
 ## Mẫu biên bản và nguồn dữ liệu
 
@@ -23,9 +29,10 @@ Khi hợp đồng có tác vụ `MoveInInventory`, bước Tenant chốt biên b
 | Thời hạn, tiền thuê, cọc, điều khoản | Snapshot/thông tin hợp đồng đã lưu |
 | Chỉ số điện/nước khởi tạo | MeterReading của task `Initial` *đúng Contract*, ảnh/hashes đã xác nhận |
 | Nhóm tài sản, số dự kiến/số thực giao, tình trạng và ghi chú | RoomInventoryReview + Staff inspection theo group ID/physical ID, không đoán từ tên |
-| Tình trạng phòng, chìa khóa/thẻ, ảnh kèm theo | Staff cập nhật Draft, evidence private |
+| Tình trạng phòng, ảnh kiểm tra khu vực | Staff cập nhật Draft, evidence private theo từng `roomChecks[].evidenceIds` |
 | Checklist tường/trần/sàn; cửa/khóa; điện/đèn/ổ cắm; nước/thoát nước; nhà vệ sinh; vệ sinh; thiết bị an toàn | `roomChecks[]` với `code`, `status=Passed/Issue/NotApplicable`, `notes`, `evidenceIds`; không suy đoán từ ô ghi chú chung |
-| Chìa khóa, thẻ, remote và quyền ra vào điện tử đã giao | `accessItems[]` gồm `type`, `quantity`, `notes` |
+| Một loại chìa khóa bàn giao (số lượng thực tế) | `accessItems:[{type:"RoomKey",quantity,notes}]`; số lượng từ 0–100, ghi chú tùy chọn (bắt buộc ghi lý do nếu số lượng là 0) |
+| Ảnh chìa khóa bàn giao | `keyEvidenceIds[]` tùy chọn từ evidence private (0–5 ảnh), không lẫn với ảnh hiện trạng/kiểm kê |
 | Phát hiện bất thường | `roomChecks[]` status `Issue` + mô tả/ảnh thật từ Staff. Owner quyết định ngoại lệ qua `reason` và `handlingPlan` khi Ready; trường `outstandingIssues` cũ chỉ giữ để đọc biên bản lịch sử |
 | Chủ thể xác nhận, thời điểm, ngoại lệ, yêu cầu sửa | Owner/Tenant actor + version/audit events |
 | Chữ ký | **Chưa triển khai**; không giả lập chữ ký số |
@@ -38,7 +45,7 @@ Tất cả đường dẫn dưới `/api/v1/contracts/{id}/`. GET có Bearer và
 | --- | --- | --- |
 | GET | `handover/draft` | Owner/Staff/Tenant được phép: DTO snapshot, `status`, `version`, `missing[]`, `requests[]`, `moveInTask?: {id,status,version,canInspect}`. `canInspect=true` chỉ khi Staff đang được giao đã bắt đầu nhiệm vụ |
 | GET | `handover/draft/pdf` | Bản PDF **nháp**, xem/tải authenticated |
-| POST | `handover/draft` | Staff chỉ khi `moveInTask.canInspect`: `{version,roomCondition?,keysAndAccess?,notes?,assets?,evidenceIds?,inventoryToken?,roomChecks?,accessItems?}`. `roomChecks` merge theo code, `accessItems` thay cả danh sách; `outstandingIssues:[]` từ client cũ chỉ xóa dữ liệu đề xuất cũ, gửi phần tử mới bị từ chối `staff_repair_decision_forbidden` |
+| POST | `handover/draft` | Staff chỉ khi `moveInTask.canInspect`: `{version,roomCondition?,notes?,assets?,evidenceIds?,keyEvidenceIds?,inventoryToken?,roomChecks?,accessItems?}`. `roomChecks` merge theo code, `accessItems` thay cả danh sách (chỉ một `RoomKey`); `keyEvidenceIds` tối đa 5 ảnh private, không trùng ảnh phòng/tài sản; `outstandingIssues:[]` từ client cũ chỉ xóa dữ liệu đề xuất cũ, gửi phần tử mới bị từ chối `staff_repair_decision_forbidden` |
 | POST | `handover/draft/evidence` | Staff chỉ khi `moveInTask.canInspect`: raw PNG/JPEG, tối đa 5 MB; trả `{id}` |
 | POST | `/api/v1/operational-tasks/{moveInTask.id}/start` | Staff đã được giao: `{version:moveInTask.version}` + Idempotency-Key. Phải bắt đầu trước kiểm kê/tải ảnh; không thay phiên bản Draft |
 | GET | `handover/draft/evidence/{fileId}` | Xem ảnh đã gắn vào đúng Draft, kiểm file, scope và hash |
@@ -55,14 +62,14 @@ Ví dụ Staff lưu tiến độ từng mục:
 {
   "version": 3,
   "roomCondition": "Tường và sàn đã kiểm tra, cửa hoạt động tốt",
-  "keysAndAccess": "2 chìa khóa phòng, 1 thẻ cổng",
   "assets": [{"id": "<group-uuid>", "condition": "Tốt", "checked": true,
     "observedQuantity": 2, "handedOverQuantity": 2,
     "goodQuantity": 2, "wornQuantity": 0, "damagedQuantity": 0,
     "missingQuantity": 0, "notes": "Đã đối chiếu thực tế", "evidenceIds": []}],
   "inventoryToken": "<token-from-GET>",
   "roomChecks": [{"code":"walls_ceiling_floor","status":"Passed","notes":"Không ghi nhận nứt/vỡ","evidenceIds":[]}],
-  "accessItems": [{"type":"RoomKey","quantity":2,"notes":"Đã kiểm đếm"}]
+  "accessItems": [{"type":"RoomKey","quantity":2,"notes":"Đã kiểm đếm"}],
+  "keyEvidenceIds": ["<key-photo-uuid>"]
 }
 ```
 

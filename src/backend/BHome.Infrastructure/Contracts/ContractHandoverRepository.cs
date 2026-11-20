@@ -20,7 +20,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
 {
     private static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
     public async Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId,
-        Guid? staffUserId, CancellationToken t)
+        Guid? staffUserId, bool includeOwnerInventory, CancellationToken t)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return null;
         var task = await db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(x =>
@@ -30,7 +30,9 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         // Expose the native task status, with a separate permission-safe
         // indication of whether this Staff actor may inspect at this moment.
         var isResponsibleStaff = staffUserId is not null && task.AssignedStaffUserId == staffUserId;
-        var inventoryTask = isResponsibleStaff
+        // Only the authorized Owner or assigned Staff receives the operational
+        // inventory-task reference in the contract draft. Tenant gets no ID.
+        var inventoryTask = (isResponsibleStaff || includeOwnerInventory)
             ? await db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(x =>
                 x.Id == Key($"contract-pre-move-in-inventory:{contractId:N}") &&
                 x.Kind == OperationalTaskKind.MoveInInventory && x.ContractId == contractId, t)
@@ -204,12 +206,28 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         try { snapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(task.MoveInInventoryJson); }
         catch (JsonException) { return false; }
         if (snapshot?.Items is null || snapshot.Items.Any(i => i.Condition is null ||
-            (i.Condition is "Missing" or "Damaged") && i.IncidentId is null))
+            i.ActualQuantity is null || i.EvidenceIds is null ||
+            i.Condition == "Good" && i.ActualQuantity != i.ExpectedQuantity ||
+            i.Condition == "Missing" && i.ActualQuantity >= i.ExpectedQuantity ||
+            i.ActualQuantity > i.ExpectedQuantity ||
+            (i.Condition is "Missing" or "Damaged") &&
+                (i.EvidenceIds.Length == 0 || string.IsNullOrWhiteSpace(i.Notes))))
             return false;
-        var incidentIds = snapshot.Items.Where(i => i.Condition is "Missing" or "Damaged")
-            .Select(i => i.IncidentId!.Value).Distinct().ToArray();
-        return incidentIds.Length == 0 || await db.Set<IncidentReport>().AsNoTracking()
-            .CountAsync(i => incidentIds.Contains(i.Id) && i.Status == IncidentStatus.Resolved, t) == incidentIds.Length;
+        return true;
+    }
+    public async Task<bool> InventoryHasIssuesAsync(Guid contractId, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return false;
+        var task = await db.Set<OperationalTask>().AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == Key($"contract-pre-move-in-inventory:{contractId:N}"), t);
+        if (task?.Kind != OperationalTaskKind.MoveInInventory ||
+            string.IsNullOrWhiteSpace(task.MoveInInventoryJson)) return false;
+        try
+        {
+            var snapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(task.MoveInInventoryJson);
+            return snapshot?.Items.Any(i => i.Condition is "Missing" or "Damaged") == true;
+        }
+        catch (JsonException) { return false; }
     }
     public async Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t)
     {

@@ -80,6 +80,44 @@ it('renders contract-filled draft and blocks readiness while Staff checklist is 
   expect(transport).toHaveBeenCalledWith('/api/v1/contracts/contract-1/handover/draft', { signal: expect.any(AbortSignal) });
 });
 
+it('shows Staff saved inventory from the task rather than stale draft assets and loads private evidence', async () => {
+  const inventoryTaskId = '11111111-1111-4111-8111-111111111111';
+  const fileId = '22222222-2222-4222-8222-222222222222';
+  const response = {
+    ...draft,
+    noAssetsConfirmed: false,
+    moveInTask: {
+      id: 'main-task', status: 'InProgress', inventoryTaskId, inventoryStatus: 'InProgress',
+    },
+    assets: [{ ...inspectedAsset, checked: false, observedQuantity: null, handedOverQuantity: null }],
+  };
+  const { api, transport } = client(response);
+  transport.mockImplementation(async (path: string) => {
+    if (path.endsWith('/move-in-inventory')) return {
+      taskId: inventoryTaskId, status: 'InProgress',
+      items: [
+        { id: 'item-one', name: 'Bàn học', expectedQuantity: 1, actualQuantity: 1,
+          condition: 'Good', notes: null, evidenceIds: [] },
+        { id: 'item-two', name: 'Ghế', expectedQuantity: 2, actualQuantity: 1,
+          condition: 'Missing', notes: 'Thiếu một chiếc', evidenceIds: [fileId] },
+      ],
+    };
+    if (path.endsWith(`/evidence/${fileId}`)) return new Blob(['image'], { type: 'image/jpeg' });
+    return response;
+  });
+  render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
+  expect(await screen.findByText('Đã kiểm kê 2/2')).toBeInTheDocument();
+  expect(screen.getByText('Bàn học')).toBeInTheDocument();
+  expect(screen.getByText('Thiếu một chiếc')).toBeInTheDocument();
+  expect(screen.getByText('Dự kiến 2 · Thực tế 1')).toBeInTheDocument();
+  expect(screen.queryByText(/Ghế.*Chờ kiểm kê/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Ghế · Ảnh minh chứng 1' }));
+  expect(transport).toHaveBeenCalledWith(
+    `/api/v1/operational-tasks/${inventoryTaskId}/evidence/${fileId}`,
+    { signal: expect.any(AbortSignal) }, 'blob',
+  );
+});
+
 it('translates invalid asset quantities or evidence and blocks Owner Ready even when all asset groups are checked', async () => {
   const { api, mutate } = client({
     ...draft,
@@ -106,6 +144,7 @@ it('shows room checklist, physical keys and issue handling; requires Owner excep
   const evidenceId = 'photo-wall';
   const { api, mutate, transport } = client({
     ...draft,
+    keyEvidenceIds: ['photo-keys'],
     roomChecks: draft.roomChecks.map((check) => check.code === 'walls_ceiling_floor'
       ? { ...check, status: 'Issue', notes: 'Vết nứt sẵn có gần cửa', evidenceIds: [evidenceId] }
       : check),
@@ -114,7 +153,8 @@ it('shows room checklist, physical keys and issue handling; requires Owner excep
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
   expect(await screen.findByText('Tường, trần, sàn: Cần xử lý')).toBeInTheDocument();
   expect(screen.getByText('Vết nứt sẵn có gần cửa')).toBeInTheDocument();
-  expect(screen.getByText('Chìa khóa phòng: 2 · Đã giao đủ')).toBeInTheDocument();
+  expect(screen.getByText('Số lượng thực giao: 2')).toBeInTheDocument();
+  expect(screen.getByText('Ảnh chìa khóa: 1')).toBeInTheDocument();
   expect(screen.getByText(/Owner quyết định chấp thuận tình trạng thực tế hoặc phương án xử lý/)).toBeInTheDocument();
   expect(screen.queryByText(/Trám tường · Staff xử lý/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Tường, trần, sàn · Ảnh kiểm tra 1' }));
@@ -122,16 +162,46 @@ it('shows room checklist, physical keys and issue handling; requires Owner excep
     '/api/v1/contracts/contract-1/handover/draft/evidence/photo-wall',
     { signal: expect.any(AbortSignal) }, 'blob',
   ));
+  fireEvent.click(screen.getByRole('button', { name: 'Ảnh chìa khóa bàn giao 1' }));
+  await waitFor(() => expect(transport).toHaveBeenCalledWith(
+    '/api/v1/contracts/contract-1/handover/draft/evidence/photo-keys',
+    { signal: expect.any(AbortSignal) }, 'blob',
+  ));
   fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra nội dung/ }));
   expect(screen.getByRole('button', { name: 'Đánh dấu sẵn sàng bàn giao' })).toBeDisabled();
   expect(mutate).not.toHaveBeenCalled();
+});
+
+it('requires Owner handling plan when Staff recorded damaged inventory even if the draft asset appears Good', async () => {
+  const { api, mutate } = client({
+    ...draft, noAssetsConfirmed: false, inventoryHasIssues: true,
+    assets: [inspectedAsset],
+  });
+  render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
+  expect(await screen.findByText(/Staff ghi nhận tài sản thiếu hoặc hư hỏng trong phiếu kiểm kê/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox', { name: /đã kiểm tra nội dung/ }));
+  expect(screen.getByRole('button', { name: 'Đánh dấu sẵn sàng bàn giao' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText(/Lý do chấp thuận ngoại lệ bàn giao/), {
+    target: { value: 'Tài sản hỏng đã được Staff chụp và mô tả đầy đủ.' },
+  });
+  fireEvent.change(screen.getByLabelText(/Phương án xử lý ngoại lệ bàn giao/), {
+    target: { value: 'Owner sẽ xử lý sau khi bàn giao theo biên bản.' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Đánh dấu sẵn sàng bàn giao' }));
+  await waitFor(() => expect(mutate).toHaveBeenCalledWith(
+    'contract-1', 'handover/draft/ready', {
+      version: 4,
+      reason: 'Tài sản hỏng đã được Staff chụp và mô tả đầy đủ.',
+      handlingPlan: 'Owner sẽ xử lý sau khi bàn giao theo biên bản.',
+    }, expect.any(String),
+  ));
 });
 
 it('translates missing room checklist and blocks Owner Ready', async () => {
   const { api } = client({ ...draft, roomChecks: [], missing: ['room_checklist', 'access_inventory'] });
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
   expect(await screen.findByText('Staff chưa hoàn tất 7 hạng mục kiểm tra hiện trạng phòng')).toBeInTheDocument();
-  expect(screen.getByText('Chưa kiểm kê số lượng chìa khóa, thẻ và quyền ra vào thực giao')).toBeInTheDocument();
+  expect(screen.getByText('Chưa ghi nhận số lượng chìa khóa bàn giao')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Đánh dấu sẵn sàng bàn giao' })).toBeDisabled();
 });
 

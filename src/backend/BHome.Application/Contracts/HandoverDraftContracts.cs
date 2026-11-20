@@ -30,7 +30,8 @@ public sealed record HandoverDraftState(
     Guid? ApprovedElectricityReadingId = null, Guid? ApprovedWaterReadingId = null,
     string? OwnerReadyReason = null, string? OwnerHandlingPlan = null,
     HandoverRoomCheck[]? RoomChecks = null, HandoverAccessItem[]? AccessItems = null,
-    HandoverOutstandingIssue[]? OutstandingIssues = null)
+    HandoverOutstandingIssue[]? OutstandingIssues = null,
+    Guid[]? KeyEvidenceIds = null)
 {
     public static HandoverDraftState Create(Contract contract, DateTimeOffset at) =>
         new(1, "Draft", contract.SnapshotHash, at, "", "", "", [], [], null,
@@ -47,7 +48,8 @@ public sealed record HandoverDraftView(
     HandoverDraftRequest[] Requests, string[] Missing,
     HandoverRoomCheck[]? RoomChecks = null, HandoverAccessItem[]? AccessItems = null,
     HandoverOutstandingIssue[]? OutstandingIssues = null,
-    HandoverMoveInTask? MoveInTask = null);
+    HandoverMoveInTask? MoveInTask = null, bool InventoryHasIssues = false,
+    Guid[]? KeyEvidenceIds = null);
 
 public sealed record HandoverDraftWrite(int Version, string? RoomCondition = null,
     string? KeysAndAccess = null, string? Notes = null, HandoverAssetInput[]? Assets = null,
@@ -55,7 +57,8 @@ public sealed record HandoverDraftWrite(int Version, string? RoomCondition = nul
     HandoverRoomCheck[]? RoomChecks = null, HandoverAccessItem[]? AccessItems = null,
     // Backward-compatible wire property. Staff may clear old proposals with []
     // but cannot create a repair assignment, deadline or remediation plan.
-    HandoverOutstandingIssue[]? OutstandingIssues = null);
+    HandoverOutstandingIssue[]? OutstandingIssues = null,
+    Guid[]? KeyEvidenceIds = null);
 public sealed record HandoverDraftReady(int Version, string? Reason = null, string? HandlingPlan = null);
 public sealed record HandoverDraftCorrection(int Version, string Reason);
 public sealed record HandoverDraftCorrectionDecision(int Version, bool Accepted, string Reason);

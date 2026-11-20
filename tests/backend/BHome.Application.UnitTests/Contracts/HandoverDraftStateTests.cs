@@ -20,6 +20,7 @@ public sealed class HandoverDraftStateTests
         Assert.Equal("", result.RoomCondition);
         Assert.Equal("", result.KeysAndAccess);
         Assert.Empty(result.EvidenceIds);
+        Assert.Empty(result.KeyEvidenceIds ?? []);
         Assert.Empty(result.Assets);
         Assert.Empty(result.Requests);
         Assert.Null(result.OwnerReadyAt);
@@ -30,8 +31,10 @@ public sealed class HandoverDraftStateTests
     [Fact]
     public void SerializedPreparationIsIndependentOfExistingImmutableHandoverCurrent()
     {
+        var keyPhoto = Guid.NewGuid();
         var initial = HandoverDraftState.Create(new Contract { SnapshotHash = "first" },
-            new DateTimeOffset(2026, 11, 19, 5, 0, 0, TimeSpan.Zero));
+            new DateTimeOffset(2026, 11, 19, 5, 0, 0, TimeSpan.Zero)) with
+            { KeyEvidenceIds = [keyPhoto] };
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var json = JsonSerializer.Serialize(initial, options);
         var deserialized = JsonSerializer.Deserialize<HandoverDraftState>(json, options);
@@ -41,6 +44,7 @@ public sealed class HandoverDraftStateTests
         Assert.Equal(initial.Status, deserialized.Status);
         Assert.Equal(initial.ContractSnapshotHash, deserialized.ContractSnapshotHash);
         Assert.Empty(deserialized.Assets);
+        Assert.Equal([keyPhoto], deserialized.KeyEvidenceIds ?? []);
         Assert.Empty(deserialized.Requests);
         Assert.Null(deserialized.TenantConfirmedBy);
     }
@@ -79,9 +83,18 @@ public sealed class HandoverDraftStateTests
         var all = HandoverRoomChecklist.Merge(updated,
             HandoverRoomChecklist.RequiredCodes.Skip(2).Select(code =>
                 new HandoverRoomCheck(code, "Passed", "", [])).ToArray());
+        // No key photo is necessary to complete the counted handover.
         Assert.Empty(HandoverRoomChecklist.Missing(all,
-            [new HandoverAccessItem("RoomKey", 2, "Đủ")], []));
+            [new HandoverAccessItem("RoomKey", 5, "")], []));
         Assert.Contains("access_inventory", HandoverRoomChecklist.Missing(all, [], []));
+        Assert.Contains("access_inventory", HandoverRoomChecklist.Missing(all,
+            [new HandoverAccessItem("GateKey", 1, "")], []));
+        Assert.Throws<ContractException>(() => HandoverRoomChecklist.NormalizeAccess([
+            new HandoverAccessItem("RoomKey", 1, ""), new HandoverAccessItem("GateKey", 1, "")
+        ]));
+        Assert.Equal(0, Assert.Single(HandoverRoomChecklist.NormalizeAccess([
+            new HandoverAccessItem("RoomKey", 0, "Không giao chìa khóa vật lý")
+        ])).Quantity);
     }
 
     [Fact]
@@ -97,11 +110,23 @@ public sealed class HandoverDraftStateTests
         var checks = HandoverRoomChecklist.RequiredCodes.Select(item =>
             new HandoverRoomCheck(item, item == code ? "Issue" : "Passed", item == code ? "Vết nứt cũ" : "", [])).ToArray();
         Assert.Contains("room_issue_evidence", HandoverRoomChecklist.Missing(checks,
-            [new HandoverAccessItem("GateKey", 1, "")], []));
+            [new HandoverAccessItem("RoomKey", 1, "")], []));
         var reviewed = HandoverRoomChecklist.Merge(checks,
             [new HandoverRoomCheck(code, "Issue", "Vết nứt cũ", [Guid.NewGuid()])]);
         Assert.Empty(HandoverRoomChecklist.NormalizeIssues([]));
         Assert.Empty(HandoverRoomChecklist.Missing(reviewed,
-            [new HandoverAccessItem("GateKey", 1, "")], []));
+            [new HandoverAccessItem("RoomKey", 1, "")], []));
+    }
+
+    [Fact]
+    public void KeyPhotoCannotReuseAnotherInspectionPhoto()
+    {
+        var fileId = Guid.NewGuid();
+        Assert.Throws<ContractException>(() => HandoverRoomChecklist.RequireSeparateKeyEvidence(
+            [fileId], [fileId], [], []));
+        Assert.Throws<ContractException>(() => HandoverRoomChecklist.RequireSeparateKeyEvidence(
+            [fileId], [], [new HandoverRoomCheck("doors_windows_locks", "Issue", "Hỏng", [fileId])], []));
+        HandoverRoomChecklist.RequireSeparateKeyEvidence([fileId], [],
+            [new HandoverRoomCheck("doors_windows_locks", "Passed", "", [])], []);
     }
 }

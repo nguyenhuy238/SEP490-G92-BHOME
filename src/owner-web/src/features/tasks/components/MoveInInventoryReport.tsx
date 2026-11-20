@@ -48,7 +48,7 @@ export interface MoveInInventoryView {
 const conditionText: Record<string, string> = {
   Good: 'Đạt',
   Missing: 'Thiếu',
-  Damaged: 'Hư hỏng cần sửa chữa',
+  Damaged: 'Hư hỏng',
 };
 
 /** Read-only Owner view: Staff completes inventory directly, without an Owner approval step. */
@@ -77,7 +77,7 @@ export function MoveInInventoryReport({
           Báo cáo kiểm kê trước bàn giao
         </Typography>
         <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-          Nhân viên hoàn thành trực tiếp. Chủ cơ sở chỉ theo dõi kết quả, không cần nghiệm thu.
+          Staff ghi nhận số lượng, tình trạng và ảnh. Owner xem kết quả để quyết định phương án xử lý khi duyệt bàn giao.
         </Typography>
       </Box>
       <OwnerFeedback busy={report.isFetching} error={report.error} />
@@ -120,8 +120,7 @@ export function MoveInInventoryReport({
           </Stack>
           {issues.length > 0 && (
             <Alert severity="warning" variant="outlined">
-              Có tài sản thiếu hoặc hư hỏng. Công việc kiểm kê có thể đã hoàn thành, nhưng sự cố cần
-              được theo dõi riêng trước khi bàn giao phòng.
+              Có tài sản thiếu hoặc hư hỏng. Owner cần xem ảnh, ghi chú và đưa ra quyết định xử lý khi duyệt bàn giao.
             </Alert>
           )}
           {data.items.length === 0 && (
@@ -181,7 +180,7 @@ export function MoveInInventoryReport({
                       </Button>
                     )}
                     {hasIssue && !item.incidentId && (
-                      <Alert severity="warning">Chưa có báo cáo sự cố liên kết.</Alert>
+                      <Alert severity="info">Vấn đề đã được Staff ghi nhận trong biên bản để Owner xem xét.</Alert>
                     )}
                     <Box>
                       <Typography sx={{ fontWeight: 600, fontSize: 13, mb: 1 }}>

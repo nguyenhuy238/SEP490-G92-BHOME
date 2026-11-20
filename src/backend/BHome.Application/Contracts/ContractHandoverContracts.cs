@@ -34,7 +34,7 @@ public sealed record HandoverSnapshot(DateOnly Date, string RoomNumber, string R
     string? MissingBaselineReason = null, bool OtherTenantsRemain = false,
     IReadOnlyDictionary<Guid, string>? EvidenceHashes = null, string? ProposedCompensation = null,
     HandoverRoomCheck[]? RoomChecks = null, HandoverAccessItem[]? AccessItems = null,
-    HandoverOutstandingIssue[]? OutstandingIssues = null);
+    HandoverOutstandingIssue[]? OutstandingIssues = null, Guid[]? KeyEvidenceIds = null);
 public sealed record HandoverView(int Version, string Status, HandoverSnapshot Snapshot, int? TenantConfirmedVersion,
     DateTimeOffset? TenantConfirmedAt, DateTimeOffset? StaffConfirmedAt, Guid? SourceContractId = null);
 public sealed record HandoverHistoryView(int Version, string Action, Guid ActorId, DateTimeOffset OccurredAt, string Note, HandoverSnapshot Snapshot);
@@ -62,9 +62,11 @@ public interface IContractHandoverRepository
     Task<bool> HistoryContainsEvidenceAsync(Guid contractId, Guid evidenceId, CancellationToken t);
     Task<string?> HistoryForReadingAsync(Guid contractId, Guid readingId, CancellationToken t);
     Task EnsureMoveInTaskAsync(Contract contract, Guid actor, DateTimeOffset now, CancellationToken t);
-    Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId, Guid? staffUserId, CancellationToken t);
+    Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId, Guid? staffUserId,
+        bool includeOwnerInventory, CancellationToken t);
     Task CompleteMoveInTaskAsync(Guid contractId, Guid actor, DateTimeOffset now, CancellationToken t);
     Task<bool> InventoryReadyAsync(Guid contractId, CancellationToken t);
+    Task<bool> InventoryHasIssuesAsync(Guid contractId, CancellationToken t);
     Task NotifyAsync(Contract contract, string action, Guid actor, int version, CancellationToken t);
     Task<IReadOnlyList<AssetChangeParty>> ActivePartiesAsync(Guid roomId, CancellationToken t);
     Task<IReadOnlyList<AssetChangeSource>> ChangeSourcesAsync(Guid roomId, CancellationToken t);

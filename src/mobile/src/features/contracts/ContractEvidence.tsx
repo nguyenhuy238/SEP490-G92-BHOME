@@ -1,6 +1,6 @@
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, Platform } from 'react-native';
+import { Image, Platform, View } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -25,6 +25,8 @@ export function ContractEvidence({
   draftHandoverPdf = false,
   draftHandoverEvidence = false,
   assetChangeId,
+  thumbnail = false,
+  localThumbnailUri,
 }: {
   api: ContractClient;
   contractId: string;
@@ -39,10 +41,16 @@ export function ContractEvidence({
   draftHandoverPdf?: boolean;
   draftHandoverEvidence?: boolean;
   assetChangeId?: string;
+  thumbnail?: boolean;
+  localThumbnailUri?: string;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useFeedbackState(),
-    [previewUri, setPreviewUri] = useState('');
+    [previewUri, setPreviewUri] = useState(''),
+    [thumbnailState, setThumbnailState] = useState({ key: '', uri: '', error: '' });
+  const thumbnailKey = `${contractId}:${evidenceId ?? ''}`;
+  const thumbnailUri = localThumbnailUri || (thumbnailState.key === thumbnailKey ? thumbnailState.uri : '');
+  const thumbnailError = thumbnailState.key === thumbnailKey ? thumbnailState.error : '';
   const lock = useRef(false),
     abort = useRef<AbortController | null>(null),
     previewUrl = useRef<string | null>(null);
@@ -50,6 +58,53 @@ export function ContractEvidence({
     abort.current?.abort();
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
   }, []);
+  useEffect(() => {
+    if (!thumbnail || localThumbnailUri || !draftHandoverEvidence || !evidenceId) return;
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    let cachedPhoto: File | null = null;
+    void (async () => {
+      try {
+        const path = `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/evidence/${encodeURIComponent(evidenceId)}`;
+        if (Platform.OS === 'web') {
+          const blob = await api.transport<Blob>(path, { signal: controller.signal }, 'blob');
+          if (controller.signal.aborted) return;
+          if (blob.size > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
+          const signature = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+          const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => signature[i] === byte);
+          const jpeg = signature[0] === 255 && signature[1] === 216 && signature[2] === 255;
+          if (!png && !jpeg) throw new Error('Ảnh không phải PNG/JPEG hợp lệ.');
+          if (controller.signal.aborted) return;
+          objectUrl = URL.createObjectURL(new Blob([blob], { type: png ? 'image/png' : 'image/jpeg' }));
+          setThumbnailState({ key: thumbnailKey, uri: objectUrl, error: '' });
+        } else {
+          const bytes = await api.transport<Uint8Array>(path, { signal: controller.signal }, 'bytes');
+          if (controller.signal.aborted) return;
+          if (bytes.length > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
+          const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => bytes[i] === byte);
+          const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+          if (!png && !jpeg) throw new Error('Ảnh không phải PNG/JPEG hợp lệ.');
+          const directory = new Directory(Paths.cache, 'bhome-handover-photo-thumbnails');
+          directory.create({ idempotent: true, intermediates: true });
+          cachedPhoto = new File(directory, `${randomUUID()}.${png ? 'png' : 'jpg'}`);
+          cachedPhoto.create();
+          await cachedPhoto.write(bytes);
+          if (controller.signal.aborted) {
+            if (cachedPhoto.exists) cachedPhoto.delete();
+            return;
+          }
+          setThumbnailState({ key: thumbnailKey, uri: cachedPhoto.uri, error: '' });
+        }
+      } catch (cause) {
+        if (!controller.signal.aborted) setThumbnailState({ key: thumbnailKey, uri: '', error: contractError(cause) });
+      }
+    })();
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (cachedPhoto?.exists) cachedPhoto.delete();
+    };
+  }, [api, contractId, evidenceId, draftHandoverEvidence, thumbnail, thumbnailKey, localThumbnailUri]);
   function closePreview() {
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     previewUrl.current = null;
@@ -210,6 +265,19 @@ export function ContractEvidence({
   }
   return (
     <>
+      {thumbnail ? (
+        <View style={{ width: '100%', height: 110, justifyContent: 'center', alignItems: 'center' }}>
+          {thumbnailUri ? (
+            <Image source={{ uri: thumbnailUri }} accessibilityLabel={label ?? 'Ảnh hiện trạng'}
+              resizeMode="cover" style={{ width: '100%', height: 110, borderRadius: 9 }} />
+          ) : (
+            <Text variant="bodySmall" style={ui.muted}>
+              {thumbnailError ? 'Không xem được ảnh' : 'Đang tải ảnh…'}
+            </Text>
+          )}
+        </View>
+      ) : (
+      <>
       {draftHandoverEvidence && Platform.OS === 'web' ? (
         <>
           <Button disabled={busy} loading={busy} onPress={() => previewUri ? closePreview() : void showDraftImage()}>
@@ -238,6 +306,8 @@ export function ContractEvidence({
         </Button>
       )}
       {!!error && <Text style={ui.red}>{error}</Text>}
+      </>
+      )}
     </>
   );
 }

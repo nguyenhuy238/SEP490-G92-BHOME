@@ -21,6 +21,11 @@ const state = vi.hoisted(() => ({
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => React.useEffect(callback, [callback]),
 }));
+vi.mock('expo-file-system', () => ({
+  Paths: { cache: '/private-handover-cache' },
+  Directory: class { create() { /* web-only test */ } },
+  File: class { create() { /* web-only test */ } write() { /* web-only test */ } },
+}));
 vi.mock('react-native', () => ({
   Platform: { OS: 'web' },
   useWindowDimensions: () => ({ width: state.viewportWidth, height: 730 }),
@@ -32,7 +37,8 @@ vi.mock('react-native', () => ({
     ? <div role="dialog">{children}</div> : null,
 }));
 vi.mock('../theme/theme', () => ({
-  colors: { blue: '#1052cf', border: '#e2e8f0', tint: '#e8edff' },
+  colors: { blue: '#1052cf', border: '#e2e8f0', tint: '#e8edff', green: '#168565',
+    red: '#ba1a1a', amber: '#a86108', muted: '#64748b', navy: '#001637' },
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => ({ staffLocationId: state.location, resetScroll: state.resetScroll }),
@@ -55,13 +61,20 @@ vi.mock('../components/WorkspaceKit', () => ({
 }));
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-  Icon: () => null,
-  TouchableRipple: ({ children, onPress, disabled, accessibilityLabel }: {
+  Icon: ({ source, color }: { source: string; color: string }) => (
+    <span data-testid="paper-icon" data-source={source} data-color={color} />
+  ),
+  IconButton: ({ onPress, disabled, accessibilityLabel }: {
+    onPress: () => void; disabled?: boolean; accessibilityLabel: string;
+  }) => <button type="button" aria-label={accessibilityLabel} disabled={disabled} onClick={onPress}>×</button>,
+  TouchableRipple: ({ children, onPress, disabled, accessibilityLabel, accessibilityState }: {
     children: React.ReactNode; onPress: () => void; disabled?: boolean; accessibilityLabel?: string;
-  }) => <button aria-label={accessibilityLabel} disabled={disabled} onClick={onPress}>{children}</button>,
+    accessibilityState?: { selected?: boolean };
+  }) => <button aria-label={accessibilityLabel} aria-pressed={accessibilityState?.selected}
+    disabled={disabled} onClick={onPress}>{children}</button>,
   ProgressBar: ({ progress }: { progress: number }) => <div role="progressbar" aria-valuenow={progress * 100} />,
-  Button: ({ children, onPress, disabled }: { children: React.ReactNode; onPress: () => void; disabled?: boolean }) => (
-    <button disabled={disabled} onClick={onPress}>{children}</button>
+  Button: ({ children, onPress, disabled, accessibilityLabel }: { children: React.ReactNode; onPress: () => void; disabled?: boolean; accessibilityLabel?: string }) => (
+    <button aria-label={accessibilityLabel} disabled={disabled} onClick={onPress}>{children}</button>
   ),
   SegmentedButtons: ({ value, onValueChange, buttons }: {
     value: string;
@@ -88,8 +101,11 @@ vi.mock('../components/WorkflowControls', () => ({
   ),
 }));
 vi.mock('../components/CameraCapture', () => ({
-  CameraCapture: ({ onCapture, disabled }: { onCapture: (bytes: Uint8Array) => void; disabled: boolean }) => (
-    <button disabled={disabled} onClick={() => onCapture(new Uint8Array([1, 2, 3]))}>Chụp ảnh hiện trạng</button>
+  CameraCapture: ({ label, onCapture, disabled, presentation }: {
+    label: string; onCapture: (bytes: Uint8Array) => void; disabled: boolean; presentation: string;
+  }) => (
+    <button data-presentation={presentation} disabled={disabled}
+      onClick={() => onCapture(new Uint8Array([1, 2, 3]))}>{label}</button>
   ),
 }));
 vi.mock('../features/contracts/ContractInitialMeterTasks', () => ({
@@ -121,14 +137,17 @@ vi.mock('../screens/StaffMoveInInventoryScreen', () => ({
   StaffMoveInInventoryScreen: () => <span>Phiếu kiểm kê nội bộ</span>,
 }));
 vi.mock('../features/contracts/ContractEvidence', () => ({
-  ContractEvidence: ({ label, handoverDocumentId, draftHandoverPdf, draftHandoverEvidence }: {
+  ContractEvidence: ({ label, handoverDocumentId, draftHandoverPdf, draftHandoverEvidence, thumbnail, localThumbnailUri }: {
     label: string;
     handoverDocumentId?: string;
     draftHandoverPdf?: boolean;
     draftHandoverEvidence?: boolean;
+    thumbnail?: boolean;
+    localThumbnailUri?: string;
   }) => (
     <span
-      data-testid={handoverDocumentId ? 'final-handover-pdf' : draftHandoverPdf ? 'draft-handover-pdf' : draftHandoverEvidence ? 'private-handover-photo' : undefined}
+      data-preview-uri={localThumbnailUri}
+      data-testid={thumbnail ? 'private-photo-thumbnail' : handoverDocumentId ? 'final-handover-pdf' : draftHandoverPdf ? 'draft-handover-pdf' : draftHandoverEvidence ? 'private-handover-photo' : undefined}
       data-document-id={handoverDocumentId}
     >{label}</span>
   ),
@@ -189,6 +208,8 @@ function draft(status: MoveInDraft['status'], missing: string[] = []): MoveInDra
 }
 
 beforeEach(() => {
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:unsaved-room-photo') });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
   state.location = contract.locationId;
   state.viewportWidth = 320;
   state.draft = draft('Draft', ['Chưa xác nhận điện']);
@@ -235,7 +256,7 @@ afterEach(() => {
 function openSection(index: 1 | 2 | 3 | 4) {
   const titles = [
     'Ghi chỉ số điện nước', 'Kiểm tra hiện trạng phòng',
-    'Kiểm kê tài sản', 'Chìa khóa và ảnh bàn giao',
+    'Kiểm kê tài sản', 'Chìa khóa bàn giao',
   ];
   fireEvent.click(screen.getByRole('button', { name: `${index}. ${titles[index - 1]}` }));
 }
@@ -411,7 +432,7 @@ it('requires a successful server start before showing meter capture, inventory o
     }),
   ));
   expect(await screen.findByRole('button', { name: '1. Ghi chỉ số điện nước' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: '4. Chìa khóa và ảnh bàn giao' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: '4. Chìa khóa bàn giao' })).toBeTruthy();
   openSection(1);
   expect(screen.getByText('Chụp điện nước trong công việc')).toBeTruthy();
   home();
@@ -429,7 +450,7 @@ it('keeps four selectable sections and preserves unsaved input while switching i
   openWork('Hiện trạng tổng quan');
   expect(screen.getByLabelText('Hiện trạng phòng')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Đã kiểm kê Quạt' })).toBeNull();
-  expect(screen.queryByLabelText('Chìa khóa / quyền truy cập')).toBeNull();
+  expect(screen.queryByLabelText('Số lượng chìa khóa bàn giao')).toBeNull();
   fireEvent.change(screen.getByLabelText('Hiện trạng phòng'), {
     target: { value: 'Trần và sàn đã kiểm tra' },
   });
@@ -442,8 +463,8 @@ it('keeps four selectable sections and preserves unsaved input while switching i
   closeWork();
   home();
   openSection(4);
-  openWork('Ghi chú bàn giao');
-  expect(screen.getByLabelText('Chìa khóa / quyền truy cập')).toBeTruthy();
+  openWork('Chìa khóa bàn giao');
+  expect(screen.getByLabelText('Số lượng chìa khóa bàn giao')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Đã kiểm kê Quạt' })).toBeNull();
   closeWork();
   home();
@@ -504,8 +525,9 @@ it('keeps Assets as the next required section until its embedded inventory check
   page.unmount();
   state.draft.moveInTask = { ...state.draft.moveInTask!, inventoryStatus: 'Completed' };
   state.inventory = linkedInventory('Completed', true);
+  state.inventory.items[0]!.evidenceIds = []; // A saved Good inspection needs no asset photo.
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  expect(await screen.findByText(/Gợi ý tiếp theo: Chìa khóa và ảnh bàn giao/)).toBeTruthy();
+  expect(await screen.findByText(/Gợi ý tiếp theo: Chìa khóa bàn giao/)).toBeTruthy();
   expect(screen.getByText('3/4 đã ghi nhận')).toBeTruthy();
 });
 
@@ -520,6 +542,7 @@ it('shows linked assets as a read-only list with ticks only for server-saved inv
     inventoryCondition: 'Tốt', observedCondition: 'Tốt',
   });
   state.inventory = linkedInventory('InProgress', true);
+  state.inventory.items[0]!.evidenceIds = []; // Normal inventory still counts as inspected.
   state.inventory.items.push({
     id: secondId, assetId: null, name: 'Bàn', expectedQuantity: 2,
     actualQuantity: null, condition: null, notes: null, evidenceIds: [], incidentId: null,
@@ -585,7 +608,7 @@ it('does not mislabel assets as inspected when the internal inventory request fa
   expect(screen.queryByText('Đã kiểm kê · Đạt')).toBeNull();
 });
 
-it('shows a finished message instead of recommending another section when all four sections are saved', async () => {
+it('counts all four sections complete when five handed-over keys were saved without optional photos', async () => {
   state.draft.electricity = {
     id: 'reading-e', meterCode: 'ELEC-01', utilityType: 0,
     date: '2026-11-20', value: '4', evidenceId: 'photo-e', evidenceHash: 'hash-e',
@@ -598,12 +621,27 @@ it('shows a finished message instead of recommending another section when all fo
     code, status: 'Passed', notes: '', evidenceIds: [],
   }));
   state.draft.assets[0]!.checked = true;
-  state.draft.accessItems = [{ type: 'RoomKey', quantity: 1, notes: '' }];
-  state.draft.evidenceIds = ['30000000-0000-4000-8000-000000000001'];
+  state.draft.accessItems = [{ type: 'RoomKey', quantity: 5, notes: '' }];
+  state.draft.keyEvidenceIds = [];
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
   expect(await screen.findByText('4/4 đã ghi nhận')).toBeTruthy();
   expect(screen.getByText(/Đã lưu đủ 4 mục kiểm tra/)).toBeTruthy();
   expect(screen.queryByText(/Gợi ý tiếp theo:/)).toBeNull();
+  openSection(4);
+  expect(screen.getByText('5 chiếc · 0 ảnh chìa khóa (tùy chọn)')).toBeTruthy();
+  expect(screen.getByText('Đã ghi nhận')).toBeTruthy();
+  openWork('Chìa khóa bàn giao');
+  expect(screen.getByText('Ảnh chìa khóa bàn giao (không bắt buộc):')).toBeTruthy();
+});
+
+it('does not count the key section complete before the key quantity is saved', async () => {
+  state.draft.accessItems = [];
+  state.draft.keyEvidenceIds = [];
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '4. Chìa khóa bàn giao' });
+  openSection(4);
+  expect(screen.getByText('Chưa hoàn tất')).toBeTruthy();
+  expect(screen.getByText('Chưa ghi chiếc · 0 ảnh chìa khóa (tùy chọn)')).toBeTruthy();
 });
 
 it('does not call a room issue finished when its required inspection photo is missing', async () => {
@@ -686,8 +724,7 @@ it('preserves uploaded photo assignment to an asset when saving the draft', asyn
   await screen.findByRole('button', { name: '3. Kiểm kê tài sản' });
   openSection(3);
   openWork('Quạt');
-  fireEvent.click(screen.getByRole('button', { name: 'Ảnh không có giấy tờ cá nhân hoặc thông tin riêng tư' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh hiện trạng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
   await waitFor(() => expect(state.transport).toHaveBeenCalledWith(
     `/api/v1/contracts/${contract.id}/handover/draft/evidence`,
     expect.objectContaining({ method: 'POST', headers: { 'Content-Type': 'image/jpeg' } }),
@@ -862,7 +899,7 @@ it('Tenant can review seven room inspections, attached Issue image, access items
   for (const { label } of roomHandoverChecks) {
     expect(screen.getByText(label)).toBeTruthy();
   }
-  expect(screen.getByText(/Chìa khóa phòng: 2/)).toBeTruthy();
+  expect(screen.getByText(/Chìa khóa bàn giao: 2 chiếc/)).toBeTruthy();
   expect(screen.getByText(/Sửa ổ điện/)).toBeTruthy();
   expect(screen.getByText(/Ổ điện bị hỏng/)).toBeTruthy();
   expect(screen.getAllByTestId('private-handover-photo')).toHaveLength(1);
@@ -878,11 +915,20 @@ it('saves a room problem as a factual inspection with notes and photo, without a
     { target: { value: 'Ổ cắm bên trái không có điện' } });
   saveWork();
   expect(await screen.findByText(/cần gắn ít nhất một ảnh bằng chứng riêng/)).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Ảnh không có giấy tờ cá nhân hoặc thông tin riêng tư' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh hiện trạng' }));
+  expect(screen.queryByRole('button', { name: /Ảnh không có giấy tờ cá nhân/ })).toBeNull();
+  expect(screen.getByText('Ảnh minh chứng:')).toBeTruthy();
+  const camera = screen.getByRole('button', { name: 'Chụp ảnh' });
+  expect(camera.getAttribute('data-presentation')).toBe('evidence');
+  expect((camera as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(camera);
   await waitFor(() => expect(state.transport.mock.calls.some(([path]) =>
     path.endsWith('/handover/draft/evidence'))).toBe(true));
-  expect((await screen.findByRole('button', { name: 'Gắn ảnh 1' })).getAttribute('aria-pressed')).toBe('true');
+  expect(await screen.findByRole('button', { name: 'Xóa ảnh hiện trạng 1' })).toBeTruthy();
+  expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(1);
+  expect(screen.queryByText('Đã chọn')).toBeNull();
+  expect(screen.queryByText('Chạm để chọn')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Gắn ảnh 1' })).toBeNull();
+  expect(screen.queryByText(/Chỉ ghi nhận thực tế\. Owner quyết định xử lý/)).toBeNull();
   saveWork();
   await waitFor(() => expect(state.transport.mock.calls.some(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST')).toBe(true));
@@ -901,45 +947,180 @@ it('saves a room problem as a factual inspection with notes and photo, without a
   expect(screen.queryByLabelText('Hạn xử lý Hệ thống điện, đèn và ổ cắm (dd/MM/yyyy)')).toBeNull();
 });
 
-it('replaces access items only when edited and validates digital access with quantity zero', async () => {
+it('distinguishes passed, issue, not applicable and unreviewed room checks without losing saved progress', async () => {
+  state.draft.roomChecks = [
+    { code: 'walls_ceiling_floor', status: 'Passed', notes: '', evidenceIds: [] },
+    { code: 'doors_windows_locks', status: 'Issue', notes: 'Hỏng', evidenceIds: ['30000000-0000-4000-8000-000000000007'] },
+    { code: 'electrical_lighting_outlets', status: 'NotApplicable', notes: 'Không lắp', evidenceIds: [] },
+  ];
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  await screen.findByRole('button', { name: '4. Chìa khóa và ảnh bàn giao' });
-  openSection(4);
-  openWork('Thêm chìa khóa / thẻ / quyền truy cập');
-  fireEvent.click(screen.getByRole('button', { name: 'Chìa khóa phòng' }));
-  fireEvent.change(screen.getByLabelText('Số lượng bàn giao'), { target: { value: '2' } });
-  closeWork();
-  openWork('Thêm chìa khóa / thẻ / quyền truy cập');
-  fireEvent.click(screen.getByRole('button', { name: 'Quyền truy cập số' }));
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  expect(screen.getByText('3/7 khu vực đã kiểm tra')).toBeTruthy();
+  openSection(2);
+  const icon = (label: string) => screen.getByRole('button', { name: label })
+    .querySelector('[data-testid="paper-icon"]');
+  expect(icon('Tường, trần và sàn')?.getAttribute('data-source')).toBe('check-circle-outline');
+  expect(icon('Tường, trần và sàn')?.getAttribute('data-color')).toBe('#168565');
+  expect(icon('Cửa, cửa sổ và ổ khóa')?.getAttribute('data-source')).toBe('alert-circle-outline');
+  expect(icon('Cửa, cửa sổ và ổ khóa')?.getAttribute('data-color')).toBe('#a86108');
+  expect(icon('Hệ thống điện, đèn và ổ cắm')?.getAttribute('data-source')).toBe('minus-circle-outline');
+  expect(icon('Hệ thống điện, đèn và ổ cắm')?.getAttribute('data-color')).toBe('#64748b');
+  expect(icon('Hệ thống nước và thoát nước')?.getAttribute('data-source')).toBe('clipboard-text-outline');
+});
+
+it('shows warning instead of a green success tick for a saved damaged inventory item', async () => {
+  state.draft.moveInTask!.inventoryTaskId = '60000000-0000-4000-8000-000000000001';
+  state.inventory = linkedInventory('InProgress', true);
+  state.inventory.items[0]!.condition = 'Damaged';
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '3. Kiểm kê tài sản' });
+  openSection(3);
+  const inventoryRow = screen.getByText('Quạt').closest('div');
+  expect(inventoryRow?.parentElement?.querySelector('[data-source="alert-circle-outline"]')).toBeTruthy();
+  expect(screen.getByText('Đã kiểm kê · Hư hỏng')).toBeTruthy();
+});
+
+it('automatically attaches captured photos, shows only thumbnails and an upper-corner X, and removes one before save', async () => {
+  let count = 0;
+  const submitted: Array<{ roomChecks: { evidenceIds: string[] }[] }> = [];
+  state.transport.mockImplementation(async (path: string, init?: { method?: string; body?: string }) => {
+    if (path.endsWith('/handover/draft/evidence') && init?.method === 'POST') {
+      count++;
+      return { id: `30000000-0000-4000-8000-${String(count).padStart(12, '0')}` };
+    }
+    if (path.endsWith('/handover/draft') && init?.method === 'POST') {
+      submitted.push(JSON.parse(init.body!));
+      return state.draft;
+    }
+    return state.draft;
+  });
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  openSection(2);
+  openWork('Tường, trần và sàn');
+  fireEvent.click(screen.getByRole('radio', { name: 'Có vấn đề' }));
+  fireEvent.change(screen.getByLabelText('Ghi chú · Tường, trần và sàn'), { target: { value: 'Tường tróc sơn' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
+  await waitFor(() => expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(1));
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
+  await waitFor(() => expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(2));
+  const modal = screen.getByRole('dialog');
+  expect(modal.textContent!.indexOf('Chụp ảnh')).toBeLessThan(modal.textContent!.indexOf('Ảnh hiện trạng 1'));
+  expect(screen.getAllByTestId('private-photo-thumbnail')[0].getAttribute('data-preview-uri')).toBe('blob:unsaved-room-photo');
+  expect(screen.queryByText('Đã chọn')).toBeNull();
+  expect(screen.queryByText('Chạm để chọn')).toBeNull();
+  expect(screen.queryByText('Bỏ ảnh')).toBeNull();
+  expect(screen.queryByRole('button', { name: /Chọn ảnh hiện trạng/ })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Xóa ảnh hiện trạng 1' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa ảnh hiện trạng 2' }));
+  expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(1);
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:unsaved-room-photo');
   saveWork();
-  expect(await screen.findByText(/quyền truy cập số có thể bằng 0 nếu có ghi chú/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Ghi chú / cách sử dụng'),
-    { target: { value: 'Cấp mã cổng theo tài khoản Tenant' } });
+  await waitFor(() => expect(submitted).toHaveLength(1));
+  expect(submitted[0].roomChecks[0].evidenceIds).toEqual(['30000000-0000-4000-8000-000000000001']);
+  expect(submitted[0]).not.toHaveProperty('outstandingIssues');
+});
+
+it('limits room photos to five per area and never exposes photos from another area', async () => {
+  let uploads = 0;
+  state.transport.mockImplementation(async (path: string) => {
+    if (path.endsWith('/handover/draft/evidence')) {
+      uploads++;
+      return { id: `30000000-0000-4000-8000-${String(uploads).padStart(12, '0')}` };
+    }
+    return state.draft;
+  });
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  openSection(2);
+  openWork('Tường, trần và sàn');
+  fireEvent.click(screen.getByRole('radio', { name: 'Có vấn đề' }));
+  for (let count = 1; count <= 5; count++) {
+    fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
+    await waitFor(() => expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(count));
+  }
+  expect((screen.getByRole('button', { name: 'Chụp ảnh' }) as HTMLButtonElement).disabled).toBe(true);
+  closeWork();
+  openWork('Cửa, cửa sổ và ổ khóa');
+  fireEvent.click(screen.getByRole('radio', { name: 'Có vấn đề' }));
+  expect(screen.queryByTestId('private-photo-thumbnail')).toBeNull();
+  expect((screen.getByRole('button', { name: 'Chụp ảnh' }) as HTMLButtonElement).disabled).toBe(false);
+  closeWork();
+  openWork('Tường, trần và sàn');
+  expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(5);
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa ảnh hiện trạng 5' }));
+  expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(4);
+  expect((screen.getByRole('button', { name: 'Chụp ảnh' }) as HTMLButtonElement).disabled).toBe(false);
+});
+
+it('shows existing photos only inside their assigned room check and X unlinks the current room only', async () => {
+  const photoId = '30000000-0000-4000-8000-000000000007';
+  state.draft.roomChecks = [{ code: 'doors_windows_locks', status: 'Issue', notes: 'Cửa kẹt', evidenceIds: [photoId] }];
+  const saves: Array<{ roomChecks: { code: string; evidenceIds: string[] }[]; evidenceIds: string[] }> = [];
+  state.transport.mockImplementation(async (path: string, init?: { method?: string; body?: string }) => {
+    if (path.endsWith('/handover/draft') && init?.method === 'POST') {
+      saves.push(JSON.parse(init.body!));
+    }
+    return state.draft;
+  });
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '2. Kiểm tra hiện trạng phòng' });
+  openSection(2);
+  openWork('Tường, trần và sàn');
+  expect(screen.queryByTestId('private-photo-thumbnail')).toBeNull();
+  expect(screen.queryByRole('button', { name: /Xóa ảnh hiện trạng/ })).toBeNull();
+  closeWork();
+  openWork('Cửa, cửa sổ và ổ khóa');
+  expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa ảnh hiện trạng 1' }));
+  expect(screen.queryByTestId('private-photo-thumbnail')).toBeNull();
+  fireEvent.click(screen.getByRole('radio', { name: 'Đạt' }));
+  saveWork();
+  await waitFor(() => expect(saves).toHaveLength(1));
+  expect(saves[0].roomChecks).toEqual([
+    { code: 'doors_windows_locks', status: 'Passed', notes: 'Cửa kẹt', evidenceIds: [] },
+  ]);
+  expect(saves[0].evidenceIds).not.toContain(photoId);
+});
+
+it('saves one counted key handover and rejects invalid quantities without multiple access types', async () => {
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '4. Chìa khóa bàn giao' });
+  openSection(4);
+  expect(screen.queryByRole('button', { name: 'Thêm chìa khóa / thẻ / quyền truy cập' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Ảnh bàn giao chung' })).toBeNull();
+  openWork('Chìa khóa bàn giao');
+  fireEvent.change(screen.getByLabelText('Số lượng chìa khóa bàn giao'), { target: { value: '-1' } });
+  saveWork();
+  expect(await screen.findByText(/số nguyên từ 0 đến 100/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Số lượng chìa khóa bàn giao'), { target: { value: '2' } });
+  fireEvent.change(screen.getByLabelText('Ghi chú chìa khóa (nếu có)'), { target: { value: 'Đã kiểm đếm' } });
   saveWork();
   await waitFor(() => expect(state.transport.mock.calls.some(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST')).toBe(true));
   const mutation = state.transport.mock.calls.find(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST');
   expect(JSON.parse(mutation![1].body).accessItems).toEqual([
-    { type: 'RoomKey', quantity: 2, notes: '' },
-    { type: 'DigitalAccess', quantity: 0, notes: 'Cấp mã cổng theo tài khoản Tenant' },
+    { type: 'RoomKey', quantity: 2, notes: 'Đã kiểm đếm' },
   ]);
+  expect(JSON.parse(mutation![1].body)).not.toHaveProperty('keysAndAccess');
 });
 
-it('offers photo capture inside each access item modal and saves it as shared handover evidence', async () => {
+it('attaches photographed keys only to key evidence, never to the old general room photos', async () => {
+  state.draft.evidenceIds = ['30000000-0000-4000-8000-000000000009'];
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
-  await screen.findByRole('button', { name: '4. Chìa khóa và ảnh bàn giao' });
+  await screen.findByRole('button', { name: '4. Chìa khóa bàn giao' });
   openSection(4);
-  openWork('Thêm chìa khóa / thẻ / quyền truy cập');
-  fireEvent.click(screen.getByRole('button', { name: 'Chìa khóa phòng' }));
-  expect(screen.getByText(/không gắn riêng từng loại quyền truy cập/)).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Ảnh không có giấy tờ cá nhân hoặc thông tin riêng tư' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh hiện trạng' }));
+  openWork('Chìa khóa bàn giao');
+  expect(screen.getByText('Ảnh chìa khóa bàn giao (không bắt buộc):')).toBeTruthy();
+  expect(screen.queryByTestId('private-photo-thumbnail')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
   await waitFor(() => expect(state.transport.mock.calls.some(([path]) =>
     path.endsWith('/handover/draft/evidence'))).toBe(true));
-  expect(await screen.findByText('Đã tải ảnh hiện trạng lên máy chủ.')).toBeTruthy();
+  expect(await screen.findByText(/Đã tải ảnh chìa khóa/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Xóa ảnh chìa khóa 1' })).toBeTruthy();
   expect(screen.getByRole('dialog')).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Số lượng bàn giao'), { target: { value: '2' } });
+  fireEvent.change(screen.getByLabelText('Số lượng chìa khóa bàn giao'), { target: { value: '2' } });
   saveWork();
   await waitFor(() => expect(state.transport.mock.calls.some(([path, options]) =>
     path.endsWith('/handover/draft') && options?.method === 'POST')).toBe(true));
@@ -947,9 +1128,43 @@ it('offers photo capture inside each access item modal and saves it as shared ha
     path.endsWith('/handover/draft') && options?.method === 'POST');
   const body = JSON.parse(mutation![1].body);
   expect(body.accessItems).toEqual([{ type: 'RoomKey', quantity: 2, notes: '' }]);
-  expect(body.evidenceIds).toContain('30000000-0000-4000-8000-000000000001');
+  expect(body.keyEvidenceIds).toEqual(['30000000-0000-4000-8000-000000000001']);
+  expect(body.evidenceIds).toEqual(['30000000-0000-4000-8000-000000000009']);
   expect(body).not.toHaveProperty('roomChecks');
   expect(body).not.toHaveProperty('assets');
+});
+
+it('keeps key photographs exclusive, allows at most five and saves only the retained keys', async () => {
+  let uploads = 0;
+  const saved: Array<{ keyEvidenceIds: string[]; evidenceIds: string[] }> = [];
+  state.transport.mockImplementation(async (path: string, init?: { method?: string; body?: string }) => {
+    if (path.endsWith('/handover/draft/evidence')) {
+      uploads++;
+      return { id: `30000000-0000-4000-8000-${String(uploads).padStart(12, '0')}` };
+    }
+    if (path.endsWith('/handover/draft') && init?.method === 'POST') {
+      saved.push(JSON.parse(init.body!));
+    }
+    return state.draft;
+  });
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  await screen.findByRole('button', { name: '4. Chìa khóa bàn giao' });
+  openSection(4);
+  openWork('Chìa khóa bàn giao');
+  fireEvent.change(screen.getByLabelText('Số lượng chìa khóa bàn giao'), { target: { value: '3' } });
+  for (let count = 1; count <= 5; count++) {
+    fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh' }));
+    await waitFor(() => expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(count));
+  }
+  expect((screen.getByRole('button', { name: 'Chụp ảnh' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa ảnh chìa khóa 3' }));
+  expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(4);
+  expect((screen.getByRole('button', { name: 'Chụp ảnh' }) as HTMLButtonElement).disabled).toBe(false);
+  saveWork();
+  await waitFor(() => expect(saved).toHaveLength(1));
+  expect(saved[0]!.keyEvidenceIds).toHaveLength(4);
+  expect(saved[0]!.keyEvidenceIds).not.toContain('30000000-0000-4000-8000-000000000003');
+  expect(saved[0]!.evidenceIds).toEqual([]);
 });
 
 it('does not modify previous Owner plans when Staff changes the factual inspection result', async () => {
@@ -982,24 +1197,23 @@ it('shows a synthetic JPEG upload button only for a development demo contract on
   const testContract = { ...contract, isDevelopmentDemo: true };
   const liveContract = { ...contract, isDevelopmentDemo: false };
   const first = render(<MoveInDraftHandoverPanel api={api} contract={liveContract} role="Staff" />);
-  await screen.findByRole('button', { name: '4. Chìa khóa và ảnh bàn giao' });
+  await screen.findByRole('button', { name: '4. Chìa khóa bàn giao' });
   openSection(4);
-  openWork('Ảnh bàn giao chung');
-  expect(screen.queryByRole('button', { name: 'Ảnh giả lập DEV – không dùng làm bằng chứng thực tế' })).toBeNull();
+  openWork('Chìa khóa bàn giao');
+  expect(screen.queryByRole('button', { name: 'Thêm ảnh mẫu DEV' })).toBeNull();
   first.unmount();
   render(<MoveInDraftHandoverPanel api={api} contract={testContract} role="Staff" />);
-  await screen.findByRole('button', { name: '4. Chìa khóa và ảnh bàn giao' });
+  await screen.findByRole('button', { name: '4. Chìa khóa bàn giao' });
   openSection(4);
-  openWork('Ảnh bàn giao chung');
-  const sample = screen.getByRole('button', { name: 'Ảnh giả lập DEV – không dùng làm bằng chứng thực tế' });
-  expect((sample as HTMLButtonElement).disabled).toBe(true);
+  openWork('Chìa khóa bàn giao');
+  const sample = screen.getByRole('button', { name: 'Thêm ảnh mẫu DEV' });
+  expect((sample as HTMLButtonElement).disabled).toBe(false);
   const sampleJpeg = [0xff, 0xd8, 0xff, ...Array(140).fill(0)];
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
     fillRect: vi.fn(), fillText: vi.fn(),
   } as unknown as CanvasRenderingContext2D);
   vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue(
     `data:image/jpeg;base64,${btoa(String.fromCharCode(...sampleJpeg))}`);
-  fireEvent.click(screen.getByRole('button', { name: 'Ảnh không có giấy tờ cá nhân hoặc thông tin riêng tư' }));
   fireEvent.click(sample);
   await waitFor(() => expect(state.transport).toHaveBeenCalledWith(
     `/api/v1/contracts/${contract.id}/handover/draft/evidence`,

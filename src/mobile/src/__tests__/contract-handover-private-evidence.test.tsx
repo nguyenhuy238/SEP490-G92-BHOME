@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock('react-native', () => ({
   Platform: { get OS() { return state.platform; } },
+  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Image: ({ source, accessibilityLabel }: { source: { uri: string }; accessibilityLabel: string }) => (
     <img src={source.uri} alt={accessibilityLabel} />
   ),
@@ -105,6 +106,43 @@ it('previews and downloads an authenticated draft photo, revoking its private bl
   await waitFor(() => expect(state.transport).toHaveBeenCalledTimes(2));
   expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledOnce();
   expect(state.handoverDocument).not.toHaveBeenCalled();
+});
+
+it('shows a real private photo thumbnail without public URLs and cleans the browser blob on unmount', async () => {
+  const { unmount } = render(<ContractEvidence api={api} contractId={contractId}
+    draftHandoverEvidence evidenceId={evidenceId} thumbnail label="Ảnh khu vực" />);
+  const image = await screen.findByRole('img', { name: 'Ảnh khu vực' });
+  expect(image.getAttribute('src')).toBe('blob:private-test');
+  expect(state.transport).toHaveBeenCalledWith(
+    `/api/v1/contracts/${contractId}/handover/draft/evidence/${evidenceId}`,
+    { signal: expect.any(AbortSignal) }, 'blob',
+  );
+  expect(screen.queryByRole('button', { name: 'Tải ảnh' })).toBeNull();
+  unmount();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
+});
+
+it('shows an unsaved photo immediately from the local preview without fetching a not-yet-linked private file', () => {
+  render(<ContractEvidence api={api} contractId={contractId} draftHandoverEvidence
+    evidenceId={evidenceId} thumbnail localThumbnailUri="blob:unsaved-photo" label="Ảnh vừa chụp" />);
+  expect(screen.getByRole('img', { name: 'Ảnh vừa chụp' }).getAttribute('src')).toBe('blob:unsaved-photo');
+  expect(state.transport).not.toHaveBeenCalled();
+});
+
+it('uses an ephemeral private cached file for native thumbnails and deletes it on unmount', async () => {
+  state.platform = 'android';
+  const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  state.transport.mockResolvedValue(bytes);
+  const { unmount } = render(<ContractEvidence api={api} contractId={contractId}
+    draftHandoverEvidence evidenceId={evidenceId} thumbnail label="Ảnh trên điện thoại" />);
+  expect(await screen.findByRole('img', { name: 'Ảnh trên điện thoại' })).toBeTruthy();
+  expect(state.transport).toHaveBeenCalledWith(
+    `/api/v1/contracts/${contractId}/handover/draft/evidence/${evidenceId}`,
+    { signal: expect.any(AbortSignal) }, 'bytes',
+  );
+  expect(state.write).toHaveBeenCalledWith(bytes);
+  unmount();
+  expect(state.remove).toHaveBeenCalledOnce();
 });
 
 it('opens the immutable PDF via authenticated final document endpoint on web', async () => {

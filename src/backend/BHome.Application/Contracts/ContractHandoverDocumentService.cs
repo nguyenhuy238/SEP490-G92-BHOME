@@ -24,7 +24,8 @@ public sealed partial class ContractService
         var documentId = fileRecord.Id;
         var photos = new List<HandoverDocumentPhoto>();
         foreach (var id in snapshot.EvidenceIds.Concat(snapshot.Assets.SelectMany(a => a.EvidenceIds ?? []))
-                     .Concat((snapshot.RoomChecks ?? []).SelectMany(check => check.EvidenceIds)).Distinct())
+                     .Concat((snapshot.RoomChecks ?? []).SelectMany(check => check.EvidenceIds))
+                     .Concat(snapshot.KeyEvidenceIds ?? []).Distinct())
         {
             using var bytes = new MemoryStream();
             if (type == "MoveOut")
@@ -44,7 +45,9 @@ public sealed partial class ContractService
             if (bytes.Length > 5 * 1024 * 1024) throw ContractException.Invalid("inspection_image_too_large");
             var groups = snapshot.Assets.Where(a => a.EvidenceIds?.Contains(id) == true).Select(a => a.Name)
                 .Concat((snapshot.RoomChecks ?? []).Where(check => check.EvidenceIds.Contains(id))
-                    .Select(check => HandoverRoomChecklist.Labels[check.Code])).Distinct().ToArray();
+                    .Select(check => HandoverRoomChecklist.Labels[check.Code]))
+                .Concat((snapshot.KeyEvidenceIds ?? []).Contains(id) ? ["Chìa khóa bàn giao"] : [])
+                .Distinct().ToArray();
             photos.Add(new(id, $"{snapshot.Date:dd/MM/yyyy} · {(groups.Length == 0 ? "Toàn cảnh phòng" : string.Join(", ", groups))}", bytes.ToArray()));
         }
         if (type == "MoveIn")
