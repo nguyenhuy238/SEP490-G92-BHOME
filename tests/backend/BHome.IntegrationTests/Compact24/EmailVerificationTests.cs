@@ -35,9 +35,10 @@ public sealed partial class Compact24NotificationMvpTests
         var delivery = await AuthenticationDelivery(host, before.Id); await SendEmail(host, delivery);
         var mail = Assert.Single(probe.Messages); Assert.Equal("EMAIL_CONFIRMATION_REQUESTED", mail.EventType);
         Assert.StartsWith("https://owner.example.invalid/confirm-email#", mail.ActionUrl);
-        Assert.Contains("bhome://confirm-email?", mail.Body);
+        Assert.StartsWith("bhome://confirm-email?", mail.MobileActionUrl);
         var q = QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));
-        var nativeQuery = QueryHelpers.ParseQuery(new Uri(mail.Body.Split('\n').Last()).Query);
+        var nativeQuery = QueryHelpers.ParseQuery(new Uri(mail.MobileActionUrl!).Query);
+        Assert.DoesNotContain("bhome://", mail.Body);
         Assert.Equal(q["token"].ToString(), nativeQuery["token"].ToString());
         Assert.Equal(q["userName"].ToString(), nativeQuery["userName"].ToString());
         var confirm = new { userName = q["userName"].ToString(), token = q["token"].ToString() };

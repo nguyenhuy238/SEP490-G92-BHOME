@@ -56,7 +56,8 @@ public sealed partial class Compact24NotificationMvpTests
         await SendEmail(host, delivery); await SendEmail(host, delivery);
         var mail = Assert.Single(probe.Messages);
         Assert.StartsWith("https://owner.example.invalid/reset-password#", mail.ActionUrl);
-        Assert.Equal(role != "Owner", mail.Body.Contains("bhome://reset-password?", StringComparison.Ordinal));
+        Assert.Equal(role != "Owner", mail.MobileActionUrl?.StartsWith("bhome://reset-password?", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain("bhome://", mail.Body);
         Assert.Equal("Sent", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());
     }
 

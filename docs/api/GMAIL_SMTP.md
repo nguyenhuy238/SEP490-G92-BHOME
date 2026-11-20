@@ -74,6 +74,10 @@ emergency có Location/Room và hướng dẫn xử lý. Nội dung hướng ng�
 chi tiết, không chứa CCCD, mật khẩu, JWT, tham chiếu ngân hàng hoặc mã allocation. Template có
 HTML encode, UTF-8, plain-text alternative và subject `[BHOME]`. Announcement giữ body đã
 được tác giả có quyền nhập; HTML vẫn được encode, không thực thi markup.
+Template v2 ngày 20/11/2026 giữ subject đã có tiền tố BHOME để không lặp thương hiệu;
+giữ subject xác nhận giữ chỗ và subject credential Staff theo loại thư. URL action
+không hiện dài trong HTML; plain text vẫn giữ liên kết đầy đủ. Email credential
+Staff là ngoại lệ đã được quyết định cho nội dung mật khẩu, xem [email tài khoản](AUTHENTICATION_EMAIL.md).
 Không backfill/replay publication đã phát trước thay đổi này. Account reset/invitation dùng
 abstraction EMAIL hiện có; luồng link, protected outbox và token-expiry-aware retry được cập nhật
 tại [Email xác thực](AUTHENTICATION_EMAIL.md). Raw token không vào inbox/log/API.
