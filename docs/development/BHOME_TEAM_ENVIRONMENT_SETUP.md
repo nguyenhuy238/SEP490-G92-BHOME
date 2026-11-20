@@ -174,6 +174,22 @@ Không cấu hình wildcard. Người nhận ngoài allowlist bị từ chối *
 không tự chuyển hướng thư chứa token của người khác vào mailbox test.
 `Email__TestRecipient` chỉ thuộc endpoint thử thư, không thay thế allowlist của mọi email.
 
+**Máy Development muốn gửi ra Gmail thật (tùy chọn, không thay đổi mặc định của nhóm):**
+chạy `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Configure-LocalGmail.ps1`.
+Nhập địa chỉ Gmail gửi, các địa chỉ nhận được phê duyệt (cách nhau bằng dấu phẩy),
+và **Gmail App Password** tại dấu nhắc ẩn. Không nhập mật khẩu Gmail thường và
+không gửi App Password qua chat, commit, `.env` hay tham số command line. Script
+chỉ cập nhật `.NET User Secrets` Development, giữ nguyên `.env`/database, bật
+STARTTLS và giới hạn email ra ngoài theo allowlist; không tự gửi thư.
+Sau đó dừng Backend đang chạy, khởi động lại bằng `scripts/Start-Api.ps1`, chạy
+`scripts/Configure-LocalGmail.ps1 -CheckOnly`, đăng nhập tài khoản Owner và
+thử endpoint `POST /api/v1/notifications/email-test` để gửi một email tổng hợp
+đến người nhận đầu tiên trong allowlist. Phản hồi `SmtpAccepted` chỉ xác nhận
+máy chủ SMTP đã nhận, **không chứng minh email đã vào Inbox**; kiểm tra cả Spam.
+Địa chỉ của Staff/Tenant cần thực sự nhận email cũng phải có trong allowlist;
+chỉ bật cho địa chỉ đã được phê duyệt. Chạy lại công cụ cần giữ nguyên allowlist
+đã duyệt; khi muốn đổi danh sách, chủ động rà soát User Secrets trước.
+
 Nếu máy đã cấu hình Gmail trước khi pull bản chuẩn hóa, API có thể dừng vì thiếu
 `Email:AllowedRecipients:0`; Web nhận 502 và Mobile báo ECONNREFUSED vì API chưa mở cổng.
 Với mailbox thử nghiệm đã được xác định trong `Email:TestRecipient`, chủ động chuyển đổi bằng:

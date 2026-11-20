@@ -1,0 +1,156 @@
+# Opt-in real Gmail SMTP for local Development. Never changes .env, database, Docker or deployment.
+# App Password is entered without echo and stored only in the current API's .NET User Secrets.
+[CmdletBinding()]
+param(
+    [string]$Sender,
+    [string[]]$AllowedRecipients,
+    [Security.SecureString]$AppPassword,
+    [switch]$CheckOnly,
+    [string]$EnvironmentFile = '.env',
+    [string]$UserSecretsId
+)
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Use-LocalTools.ps1')
+$root = Split-Path -Parent $PSScriptRoot
+$file = if ([IO.Path]::IsPathRooted($EnvironmentFile)) {
+    [IO.Path]::GetFullPath($EnvironmentFile)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $root $EnvironmentFile))
+}
+if (!(Test-Path -LiteralPath $file)) { throw 'Selected Development environment file is missing.' }
+foreach ($key in @('ASPNETCORE_ENVIRONMENT', 'DOTNET_ENVIRONMENT')) {
+    $environmentName = [Environment]::GetEnvironmentVariable($key, 'Process')
+    if ($environmentName -and $environmentName -ne 'Development') {
+        throw 'Local Gmail setup is Development-only; Staging and Production secrets are not touched.'
+    }
+}
+$fileEnvironment = Get-Content -Encoding UTF8 -LiteralPath $file |
+    Where-Object { $_ -match '^ASPNETCORE_ENVIRONMENT=' } | Select-Object -Last 1
+if ($fileEnvironment -and $fileEnvironment -ne 'ASPNETCORE_ENVIRONMENT=Development') {
+    throw 'Selected file must be a Development profile.'
+}
+
+if (!$UserSecretsId) {
+    $project = [xml][IO.File]::ReadAllText((Join-Path $root 'src/backend/BHome.Api/BHome.Api.csproj'))
+    $UserSecretsId = [string]$project.Project.PropertyGroup.UserSecretsId
+}
+if (!$UserSecretsId -or $UserSecretsId -in @('.', '..') -or
+    $UserSecretsId.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) {
+    throw 'Invalid API UserSecretsId.'
+}
+$secretsPath = Join-Path $env:APPDATA "Microsoft/UserSecrets/$UserSecretsId/secrets.json"
+$secrets = @{}
+if (Test-Path -LiteralPath $secretsPath) {
+    try {
+        $json = Get-Content -LiteralPath $secretsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($property in $json.PSObject.Properties) { $secrets[$property.Name] = $property.Value }
+    } catch {
+        throw 'Existing user-secrets JSON is invalid; refusing to replace it. Values withheld.'
+    }
+}
+
+function Valid-Email([string]$address) {
+    if ([string]::IsNullOrWhiteSpace($address) -or $address.Length -gt 254 -or
+        $address.IndexOfAny([char[]]@("`r", "`n")) -ge 0) { return $false }
+    try {
+        $mailbox = [Net.Mail.MailAddress]::new($address)
+        return $mailbox.Address -ceq $address -and $mailbox.Host.Contains('.')
+    } catch { return $false }
+}
+
+if ($CheckOnly) {
+    $effective = @{}
+    foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $file) {
+        if ($line -match '^([^#=\s]+)=(.*)$') { $effective[$Matches[1].Replace('__', ':')] = $Matches[2].Trim() }
+    }
+    foreach ($key in $secrets.Keys) { $effective[$key] = $secrets[$key] }
+    $processOverrides = @(Get-ChildItem Env:Email__* -ErrorAction SilentlyContinue)
+    if ($processOverrides.Count) { throw 'Process Email__* overrides are present; check effective API settings before sending.' }
+    $allowed = @($effective.Keys | Where-Object { $_ -match '^Email:AllowedRecipients:[0-9]+$' })
+    $ready = $effective['Email:Enabled'] -eq 'true' -and
+        $effective['Email:DeliveryMode'] -eq 'Smtp' -and
+        $effective['Email:Host'] -eq 'smtp.gmail.com' -and
+        $effective['Email:Port'] -eq '587' -and
+        $effective['Email:UseStartTls'] -eq 'true' -and
+        (Valid-Email ([string]$effective['Email:Username'])) -and
+        $effective['Email:Username'] -eq $effective['Email:FromEmail'] -and
+        ![string]::IsNullOrWhiteSpace([string]$effective['Email:AppPassword']) -and
+        $allowed.Count -gt 0 -and
+        @($allowed | Where-Object { !(Valid-Email ([string]$effective[$_])) }).Count -eq 0
+    if (!$ready) { throw 'Local Gmail SMTP is NOT configured. Current local email may be captured by Mailpit. Run Configure-LocalGmail.ps1 to opt in.' }
+    Write-Output 'PASS: Local Gmail SMTP configuration is present (secrets withheld). SMTP acceptance/inbox delivery not tested.'
+    return
+}
+
+# Process environment overrides User Secrets: do not misleadingly report success if they exist.
+if (@(Get-ChildItem Env:Email__* -ErrorAction SilentlyContinue).Count) {
+    throw 'Process Email__* overrides are set. Remove them before configuring local Gmail SMTP.'
+}
+if (!$Sender) { $Sender = Read-Host 'Gmail sender address' }
+$Sender = $Sender.Trim()
+if (!(Valid-Email $Sender) -or !$Sender.EndsWith('@gmail.com', [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Sender must be a valid Gmail address. No configuration changed.'
+}
+if (!$AllowedRecipients -or !$AllowedRecipients.Count) {
+    $raw = Read-Host 'Approved test recipients (comma-separated email addresses)'
+    $AllowedRecipients = @($raw.Split(','))
+}
+$recipients = @($AllowedRecipients | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if (!$recipients.Count -or $recipients.Count -gt 10 -or
+    @($recipients | Where-Object { !(Valid-Email $_) }).Count -gt 0 -or
+    @($recipients | Sort-Object -Unique).Count -ne $recipients.Count) {
+    throw 'Provide 1-10 distinct valid approved recipient addresses. No configuration changed.'
+}
+# Preserve previously granted recipient permissions instead of silently broadening or narrowing them.
+$existing = @($secrets.Keys | Where-Object { $_ -match '^Email:AllowedRecipients:[0-9]+$' })
+$inFile = @(
+    Get-Content -Encoding UTF8 -LiteralPath $file |
+        Where-Object { $_ -match '^Email__AllowedRecipients__[0-9]+=' } |
+        ForEach-Object { ($_ -split '=', 2)[1].Trim() }
+)
+if (@($inFile | Where-Object { $recipients -notcontains $_ }).Count -gt 0) {
+    throw 'The selected .env contains other approved recipients. Review those entries before enabling real mail.'
+}
+if ($existing.Count) {
+    $prior = @($existing | ForEach-Object { [string]$secrets[$_] })
+    if ($prior.Count -ne $recipients.Count -or
+        @($prior | Where-Object { $recipients -notcontains $_ }).Count -gt 0) {
+        throw 'An existing SMTP allowlist differs. Review it manually before changing approved recipients.'
+    }
+}
+if (!$AppPassword) { $AppPassword = Read-Host 'Gmail App Password (hidden)' -AsSecureString }
+if (!$AppPassword -or $AppPassword.Length -lt 8) { throw 'App Password is missing or too short. No configuration changed.' }
+
+$pointer = [IntPtr]::Zero
+$privatePassword = $null
+try {
+    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($AppPassword)
+    $privatePassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+    if ($privatePassword -match '[\r\n]' -or [string]::IsNullOrWhiteSpace($privatePassword)) {
+        throw 'Invalid App Password. No configuration changed.'
+    }
+    $options = @{
+        'Email:Enabled' = 'true'
+        'Email:DeliveryMode' = 'Smtp'
+        'Email:Host' = 'smtp.gmail.com'
+        'Email:Port' = '587'
+        'Email:UseStartTls' = 'true'
+        'Email:Username' = $Sender
+        'Email:FromEmail' = $Sender
+        'Email:AppPassword' = $privatePassword
+        'Email:TestEnabled' = 'true'
+        'Email:TestRecipient' = $recipients[0]
+    }
+    for ($i = 0; $i -lt $recipients.Count; $i++) {
+        $options["Email:AllowedRecipients:$i"] = $recipients[$i]
+    }
+    $options | ConvertTo-Json -Compress -Depth 3 | dotnet user-secrets set --id $UserSecretsId | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not update local API user-secrets. No email was sent.' }
+} finally {
+    if ($pointer -ne [IntPtr]::Zero) {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+    }
+    $privatePassword = $null
+}
+Write-Output 'Configured Development Gmail SMTP in API User Secrets (credentials withheld). No .env/database/deployment change and no email sent.'
+Write-Output 'Restart the API and run Configure-LocalGmail.ps1 -CheckOnly before testing with the approved mailbox.'
