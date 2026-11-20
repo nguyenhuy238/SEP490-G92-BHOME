@@ -16,6 +16,13 @@ docker build -f deploy/docker/Web.Dockerfile --build-arg APP=owner-web --build-a
 docker build -f deploy/docker/Web.Dockerfile --build-arg APP=public-web --build-arg VITE_API_BASE_URL=https://api.example.com -t bhome-public-web .
 ```
 
+`Api.Release.Dockerfile` is the release runtime used by VPS Staging and Production image builds.
+It includes the LibreOffice Writer, Poppler and font packages required by contract document/PDF
+workflows, plus the `schema-output` and `seed` targets retained for separately reviewed operations.
+The normal release pipeline builds only `--target api`; it never applies migrations or runs seeds.
+Keep the older `Api.Dockerfile` available for the lightweight local image. Do not replace an
+existing VPS image until the release image has passed the Staging acceptance checks.
+
 The two web clients share a parameterized Dockerfile and serve SPA fallback with unprivileged Nginx
 on port 8080. Vite's API URL is embedded at build time and must never be a secret. Native mobile uses
 React Native and Expo. CI validates its Expo web export. Docker build contexts exclude private env files,
