@@ -1,3 +1,4 @@
+import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { useRef, useState } from 'react';
 import { Alert, Button, Checkbox, FormControlLabel, Paper, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -36,6 +37,8 @@ export function FinalFixedChargesPanel({
     const row = query.data?.find((r) => r.chargeCode === code);
     if (
       lock.current ||
+      query.isFetching ||
+      !!query.error ||
       !row ||
       row.missingInputs.length ||
       row.amount == null ||
@@ -59,6 +62,11 @@ export function FinalFixedChargesPanel({
       await saved();
     } catch (e) {
       setError(contractError(e));
+      if ((e as { status?: number })?.status === 409) {
+        setConfirmed({});
+        await query.refetch();
+        await saved();
+      }
     } finally {
       lock.current = false;
       setBusy(false);
@@ -134,7 +142,13 @@ export function FinalFixedChargesPanel({
                   control={
                     <Checkbox
                       checked={confirmed[row.chargeCode] === row.reference}
-                      disabled={busy || row.amount == null || !!row.missingInputs.length}
+                      disabled={
+                        busy ||
+                        query.isFetching ||
+                        !!query.error ||
+                        row.amount == null ||
+                        !!row.missingInputs.length
+                      }
                       onChange={(_, checked) =>
                         setConfirmed((c) => ({
                           ...c,
@@ -145,17 +159,22 @@ export function FinalFixedChargesPanel({
                   }
                   label={`Tôi xác nhận chính sách ${row.name} áp dụng đúng điều khoản đã ký và chưa thu trùng`}
                 />
-                <Button
+                <ConfirmActionButton
+                  title="Duyệt phí cuối kỳ"
+                  description={`${row.name}: ${row.amount == null ? 'Chưa đủ dữ liệu' : formatContractMoney(row.amount)}. Khoản đã duyệt được ghi vào sổ phải thu, chưa xác nhận Tenant đã trả tiền.`}
+                  confirmationKey={`${row.reference}:${confirmed[row.chargeCode]}`}
                   disabled={
                     busy ||
+                    query.isFetching ||
+                    !!query.error ||
                     row.amount == null ||
                     !!row.missingInputs.length ||
                     confirmed[row.chargeCode] !== row.reference
                   }
-                  onClick={() => void approve(row.chargeCode)}
+                  onConfirm={() => approve(row.chargeCode)}
                 >
                   Duyệt {row.name}
-                </Button>
+                </ConfirmActionButton>
               </>
             )}
           </Stack>

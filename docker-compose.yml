@@ -1,6 +1,12 @@
 # Local data services only; TLS, backups and production deployment are separate concerns.
 name: bhome-dev
 services:
+  mailpit:
+    image: axllent/mailpit:v1.27.10
+    ports:
+      - '127.0.0.1:1025:1025'
+      - '127.0.0.1:8025:8025'
+    restart: unless-stopped
   postgres:
     image: postgres:16-alpine
     environment:
@@ -38,13 +44,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
-    restart: unless-stopped
-  mailpit:
-    # Local test inbox only; no relay and no externally exposed listener.
-    image: axllent/mailpit:v1.34.0
-    ports:
-      - '127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025'
-      - '127.0.0.1:${MAILPIT_WEB_PORT:-8025}:8025'
     restart: unless-stopped
 volumes:
   postgres-data:

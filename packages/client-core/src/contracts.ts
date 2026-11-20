@@ -146,7 +146,7 @@ export interface DepositVerification {
   bankTransactionReference: string;
   amount: string;
   verificationReason: string;
-  verifiedByUserId: string;
+  verifiedByUserId: string | null;
   verifiedAt: string;
 }
 export interface Readiness {
@@ -797,10 +797,15 @@ export function contractClient(request: ContractRequest) {
         body: JSON.stringify(body),
       }),
     moveOutHistory: (id: string, signal?: AbortSignal) =>
-      request<{ version: number; action: string; occurredAt: string }[]>(
-        `${root}/${id}/move-out/history`,
-        { signal },
-      ),
+      request<
+        {
+          version: number;
+          action: string;
+          occurredAt: string;
+          actorId?: string;
+          snapshot?: string;
+        }[]
+      >(`${root}/${id}/move-out/history`, { signal }),
     moveOutAssignments: (signal?: AbortSignal) =>
       request<
         {
@@ -1214,7 +1219,19 @@ export const labels: Record<string, string> = {
   verified_residents_required: 'Cần xác minh tất cả người ở và người đại diện.',
   invalid_contract_signers: 'Tài khoản bên ký chưa hợp lệ.',
   security_deposit_insufficient: 'Tiền cọc đã xác minh chưa đủ.',
-  room_contract_conflict: 'Phòng có hợp đồng đang xung đột.',
+  room_contract_conflict: 'Phòng đã đủ chỗ hoặc có hợp đồng đang xung đột.',
+  household_version_changed:
+    'Thông tin hộ gia đình đã được cập nhật ở phiên khác. Tải lại hồ sơ trước khi lưu tiếp.',
+  household_member_mismatch: 'Thành viên không khớp hộ gia đình đang nhập. Hãy tải lại hồ sơ.',
+  household_representative_not_verified:
+    'Người đại diện cần hoàn tất xác minh CCCD trước khi lưu thành viên.',
+  invalid_household_members:
+    'Kiểm tra họ tên, ngày sinh, quan hệ và số điện thoại/CCCD của thành viên nếu có.',
+  invalid_household_input: 'Kiểm tra và xác nhận thông tin thành viên trước khi tiếp tục.',
+  household_already_used_by_contract:
+    'Hợp đồng đã chuyển sang giai đoạn không cho phép sửa danh sách thành viên. Kiểm tra lại hợp đồng.',
+  room_capacity_exceeded:
+    'Số người ở vượt sức chứa của phòng. Hãy bớt người ở hoặc chọn phòng khác.',
   financial_ledger_and_deposit_policy:
     'Chờ đối chiếu nghĩa vụ, cọc và giao dịch thực tế; trạng thái bàn giao được theo dõi riêng.',
   contract_not_ready_for_activation:
@@ -1439,7 +1456,6 @@ export function contractActions(
   if (
     signer &&
     (c.signingMode !== 'INTERNAL_OTP_DRAWN' || (owner && !c.isDevelopmentDemo)) &&
-    (c.kind !== 'Holding' || !!c.approvedAt) &&
     ['Draft', 'PendingSigning'].includes(c.status) &&
     !mine.some((s) => s.status !== 'Failed') &&
     !open &&
@@ -1531,14 +1547,8 @@ export function contractActions(
         action(
           'holding-conversion',
           'Chuyển sang hợp đồng thuê chính',
-          [
-            {
-              name: 'requiredSecurityDeposit',
-              label: 'Tiền cọc thuê yêu cầu (VND)',
-              type: 'money',
-            },
-          ],
-          'Tạo bản nháp hợp đồng thuê chính và áp dụng tiền giữ chỗ đã xác minh; chưa tự kích hoạt hợp đồng thuê.',
+          [],
+          'Tiền cọc đảm bảo lấy từ tiền giữ chỗ đã lưu. Tạo bản nháp hợp đồng thuê chính và áp dụng tiền giữ chỗ đã xác minh; chưa tự kích hoạt hợp đồng thuê.',
         ),
       );
     return result;

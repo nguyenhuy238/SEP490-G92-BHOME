@@ -13,7 +13,14 @@ interface LifecycleState {
   inspections: FinalInspection[];
   preparation: InspectionPreparation | null;
   summary: SettlementSummary | null;
-  history: { version: number; action: string; occurredAt: string }[];
+  history: {
+    version: number;
+    action: string;
+    occurredAt: string;
+    actorId?: string;
+    snapshot?: string;
+  }[];
+  sectionErrors: Partial<Record<'inspections' | 'preparation' | 'summary' | 'history', string>>;
 }
 const emptyLifecycle: LifecycleState = {
   loading: true,
@@ -22,6 +29,7 @@ const emptyLifecycle: LifecycleState = {
   preparation: null,
   summary: null,
   history: [],
+  sectionErrors: {},
 };
 
 export function useContractLifecycle(api: ContractClient, id: string, role: string) {
@@ -37,18 +45,52 @@ export function useContractLifecycle(api: ContractClient, id: string, role: stri
   useEffect(() => {
     const c = new AbortController();
     const request = { api, id, role, revision };
-    void Promise.all([
+    void Promise.allSettled([
       api.inspections(id, c.signal),
       role !== 'Tenant' ? api.inspectionPreparation(id, c.signal) : Promise.resolve(null),
       role !== 'Staff' ? api.settlementSummary(id, c.signal) : Promise.resolve(null),
       api.moveOutHistory(id, c.signal),
     ])
       .then(([inspections, preparation, summary, history]) => {
-        if (!c.signal.aborted)
+        if (!c.signal.aborted) {
+          // Access loss must clear the entire snapshot. Other source failures must
+          // not hide a saved inspection or prevent scheduling a room inspection.
+          const results = { inspections, preparation, summary, history };
+          const accessLost = Object.values(results).find(
+            (r) =>
+              r.status === 'rejected' &&
+              [401, 403, 404].includes((r.reason as { status?: number })?.status ?? 0),
+          );
+          const sectionErrors = Object.fromEntries(
+            Object.entries(results)
+              .filter(([, r]) => r.status === 'rejected')
+              .map(([name, r]) => [name, contractError((r as PromiseRejectedResult).reason)]),
+          );
+          if (accessLost?.status === 'rejected') {
+            setSnapshot({
+              ...request,
+              data: {
+                ...emptyLifecycle,
+                loading: false,
+                error: contractError(accessLost.reason),
+                sectionErrors,
+              },
+            });
+            return;
+          }
           setSnapshot({
             ...request,
-            data: { loading: false, error: '', inspections, preparation, summary, history },
+            data: {
+              loading: false,
+              error: Object.values(sectionErrors).join(' '),
+              sectionErrors,
+              inspections: inspections.status === 'fulfilled' ? inspections.value : [],
+              preparation: preparation.status === 'fulfilled' ? preparation.value : null,
+              summary: summary.status === 'fulfilled' ? summary.value : null,
+              history: history.status === 'fulfilled' ? history.value : [],
+            },
           });
+        }
       })
       .catch((e) => {
         if (!c.signal.aborted)
@@ -68,6 +110,8 @@ export function useContractLifecycle(api: ContractClient, id: string, role: stri
 }
 
 const blockers: Record<string, string> = {
+  financial_ledger_and_deposit_policy:
+    'Chờ đối chiếu nghĩa vụ, cọc và giao dịch thực tế; trạng thái bàn giao được theo dõi riêng.',
   final_charge_review_required: 'Owner cần xác nhận đủ danh sách khoản thu trả phòng hiện tại.',
   settlement_charge_sources_incomplete:
     'Còn nguồn khoản thu chưa xác nhận hoặc khoản phải thu chưa thanh toán.',
@@ -101,13 +145,21 @@ const blockers: Record<string, string> = {
   invoice_adjustment_pending: 'Còn yêu cầu điều chỉnh hóa đơn chờ duyệt.',
   bank_transfer_pending_review: 'Giao dịch ngân hàng đang chờ đối chiếu.',
   final_usage_not_covered_by_invoice: 'Chỉ số chốt chưa được bao phủ bởi hóa đơn đã phát hành.',
+  final_meter_readings_required: 'Cần chỉ số điện và nước chốt đã được Staff xác nhận.',
+  maintenance_compensation_pending: 'Còn khoản bồi thường bảo trì cần Owner xử lý.',
+  receipt_excess_refund_pending: 'Còn tiền dư giao dịch cần đối soát hoặc hoàn lại.',
+  legacy_deduction_requires_migration_review:
+    'Có quyết định khấu trừ cũ cần đối chiếu trước khi dùng luồng mới.',
 };
 export function settlementBlocker(value: string) {
   if (value.startsWith('unbilled_final_usage_pending:'))
     return 'Chỉ số chốt chưa được bao phủ bởi hóa đơn đã phát hành.';
   if (value.startsWith('final_invoice_coverage_required:'))
     return 'Thiếu hóa đơn đã phát hành cho kỳ ' + value.split(':')[1];
-  return blockers[value] ?? 'Cần đối chiếu: ' + value;
+  return (
+    blockers[value] ??
+    'Còn điều kiện cần đối chiếu. Tải lại dữ liệu hoặc liên hệ người quản lý để kiểm tra.'
+  );
 }
 export function moveOutActionLabel(action: string) {
   return (
@@ -123,6 +175,6 @@ export function moveOutActionLabel(action: string) {
         PendingSettlement: 'Chờ quyết toán',
         Completed: 'Hoàn tất',
       } as Record<string, string>
-    )[action] ?? action
+    )[action] ?? 'Cập nhật trả phòng'
   );
 }

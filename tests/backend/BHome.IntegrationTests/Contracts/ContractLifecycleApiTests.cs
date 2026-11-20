@@ -212,7 +212,9 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal(preview.Id, replay.Id); Assert.True(preview.DevelopmentOnly);
         var pdf = await tenant.Client.GetByteArrayAsync(Path(id, $"previews/{preview.Id}"));
         Assert.StartsWith("%PDF-", Encoding.ASCII.GetString(pdf));
-        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync(Path(id, "previews"))).StatusCode);
+        Assert.Equal(preview.Id, Assert.Single(await Success<ContractDocumentView[]>(await staff.Client.GetAsync(Path(id, "previews")))).Id);
+        Assert.Equal(pdf, await staff.Client.GetByteArrayAsync(Path(id, $"previews/{preview.Id}")));
+        Assert.Equal(HttpStatusCode.NotFound, (await outside.Staff.Client.GetAsync(Path(id, $"previews/{preview.Id}"))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await outside.Tenant.Client.GetAsync(Path(id, $"previews/{preview.Id}"))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, Path(id, "activate"))).StatusCode);
         foreach (var actor in new[] { owner, tenant })
@@ -227,6 +229,8 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(staff, Path(id, "activate"))).StatusCode);
         var active = await Success<ContractView>(await Post(owner, Path(id, "activate")));
         Assert.Equal("Active", active.Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync(Path(id, "previews"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.Client.GetAsync(Path(id, $"previews/{preview.Id}"))).StatusCode);
         Assert.Single(await Success<DepositVerificationView[]>(await owner.Client.GetAsync(Path(id, "deposit-verifications"))));
         Assert.Contains(await Success<ContractHistoryView[]>(await tenant.Client.GetAsync(Path(id, "history"))), a => a.Action == "ContractSignatureSimulated");
         await using var scope = host.Services.CreateAsyncScope();
@@ -660,7 +664,10 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var main = (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), conversion, conversionKey))).Id;
         Assert.Equal(main, (await Success<ContractId>(await Post(w.Staff, Path(holding, "holding-conversion"), conversion, conversionKey))).Id);
         Assert.Equal("Active", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(holding)))!.Status);
-        await Signed(w, main); await Deposit(w, main, 2000000); await Success<ContractView>(await Post(w.Owner, Path(main, "activate")));
+        var inherited = (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(main)))!;
+        Assert.Equal(activeHolding.RequiredDeposit, inherited.RequiredDeposit);
+        Assert.Equal(inherited.RequiredDeposit, inherited.AppliedHoldingDeposit);
+        await Signed(w, main); await Success<ContractView>(await Post(w.Owner, Path(main, "activate")));
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(1, await db.Set<Contract>().CountAsync(c => c.HoldingContractId == holding));
         Assert.Equal(1, await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().CountAsync(a => a.SourceDepositContractId == holding));

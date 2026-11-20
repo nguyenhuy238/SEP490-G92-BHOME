@@ -13,7 +13,8 @@ public sealed class AnonymousSigningUrlTests
         Options.Create(new AnonymousSigningOptions { PublicSigningUrl = configuredUrl }),
         Substitute.For<INotificationChannelProvider>(),
         Options.Create(new NotificationChannelOptions()),
-        new MailKitEmailSender(Options.Create(new EmailOptions()), NullLogger<MailKitEmailSender>.Instance));
+        new MailKitEmailSender(Options.Create(new EmailOptions()), NullLogger<MailKitEmailSender>.Instance,
+            Substitute.For<Microsoft.Extensions.Hosting.IHostEnvironment>()));
 
     [Fact]
     public void LocalHttpsSigningUrlWorksWithoutACloudflareDomain()

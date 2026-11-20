@@ -18,7 +18,7 @@ public sealed class ContractDepositInstructionsService(ContractService contracts
     {
         await contracts.GetAsync(id, t); // Effective Owner/Staff/Tenant resource scope.
         var c = await contractData.FindAsync(id, t) ?? throw new PaymentException(404, "contract_not_found");
-        if (c.Kind != ContractKind.Holding || c.ApprovedAt is null || c.Status is not (ContractStatus.PendingActivation or ContractStatus.Active))
+        if (c.Kind != ContractKind.Holding || (c.ApprovedAt is null && !BHome.Application.Contracts.AnonymousContractSigningService.HoldingOwnerHasSigned(c)) || c.Status is not (ContractStatus.PendingActivation or ContractStatus.Active))
             throw new PaymentException(409, "holding_not_payable");
         if (!ContractChargeSnapshot.IsIntact(c)) throw new PaymentException(409, "signed_terms_changed");
         if (c.Status != ContractStatus.Active)

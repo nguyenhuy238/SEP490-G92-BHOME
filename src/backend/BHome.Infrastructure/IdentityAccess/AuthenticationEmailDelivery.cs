@@ -19,8 +19,14 @@ namespace BHome.Infrastructure.IdentityAccess;
 internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, CompactNotificationWriter sql,
     IDataProtectionProvider protection, IOptions<AuthenticationEmailOptions> options,
     IHostEnvironment environment, IOptions<SessionOptions> sessions, IOptions<NotificationChannelOptions> channels,
-    UserManager<ApplicationUser> users) : IPasswordResetDelivery
+    UserManager<ApplicationUser> users, NotificationEmailContent contractEmail,
+    IOptions<EmailOptions> email) : IPasswordResetDelivery
 {
+    public void ValidateInvitationRecipient(string destination)
+    {
+        if (email.Value.Enabled && !email.Value.RecipientAllowed(destination))
+            throw new NotificationException(503, "email_recipient_not_allowed");
+    }
     private IDataProtector Protector => protection.CreateProtector("BHome.AuthenticationEmail.v1");
     public bool IsAvailable => IsAvailableFor("PasswordReset");
     public bool IsAvailableFor(string kind) => channels.Value.Enabled && kind switch
@@ -32,7 +38,12 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
     };
     public bool IsDurable => true;
     private sealed record Envelope(AuthenticationEmailRequest Request);
-    internal sealed record Content(string Destination, string Title, string Body, string ActionUrl);
+    internal sealed record Content(string Destination, string Title, string Body, string ActionUrl,
+        IReadOnlyList<EmailAttachment>? Attachments = null);
+
+    internal static string CallbackLink(string callback, string userName, string token) =>
+        callback + (new Uri(callback).Scheme == "bhome" ? "?" : "#") +
+        "userName=" + Uri.EscapeDataString(userName) + "&token=" + Uri.EscapeDataString(token);
 
     public async Task EnsureQueueWritableAsync(CancellationToken t)
     {
@@ -117,8 +128,7 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
         var url = verification ? owner ? options.Value.WebVerificationUrl : options.Value.MobileVerificationUrl :
             reset ? owner ? options.Value.WebResetUrl : options.Value.MobileResetUrl : owner ? options.Value.WebInvitationUrl : options.Value.MobileInvitationUrl;
         if (!options.Value.Trusted(url, environment.IsDevelopment())) throw new ChannelDeliveryException("authentication_email_url_invalid");
-        string Link(string callback) => callback + (new Uri(callback).Scheme == "bhome" ? "?" : "#") +
-            "userName=" + Uri.EscapeDataString(user.UserName!) + "&token=" + Uri.EscapeDataString(request.Token);
+        string Link(string callback) => CallbackLink(callback, user.UserName!, request.Token);
         var nativeLink = new Uri(url).Scheme == "bhome" ? Link(url) : null;
         // Mail clients may remove custom-scheme anchors. Existing anonymous Web pages
         // accept the same token for every role; retain the native link as an alternative.
@@ -136,6 +146,20 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
             reset ? "BHOME nhận được yêu cầu đặt lại mật khẩu của bạn." : "Bạn được mời sử dụng tài khoản BHOME. Hãy thiết lập mật khẩu trước khi đăng nhập trên ứng dụng BHOME.") +
             $"\nTài khoản: {request.Destination}\nLiên kết chỉ dùng một lần, hết hạn lúc {expiry:HH:mm dd/MM/yyyy} (giờ Việt Nam).\n\nNếu không yêu cầu thao tác này, hãy bỏ qua email hoặc liên hệ Owner. Không chia sẻ liên kết này.";
         if (nativeLink is not null) body += "\n\nNếu đã cài ứng dụng BHOME, bạn cũng có thể mở liên kết ứng dụng này:\n" + nativeLink;
-        return new(request.Destination, title, body, link);
+        IReadOnlyList<EmailAttachment>? attachments = null;
+        if (request.Kind == "TenantInvitation")
+        {
+            var contractId = await db.Set<BHome.Domain.TenantContracts.Contract>().AsNoTracking()
+                .Where(c => c.TenantUserId == recipient && c.Kind == BHome.Domain.TenantContracts.ContractKind.Main &&
+                    c.Status == BHome.Domain.TenantContracts.ContractStatus.Active)
+                .OrderByDescending(c => c.ActivatedAt).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(t);
+            if (contractId is { } id && await contractEmail.MainConfirmationAsync(id, recipient, t) is { } confirmed)
+            {
+                title = confirmed.Title;
+                attachments = await contractEmail.MainAttachmentsAsync(id, recipient, t);
+                body = confirmed.Body + "\nHãy dùng liên kết trong email này để tự đặt mật khẩu trước khi đăng nhập. Không chia sẻ liên kết này.\n\n" + body;
+            }
+        }
+        return new(request.Destination, title, body, link, attachments);
     }
 }

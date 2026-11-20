@@ -1,67 +1,16 @@
-# REFERENCE ONLY; no deployment is performed. All services require an explicit
-# --profile deployment-reference-only and externally supplied image/env paths.
-# This is NOT a migration or PostgreSQL/MinIO provisioning compose file.
-# API/Owner Web are only reachable through the Caddy TLS ingress here.
-# Replace the image references with reviewed/pinned images before deployment.
-# Required operator-supplied variables (no secrets belong in this file):
-# BHOME_RUNTIME_ENVIRONMENT=Staging or Production
-# BHOME_API_IMAGE=<approved API image reference>
-# BHOME_OWNER_WEB_IMAGE=<approved web image reference>
-# BHOME_API_RUNTIME_ENV_FILE=<private runtime env file with DB/JWT/storage keys>
-# BHOME_OWNER_DOMAIN=<public DNS hostname>  BHOME_ACME_EMAIL=<approved ACME contact>
-# This network does not join existing VPS staging aliases such as
-# bhome-sepay-stage-api or bhome-sepay-stage-owner. Review connectivity first.
-name: bhome-deployment-reference
-
+# Optional overlay for an EXISTING reviewed VPS stack; never a replacement stack.
+# --env-file supplies interpolation; service env_file below supplies API options.
+# Existing environment entries override env_file entries. Review stale URL overrides
+# before adopting this overlay; startup rejects any disagreement.
 services:
   api:
-    profiles: [deployment-reference-only]
-    image: ${BHOME_API_IMAGE:?Set reviewed API image reference}
     env_file:
-      - path: ${BHOME_API_RUNTIME_ENV_FILE:?Set path to a protected API runtime env file}
-        required: true
+      - ${BHOME_API_ENV_FILE:?Select the existing private Staging or Production API env file}
     environment:
-      ASPNETCORE_ENVIRONMENT: ${BHOME_RUNTIME_ENVIRONMENT:?Set Staging or Production}
-      ASPNETCORE_URLS: http://+:8080
-      # No public API listener: only Caddy has external ports. TLS terminates at Caddy.
-      # This setting requires edge TLS enforcement and a reviewed proxy boundary.
-      Api__UseHttpsRedirection: 'false'
-      DevelopmentDatabase__InitializeOnStartup: 'false'
-    expose:
-      - '8080'
-    security_opt:
-      - no-new-privileges:true
-
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:?Choose Staging or Production explicitly}
   owner-web:
-    profiles: [deployment-reference-only]
-    image: ${BHOME_OWNER_WEB_IMAGE:?Set reviewed Owner Web image reference}
-    expose:
-      - '8080'
-    security_opt:
-      - no-new-privileges:true
-
-  caddy:
-    profiles: [deployment-reference-only]
-    image: caddy:2.10-alpine
-    depends_on:
-      - api
-      - owner-web
-    environment:
-      BHOME_OWNER_DOMAIN: ${BHOME_OWNER_DOMAIN:?Set approved public DNS hostname}
-      BHOME_ACME_EMAIL: ${BHOME_ACME_EMAIL:?Set approved ACME contact}
-      BHOME_API_UPSTREAM: api:8080
-      BHOME_OWNER_UPSTREAM: owner-web:8080
-    ports:
-      - '80:80'
-      - '443:443'
-    volumes:
-      # Relative bind-mount paths are resolved from deploy/vps/ for this Compose file.
-      - ./Caddyfile.example:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    security_opt:
-      - no-new-privileges:true
-
-volumes:
-  caddy-data:
-  caddy-config:
+    build:
+      args:
+        APP: owner-web
+        VITE_API_BASE_URL: ${BHOME_OWNER_ORIGIN:?HTTPS origin of the selected Owner portal}
+    # Caddy routes /api/* to this environment's API and page routes to this build.

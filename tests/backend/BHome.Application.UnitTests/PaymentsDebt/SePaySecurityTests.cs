@@ -62,7 +62,7 @@ public sealed class SePaySecurityTests
     [InlineData(true, "Live", "Development", false)]
     [InlineData(true, "Test", "Production", false)]
     [InlineData(true, "Live", "Production", false)]
-    [InlineData(true, "Test", "Staging", false)]
+    [InlineData(true, "Test", "Staging", true)]
     public void TestingWorkspaceRequiresEnabledSandboxAndPermittedEnvironment(bool enabled, string mode, string environment, bool expected) =>
         Assert.Equal(expected, new SePayOptions { Enabled = enabled, Mode = mode }.TestingAvailable(environment));
 

@@ -18,25 +18,25 @@ public sealed class EmailOptions
     public int TimeoutSeconds { get; set; } = 30;
     public bool TestEnabled { get; set; }
     public string TestRecipient { get; set; } = "";
+    public string[] AllowedRecipients { get; set; } = [];
 
-    public bool IsCapture => DeliveryMode == "Capture";
+    public bool LocalCapture => DeliveryMode == "Capture" && Host is "localhost" or "127.0.0.1" or "::1";
+    public bool CaptureAllowed(string environment) => !Enabled || DeliveryMode != "Capture" ||
+        LocalCapture && environment is "Development" or "Testing";
 
-    public bool Valid() => !Enabled || (Port is >= 1 and <= 65535 &&
-        ValidAddress(FromEmail) && TimeoutSeconds is >= 1 and <= 45 &&
-        !FromName.Contains('\r') && !FromName.Contains('\n') &&
-        (!TestEnabled || ValidAddress(TestRecipient)) &&
-        (DeliveryMode switch
-        {
-            "Smtp" => !string.IsNullOrWhiteSpace(Host) && ValidAddress(Username) &&
-                !string.IsNullOrWhiteSpace(AppPassword) && UseStartTls,
-            // Stale SMTP credentials from local user-secrets are intentionally ignored in Capture.
-            "Capture" => IsLoopbackHost(Host) && !UseStartTls,
-            _ => false
-        }));
+    public bool RecipientsConfigured(string environment) => !Enabled || DeliveryMode != "Smtp" ||
+        environment is not ("Development" or "Testing" or "Staging") || AllowedRecipients.Length > 0;
 
-    private static bool IsLoopbackHost(string host) =>
-        string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) ||
-        IPAddress.TryParse(host, out var address) && IPAddress.IsLoopback(address);
+    public bool ValidForEnvironment(string environment) => Valid() && CaptureAllowed(environment) && RecipientsConfigured(environment);
+
+    public bool RecipientAllowed(string destination) => AllowedRecipients.Length == 0 ||
+        AllowedRecipients.Contains(destination, StringComparer.OrdinalIgnoreCase);
+
+    public bool Valid() => !Enabled || (!string.IsNullOrWhiteSpace(Host) && Port is >= 1 and <= 65535 &&
+        ValidAddress(FromEmail) &&
+        (LocalCapture || DeliveryMode == "Smtp" && ValidAddress(Username) && !string.IsNullOrWhiteSpace(AppPassword) && UseStartTls) &&
+        AllowedRecipients.All(ValidAddress) && TimeoutSeconds is >= 1 and <= 45 && !FromName.Contains('\r') && !FromName.Contains('\n') &&
+        (!TestEnabled || ValidAddress(TestRecipient)));
 
     public static bool ValidAddress(string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= 254 &&
         !value.Contains('\r') && !value.Contains('\n') && MailAddress.TryCreate(value, out var address) &&

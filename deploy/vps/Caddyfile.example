@@ -1,39 +1,35 @@
-# REFERENCE ONLY. Copy into reviewed infrastructure, never install by this file alone.
-# Requires BHOME_OWNER_DOMAIN, BHOME_ACME_EMAIL, BHOME_API_UPSTREAM and
-# BHOME_OWNER_UPSTREAM environment variables.
-# DNS, TLS, proxy trust, backups and secrets must be independently verified.
-# The browser connects to one HTTPS origin for both Owner Web and the API;
-# the API and Owner Web containers themselves only listen on a private network.
-# Existing staging names bhome-sepay-stage-api/bhome-sepay-stage-owner are not
-# connected by this example. An operator must check Docker networks/aliases
-# and merge with the existing Caddy config; DO NOT replace live ingress.
-# In Production the API's separate public host remains a separate deployment
-# concern; this example only illustrates an Owner-host, same-origin proxy.
-{
-    email {$BHOME_ACME_EMAIL}
-}
-
-{$BHOME_OWNER_DOMAIN} {
-    encode zstd gzip
-
-    header {
-        X-Content-Type-Options nosniff
-        Referrer-Policy strict-origin-when-cross-origin
-        X-Frame-Options DENY
-    }
-
-    # Keep internal health endpoints outside the public routing surface.
-    @privateHealth path /health /health/*
-    respond @privateHealth 404
-
-    # No strip_prefix: ASP.NET controllers expect their full /api/v1/... paths.
-    # The email's /open/sign-contract link is also an API endpoint.
-    @backend path /api/* /open/sign-contract
+# Review and merge into /opt/bhome-config/Caddyfile; never overwrite the live file blindly.
+# Environment variables are supplied to the Caddy container by its existing Compose stack.
+{$OWNER_HOST} {
+    encode gzip
+    @backend path /api/* /open/*
     handle @backend {
-        reverse_proxy {$BHOME_API_UPSTREAM}
+        reverse_proxy api:8080
     }
-
     handle {
-        reverse_proxy {$BHOME_OWNER_UPSTREAM}
+        reverse_proxy owner-web:8080
+    }
+}
+{$PUBLIC_HOST} {
+    reverse_proxy public-web:8080
+}
+{$API_HOST} {
+    @health path /health/*
+    respond @health 404
+    reverse_proxy api:8080
+}
+# Staging services must be reachable on a dedicated shared proxy network;
+# neither postgres nor MinIO should join that network or expose public ports.
+{$STAGING_HOST} {
+    @health path /health/*
+    handle @health {
+        respond 404
+    }
+    @backend path /api/* /open/*
+    handle @backend {
+        reverse_proxy bhome-sepay-stage-api:8080
+    }
+    handle {
+        reverse_proxy bhome-sepay-stage-owner:8080
     }
 }

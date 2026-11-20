@@ -175,6 +175,7 @@ vi.mock('react-native-paper', () => ({
       onChange={(e) => onChangeText(e.target.value)}
     />
   ),
+  HelperText: ({ children }: { children: React.ReactNode }) => <span role="alert">{children}</span>,
   Checkbox: {
     Item: ({
       label,
@@ -291,10 +292,10 @@ vi.mock('../features/onboarding/useCaptureScope', () => ({
       locations: [{ id: 'location', label: 'Cơ sở mẫu' }],
       rooms: location
         ? [
-            { id: 'room', label: '101', status: 'Available' },
-            { id: 'occupied', label: '102', status: 'Occupied' },
+            { id: 'room', label: '101', status: 'Available', capacity: 2 },
+            { id: 'occupied', label: '102', status: 'Occupied', capacity: 2, remainingCapacity: 1 },
             { id: 'full', label: '105', status: 'Occupied', capacity: 2, remainingCapacity: 0 },
-            { id: 'held', label: '103', status: 'OnHold' },
+            { id: 'held', label: '103', status: 'OnHold', capacity: 2 },
             { id: 'unavailable', label: '104', status: 'Unavailable' },
           ]
         : [],
@@ -328,15 +329,15 @@ it('shows empty and occupied rooms together without a reception-type selector', 
   expect(screen.queryByRole('combobox', { name: 'Nhu cầu tiếp nhận' })).toBeNull();
   const room = screen.getByRole('combobox', { name: 'Phòng *' });
   expect(within(room).getByRole('option', { name: '101' })).toBeTruthy();
-  expect(within(room).getByRole('option', { name: '102' })).toBeTruthy();
-  expect(within(room).queryByRole('option', { name: '103' })).toBeNull();
+  expect(within(room).getByRole('option', { name: /^102/ })).toBeTruthy();
+  expect(within(room).queryByRole('option', { name: '103' })).toBeTruthy();
   expect(within(room).queryByRole('option', { name: '104' })).toBeNull();
   fireEvent.change(room, { target: { value: 'occupied' } });
   expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(
     false,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
-  expect(screen.getByText('Thông tin người ở')).toBeTruthy();
+  expect(screen.getByText('CCCD của người ở')).toBeTruthy();
 });
 beforeEach(() => {
   vi.clearAllMocks();
@@ -363,24 +364,55 @@ function selectRoom() {
   });
   fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
 }
-function namePerson(label: string) {
-  fireEvent.change(screen.getByLabelText('Tên gọi hồ sơ'), { target: { value: label } });
+function addFamilyMember() {
+  fireEvent.change(screen.getByRole('combobox', { name: 'Hình thức thuê' }), {
+    target: { value: 'family' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
 }
+it('limits a family to the database room capacity and allows adding again after removing a draft member', () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  addFamilyMember();
+  expect(screen.getByText('2/2 người')).toBeTruthy();
+  const add = screen.getByRole('button', { name: 'Thêm người ở' });
+  expect(add).toHaveProperty('disabled', true);
+  fireEvent.click(add);
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
+  expect(screen.getByRole('textbox', { name: 'CCCD (nếu có)' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa Người ở 2' }));
+  expect(screen.getByRole('button', { name: 'Thêm người ở' })).toHaveProperty('disabled', false);
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
+  expect(screen.getByText('2/2 người')).toBeTruthy();
+  expect(state.json).not.toHaveBeenCalled();
+});
+it('limits new occupants to the remaining place when a two-person room already has one occupant', () => {
+  render(<OnboardingScreen />);
+  fireEvent.change(screen.getByRole('combobox', { name: 'Phòng *' }), {
+    target: { value: 'occupied' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Hình thức thuê' }), {
+    target: { value: 'family' },
+  });
+  expect(screen.getByText('1/1 người')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Thêm người ở' })).toHaveProperty('disabled', true);
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
+});
 it.each(['Nhập thủ công', 'Bắt đầu quét CCCD'] as const)(
   'creates an identity through %s without collecting email or reserving an account',
   async (entry) => {
     render(<OnboardingScreen />);
     selectRoom();
-    namePerson('Synthetic deferred occupant');
+
     expect(screen.queryByLabelText('Email người ở')).toBeNull();
     expect(state.json).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
     fireEvent.click(screen.getByRole('button', { name: entry }));
     await screen.findByRole('dialog');
     expect(state.json).toHaveBeenCalledOnce();
     expect(state.json.mock.calls[0][1]).toMatchObject({
       roomId: 'room',
-      displayLabel: 'Synthetic deferred occupant',
+      displayLabel: 'Người ở 1',
     });
     expect(state.json.mock.calls[0][1]).not.toHaveProperty('email');
     expect(state.request.mock.calls.some(([path]) => path.includes('/residents'))).toBe(false);
@@ -390,8 +422,7 @@ it('opens manual identity on Web without mounting the unsupported native screen-
   state.platform = 'web';
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Synthetic web occupant');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   fireEvent.click(screen.getByRole('button', { name: 'Nhập thủ công' }));
   await screen.findByRole('dialog');
   expect(screen.getByRole('textbox', { name: 'Số CCCD (12 chữ số)' })).toBeTruthy();
@@ -402,8 +433,7 @@ it('opens manual identity on Web without mounting the unsupported native screen-
 it('keeps native screen-capture protection on Android', async () => {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Synthetic native occupant');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   await openIdentity();
   expect(state.protect).toHaveBeenCalledWith('identity-wizard-resident-1');
   expect(screen.getByRole('dialog').getAttribute('data-animation')).toBe('slide');
@@ -436,8 +466,7 @@ function manualIdentity() {
 it('opens a calendar for each CCCD date and applies selections without confirming the identity', async () => {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu chọn ngày');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   await openIdentity();
   manualIdentity();
   for (const label of [
@@ -453,95 +482,54 @@ it('opens a calendar for each CCCD date and applies selections without confirmin
   }
   expect(state.json.mock.calls.some(([path]) => String(path).endsWith('/confirm'))).toBe(false);
 });
-it('gates mandatory steps and retains room and multiple people when navigating back', () => {
+it('opens CCCD directly with Individual selected and forbids a second person', () => {
   render(<OnboardingScreen />);
-  expect(screen.queryByRole('combobox', { name: 'Cơ sở được phân công *' })).toBeNull();
-  expect(screen.getByText('Cơ sở mẫu')).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
   selectRoom();
+  expect(screen.queryByLabelText('Tên gọi hồ sơ')).toBeNull();
   expect(
-    (screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
-  namePerson('Người mẫu B');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
-  expect(
-    (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
-  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
-  expect((screen.getByLabelText('Tên gọi hồ sơ') as HTMLInputElement).value).toBe('Người mẫu B');
+    (screen.getByRole('combobox', { name: 'Hình thức thuê' }) as HTMLSelectElement).value,
+  ).toBe('individual');
+  const add = screen.getByRole('button', { name: 'Thêm người ở' }) as HTMLButtonElement;
+  expect(add.disabled).toBe(true);
+  fireEvent.click(add);
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
+  expect(state.json).not.toHaveBeenCalled();
+});
+it('retains a family selection through Back and keeps draft members separate', () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  addFamilyMember();
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
   expect((screen.getByRole('combobox', { name: 'Phòng *' }) as HTMLSelectElement).value).toBe(
     'room',
   );
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Chọn Người ở 2 làm đại diện' }));
+  expect(screen.queryByRole('button', { name: 'Chọn Người ở 2 làm đại diện' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Xóa Người ở 2' }));
+  expect(screen.getAllByRole('button', { name: 'Bắt đầu quét CCCD' })).toHaveLength(1);
   expect(state.json).not.toHaveBeenCalled();
 });
-it('keeps draft labels intact while editing, changing representative and deleting a draft', () => {
+it('creates only the representative identity and keeps family members editable without requiring CCCD', async () => {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
-  namePerson('Người mẫu B');
-  expect(screen.queryByRole('button', { name: 'Chọn Người mẫu A làm đại diện' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa Người mẫu A' }));
-  expect((screen.getByLabelText('Tên gọi hồ sơ') as HTMLInputElement).value).toBe('Người mẫu A');
-  namePerson('Hồ sơ A đã sửa');
-  fireEvent.click(screen.getByRole('button', { name: 'Chọn Người mẫu B làm đại diện' }));
-  expect(screen.queryByRole('button', { name: 'Chọn Người mẫu B làm đại diện' })).toBeNull();
-  expect(screen.getByRole('button', { name: 'Chọn Hồ sơ A đã sửa làm đại diện' })).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Xóa Người mẫu B' }));
-  expect((screen.getByLabelText('Tên gọi hồ sơ') as HTMLInputElement).value).toBe('Hồ sơ A đã sửa');
-  expect(
-    (screen.getByRole('button', { name: 'Xóa Hồ sơ A đã sửa' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
-  expect(screen.queryByRole('button', { name: /làm đại diện/ })).toBeNull();
-  expect(screen.getAllByRole('button', { name: 'Quay lại' })).toHaveLength(1);
-  expect(state.json).not.toHaveBeenCalled();
-});
-it('preserves separate tenant profiles and locks the same controls after creating a resident', async () => {
-  render(<OnboardingScreen />);
-  selectRoom();
-  fireEvent.change(screen.getByRole('combobox', { name: 'Hình thức thuê' }), {
-    target: { value: 'individual' },
-  });
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
-  namePerson('Người mẫu B');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+  addFamilyMember();
   await openIdentity();
-  await openIdentity(1);
-  expect(state.json.mock.calls[0][1]).toMatchObject({
-    residentType: 0,
-    displayLabel: 'Người mẫu A',
-  });
-  expect(state.json.mock.calls[1][1]).toMatchObject({
-    residentType: 0,
-    displayLabel: 'Người mẫu B',
-  });
   closeIdentity();
-  fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  expect(state.json.mock.calls[0][1]).toMatchObject({ residentType: 0, displayLabel: 'Người ở 1' });
+  expect(state.json).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('textbox', { name: 'Họ tên thành viên' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Xóa Người ở 2' })).toHaveProperty('disabled', false);
   expect(
     (screen.getByRole('combobox', { name: 'Hình thức thuê' }) as HTMLSelectElement).disabled,
   ).toBe(true);
-  expect(
-    (screen.getByRole('combobox', { name: 'Hình thức thuê' }) as HTMLSelectElement).value,
-  ).toBe('individual');
-  expect(
-    (screen.getByRole('button', { name: 'Chỉnh sửa Người mẫu A' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
-  expect(
-    (screen.getByRole('button', { name: 'Xóa Người mẫu B' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
-  expect(screen.queryByRole('button', { name: /làm đại diện/ })).toBeNull();
 });
 it('allows manual confirmation after OCR failure and completes only after the server accepts it', async () => {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   await openIdentity();
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
   await screen.findByText('OCR chưa thành công; nhập thủ công vẫn khả dụng.');
@@ -575,8 +563,7 @@ it('allows manual confirmation after OCR failure and completes only after the se
 it('does not blindly create another Resident after a timeout with an unknown save result', async () => {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Hồ sơ tổng hợp');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   state.json.mockRejectedValueOnce(new MobileApiError(0, 'request_timeout'));
   fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu quét CCCD' }));
   await screen.findByRole('button', { name: 'Kiểm tra danh sách người ở' });
@@ -589,8 +576,7 @@ it.each(['Web released contract', 'Contract list'])(
   async (action) => {
     render(<OnboardingScreen />);
     selectRoom();
-    namePerson('Synthetic contract applicant');
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
     await openIdentity();
     manualIdentity();
     fireEvent.click(screen.getByRole('checkbox'));
@@ -607,8 +593,7 @@ it.each(['Web released contract', 'Contract list'])(
 async function submitAlreadyConfirmed() {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Synthetic recovered occupant');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   await openIdentity();
   manualIdentity();
   state.json.mockRejectedValueOnce(new MobileApiError(409, 'identity_already_confirmed'));
@@ -692,8 +677,7 @@ it('keeps a rejected confirmation error visible after closing the form and can r
 it('recovers a committed confirmation after the app backgrounds before its response arrives', async () => {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Synthetic delayed confirmation');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   await openIdentity();
   manualIdentity();
   let complete!: (result: unknown) => void;
@@ -724,8 +708,7 @@ it.each(['pending', 'wrong-id', 'wrong-room', 'forbidden'])(
   async (scenario) => {
     render(<OnboardingScreen />);
     selectRoom();
-    namePerson('Synthetic pending check');
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
     await openIdentity();
     closeIdentity();
     if (scenario === 'forbidden') state.request.mockRejectedValueOnce(new MobileApiError(403));
@@ -750,26 +733,23 @@ it.each(['pending', 'wrong-id', 'wrong-room', 'forbidden'])(
 it('retains unconfirmed identity edits across steps and keeps each person separate', async () => {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
-  namePerson('Người mẫu B');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
+  addFamilyMember();
+
   await openIdentity();
   manualIdentity();
   closeIdentity();
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
   await openIdentity();
   expect((screen.getByRole('textbox', { name: 'Họ và tên' }) as HTMLInputElement).value).toBe(
     'NGƯỜI Ở MẪU',
   );
-  await openIdentity(1);
-  manualIdentity();
-  await waitFor(() => expect(state.json).toHaveBeenCalledTimes(2));
-  expect(state.json.mock.calls[1][1]).toMatchObject({
-    residentType: 1,
-    displayLabel: 'Người mẫu B',
+  closeIdentity();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
+    target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });
+  expect(state.json).toHaveBeenCalledTimes(1);
 });
 it('keeps OCR suggestions and Staff edits in memory without confirming them when backgrounded', async () => {
   state.image.mockResolvedValue({
@@ -785,8 +765,7 @@ it('keeps OCR suggestions and Staff edits in memory without confirming them when
   });
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   await openIdentity();
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Chụp ảnh mặt sau' }));
@@ -827,8 +806,7 @@ it('scans both existing endpoints and uses the back-side issue date in confirmat
   });
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   await openIdentity();
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
   await screen.findByRole('button', { name: 'Chụp ảnh mặt sau' });
@@ -887,8 +865,7 @@ it('retries the back side independently and preserves Staff edits and front fiel
     .mockResolvedValueOnce(proposal({ dateOfIssue: '2022-06-07' }));
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   await openIdentity();
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Chụp ảnh mặt sau' }));
@@ -942,8 +919,7 @@ it('resumes the back camera after closing and leaves a missing issue date empty 
     });
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   await openIdentity();
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
   await screen.findByRole('button', { name: 'Chụp ảnh mặt sau' });
@@ -964,8 +940,7 @@ it('resumes the back camera after closing and leaves a missing issue date empty 
 it('does not mark a person confirmed when the response lacks a verified status', async () => {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   await openIdentity();
   manualIdentity();
   state.json.mockResolvedValueOnce({ id: 'resident-1', verificationStatus: 0 });
@@ -979,13 +954,12 @@ it('does not mark a person confirmed when the response lacks a verified status',
     (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
 });
-it('tracks confirmations independently for two people and waits for both before review', async () => {
+it('requires verified representative identity and member details before review', async () => {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
-  namePerson('Người mẫu B');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
+  addFamilyMember();
+
   await openIdentity();
   manualIdentity();
   fireEvent.click(screen.getByRole('checkbox'));
@@ -995,23 +969,87 @@ it('tracks confirmations independently for two people and waits for both before 
     (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(true);
   expect(screen.queryByRole('dialog')).toBeNull();
-  await openIdentity();
-  manualIdentity();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Số CCCD (12 chữ số)' }), {
-    target: { value: '000000000002' },
+  fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
+    target: { value: 'THÀNH VIÊN KIỂM THỬ' },
   });
-  fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
-  await screen.findByText('Đã xác nhận 2/2 người ở');
+  fireEvent.change(screen.getByRole('textbox', { name: 'Ngày sinh thành viên (dd/MM/yyyy)' }), {
+    target: { value: '01/01/2015' },
+  });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Quan hệ với người đại diện' }), {
+    target: { value: 'Con' },
+  });
   expect(
     (screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' }) as HTMLButtonElement).disabled,
   ).toBe(false);
 });
+it('persists a household before common step 3, retries safely and retains editable members on Back', async () => {
+  render(<OnboardingScreen />);
+  selectRoom();
+  addFamilyMember();
+  await openIdentity();
+  manualIdentity();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận thông tin' }));
+  await screen.findByText('Đã xác nhận 1/2 người ở');
+  fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
+    target: { value: 'THÀNH VIÊN KIỂM THỬ' },
+  });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Ngày sinh thành viên (dd/MM/yyyy)' }), {
+    target: { value: '31/02/2015' },
+  });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Quan hệ với người đại diện' }), {
+    target: { value: 'Con' },
+  });
+  const next = () => screen.getByRole('button', { name: 'Tiếp tục tạo hợp đồng' });
+  expect(next()).toHaveProperty('disabled', true);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Ngày sinh thành viên (dd/MM/yyyy)' }), {
+    target: { value: '01/01/2015' },
+  });
+  state.request.mockRejectedValueOnce(new MobileApiError(0, 'request_timeout'));
+  fireEvent.click(next());
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('dialog', { name: 'Contract preparation' })).toBeNull();
+  const response = {
+    representativeResidentId: 'resident-1',
+    version: 1,
+    members: [{ residentId: 'saved-child', clientKey: 'person-2' }],
+  };
+  state.request.mockResolvedValueOnce(response);
+  fireEvent.click(next());
+  await screen.findByRole('dialog', { name: 'Contract preparation' });
+  expect(screen.getByText('Room: room; Residents: resident-1,saved-child')).toBeTruthy();
+  const saves = () => state.request.mock.calls.filter(([path]) => path.endsWith('/household'));
+  expect(saves()).toHaveLength(2);
+  expect(saves()[0][1].headers['Idempotency-Key']).toBe(saves()[1][1].headers['Idempotency-Key']);
+  expect(JSON.parse(saves()[1][1].body)).toMatchObject({
+    expectedVersion: 0,
+    humanConfirmed: true,
+    members: [{ fullName: 'THÀNH VIÊN KIỂM THỬ', dateOfBirth: '2015-01-01' }],
+  });
+  fireEvent.click(screen.getByText('Previous identity step'));
+  fireEvent.click(next());
+  await screen.findByRole('dialog', { name: 'Contract preparation' });
+  expect(saves()).toHaveLength(2);
+  fireEvent.click(screen.getByText('Previous identity step'));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
+    target: { value: 'THÀNH VIÊN ĐÃ SỬA' },
+  });
+  state.request.mockResolvedValueOnce({ ...response, version: 2 });
+  fireEvent.click(next());
+  await screen.findByRole('dialog', { name: 'Contract preparation' });
+  expect(saves()).toHaveLength(3);
+  expect(JSON.parse(saves()[2][1].body)).toMatchObject({
+    expectedVersion: 1,
+    members: [{ residentId: 'saved-child', fullName: 'THÀNH VIÊN ĐÃ SỬA' }],
+  });
+  expect(saves()[2][1].headers['Idempotency-Key']).not.toBe(
+    saves()[1][1].headers['Idempotency-Key'],
+  );
+});
 it('handles Android Back without losing the selected step or manual edits', async () => {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   expect(screen.queryByRole('button', { name: 'Chụp ảnh mặt trước' })).toBeNull();
   await openIdentity();
   manualIdentity();
@@ -1027,8 +1065,7 @@ it('handles Android Back without losing the selected step or manual edits', asyn
 it('shows existing validation errors at each field without sending invalid data', async () => {
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
   await openIdentity();
   fireEvent.click(
     within(screen.getByRole('dialog')).getByRole('button', { name: 'Nhập thủ công' }),
@@ -1040,7 +1077,7 @@ it('shows existing validation errors at each field without sending invalid data'
   expect(screen.getByText('Nhập ngày hợp lệ theo dd/MM/yyyy.')).toBeTruthy();
   expect(state.json).toHaveBeenCalledTimes(1);
 });
-it('aborts a closed OCR flow and ignores a late response after switching people', async () => {
+it('aborts a closed representative OCR flow and ignores a late response while editing the family member', async () => {
   let finish!: (value: unknown) => void;
   state.image.mockImplementationOnce(
     () =>
@@ -1050,16 +1087,16 @@ it('aborts a closed OCR flow and ignores a late response after switching people'
   );
   render(<OnboardingScreen />);
   selectRoom();
-  namePerson('Người mẫu A');
-  fireEvent.click(screen.getByRole('button', { name: 'Thêm người ở' }));
-  namePerson('Người mẫu B');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục đến CCCD' }));
+
+  addFamilyMember();
+
   await openIdentity();
   fireEvent.click(screen.getByRole('button', { name: 'Chụp ảnh mặt trước' }));
   closeIdentity();
   expect(state.image.mock.calls[0][2].aborted).toBe(true);
-  await openIdentity(1);
-  manualIdentity();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Họ tên thành viên' }), {
+    target: { value: 'THÀNH VIÊN KIỂM THỬ' },
+  });
   await act(async () =>
     finish({
       proposedFields: { fullName: 'LATE RESULT' },
@@ -1069,9 +1106,9 @@ it('aborts a closed OCR flow and ignores a late response after switching people'
       isFallback: false,
     }),
   );
-  expect((screen.getByRole('textbox', { name: 'Họ và tên' }) as HTMLInputElement).value).toBe(
-    'NGƯỜI Ở MẪU',
-  );
+  expect(
+    (screen.getByRole('textbox', { name: 'Họ tên thành viên' }) as HTMLInputElement).value,
+  ).toBe('THÀNH VIÊN KIỂM THỬ');
   expect(screen.queryByText('LATE RESULT')).toBeNull();
 });
 const signature = (id: string, status: string): Signature => ({
@@ -1089,7 +1126,7 @@ it('keeps a one-sided contract at signing and never presents it as active or pai
   } as ContractView;
   render(<ContractProgress contract={contract} readiness={null} />);
   expect(screen.getByText('Đang chờ khách thuê ký')).toBeTruthy();
-  expect(screen.getByText('Bước 6/8')).toBeTruthy();
+  expect(screen.getByText('Bước 5/7')).toBeTruthy();
   expect(screen.queryByText('Hợp đồng đã được kích hoạt.')).toBeNull();
   expect(screen.queryByText('Tiền cọc đã được đối chiếu đầy đủ.')).toBeNull();
 });
@@ -1106,7 +1143,7 @@ it('moves the display to payment only after both verified signatures without act
     tenantUserId: 'tenant',
   } as ContractView;
   render(<ContractProgress contract={contract} readiness={null} />);
-  expect(screen.getByText('Bước 7/8')).toBeTruthy();
+  expect(screen.getByText('Bước 6/7')).toBeTruthy();
   expect(screen.getByText('Chưa có thông tin đối chiếu tiền cọc.')).toBeTruthy();
   expect(screen.queryByText('Hợp đồng đã được kích hoạt.')).toBeNull();
 });

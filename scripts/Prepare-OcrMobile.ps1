@@ -70,7 +70,11 @@ Set-Setting 'Ocr__Enabled' 'true'
 Set-Setting 'Ocr__ModelDirectory' (Join-Path $repo '.tools/ocr-models')
 Set-Setting 'MobileDevelopment__Enabled' 'true'
 Set-Setting 'MobileDevelopment__RootCertificate' $caPath
-Set-Setting 'AllowedHosts' ((@('localhost', '127.0.0.1', $LanIp, $developmentHost) | Where-Object { $_ }) -join ';')
+# Keep explicitly configured tunnel hosts when preparing the LAN certificate.
+$configuredHosts = [regex]::Matches($configText, '(?m)^AllowedHosts=([^\r\n]*)') |
+    ForEach-Object { $_.Groups[1].Value.Trim().Trim('"', "'") -split ';' }
+Set-Setting 'AllowedHosts' ((@('localhost', '127.0.0.1', $LanIp, $developmentHost) + @($configuredHosts) |
+    Where-Object { $_ } | Select-Object -Unique) -join ';')
 [IO.File]::WriteAllText($configurationPath, $configText, [Text.UTF8Encoding]::new($false))
 foreach ($line in ($configText -split '\r?\n')) {
     if ($line -match '^(ConnectionStrings__[^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process') }

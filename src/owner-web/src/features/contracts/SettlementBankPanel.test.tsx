@@ -89,6 +89,7 @@ it('allocates settlement payment without using a payer identity from eligible us
   expect(confirm).toBeDisabled();
   fireEvent.click(screen.getByLabelText(consent));
   fireEvent.click(confirm);
+  await confirmPendingAction();
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());
   const post = request.mock.calls.find(([, init]) => init?.method === 'POST')!;
   expect(post[0]).toMatch(/charge\/bank-allocations$/);
@@ -109,3 +110,8 @@ it('requires renewed confirmation when the financial source changes', async () =
   expect(screen.getByRole('button', { name: 'Xác nhận phân bổ tiền ngân hàng' })).toBeDisabled();
   expect(request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 });
+
+async function confirmPendingAction() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận thực hiện' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+}

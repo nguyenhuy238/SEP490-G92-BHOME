@@ -19,7 +19,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private void Role() { _ = Actor; if (!user.IsInRole(Roles.Staff) && !user.IsInRole(Roles.Owner)) throw new ContractException(403, "contract_role_forbidden"); }
     private static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
-    private static string Snapshot(Contract c, MainDraftState state) => Hash(new
+    public static string Snapshot(Contract c, MainDraftState state) => Hash(new
     {
         c.Id,
         c.DraftVersion,
@@ -72,8 +72,9 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
     {
         var room = await Room(roomId, t);
         if (on == default || ids is null || ids.Length is < 1 or > 50 || ids.Distinct().Count() != ids.Length || !ids.Contains(representative)) throw ContractException.Invalid("invalid_contract_period_or_residents");
+        if (ids.Length > room.Capacity) throw ContractException.Conflict("room_capacity_exceeded");
         var residents = await repository.ResidentsAsync(roomId, ids, t);
-        if (residents.Count != ids.Length || residents.Any(r => r.VerificationStatus != IdentityVerificationStatus.Verified)) throw ContractException.Invalid("verified_residents_required");
+        if (residents.Count != ids.Length || residents.Any(r => !BHome.Application.Ocr.ContractResidentEligibility.Ready(r, representative))) throw ContractException.Invalid("verified_residents_required");
         var settings = await data.SettingsAsync(room.LocationId, on, t);
         var pricing = await prices.ResolvePricesAsync(roomId, on, t);
         var blockers = new List<string>();
@@ -87,10 +88,13 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
         foreach (var r in residents)
         {
             var identity = await data.IdentityAsync(roomId, r.Id, t);
-            if (string.IsNullOrWhiteSpace(identity.FullName) || !identity.HumanConfirmed || identity.DateOfBirth == default || !System.Text.RegularExpressions.Regex.IsMatch(identity.CitizenIdentityNumber ?? "", "^[0-9]{12}$")) blockers.Add("confirmed_identity_required");
+            if (string.IsNullOrWhiteSpace(identity.FullName) || !identity.HumanConfirmed || identity.DateOfBirth == default ||
+                r.Id == representative && !System.Text.RegularExpressions.Regex.IsMatch(identity.CitizenIdentityNumber ?? "", "^[0-9]{12}$")) blockers.Add("confirmed_identity_required");
             if (r.Id == representative && (identity.DateOfIssue is null || string.IsNullOrWhiteSpace(identity.ResidentialAddress))) blockers.Add("tenant_issue_date_and_address_required");
             var number = identity.CitizenIdentityNumber;
-            summaries.Add(new(r.Id, identity.FullName, number is { Length: >= 4 } ? "********" + number[^4..] : "Chưa có dữ liệu", identity.DateOfIssue, r.Id == representative, await data.PhoneAsync(roomId, r.Id, t), r.Id == representative ? await data.EmailAsync(roomId, r.Id, t) : null));
+            var member = r.Id != representative ? await data.HouseholdMemberAsync(roomId, r.Id, t) : null;
+            summaries.Add(new(r.Id, identity.FullName, number is { Length: >= 4 } ? "********" + number[^4..] : "Chưa cung cấp", identity.DateOfIssue, r.Id == representative,
+                member?.Phone ?? await data.PhoneAsync(roomId, r.Id, t), r.Id == representative ? await data.EmailAsync(roomId, r.Id, t) : null, identity.DateOfBirth, member?.Relationship));
         }
         return new(roomId, room.LocationId, room.Location.Name, room.RoomNumber, room.Location.Address, on, summaries, pricing.Charges,
             settings?.SecurityDeposit, settings?.PaymentTerms, settings?.Owner.FullName, blockers.Distinct().ToArray());

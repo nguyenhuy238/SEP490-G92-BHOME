@@ -34,6 +34,7 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         var user = await security.LockUserAsync(userId, t);
         if (user is null || !user.IsActive || !(await security.RolesAsync(userId, t)).Contains(Roles.Staff)) throw new NotificationException(404, "staff_not_found");
         if (string.IsNullOrWhiteSpace(user.Email)) throw new NotificationException(409, "account_not_eligible_for_invitation");
+        delivery.ValidateInvitationRecipient(user.Email);
         var grant = await identity.ResetGrantAsync(user.Id, t);
         if (CoolingDown(grant)) return new(user.Id, "ExistingInvitationPreserved");
         // A Staff who has completed setup receives a reset link, while a new Staff
@@ -111,6 +112,7 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
             await db.SaveChangesAsync(t);
             await sql.Execute("UPDATE residents SET user_id=@user WHERE id=@resident AND user_id IS NULL", t, ("user", id), ("resident", residentId));
         }
+        delivery.ValidateInvitationRecipient(request.Email);
         var grant = await identity.ResetGrantAsync(user.Id, t);
         if (dispatchJob is { } queued && grant is { ConsumedAt: null } && grant.ExpiresAt > sql.Now)
         {

@@ -34,11 +34,7 @@ Thumbs.db
 !.env.neon.example
 !.env.sepay.example
 !**/.env.example
-# Public, placeholder-only environment references; actual runtime files remain ignored.
-!.env.staging.example
-!.env.production.example
-!src/owner-web/.env.staging.example
-!src/owner-web/.env.production.example
+!**/.env.*.example
 **/appsettings.Local.json
 **/secrets.json
 # Private database exports and recovery artifacts.

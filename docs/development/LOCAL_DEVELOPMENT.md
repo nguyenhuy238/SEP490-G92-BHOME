@@ -1,5 +1,8 @@
 # Local development
 
+Team onboarding Local / Staging / Production: [BHOME_TEAM_ENVIRONMENT_SETUP.md](BHOME_TEAM_ENVIRONMENT_SETUP.md).
+The standard local profile is independent and needs no tunnel. Public email/signing and SePay callbacks use Staging.
+
 Use .NET 8 SDK, Node 22.13+ (22.x) and npm 10+. `global.json` intentionally does not use .NET
 9/10 even if those SDKs are present. Native Android development also requires Android Studio/JDK;
 iOS requires macOS and Xcode. Native tools are not needed for browser development.
@@ -20,16 +23,6 @@ This changes only the child process policy, not the machine policy. `npm.cmd` av
 script policy for npm shims.
 
 ## Configuration
-
-For the agreed November 2026 team-local profile, use
-[TEAM_LOCAL_ENVIRONMENT.md](TEAM_LOCAL_ENVIRONMENT.md). It sets Mailpit Capture
-SMTP on loopback, Owner HTTP 5173 and local HTTPS signing 5176 with a generated
-PEM certificate, while retaining existing private secrets and database volumes:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-TeamEnvironment.ps1 -SkipNetworkChecks
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-TeamEnvironment.ps1 -CheckOnly -SkipNetworkChecks
-```
 
 Run `scripts/Initialize-Local.ps1` once to generate an ignored `.env` with random local PostgreSQL,
 MinIO and JWT values. It refuses to overwrite an existing file. Keep the file private. Alternatively
@@ -72,9 +65,7 @@ with no EF migration history table. Keep the old migrations/snapshot for legacy 
 do not run `dotnet ef database update` against Compact24.
 
 One-time prerequisites: generate your own ignored `.env`, configure its connection for your local
-PostgreSQL, and start PostgreSQL (native or Docker). The team example binds PostgreSQL to
-`127.0.0.1:5434`, while older local databases may keep their matching configured port.
-Docker users can run:
+PostgreSQL, and start PostgreSQL (native or Docker). Docker users can run:
 
 ```powershell
 docker compose config --quiet

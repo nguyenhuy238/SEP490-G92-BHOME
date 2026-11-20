@@ -1,4 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  waitForElementToBeRemoved,
+  within,
+} from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../../../packages/client-core/src/api';
@@ -178,25 +185,35 @@ it('keeps invitation errors visible and allows a successful retry', async () => 
   fireEvent.click(
     await screen.findByRole('button', { name: 'Thiết lập mật khẩu mới và gửi cho nhân viên' }),
   );
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Thiết lập mật khẩu mới và gửi cho nhân viên',
+  });
+  const confirm = within(dialog).getByRole('button', { name: 'Xác nhận' });
   const original = mocks.request.getMockImplementation()!;
   let failInvitation = true;
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path.endsWith('/invitation') && init?.method === 'POST' && failInvitation) {
       failInvitation = false;
-      throw new ApiError(503, { detail: 'Synthetic unavailable' });
+      throw new ApiError(503, { code: 'email_recipient_not_allowed' });
     }
     return original(path, init);
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
-  expect(await screen.findByRole('alert')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
-  await waitFor(() =>
-    expect(screen.queryByRole('button', { name: 'Xác nhận' })).not.toBeInTheDocument(),
-  );
+  fireEvent.click(confirm);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Địa chỉ nhận chưa được cho phép');
+  await waitFor(() => expect(confirm).toBeEnabled());
+  fireEvent.click(confirm);
+  // Wait for the captured dialog's exit transition without repeatedly scanning
+  // the whole MUI page's accessibility tree on a busy CI runner.
+  await waitForElementToBeRemoved(dialog, { timeout: 5000 });
   expect(mocks.request).toHaveBeenCalledWith(
     '/api/v1/staff/staff/invitation',
     expect.objectContaining({ method: 'POST' }),
   );
+  expect(
+    mocks.request.mock.calls.filter(
+      ([path, init]) => path.endsWith('/invitation') && init?.method === 'POST',
+    ),
+  ).toHaveLength(2);
 });
 
 it('retains edited values after a stale-version error', async () => {

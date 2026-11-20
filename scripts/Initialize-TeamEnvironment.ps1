@@ -1,206 +1,119 @@
-# Shared local Development profile. Only non-secret keys are normalized.
-# -CheckOnly does not write files, create secrets, start services, or send email.
-[CmdletBinding()]
-param(
-    [switch]$CheckOnly,
-    [switch]$SkipNetworkChecks,
-    [string]$EnvironmentFile = '.env'
-)
-
+# Local onboarding/doctor. Does not start containers, initialize/reset data or overwrite existing configuration.
+param([switch]$CheckOnly, [switch]$SkipNetworkChecks)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Use-LocalTools.ps1')
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$configurationFile = if ([IO.Path]::IsPathRooted($EnvironmentFile)) {
-    [IO.Path]::GetFullPath($EnvironmentFile)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repositoryRoot $EnvironmentFile))
+$problems = 0
+function Problem([string]$message) { $script:problems++; Write-Warning $message }
+function Read-Settings([string]$path) {
+    $settings = @{}
+    if (Test-Path -LiteralPath $path) {
+        foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $path) {
+            if ($line -match '^\s*([^#=\s]+)\s*=(.*)$') {
+                if ($settings.ContainsKey($Matches[1])) { Problem "Duplicate setting key in $([IO.Path]::GetFileName($path)); remove duplicates without printing credentials." }
+                $settings[$Matches[1]] = $Matches[2].Trim().Trim([char]34, [char]39)
+            }
+        }
+    }
+    return $settings
 }
-$defaultFile = [IO.Path]::GetFullPath((Join-Path $repositoryRoot '.env'))
-$isDefaultFile = [string]::Equals($configurationFile, $defaultFile, [StringComparison]::OrdinalIgnoreCase)
-
-if (-not [IO.File]::Exists($configurationFile)) {
-    if ($CheckOnly -or -not $isDefaultFile) { throw 'Selected environment file is missing.' }
+foreach ($tool in @('dotnet', 'node', 'npm.cmd', 'docker')) {
+    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { Problem "Missing $tool. Install .NET SDK 8, Node 22/npm and Docker Desktop (Linux containers)." }
+}
+if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+    $sdk = & dotnet --version
+    if ($LASTEXITCODE -ne 0 -or $sdk -notmatch '^8\.') { Problem 'Use the .NET 8 SDK selected by global.json.' }
+}
+if (Get-Command node -ErrorAction SilentlyContinue) {
+    $nodeVersion = (& node --version).TrimStart('v')
+    if ([version]$nodeVersion -lt [version]'22.13.0' -or [version]$nodeVersion -ge [version]'23.0.0') { Problem 'Use Node 22.13+ within 22.x (repository engines); dot-source scripts/Use-LocalTools.ps1 if installed locally.' }
+}
+if (Get-Command npm.cmd -ErrorAction SilentlyContinue) {
+    if ([int]((& npm.cmd --version).Split('.')[0]) -lt 10) { Problem 'npm 10 or later is required.' }
+}
+if (-not $CheckOnly) {
     & (Join-Path $PSScriptRoot 'Initialize-Local.ps1')
-}
-
-$content = [IO.File]::ReadAllText($configurationFile)
-$newline = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
-$lines = [Collections.Generic.List[string]]::new()
-$lines.AddRange([string[]]($content -split "`r?`n"))
-
-# All values stay in memory; no connection strings or secrets are printed.
-$current = @{}
-foreach ($line in $lines) {
-    if ($line -match '^([A-Za-z][A-Za-z0-9_]*)=(.*)$') {
-        if ($current.ContainsKey($Matches[1])) {
-            throw ('Duplicate environment key: ' + $Matches[1])
-        }
-        $current[$Matches[1]] = $Matches[2]
+    foreach ($app in @('owner-web', 'public-web')) {
+        $directory = Join-Path $repositoryRoot "src/$app"
+        if (!(Test-Path -LiteralPath "$directory/.env") -and !(Test-Path -LiteralPath "$directory/.env.local")) {
+            [IO.File]::Copy("$directory/.env.example", "$directory/.env.local", $false)
+            Write-Output "Created src/$app/.env.local."
+        } else { Write-Output "Preserved existing src/$app environment configuration." }
     }
 }
-
-$postgresPort = if ($current.ContainsKey('POSTGRES_PORT')) { $current['POSTGRES_PORT'] } else { '5434' }
-$smtpPort = if ($current.ContainsKey('MAILPIT_SMTP_PORT')) { $current['MAILPIT_SMTP_PORT'] } else { '1025' }
-$mailpitWebPort = if ($current.ContainsKey('MAILPIT_WEB_PORT')) { $current['MAILPIT_WEB_PORT'] } else { '8025' }
-foreach ($port in @($postgresPort, $smtpPort, $mailpitWebPort)) {
-    $parsedPort = 0
-    if (-not [int]::TryParse($port, [ref]$parsedPort) -or $parsedPort -lt 1 -or $parsedPort -gt 65535) {
-        throw 'Invalid local port in environment file.'
-    }
+$settings = Read-Settings (Join-Path $repositoryRoot '.env')
+if ($settings.Count -eq 0) { Problem 'Missing root .env. Run scripts/Initialize-Local.ps1.' }
+if ($settings.ASPNETCORE_ENVIRONMENT -and $settings.ASPNETCORE_ENVIRONMENT -ne 'Development') { Problem 'Local .env must use Development.' }
+if ($settings.SePay__Enabled -ne 'false') { Problem 'Local default must use SePay__Enabled=false. Use the dedicated Staging deployment for Internet callbacks.' }
+$db = $settings.ConnectionStrings__Database
+if ($db -notmatch '(?i)(^|;)\s*Host\s*=\s*(localhost|127\.0\.0\.1|::1)\s*(;|$)') {
+    Problem 'Local database is not loopback. Do not use the Staging/Production database. Review any deliberate remote Development override separately.'
 }
-$connection = if ($current.ContainsKey('ConnectionStrings__Database')) { $current['ConnectionStrings__Database'] } else { '' }
-if ($connection -and $connection -match '(?:^|;)Port=([0-9]+)(?:;|$)' -and $Matches[1] -ne $postgresPort) {
-    throw 'POSTGRES_PORT and ConnectionStrings__Database Port disagree. Correct them without resetting the database.'
-}
-
-$expected = [ordered]@{
-    'MAILPIT_SMTP_PORT' = $smtpPort
-    'MAILPIT_WEB_PORT' = $mailpitWebPort
-    'BHOME_WEB_HTTPS' = 'true'
-    'Email__DeliveryMode' = 'Capture'
-    'Email__Enabled' = 'true'
-    'Email__Host' = '127.0.0.1'
-    'Email__Port' = $smtpPort
-    'Email__UseStartTls' = 'false'
-    'Email__Username' = ''
-    'Email__FromEmail' = 'bhome.notifications@example.invalid'
-    'Email__FromName' = 'BHOME'
-    'NotificationChannels__Enabled' = 'true'
-    'NotificationChannels__AutomationEnabled' = 'true'
-    'NotificationChannels__Mode' = 'Unconfigured'
-    'Jobs__Enabled' = 'false'
-    'SePay__Enabled' = 'false'
-    'ContractSigning__Methods__Otp' = 'true'
-    'ContractSigning__Methods__ViettelMySign' = 'false'
-    'AuthWeb__AllowedOrigins__0' = 'http://localhost:5173'
-    'AuthWeb__AllowedOrigins__1' = 'https://localhost:5176'
-    'Cors__AllowedOrigins__0' = 'http://localhost:5173'
-    'Cors__AllowedOrigins__3' = 'https://localhost:5176'
-    # Expo Web is served directly by Metro, unlike Owner Web's Vite API proxy.
-    # Exact loopback origins only; do not expand Production CORS to local subnets.
-    'Cors__AllowedOrigins__4' = 'http://localhost:8081'
-    'Cors__AllowedOrigins__5' = 'http://127.0.0.1:8081'
-    'AuthenticationEmail__WebResetUrl' = 'http://localhost:5173/reset-password'
-    'AuthenticationEmail__WebInvitationUrl' = 'http://localhost:5173/accept-invitation'
-    'AuthenticationEmail__WebVerificationUrl' = 'http://localhost:5173/confirm-email'
-    'AuthenticationEmail__TrustedOrigins__0' = 'http://localhost:5173'
-    'AnonymousSigning__PublicSigningUrl' = 'https://localhost:5176/contract-signing'
-    'ContractSigning__InvitationLink__PublicOpenUrl' = 'https://localhost:7240/open/sign-contract'
-}
-$missingOrDrifted = [Collections.Generic.List[string]]::new()
-foreach ($key in $expected.Keys) {
-    if (-not $current.ContainsKey($key) -or $current[$key] -cne $expected[$key]) { $missingOrDrifted.Add($key) }
-}
-# A previous tunnel script marks its single extra AuthWeb origin. Remove that managed origin
-# when selecting local mode; other custom origins remain user-managed.
-$tunnelMarker = '# BHOME Cloudflare email origin (managed by Configure-CloudflareEmailLinks.ps1)'
-$markerIndices = @(
-    for ($index = 0; $index -lt $lines.Count; $index++) {
-        if ($lines[$index] -eq $tunnelMarker) { $index }
-    }
-)
-if ($markerIndices.Count -gt 1) { throw 'Duplicate managed Cloudflare origin marker.' }
-if ($markerIndices.Count -eq 1) {
-    $next = $markerIndices[0] + 1
-    if ($next -ge $lines.Count -or $lines[$next] -notmatch '^AuthWeb__AllowedOrigins__[0-9]+=') {
-        throw 'Cloudflare origin marker is not followed by the expected AuthWeb setting.'
-    }
-    if ($lines[$next] -notmatch '^AuthWeb__AllowedOrigins__([0-9]+)=') { throw 'Invalid marked AuthWeb origin.' }
-    $markedKey = 'AuthWeb__AllowedOrigins__' + $Matches[1]
-    if ($expected.Contains($markedKey)) {
-        # The managed slot is now reserved for the local HTTPS origin.
-        $lines.RemoveAt($markerIndices[0])
-    } else {
-        $lines.RemoveAt($next)
-        $lines.RemoveAt($markerIndices[0])
-    }
-    $missingOrDrifted.Add('Cloudflare managed origin')
-}
-
-if ($CheckOnly) {
-    if ($missingOrDrifted.Count -gt 0) {
-        throw ('Team environment requires local configuration for: ' + ($missingOrDrifted -join ', ') +
-            '. Run Initialize-TeamEnvironment.ps1 without -CheckOnly.')
-    }
-    Write-Output 'PASS: local team configuration matches the shared profile. No files changed.'
-} else {
-    foreach ($key in $expected.Keys) {
-        $found = $false
-        for ($i = 0; $i -lt $lines.Count; $i++) {
-            if ($lines[$i].StartsWith($key + '=', [StringComparison]::Ordinal)) {
-                $lines[$i] = $key + '=' + $expected[$key]
-                $found = $true
-                break
-            }
-        }
-        if (-not $found) { $lines.Add($key + '=' + $expected[$key]) }
-    }
-    if ($missingOrDrifted.Count -gt 0) {
-        $temporary = $configurationFile + '.team-update-' + [Guid]::NewGuid().ToString('N')
-        $backup = $configurationFile + '.team-backup-' + [Guid]::NewGuid().ToString('N')
-        try {
-            [IO.File]::WriteAllText($temporary, [string]::Join($newline, $lines), [Text.UTF8Encoding]::new($false))
-            # .NET Framework used by PowerShell 5 requires an actual backup path.
-            # Both temporary files remain git-ignored and are always cleaned up.
-            [IO.File]::Replace($temporary, $configurationFile, $backup)
-        } finally {
-            if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) }
-            if ([IO.File]::Exists($backup)) { [IO.File]::Delete($backup) }
-        }
-    }
-    Write-Output 'Local team settings ready. Existing secrets and PostgreSQL port preserved.'
-    if ($isDefaultFile) {
-        $ownerExample = Join-Path $repositoryRoot 'src/owner-web/.env.example'
-        $ownerLocal = Join-Path $repositoryRoot 'src/owner-web/.env.local'
-        if (-not [IO.File]::Exists($ownerLocal)) {
-            [IO.File]::Copy($ownerExample, $ownerLocal)
-            Write-Output 'Created ignored Owner Web .env.local from its example.'
-        }
-        $certFolder = Join-Path $repositoryRoot '.tools/team-tls'
-        $certFile = Join-Path $certFolder 'localhost.crt'
-        $keyFile = Join-Path $certFolder 'localhost.key'
-        if ([IO.File]::Exists($certFile) -xor [IO.File]::Exists($keyFile)) {
-            throw 'The team HTTPS certificate/key pair is incomplete. Inspect .tools/team-tls before retrying.'
-        }
-        if (-not [IO.File]::Exists($certFile)) {
-            [IO.Directory]::CreateDirectory($certFolder) | Out-Null
-            & dotnet dev-certs https --export-path $certFile --format Pem --no-password --quiet
-            if ($LASTEXITCODE -ne 0 -or -not [IO.File]::Exists($certFile) -or
-                -not [IO.File]::Exists($keyFile)) {
-                throw 'Could not export the local HTTPS localhost.crt + localhost.key pair.'
-            }
-            Write-Output 'Created ignored .tools/team-tls/localhost.crt and localhost.key for HTTPS Owner Web.'
-        }
-        & (Join-Path $PSScriptRoot 'Initialize-LocalSigning.ps1')
-    }
-}
-
-if ($isDefaultFile -and $CheckOnly) {
-    $certFolder = Join-Path $repositoryRoot '.tools/team-tls'
-    if (-not [IO.File]::Exists((Join-Path $certFolder 'localhost.crt')) -or
-        -not [IO.File]::Exists((Join-Path $certFolder 'localhost.key'))) {
-        throw 'Local HTTPS PEM certificate/key pair is missing. Run Initialize-TeamEnvironment.ps1 to export it.'
-    }
-}
-
-Push-Location $repositoryRoot
-try {
-    & docker compose --env-file $configurationFile config --quiet
-    if ($LASTEXITCODE -ne 0) { throw 'Docker Compose configuration is invalid.' }
-    Write-Output 'PASS: Docker Compose configuration.'
-} finally { Pop-Location }
-
-if (-not $SkipNetworkChecks) {
-    foreach ($endpoint in @(
-        ('http://127.0.0.1:' + $mailpitWebPort + '/'),
-        'https://localhost:7240/health/live',
-        'https://localhost:5176/contract-signing'
-    )) {
-        try {
-            $result = Invoke-WebRequest -Uri $endpoint -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
-            if ([int]$result.StatusCode -eq 200) { Write-Output ('PASS: reachable ' + $endpoint) }
-            else { Write-Warning ('Unexpected HTTP status at ' + $endpoint) }
-        } catch {
-            Write-Warning ('Not reachable yet: ' + $endpoint + '. Start the corresponding local service.')
+foreach ($file in @('.env', 'src/owner-web/.env', 'src/owner-web/.env.local', 'src/owner-web/.env.development', 'src/owner-web/.env.development.local', 'src/public-web/.env', 'src/public-web/.env.local', 'src/public-web/.env.development', 'src/public-web/.env.development.local')) {
+    $values = Read-Settings (Join-Path $repositoryRoot $file)
+    foreach ($key in $values.Keys) {
+        if ($values[$key] -match 'trycloudflare\.com|ngrok') { Problem "$file contains an old tunnel setting in $key. Replace it with the corresponding local template value." }
+        if ($key -match '^VITE_.*(TOKEN|SECRET|PASSWORD|HMAC|CREDENTIAL|API_?KEY|SMTP|CONNECTION_?STRING)') { Problem "Remove sensitive frontend variable $key from $file." }
+        if ($key -match '^(VITE_API_BASE_URL|AuthenticationEmail__Web.*Url|AnonymousSigning__PublicSigningUrl|ContractSigning__InvitationLink__PublicOpenUrl)$') {
+            $uri = $null
+            if (![Uri]::TryCreate($values[$key], [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -notin @('http','https') -or $uri.UserInfo -or $uri.Query -or $uri.Fragment) {
+                Problem "Invalid absolute URL in $file key $key (value withheld)."
+            } elseif (!$uri.IsLoopback) { Problem "$file key $key does not target this workstation. Use Staging as a separate deployment." }
+            elseif ($key -eq 'AnonymousSigning__PublicSigningUrl' -and $uri.Scheme -ne 'https') { Problem 'The anonymous signing page requires HTTPS.' }
         }
     }
 }
+if ($settings.Email__DeliveryMode -ne 'Capture' -or $settings.Email__Host -notin @('localhost','127.0.0.1','::1')) {
+    Write-Warning 'Local email is not the Mailpit default. Real SMTP requires STARTTLS and an explicit Email__AllowedRecipients allowlist.'
+}
+if ($settings.AuthenticationEmail__WebResetUrl -ne ($settings.AuthenticationEmail__TrustedOrigins__0 + '/reset-password')) {
+    Problem 'Authentication email URL/trusted origin differ; compare the local template and review user-secrets overrides.'
+}
+if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+    & dotnet dev-certs https --check --trust *> $null
+    if ($LASTEXITCODE -ne 0) { Problem 'HTTPS certificate missing/untrusted. Run: dotnet dev-certs https --trust; then rerun this script.' }
+    elseif (!$CheckOnly) {
+        $directory = Join-Path $repositoryRoot '.tools/team-tls'
+        $certificate = Join-Path $directory 'localhost.pem'
+        if (!(Test-Path -LiteralPath $certificate) -and !(Test-Path -LiteralPath (Join-Path $directory 'localhost.key'))) {
+            New-Item -ItemType Directory -Path $directory -Force | Out-Null
+            & dotnet dev-certs https --export-path $certificate --format PEM --no-password *> $null
+            if ($LASTEXITCODE -ne 0) { Problem 'Cannot export trusted development certificate for Vite. No certificate validation is bypassed.' }
+        }
+    }
+}
+function Check-Port([string]$hostName, [int]$port, [string]$label) {
+    $client = New-Object Net.Sockets.TcpClient
+    try {
+        $pending = $client.BeginConnect($hostName, $port, $null, $null)
+        if (!$pending.AsyncWaitHandle.WaitOne(1500)) { throw 'timeout' }
+        $client.EndConnect($pending)
+        Write-Output "$label TCP port reachable."
+    } catch { Problem "$label is not reachable. Start the documented local service or check its configured port; no data was changed." }
+    finally { $client.Dispose() }
+}
+if (!$SkipNetworkChecks) {
+    if (Get-Command docker -ErrorAction SilentlyContinue) {
+        & docker info --format '{{.ServerVersion}}' *> $null
+        if ($LASTEXITCODE -ne 0) { Problem 'Docker Desktop is not running. Start its Linux engine, then docker compose up -d postgres minio mailpit.' }
+    }
+    $port = 5432; if ($settings.POSTGRES_PORT) { $port = [int]$settings.POSTGRES_PORT }
+    Check-Port 'localhost' $port 'PostgreSQL (TCP only, credentials/schema not tested)'
+    $storagePort = 9000; if ($settings.MINIO_API_PORT) { $storagePort = [int]$settings.MINIO_API_PORT }
+    Check-Port 'localhost' $storagePort 'MinIO'
+    if ($settings.Email__DeliveryMode -eq 'Capture') { Check-Port $settings.Email__Host ([int]$settings.Email__Port) 'Mailpit SMTP' }
+    $api = 'https://localhost:7240'
+    $owner = Read-Settings (Join-Path $repositoryRoot 'src/owner-web/.env.local')
+    if ($owner.VITE_API_BASE_URL) { $api = $owner.VITE_API_BASE_URL }
+    try {
+        $uri = [Uri]$api
+        if (!$uri.IsLoopback -or $uri.UserInfo) { throw 'not local' }
+        $response = Invoke-WebRequest -UseBasicParsing -Uri ($uri.GetLeftPart([UriPartial]::Authority) + '/health/live') -TimeoutSec 4
+        if ($response.StatusCode -ne 200) { throw 'not ready' }
+        Write-Output 'API /health/live: HTTP 200 (database readiness not implied).'
+    } catch { Problem 'Local API is stopped or its HTTPS certificate is untrusted. Run scripts/Start-Api.ps1 and check /health/ready separately.' }
+}
+Write-Output 'Default: Owner http://localhost:5173; API https://localhost:7240; HTTPS signing portal https://localhost:5176; Mailpit http://localhost:8025.'
+Write-Output 'Effective precedence: CLI/process environment > user-secrets > selected .env > appsettings. This doctor checks files; API startup validates effective configuration.'
+if ($problems -gt 0) { throw "Environment check found $problems issue(s). See messages above; credentials were withheld." }
+Write-Output 'Local environment checks completed.'

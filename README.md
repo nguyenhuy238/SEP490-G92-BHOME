@@ -2,6 +2,10 @@
 
 BHOME - Nền tảng quản lý và vận hành chuỗi nhà trọ thông minh.
 
+**Thiết lập môi trường cho team:** dùng [BHOME_TEAM_ENVIRONMENT_SETUP](docs/development/BHOME_TEAM_ENVIRONMENT_SETUP.md)
+cho Local / Staging / Production. Local chạy độc lập, không cần Cloudflare/ngrok;
+luồng email/ký từ Internet và SePay Sandbox dùng VPS Staging riêng.
+
 Project hiện có nền tảng backend ASP.NET Core 8, ba ứng dụng React/TypeScript và API đăng nhập
 Identity/JWT cho tài khoản đã tồn tại, phiên phía server, refresh xoay vòng, đăng xuất và đổi mật khẩu.
 Owner Web/Mobile có màn hình đăng nhập. Các luồng nghiệp vụ, tạo/kích hoạt tài khoản và tích hợp
@@ -24,10 +28,6 @@ storage liên máy để giai đoạn sau.
 
 ## Hướng dẫn nhanh khi mới clone
 
-Nhóm dùng [cấu hình Development local thống nhất](docs/development/TEAM_LOCAL_ENVIRONMENT.md)
-để chạy email bằng Mailpit và ký hợp đồng OTP qua HTTPS localhost, không cần Cloudflare
-trên cùng máy. Tất cả thành viên sử dụng cùng script; mật khẩu và database vẫn riêng.
-
 Để test Authentication bằng Postman hoặc giao diện, làm theo
 [hướng dẫn test bằng tay](docs/development/MANUAL_AUTH_TESTING.md). Có công cụ tạo ba tài khoản
 tổng hợp local bằng Identity và collection Postman 30 request; bạn tự đặt mật khẩu ở prompt ẩn.
@@ -35,23 +35,23 @@ tổng hợp local bằng Identity và collection Postman 30 request; bạn tự
 Hướng dẫn dùng **Windows PowerShell**, chạy lệnh tại **thư mục gốc repository** sau khi clone.
 Các port bên dưới là giá trị local mặc định.
 
-| Bước | Việc cần làm                                     | Lệnh hoặc kết quả                                                                                               |
-| ---- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| 1    | Cài công cụ, bật Docker Desktop với Linux engine | .NET SDK 8 (8.0.400 trở lên trong nhánh 8.x), Node 22.13+ thuộc nhánh 22.x, npm 10+                             |
-| 2    | Tạo cấu hình team, key ký và certificate local   | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-TeamEnvironment.ps1 -SkipNetworkChecks` |
-| 3    | Cài dependency và tin cậy HTTPS local            | `dotnet restore src/backend/BHome.sln`, `dotnet tool restore`, `npm.cmd ci`, `dotnet dev-certs https --trust`   |
-| 4    | Chạy PostgreSQL, MinIO và Mailpit                | `docker compose up -d --build`; kiểm tra `docker compose ps`                                                    |
-| 5    | Chuẩn bị Compact24                               | API tự tạo schema; nếu máy còn 70 bảng cũ, chạy một lần `scripts/Update-LocalDatabase.ps1 -RecreateDatabase`    |
-| 6    | Tạo bucket lưu trữ                               | Vào `http://localhost:9001`, tạo bucket private `bhome-private`                                                 |
-| 7    | Tạo cấu hình frontend                            | Script tạo Owner Web `.env.local` khi thiếu; API mặc định `https://localhost:7240`                              |
-| 8    | Chạy API và Owner Web ở các terminal riêng       | `Start-Api.ps1`, `Start-TeamOwnerWeb.ps1`, `Start-TeamOwnerWeb.ps1 -SigningHttps`                               |
-| 9    | Kiểm tra                                         | Mở Swagger, `/health/ready`, Owner HTTP/HTTPS và Mailpit `http://localhost:8025`                                |
+| Bước | Việc cần làm                                     | Lệnh hoặc kết quả                                                                                             |
+| ---- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| 1    | Cài công cụ, bật Docker Desktop với Linux engine | .NET SDK 8 (8.0.400 trở lên trong nhánh 8.x), Node 22.13+ thuộc nhánh 22.x, npm 10+                           |
+| 2    | Tạo `.env` riêng cho máy mới                     | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-Local.ps1`                            |
+| 3    | Cài dependency và tin cậy HTTPS local            | `dotnet restore src/backend/BHome.sln`, `dotnet tool restore`, `npm.cmd ci`, `dotnet dev-certs https --trust` |
+| 4    | Chạy PostgreSQL và MinIO                         | `docker compose up -d --build`; kiểm tra `docker compose ps`                                                  |
+| 5    | Chuẩn bị Compact24                               | API tự tạo schema; nếu máy còn 70 bảng cũ, chạy một lần `scripts/Update-LocalDatabase.ps1 -RecreateDatabase`  |
+| 6    | Tạo bucket lưu trữ                               | Vào `http://localhost:9001`, tạo bucket private `bhome-private`                                               |
+| 7    | Tạo cấu hình frontend                            | Copy `.env.example` thành `.env.local` trong từng ứng dụng; API mặc định `https://localhost:7240`             |
+| 8    | Chạy API và frontend ở các terminal riêng        | Dùng `Start-Api.ps1` và lệnh `npm.cmd run dev --workspace ...` bên dưới                                       |
+| 9    | Kiểm tra                                         | Mở Swagger, `/health/ready` và frontend tương ứng                                                             |
 
 ## 1. Chuẩn bị môi trường
 
 - **.NET SDK 8**: phiên bản 8.0.400 hoặc bản 8.x mới hơn; chỉ cài .NET 9/10 sẽ không đáp ứng `global.json`.
 - **Node.js 22.13+ thuộc nhánh 22.x**, **npm 10+**.
-- **Docker Desktop**, bật Linux engine để chạy PostgreSQL, MinIO, Mailpit và các test dùng container.
+- **Docker Desktop**, bật Linux engine để chạy PostgreSQL, MinIO và các test dùng container.
 - Android Studio/JDK chỉ cần khi phát triển mobile native Android; iOS cần macOS và Xcode.
   Chạy mobile trên trình duyệt chưa cần công cụ native.
 
@@ -77,34 +77,31 @@ Nếu đã có bộ công cụ portable trong `.tools/`, nạp PATH cho phiên P
 Chạy **một lần** sau khi clone:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-TeamEnvironment.ps1 -SkipNetworkChecks
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-Local.ps1
 ```
 
-Script gọi `Initialize-Local.ps1` để tạo `.env` và sinh mật khẩu PostgreSQL, MinIO,
-JWT ngẫu nhiên nếu chưa tồn tại; đồng thời áp dụng cấu hình local cho email capture
-và xuất cặp PEM dành cho HTTPS signing. File `.env` cũ giữ nguyên secret, dữ liệu và
-port PostgreSQL; xem chi tiết tại [cấu hình local của nhóm](docs/development/TEAM_LOCAL_ENVIRONMENT.md).
-Mỗi thành viên dùng secret riêng; không cần nhận file `.env` của người khác.
+Script tạo `.env` từ `.env.example`, sinh mật khẩu PostgreSQL, MinIO và JWT key ngẫu nhiên,
+đồng thời điền thông tin tương ứng cho backend. Script giữ nguyên nếu `.env` đã tồn tại.
+Mỗi thành viên dùng cấu hình local riêng; không cần nhận file `.env` của người khác.
 
 Có thể tự copy `.env.example` thành `.env` thay cho script, nhưng phải thay các placeholder
 PostgreSQL, JWT và storage trước khi chạy. Placeholder tích hợp bên ngoài có thể giữ nguyên
 vì adapter chưa được triển khai.
 
-| Nhóm                   | Biến trong `.env`                                                                      | Cách cấu hình                                                                 |
-| ---------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| PostgreSQL             | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`                   | Database, tài khoản, mật khẩu và port Docker công bố; mặc định port `5434`    |
-| Kết nối API → database | `ConnectionStrings__Database`                                                          | Host, port, database, username và password phải khớp PostgreSQL đang dùng     |
-| JWT                    | `Jwt__SigningKey`                                                                      | Khóa ngẫu nhiên tối thiểu 32 byte; script đã sinh sẵn                         |
-| MinIO                  | `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_API_PORT`, `MINIO_CONSOLE_PORT`       | Tài khoản local và port; mặc định API `9000`, console `9001`                  |
-| Kết nối API → MinIO    | `ObjectStorage__Endpoint`, `ObjectStorage__AccessKey`, `ObjectStorage__SecretKey`      | Endpoint mặc định `localhost:9000`; script dùng tài khoản MinIO local vừa tạo |
-| Bucket và SSL          | `ObjectStorage__Bucket`, `ObjectStorage__UseSsl`                                       | Mặc định `bhome-private`, `false`; bucket phải tạo thủ công                   |
-| CORS                   | `Cors__AllowedOrigins__0` đến `__3`                                                    | Owner HTTP `5173`, Owner ký HTTPS `5176` và các client Development            |
-| Background jobs        | `Jobs__Enabled`                                                                        | Giữ `false` khi bắt đầu                                                       |
-| Tích hợp bên ngoài     | `BankIntegration__*`, `NotificationIntegration__*`, `ElectronicContractIntegration__*` | Chưa cần cấu hình để chạy local; chỉ thêm API key không tự kích hoạt provider |
+| Nhóm                   | Biến trong `.env`                                                                      | Cách cấu hình                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| PostgreSQL             | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`                   | Database, tài khoản, mật khẩu và port Docker công bố; mặc định port `5432`         |
+| Kết nối API → database | `ConnectionStrings__Database`                                                          | Host, port, database, username và password phải khớp PostgreSQL đang dùng          |
+| JWT                    | `Jwt__SigningKey`                                                                      | Khóa ngẫu nhiên tối thiểu 32 byte; script đã sinh sẵn                              |
+| MinIO                  | `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_API_PORT`, `MINIO_CONSOLE_PORT`       | Tài khoản local và port; mặc định API `9000`, console `9001`                       |
+| Kết nối API → MinIO    | `ObjectStorage__Endpoint`, `ObjectStorage__AccessKey`, `ObjectStorage__SecretKey`      | Endpoint mặc định `localhost:9000`; script dùng tài khoản MinIO local vừa tạo      |
+| Bucket và SSL          | `ObjectStorage__Bucket`, `ObjectStorage__UseSsl`                                       | Mặc định `bhome-private`, `false`; bucket phải tạo thủ công                        |
+| CORS                   | `Cors__AllowedOrigins__0`, `Cors__AllowedOrigins__1`, `Cors__AllowedOrigins__2`        | Mặc định `http://localhost:5173`, `http://localhost:5174`, `http://localhost:5175` |
+| Background jobs        | `Jobs__Enabled`                                                                        | Giữ `false` khi bắt đầu                                                            |
+| Tích hợp bên ngoài     | `BankIntegration__*`, `NotificationIntegration__*`, `ElectronicContractIntegration__*` | Chưa cần cấu hình để chạy local; chỉ thêm API key không tự kích hoạt provider      |
 
-**Nếu port PostgreSQL `5434` mặc định đã được sử dụng:** chọn một port local còn trống,
-cập nhật đồng thời `POSTGRES_PORT` và `Port=` trong `ConnectionStrings__Database`
-trước khi khởi tạo Docker. Nếu đổi port MinIO API, sửa cả
+**Nếu port `5432` đã được sử dụng:** đổi `POSTGRES_PORT=5433` và sửa `Port=5433` trong
+`ConnectionStrings__Database` trước khi khởi tạo Docker. Nếu đổi port MinIO API, sửa cả
 `ObjectStorage__Endpoint` cho khớp.
 
 Các file `.env`, `.env.local`, `.env.compose` tại thư mục gốc là cấu hình riêng từng máy,
@@ -128,7 +125,7 @@ Chấp nhận yêu cầu tin cậy chứng chỉ HTTPS nếu hệ điều hành 
 cho tất cả workspace từ lockfile gốc; không cần cài riêng trong từng app. Dùng `npm.cmd` để tránh
 lỗi execution policy của `npm.ps1` trên Windows.
 
-Docker Compose chỉ chạy **PostgreSQL, MinIO và Mailpit**; API và frontend chạy riêng ở các bước sau.
+Docker Compose chỉ chạy **PostgreSQL và MinIO**; API và frontend chạy riêng ở các bước sau.
 Lần đầu build MinIO từ source có thể mất vài phút và cần kết nối mạng. Chờ cả hai service
 hiển thị `healthy` trong `docker compose ps` trước khi tiếp tục.
 
@@ -188,11 +185,11 @@ riêng. Không tự đọc `.env` hoặc khởi tạo database trong Production/
 
 ## 6. Cấu hình và chạy frontend
 
-Script môi trường của nhóm tạo Owner Web `.env.local` khi chưa tồn tại.
-Nếu không dùng script, copy file mẫu một lần:
+Copy các file dưới đây **một lần**, khi chưa có `.env.local` trong từng app:
 
 ```powershell
 Copy-Item src/owner-web/.env.example src/owner-web/.env.local
+Copy-Item src/public-web/.env.example src/public-web/.env.local
 ```
 
 Mặc định hai ứng dụng web đều có:
@@ -204,13 +201,8 @@ VITE_API_BASE_URL=https://localhost:7240
 Mỗi frontend cần chạy dùng **một terminal riêng**, tại thư mục gốc:
 
 ```powershell
-# Terminal Owner Web HTTP (5173)
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-TeamOwnerWeb.ps1
-```
-
-```powershell
-# Terminal Owner Web HTTPS để ký hợp đồng (5176)
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-TeamOwnerWeb.ps1 -SigningHttps
+# Terminal Owner Web
+npm.cmd run dev --workspace ./src/owner-web
 ```
 
 ```powershell
@@ -220,7 +212,7 @@ npm.cmd run mobile:dev
 
 ```powershell
 # Terminal Public Web
-npm.cmd run dev --workspace @bhome/public-web
+npm.cmd run dev --workspace ./src/public-web
 ```
 
 Mobile dùng Expo Router, đã kết nối đăng nhập email và luồng OCR với backend.
@@ -247,17 +239,15 @@ thiết bị truy cập được và chứng chỉ được tin cậy; `localhos
 
 ## 7. Địa chỉ kiểm tra
 
-| Thành phần     | Địa chỉ mặc định                        | Kết quả cần kiểm tra                                                    |
-| -------------- | --------------------------------------- | ----------------------------------------------------------------------- |
-| Swagger API    | https://localhost:7240/swagger          | Mở được tài liệu API                                                    |
-| API liveness   | https://localhost:7240/health/live      | API đang chạy                                                           |
-| API readiness  | https://localhost:7240/health/ready     | HTTP 200 khi PostgreSQL kết nối được và schema Compact24 đúng phiên bản |
-| Owner Web      | http://localhost:5173                   | Mở được ứng dụng                                                        |
-| Ký local HTTPS | https://localhost:5176/contract-signing | Mở trang ký OTP cho hợp đồng; cần trust certificate local               |
-| Mobile Expo    | Địa chỉ và mã QR trong terminal         | Expo Go tải được ứng dụng demo                                          |
-| Public Web     | http://localhost:5175                   | Mở được ứng dụng                                                        |
-| MinIO Console  | http://localhost:9001                   | Đăng nhập được và có bucket private `bhome-private`                     |
-| Mailpit Inbox  | http://localhost:8025                   | Xem email/OTP gửi vào SMTP local `127.0.0.1:1025`                       |
+| Thành phần    | Địa chỉ mặc định                    | Kết quả cần kiểm tra                                                    |
+| ------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| Swagger API   | https://localhost:7240/swagger      | Mở được tài liệu API                                                    |
+| API liveness  | https://localhost:7240/health/live  | API đang chạy                                                           |
+| API readiness | https://localhost:7240/health/ready | HTTP 200 khi PostgreSQL kết nối được và schema Compact24 đúng phiên bản |
+| Owner Web     | http://localhost:5173               | Mở được ứng dụng                                                        |
+| Mobile Expo   | Địa chỉ và mã QR trong terminal     | Expo Go tải được ứng dụng demo                                          |
+| Public Web    | http://localhost:5174               | Mở được ứng dụng                                                        |
+| MinIO Console | http://localhost:9001               | Đăng nhập được và có bucket private `bhome-private`                     |
 
 API hỗ trợ login/refresh/logout/logout-all/me/change-password và lõi reset mật khẩu.
 Chưa có tài khoản demo hay luồng tạo/kích hoạt tài khoản. Gửi email reset/MFA và lưu token native

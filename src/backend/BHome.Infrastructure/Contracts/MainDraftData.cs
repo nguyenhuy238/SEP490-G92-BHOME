@@ -58,7 +58,13 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
     }
     public async Task<IdentityConfirmation> IdentityAsync(Guid roomId, Guid residentId, CancellationToken t)
     {
-        var r = await db.Set<Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.RoomId == roomId && r.VerificationStatus == IdentityVerificationStatus.Verified, t) ?? throw ContractException.Invalid("verified_residents_required");
+        var r = await db.Set<Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.RoomId == roomId, t) ?? throw ContractException.Invalid("verified_residents_required");
+        if (r.ResidentType == ResidentType.CoOccupant && r.HouseholdRepresentativeId != null && r.HouseholdConfirmedAt != null && !string.IsNullOrWhiteSpace(r.HouseholdProfile) && r.HouseholdProfile != "{}")
+        {
+            var p = Decode<HouseholdMemberInput>(JsonSerializer.Deserialize<EncryptedIdentity>(r.HouseholdProfile)!, new(r.OwnerUserId, r.Id));
+            return new(true, p.CitizenNumber ?? "", p.FullName, p.DateOfBirth, null, null, null, null, null, null);
+        }
+        if (r.VerificationStatus != IdentityVerificationStatus.Verified) throw ContractException.Invalid("verified_residents_required");
         if (string.IsNullOrWhiteSpace(r.IdentityData) || r.IdentityData == "{}") throw ContractException.Invalid("confirmed_identity_required");
         return Decode<IdentityConfirmation>(JsonSerializer.Deserialize<EncryptedIdentity>(r.IdentityData)!, new(r.OwnerUserId, r.Id));
     }
@@ -69,6 +75,12 @@ internal sealed class MainDraftData(BHomePersistenceContext db, IIdentityProtect
          join account in db.Users.AsNoTracking() on r.TenantUserId equals (Guid?)account.Id
          where r.RoomId == roomId && r.Id == residentId && r.VerificationStatus == IdentityVerificationStatus.Verified
          select account.PhoneNumber).SingleOrDefaultAsync(t);
+    public async Task<HouseholdMemberInput?> HouseholdMemberAsync(Guid roomId, Guid residentId, CancellationToken t)
+    {
+        var r = await db.Set<Resident>().AsNoTracking().SingleOrDefaultAsync(r => r.Id == residentId && r.RoomId == roomId, t);
+        return r?.HouseholdRepresentativeId is null || string.IsNullOrWhiteSpace(r.HouseholdProfile) || r.HouseholdProfile == "{}" ? null :
+            Decode<HouseholdMemberInput>(JsonSerializer.Deserialize<EncryptedIdentity>(r.HouseholdProfile)!, new(r.OwnerUserId, r.Id));
+    }
     public string Protect(Contract c, MainDraftState state) => JsonSerializer.Serialize(Encode(state, new(c.OwnerSignerId, c.Id)));
     public Task<string?> EmailAsync(Guid roomId, Guid residentId, CancellationToken t) =>
         (from r in db.Set<Resident>().AsNoTracking()

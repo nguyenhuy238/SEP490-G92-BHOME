@@ -10,10 +10,10 @@ public static class ContractSigningModes
 }
 public sealed record SigningResidentEmail(Guid ResidentId, [Required, EmailAddress, StringLength(256)] string Email);
 public sealed record SigningInvitationInput(DateTimeOffset ExpiresAt, [Required] string SnapshotHash,
-    [EmailAddress, StringLength(256)] string? RecipientEmail = null, IReadOnlyList<SigningResidentEmail>? Contacts = null);
-// Url is returned only with the one-time Owner-visible token. The server's configured HTTPS
-// signing origin is authoritative, so Web and email cannot hand out different link origins.
-public sealed record SigningInvitationResult(Guid Id, string Status, DateTimeOffset ExpiresAt, string? Token = null, string? Url = null);
+    [EmailAddress, StringLength(256)] string? RecipientEmail = null, IReadOnlyList<SigningResidentEmail>? Contacts = null,
+    bool Resend = false);
+public sealed record SigningInvitationResult(Guid Id, string Status, DateTimeOffset ExpiresAt, string? Token = null,
+    string? Url = null);
 public static class SigningContacts
 {
     public static IReadOnlyDictionary<Guid, string> Read(ContractSigningInvitation? invitation)
@@ -63,6 +63,7 @@ public interface IAnonymousSigningRepository
     Task<ContractSigningInvitation?> FindByTokenHashAsync(string hash, CancellationToken t);
     Task<ContractSigningInvitation?> FindAsync(Guid id, CancellationToken t);
     Task<IReadOnlyList<ContractSigningInvitation>> ListAsync(Guid contractId, CancellationToken t);
+    Task<bool> IsEmailInUseAsync(Guid contractId, Guid residentId, string email, CancellationToken t);
     void Add(ContractSigningInvitation invitation);
 }
 public interface IAnonymousSigningSecurity
@@ -74,8 +75,9 @@ public interface IAnonymousSigningSecurity
 }
 public interface IInternalAcceptanceRenderer
 {
-    InternalAcceptedDocument Accept(byte[] source, DrawnPoint[][] strokes, Guid residentId, DateTimeOffset acceptedAt, string sourceHash);
+    InternalAcceptedDocument Accept(byte[] source, DrawnPoint[][] strokes, Guid residentId, DateTimeOffset acceptedAt, string sourceHash, bool preserveSignatures = false);
     byte[] ConfirmOwner(byte[] tenantAcceptedPdf, Guid ownerId, DateTimeOffset acceptedAt, string sourceHash);
+    byte[] AppendTenant(byte[] ownerSignedPdf, byte[] signaturePng, Guid residentId, DateTimeOffset acceptedAt, string sourceHash);
 }
 public interface IPostActivationTenantProvisioning
 {

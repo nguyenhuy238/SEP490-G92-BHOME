@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 import React, { useEffect } from 'react';
+vi.mock('../features/profile/TenantHouseholdPanel', () => ({
+  TenantHouseholdPanel: () => <span>Household panel</span>,
+}));
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest';
 import { MobileApi, MobileApiError } from '../lib/api';
