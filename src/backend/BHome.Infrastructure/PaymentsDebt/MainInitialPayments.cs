@@ -33,12 +33,14 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                 new[] { c.OwnerSignerId, c.TenantUserId }.All(id => id is not null && c.Signatures.Any(s => s.SignerUserId == id && (c.IsDevelopmentDemo ? sepay.Mode == "Test" && workflowMode.SimulatedSigningEnabled && s.Status == SignatureStatus.Simulated : s.Status == SignatureStatus.Signed) && s.SignedAt is not null && s.SnapshotHash == c.SnapshotHash && !string.IsNullOrWhiteSpace(s.SignedObjectKey) && !string.IsNullOrWhiteSpace(s.ProviderReference)));
             if (!signed || c.Status is not (ContractStatus.PendingActivation or ContractStatus.Active)) throw new PaymentException(409, "initial_payment_signatures_required");
             if (!ContractChargeSnapshot.IsIntact(c)) throw new PaymentException(409, "signed_terms_changed");
+            var signedCharges = string.IsNullOrWhiteSpace(c.AgreedPriceSnapshot) || c.AgreedPriceSnapshot == "{}"
+                ? null : ContractChargeSnapshot.Read(c).Charges;
             var order = await orders.ReadAsync(id, token);
             if (order is null)
             {
                 IEnumerable<(int Category, int Method, string Code, string Name, decimal Rate)> policies;
-                if (c.AgreedPriceSnapshot != "{}")
-                    policies = ContractChargeSnapshot.Read(c).Charges.Select(p => (p.Category, p.Method, p.ChargeCode, p.Name ?? p.ChargeCode, p.Rate));
+                if (signedCharges is not null)
+                    policies = signedCharges.Select(p => (p.Category, p.Method, p.ChargeCode, p.Name ?? p.ChargeCode, p.Rate));
                 else
                 {
                     var legacy = c.DraftMetadata != "{}" ? drafts.Unprotect(c).Charges : (await prices.ResolvePricesAsync(c.RoomId, c.StartDate, token)).Charges;
@@ -59,14 +61,26 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
             var deposit = await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Where(a => a.TargetDepositContractId == id).SumAsync(a => (decimal?)a.Amount, token) ?? 0;
             var rent = await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().Where(a => a.TargetInitialContractId == id).SumAsync(a => (decimal?)a.Amount, token) ?? 0;
             if (deposit > order.RequiredDeposit || rent > order.MonthlyRent + order.Charges.Sum(f => f.Amount)) throw new PaymentException(409, "initial_payment_excess_requires_review");
-            var outstanding = Math.Max(0, order.RequiredDeposit - deposit) + Math.Max(0, order.MonthlyRent + order.Charges.Sum(f => f.Amount) - rent);
+            var outstandingDeposit = order.RequiredDeposit - deposit;
+            var outstandingRentAndFees = order.MonthlyRent + order.Charges.Sum(f => f.Amount) - rent;
+            var outstanding = outstandingDeposit + outstandingRentAndFees;
+            var meteredRates = (signedCharges ?? []).Where(p => p.Method == (int)ChargingMethod.Metered &&
+                    p.Category is (int)ChargeCategory.Electricity or (int)ChargeCategory.Water)
+                .Select(p => p.Category == (int)ChargeCategory.Electricity
+                    ? new MainInitialMeteredRate(p.ChargeCode, p.Name ?? "Điện", "kWh", p.Rate)
+                    : new MainInitialMeteredRate(p.ChargeCode, p.Name ?? "Nước", "m³", p.Rate))
+                .ToArray();
             var account = await payments.ReceivingAccountAsync(order.LocationId, token);
             var bound = account is not null && account.Enabled && account.IsDevelopmentDemo == ContractPaymentModes.IsTest(c) && ContractPaymentModes.Of(c) == sepay.Mode && sepay.ReceivingAccounts.Any(a => a.LocationId == order.LocationId && a.BankIdentifier == account.BankIdentifier && a.AccountNumber == account.AccountNumber);
             // IssueAsync joins this transaction; it must not clear tracked state or create nested transactions.
-            var reference = issueQr && outstanding > 0 && bound ? await codes.IssueAsync("MainInitial", id, order.LocationId, token) : await codes.GetAsync("MainInitial", id, token);
+            var reference = !sepay.Enabled || !bound ? null : issueQr && outstanding > 0
+                ? await codes.IssueAsync("MainInitial", id, order.LocationId, token) : await codes.GetAsync("MainInitial", id, token);
             var rendered = issueQr && bound && reference is not null && outstanding > 0 ? qr.Generate(account!.BankIdentifier, account.AccountNumber, outstanding, reference) : null;
-            return new MainInitialPaymentView(id, outstanding == 0 ? "Settled" : !bound ? "ReceivingAccountUnavailable" : reference is null ? "PaymentCodeUnavailable" : rendered is null ? "InstructionsOnly" : "Available", c.Status.ToString(), signed,
-                new[] { new MainInitialCharge("RENT", "Tiền thuê tháng đầu", order.MonthlyRent) }.Concat(order.Charges).ToArray(), order.RequiredDeposit, c.AppliedHoldingDeposit, deposit, rent, outstanding, outstanding == 0, reference, bound ? account!.BankIdentifier : null, bound ? account!.AccountNumber : null, bound ? account!.AccountHolder : null, rendered?.PngDataUri, ContractPaymentModes.IsTest(c));
+            var availability = outstanding == 0 ? "Settled" : !sepay.Enabled ? "PaymentProviderDisabled" :
+                !bound ? "ReceivingAccountUnavailable" : reference is null ? "PaymentCodeUnavailable" : rendered is null ? "InstructionsOnly" : "Available";
+            return new MainInitialPaymentView(id, availability, c.Status.ToString(), signed,
+                new[] { new MainInitialCharge("RENT", "Tiền thuê tháng đầu", order.MonthlyRent) }.Concat(order.Charges).ToArray(), order.RequiredDeposit, c.AppliedHoldingDeposit, deposit, rent, outstanding, outstanding == 0, reference, bound ? account!.BankIdentifier : null, bound ? account!.AccountNumber : null, bound ? account!.AccountHolder : null, rendered?.PngDataUri, ContractPaymentModes.IsTest(c),
+                outstandingDeposit, outstandingRentAndFees, meteredRates);
         }, token);
     }
 }

@@ -54,7 +54,7 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
             FROM notifications n WHERE n.record_kind='AUDIT' AND COALESCE((n.event_data->'state'->>'succeeded')::boolean,(n.event_data->>'succeeded')::boolean,(n.event_data->>'Succeeded')::boolean,true)
             AND n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated','InvoiceDraftGenerated',
               'ContractSigningInitiated','ContractSigningPrepared','ContractSigningRequested','InternalSigningInvitationApproved','ContractActivated','ContractRenewalPrepared','OperatingPolicyAmendmentCancelled','OperatingPolicyAmendmentApplied',
-              'HoldingSigningSubmitted','MainSigningSubmitted','HoldingActivated','Automatic:HoldingActivated','Automatic:ContractActivated')
+              'HoldingDraftCreated','HoldingSigningSubmitted','MainSigningSubmitted','HoldingActivated','Automatic:HoldingActivated','Automatic:ContractActivated')
             AND (NOT @authenticationOnly OR n.notification_type IN ('PasswordChange','PasswordReset','AccountActivated','AccountDeactivated','AccountInvitationAccepted','RoleChanged','StaffCreated'))
             AND NOT EXISTS(SELECT 1 FROM notifications p WHERE p.record_kind='OUTBOX' AND p.event_data->>'recordType'='NotificationPublication'
               AND p.event_data->'state'->>'eventKey'='extended-audit:'||n.id::text) ORDER BY n.event_at,n.id LIMIT 50
@@ -80,6 +80,16 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                 foreach (var r in await Roles([e.Target], t)) count += await sql.Emit(r.Id, r.Role, null, key,
                     eventType, "Account", title, $"{title}.\nThời điểm: {at:HH:mm dd/MM/yyyy} (giờ Việt Nam).\nNếu không phải bạn hoặc không được thông báo về thay đổi này, hãy liên hệ Owner ngay để kiểm tra tài khoản.",
                     "Account", r.Id, t, channels: e.Event == "StaffCreated" ? ["IN_APP"] : ["IN_APP", "EMAIL"]);
+            }
+            else if (e.Event == "HoldingDraftCreated")
+            {
+                var draft = await db.Set<Contract>().AsNoTracking().Include(c => c.Room).ThenInclude(r => r.Location)
+                    .SingleOrDefaultAsync(c => c.Id == e.Target && c.Kind == ContractKind.Holding && c.Status == ContractStatus.Draft, t);
+                if (draft is not null)
+                    count += await sql.Emit(draft.OwnerSignerId, "Owner", draft.Room.LocationId, $"holding-draft:{draft.Id:N}",
+                        "HOLDING_DRAFT_CREATED", "Contract", "Có bản nháp hợp đồng giữ chỗ",
+                        $"Phòng {draft.Room.RoomNumber} tại {draft.Room.Location.Name} có bản nháp giữ chỗ để xem xét.",
+                        "Contract", draft.Id, t, channels: ["IN_APP"]);
             }
             else if (e.Event is "HoldingSigningSubmitted" or "MainSigningSubmitted" or "HoldingActivated" or "Automatic:HoldingActivated")
             {

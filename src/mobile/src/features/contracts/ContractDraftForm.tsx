@@ -1,4 +1,4 @@
-import { conciseMessage } from '../../lib/toast';
+import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -12,7 +12,6 @@ import {
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
 import { useHoldingPreparation } from './useHoldingPreparation';
-import { ui } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { mainDraftClient } from '../../../../../packages/client-core/src/mainDrafts';
 import type { HoldingPreparation } from '../../../../../packages/client-core/src/holdingSettings';
@@ -50,7 +49,7 @@ export function ContractDraftForm({
   const [confirmedApplicantId, setConfirmedApplicantId] = useState('');
   const [step, setStep] = useState(0),
     [busy, setBusy] = useState(false),
-    [error, setError] = useFeedbackState();
+    [error, setError] = useFeedbackState('warning', false);
   const lock = useRef(false),
     [keys] = useState(() => mutationKeys(randomUUID));
   const query = useHoldingPreparation(api, values.roomId);
@@ -80,10 +79,15 @@ export function ContractDraftForm({
     owners.length > 1
       ? 'Chưa xác định được Owner ký hợp đồng: cơ sở có nhiều Owner hợp lệ. Vui lòng liên hệ quản trị viên.'
       : 'Chưa xác định được Owner ký hợp đồng cho cơ sở này. Vui lòng liên hệ quản trị viên.';
-  const roomOptions = (query.data?.rooms ?? []).map((item) => ({
-    id: item.id,
-    label: `${item.label} · ${query.data?.locations.find((location) => location.id === item.locationId)?.label ?? ''}`,
-  }));
+  const locations = query.data?.locations ?? [];
+  const selectedLocationId =
+    values.locationId || room?.locationId || (locations.length === 1 ? locations[0].id : '');
+  const roomOptions = (query.data?.rooms ?? [])
+    .filter((item) => item.locationId === selectedLocationId)
+    .map((item) => ({
+      id: item.id,
+      label: `${item.label} · ${locations.find((location) => location.id === item.locationId)?.label ?? ''}${typeof item.capacity === 'number' ? ` · ${item.capacity} người` : ''}`,
+    }));
   const roomValid = !!room && !!p && !query.loading && !query.error;
   const preparationAvailable = typeof api.holdingPreparation === 'function';
   const defaultsKey = `${values.roomId}:${defaultsRevision}`;
@@ -227,6 +231,28 @@ export function ContractDraftForm({
         {step === 0 && (
           <HoldingSectionCard title="Chọn phòng giữ chỗ">
             <Text style={styles.description}>Chọn phòng còn trống để bắt đầu.</Text>
+            {locations.length === 1 ? (
+              <Text style={styles.description}>Cơ sở được phân công: {locations[0].label}</Text>
+            ) : (
+              <ChoiceField
+                label="Cơ sở được phân công *"
+                placeholder="Chọn cơ sở"
+                value={selectedLocationId}
+                options={locations}
+                disabled={busy || query.catalogLoading || !!values.representativeResidentId}
+                onChange={(locationId) => {
+                  setValues((before) => ({
+                    ...before,
+                    locationId,
+                    roomId: '',
+                    representativeResidentId: '',
+                    ownerSignerId: '',
+                  }));
+                  setConfirmedApplicantId('');
+                  setError('');
+                }}
+              />
+            )}
             <ChoiceField
               label="Phòng giữ chỗ *"
               placeholder="Chọn phòng còn trống"
@@ -234,7 +260,12 @@ export function ContractDraftForm({
               searchable
               value={values.roomId ?? ''}
               options={roomOptions}
-              disabled={busy || query.catalogLoading || !!values.representativeResidentId}
+              disabled={
+                busy ||
+                query.catalogLoading ||
+                !selectedLocationId ||
+                !!values.representativeResidentId
+              }
               onChange={(roomId) => {
                 setValues((before) => ({
                   ...before,
@@ -257,6 +288,9 @@ export function ContractDraftForm({
                   <Text style={styles.description}>
                     {query.data?.locations.find((item) => item.id === room.locationId)?.label}
                   </Text>
+                  {typeof room.capacity === 'number' && (
+                    <Text style={styles.description}>Sức chứa: {room.capacity} người</Text>
+                  )}
                 </View>
                 <HoldingStatusBadge
                   label={
@@ -288,7 +322,7 @@ export function ContractDraftForm({
                 </Text>
               </View>
             )}
-            {!query.loading && !query.error && !roomOptions.length && (
+            {!query.loading && !query.error && !!selectedLocationId && !roomOptions.length && (
               <View style={styles.emptyRooms}>
                 <Text style={styles.description}>
                   {query.data?.blockedRooms.length
@@ -365,23 +399,15 @@ export function ContractDraftForm({
               terms={configured?.terms}
             />
             {!datesReady && !defaultsLoading && (
-              <Text accessibilityRole="alert" style={ui.red}>
-                Chưa có thời hạn giữ chỗ từ hệ thống. Chưa thể tạo hợp đồng.
-              </Text>
+              <ContractNotice message="Chưa có thời hạn giữ chỗ từ hệ thống. Chưa thể tạo hợp đồng." />
             )}
             {preparationAvailable && !configured && !defaultsError && (
               <ActivityIndicator accessibilityLabel="Đang lấy cấu hình giữ chỗ" />
             )}
-            {!!defaultsError && (
-              <Text accessibilityRole="alert" style={ui.red}>
-                {defaultsError}
-              </Text>
-            )}
+            {!!defaultsError && <ContractNotice message={defaultsError} />}
             {(!!defaultsError || (!!configured && !defaultsReady) || !preparationAvailable) && (
               <>
-                <Text accessibilityRole="alert" style={ui.red}>
-                  Chưa có đủ cấu hình giữ chỗ. Vui lòng kiểm tra cấu hình cơ sở.
-                </Text>
+                <ContractNotice message="Chưa có đủ cấu hình giữ chỗ. Vui lòng kiểm tra cấu hình cơ sở." />
                 <Button disabled={busy} onPress={() => setDefaultsRevision((value) => value + 1)}>
                   Tải lại cấu hình
                 </Button>
@@ -389,11 +415,7 @@ export function ContractDraftForm({
             )}
           </>
         )}
-        {step > 0 && !query.loading && !!p && !owner && (
-          <Text accessibilityRole="alert" style={ui.red}>
-            {ownerError}
-          </Text>
-        )}
+        {step > 0 && !query.loading && !!p && !owner && <ContractNotice message={ownerError} />}
         {step > 0 && query.loading && (
           <View style={styles.refreshStatus}>
             <ActivityIndicator
@@ -407,21 +429,13 @@ export function ContractDraftForm({
             </Text>
           </View>
         )}
-        {!!query.error && (
-          <Text accessibilityRole="alert" style={ui.red}>
-            {conciseMessage(query.error)}
-          </Text>
-        )}
+        {!!query.error && <ContractNotice message={query.error} />}
         {!!query.error && (
           <Button disabled={busy || query.loading} onPress={query.reload}>
             Thử lại
           </Button>
         )}
-        {!!error && (
-          <Text accessibilityRole="alert" style={ui.red}>
-            {conciseMessage(error)}
-          </Text>
-        )}
+        {!!error && <ContractNotice message={error} />}
       </View>
       {step < 3 && step !== 1 && (
         <WorkspaceFooter>

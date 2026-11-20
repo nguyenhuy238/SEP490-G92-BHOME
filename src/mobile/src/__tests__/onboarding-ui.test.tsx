@@ -293,9 +293,24 @@ vi.mock('../features/onboarding/useCaptureScope', () => ({
       rooms: location
         ? [
             { id: 'room', label: '101', status: 'Available', capacity: 2 },
-            { id: 'occupied', label: '102', status: 'Occupied', capacity: 2, remainingCapacity: 1 },
+            {
+              id: 'occupied',
+              label: '102',
+              status: 'Occupied',
+              capacity: 2,
+              remainingCapacity: 1,
+              currentTenantLabels: ['Người thuê mẫu'],
+            },
             { id: 'full', label: '105', status: 'Occupied', capacity: 2, remainingCapacity: 0 },
             { id: 'held', label: '103', status: 'OnHold', capacity: 2 },
+            {
+              id: 'waiting',
+              label: '106',
+              status: 'Occupied',
+              capacity: 2,
+              remainingCapacity: 1,
+              waitingForOwnerSignature: true,
+            },
             { id: 'unavailable', label: '104', status: 'Unavailable' },
           ]
         : [],
@@ -317,10 +332,12 @@ import type { ContractView, Signature } from '../../../../packages/client-core/s
 it('blocks a full room immediately at selection while allowing another room', () => {
   render(<OnboardingScreen />);
   const room = screen.getByRole('combobox', { name: 'Phòng *' });
+  expect(screen.queryByRole('option', { name: /106/ })).toBeNull();
   fireEvent.change(room, { target: { value: 'full' } });
   expect(screen.getByRole('alert').textContent).toContain('Phòng đã đủ người');
   expect(screen.getByRole('button', { name: 'Tiếp tục' })).toHaveProperty('disabled', true);
   fireEvent.change(room, { target: { value: 'occupied' } });
+  expect(screen.getByText('Người đang thuê: Người thuê mẫu')).toBeTruthy();
   expect(screen.queryByRole('alert')).toBeNull();
   expect(screen.getByRole('button', { name: 'Tiếp tục' })).toHaveProperty('disabled', false);
 });

@@ -123,7 +123,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit, c.Room.LocationId, c.IsDevelopmentDemo, c.Room.RoomNumber, c.Room.Location?.Name ?? "", ActualEndDate: c.ActualEndDate, OnboardingDraft: c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft,
         HoldingExpiresAt: c.HoldingExpiryAt, ReservedCapacity: c.ReservedCapacity, ApprovedAt: c.ApprovedAt,
         PriceLockedAt: c.PriceLockedAt, PriceLockTrigger: c.PriceLockTrigger, ConvertedMainContractId: c.ConvertedMainContractId,
-        SigningMode: c.SigningMode, SnapshotHash: c.SnapshotHash, AgreedCharges: ContractChargeSnapshot.ViewCharges(c), InitialPaymentRequired: c.InitialPaymentRequired, OwnerOnlySandboxConfirmed: MainSandboxAcceptance.Read(c) is not null, SandboxTenantSimulated: MainSandboxAcceptance.Read(c)?.TenantSimulatedAt is not null, PaymentMode: ContractPaymentModes.Of(c));
+        SigningMode: c.SigningMode, SnapshotHash: c.SnapshotHash, AgreedCharges: ContractChargeSnapshot.ViewCharges(c), InitialPaymentRequired: c.InitialPaymentRequired, OwnerOnlySandboxConfirmed: MainSandboxAcceptance.Read(c)?.ConfirmedAt is not null, SandboxTenantSimulated: MainSandboxAcceptance.Read(c)?.TenantSimulatedAt is not null, PaymentMode: ContractPaymentModes.Of(c));
     // What a signing screen shows: the method (from the provider credential), the deadline and the signing certificate.
     private static SignatureView SignatureOf(ContractSignature s)
     {

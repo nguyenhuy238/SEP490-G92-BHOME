@@ -167,9 +167,29 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         }
         var before = await w.Staff.Client.GetFromJsonAsync<BHome.Application.Ocr.NamedResource[]>($"/api/v1/capture/locations/{w.Location}/rooms");
         Assert.Equal(2, before!.Single(r => r.Id == w.Room).RemainingCapacity);
+        Assert.Empty(before!.Single(r => r.Id == w.Room).CurrentTenantLabels!);
         await Active(w);
         var after = await w.Staff.Client.GetFromJsonAsync<BHome.Application.Ocr.NamedResource[]>($"/api/v1/capture/locations/{w.Location}/rooms");
         Assert.Equal(1, after!.Single(r => r.Id == w.Room).RemainingCapacity);
+        Assert.Single(after!.Single(r => r.Id == w.Room).CurrentTenantLabels!);
+    }
+
+    [Fact]
+    public async Task CaptureRoomsFlagsPendingOwnerSignatureEvenWhenCapacityRemains()
+    {
+        var w = await Setup();
+        var id = await Draft(w);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Capacity = 2;
+            (await db.Set<Contract>().SingleAsync(c => c.Id == id)).Status = ContractStatus.PendingSigning;
+            await db.SaveChangesAsync();
+        }
+        var rooms = await w.Staff.Client.GetFromJsonAsync<BHome.Application.Ocr.NamedResource[]>($"/api/v1/capture/locations/{w.Location}/rooms");
+        var room = Assert.Single(rooms!, r => r.Id == w.Room);
+        Assert.Equal(2, room.RemainingCapacity);
+        Assert.True(room.WaitingForOwnerSignature);
     }
 
     [Fact]

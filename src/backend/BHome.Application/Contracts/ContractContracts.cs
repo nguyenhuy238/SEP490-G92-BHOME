@@ -236,6 +236,7 @@ public interface IContractRepository
     Task<bool> ActiveUserInRoleAsync(Guid id, string role, CancellationToken t);
     Task<bool> StaffAssignedAsync(Guid staffId, Guid locationId, DateOnly today, CancellationToken t);
     Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, Guid[] residentIds, CancellationToken t);
+    Task<IReadOnlySet<Guid>> RoomsAwaitingMainOwnerSignatureAsync(Guid[] roomIds, Guid exceptContractId, CancellationToken t);
     Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t);
     Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t);
     Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t);

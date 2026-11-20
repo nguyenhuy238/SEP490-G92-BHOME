@@ -54,6 +54,9 @@ export function StaffTaskListScreen() {
       <Text variant="bodySmall" style={styles.muted}>
         Công việc trong cơ sở đang được phân công
       </Text>
+      <Button icon="calendar-month-outline" onPress={() => go('shifts')}>
+        Lịch làm việc
+      </Button>
       <TaskFilterBar
         status={status}
         onChange={(next) => {

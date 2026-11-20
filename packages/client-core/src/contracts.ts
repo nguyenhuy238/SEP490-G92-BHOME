@@ -1220,6 +1220,7 @@ export const labels: Record<string, string> = {
   invalid_contract_signers: 'Tài khoản bên ký chưa hợp lệ.',
   security_deposit_insufficient: 'Tiền cọc đã xác minh chưa đủ.',
   room_contract_conflict: 'Phòng đã đủ chỗ hoặc có hợp đồng đang xung đột.',
+  room_waiting_for_owner_signature: 'Phòng có hợp đồng đang chờ Owner ký.',
   household_version_changed:
     'Thông tin hộ gia đình đã được cập nhật ở phiên khác. Tải lại hồ sơ trước khi lưu tiếp.',
   household_member_mismatch: 'Thành viên không khớp hộ gia đình đang nhập. Hãy tải lại hồ sơ.',

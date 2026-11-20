@@ -59,13 +59,15 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
         var due = new List<Work>();
         await using (var cmd = await sql.Command("""
             SELECT id,(SELECT count(*)::int FROM jsonb_array_elements(delivery_history) h WHERE h->>'recordType'='ChannelClaim')+1 FROM notifications WHERE record_kind='OUTBOX' AND event_data->>'recordType'='ChannelDelivery'
+              AND ((@email AND event_data->>'channel'='EMAIL') OR (@push AND event_data->>'channel'='PUSH') OR (@sms AND event_data->>'channel'='SMS'))
               AND (NOT @authenticationOnly OR event_data ? 'protectedAuthenticationEmail' OR event_data->>'eventType' IN
                 ('PASSWORD_CHANGED','PASSWORD_RESET_COMPLETED','ACCOUNT_ACTIVATED','ACCOUNT_DEACTIVATED','ACCOUNT_SETUP_COMPLETED','ACCOUNT_ACCESS_CHANGED','ACCOUNT_LOCKED',
                  'STAFF_ASSIGNMENT_CREATED','STAFF_ASSIGNMENT_UPDATED','STAFF_ASSIGNMENT_CANCELLED','STAFF_ASSIGNMENT_REMOVED',
                  'STAFF_ASSIGNMENT_ACTIVATED','STAFF_ASSIGNMENT_ENDED'))
               AND ((delivery_status='Pending' AND next_delivery_at<=@now) OR (delivery_status='Processing' AND locked_until<=@now))
             ORDER BY event_at,id LIMIT 50
-            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly)))
+            """, t, ("now", sql.Now), ("authenticationOnly", authenticationOnly),
+            ("email", provider.IsConfigured("EMAIL")), ("push", provider.IsConfigured("PUSH")), ("sms", provider.IsConfigured("SMS"))))
         { await using var reader = await cmd.ExecuteReaderAsync(t); while (await reader.ReadAsync(t)) due.Add(new(reader.GetGuid(0), reader.GetInt32(1))); }
         return due;
     }
@@ -129,6 +131,17 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                         ("id", claim.Recipient), ("role", claim.Role), ("security", notice?.Category == "Account"));
                     if (!eligible || notice is null || await inbox.TargetAsync(scope, claim.Notice, t) is null || !await Relevant(notice, t)) state = "Suppressed";
                     else if (claim.Channel == "EMAIL" && claim.Role == "Tenant" && notice.EventType == "CONTRACT_ACTIVATED" &&
+                        notice.RelatedObjectType == "Contract" &&
+                        await content.MainPaidConfirmationAsync(notice.RelatedObjectId, claim.Recipient, t) is { } paidMain)
+                    {
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t);
+                        timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutSeconds));
+                        providerReference = await provider.SendAsync(new($"channel/{claim.Id}/email", "EMAIL",
+                            paidMain.Destination, "MAIN_CONFIRMED", paidMain.Title, paidMain.Body, Attachments: paidMain.Attachments), timeout.Token);
+                        if (string.IsNullOrWhiteSpace(providerReference) || providerReference.Length > 200)
+                            throw new ChannelDeliveryException("email_submission_outcome_unknown", outcomeUnknown: true);
+                    }
+                    else if (claim.Channel == "EMAIL" && claim.Role == "Tenant" && notice.EventType == "CONTRACT_ACTIVATED" &&
                         !await sql.Scalar<bool>("SELECT email_confirmed FROM users WHERE id=@id", t, ("id", claim.Recipient)))
                         state = "Suppressed"; // The durable account-setup email contains the same activation confirmation and password link.
                     else if (claim.Channel == "SMS")
@@ -187,12 +200,12 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                             if (auth is null && claim.Channel == "EMAIL" && claim.Role == "Tenant" &&
                                 notice.EventType == "CONTRACT_ACTIVATED" && notice.RelatedObjectType == "Contract" &&
                                 await content.MainConfirmationAsync(notice.RelatedObjectId, claim.Recipient, t) is not null)
-                                attachments = await content.MainAttachmentsAsync(notice.RelatedObjectId, claim.Recipient, t);
+                                attachments = await content.MainAttachmentsAsync(notice.RelatedObjectId, claim.Recipient, destinations.Single().Value, t);
                             foreach (var destination in destinations)
                             {
                                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t); timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutSeconds));
                                 // Stable per-device key protects fanout retries after a partial provider failure.
-                                var receipt = await provider.SendAsync(new($"channel/{claim.Id}/{destination.Id}", claim.Channel, destination.Value, notice.EventType, emailContent.Item1, emailContent.Item2, auth?.ActionUrl, attachments), timeout.Token);
+                                var receipt = await provider.SendAsync(new($"channel/{claim.Id}/{destination.Id}", claim.Channel, destination.Value, auth?.DeliveryEventType ?? notice.EventType, emailContent.Item1, emailContent.Item2, auth?.ActionUrl, attachments), timeout.Token);
                                 if (string.IsNullOrWhiteSpace(receipt) || receipt.Length > 200) throw new InvalidOperationException("invalid_provider_receipt");
                                 providerReference = receipt;
                             }

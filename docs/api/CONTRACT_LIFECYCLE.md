@@ -6,11 +6,41 @@ Unconfigured. Cọc đã xác minh để activation không đồng nghĩa đã c
 
 ## Main Draft → tài liệu xem xét → ký (05/11/2026)
 
-UC-15 / GBR-04 / DBR-03. Bổ sung vào controller Main Draft hiện hữu:
+**Cập nhật 19/11/2026.** Bước 5 cho phép Owner signer hoặc Staff đang được phân công tại cơ sở kiểm tra PDF và gọi `POST .../{id}/release` để đưa hồ sơ sang `PendingSigning`. Với Staff, `tenantUserId: null` yêu cầu máy chủ dùng liên kết đã xác minh của đại diện thuê. Nếu chưa liên kết tài khoản, hợp đồng dùng OTP. Owner và Tenant có thể ký theo bất kỳ thứ tự nào. Sandbox cũng cho mô phỏng theo cả hai thứ tự và chỉ mở bước thanh toán khi đã ghi nhận đủ hai bên.
+
+Trong luồng tạo hợp đồng chính thức trên Staff Mobile, kỳ thuê mặc định là 6 tháng và có thể chọn 1 năm, tính từ ngày hiện tại theo giờ Việt Nam. Giá, cọc và điều khoản lấy từ cấu hình. Số điện thoại dùng dữ liệu đã lưu nếu có. Bước 4 gọi `signing-review` một lần để tạo PDF dùng để ký và phát hành chính tệp này với `emailSigning: true` khi chuyển tiếp. Bước 5 gửi lời mời OTP kèm liên kết xem bản PDF của hợp đồng và ghi sự kiện `MainSigningSubmitted` cho thông báo trên web và mobile của Owner. Bước 6 và 7 dùng luồng thanh toán và kích hoạt hiện có.
+
+Khi gửi lại lời mời ký còn hiệu lực, backend áp dụng khoảng chờ 1 phút theo địa chỉ nhận trên cùng hợp đồng. Nội dung email mới thay thế link và OTP cũ, đồng thời giữ thời hạn của lời mời.
+
+Email đã gắn với hồ sơ cư dân khác, kể cả hồ sơ chưa có hợp đồng, bị từ chối với HTTP 409 `signing_email_already_in_use` khi gửi lời mời hoặc chấp thuận ký.
+
+UC-15 / UC-21 / GBR-10. API thanh toán ban đầu trả từng khoản thuê và phí cố định đã ghi trong lệnh thanh toán, cùng số cọc và tiền thuê/phí còn phải nộp sau các phân bổ trong ledger. Tiền giữ chỗ đã cấn nằm trong tổng cọc đã ghi nhận. Đơn giá điện, nước lấy từ giá đã ký nếu có. Hóa đơn định kỳ tính tiền điện, nước sau khi xác nhận mức sử dụng.
+
+Khi SePay tắt, thanh toán ban đầu vẫn trả số dư và các khoản thu. Trạng thái `PaymentProviderDisabled` cho biết chưa thể cấp mã đối soát hoặc QR. Mobile chỉ hiển thị hướng dẫn chuyển khoản khi đã có mã đối soát.
+
+Sau kích hoạt hợp đồng thuê ký OTP có thanh toán ban đầu, hàng đợi xác nhận gửi hợp đồng đã ký và biên nhận giao dịch đã xác minh đến email khớp lời mời đã chấp thuận. Email thiết lập tài khoản đi theo luồng riêng. Biên nhận lấy số tiền phân bổ từ PostgreSQL và ghi riêng khoản giữ chỗ cấn vào cọc. Hóa đơn định kỳ được phát hành theo UC-21.
+
+UC-14. Sự kiện tạo bản nháp giữ chỗ phát một thông báo trong ứng dụng cho Owner được chỉ định ký, dùng khóa theo hợp đồng để tránh thông báo lặp. Trong luồng ký điện tử trên Owner Web, người ký vẽ hoặc chọn ảnh chữ ký cho hợp đồng đang mở trước khi xác nhận ký.
+
+Email xác nhận giữ chỗ được gửi đến địa chỉ trong lời mời đã chấp thuận sau khi giữ chỗ có hiệu lực và cọc đã xác minh. Trong Development, tùy chọn cho phép gửi lời mời ký ngoài danh sách thử cũng áp dụng cho email xác nhận giữ chỗ theo luồng này.
+
+UC-13 / UC-15. Danh sách phòng tiếp nhận khách thuê trả thêm `currentTenantLabels` cho phòng thuộc phạm vi được phân công. Mỗi mục hiển thị họ tên đã xác minh của người đại diện trên hợp đồng thuê đang có hiệu lực trong ngày, hoặc trạng thái chưa có tên xác minh. Staff xem thông tin này khi chọn phòng. Hồ sơ người thuê mới được nhập ở bước CCCD.
+
+Phòng có hợp đồng thuê chính thức chờ chữ ký Owner được đánh dấu `waitingForOwnerSignature` và ẩn khỏi danh sách chọn phòng tiếp nhận. Backend kiểm tra lại khi lưu hoặc phát hành bản nháp khác cho phòng đó.
+
+### Quyết định nghiệp vụ về cọc dùng chung
+
+UC-15 / UC-19 / UC-22 / GBR-10 / GBR-18. Cọc thuộc chu kỳ thuê của phòng. Khi một Tenant kết thúc hợp đồng và vẫn còn Tenant ở lại, chu kỳ và khoản cọc tiếp tục tồn tại. BHOME không quyết toán riêng khoản cọc giữa các Tenant. Hết hạn hợp đồng chưa hoàn tất bàn giao không kết thúc chu kỳ.
+
+Khi người thuê cuối cùng hoàn tất trả phòng, BHOME tính số dư cọc để Owner quyết định hoàn trả cho người đó. Việc chuyển tiền do Owner thực hiện bên ngoài BHOME. Chứng từ thu cọc ban đầu vẫn được lưu để đối soát. Quy tắc tự đối soát chỉ chấp nhận khoản chuyển đúng số tiền cần thu.
+
+Trạng thái triển khai: đây là quyết định cho thay đổi sắp tới. Ledger hiện tại vẫn gắn cọc với hợp đồng nguồn.
+
+UC-15 / GBR-04 / DBR-03. Các thay đổi trong controller Main Draft hiện hữu gồm các endpoint sau.
 
 - `POST /api/v1/contracts/main-drafts/{id}/signing-review`: Owner hoặc Staff đang được phân công Location, trả `ContractDocumentView` với `kind=SigningReview`. Tái sử dụng file của snapshot hiện tại. PDF được chuyển đổi từ mẫu DOCX hiện hữu và lưu private, có hash/length. Mẫu hiện tại chỉ được phép Development/Testing và có nhãn tài liệu kiểm thử; Production trả 503 `main_draft_signing_template_not_approved`.
 - `GET .../{id}/documents/{fileId}`: dùng endpoint download hiện hữu, kiểm quyền/snapshot/hash trước khi trả bytes. Tài liệu phiên bản cũ trả 409.
-- `POST .../{id}/release`: chỉ Owner signer; bắt buộc `Idempotency-Key` UUID. Body `{ tenantUserId, expectedVersion, reviewedFileId, humanReviewed: true }`; trả `{ id }`. Kiểm tra bản nháp, cấu hình/giá hiện hành, tài khoản Tenant hoạt động, liên kết Resident, room conflict và đúng file đã xem xét. Không đổi signing mode đã ghi lúc tạo Draft. Lặp cùng key/payload trả cùng kết quả; khác payload trả 409.
+- `POST .../{id}/release`: Owner signer hoặc Staff được phân công tại cơ sở. Bắt buộc `Idempotency-Key` UUID. Body `{ tenantUserId, expectedVersion, reviewedFileId, humanReviewed: true }`; trả `{ id }`. Máy chủ kiểm tra bản nháp, cấu hình/giá hiện hành, liên kết Resident, tài khoản Tenant hoạt động, xung đột phòng và PDF đã xem xét. Phương thức ký dựa trên liên kết đã xác minh. Lặp cùng key/payload trả cùng kết quả; khác payload trả 409.
 
 Release ghi `PendingSigning`, liên kết Tenant đại diện và seal snapshot; giữ encrypted draft metadata và evidence cũ. Tạo Preview bất biến bằng đúng bytes/hash PDF đã xem xét, với object key riêng. `onboardingDraft` trong list/detail chỉ true khi vẫn là Draft; Owner Web chuyển sang workflow ký hiện hữu. Tenant dùng preview/private-download/signing/sync hiện hữu; cả adapter simulation và MySign lấy canonical PDF này thay vì dựng lại mẫu khác. Chưa ký/chưa cọc thì không tự Active hoặc Occupied.
 

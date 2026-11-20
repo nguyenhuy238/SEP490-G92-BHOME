@@ -548,27 +548,27 @@ it('asks before leaving a draft and navigates only after explicit confirmation',
 it('renders four labeled Staff tabs at 60dp and applies Android bottom inset exactly once', () => {
   const view = render(
     <WorkspaceProvider>
-      <WorkspaceShell screen="notifications">
+      <WorkspaceShell screen="rooms">
         <span>Nội dung</span>
       </WorkspaceShell>
     </WorkspaceProvider>,
   );
   const tabs = screen.getAllByRole('tab');
   expect(tabs).toHaveLength(4);
-  expect(screen.getByRole('tab', { name: 'Thông báo' }).getAttribute('aria-selected')).toBe('true');
+  expect(screen.getByRole('tab', { name: 'Phòng' }).getAttribute('aria-selected')).toBe('true');
   for (const tab of tabs)
     expect((tab.firstElementChild as HTMLElement).style.minHeight).toBe('60px');
   expect(tabs[0].parentElement?.style.paddingBottom).toBe('24px');
   expect(view.container.querySelector('main')?.getAttribute('data-edges')).toBe('top,left,right');
   expect(
-    (screen.getByRole('tab', { name: 'Thông báo' }).querySelector('span') as HTMLElement).style
+    (screen.getByRole('tab', { name: 'Phòng' }).querySelector('span') as HTMLElement).style
       .color,
   ).toBe('rgb(37, 99, 235)');
 });
 
 it.each([
   ['Owner', 'owner-home', ['Tổng quan', 'Cần xử lý', 'Vận hành', 'Tài khoản']],
-  ['Staff', 'staff-home', ['Trang chủ', 'Công việc', 'Thông báo', 'Cá nhân']],
+  ['Staff', 'staff-home', ['Trang chủ', 'Công việc', 'Phòng', 'Cá nhân']],
   ['Tenant', 'tenant-home', ['Trang chủ', 'Hóa đơn', 'Yêu cầu', 'Cá nhân']],
 ] as const)('keeps %s destinations in the shared Staff shell', (role, home, labels) => {
   state.roles = [role];
@@ -590,12 +590,10 @@ it.each([
     role === 'Tenant' ? 'rgb(23, 54, 84)' : 'rgb(25, 54, 83)',
   );
   fireEvent.click(screen.getByRole('button', { name: 'Thông báo' }));
-  if (role === 'Staff') expect(state.dismissTo).toHaveBeenLastCalledWith('/(tabs)/notifications');
-  else
-    expect(state.push).toHaveBeenLastCalledWith({
-      pathname: '/workspace/[screen]',
-      params: { screen: 'notifications' },
-    });
+  expect(state.push).toHaveBeenLastCalledWith({
+    pathname: '/workspace/[screen]',
+    params: { screen: 'notifications' },
+  });
   fireEvent.click(tabs[1]);
   expect(state.dismissTo).toHaveBeenLastCalledWith(
     `/(tabs)/${role === 'Owner' ? 'approvals' : role === 'Staff' ? 'work-orders' : 'invoice'}`,

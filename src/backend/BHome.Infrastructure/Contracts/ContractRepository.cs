@@ -7,11 +7,12 @@ using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorkspaceStore? setup = null) : IContractRepository
+internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<ContractRepository> logger, ISetupWorkspaceStore? setup = null) : IContractRepository
 {
     public async Task<ContractPage> ListAsync(ContractListScope scope, int page, int pageSize, Guid? locationId, ContractStatus? status, CancellationToken t)
     {
@@ -79,7 +80,13 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
         catch (DbUpdateConcurrencyException)
         { throw ContractException.Conflict("contract_concurrent_operation_retry"); }
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" or "23P01" or "23514" })
-        { throw ContractException.Conflict("contract_concurrent_or_duplicate_operation"); }
+        {
+            var postgres = (PostgresException)e.InnerException!;
+            logger.LogWarning("Contract database conflict with SQL state {SqlState} and constraint {Constraint}", postgres.SqlState, postgres.ConstraintName);
+            if (postgres.SqlState == "23505" && postgres.ConstraintName == "ux_resident_contact_email")
+                throw ContractException.Conflict("signing_email_already_in_use");
+            throw ContractException.Conflict("contract_concurrent_or_duplicate_operation");
+        }
         catch (PostgresException e) when (e.SqlState is "40001" or "40P01" or "23514" or "23505" or "23P01")
         { throw ContractException.Conflict("contract_concurrent_operation_retry"); }
     }
@@ -103,6 +110,13 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
         if (others.Any(c => c.Residents.Any(r => residentIds.Contains(r.ResidentId)))) return true;
         var dates = others.Select(c => c.StartDate < from ? from : c.StartDate).Append(from).Distinct();
         return dates.Any(date => residentIds.Length + others.Where(c => c.StartDate <= date && c.EndDate >= date).SelectMany(c => c.Residents).Select(r => r.ResidentId).Distinct().Count() > capacity);
+    }
+    public async Task<IReadOnlySet<Guid>> RoomsAwaitingMainOwnerSignatureAsync(Guid[] roomIds, Guid exceptContractId, CancellationToken t)
+    {
+        var pending = await db.Set<Contract>().AsNoTracking().Include(c => c.Signatures)
+            .Where(c => roomIds.Contains(c.RoomId) && c.Id != exceptContractId &&
+                c.Kind == ContractKind.Main && c.Status == ContractStatus.PendingSigning).ToArrayAsync(t);
+        return pending.Where(AnonymousContractSigningService.MainAwaitsOwnerSignature).Select(c => c.RoomId).ToHashSet();
     }
     public Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t) =>
         db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Status == ContractStatus.Active, t);

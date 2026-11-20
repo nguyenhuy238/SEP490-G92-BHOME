@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Text } from 'react-native-paper';
@@ -5,7 +6,7 @@ import {
   contractError,
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
-import { Action, Heading, ui } from '../../components/WorkspaceKit';
+import { Action, Heading } from '../../components/WorkspaceKit';
 import { Input } from '../../components/WorkflowControls';
 import { IdentityWizard } from '../onboarding/IdentityWizard';
 import { IdentityPersonCard } from '../onboarding/IdentityPersonCard';
@@ -226,11 +227,7 @@ export function HoldingNewTenant({
           Chưa xác định hồ sơ đã được lưu hay chưa. Kiểm tra danh sách người ở trước khi tạo lại.
         </Text>
       )}
-      {!!error && (
-        <Text accessibilityRole="alert" style={ui.red}>
-          {error}
-        </Text>
-      )}
+      {!!error && <ContractNotice message={error} />}
       {(open || (stage === 'identity' && role === 'Staff')) && residentId && (
         <IdentityWizard
           residentId={residentId}

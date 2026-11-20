@@ -5,6 +5,8 @@ public sealed record MainInitialCharge(string Code, string Name,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Amount);
 public sealed record MainInitialOrder(Guid ContractId, Guid LocationId, string SnapshotHash,
     decimal RequiredDeposit, decimal MonthlyRent, MainInitialCharge[] Charges, DateTimeOffset CreatedAt);
+public sealed record MainInitialMeteredRate(string Code, string Name, string Unit,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Rate);
 public sealed record MainInitialPaymentView(Guid ContractId, string Availability, string ContractStatus, bool SigningComplete,
     IReadOnlyList<MainInitialCharge> Charges,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal RequiredDeposit,
@@ -13,7 +15,10 @@ public sealed record MainInitialPaymentView(Guid ContractId, string Availability
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal VerifiedRentAndFees,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal OutstandingAmount,
     bool Paid, string? TransferReference, string? BankIdentifier, string? AccountNumber, string? AccountHolder,
-    string? QrImageDataUri, bool IsDevelopmentDemo);
+    string? QrImageDataUri, bool IsDevelopmentDemo,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal OutstandingDeposit,
+    [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal OutstandingRentAndFees,
+    IReadOnlyList<MainInitialMeteredRate> MeteredRates);
 
 public interface IMainInitialPayments
 {

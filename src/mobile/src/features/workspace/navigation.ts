@@ -104,7 +104,7 @@ export const tabs: Record<MobileRole, { screen: WorkspaceScreen; title: string; 
     Staff: [
       { screen: 'staff-home', title: 'Trang chủ', icon: 'home-outline' },
       { screen: 'work-orders', title: 'Công việc', icon: 'clipboard-check-outline' },
-      { screen: 'notifications', title: 'Thông báo', icon: 'bell-outline' },
+      { screen: 'rooms', title: 'Phòng', icon: 'door-open' },
       { screen: 'profile', title: 'Cá nhân', icon: 'account' },
     ],
     Tenant: [
@@ -152,7 +152,7 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
       ].includes(screen)
     )
       return 'work-orders';
-    if (['notifications', 'send-notification'].includes(screen)) return 'notifications';
+    if (screen === 'rooms') return 'rooms';
     return 'staff-home';
   }
   if (

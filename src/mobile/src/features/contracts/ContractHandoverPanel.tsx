@@ -1,4 +1,4 @@
-import { conciseMessage } from '../../lib/toast';
+import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
 import { router } from 'expo-router';
@@ -46,7 +46,7 @@ export function ContractHandoverPanel({
     [values, setValues] = useState<Record<string, string>>({}),
     [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useFeedbackState(),
+    [error, setError] = useFeedbackState('warning', false),
     [notice, setNotice] = useFeedbackState('success'),
     [safePhoto, setSafePhoto] = useState(false);
   const confirmationKey = `${contract.id}:${h?.version ?? ''}`;
@@ -142,7 +142,7 @@ export function ContractHandoverPanel({
         detail="Tenant xác nhận nội dung · Staff hoàn tất cùng phiên bản"
       />
       {query.loading && <Text>Đang tải bàn giao…</Text>}
-      {!!query.error && <Text style={ui.red}>{conciseMessage(query.error)}</Text>}
+      {!!query.error && <ContractNotice message={query.error} />}
       {!query.loading && !query.error && !h && <Text>Chưa có biên bản nhận phòng.</Text>}
       {h && !editing && (
         <>
@@ -427,7 +427,7 @@ export function ContractHandoverPanel({
       {h?.status === 'Confirmed' && (
         <ContractAssetChangesPanel api={api} contract={contract} role={role} />
       )}
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       {!!notice && <Text style={ui.green}>{notice}</Text>}
       <Action secondary disabled={query.loading || busy} onPress={query.reload}>
         Tải lại bàn giao

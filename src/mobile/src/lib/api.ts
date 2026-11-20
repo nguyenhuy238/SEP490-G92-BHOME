@@ -23,6 +23,8 @@ export interface Named {
   status?: string | null;
   capacity?: number | null;
   remainingCapacity?: number | null;
+  currentTenantLabels?: string[] | null;
+  waitingForOwnerSignature?: boolean | null;
 }
 export interface Resident {
   id: string;

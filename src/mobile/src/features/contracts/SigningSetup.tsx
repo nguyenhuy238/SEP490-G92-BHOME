@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
 import { Button, Checkbox, Text } from 'react-native-paper';
@@ -287,7 +288,7 @@ export function SignatureImageSection({
         chứng thư số CA.
       </Text>
       {view.loading && <Text>Đang tải ảnh chữ ký…</Text>}
-      {!!view.error && <Text style={ui.red}>{view.error}</Text>}
+      {!!view.error && <ContractNotice message={view.error} />}
       {view.value && !view.value.present && <Text>Bạn chưa có ảnh chữ ký.</Text>}
       {view.value?.present && !!uri.value && (
         <Image
@@ -337,7 +338,7 @@ export function SignatureImageSection({
           Xóa ảnh chữ ký
         </Button>
       )}
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       {!!notice && <Text>{notice}</Text>}
     </Box>
   );

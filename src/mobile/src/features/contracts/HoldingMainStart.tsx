@@ -1,7 +1,8 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useRef, useState } from 'react';
 import { Button, Text } from 'react-native-paper';
 import { ChoiceField } from '../../components/WorkflowControls';
-import { Box, ui } from '../../components/WorkspaceKit';
+import { Box } from '../../components/WorkspaceKit';
 import {
   contractError,
   formatContractMoney,
@@ -173,11 +174,7 @@ export function HoldingMainStart({
           <Text>Áp dụng từ tiền giữ chỗ của hợp đồng đã chọn.</Text>
         </>
       )}
-      {!!displayedError && (
-        <Text style={ui.red} accessibilityRole="alert">
-          {displayedError}
-        </Text>
-      )}
+      {!!displayedError && <ContractNotice message={displayedError} />}
       {!!displayedError && (
         <Button
           disabled={busy}

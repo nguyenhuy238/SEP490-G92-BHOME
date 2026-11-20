@@ -116,6 +116,7 @@ export function OwnerSigningPanel({
           <UploadStart signing={signing} contractId={c.id} onStarted={onChanged} />
         ) : (
           <OtpStart
+            key={c.id}
             signing={signing}
             contractId={c.id}
             onStarted={onChanged}
@@ -369,22 +370,23 @@ function OtpStart({
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const [key] = useState(() => crypto.randomUUID());
-  const [revision, setRevision] = useState(0);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   async function sign() {
-    if (busy || !agreed) return;
+    if (busy || !agreed || (!drawing && !imageFile)) return;
     setBusy(true);
     setError('');
     try {
       if (drawing) {
         await signing.drawImage(drawing);
-        setRevision((r) => r + 1);
+      } else if (imageFile) {
+        await signing.uploadImage(imageFile);
       }
       await signing.start(
         contractId,
         session ? 'OWNER_SESSION' : 'OTP',
         key,
         choice.placement,
-        choice.usePicture,
+        true,
       );
       onStarted();
     } catch (e) {
@@ -396,12 +398,12 @@ function OtpStart({
   return (
     <Stack spacing={1.5}>
       <SignaturePlacementPicker
-        key={revision}
         signing={signing}
         contractId={contractId}
         value={choice}
         onChange={setChoice}
         disabled={busy}
+        showSignatureImage={false}
       />
       <Typography variant="subtitle2">Chữ ký của bạn</Typography>
       <DrawPad onChange={setDrawing} disabled={busy} />
@@ -410,26 +412,20 @@ function OtpStart({
         <input
           hidden
           type="file"
+          aria-label="Ảnh chữ ký cho hợp đồng"
           accept="image/png"
           onChange={(e) => {
             const file = e.target.files?.[0];
             e.target.value = '';
             if (!file) return;
-            setBusy(true);
             setError('');
-            void signing
-              .uploadImage(file)
-              .then(() => {
-                setDrawing(null);
-                setRevision((r) => r + 1);
-              })
-              .catch((e) => setError(signingError(e)))
-              .finally(() => setBusy(false));
+            setDrawing(null);
+            setImageFile(file);
           }}
         />
       </Button>
       <Typography variant="caption" color="text.secondary">
-        Bỏ trống nếu muốn dùng ảnh chữ ký đã lưu.
+        {imageFile ? 'Đã chọn ảnh cho hợp đồng này.' : 'Vẽ chữ ký hoặc tải ảnh cho hợp đồng này.'}
       </Typography>
       <FormControlLabel
         control={
@@ -443,7 +439,11 @@ function OtpStart({
       />
       {!!error && <Alert severity="error">{error}</Alert>}
       <Box>
-        <Button variant="contained" disabled={busy || !agreed} onClick={() => void sign()}>
+        <Button
+          variant="contained"
+          disabled={busy || !agreed || (!drawing && !imageFile)}
+          onClick={() => void sign()}
+        >
           {busy ? (session ? 'Đang ký…' : 'Đang gửi mã…') : 'Ký hợp đồng'}
         </Button>
       </Box>

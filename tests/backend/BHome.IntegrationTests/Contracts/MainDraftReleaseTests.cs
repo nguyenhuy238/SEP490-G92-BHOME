@@ -61,14 +61,15 @@ public sealed partial class MainDraftApiTests
         using (var pdf = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(reviewedBytes))))
         { var text = ContractPdfRendererTests.Text(pdf); Assert.Contains("TÀI LIỆU KIỂM THỬ", text); Assert.DoesNotContain("BẢN NHÁP", text); }
         var input = new MainDraftReleaseInput(tenant.Id, draft.Version, review.Id, true); var key = Guid.NewGuid();
-        Assert.Equal(HttpStatusCode.Forbidden, (await Release(staff, draft.Id, input, key)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Release(stranger, draft.Id, input, key)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Release(owner, draft.Id, input with { HumanReviewed = false }, key)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, input with { ExpectedVersion = 0 }, key)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, input with { TenantUserId = outside.Id }, Guid.NewGuid())).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, input with { TenantUserId = null }, Guid.NewGuid())).StatusCode);
-        var releases = await Task.WhenAll(Release(owner, draft.Id, input, key), Release(owner, draft.Id, input, key));
+        var staffInput = input with { TenantUserId = null };
+        var releases = await Task.WhenAll(Release(staff, draft.Id, staffInput, key), Release(staff, draft.Id, staffInput, key));
         foreach (var response in releases) await Success(response);
-        Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, input with { TenantUserId = outside.Id }, key)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Release(staff, draft.Id, input with { TenantUserId = outside.Id }, key)).StatusCode);
         var contract = (await owner.GetFromJsonAsync<ContractView>($"/api/v1/contracts/{draft.Id}"))!;
         Assert.False(contract.OnboardingDraft); Assert.Equal("PendingSigning", contract.Status); Assert.Equal(tenant.Id, contract.TenantUserId);
         Assert.NotNull(contract.PriceLockedAt);

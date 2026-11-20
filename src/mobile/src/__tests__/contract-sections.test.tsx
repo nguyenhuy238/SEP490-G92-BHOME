@@ -2,7 +2,11 @@
 import React, { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { ContractSummary, Readiness } from '../../../../packages/client-core/src/contracts';
+import type {
+  ContractAction,
+  ContractSummary,
+  Readiness,
+} from '../../../../packages/client-core/src/contracts';
 import { contractActionSection, groupContracts } from '../features/contracts/contractSections';
 
 const state = vi.hoisted(() => ({
@@ -123,7 +127,18 @@ vi.mock('../features/contracts/ContractProgress', () => ({
   ContractProgress: () => <span>Contract progress</span>,
 }));
 vi.mock('../features/contracts/ContractActionForm', () => ({
-  ContractActionForm: () => <span>Action form</span>,
+  ContractActionForm: ({ action, onSuccess }: { action: ContractAction; onSuccess: () => void }) =>
+    action.operation === 'termination-requests' ? (
+      <>
+        <h2>{action.label}</h2>
+        {action.fields.map((field) => (
+          <label key={field.name}>{field.label}</label>
+        ))}
+        <button onClick={() => onSuccess()}>Gửi yêu cầu</button>
+      </>
+    ) : (
+      <span>Action form</span>
+    ),
   SigningCertificates: () => null,
 }));
 vi.mock('../features/contracts/ContractDraftForm', () => ({
@@ -230,6 +245,21 @@ beforeEach(() => {
   );
 });
 afterEach(cleanup);
+it('shows the early termination form directly in the Tenant lifecycle section', () => {
+  state.role = 'Tenant';
+  state.section = 'lifecycle';
+  render(<ContractScreen />);
+
+  expect(screen.getByRole('heading', { name: 'Yêu cầu chấm dứt trước hạn' })).toBeTruthy();
+  expect(screen.getByText('Ngày dự kiến trả phòng')).toBeTruthy();
+  expect(screen.getByText('Lý do')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Yêu cầu chấm dứt trước hạn' })).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }));
+  expect(screen.getByText('Yêu cầu đang chờ Owner duyệt.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Gửi yêu cầu' })).toBeNull();
+});
+
 it('removes the duplicate detail back button and registers previous-screen navigation on the topbar', () => {
   render(<ContractScreen />);
   expect(screen.queryByRole('button', { name: 'Về danh sách hợp đồng' })).toBeNull();
@@ -460,6 +490,21 @@ it('defaults to overview and switches sections without displaying all forms at o
   expect(screen.getByText('Workflow history')).toBeTruthy();
   expect(screen.queryByText('Handover panel')).toBeNull();
 });
+it.each(['PendingSigning', 'PendingActivation', 'Active'] as const)(
+  'hides the section tabs in the Staff guided Main contract flow in %s',
+  (status) => {
+    state.contract = { ...state.contract, status, initialPaymentRequired: true };
+    render(<ContractScreen />);
+    for (const name of [
+      'Tổng quan',
+      'Ký & kích hoạt',
+      'Bàn giao',
+      'Gia hạn & trả phòng',
+      'Lịch sử',
+    ])
+      expect(screen.queryByRole('button', { name })).toBeNull();
+  },
+);
 it('keeps Staff restrictions in the signing section', () => {
   state.contract.status = 'PendingSigning';
   render(<ContractScreen />);

@@ -1,4 +1,4 @@
-import { conciseMessage } from '../../lib/toast';
+import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Checkbox, Text } from 'react-native-paper';
@@ -16,7 +16,7 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { useSigningCertificates } from '../../../../../packages/client-core/src/useSigningCertificates';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
-import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
+import { Action, Box, Heading } from '../../components/WorkspaceKit';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
 import {
   signingClient,
@@ -43,11 +43,11 @@ export function ContractActionForm({
   contract: ContractView;
   keys: ReturnType<typeof mutationKeys>;
   evidenceIds: string[];
-  onCancel: () => void;
+  onCancel?: () => void;
   onSuccess: (id?: string) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
-  const [error, setError] = useFeedbackState(),
+  const [error, setError] = useFeedbackState('warning', false),
     [busy, setBusy] = useState(false),
     [checked, setChecked] = useState(false);
   const directory = useSigningCertificates(
@@ -213,7 +213,7 @@ export function ContractActionForm({
       {action.operation === 'signing' && !contract.isDevelopmentDemo && (
         <>
           {directory.loading && <Text>Đang tải chứng thư…</Text>}
-          {!!directory.error && <Text style={ui.red}>{conciseMessage(directory.error)}</Text>}
+          {!!directory.error && <ContractNotice message={directory.error} />}
           {!directory.loading &&
             !directory.error &&
             !directory.certificates.some(canUseCertificate) && (
@@ -263,13 +263,19 @@ export function ContractActionForm({
         status={checked ? 'checked' : 'unchecked'}
         onPress={() => setChecked((v) => !v)}
       />
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       <Action disabled={busy || !checked || signingBlocked} onPress={() => void submit()}>
-        {busy ? 'Đang xử lý…' : 'Xác nhận'}
+        {busy
+          ? 'Đang xử lý…'
+          : action.operation === 'termination-requests'
+            ? 'Gửi yêu cầu'
+            : 'Xác nhận'}
       </Action>
-      <Action secondary disabled={busy} onPress={onCancel}>
-        Đóng và tải lại
-      </Action>
+      {onCancel && (
+        <Action secondary disabled={busy} onPress={onCancel}>
+          Đóng và tải lại
+        </Action>
+      )}
     </Box>
   );
 }
@@ -278,7 +284,7 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
     [subscriber, setSubscriber] = useState(''),
     [serial, setSerial] = useState(''),
     [busy, setBusy] = useState(false),
-    [error, setError] = useFeedbackState(),
+    [error, setError] = useFeedbackState('warning', false),
     [notice, setNotice] = useFeedbackState('success');
   const lock = useRef(false);
   const directory = useSigningCertificates(api, open);
@@ -322,7 +328,7 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
             có yêu cầu.
           </Text>
           {directory.loading && <Text>Đang tải chứng thư…</Text>}
-          {!!directory.error && <Text style={ui.red}>{conciseMessage(directory.error)}</Text>}
+          {!!directory.error && <ContractNotice message={directory.error} />}
           {!directory.loading && !directory.error && !directory.certificates.length && (
             <Text>Bạn chưa khai báo chứng thư MySign.</Text>
           )}
@@ -368,7 +374,7 @@ export function SigningCertificates({ api }: { api: ContractClient }) {
             disabled={busy}
           />
           <Input label="Số serial (tùy chọn)" value={serial} onChange={setSerial} disabled={busy} />
-          {!!error && <Text style={ui.red}>{error}</Text>}
+          {!!error && <ContractNotice message={error} />}
           {!!notice && <Text>{notice}</Text>}
           <Action
             disabled={busy || !subscriber.trim() || subscriber.length > 100 || serial.length > 100}

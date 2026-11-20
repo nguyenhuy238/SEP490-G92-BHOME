@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useRef, useState } from 'react';
 import { Checkbox, Text } from 'react-native-paper';
 import {
@@ -11,7 +12,7 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { handoverQuantity } from '../../../../../packages/client-core/src/handoverForm';
 import { useContractAssetChanges } from '../../../../../packages/client-core/src/useContractAssetChanges';
-import { Action, Heading, ui } from '../../components/WorkspaceKit';
+import { Action, Heading } from '../../components/WorkspaceKit';
 import { Input, ChoiceField } from '../../components/WorkflowControls';
 import { CameraCapture } from '../../components/CameraCapture';
 import { randomUUID } from '../../lib/randomUUID';
@@ -78,7 +79,7 @@ export function ContractAssetChangesPanel({
         detail="Giữ nguyên biên bản nhận phòng; Tenant xác nhận riêng từng thay đổi."
       />
       {q.loading && <Text>Đang tải lịch sử thay đổi tài sản…</Text>}
-      {(q.error || error) && <Text style={ui.red}>{q.error || error}</Text>}
+      {(q.error || error) && <ContractNotice message={q.error || error} />}
       {!q.loading && !q.events.length && (
         <Text>Chưa có bàn giao bổ sung, thay thế hoặc thu hồi.</Text>
       )}

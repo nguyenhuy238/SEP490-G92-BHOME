@@ -15,6 +15,7 @@ import {
   type ContractView,
 } from '../../../../packages/client-core/src/contracts';
 import { ContractSigningStep } from '../features/contracts/ContractSigningStep';
+import { ContractNotice } from '../features/contracts/ContractNotice';
 
 vi.mock('react-native-paper', () => ({
   Text: ({
@@ -25,6 +26,15 @@ vi.mock('react-native-paper', () => ({
     accessibilityRole?: React.AriaRole;
   }) => <span role={accessibilityRole}>{children}</span>,
 }));
+
+it('shows a readable connection message without request diagnostics', () => {
+  render(
+    <ContractNotice message="Không kết nối được máy chủ. Kết quả thao tác chưa được xác nhận. Hãy tải lại trước khi thử lại. · GET /api/v1/contracts/123/internal-signing" />,
+  );
+  expect(screen.getByRole('alert').textContent).toBe(
+    'Không kết nối được máy chủ. Kết quả thao tác chưa được xác nhận. Hãy tải lại trước khi thử lại.',
+  );
+});
 vi.mock('../components/WorkflowControls', () => ({
   Input: ({
     label,
@@ -305,7 +315,8 @@ it.each(['sent', 'timeout', 'rejected'] as const)(
     });
     expect(screen.queryByText('Bước 6 · Ký hợp đồng')).toBeNull();
     expect(screen.queryByText(/OTP và chữ ký vẽ/)).toBeNull();
-    expect(screen.queryByText('Làm mới trạng thái ký')).toBeNull();
+    expect(screen.getByText('Làm mới trạng thái ký')).toBeTruthy();
+    expect(screen.queryByText('Chi tiết ký')).toBeNull();
     expect(screen.queryByText('Tiếp tục thanh toán')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Gửi lời mời ký qua email' }));
     await waitFor(() =>
@@ -431,9 +442,9 @@ it.each([
     );
     await waitFor(() => expect(request).toHaveBeenCalled());
     if (kind === 'Holding') {
-      await screen.findByText('Chi tiết ký');
+      await screen.findByText('Làm mới trạng thái ký');
+      expect(screen.queryByText('Chi tiết ký')).toBeNull();
       expect(screen.queryByText('Tiếp tục thanh toán')).toBeNull();
-      fireEvent.click(screen.getByText('Chi tiết ký'));
     } else
       expect((screen.getByText('Tiếp tục thanh toán') as HTMLButtonElement).disabled).toBe(true);
     latest = contract(kind, internal, true);

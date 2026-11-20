@@ -18,6 +18,7 @@ public sealed class EmailOptions
     // Capture is plaintext SMTP to a loopback Mailpit only, allowed by the host in Development/Testing.
     public string DeliveryMode { get; set; } = "Smtp";
     public string[] AllowedRecipients { get; set; } = [];
+    public bool AllowAnyDevelopmentSigningRecipient { get; set; }
 
     public bool LocalCapture => DeliveryMode == "Capture" && Host is "localhost" or "127.0.0.1" or "::1";
     public bool CaptureAllowed(string environment) => !Enabled || DeliveryMode != "Capture" ||
