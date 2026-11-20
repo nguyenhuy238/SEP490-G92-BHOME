@@ -232,6 +232,9 @@ it('retains edited values after a stale-version error', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
   const staleDialog = await screen.findByRole('dialog', { name: 'Dữ liệu đã thay đổi' });
   fireEvent.click(within(staleDialog).getByRole('button', { name: 'Hủy' }));
+  // MUI keeps the underlying editor aria-hidden during dialog exit animation.
+  // Wait for the portal to close before searching the editor's accessible UI.
+  await waitForElementToBeRemoved(staleDialog, { timeout: 5000 });
   expect(await screen.findByRole('button', { name: 'Tải hồ sơ mới' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled();
   expect(screen.getByLabelText(/Họ tên/)).toHaveValue('Updated synthetic');
