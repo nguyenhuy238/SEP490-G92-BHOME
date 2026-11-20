@@ -50,6 +50,11 @@ export function ContractWorkflowPanel({
   const [keys] = useState(() => mutationKeys(randomUUID)),
     lock = useRef(false);
   const privileged = ['Owner', 'Tenant'].includes(role);
+  const canPreview =
+    privileged ||
+    (role === 'Staff' &&
+      contract.kind === 'Main' &&
+      ['Draft', 'PendingSigning'].includes(contract.status));
   const documents = section !== 'history';
   const history = section !== 'documents';
   const holding = useWorkspaceQuery<HoldingDepositStatus>(
@@ -70,7 +75,7 @@ export function ContractWorkflowPanel({
       setError('');
       try {
         const [previews, deposits, audit] = await Promise.all([
-          privileged && documents ? api.previews(contract.id, c.signal) : Promise.resolve([]),
+          canPreview && documents ? api.previews(contract.id, c.signal) : Promise.resolve([]),
           privileged && documents && showDeposits
             ? api.deposits(contract.id, c.signal)
             : Promise.resolve([]),
@@ -85,7 +90,7 @@ export function ContractWorkflowPanel({
     }
     void load();
     return () => c.abort();
-  }, [api, contract, privileged, documents, history, showDeposits, revision, setError]);
+  }, [api, contract, privileged, canPreview, documents, history, showDeposits, revision, setError]);
   async function preview() {
     if (lock.current) return;
     lock.current = true;
@@ -188,10 +193,10 @@ export function ContractWorkflowPanel({
       )}
       {loading && <Text>Đang tải tài liệu và lịch sử…</Text>}
       {!!error && <Text style={ui.red}>{error}</Text>}
-      {documents && privileged && (
+      {documents && canPreview && (
         <Box>
-          <Heading title="Bản hợp đồng PDF" detail="Nội dung hợp đồng đã lưu" />
-          <Action disabled={busy} onPress={() => void preview()}>
+          <Heading title="Xem trước hợp đồng" detail="Bản PDF theo nội dung hợp đồng đã lưu" />
+          <Action disabled={loading || busy} onPress={() => void preview()}>
             {busy
               ? 'Đang tạo…'
               : data?.previews.length

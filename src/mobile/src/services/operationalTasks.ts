@@ -10,7 +10,7 @@ export interface TaskPage<T> {
 export interface OperationalTask {
   id: string;
   locationId: string;
-  kind: 'AdHoc' | 'MeterReading';
+  kind: 'AdHoc' | 'MeterReading' | 'MoveInInventory' | 'LocationAssetHandover';
   title: string;
   requirements: string;
   priority: 'Normal' | 'High';
@@ -91,6 +91,12 @@ export const taskActionLabels: Record<string, string> = {
   assign: 'Đồng bộ phân công',
   responsibility_changed: 'Cập nhật phân công',
   evidence_uploaded: 'Tải ảnh kết quả',
+  location_asset_inventory_created: 'Tạo kiểm kê tài sản toàn cơ sở',
+  location_asset_inventory_item_checked: 'Cập nhật xác nhận tài sản',
+  location_asset_handover_approved: 'Owner đã duyệt biên bản',
+  location_asset_handover_owner_signed: 'Owner đã ký xác nhận',
+  location_asset_handover_rework_requested: 'Owner yêu cầu kiểm tra lại',
+  location_asset_handover_completed: 'Hai bên hoàn tất ký bàn giao',
 };
 // UI affordances only. The server rechecks role, current assignment, version and state.
 export function availableTaskActions(
@@ -98,6 +104,12 @@ export function availableTaskActions(
   role: string,
   actorId: string,
 ): TaskAction[] {
+  if (task.kind === 'LocationAssetHandover') {
+    if (role !== 'Staff' || task.currentResponsibleStaffUserId !== actorId) return [];
+    if (task.status === 'Assigned') return ['start'];
+    if (task.status === 'InProgress') return ['progress', 'blockers', 'submit'];
+    return [];
+  }
   if (task.kind !== 'AdHoc') return [];
   if (role === 'Staff' && task.currentResponsibleStaffUserId === actorId) {
     if (task.status === 'Assigned') return ['start'];
@@ -154,11 +166,16 @@ export function operationalTasks(api: MobileApi) {
       command<OperationalTask>(root, { locationId: guid(locationId), work }, key),
     update: (id: string, version: number, work: TaskWork, reason: string, key: string) =>
       command<OperationalTask>(path(id), { version, work, reason }, key, 'PUT'),
-    upload: (id: string, bytes: Uint8Array<ArrayBuffer>, key: string) =>
+    upload: (
+      id: string,
+      bytes: Uint8Array<ArrayBuffer>,
+      key: string,
+      contentType: 'image/jpeg' | 'image/png' = 'image/jpeg',
+    ) =>
       api.request<TaskEvidence>(`${path(id)}/evidence`, {
         method: 'PUT',
         body: bytes,
-        headers: { 'Content-Type': 'image/jpeg', 'Idempotency-Key': guid(key) },
+        headers: { 'Content-Type': contentType, 'Idempotency-Key': guid(key) },
       }),
     notifications: (page: number, signal?: AbortSignal) =>
       api.request<TaskPage<TaskNotification>>(`${root}/notifications?page=${page}&pageSize=20`, {

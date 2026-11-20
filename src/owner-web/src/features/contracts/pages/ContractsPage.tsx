@@ -57,15 +57,26 @@ export default function ContractsPage() {
   );
 }
 function LiveContractsPage() {
-  const [deepParams] = useSearchParams();
+  const [deepParams, setDeepParams] = useSearchParams();
   const api = useContractsApi();
   const { session } = useAuth();
   const actorId = session?.userId ?? '';
   const [page, setPage] = useState(1),
     [status, setStatus] = useState(''),
     [location, setLocation] = useState(deepParams.get('locationId') ?? '');
-  const [selected, setSelected] = useState(deepParams.get('contractId') ?? ''),
-    [selectedLocation, setSelectedLocation] = useState('');
+  const selected = deepParams.get('contractId') ?? '';
+  const [selectedLocation, setSelectedLocation] = useState('');
+  function setSelected(id: string) {
+    setDeepParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (id) next.set('contractId', id);
+      else {
+        next.delete('contractId');
+        next.delete('section');
+      }
+      return next;
+    });
+  }
   const [mainDraft, setMainDraft] = useState(false);
   const [holding, setHolding] = useState(false);
   const [settings, setSettings] = useState(false);

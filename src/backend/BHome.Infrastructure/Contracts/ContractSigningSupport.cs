@@ -26,6 +26,21 @@ internal static class ContractSignatureSlots
 {
     public const string Owner = "BHomeSignatureSlotOwner";
     public const string Tenant = "BHomeSignatureSlotTenant";
+    internal static void RequireSeparatePartyBoxes(byte[] source, SignaturePlacementInput placement, bool owner, double? pictureRatio)
+    {
+        using var pdf = new PdfDocument(new PdfReader(new MemoryStream(source)));
+        if (!placement.IsValid || placement.Page > pdf.GetNumberOfPages())
+            throw ContractException.Invalid("invalid_signature_placement");
+        var other = Read(pdf, !owner);
+        if (other is null || other.Page != placement.Page) return;
+        var page = pdf.GetPage(placement.Page).GetPageSize();
+        var left = placement.X * page.GetWidth(); var top = placement.Y * page.GetHeight();
+        var width = placement.Width * page.GetWidth();
+        var height = pictureRatio is { } ratio ? width * ratio + 2 * 9.8 * 1.35 + 12 : 2 * 14 * 1.35 + 12;
+        var x = other.X * page.GetWidth(); var y = other.Y * page.GetHeight(); var otherWidth = other.Width * page.GetWidth();
+        if (left < x + otherWidth && left + width > x && top < y + 135 && top + height > y)
+            throw ContractException.Invalid("signature_placement_overlaps_other_party");
+    }
 
     public static SignaturePlacementInput? Read(byte[] pdf, bool owner)
     {

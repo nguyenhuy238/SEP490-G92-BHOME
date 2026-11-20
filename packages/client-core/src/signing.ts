@@ -205,6 +205,8 @@ const codes: Record<string, string> = {
   owner_session_signing_failed: 'Chưa ký được PDF. Hãy tải lại hợp đồng rồi thử lại.',
   signature_placement_invalid:
     'Ô chữ ký nằm ngoài trang hoặc quá nhỏ/quá lớn. Kéo ô vào trong trang rồi thử lại.',
+  signature_placement_overlaps_other_party:
+    'Ô chữ ký đang đè lên phần ký của bên còn lại. Hãy đưa về ô ký mặc định hoặc thu nhỏ chữ ký.',
   signing_page_invalid: 'Trang cần xem không có trong hợp đồng.',
   signature_name_invalid: 'Nhập họ tên từ 2 đến 60 ký tự, chỉ gồm chữ và khoảng trắng.',
   certificate_has_contract_history:

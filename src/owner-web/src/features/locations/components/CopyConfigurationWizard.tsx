@@ -77,7 +77,7 @@ interface GroupMeta {
 const AVAILABLE_GROUPS: Omit<GroupMeta, 'count'>[] = [
   {
     group: 'ROOM_TYPES',
-    title: 'Mẫu loại phòng & Tiện nghi',
+    title: 'Loại phòng mẫu & Tiện nghi',
     description: 'Diện tích chuẩn, sức chứa tối đa, đơn giá thuê cơ sở và danh mục tiện ích.',
     icon: Layers3,
   },
@@ -312,7 +312,7 @@ export function CopyConfigurationWizard({
               Công cụ sao chép cấu hình cơ sở (Copy Configuration Wizard)
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Tái sử dụng mẫu loại phòng, định mức trang bị, biểu phí điện nước và nội quy giữa các
+              Tái sử dụng loại phòng mẫu, định mức trang bị, biểu phí điện nước và nội quy giữa các
               cơ sở
             </Typography>
           </Box>

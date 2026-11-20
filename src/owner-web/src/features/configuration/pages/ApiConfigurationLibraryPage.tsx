@@ -56,10 +56,10 @@ const libraryMeta: Record<
   { title: string; subtitle: string; action: string; search: string }
 > = {
   'room-type-templates': {
-    title: 'Mẫu loại phòng',
+    title: 'Loại phòng mẫu',
     subtitle: '',
     action: 'Tạo mẫu',
-    search: 'Tìm kiếm mẫu loại phòng...',
+    search: 'Tìm kiếm loại phòng mẫu...',
   },
   'asset-catalog': {
     title: 'Tài sản mẫu',
@@ -88,7 +88,7 @@ const libraryMeta: Record<
 };
 
 const statusLabel = (status: SharedDocument['status']) =>
-  status === 'Draft' ? 'Bản nháp' : status === 'Published' ? 'Đã công bố' : 'Đã lưu trữ';
+  status === 'Draft' ? 'Bản nháp' : status === 'Published' ? 'Có thể áp dụng' : 'Ngừng áp dụng';
 
 const resourceColumns: Record<SharedResource, { label: string; numeric?: boolean }[]> = {
   'room-type-templates': [
@@ -255,11 +255,11 @@ function SharedLibrary({
     ],
     queryFn: async ({ signal }) => {
       if (resource !== 'asset-catalog' || !scope)
-        return api.list(resource, search, status, page + 1, 20, signal);
+        return api.list(resource, search, status, page + 1, 20, signal, true);
       const items: SharedDocument[] = [];
       let scanned = 0;
       for (let index = 1; ; index++) {
-        const result = await api.list(resource, search, status, index, 100, signal);
+        const result = await api.list(resource, search, status, index, 100, signal, true);
         scanned += result.items.length;
         items.push(
           ...result.items.filter(
@@ -357,8 +357,8 @@ function SharedLibrary({
           >
             <MenuItem value="">Tất cả trạng thái</MenuItem>
             <MenuItem value="Draft">Bản nháp</MenuItem>
-            <MenuItem value="Published">Đã công bố</MenuItem>
-            <MenuItem value="Archived">Đã lưu trữ</MenuItem>
+            <MenuItem value="Published">Có thể áp dụng</MenuItem>
+            <MenuItem value="Archived">Ngừng áp dụng</MenuItem>
           </TextField>
           {resource === 'asset-catalog' && (
             <TextField
@@ -514,37 +514,17 @@ function SharedLibrary({
                         </>
                       )}
                       <TableCell align="right" sx={{ verticalAlign: { xs: 'top', lg: 'middle' } }}>
-                        <Stack
-                          direction={{ xs: 'column', lg: 'row' }}
-                          spacing={0.5}
-                          sx={{
-                            justifyContent: 'flex-end',
-                            alignItems: { xs: 'flex-end', lg: 'center' },
-                          }}
+                        <IconButton
+                          size="small"
+                          aria-label={`Thao tác cho ${document.name}`}
+                          aria-haspopup="menu"
+                          aria-controls={selected?.id === document.id ? menuId : undefined}
+                          aria-expanded={selected?.id === document.id}
+                          onClick={(event) => setRowMenu({ anchor: event.currentTarget, document })}
+                          sx={{ minWidth: { xs: 44, lg: 32 }, minHeight: { xs: 44, lg: 32 } }}
                         >
-                          {document.status === 'Published' && resource !== 'asset-catalog' && (
-                            <Button
-                              size="small"
-                              onClick={() => setDetails(document.id)}
-                              sx={{ whiteSpace: 'nowrap', minHeight: { xs: 44, lg: 30 } }}
-                            >
-                              Áp dụng
-                            </Button>
-                          )}
-                          <IconButton
-                            size="small"
-                            aria-label={`Thao tác cho ${document.name}`}
-                            aria-haspopup="menu"
-                            aria-controls={selected?.id === document.id ? menuId : undefined}
-                            aria-expanded={selected?.id === document.id}
-                            onClick={(event) =>
-                              setRowMenu({ anchor: event.currentTarget, document })
-                            }
-                            sx={{ minWidth: { xs: 44, lg: 32 }, minHeight: { xs: 44, lg: 32 } }}
-                          >
-                            <MoreHorizontal size={20} />
-                          </IconButton>
-                        </Stack>
+                          <MoreHorizontal size={20} />
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   );
@@ -578,10 +558,7 @@ function SharedLibrary({
           },
         }}
       >
-        <MenuItem onClick={() => runMenuAction((document) => setDetails(document.id))}>
-          Xem chi tiết
-        </MenuItem>
-        {selected?.status === 'Draft' && (
+        {selected && selected.status !== 'Archived' && (
           <MenuItem
             disabled={action.busy}
             onClick={() => runMenuAction((document) => setEditor({ document }))}
@@ -596,27 +573,12 @@ function SharedLibrary({
               runMenuAction((document) =>
                 action.run(
                   () => api.publish(resource, document.id, document.version),
-                  'Đã công bố phiên bản trên máy chủ.',
+                  'Mẫu đã có thể áp dụng.',
                 ),
               )
             }
           >
-            Công bố
-          </MenuItem>
-        )}
-        {selected?.status === 'Published' && (
-          <MenuItem
-            disabled={action.busy}
-            onClick={() =>
-              runMenuAction((document) =>
-                action.run(
-                  () => api.edition(resource, document.id, document.version),
-                  'Đã tạo bản nháp phiên bản mới.',
-                ),
-              )
-            }
-          >
-            Phiên bản mới
+            Cho phép áp dụng
           </MenuItem>
         )}
         {selected && selected.status !== 'Archived' && (
@@ -634,7 +596,7 @@ function SharedLibrary({
         )}
         {selected && selected.status !== 'Archived' && (
           <MenuItem disabled={action.busy} onClick={() => runMenuAction(setArchive)}>
-            Lưu trữ
+            Ngừng áp dụng
           </MenuItem>
         )}
         {selected?.status === 'Archived' && (
@@ -643,13 +605,13 @@ function SharedLibrary({
             onClick={() =>
               runMenuAction((document) =>
                 action.run(
-                  () => api.restore(resource, document.id, document.version),
-                  'Đã khôi phục mẫu thành bản nháp để tiếp tục chỉnh sửa.',
+                  () => api.restore(resource, document.id, document.version, true),
+                  'Mẫu đã có thể áp dụng trở lại.',
                 ),
               )
             }
           >
-            Hoàn tác lưu trữ
+            Áp dụng lại
           </MenuItem>
         )}
       </Menu>
@@ -665,9 +627,12 @@ function SharedLibrary({
           close={() => setEditor(null)}
           save={(input) =>
             action.run(async () => {
-              await api.save(resource, editor.document?.id ?? null, input);
+              await api.save(resource, editor.document?.id ?? null, {
+                ...input,
+                publishImmediately: true,
+              });
               setEditor(null);
-            }, 'Đã lưu bản nháp trên máy chủ.')
+            }, 'Đã lưu mẫu. Có thể sử dụng ngay.')
           }
         />
       )}
@@ -676,18 +641,19 @@ function SharedLibrary({
       )}
       <ConfirmDialog
         open={!!archive}
-        title="Lưu trữ mẫu?"
+        title="Ngừng áp dụng mẫu?"
         busy={action.busy}
         onClose={() => setArchive(null)}
         onConfirm={() => {
           if (archive)
             action.run(async () => {
-              await api.archive(resource, archive.id, archive.version);
+              await api.archive(resource, archive.id, archive.version, true);
               setArchive(null);
-            }, 'Đã lưu trữ mẫu.');
+            }, 'Mẫu đã ngừng áp dụng.');
         }}
       >
-        Phiên bản đã áp dụng tại cơ sở và lịch sử vẫn được giữ lại.
+        Mẫu sẽ không còn được chọn để áp dụng mới. Cấu hình đã áp dụng tại cơ sở và lịch sử vẫn được
+        giữ lại.
       </ConfirmDialog>
       <Dialog
         open={!!duplicate}
@@ -701,7 +667,7 @@ function SharedLibrary({
             event.preventDefault();
             if (duplicate)
               action.run(async () => {
-                await api.duplicate(resource, duplicate.id, duplicateName, duplicate.version);
+                await api.duplicate(resource, duplicate.id, duplicateName, duplicate.version, true);
                 setDuplicate(null);
               }, 'Đã lưu bản sao trên máy chủ.');
           }}

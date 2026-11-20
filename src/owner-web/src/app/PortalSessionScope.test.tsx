@@ -1,5 +1,5 @@
-import { cleanup, renderHook } from '@testing-library/react';
-import { useQueryClient } from '@tanstack/react-query';
+import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { onlineManager, useQuery, useQueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PortalProvider } from './PortalProvider';
 const auth = vi.hoisted(() => ({
@@ -7,7 +7,10 @@ const auth = vi.hoisted(() => ({
 }));
 vi.mock('../../../../packages/client-core/src/auth', () => ({ useAuth: () => auth }));
 vi.mock('../services/config', () => ({ isMockMode: false, apiBaseUrl: '' }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  onlineManager.setOnline(true);
+});
 it('drops cached business data when the session or effective roles change', () => {
   const { result, rerender } = renderHook(() => useQueryClient(), {
     wrapper: ({ children }) => <PortalProvider>{children}</PortalProvider>,
@@ -19,4 +22,20 @@ it('drops cached business data when the session or effective roles change', () =
   expect(result.current.getQueryData(['private'])).toBeUndefined();
   expect(result.current).not.toBe(first);
   expect(first.getQueryData(['private'])).toBeUndefined();
+});
+
+it('does not pause local API reads when Windows reports the browser offline', async () => {
+  onlineManager.setOnline(false);
+  const request = vi.fn().mockResolvedValue({ items: [{ id: 'location-1' }], totalCount: 1 });
+  const { result } = renderHook(
+    () =>
+      useQuery({
+        queryKey: ['local-location-list-offline-regression'],
+        queryFn: request,
+      }),
+    { wrapper: ({ children }) => <PortalProvider>{children}</PortalProvider> },
+  );
+  await waitFor(() => expect(result.current.data?.totalCount).toBe(1));
+  expect(result.current.fetchStatus).toBe('idle');
+  expect(request).toHaveBeenCalledTimes(1);
 });

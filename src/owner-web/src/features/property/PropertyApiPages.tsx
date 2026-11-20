@@ -76,7 +76,7 @@ export function PropertyApiPage({
   kind: Kind;
   createInitially?: boolean;
   embedded?: boolean;
-  onAssetInventory?: () => void;
+  onAssetInventory?: (scope?: 'rooms' | 'common') => void;
 }) {
   const api = usePropertySetupApi();
   const setup = locationSetupClient(api.request);
@@ -661,26 +661,32 @@ export function PropertyApiPage({
                   search || statusFilter || (!groupedAssets && assetScope)
                     ? 'Không có dữ liệu phù hợp. Thử đổi từ khóa hoặc trạng thái.'
                     : groupedAssets
-                      ? 'Vị trí này chưa có tài sản thực tế.'
+                      ? 'Vị trí này chưa có tài sản thực tế được ghi nhận sau kiểm kê.'
                       : kind === 'assets'
-                        ? 'Chưa có tài sản thực tế. Ghi nhận thiết bị đã có hoặc kiểm kê phòng theo cấu hình.'
+                        ? 'Chưa có tài sản thực tế. Chọn kiểm kê theo cấu hình để xác nhận tài sản.'
                         : kind === 'rooms'
                           ? 'Chưa có phòng. Thêm phòng đầu tiên để bắt đầu quản lý.'
                           : 'Chưa có bản ghi. Thêm bản ghi đầu tiên để bắt đầu quản lý.'
                 }
               />
-              {canManage && !search && !statusFilter && !assetScope && (
+              {canManage && kind !== 'assets' && !search && !statusFilter && !assetScope && (
                 <Stack
                   direction="row"
                   sx={{ mt: 2, gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}
                 >
                   <Button variant="outlined" onClick={() => edit(null)}>
-                    {kind === 'assets' ? 'Ghi nhận tài sản' : 'Thêm mới'}
+                    Thêm mới
                   </Button>
-                  {kind === 'assets' && onAssetInventory && (
-                    <Button onClick={onAssetInventory}>Kiểm kê phòng</Button>
-                  )}
                 </Stack>
+              )}
+              {canManage && kind === 'assets' && onAssetInventory && !search && !statusFilter && (
+                <Button
+                  sx={{ mt: 2 }}
+                  variant="contained"
+                  onClick={() => onAssetInventory(assetScope === 'common' ? 'common' : 'rooms')}
+                >
+                  {assetScope === 'common' ? 'Kiểm kê tài sản chung' : 'Kiểm kê tài sản theo phòng'}
+                </Button>
               )}
             </Box>
           ) : kind === 'rooms' && view === 'cards' ? (

@@ -25,11 +25,14 @@ internal sealed partial class SharedConfigurationStore(Compact24DbContext db, Co
         var value = await sql.Scalar<string>("SELECT task_data->'document' FROM operational_tasks WHERE id=@id AND task_type='COMMAND' AND task_data->>'recordType'='SharedConfiguration' AND task_data->'document'->>'resource'=@resource", t, ("id", id), ("resource", resource));
         return value is null ? null : JsonSerializer.Deserialize<SharedDocument>(value, Json);
     }
-    public async Task<SharedPage> ListAsync(string resource, string search, string status, int page, int pageSize, CancellationToken t)
+    public async Task<SharedPage> ListAsync(string resource, string search, string status, int page, int pageSize, CancellationToken t, bool latestOnly = false)
     {
-        const string filter = " FROM operational_tasks WHERE task_type='COMMAND' AND task_data->>'recordType'='SharedConfiguration' AND task_data->'document'->>'resource'=@resource AND (@status='' OR status=@status) AND position(lower(@search) in lower(task_data->'document'->>'name'))>0";
+        const string documents = "SELECT id,status,task_data->'document' AS document FROM operational_tasks WHERE task_type='COMMAND' AND task_data->>'recordType'='SharedConfiguration' AND task_data->'document'->>'resource'=@resource";
+        // Pick a representative before searching: old editions must not reappear when the current name changes.
+        var source = latestOnly ? "SELECT DISTINCT ON (document->>'familyId') id,status,document FROM (" + documents + ") d WHERE (@status IN ('','Archived') OR status=@status) ORDER BY document->>'familyId', CASE WHEN status='Archived' THEN 1 ELSE 0 END, (document->>'edition')::integer DESC,id" : documents;
+        var filter = " FROM (" + source + ") d WHERE (@status='' OR status=@status) AND position(lower(@search) in lower(document->>'name'))>0";
         var total = await sql.Scalar<long>("SELECT count(*)" + filter, t, ("resource", resource), ("search", search), ("status", status));
-        var items = await ReadAsync("SELECT task_data->'document'" + filter + " ORDER BY task_data->'document'->>'name',id LIMIT @limit OFFSET @offset", t,
+        var items = await ReadAsync("SELECT document" + filter + " ORDER BY document->>'name',id LIMIT @limit OFFSET @offset", t,
             ("resource", resource), ("search", search), ("status", status), ("limit", pageSize), ("offset", (page - 1) * pageSize));
         return new(items, total, page, pageSize);
     }
@@ -40,7 +43,20 @@ internal sealed partial class SharedConfigurationStore(Compact24DbContext db, Co
         await using var cmd = await sql.Command(query, t, args); await using var reader = await cmd.ExecuteReaderAsync(t); var items = new List<SharedDocument>();
         while (await reader.ReadAsync(t)) items.Add(JsonSerializer.Deserialize<SharedDocument>(reader.GetString(0), Json)!); return items;
     }
-    public Task<bool> NameExistsAsync(string resource, string name, Guid family, CancellationToken t) => sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE task_type='COMMAND' AND task_data->>'recordType'='SharedConfiguration' AND task_data->'document'->>'resource'=@resource AND status<>'Archived' AND lower(trim(task_data->'document'->>'name'))=lower(@name) AND task_data->'document'->>'familyId'<>@family)", t, ("resource", resource), ("name", name), ("family", family.ToString()));
+    public Task<bool> NameExistsAsync(string resource, string name, Guid family, CancellationToken t, bool includeArchived = true) => sql.Scalar<bool>("SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE task_type='COMMAND' AND task_data->>'recordType'='SharedConfiguration' AND task_data->'document'->>'resource'=@resource AND (@includeArchived OR status<>'Archived') AND lower(trim(regexp_replace(normalize(task_data->'document'->>'name', NFC), '[[:space:]]+', ' ', 'g')))=lower(trim(regexp_replace(normalize(@name, NFC), '[[:space:]]+', ' ', 'g'))) AND task_data->'document'->>'familyId'<>@family)", t, ("resource", resource), ("name", name), ("family", family.ToString()), ("includeArchived", includeArchived));
+    public Task<bool> IsUsedAsync(Guid id, string resource, CancellationToken t) => sql.Scalar<bool>("""
+        SELECT EXISTS(SELECT 1 FROM operational_tasks WHERE (
+          (task_type='COMMAND' AND task_data->>'recordType'='SharedConfigurationOperation' AND (
+            (task_data->'operation'->>'sourceId'=@id AND task_data->'operation'->>'resource'=@resource) OR
+            EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(task_data->'operation'->'sourceReferences')='array' THEN task_data->'operation'->'sourceReferences' ELSE '[]'::jsonb END) ref WHERE ref->>'id'=@id AND ref->>'kind'=@resource))) OR
+          (@resource='room-type-templates' AND task_data->>'recordType'='SetupRoomDefaults' AND task_data->'document'->'data'->>'sourceId'=@id) OR
+          (@resource='asset-catalog' AND task_type='COMMAND' AND task_data->>'recordType'='SharedConfiguration' AND status IN ('Published','Archived') AND EXISTS(
+            SELECT 1 FROM jsonb_array_elements(CASE
+              WHEN jsonb_typeof(task_data->'document'->'data'->'items')='array' THEN task_data->'document'->'data'->'items'
+              WHEN jsonb_typeof(task_data->'document'->'data'->'assetItems')='array' THEN task_data->'document'->'data'->'assetItems'
+              ELSE '[]'::jsonb END) item WHERE item->>'catalogId'=@id))
+        ))
+        """, t, ("id", id.ToString()), ("resource", resource));
     public async Task SaveAsync(SharedDocument document, int expected, CancellationToken t)
     {
         var payload = JsonSerializer.Serialize(new { recordType = "SharedConfiguration", document }, Json);

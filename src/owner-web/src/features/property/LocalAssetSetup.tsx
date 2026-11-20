@@ -32,7 +32,7 @@ import type {
   LocalAssetTemplate,
   SetupDocument,
 } from '../../../../../packages/client-core/src/propertySetup';
-import { ErrorState, LoadingState } from '../../components/common/PortalUI';
+import { ConfirmDialog, ErrorState, LoadingState } from '../../components/common/PortalUI';
 import { usePropertySetupApi } from './usePropertySetupApi';
 import { useSetupAction } from './useSetupAction';
 import { SetupEvidenceField } from './SetupEvidenceField';
@@ -62,6 +62,8 @@ export function LocalAssetSetup({
     undefined,
   );
   const [editingType, setEditingType] = useState<SetupDocument<LocalRoomDefaultsData> | null>(null);
+  const [copyFrom, setCopyFrom] = useState<SetupDocument<LocalAssetTemplate> | null>(null);
+  const [historyFamily, setHistoryFamily] = useState<string | null>(null);
   const [roomId, setRoomId] = useState(initialRoomId);
   const [run, setRun] = useState<Pick<AssetSyncRun, 'rooms'> | null>(null);
   const action = useSetupAction();
@@ -78,6 +80,16 @@ export function LocalAssetSetup({
     enabled: owner && showTemplates,
   });
   const linkedIds = new Set(defaults.data?.map((item) => item.data.assetTemplateId));
+  const standalone = (templates.data ?? []).filter(
+    (item) => !linkedIds.has(item.id) && !item.data.scoped,
+  );
+  const latestTemplates = new Map<string, SetupDocument<LocalAssetTemplate>>();
+  for (const template of standalone) {
+    const key = template.data.familyId ?? template.id;
+    const previous = latestTemplates.get(key);
+    if (!previous || (template.data.edition ?? 1) > (previous.data.edition ?? 1))
+      latestTemplates.set(key, template);
+  }
   const rooms = useQuery({
     queryKey: ['property-setup', 'room-options', session?.userId, locationId],
     queryFn: ({ signal }) => api.roomOptions(locationId, signal),
@@ -104,7 +116,10 @@ export function LocalAssetSetup({
             variant="contained"
             sx={{ alignSelf: 'flex-start' }}
             disabled={action.busy}
-            onClick={() => setEditing(null)}
+            onClick={() => {
+              setCopyFrom(null);
+              setEditing(null);
+            }}
           >
             Tạo danh sách tài sản phòng
           </Button>
@@ -245,138 +260,148 @@ export function LocalAssetSetup({
                   Chưa có bộ mẫu. Tạo bộ mẫu để quy định các thiết bị cần trang bị cho phòng.
                 </Alert>
               )}
+              {defaults.isSuccess && latestTemplates.size > 0 && (
+                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  Bộ mẫu khác
+                </Typography>
+              )}
               {defaults.isSuccess &&
-                templates.data.some((item) => !linkedIds.has(item.id) && !item.data.scoped) && (
-                  <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    Bộ mẫu khác
-                  </Typography>
-                )}
-              {defaults.isSuccess &&
-                templates.data
-                  ?.filter((template) => !linkedIds.has(template.id) && !template.data.scoped)
-                  .map((template) => (
-                    <Paper key={template.id} variant="outlined" sx={{ p: 1.5 }}>
-                      <Stack spacing={1}>
-                        <Stack
-                          direction="row"
-                          sx={{
-                            flexWrap: 'wrap',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            gap: 1,
+                [...latestTemplates.values()].map((template) => (
+                  <Paper key={template.id} variant="outlined" sx={{ p: 1.5 }}>
+                    <Stack spacing={1}>
+                      <Stack
+                        direction="row"
+                        sx={{
+                          flexWrap: 'wrap',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 1,
+                        }}
+                      >
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                          {template.data.name}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          label={
+                            template.status === 'Draft'
+                              ? 'Chưa sử dụng'
+                              : `Phiên bản ${template.data.edition ?? 1}`
+                          }
+                          color={template.status === 'Draft' ? 'default' : 'success'}
+                        />
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary">
+                        {template.data.items.length} loại thiết bị
+                      </Typography>
+                      <TableContainer sx={{ maxWidth: '100%', maxHeight: 200, overflow: 'auto' }}>
+                        <Table
+                          size="small"
+                          aria-label={`Định mức ${template.data.name}`}
+                          sx={{ minWidth: 420 }}
+                        >
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Thiết bị</TableCell>
+                              <TableCell>Đơn vị</TableCell>
+                              <TableCell align="right">Định mức</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {template.data.items.map((item) => (
+                              <TableRow key={item.id}>
+                                <TableCell>{item.name}</TableCell>
+                                <TableCell>{item.unit || 'Chưa ghi nhận'}</TableCell>
+                                <TableCell align="right">{item.quantity}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                        <Button
+                          disabled={action.busy}
+                          variant="outlined"
+                          onClick={() => {
+                            setCopyFrom(null);
+                            setEditing(template);
                           }}
                         >
-                          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                            {template.data.name}
-                          </Typography>
-                          <Chip
-                            size="small"
-                            label={template.status === 'Draft' ? 'Bản nháp' : 'Đã công bố'}
-                            color={template.status === 'Draft' ? 'default' : 'success'}
-                          />
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                          {template.data.items.length} loại thiết bị
-                        </Typography>
-                        <TableContainer sx={{ maxWidth: '100%', maxHeight: 200, overflow: 'auto' }}>
-                          <Table
-                            size="small"
-                            aria-label={`Định mức ${template.data.name}`}
-                            sx={{ minWidth: 420 }}
-                          >
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Thiết bị</TableCell>
-                                <TableCell>Đơn vị</TableCell>
-                                <TableCell align="right">Định mức</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {template.data.items.map((item) => (
-                                <TableRow key={item.id}>
-                                  <TableCell>{item.name}</TableCell>
-                                  <TableCell>{item.unit || 'Chưa ghi nhận'}</TableCell>
-                                  <TableCell align="right">{item.quantity}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                        {template.status === 'Draft' && (
-                          <Typography variant="caption" color="text.secondary">
-                            Công bố chỉ cập nhật định mức; tài sản thực tế được ghi nhận qua kiểm
-                            kê.
-                          </Typography>
-                        )}
-                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-                          {template.status === 'Draft' ? (
-                            <>
-                              <Button
-                                disabled={action.busy}
-                                variant="outlined"
-                                onClick={() => setEditing(template)}
-                              >
-                                Sửa bản nháp
-                              </Button>
-                              <Button
-                                disabled={action.busy}
-                                variant="contained"
-                                onClick={() =>
-                                  action.run(
-                                    async () =>
-                                      setRun(
-                                        await api.publishTemplate(template.id, template.version),
-                                      ),
-                                    'Máy chủ đã công bố bộ mẫu; kiểm tra kết quả đồng bộ từng phòng.',
-                                  )
-                                }
-                              >
-                                Công bố bộ mẫu
-                              </Button>
-                            </>
-                          ) : (
-                            <Button
-                              disabled={action.busy}
-                              variant="outlined"
-                              onClick={() =>
-                                action.run(async () => setRun(await api.syncTemplate(template.id)))
-                              }
-                            >
-                              Đồng bộ lại
-                            </Button>
-                          )}
+                          Chỉnh sửa
+                        </Button>
+                        {template.status !== 'Draft' && (
                           <Button
                             disabled={action.busy}
+                            variant="outlined"
                             onClick={() =>
-                              action.run(
-                                async () => setEditing(await api.cloneTemplate(template.id)),
-                                'Máy chủ đã tạo bản sao nháp.',
-                              )
+                              action.run(async () => setRun(await api.syncTemplate(template.id)))
                             }
                           >
-                            Nhân bản
+                            Đồng bộ lại
                           </Button>
-                        </Stack>
+                        )}
+                        <Button
+                          disabled={action.busy}
+                          onClick={() => {
+                            setCopyFrom(template);
+                            setEditing(null);
+                          }}
+                        >
+                          Nhân bản
+                        </Button>
+                        <Button
+                          onClick={() => setHistoryFamily(template.data.familyId ?? template.id)}
+                        >
+                          Lịch sử phiên bản
+                        </Button>
                       </Stack>
-                    </Paper>
-                  ))}
+                    </Stack>
+                  </Paper>
+                ))}
             </>
           )}
         </>
       )}
       <Dialog open={editing !== undefined} fullWidth maxWidth="md">
-        <DialogTitle>
-          {editing ? 'Chỉnh sửa bộ mẫu nháp' : 'Tạo danh sách tài sản phòng'}
-        </DialogTitle>
+        <DialogTitle>{editing ? 'Chỉnh sửa bộ mẫu' : 'Tạo danh sách tài sản phòng'}</DialogTitle>
         <DialogContent>
           {editing !== undefined && (
             <LocalTemplateEditor
               key={editing?.id ?? 'new'}
               locationId={locationId}
               value={editing}
+              copyFrom={copyFrom}
               onClose={() => setEditing(undefined)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={historyFamily !== null}
+        fullWidth
+        maxWidth="sm"
+        onClose={() => setHistoryFamily(null)}
+      >
+        <DialogTitle>Lịch sử phiên bản</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2}>
+            {standalone
+              .filter((row) => (row.data.familyId ?? row.id) === historyFamily)
+              .sort((a, b) => (b.data.edition ?? 1) - (a.data.edition ?? 1))
+              .map((row) => (
+                <Box key={row.id} sx={{ borderBottom: '1px solid', borderColor: 'divider', pb: 1 }}>
+                  <Typography sx={{ fontWeight: 700 }}>
+                    Phiên bản {row.data.edition ?? 1} · {row.data.name}
+                  </Typography>
+                  {row.data.items.map((item) => (
+                    <Typography key={item.id} variant="body2">
+                      {item.name} × {item.quantity} {item.unit ?? ''}
+                    </Typography>
+                  ))}
+                </Box>
+              ))}
+            <Button onClick={() => setHistoryFamily(null)}>Đóng</Button>
+          </Stack>
         </DialogContent>
       </Dialog>
       {editingType && (
@@ -499,6 +524,7 @@ function RoomTypeAssetEditor({
   const action = useSetupAction();
   const [items, setItems] = useState<LocalAssetItem[]>(template?.data.items ?? []);
   const [apply, setApply] = useState(false);
+  const [confirmApply, setConfirmApply] = useState(false);
   const [reason, setReason] = useState('');
   const valid =
     !!reason.trim() &&
@@ -510,78 +536,106 @@ function RoomTypeAssetEditor({
         item.quantity >= 1 &&
         item.quantity <= 10000,
     );
+  function save() {
+    if (!valid || action.busy) return;
+    action.run(async () => {
+      const result = await api.saveRoomDefaultsAssetRequirements(locationId, value.id, {
+        expectedVersion: value.version,
+        items,
+        applyToExistingRooms: apply,
+        reason: reason.trim(),
+      });
+      setConfirmApply(false);
+      onSaved(result);
+    });
+  }
   return (
-    <Stack
-      component="form"
-      spacing={2}
-      sx={{ pt: 1 }}
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!valid) return;
-        action.run(async () => {
-          const result = await api.saveRoomDefaultsAssetRequirements(locationId, value.id, {
-            expectedVersion: value.version,
-            items,
-            applyToExistingRooms: apply,
-            reason: reason.trim(),
-          });
-          onSaved(result);
-        });
-      }}
-    >
-      <AssetRequirementFields items={items} onChange={setItems} disabled={action.busy} />
-      <Divider />
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={apply}
-            onChange={(event) => setApply(event.target.checked)}
-            disabled={action.busy}
-          />
-        }
-        label="Áp dụng cho các phòng hiện có thuộc loại này"
-      />
-      <Typography variant="body2" color="text.secondary">
-        {apply
-          ? 'Chỉ cập nhật phòng cùng loại đủ điều kiện, chưa có hợp đồng. Giữ nguyên tài sản đã kiểm kê.'
-          : 'Cấu hình mới dùng cho phòng tạo sau này.'}
-      </Typography>
-      <TextField
-        label="Lý do thay đổi"
-        required
-        multiline
-        minRows={2}
-        value={reason}
-        onChange={(event) => setReason(event.target.value)}
-        disabled={action.busy}
-      />
-      {action.error && <Alert severity="error">{action.error}</Alert>}
-      <ConflictReload error={action.rawError} reload={reload} />
-      <Stack direction="row" sx={{ justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
-        <Button disabled={action.busy} onClick={onClose}>
-          Hủy
-        </Button>
-        <Button disabled={action.busy || !valid} type="submit" variant="contained">
-          {apply ? 'Lưu và áp dụng' : 'Lưu tài sản phòng'}
-        </Button>
+    <>
+      <Stack
+        component="form"
+        spacing={2}
+        sx={{ pt: 1 }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!valid || action.busy) return;
+          if (apply) setConfirmApply(true);
+          else save();
+        }}
+      >
+        <AssetRequirementFields items={items} onChange={setItems} disabled={action.busy} />
+        <Divider />
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={apply}
+              onChange={(event) => setApply(event.target.checked)}
+              disabled={action.busy}
+            />
+          }
+          label="Áp dụng cho các phòng hiện có đủ điều kiện"
+        />
+        <Typography variant="body2" color="text.secondary">
+          {apply
+            ? 'Chỉ cập nhật phòng cùng loại không bị ràng buộc bởi hợp đồng hoặc nghĩa vụ khác. Giữ nguyên tài sản đã kiểm kê.'
+            : 'Cấu hình mới dùng cho phòng tạo sau này.'}
+        </Typography>
+        <TextField
+          label="Lý do thay đổi"
+          required
+          multiline
+          minRows={2}
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          disabled={action.busy}
+        />
+        {action.error && <Alert severity="error">{action.error}</Alert>}
+        <ConflictReload error={action.rawError} reload={reload} />
+        <Stack direction="row" sx={{ justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
+          <Button disabled={action.busy} onClick={onClose}>
+            Hủy
+          </Button>
+          <Button disabled={action.busy || !valid} type="submit" variant="contained">
+            {apply ? 'Lưu và áp dụng' : 'Lưu tài sản phòng'}
+          </Button>
+        </Stack>
       </Stack>
-    </Stack>
+      <ConfirmDialog
+        open={confirmApply}
+        title="Áp dụng định mức mới?"
+        busy={action.busy}
+        error={action.error || undefined}
+        onClose={() => setConfirmApply(false)}
+        onConfirm={save}
+      >
+        <Typography variant="body2">
+          Áp dụng định mức mới cho các phòng hiện có thuộc loại {value.data.name} đủ điều kiện.
+          Phòng bị ràng buộc bởi hợp đồng hoặc nghĩa vụ khác sẽ giữ nguyên. Không tự động thêm hoặc
+          xóa tài sản thực tế.
+        </Typography>
+      </ConfirmDialog>
+    </>
   );
 }
 
 function LocalTemplateEditor({
   locationId,
   value,
+  copyFrom,
   onClose,
 }: {
   locationId: string;
   value: SetupDocument<LocalAssetTemplate> | null;
+  copyFrom: SetupDocument<LocalAssetTemplate> | null;
   onClose: () => void;
 }) {
   const api = usePropertySetupApi();
   const action = useSetupAction();
-  const [name, setName] = useState(value?.data.name ?? '');
-  const [items, setItems] = useState<LocalAssetItem[]>(value?.data.items ?? []);
+  const [name, setName] = useState(
+    value?.data.name ?? (copyFrom ? `${copyFrom.data.name} - Bản sao` : ''),
+  );
+  const [items, setItems] = useState<LocalAssetItem[]>(
+    value?.data.items ?? copyFrom?.data.items ?? [],
+  );
   return (
     <Box>
       <Stack
@@ -590,14 +644,14 @@ function LocalTemplateEditor({
         onSubmit={(event) => {
           event.preventDefault();
           action.run(async () => {
-            await api.saveTemplate(value?.id ?? null, {
+            await api.saveReadyTemplate(value?.id ?? null, {
               locationId,
               name,
               items,
               expectedVersion: value?.version ?? 0,
             });
             onClose();
-          }, 'Máy chủ đã lưu bản nháp trang bị.');
+          }, 'Đã lưu bộ mẫu.');
         }}
       >
         <TextField
@@ -625,7 +679,7 @@ function LocalTemplateEditor({
             type="submit"
             variant="contained"
           >
-            Lưu bộ mẫu nháp
+            Lưu
           </Button>
           <Button disabled={action.busy} onClick={onClose}>
             Đóng

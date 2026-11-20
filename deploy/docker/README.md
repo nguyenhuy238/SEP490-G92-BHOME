@@ -1,6 +1,6 @@
 # Container foundation
 
-Root Compose starts only local PostgreSQL and MinIO. It reads ignored `.env`, binds host ports to
+Root Compose starts local PostgreSQL, MinIO and loopback-only Mailpit. It reads ignored `.env`, binds host ports to
 loopback, has named volumes and health checks, and does not deploy clients/API. PostgreSQL is pinned
 to major 16. MinIO is built from the official `RELEASE.2025-10-15T17-29-55Z` source tag because community
 distribution is source-only. This preserves the required MinIO/S3 architecture without using an
@@ -12,14 +12,29 @@ Build API artifacts from the repository root:
 
 ```sh
 docker build -f deploy/docker/Api.Dockerfile -t bhome-api .
-docker build -f deploy/docker/Web.Dockerfile --build-arg APP=owner-web --build-arg VITE_API_BASE_URL=https://api.example.com -t bhome-owner-web .
-docker build -f deploy/docker/Web.Dockerfile --build-arg APP=public-web --build-arg VITE_API_BASE_URL=https://api.example.com -t bhome-public-web .
+docker build -f deploy/docker/Web.Dockerfile --build-arg APP=owner-web --build-arg VITE_API_BASE_URL=https://api-staging.103.146.23.157.sslip.io --build-arg VITE_DEPLOYMENT_ENVIRONMENT=Staging --build-arg BHOME_REVISION="$(git rev-parse HEAD)" -t bhome-owner-web-staging .
+docker build -f deploy/docker/Web.Dockerfile --build-arg APP=public-web --build-arg VITE_API_BASE_URL=https://api-staging.103.146.23.157.sslip.io --build-arg VITE_DEPLOYMENT_ENVIRONMENT=Staging --build-arg BHOME_REVISION="$(git rev-parse HEAD)" -t bhome-public-web-staging .
 ```
+
+`Api.Release.Dockerfile` is the release runtime used by VPS Staging and Production image builds.
+It includes the LibreOffice Writer, Poppler and font packages required by contract document/PDF
+workflows, plus the `schema-output` and `seed` targets retained for separately reviewed operations.
+The normal release pipeline builds only `--target api`; it never applies migrations or runs seeds.
+Keep the older `Api.Dockerfile` available for the lightweight local image. Do not replace an
+existing VPS image until the release image has passed the Staging acceptance checks.
 
 The two web clients share a parameterized Dockerfile and serve SPA fallback with unprivileged Nginx
 on port 8080. Vite's API URL is embedded at build time and must never be a secret. Native mobile uses
 React Native and Expo. CI validates its Expo web export. Docker build contexts exclude private env files,
 generated output and local tool downloads.
+
+Release builds also require an explicit Staging/Production environment and full source revision.
+The artifact check rejects a cross-environment API hostname and writes public release metadata.
+Production Owner uses its own Owner origin; Production Public uses the Production API origin.
+Build separate images for both environments. The current fixed hostname allowlist is intentional
+for this VPS; a domain migration must update build validation and proxy configuration together.
+See the [Staging runbook](../../docs/development/BHOME_STAGING_DEPLOYMENT.md) and
+[Production runbook](../../docs/development/BHOME_PRODUCTION_RELEASE_RUNBOOK.md).
 
 The API runs as the .NET image's unprivileged app user on port 8080 and requires runtime connection,
 JWT and storage configuration. No credentials are baked in, and no migration is applied automatically.

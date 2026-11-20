@@ -17,6 +17,12 @@ public sealed class AssetInventoryController(AssetInventoryService service, Asse
     public Task<SetupDocument> Create(AssetTemplateWrite input, CancellationToken t) => service.SaveTemplateAsync(null, input, t);
     [HttpPut("api/v1/asset-templates/{id:guid}/draft"), Authorize(Roles = Roles.Owner)]
     public Task<SetupDocument> Update(Guid id, AssetTemplateWrite input, CancellationToken t) => service.SaveTemplateAsync(id, input, t);
+    [HttpPost("api/v1/asset-templates/ready"), Authorize(Roles = Roles.Owner)]
+    public Task<SetupDocument> CreateReady(AssetTemplateWrite input, CancellationToken t) => service.SaveReadyTemplateAsync(null, input, t);
+    [HttpPut("api/v1/asset-templates/{id:guid}/ready"), Authorize(Roles = Roles.Owner)]
+    public Task<SetupDocument> UpdateReady(Guid id, AssetTemplateWrite input, CancellationToken t) => service.SaveReadyTemplateAsync(id, input, t);
+    [HttpGet("api/v1/asset-templates/{id:guid}/family-versions"), Authorize(Roles = Roles.Owner)]
+    public Task<IReadOnlyList<SetupDocument>> FamilyVersions(Guid id, CancellationToken t) => service.TemplateVersionsAsync(id, t);
     [HttpPost("api/v1/asset-templates/{id:guid}/drafts"), Authorize(Roles = Roles.Owner)]
     public Task<SetupDocument> Clone(Guid id, CancellationToken t) => service.CloneTemplateAsync(id, t);
     [HttpPut("api/v1/rooms/{id:guid}/asset-template"), Authorize(Roles = Roles.Owner)]
@@ -95,6 +101,12 @@ public sealed class OperatingPoliciesController(OperatingPolicyService service, 
     [HttpGet("operating-policies/{id:guid}"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)] public Task<SetupDocument> Get(Guid id, CancellationToken t) => service.ReadPolicyAsync(id, t);
     [HttpGet("operating-policies/{id:guid}/versions"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<IReadOnlyList<SetupDocument>> Versions(Guid id, CancellationToken t) => service.RevisionsAsync(id, t);
+    [HttpGet("operating-policies/{id:guid}/family-versions"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
+    public Task<IReadOnlyList<SetupDocument>> FamilyVersions(Guid id, CancellationToken t) => service.FamilyRevisionsAsync(id, t);
+    [HttpPost("operating-policies/ready"), Authorize(Roles = Roles.Owner)]
+    public Task<SetupDocument> CreateReady(OperatingPolicyWrite input, CancellationToken t) => service.SaveReadyAsync(null, input, t);
+    [HttpPut("operating-policies/{id:guid}/ready"), Authorize(Roles = Roles.Owner)]
+    public Task<SetupDocument> UpdateReady(Guid id, OperatingPolicyWrite input, CancellationToken t) => service.SaveReadyAsync(id, input, t);
     [HttpPost("operating-policies"), Authorize(Roles = Roles.Owner)] public Task<SetupDocument> Create(OperatingPolicyWrite input, CancellationToken t) => service.SaveAsync(null, input, t);
     [HttpPut("operating-policies/{id:guid}/draft"), Authorize(Roles = Roles.Owner)] public Task<SetupDocument> Update(Guid id, OperatingPolicyWrite input, CancellationToken t) => service.SaveAsync(id, input, t);
     [HttpPost("operating-policies/{id:guid}/publish"), Authorize(Roles = Roles.Owner)] public Task<SetupDocument> Publish(Guid id, TemplatePublish input, CancellationToken t) => service.PublishAsync(id, input.ExpectedVersion, t);

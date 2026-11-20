@@ -24,6 +24,7 @@ export interface SetupAssetRequirement {
   trackingMode: 'Serialized' | 'BulkQuantity';
   quantity: number;
   unit?: string | null;
+  referencePrice?: string | number | null;
 }
 export interface SetupCommonAssetRequirement extends SetupAssetRequirement {
   id: string;
@@ -93,6 +94,7 @@ export interface LocationSetupInput {
 }
 export interface LocalRoomDefaultsData {
   name: string;
+  edition?: number;
   description?: string;
   defaults: RoomTemplateData;
   assetTemplateId?: string | null;

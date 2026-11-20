@@ -50,7 +50,7 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
         var tenantAccepted = evidence?.SnapshotHash == c.SnapshotHash || signs.TenantAt is not null;
         var verified = await contractRepository.DepositTotalAsync(c.Id, token);
         return new("Test", c.Id, false, signs.TenantAt is not null,
-            previewOnly || ownerConfirmed && tenantAccepted && c.ApprovedAt is not null, c.RequiredDeposit > 0 && verified == c.RequiredDeposit,
+            previewOnly || ownerConfirmed && tenantAccepted, c.RequiredDeposit > 0 && verified == c.RequiredDeposit,
             c.RequiredDeposit.ToString("0", System.Globalization.CultureInfo.InvariantCulture), verified.ToString("0", System.Globalization.CultureInfo.InvariantCulture),
             c.Status == ContractStatus.Active && c.Room.Status == RoomStatus.OnHold, c.Status.ToString());
     }
@@ -100,7 +100,7 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
         return await contractRepository.InTransactionAsync(before.RoomId, async () =>
         {
             var c = await Scoped(id, token);
-            if (c.ApprovedAt is null || c.HoldingExpiryAt <= clock.GetUtcNow() || c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation))
+            if (c.HoldingExpiryAt <= clock.GetUtcNow() || c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation))
                 throw new PaymentException(409, "sandbox_holding_not_ready");
             if (c.Signatures.Count > 0 || c.InternalAcceptance != "{}")
                 throw new PaymentException(409, "sandbox_existing_signing_evidence");
@@ -122,7 +122,7 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
         {
             var c = await Scoped(id, token); var state = await State(c, token);
             if (state.OnHold) return state;
-            if (!state.CanShowQr || !state.DepositVerified || c.ApprovedAt is null || c.HoldingExpiryAt <= clock.GetUtcNow() ||
+            if (!state.CanShowQr || !state.DepositVerified || !SandboxSignatures.Read(c).OwnerConfirmed(c) || c.HoldingExpiryAt <= clock.GetUtcNow() ||
                 c.Status is not (ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation) ||
                 !c.Room.Location.IsActive || c.Room.RoomType is { IsActive: false } ||
                 !PropertyRules.CanChangeRoomStatus(c.Room.Status, RoomStatus.OnHold, RoomTransitionSource.HoldingActivation) ||
@@ -155,8 +155,8 @@ public sealed class SePayHoldingPreviewController(IPaymentRepository repository,
         // QR preview alone may be used on a genuinely signed contract in an explicitly scoped Test location.
         // All simulation/activation endpoints still require a demo contract; Test receipts cannot pay a real contract.
         var contract = await Scoped(id, token, allowRealQrPreview: true);
-        if (!contract.IsDevelopmentDemo && contract.ApprovedAt is null)
-            throw new PaymentException(409, "holding_owner_approval_required");
+        if (!contract.IsDevelopmentDemo && !AnonymousContractSigningService.HoldingOwnerHasSigned(contract))
+            throw new PaymentException(409, "holding_owner_signature_required");
         if (!contract.IsDevelopmentDemo && (!AnonymousContractSigningService.Complete(contract) &&
             !new[] { contract.OwnerSignerId, contract.TenantUserId }.All(signer => signer is not null &&
                 contract.Signatures.Any(s => s.SignerUserId == signer && s.Status == SignatureStatus.Signed && s.SnapshotHash == contract.SnapshotHash))))

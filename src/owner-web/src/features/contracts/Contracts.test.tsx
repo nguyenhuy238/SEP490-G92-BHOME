@@ -1,4 +1,4 @@
-import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@mui/material';
 import { expect, it, vi } from 'vitest';
@@ -19,6 +19,9 @@ import { ContractActionDialog } from './ContractActionDialog';
 import { useContractDetail } from '../../../../../packages/client-core/src/useContractDetail';
 vi.mock('./DepositReceiptPanel', () => ({
   DepositReceiptPanel: () => <div>Deposit receipt workflow</div>,
+}));
+vi.mock('./HoldingDepositPanel', () => ({
+  HoldingDepositPanel: () => <div>Holding deposit workflow</div>,
 }));
 
 const owner = '00000000-0000-0000-0000-000000000001',
@@ -164,7 +167,19 @@ function setup(c = draft, ready = false, m: MoveOut | null = null) {
   request.mockImplementation(async <T,>(path: string, init?: RequestInit): Promise<T> => {
     let result: unknown;
     if (init?.method === 'POST') throw { status: 503 };
-    if (path.endsWith('/activation-readiness'))
+    if (path.endsWith('/internal-signing'))
+      result = {
+        invitations: [],
+        tenantAcceptedAt: null,
+        ownerAcceptedAt: null,
+        canContinue: false,
+      };
+    else if (path.endsWith('/signing-methods'))
+      result = { methods: ['OWNER_SESSION'], default: 'OWNER_SESSION' };
+    else if (path.startsWith('/api/v1/operating-policies')) result = [];
+    else if (path.endsWith('/agreed-operating-policy'))
+      result = { status: 'NotRecorded', policy: null };
+    else if (path.endsWith('/activation-readiness'))
       result = {
         ready,
         verifiedDeposit: ready ? '3000000' : '1000000',
@@ -263,6 +278,27 @@ it('shows frozen contract charges instead of fetching mutable room rates', async
   expect(request.mock.calls.every(([path]) => !path.includes('/prices?'))).toBe(true);
 });
 
+it('shows the real Holding Owner signing form before activation blockers without waiting for Tenant', async () => {
+  const c: ContractView = {
+    ...draft,
+    kind: 'Holding',
+    status: 'PendingSigning',
+    signatures: [],
+    signingMode: 'INTERNAL_OTP_DRAWN',
+    isDevelopmentDemo: false,
+    approvedAt: null,
+    snapshotHash: 'reviewed-holding',
+  };
+  const { api } = setup(c);
+  mount(
+    <ContractDetailPanel api={api} id={id} actorId={owner} locationId={id} onChanged={vi.fn()} />,
+  );
+  const button = await screen.findByRole('button', { name: 'Ký hợp đồng' });
+  const blocker = await screen.findByText('Tiền cọc đã xác minh chưa đủ.');
+  expect(button.compareDocumentPosition(blocker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getAllByRole('button', { name: 'Ký hợp đồng' })).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: 'Phê duyệt hợp đồng giữ chỗ' })).toBeNull();
+});
 it('shows backend blockers and exact VND, and keeps activation disabled for insufficient verified deposit', async () => {
   const { api, request } = setup();
   mount(
@@ -502,4 +538,58 @@ it('keeps onboarding drafts out of lifecycle reads and actions even for Owner de
   await waitFor(() => expect(result.current.data?.contract.id).toBe(id));
   expect(request.mock.calls.map(([path]) => path)).toEqual([`/api/v1/contracts/${id}`]);
   expect(contractActions(c, null, 'Owner', owner)).toEqual([]);
+});
+
+it('keeps the contract accessible when settlement history alone is unavailable and clears access on 403', async () => {
+  const moveOut = {
+    id,
+    status: 'Completed',
+    proposedDate: '2026-11-16',
+    reason: 'Synthetic',
+  } as MoveOut;
+  const { api } = setup({ ...draft, status: 'Terminated' }, false, moveOut);
+  const history = vi.spyOn(api, 'history').mockRejectedValue({ status: 503 });
+  const hook = renderHook(() => useContractDetail(api, id, 'Owner'));
+  await waitFor(() => expect(hook.result.current.loading).toBe(false));
+  expect(hook.result.current.data?.contract.status).toBe('Terminated');
+  expect(hook.result.current.data?.history).toEqual([]);
+  expect(hook.result.current.data?.historyError).toBeTruthy();
+  history.mockRejectedValue({ status: 403 });
+  act(() => hook.result.current.reload());
+  await waitFor(() => expect(hook.result.current.data).toBeNull());
+  expect(hook.result.current.error).toBeTruthy();
+});
+
+it('refreshes a conflicted physical-closure review and requires reopening before another submission', async () => {
+  const c = { ...draft, status: 'Active' };
+  const { api } = setup(c);
+  const mutate = vi.spyOn(api, 'mutate').mockRejectedValue({ status: 409 });
+  const onConflict = vi.fn();
+  const action = contractActions(
+    c,
+    { status: 'Inspected', ownerConfirmedInspection: true } as MoveOut,
+    'Owner',
+    owner,
+  ).find((a) => a.operation === 'move-out/complete')!;
+  const onSuccess = vi.fn();
+  mount(
+    <ContractActionDialog
+      api={api}
+      contract={c}
+      action={action}
+      keys={mutationKeys(() => owner)}
+      actorId={owner}
+      onClose={vi.fn()}
+      onSuccess={onSuccess}
+      onConflict={onConflict}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText('Ngày kết thúc thực tế'), {
+    target: { value: '2026-11-16' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
+  await waitFor(() => expect(onConflict).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('button', { name: 'Xác nhận' })).toBeDisabled();
+  expect(onSuccess).not.toHaveBeenCalled();
+  expect(mutate).toHaveBeenCalledTimes(1);
 });

@@ -14,7 +14,7 @@ internal sealed partial class SharedConfigurationStore
     public async Task<IReadOnlyList<PolicyDto>> PoliciesAsync(Guid location, CancellationToken t)
     {
         var rows = await db.Set<BillingPolicy>().AsNoTracking().Where(p => p.LocationId == location).OrderBy(p => p.Id)
-            .Select(p => new PolicyDto(p.Id, p.LocationId, p.RoomId, p.Category, p.ChargeCode, p.Name, p.Method, p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version, p.FirstUsedAt, p.RoomTypeId)).Take(1001).ToArrayAsync(t);
+            .Select(p => new PolicyDto(p.Id, p.LocationId, p.RoomId, p.Category, p.ChargeCode, p.Name, p.Method, p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version, p.FirstUsedAt, p.RoomTypeId, null)).Take(1001).ToArrayAsync(t);
         if (rows.Length > 1000) throw new PropertyException(409, "configuration_copy_page_limit"); return rows;
     }
     public async Task<IReadOnlyList<PolicyDto>> SetupCopyPoliciesAsync(Guid location, CancellationToken t)
@@ -25,7 +25,7 @@ internal sealed partial class SharedConfigurationStore
             .Where(p => p.LocationId == location && p.RoomTypeId == null && (p.RoomId == null || p.Category != ChargeCategory.Rent))
             .OrderBy(p => p.Id)
             .Select(p => new PolicyDto(p.Id, p.LocationId, p.RoomId, p.Category, p.ChargeCode, p.Name, p.Method, p.Rate,
-                p.EffectiveFrom, p.EffectiveTo, p.Version, null, null)).Take(1001).ToArrayAsync(t);
+                p.EffectiveFrom, p.EffectiveTo, p.Version, null, null, null)).Take(1001).ToArrayAsync(t);
         if (rows.Length > 1000) throw new PropertyException(409, "configuration_copy_page_limit"); return rows;
     }
     public async Task<SharedOperation?> OperationAsync(Guid actor, string kind, Guid key, CancellationToken t)
@@ -35,10 +35,34 @@ internal sealed partial class SharedConfigurationStore
     }
     public async Task<SharedUsage> ApplicationsAsync(Guid family, int page, int pageSize, CancellationToken t)
     {
-        const string filter = " FROM operational_tasks WHERE task_type='COMMAND' AND task_data->>'recordType'='SharedConfigurationOperation' AND task_data->'operation'->>'kind'='Apply' AND task_data->'operation'->>'familyId'=@family";
-        var total = await sql.Scalar<long>("SELECT count(*)" + filter, t, ("family", family.ToString()));
-        var locations = await sql.Scalar<long>("SELECT count(DISTINCT location_id)" + filter, t, ("family", family.ToString()));
-        await using var cmd = await sql.Command("SELECT task_data->'operation'" + filter + " ORDER BY id LIMIT @limit OFFSET @offset", t, ("family", family.ToString()), ("limit", pageSize), ("offset", (page - 1) * pageSize));
+        // Setup operations capture every source reference rather than a single shared family.
+        // Project their exact committed references into family usage without altering the operation.
+        const string usage = """
+            WITH family_documents AS (
+                SELECT task_data->'document' AS document FROM operational_tasks
+                WHERE task_type='COMMAND' AND task_data->>'recordType'='SharedConfiguration'
+                    AND task_data->'document'->>'familyId'=@family
+            ), operations AS (
+                SELECT id, location_id, task_data->'operation' AS operation FROM operational_tasks
+                WHERE task_type='COMMAND' AND task_data->>'recordType'='SharedConfigurationOperation'
+            ), usage AS (
+                SELECT id, location_id, operation FROM operations
+                WHERE operation->>'kind'='Apply' AND operation->>'familyId'=@family
+                UNION ALL
+                SELECT o.id, o.location_id, o.operation || jsonb_build_object(
+                    'sourceId', ref->'id', 'sourceVersion', ref->'version',
+                    'sourceEdition', d.document->'edition', 'familyId', d.document->'familyId',
+                    'resource', d.document->'resource')
+                FROM operations o
+                CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(o.operation->'sourceReferences')='array'
+                    THEN o.operation->'sourceReferences' ELSE '[]'::jsonb END) ref
+                JOIN family_documents d ON d.document->>'id'=ref->>'id' AND d.document->>'resource'=ref->>'kind'
+                WHERE o.operation->>'kind'='LocationSetup'
+            )
+            """;
+        var total = await sql.Scalar<long>(usage + " SELECT count(*) FROM usage", t, ("family", family.ToString()));
+        var locations = await sql.Scalar<long>(usage + " SELECT count(DISTINCT location_id) FROM usage", t, ("family", family.ToString()));
+        await using var cmd = await sql.Command(usage + " SELECT operation FROM usage ORDER BY id,operation->>'sourceId',operation->>'sourceVersion' LIMIT @limit OFFSET @offset", t, ("family", family.ToString()), ("limit", pageSize), ("offset", (page - 1) * pageSize));
         await using var reader = await cmd.ExecuteReaderAsync(t); var items = new List<SharedOperation>();
         while (await reader.ReadAsync(t)) items.Add(JsonSerializer.Deserialize<SharedOperation>(reader.GetString(0), Json)!);
         return new(items, total, locations, page, pageSize);

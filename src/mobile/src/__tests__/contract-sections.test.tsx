@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useState } from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ContractSummary, Readiness } from '../../../../packages/client-core/src/contracts';
 import { contractActionSection, groupContracts } from '../features/contracts/contractSections';
@@ -39,7 +39,7 @@ vi.mock('../components/WorkspaceHeaderContext', () => ({
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({
     api: transport,
-    session: { userId: 'staff', roles: [state.role] },
+    session: { userId: state.role.toLowerCase(), roles: [state.role] },
   }),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
@@ -213,7 +213,7 @@ beforeEach(() => {
     isDevelopmentDemo: true,
   };
   state.request.mockImplementation(async (path: string) =>
-    path.includes('move-out-assignments')
+    path.includes('move-out-assignments') || path.endsWith('/previews')
       ? []
       : {
           items: [
@@ -244,7 +244,8 @@ it('opens a Holding draft with metadata in the Holding flow without Main handove
   state.contract.onboardingDraft = true;
   state.contract.signingMode = 'INTERNAL_OTP_DRAWN';
   render(<ContractScreen />);
-  expect(screen.getByText('Chờ Owner phê duyệt')).toBeTruthy();
+  expect(screen.getByText('Bản nháp chờ gửi Owner ký')).toBeTruthy();
+  expect(screen.getByText('Người ở tổng hợp')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Bàn giao' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Gia hạn & trả phòng' })).toBeNull();
   expect(screen.queryByText('Chữ ký số qua MySign')).toBeNull();
@@ -300,20 +301,27 @@ it('does not expose full contract creation in the Owner contract list', () => {
   expect(screen.queryByText('Tạo hợp đồng thuê')).toBeNull();
   expect(screen.queryByText('Main preparation')).toBeNull();
 });
-it('allows Owner to approve a Holding draft while Staff cannot approve, verify deposits or activate', () => {
+it('lets the Owner signer review a Holding draft without an approval step and keeps Staff read-only in signing', async () => {
   state.contract.kind = 'Holding';
   state.contract.status = 'Draft';
   state.contract.holdingExpiresAt = '2099-12-01T00:00:00Z';
   state.role = 'Owner';
   const view = render(<ContractScreen />);
   fireEvent.click(screen.getByRole('button', { name: 'Ký hợp đồng' }));
-  expect(screen.getByRole('button', { name: 'Phê duyệt hợp đồng giữ chỗ' })).toBeTruthy();
-  expect(screen.queryByText('Thực hiện trên Owner Web')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Xem hợp đồng' })).toBeTruthy();
+  await waitFor(() => expect(screen.queryByText('Đang tải tài liệu…')).toBeNull());
+  expect(state.request.mock.calls.map(([path]) => path)).toContain(
+    `/api/v1/contracts/${id}/previews`,
+  );
+  expect(screen.queryByRole('button', { name: 'Phê duyệt hợp đồng giữ chỗ' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Kích hoạt giữ chỗ' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Xác minh cọc ngân hàng' })).toBeNull();
   view.unmount();
   state.role = 'Staff';
   render(<ContractScreen />);
   fireEvent.click(screen.getByRole('button', { name: 'Ký hợp đồng' }));
+  expect(screen.getByText('Gửi Owner ký')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Xem hợp đồng' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Phê duyệt hợp đồng giữ chỗ' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Kích hoạt giữ chỗ' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Xác minh cọc ngân hàng' })).toBeNull();
@@ -456,7 +464,7 @@ it('keeps Staff restrictions in the signing section', () => {
   state.contract.status = 'PendingSigning';
   render(<ContractScreen />);
   fireEvent.click(screen.getByRole('button', { name: 'Ký & kích hoạt' }));
-  expect(screen.getByText('Bước 6/8')).toBeTruthy();
+  expect(screen.getByText('Bước 5/7')).toBeTruthy();
   expect(screen.queryByText('Signed PDF')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
   expect(screen.getByText(/Staff theo dõi hồ sơ/)).toBeTruthy();

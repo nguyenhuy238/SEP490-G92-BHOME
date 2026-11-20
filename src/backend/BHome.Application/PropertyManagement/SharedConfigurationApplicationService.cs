@@ -77,7 +77,7 @@ public sealed class SharedConfigurationApplicationService(ISharedConfigurationSt
                     if (defaults.AssetItems is { Length: > 0 })
                     {
                         var requirements = defaults.AssetItems.Where(i => i.Required || input.IncludeOptionalItems)
-                            .Select(i => new AssetTemplateItem(Guid.NewGuid(), i.Catalog!.Name, i.Catalog.Category, i.TrackingMode, i.Quantity, i.Catalog.Unit)).ToArray();
+                            .Select(i => new AssetTemplateItem(Guid.NewGuid(), i.Catalog!.Name, i.Catalog.Category, i.TrackingMode, i.Quantity, i.Catalog.Unit, i.Catalog.ReferencePrice)).ToArray();
                         if (requirements.Length > 0)
                         {
                             var template = await local.SaveAsync(Guid.NewGuid(), input.LocationId, "AssetTemplate", "Published",
@@ -86,16 +86,16 @@ public sealed class SharedConfigurationApplicationService(ISharedConfigurationSt
                         }
                     }
                     created = Guid.NewGuid();
-                    await local.SaveAsync(created, input.LocationId, "RoomDefaults", "Recorded", new { name = source.Name, defaults = defaults with { AssetItems = null }, assetTemplateId, sourceId = source.Id, sourceVersion = source.Version, sourceEdition = source.Edition }, 0, actor, t); break;
+                    await local.SaveAsync(created, input.LocationId, "RoomDefaults", "Recorded", new { name = source.Name, defaults = defaults with { AssetItems = null }, assetTemplateId, sourceId = source.Id, sourceVersion = source.Version, sourceEdition = source.Edition, edition = 1 }, 0, actor, t); break;
                 case "asset-templates":
-                    var items = Data<SharedAssetData>(source).Items.Where(i => i.Required || input.IncludeOptionalItems).Select(i => new AssetTemplateItem(Guid.NewGuid(), i.Catalog!.Name, i.Catalog.Category, i.TrackingMode, i.Quantity, i.Catalog.Unit)).ToArray();
-                    created = (await assets.SaveTemplateAsync(null, new(input.LocationId, source.Name, items), t)).Id; break;
+                    var items = Data<SharedAssetData>(source).Items.Where(i => i.Required || input.IncludeOptionalItems).Select(i => new AssetTemplateItem(Guid.NewGuid(), i.Catalog!.Name, i.Catalog.Category, i.TrackingMode, i.Quantity, i.Catalog.Unit, i.Catalog.ReferencePrice)).ToArray();
+                    created = (await assets.SaveReadyTemplateAsync(null, new(input.LocationId, source.Name, items), t)).Id; break;
                 case "fee-templates":
                     var fee = Data<SharedFeeData>(source);
                     created = (await properties.CreatePolicyAsync(new(input.LocationId, input.RoomId, fee.Category, fee.ChargeCode, source.Name, fee.Method, fee.ReferenceRate, fee.EffectiveFrom, fee.EffectiveTo, $"Applied shared edition {source.Id}"), t)).Id; break;
                 case "policy-templates":
                     var policy = Data<SharedPolicyData>(source);
-                    created = (await policies.SaveAsync(null, new(input.LocationId, source.Name, policy.Content, policy.EffectiveFrom), t)).Id; break;
+                    created = (await policies.SaveReadyAsync(null, new(input.LocationId, source.Name, policy.Content, policy.EffectiveFrom), t)).Id; break;
                 default: throw new PropertyException(400, "shared_resource_not_applicable");
             }
             var operation = new SharedOperation(Guid.NewGuid(), "Apply", key, fingerprint, actor, clock.GetUtcNow(), source.Id, null, source.FamilyId, source.Version, source.Edition, resource, input.LocationId, "Completed", [created], [new(source.Id, source.Version, resource)], Hash(source), plan.TargetState);

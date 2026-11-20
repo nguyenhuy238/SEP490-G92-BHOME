@@ -40,7 +40,7 @@ import {
 } from '../SharedConfigurationLayout';
 
 const resourceNames: Record<SharedResource, string> = {
-  'room-type-templates': 'mẫu loại phòng',
+  'room-type-templates': 'loại phòng mẫu',
   'asset-catalog': 'loại tài sản',
   'asset-templates': 'mẫu tài sản',
   'fee-templates': 'mẫu giá & biểu phí',
@@ -120,6 +120,9 @@ export function SharedTemplateEditor({
   );
   const [catalogId, setCatalogId] = useState('');
   const [validationError, setValidationError] = useState('');
+  const [submittedName, setSubmittedName] = useState('');
+  const normalizedName = name.normalize('NFC').trim().replace(/\s+/g, ' ');
+  const duplicateName = error.startsWith('Tên mẫu đã tồn tại.') && submittedName === normalizedName;
   const updateFields: typeof setValues = (update) => {
     setValues((old) => {
       const next = typeof update === 'function' ? update(old) : update;
@@ -235,6 +238,10 @@ export function SharedTemplateEditor({
             : [];
   function submit() {
     if (busy) return;
+    if (!normalizedName) {
+      setValidationError('Vui lòng nhập tên mẫu.');
+      return;
+    }
     if (resource === 'fee-templates') {
       const defaults = feeDefaults[values.category];
       const code = (values.chargeCode ?? '').trim().toUpperCase();
@@ -291,7 +298,8 @@ export function SharedTemplateEditor({
                   effectiveTo: values.effectiveTo || null,
                 }
               : { content: values.content ?? '', effectiveFrom: values.effectiveFrom ?? '' };
-    save({ name, description, data, expectedVersion: document?.version ?? 0 });
+    setSubmittedName(normalizedName);
+    save({ name: normalizedName, description, data, expectedVersion: document?.version ?? 0 });
   }
   return (
     <Dialog
@@ -315,7 +323,7 @@ export function SharedTemplateEditor({
           >
             <Chip
               size="small"
-              label={setupCreation ? 'Thư viện dùng chung' : 'Bản nháp'}
+              label={document?.status === 'Draft' ? 'Bản nháp' : 'Thư viện dùng chung'}
               variant="outlined"
             />
             {document && (
@@ -324,7 +332,7 @@ export function SharedTemplateEditor({
                 color="text.secondary"
                 sx={{ overflowWrap: 'anywhere' }}
               >
-                {document.name} · Phiên bản {document.edition} · Lần cập nhật {document.version}
+                {document.name}
               </Typography>
             )}
           </Stack>
@@ -340,12 +348,20 @@ export function SharedTemplateEditor({
       >
         <DialogContent dividers sx={configurationDialogContentSx}>
           <Stack spacing={1.5}>
-            {error && <Alert severity="error">{error}</Alert>}
+            {error && !error.startsWith('Tên mẫu đã tồn tại.') && (
+              <Alert severity="error">{error}</Alert>
+            )}
             {validationError && <Alert severity="error">{validationError}</Alert>}
             {setupCreation && (
               <Typography variant="body2" color="text.secondary">
-                Mẫu được lưu và công bố trong thư viện dùng chung. Sau đó bạn có thể chọn mẫu để
-                thêm vào cơ sở đang thiết lập.
+                Mẫu được lưu vào thư viện dùng chung và có thể áp dụng ngay tại cơ sở đang thiết
+                lập.
+              </Typography>
+            )}
+            {document?.status === 'Published' && (
+              <Typography variant="body2" color="text.secondary">
+                Khi chỉnh sửa mẫu, cấu hình tại các cơ sở đã áp dụng vẫn được giữ nguyên. Bạn có thể
+                áp dụng nội dung mới cho cơ sở khi cần.
               </Typography>
             )}
             <TextField
@@ -353,7 +369,12 @@ export function SharedTemplateEditor({
               disabled={busy}
               label="Tên mẫu"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              error={duplicateName}
+              helperText={duplicateName ? error : undefined}
+              onChange={(e) => {
+                setName(e.target.value);
+                setValidationError('');
+              }}
               slotProps={{ htmlInput: { maxLength: 150 } }}
             />
             <TextField
@@ -505,7 +526,7 @@ export function SharedTemplateEditor({
                       )
                       .map((item) => (
                         <MenuItem key={item.id} value={item.id}>
-                          {item.name} · phiên bản {item.edition}
+                          {item.name}
                         </MenuItem>
                       ))}
                   </TextField>
@@ -548,7 +569,7 @@ export function SharedTemplateEditor({
                 </Stack>
                 {!items.length && (
                   <Typography variant="body2" color="text.secondary">
-                    Chọn tài sản đã công bố để thêm vào mẫu.
+                    Chọn tài sản có thể áp dụng để thêm vào mẫu.
                   </Typography>
                 )}
                 {items.map((item, index) => (
@@ -562,11 +583,6 @@ export function SharedTemplateEditor({
                         catalog.data?.find((d) => d.id === item.catalogId)?.name ??
                         'Mục danh mục đã chọn'}
                     </Typography>
-                    {item.catalog && (
-                      <Typography variant="caption" color="text.secondary">
-                        Phiên bản {item.catalog.edition} · Lần cập nhật {item.catalogVersion}
-                      </Typography>
-                    )}
                     <Box sx={configurationFormGridSx}>
                       <TextField
                         required
@@ -638,7 +654,7 @@ export function SharedTemplateEditor({
             type="submit"
             variant="contained"
           >
-            {setupCreation ? 'Lưu và công bố' : 'Lưu bản nháp'}
+            Lưu mẫu
           </Button>
         </DialogActions>
       </Box>

@@ -74,6 +74,11 @@ export function AssignmentDetailDrawer({
   act: (intent: AssignmentIntent) => void;
 }) {
   const current = row?.assignments?.find((item) => assignmentState(item, today) === 'current');
+  const employment = staff.find((item) => item.userId === current?.staffUserId)?.employment;
+  const employmentExpired =
+    !!current &&
+    !!employment &&
+    (employment.status === 'Ended' || (!!employment.endDate && employment.endDate < today));
   const sorted = [...(row?.assignments ?? [])]
     .filter((item) => item.id !== current?.id)
     .sort((a, b) => {
@@ -116,6 +121,13 @@ export function AssignmentDetailDrawer({
         {current ? (
           <>
             <AssignedStaff staff={staff} id={current.staffUserId} />
+            {employmentExpired && (
+              <Alert severity="warning" sx={{ py: 0.5 }}>
+                Hợp đồng lao động của nhân viên này đã kết thúc hoặc hết hạn dù phân công cơ sở còn
+                thời hạn. Nhân viên không còn đủ điều kiện tiếp nhận công việc. Hãy thay người phụ
+                trách để tiếp tục xử lý các công việc đang mở.
+              </Alert>
+            )}
             <Typography sx={{ fontSize: 14 }}>
               {assignmentDate(current.startDate)} – {assignmentDate(current.endDate)}
             </Typography>
@@ -216,13 +228,15 @@ export function AssignmentDetailDrawer({
             Thay người phụ trách
           </Button>
         )}
-        <Button
-          variant={current ? 'outlined' : 'contained'}
-          disabled={row?.location.isActive === false}
-          onClick={() => act({ mode: 'create', locationId: row!.location.id })}
-        >
-          {current ? 'Lên lịch phân công' : 'Tạo phân công'}
-        </Button>
+        {!current && (
+          <Button
+            variant="contained"
+            disabled={row?.location.isActive === false}
+            onClick={() => act({ mode: 'create', locationId: row!.location.id })}
+          >
+            Tạo phân công
+          </Button>
+        )}
         {current && (
           <Button
             color="error"

@@ -48,8 +48,10 @@ public sealed class SePaySecurityTests
     public void ConfigurationSeparatesEnvironmentAndCredentials()
     {
         var options = new SePayOptions { Enabled = true, WebhookSecret = Secret, ReceivingAccounts = [new() { LocationId = Guid.NewGuid(), BankIdentifier = "970416", Gateway = "ACB", AccountNumber = "0000001234" }] };
-        Assert.True(options.Valid("Testing")); Assert.False(options.Valid("Production"));
+        Assert.True(options.Valid("Testing")); Assert.True(options.Valid("Staging")); Assert.False(options.Valid("Production"));
         options.ApiBaseUrl = "https://userapi.sepay.vn/v2"; Assert.False(options.Valid("Testing"));
+        options.Mode = "Live";
+        Assert.False(options.Valid("Staging")); Assert.True(options.Valid("Production"));
         options.Enabled = false; Assert.True(options.Valid("Production"));
     }
 
@@ -60,7 +62,7 @@ public sealed class SePaySecurityTests
     [InlineData(true, "Live", "Development", false)]
     [InlineData(true, "Test", "Production", false)]
     [InlineData(true, "Live", "Production", false)]
-    [InlineData(true, "Test", "Staging", false)]
+    [InlineData(true, "Test", "Staging", true)]
     public void TestingWorkspaceRequiresEnabledSandboxAndPermittedEnvironment(bool enabled, string mode, string environment, bool expected) =>
         Assert.Equal(expected, new SePayOptions { Enabled = enabled, Mode = mode }.TestingAvailable(environment));
 

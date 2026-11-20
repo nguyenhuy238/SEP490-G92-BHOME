@@ -94,7 +94,7 @@ export function ContractPolicyPanel({
               value={policyId}
               onChange={(event) => setPolicyId(event.target.value)}
             >
-              <MenuItem value="">Chọn nội quy đã công bố</MenuItem>
+              <MenuItem value="">Chọn nội quy có thể áp dụng</MenuItem>
               {policies.data
                 ?.filter((policy) => policy.status === 'Published')
                 .map((policy) => (

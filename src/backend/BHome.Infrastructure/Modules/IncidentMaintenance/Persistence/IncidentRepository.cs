@@ -5,6 +5,7 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.TenantContracts;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -53,8 +54,12 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
         join staff in db.Users.AsNoTracking() on assignment.StaffUserId equals staff.Id
         where assignment.LocationId == location && assignment.StartDate <= today && assignment.EndDate >= today && staff.IsActive &&
             db.Locations.Any(l => l.Id == location && l.IsActive) &&
+            EligibleStaff(today).Contains(staff.Id) &&
             db.UserRoles.Any(ur => ur.UserId == staff.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == Roles.Staff))
         select staff.Id;
+    private IQueryable<Guid> EligibleStaff(DateOnly date) => db is Compact24DbContext compact
+        ? StaffEmploymentEligibility.EligibleIds(compact, date)
+        : db.Users.Where(u => u.IsActive).Select(u => u.Id);
     public Task<bool> StaffAssignedAsync(Guid actor, Guid location, DateOnly today, CancellationToken t) => StaffAt(location, today).AnyAsync(s => s == actor, t);
     public Task<bool> StaffAvailableAsync(Guid location, DateOnly today, CancellationToken t) => StaffAt(location, today).AnyAsync(t);
     public async Task<Guid?> ResponsibleStaffAsync(Guid location, DateOnly today, CancellationToken t) =>
@@ -109,6 +114,7 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
         var rows = db.Set<IncidentReport>().AsNoTracking();
         if (scope.Owner) return rows;
         return rows.Where(r => scope.Tenant && r.ReporterRole == Roles.Tenant && r.ReporterId == scope.ActorId || scope.Staff &&
+            EligibleStaff(scope.Today).Contains(scope.ActorId) &&
             db.Locations.Any(l => l.Id == r.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a =>
                 a.LocationId == r.LocationId && a.StaffUserId == scope.ActorId && a.StartDate <= scope.Today && a.EndDate >= scope.Today));
     }
@@ -132,6 +138,7 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
         c.Residents.Any(r => r.ResidentId == c.RepresentativeResidentId && r.ResidenceFrom <= scope.Today &&
             (r.ResidenceTo == null || r.ResidenceTo >= scope.Today)));
     private IQueryable<Guid> ReportingStaffLocations(IncidentScope scope) => db.StaffLocationAssignments.Where(a => scope.Staff &&
+        EligibleStaff(scope.Today).Contains(scope.ActorId) &&
         a.StaffUserId == scope.ActorId && a.StartDate <= scope.Today && a.EndDate >= scope.Today).Select(a => a.LocationId);
     public async Task<IncidentPage<IncidentReportingRoom>> ReportingRoomsAsync(IncidentScope scope, IncidentLookupQuery query, CancellationToken t)
     {
@@ -234,7 +241,7 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
         db.Set<IncidentNotification>().SingleOrDefaultAsync(n => n.Id == id && n.RecipientId == actor, t);
     public Task FlushAsync(CancellationToken t) => db.SaveChangesAsync(t);
     private IQueryable<MaintenanceWorkOrder> VisibleWork(IncidentScope scope) => db.Set<MaintenanceWorkOrder>().AsNoTracking().Where(w =>
-        scope.Owner || scope.Staff && db.Locations.Any(l => l.Id == w.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a =>
+        scope.Owner || scope.Staff && EligibleStaff(scope.Today).Contains(scope.ActorId) && db.Locations.Any(l => l.Id == w.LocationId && l.IsActive) && db.StaffLocationAssignments.Any(a =>
             a.LocationId == w.LocationId && a.StaffUserId == scope.ActorId && a.StartDate <= scope.Today && a.EndDate >= scope.Today));
     public void Add(object entity)
     {

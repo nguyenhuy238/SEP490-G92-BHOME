@@ -116,6 +116,7 @@ public sealed record ContractSigningProgress(Guid ContractId, string RoomNumber,
 public interface IContractSigningNotifier
 {
     Task SignatureCompletedAsync(ContractSigningProgress progress, CancellationToken t);
+    Task HoldingOwnerSignedAsync(Guid contractId, CancellationToken t) => Task.CompletedTask;
 }
 public sealed record SigningOtpConfirmation(string Code);
 public sealed record SigningOtpView(Guid SignatureId, string Status, string MaskedEmail, DateTimeOffset ExpiresAt, int ResendAfterSeconds);

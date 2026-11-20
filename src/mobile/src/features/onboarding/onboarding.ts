@@ -7,6 +7,13 @@ export const emptyCaptureProgress = (): CaptureProgress => ({
   back: 'unscanned',
 });
 export interface OnboardingPerson {
+  member?: {
+    fullName: string;
+    dateOfBirth: string;
+    relationship: string;
+    phone: string;
+    citizenNumber: string;
+  };
   key: string;
   label: string;
   email?: string;

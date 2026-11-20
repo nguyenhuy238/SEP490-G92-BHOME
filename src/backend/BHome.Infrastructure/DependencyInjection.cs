@@ -151,7 +151,15 @@ public static class DependencyInjection
                     o.FromEmail = legacy.FromAddress ?? ""; o.UseStartTls = legacy.SmtpUseTls;
                 }
             })
-            .Validate(o => o.Valid(), "Email configuration invalid: check Email host, port, username, sender, STARTTLS, timeout and Email:AppPassword in secrets.").ValidateOnStart();
+            .Validate(o => o.Valid(),
+                "Email configuration invalid: check Email:Host/Port/FromEmail, Email:AppPassword and STARTTLS for SMTP, or the syntax of Email:AllowedRecipients.")
+            .Validate<IHostEnvironment>((o, env) => o.CaptureAllowed(env.EnvironmentName),
+                "Email:DeliveryMode=Capture requires a loopback Email:Host and Development/Testing; deployed SMTP must use STARTTLS.")
+            .Validate<IHostEnvironment>((o, env) => o.AnyRecipientOverrideAllowed(env.EnvironmentName),
+                "Email:AllowAnyRecipientInDevelopment can only be enabled with SMTP in Development.")
+            .Validate<IHostEnvironment>((o, env) => o.RecipientsConfigured(env.EnvironmentName),
+                "SMTP requires Email:AllowedRecipients:0 (and optional :1, :2, ...) in Development/Testing/Staging. Development can explicitly opt in with Email:AllowAnyRecipientInDevelopment=true. For an existing local test mailbox, run scripts/Initialize-LocalEmail.ps1 -UseConfiguredTestRecipient, then restart the API. Email:TestRecipient alone is not an allowlist.")
+            .ValidateOnStart();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
         services.AddScoped<BHome.Application.Notifications.IDevelopmentEmailTest, BHome.Infrastructure.Modules.Notifications.DevelopmentEmailTest>();
@@ -166,6 +174,9 @@ public static class DependencyInjection
         services.AddScoped<AssignmentReconciliationJob>();
         services.AddScoped<IBackgroundJobHandler>(provider => provider.GetRequiredService<AssignmentReconciliationJob>());
         services.AddScoped<IJobScheduleContributor>(provider => provider.GetRequiredService<AssignmentReconciliationJob>());
+        // The standalone Location-only runner is an opt-in fallback when Jobs:Enabled is false.
+        // It cannot accidentally activate billing or contract-expiry jobs.
+        services.AddHostedService<StaffAssignmentReconciliationWorker>();
         services.AddScoped<CaptureScope>();
         services.AddScoped<ResourceAccess>();
         services.AddScoped<PermissionAccess>();
@@ -177,6 +188,7 @@ public static class DependencyInjection
             BHome.Infrastructure.Modules.StaffOperations.Persistence.PostgresOperationalTaskRepository>();
         services.AddScoped<BHome.Application.StaffOperations.ITaskEvidenceFiles, BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceFiles>();
         services.AddScoped<BHome.Application.StaffOperations.OperationalTaskService>();
+        services.AddScoped<BHome.Infrastructure.StaffOperations.LocationAssetHandoverService>();
         services.AddHostedService<BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceCleanup>();
         services.AddScoped<BHome.Application.Operations.IOperationsRepository,
             BHome.Infrastructure.Modules.Operations.CompactOperationsRepository>();
@@ -197,6 +209,11 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PropertyManagement.IRoomInsightsRepository,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.PostgresRoomInsightsRepository>();
         services.AddScoped<BHome.Application.PropertyManagement.PropertyService>();
+        // RoomInventoryReviewService is used by ContractService and ContractHandoverRepository,
+        // while PropertyService also depends on ContractService for readiness checks. Resolve
+        // PropertyService only in the inventory operation that actually needs it, not during DI.
+        services.AddScoped(p => new Lazy<BHome.Application.PropertyManagement.PropertyService>(
+            () => p.GetRequiredService<BHome.Application.PropertyManagement.PropertyService>()));
         services.AddScoped<BHome.Application.PropertyManagement.ISetupWorkspaceStore,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SetupWorkspaceStore>();
         services.AddScoped<BHome.Application.PropertyManagement.ISharedConfigurationStore,
@@ -220,6 +237,7 @@ public static class DependencyInjection
         services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>());
         services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>());
         services.AddScoped<BHome.Application.PropertyManagement.RoomInventoryReviewService>();
+        services.AddScoped<BHome.Application.PropertyManagement.CommonAssetInventoryReviewService>();
         services.AddScoped<BHome.Application.Contracts.IHandoverInventory>(p => p.GetRequiredService<BHome.Application.PropertyManagement.RoomInventoryReviewService>());
         services.AddScoped<BHome.Application.PropertyManagement.AssetCountObservationService>();
         services.AddScoped<BHome.Application.PropertyManagement.SetupEvidenceService>();
@@ -287,6 +305,15 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.Contracts.IHoldingSettingsData, BHome.Infrastructure.Contracts.HoldingSettingsData>();
         services.AddScoped<BHome.Application.Finance.IExpenseRepository, BHome.Infrastructure.Finance.ExpenseRepository>();
         services.AddScoped<BHome.Application.Finance.ExpenseService>();
+        services.AddScoped<BHome.Application.Finance.ICapitalAssetRepository, BHome.Infrastructure.Finance.CapitalAssetRepository>();
+        services.AddScoped<BHome.Application.Finance.CapitalAssetService>();
+        services.AddScoped<BHome.Application.Finance.RecurringExpenseService>();
+        services.AddScoped<BHome.Infrastructure.Finance.RecurringExpenseJob>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Finance.RecurringExpenseJob>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Finance.RecurringExpenseJob>());
+        services.AddScoped<BHome.Infrastructure.Finance.AssetCapitalSyncJob>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Finance.AssetCapitalSyncJob>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Finance.AssetCapitalSyncJob>());
         services.AddScoped<BHome.Application.Finance.IExpenseEvidenceRepository, BHome.Infrastructure.Finance.ExpenseEvidenceRepository>();
         services.AddScoped<BHome.Application.Finance.ExpenseEvidenceService>();
         services.AddScoped<BHome.Application.Finance.IFinancialReportRepository, BHome.Infrastructure.Finance.FinancialReportRepository>();
@@ -421,6 +448,7 @@ public static class DependencyInjection
         services.AddHostedService<MeterEvidenceCleanup>();
         services.AddOptions<IdentityProtectionOptions>().Bind(configuration.GetSection("IdentityProtection"));
         services.AddSingleton<IIdentityProtection, IdentityProtection>();
+        services.AddScoped<IHouseholdProfiles, HouseholdProfiles>();
         services.AddOptions<ObjectStorageOptions>().Bind(configuration.GetSection(ObjectStorageOptions.Section));
         services.AddScoped<IObjectStorage, MinioObjectStorage>();
         services.AddOptions<JobWorkerOptions>().Bind(configuration.GetSection("Jobs"))

@@ -166,7 +166,7 @@ public sealed partial class MainDraftApiTests
         var rejected = await Release(owner, draft.Id, new(null, draft.Version, review.Id, true), Guid.NewGuid()); Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode); Assert.Contains("contract_document_integrity_failed", await rejected.Content.ReadAsStringAsync());
         var updated = await Save(w, Input(w) with { Notes = "Changed saved terms", ExpectedVersion = draft.Version }, id: draft.Id);
         Assert.Equal(HttpStatusCode.Conflict, (await Release(owner, draft.Id, new(null, updated.Version, review.Id, true), Guid.NewGuid())).StatusCode);
-        await using var production = fixture.Factory.WithWebHostBuilder(b => b.UseEnvironment("Production")); using var productionOwner = InHost(production, w.Owner);
+        await using var production = fixture.Factory.WithWebHostBuilder(b => b.UseTestEnvironment("Production")); using var productionOwner = InHost(production, w.Owner);
         var blocked = await productionOwner.PostAsync($"{Root}/{draft.Id}/signing-review", null); Assert.Equal(HttpStatusCode.ServiceUnavailable, blocked.StatusCode); Assert.Contains("main_draft_signing_template_not_approved", await blocked.Content.ReadAsStringAsync());
         await using var verify = fixture.Factory.Services.CreateAsyncScope(); var db = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Null((await db.Set<Resident>().SingleAsync(r => r.Id == w.Resident)).TenantUserId); Assert.Equal(ContractStatus.Draft, (await db.Set<Contract>().SingleAsync(c => c.Id == draft.Id)).Status);

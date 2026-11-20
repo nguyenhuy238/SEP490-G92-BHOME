@@ -79,6 +79,132 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(route + "/" + draft.Id, input with { ExpectedVersion = published.Version + 1 })).StatusCode);
     }
     [CompactPostgresFact]
+    public async Task SharedImmediateSaveEditsUnusedAndVersionsAppliedDocumentsWithoutChangingTargets()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner);
+        const string route = "/api/v1/shared-configuration/room-type-templates";
+        var input = SharedInput("room-type-templates") with { PublishImmediately = true };
+        var created = await Read<SharedDocument>(await owner.PostAsJsonAsync(route, input));
+        Assert.Equal("Published", created.Status); Assert.Equal(1, created.Edition); Assert.Equal(1, created.Version);
+        var edited = await Read<SharedDocument>(await owner.PutAsJsonAsync(route + "/" + created.Id,
+            input with { ExpectedVersion = created.Version, Description = "Updated before use" }));
+        Assert.Equal(created.Id, edited.Id); Assert.Equal(1, edited.Edition); Assert.Equal(2, edited.Version);
+        var unchanged = await Read<SharedDocument>(await owner.PutAsJsonAsync(route + "/" + edited.Id,
+            input with { ExpectedVersion = edited.Version, Description = edited.Description }));
+        Assert.Equal(edited.Version, unchanged.Version);
+        var apply = new SharedApply(w.Location, edited.Version);
+        var plan = await Read<ConfigurationPlan>(await owner.PostAsJsonAsync(route + "/" + edited.Id + "/apply-preview", apply));
+        Assert.True(plan.CanProceed);
+        var operation = await Read<SharedOperation>(await Keyed(owner, route + "/" + edited.Id + "/apply", apply with { TargetState = plan.TargetState }, Guid.NewGuid()));
+        var usedUnchanged = await Read<SharedDocument>(await owner.PutAsJsonAsync(route + "/" + edited.Id,
+            input with { ExpectedVersion = edited.Version, Description = edited.Description }));
+        Assert.Equal(edited.Id, usedUnchanged.Id); Assert.Equal(edited.Version, usedUnchanged.Version);
+        var next = await Read<SharedDocument>(await owner.PutAsJsonAsync(route + "/" + edited.Id,
+            input with { ExpectedVersion = edited.Version, Name = input.Name + " latest", Description = "Updated after use" }));
+        Assert.NotEqual(edited.Id, next.Id); Assert.Equal(edited.FamilyId, next.FamilyId);
+        Assert.Equal(2, next.Edition); Assert.Equal(1, next.Version); Assert.Equal("Published", next.Status);
+        Assert.Equal("Updated before use", (await owner.GetFromJsonAsync<SharedDocument>(route + "/" + edited.Id))!.Description);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(route + "/" + edited.Id, input with { ExpectedVersion = edited.Version })).StatusCode);
+        var page = (await owner.GetFromJsonAsync<SharedPage>(route + "?status=Published&latestOnly=true&search=" + Uri.EscapeDataString(input.Name)))!;
+        Assert.Single(page.Items); Assert.Equal(next.Id, page.Items[0].Id); Assert.Equal(1, page.Total);
+        var oldName = (await owner.GetFromJsonAsync<SharedPage>(route + "?status=Published&latestOnly=false&search=" + Uri.EscapeDataString(input.Name)))!;
+        Assert.Equal(2, oldName.Total);
+        var archived = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + next.Id + "/archive", new SharedVersion(next.Version, WholeFamily: true)));
+        Assert.All((await owner.GetFromJsonAsync<SharedDocument[]>(route + "/" + next.Id + "/versions"))!, v => Assert.Equal("Archived", v.Status));
+        Assert.Empty((await owner.GetFromJsonAsync<SharedPage>(route + "?status=Published&latestOnly=true&search=" + Uri.EscapeDataString(input.Name)))!.Items);
+        var restored = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + archived.Id + "/restore", new SharedVersion(archived.Version, WholeFamily: true)));
+        Assert.Equal(next.Id, restored.Id); Assert.Equal("Published", restored.Status);
+        var copy = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + restored.Id + "/duplicate",
+            new SharedDuplicate(input.Name + " independent", restored.Version, PublishImmediately: true)));
+        Assert.Equal("Published", copy.Status); Assert.NotEqual(restored.FamilyId, copy.FamilyId);
+        Assert.Empty((await owner.GetFromJsonAsync<SharedPage>(route + "?status=Archived&latestOnly=true&search=" + Uri.EscapeDataString(input.Name)))!.Items);
+        var local = await owner.GetFromJsonAsync<SetupDocument[]>($"/api/v1/locations/{w.Location}/room-defaults");
+        var target = Assert.Single(local!, d => d.Id == operation.CreatedReferences[0]);
+        Assert.Equal(input.Name, target.Data.GetProperty("name").GetString());
+        Assert.Equal(1, target.Version);
+    }
+
+    [CompactPostgresFact]
+    public async Task SharedImmediateSaveRecognizesSetupProvenanceAndCompletesLegacyDraft()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner);
+        const string route = "/api/v1/shared-configuration/policy-templates";
+        var input = SharedInput("policy-templates");
+        var draft = await Read<SharedDocument>(await owner.PostAsJsonAsync(route, input));
+        var current = await Read<SharedDocument>(await owner.PutAsJsonAsync(route + "/" + draft.Id,
+            input with { ExpectedVersion = draft.Version, PublishImmediately = true }));
+        Assert.Equal(draft.Id, current.Id); Assert.Equal("Published", current.Status);
+        var setup = SetupDraft() with { SourceReferences = [new(current.Id, current.Version, current.Resource)] };
+        var created = await Read<LocationSetupResult>(await Keyed(owner, SetupRoute, setup, Guid.NewGuid()));
+        var next = await Read<SharedDocument>(await owner.PutAsJsonAsync(route + "/" + current.Id,
+            input with { ExpectedVersion = current.Version, PublishImmediately = true, Description = "Changed after setup" }));
+        Assert.Equal(2, next.Edition); Assert.NotEqual(current.Id, next.Id);
+        Assert.Equal(current.Description, (await owner.GetFromJsonAsync<SharedDocument>(route + "/" + current.Id))!.Description);
+        var usage = (await owner.GetFromJsonAsync<SharedUsage>(route + "/" + next.Id + "/applications"))!;
+        var applied = Assert.Single(usage.Items);
+        Assert.Equal(1, usage.LocationsUsing); Assert.Equal(1, usage.Total);
+        Assert.Equal(current.Id, applied.SourceId); Assert.Equal(current.Version, applied.SourceVersion);
+        Assert.Equal(current.Edition, applied.SourceEdition); Assert.Equal(created.Location.Id, applied.TargetLocationId);
+        var saved = await owner.GetFromJsonAsync<SetupDocument[]>($"/api/v1/operating-policies?locationId={created.Location.Id}");
+        Assert.Equal(setup.Policy!.Content, Assert.Single(saved!).Data.GetProperty("content").GetString());
+    }
+
+    [CompactPostgresFact]
+    public async Task SharedImmediateCatalogPreservesNestedReferencesAndRejectsInvalidRestore()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner);
+        const string catalogRoute = "/api/v1/shared-configuration/asset-catalog";
+        const string roomRoute = "/api/v1/shared-configuration/room-type-templates";
+        var catalogInput = SharedInput("asset-catalog") with { PublishImmediately = true };
+        var catalog = await Read<SharedDocument>(await owner.PostAsJsonAsync(catalogRoute, catalogInput));
+        var item = new SharedAssetItem(catalog.Id, catalog.Version, 2, true, "BulkQuantity");
+        var roomInput = SharedInput("room-type-templates") with
+        {
+            PublishImmediately = true,
+            Data = JsonSerializer.SerializeToElement(new
+            {
+                capacity = 3,
+                area = 25,
+                amenities = Array.Empty<string>(),
+                referenceRent = 3500000,
+                assetItems = new[] { item }
+            })
+        };
+        var room = await Read<SharedDocument>(await owner.PostAsJsonAsync(roomRoute, roomInput));
+        var nextCatalog = await Read<SharedDocument>(await owner.PutAsJsonAsync(catalogRoute + "/" + catalog.Id,
+            catalogInput with { ExpectedVersion = catalog.Version, Name = catalog.Name + " new" }));
+        Assert.Equal(2, nextCatalog.Edition); Assert.NotEqual(catalog.Id, nextCatalog.Id);
+        var frozen = (await owner.GetFromJsonAsync<SharedDocument>(roomRoute + "/" + room.Id))!.Data.GetProperty("assetItems")[0];
+        Assert.Equal(catalog.Name, frozen.GetProperty("catalog").GetProperty("name").GetString());
+        Assert.Equal(catalog.Id, frozen.GetProperty("catalogId").GetGuid());
+        var archivedRoom = await Read<SharedDocument>(await owner.PostAsJsonAsync(roomRoute + "/" + room.Id + "/archive", new SharedVersion(room.Version, WholeFamily: true)));
+        await Read<SharedDocument>(await owner.PostAsJsonAsync(catalogRoute + "/" + nextCatalog.Id + "/archive", new SharedVersion(nextCatalog.Version, WholeFamily: true)));
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(roomRoute + "/" + room.Id + "/restore", new SharedVersion(archivedRoom.Version, WholeFamily: true))).StatusCode);
+        Assert.Equal("Archived", (await owner.GetFromJsonAsync<SharedDocument>(roomRoute + "/" + room.Id))!.Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(roomRoute, roomInput with { Name = roomInput.Name + " invalid" })).StatusCode);
+    }
+
+    [CompactPostgresFact]
+    public async Task SharedTemplateNamesRemainReservedAfterArchiveAndNormalizeWhitespace()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner);
+        const string route = "/api/v1/shared-configuration/room-type-templates";
+        var input = SharedInput("room-type-templates") with { Name = "Phòng 3 giường " + Guid.NewGuid().ToString("N") };
+        var draft = await Read<SharedDocument>(await owner.PostAsJsonAsync(route, input));
+        var equivalent = input with { Name = "  " + input.Name.ToUpperInvariant().Replace(" ", "   ").Normalize(System.Text.NormalizationForm.FormD) + "  " };
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(route, equivalent)).StatusCode);
+        var archived = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/archive", new SharedVersion(draft.Version)));
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(route, equivalent)).StatusCode);
+        var other = await Read<SharedDocument>(await owner.PostAsJsonAsync(route, input with { Name = input.Name + " khác" }));
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsJsonAsync(route + "/" + other.Id, equivalent with { ExpectedVersion = other.Version })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(route + "/" + other.Id + "/duplicate", new SharedDuplicate(equivalent.Name, other.Version))).StatusCode);
+        var restored = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/restore", new SharedVersion(archived.Version)));
+        var published = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/publish", new SharedVersion(restored.Version)));
+        var next = await Read<SharedDocument>(await owner.PostAsJsonAsync(route + "/" + draft.Id + "/versions", new SharedVersion(published.Version)));
+        Assert.Equal(draft.FamilyId, next.FamilyId);
+        Assert.Equal(2, next.Edition);
+    }
+    [CompactPostgresFact]
     public async Task SharedRoomAndCatalogRejectUnknownAndInvalidData()
     {
         var w = await Seed(); using var owner = await Client(w.Owner);

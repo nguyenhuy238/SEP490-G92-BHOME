@@ -293,7 +293,7 @@ it('repairs only the known malformed RENT display across the list, detail, edito
   await screen.findByRole('heading', { name: 'Kết thúc áp dụng: Giá thuê phòng' });
   fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  fireEvent.click(within(row).getByRole('button', { name: 'Sửa giá tương lai' }));
+  fireEvent.click(within(row).getByRole('button', { name: 'Chỉnh sửa' }));
   dialog = within(await screen.findByRole('dialog'));
   expect(dialog.getByLabelText(/Tên khoản thu/)).toHaveValue('Giá thuê phòng');
   expect(dialog.getByLabelText(/Đơn giá VND/)).toHaveValue('3.500.000,1251');
@@ -301,7 +301,7 @@ it('repairs only the known malformed RENT display across the list, detail, edito
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
   const customRow = screen.getByRole('row', { name: /Tiền thuê căn hộ sân vườn/ });
-  fireEvent.click(within(customRow).getByRole('button', { name: 'Tạo giá kế tiếp' }));
+  fireEvent.click(within(customRow).getByRole('button', { name: 'Chỉnh sửa' }));
   dialog = within(await screen.findByRole('dialog'));
   expect(dialog.getByLabelText(/Tên khoản thu/)).toHaveValue(custom.name);
   expect(broken.name).toBe('Gi? thu? ph?ng');
@@ -354,7 +354,7 @@ it('localizes only the exact generated rent name, hides redundant codes and pres
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   fireEvent.click(
     within(await screen.findByRole('row', { name: /Giá thuê P\.101/ })).getByRole('button', {
-      name: 'Tạo giá kế tiếp',
+      name: 'Chỉnh sửa',
     }),
   );
   expect(within(await screen.findByRole('dialog')).getByLabelText(/Tên khoản thu/)).toHaveValue(
@@ -392,7 +392,7 @@ it('keeps a service fee name untouched and shows the exact per-person monthly un
   expect(within(row).getByText('120.000,1251 đ')).toBeInTheDocument();
   expect(within(row).getByText('/người/tháng')).toBeInTheDocument();
   expect(within(row).queryByText('PERSON_FEE')).not.toBeInTheDocument();
-  fireEvent.click(within(row).getByRole('button', { name: 'Tạo giá kế tiếp' }));
+  fireEvent.click(within(row).getByRole('button', { name: 'Chỉnh sửa' }));
   const dialog = within(await screen.findByRole('dialog'));
   expect(dialog.getByLabelText(/Tên khoản thu/)).toHaveValue('Gi? thu? ph?ng');
   expect(dialog.getByLabelText('Cách tính phí dịch vụ')).toHaveTextContent('Cố định/người/tháng');
@@ -441,7 +441,7 @@ it('keeps exact price, effect and permitted actions visible in a mobile record',
   expect(within(record).getByText('Toàn cơ sở')).toBeVisible();
   expect(within(record).getByText('Sắp áp dụng')).toBeVisible();
   expect(within(record).getByText('01/01/2099 → Không thời hạn')).toBeVisible();
-  expect(within(record).getByRole('button', { name: 'Tạo giá kế tiếp' })).toBeVisible();
+  expect(within(record).getByRole('button', { name: 'Chỉnh sửa' })).toBeVisible();
   fireEvent.click(within(record).getByRole('button', { name: 'Chi tiết' }));
   expect(await screen.findByRole('dialog')).toBeVisible();
   expect(state.request.mock.calls.some(([, init]) => init?.method)).toBe(false);

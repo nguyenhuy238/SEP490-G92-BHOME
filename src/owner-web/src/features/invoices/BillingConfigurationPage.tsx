@@ -29,6 +29,7 @@ import { PageHeader, FilterToolbar } from '../../components/common/PortalUI';
 import { useInvoiceApi } from './useInvoiceApi';
 import { ConflictReload } from '../locations/components/ConflictReload';
 import { todayVietnam } from '../staff/staffContracts';
+import { canEditPolicyInPlace } from './policyVersions';
 
 /**
  * Inline, read-only guide for the existing /pricing demo. It deliberately
@@ -197,7 +198,7 @@ function LocationBilling({ location }: { location: string }) {
           </Stack>
           <Typography variant="body2" color="text.secondary">
             Kiểm tra khoản thu, phạm vi phòng hoặc cơ sở và ngày hiệu lực. Sử dụng “Thêm biểu giá”
-            để bắt đầu hoặc “Tạo giá kế tiếp” khi cần thay đổi mức giá.
+            để bắt đầu hoặc “Chỉnh sửa” khi cần thay đổi mức giá. Hợp đồng đã chốt giữ nguyên giá.
           </Typography>
           {policies.isPending && <LinearProgress />}
           {policies.error && (
@@ -244,10 +245,17 @@ function LocationBilling({ location }: { location: string }) {
                     {p.effectiveTo?.split('-').reverse().join('/') ?? 'Không hạn'} ·{' '}
                     {p.roomId ? 'Phòng' : 'Cơ sở'}
                   </Typography>
+                  {p.lastContractEndDate && (
+                    <Typography variant="caption" color="text.secondary">
+                      Ràng buộc hợp đồng đến {p.lastContractEndDate.split('-').reverse().join('/')}
+                    </Typography>
+                  )}
                 </Stack>
-                <Button variant="outlined" size="small" onClick={() => openPolicy(p)}>
-                  Tạo giá kế tiếp
-                </Button>
+                {(!p.effectiveTo || p.effectiveTo >= todayVietnam()) && (
+                  <Button variant="outlined" size="small" onClick={() => openPolicy(p)}>
+                    Chỉnh sửa
+                  </Button>
+                )}
               </Stack>
             ))}
           <Stack direction="row" sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
@@ -318,8 +326,9 @@ function LocationBilling({ location }: { location: string }) {
             key={replacing?.id ?? 'new'}
             location={location}
             previous={replacing}
+            mode={replacing && canEditPolicyInPlace(replacing) ? 'update' : 'replace'}
             onSaved={() => {
-              setNotice(replacing ? 'Đã lưu phiên bản biểu giá kế tiếp.' : 'Đã thêm biểu giá.');
+              setNotice(replacing ? 'Đã lưu biểu giá.' : 'Đã thêm biểu giá.');
               setReplacing(null);
               setShowPolicyForm(false);
               void policies.refetch();
@@ -522,7 +531,7 @@ export function PolicyForm({
   previous: initialPrevious,
   onSaved,
   onCancel,
-  mode = 'replace',
+  mode: initialMode = 'replace',
   defaultCategory = 1,
 }: {
   location: string;
@@ -541,10 +550,11 @@ export function PolicyForm({
   const earliest = (policy: Policy | null) => {
     const today = todayVietnam();
     if (!policy) return today;
-    if (mode === 'update') return nextDay(today);
+    if (canEditPolicyInPlace(policy)) return nextDay(today);
     return nextDay(policy.effectiveFrom > today ? policy.effectiveFrom : today);
   };
   const [previous, setPrevious] = useState(initialPrevious);
+  const mode = previous ? (canEditPolicyInPlace(previous) ? 'update' : 'replace') : initialMode;
   const cache = useQueryClient();
   const { session } = useAuth();
   const rooms = useQuery({
@@ -556,11 +566,11 @@ export function PolicyForm({
       ),
   });
   const [category, setCategory] = useState(String(previous?.category ?? defaultCategory)),
-    [rate, setRate] = useState(mode === 'update' ? String(previous?.rate ?? '') : ''),
+    [rate, setRate] = useState(String(previous?.rate ?? '')),
     [date, setDate] = useState(
       mode === 'update' ? (previous?.effectiveFrom ?? '') : earliest(previous),
     ),
-    [endDate, setEndDate] = useState(mode === 'update' ? (previous?.effectiveTo ?? '') : '');
+    [endDate, setEndDate] = useState(previous?.effectiveTo ?? '');
   const [name, setName] = useState(previous?.name ?? ''),
     [code, setCode] = useState(previous?.chargeCode ?? ''),
     [reason, setReason] = useState('');
@@ -639,16 +649,13 @@ export function PolicyForm({
       >
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            {previous
-              ? (mode === 'update' ? 'Chỉnh sửa giá tương lai: ' : 'Phiên bản giá kế tiếp: ') +
-                previous.name
-              : 'Thêm biểu giá'}
+            {previous ? 'Chỉnh sửa: ' + previous.name : 'Thêm biểu giá'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {previous
               ? mode === 'update'
-                ? 'Cập nhật phiên bản giá tương lai hiện tại; máy chủ sẽ kiểm tra hiệu lực và phiên bản.'
-                : 'Tạo mức giá mới theo ngày hiệu lực, không thay đổi hóa đơn đã phát hành.'
+                ? 'Giá tương lai chưa sử dụng được cập nhật nếu vẫn đủ điều kiện.'
+                : 'Khi thay đổi, hệ thống tạo phiên bản mới. Hợp đồng đã chốt giữ nguyên đơn giá.'
               : 'Chọn phạm vi, khoản thu và đơn giá cần áp dụng.'}
           </Typography>
         </Box>
@@ -705,6 +712,7 @@ export function PolicyForm({
               select
               label="Cách tính phí dịch vụ"
               value={serviceMethod}
+              disabled={!!previous && mode === 'update'}
               onChange={(e) => {
                 setServiceMethod(e.target.value);
                 setRate('');
@@ -788,9 +796,9 @@ export function PolicyForm({
               setCode(latest.chargeCode);
               setRoomId(latest.roomId ?? '');
               setCategory(String(latest.category));
-              setRate(mode === 'update' ? String(latest.rate) : '');
-              setDate(mode === 'update' ? latest.effectiveFrom : earliest(latest));
-              setEndDate(mode === 'update' ? (latest.effectiveTo ?? '') : '');
+              setRate(String(latest.rate));
+              setDate(canEditPolicyInPlace(latest) ? latest.effectiveFrom : earliest(latest));
+              setEndDate(latest.effectiveTo ?? '');
               setServiceMethod(latest.method === 2 ? '2' : '0');
               setReason('');
               setError('');

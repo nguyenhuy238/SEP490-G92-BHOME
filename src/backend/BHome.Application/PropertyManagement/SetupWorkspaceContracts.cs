@@ -22,6 +22,7 @@ public interface ISetupWorkspaceStore
     Task<IReadOnlyList<Guid>> RoomsAsync(Guid locationId, CancellationToken t);
     Task<IReadOnlyList<Room>> ReviewRoomsAsync(Guid locationId, CancellationToken t);
     Task<IReadOnlyList<RoomInventoryPhysicalAsset>> ReviewRoomAssetsAsync(Guid locationId, CancellationToken t);
+    Task<IReadOnlyList<RoomInventoryPhysicalAsset>> ReviewCommonAssetsAsync(Guid locationId, CancellationToken t);
     Task<IReadOnlyList<SetupDocument>> ReviewDocumentsAsync(Guid locationId, Guid[] activeAssetIds, CancellationToken t);
     Task<IReadOnlyList<SetupDocument>> EvidenceDocumentsAsync(Guid locationId, Guid[] evidenceIds, CancellationToken t);
     Task<IReadOnlyList<SetupDocument>> SaveBatchAsync(Guid locationId, IReadOnlyList<SetupDocumentWrite> documents, Guid actor, CancellationToken t);
@@ -48,7 +49,8 @@ public sealed record RoomInventoryPhysicalAsset(Asset Asset, AssetMetadata Metad
 public sealed record AssetInventoryCreation(Asset Asset, AssetMetadata Metadata, string Reason);
 public sealed record SetupDocumentWrite(Guid Id, string Kind, string Status, object Data, int ExpectedVersion);
 public sealed record SetupEvidenceUpload(Guid EvidenceId, string ObjectKey);
-public sealed record AssetTemplateItem(Guid Id, string Name, string Category, string TrackingMode, int Quantity, string? Unit = null);
+public sealed record AssetTemplateItem(Guid Id, string Name, string Category, string TrackingMode, int Quantity, string? Unit = null,
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal? ReferencePrice = null);
 public sealed record AssetTemplateWrite(Guid LocationId, string Name, AssetTemplateItem[] Items, int ExpectedVersion = 0,
     bool Scoped = false, Guid? ScopeRoomId = null);
 public sealed record TemplatePublish(int ExpectedVersion);

@@ -1,5 +1,8 @@
 # Local development
 
+Team onboarding Local / Staging / Production: [BHOME_TEAM_ENVIRONMENT_SETUP.md](BHOME_TEAM_ENVIRONMENT_SETUP.md).
+The standard local profile is independent and needs no tunnel. Public email/signing and SePay callbacks use Staging.
+
 Use .NET 8 SDK, Node 22.13+ (22.x) and npm 10+. `global.json` intentionally does not use .NET
 9/10 even if those SDKs are present. Native Android development also requires Android Studio/JDK;
 iOS requires macOS and Xcode. Native tools are not needed for browser development.
@@ -93,6 +96,15 @@ Set `DevelopmentDatabase__InitializeOnStartup=false` to opt out explicitly.
 Development loads repository `.env` as a fallback above appsettings, below user-secrets, process
 environment and CLI arguments. The launcher selects exactly its `-EnvironmentFile`. Missing local
 configuration still requires the one-time setup; the project does not install/start PostgreSQL for you.
+Staff assignment rollover has a dedicated Development-only default:
+`StaffAssignments:AutoReconcileEnabled=true`, `StaffAssignments:PollSeconds=60`. When
+`Jobs:Enabled=false` it reconciles current Location responsibilities on startup and at most
+every 60 seconds thereafter, without turning on contract-expiry, billing or other general jobs.
+If the general `Jobs:Enabled=true` worker is running, it owns assignment reconciliation instead
+and this dedicated fallback does not run. To disable the fallback explicitly set
+`StaffAssignments__AutoReconcileEnabled=false` and restart the API. In Staging/Production either
+enable and supervise the general job worker or explicitly enable this Location-only fallback;
+verify startup logs and a dated Staff handoff before relying on automatic rollover.
 No users, contracts, invoices or shared passwords are automatically seeded. Use
 `scripts/New-LocalTestUsers.ps1` once and choose your own password at its hidden prompt.
 

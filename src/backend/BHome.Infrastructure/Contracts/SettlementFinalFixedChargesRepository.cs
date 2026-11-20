@@ -22,7 +22,7 @@ internal sealed partial class SettlementReceivablesRepository
         BillingSchedule? schedule = null;
         if (!string.IsNullOrWhiteSpace(invoice?.ScheduleSnapshot))
             try { schedule = JsonSerializer.Deserialize<BillingSchedule>(invoice.ScheduleSnapshot); } catch (JsonException) { missing.Add("billing_schedule_snapshot_invalid"); }
-        else schedule = await db.Set<BillingSchedule>().AsNoTracking().SingleOrDefaultAsync(s => s.LocationId == contract.Room.LocationId, token);
+        else schedule = await new InvoiceRepository(db).ScheduleForPeriodAsync(contract.Room.LocationId, period, token);
         if (schedule is not null && (schedule.LocationId != contract.Room.LocationId || schedule.Version < 1 ||
             !Enum.IsDefined(schedule.RentSource) || !Enum.IsDefined(schedule.RateDate) || !Enum.IsDefined(schedule.PartialMonth) || !Enum.IsDefined(schedule.Rounding)))
         { schedule = null; missing.Add("billing_schedule_snapshot_invalid"); }

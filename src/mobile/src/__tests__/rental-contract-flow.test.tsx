@@ -308,7 +308,7 @@ it.each([true, false])(
     const next = await screen.findByRole('button', { name: 'Tiếp tục thanh toán' });
     await waitFor(() => expect(next).toHaveProperty('disabled', false));
     fireEvent.click(next);
-    await screen.findByText('Bước 7/8');
+    await screen.findByText('Bước 6/7');
     expect(screen.getByText('Tiền cọc hợp đồng')).toBeTruthy();
   },
 );
@@ -363,7 +363,7 @@ it('blocks QR after Owner-only confirmation until Staff simulation is persisted 
       }),
   );
   const { reload } = flow(c, 'Staff');
-  expect(screen.getByText('Bước 6/8')).toBeTruthy();
+  expect(screen.getByText('Bước 5/7')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Tiếp tục' })).toHaveProperty('disabled', true);
   const simulate = screen.getByRole('button', { name: 'Mô phỏng Tenant ký' });
   fireEvent.click(simulate);
@@ -405,7 +405,7 @@ it('keeps one-sided and simulated signatures at signing, without marking payment
     completed: ['preview'],
   });
   flow(c);
-  expect(screen.getByText('Bước 6/8')).toBeTruthy();
+  expect(screen.getByText('Bước 5/7')).toBeTruthy();
   expect(
     (screen.getByRole('button', { name: 'Tiếp tục thanh toán' }) as HTMLButtonElement).disabled,
   ).toBe(true);
@@ -426,7 +426,7 @@ it('shows a missing QR honestly and never invents transfer references or marks a
     verifiedDeposit: '0',
     blockers: ['security_deposit_insufficient'],
   });
-  expect(screen.getByText('Bước 7/8')).toBeTruthy();
+  expect(screen.getByText('Bước 6/7')).toBeTruthy();
   expect(screen.getByText('Chưa có QR tiền cọc')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Tôi đã thanh toán' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra kích hoạt' }));

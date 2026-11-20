@@ -53,6 +53,12 @@ public sealed class OperationalTask : AuditableEntity
     // Meter details remain in the existing table to preserve reading/evidence FKs and API IDs.
     // Kind and database constraints distinguish these from Owner-verified operational work.
     public Guid? ContractId { get; set; }
+    // Stored inside Compact24 operational_tasks.task_data.state; no second asset ledger.
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string MoveInInventoryJson { get; set; } = "";
+    // Frozen checklist for each effective Staff/Location assignment. Compact24 persists it in task_data.state.
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string LocationAssetInventoryJson { get; set; } = "";
     public Guid? BillingRoomId { get; set; }
     public UtilityType? BillingUtilityType { get; set; }
     public Guid? AutomationPlanId { get; set; }
@@ -71,7 +77,12 @@ public sealed class OperationalTask : AuditableEntity
 
     public void ApplyAction(string action, DateTimeOffset now, Guid actor)
     {
-        if (Kind != OperationalTaskKind.AdHoc) throw new InvalidOperationException("meter_workflow_required");
+        if (Kind == OperationalTaskKind.MoveInInventory && action != "start")
+            throw new InvalidOperationException("move_in_inventory_workflow_required");
+        if (Kind == OperationalTaskKind.LocationAssetHandover && action is not ("start" or "progress" or "blockers" or "submit" or "coordinate"))
+            throw new InvalidOperationException("location_asset_handover_workflow_required");
+        if (Kind is not (OperationalTaskKind.AdHoc or OperationalTaskKind.MoveInInventory or OperationalTaskKind.LocationAssetHandover))
+            throw new InvalidOperationException("meter_workflow_required");
         Status = (action, Status) switch
         {
             ("start", MeterTaskStatus.Assigned) => MeterTaskStatus.InProgress,

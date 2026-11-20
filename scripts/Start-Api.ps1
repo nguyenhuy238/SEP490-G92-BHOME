@@ -7,12 +7,18 @@ $configurationFile = if ([System.IO.Path]::IsPathRooted($EnvironmentFile)) { $En
 else { Join-Path $repositoryRoot $EnvironmentFile }
 if (-not (Test-Path -LiteralPath $configurationFile)) { throw 'Selected environment file is missing. Run scripts/Initialize-Local.ps1 for the default .env, or use dotnet run with user-secrets.' }
 $env:BHOME_ENV_FILE = $configurationFile
-foreach ($line in Get-Content -LiteralPath $configurationFile) {
-    if ($line -match '^((ConnectionStrings|Jwt|Sessions|AuthRateLimit|AuthWeb|AuthenticationEmail|Sms|SmsRecovery|ObjectStorage|Jobs|Email|Cors|BankIntegration|SePay|NotificationIntegration|NotificationChannels|OwnerSetup|ElectronicContractIntegration|Ocr|IdentityProtection|Capture|Kestrel|MobileDevelopment|Api|MainDraft|DevelopmentDatabase|DigitalSigning|ContractSigning|AnonymousSigning|HoldingTesting)__[^=]+|AllowedHosts)=(.*)$') {
-        if ($Matches[1] -eq 'AnonymousSigning__OtpHmacKey' -and [string]::IsNullOrWhiteSpace($Matches[3])) { continue }
-        [Environment]::SetEnvironmentVariable($Matches[1], $Matches[3], 'Process')
-    }
+if (Get-Content -Encoding UTF8 -LiteralPath $configurationFile | Where-Object { $_ -match '^ASPNETCORE_ENVIRONMENT=(?!Development\s*$)' }) {
+    throw 'Selected file is not a Development profile. Deploy Staging/Production through Docker Compose.'
 }
+# Let the API's single Development loader handle all option keys and preserve
+# user-secrets/process/CLI precedence. Never launch a deployment from a local .env.
+if ($env:ASPNETCORE_ENVIRONMENT -and $env:ASPNETCORE_ENVIRONMENT -ne 'Development') {
+    throw 'Start-Api.ps1 is a local Development launcher. Run the published API with deployment environment variables for Staging/Production.'
+}
+if ($env:DOTNET_ENVIRONMENT -and $env:DOTNET_ENVIRONMENT -ne 'Development') {
+    throw 'Clear DOTNET_ENVIRONMENT or set it to Development for the local launcher.'
+}
+$env:ASPNETCORE_ENVIRONMENT = 'Development'
 Push-Location $repositoryRoot
 try { dotnet run --project src/backend/BHome.Api; exit $LASTEXITCODE }
 finally { Pop-Location }

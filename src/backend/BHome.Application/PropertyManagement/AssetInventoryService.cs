@@ -8,9 +8,12 @@ namespace BHome.Application.PropertyManagement;
 public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUser user, ResourceAccess access) : SetupWorkspaceService(store, user, access)
 {
     public static bool IsLocationDefault(SetupDocument document) =>
-        document.Status == "Published" && !Read<AssetTemplateWrite>(document).Scoped;
+        document.Status == "Published" && !Read<AssetTemplateWrite>(document).Scoped && !document.Data.TryGetProperty("familyId", out _);
 
-    private static AssetTemplateItem[] ValidateItems(AssetTemplateItem[] items, bool allowEmpty = false)
+    private static Guid TemplateFamily(SetupDocument document) => document.Data.TryGetProperty("familyId", out var family) && family.TryGetGuid(out var id) ? id : document.Id;
+    private static int TemplateEdition(SetupDocument document) => document.Data.TryGetProperty("edition", out var edition) && edition.TryGetInt32(out var value) ? value : 1;
+
+    internal static AssetTemplateItem[] ValidateItems(AssetTemplateItem[] items, bool allowEmpty = false)
     {
         if (items is null || items.Length > 100 || !allowEmpty && items.Length == 0 ||
             items.Any(i => i is null) || items.Select(i => i.Id).Distinct().Count() != items.Length)
@@ -18,6 +21,7 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
         return items.Select(item =>
         {
             if (item.Id == Guid.Empty || item.Quantity is < 1 or > 10000 ||
+                !InventoryAcquisitionPrice.ValidReference(item.ReferencePrice) ||
                 item.TrackingMode is not ("Serialized" or "BulkQuantity"))
                 throw new PropertyException(400, "invalid_template_item");
             return item with
@@ -39,6 +43,45 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             if (id is { } existing && (await Document(existing, "AssetTemplate", true, t)).Status != "Draft") throw new PropertyException(409, "published_template_immutable");
             return await Store.SaveAsync(id ?? Guid.NewGuid(), input.LocationId, "AssetTemplate", "Draft", input, input.ExpectedVersion, Actor, t);
         }, t);
+    }
+    // New Owner workflow: a usable standalone package is saved atomically, but
+    // never becomes an implicit Location-wide default or synchronizes rooms.
+    public async Task<SetupDocument> SaveReadyTemplateAsync(Guid? id, AssetTemplateWrite input, CancellationToken t)
+    {
+        Owner(); await Scope(input.LocationId, true, t);
+        input = input with { Name = Text(input.Name, 150), Items = ValidateItems(input.Items) };
+        if (input.Scoped || input.ScopeRoomId is not null) throw new PropertyException(400, "template_scope_invalid");
+        return await Store.TransactionAsync(input.LocationId, async () =>
+        {
+            var before = id is { } existing ? await Document(existing, "AssetTemplate", true, t) : null;
+            if (before is not null && (before.LocationId != input.LocationId || Read<AssetTemplateWrite>(before).Scoped)) throw new PropertyException(400, "template_scope_invalid");
+            if ((before?.Version ?? 0) != input.ExpectedVersion || before is not null && before.Status is not ("Draft" or "Published")) throw new PropertyException(409, "stale_version");
+            var all = await Store.ListAsync(input.LocationId, "AssetTemplate", t);
+            var nextId = before?.Id ?? Guid.NewGuid(); var family = before is null ? nextId : TemplateFamily(before);
+            var edition = before is null ? 1 : TemplateEdition(before); Guid? previous = null;
+            var expected = before?.Version ?? 0;
+            if (all.Any(d => !Read<AssetTemplateWrite>(d).Scoped && TemplateFamily(d) != family && string.Equals(Read<AssetTemplateWrite>(d).Name.Trim(), input.Name, StringComparison.OrdinalIgnoreCase)))
+                throw new PropertyException(409, "duplicate_shared_name");
+            if (before is not null)
+            {
+                if (all.Any(d => TemplateFamily(d) == family && TemplateEdition(d) > edition)) throw new PropertyException(409, "stale_version");
+                var old = Read<AssetTemplateWrite>(before);
+                var unchanged = old.Name == input.Name && old.Items.OrderBy(i => i.Id).SequenceEqual(input.Items.OrderBy(i => i.Id));
+                if (before.Status == "Published" && unchanged) return before;
+                var used = IsLocationDefault(before) || (await Store.ListAsync(input.LocationId, "RoomDefaults", t)).Any(d => d.Data.TryGetProperty("assetTemplateId", out var link) && link.ValueKind == JsonValueKind.String && link.TryGetGuid(out var template) && template == before.Id) ||
+                    (await Store.ListAsync(input.LocationId, "AssetTemplateAssignment", t)).Any(d => Read<AssetTemplateAssignment>(d).TemplateId == before.Id) ||
+                    (await Store.ListAsync(input.LocationId, "DesiredAssets", t)).Any(d => Read<DesiredAssets>(d).TemplateId == before.Id);
+                if (used && !unchanged) { previous = before.Id; nextId = Guid.NewGuid(); edition++; expected = 0; }
+            }
+            return await Store.SaveAsync(nextId, input.LocationId, "AssetTemplate", "Published",
+                new { input.LocationId, input.Name, input.Items, scoped = false, familyId = family, edition, previousVersionId = previous }, expected, Actor, t);
+        }, t);
+    }
+
+    public async Task<IReadOnlyList<SetupDocument>> TemplateVersionsAsync(Guid id, CancellationToken t)
+    {
+        var doc = await Document(id, "AssetTemplate", true, t);
+        return (await Store.ListAsync(doc.LocationId, "AssetTemplate", t)).Where(d => TemplateFamily(d) == TemplateFamily(doc)).OrderBy(TemplateEdition).ToArray();
     }
     public async Task<AssetSyncRun> PublishAsync(Guid id, int expectedVersion, CancellationToken t)
     {
@@ -348,6 +391,26 @@ public sealed class AssetInventoryService(ISetupWorkspaceStore store, ICurrentUs
             asset = await Store.AssetAsync(id, t) ?? throw new PropertyException(404, "resource_not_found");
             var previous = (await Store.AssetMetadataAsync([id], t))[id];
             m = m with { Unit = string.IsNullOrWhiteSpace(m.Unit) ? previous.Unit : Text(m.Unit, 80) };
+            // An Owner-verified purchase is a historical financial snapshot, not
+            // a mutable reference price. An acquisition-price change with no
+            // additional units would retroactively revalue that purchase before
+            // the background capital ledger has run. Only an increase in
+            // quantity may carry a new unit price for newly acquired units.
+            if (previous.PurchaseCost.HasValue && previous.PurchaseCost != m.PurchaseCost &&
+                m.Quantity <= previous.Quantity)
+            {
+                var roomVerified = (await Store.ListAsync(asset.LocationId, "AssetVerification", t))
+                    .Any(document => document.Status == "Verified" &&
+                        document.Data.TryGetProperty("assetId", out var linked) &&
+                        linked.TryGetGuid(out var linkedId) && linkedId == id);
+                var commonVerified = !roomVerified && (await Store.ListAsync(
+                        asset.LocationId, "CommonAssetInventoryVerification", t))
+                    .Any(document => document.Status == "Verified" &&
+                        document.Data.TryGetProperty("assetId", out var linked) &&
+                        linked.TryGetGuid(out var linkedId) && linkedId == id);
+                if (roomVerified || commonVerified)
+                    throw new PropertyException(409, "asset_acquisition_price_locked");
+            }
             if ((m.Quantity != previous.Quantity || m.TrackingMode != previous.TrackingMode) &&
                 (asset.Status is AssetStatus.Retired or AssetStatus.UnderRepair || await Store.HasOpenAssetWorkAsync(id, t)))
                 throw new PropertyException(409, "asset_workflow_controlled");

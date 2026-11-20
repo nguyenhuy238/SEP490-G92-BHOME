@@ -29,7 +29,7 @@ export function StaffApiPage() {
   const [selected, setSelected] = useState('');
   const [editor, setEditor] = useState<Staff | null | undefined>();
   const [renewal, setRenewal] = useState<Staff>();
-  const [invite, setInvite] = useState(false);
+  const [issuePassword, setIssuePassword] = useState(false);
   const action = useOwnerAction();
   useEffect(() => {
     const timer = setTimeout(
@@ -197,29 +197,36 @@ export function StaffApiPage() {
         close={() => setSelected('')}
         edit={setEditor}
         renew={setRenewal}
-        invite={() => setInvite(true)}
+        invite={() => setIssuePassword(true)}
         retry={() => void detail.refetch()}
         actionBusy={action.busy}
       />
       <ConfirmDialog
         error={action.error}
-        open={invite}
-        title="Gửi thông tin tài khoản"
+        open={issuePassword}
+        title="Thiết lập mật khẩu mới và gửi cho nhân viên"
         busy={action.busy}
-        onClose={() => setInvite(false)}
+        onClose={() => setIssuePassword(false)}
         onConfirm={() => {
           void action
             .run(
-              () => action.command(`/api/v1/staff/${selected}/invitation`, 'POST'),
-              'Đã tiếp nhận yêu cầu lời mời. Email đang chờ xử lý; chưa phải xác nhận đã giao thư.',
+              () => action.command(`/api/v1/staff/${selected}/issue-password`, 'POST'),
+              'Yêu cầu cấp mật khẩu đã được tiếp nhận hoặc đang chờ gửi email. Chưa có xác nhận thư đã được giao.',
             )
             .then((ok) => {
-              if (ok) setInvite(false);
+              if (ok) setIssuePassword(false);
             });
         }}
       >
-        Gửi liên kết dùng một lần để nhân viên tự đặt mật khẩu đến email hiện tại. Không gửi mật
-        khẩu rõ.
+        {detail.data?.email && (
+          <Typography sx={{ mb: 1, fontWeight: 600, overflowWrap: 'anywhere' }}>
+            Email nhận: {detail.data.email}
+          </Typography>
+        )}
+        Hệ thống tạo mật khẩu ngẫu nhiên 12 ký tự và gửi tài khoản đăng nhập cùng mật khẩu mới đến
+        email của nhân viên. Mật khẩu cũ sẽ không còn hiệu lực. Nhân viên có thể đổi mật khẩu trong
+        Hồ sơ → Bảo mật và mật khẩu trên ứng dụng Mobile. Vì mật khẩu được gửi qua email, nên đổi
+        lại ngay sau khi đăng nhập.
       </ConfirmDialog>
       {editor !== undefined && <StaffEditor staff={editor} close={() => setEditor(undefined)} />}
       {renewal && <StaffEditor staff={renewal} renewal close={() => setRenewal(undefined)} />}

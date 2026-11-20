@@ -11,6 +11,36 @@ namespace BHome.IntegrationTests.Contracts;
 // "Ký bởi / Ngày ký", both signatures still valid, and the page pictures a signer places the box on.
 public sealed class ContractVisibleSignatureTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HoldingTenantAcceptancePreservesVerifiedOwnerPdfSignature(bool previouslyAccepted)
+    {
+        using var backend = ContractPdfRendererTests.Backend();
+        using var scope = backend.CreateScope();
+        var renderer = scope.ServiceProvider.GetRequiredService<IContractDocumentRenderer>();
+        var signer = backend.GetRequiredService<IPdfSigner>();
+        var evidence = scope.ServiceProvider.GetRequiredService<IInternalAcceptanceRenderer>();
+        var source = await renderer.RenderAsync(ContractPdfRendererTests.Snapshot(), default);
+        using var remote = new SyntheticRemoteSigningProvider();
+        var credential = Assert.Single(await remote.ListCredentialsAsync("SYNTHETIC-OWNER", null, default));
+        var prepared = signer.Prepare(source, credential.Chain, DateTimeOffset.UtcNow, null);
+        var reference = await remote.RequestSignatureAsync(new("SYNTHETIC-OWNER", credential.CredentialId,
+            prepared.DataToSignDigest, Guid.NewGuid().ToString(), "Synthetic Holding owner signature"), default);
+        var signed = Assert.IsType<SignStatus.Signed>(await remote.GetStatusAsync("SYNTHETIC-OWNER", reference, default));
+        var ownerPdf = signer.Complete(prepared.PreparedPdf, prepared.FieldName, prepared.DocumentDigest, credential.Chain, signed.RawSignature);
+        var resident = Guid.NewGuid(); var at = DateTimeOffset.UtcNow;
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source));
+        var accepted = evidence.Accept(previouslyAccepted ? source : ownerPdf, [[new(.1, .1), new(.8, .8)]], resident, at,
+            hash, preserveSignatures: true);
+        var final = previouslyAccepted ? evidence.AppendTenant(ownerPdf, accepted.SignaturePng, resident, at, hash) : accepted.Pdf;
+        using var document = new PdfDocument(new PdfReader(new MemoryStream(final)));
+        var signatures = new SignatureUtil(document);
+        var name = Assert.Single(signatures.GetSignatureNames());
+        Assert.True(signatures.ReadSignatureData(name).VerifySignatureIntegrityAndAuthenticity());
+        Assert.False(signatures.SignatureCoversWholeDocument(name)); // Tenant evidence is a later incremental revision.
+    }
+
     [Fact]
     public async Task SIGN02_BothPartiesSignVisiblyInTheirOwnBoxWithAGeneratedPicture()
     {

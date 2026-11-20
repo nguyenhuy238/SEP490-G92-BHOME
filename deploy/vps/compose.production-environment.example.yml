@@ -1,0 +1,11 @@
+# Prepare privately; apply only in an approved Production release.
+# Contains no credentials and does not enable any payment integration.
+services:
+  api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      DOTNET_ENVIRONMENT: Production
+      Deployment__Environment: Production
+      Deployment__OwnerOrigin: https://owner.103.146.23.157.sslip.io
+      Deployment__ApiOrigin: https://api.103.146.23.157.sslip.io
+      Deployment__PublicOrigin: https://www.103.146.23.157.sslip.io

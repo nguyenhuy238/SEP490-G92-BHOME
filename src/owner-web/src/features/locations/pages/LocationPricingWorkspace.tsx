@@ -25,6 +25,7 @@ import {
 } from '../../../../../../packages/client-core/src/invoices';
 import { useInvoiceApi } from '../../invoices/useInvoiceApi';
 import { PolicyForm } from '../../invoices/BillingConfigurationPage';
+import { canEditPolicyInPlace } from '../../invoices/policyVersions';
 import { ErrorState, LoadingState } from '../../../components/common/PortalUI';
 import { OwnerTable } from '../../../components/common/OwnerWorkspace';
 import { LocationEmpty } from '../components/LocationSection';
@@ -54,7 +55,10 @@ function policyUnit(policy: Policy) {
 }
 
 function policyStatus(policy: Policy, today: string) {
-  if (policy.effectiveTo && policy.effectiveTo < today) return 'Đã kết thúc';
+  if (policy.effectiveTo && policy.effectiveTo < today)
+    return policy.lastContractEndDate && policy.lastContractEndDate >= today
+      ? 'Chỉ hợp đồng cũ'
+      : 'Đã kết thúc';
   if (policy.effectiveFrom > today) return 'Sắp áp dụng';
   return 'Đang hiệu lực';
 }
@@ -388,6 +392,11 @@ export function LocationPricingWorkspace({
                           >
                             {dateLabel(policy.effectiveFrom)} → {dateLabel(policy.effectiveTo)}
                           </Typography>
+                          {policy.lastContractEndDate && (
+                            <Typography variant="caption" color="text.secondary">
+                              Ràng buộc đến {dateLabel(policy.lastContractEndDate)}
+                            </Typography>
+                          )}
                         </Stack>
                       ),
                     },
@@ -398,27 +407,15 @@ export function LocationPricingWorkspace({
                           <Button onClick={() => setDetail(policy)}>Chi tiết</Button>
                           {owner &&
                             !policy.roomTypeId &&
-                            policyStatus(policy, today) !== 'Đã kết thúc' && (
-                              <>
-                                <Button
-                                  onClick={() => {
-                                    setEditMode('replace');
-                                    setEditing(policy);
-                                  }}
-                                >
-                                  Tạo giá kế tiếp
-                                </Button>
-                                {policy.effectiveFrom > today && !policy.firstUsedAt && (
-                                  <Button
-                                    onClick={() => {
-                                      setEditMode('update');
-                                      setEditing(policy);
-                                    }}
-                                  >
-                                    Sửa giá tương lai
-                                  </Button>
-                                )}
-                              </>
+                            (!policy.effectiveTo || policy.effectiveTo >= today) && (
+                              <Button
+                                onClick={() => {
+                                  setEditMode(canEditPolicyInPlace(policy) ? 'update' : 'replace');
+                                  setEditing(policy);
+                                }}
+                              >
+                                Chỉnh sửa
+                              </Button>
                             )}
                         </Stack>
                       ),
@@ -446,21 +443,8 @@ export function LocationPricingWorkspace({
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>
-          {editing
-            ? editMode === 'update'
-              ? 'Chỉnh sửa giá tương lai'
-              : 'Tạo phiên bản giá kế tiếp'
-            : 'Thêm khoản thu'}
-        </DialogTitle>
+        <DialogTitle>{editing ? 'Chỉnh sửa biểu giá' : 'Thêm khoản thu'}</DialogTitle>
         <DialogContent>
-          <Alert severity="info" sx={{ mb: 1.5 }}>
-            {editing
-              ? editMode === 'update'
-                ? 'Chỉ sửa được giá tương lai chưa sử dụng. Hợp đồng và hóa đơn đã chốt giữ nguyên lịch sử.'
-                : 'Giá kế tiếp áp dụng từ ngày đã chọn. Hợp đồng và hóa đơn đã chốt giữ nguyên lịch sử.'
-              : 'Giá thuê dùng để tham khảo cho thỏa thuận mới. Hợp đồng và hóa đơn đã chốt giữ nguyên lịch sử.'}
-          </Alert>
           {editing !== undefined && (
             <PolicyForm
               key={editing?.id ?? 'new'}
@@ -488,12 +472,18 @@ export function LocationPricingWorkspace({
               Đơn giá: {detail && formatBillingDecimal(detail.rate)} đ/
               {detail && policyUnit(detail)}
             </Typography>
-            <Typography>Phiên bản: {detail?.version}</Typography>
+            <Typography>Phiên bản: {detail?.edition ?? 1}</Typography>
             <Typography>
-              Ngày hiệu lực: {dateLabel(detail?.effectiveFrom)} – {dateLabel(detail?.effectiveTo)}
+              Thời gian lựa chọn cho hợp đồng mới: {dateLabel(detail?.effectiveFrom)} –{' '}
+              {dateLabel(detail?.effectiveTo)}
             </Typography>
             {detail && <Typography>Trạng thái: {policyStatus(detail, today)}</Typography>}
-            {detail?.firstUsedAt && (
+            {detail?.lastContractEndDate && (
+              <Typography>
+                Ràng buộc hợp đồng đến: {dateLabel(detail.lastContractEndDate)}
+              </Typography>
+            )}
+            {(detail?.firstUsedAt || detail?.lastContractEndDate) && (
               <Typography variant="body2" color="text.secondary">
                 Đã được sử dụng; không thể sửa trực tiếp phiên bản này.
               </Typography>
@@ -510,7 +500,8 @@ export function LocationPricingWorkspace({
           {owner &&
             detail &&
             !detail.roomTypeId &&
-            policyStatus(detail, today) !== 'Đã kết thúc' && (
+            (!detail.effectiveTo || detail.effectiveTo >= today) &&
+            !detail.lastContractEndDate && (
               <Button
                 color="warning"
                 onClick={() => {

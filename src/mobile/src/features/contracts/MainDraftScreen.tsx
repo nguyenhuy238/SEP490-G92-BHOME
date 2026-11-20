@@ -693,6 +693,26 @@ export function MainDraftScreen({
                           {!!fieldErrors.phone && (
                             <Text style={styles.error}>{fieldErrors.phone}</Text>
                           )}
+                          {preparation.residents.some((person) => !person.representative) && (
+                            <>
+                              <Text style={styles.support}>Thành viên cùng ở · Đã lưu</Text>
+                              {preparation.residents
+                                .filter((person) => !person.representative)
+                                .map((person) => (
+                                  <View key={person.id} style={{ gap: 4 }}>
+                                    <Text>
+                                      {person.fullName}
+                                      {person.relationship ? ` · ${person.relationship}` : ''}
+                                    </Text>
+                                    {!!person.dateOfBirth && (
+                                      <Text style={styles.support}>
+                                        Ngày sinh: {displayContractDate(person.dateOfBirth)}
+                                      </Text>
+                                    )}
+                                  </View>
+                                ))}
+                            </>
+                          )}
                         </Box>
                       </>
                     ) : (

@@ -15,6 +15,24 @@ function New-Network([string]$Address, [int]$Index, [int]$Metric = 10, [string]$
         IPv4Address = @([pscustomobject]@{ IPAddress = $Address; SkipAsSource = $false })
     }
 }
+# Exercise host updates without running certificate, user-secret or database setup.
+$prepareAst = [Management.Automation.Language.Parser]::ParseFile(
+    (Join-Path $repositoryRoot 'scripts/Prepare-OcrMobile.ps1'), [ref]$null, [ref]$null)
+$hostStatements = $prepareAst.EndBlock.Statements | Where-Object {
+    $_.Extent.Text -match '^\$configuredHosts\s*=' -or $_.Extent.Text -match "^Set-Setting 'AllowedHosts'"
+}
+Assert-Equal $hostStatements.Count 2 'locate actual host configuration statements'
+$hostUpdate = [scriptblock]::Create(($hostStatements.Extent.Text -join "`n"))
+& {
+    function Set-Setting($key, $value) { $script:preparedHosts = $value }
+    $LanIp = '192.168.1.8'; $developmentHost = 'desktop.example.invalid'
+    $configText = 'AllowedHosts=localhost;payments.example.invalid;mail.example.invalid'
+    . $hostUpdate
+    Assert-Equal $script:preparedHosts 'localhost;127.0.0.1;192.168.1.8;desktop.example.invalid;payments.example.invalid;mail.example.invalid' 'retain payment and email tunnel hosts without duplicate localhost'
+    $configText = ''
+    . $hostUpdate
+    Assert-Equal $script:preparedHosts 'localhost;127.0.0.1;192.168.1.8;desktop.example.invalid' 'missing allowlist retains explicit LAN defaults'
+}
 $tlsSettings = Get-MobileHttpsSniSettings 'synthetic-mobile.pfx' 'synthetic-password' 'synthetic-localhost.pfx'
 Assert-Equal $tlsSettings['Kestrel:Endpoints:MobileHttps:Sni:*:Certificate:Path'] 'synthetic-mobile.pfx' 'LAN and no-SNI clients retain mobile certificate'
 Assert-Equal $tlsSettings['Kestrel:Endpoints:MobileHttps:Sni:localhost:Certificate:Path'] 'synthetic-localhost.pfx' 'localhost uses the trusted development certificate'
@@ -53,6 +71,11 @@ DevelopmentDatabase__InitializeOnStartup=false
 DevelopmentDatabase__AllowPreviousPropertySchema=false
 MainDraft__SigningProvider=synthetic-provider
 IdentityProtection__EncryptionKeys__local-v1=synthetic-identity-key
+Email__DeliveryMode=Capture
+Email__Host=localhost
+Email__Username=synthetic-mobile-would-overwrite-smtp
+Email__AppPassword=synthetic-mobile-would-overwrite-gmail-password
+Email__AllowedRecipients__0=synthetic@example.invalid
 EXPO_PUBLIC_API_BASE_URL=https://other-machine.local:7240
 UNRELATED_SECRET=synthetic-unrelated
 # Jwt__SigningKey=ignored-comment
@@ -67,6 +90,13 @@ Assert-Equal $syntheticSettings['DevelopmentDatabase:InitializeOnStartup'] 'fals
 Assert-Equal $syntheticSettings['DevelopmentDatabase:AllowPreviousPropertySchema'] 'false' 'preserve the selected database compatibility setting'
 Assert-Equal $syntheticSettings['MainDraft:SigningProvider'] 'synthetic-provider' 'preserve selected contract configuration'
 Assert-Equal $syntheticSettings['IdentityProtection:EncryptionKeys:local-v1'] 'synthetic-identity-key' 'preserve identity settings'
+Assert-Equal @($syntheticSettings.Keys | Where-Object { $_ -like 'Email:*' }).Count 0 'Mobile preparation never overwrites SMTP, recipients, or App Password in User Secrets'
+
+# The standalone launcher must also avoid overriding User Secrets via process
+# environment, which has higher precedence even if preparation skipped Email.
+$ocrLauncher = [IO.File]::ReadAllText((Join-Path $repositoryRoot 'scripts/Start-OcrMobile.ps1'))
+Assert-Equal ($ocrLauncher -match 'AuthenticationEmail\|Email\|ObjectStorage') $false 'standalone API launcher must not import Email from .env as process overrides'
+Assert-Equal ($ocrLauncher -match 'AuthenticationEmail\|ObjectStorage') $true 'standalone API launcher retains non-email configuration import'
 Assert-Equal $syntheticSettings.ContainsKey('UNRELATED_SECRET') $false 'do not import unknown settings'
 Assert-Equal $syntheticSettings.ContainsKey('EXPO_PUBLIC_API_BASE_URL') $false 'do not import client workstation configuration'
 Assert-Equal $syntheticSettings['Api:PublicBaseUrl'] '$(throw ''must-not-evaluate'')' 'parse env values as data without shell evaluation'

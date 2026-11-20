@@ -48,6 +48,7 @@ import { useWorkspaceHeaderRefresh } from '../../components/WorkspaceHeaderConte
 import { mobileContractActions } from './contractSections';
 import { OwnerMainContractFlow } from '../owner/OwnerMainContractFlow';
 import { OwnerWebNotice } from '../../components/OwnerWebNotice';
+import { ContractLoading } from './ContractLoading';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
@@ -422,7 +423,7 @@ function LiveContractDetail({
     [uploadChecked, setUploadChecked] = useState(false);
   const uploadLock = useRef(false);
   const [notice, setNotice] = useFeedbackState('success');
-  if (detail.loading) return <ActivityIndicator accessibilityLabel="Đang tải chi tiết hợp đồng" />;
+  if (detail.loading) return <ContractLoading label="Đang tải chi tiết hợp đồng…" />;
   if (detail.error)
     return (
       <Box>

@@ -21,7 +21,8 @@ public sealed record MainContractSettingsInput(Guid OwnerSignerId, DateOnly Effe
     [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString | System.Text.Json.Serialization.JsonNumberHandling.WriteAsString)] decimal SecurityDeposit, string PaymentTerms, string AdditionalTerms, LessorProfile Owner, int ExpectedVersion);
 public sealed record MainContractSettings(Guid OwnerSignerId, DateOnly EffectiveFrom, DateOnly? EffectiveTo,
     [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString | System.Text.Json.Serialization.JsonNumberHandling.WriteAsString)] decimal SecurityDeposit, string PaymentTerms, string AdditionalTerms, LessorProfile Owner, int Version);
-public sealed record DraftTenantSummary(Guid Id, string FullName, string MaskedCitizenNumber, DateOnly? DateOfIssue, bool Representative, string? Phone = null, string? Email = null);
+public sealed record DraftTenantSummary(Guid Id, string FullName, string MaskedCitizenNumber, DateOnly? DateOfIssue, bool Representative, string? Phone = null, string? Email = null,
+    DateOnly? DateOfBirth = null, string? Relationship = null);
 public sealed record MainDraftPreparation(Guid RoomId, Guid LocationId, string LocationName, string RoomNumber,
     string Address, DateOnly EffectiveOn, IReadOnlyList<DraftTenantSummary> Residents,
     IReadOnlyList<PolicyDto> Charges, [property: System.Text.Json.Serialization.JsonNumberHandling(System.Text.Json.Serialization.JsonNumberHandling.WriteAsString | System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString)] decimal? SecurityDeposit, string? PaymentTerms,
@@ -41,6 +42,7 @@ public interface IMainDraftData
     Task SetSettingsAsync(Guid locationId, MainContractSettingsInput input, Guid actor, CancellationToken t);
     Task<IdentityConfirmation> IdentityAsync(Guid roomId, Guid residentId, CancellationToken t);
     Task<string?> PhoneAsync(Guid roomId, Guid residentId, CancellationToken t);
+    Task<HouseholdMemberInput?> HouseholdMemberAsync(Guid roomId, Guid residentId, CancellationToken t) => Task.FromResult<HouseholdMemberInput?>(null);
     Task<string?> EmailAsync(Guid roomId, Guid residentId, CancellationToken t) => Task.FromResult<string?>(null);
     Task<bool> DuplicateAsync(Guid roomId, Guid except, Guid[] people, DateOnly from, DateOnly to, CancellationToken t);
     string Protect(Contract contract, MainDraftState value);

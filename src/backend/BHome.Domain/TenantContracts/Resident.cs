@@ -16,6 +16,14 @@ public sealed class Resident : AuditableEntity
     public IdentityVerificationStatus VerificationStatus { get; set; }
     public Guid OwnerUserId { get; set; }
     public Guid? TenantUserId { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public Guid? HouseholdRepresentativeId { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string? HouseholdClientKey { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string HouseholdProfile { get; set; } = "{}";
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public DateTimeOffset? HouseholdConfirmedAt { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public Guid? HouseholdConfirmedByUserId { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public int HouseholdVersion { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public Guid? HouseholdRequestKey { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped] public string? HouseholdRequestHash { get; set; }
     // Contact identity exists before a login account. Only Compact24 persists this field.
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string? ContactEmail { get; set; }

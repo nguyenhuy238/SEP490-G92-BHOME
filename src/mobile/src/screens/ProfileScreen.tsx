@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { TenantHouseholdPanel } from '../features/profile/TenantHouseholdPanel';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Avatar, Button, Dialog, Portal, Text } from 'react-native-paper';
@@ -105,6 +106,7 @@ export function ProfileScreen() {
             </View>
           </View>
           <ProfileInfoCard profile={data} edit={() => go('profile-edit')} />
+          {role === 'Tenant' && <TenantHouseholdPanel />}
           {staff && (
             <View style={styles.card}>
               <Text variant="titleMedium">Cơ sở được phân công</Text>
