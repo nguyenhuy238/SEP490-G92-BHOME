@@ -21,6 +21,16 @@ script policy for npm shims.
 
 ## Configuration
 
+For the agreed November 2026 team-local profile, use
+[TEAM_LOCAL_ENVIRONMENT.md](TEAM_LOCAL_ENVIRONMENT.md). It sets Mailpit Capture
+SMTP on loopback, Owner HTTP 5173 and local HTTPS signing 5176 with a generated
+PEM certificate, while retaining existing private secrets and database volumes:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-TeamEnvironment.ps1 -SkipNetworkChecks
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Initialize-TeamEnvironment.ps1 -CheckOnly -SkipNetworkChecks
+```
+
 Run `scripts/Initialize-Local.ps1` once to generate an ignored `.env` with random local PostgreSQL,
 MinIO and JWT values. It refuses to overwrite an existing file. Keep the file private. Alternatively
 copy the root example and replace placeholders yourself. Compose and the Development API read
@@ -62,7 +72,9 @@ with no EF migration history table. Keep the old migrations/snapshot for legacy 
 do not run `dotnet ef database update` against Compact24.
 
 One-time prerequisites: generate your own ignored `.env`, configure its connection for your local
-PostgreSQL, and start PostgreSQL (native or Docker). Docker users can run:
+PostgreSQL, and start PostgreSQL (native or Docker). The team example binds PostgreSQL to
+`127.0.0.1:5434`, while older local databases may keep their matching configured port.
+Docker users can run:
 
 ```powershell
 docker compose config --quiet

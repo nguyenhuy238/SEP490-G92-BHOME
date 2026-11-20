@@ -45,6 +45,7 @@ export function InternalSigningPanel({
     refetchInterval: 5000,
   });
   const [link, setLink] = useState(''),
+    [manualToken, setManualToken] = useState(''),
     [error, setError] = useState(''),
     [reviewed, setReviewed] = useState(false),
     [sandboxReviewed, setSandboxReviewed] = useState(false),
@@ -58,6 +59,7 @@ export function InternalSigningPanel({
       setReviewed(false);
       setSandboxReviewed(false);
       setLink('');
+      setManualToken('');
     });
     return () => {
       active = false;
@@ -245,11 +247,8 @@ export function InternalSigningPanel({
                 contract.snapshotHash!,
                 new Date(Date.now() + 60 * 60 * 1000).toISOString(),
               );
-              setLink(
-                window.location.origin +
-                  '/contract-signing#token=' +
-                  encodeURIComponent(issued.token ?? ''),
-              );
+              setLink(issued.url ?? '');
+              setManualToken(issued.url ? '' : (issued.token ?? ''));
             })
           }
         >
@@ -275,6 +274,14 @@ export function InternalSigningPanel({
           value={link}
           slotProps={{ input: { readOnly: true } }}
           helperText="Chỉ hiển thị lần này. Liên kết mới sẽ thu hồi lời mời cũ chưa chấp thuận."
+        />
+      )}
+      {manualToken && (
+        <TextField
+          label="Mã lời mời dùng một lần"
+          value={manualToken}
+          slotProps={{ input: { readOnly: true } }}
+          helperText="Chưa cấu hình URL trang ký HTTPS. Có thể dùng mã trên Mobile; cần cấu hình AnonymousSigning:PublicSigningUrl để gửi liên kết qua email."
         />
       )}
       {status.data?.invitations

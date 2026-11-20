@@ -177,6 +177,7 @@ public static class DependencyInjection
             BHome.Infrastructure.Modules.StaffOperations.Persistence.PostgresOperationalTaskRepository>();
         services.AddScoped<BHome.Application.StaffOperations.ITaskEvidenceFiles, BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceFiles>();
         services.AddScoped<BHome.Application.StaffOperations.OperationalTaskService>();
+        services.AddScoped<BHome.Infrastructure.StaffOperations.LocationAssetHandoverService>();
         services.AddHostedService<BHome.Infrastructure.Modules.StaffOperations.TaskEvidenceCleanup>();
         services.AddScoped<BHome.Application.Operations.IOperationsRepository,
             BHome.Infrastructure.Modules.Operations.CompactOperationsRepository>();

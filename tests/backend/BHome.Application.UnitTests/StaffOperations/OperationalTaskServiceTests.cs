@@ -32,10 +32,14 @@ public sealed class OperationalTaskServiceTests
             Repo.LocationAsync(default, default).ReturnsForAnyArgs(c => new TaskLocation(c.Arg<Guid>(), true));
             Repo.ResponsibilityAsync(default, default, default).ReturnsForAnyArgs(_ => Responsibility);
             Repo.FindAsync(default, default).ReturnsForAnyArgs(c => Added.OfType<OperationalTask>().SingleOrDefault(x => x.Id == c.Arg<Guid>()));
+            Repo.OwnerConfirmedInventoryAsync(default!, default).ReturnsForAnyArgs(c =>
+                JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(c.Arg<OperationalTask>().LocationAssetInventoryJson)!);
             Repo.CommandAsync(default, default, default).ReturnsForAnyArgs(c => Added.OfType<OperationalTaskCommand>().SingleOrDefault(x => x.ActorId == c.ArgAt<Guid>(0) && x.Key == c.ArgAt<Guid>(1)));
             Repo.EvidenceAsync(default, default).ReturnsForAnyArgs(c => (IReadOnlyList<OperationalTaskEvidence>)Added.OfType<OperationalTaskEvidence>().Where(x => x.TaskId == c.Arg<Guid>()).ToArray());
             Repo.OwnersAsync(default).ReturnsForAnyArgs(new[] { User.UserId!.Value });
             Repo.TransactionAsync(default, default, default, default(Func<Task<TaskView>>)!, default).ReturnsForAnyArgs(c => c.Arg<Func<Task<TaskView>>>()());
+            Repo.TransactionAsync(default, default, default, default(Func<Task<LocationAssetInventoryView>>)!, default)
+                .ReturnsForAnyArgs(c => c.Arg<Func<Task<LocationAssetInventoryView>>>()());
             Repo.TransactionAsync(default, default, default, default(Func<Task<TaskEvidenceView>>)!, default).ReturnsForAnyArgs(c => c.Arg<Func<Task<TaskEvidenceView>>>()());
             Repo.When(x => x.Add(Arg.Any<object>())).Do(c => Added.Add(c.Arg<object>()));
             Files.Validate(default!, default).ReturnsForAnyArgs("image/png");
@@ -230,6 +234,154 @@ public sealed class OperationalTaskServiceTests
         Assert.Equal(next, task.RecordedStaffUserId);
         Assert.Contains(r.Added.OfType<OperationalTaskHistory>(), h => h.Action == "created" && h.ResponsibleStaffUserId == r.Staff);
         Assert.Contains(r.Added.OfType<OperationalTaskHistory>(), h => h.Action == "responsibility_changed" && h.ResponsibleStaffUserId == next);
+    }
+    [Fact]
+    public async Task LocationAssetInventoryRequiresAllChecksAndPreservesInheritedEvidence()
+    {
+        var rig = new Rig();
+        var room = Guid.NewGuid();
+        var sourceContract = Guid.NewGuid();
+        var inherited = new LocationAssetInventoryItem(Guid.NewGuid(), room, "P.101", Guid.NewGuid(),
+            "Giường", 2, null, true, true, sourceContract);
+        var common = new LocationAssetInventoryItem(Guid.NewGuid(), null, null, Guid.NewGuid(), "Bình cứu hỏa", 1, "Sảnh");
+        var task = new OperationalTask
+        {
+            Kind = OperationalTaskKind.LocationAssetHandover,
+            LocationId = rig.Location,
+            AssignmentId = rig.Responsibility!.AssignmentId,
+            AssignedStaffUserId = rig.Staff,
+            LocationAssetInventoryJson = JsonSerializer.Serialize(new LocationAssetInventorySnapshot(
+                rig.Responsibility.AssignmentId, new DateOnly(2026, 10, 31), [inherited, common]))
+        };
+        rig.Added.Add(task);
+        rig.AsStaff();
+        var beginning = await rig.Service.LocationAssetInventoryAsync(task.Id, default);
+        Assert.Equal(2, beginning.TotalCount);
+        Assert.Equal(1, beginning.CheckedCount);
+        var begun = await rig.Service.ActAsync(task.Id, "start", new(task.Version), Guid.NewGuid(), default);
+        var image = await rig.Service.UploadAsync(task.Id, Guid.NewGuid(), new MemoryStream([1, 2, 3]), default);
+        Assert.Equal(task.Id, Assert.Single(rig.Added.OfType<OperationalTaskEvidence>()).TaskId);
+        Assert.Equal(image.Id, Assert.Single(rig.Added.OfType<OperationalTaskEvidence>()).Id);
+        begun = await rig.Service.GetAsync(task.Id, default);
+        Assert.Equal("location_asset_inventory_incomplete", (await Assert.ThrowsAsync<OperationalTaskException>(
+            () => rig.Service.ActAsync(task.Id, "submit", new(begun.Version, "Đã kiểm"), Guid.NewGuid(), default))).Code);
+        Assert.Equal("location_asset_inventory_inherited_item_immutable", (await Assert.ThrowsAsync<OperationalTaskException>(
+            () => rig.Service.UpdateLocationAssetInventoryItemAsync(task.Id, inherited.Id,
+                new(begun.Version, false), Guid.NewGuid(), default))).Code);
+        var checkedView = await rig.Service.UpdateLocationAssetInventoryItemAsync(task.Id, common.Id,
+            new(begun.Version, true, "Đã kiểm tra thực tế"), Guid.NewGuid(), default);
+        Assert.Equal(checkedView.TotalCount, checkedView.CheckedCount);
+        Assert.Equal(sourceContract, Assert.Single(checkedView.Items, item => item.Inherited).SourceHandoverContractId);
+        var submitted = await rig.Service.ActAsync(task.Id, "submit",
+            new(checkedView.Version, "Hoàn thành kiểm kê"), Guid.NewGuid(), default);
+        Assert.Equal("PendingVerification", submitted.Status);
+        rig.User.Role = Roles.Owner;
+        rig.User.UserId = Guid.NewGuid();
+        Assert.Equal("location_asset_handover_workflow_required", (await Assert.ThrowsAsync<OperationalTaskException>(
+            () => rig.Service.ActAsync(task.Id, "verify", new(submitted.Version), Guid.NewGuid(), default))).Code);
+    }
+
+    [Fact]
+    public async Task OwnerReconciliationRemovesOnlyUntouchedLegacyEntriesAndPreservesHistory()
+    {
+        var rig = new Rig();
+        var assignment = rig.Responsibility!.AssignmentId;
+        var confirmed = new LocationAssetInventoryItem(Guid.NewGuid(), Guid.NewGuid(), "P.101",
+            Guid.NewGuid(), "Owner verified bed", 1, null);
+        var staffChecked = confirmed with { Checked = true, Note = "Staff đã kiểm tra thực tế" };
+        var legacy = new LocationAssetInventoryItem(Guid.NewGuid(), Guid.NewGuid(), "P.102",
+            null, "Configured only, not confirmed", 1, null);
+        var task = new OperationalTask
+        {
+            Kind = OperationalTaskKind.LocationAssetHandover, Status = MeterTaskStatus.InProgress,
+            LocationId = rig.Location, AssignmentId = assignment, AssignedStaffUserId = rig.Staff,
+            LocationAssetInventoryJson = JsonSerializer.Serialize(new LocationAssetInventorySnapshot(
+                assignment, new DateOnly(2026, 10, 31), [staffChecked, legacy]))
+        };
+        rig.Added.Add(task);
+        var ownerBaseline = new LocationAssetInventorySnapshot(assignment, new DateOnly(2026, 10, 31), [confirmed]);
+        rig.Repo.OwnerConfirmedInventoryAsync(task, default).Returns(Task.FromResult(ownerBaseline));
+
+        var preview = await rig.Service.PreviewLocationAssetInventoryReconciliationAsync(task.Id, default);
+        Assert.True(preview.CanApply);
+        Assert.Equal(2, preview.CurrentCount);
+        Assert.Equal(1, preview.OwnerConfirmedCount);
+        Assert.Equal(1, preview.RemovedCount);
+
+        var command = new LocationAssetInventoryReconcileCommand(task.Version, true);
+        var key = Guid.NewGuid();
+        var result = await rig.Service.ReconcileLocationAssetInventoryAsync(task.Id, command, key, default);
+        Assert.Equal(task.Version, result.Version);
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(confirmed.AssetId, Assert.Single(result.Items).AssetId);
+        Assert.True(Assert.Single(result.Items).Checked);
+        Assert.Equal("Staff đã kiểm tra thực tế", Assert.Single(result.Items).Note);
+        var replay = await rig.Service.ReconcileLocationAssetInventoryAsync(task.Id, command, key, default);
+        Assert.Equal(result.Version, replay.Version);
+        Assert.Equal(result.TotalCount, replay.TotalCount);
+        Assert.Equal(result.Items.Select(item => item.Id), replay.Items.Select(item => item.Id));
+        Assert.Contains(rig.Added.OfType<OperationalTaskHistory>(), x => x.Action == "location_asset_inventory_owner_reconciled");
+        Assert.Single(rig.Added.OfType<OperationalTaskHistory>(), x => x.Action == "location_asset_inventory_owner_reconciled");
+        rig.AsStaff();
+        Assert.Equal(403, (await Assert.ThrowsAsync<OperationalTaskException>(() =>
+            rig.Service.PreviewLocationAssetInventoryReconciliationAsync(task.Id, default))).Status);
+    }
+
+    [Fact]
+    public async Task OwnerReconciliationRefusesToDropCheckedStaffWorkOrMutateSubmittedTasks()
+    {
+        var rig = new Rig();
+        var assignment = rig.Responsibility!.AssignmentId;
+        var checkedItem = new LocationAssetInventoryItem(Guid.NewGuid(), Guid.NewGuid(), "P.101",
+            Guid.NewGuid(), "Staff checked bed", 1, null, Checked: true, Note: "Đã kiểm tra");
+        var task = new OperationalTask
+        {
+            Kind = OperationalTaskKind.LocationAssetHandover, Status = MeterTaskStatus.InProgress,
+            LocationId = rig.Location, AssignmentId = assignment, AssignedStaffUserId = rig.Staff,
+            LocationAssetInventoryJson = JsonSerializer.Serialize(new LocationAssetInventorySnapshot(
+                assignment, new DateOnly(2026, 10, 31), [checkedItem]))
+        };
+        rig.Added.Add(task);
+        var differentOwnerAsset = new LocationAssetInventoryItem(Guid.NewGuid(), Guid.NewGuid(), "P.102",
+            Guid.NewGuid(), "Different owner verified item", 1, null);
+        rig.Repo.OwnerConfirmedInventoryAsync(task, default).Returns(Task.FromResult(new LocationAssetInventorySnapshot(
+            assignment, new DateOnly(2026, 10, 31), [differentOwnerAsset])));
+        var preview = await rig.Service.PreviewLocationAssetInventoryReconciliationAsync(task.Id, default);
+        Assert.False(preview.CanApply);
+        Assert.Equal("location_asset_inventory_staff_work_conflict", preview.BlockedReason);
+        var before = task.LocationAssetInventoryJson;
+        Assert.Equal("location_asset_inventory_staff_work_conflict", (await Assert.ThrowsAsync<OperationalTaskException>(() =>
+            rig.Service.ReconcileLocationAssetInventoryAsync(task.Id,
+                new(task.Version, true), Guid.NewGuid(), default))).Code);
+        Assert.Equal(before, task.LocationAssetInventoryJson);
+        task.Status = MeterTaskStatus.PendingVerification;
+        Assert.Equal("location_asset_inventory_reconciliation_locked", (await Assert.ThrowsAsync<OperationalTaskException>(() =>
+            rig.Service.ReconcileLocationAssetInventoryAsync(task.Id,
+                new(task.Version, true), Guid.NewGuid(), default))).Code);
+        Assert.Empty(rig.Added.OfType<OperationalTaskHistory>());
+    }
+
+    [Fact]
+    public async Task NewAssignmentCannotAlterPreviousAssignmentInventory()
+    {
+        var rig = new Rig();
+        var firstAssignmentId = rig.Responsibility!.AssignmentId;
+        var item = new LocationAssetInventoryItem(Guid.NewGuid(), null, null, null, "Kiểm tra khu chung", 0, "Sảnh");
+        var task = new OperationalTask
+        {
+            Kind = OperationalTaskKind.LocationAssetHandover,
+            LocationId = rig.Location,
+            AssignmentId = firstAssignmentId,
+            AssignedStaffUserId = rig.Staff,
+            LocationAssetInventoryJson = JsonSerializer.Serialize(new LocationAssetInventorySnapshot(
+                firstAssignmentId, new DateOnly(2026, 10, 31), [item]))
+        };
+        rig.Added.Add(task);
+        rig.Responsibility = new(Guid.NewGuid(), rig.Staff); // Same Staff, later responsibility period.
+        rig.AsStaff();
+        var denied = await Assert.ThrowsAsync<OperationalTaskException>(
+            () => rig.Service.LocationAssetInventoryAsync(task.Id, default));
+        Assert.Equal(404, denied.Status);
     }
     [Fact]
     public async Task DeadlineExtensionRetainsOverdueHistoryWithoutDiscardingExecutionState()

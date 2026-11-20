@@ -11,7 +11,9 @@ public static class ContractSigningModes
 public sealed record SigningResidentEmail(Guid ResidentId, [Required, EmailAddress, StringLength(256)] string Email);
 public sealed record SigningInvitationInput(DateTimeOffset ExpiresAt, [Required] string SnapshotHash,
     [EmailAddress, StringLength(256)] string? RecipientEmail = null, IReadOnlyList<SigningResidentEmail>? Contacts = null);
-public sealed record SigningInvitationResult(Guid Id, string Status, DateTimeOffset ExpiresAt, string? Token = null);
+// Url is returned only with the one-time Owner-visible token. The server's configured HTTPS
+// signing origin is authoritative, so Web and email cannot hand out different link origins.
+public sealed record SigningInvitationResult(Guid Id, string Status, DateTimeOffset ExpiresAt, string? Token = null, string? Url = null);
 public static class SigningContacts
 {
     public static IReadOnlyDictionary<Guid, string> Read(ContractSigningInvitation? invitation)

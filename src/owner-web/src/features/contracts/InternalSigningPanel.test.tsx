@@ -164,3 +164,29 @@ it('retains unconfirmed state when backend rejects the Owner action', async () =
   await waitFor(() => expect(button).toBeEnabled());
   expect(screen.queryByText(/Owner đã xác nhận:/)).toBeNull();
 });
+
+it.each([
+  ['configured HTTPS link', 'https://localhost:5176/contract-signing#token=test-once', 'Liên kết gửi riêng cho người đại diện'],
+  ['missing HTTPS link', null, 'Mã lời mời dùng một lần'],
+])('uses the server invitation URL for %s, never the HTTP Owner origin', async (_label, url, field) => {
+  const request = vi.fn(async (path: string) => {
+    if (path.endsWith('/signing-invitations'))
+      return { id: 'invite', token: 'test-once', url, status: 'OwnerApprovedLink', expiresAt: '2026-11-20T00:00:00Z' };
+    return { invitations: [], tenantAcceptedAt: null, ownerAcceptedAt: null, sandboxAvailable: false };
+  });
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <InternalSigningPanel
+        api={contractClient(request as ContractRequest)}
+        contract={{ ...contract, isDevelopmentDemo: true }}
+        onChanged={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  const button = await screen.findByRole('button', { name: 'Duyệt và tạo lời mời ký' });
+  fireEvent.click(screen.getByLabelText('Tôi đã đọc đúng PDF và đồng ý nội dung hợp đồng'));
+  fireEvent.click(button);
+  const input = await screen.findByLabelText(field) as HTMLInputElement;
+  expect(input.value).toBe(url ?? 'test-once');
+  expect(input.value).not.toContain(window.location.origin);
+});

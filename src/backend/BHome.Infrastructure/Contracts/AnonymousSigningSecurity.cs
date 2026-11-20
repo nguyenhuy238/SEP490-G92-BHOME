@@ -20,7 +20,8 @@ internal sealed class AnonymousSigningSecurity(IOptions<AnonymousSigningOptions>
     public bool EmailConfigured => channel.IsConfigured("EMAIL") &&
         (emailSender.IsConfigured || channelOptions.Value.Mode != "Sandbox");
     public string? InvitationUrl(string token) => Uri.TryCreate(options.Value.PublicSigningUrl, UriKind.Absolute, out var url) &&
-        url.Scheme == "https" && string.IsNullOrEmpty(url.Query) && string.IsNullOrEmpty(url.Fragment)
+        url.Scheme == Uri.UriSchemeHttps && string.IsNullOrEmpty(url.UserInfo) &&
+        string.IsNullOrEmpty(url.Query) && string.IsNullOrEmpty(url.Fragment)
         ? url.AbsoluteUri + "#token=" + Uri.EscapeDataString(token) : null;
     public string OtpHash(Guid invitationId, string tokenHash, string otp)
     {

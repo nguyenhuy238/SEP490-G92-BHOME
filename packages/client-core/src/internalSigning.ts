@@ -74,7 +74,7 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
       recipientEmail?: string,
       contacts?: { residentId: string; email: string }[],
     ) =>
-      post<{ id: string; token?: string | null; status: string; expiresAt: string }>(
+      post<{ id: string; token?: string | null; url?: string | null; status: string; expiresAt: string }>(
         '/api/v1/contracts/' + id + '/signing-invitations',
         {
           snapshotHash,

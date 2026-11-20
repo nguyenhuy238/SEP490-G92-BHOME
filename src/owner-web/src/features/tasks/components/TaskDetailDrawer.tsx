@@ -39,6 +39,8 @@ import {
 } from '../useOperationalTasksApi';
 import { TaskEvidenceGallery } from './TaskEvidenceGallery';
 import { MoveInInventoryReport } from './MoveInInventoryReport';
+import { LocationAssetInventoryReport } from './LocationAssetInventoryReport';
+import { LocationAssetHandoverPanel } from './LocationAssetHandoverPanel';
 
 export function TaskStatus({ task }: { task: OwnerTask }) {
   return (
@@ -82,6 +84,12 @@ const historyNames: Record<string, string> = {
   responsibility_changed: 'Thay đổi trách nhiệm',
   'assignment-replaced': 'Thay đổi phân công cơ sở',
   evidence_uploaded: 'Tải bằng chứng',
+  location_asset_inventory_created: 'Tạo kiểm kê tài sản toàn cơ sở',
+  location_asset_inventory_item_checked: 'Cập nhật xác nhận tài sản',
+  location_asset_handover_approved: 'Owner đã duyệt biên bản',
+  location_asset_handover_owner_signed: 'Owner đã ký xác nhận',
+  location_asset_handover_rework_requested: 'Owner yêu cầu kiểm tra lại',
+  location_asset_handover_completed: 'Hai bên hoàn tất ký bàn giao',
 };
 export function TaskDetailDrawer({
   id,
@@ -102,6 +110,7 @@ export function TaskDetailDrawer({
 }) {
   const [page, setPage] = useState(1);
   const [operation, setOperation] = useState(initialOperation);
+  const [reworkItemIds, setReworkItemIds] = useState<string[]>([]);
   const detail = useOwnerQuery<OwnerTask>(['task', id], `${taskRoot}/${id}`);
   const history = useOwnerQuery<OwnerPage<TaskHistory>>(
     ['task-history', id, page],
@@ -182,7 +191,9 @@ export function TaskDetailDrawer({
               </Typography>
               <Typography>
                 Loại:{' '}
-                {task.kind === 'MoveInInventory'
+                {task.kind === 'LocationAssetHandover'
+                  ? 'Kiểm kê và bàn giao tài sản toàn cơ sở'
+                  : task.kind === 'MoveInInventory'
                   ? 'Kiểm kê tài sản trước bàn giao'
                   : task.kind === 'AdHoc'
                     ? 'Công việc vận hành'
@@ -218,6 +229,25 @@ export function TaskDetailDrawer({
             </Box>
             {task.kind === 'MoveInInventory' && (
               <MoveInInventoryReport taskId={task.id} evidence={evidence.data} />
+            )}
+            {task.kind === 'LocationAssetHandover' && (
+              <>
+                <LocationAssetInventoryReport
+                  taskId={task.id}
+                  selectable={task.status === 'PendingVerification'}
+                  selectedIds={reworkItemIds}
+                  onSelectedIdsChange={setReworkItemIds}
+                />
+                <LocationAssetHandoverPanel
+                  task={task}
+                  notify={notify}
+                  reworkItemIds={reworkItemIds}
+                  onReworked={() => {
+                    setReworkItemIds([]);
+                    void refresh();
+                  }}
+                />
+              </>
             )}
             <Box>
               <Typography variant="h6" sx={{ fontSize: 16, mb: 1 }}>

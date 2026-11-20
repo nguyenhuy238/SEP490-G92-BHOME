@@ -20,5 +20,6 @@ $content = $content.Replace('replace-with-local-minio-password', $storagePasswor
 $content = $content.Replace('replace-with-scoped-storage-access-key', 'bhome_local_admin')
 $content = $content.Replace('replace-with-scoped-storage-secret-key', $storagePassword)
 $content = $content.Replace('replace-with-random-key-at-least-32-bytes', $jwtKey)
+$content = $content.Replace('replace-with-random-key-at-least-32-characters', (New-LocalSecret))
 [System.IO.File]::WriteAllText($target, $content, (New-Object System.Text.UTF8Encoding($false)))
 Write-Output 'Created ignored .env with random local credentials. No credentials were printed.'

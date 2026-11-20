@@ -1,7 +1,8 @@
 # Container foundation
 
-Root Compose starts only local PostgreSQL and MinIO. It reads ignored `.env`, binds host ports to
-loopback, has named volumes and health checks, and does not deploy clients/API. PostgreSQL is pinned
+Root Compose starts local PostgreSQL, MinIO and Mailpit (SMTP capture and its web inbox).
+It reads ignored `.env`, binds host ports to loopback, has named database/storage volumes
+and health checks for PostgreSQL/MinIO, and does not deploy clients/API. PostgreSQL is pinned
 to major 16. MinIO is built from the official `RELEASE.2025-10-15T17-29-55Z` source tag because community
 distribution is source-only. This preserves the required MinIO/S3 architecture without using an
 unverified third-party image. Its first build is slower and requires network access to GitHub/Go

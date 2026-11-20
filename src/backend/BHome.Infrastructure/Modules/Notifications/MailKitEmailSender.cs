@@ -6,13 +6,16 @@ using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using MimeKit;
 
 namespace BHome.Infrastructure.Modules.Notifications;
 
-internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger<MailKitEmailSender> logger)
+internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger<MailKitEmailSender> logger,
+    IHostEnvironment? environment = null)
 {
-    internal bool IsConfigured => options.Value.Enabled && options.Value.Valid();
+    internal bool IsConfigured => options.Value.Enabled && options.Value.Valid() &&
+        (!options.Value.IsCapture || environment?.IsDevelopment() == true || environment?.IsEnvironment("Testing") == true);
 
     internal async Task<string> SendAsync(ChannelMessage message, CancellationToken t)
     {
@@ -36,9 +39,11 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
         var submitting = false;
         try
         {
-            // STARTTLS is mandatory. Never downgrade or disable certificate validation.
-            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls, timeout.Token);
-            await client.AuthenticateAsync(config.Username, config.AppPassword.Replace(" ", ""), timeout.Token);
+            // Capture is strictly local, never relayed to external SMTP; regular SMTP requires STARTTLS.
+            await client.ConnectAsync(config.Host, config.Port,
+                config.IsCapture ? SecureSocketOptions.None : SecureSocketOptions.StartTls, timeout.Token);
+            if (!config.IsCapture)
+                await client.AuthenticateAsync(config.Username, config.AppPassword.Replace(" ", ""), timeout.Token);
             submitting = true;
             await client.SendAsync(mail, timeout.Token);
             logger.LogInformation("SMTP accepted notification {DeliveryKey}; inbox delivery is not confirmed", key);

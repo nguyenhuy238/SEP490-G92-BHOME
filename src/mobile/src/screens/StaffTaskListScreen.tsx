@@ -12,6 +12,7 @@ import { formatInstant } from '../../../../packages/client-core/src/localization
 import { useWorkspaceHeaderRefresh } from '../components/WorkspaceHeaderContext';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
+import type { Named } from '../lib/api';
 import { queryPolicies } from '../lib/queryPolicies';
 import {
   taskStatusLabels,
@@ -33,6 +34,17 @@ export function StaffTaskListScreen() {
     `/api/v1/operational-tasks?page=${page}&pageSize=20${status ? `&status=${status}` : ''}`,
     { cache: queryPolicies.tasks, notifyError: false },
   );
+  // Resolve Location labels only when a property-wide handover task is on this
+  // page. Ordinary task-list reads must not introduce an unrelated network
+  // request or interfere with their independently retried/paginated results.
+  const needsLocationLabels = query.data?.items.some(
+    (task) => task.kind === 'LocationAssetHandover',
+  ) ?? false;
+  const locations = useWorkspaceQuery<Named[]>(
+    needsLocationLabels ? '/api/v1/capture/locations' : null, {
+    cache: queryPolicies.rooms,
+    notifyError: false,
+  });
   const inHeader = useWorkspaceHeaderRefresh(query.reload, query.fetching);
   const data = query.data;
   const items = data?.items ?? [];
@@ -91,6 +103,8 @@ export function StaffTaskListScreen() {
         <TaskCard
           key={task.id}
           task={task}
+          locationName={(Array.isArray(locations.data) ? locations.data : [])
+            .find((location) => location.id === task.locationId)?.label}
           onPress={() =>
             task.kind === 'MeterReading'
               ? go('meter-reading')
@@ -214,14 +228,20 @@ function TaskSummaryBar({
   );
 }
 
-export function TaskCard({ task, onPress }: { task: OperationalTask; onPress: () => void }) {
+export function TaskCard({ task, onPress, locationName }: {
+  task: OperationalTask;
+  onPress: () => void;
+  locationName?: string;
+}) {
   const title =
     task.title ||
     (task.kind === 'MeterReading'
       ? 'Ghi chỉ số đồng hồ'
       : task.kind === 'MoveInInventory'
         ? 'Kiểm kê trước nhận phòng'
-        : 'Công việc');
+        : task.kind === 'LocationAssetHandover'
+          ? 'Kiểm kê và nhận bàn giao cơ sở'
+          : 'Công việc');
   const status = taskStatusLabels[task.status] ?? task.status;
   const due =
     task.dueAt && Number.isFinite(Date.parse(task.dueAt)) ? formatInstant(task.dueAt) : null;
@@ -244,6 +264,14 @@ export function TaskCard({ task, onPress }: { task: OperationalTask; onPress: ()
           </Text>
           <TaskBadge status={task.status} label={status} />
         </View>
+        {(task.kind === 'LocationAssetHandover' || !!locationName) && (
+          <View style={styles.dueRow}>
+            <Icon source="map-marker-outline" size={15} color={c.muted} />
+            <Text variant="bodySmall" style={styles.title}>
+              Cơ sở: {locationName?.trim() || 'Chưa xác định tên cơ sở'}
+            </Text>
+          </View>
+        )}
         <View style={styles.dueRow}>
           <Icon
             source={task.isOverdue ? 'clock-alert-outline' : 'clock-outline'}
@@ -258,6 +286,11 @@ export function TaskCard({ task, onPress }: { task: OperationalTask; onPress: ()
         {!!task.requirements && (
           <Text variant="bodySmall" numberOfLines={2} ellipsizeMode="tail" style={styles.preview}>
             {task.requirements}
+          </Text>
+        )}
+        {task.kind === 'LocationAssetHandover' && (
+          <Text variant="labelMedium" style={styles.link}>
+            Kiểm kê toàn bộ phòng và tài sản chung
           </Text>
         )}
         {!!task.result && (

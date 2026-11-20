@@ -1,4 +1,5 @@
 using BHome.Application.StaffOperations;
+using BHome.Application.PropertyManagement;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.IncidentMaintenance;
@@ -6,6 +7,7 @@ using BHome.Domain.PropertyManagement;
 using BHome.Domain.StaffOperations;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
+using BHome.Infrastructure.Persistence.Compact24;
 using BHome.Infrastructure.Modules.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -13,7 +15,7 @@ using Npgsql;
 namespace BHome.Infrastructure.Modules.StaffOperations.Persistence;
 
 internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext db,
-    CompactNotificationWriter? inbox = null) : IOperationalTaskRepository
+    CompactNotificationWriter? inbox = null, ISetupWorkspaceStore? workspace = null) : IOperationalTaskRepository
 {
     public async Task<T> TransactionAsync<T>(Guid locationId, Guid actorId, Guid commandKey, Func<Task<T>> operation, CancellationToken t)
     {
@@ -52,6 +54,12 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
         return new(items, page, pageSize, total);
     }
     public Task<OperationalTask?> FindAsync(Guid id, CancellationToken t) => db.Set<OperationalTask>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, t);
+    public Task<LocationAssetInventorySnapshot> OwnerConfirmedInventoryAsync(OperationalTask task, CancellationToken t)
+    {
+        if (db is not Compact24DbContext compact) throw OperationalTaskException.Conflict("owner_inventory_compact_required");
+        return LocationAssetInventoryTaskFactory.BuildConfirmedSnapshotAsync(compact, workspace,
+            task.LocationId, task.AssignmentId ?? Guid.Empty, task.ReadingDate, DateTimeOffset.UtcNow, t);
+    }
     public async Task<IReadOnlyList<TaskIncidentTarget>> IncidentTargetsAsync(Guid[] ids, CancellationToken t) =>
         await db.Set<IncidentReport>().AsNoTracking().Where(x => ids.Contains(x.Id))
             .Select(x => new TaskIncidentTarget(x.Id, x.LocationId, x.RoomId, x.AssetId, x.ReporterId,
@@ -91,7 +99,10 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
     public async Task<TaskPage<TaskView>> ListAsync(TaskQuery query, Guid? staffId, DateOnly date, DateTimeOffset now, CancellationToken t)
     {
         // Meter-specific actions remain on capture APIs; expose only the UC-10..12 work list here.
-        var rows = Visible(staffId, date).Where(x => x.Kind == OperationalTaskKind.AdHoc || x.Kind == OperationalTaskKind.MoveInInventory);
+        var rows = Visible(staffId, date).Where(x => x.Kind == OperationalTaskKind.AdHoc || x.Kind == OperationalTaskKind.MoveInInventory || x.Kind == OperationalTaskKind.LocationAssetHandover);
+        if (staffId.HasValue)
+            rows = rows.Where(x => x.Kind != OperationalTaskKind.LocationAssetHandover ||
+                db.StaffLocationAssignments.Any(a => a.Id == x.AssignmentId && a.StaffUserId == staffId.Value && a.StartDate <= date && a.EndDate >= date));
         if (query.LocationId is { } location) rows = rows.Where(x => x.LocationId == location);
         if (query.RecordedStaffUserId is { } recorded) rows = rows.Where(x => x.AssignedStaffUserId == recorded);
         if (query.HasResponsibility is { } available) rows = rows.Where(task =>

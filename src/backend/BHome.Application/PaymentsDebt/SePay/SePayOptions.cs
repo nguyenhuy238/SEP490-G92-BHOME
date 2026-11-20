@@ -21,7 +21,12 @@ public sealed class SePayOptions
     {
         if (!Enabled) return true;
         var expectedApi = Mode == "Test" ? "https://userapi-sandbox.sepay.vn/v2" : "https://userapi.sepay.vn/v2";
-        return Mode is "Test" or "Live" && (Mode == "Test") == (environment is "Development" or "Testing") &&
+        // Staging may call SePay's sandbox, but never the Live provider. The testing
+        // workspace/fixtures remain separately restricted to Development/Testing.
+        var permittedMode = Mode == "Test"
+            ? environment is "Development" or "Testing" or "Staging"
+            : Mode == "Live" && environment == "Production";
+        return permittedMode &&
             ApiBaseUrl.TrimEnd('/') == expectedApi && WebhookPath == WebhookRoute && PaymentCodePrefix == "BH" &&
             WebhookSecret is { Length: >= 32 } && !WebhookSecret.Contains("replace", StringComparison.OrdinalIgnoreCase) &&
             (string.IsNullOrEmpty(ApiToken) || !ApiToken.Contains("replace", StringComparison.OrdinalIgnoreCase) && !ApiToken.Contains('\r') && !ApiToken.Contains('\n')) &&

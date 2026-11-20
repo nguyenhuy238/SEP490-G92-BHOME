@@ -11,11 +11,13 @@ using BHome.Domain.IncidentMaintenance;
 using BHome.Domain.TenantContracts;
 using BHome.Domain.StaffOperations;
 using BHome.Domain.Locations;
+using BHome.Application.PropertyManagement;
 using BHome.Infrastructure.Modules.Notifications;
 
 namespace BHome.Infrastructure.Persistence.Compact24;
 
-internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProvider clock) : ILocationAssignments, IStaffLocationAccess
+internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProvider clock,
+    ISetupWorkspaceStore? workspace = null) : ILocationAssignments, IStaffLocationAccess
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private sealed record Assignment(Guid Id, Guid StaffUserId,
@@ -305,7 +307,7 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
     {
         var tasks = await db.Set<OperationalTask>().Where(task => task.LocationId == locationId &&
             task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled)
-            .Select(task => new { task.Id, task.AssignedStaffUserId, task.AssignmentId, task.AssignedAt, task.DueAt, task.Version }).ToArrayAsync(token);
+            .Select(task => new { task.Id, task.Kind, task.AssignedStaffUserId, task.AssignmentId, task.AssignedAt, task.DueAt, task.Version }).ToArrayAsync(token);
         var orders = await db.Set<MaintenanceWorkOrder>().Where(w => w.LocationId == locationId &&
             w.Status != WorkOrderStatus.Verified && w.Status != WorkOrderStatus.Cancelled).ToArrayAsync(token);
         var inspections = await db.Set<ContractMoveOut>().Where(m => m.InspectionStaffId != null &&
@@ -321,6 +323,9 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
         var nextAssignment = next?.Id;
         foreach (var task in tasks)
         {
+            // Each assignment owns its own immutable handover baseline. A superseded
+            // Staff handover remains reviewable by Owner, never transferred to the new Staff.
+            if (task.Kind == OperationalTaskKind.LocationAssetHandover) continue;
             if (task.AssignedStaffUserId == nextStaff && task.AssignmentId == nextAssignment) continue;
             // Compact24 maps both the scalar columns and the state JSON to this row.
             // Mutate once, then append one typed history record (no second root write).
@@ -380,6 +385,9 @@ internal sealed class CompactLocationAssignments(Compact24DbContext db, TimeProv
             });
         }
         await db.SaveChangesAsync(token);
+        if (next is not null)
+            await LocationAssetInventoryTaskFactory.EnsureAsync(db, workspace, locationId, next.Id,
+                next.StaffUserId, next.StartDate, actor == Guid.Empty ? next.ActorId : actor, now, token);
         await using var marker = Command("""
             SELECT h::text FROM locations l CROSS JOIN LATERAL jsonb_array_elements(l.history) WITH ORDINALITY a(h,n)
             WHERE l.id=@location AND h->>'action'='StaffResponsibilityReconciled' ORDER BY n DESC LIMIT 1

@@ -8,8 +8,18 @@ import { Agent } from 'node:https';
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, fileURLToPath(new URL('.', import.meta.url)), 'VITE_');
+  // The dedicated Development signing page uses a trusted localhost certificate exported
+  // by the shared team setup. HTTP Owner Web remains on 5173 in a separate Vite process.
+  const signingHttps = process.env.BHOME_WEB_HTTPS === 'true';
+  const signingKey = fileURLToPath(new URL('../../.tools/team-tls/localhost.key', import.meta.url));
+  const signingCertificate = fileURLToPath(new URL('../../.tools/team-tls/localhost.crt', import.meta.url));
+  if (signingHttps && (!existsSync(signingCertificate) || !existsSync(signingKey))) {
+    throw new Error('HTTPS signing needs .tools/team-tls/localhost.key and localhost.crt from shared team setup.');
+  }
   const target = new URL(
-    process.env.VITE_API_BASE_URL || env.VITE_API_BASE_URL || 'https://localhost:7240',
+    signingHttps
+      ? 'https://localhost:7240'
+      : process.env.VITE_API_BASE_URL || env.VITE_API_BASE_URL || 'https://localhost:7240',
   );
   if (
     target.username ||
@@ -30,6 +40,7 @@ export default defineConfig(({ mode }) => {
     ...['localhost.cer', 'root-ca.cer'].map((name) =>
       fileURLToPath(new URL(name, certificateDirectory)),
     ),
+    signingCertificate,
     ...(process.env.VITE_DEV_CA_FILE ? [process.env.VITE_DEV_CA_FILE] : []),
   ]
     .filter(existsSync)
@@ -43,6 +54,14 @@ export default defineConfig(({ mode }) => {
     // Same-origin browser cookies retain Secure/HttpOnly/SameSite=Strict. The API
     // remains HTTPS and its certificate is verified; never set secure:false.
     server: {
+      ...(signingHttps
+        ? {
+            host: 'localhost',
+            port: 5176,
+            strictPort: true,
+            https: { key: readFileSync(signingKey), cert: readFileSync(signingCertificate) },
+          }
+        : {}),
       proxy: { '/api': { target: target.origin, changeOrigin: true, secure: true, agent } },
     },
   };
