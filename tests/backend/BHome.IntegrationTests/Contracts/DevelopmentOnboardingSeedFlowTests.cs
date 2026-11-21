@@ -104,7 +104,10 @@ public sealed partial class Compact24OwnerSetupTests
             Assert.True(asset.OwnerChecked);
             Assert.Empty(asset.EvidenceIds ?? []);
         });
-        Assert.Contains("assets", draft.Missing); // Staff must still inspect and upload evidence.
+        // New onboarding uses the canonical, separate inventory checkpoint.
+        // The absent completed inventory is surfaced as move_in_inventory,
+        // not the legacy draft.assets array.
+        Assert.Contains("move_in_inventory", draft.Missing);
 
         await using var scope = host.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();

@@ -29,15 +29,26 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
           availableDeposit: '100000',
           receivables: [
             {
-              charge: { id: 'charge', kind: 'TenantDamage', assetId: 'asset',
-                description: 'Giường đơn hỏng khung', amount: '600000' },
+              charge: {
+                id: 'charge',
+                kind: 'TenantDamage',
+                assetId: 'asset',
+                description: 'Giường đơn hỏng khung',
+                amount: '600000',
+              },
               allocated: '400000',
               outstanding: '200000',
               status: 'PartiallyPaid',
             },
           ],
-          offsets: [{ id: 'offset', receivableId: 'charge',
-            amount: '400000', reason: 'Owner approved source' }],
+          offsets: [
+            {
+              id: 'offset',
+              receivableId: 'charge',
+              amount: '400000',
+              reason: 'Owner approved source',
+            },
+          ],
         },
       ],
     },

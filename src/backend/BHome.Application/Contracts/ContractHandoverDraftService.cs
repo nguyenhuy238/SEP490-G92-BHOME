@@ -222,10 +222,21 @@ public sealed partial class ContractService
         if (user.IsInRole(Roles.Tenant) && state.Status is not ("Ready" or "Confirmed" or "ChangesRequested"))
             return view with
             {
-                RoomCondition = "", KeysAndAccess = "", Notes = "", Assets = [],
-                EvidenceIds = [], KeyEvidenceIds = [], RoomChecks = [], AccessItems = [],
-                OutstandingIssues = [], ReinspectionItems = [], ReinspectionHistory = [],
-                Missing = [], Electricity = null, Water = null, MoveInTask = null,
+                RoomCondition = "",
+                KeysAndAccess = "",
+                Notes = "",
+                Assets = [],
+                EvidenceIds = [],
+                KeyEvidenceIds = [],
+                RoomChecks = [],
+                AccessItems = [],
+                OutstandingIssues = [],
+                ReinspectionItems = [],
+                ReinspectionHistory = [],
+                Missing = [],
+                Electricity = null,
+                Water = null,
+                MoveInTask = null,
                 InspectedAssets = null
             };
         return view;

@@ -23,13 +23,18 @@ vi.mock('../../components/common/ConfirmActionButton', () => ({
   ),
 }));
 
-function setup(noAdditionalCharges = false, overage = false) {
+function setup(
+  noAdditionalCharges = false,
+  overage = false,
+  refundOverrides: Record<string, unknown> = {},
+) {
   const transport = vi.fn().mockResolvedValue({
     financialReference: 'DEPOSIT-123',
     availableAmount: '100000',
     blockers: [],
     beneficiaries: [{ id: 'resident-1', label: 'Người thuê được xác minh' }],
     requests: [],
+    ...refundOverrides,
   });
   const settlementChargeReview = vi.fn().mockResolvedValue({
     reference: 'CHARGES-123',
@@ -157,4 +162,22 @@ it('does not require a refund beneficiary when damage exceeds the deposit, and n
     waivedIssueKeys: [],
   });
   expect(await screen.findByText(/Chưa có đơn hoàn cọc được tạo/)).toBeInTheDocument();
+});
+
+it('blocks closing when the refund source reports unresolved obligations, even if Owner has confirmed the form', async () => {
+  const { mutate } = setup(true, false, { blockers: ['unpaid_final_invoice'] });
+  expect(await screen.findByText(/Nguồn tiền cọc còn điều kiện chưa xử lý/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Lý do chốt quyết toán / căn cứ miễn thu'), {
+    target: { value: 'Chốt sau khi kiểm tra.' },
+  });
+  fireEvent.click(screen.getByRole('checkbox', { name: /xác nhận đầy đủ mức bồi thường/ }));
+  expect(screen.getByRole('button', { name: 'Chốt quyết toán và xử lý tiền cọc' })).toBeDisabled();
+  expect(mutate).not.toHaveBeenCalled();
+});
+
+it('prevents a duplicate refund request from being created after an existing request', async () => {
+  const { mutate } = setup(true, false, { requests: [{ status: 'REQUESTED' }] });
+  expect(await screen.findByText(/Đã có yêu cầu hoàn cọc đang chờ xử lý/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Chốt quyết toán và xử lý tiền cọc' })).toBeDisabled();
+  expect(mutate).not.toHaveBeenCalled();
 });

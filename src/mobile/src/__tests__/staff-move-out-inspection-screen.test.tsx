@@ -35,8 +35,16 @@ vi.mock('../features/workspace/WorkspaceProvider', () => ({
 vi.mock('../features/workspace/useWorkspaceQuery', () => ({
   useWorkspaceQuery: () => ({
     data: state.assigned
-      ? [{ contractId, roomId, roomNumber: 'R.101', locationName: 'Cơ sở kiểm thử',
-          status: 'Approved', scheduledAt: '2026-11-18T00:00:00Z' }]
+      ? [
+          {
+            contractId,
+            roomId,
+            roomNumber: 'R.101',
+            locationName: 'Cơ sở kiểm thử',
+            status: 'Approved',
+            scheduledAt: '2026-11-18T00:00:00Z',
+          },
+        ]
       : [],
     loading: false,
     error: '',
@@ -47,9 +55,21 @@ vi.mock('react-native', () => ({ View: ({ children }: Children) => <div>{childre
 vi.mock('react-native-paper', () => ({
   Text: ({ children }: Children) => <div>{children}</div>,
   Checkbox: {
-    Item: ({ label, status, onPress, disabled }: {
-      label: string; status: string; onPress: () => void; disabled?: boolean;
-    }) => <button disabled={disabled} aria-pressed={status === 'checked'} onClick={onPress}>{label}</button>,
+    Item: ({
+      label,
+      status,
+      onPress,
+      disabled,
+    }: {
+      label: string;
+      status: string;
+      onPress: () => void;
+      disabled?: boolean;
+    }) => (
+      <button disabled={disabled} aria-pressed={status === 'checked'} onClick={onPress}>
+        {label}
+      </button>
+    ),
   },
 }));
 vi.mock('../components/WorkspaceKit', () => ({
@@ -58,53 +78,101 @@ vi.mock('../components/WorkspaceKit', () => ({
   Heading: ({ title }: { title: string }) => <h2>{title}</h2>,
   Pill: ({ children }: Children) => <span>{children}</span>,
   ui: {},
-  Action: ({ children, disabled, onPress }: Children & {
-    disabled?: boolean; onPress: () => void;
-  }) => <button disabled={disabled} onClick={onPress}>{children}</button>,
+  Action: ({
+    children,
+    disabled,
+    onPress,
+  }: Children & {
+    disabled?: boolean;
+    onPress: () => void;
+  }) => (
+    <button disabled={disabled} onClick={onPress}>
+      {children}
+    </button>
+  ),
 }));
 vi.mock('../components/CameraCapture', () => ({
-  CameraCapture: ({ onCapture, disabled }: {
+  CameraCapture: ({
+    onCapture,
+    disabled,
+  }: {
     onCapture: (bytes: Uint8Array<ArrayBuffer>) => Promise<unknown>;
     disabled: boolean;
   }) => (
-    <button disabled={disabled} onClick={() => void onCapture(new Uint8Array([255, 216, 255, 217]))}>
+    <button
+      disabled={disabled}
+      onClick={() => void onCapture(new Uint8Array([255, 216, 255, 217]))}
+    >
       Chụp ảnh
     </button>
   ),
 }));
 vi.mock('../components/WorkflowControls', () => ({
-  Input: ({ label, value, onChange, disabled }: {
-    label: string; value: string; onChange: (s: string) => void; disabled?: boolean;
+  Input: ({
+    label,
+    value,
+    onChange,
+    disabled,
+  }: {
+    label: string;
+    value: string;
+    onChange: (s: string) => void;
+    disabled?: boolean;
   }) => (
-    <input aria-label={label} value={value} disabled={disabled}
-      onChange={(event) => onChange(event.target.value)} />
+    <input
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+    />
   ),
-  ChoiceField: ({ label, value, options, onChange, disabled }: {
-    label: string; value: string;
+  ChoiceField: ({
+    label,
+    value,
+    options,
+    onChange,
+    disabled,
+  }: {
+    label: string;
+    value: string;
     options: { id: string; label: string }[];
-    onChange: (v: string) => void; disabled?: boolean;
+    onChange: (v: string) => void;
+    disabled?: boolean;
   }) => (
-    <select aria-label={label} value={value} disabled={disabled}
-      onChange={(event) => onChange(event.target.value)}>
+    <select
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+    >
       <option value="">Chọn</option>
-      {options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
     </select>
   ),
 }));
 vi.mock('../features/contracts/HandoverAssetFields', () => ({
-  HandoverAssetFields: ({ asset, set }: {
+  HandoverAssetFields: ({
+    asset,
+    set,
+  }: {
     asset: { id: string; name: string };
     set: (name: string, value: string) => void;
   }) => (
-    <button onClick={() => {
-      set(`asset-${asset.id}`, 'Tốt');
-      set(`${asset.id}.observedQuantity`, '2');
-      set(`${asset.id}.handedOverQuantity`, '2');
-      set(`${asset.id}.goodQuantity`, '2');
-      set(`${asset.id}.wornQuantity`, '0');
-      set(`${asset.id}.damagedQuantity`, '0');
-      set(`${asset.id}.checked`, 'true');
-    }}>
+    <button
+      onClick={() => {
+        set(`asset-${asset.id}`, 'Tốt');
+        set(`${asset.id}.observedQuantity`, '2');
+        set(`${asset.id}.handedOverQuantity`, '2');
+        set(`${asset.id}.goodQuantity`, '2');
+        set(`${asset.id}.wornQuantity`, '0');
+        set(`${asset.id}.damagedQuantity`, '0');
+        set(`${asset.id}.checked`, 'true');
+      }}
+    >
       Đã kiểm kê {asset.name}
     </button>
   ),
@@ -130,26 +198,60 @@ beforeEach(() => {
       return {
         baseline: {
           version: 1,
-          snapshot: { roomCondition: 'Tường nguyên vẹn', keysAndAccess: '2 chìa khóa',
-            accessItems: [{ type: 'RoomKey', quantity: 2, notes: '' }], assets: [], roomChecks: [] },
+          snapshot: {
+            roomCondition: 'Tường nguyên vẹn',
+            keysAndAccess: '2 chìa khóa',
+            accessItems: [{ type: 'RoomKey', quantity: 2, notes: '' }],
+            assets: [],
+            roomChecks: [],
+          },
         },
         legacyExceptionRequired: false,
         finalReadings: [
-          { id: '77777777-7777-4777-8777-777777777777', utilityType: 0,
-            meterCode: 'E1', value: '100', date: '2026-11-18' },
-          { id: '88888888-8888-4888-8888-888888888888', utilityType: 1,
-            meterCode: 'W1', value: '50', date: '2026-11-18' },
+          {
+            id: '77777777-7777-4777-8777-777777777777',
+            utilityType: 0,
+            meterCode: 'E1',
+            value: '100',
+            date: '2026-11-18',
+          },
+          {
+            id: '88888888-8888-4888-8888-888888888888',
+            utilityType: 1,
+            meterCode: 'W1',
+            value: '50',
+            date: '2026-11-18',
+          },
         ],
         inventory: { stateToken: 'token-inventory', groups: [], noAssetsConfirmed: false },
-        inspectionGroups: [{ id: assetId, name: 'Giường đơn', configuredQuantity: 2,
-          handedOverQuantity: 2, inventoryCondition: 'Tốt', observedCondition: '', checked: false }],
+        inspectionGroups: [
+          {
+            id: assetId,
+            name: 'Giường đơn',
+            configuredQuantity: 2,
+            handedOverQuantity: 2,
+            inventoryCondition: 'Tốt',
+            observedCondition: '',
+            checked: false,
+          },
+        ],
       };
     if (path.endsWith('/move-out'))
-      return { id: '99999999-9999-4999-8999-999999999999', status: 'Approved',
-        proposedDate: '2026-11-18', inspectionScheduledAt: '2026-11-18T00:00:00Z',
-        version: 3 };
-    return { id: contractId, roomId, locationId, roomNumber: 'R.101',
-      locationName: 'Cơ sở kiểm thử', status: 'Active' };
+      return {
+        id: '99999999-9999-4999-8999-999999999999',
+        status: 'Approved',
+        proposedDate: '2026-11-18',
+        inspectionScheduledAt: '2026-11-18T00:00:00Z',
+        version: 3,
+      };
+    return {
+      id: contractId,
+      roomId,
+      locationId,
+      roomNumber: 'R.101',
+      locationName: 'Cơ sở kiểm thử',
+      status: 'Active',
+    };
   });
 });
 afterEach(cleanup);
@@ -197,16 +299,18 @@ it('records four factual sections and submits authenticated versioned inspection
   expect(screen.getByText('4/4 đã điền')).toBeTruthy();
   fireEvent.click(screen.getByText('Tôi đã đối chiếu thực tế đủ 4 phần và các ảnh đúng hạng mục'));
   fireEvent.click(screen.getByText('Gửi biên bản kiểm tra trả phòng cho Owner'));
-  await waitFor(() => expect(
-    state.request.mock.calls.some(([path, init]) =>
-      path.endsWith('/move-out/inspection') && init?.method === 'POST'),
-  ).toBe(true));
-  const request = state.request.mock.calls.find(
-    ([path]) => path.endsWith('/move-out/inspection'),
-  )!;
+  await waitFor(() =>
+    expect(
+      state.request.mock.calls.some(
+        ([path, init]) => path.endsWith('/move-out/inspection') && init?.method === 'POST',
+      ),
+    ).toBe(true),
+  );
+  const request = state.request.mock.calls.find(([path]) => path.endsWith('/move-out/inspection'))!;
   const body = JSON.parse(request[1].body as string);
   expect(body).toMatchObject({
-    expectedVersion: 3, inventoryToken: 'token-inventory',
+    expectedVersion: 3,
+    inventoryToken: 'token-inventory',
     roomCondition: 'Phòng nguyên vẹn, kiểm tra đủ bảy mục',
     electricityReadingId: '77777777-7777-4777-8777-777777777777',
     waterReadingId: '88888888-8888-4888-8888-888888888888',
@@ -214,8 +318,13 @@ it('records four factual sections and submits authenticated versioned inspection
   });
   expect(body.roomChecks).toHaveLength(7);
   expect(body.roomChecks.every((item: { status: string }) => item.status === 'Passed')).toBe(true);
-  expect(body.assets[0]).toMatchObject({ id: assetId, condition: 'Tốt', checked: true,
-    observedQuantity: 2, goodQuantity: 2 });
+  expect(body.assets[0]).toMatchObject({
+    id: assetId,
+    condition: 'Tốt',
+    checked: true,
+    observedQuantity: 2,
+    goodQuantity: 2,
+  });
   expect(body.evidenceIds).toHaveLength(1);
   expect(request[1].headers['Idempotency-Key']).toBeTruthy();
 });

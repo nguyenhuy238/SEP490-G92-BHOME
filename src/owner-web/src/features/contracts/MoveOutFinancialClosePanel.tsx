@@ -99,6 +99,15 @@ export function MoveOutFinancialClosePanel({
   const damagesOutstanding = outstandingForDamage.every((item) => item !== null)
     ? outstandingForDamage.reduce<bigint>((total, value) => total + (value ?? 0n), 0n)
     : null;
+  // A pending damage balance is resolved by this action itself; every other
+  // refund-source blocker still requires separate resolution on the server.
+  const unresolvedBlockers = (source.data?.blockers ?? []).filter(
+    (blocker) => blocker !== 'settlement_receivable_outstanding' || damagesOutstanding === 0n,
+  );
+  const existingRefundRequest = (source.data?.requests ?? []).some((request) =>
+    ['REQUESTED', 'APPROVED', 'COMPLETED'].includes(request.status),
+  );
+  const hasLegacyDeductionPlan = source.data?.depositDeductions != null;
   const sourceValid =
     Array.isArray(source.data?.beneficiaries) &&
     typeof source.data?.financialReference === 'string' &&
@@ -127,6 +136,9 @@ export function MoveOutFinancialClosePanel({
     !chargeReview.isFetching &&
     !source.error &&
     !chargeReview.error &&
+    unresolvedBlockers.length === 0 &&
+    !existingRefundRequest &&
+    !hasLegacyDeductionPlan &&
     sourceValid &&
     chargeReviewReady &&
     !undecided.length &&
@@ -196,6 +208,18 @@ export function MoveOutFinancialClosePanel({
         )}
         {source.error && <Alert severity="error">{contractError(source.error)}</Alert>}
         {chargeReview.error && <Alert severity="error">{contractError(chargeReview.error)}</Alert>}
+        {(unresolvedBlockers.length > 0 || hasLegacyDeductionPlan) && (
+          <Alert severity="warning">
+            Nguồn tiền cọc còn điều kiện chưa xử lý. Hãy hoàn tất đối soát các nghĩa vụ và khấu trừ
+            hiện có trước khi chốt quyết toán.
+          </Alert>
+        )}
+        {existingRefundRequest && (
+          <Alert severity="warning">
+            Đã có yêu cầu hoàn cọc đang chờ xử lý hoặc đã hoàn tất. Không thể tạo thêm từ bước chốt
+            quyết toán này.
+          </Alert>
+        )}
         {sourceValid && source.data && (
           <Typography variant="body2">
             Cọc hiện có thể đối chiếu: {formatContractMoney(source.data.availableAmount ?? '0')}

@@ -36,9 +36,7 @@ const statusLabels: Record<MoveInDraft['status'], string> = {
 function displayMeterReading(value: string | number | undefined): string {
   if (value === undefined || value === null || value === '') return '—';
   const reading = Number(value);
-  return Number.isFinite(reading)
-    ? Math.trunc(reading).toLocaleString('vi-VN')
-    : String(value);
+  return Number.isFinite(reading) ? Math.trunc(reading).toLocaleString('vi-VN') : String(value);
 }
 
 const styles = StyleSheet.create({
@@ -474,7 +472,10 @@ export function TenantMoveInHandoverSummary({
                 <>
                   <View style={styles.detailLine}>
                     <Text style={styles.rowLabel}>
-                      Điện: {draft.electricity ? `${displayMeterReading(draft.electricity.value)} kWh` : 'Chưa xác nhận'}
+                      Điện:{' '}
+                      {draft.electricity
+                        ? `${displayMeterReading(draft.electricity.value)} kWh`
+                        : 'Chưa xác nhận'}
                     </Text>
                     <EvidenceGallery
                       api={api}
@@ -485,7 +486,10 @@ export function TenantMoveInHandoverSummary({
                   </View>
                   <View style={styles.detailLine}>
                     <Text style={styles.rowLabel}>
-                      Nước: {draft.water ? `${displayMeterReading(draft.water.value)} m³` : 'Chưa xác nhận'}
+                      Nước:{' '}
+                      {draft.water
+                        ? `${displayMeterReading(draft.water.value)} m³`
+                        : 'Chưa xác nhận'}
                     </Text>
                     <EvidenceGallery
                       api={api}
@@ -501,10 +505,10 @@ export function TenantMoveInHandoverSummary({
                   {draft.assets.map((item: HandoverAsset) => (
                     <View key={item.id}>
                       {compactRow({
-                      label: item.name,
-                      detail: quantityText(item),
-                      icon: 'package-variant-closed',
-                      onPress: () => setDetail({ section: 'assets', item: item.id }),
+                        label: item.name,
+                        detail: quantityText(item),
+                        icon: 'package-variant-closed',
+                        onPress: () => setDetail({ section: 'assets', item: item.id }),
                       })}
                     </View>
                   ))}

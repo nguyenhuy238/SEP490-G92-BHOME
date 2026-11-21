@@ -27,9 +27,11 @@ public sealed partial class InvoiceApiTests
             var photo = fixtureImage.ImEncode(".png");
             var proof = new ContractInspectionEvidence
             {
-                ContractId = w.Contract, UploadedByUserId = w.Staff.Id,
+                ContractId = w.Contract,
+                UploadedByUserId = w.Staff.Id,
                 ObjectKey = "synthetic/owner-close/" + Guid.NewGuid(),
-                ContentType = "image/png", IsLinked = true
+                ContentType = "image/png",
+                IsLinked = true
             };
             fixtureDb.Add(proof);
             var inspection = await fixtureDb.Set<ContractFinalInspection>().SingleAsync(i => i.ContractId == w.Contract);

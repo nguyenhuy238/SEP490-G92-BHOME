@@ -45,7 +45,12 @@ export function MeterCameraView({
       {camera ? (
         <>
           <View
-            style={{ height: compact ? 300 : 460, borderRadius: 12, overflow: 'hidden', backgroundColor: c.ink }}
+            style={{
+              height: compact ? 300 : 460,
+              borderRadius: 12,
+              overflow: 'hidden',
+              backgroundColor: c.ink,
+            }}
           >
             {camera}
           </View>
@@ -131,11 +136,17 @@ export function MeterCameraView({
       )}
       {onUseDemo && !preview && (
         <View style={{ gap: 2 }}>
-          <Button mode="outlined" contentStyle={{ minHeight: 44 }} disabled={blocked} onPress={onUseDemo}>
+          <Button
+            mode="outlined"
+            contentStyle={{ minHeight: 44 }}
+            disabled={blocked}
+            onPress={onUseDemo}
+          >
             Dùng ảnh mẫu (test)
           </Button>
           <Text variant="bodySmall" style={{ color: c.muted }}>
-            Chỉ dùng trên web local. Ảnh mẫu không phải bằng chứng thật; phải kiểm tra chỉ số trước khi xác nhận.
+            Chỉ dùng trên web local. Ảnh mẫu không phải bằng chứng thật; phải kiểm tra chỉ số trước
+            khi xác nhận.
           </Text>
         </View>
       )}

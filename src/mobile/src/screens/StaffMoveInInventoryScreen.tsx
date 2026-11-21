@@ -495,8 +495,7 @@ function InventoryDetail({
   // The server retains these IDs for audit after completion. Only an active
   // InProgress task has an outstanding Owner reinspection request.
   const pendingReinspectionItemIds = editable ? (data?.reinspectionItemIds ?? []) : [];
-  const reinspectionCompleted =
-    data?.status === 'Completed' && !!data.reinspectionItemIds?.length;
+  const reinspectionCompleted = data?.status === 'Completed' && !!data.reinspectionItemIds?.length;
   const selectedItem = data?.items.find((item) => item.id === selectedItemId);
   return (
     <>

@@ -84,8 +84,11 @@ public sealed partial class SettlementReceivablesService
             input.WaivedIssueKeys.Distinct(StringComparer.Ordinal).Count() != input.WaivedIssueKeys.Length ||
             input.BeneficiaryResidentId == Guid.Empty)
             throw ContractException.Invalid("move_out_financial_close_confirmation_required");
-        var normalized = input with { Reason = input.Reason.Trim(),
-            WaivedIssueKeys = input.WaivedIssueKeys.Order(StringComparer.Ordinal).ToArray() };
+        var normalized = input with
+        {
+            Reason = input.Reason.Trim(),
+            WaivedIssueKeys = input.WaivedIssueKeys.Order(StringComparer.Ordinal).ToArray()
+        };
         var fingerprint = Fingerprint(id, normalized);
 
         // ContractRepository owns the payment ledger -> Location -> Room lock;

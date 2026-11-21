@@ -107,7 +107,11 @@ it('loads move-in handover list immediately, opens a compact right Drawer, and k
 });
 
 it('shows confirmed handovers as green success instead of neutral gray', async () => {
-  const confirmed = { ...entries[1], status: 'Confirmed', tenantConfirmedAt: '2026-11-21T09:00:00Z' };
+  const confirmed = {
+    ...entries[1],
+    status: 'Confirmed',
+    tenantConfirmedAt: '2026-11-21T09:00:00Z',
+  };
   mocks.transport.mockResolvedValue({ items: [confirmed], page: 1, pageSize: 20, totalCount: 1 });
   mount();
   expect(await screen.findByText('1 biên bản phù hợp')).toBeInTheDocument();

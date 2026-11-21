@@ -22,9 +22,11 @@ public sealed partial class PaymentLedgerTests
             {
                 var file = new BHome.Domain.TenantContracts.ContractInspectionEvidence
                 {
-                    ContractId = w.Contract, UploadedByUserId = w.Staff,
+                    ContractId = w.Contract,
+                    UploadedByUserId = w.Staff,
                     ObjectKey = "synthetic/move-out-room-check/" + Guid.NewGuid(),
-                    ContentType = "image/png", IsLinked = true
+                    ContentType = "image/png",
+                    IsLinked = true
                 };
                 db.Add(file);
                 await db.SaveChangesAsync();

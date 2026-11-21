@@ -179,6 +179,13 @@ public sealed partial class ContractService
             }
             await ValidateHandoverEvidence(c, snapshot, t, existingSnapshot: true);
             h.StaffConfirmedBy = Actor; h.StaffConfirmedAt = clock.GetUtcNow(); h.Status = ContractHandoverStatus.Confirmed;
+            // Archived handovers can be completed without the newer Draft
+            // submission route. The actual confirming Staff must transition
+            // their started move-in task through submission before completion;
+            // never bypass the task's status/version guards.
+            var legacyTask = await Handovers.MoveInTaskAsync(id, c.RoomId, Actor, false, t);
+            if (legacyTask?.Status == "InProgress")
+                await Handovers.SubmitMoveInTaskAsync(id, Actor, clock.GetUtcNow(), t);
             await Handovers.CompleteMoveInTaskAsync(id, Actor, clock.GetUtcNow(), t);
             if (handoverDocuments is not null) await PersistHandoverDocument(c, h, t);
         }

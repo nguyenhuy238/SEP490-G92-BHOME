@@ -672,15 +672,21 @@ it('Tenant directly signs the Owner-reviewed PDF in their account without OTP', 
     name: 'Tôi đã kiểm tra nội dung biên bản',
   });
   const drawing = screen.getByRole('button', { name: 'Vẽ chữ ký Tenant' });
-  expect(drawing.compareDocumentPosition(acknowledge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(
+    drawing.compareDocumentPosition(acknowledge) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   expect(screen.queryByText(/Vẽ chữ ký vào khung\. Chữ ký sẽ/)).toBeNull();
   expect(screen.queryByText('Ghi chú / nội dung cần sửa')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Biên bản và chữ ký' }));
   expect(screen.getByTestId('draft-handover-pdf').textContent).toContain('Owner đã ký');
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
-  expect((screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    (screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Vẽ chữ ký Tenant' }));
-  expect((screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    (screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
   fireEvent.click(acknowledge);
   fireEvent.click(screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }));
   await waitFor(() =>
@@ -694,7 +700,15 @@ it('Tenant directly signs the Owner-reviewed PDF in their account without OTP', 
           ink: {
             width: 320,
             height: 200,
-            strokes: [[[10, 10], [15, 15], [30, 20], [35, 27], [60, 40]]],
+            strokes: [
+              [
+                [10, 10],
+                [15, 15],
+                [30, 20],
+                [35, 27],
+                [60, 40],
+              ],
+            ],
           },
           note: '',
         }),
@@ -703,7 +717,9 @@ it('Tenant directly signs the Owner-reviewed PDF in their account without OTP', 
   );
   expect(await screen.findByText('Đã xác nhận')).toBeTruthy();
   expect(state.transport.mock.calls.every(([path]) => !path.includes('/otp'))).toBe(true);
-  expect(state.transport.mock.calls.every(([path]) => !path.includes('signature-image/drawn'))).toBe(true);
+  expect(
+    state.transport.mock.calls.every(([path]) => !path.includes('signature-image/drawn')),
+  ).toBe(true);
 });
 
 it('verifies a committed Tenant signature by GET when the POST response times out, without sending another POST', async () => {
@@ -722,7 +738,13 @@ it('verifies a committed Tenant signature by GET when the POST response times ou
     }
     return state.draft;
   });
-  render(<MoveInDraftHandoverPanel api={api} contract={{ ...contract, status: 'Active' }} role="Tenant" />);
+  render(
+    <MoveInDraftHandoverPanel
+      api={api}
+      contract={{ ...contract, status: 'Active' }}
+      role="Tenant"
+    />,
+  );
   fireEvent.click(await screen.findByRole('button', { name: 'Vẽ chữ ký Tenant' }));
   fireEvent.click(screen.getByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản' }));
   fireEvent.click(screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }));
@@ -740,7 +762,13 @@ it('does not claim signed or auto-retry when a timed-out Tenant signature is sti
     }
     return state.draft;
   });
-  render(<MoveInDraftHandoverPanel api={api} contract={{ ...contract, status: 'Active' }} role="Tenant" />);
+  render(
+    <MoveInDraftHandoverPanel
+      api={api}
+      contract={{ ...contract, status: 'Active' }}
+      role="Tenant"
+    />,
+  );
   fireEvent.click(await screen.findByRole('button', { name: 'Vẽ chữ ký Tenant' }));
   fireEvent.click(screen.getByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản' }));
   fireEvent.click(screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }));
@@ -773,18 +801,31 @@ it('Tenant sees integer-only meter values and verified canonical asset counts in
   state.draft = draft('Ready');
   state.draft.electricity = {
     id: '60000000-0000-4000-8000-000000000001',
-    meterCode: 'E-1', utilityType: 0, date: '2026-11-20', value: '2000.9900',
-    evidenceId: 'e-photo', evidenceHash: 'e-hash',
+    meterCode: 'E-1',
+    utilityType: 0,
+    date: '2026-11-20',
+    value: '2000.9900',
+    evidenceId: 'e-photo',
+    evidenceHash: 'e-hash',
   };
   state.draft.water = {
     id: '60000000-0000-4000-8000-000000000002',
-    meterCode: 'W-1', utilityType: 1, date: '2026-11-20', value: '2.0000',
-    evidenceId: 'w-photo', evidenceHash: 'w-hash',
+    meterCode: 'W-1',
+    utilityType: 1,
+    date: '2026-11-20',
+    value: '2.0000',
+    evidenceId: 'w-photo',
+    evidenceHash: 'w-hash',
   };
-  state.draft.inspectedAssets = [{
-    id: state.draft.assets[0]!.id,
-    name: 'Quạt', expectedQuantity: 4, actualQuantity: 3, condition: 'Good',
-  }];
+  state.draft.inspectedAssets = [
+    {
+      id: state.draft.assets[0]!.id,
+      name: 'Quạt',
+      expectedQuantity: 4,
+      actualQuantity: 3,
+      condition: 'Good',
+    },
+  ];
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Tenant" />);
   expect(await screen.findByText('Sẵn sàng bàn giao')).toBeTruthy();
   expect(screen.getByText(/Điện: 2\.000 kWh · Nước: 2 m³/)).toBeTruthy();

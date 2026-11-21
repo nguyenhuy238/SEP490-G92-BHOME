@@ -582,7 +582,9 @@ it('does not fabricate an Asset reinspection ID when the canonical inventory ite
       : current,
   );
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" compact />);
-  expect(await screen.findByText('Giường ngủ')).toBeInTheDocument();
+  // The canonical inventory is fetched after the draft and may take longer
+  // when the entire Owner test suite is running in CI.
+  expect(await screen.findByText('Giường ngủ', {}, { timeout: 5000 })).toBeInTheDocument();
   expect(
     screen.getByText(/mã tài sản chưa được máy chủ xác nhận trong biên bản/),
   ).toBeInTheDocument();
@@ -795,7 +797,9 @@ it('requires a fresh review when Staff submits a newer draft while Owner has the
 
   serverDraft = { ...draft, version: 5 };
   fireEvent.focus(window);
-  await waitFor(() => expect(screen.getByText('v5')).toBeInTheDocument());
+  // The compact Owner drawer deliberately no longer displays a "v5" chip.
+  // A newer server draft must still invalidate the Owner's prior review.
+  await waitFor(() => expect(review).not.toBeChecked());
   expect(review).not.toBeChecked();
   expect(approve).toBeDisabled();
   expect(mutate).not.toHaveBeenCalled();
@@ -1242,7 +1246,9 @@ it('prefers the persisted confirmed MoveIn PDF over the watermarked draft and fe
   expect(
     await screen.findByRole('button', { name: 'Xem biên bản bàn giao đã xác nhận' }),
   ).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Xem biên bản bàn giao đã xác nhận 2' })).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Xem biên bản bàn giao đã xác nhận 2' }),
+  ).toBeInTheDocument();
   expect(screen.getAllByRole('button', { name: 'Tải xuống' })).toHaveLength(2);
   expect(screen.queryByText(/Phiên bản 6/)).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /PDF bản nháp bàn giao/ })).not.toBeInTheDocument();

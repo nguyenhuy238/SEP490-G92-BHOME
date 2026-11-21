@@ -1703,7 +1703,9 @@ export function MoveInDraftHandoverPanel({
                 compactPhone && wizardStyles.phoneModalCard,
               ]}
             >
-              <View style={[wizardStyles.modalHeader, compactPhone && wizardStyles.phoneModalHeader]}>
+              <View
+                style={[wizardStyles.modalHeader, compactPhone && wizardStyles.phoneModalHeader]}
+              >
                 <Row spread>
                   <Text variant="titleMedium" style={wizardStyles.rowTitle}>
                     Yêu cầu chỉnh sửa biên bản
@@ -1735,7 +1737,9 @@ export function MoveInDraftHandoverPanel({
                   </Text>
                 )}
               </ScrollView>
-              <View style={[wizardStyles.modalFooter, compactPhone && wizardStyles.phoneModalFooter]}>
+              <View
+                style={[wizardStyles.modalFooter, compactPhone && wizardStyles.phoneModalFooter]}
+              >
                 <View style={{ flex: 1 }}>
                   <Button mode="outlined" disabled={busy} onPress={closeCorrection}>
                     Hủy

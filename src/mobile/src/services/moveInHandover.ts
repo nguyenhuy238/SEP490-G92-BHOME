@@ -107,14 +107,16 @@ export interface MoveInDraft {
   electricity: HandoverReading | null;
   water: HandoverReading | null;
   assets: HandoverAsset[];
-  inspectedAssets?: {
-    id: string;
-    name: string;
-    expectedQuantity: number;
-    actualQuantity: number;
-    condition: string;
-    notes?: string | null;
-  }[] | null;
+  inspectedAssets?:
+    | {
+        id: string;
+        name: string;
+        expectedQuantity: number;
+        actualQuantity: number;
+        condition: string;
+        notes?: string | null;
+      }[]
+    | null;
   roomCondition: string;
   keysAndAccess: string;
   notes: string;
@@ -216,7 +218,8 @@ export function moveInHandover(api: ContractClient) {
       ink: { width: number; height: number; strokes: number[][][] },
       note: string,
       key: string,
-    ) => mutate(id, '/tenant-sign/session', { version, consent: true, ink, note: note.trim() }, key),
+    ) =>
+      mutate(id, '/tenant-sign/session', { version, consent: true, ink, note: note.trim() }, key),
     tenantSigningOtp: (id: string, signal?: AbortSignal) =>
       request<SigningOtpView>(`${endpoint(id)}/tenant-sign/otp`, { signal }),
     resendTenantSigningOtp: (id: string) =>

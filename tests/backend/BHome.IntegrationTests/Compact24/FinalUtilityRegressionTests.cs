@@ -15,8 +15,11 @@ public sealed class FinalUtilityRegressionTests
     public async Task OwnerFinalCloseLeavesOverageOnSameReceivableWithoutAutoRefundOrNewInvoice()
     {
         var fixture = new Compact24WorkflowFixture(); await fixture.InitializeAsync();
-        try { await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveContractRates(
-            reviewRefund: true, autoFinancialClose: true, offsetAllDeposit: true); }
+        try
+        {
+            await new InvoiceApiTests(fixture.Capture).FinalUtilitiesUseBilledBaselineAndPreserveContractRates(
+            reviewRefund: true, autoFinancialClose: true, offsetAllDeposit: true);
+        }
         finally { await fixture.DisposeAsync(); }
     }
     [CompactPostgresFact]

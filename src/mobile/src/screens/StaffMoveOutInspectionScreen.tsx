@@ -18,10 +18,7 @@ import { Action, Box, Heading, Pill, Row, ui } from '../components/WorkspaceKit'
 import { CameraCapture } from '../components/CameraCapture';
 import { ChoiceField, Input } from '../components/WorkflowControls';
 import { HandoverAssetFields } from '../features/contracts/HandoverAssetFields';
-import {
-  roomHandoverChecks,
-  type MoveInRoomCheckStatus,
-} from '../services/moveInHandover';
+import { roomHandoverChecks, type MoveInRoomCheckStatus } from '../services/moveInHandover';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
@@ -59,7 +56,8 @@ export function StaffMoveOutInspectionScreen() {
   const { api, session } = useSession();
   const { role, preview, staffLocationId, go } = useWorkspace();
   const allowed = role === 'Staff' && !preview && !!session?.roles.includes('Staff');
-  const selectedId = typeof contractId === 'string' && guidPattern.test(contractId) ? contractId : '';
+  const selectedId =
+    typeof contractId === 'string' && guidPattern.test(contractId) ? contractId : '';
   const assignments = useWorkspaceQuery<Assignment[]>(
     allowed && staffLocationId ? '/api/v1/contracts/move-out-assignments' : null,
     { notifyError: false },
@@ -121,7 +119,9 @@ export function StaffMoveOutInspectionScreen() {
     return (
       <Box>
         <Text style={ui.red}>{assignments.error}</Text>
-        <Action secondary onPress={assignments.reload}>Tải lại công việc</Action>
+        <Action secondary onPress={assignments.reload}>
+          Tải lại công việc
+        </Action>
       </Box>
     );
   if (!selectedId)
@@ -131,8 +131,12 @@ export function StaffMoveOutInspectionScreen() {
         {!assignments.data?.length && <Text>Chưa có công việc trả phòng được phân công.</Text>}
         {(assignments.data ?? []).map((item) => (
           <Box key={item.contractId}>
-            <Text>Phòng {item.roomNumber} · {item.locationName}</Text>
-            <Text>{formatInstant(item.scheduledAt)} · {item.status}</Text>
+            <Text>
+              Phòng {item.roomNumber} · {item.locationName}
+            </Text>
+            <Text>
+              {formatInstant(item.scheduledAt)} · {item.status}
+            </Text>
             <Action onPress={() => go('move-out', { contractId: item.contractId })}>
               Mở kiểm tra trả phòng
             </Action>
@@ -143,8 +147,12 @@ export function StaffMoveOutInspectionScreen() {
   if (!assigned)
     return (
       <Box>
-        <Text style={ui.red}>Hợp đồng này hiện không nằm trong danh sách Staff được giao kiểm tra.</Text>
-        <Action secondary onPress={() => go('move-out')}>Về công việc được phân công</Action>
+        <Text style={ui.red}>
+          Hợp đồng này hiện không nằm trong danh sách Staff được giao kiểm tra.
+        </Text>
+        <Action secondary onPress={() => go('move-out')}>
+          Về công việc được phân công
+        </Action>
       </Box>
     );
   const current = response?.key.startsWith(`${selectedId}:${staffLocationId}:`) ? response : null;
@@ -153,7 +161,9 @@ export function StaffMoveOutInspectionScreen() {
     return (
       <Box>
         <Text style={ui.red}>{current.error || 'Không tải được biên bản trả phòng.'}</Text>
-        <Action secondary onPress={() => setRevision((v) => v + 1)}>Tải lại biên bản</Action>
+        <Action secondary onPress={() => setRevision((v) => v + 1)}>
+          Tải lại biên bản
+        </Action>
       </Box>
     );
   return (
@@ -197,8 +207,7 @@ function InspectionForm({
     !!moveOut.inspectionScheduledAt &&
     businessToday() >= moveOut.proposedDate;
   const canInspect =
-    (!!baseline && !preparation.legacyExceptionRequired) ||
-    !!preparation.legacyExceptionReason;
+    (!!baseline && !preparation.legacyExceptionRequired) || !!preparation.legacyExceptionReason;
   const getPhotos = (bucket: string) => photos[bucket] ?? [];
   const set = (name: string, value: string) => {
     setValues((prior) => ({ ...prior, [name]: value }));
@@ -215,15 +224,12 @@ function InspectionForm({
       (status !== 'Issue' || getPhotos(`room:${code}`).length > 0)
     );
   });
-  const assetIssue = (
-    asset: HandoverAsset,
-    condition: string,
-    actual: number | undefined,
-  ) => {
-    const expected = asset.configuredQuantity ?? asset.handedOverQuantity ??
+  const assetIssue = (asset: HandoverAsset, condition: string, actual: number | undefined) => {
+    const expected =
+      asset.configuredQuantity ??
+      asset.handedOverQuantity ??
       asset.physicalAssets?.reduce((sum, item) => sum + item.quantity, 0);
-    return condition !== 'Tốt' ||
-      (actual !== undefined && expected != null && actual !== expected);
+    return condition !== 'Tốt' || (actual !== undefined && expected != null && actual !== expected);
   };
   const assetCompleted =
     (groups.length > 0 || noAssetsConfirmed) &&
@@ -231,23 +237,31 @@ function InspectionForm({
       if (values[`${item.id}.checked`] !== 'true') return false;
       try {
         const observed = assetInspectionInput(
-          item, values, getPhotos(`asset:${item.id}`),
-          !!preparation.inventory, !preparation.legacyExceptionRequired,
+          item,
+          values,
+          getPhotos(`asset:${item.id}`),
+          !!preparation.inventory,
+          !preparation.legacyExceptionRequired,
         );
         const hasIssue = assetIssue(
-          item, observed.condition,
+          item,
+          observed.condition,
           'observedQuantity' in observed ? observed.observedQuantity : undefined,
         );
-        return !hasIssue ||
-          (!!values[`${item.id}.notes`]?.trim() && getPhotos(`asset:${item.id}`).length > 0);
+        return (
+          !hasIssue ||
+          (!!values[`${item.id}.notes`]?.trim() && getPhotos(`asset:${item.id}`).length > 0)
+        );
       } catch {
         return false;
       }
     });
   const keyCount = values.keyQuantity ?? '';
   const initialKeyCount = baseline?.accessItems?.find((item) => item.type === 'RoomKey')?.quantity;
-  const missingKeys = typeof initialKeyCount === 'number' &&
-    /^\d+$/.test(keyCount) && Number(keyCount) < initialKeyCount;
+  const missingKeys =
+    typeof initialKeyCount === 'number' &&
+    /^\d+$/.test(keyCount) &&
+    Number(keyCount) < initialKeyCount;
   const keysCompleted =
     /^\d+$/.test(keyCount) &&
     Number(keyCount) <= 100 &&
@@ -256,8 +270,10 @@ function InspectionForm({
     (!missingKeys || (!!values.keyNotes?.trim() && getPhotos('keys').length > 0));
   const completedSteps = [
     !!readingId(0) && !!readingId(1),
-    !!values.roomCondition?.trim() && !!values.notes?.trim() &&
-      roomCompleted && getPhotos('general').length > 0,
+    !!values.roomCondition?.trim() &&
+      !!values.notes?.trim() &&
+      roomCompleted &&
+      getPhotos('general').length > 0,
     assetCompleted,
     keysCompleted,
   ];
@@ -291,7 +307,9 @@ function InspectionForm({
     const count = getPhotos(bucket).length;
     return (
       <Box>
-        <Text>{label}: {count} ảnh đã tải</Text>
+        <Text>
+          {label}: {count} ảnh đã tải
+        </Text>
         <CameraCapture
           label="Chụp ảnh"
           presentation="evidence"
@@ -337,11 +355,15 @@ function InspectionForm({
       if (values[`${item.id}.checked`] !== 'true')
         throw new Error(`Chưa xác nhận kiểm kê: ${item.name}.`);
       const result = assetInspectionInput(
-        item, values, getPhotos(`asset:${item.id}`),
-        !!preparation.inventory, !preparation.legacyExceptionRequired,
+        item,
+        values,
+        getPhotos(`asset:${item.id}`),
+        !!preparation.inventory,
+        !preparation.legacyExceptionRequired,
       );
       const issue = assetIssue(
-        item, result.condition,
+        item,
+        result.condition,
         'observedQuantity' in result ? result.observedQuantity : undefined,
       );
       if (issue && !values[`${item.id}.notes`]?.trim())
@@ -360,7 +382,8 @@ function InspectionForm({
     const notes = values.notes?.trim();
     if (!notes) throw new Error('Ghi tóm tắt buổi kiểm tra trả phòng.');
     const allIds = [
-      ...evidenceIds, ...roomChecks.flatMap((item) => item.evidenceIds),
+      ...evidenceIds,
+      ...roomChecks.flatMap((item) => item.evidenceIds),
       ...assets.flatMap((item) => ('evidenceIds' in item ? item.evidenceIds : []) ?? []),
       ...getPhotos('keys'),
     ];
@@ -398,7 +421,10 @@ function InspectionForm({
     try {
       const scope = 'staff-move-out-inspection';
       const result = await client.mutate<MoveOut>(
-        contract.id, 'move-out/inspection', body, keys.get(scope, body),
+        contract.id,
+        'move-out/inspection',
+        body,
+        keys.get(scope, body),
       );
       if (result.status !== 'Inspected')
         throw new Error('Máy chủ chưa xác nhận đã lưu biên bản trả phòng.');
@@ -421,7 +447,9 @@ function InspectionForm({
       />
       <Text>
         Ngày trả dự kiến: {displayContractDate(moveOut.proposedDate)}
-        {moveOut.inspectionScheduledAt ? ` · Lịch kiểm tra: ${formatInstant(moveOut.inspectionScheduledAt)}` : ''}
+        {moveOut.inspectionScheduledAt
+          ? ` · Lịch kiểm tra: ${formatInstant(moveOut.inspectionScheduledAt)}`
+          : ''}
       </Text>
       <Pill tone={isSubmitted ? 'green' : 'blue'}>
         {moveOut.status === 'Inspected' ? 'Đã gửi Owner duyệt' : moveOut.status}
@@ -440,8 +468,16 @@ function InspectionForm({
           việc giải phóng phòng.
         </Text>
       )}
-      {!!error && <Text accessibilityRole="alert" style={ui.red}>{error}</Text>}
-      {!!notice && <Text accessibilityRole="status" style={ui.green}>{notice}</Text>}
+      {!!error && (
+        <Text accessibilityRole="alert" style={ui.red}>
+          {error}
+        </Text>
+      )}
+      {!!notice && (
+        <Text accessibilityRole="status" style={ui.green}>
+          {notice}
+        </Text>
+      )}
       <Row spread>
         <Text variant="titleMedium">4 phần kiểm tra trả phòng</Text>
         <Pill tone={completedSteps.every(Boolean) ? 'green' : 'blue'}>
@@ -449,19 +485,26 @@ function InspectionForm({
         </Pill>
       </Row>
       {step !== null && (
-        <Action secondary disabled={busy} onPress={() => setStep(null)}>Về 4 mục trả phòng</Action>
+        <Action secondary disabled={busy} onPress={() => setStep(null)}>
+          Về 4 mục trả phòng
+        </Action>
       )}
-      {step === null && sections.map((label, index) => (
-        <Box key={label}>
-          <Row spread>
-            <Text>{index + 1}. {label}</Text>
-            <Pill tone={completedSteps[index] ? 'green' : 'neutral'}>
-              {completedSteps[index] ? 'Đã điền' : 'Chưa đủ'}
-            </Pill>
-          </Row>
-          <Action secondary disabled={busy} onPress={() => setStep(index)}>Mở mục kiểm tra</Action>
-        </Box>
-      ))}
+      {step === null &&
+        sections.map((label, index) => (
+          <Box key={label}>
+            <Row spread>
+              <Text>
+                {index + 1}. {label}
+              </Text>
+              <Pill tone={completedSteps[index] ? 'green' : 'neutral'}>
+                {completedSteps[index] ? 'Đã điền' : 'Chưa đủ'}
+              </Pill>
+            </Row>
+            <Action secondary disabled={busy} onPress={() => setStep(index)}>
+              Mở mục kiểm tra
+            </Action>
+          </Box>
+        ))}
       {step === 0 && (
         <Box>
           <Heading title="1. Chỉ số điện, nước chốt" />
@@ -475,20 +518,29 @@ function InspectionForm({
               label={type === 0 ? 'Chỉ số điện chốt' : 'Chỉ số nước chốt'}
               value={readingId(type)}
               onChange={(id) => set(type === 0 ? 'electricityReadingId' : 'waterReadingId', id)}
-              options={preparation.finalReadings.filter((r) => r.utilityType === type).map((r) => ({
-                id: r.id, label: `${r.meterCode} · ${r.value} · ${displayContractDate(r.date)}`,
-              }))}
+              options={preparation.finalReadings
+                .filter((r) => r.utilityType === type)
+                .map((r) => ({
+                  id: r.id,
+                  label: `${r.meterCode} · ${r.value} · ${displayContractDate(r.date)}`,
+                }))}
               disabled={busy || !editable}
             />
           ))}
-          <Action secondary onPress={() => router.push('/capture')}>Mở tác vụ chụp công tơ</Action>
-          <Action secondary onPress={refresh}>Tải lại chỉ số đã xác nhận</Action>
+          <Action secondary onPress={() => router.push('/capture')}>
+            Mở tác vụ chụp công tơ
+          </Action>
+          <Action secondary onPress={refresh}>
+            Tải lại chỉ số đã xác nhận
+          </Action>
         </Box>
       )}
       {step === 1 && (
         <Box>
           <Heading title="2. Hiện trạng phòng · 7 mục" />
-          <Text>Hiện trạng khi nhận: {baseline?.roomCondition ?? 'Chưa có baseline được duyệt'}</Text>
+          <Text>
+            Hiện trạng khi nhận: {baseline?.roomCondition ?? 'Chưa có baseline được duyệt'}
+          </Text>
           <Input
             label="Hiện trạng tổng quan khi trả"
             multiline
@@ -550,12 +602,15 @@ function InspectionForm({
                 compact
                 embedded
               />
-              {photoSection(`asset:${item.id}`, `Ảnh riêng cho ${item.name} khi thiếu, hỏng, hao mòn`)}
+              {photoSection(
+                `asset:${item.id}`,
+                `Ảnh riêng cho ${item.name} khi thiếu, hỏng, hao mòn`,
+              )}
             </Box>
           ))}
           <Text style={ui.muted}>
-            Staff ghi nhận số lượng, hiện trạng và ảnh thực tế. Owner xem biên bản và quyết định
-            bồi thường sau khi duyệt.
+            Staff ghi nhận số lượng, hiện trạng và ảnh thực tế. Owner xem biên bản và quyết định bồi
+            thường sau khi duyệt.
           </Text>
         </Box>
       )}
@@ -563,8 +618,10 @@ function InspectionForm({
         <Box>
           <Heading title="4. Chìa khóa và quyền truy cập" />
           <Text>
-            Khi nhận: {baseline?.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ??
-              baseline?.keysAndAccess ?? 'Chưa rõ'}
+            Khi nhận:{' '}
+            {baseline?.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ??
+              baseline?.keysAndAccess ??
+              'Chưa rõ'}
           </Text>
           <Input
             label="Số chìa khóa phòng thực tế đã nhận lại"
@@ -597,7 +654,9 @@ function InspectionForm({
             onPress={() => setAccepted((v) => !v)}
           />
           <Action
-            disabled={busy || !editable || !canInspect || !accepted || !completedSteps.every(Boolean)}
+            disabled={
+              busy || !editable || !canInspect || !accepted || !completedSteps.every(Boolean)
+            }
             onPress={() => void submit()}
           >
             Gửi biên bản kiểm tra trả phòng cho Owner

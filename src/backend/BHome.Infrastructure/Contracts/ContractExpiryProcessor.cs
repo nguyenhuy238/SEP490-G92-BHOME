@@ -139,9 +139,13 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                             OccurredAt = now,
                             Snapshot = JsonSerializer.Serialize(new
                             {
-                                move.Id, move.ContractId, move.ProposedDate,
-                                Status = move.Status.ToString(), move.IsExpiry,
-                                Origin = "ContractExpiryJob", OwnerApproved = false
+                                move.Id,
+                                move.ContractId,
+                                move.ProposedDate,
+                                Status = move.Status.ToString(),
+                                move.IsExpiry,
+                                Origin = "ContractExpiryJob",
+                                OwnerApproved = false
                             })
                         });
                         db.SecurityAudit.Add(new SecurityAuditRecord

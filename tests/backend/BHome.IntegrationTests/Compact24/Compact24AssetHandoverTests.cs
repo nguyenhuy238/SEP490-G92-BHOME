@@ -166,7 +166,10 @@ public sealed partial class Compact24OwnerSetupTests
         using (var rendered = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(pdf))))
         {
             var captions = string.Join("\n", Enumerable.Range(1, rendered.GetNumberOfPages()).Select(p => iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor.GetTextFromPage(rendered.GetPage(p))));
-            Assert.Contains("Ghế tổng hợp 8, Ghế tổng hợp 9", captions);
+            // The concise administrative PDF lists inventory items as rows,
+            // rather than joining unmatched asset names with commas.
+            Assert.Contains("Ghế tổng hợp 8", captions);
+            Assert.Contains("Ghế tổng hợp 9", captions);
         }
         Assert.Equal(pdf, await owner.GetByteArrayAsync(route + "/documents/" + document.Id));
         Assert.Equal(HttpStatusCode.NotFound, (await otherTenant.GetAsync(route + "/documents/" + document.Id)).StatusCode);
@@ -606,8 +609,11 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "move-out/inspection",
             inspection with { RoomChecks = roomChecks[..^1] })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "move-out/inspection",
-            inspection with { RoomChecks = roomChecks.Select(check => check.Code == "walls_ceiling_floor"
-                ? check with { EvidenceIds = [] } : check).ToArray() })).StatusCode);
+            inspection with
+            {
+                RoomChecks = roomChecks.Select(check => check.Code == "walls_ceiling_floor"
+                ? check with { EvidenceIds = [] } : check).ToArray()
+            })).StatusCode);
         await Read<MoveOutView>(await HandoverPost(staff, id, "move-out/inspection", inspection));
         var observedInspection = Assert.Single((await tenant.GetFromJsonAsync<FinalInspectionView[]>(
             route + "/move-out/inspections"))!);
