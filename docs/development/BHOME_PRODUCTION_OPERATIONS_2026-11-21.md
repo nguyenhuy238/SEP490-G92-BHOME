@@ -3,7 +3,10 @@
 Tài liệu này bổ sung [runbook release](BHOME_PRODUCTION_RELEASE_RUNBOOK.md).
 Mốc preflight cũ nằm ở [biên bản preflight](BHOME_PRODUCTION_PREFLIGHT_2026-11-21.md);
 không dùng trạng thái chưa deploy trong biên bản cũ làm trạng thái hiện tại.
-Kết quả go-live cụ thể phải đối chiếu GitHub run và `/opt/bhome-deploy/production/current.json`.
+Production đã deploy thành công main `70406ecf`, run `44878730626-4`, lúc
+14:48:52 ngày 21/11/2026 (Asia/Ho_Chi_Minh). Xem
+[nghiệm thu hiện tại](BHOME_PRODUCTION_CD_ACCEPTANCE_2026-11-21.md).
+Đối chiếu GitHub run và `/opt/bhome-deploy/production/current.json` cho release tiếp theo.
 
 ## Phạm vi và ủy quyền
 
@@ -48,6 +51,8 @@ Không tắt CI hoặc environment approval gate.
 
 `production-operations.py` dùng standard library, không thêm dependency hạ tầng.
 Script chạy root bởi systemd và dùng cùng flock với deployment để tránh cạnh tranh.
+Health bỏ lượt nếu khóa bận và thử lại ở tick tiếp theo; backup chờ khóa, không bỏ
+lượt hàng ngày. Đã kiểm thử cả hai tình huống và chạy backup thật sau go-live.
 
 ```sh
 systemctl status bhome-health.timer bhome-health.service
@@ -101,7 +106,9 @@ Archive dùng AES-256-CBC, PBKDF2-SHA256 200.000 iterations và HMAC-SHA256 riê
 Phải xác minh HMAC trước khi giải mã. Lượt kiểm thử đã xác minh HMAC của bản copy,
 giải mã và đọc tar thành công mà không xuất dữ liệu plaintext ra console.
 `recovery.json` chứa vật liệu khôi phục riêng tư; không `cat` hoặc in giá trị.
-Đây là bản copy ngoài VPS tại thời điểm commissioning, chưa có replication định kỳ
+Checkpoint mới nhất là backup sau release `production-scheduled-backup-20261121T075402-i5mldxr4`,
+đã restore thử và kiểm HMAC/SHA256 sau khi copy ra ngoài VPS.
+Đây là bản copy tại một thời điểm, chưa có replication định kỳ
 đến một storage độc lập. Người vận hành cần giữ recovery material ngoài VPS và ngoài
 cùng failure domain của archive, rồi bổ sung destination cho replication dài hạn.
 
