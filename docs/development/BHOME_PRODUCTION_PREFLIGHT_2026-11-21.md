@@ -83,6 +83,19 @@ Production hiện `SePay__Enabled=false`, jobs/billing/initializer false,
 Backend mới có các worker chuyên biệt ngoài `Jobs__Enabled`: phải review cấu hình
 và side effects trước commissioning, không suy ra tất cả worker đều tắt từ một flag.
 
+Hai điểm cần quyết định trước commissioning, chưa sửa trong nhiệm vụ hạ tầng này:
+
+- `SePayAutomationWorker` vẫn gọi `MainContractActivationScheduling.EnqueueDueAsync`
+  và xử lý job activation khi general jobs tắt, kể cả khi provider SePay tắt.
+  Backend có recheck readiness/payment/evidence; tuy nhiên phải duyệt phạm vi worker
+  này và trạng thái contracts hiện có trước khi chạy binary mới trên Production.
+  `Jobs__Enabled=false` không bảo đảm không có tự động chuyển trạng thái contract.
+- AGENTS.md mục 3.6/GBR-04 yêu cầu external contract provider, còn
+  `ContractSigningMethods.cs` và `docs/api/CONTRACT_SIGNING_OTP.md` mô tả OTP/system
+  seal và có quyết định ở tài liệu ngoài checkout. Chưa đối chiếu được quyết định
+  thay đổi phạm vi đã duyệt trong phiên này. Không bật/test ký thật hoặc thay policy;
+  cần xác nhận thiết kế áp dụng trước go-live các chức năng đó.
+
 Smoke Production hiện tại **FAIL** vì Public `/api/not-a-route` trả HTML HTTP 200.
 Live Caddy Public block chỉ có `reverse_proxy public-web:8080`. Đã chuẩn bị
 `/opt/bhome-deploy/proposals/20261121/Caddyfile.NOT_APPLIED`: thêm `handle /api/*`
