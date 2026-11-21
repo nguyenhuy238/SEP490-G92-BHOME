@@ -205,7 +205,7 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
                             {
                                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(t); timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.TimeoutSeconds));
                                 // Stable per-device key protects fanout retries after a partial provider failure.
-                                var receipt = await provider.SendAsync(new($"channel/{claim.Id}/{destination.Id}", claim.Channel, destination.Value, auth?.DeliveryEventType ?? notice.EventType, emailContent.Item1, emailContent.Item2, auth?.ActionUrl, attachments), timeout.Token);
+                                var receipt = await provider.SendAsync(new($"channel/{claim.Id}/{destination.Id}", claim.Channel, destination.Value, auth?.DeliveryEventType ?? notice.EventType, emailContent.Item1, emailContent.Item2, auth?.ActionUrl, attachments, auth?.MobileActionUrl, auth?.Credentials), timeout.Token);
                                 if (string.IsNullOrWhiteSpace(receipt) || receipt.Length > 200) throw new InvalidOperationException("invalid_provider_receipt");
                                 providerReference = receipt;
                             }

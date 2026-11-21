@@ -1,4 +1,5 @@
 import { MoneyField } from '../../components/common/MoneyField';
+import { AssetLifecyclePanel } from './AssetLifecyclePanel';
 import { ASSET_UNITS } from '../../../../../packages/client-core/src/assetUnits';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -153,6 +154,13 @@ export function AssetOperationsPanel({
               )}
             </Stack>
           )}
+          {owner &&
+            [
+              'FireSafetyEquipment',
+              'SafetyEquipment',
+              'TechnicalEquipment',
+              'ElectricalEquipment',
+            ].includes(asset.category) && <AssetLifecyclePanel asset={asset} />}
           {owner &&
             (metadata.isPending ? (
               <LoadingState />

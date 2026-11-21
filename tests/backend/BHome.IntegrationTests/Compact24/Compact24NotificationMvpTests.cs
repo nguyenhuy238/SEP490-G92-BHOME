@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 
 namespace BHome.IntegrationTests.Compact24;
@@ -301,14 +302,19 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
         public Task SendAsync(Guid userId, string destination, string token, CancellationToken t) { Token = token; return Task.CompletedTask; }
     }
     [CompactPostgresFact]
-    public async Task OwnerCreatesStaffWithExplicitRoleAndSendsOneTimeInvitation()
+    public async Task OwnerCreatesActiveStaffAndIssuesPasswordWithoutInvitation()
     {
-        var w = await Seed(); var mailbox = new InvitationMailbox(); using var host = fixture.Factory!.WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<IPasswordResetDelivery>(mailbox)));
+        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
         using var owner = await Client(w.Owner, host); var email = Guid.NewGuid().ToString("N") + "@example.invalid";
         var input = new BHome.Application.Operations.StaffCreate(email, "Synthetic staff", null, null, new(null, "PartTime", Today, null, null, null, "Active"));
         var response = await owner.PostAsJsonAsync("/api/v1/staff", input); response.EnsureSuccessStatusCode(); var staff = (await response.Content.ReadFromJsonAsync<BHome.Application.Operations.StaffView>())!;
-        (await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null)).EnsureSuccessStatusCode(); Assert.NotNull(mailbox.Token);
-        using var anonymous = host.CreateClient(); Assert.Equal(HttpStatusCode.NoContent, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", new AcceptInvitationRequest(email, mailbox.Token!, Password))).StatusCode);
+        Assert.True(staff.IsActive);
+        host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [email];
+        var issued = await owner.PostAsync($"/api/v1/staff/{staff.UserId}/issue-password", null);
+        issued.EnsureSuccessStatusCode();
+        Assert.Equal("Queued", (await issued.Content.ReadFromJsonAsync<TenantInvitationResult>())!.DeliveryState);
+        await SendEmail(host, await AuthenticationDelivery(host, staff.UserId));
+        Assert.Equal("STAFF_PASSWORD_ISSUED", Assert.Single(probe.Messages).EventType);
         await Pump(host); await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         Assert.True(await db.Set<UserNotification>().AnyAsync(n => n.RecipientUserId == staff.UserId && n.EventType == "STAFF_ACCOUNT_CREATED"));
     }

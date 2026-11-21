@@ -4,5 +4,5 @@ import { useMeterApi } from '../meters/useMeterApi';
 
 export function usePropertySetupApi() {
   const { request } = useMeterApi();
-  return useMemo(() => propertySetupClient(request), [request]);
+  return useMemo(() => ({ ...propertySetupClient(request), request }), [request]);
 }

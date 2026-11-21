@@ -22,6 +22,8 @@ export function mutationTags(path: string): QueryTag[] {
   if (/\/(?:evidence|ocr|diagnostics|preview|previews)(?:\/|$)/.test(path)) return [];
   if (/^\/api\/v1\/notifications(?:\/|$)/.test(path)) return ['notifications'];
   if (/^\/api\/v1\/operational-tasks(?:\/|$)/.test(path)) return ['tasks', 'notifications'];
+  if (/^\/api\/v1\/equipment-inspections(?:\/|$)/.test(path))
+    return ['tasks', 'incidents', 'notifications'];
   if (path === '/api/v1/incidents') return ['incidents', 'notifications'];
   if (/^\/api\/v1\/(?:incidents|maintenance|work-orders)(?:\/|$)/.test(path))
     return ['incidents', 'tasks', 'notifications'];

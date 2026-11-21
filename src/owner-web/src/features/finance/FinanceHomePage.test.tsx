@@ -59,7 +59,11 @@ it('shows three visible work areas with direct links to each core finance task',
     }
   }
 
-  expect(screen.getAllByRole('link')).toHaveLength(11);
+  expect(screen.getByRole('link', { name: /Thuế & chứng từ/ })).toHaveAttribute(
+    'href',
+    '/finance/tax-records',
+  );
+  expect(screen.getAllByRole('link')).toHaveLength(12);
 });
 
 it('keeps all destinations visible without speculative progress, figures or hidden tabs', () => {

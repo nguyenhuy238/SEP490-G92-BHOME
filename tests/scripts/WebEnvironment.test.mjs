@@ -21,7 +21,9 @@ function request(url) {
       response.on('data', (chunk) => {
         body += chunk;
       });
-      response.on('end', () => resolve({ status: response.statusCode, body }));
+      response.on('end', () =>
+        resolve({ status: response.statusCode, headers: response.headers, body }),
+      );
     });
     req.setTimeout(10000, () => req.destroy(new Error('Local Vite probe timed out.')));
     req.on('error', reject);
@@ -34,6 +36,11 @@ try {
     ['DeveloperB', true],
   ]) {
     const upstream = createHttpsServer({ cert, key }, (req, res) => {
+      if (req.url === '/open/sign-contract?probe=synthetic') {
+        res.writeHead(302, { Location: 'bhome://sign-contract?probe=synthetic' });
+        res.end();
+        return;
+      }
       assert.equal(req.url, '/api/environment-probe');
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ developer }));
@@ -55,6 +62,9 @@ try {
       const api = await request(`${origin}/api/environment-probe`);
       assert.equal(api.status, 200);
       assert.equal(JSON.parse(api.body).developer, developer);
+      const signing = await request(`${origin}/open/sign-contract?probe=synthetic`);
+      assert.equal(signing.status, 302);
+      assert.equal(signing.headers.location, 'bhome://sign-contract?probe=synthetic');
       for (const route of [
         '/accept-invitation',
         '/reset-password',
@@ -66,7 +76,7 @@ try {
         assert.match(page.body, /id="root"/);
       }
       log(
-        `PASS: ${developer}: ${https ? 'HTTPS signing portal' : 'HTTP portal'}, TLS-verified API proxy, four SPA routes.`,
+        `PASS: ${developer}: ${https ? 'HTTPS signing portal' : 'HTTP portal'}, TLS-verified API/signing proxies, four SPA routes.`,
       );
     } finally {
       if (vite) await vite.close();

@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => ({
     debtSummary: vi.fn(),
     history: vi.fn(),
     transfers: vi.fn(),
+    account: vi.fn(),
+    saveAccount: vi.fn(),
     request: vi.fn(),
     excessDisposition: vi.fn(),
     excessContext: vi.fn(),
@@ -327,6 +329,7 @@ beforeEach(() => {
   );
   mocks.api.reviews.mockResolvedValue({ items: [], totalCount: 0 });
   mocks.api.request.mockResolvedValue([]);
+  mocks.api.account.mockResolvedValue(null);
   mocks.api.excessDisposition.mockResolvedValue(null);
   mocks.api.excessContext.mockResolvedValue({
     amount: '100000',
@@ -801,6 +804,121 @@ it('opens the review queue immediately, keeps operations in three tabs and setti
   );
   expect(mocks.api.allocate).not.toHaveBeenCalled();
   expect(mocks.api.register).not.toHaveBeenCalled();
+});
+const testReceivingLocationId = '11111111-2222-4333-8444-555555555555';
+const configuredReceivingAccount = {
+  locationId: testReceivingLocationId,
+  bankIdentifier: '970422',
+  accountNumber: '0000000001',
+  accountHolder: 'NGUYEN QUOC HUY',
+  enabled: true,
+  isDevelopmentDemo: true,
+  version: 15,
+};
+async function openReceivingAccountSettings() {
+  mocks.api.request.mockImplementation(async (url: string) =>
+    url === '/api/v1/capture/locations'
+      ? [{ id: testReceivingLocationId, label: 'Cơ sở Hòa Lạc' }]
+      : [],
+  );
+  mount(<PaymentManagementPage />, '/payments?setupAccount=1');
+  fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Cơ sở' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Cơ sở Hòa Lạc' }));
+  return screen.findByText('Tài khoản nhận tiền của cơ sở');
+}
+it('shows an already confirmed receiving account as saved and prevents an unchanged resubmission', async () => {
+  mocks.api.account.mockResolvedValue(configuredReceivingAccount);
+  await openReceivingAccountSettings();
+  await screen.findByText('Đã xác nhận và lưu cấu hình phiên bản 15.');
+  const approved = screen.getByRole('checkbox', {
+    name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
+  });
+  expect(approved).toBeChecked();
+  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeDisabled();
+  fireEvent.change(screen.getByRole('textbox', { name: 'BIN ngân hàng (6 số)' }), {
+    target: { value: '970418' },
+  });
+  expect(approved).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeDisabled();
+  fireEvent.click(approved);
+  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeEnabled();
+  expect(mocks.api.saveAccount).not.toHaveBeenCalled();
+});
+it('preserves confirmation and gives explicit success feedback after a receiving account is saved', async () => {
+  mocks.api.account.mockResolvedValueOnce(null).mockResolvedValue({
+    ...configuredReceivingAccount,
+    version: 1,
+  });
+  mocks.api.saveAccount.mockResolvedValue({ ...configuredReceivingAccount, version: 1 });
+  await openReceivingAccountSettings();
+  fireEvent.change(screen.getByRole('textbox', { name: 'BIN ngân hàng (6 số)' }), {
+    target: { value: '970422' },
+  });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' }), {
+    target: { value: '0000000001' },
+  });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Chủ tài khoản (in hoa không dấu)' }), {
+    target: { value: 'NGUYEN QUOC HUY' },
+  });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Bật hướng dẫn nhận tiền' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Tài khoản tổng hợp Development/Testing' }));
+  fireEvent.click(
+    screen.getByRole('checkbox', {
+      name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
+    }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' }));
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Đã lưu tài khoản nhận tiền thành công (phiên bản 1).',
+  );
+  await waitFor(() => expect(mocks.api.account).toHaveBeenCalledTimes(2));
+  expect(
+    screen.getByRole('checkbox', {
+      name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
+    }),
+  ).toBeChecked();
+  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeDisabled();
+  expect(mocks.api.saveAccount).toHaveBeenCalledTimes(1);
+  expect(mocks.api.saveAccount).toHaveBeenCalledWith(
+    expect.objectContaining({
+      locationId: testReceivingLocationId,
+      bankIdentifier: '970422',
+      version: 0,
+      enabled: true,
+      isDevelopmentDemo: true,
+    }),
+  );
+  fireEvent.change(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' }), {
+    target: { value: '0000000002' },
+  });
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(
+    screen.getByRole('checkbox', {
+      name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
+    }),
+  ).not.toBeChecked();
+});
+it('keeps edited receiving account fields and approval for retry after a failed save', async () => {
+  mocks.api.account.mockResolvedValue(configuredReceivingAccount);
+  mocks.api.saveAccount.mockRejectedValue({
+    status: 409,
+    code: 'receiving_account_version_changed',
+  });
+  await openReceivingAccountSettings();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' }), {
+    target: { value: '0000000002' },
+  });
+  const approved = screen.getByRole('checkbox', {
+    name: 'Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận',
+  });
+  fireEvent.click(approved);
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' }));
+  expect(await screen.findByText('Tài khoản nhận đã thay đổi. Hãy tải lại.')).toBeInTheDocument();
+  expect(screen.queryByText(/Đã lưu tài khoản nhận tiền thành công/)).not.toBeInTheDocument();
+  expect(approved).toBeChecked();
+  expect(screen.getByRole('textbox', { name: 'Số tài khoản nhận tiền' })).toHaveValue('0000000002');
+  expect(screen.getByRole('button', { name: 'Lưu tài khoản nhận tiền' })).toBeEnabled();
+  expect(mocks.api.saveAccount).toHaveBeenCalledTimes(1);
 });
 it('provides visible overdue debt action and accessible secondary filters', async () => {
   mocks.api.debts.mockResolvedValue({ items: [], totalCount: 0 });

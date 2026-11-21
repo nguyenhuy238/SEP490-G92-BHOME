@@ -72,7 +72,7 @@ public interface IAnonymousSigningSecurity
     string OtpHash(Guid invitationId, string tokenHash, string otp);
     bool EmailConfigured { get; }
     string? InvitationUrl(string token);
-    Task SendAsync(string email, string eventKey, string title, string body, CancellationToken t);
+    Task SendAsync(string email, string eventKey, string title, string body, CancellationToken t, string? actionUrl = null);
 }
 public interface IInternalAcceptanceRenderer
 {

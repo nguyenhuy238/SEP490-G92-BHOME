@@ -41,6 +41,7 @@ const DebtsPage = lazy(() => import('../features/debts/pages/DebtsPage'));
 const IncidentsPage = lazy(() => import('../features/incidents/pages/IncidentsPage'));
 const MaintenancePage = lazy(() => import('../features/maintenance/pages/MaintenancePage'));
 const ExpensesPage = lazy(() => import('../features/expenses/pages/ExpensesPage'));
+const TaxTrackingPage = lazy(() => import('../features/finance/TaxTrackingPage'));
 const LocationFinanceWorkspace = lazy(() =>
   import('../features/locations/pages/LocationFinanceWorkspace').then((module) => ({
     default: module.LocationFinanceWorkspace,
@@ -151,6 +152,7 @@ export function AppRouter() {
               <Route path="/incidents" element={<IncidentsPage />} />
               <Route path="/maintenance" element={<MaintenancePage />} />
               <Route path="/expenses" element={<ExpensesPage />} />
+              <Route path="/finance/tax-records" element={<TaxTrackingPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/what-if" element={<WhatIfPage />} />

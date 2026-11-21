@@ -37,6 +37,9 @@ vi.mock('../components/OwnerMobileKit', () => ({
   OwnerLoading: () => <p>Đang tải</p>,
 }));
 vi.mock('../components/WorkspaceKit', () => ({
+  Action: ({ children, onPress }: C & { onPress: () => void }) => (
+    <button onClick={onPress}>{children}</button>
+  ),
   Filters: ({ options, onChange }: { options: string[]; onChange: (value: string) => void }) => (
     <div>
       {options.map((value) => (

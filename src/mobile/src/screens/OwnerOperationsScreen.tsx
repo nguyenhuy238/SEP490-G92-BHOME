@@ -7,7 +7,7 @@ import {
   OwnerLoading,
   OwnerRecordRow,
 } from '../components/OwnerMobileKit';
-import { Filters } from '../components/WorkspaceKit';
+import { Action, Filters } from '../components/WorkspaceKit';
 import { Pagination } from '../components/WorkspaceQueryState';
 import { ChoiceField } from '../components/WorkflowControls';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
@@ -98,6 +98,12 @@ export function OwnerOperationsScreen({ initialSection = 'Sự cố' }: { initia
   return (
     <>
       <DashboardSummary title="Vận hành" detail="Theo dõi tiến độ và kiểm tra kết quả tại cơ sở" />
+      <Action secondary onPress={() => go('owner-location-records')}>
+        Hồ sơ và thiết bị cơ sở
+      </Action>
+      <Action secondary onPress={() => go('owner-tax-records')}>
+        Thuế & chứng từ
+      </Action>
       <Filters
         minTouchSize={48}
         options={sections}

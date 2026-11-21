@@ -35,10 +35,12 @@ export function StaffEditor({
   staff,
   renewal = false,
   close,
+  onCreated,
 }: {
   staff: Staff | null;
   renewal?: boolean;
   close: () => void;
+  onCreated?: (created: Staff) => void;
 }) {
   const action = useOwnerAction();
   const [name, setName] = useState(staff?.fullName ?? ''),
@@ -126,10 +128,11 @@ export function StaffEditor({
           employment: work,
           ...(staff ? { accountVersion: version, isActive: active, reason } : {}),
         };
+    let createdStaff: Staff | undefined;
     if (
       await action.run(async () => {
         try {
-          return await action.command(
+          const result = await action.command<Staff>(
             renewal
               ? `/api/v1/staff/${staff!.userId}/employments`
               : staff
@@ -138,6 +141,8 @@ export function StaffEditor({
             staff && !renewal ? 'PUT' : 'POST',
             body,
           );
+          if (!staff && !renewal && result?.userId) createdStaff = result;
+          return result;
         } catch (error) {
           if (error instanceof ApiError) {
             if (error.problem?.code === 'stale_staff_version') {
@@ -156,8 +161,10 @@ export function StaffEditor({
           throw error;
         }
       })
-    )
+    ) {
       close();
+      if (createdStaff) onCreated?.(createdStaff);
+    }
   }
   return (
     <Dialog
@@ -292,8 +299,9 @@ export function StaffEditor({
                 </Box>
                 {!staff && (
                   <Alert severity="info">
-                    Nhân viên tự đặt mật khẩu qua lời mời email. Sau khi tạo, chọn Gửi thông tin tài
-                    khoản trong chi tiết nhân viên.
+                    Tài khoản nhân viên được kích hoạt ngay khi tạo, không cần lời mời kích hoạt.
+                    Sau khi tạo, mở chi tiết nhân viên và chọn gửi tài khoản cùng mật khẩu ngẫu
+                    nhiên đến email đã nhập. Nhân viên nên đổi mật khẩu sau khi đăng nhập.
                   </Alert>
                 )}
                 {staff && (

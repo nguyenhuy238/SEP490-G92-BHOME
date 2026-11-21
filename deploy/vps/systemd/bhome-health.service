@@ -1,0 +1,7 @@
+[Unit]
+Description=BHOME Production readiness, TLS and disk check
+OnFailure=bhome-operations-alert.service
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/bhome-deploy/production/production-operations.py health

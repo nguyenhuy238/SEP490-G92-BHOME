@@ -192,6 +192,7 @@ it('successful API mutations invalidate task data while failed mutations do not'
   const transport = vi
     .fn<typeof fetch>()
     .mockResolvedValueOnce(new Response('{}', { status: 409 }))
+    .mockResolvedValueOnce(new Response('{}'))
     .mockResolvedValueOnce(new Response('{}'));
   const api = new MobileApi(
     'https://api.example.invalid',
@@ -217,6 +218,9 @@ it('successful API mutations invalidate task data while failed mutations do not'
   await api.json('/api/v1/operational-tasks/id/complete', {});
   await api.queryCache.fetch(entry);
   expect(load).toHaveBeenCalledTimes(2);
+  await api.json('/api/v1/equipment-inspections/id/review', { action: 'Verify' });
+  await api.queryCache.fetch(entry);
+  expect(load).toHaveBeenCalledTimes(3);
   expect(mutationTags('/api/v1/capture/meter-tasks/id/confirm')).toContain('meters');
   expect(mutationTags('/api/v1/incidents/id/status')).toContain('incidents');
   expect(mutationTags('/api/v1/capture/meter-tasks/id/evidence')).toEqual([]);
