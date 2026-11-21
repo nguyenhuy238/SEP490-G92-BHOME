@@ -17,10 +17,10 @@ SMTP thực xác thực và thư tổng hợp đến mailbox kiểm thử.
 
 ## Nguyên nhân được xác minh
 
-| Môi trường | Nguyên nhân |
-| --- | --- |
-| Localhost | SMTP đã bật nhưng User Secrets giữ allowlist không chứa địa chỉ nhận trong yêu cầu; Backend trả `email_recipient_not_allowed` trước khi đổi mật khẩu. |
-| Staging | Container hiệu lực có `Email__Enabled=false`, `NotificationChannels__Enabled=false`; chưa có cấu hình SMTP/allowlist ở API. Endpoint từ chối delivery với 503. |
+| Môi trường | Nguyên nhân                                                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Localhost  | SMTP đã bật nhưng User Secrets giữ allowlist không chứa địa chỉ nhận trong yêu cầu; Backend trả `email_recipient_not_allowed` trước khi đổi mật khẩu.            |
+| Staging    | Container hiệu lực có `Email__Enabled=false`, `NotificationChannels__Enabled=false`; chưa có cấu hình SMTP/allowlist ở API. Endpoint từ chối delivery với 503.   |
 | Production | File `compose.integrations.yml` đã bật email và có credential hợp lệ, nhưng file `compose.production-environment.yml` được nạp sau ghi đè cả hai cờ thành false. |
 
 Đã kiểm tra STARTTLS/certificate và SMTP login từ VPS trước khi sửa: thành công.
@@ -86,17 +86,17 @@ ra Internet chỉ bằng pull code. Xem [hướng dẫn nhóm](BHOME_TEAM_ENVIRO
 
 ## Bằng chứng kiểm thử
 
-| Kiểm tra đã chạy | Kết quả |
-| --- | --- |
-| `tests/scripts/LocalGmail.Tests.ps1` | PASS, credential tổng hợp và UserSecretsId tạm, không gửi email. |
-| Python unittest `test_email_preflight.py` | 6/6 PASS, không mạng/secret thật. |
-| `Test-Compact24Isolated.ps1` với `AuthenticationEmailTests`, `EmailTransportTests`, `EmailCaptureTests` | 45/45 PASS, PostgreSQL disposable; gồm cấp mật khẩu/đăng nhập/đổi mật khẩu Staff, 401/403, mã hóa outbox, dedup/retry và allowlist. |
-| `GmailSmtpSmokeTests` opt-in với read-only IMAP | 1/1 PASS; API Development trên DB tạm gửi một email tổng hợp đến chính sender; SMTP accepted và đúng Message-ID có trong INBOX. |
-| VPS preflight Staging và Production `--smtp` | PASS ở cả hai; TLS/certificate/login hợp lệ. |
-| Thư tổng hợp tự gửi từ cấu hình Staging và Production | Mỗi môi trường một thư đến chính sender; SMTP accepted và exact Message-ID trong INBOX, không đọc thư khác. Đây là transport smoke, không gọi cấp lại mật khẩu Staff thật. |
-| Readiness localhost và readiness nội bộ container Staging/Production; release-safety VPS | PASS. |
-| Public ingress Staging/Production | `/health/ready` trả 404 đúng chính sách `smoke-release.sh`; issue-password không xác thực trả 401 ở cả ba môi trường. |
-| Staging: đăng nhập Owner, xem channel-status, gọi issue-password với UUID không tồn tại | Login 200, channel enabled; 404 `staff_not_found` thay vì lỗi delivery 503, không đổi tài khoản thật. |
+| Kiểm tra đã chạy                                                                                        | Kết quả                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/scripts/LocalGmail.Tests.ps1`                                                                    | PASS, credential tổng hợp và UserSecretsId tạm, không gửi email.                                                                                                           |
+| Python unittest `test_email_preflight.py`                                                               | 6/6 PASS, không mạng/secret thật.                                                                                                                                          |
+| `Test-Compact24Isolated.ps1` với `AuthenticationEmailTests`, `EmailTransportTests`, `EmailCaptureTests` | 45/45 PASS, PostgreSQL disposable; gồm cấp mật khẩu/đăng nhập/đổi mật khẩu Staff, 401/403, mã hóa outbox, dedup/retry và allowlist.                                        |
+| `GmailSmtpSmokeTests` opt-in với read-only IMAP                                                         | 1/1 PASS; API Development trên DB tạm gửi một email tổng hợp đến chính sender; SMTP accepted và đúng Message-ID có trong INBOX.                                            |
+| VPS preflight Staging và Production `--smtp`                                                            | PASS ở cả hai; TLS/certificate/login hợp lệ.                                                                                                                               |
+| Thư tổng hợp tự gửi từ cấu hình Staging và Production                                                   | Mỗi môi trường một thư đến chính sender; SMTP accepted và exact Message-ID trong INBOX, không đọc thư khác. Đây là transport smoke, không gọi cấp lại mật khẩu Staff thật. |
+| Readiness localhost và readiness nội bộ container Staging/Production; release-safety VPS                | PASS.                                                                                                                                                                      |
+| Public ingress Staging/Production                                                                       | `/health/ready` trả 404 đúng chính sách `smoke-release.sh`; issue-password không xác thực trả 401 ở cả ba môi trường.                                                      |
+| Staging: đăng nhập Owner, xem channel-status, gọi issue-password với UUID không tồn tại                 | Login 200, channel enabled; 404 `staff_not_found` thay vì lỗi delivery 503, không đổi tài khoản thật.                                                                      |
 
 Evidence local ignored: `.tools/email-repair-20261121/tests/` và `gmail-smoke/`.
 Không coi test với SMTP probe là bằng chứng thư thật; transport smoke/IMAP là bằng chứng riêng.
