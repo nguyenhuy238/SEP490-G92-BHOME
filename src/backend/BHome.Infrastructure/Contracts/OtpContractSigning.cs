@@ -17,6 +17,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
+using SkiaSharp;
 
 namespace BHome.Infrastructure.Contracts;
 
@@ -187,11 +188,16 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         var session = SigningMethods.IsOwnerSession(appearance.Method);
         if (session && (!user.IsInRole(BHome.Domain.IdentityAccess.Roles.Owner) || document.OwnerSignerId != Actor))
             throw new ContractException(403, "owner_session_signing_owner_only");
+        if (appearance.HandwrittenInkPng is not null && (!session || !appearance.UsePicture))
+            throw ContractException.Invalid("handover_owner_ink_invalid");
         if (!session && !channel.IsConfigured("EMAIL")) throw new ContractException(503, "otp_email_unavailable");
         var (email, name) = await parties.FindAsync(Actor, t);
         if (!session && email is null) throw ContractException.Conflict("signer_email_required");
-        var reviewed = await documents.ReadAsync(document, t);
-        if (reviewed is null) await renderer.ValidateAsync(document, t);
+        // The trusted caller may supply an immutable previously signed PDF
+        // (including the separate handover report). The normal contract source
+        // lookup must not replace or require a tenancy draft in that case.
+        var reviewed = previousPdf is null ? await documents.ReadAsync(document, t) : null;
+        if (previousPdf is null && reviewed is null) await renderer.ValidateAsync(document, t);
         var source = previousPdf ?? reviewed ?? await renderer.RenderAsync(document, t);
         if (source.Length > 10 * 1024 * 1024 || source.Length < 5 || !source.AsSpan(0, 5).SequenceEqual("%PDF-"u8))
             throw ContractException.Invalid("contract_pdf_invalid");
@@ -201,11 +207,29 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         if (placement is not null)
         {
             var text = $"Ký điện tử bởi: {name}\nNgày ký: {now.ToOffset(VietnamOffset):dd/MM/yyyy HH:mm:ss}";
-            var picture = appearance.UsePicture && pictures is not null ? await pictures.FindAsync(Actor, t) : null;
+            byte[]? ink = appearance.HandwrittenInkPng;
+            double? inkRatio = null;
+            if (ink is not null)
+            {
+                if (ink.Length is < 50 or > 2 * 1024 * 1024)
+                    throw ContractException.Invalid("handover_owner_ink_invalid");
+                // The raw request is normalized into PNG by the trusted
+                // handover renderer. A non-image cannot reach PDF signing.
+                using var bitmap = SKBitmap.Decode(ink);
+                if (bitmap is null || bitmap.Width is < 40 or > 4000 ||
+                    bitmap.Height is < 40 or > 4000)
+                    throw ContractException.Invalid("handover_owner_ink_invalid");
+                inkRatio = (double)bitmap.Height / bitmap.Width;
+            }
+            var picture = ink is null && appearance.UsePicture && pictures is not null
+                ? await pictures.FindAsync(Actor, t) : null;
             ContractSignatureSlots.RequireSeparatePartyBoxes(source, placement, document.OwnerSignerId == Actor,
-                picture is null ? null : (double)picture.Height / picture.Width);
-            visible = new VisibleSignature(placement.Page, placement.X, placement.Y, placement.Width, text, picture?.Content, CaptionUnderImage: true);
+                inkRatio ?? (picture is null ? null : (double)picture.Height / picture.Width));
+            visible = new VisibleSignature(placement.Page, placement.X, placement.Y, placement.Width, text,
+                ink ?? picture?.Content, CaptionUnderImage: true);
         }
+        else if (appearance.HandwrittenInkPng is not null)
+            throw ContractException.Conflict("handover_owner_signing_box_missing");
         PreparedSignature prepared;
         try { prepared = pdf.Prepare(source, seal.Chain, now, visible); }
         catch (ArgumentException) { throw ContractException.Invalid("signature_placement_invalid"); }
@@ -278,10 +302,12 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         if (email is null) throw ContractException.Conflict("signer_email_required");
         var (code, challenge) = await challenges.IssueAsync(signature.Id, email, t);
         var minutes = Math.Max(1, options.Value.Otp.TtlSeconds / 60);
+        var handover = signature.PreparedObjectKey.Contains("/handover-signatures/", StringComparison.Ordinal);
+        var subject = handover ? "biên bản bàn giao phòng" : "hợp đồng";
         var receipt = await channel.SendAsync(new ChannelMessage($"contract-otp:{signature.Id:N}:{challenge.Issues}", "EMAIL", email,
-            "CONTRACT_SIGNING_OTP", $"[BHOME] Mã xác nhận ký hợp đồng: {code}",
-            $"Mã xác nhận ký hợp đồng của bạn là: {code}\n\nMã có hiệu lực {minutes} phút và chỉ dùng được một lần.\n" +
-            "Không chia sẻ mã này với bất kỳ ai, kể cả nhân viên BHOME.\nNếu bạn không yêu cầu ký hợp đồng, hãy bỏ qua email này."), t);
+            handover ? "HANDOVER_SIGNING_OTP" : "CONTRACT_SIGNING_OTP", $"[BHOME] Mã xác nhận ký {subject}: {code}",
+            $"Mã xác nhận ký {subject} của bạn là: {code}\n\nMã có hiệu lực {minutes} phút và chỉ dùng được một lần.\n" +
+            $"Không chia sẻ mã này với bất kỳ ai, kể cả nhân viên BHOME.\nNếu bạn không yêu cầu ký {subject}, hãy bỏ qua email này."), t);
         // Sandbox email (Development) delivers nothing; an explicit Development-only switch prints the code to test locally.
         if (options.Value.Otp.DevelopmentLogCode && environment.IsDevelopment() && receipt.StartsWith("sandbox:", StringComparison.Ordinal))
             logger.LogWarning("DEVELOPMENT ONLY - contract signing OTP for signature {SignatureId}: {Code}", signature.Id, code);

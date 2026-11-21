@@ -8,7 +8,7 @@ import { InventoryPhotoCapture } from '../components/InventoryPhotoCapture';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
-import { errorMessage } from '../lib/api';
+import { errorMessage, MobileApiError } from '../lib/api';
 import { randomUUID } from '../lib/randomUUID';
 import { showSuccess } from '../lib/toast';
 import { operationalTasks } from '../services/operationalTasks';
@@ -62,9 +62,16 @@ type ItemDraft = {
   dirty: boolean;
 };
 type ItemFieldErrors = Partial<Record<'quantity' | 'condition' | 'notes' | 'photos', string>>;
-function validateItemDraft(item: MoveInInventoryItem, draft: ItemDraft): ItemFieldErrors {
+function validateItemDraft(
+  item: MoveInInventoryItem,
+  draft: ItemDraft,
+  reinspectionSelected = false,
+): ItemFieldErrors {
   const errors: ItemFieldErrors = {};
   const quantity = Number(draft.quantity);
+  const photoCount =
+    (item.evidenceIds ?? []).filter((id) => !draft.removedEvidenceIds.includes(id)).length +
+    draft.photos.length;
   if (!/^\d+$/.test(draft.quantity.trim()))
     errors.quantity = 'Nhập số lượng thực tế (số nguyên từ 0).';
   else if (!Number.isSafeInteger(quantity) || quantity > item.expectedQuantity)
@@ -77,11 +84,16 @@ function validateItemDraft(item: MoveInInventoryItem, draft: ItemDraft): ItemFie
   if (draft.condition === 'Missing' || draft.condition === 'Damaged') {
     if (!draft.notes.trim()) errors.notes = 'Mô tả tình trạng thiếu hoặc hư hỏng.';
     else if (draft.notes.length > 2000) errors.notes = 'Ghi chú không quá 2000 ký tự.';
-    const total =
-      (item.evidenceIds ?? []).filter((id) => !draft.removedEvidenceIds.includes(id)).length +
-      draft.photos.length;
-    if (total === 0) errors.photos = 'Chụp ít nhất 1 ảnh minh chứng.';
-    else if (total > 5) errors.photos = 'Tối đa 5 ảnh minh chứng.';
+    if (photoCount === 0) errors.photos = 'Chụp ít nhất 1 ảnh minh chứng.';
+  }
+  if (photoCount > 5) errors.photos = 'Tối đa 5 ảnh minh chứng.';
+  if (
+    reinspectionSelected &&
+    draft.condition === 'Good' &&
+    item.condition !== 'Good' &&
+    draft.photos.length === 0
+  ) {
+    errors.photos = 'Kiểm tra lại tài sản đã sửa cần chụp ảnh mới sau yêu cầu của Owner.';
   }
   return errors;
 }
@@ -205,7 +217,10 @@ function InventoryDetail({
     if (!api) throw new Error('Chưa kết nối máy chủ.');
     const quantity = Number(draft.quantity);
     const hasIssue = draft.condition === 'Missing' || draft.condition === 'Damaged';
-    const photosToUpload = hasIssue ? draft.photos : [];
+    const reinspectionSelected = !!view.reinspectionItemIds?.includes(item.id);
+    // On a first inspection, Good requires no photo. An Owner-requested
+    // reinspection is different: a newly repaired Good item needs fresh proof.
+    const photosToUpload = hasIssue || reinspectionSelected ? draft.photos : [];
     const savedEvidence = (item.evidenceIds ?? []).filter(
       (id) => !draft.removedEvidenceIds.includes(id),
     );
@@ -220,6 +235,13 @@ function InventoryDetail({
     if (failure) throw new Error(failure);
     if (hasIssue && savedEvidence.length + photosToUpload.length === 0)
       throw new Error('Tài sản thiếu hoặc hư hỏng cần ít nhất một ảnh minh chứng.');
+    if (
+      reinspectionSelected &&
+      draft.condition === 'Good' &&
+      item.condition !== 'Good' &&
+      photosToUpload.length === 0
+    )
+      throw new Error('Cần chụp ảnh mới sau khi Owner yêu cầu kiểm tra lại tài sản.');
     if (savedEvidence.length + photosToUpload.length > 5)
       throw new Error('Mỗi tài sản chỉ được lưu tối đa 5 ảnh. Hãy bỏ bớt ảnh mới.');
     const client = moveInInventoryClient(api);
@@ -288,7 +310,11 @@ function InventoryDetail({
     const targets = data.items.filter((entry) => entry.id === itemId);
     for (const item of targets) {
       const draft = drafts[item.id] ?? fromItem(item);
-      const problems = validateItemDraft(item, draft);
+      const problems = validateItemDraft(
+        item,
+        draft,
+        !!data.reinspectionItemIds?.includes(item.id),
+      );
       if (Object.keys(problems).length) {
         setFieldErrors((previous) => ({ ...previous, [item.id]: problems }));
         if (selectedItemId !== item.id) openItem(item.id);
@@ -337,17 +363,27 @@ function InventoryDetail({
         !hasUnsavedOtherItem &&
         view.status === 'InProgress' &&
         view.items.length > 0 &&
-        readyToComplete(view.items);
+        readyToComplete(view.items, view.reinspectionItemIds ?? []);
       if (shouldComplete) {
         try {
           view = await finalizeInventory(view);
           setCompletionSyncFailed(false);
-        } catch {
-          // The item PUT succeeded. Never tell Staff their inspection was lost
-          // if only the subsequent completion request failed.
-          setCompletionSyncFailed(true);
+        } catch (failure) {
+          // Item PUT has succeeded. Report business-rule rejections precisely;
+          // retry is appropriate only when confirmation could have been lost.
+          const businessRejection =
+            failure instanceof MobileApiError &&
+            [
+              'move_in_inventory_reinspection_not_passed',
+              'move_in_inventory_reinspection_new_evidence_required',
+              'move_in_inventory_checklist_incomplete',
+              'move_in_inventory_evidence_missing',
+            ].includes(failure.code ?? '');
+          setCompletionSyncFailed(!businessRejection);
           setError(
-            'Đã lưu tài sản nhưng chưa đồng bộ hoàn tất kiểm kê. Có thể thử gửi lại kết quả đã lưu.',
+            businessRejection
+              ? errorMessage(failure)
+              : `Đã lưu tài sản, nhưng chưa xác nhận được hoàn tất kiểm kê. ${errorMessage(failure)}`,
           );
           reload();
           openItem(null);
@@ -355,10 +391,13 @@ function InventoryDetail({
         }
       }
       reload();
+      setCompletionSyncFailed(false);
       setNotice(
         shouldComplete
           ? 'Đã lưu đầy đủ kết quả kiểm kê cho Owner.'
-          : 'Đã lưu kết quả kiểm kê vào máy chủ.',
+          : view.reinspectionItemIds?.length
+            ? 'Đã lưu kết quả. Cần kiểm tra các tài sản Owner chọn đến khi đạt và có ảnh mới trước khi hoàn thành kiểm kê lại.'
+            : 'Đã lưu kết quả kiểm kê vào máy chủ.',
       );
       showSuccess(shouldComplete ? 'Đã lưu đầy đủ kiểm kê.' : 'Đã lưu kết quả kiểm kê.');
       openItem(null);
@@ -383,15 +422,29 @@ function InventoryDetail({
     setError('');
     try {
       const fresh = await moveInInventoryClient(api).get(taskId);
-      if (fresh.status === 'InProgress' && fresh.items.length > 0 && readyToComplete(fresh.items))
+      if (
+        fresh.status === 'InProgress' &&
+        fresh.items.length > 0 &&
+        readyToComplete(fresh.items, fresh.reinspectionItemIds ?? [])
+      )
         await finalizeInventory(fresh);
       else if (fresh.status !== 'Completed')
-        throw new Error('Vẫn còn mục kiểm kê chưa được lưu đầy đủ.');
+        throw new Error(
+          fresh.reinspectionItemIds?.length
+            ? 'Tài sản cần kiểm tra lại vẫn chưa đạt. Mở mục Owner yêu cầu và ghi nhận kết quả mới.'
+            : 'Vẫn còn mục kiểm kê chưa được lưu đầy đủ.',
+        );
       setCompletionSyncFailed(false);
       setNotice('Đã đồng bộ kết quả kiểm kê cho Owner.');
       reload();
     } catch (failure) {
-      setError(errorMessage(failure));
+      if (failure instanceof MobileApiError && failure.status === 409)
+        setCompletionSyncFailed(false);
+      setError(
+        failure instanceof Error && !(failure instanceof MobileApiError)
+          ? failure.message
+          : errorMessage(failure),
+      );
       reload();
     } finally {
       busyRef.current = false;
@@ -439,6 +492,11 @@ function InventoryDetail({
   }
   const completed = data?.status === 'Completed' || !!data?.completedAt;
   const editable = data?.status === 'InProgress' && !completed;
+  // The server retains these IDs for audit after completion. Only an active
+  // InProgress task has an outstanding Owner reinspection request.
+  const pendingReinspectionItemIds = editable ? (data?.reinspectionItemIds ?? []) : [];
+  const reinspectionCompleted =
+    data?.status === 'Completed' && !!data.reinspectionItemIds?.length;
   const selectedItem = data?.items.find((item) => item.id === selectedItemId);
   return (
     <>
@@ -502,6 +560,15 @@ function InventoryDetail({
               Staff chỉ ghi nhận hiện trạng. Owner xem kết quả bàn giao và quyết định phương án xử
               lý.
             </Text>
+            {!!pendingReinspectionItemIds.length && (
+              <Text style={ui.red}>
+                Owner yêu cầu kiểm tra lại {pendingReinspectionItemIds.length} nhóm tài sản. Các mục
+                được chọn cần đạt đủ số lượng và có ảnh mới sau yêu cầu của Owner.
+              </Text>
+            )}
+            {reinspectionCompleted && (
+              <Text style={ui.green}>Đã hoàn thành kiểm kê lại theo yêu cầu của Owner.</Text>
+            )}
             {completed && (
               <Text style={data.readyForHandover ? ui.green : ui.red}>
                 {data.readyForHandover
@@ -547,6 +614,11 @@ function InventoryDetail({
                   {draft.quantity === '' ? 'chưa ghi' : draft.quantity}
                   {draft.dirty ? ' (chưa lưu)' : ''}
                 </Text>
+                {pendingReinspectionItemIds.includes(item.id) && (
+                  <Text style={ui.red}>
+                    Owner yêu cầu kiểm tra lại · Cần đối chiếu thực tế và chụp ảnh mới
+                  </Text>
+                )}
                 <Button
                   compact
                   disabled={busy}
@@ -590,6 +662,7 @@ function InventoryDetail({
           const item = selectedItem;
           const draft = drafts[item.id] ?? fromItem(item);
           const issued = draft.condition === 'Missing' || draft.condition === 'Damaged';
+          const reinspectionSelected = pendingReinspectionItemIds.includes(item.id);
           const errors = fieldErrors[item.id] ?? {};
           const savedIds = (item.evidenceIds ?? []).filter(
             (id) => !draft.removedEvidenceIds.includes(id),
@@ -600,6 +673,12 @@ function InventoryDetail({
               <Text style={ui.muted}>
                 Dự kiến {item.expectedQuantity} · Đếm số lượng thực tế và chọn tình trạng.
               </Text>
+              {reinspectionSelected && (
+                <Text style={ui.red}>
+                  Owner yêu cầu kiểm tra lại tài sản này. Sau khi sửa chữa, chỉ chọn Đạt khi thực tế
+                  đạt yêu cầu và chụp ảnh minh chứng mới. Ảnh cũ không thay thế lần kiểm tra lại.
+                </Text>
+              )}
               <TextInput
                 ref={(instance: unknown) => {
                   quantityRef.current = instance;
@@ -653,7 +732,11 @@ function InventoryDetail({
               )}
               {draft.condition === 'Good' && (
                 <Text style={ui.muted}>
-                  Đạt: đủ số lượng và không hư hỏng. Chỉ cần lưu kết quả.
+                  {completed
+                    ? 'Đạt: tài sản đã được kiểm kê đủ số lượng và lưu kết quả.'
+                    : reinspectionSelected
+                      ? 'Đạt: đủ số lượng, không hư hỏng và cần ảnh mới cho lần kiểm tra lại này.'
+                      : 'Đạt: đủ số lượng và không hư hỏng. Chỉ cần lưu kết quả.'}
                 </Text>
               )}
               {draft.condition === 'Damaged' &&
@@ -689,24 +772,24 @@ function InventoryDetail({
                       {errors.notes}
                     </Text>
                   )}
-                  {api && (
-                    <InventoryPhotoCapture
-                      api={api}
-                      taskId={taskId}
-                      savedIds={savedIds}
-                      developmentDemo={developmentDemo}
-                      photos={draft.photos}
-                      disabled={busy || !editable}
-                      error={errors.photos}
-                      onChange={(photos) => update(item.id, { photos })}
-                      onRemoveSaved={(id) =>
-                        update(item.id, {
-                          removedEvidenceIds: [...draft.removedEvidenceIds, id],
-                        })
-                      }
-                    />
-                  )}
                 </>
+              )}
+              {api && (issued || reinspectionSelected) && (
+                <InventoryPhotoCapture
+                  api={api}
+                  taskId={taskId}
+                  savedIds={savedIds}
+                  developmentDemo={developmentDemo}
+                  photos={draft.photos}
+                  disabled={busy || !editable}
+                  error={errors.photos}
+                  onChange={(photos) => update(item.id, { photos })}
+                  onRemoveSaved={(id) =>
+                    update(item.id, {
+                      removedEvidenceIds: [...draft.removedEvidenceIds, id],
+                    })
+                  }
+                />
               )}
               {draft.dirty && editable && (
                 <Action secondary disabled={busy} onPress={() => void runSave(item.id)}>

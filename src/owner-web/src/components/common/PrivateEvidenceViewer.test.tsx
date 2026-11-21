@@ -45,19 +45,45 @@ it('loads only after explicit action, previews verified PNG and revokes it on cl
   expect(revoke).toHaveBeenCalledWith('blob:private-1');
 });
 
-it('previews a verified PDF inline even when authorized response MIME is generic', async () => {
-  render(
-    <PrivateEvidenceViewer
-      label="biên bản"
-      filename="bien-ban.pdf"
-      fetchBlob={async () => makeBlob(pdf, 'application/octet-stream')}
-    />,
-  );
+it('previews a verified private PDF without blocking the Chrome viewer, supports download fallback and revokes URLs', async () => {
+  const fetchBlob = vi.fn(async () => makeBlob(pdf, 'application/octet-stream'));
+  render(<PrivateEvidenceViewer label="biên bản" filename="bien-ban.pdf" fetchBlob={fetchBlob} />);
   fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản' }));
   const frame = await screen.findByTitle('Nội dung PDF: biên bản');
   expect(frame).toHaveAttribute('src', 'blob:private-1');
-  expect(frame).toHaveAttribute('sandbox', '');
+  expect(frame).not.toHaveAttribute('sandbox');
+  expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer');
   expect(create).toHaveBeenCalledWith(expect.objectContaining({ type: 'application/pdf' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tải PDF nếu không xem được' }));
+  await waitFor(() => expect(clicked).toHaveLength(1));
+  expect(clicked[0].filename).toBe('bien-ban.pdf');
+  expect(fetchBlob).toHaveBeenCalledTimes(2);
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Đóng' }));
+  expect(revoke).toHaveBeenCalledWith('blob:private-1');
+  expect(revoke).toHaveBeenCalledWith(clicked[0].url);
+});
+
+it('keeps short PDF buttons in the compact handover view with the same private preview and download actions', async () => {
+  const fetchBlob = vi.fn(async () => makeBlob(pdf, 'application/pdf'));
+  render(
+    <PrivateEvidenceViewer
+      label="PDF bản nháp bàn giao (chưa xác nhận)"
+      filename="handover.pdf"
+      compactActions
+      fetchBlob={fetchBlob}
+    />,
+  );
+  expect(screen.queryByRole('button', { name: /Xem PDF bản nháp/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem PDF' }));
+  expect(
+    await screen.findByTitle('Nội dung PDF: PDF bản nháp bàn giao (chưa xác nhận)'),
+  ).toHaveAttribute('src', 'blob:private-1');
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Đóng' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  fireEvent.click(screen.getByRole('button', { name: 'Tải xuống' }));
+  await waitFor(() => expect(clicked).toHaveLength(1));
+  expect(clicked[0].filename).toBe('handover.pdf');
+  expect(fetchBlob).toHaveBeenCalledTimes(2);
 });
 
 it('downloads verified JPEG with a sanitized name and releases the object URL on unmount', async () => {

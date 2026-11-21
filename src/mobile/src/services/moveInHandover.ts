@@ -4,8 +4,15 @@ import {
   type HandoverAsset,
   type HandoverReading,
 } from '../../../../packages/client-core/src/contracts';
+import { NO_CERTIFICATE, type SigningOtpView } from '../../../../packages/client-core/src/signing';
 
-export type MoveInDraftStatus = 'Draft' | 'Ready' | 'ChangesRequested' | 'Confirmed';
+export type MoveInDraftStatus =
+  | 'Draft'
+  | 'PendingOwnerReview'
+  | 'ReinspectionRequested'
+  | 'Ready'
+  | 'ChangesRequested'
+  | 'Confirmed';
 
 export const roomHandoverChecks = [
   { code: 'walls_ceiling_floor', label: 'Tường, trần và sàn' },
@@ -69,6 +76,22 @@ export interface MoveInChangeRequest {
   decisionReason?: string | null;
 }
 
+export interface MoveInReinspectionItem {
+  kind: string;
+  code?: string | null;
+  assetId?: string | null;
+  rechecked?: boolean;
+  readingId?: string | null;
+}
+
+export interface MoveInReinspectionRecord {
+  version: number;
+  reason: string;
+  ownerId: string;
+  requestedAt: string;
+  items: MoveInReinspectionItem[];
+}
+
 export interface MoveInDraft {
   version: number;
   status: MoveInDraftStatus;
@@ -96,6 +119,14 @@ export interface MoveInDraft {
   inventoryToken?: string | null;
   noAssetsConfirmed: boolean;
   ownerReadyAt?: string | null;
+  staffSubmittedAt?: string | null;
+  ownerSignedAt?: string | null;
+  ownerDocumentId?: string | null;
+  ownerDocumentHash?: string | null;
+  tenantSignedAt?: string | null;
+  reinspectionItems?: MoveInReinspectionItem[];
+  reinspectionHistory?: MoveInReinspectionRecord[];
+  tenantSigningPending?: boolean;
   tenantConfirmedAt?: string | null;
   requests: MoveInChangeRequest[];
   missing: string[];
@@ -158,6 +189,30 @@ export function moveInHandover(api: ContractClient) {
         headers: { 'Idempotency-Key': guid(key) },
         body: JSON.stringify({ version: task.version }),
       }),
+    submit: (id: string, version: number, key: string) => mutate(id, '/submit', { version }, key),
+    resubmit: (id: string, version: number, key: string) =>
+      mutate(id, '/resubmit', { version }, key),
+    startTenantSigning: (id: string, version: number, key: string) =>
+      mutate(
+        id,
+        '/tenant-sign',
+        {
+          version,
+          signature: { certificateId: NO_CERTIFICATE, method: 'OTP', usePicture: true },
+        },
+        key,
+      ),
+    tenantSigningOtp: (id: string, signal?: AbortSignal) =>
+      request<SigningOtpView>(`${endpoint(id)}/tenant-sign/otp`, { signal }),
+    resendTenantSigningOtp: (id: string) =>
+      request<SigningOtpView>(`${endpoint(id)}/tenant-sign/otp/resend`, { method: 'POST' }),
+    confirmTenantSigning: (id: string, version: number, code: string, note: string, key: string) =>
+      mutate(
+        id,
+        '/tenant-sign/otp/confirm',
+        { version, code: code.trim(), note: note.trim() },
+        key,
+      ),
     requestCorrection: (id: string, version: number, reason: string, key: string) =>
       mutate(id, '/requests', { version, reason: reason.trim() }, key),
     confirm: (id: string, version: number, note: string, key: string) =>
@@ -171,10 +226,23 @@ export function canTenantRespondToMoveIn(draft: MoveInDraft | null): boolean {
 
 export function canStaffEditMoveIn(draft: MoveInDraft | null): boolean {
   return (
-    draft?.status === 'Draft' &&
+    (draft?.status === 'Draft' || draft?.status === 'ReinspectionRequested') &&
     draft.moveInTask?.status === 'InProgress' &&
     draft.moveInTask.canInspect === true
   );
+}
+
+export function moveInReinspectionLabel(item: MoveInReinspectionItem, draft: MoveInDraft): string {
+  if (item.kind === 'RoomCheck')
+    return (
+      roomHandoverChecks.find((check) => check.code === item.code)?.label ?? 'Hiện trạng phòng'
+    );
+  if (item.kind === 'Asset')
+    return draft.assets.find((asset) => asset.id === item.assetId)?.name ?? 'Tài sản bàn giao';
+  if (item.kind === 'Meter') return item.code === 'Water' ? 'Công tơ nước' : 'Công tơ điện';
+  if (item.kind === 'Access') return 'Chìa khóa bàn giao';
+  if (item.kind === 'Room') return 'Hiện trạng tổng quan';
+  return 'Nội dung bàn giao';
 }
 
 const missingMessages: Record<string, string> = {

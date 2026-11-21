@@ -1216,6 +1216,18 @@ export const labels: Record<string, string> = {
     'Cần xác minh hồ sơ và email riêng hợp lệ cho tất cả người ở.',
   internal_signing_flow_required: 'Hợp đồng này dùng lời mời ký nội bộ qua OTP.',
   signing_otp_key_not_configured: 'Dịch vụ xác nhận OTP chưa được cấu hình.',
+  handover_owner_ink_required: 'Owner cần vẽ chữ ký tay trong khung trước khi ký biên bản.',
+  handover_owner_signature_consent_required:
+    'Chưa xác nhận đồng ý ký biên bản bằng phiên đăng nhập Owner.',
+  handover_items_not_passed:
+    'Biên bản còn hạng mục chưa đạt. Cần Staff kiểm tra lại và hoàn tất trước khi Owner ký.',
+  handover_draft_version_changed:
+    'Phiên bản biên bản đã thay đổi. Hãy tải lại và kiểm tra nội dung trước khi ký.',
+  handover_owner_signing_failed:
+    'Máy chủ chưa xác nhận được chữ ký Owner. Hãy kiểm tra trạng thái biên bản trước khi thử lại.',
+  signing_seal_not_configured:
+    'Máy chủ chưa cấu hình chứng thư/dấu ký điện tử BHOME. Cần quản trị viên cấu hình để ký biên bản.',
+  contract_owner_signer_required: 'Tài khoản hiện tại không phải Owner được phép ký hợp đồng này.',
   verified_residents_required: 'Cần xác minh tất cả người ở và người đại diện.',
   invalid_contract_signers: 'Tài khoản bên ký chưa hợp lệ.',
   security_deposit_insufficient: 'Tiền cọc đã xác minh chưa đủ.',

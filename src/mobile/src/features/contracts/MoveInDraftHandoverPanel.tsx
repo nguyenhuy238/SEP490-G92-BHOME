@@ -32,6 +32,14 @@ import {
   type PreviewDocument,
 } from '../../../../../packages/client-core/src/contracts';
 import {
+  mmss,
+  secondsUntil,
+  signingClient,
+  signingError,
+  type DrawnSignature,
+  type SigningOtpView,
+} from '../../../../../packages/client-core/src/signing';
+import {
   assetInspectionInput,
   handoverAssetSummary,
   quantityFields,
@@ -48,6 +56,7 @@ import {
   canStaffEditMoveIn,
   canTenantRespondToMoveIn,
   moveInMissingMessage,
+  moveInReinspectionLabel,
   moveInHandover,
   roomHandoverChecks,
   type MoveInDraft,
@@ -58,6 +67,8 @@ import {
 } from '../../services/moveInHandover';
 import { ContractInitialMeterTasks } from './ContractInitialMeterTasks';
 import { ContractEvidence } from './ContractEvidence';
+import { SignaturePad } from './SignaturePad';
+import { SignatureImageSection } from './SigningSetup';
 import { HandoverAssetFields } from './HandoverAssetFields';
 import { MeterTaskScreen } from '../../app/meter';
 import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
@@ -70,6 +81,8 @@ import { colors } from '../../theme/theme';
 
 const statusLabels = {
   Draft: 'Đang chuẩn bị',
+  PendingOwnerReview: 'Chờ Owner duyệt',
+  ReinspectionRequested: 'Owner yêu cầu kiểm tra lại',
   Ready: 'Sẵn sàng bàn giao',
   ChangesRequested: 'Đang xử lý yêu cầu sửa',
   Confirmed: 'Đã xác nhận bàn giao',
@@ -278,6 +291,7 @@ export function MoveInDraftHandoverPanel({
   const { width } = useWindowDimensions();
   const compactPhone = width <= 380;
   const client = useMemo(() => moveInHandover(api), [api]);
+  const signing = useMemo(() => signingClient(api.transport), [api]);
   const staff = role === 'Staff' && contract.locationId === staffLocationId;
   const tenant = role === 'Tenant';
   const allowed = (staff || tenant) && contract.kind === 'Main';
@@ -313,8 +327,22 @@ export function MoveInDraftHandoverPanel({
   const [keyNotes, setKeyNotes] = useState('');
   const [keysTouched, setKeysTouched] = useState(false);
   const [feedback, setFeedback] = useState({ version: -1, note: '', acknowledged: false });
+  const [tenantDrawing, setTenantDrawing] = useState<DrawnSignature | null>(null);
+  const [otpActive, setOtpActive] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpChallenge, setOtpChallenge] = useState<SigningOtpView | null>(null);
+  const [otpError, setOtpError] = useState('');
+  const [tenantSigningVersion, setTenantSigningVersion] = useState<number | null>(null);
+  const [otpClock, setOtpClock] = useState(() => Date.now());
+  const [otpResendAt, setOtpResendAt] = useState(0);
   const lock = useRef(false);
   const [keys] = useState(() => mutationKeys(randomUUID));
+
+  useEffect(() => {
+    if (!otpActive) return;
+    const tick = setInterval(() => setOtpClock(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, [otpActive]);
 
   useEffect(
     () => () => {
@@ -353,6 +381,19 @@ export function MoveInDraftHandoverPanel({
         (draft.accessItems ?? []).length === 1 && draft.accessItems[0]?.type === 'RoomKey',
       ]
     : [false, false, false, false];
+  // A reinspection is complete only when the server has verified the newly
+  // saved observation AND, for canonical inventory assets, fresh photo proof.
+  // Rechecking timestamps/conditions on the client would allow old photos to
+  // appear sufficient. The server updates reinspectionItems[].rechecked.
+  const isReinspectionItemComplete = (item: { rechecked?: boolean }): boolean =>
+    item.rechecked === true;
+  const reinspectionReady =
+    draft?.status !== 'ReinspectionRequested' ||
+    ((draft.reinspectionItems?.length ?? 0) > 0 &&
+      (draft.reinspectionItems ?? []).every(isReinspectionItemComplete));
+  // Staff completes an inspection by recording its four sections. Conditions
+  // that only the Owner can resolve before signing are not Staff blockers.
+  const inspectionReady = savedWizardSteps.every(Boolean) && reinspectionReady;
   const recommendedStep = draft ? firstUnfinishedStep(draft, inventory) : 0;
   const availableEvidence = [
     ...new Set([
@@ -632,14 +673,70 @@ export function MoveInDraftHandoverPanel({
     // they open the next check. Returning to the four-section menu is explicit.
   }
 
-  async function tenantDecision(correction: boolean) {
+  async function requestTenantCorrection() {
     if (!draft) return;
-    const operation = correction ? 'correction' : 'confirmation';
-    const input = { version: draft.version, note: note.trim() };
-    const key = keys.get(operation, input);
-    if (correction) await client.requestCorrection(contract.id, draft.version, input.note, key);
-    else await client.confirm(contract.id, draft.version, input.note, key);
-    keys.confirmed(operation, input);
+    const input = { version: draft.version, reason: note.trim() };
+    const key = keys.get('correction', input);
+    await client.requestCorrection(contract.id, draft.version, input.reason, key);
+    keys.confirmed('correction', input);
+    setFeedback({ version: -1, note: '', acknowledged: false });
+  }
+
+  async function loadTenantOtp() {
+    if (!tenant || draft?.status !== 'Ready') return;
+    setOtpError('');
+    try {
+      const value = await client.tenantSigningOtp(contract.id);
+      if (value.status !== 'Sent' || !value.signatureId)
+        throw new Error('Chưa có mã OTP đang hiệu lực. Vui lòng bắt đầu lượt ký mới.');
+      setOtpChallenge(value);
+      setOtpResendAt(Date.now() + value.resendAfterSeconds * 1000);
+      setOtpActive(true);
+    } catch (cause) {
+      setOtpError(signingError(cause));
+    }
+  }
+
+  async function resendTenantOtp() {
+    if (!tenant || !draft || draft.status !== 'Ready' || Date.now() < otpResendAt) return;
+    const value = await client.resendTenantSigningOtp(contract.id);
+    setOtpChallenge(value);
+    setOtpResendAt(Date.now() + value.resendAfterSeconds * 1000);
+    setOtpCode('');
+    setOtpError('');
+  }
+
+  async function startTenantSign() {
+    if (
+      !tenant ||
+      !draft ||
+      !canTenantRespondToMoveIn(draft) ||
+      !acknowledged ||
+      contract.status !== 'Active'
+    )
+      return;
+    const input = { version: draft.version, method: 'OTP', usePicture: true };
+    const key = keys.get('start-tenant-handover-sign', input);
+    if (tenantDrawing) await signing.drawImage(tenantDrawing);
+    const startedSigning = await client.startTenantSigning(contract.id, draft.version, key);
+    // Starting OTP advances the persisted handover draft version. Confirm the
+    // updated version, otherwise the server correctly rejects the stale write.
+    setTenantSigningVersion(startedSigning.version);
+    keys.confirmed('start-tenant-handover-sign', input);
+    await loadTenantOtp();
+  }
+
+  async function finishTenantSign() {
+    if (!tenant || !draft || !/^\d{6}$/.test(otpCode)) return;
+    const version = tenantSigningVersion ?? draft.version;
+    const input = { version, code: otpCode, note: note.trim() };
+    const key = keys.get('finish-tenant-handover-sign', input);
+    await client.confirmTenantSigning(contract.id, version, otpCode, note, key);
+    keys.confirmed('finish-tenant-handover-sign', input);
+    setOtpActive(false);
+    setOtpCode('');
+    setOtpChallenge(null);
+    setTenantSigningVersion(null);
     setFeedback({ version: -1, note: '', acknowledged: false });
   }
 
@@ -649,6 +746,34 @@ export function MoveInDraftHandoverPanel({
     const key = keys.get('start-move-in', input);
     await client.beginWork(draft.moveInTask, key);
     keys.confirmed('start-move-in', input);
+  }
+
+  async function submitInspection() {
+    if (!staff || !draft || !started || !inspectionReady) return;
+    const resubmit = draft.status === 'ReinspectionRequested';
+    const input = { version: draft.version };
+    const action = resubmit ? 'resubmit-move-in' : 'submit-move-in';
+    const key = keys.get(action, input);
+    if (resubmit) await client.resubmit(contract.id, draft.version, key);
+    else await client.submit(contract.id, draft.version, key);
+    keys.confirmed(action, input);
+    setSectionOpen(false);
+  }
+
+  function openReinspectionItem(kind: string, code?: string | null, assetId?: string | null) {
+    if (!started) return;
+    if (kind === 'Meter') goToStep(0);
+    else if (kind === 'RoomCheck' || kind === 'Room') goToStep(1);
+    else if (kind === 'Asset') goToStep(2);
+    else if (kind === 'Access') goToStep(3);
+    if (kind === 'RoomCheck' && code && roomHandoverChecks.some((check) => check.code === code))
+      setActiveItem(`room:${code}`);
+    else if (kind === 'Room') setActiveItem('room-summary');
+    else if (kind === 'Access') setActiveItem('keys');
+    else if (kind === 'Asset' && assetId && draft?.assets.some((asset) => asset.id === assetId))
+      // A canonical inventory task, once reopened by Owner, is the only
+      // authoritative place to record a fresh asset condition and photo.
+      setActiveItem(draft.moveInTask?.inventoryTaskId ? 'legacy-inventory' : `asset:${assetId}`);
   }
 
   function goToStep(next: number) {
@@ -986,10 +1111,53 @@ export function MoveInDraftHandoverPanel({
               </Action>
             </>
           )}
-          {draft.status === 'Draft' && !started && draft.moveInTask?.status !== 'Assigned' && (
+          {(draft.status === 'Draft' || draft.status === 'ReinspectionRequested') &&
+            !started &&
+            draft.moveInTask?.status !== 'Assigned' && (
+              <Text style={ui.muted}>
+                Chưa thể ghi nhận. Nhiệm vụ bàn giao cần được phân công và bắt đầu đúng trạng thái.
+              </Text>
+            )}
+          {draft.status === 'PendingOwnerReview' && (
             <Text style={ui.muted}>
-              Chưa thể ghi nhận. Nhiệm vụ bàn giao cần được phân công và bắt đầu đúng trạng thái.
+              Đã gửi kết quả kiểm tra cho Owner. Bạn sẽ nhận được yêu cầu cụ thể nếu cần kiểm tra
+              lại.
             </Text>
+          )}
+          {draft.status === 'ReinspectionRequested' && (
+            <View style={wizardStyles.section}>
+              <Text variant="titleMedium">Các mục Owner yêu cầu kiểm tra lại</Text>
+              {!!draft.reinspectionHistory?.length && (
+                <Text>
+                  {draft.reinspectionHistory[draft.reinspectionHistory.length - 1]?.reason}
+                </Text>
+              )}
+              {(draft.reinspectionItems ?? []).map((item, index) => (
+                <View key={`${item.kind}:${item.code ?? item.assetId ?? index}`}>
+                  <Button
+                    mode="outlined"
+                    disabled={busy || !started}
+                    onPress={() => openReinspectionItem(item.kind, item.code, item.assetId)}
+                  >
+                    {moveInReinspectionLabel(item, draft)} · Mở kiểm tra
+                  </Button>
+                  <Text
+                    variant="bodySmall"
+                    style={isReinspectionItemComplete(item) ? ui.green : ui.muted}
+                  >
+                    {isReinspectionItemComplete(item)
+                      ? 'Staff đã lưu kết quả kiểm tra lại'
+                      : 'Cần ghi nhận kiểm tra lại'}
+                  </Text>
+                  {item.kind === 'Asset' && !!draft.moveInTask?.inventoryTaskId && (
+                    <Text variant="bodySmall" style={ui.muted}>
+                      Mở phiếu kiểm kê gốc, ghi nhận tình trạng Đạt và chụp ảnh minh chứng mới
+                      sau khi Owner yêu cầu kiểm tra lại. Ảnh cũ không thay thế kết quả mới.
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
           )}
           {!!error && !activeItem && (
             <Text accessibilityRole="alert" style={ui.red}>
@@ -1031,7 +1199,7 @@ export function MoveInDraftHandoverPanel({
                     />
                     <Text variant="bodySmall" style={[ui.muted, { lineHeight: 20 }]}>
                       {savedWizardSteps.every(Boolean)
-                        ? 'Đã lưu đủ 4 mục kiểm tra. Owner sẽ tiếp tục xem xét các điều kiện bàn giao.'
+                        ? 'Đã lưu đủ 4 mục. Xác nhận hoàn thành để Owner xem xét biên bản.'
                         : `Chọn một mục để làm việc. Gợi ý tiếp theo: ${staffSteps[recommendedStep]!.title}.`}
                     </Text>
                   </>
@@ -1247,6 +1415,37 @@ export function MoveInDraftHandoverPanel({
               )}
             </View>
           )}
+          {started && (
+            <View style={wizardStyles.section}>
+              <Text variant="titleMedium">
+                {draft.status === 'ReinspectionRequested'
+                  ? 'Hoàn thành kiểm tra lại'
+                  : 'Hoàn thành nhiệm vụ kiểm tra'}
+              </Text>
+              <Text style={ui.muted}>
+                {inspectionReady
+                  ? 'Đã ghi nhận đủ 4 mục, kể cả hạng mục thiếu hoặc hỏng. Xác nhận hoàn thành để Owner duyệt và quyết định xử lý.'
+                  : draft.status === 'ReinspectionRequested' && !reinspectionReady
+                    ? 'Bạn cần mở và lưu lại từng hạng mục Owner yêu cầu kiểm tra trước khi gửi duyệt.'
+                    : `Cần lưu đủ 4 mục trước khi xác nhận. Hiện đã hoàn thành ${savedWizardSteps.filter(Boolean).length}/4 mục.`}
+              </Text>
+              <Action
+                disabled={busy || !inspectionReady || !!activeItem}
+                onPress={() =>
+                  void run(
+                    submitInspection,
+                    draft.status === 'ReinspectionRequested'
+                      ? 'Đã nộp kết quả kiểm tra lại cho Owner.'
+                      : 'Đã xác nhận hoàn thành kiểm tra. Biên bản đang chờ Owner duyệt.',
+                  )
+                }
+              >
+                {draft.status === 'ReinspectionRequested'
+                  ? 'Xác nhận hoàn thành kiểm tra lại'
+                  : 'Xác nhận hoàn thành'}
+              </Action>
+            </View>
+          )}
         </View>
       )}
       {draft && !editing && tenant && (
@@ -1414,12 +1613,12 @@ export function MoveInDraftHandoverPanel({
           {draft.tenantConfirmedAt && (
             <Text>Tenant xác nhận: {formatInstant(draft.tenantConfirmedAt)}</Text>
           )}
-          {draft.status !== 'Confirmed' && (
+          {draft.status === 'Ready' && (
             <ContractEvidence
               api={api}
               contractId={contract.id}
               draftHandoverPdf
-              label="Xem PDF biên bản nháp"
+              label="Xem PDF biên bản Owner đã ký"
             />
           )}
           {current?.documents.map((document) => (
@@ -1683,6 +1882,10 @@ export function MoveInDraftHandoverPanel({
         <>
           {canTenantRespondToMoveIn(draft) ? (
             <>
+              <Heading
+                title="Ký biên bản bàn giao"
+                detail="Đọc bản PDF Owner đã ký, ký điện tử và xác thực mã OTP qua email"
+              />
               <Input
                 label="Ghi chú / nội dung cần sửa"
                 multiline
@@ -1697,34 +1900,102 @@ export function MoveInDraftHandoverPanel({
                 onPress={() => setAcknowledged(!acknowledged)}
               />
               {contract.status !== 'Active' && (
-                <Text style={ui.muted}>Chờ hợp đồng được kích hoạt để xác nhận nhận phòng.</Text>
+                <Text style={ui.muted}>Chờ hợp đồng được kích hoạt để ký nhận bàn giao.</Text>
               )}
-              <Action
-                disabled={busy || !acknowledged || contract.status !== 'Active'}
-                onPress={() =>
-                  void run(
-                    () => tenantDecision(false),
-                    'Đã xác nhận bàn giao; vui lòng kiểm tra PDF cuối cùng đã lưu.',
-                  )
-                }
-              >
-                Xác nhận biên bản bàn giao
-              </Action>
+              {!otpActive && contract.status === 'Active' && (
+                <>
+                  <Text variant="titleSmall">Chữ ký của Tenant</Text>
+                  <SignaturePad disabled={busy} onChange={setTenantDrawing} />
+                  <SignatureImageSection signing={signing} />
+                  <Text style={ui.muted}>
+                    Ký vào khung hoặc dùng ảnh chữ ký đã lưu trong tài khoản. Ảnh chữ ký được xác
+                    thực qua OTP như khi ký hợp đồng.
+                  </Text>
+                  <Action
+                    disabled={busy || !acknowledged || draft.tenantSigningPending === true}
+                    onPress={() =>
+                      void run(
+                        startTenantSign,
+                        'Đã yêu cầu ký. Kiểm tra email và nhập mã xác thực OTP.',
+                        false,
+                      )
+                    }
+                  >
+                    Gửi mã OTP để ký biên bản
+                  </Action>
+                  <Action secondary disabled={busy} onPress={() => void loadTenantOtp()}>
+                    Tôi đã có mã OTP · Tiếp tục ký
+                  </Action>
+                </>
+              )}
+              {otpActive && (
+                <View style={wizardStyles.section}>
+                  <Text variant="titleMedium">Xác thực chữ ký bằng OTP</Text>
+                  {otpChallenge && (
+                    <Text style={ui.muted}>
+                      Mã gồm 6 số đã gửi tới {otpChallenge.maskedEmail}.{' '}
+                      {secondsUntil(otpChallenge.expiresAt, otpClock) > 0
+                        ? `Còn ${mmss(secondsUntil(otpChallenge.expiresAt, otpClock))} để xác thực.`
+                        : 'Mã đã hết hạn, hãy yêu cầu gửi lại.'}
+                    </Text>
+                  )}
+                  <Input
+                    label="Mã OTP gồm 6 số"
+                    value={otpCode}
+                    numeric
+                    disabled={busy}
+                    onChange={(value) => setOtpCode(value.replace(/\D/g, '').slice(0, 6))}
+                  />
+                  <Action
+                    disabled={busy || !/^\d{6}$/.test(otpCode)}
+                    onPress={() =>
+                      void run(
+                        finishTenantSign,
+                        'Đã ký điện tử và hoàn thành bàn giao. Biên bản đã được lưu.',
+                      )
+                    }
+                  >
+                    Xác nhận OTP và ký biên bản
+                  </Action>
+                  <Action secondary disabled={busy} onPress={() => void loadTenantOtp()}>
+                    Kiểm tra lại lượt ký
+                  </Action>
+                  <Action
+                    secondary
+                    disabled={busy || otpChallenge?.status === 'Locked' || otpClock < otpResendAt}
+                    onPress={() =>
+                      void run(resendTenantOtp, 'Đã gửi lại mã OTP để ký biên bản.', false)
+                    }
+                  >
+                    {otpClock < otpResendAt
+                      ? `Gửi lại sau ${mmss(Math.ceil((otpResendAt - otpClock) / 1000))}`
+                      : 'Gửi lại mã OTP'}
+                  </Action>
+                  <Text style={ui.muted}>
+                    Chỉ khi OTP được máy chủ xác thực và chữ ký được ghi vào PDF thì phòng mới hoàn
+                    thành bàn giao.
+                  </Text>
+                </View>
+              )}
+              {!!otpError && (
+                <Text accessibilityRole="alert" style={ui.red}>
+                  {otpError}
+                </Text>
+              )}
               <Action
                 secondary
                 disabled={busy || !acknowledged || !note.trim()}
                 onPress={() =>
-                  void run(() => tenantDecision(true), 'Đã gửi yêu cầu sửa biên bản cho Owner.')
+                  void run(requestTenantCorrection, 'Đã gửi yêu cầu sửa biên bản cho Owner.')
                 }
               >
                 Gửi yêu cầu chỉnh sửa
               </Action>
-              <Text style={ui.muted}>Chưa cần ký biên bản ở bước này.</Text>
             </>
           ) : (
             <Text>
-              Biên bản đang được Staff và Owner chuẩn bị hoặc xử lý yêu cầu sửa. Bạn sẽ xác nhận khi
-              Owner đánh dấu sẵn sàng.
+              Biên bản đang được Staff kiểm tra hoặc Owner xem xét. Bạn sẽ nhận được bản PDF đã ký
+              của Owner trước khi ký nhận bàn giao.
             </Text>
           )}
         </>

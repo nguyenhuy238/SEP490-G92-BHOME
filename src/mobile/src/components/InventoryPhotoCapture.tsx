@@ -153,7 +153,7 @@ export function InventoryPhotoCapture({
           Thêm ảnh mẫu DEV
         </Button>
       )}
-      {(error || captureError) && (
+      {!!(error || captureError) && (
         <Text accessibilityRole="alert" style={{ color: colors.red }}>
           {error || captureError}
         </Text>

@@ -18,6 +18,12 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
         [FromQuery] Guid? locationId = null, [FromQuery] string? status = null)
         => service.ListAsync(page, pageSize, locationId, status, t);
 
+    [HttpGet("handovers"), Authorize(Roles = Roles.Owner)]
+    public Task<HandoverInboxPage> HandoverInbox(CancellationToken t, [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20, [FromQuery] Guid? locationId = null,
+        [FromQuery] string? status = null, [FromQuery] string? room = null)
+        => service.ListHandoverInboxAsync(page, pageSize, locationId, status, room, t);
+
     [HttpGet("configuration")]
     public Task<ContractWorkflowConfiguration> Configuration(CancellationToken t) => service.ConfigurationAsync(t);
     [HttpGet("holding-settings/{locationId:guid}"), Authorize(Roles = Roles.Owner)]
@@ -148,10 +154,21 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     [HttpPost("{id:guid}/handover/draft"), Authorize(Roles = Roles.Staff)]
     public Task<HandoverDraftView> SaveHandoverDraft(Guid id, HandoverDraftWrite input, CancellationToken t)
         => service.SaveHandoverDraftAsync(id, input, Key(), t);
+    [HttpPost("{id:guid}/handover/draft/submit"), Authorize(Roles = Roles.Staff)]
+    public Task<HandoverDraftView> SubmitHandoverDraft(Guid id, HandoverDraftSubmit input, CancellationToken t)
+        => service.SubmitHandoverDraftAsync(id, input, Key(), t);
+    [HttpPost("{id:guid}/handover/draft/resubmit"), Authorize(Roles = Roles.Staff)]
+    public Task<HandoverDraftView> ResubmitHandoverDraft(Guid id, HandoverDraftSubmit input, CancellationToken t)
+        => service.ResubmitHandoverDraftAsync(id, input, Key(), t);
+    [HttpPost("{id:guid}/handover/draft/reinspection"), Authorize(Roles = Roles.Owner)]
+    public Task<HandoverDraftView> RequestHandoverReinspection(Guid id,
+        HandoverDraftReinspection input, CancellationToken t)
+        => service.RequestHandoverReinspectionAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/handover/draft/evidence"), Authorize(Roles = Roles.Staff), Consumes("image/png", "image/jpeg"), RequestSizeLimit(5 * 1024 * 1024)]
     public Task<ContractId> UploadHandoverDraftEvidence(Guid id, CancellationToken t)
         => service.UploadHandoverDraftEvidenceAsync(id, Request.Body, t);
-    [HttpPost("{id:guid}/handover/draft/ready"), Authorize(Roles = Roles.Owner)]
+    [HttpPost("{id:guid}/handover/draft/ready"), Authorize(Roles = Roles.Owner),
+     RequestSizeLimit(512 * 1024)]
     public Task<HandoverDraftView> ReadyHandoverDraft(Guid id, HandoverDraftReady input, CancellationToken t)
         => service.ReadyHandoverDraftAsync(id, input, Key(), t);
     [HttpPost("{id:guid}/handover/draft/requests"), Authorize(Roles = Roles.Tenant)]
@@ -164,6 +181,19 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     [HttpPost("{id:guid}/handover/draft/tenant-confirmation"), Authorize(Roles = Roles.Tenant)]
     public Task<HandoverDraftView> ConfirmHandoverDraft(Guid id, HandoverDraftTenantConfirmation input, CancellationToken t)
         => service.ConfirmHandoverDraftAsync(id, input, Key(), t);
+    [HttpPost("{id:guid}/handover/draft/tenant-sign"), Authorize(Roles = Roles.Tenant)]
+    public Task<HandoverDraftView> RequestTenantHandoverSigning(Guid id, HandoverDraftTenantSign input, CancellationToken t)
+        => service.RequestTenantHandoverSigningAsync(id, input, Key(), t);
+    [HttpGet("{id:guid}/handover/draft/tenant-sign/otp"), Authorize(Roles = Roles.Tenant)]
+    public Task<SigningOtpView> TenantHandoverSigningOtp(Guid id, CancellationToken t)
+        => service.TenantHandoverSigningOtpAsync(id, t);
+    [HttpPost("{id:guid}/handover/draft/tenant-sign/otp/resend"), Authorize(Roles = Roles.Tenant)]
+    public Task<SigningOtpView> ResendTenantHandoverSigningOtp(Guid id, CancellationToken t)
+        => service.ResendTenantHandoverSigningOtpAsync(id, t);
+    [HttpPost("{id:guid}/handover/draft/tenant-sign/otp/confirm"), Authorize(Roles = Roles.Tenant)]
+    public Task<HandoverDraftView> ConfirmTenantHandoverSigning(Guid id,
+        HandoverDraftTenantSignOtp input, CancellationToken t)
+        => service.ConfirmTenantHandoverSigningAsync(id, input, Key(), t);
     [HttpGet("{id:guid}/handover/history")]
     public Task<IReadOnlyList<HandoverHistoryView>> HandoverHistory(Guid id, CancellationToken t) => service.HandoverHistoryAsync(id, t);
     [HttpGet("{id:guid}/handover/choices"), Authorize(Roles = Roles.Staff)]

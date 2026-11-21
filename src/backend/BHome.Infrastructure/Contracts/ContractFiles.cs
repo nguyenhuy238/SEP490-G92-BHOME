@@ -73,6 +73,21 @@ public sealed class ContractFileCleanup(IServiceScopeFactory scopes, TimeProvide
                 linked = await db.Set<ContractSigningInvitation>().AnyAsync(i => i.DocumentObjectKey == file.ObjectKey ||
                     i.SignatureObjectKey == file.ObjectKey || i.AcceptedDocumentObjectKey == file.ObjectKey, t) ||
                     await db.Set<Contract>().AnyAsync(c => c.SigningMode == ContractSigningModes.Internal && c.InternalAcceptance.Contains(file.ObjectKey), t);
+            if (!linked && db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            {
+                // Handover-signing attempts and Owner-signed revisions live in
+                // versioned contracts.handover JSON until Tenant signs. They are
+                // authoritative private files, not orphan uploads. Never purge
+                // them while a signature is pending or waiting for the Tenant.
+                linked = await db.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (
+                        SELECT 1 FROM contracts WHERE
+                          handover->'preparation'->'ownerSignature'->>'objectKey'={file.ObjectKey}
+                          OR handover->'preparation'->'tenantSigning'->>'preparedObjectKey'={file.ObjectKey}
+                          OR handover->'preparation'->'tenantSignature'->>'objectKey'={file.ObjectKey}
+                    ) AS "Value"
+                    """).SingleAsync(t);
+            }
             if (!linked) await storage.DeleteAsync(file.ObjectKey, t);
             db.Remove(file); await db.SaveChangesAsync(t); await tx.CommitAsync(t);
         }

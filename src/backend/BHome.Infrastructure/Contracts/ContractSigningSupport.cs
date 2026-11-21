@@ -202,8 +202,30 @@ internal sealed class CompactSigningSettingsStore(BHomePersistenceContext db) : 
 
 // "Tạo từ họ tên": a transparent PNG with the name in a slanted serif (the font the contract uses), so a signer
 // without a scanned signature still gets a picture. The result goes through SignatureImageService's checks like an upload.
-public sealed class SignaturePictureGenerator
+public sealed class SignaturePictureGenerator : IHandoverSignatureInkRenderer
 {
+    public byte[] Render(HandoverInkInput drawing)
+    {
+        var png = FromStrokes(new DrawnSignatureInput(drawing.Width, drawing.Height, drawing.Strokes));
+        using var original = SKBitmap.Decode(png);
+        if (original is null) throw ContractException.Invalid("handover_owner_ink_invalid");
+        // The A4 Owner signing slot is wide and 135pt high. Keep the real ink
+        // unchanged, but add transparent side margins when the drawing is very
+        // tall/narrow so it fits the box without being cropped or stretched.
+        var minimumWidth = (int)Math.Ceiling(original.Height / 0.4);
+        if (original.Width >= minimumWidth) return png;
+        using var padded = new SKBitmap(new SKImageInfo(minimumWidth, original.Height,
+            SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(padded))
+        {
+            canvas.Clear(SKColors.Transparent);
+            canvas.DrawBitmap(original, (minimumWidth - original.Width) / 2f, 0,
+                new SKSamplingOptions(SKFilterMode.Linear));
+        }
+        using var image = SKImage.FromBitmap(padded);
+        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
+        return encoded.ToArray();
+    }
     private static readonly Lazy<byte[]> FontBytes = new(() =>
     {
         using var stream = typeof(SignaturePictureGenerator).Assembly.GetManifestResourceStream("BHome.Contracts.Tinos-Regular.ttf")
@@ -259,12 +281,15 @@ public sealed class SignaturePictureGenerator
             points.Add(line);
         }
         var all = points.SelectMany(p => p).ToArray();
+        if (all.Length < 5) throw ContractException.Invalid("signature_drawing_empty");
         var left = all.Min(p => p.X); var top = all.Min(p => p.Y);
         var inkWidth = all.Max(p => p.X) - left; var inkHeight = all.Max(p => p.Y) - top;
         // A tap or a dot is not a signature.
-        if (all.Length < 5 || Math.Max(inkWidth, inkHeight) < 20) throw ContractException.Invalid("signature_drawing_empty");
+        if (Math.Max(inkWidth, inkHeight) < 20) throw ContractException.Invalid("signature_drawing_empty");
         const float pad = 16f, target = 200f;
-        var scale = Math.Min(4f, (target - 2 * pad) / Math.Max(inkHeight, 1f));
+        var scale = Math.Min(4f, Math.Min(
+            (target - 2 * pad) / Math.Max(inkHeight, 1f),
+            (4000 - 2 * pad) / Math.Max(inkWidth, 1f)));
         var width = (int)Math.Ceiling(Math.Max(inkWidth * scale + 2 * pad, 80));
         var height = (int)target;
         using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));

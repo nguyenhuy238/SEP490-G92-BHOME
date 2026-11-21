@@ -332,6 +332,32 @@ vi.mock('../features/contracts/ContractEvidence', () => ({
     </span>
   ),
 }));
+vi.mock('../features/contracts/SignaturePad', () => ({
+  SignaturePad: ({ onChange }: { onChange: (drawing: object | null) => void }) => (
+    <button
+      onClick={() =>
+        onChange({
+          width: 320,
+          height: 200,
+          strokes: [
+            [
+              [10, 10],
+              [15, 15],
+              [30, 20],
+              [35, 27],
+              [60, 40],
+            ],
+          ],
+        })
+      }
+    >
+      Vẽ chữ ký Tenant
+    </button>
+  ),
+}));
+vi.mock('../features/contracts/SigningSetup', () => ({
+  SignatureImageSection: () => <span>Ảnh chữ ký đã lưu</span>,
+}));
 vi.mock('../features/contracts/HandoverAssetFields', () => ({
   HandoverAssetFields: ({
     asset,
@@ -538,7 +564,7 @@ it('keeps the existing segmented room choices at desktop widths', async () => {
 it('allows Tenant to view Draft but hides both actions until Owner marks Ready', async () => {
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Tenant" />);
   expect(await screen.findByText('Đang chuẩn bị')).toBeTruthy();
-  expect(screen.getByText(/Biên bản đang được Staff và Owner/)).toBeTruthy();
+  expect(screen.getByText(/Biên bản đang được Staff kiểm tra hoặc Owner xem xét/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Xác nhận biên bản bàn giao' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Gửi yêu cầu chỉnh sửa' })).toBeNull();
   expect(state.transport).toHaveBeenCalledTimes(1);
@@ -599,8 +625,23 @@ it('Tenant requires acknowledgement and reason before requesting a revision, sen
   expect(state.updated).toHaveBeenCalledOnce();
 });
 
-it('Tenant confirms a ready and complete version without a signature', async () => {
+it('Tenant signs a reviewed PDF with drawn signature and OTP before the handover completes', async () => {
   state.draft = draft('Ready');
+  state.transport.mockImplementation(async (path: string) => {
+    if (path.endsWith('/tenant-sign')) {
+      state.draft = { ...state.draft, version: 8, tenantSigningPending: true };
+      return state.draft;
+    }
+    if (path.endsWith('/tenant-sign/otp'))
+      return {
+        signatureId: '22222222-2222-4222-8222-222222222222',
+        status: 'Sent',
+        maskedEmail: 't***@example.test',
+        expiresAt: '2026-11-20T16:00:00Z',
+        resendAfterSeconds: 60,
+      };
+    return state.draft;
+  });
   render(
     <MoveInDraftHandoverPanel
       api={api}
@@ -611,11 +652,40 @@ it('Tenant confirms a ready and complete version without a signature', async () 
   fireEvent.click(
     await screen.findByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản phiên bản 7' }),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận biên bản bàn giao' }));
+  expect(screen.getByTestId('draft-handover-pdf').textContent).toContain('Owner đã ký');
+  fireEvent.click(screen.getByRole('button', { name: 'Vẽ chữ ký Tenant' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi mã OTP để ký biên bản' }));
   await waitFor(() =>
     expect(state.transport).toHaveBeenCalledWith(
-      `/api/v1/contracts/${contract.id}/handover/draft/tenant-confirmation`,
-      expect.objectContaining({ method: 'POST', body: JSON.stringify({ version: 7, note: '' }) }),
+      `/api/v1/contracts/${contract.id}/handover/draft/tenant-sign`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          version: 7,
+          signature: {
+            certificateId: '00000000-0000-0000-0000-000000000000',
+            method: 'OTP',
+            usePicture: true,
+          },
+        }),
+      }),
+    ),
+  );
+  expect(state.transport).toHaveBeenCalledWith(
+    '/api/v1/digital-signing/signature-image/drawn',
+    expect.objectContaining({ method: 'POST' }),
+  );
+  fireEvent.change(await screen.findByLabelText('Mã OTP gồm 6 số'), {
+    target: { value: '123456' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận OTP và ký biên bản' }));
+  await waitFor(() =>
+    expect(state.transport).toHaveBeenCalledWith(
+      `/api/v1/contracts/${contract.id}/handover/draft/tenant-sign/otp/confirm`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ version: 8, code: '123456', note: '' }),
+      }),
     ),
   );
 });
@@ -626,11 +696,8 @@ it('Tenant may request correction while activation is pending but cannot confirm
   fireEvent.click(
     await screen.findByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản phiên bản 7' }),
   );
-  expect(
-    (screen.getByRole('button', { name: 'Xác nhận biên bản bàn giao' }) as HTMLButtonElement)
-      .disabled,
-  ).toBe(true);
-  expect(screen.getByText(/Chờ hợp đồng được kích hoạt/)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Gửi mã OTP để ký biên bản' })).toBeNull();
+  expect(screen.getByText(/Chờ hợp đồng được kích hoạt để ký nhận bàn giao/)).toBeTruthy();
 });
 
 it('uses the legacy panel when an older active contract has no handover draft', async () => {
@@ -703,6 +770,279 @@ it('requires a successful server start before showing meter capture, inventory o
   openWork('Tường, trần và sàn');
   expect(screen.getByRole('dialog')).toBeTruthy();
   expect(screen.getAllByRole('radio', { name: 'Đạt' })).toHaveLength(1);
+});
+
+it('Staff can submit only after the four saved inspections have been completed', async () => {
+  state.draft = draft('Draft');
+  const page = render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  const submit = await screen.findByRole('button', {
+    name: 'Xác nhận hoàn thành',
+  });
+  expect((submit as HTMLButtonElement).disabled).toBe(true);
+  page.unmount();
+
+  state.draft.electricity = {
+    id: 'reading-e',
+    meterCode: 'E',
+    utilityType: 0,
+    date: '2026-11-20',
+    value: '1',
+    evidenceId: 'e-photo',
+    evidenceHash: 'e-hash',
+  };
+  state.draft.water = {
+    id: 'reading-w',
+    meterCode: 'W',
+    utilityType: 1,
+    date: '2026-11-20',
+    value: '2',
+    evidenceId: 'w-photo',
+    evidenceHash: 'w-hash',
+  };
+  state.draft.roomChecks = roomHandoverChecks.map(({ code }) => ({
+    code,
+    status: 'Passed',
+    notes: '',
+    evidenceIds: [],
+  }));
+  state.draft.assets[0]!.checked = true;
+  state.draft.accessItems = [{ type: 'RoomKey', quantity: 2, notes: '' }];
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  const ready = await screen.findByRole('button', {
+    name: 'Xác nhận hoàn thành',
+  });
+  expect((ready as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(ready);
+  await waitFor(() =>
+    expect(state.transport).toHaveBeenCalledWith(
+      `/api/v1/contracts/${contract.id}/handover/draft/submit`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ version: 7 }),
+        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+      }),
+    ),
+  );
+});
+
+it('Staff can complete all four sections with damaged assets and a reported room issue despite pending Owner conditions', async () => {
+  state.draft = draft('Draft', ['asset_quantities_or_evidence', 'contract_active']);
+  state.draft.electricity = {
+    id: 'reading-e',
+    meterCode: 'E',
+    utilityType: 0,
+    date: '2026-11-20',
+    value: '123',
+    evidenceId: 'e-photo',
+    evidenceHash: 'e-hash',
+  };
+  state.draft.water = {
+    id: 'reading-w',
+    meterCode: 'W',
+    utilityType: 1,
+    date: '2026-11-20',
+    value: '45',
+    evidenceId: 'w-photo',
+    evidenceHash: 'w-hash',
+  };
+  state.draft.roomChecks = roomHandoverChecks.map(({ code }) => ({
+    code,
+    status: code === 'doors_windows_locks' ? 'Issue' : 'Passed',
+    notes: code === 'doors_windows_locks' ? 'Ổ khóa bị kẹt' : '',
+    evidenceIds: code === 'doors_windows_locks' ? ['room-issue-photo'] : [],
+  }));
+  state.draft.assets[0] = {
+    ...state.draft.assets[0]!,
+    checked: true,
+    observedCondition: 'Hỏng cánh quạt',
+    observedQuantity: 1,
+    handedOverQuantity: 1,
+    damagedQuantity: 1,
+    missingQuantity: 0,
+    evidenceIds: ['asset-damage-photo'],
+  };
+  state.draft.accessItems = [{ type: 'RoomKey', quantity: 5, notes: '' }];
+
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  const submit = await screen.findByRole('button', { name: 'Xác nhận hoàn thành' });
+  expect(screen.getByText('4/4 đã ghi nhận')).toBeTruthy();
+  expect(screen.getByText(/kể cả hạng mục thiếu hoặc hỏng/)).toBeTruthy();
+  expect((submit as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(submit);
+  await waitFor(() =>
+    expect(state.transport).toHaveBeenCalledWith(
+      `/api/v1/contracts/${contract.id}/handover/draft/submit`,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ version: 7 }) }),
+    ),
+  );
+});
+
+it('Staff sees which room check needs reinspection and submits the correction to Owner', async () => {
+  state.draft = draft('ReinspectionRequested');
+  state.draft.reinspectionHistory = [
+    {
+      version: 6,
+      reason: 'Ổ khóa vẫn kẹt, đề nghị thử lại',
+      ownerId: '44444444-4444-4444-8444-444444444444',
+      requestedAt: '2026-11-20T00:00:00Z',
+      items: [{ kind: 'RoomCheck', code: 'doors_windows_locks' }],
+    },
+  ];
+  state.draft.reinspectionItems = [{ kind: 'RoomCheck', code: 'doors_windows_locks' }];
+  state.draft.electricity = {
+    id: 'reading-e',
+    meterCode: 'E',
+    utilityType: 0,
+    date: '2026-11-20',
+    value: '1',
+    evidenceId: 'e-photo',
+    evidenceHash: 'e-hash',
+  };
+  state.draft.water = {
+    id: 'reading-w',
+    meterCode: 'W',
+    utilityType: 1,
+    date: '2026-11-20',
+    value: '2',
+    evidenceId: 'w-photo',
+    evidenceHash: 'w-hash',
+  };
+  state.draft.roomChecks = roomHandoverChecks.map(({ code }) => ({
+    code,
+    status: 'Passed',
+    notes: '',
+    evidenceIds: [],
+  }));
+  state.draft.assets[0]!.checked = true;
+  state.draft.accessItems = [{ type: 'RoomKey', quantity: 2, notes: '' }];
+  state.transport.mockImplementation(async (path: string, init?: { method?: string }) => {
+    if (path.endsWith('/handover/draft') && init?.method === 'POST') {
+      state.draft.version += 1;
+      state.draft.reinspectionItems = [
+        {
+          kind: 'RoomCheck',
+          code: 'doors_windows_locks',
+          rechecked: true,
+        },
+      ];
+    }
+    return state.draft;
+  });
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  expect(await screen.findByText('Ổ khóa vẫn kẹt, đề nghị thử lại')).toBeTruthy();
+  const resubmit = screen.getByRole('button', { name: 'Xác nhận hoàn thành kiểm tra lại' });
+  expect((resubmit as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Cửa, cửa sổ và ổ khóa · Mở kiểm tra' }));
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  fireEvent.click(screen.getByRole('radio', { name: 'Có vấn đề' }));
+  expect(screen.getByLabelText('Ghi chú · Cửa, cửa sổ và ổ khóa')).toBeTruthy();
+  // A recheck needs a fresh saved observation before Staff may resubmit.
+  fireEvent.click(screen.getByRole('radio', { name: 'Đạt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu tiến độ' }));
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Xác nhận hoàn thành kiểm tra lại',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hoàn thành kiểm tra lại' }));
+  await waitFor(() =>
+    expect(state.transport).toHaveBeenCalledWith(
+      `/api/v1/contracts/${contract.id}/handover/draft/resubmit`,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ version: 8 }) }),
+    ),
+  );
+});
+
+it('opens canonical asset inventory for reinspection and requires fresh completed Good observations', async () => {
+  state.draft = draft('ReinspectionRequested');
+  state.draft.moveInTask = {
+    ...state.draft.moveInTask!,
+    inventoryTaskId: '60000000-0000-4000-8000-000000000001',
+    inventoryStatus: 'Completed',
+  };
+  state.draft.electricity = {
+    id: 'reading-e',
+    meterCode: 'E',
+    utilityType: 0,
+    date: '2026-11-20',
+    value: '17',
+    evidenceId: 'e-photo',
+    evidenceHash: 'e-hash',
+  };
+  state.draft.water = {
+    id: 'reading-w',
+    meterCode: 'W',
+    utilityType: 1,
+    date: '2026-11-20',
+    value: '21',
+    evidenceId: 'w-photo',
+    evidenceHash: 'w-hash',
+  };
+  state.draft.roomChecks = roomHandoverChecks.map(({ code }) => ({
+    code,
+    status: 'Passed',
+    notes: '',
+    evidenceIds: [],
+  }));
+  state.draft.accessItems = [{ type: 'RoomKey', quantity: 2, notes: '' }];
+  state.draft.reinspectionHistory = [
+    {
+      version: 6,
+      reason: 'Quạt hỏng, yêu cầu kiểm kê lại sau sửa chữa',
+      ownerId: '44444444-4444-4444-8444-444444444444',
+      requestedAt: '2026-11-21T09:00:00Z',
+      items: [{ kind: 'Asset', assetId: state.draft.assets[0]!.id }],
+    },
+  ];
+  state.draft.reinspectionItems = [{ kind: 'Asset', assetId: state.draft.assets[0]!.id }];
+  // A previously completed task does not satisfy a new Owner reinspection.
+  state.inventory = linkedInventory('Completed', true);
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
+  const submit = await screen.findByRole('button', {
+    name: 'Xác nhận hoàn thành kiểm tra lại',
+  });
+  expect((submit as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Quạt · Mở kiểm tra' }));
+  expect(screen.getByText('Phiếu kiểm kê nội bộ')).toBeTruthy();
+  state.inventory = {
+    ...linkedInventory('Completed', true),
+    completedAt: '2026-11-21T09:05:00Z',
+    items: [{ ...linkedInventory('Completed', true).items[0]!, condition: 'Good' }],
+  };
+  closeWork(); // Parent reloads after the embedded, authenticated inventory task closes.
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Xác nhận hoàn thành kiểm tra lại',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true),
+  );
+  // Even a freshly completed Good task cannot unlock submit until Backend
+  // verifies that the selected item has a genuinely new evidence image.
+  state.draft.reinspectionItems = [
+    {
+      kind: 'Asset',
+      assetId: state.draft.assets[0]!.id,
+      rechecked: true,
+    },
+  ];
+  fireEvent.click(screen.getByRole('button', { name: 'Quạt · Mở kiểm tra' }));
+  closeWork();
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Xác nhận hoàn thành kiểm tra lại',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false),
+  );
 });
 
 it('keeps four selectable sections and preserves unsaved input while switching inspection modals', async () => {
@@ -954,7 +1294,7 @@ it('counts all four sections complete when five handed-over keys were saved with
   state.draft.keyEvidenceIds = [];
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Staff" />);
   expect(await screen.findByText('4/4 đã ghi nhận')).toBeTruthy();
-  expect(screen.getByText(/Đã lưu đủ 4 mục kiểm tra/)).toBeTruthy();
+  expect(screen.getByText(/Đã lưu đủ 4 mục. Xác nhận hoàn thành/)).toBeTruthy();
   expect(screen.queryByText(/Gợi ý tiếp theo:/)).toBeNull();
   openSection(4);
   expect(screen.getByText('5 chiếc · 0 ảnh chìa khóa (tùy chọn)')).toBeTruthy();

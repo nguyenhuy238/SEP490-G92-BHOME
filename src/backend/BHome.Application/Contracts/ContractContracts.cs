@@ -67,7 +67,10 @@ public sealed record SignaturePlacementInput(int Page, double X, double Y, doubl
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsValid => Page is >= 1 and <= 500 && X is >= 0 and < 1 && Y is >= 0 and < 1 && Width is >= 0.08 and <= 0.6 && X + Width <= 1.0001;
 }
-public sealed record SigningAppearance(SignaturePlacementInput? Placement, bool UsePicture, string? Method = null);
+public sealed record SigningAppearance(SignaturePlacementInput? Placement, bool UsePicture, string? Method = null,
+    // Only trusted server-rendered PNG bytes from Owner's own strokes for
+    // the one handover PDF being signed. Never falls back to a profile image.
+    byte[]? HandwrittenInkPng = null);
 // What a signer sees before choosing where to sign: the pages of the PDF they will sign, and their suggested box.
 public sealed record SigningPageSize(double Width, double Height);
 public sealed record SigningLayout(int PageCount, IReadOnlyList<SigningPageSize> Pages, SignaturePlacementInput? Suggested,
