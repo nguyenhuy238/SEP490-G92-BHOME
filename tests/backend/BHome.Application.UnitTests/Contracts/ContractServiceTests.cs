@@ -56,14 +56,15 @@ public sealed class ContractServiceTests
         var raw = "%PDF-1.7 SYNTHETIC REVIEW"u8.ToArray();
         var ownerPdf = "%PDF-1.7 SYNTHETIC OWNER SIGNED"u8.ToArray();
         var tenantPdf = "%PDF-1.7 SYNTHETIC BOTH SIGNED"u8.ToArray();
-        string otp = "", emailBody = "";
+        string otp = "", emailBody = "", emailAction = "";
         evidence.AppendTenant(default!, default!, default, default, default!).ReturnsForAnyArgs(tenantPdf);
         security.EmailConfigured.Returns(true);
         security.InvitationUrl(Arg.Any<string>()).Returns(call => "https://signing.example.invalid/#token=" + call.Arg<string>());
-        security.When(x => x.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default))
+        security.When(x => x.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default, Arg.Any<string>()))
             .Do(call =>
             {
                 emailBody = call.ArgAt<string>(3);
+                emailAction = call.ArgAt<string>(5);
                 if (initialDeliveryFails && call.ArgAt<string>(0) == "staff-entered@example.invalid")
                     throw new InvalidOperationException("Synthetic SMTP rejection");
             });
@@ -127,12 +128,12 @@ public sealed class ContractServiceTests
         Assert.Equal(submitted.Id, retry.Id); Assert.Single(rows);
         Assert.Equal(initialDeliveryFails ? "InvitationPendingManualDelivery" : "InvitationAcceptedByProvider", submitted.Status); Assert.Null(submitted.Token);
         Assert.Equal(1, rows.Single().OtpSendCount);
-        await security.Received(1).SendAsync("staff-entered@example.invalid", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default);
+        await security.Received(1).SendAsync("staff-entered@example.invalid", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default, Arg.Any<string>());
         r.Repo.Received(1).Audit(staff, kind == ContractKind.Holding ? "HoldingSigningSubmitted" : "MainSigningSubmitted", id.Id, Arg.Any<DateTimeOffset>());
         if (resend)
         {
             var originalHash = rows.Single().DocumentHash;
-            var originalToken = System.Text.RegularExpressions.Regex.Match(emailBody, "[A-F0-9]{64}").Value;
+            var originalToken = System.Text.RegularExpressions.Regex.Match(emailAction, "[A-F0-9]{64}").Value;
             var otpBefore = System.Text.RegularExpressions.Regex.Match(emailBody, @"Mã OTP của bạn: (\d{6})").Groups[1].Value;
             await service.VerifyOtpAsync(new(originalToken, otpBefore), default);
             Assert.NotNull(rows.Single().SessionHash);
@@ -169,7 +170,7 @@ public sealed class ContractServiceTests
             var limited = await Assert.ThrowsAsync<ContractException>(() => service.InviteAsync(id.Id, resendInput, default));
             Assert.Equal(429, limited.Status);
             rows.Single().OtpSendCount = count;
-            await security.Received(1).SendAsync("corrected@example.invalid", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default);
+            await security.Received(1).SendAsync("corrected@example.invalid", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default, Arg.Any<string>());
             r.Repo.Received(1).Audit(staff, kind == ContractKind.Holding ? "HoldingSigningSubmitted" : "MainSigningSubmitted", id.Id, Arg.Any<DateTimeOffset>());
         }
         if (!tenantFirst && !ownerAlreadyStarted) { await StartOwner(); await FinishOwner(); }
@@ -183,7 +184,8 @@ public sealed class ContractServiceTests
             Assert.Equal(tokenHash, rows.Single().TokenHash);
             Assert.Equal(resend ? 2 : 1, rows.Single().OtpSendCount);
         }
-        var invite = rows.Single(); var token = System.Text.RegularExpressions.Regex.Match(emailBody, "[A-F0-9]{64}").Value;
+        var invite = rows.Single(); var token = System.Text.RegularExpressions.Regex.Match(emailAction, "[A-F0-9]{64}").Value;
+        Assert.DoesNotContain(token, emailBody);
         Assert.Equal(64, token.Length);
         var deliveredOtp = System.Text.RegularExpressions.Regex.Match(emailBody, @"Mã OTP của bạn: (\d{6})").Groups[1].Value;
         var access = await service.VerifyOtpAsync(new(token, deliveredOtp), default);
@@ -202,7 +204,7 @@ public sealed class ContractServiceTests
             if (!ownerAlreadyStarted) await StartOwner();
             await FinishOwner();
         }
-        await security.Received(1).SendAsync("staff-entered@example.invalid", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default);
+        await security.Received(1).SendAsync("staff-entered@example.invalid", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default, Arg.Any<string>());
         Assert.Single(rows); Assert.Equal(tokenHash, invite.TokenHash);
         Assert.Equal(ContractStatus.PendingActivation, c.Status);
         Assert.True(AnonymousContractSigningService.Complete(c));
@@ -217,7 +219,7 @@ public sealed class ContractServiceTests
             r.User.Role = Roles.Staff; r.User.UserId = staff;
             await Assert.ThrowsAsync<ContractException>(() => service.InviteAsync(id.Id, input with { Resend = true }, default));
             Assert.Equal(signedEvidence, c.InternalAcceptance);
-            await security.Received(1).SendAsync("corrected@example.invalid", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default);
+            await security.Received(1).SendAsync("corrected@example.invalid", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), default, Arg.Any<string>());
         }
         if (!tenantFirst)
             evidence.Received(1).Accept(Arg.Is<byte[]>(x => x.SequenceEqual(ownerPdf)), Arg.Any<DrawnPoint[][]>(), c.RepresentativeResidentId,

@@ -6,6 +6,9 @@ import {
   MaintenanceDetailScreen,
 } from '../../features/incidents/IncidentScreens';
 import React from 'react';
+import { OwnerLocationRecordsScreen } from '../../screens/OwnerLocationRecordsScreen';
+import { OwnerTaxRecordsScreen } from '../../screens/OwnerTaxRecordsScreen';
+import { PersonalDataRequestsScreen } from '../../screens/PersonalDataRequestsScreen';
 import { Redirect } from 'expo-router';
 import { TenantInvoicesScreen } from '../../screens/TenantInvoicesScreen';
 import { NotificationsScreen } from '../../screens/NotificationsScreen';
@@ -31,6 +34,7 @@ import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens'
 import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
 import { StaffScheduleScreen } from '../../screens/StaffScheduleScreen';
 import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
+import { StaffMoveOutInspectionScreen } from '../../screens/StaffMoveOutInspectionScreen';
 import {
   StaffIncidentReportScreen,
   StaffMaintenanceScreen,
@@ -102,6 +106,9 @@ function EmergencyIncidents() {
   return <IncidentListScreen emergency />;
 }
 const screens = {
+  'owner-location-records': OwnerLocationRecordsScreen,
+  'owner-tax-records': OwnerTaxRecordsScreen,
+  'personal-data-requests': PersonalDataRequestsScreen,
   'incident-detail': IncidentDetailScreen,
   'incident-inbox': IncidentInbox,
   'maintenance-detail': MaintenanceDetailScreen,
@@ -210,7 +217,6 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
         'contract',
         'contract-request',
         'prepare-contract',
-        'move-out',
         'move-in',
         'checklist',
       ].includes(screen)
@@ -266,6 +272,9 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
         case 'meter-reading':
           content = <MeterTasksScreen />;
           break;
+        case 'move-out':
+          content = <StaffMoveOutInspectionScreen />;
+          break;
         case 'notifications':
           content = <NotificationsScreen />;
           break;
@@ -285,6 +294,9 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
         case 'owner-announcements':
         case 'owner-finance':
         case 'owner-residence':
+        case 'owner-location-records':
+        case 'owner-tax-records':
+        case 'personal-data-requests':
           content = <Screen />;
           break;
         case 'incident-detail':

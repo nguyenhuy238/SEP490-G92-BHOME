@@ -11,7 +11,7 @@ namespace BHome.Application.Contracts;
 
 public sealed record DamageChargeInput(string ExpectedReference, Guid InspectionId, int InspectionVersion,
     Guid? AssetId, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount,
-    string Description, Guid[] EvidenceIds, bool HumanConfirmed);
+    string Description, Guid[] EvidenceIds, bool HumanConfirmed, string? RoomCheckCode = null);
 public sealed record DepositOffsetInput(string ExpectedReference, Guid? ReceivableId, Guid? InvoiceId,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount, string Reason, bool HumanConfirmed);
 public sealed record SettlementReceivable(Guid Id, Guid ContractId, Guid RoomId, string Kind, string SourceKey,
@@ -19,7 +19,8 @@ public sealed record SettlementReceivable(Guid Id, Guid ContractId, Guid RoomId,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount, string Description,
     string CalculationPolicy, IReadOnlyList<DeductionEvidence> Evidence, Guid[] RecipientUserIds,
     Guid ApprovedByUserId, DateTimeOffset ApprovedAt, Guid OperationKey, string Fingerprint, bool IsDevelopmentDemo = false,
-    SettlementUtilitySource? Utility = null, BHome.Application.Billing.FixedChargeSource? FixedCharge = null);
+    SettlementUtilitySource? Utility = null, BHome.Application.Billing.FixedChargeSource? FixedCharge = null,
+    string? RoomCheckCode = null);
 [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)]
 public sealed record DepositOffsetApproval(Guid Id, Guid ContractId, Guid SourceDepositContractId,
     Guid? ReceivableId, Guid? InvoiceId, decimal Amount, string Reason, Guid ApprovedByUserId,
@@ -32,11 +33,15 @@ public sealed record SettlementReceivableBalance(SettlementReceivable Charge, de
 public sealed record SettlementReceivablesView(Guid ContractId, Guid RoomId, string Reference,
     decimal AvailableDeposit, IReadOnlyList<SettlementReceivableBalance> Receivables,
     IReadOnlyList<DepositOffsetApproval> Offsets, string RoomNumber = "", IReadOnlyList<SettlementOffsetInvoice>? Invoices = null,
-    IReadOnlyList<PayerChoice>? Payers = null);
+    IReadOnlyList<PayerChoice>? Payers = null,
+    bool RoomCheckChargesSupported = false, bool NoAdditionalCharges = false);
 public sealed record SettlementReceivablePage(IReadOnlyList<SettlementReceivablesView> Items, int Page, int PageSize, int Total);
 public sealed record SettlementChargeContext(SettlementReceivablesView View, Guid DepositContractId,
     Guid InspectionId, int InspectionVersion, bool InspectionConfirmed, bool NoAdditionalCharges,
-    Guid[] AssetIds, Guid[] EvidenceIds, Guid[] RecipientUserIds, bool HasLegacyDeductions, bool IsDevelopmentDemo = false);
+    Guid[] AssetIds, Guid[] EvidenceIds, Guid[] RecipientUserIds, bool HasLegacyDeductions, bool IsDevelopmentDemo = false,
+    IReadOnlyDictionary<Guid, Guid[]>? IssueAssetEvidence = null,
+    IReadOnlyDictionary<string, Guid[]>? IssueRoomCheckEvidence = null,
+    bool HasStructuredRoomChecks = false);
 public interface ISettlementReceivablesRepository
 {
     Task<T> TransactionAsync<T>(Guid contractId, Func<Task<T>> work, CancellationToken token);
@@ -56,12 +61,16 @@ public interface ISettlementReceivablesRepository
     Task<SettlementChargeReviewContext> ChargeReviewAsync(Guid contractId, CancellationToken token);
     Task<SettlementChargeReview?> ReviewOperationAsync(Guid actor, Guid key, CancellationToken token);
     Task SaveReviewAsync(SettlementChargeReview review, CancellationToken token);
+    Task<SettlementFinancialClose?> FinancialCloseOperationAsync(Guid actor, Guid key, CancellationToken token);
+    Task<SettlementFinancialClose?> LatestFinancialCloseAsync(Guid contractId, CancellationToken token);
+    Task SaveFinancialCloseAsync(SettlementFinancialClose result, CancellationToken token);
 }
 
 public sealed partial class SettlementReceivablesService(ISettlementReceivablesRepository repository,
     IDepositDeductionEvidence evidence, ICurrentUser user, TimeProvider clock, PaymentRuntimeMode? mode = null, IPaymentRepository? payments = null,
     ITransferQrGenerator? qr = null, ISettlementChargeEvidence? chargeEvidence = null,
-    BHome.Application.Billing.IFixedChargeCoverage? fixedCoverage = null)
+    BHome.Application.Billing.IFixedChargeCoverage? fixedCoverage = null,
+    BHome.Application.Finance.RefundService? refunds = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new ContractException(401, "authentication_required");
     private async Task AuthorizeAsync(Guid id, bool write, CancellationToken token)
@@ -77,7 +86,8 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
         var context = await repository.ContextAsync(id, token);
         if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
         var view = context.View;
-        if (user.IsInRole(Roles.Owner)) return view;
+        if (user.IsInRole(Roles.Owner))
+            return view with { RoomCheckChargesSupported = true, NoAdditionalCharges = context.NoAdditionalCharges };
         var visible = view.Receivables.Where(r => r.Charge.RecipientUserIds.Contains(Actor)).ToArray();
         return view with
         {
@@ -106,7 +116,10 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
             string.IsNullOrWhiteSpace(input.Description) || input.Description.Length > 2000 ||
             string.IsNullOrWhiteSpace(input.ExpectedReference) || input.InspectionId == Guid.Empty || input.InspectionVersion < 1 ||
             input.AssetId == Guid.Empty || input.EvidenceIds is null || input.EvidenceIds.Length is < 1 or > 5 ||
-            input.EvidenceIds.Any(e => e == Guid.Empty) || input.EvidenceIds.Distinct().Count() != input.EvidenceIds.Length)
+            input.EvidenceIds.Any(e => e == Guid.Empty) || input.EvidenceIds.Distinct().Count() != input.EvidenceIds.Length ||
+            input.RoomCheckCode is not null &&
+                (input.AssetId is not null || input.RoomCheckCode != "access_room_key" &&
+                    !HandoverRoomChecklist.RequiredCodes.Contains(input.RoomCheckCode)))
             throw ContractException.Invalid("invalid_settlement_charge");
         input = input with { Description = input.Description.Trim(), EvidenceIds = input.EvidenceIds.Order().ToArray() };
         var fingerprint = Fingerprint(id, input);
@@ -120,21 +133,46 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
                 return previous;
             }
             await AuthorizeAsync(id, true, token);
+            if (await repository.LatestFinancialCloseAsync(id, token) is not null)
+                throw ContractException.Conflict("settlement_financial_already_closed");
             var context = await repository.ContextAsync(id, token);
             if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
             if (context.View.Reference != input.ExpectedReference) throw ContractException.Conflict("settlement_review_changed");
             if (!context.InspectionConfirmed || context.NoAdditionalCharges || context.HasLegacyDeductions ||
                 context.InspectionId != input.InspectionId || context.InspectionVersion != input.InspectionVersion || context.RecipientUserIds.Length == 0)
                 throw ContractException.Conflict("settlement_charge_not_ready");
-            if (input.AssetId is { } asset && !context.AssetIds.Contains(asset) || input.EvidenceIds.Any(e => !context.EvidenceIds.Contains(e)))
+            if (input.EvidenceIds.Any(e => !context.EvidenceIds.Contains(e)))
                 throw ContractException.Invalid("settlement_charge_source_invalid");
+            if (input.AssetId is { } asset)
+            {
+                if (context.IssueAssetEvidence is null ||
+                    !context.IssueAssetEvidence.TryGetValue(asset, out var linked) ||
+                    input.EvidenceIds.Any(e => !linked.Contains(e)))
+                    throw ContractException.Conflict("settlement_damage_not_observed");
+            }
+            else if (input.RoomCheckCode is { } roomCode)
+            {
+                if (context.IssueRoomCheckEvidence is null ||
+                    !context.IssueRoomCheckEvidence.TryGetValue(roomCode, out var linked) ||
+                    input.EvidenceIds.Any(e => !linked.Contains(e)))
+                    throw ContractException.Conflict("settlement_room_check_not_issue");
+            }
+            else if (context.HasStructuredRoomChecks)
+                // Legacy catch-all room charge cannot cover the same issues
+                // already priced individually in a structured inspection.
+                throw ContractException.Conflict("settlement_room_check_required");
             // One approved damage source, independent of the amount of security deposit.
-            var sourceKey = $"damage:{id:N}:{input.AssetId?.ToString("N") ?? "room"}";
-            if (context.View.Receivables.Any(r => r.Charge.SourceKey == sourceKey)) throw ContractException.Conflict("settlement_source_already_charged");
+            var sourceKey = $"damage:{id:N}:{input.AssetId?.ToString("N") ?? input.RoomCheckCode ?? "room"}";
+            var legacyRoomSource = $"damage:{id:N}:room";
+            if (context.View.Receivables.Any(r => r.Charge.SourceKey == sourceKey ||
+                input.RoomCheckCode is not null && r.Charge.SourceKey == legacyRoomSource ||
+                input.AssetId is null && input.RoomCheckCode is null && r.Charge.RoomCheckCode is not null))
+                throw ContractException.Conflict("settlement_source_already_charged");
             var proofs = await evidence.CaptureAsync(id, input.EvidenceIds, token);
             var charge = new SettlementReceivable(Guid.NewGuid(), id, context.View.RoomId, "TenantDamage", sourceKey,
                 input.InspectionId, input.InspectionVersion, input.AssetId, input.Amount, input.Description,
-                "OwnerApprovedInspectionDamage/v1", proofs, context.RecipientUserIds.Order().ToArray(), Actor, clock.GetUtcNow(), key, fingerprint, context.IsDevelopmentDemo);
+                "OwnerApprovedInspectionDamage/v1", proofs, context.RecipientUserIds.Order().ToArray(), Actor, clock.GetUtcNow(), key, fingerprint, context.IsDevelopmentDemo,
+                RoomCheckCode: input.RoomCheckCode);
             await repository.SaveChargeAsync(charge, token); return charge;
         }, token);
     }
@@ -156,6 +194,8 @@ public sealed partial class SettlementReceivablesService(ISettlementReceivablesR
                 return previous;
             }
             await AuthorizeAsync(id, true, token);
+            if (await repository.LatestFinancialCloseAsync(id, token) is not null)
+                throw ContractException.Conflict("settlement_financial_already_closed");
             var context = await repository.ContextAsync(id, token);
             if (context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true) throw ContractException.Conflict("development_payment_unavailable");
             if (context.View.Reference != input.ExpectedReference) throw ContractException.Conflict("settlement_review_changed");

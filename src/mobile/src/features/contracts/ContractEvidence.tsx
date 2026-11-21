@@ -26,6 +26,7 @@ export function ContractEvidence({
   draftHandoverEvidence = false,
   assetChangeId,
   thumbnail = false,
+  thumbnailHeight = 110,
   localThumbnailUri,
 }: {
   api: ContractClient;
@@ -42,13 +43,14 @@ export function ContractEvidence({
   draftHandoverEvidence?: boolean;
   assetChangeId?: string;
   thumbnail?: boolean;
+  thumbnailHeight?: number;
   localThumbnailUri?: string;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useFeedbackState(),
     [previewUri, setPreviewUri] = useState(''),
     [thumbnailState, setThumbnailState] = useState({ key: '', uri: '', error: '' });
-  const thumbnailKey = `${contractId}:${evidenceId ?? ''}`;
+  const thumbnailKey = `${contractId}:${evidenceId ?? ''}:${readingId ?? ''}:${draftHandoverEvidence}`;
   const thumbnailUri =
     localThumbnailUri || (thumbnailState.key === thumbnailKey ? thumbnailState.uri : '');
   const thumbnailError = thumbnailState.key === thumbnailKey ? thumbnailState.error : '';
@@ -63,15 +65,18 @@ export function ContractEvidence({
     [],
   );
   useEffect(() => {
-    if (!thumbnail || localThumbnailUri || !draftHandoverEvidence || !evidenceId) return;
+    if (!thumbnail || localThumbnailUri || !((draftHandoverEvidence && evidenceId) || readingId))
+      return;
     const controller = new AbortController();
     let objectUrl: string | null = null;
     let cachedPhoto: File | null = null;
     void (async () => {
       try {
-        const path = `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/evidence/${encodeURIComponent(evidenceId)}`;
+        const path = `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/evidence/${encodeURIComponent(evidenceId ?? '')}`;
         if (Platform.OS === 'web') {
-          const blob = await api.transport<Blob>(path, { signal: controller.signal }, 'blob');
+          const blob = readingId
+            ? await api.handoverMeterEvidence(contractId, readingId, controller.signal)
+            : await api.transport<Blob>(path, { signal: controller.signal }, 'blob');
           if (controller.signal.aborted) return;
           if (blob.size > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
           const signature = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
@@ -84,11 +89,9 @@ export function ContractEvidence({
           );
           setThumbnailState({ key: thumbnailKey, uri: objectUrl, error: '' });
         } else {
-          const bytes = await api.transport<Uint8Array>(
-            path,
-            { signal: controller.signal },
-            'bytes',
-          );
+          const bytes = readingId
+            ? await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
+            : await api.transport<Uint8Array>(path, { signal: controller.signal }, 'bytes');
           if (controller.signal.aborted) return;
           if (bytes.length > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
           const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => bytes[i] === byte);
@@ -123,6 +126,7 @@ export function ContractEvidence({
     thumbnail,
     thumbnailKey,
     localThumbnailUri,
+    readingId,
   ]);
   function closePreview() {
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
@@ -290,14 +294,19 @@ export function ContractEvidence({
     <>
       {thumbnail ? (
         <View
-          style={{ width: '100%', height: 110, justifyContent: 'center', alignItems: 'center' }}
+          style={{
+            width: '100%',
+            height: thumbnailHeight,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
         >
           {thumbnailUri ? (
             <Image
               source={{ uri: thumbnailUri }}
               accessibilityLabel={label ?? 'Ảnh hiện trạng'}
-              resizeMode="cover"
-              style={{ width: '100%', height: 110, borderRadius: 9 }}
+              resizeMode="contain"
+              style={{ width: '100%', height: thumbnailHeight, borderRadius: 9 }}
             />
           ) : (
             <Text variant="bodySmall" style={ui.muted}>

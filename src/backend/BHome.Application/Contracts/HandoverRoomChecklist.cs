@@ -22,25 +22,29 @@ public static class HandoverRoomChecklist
 
     public static HandoverRoomCheck[] Merge(HandoverRoomCheck[]? prior, HandoverRoomCheck[]? input)
     {
-        if (input is null) return prior ?? [];
+        // A former defect may still have notes in an older draft after Staff
+        // rechecks it as Passed. Clear such notes on every subsequent save.
+        var previous = (prior ?? []).Select(item => item.Status == "Passed"
+            ? item with { Notes = null } : item).ToArray();
+        if (input is null) return previous;
         if (input.Length > RequiredCodes.Length || input.Any(item => item is null) ||
             input.Select(item => item.Code).Distinct(StringComparer.Ordinal).Count() != input.Length)
             throw ContractException.Invalid("invalid_handover_room_checks");
         var normalized = input.Select(Validate).ToArray();
-        return (prior ?? []).Where(item => !normalized.Any(next => next.Code == item.Code))
+        return previous.Where(item => !normalized.Any(next => next.Code == item.Code))
             .Concat(normalized).OrderBy(item => Array.IndexOf(RequiredCodes, item.Code)).ToArray();
     }
 
     private static HandoverRoomCheck Validate(HandoverRoomCheck item)
     {
         if (!RequiredCodes.Contains(item.Code) || item.Status is not ("Passed" or "Issue" or "NotApplicable") ||
-            item.Notes is null || item.Notes.Length > 2000 ||
+            item.Notes?.Length > 2000 ||
             item.Status != "Passed" && string.IsNullOrWhiteSpace(item.Notes) ||
             item.EvidenceIds is null or { Length: > 5 } ||
             item.EvidenceIds.Contains(Guid.Empty) ||
             item.EvidenceIds.Distinct().Count() != item.EvidenceIds.Length)
             throw ContractException.Invalid("invalid_handover_room_checks");
-        return item with { Notes = item.Notes.Trim() };
+        return item with { Notes = item.Status == "Passed" ? null : item.Notes!.Trim() };
     }
 
     public static HandoverAccessItem[] NormalizeAccess(HandoverAccessItem[]? items)

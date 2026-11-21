@@ -44,6 +44,21 @@ import { PrivateEvidenceViewer } from '../../components/common/PrivateEvidenceVi
 import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { financialState, historyNote, moveOutProgress } from './termination';
 
+const roomCheckNames: Record<string, string> = {
+  walls_ceiling_floor: 'Tường, trần và sàn',
+  doors_windows_locks: 'Cửa, cửa sổ và khóa',
+  electrical_lighting_outlets: 'Đèn, công tắc và ổ điện',
+  water_plumbing_drainage: 'Cấp nước, vòi và thoát nước',
+  bathroom_toilet: 'Nhà vệ sinh và thiết bị vệ sinh',
+  cleanliness: 'Vệ sinh và hiện trạng phòng',
+  safety_equipment: 'Thiết bị an toàn',
+};
+const roomCheckResult: Record<string, string> = {
+  Passed: 'Đạt',
+  Issue: 'Cần xử lý',
+  NotApplicable: 'Cần xác minh',
+};
+
 export function ContractLifecyclePanel({
   api,
   contract,
@@ -219,6 +234,14 @@ export function ContractLifecyclePanel({
             trạng thái này không xác nhận đã thanh toán.
           </Alert>
         )}
+        {moveOut.status === 'Approved' &&
+          (!moveOut.inspectionStaffId || !moveOut.inspectionScheduledAt) && (
+            <Alert severity="warning">
+              Hồ sơ trả phòng đã được mở. Owner cần chọn Staff phụ trách và lịch kiểm tra để nhiệm
+              vụ xuất hiện trên Mobile của nhân viên; chưa có việc bàn giao nào được tự xác nhận
+              hoàn thành.
+            </Alert>
+          )}
         {moveOut.pendingReason && (
           <Alert severity="warning">{settlementBlocker(moveOut.pendingReason)}</Alert>
         )}
@@ -274,7 +297,7 @@ export function ContractLifecyclePanel({
               </Alert>
             )}
             <Button
-              disabled={busy || !schedule || !!staff.error || staff.isFetching}
+              disabled={busy || !schedule || !assignee || !!staff.error || staff.isFetching}
               onClick={() => {
                 try {
                   void save('move-out/schedule', {
@@ -349,15 +372,71 @@ export function ContractLifecyclePanel({
                   </TableRow>
                 </TableHead>
                 <TableBody>
+                  <TableRow sx={{ bgcolor: 'action.hover' }}>
+                    <TableCell colSpan={3} sx={{ fontWeight: 700 }}>
+                      Hiện trạng phòng và 7 hạng mục kiểm tra
+                    </TableCell>
+                  </TableRow>
                   <TableRow>
                     <TableCell>Phòng</TableCell>
                     <TableCell>{i.baseline?.roomCondition ?? 'Không có dữ liệu ban đầu'}</TableCell>
                     <TableCell>{i.observed.roomCondition}</TableCell>
                   </TableRow>
+                  {(i.observed.roomChecks ?? []).map((check) => (
+                    <TableRow key={`room-check-${check.code}`}>
+                      <TableCell>{roomCheckNames[check.code] ?? check.code}</TableCell>
+                      <TableCell>
+                        {i.baseline?.roomChecks?.find((previous) => previous.code === check.code)
+                          ?.status === 'Passed'
+                          ? 'Đạt khi nhận phòng'
+                          : 'Không có kết quả đối chiếu'}
+                      </TableCell>
+                      <TableCell>
+                        <Stack spacing={0.5}>
+                          <Chip
+                            size="small"
+                            color={check.status === 'Passed' ? 'success' : 'warning'}
+                            label={roomCheckResult[check.status] ?? check.status}
+                            sx={{ alignSelf: 'flex-start' }}
+                          />
+                          {!!check.notes?.trim() && (
+                            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                              {check.notes}
+                            </Typography>
+                          )}
+                          {(check.evidenceIds ?? []).map((fileId, index) => (
+                            <PrivateEvidenceViewer
+                              key={fileId}
+                              label={`${roomCheckNames[check.code] ?? check.code} · ảnh ${index + 1}`}
+                              filename={`kiem-tra-phong-${check.code}-${index + 1}.jpg`}
+                              fetchBlob={(signal) => api.evidence(contract.id, fileId, signal)}
+                              errorMessage={contractError}
+                            />
+                          ))}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow sx={{ bgcolor: 'action.hover' }}>
+                    <TableCell colSpan={3} sx={{ fontWeight: 700 }}>
+                      Chìa khóa và vật dụng ra vào
+                    </TableCell>
+                  </TableRow>
                   <TableRow>
                     <TableCell>Chìa khóa / quyền truy cập</TableCell>
                     <TableCell>{i.baseline?.keysAndAccess ?? 'Chưa rõ'}</TableCell>
-                    <TableCell>{i.observed.keysAndAccess}</TableCell>
+                    <TableCell>
+                      {i.observed.accessItems?.length
+                        ? i.observed.accessItems
+                            .map((entry) => `${entry.type}: ${entry.quantity}`)
+                            .join(' · ')
+                        : i.observed.keysAndAccess}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow sx={{ bgcolor: 'action.hover' }}>
+                    <TableCell colSpan={3} sx={{ fontWeight: 700 }}>
+                      Kiểm kê tài sản so với lúc nhận phòng
+                    </TableCell>
                   </TableRow>
                   {i.observed.assets.map((a) => (
                     <TableRow key={a.id}>
@@ -372,6 +451,11 @@ export function ContractLifecyclePanel({
                       <TableCell>{handoverAssetSummary(a)}</TableCell>
                     </TableRow>
                   ))}
+                  <TableRow sx={{ bgcolor: 'action.hover' }}>
+                    <TableCell colSpan={3} sx={{ fontWeight: 700 }}>
+                      Chỉ số điện và nước chốt trả phòng
+                    </TableCell>
+                  </TableRow>
                   <TableRow>
                     <TableCell>Điện</TableCell>
                     <TableCell>{i.baseline?.electricity.value ?? 'Chưa rõ'}</TableCell>
@@ -426,6 +510,15 @@ export function ContractLifecyclePanel({
                   label={`ảnh trả phòng ${index + 1} phiên bản ${i.version}`}
                   filename={`tra-phong-${i.version}-${index + 1}.jpg`}
                   fetchBlob={(signal) => api.evidence(contract.id, evidenceId, signal)}
+                  errorMessage={contractError}
+                />
+              ))}
+              {(i.observed.keyEvidenceIds ?? []).map((fileId, index) => (
+                <PrivateEvidenceViewer
+                  key={`key-${fileId}`}
+                  label={`ảnh chìa khóa trả phòng ${index + 1}`}
+                  filename={`chia-khoa-tra-phong-${index + 1}.jpg`}
+                  fetchBlob={(signal) => api.evidence(contract.id, fileId, signal)}
                   errorMessage={contractError}
                 />
               ))}

@@ -516,6 +516,16 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await using var verify = fixture.Factory.Services.CreateAsyncScope(); var stored = verify.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         if (stored is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
         {
+            var moveInTask = await stored.Set<OperationalTask>().SingleAsync(task =>
+                task.ContractId == id && task.Kind == BHome.Domain.StaffOperations.OperationalTaskKind.AdHoc);
+            Assert.Equal(MeterTaskStatus.Completed, moveInTask.Status);
+            var transitions = await stored.Set<BHome.Domain.StaffOperations.OperationalTaskHistory>()
+                .Where(entry => entry.TaskId == moveInTask.Id &&
+                    (entry.Action == "MoveInSubmitted" || entry.Action == "MoveInCompleted"))
+                .OrderBy(entry => entry.TaskVersion).ToArrayAsync();
+            Assert.Equal(new[] { "MoveInSubmitted", "MoveInCompleted" }, transitions.Select(entry => entry.Action));
+            Assert.All(transitions, entry => Assert.Equal(w.Staff.Id, entry.ActorId));
+            Assert.Equal(transitions[0].TaskVersion + 1, transitions[1].TaskVersion);
             Assert.Equal("23514", (await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET handover=jsonb_set(handover,'{{current,version}}','3'::jsonb) WHERE id={id}"))).SqlState);
             Assert.NotEqual("42P01", (await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET history='[]'::jsonb WHERE id={id}"))).SqlState);
             Assert.NotEqual("42P01", (await Assert.ThrowsAsync<PostgresException>(() => stored.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM meter_readings WHERE id={readingIds[0]}"))).SqlState);

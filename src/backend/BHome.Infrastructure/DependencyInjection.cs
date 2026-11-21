@@ -233,6 +233,18 @@ public static class DependencyInjection
         services.AddScoped<BHome.Application.PropertyManagement.LocationConfigurationCopyService>();
         services.AddScoped<BHome.Application.PropertyManagement.LocationSetupService>();
         services.AddScoped<BHome.Application.PropertyManagement.AssetInventoryService>();
+        services.AddScoped<BHome.Application.PropertyManagement.LocationLegalRecordService>();
+        services.AddScoped<BHome.Application.PropertyManagement.AssetLifecycleService>();
+        services.AddScoped<BHome.Application.PropertyManagement.EquipmentInspectionScheduler>();
+        services.AddScoped<BHome.Application.PropertyManagement.EquipmentInspectionService>();
+        services.AddScoped<BHome.Application.Finance.TaxTrackingService>();
+        services.AddScoped<BHome.Application.Operations.IPersonalDataRequestRepository, BHome.Infrastructure.Modules.Operations.PersonalDataRequestRepository>();
+        services.AddScoped<BHome.Application.Operations.PersonalDataRequestService>();
+        services.AddScoped<BHome.Application.Operations.ILifecycleAttentionRepository, BHome.Infrastructure.Modules.Operations.LifecycleAttentionRepository>();
+        services.AddScoped<BHome.Application.Operations.LifecycleAttentionService>();
+        services.AddScoped<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>();
+        services.AddScoped<IBackgroundJobHandler>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>());
+        services.AddScoped<IJobScheduleContributor>(p => p.GetRequiredService<BHome.Infrastructure.Modules.PropertyManagement.EquipmentInspectionJob>());
         services.AddScoped<BHome.Application.PropertyManagement.RoomInventoryReviewService>();
         services.AddScoped<BHome.Application.PropertyManagement.CommonAssetInventoryReviewService>();
         services.AddScoped<BHome.Application.Contracts.IHandoverInventory>(p => p.GetRequiredService<BHome.Application.PropertyManagement.RoomInventoryReviewService>());
@@ -369,6 +381,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.DigitalSigning.Application.ISignatureImageStore, BHome.Infrastructure.Contracts.CompactSignatureImageStore>();
         BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractSigningAccounts(services, configuration);
         services.AddSingleton<BHome.Infrastructure.Contracts.SignaturePictureGenerator>();
+        services.AddSingleton<BHome.Application.Contracts.IHandoverSignatureInkRenderer>(
+            provider => provider.GetRequiredService<BHome.Infrastructure.Contracts.SignaturePictureGenerator>());
         services.AddSingleton<BHome.Application.Contracts.IContractSigningPages, BHome.Infrastructure.Contracts.ContractSigningPages>();
         BHome.DigitalSigning.MySign.MySignRegistration.AddMySignClient(services);
         services.AddScoped<BHome.DigitalSigning.Application.ISigningCertificateStore, BHome.Infrastructure.Contracts.ContractSigningCertificateStore>();

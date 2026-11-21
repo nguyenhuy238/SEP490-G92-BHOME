@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Net.Sockets;
 using System.Text;
 using BHome.Application.Notifications;
 using MailKit;
@@ -70,8 +71,9 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
     {
         var body = new BodyBuilder
         {
-            TextBody = message.Body + (message.ActionUrl is null ? "" : "\n\n" + message.ActionUrl),
-            HtmlBody = EmailTemplate.Html(message.Title, message.Body, message.ActionUrl, EmailTemplate.ActionLabel(message.EventType))
+            TextBody = EmailTemplate.Text(message),
+            HtmlBody = EmailTemplate.Html(message.Title, message.Body, message.ActionUrl,
+                EmailTemplate.ActionLabel(message.EventType), message.MobileActionUrl, message.Credentials)
         };
         if (message.Attachments is { } attachments)
         {
@@ -94,7 +96,7 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
         MailKit.Security.AuthenticationException or ServiceNotAuthenticatedException => new("email_authentication_failed"),
         SslHandshakeException or NotSupportedException => new("email_tls_configuration_invalid"),
         SmtpCommandException command => new("email_smtp_" + (int)command.StatusCode, (int)command.StatusCode is >= 400 and < 500),
-        OperationCanceledException or TimeoutException or IOException or SmtpProtocolException =>
+        OperationCanceledException or TimeoutException or IOException or SocketException or SmtpProtocolException =>
             new(submitting ? "email_submission_outcome_unknown" : "email_connection_failed", !submitting, submitting),
         _ => new("email_unexpected_failure", outcomeUnknown: submitting)
     };

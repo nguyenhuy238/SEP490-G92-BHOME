@@ -12,6 +12,7 @@ import {
   Typography,
 } from '@mui/material';
 import { requestDiagnostic } from '../../../../../packages/client-core/src/api';
+import { Download } from 'lucide-react';
 
 type PreviewType = 'image/png' | 'image/jpeg' | 'application/pdf';
 type SafeFile = { blob: Blob; type: PreviewType | null };
@@ -89,6 +90,10 @@ export interface PrivateEvidenceViewerProps {
   expectedSize?: number;
   errorMessage?: (error: unknown) => string;
   disabled?: boolean;
+  /** Short action labels for the compact Owner handover PDF row only. */
+  compactActions?: boolean;
+  /** Optional precise preview CTA; does not change the private document title or download. */
+  previewButtonLabel?: string;
 }
 
 function classify(blob: Blob, declaredType?: string): Promise<SafeFile> {
@@ -158,6 +163,8 @@ export function PrivateEvidenceViewer({
   expectedSize,
   errorMessage,
   disabled = false,
+  compactActions = false,
+  previewButtonLabel,
 }: PrivateEvidenceViewerProps) {
   const dialogTitleId = useId();
   const [open, setOpen] = useState(false);
@@ -297,15 +304,16 @@ export function PrivateEvidenceViewer({
           disabled={disabled || !!busy}
           onClick={() => void fetchFile('preview')}
         >
-          Xem {label}
+          {previewButtonLabel ?? (compactActions ? 'Xem PDF' : `Xem ${label}`)}
         </Button>
         <Button
           size="small"
           type="button"
+          startIcon={compactActions ? <Download size={16} aria-hidden="true" /> : undefined}
           disabled={disabled || !!busy}
           onClick={() => void fetchFile('download')}
         >
-          Tải xuống {label}
+          {compactActions ? 'Tải xuống' : `Tải xuống ${label}`}
         </Button>
       </Stack>
       {error && !open && (
@@ -371,15 +379,19 @@ export function PrivateEvidenceViewer({
               component="iframe"
               src={preview.url}
               title={`Nội dung PDF: ${label}`}
-              sandbox=""
+              // Chrome's built-in PDF viewer is a separate browser extension/
+              // plugin. An empty iframe sandbox blocks that viewer entirely.
+              // This path embeds only a signature-checked application/pdf Blob;
+              // unsupported/HTML/SVG data never reaches the frame.
+              referrerPolicy="no-referrer"
               sx={{ width: '100%', flex: 1, minHeight: 280, border: 0 }}
             />
           )}
         </DialogContent>
         <DialogActions sx={{ gap: 1, px: 2, py: 1.5 }}>
-          {unsupported && (
+          {(unsupported || preview?.type === 'application/pdf') && (
             <Button disabled={!!busy || disabled} onClick={() => void fetchFile('download')}>
-              Tải xuống
+              {unsupported ? 'Tải xuống' : 'Tải PDF nếu không xem được'}
             </Button>
           )}
           <Button onClick={close}>Đóng</Button>

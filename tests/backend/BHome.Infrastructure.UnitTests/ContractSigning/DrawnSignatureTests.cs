@@ -47,5 +47,24 @@ public sealed class DrawnSignatureTests
     public void NoStrokesAreRefused()
     {
         Assert.Equal("signature_drawing_invalid", Assert.Throws<ContractException>(() => generator.FromStrokes(new DrawnSignatureInput(360, 150, []))).Code);
+        Assert.Equal("signature_drawing_empty", Assert.Throws<ContractException>(() =>
+            generator.FromStrokes(new DrawnSignatureInput(360, 150, [[], []]))).Code);
+    }
+
+    [Fact]
+    public void HandoverUsesRealOwnerInkAndRejectsTaps()
+    {
+        IHandoverSignatureInkRenderer renderer = generator;
+        var a = renderer.Render(new HandoverInkInput(360, 150,
+            [[[20, 100], [60, 40], [90, 110], [130, 50], [170, 85]]]));
+        var b = renderer.Render(new HandoverInkInput(360, 150,
+            [[[20, 40], [60, 100], [90, 45], [130, 110], [170, 60]]]));
+        Assert.False(a.SequenceEqual(b)); // The strokes, not a saved typed name, determine the PNG.
+        using var png = SKBitmap.Decode(a);
+        Assert.Equal(200, png.Height);
+        Assert.Equal(0, png.GetPixel(0, 0).Alpha);
+        var invalid = Assert.Throws<ContractException>(() => renderer.Render(
+            new HandoverInkInput(360, 150, [[[20, 20]]])));
+        Assert.Equal("signature_drawing_empty", invalid.Code);
     }
 }

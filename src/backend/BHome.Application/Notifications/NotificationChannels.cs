@@ -33,8 +33,13 @@ public interface IDevelopmentEmailTest
     Task<EmailTestResult> SendAsync(CancellationToken t);
 }
 public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);
+// Delivery-only data: never include credentials in an API response, inbox or audit.
+public sealed record EmailCredentials(string Account, string Password)
+{
+    public override string ToString() => "EmailCredentials { [redacted] }";
+}
 public sealed record ChannelMessage(string IdempotencyKey, string Channel, string Destination, string EventType, string Title, string Body, string? ActionUrl = null,
-    IReadOnlyList<EmailAttachment>? Attachments = null);
+    IReadOnlyList<EmailAttachment>? Attachments = null, string? MobileActionUrl = null, EmailCredentials? Credentials = null);
 public interface INotificationChannelProvider
 {
     bool IsConfigured(string channel);

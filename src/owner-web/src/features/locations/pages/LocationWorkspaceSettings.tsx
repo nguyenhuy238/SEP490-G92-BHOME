@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { LocationLegalRecords } from '../components/LocationLegalRecords';
 import {
   contactPhoneError,
   normalizeContactPhone,
@@ -446,6 +447,11 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
             )}
           </Stack>
         </Paper>
+      )}
+      {canManage && (
+        <Box sx={{ mt: 3 }}>
+          <LocationLegalRecords locationId={location.id} />
+        </Box>
       )}
     </Box>
   );

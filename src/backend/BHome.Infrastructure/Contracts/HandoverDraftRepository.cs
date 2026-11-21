@@ -9,6 +9,54 @@ internal sealed class HandoverDraftRepository(BHomePersistenceContext db) : IHan
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    public async Task<HandoverInboxPage> ListAsync(int page, int pageSize, Guid? locationId,
+        string? status, string roomSearch, CancellationToken token)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            throw new ContractException(503, "handover_draft_storage_unavailable");
+
+        // Apply all filters before paging, so a page never silently contains
+        // unrelated contracts or hides reports on subsequent contract pages.
+        var count = await db.Database.SqlQuery<int>($"""
+            SELECT COUNT(*)::integer AS "Value"
+            FROM contracts c JOIN rooms r ON r.id = c.room_id
+            WHERE c.contract_type = 'MAIN'
+              AND c.handover->'preparation'->>'status' IS NOT NULL
+              AND ({locationId}::uuid IS NULL OR r.location_id = {locationId}::uuid)
+              AND ({status}::text IS NULL OR c.handover->'preparation'->>'status' = {status}::text)
+              AND ({roomSearch}::text = '' OR r.room_number ILIKE '%' || {roomSearch}::text || '%')
+            """).SingleAsync(token);
+        var offset = (page - 1) * pageSize;
+        var items = await db.Database.SqlQuery<HandoverInboxItem>($"""
+            SELECT c.id AS "ContractId", r.location_id AS "LocationId",
+                   l.name AS "LocationName", r.room_number AS "RoomNumber",
+                   c.handover->'preparation'->>'status' AS "Status",
+                   c.start_date AS "StartDate",
+                   (c.handover->'preparation'->>'staffSubmittedAt')::timestamptz AS "StaffSubmittedAt",
+                   (c.handover->'preparation'->>'ownerReadyAt')::timestamptz AS "OwnerReadyAt",
+                   (c.handover->'preparation'->>'tenantConfirmedAt')::timestamptz AS "TenantConfirmedAt"
+            FROM contracts c JOIN rooms r ON r.id = c.room_id
+                             JOIN locations l ON l.id = r.location_id
+            WHERE c.contract_type = 'MAIN'
+              AND c.handover->'preparation'->>'status' IS NOT NULL
+              AND ({locationId}::uuid IS NULL OR r.location_id = {locationId}::uuid)
+              AND ({status}::text IS NULL OR c.handover->'preparation'->>'status' = {status}::text)
+              AND ({roomSearch}::text = '' OR r.room_number ILIKE '%' || {roomSearch}::text || '%')
+            ORDER BY CASE c.handover->'preparation'->>'status'
+                       WHEN 'PendingOwnerReview' THEN 0
+                       WHEN 'ChangesRequested' THEN 1
+                       WHEN 'ReinspectionRequested' THEN 2
+                       WHEN 'Ready' THEN 3
+                       WHEN 'Draft' THEN 4
+                       ELSE 5 END,
+                     COALESCE((c.handover->'preparation'->>'staffSubmittedAt')::timestamptz,
+                              (c.handover->'preparation'->>'createdAt')::timestamptz) DESC NULLS LAST,
+                     c.id
+            LIMIT {pageSize} OFFSET {offset}
+            """).ToArrayAsync(token);
+        return new HandoverInboxPage(items, page, pageSize, count);
+    }
+
     public async Task<HandoverDraftState?> GetAsync(Guid contractId, CancellationToken token)
     {
         if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)

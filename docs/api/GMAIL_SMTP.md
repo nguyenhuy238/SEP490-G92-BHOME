@@ -4,6 +4,10 @@ EMAIL sử dụng MailKit, `smtp.gmail.com:587`, STARTTLS bắt buộc và Googl
 Sender hiện tại: BHOME / `bhome.notification@gmail.com`. Mật khẩu tài khoản Google không dùng
 cho SMTP. Không commit App Password vào appsettings, `.env.example`, test hoặc tài liệu.
 
+Lỗi gửi tài khoản Staff trên cả ba môi trường ngày 21/11/2026 là do cấu hình:
+localhost có allowlist cũ; Staging/Production tắt `Email.Enabled` và
+`NotificationChannels.Enabled`. Xem [nguyên nhân, cấu hình đã áp dụng và kiểm thử](../development/BHOME_EMAIL_REPAIR_2026-11-21.md).
+
 ## Cấu hình
 
 Các giá trị không bí mật đã có tại `BHome.Api/appsettings.json`. Mặc định repository tắt EMAIL.
@@ -55,10 +59,31 @@ Không dùng Sandbox để xác nhận gửi thật.
 Cấu hình cũ Mode=Smtp + SmtpHost/SmtpPort/SmtpUser/SmtpPassword/FromAddress còn được map
 khi Email.Enabled=false; cần bỏ cấu hình cũ nếu muốn tắt SMTP bằng Email.Enabled.
 
-Nếu `Jobs.Enabled=false`, bật AutomationEnabled để worker notification riêng hoạt động.
+Nếu `Jobs.Enabled=false`, bật AutomationEnabled để publisher thông báo nghiệp vụ riêng hoạt động.
 Nếu Jobs.Enabled=true, queue/scheduler hiện có xử lý JOB-04, worker riêng nhường lại.
-Không cần bật financial jobs chỉ để gửi email. File `.env` local hiện đã tắt AutomationEnabled;
-task giữ lựa chọn đó để không chạy gửi backlog tới Tenant khi smoke.
+Không cần bật financial jobs chỉ để gửi email. Kiểm tra backlog và lựa chọn riêng
+AutomationEnabled trước khi bật publisher; không bật nó chỉ để smoke credential Staff.
+
+Luồng cấp mật khẩu Staff chỉ cần `Email.Enabled=true`, SMTP hợp lệ và
+`NotificationChannels.Enabled=true`. Với `Jobs.Enabled=false`, worker xác thực riêng
+vẫn xử lý protected outbox khi `NotificationChannels.AutomationEnabled=false`.
+Giữ AutomationEnabled=false khi chỉ bật email tài khoản và chưa duyệt phát thông báo
+nghiệp vụ cũ. Bật AutomationEnabled=true là lựa chọn riêng cho publisher thông báo
+nghiệp vụ, không phải điều kiện bắt buộc để gửi credential Staff.
+
+Kiểm tra **cấu hình hiệu lực của container**, sau tất cả Compose overlays, bằng công cụ
+chỉ đọc (Python 3 standard library, Docker CLI):
+
+```sh
+python3 deploy/vps/check-email.py staging --smtp
+python3 deploy/vps/check-email.py production --smtp
+```
+
+`--smtp` kiểm tra certificate STARTTLS và đăng nhập SMTP, không gửi thư. Có thể thêm
+`--recipient` để kiểm tra allowlist; tránh đưa email cá nhân vào command/log dùng chung.
+Công cụ chỉ hỗ trợ hai container VPS hiện có và không thay thế validation của Backend.
+Nếu dùng bản cài tại VPS hiện tại, đường dẫn là `/opt/bhome-config/check-email.py`.
+Không in `docker inspect` đầy đủ hoặc `docker compose config` vì chúng có thể chứa secrets.
 
 ## Sự kiện và nội dung
 
@@ -76,6 +101,10 @@ emergency có Location/Room và hướng dẫn xử lý. Nội dung hướng ng�
 chi tiết, không chứa CCCD, mật khẩu, JWT, tham chiếu ngân hàng hoặc mã allocation. Template có
 HTML encode, UTF-8, plain-text alternative và subject `[BHOME]`. Announcement giữ body đã
 được tác giả có quyền nhập; HTML vẫn được encode, không thực thi markup.
+Template v2 ngày 20/11/2026 giữ subject đã có tiền tố BHOME để không lặp thương hiệu;
+giữ subject xác nhận giữ chỗ và subject credential Staff theo loại thư. URL action
+không hiện dài trong HTML; plain text vẫn giữ liên kết đầy đủ. Email credential
+Staff là ngoại lệ đã được quyết định cho nội dung mật khẩu, xem [email tài khoản](AUTHENTICATION_EMAIL.md).
 Không backfill/replay publication đã phát trước thay đổi này. Account reset/invitation dùng
 abstraction EMAIL hiện có; luồng link, protected outbox và token-expiry-aware retry được cập nhật
 tại [Email xác thực](AUTHENTICATION_EMAIL.md). Raw token không vào inbox/log/API.

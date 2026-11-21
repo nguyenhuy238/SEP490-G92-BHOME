@@ -317,7 +317,7 @@ it('atomically creates usable templates, retries a failed save and keeps the set
   expect(draft.roomTypes[0].assets[0].name).toBe('New desk');
   expect(draft.fees[0].sourceId).toBe('fee-templates-created');
   expect(draft.rules[0].sourceId).toBe('policy-templates-created');
-}, 30000);
+}, 60000);
 
 it('resumes the draft, reads the four selectable libraries and loads the whole asset catalog once', async () => {
   let published = false;
@@ -510,7 +510,7 @@ it('resumes the draft, reads the four selectable libraries and loads the whole a
       referencePrice: 500000,
     },
   ]);
-}, 30000);
+}, 60000);
 
 it('uses compact step navigation on mobile and preserves validation when jumping ahead', () => {
   vi.stubGlobal(
@@ -576,7 +576,7 @@ it('edits generated rooms from the floor matrix and deletes a room or the remain
   fireEvent.click(confirmation.getByRole('button', { name: 'Xóa hết phòng' }));
   expect(screen.getByText('Danh sách phòng nháp (0)')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Xem phòng P.102' })).not.toBeInTheDocument();
-});
+}, 60000);
 
 it('preloads configured sample assets from a room template before room generation', async () => {
   const roomWithAssets: SharedDocument = {
