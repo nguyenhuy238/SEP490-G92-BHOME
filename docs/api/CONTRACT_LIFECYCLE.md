@@ -158,6 +158,13 @@ Ngày date-only giữ nguyên ISO trên wire; giờ lịch nhập ở Việt Nam
 
 Tái sử dụng `/api/v1/contracts/{id}` renewal/signing/activation, termination-requests,
 expiry-move-out, move-out/approve/schedule/inspection/settlement/complete hiện có.
+
+Sau khi Tenant gửi yêu cầu kết thúc trước hạn (UC-19), hệ thống phát thông báo trong ứng dụng cho
+Owner đang hoạt động và Staff đủ điều kiện đang được phân công tại cơ sở của phòng. Bộ phát thông
+báo đọc audit đã lưu, chống gửi trùng theo hợp đồng và người nhận, và chỉ phát khi yêu cầu còn chờ
+duyệt. Nội dung thông báo không chứa lý do trả phòng. Owner vẫn thực hiện bước phê duyệt theo
+luồng hiện có.
+
 Mutation JSON cần Idempotency-Key GUID. Auth ở service, object scope lấy từ DB.
 
 - GET `{id}/versions`: Owner/Tenant sở hữu, Staff assigned; cùng chain previous/next;

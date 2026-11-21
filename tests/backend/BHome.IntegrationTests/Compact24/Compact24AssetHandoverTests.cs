@@ -4,6 +4,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using BHome.Application.Contracts;
+using BHome.Application.Notifications;
+using BHome.Domain.Notifications;
 using BHome.Application.PropertyManagement;
 using BHome.Application.Storage;
 using BHome.Domain.Billing;
@@ -238,6 +240,46 @@ public sealed partial class Compact24OwnerSetupTests
         var stored = await db.Set<ContractDocumentFile>().SingleAsync(f => f.Id == document.Id);
         files.Corrupt(stored.ObjectKey);
         Assert.Equal(HttpStatusCode.Conflict, (await tenant.GetAsync(route + "/documents/" + document.Id)).StatusCode);
+    }
+
+    [CompactPostgresFact]
+    public async Task TenantMoveOutRequestNotifiesOwnerAndAssignedStaffOnce()
+    {
+        var w = await Seed(); using var host = Host();
+        var id = (await SeedAssetHandover(w, host.Services, 0, 0)).Contract;
+        using var tenant = await Client(w.Tenant, host);
+        using var staff = await Client(w.Staff, host);
+        var request = new TerminationInput(Today, "Synthetic private reason");
+        var key = Guid.NewGuid();
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await HandoverPost(staff, id, "termination-requests", request)).StatusCode);
+        await Read<MoveOutView>(await HandoverPost(tenant, id, "termination-requests", request, key));
+        await Read<MoveOutView>(await HandoverPost(tenant, id, "termination-requests", request, key));
+
+        await using var scope = host.Services.CreateAsyncScope();
+        var otherStaff = await WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
+            new BHome.Infrastructure.Persistence.ApplicationUser
+            {
+                Id = Guid.NewGuid(),
+                UserName = Guid.NewGuid().ToString("N"),
+                Email = Guid.NewGuid().ToString("N") + "@example.invalid",
+                EmailConfirmed = true
+            }, "Staff", Password);
+        var publisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
+        await publisher.PublishPendingAsync(default);
+        await publisher.PublishPendingAsync(default);
+        var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var notices = await db.Set<UserNotification>().AsNoTracking()
+            .Where(n => n.RelatedObjectId == id && n.EventType == "CONTRACT_MOVE_OUT_REQUESTED").ToArrayAsync();
+        Assert.Single(notices, n => n.RecipientUserId == w.Owner.Id && n.AudienceRole == "Owner");
+        Assert.Equal(w.Staff.Id, Assert.Single(notices, n => n.AudienceRole == "Staff").RecipientUserId);
+        Assert.DoesNotContain(notices, n => n.RecipientUserId == w.Tenant.Id || n.RecipientUserId == otherStaff.Id);
+        Assert.All(notices, n =>
+        {
+            Assert.Equal(w.Location, n.LocationId);
+            Assert.Contains("IN_APP", n.Channels);
+            Assert.DoesNotContain(request.Reason, n.Summary);
+        });
     }
 
     [CompactPostgresTheory]

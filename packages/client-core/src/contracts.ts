@@ -1646,6 +1646,18 @@ export function contractActions(
     );
   return result;
 }
+export function earlyTerminationDate(
+  value: string,
+  contract: Pick<ContractView, 'startDate' | 'endDate'>,
+): string {
+  const date = dateOnly(/^\d{2}-\d{2}-\d{4}$/.test(value) ? value.replaceAll('-', '/') : value);
+  if (date < businessToday()) throw new Error('Ngày trả phòng không được trong quá khứ.');
+  if (date < contract.startDate) throw new Error('Ngày trả phòng phải từ ngày bắt đầu hợp đồng.');
+  if (date >= contract.endDate)
+    throw new Error('Yêu cầu trước hạn cần ngày trả phòng trước ngày hết hạn.');
+  return date;
+}
+
 export function actionPayload(
   a: ContractAction,
   values: Record<string, string>,
@@ -1660,7 +1672,9 @@ export function actionPayload(
     const value = values[f.name] ?? '';
     body[f.name] =
       f.type === 'date'
-        ? dateOnly(value)
+        ? a.operation === 'termination-requests' && f.name === 'proposedDate'
+          ? earlyTerminationDate(value, c)
+          : dateOnly(value)
         : f.type === 'money'
           ? vnd(value, true)
           : f.type === 'schedule'
@@ -1677,12 +1691,10 @@ export function actionPayload(
     body.cause = Number(values.cause);
     body.humanConfirmed = true;
   }
-  if (a.operation === 'termination-requests' || a.operation === 'expiry-move-out') {
+  if (a.operation === 'expiry-move-out') {
     if (String(body.proposedDate) < businessToday())
       throw new Error('Ngày trả phòng không được trong quá khứ.');
-    if (a.operation === 'termination-requests' && String(body.proposedDate) >= c.endDate)
-      throw new Error('Yêu cầu trước hạn cần ngày trả phòng trước ngày hết hạn.');
-    if (a.operation === 'expiry-move-out' && String(body.proposedDate) < c.endDate)
+    if (String(body.proposedDate) < c.endDate)
       throw new Error('Trả phòng hết hạn cần ngày từ ngày hết hạn trở đi.');
   }
   if (a.operation === 'move-out/inspection') {

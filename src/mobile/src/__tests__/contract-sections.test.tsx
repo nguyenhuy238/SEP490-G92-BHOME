@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { earlyTerminationDate } from '../../../../packages/client-core/src/contracts';
 import React, { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -548,3 +549,13 @@ it.each([
 ])('routes %s actions to %s without changing permissions', (operation, section) =>
   expect(contractActionSection(operation)).toBe(section),
 );
+
+it('validates the typed early termination date before it can be sent', () => {
+  const contract = { startDate: '2099-01-01', endDate: '2099-12-31' };
+  expect(() => earlyTerminationDate('05-11-', contract)).toThrow(/dd\/MM\/yyyy/);
+  expect(() => earlyTerminationDate('31-02-2099', contract)).toThrow(/dd\/MM\/yyyy/);
+  expect(() => earlyTerminationDate('09-10-2024', contract)).toThrow(/quá khứ/);
+  expect(() => earlyTerminationDate('31-12-2098', contract)).toThrow(/bắt đầu/);
+  expect(() => earlyTerminationDate('31-12-2099', contract)).toThrow(/hết hạn/);
+  expect(earlyTerminationDate('05-11-2099', contract)).toBe('2099-11-05');
+});

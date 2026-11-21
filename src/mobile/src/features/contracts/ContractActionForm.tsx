@@ -1,13 +1,14 @@
 import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Checkbox, Text } from 'react-native-paper';
+import { Button, Checkbox, HelperText, Text } from 'react-native-paper';
 import {
   actionPayload,
   businessToday,
   canUseCertificate,
   certificateStatus,
   contractError,
+  earlyTerminationDate,
   type ContractAction,
   type ContractClient,
   type ContractView,
@@ -17,6 +18,7 @@ import {
 import { useSigningCertificates } from '../../../../../packages/client-core/src/useSigningCertificates';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Box, Heading } from '../../components/WorkspaceKit';
+import { IdentityDateField } from '../../components/IdentityDateField';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
 import {
   signingClient,
@@ -62,6 +64,18 @@ export function ContractActionForm({
       !!directory.error ||
       !selectedCertificate ||
       !canUseCertificate(selectedCertificate));
+  const earlyTermination = action.operation === 'termination-requests';
+  const [dateTouched, setDateTouched] = useState(false);
+  const proposedDate = values.proposedDate ?? '';
+  let dateError = '';
+  if (earlyTermination) {
+    try {
+      earlyTerminationDate(proposedDate, contract);
+    } catch (e) {
+      dateError = (e as Error).message.replace('dd/MM/yyyy', 'dd-MM-yyyy');
+    }
+  }
+  const showDateError = !!dateError && (dateTouched || proposedDate.length === 10);
   const remoteSigning = action.operation === 'signing' && !contract.isDevelopmentDemo;
   const signing = useMemo(() => signingClient(api.transport), [api]);
   const [choice, setChoice] = useState<PlacementChoice>({ placement: null, usePicture: true });
@@ -91,7 +105,7 @@ export function ContractActionForm({
     return () => c.abort();
   }, [api, action.operation, contract.id, setError]);
   async function submit() {
-    if (lock.current || !checked || signingBlocked) return;
+    if (lock.current || !checked || signingBlocked || dateError) return;
     if (
       action.operation === 'signing' &&
       !contract.isDevelopmentDemo &&
@@ -111,7 +125,8 @@ export function ContractActionForm({
             evidenceIds,
           );
     } catch (e) {
-      setError((e as Error).message);
+      const message = (e as Error).message;
+      setError(earlyTermination ? message.replace('dd/MM/yyyy', 'dd-MM-yyyy') : message);
       return;
     }
     lock.current = true;
@@ -188,6 +203,28 @@ export function ContractActionForm({
               setChecked(false);
             }}
           />
+        ) : earlyTermination && f.name === 'proposedDate' ? (
+          <React.Fragment key={f.name}>
+            <IdentityDateField
+              label={f.label}
+              accessibilityLabel={f.label}
+              value={values[f.name] ?? ''}
+              disabled={busy}
+              hyphenated
+              compactCalendar
+              error={showDateError}
+              onBlur={() => setDateTouched(true)}
+              onChange={(v) => {
+                setValues((before) => ({ ...before, [f.name]: v }));
+                setChecked(false);
+              }}
+            />
+            {showDateError && (
+              <HelperText type="error" accessibilityRole="alert">
+                {dateError}
+              </HelperText>
+            )}
+          </React.Fragment>
         ) : (
           <Input
             key={f.name}
@@ -264,7 +301,10 @@ export function ContractActionForm({
         onPress={() => setChecked((v) => !v)}
       />
       {!!error && <ContractNotice message={error} />}
-      <Action disabled={busy || !checked || signingBlocked} onPress={() => void submit()}>
+      <Action
+        disabled={busy || !checked || signingBlocked || !!dateError}
+        onPress={() => void submit()}
+      >
         {busy
           ? 'Đang xử lý…'
           : action.operation === 'termination-requests'
