@@ -54,6 +54,15 @@ public static class HandoverChecklist
 
     public static bool Problem(HandoverAsset a) => a.MissingQuantity > 0 || a.DamagedQuantity > 0 ||
         a.ObservedQuantity != null && (a.ObservedQuantity != (a.PhysicalAssets?.Sum(p => p.Quantity) ?? 0) || a.HandedOverQuantity < a.ObservedQuantity);
+    // Financial liability must be demonstrably new relative to the signed
+    // move-in baseline. A pre-existing damaged or missing unit is not a new
+    // tenant charge, and missing baselines cannot be silently inferred.
+    public static bool NewDamageAgainstBaseline(HandoverAsset observed, HandoverAsset? baseline) =>
+        observed.Checked && baseline is not null &&
+        (observed.MissingQuantity.GetValueOrDefault() > baseline.MissingQuantity.GetValueOrDefault() ||
+         observed.DamagedQuantity.GetValueOrDefault() > baseline.DamagedQuantity.GetValueOrDefault() ||
+         observed.HandedOverQuantity is { } returned &&
+         baseline.HandedOverQuantity is { } given && returned < given);
     public static bool RequiresOwner(HandoverSnapshot s) => !s.NoAssetsConfirmed && (s.Assets.Length == 0 ||
         s.Assets.Any(a => !a.OwnerChecked || Problem(a)));
 

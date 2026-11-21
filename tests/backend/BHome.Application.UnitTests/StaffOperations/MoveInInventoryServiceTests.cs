@@ -185,6 +185,36 @@ public sealed class MoveInInventoryServiceTests
     }
 
     [Fact]
+    public async Task ReinspectionViewIdentifiesSelectedItemAndPreservesRecordedDamage()
+    {
+        var r = new Rig(2);
+        var initial = JsonSerializer.Deserialize<MoveInInventorySnapshot>(r.Task.MoveInInventoryJson)!;
+        var damaged = initial.Items[0];
+        var requestedAt = new DateTimeOffset(2026, 11, 21, 2, 15, 0, TimeSpan.Zero);
+        initial.Items[0] = damaged with
+        {
+            ActualQuantity = 2,
+            Condition = "Damaged",
+            Notes = "Giường bị hư",
+            EvidenceIds = [r.Evidence()]
+        };
+        r.Mark(initial.Items[1]);
+        var snapshot = JsonSerializer.Deserialize<MoveInInventorySnapshot>(r.Task.MoveInInventoryJson)!;
+        snapshot.Items[0] = initial.Items[0];
+        r.Task.MoveInInventoryJson = JsonSerializer.Serialize(snapshot with
+        {
+            ReinspectionItemIds = [damaged.Id],
+            ReinspectionRequestedAt = requestedAt
+        });
+
+        var view = await r.Service.MoveInInventoryAsync(r.Task.Id, default);
+        Assert.Equal(damaged.Id, Assert.Single(Assert.IsType<Guid[]>(view.ReinspectionItemIds)));
+        Assert.Equal(requestedAt, view.ReinspectionRequestedAt);
+        Assert.Equal("Damaged", view.Items.Single(item => item.Id == damaged.Id).Condition);
+        Assert.Equal("Good", view.Items.Single(item => item.Id != damaged.Id).Condition);
+    }
+
+    [Fact]
     public async Task IssueCanFinishInspectionButRequiresResolvedIncidentBeforeHandover()
     {
         var r = new Rig();

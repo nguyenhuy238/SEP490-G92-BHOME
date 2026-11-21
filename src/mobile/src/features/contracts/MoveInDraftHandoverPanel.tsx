@@ -23,20 +23,17 @@ import {
 } from 'react-native-paper';
 import {
   contractError,
-  displayContractDate,
-  formatContractMoney,
   guid,
   mutationKeys,
   type ContractClient,
   type ContractView,
   type PreviewDocument,
 } from '../../../../../packages/client-core/src/contracts';
+import { type DrawnSignature } from '../../../../../packages/client-core/src/signing';
 import {
   assetInspectionInput,
-  handoverAssetSummary,
   quantityFields,
 } from '../../../../../packages/client-core/src/handoverForm';
-import { formatInstant } from '../../../../../packages/client-core/src/localization';
 import { Action, Box, Heading, Pill, Row, ui } from '../../components/WorkspaceKit';
 import { Input } from '../../components/WorkflowControls';
 import { CameraCapture } from '../../components/CameraCapture';
@@ -47,7 +44,7 @@ import { canUseLocalMeterDemo, meterDemoJpegBytes } from '../../lib/meterDemoCap
 import {
   canStaffEditMoveIn,
   canTenantRespondToMoveIn,
-  moveInMissingMessage,
+  moveInReinspectionLabel,
   moveInHandover,
   roomHandoverChecks,
   type MoveInDraft,
@@ -58,6 +55,8 @@ import {
 } from '../../services/moveInHandover';
 import { ContractInitialMeterTasks } from './ContractInitialMeterTasks';
 import { ContractEvidence } from './ContractEvidence';
+import { TenantMoveInHandoverSummary } from './TenantMoveInHandoverSummary';
+import { SignaturePad } from './SignaturePad';
 import { HandoverAssetFields } from './HandoverAssetFields';
 import { MeterTaskScreen } from '../../app/meter';
 import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
@@ -70,6 +69,8 @@ import { colors } from '../../theme/theme';
 
 const statusLabels = {
   Draft: 'Đang chuẩn bị',
+  PendingOwnerReview: 'Chờ Owner duyệt',
+  ReinspectionRequested: 'Owner yêu cầu kiểm tra lại',
   Ready: 'Sẵn sàng bàn giao',
   ChangesRequested: 'Đang xử lý yêu cầu sửa',
   Confirmed: 'Đã xác nhận bàn giao',
@@ -288,6 +289,7 @@ export function MoveInDraftHandoverPanel({
     notFound: boolean;
     documents: PreviewDocument[];
     documentsError: string;
+    documentsLoading: boolean;
     inventory: MoveInInventory | null;
     inventoryError: string;
   } | null>(null);
@@ -312,7 +314,10 @@ export function MoveInDraftHandoverPanel({
   const [keyQuantity, setKeyQuantity] = useState('');
   const [keyNotes, setKeyNotes] = useState('');
   const [keysTouched, setKeysTouched] = useState(false);
-  const [feedback, setFeedback] = useState({ version: -1, note: '', acknowledged: false });
+  const [feedback, setFeedback] = useState({ version: -1, acknowledged: false });
+  const [correctionOpen, setCorrectionOpen] = useState(false);
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [tenantDrawing, setTenantDrawing] = useState<DrawnSignature | null>(null);
   const lock = useRef(false);
   const [keys] = useState(() => mutationKeys(randomUUID));
 
@@ -353,6 +358,19 @@ export function MoveInDraftHandoverPanel({
         (draft.accessItems ?? []).length === 1 && draft.accessItems[0]?.type === 'RoomKey',
       ]
     : [false, false, false, false];
+  // A reinspection is complete only when the server has verified the newly
+  // saved observation AND, for canonical inventory assets, fresh photo proof.
+  // Rechecking timestamps/conditions on the client would allow old photos to
+  // appear sufficient. The server updates reinspectionItems[].rechecked.
+  const isReinspectionItemComplete = (item: { rechecked?: boolean }): boolean =>
+    item.rechecked === true;
+  const reinspectionReady =
+    draft?.status !== 'ReinspectionRequested' ||
+    ((draft.reinspectionItems?.length ?? 0) > 0 &&
+      (draft.reinspectionItems ?? []).every(isReinspectionItemComplete));
+  // Staff completes an inspection by recording its four sections. Conditions
+  // that only the Owner can resolve before signing are not Staff blockers.
+  const inspectionReady = savedWizardSteps.every(Boolean) && reinspectionReady;
   const recommendedStep = draft ? firstUnfinishedStep(draft, inventory) : 0;
   const availableEvidence = [
     ...new Set([
@@ -380,7 +398,11 @@ export function MoveInDraftHandoverPanel({
     }
   };
   const setRoomCheck = (code: MoveInRoomCheckCode, field: string, value: string) => {
-    setValues((previous) => ({ ...previous, [`roomCheck.${code}.${field}`]: value }));
+    setValues((previous) => ({
+      ...previous,
+      [`roomCheck.${code}.${field}`]: value,
+      ...(field === 'status' && value === 'Passed' ? { [`roomCheck.${code}.notes`]: '' } : {}),
+    }));
     setRoomChecksTouched((previous) => (previous.includes(code) ? previous : [...previous, code]));
   };
 
@@ -414,32 +436,46 @@ export function MoveInDraftHandoverPanel({
           loadedWizardContract.current = contract.id;
           setWizardStep(firstUnfinishedStep(value, inventory));
         }
-        let documents: PreviewDocument[] = [];
-        let documentsError = '';
-        if (value.status === 'Confirmed') {
-          try {
-            // The endpoint also returns move-out and asset-change documents, possibly from
-            // prior contracts in the lineage. Only this Main's immutable MoveIn PDF applies.
-            const files = await api.handoverDocuments(contract.id, controller.signal);
-            documents = files
-              .filter((file) => file.kind === 'MoveInReport' && file.contractId === contract.id)
-              .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))
-              .slice(0, 1);
-          } catch (cause) {
-            documentsError = conciseMessage(contractError(cause));
-          }
-        }
         if (!controller.signal.aborted) {
           setResponse({
             key,
             record: value,
             error: '',
             notFound: false,
-            documents,
-            documentsError,
+            documents: [],
+            documentsError: '',
+            documentsLoading: value.status === 'Confirmed',
             inventory,
             inventoryError,
           });
+        }
+        if (value.status === 'Confirmed' && !controller.signal.aborted) {
+          try {
+            // Render the confirmed state before fetching the separate document list.
+            // Only the immutable MoveIn PDF from this contract is exposed.
+            const files = await api.handoverDocuments(contract.id, controller.signal);
+            const documents = files
+              .filter((file) => file.kind === 'MoveInReport' && file.contractId === contract.id)
+              .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))
+              .slice(0, 1);
+            if (!controller.signal.aborted)
+              setResponse((previous) =>
+                previous?.key === key
+                  ? { ...previous, documents, documentsLoading: false }
+                  : previous,
+              );
+          } catch (cause) {
+            if (!controller.signal.aborted)
+              setResponse((previous) =>
+                previous?.key === key
+                  ? {
+                      ...previous,
+                      documentsError: conciseMessage(contractError(cause)),
+                      documentsLoading: false,
+                    }
+                  : previous,
+              );
+          }
         }
       } catch (cause) {
         if (!controller.signal.aborted) {
@@ -455,6 +491,7 @@ export function MoveInDraftHandoverPanel({
             notFound,
             documents: [],
             documentsError: '',
+            documentsLoading: false,
             inventory: null,
             inventoryError: '',
           });
@@ -464,20 +501,19 @@ export function MoveInDraftHandoverPanel({
     return () => controller.abort();
   }, [allowed, api, client, contract.id, key, revision, staff]);
 
-  const note = feedback.version === draft?.version ? feedback.note : '';
   const acknowledged = feedback.version === draft?.version && feedback.acknowledged;
-  const setNote = (next: string) =>
-    setFeedback((value) => ({
-      version: draft?.version ?? -1,
-      note: next,
-      acknowledged: value.version === draft?.version && value.acknowledged,
-    }));
   const setAcknowledged = (next: boolean) =>
-    setFeedback((value) => ({
+    setFeedback(() => ({
       version: draft?.version ?? -1,
-      note: value.version === draft?.version ? value.note : '',
       acknowledged: next,
     }));
+
+  function closeCorrection() {
+    if (busy) return;
+    setCorrectionOpen(false);
+    setCorrectionReason('');
+    setActionError('');
+  }
 
   async function run(command: () => Promise<unknown>, success: string, refresh = true) {
     if (lock.current) return false;
@@ -586,7 +622,7 @@ export function MoveInDraftHandoverPanel({
         if (evidenceIds.length > 5) {
           throw new Error(`Mục "${label}" chỉ được gắn tối đa 5 ảnh.`);
         }
-        return { code, status, notes, evidenceIds };
+        return { code, status, notes: status === 'Passed' ? null : notes, evidenceIds };
       },
     );
     let validatedAccessItems: MoveInAccessItem[] | undefined;
@@ -632,15 +668,47 @@ export function MoveInDraftHandoverPanel({
     // they open the next check. Returning to the four-section menu is explicit.
   }
 
-  async function tenantDecision(correction: boolean) {
+  async function requestTenantCorrection() {
     if (!draft) return;
-    const operation = correction ? 'correction' : 'confirmation';
-    const input = { version: draft.version, note: note.trim() };
-    const key = keys.get(operation, input);
-    if (correction) await client.requestCorrection(contract.id, draft.version, input.note, key);
-    else await client.confirm(contract.id, draft.version, input.note, key);
-    keys.confirmed(operation, input);
-    setFeedback({ version: -1, note: '', acknowledged: false });
+    const input = { version: draft.version, reason: correctionReason.trim() };
+    const key = keys.get('correction', input);
+    await client.requestCorrection(contract.id, draft.version, input.reason, key);
+    keys.confirmed('correction', input);
+    setFeedback({ version: -1, acknowledged: false });
+  }
+
+  async function signTenantInSession() {
+    if (
+      !tenant ||
+      !draft ||
+      !canTenantRespondToMoveIn(draft) ||
+      !acknowledged ||
+      !tenantDrawing ||
+      contract.status !== 'Active'
+    )
+      return;
+    const input = { version: draft.version, ink: tenantDrawing, note: '' };
+    const key = keys.get('tenant-handover-session-sign', input);
+    try {
+      await client.signTenantInSession(contract.id, input.version, input.ink, input.note, key);
+    } catch (cause) {
+      // The client may lose the response after the signed PDF was committed.
+      // Verify server state via GET; never automatically repeat the signature POST.
+      const uncertain = cause as { code?: string; status?: number } | null;
+      if (uncertain?.code !== 'request_timeout' && uncertain?.code !== 'network_unavailable')
+        throw cause;
+      let completed = false;
+      try {
+        const latest = await client.get(contract.id);
+        completed = latest.status === 'Confirmed' && !!latest.tenantSignedAt;
+      } catch {
+        // Keep the original ambiguous result: do not misreport a signed PDF.
+      }
+      if (!completed) throw cause;
+    }
+    keys.confirmed('tenant-handover-session-sign', input);
+    setTenantDrawing(null);
+    setFeedback({ version: -1, acknowledged: false });
   }
 
   async function beginWork() {
@@ -649,6 +717,34 @@ export function MoveInDraftHandoverPanel({
     const key = keys.get('start-move-in', input);
     await client.beginWork(draft.moveInTask, key);
     keys.confirmed('start-move-in', input);
+  }
+
+  async function submitInspection() {
+    if (!staff || !draft || !started || !inspectionReady) return;
+    const resubmit = draft.status === 'ReinspectionRequested';
+    const input = { version: draft.version };
+    const action = resubmit ? 'resubmit-move-in' : 'submit-move-in';
+    const key = keys.get(action, input);
+    if (resubmit) await client.resubmit(contract.id, draft.version, key);
+    else await client.submit(contract.id, draft.version, key);
+    keys.confirmed(action, input);
+    setSectionOpen(false);
+  }
+
+  function openReinspectionItem(kind: string, code?: string | null, assetId?: string | null) {
+    if (!started) return;
+    if (kind === 'Meter') goToStep(0);
+    else if (kind === 'RoomCheck' || kind === 'Room') goToStep(1);
+    else if (kind === 'Asset') goToStep(2);
+    else if (kind === 'Access') goToStep(3);
+    if (kind === 'RoomCheck' && code && roomHandoverChecks.some((check) => check.code === code))
+      setActiveItem(`room:${code}`);
+    else if (kind === 'Room') setActiveItem('room-summary');
+    else if (kind === 'Access') setActiveItem('keys');
+    else if (kind === 'Asset' && assetId && draft?.assets.some((asset) => asset.id === assetId))
+      // A canonical inventory task, once reopened by Owner, is the only
+      // authoritative place to record a fresh asset condition and photo.
+      setActiveItem(draft.moveInTask?.inventoryTaskId ? 'legacy-inventory' : `asset:${assetId}`);
   }
 
   function goToStep(next: number) {
@@ -986,10 +1082,53 @@ export function MoveInDraftHandoverPanel({
               </Action>
             </>
           )}
-          {draft.status === 'Draft' && !started && draft.moveInTask?.status !== 'Assigned' && (
+          {(draft.status === 'Draft' || draft.status === 'ReinspectionRequested') &&
+            !started &&
+            draft.moveInTask?.status !== 'Assigned' && (
+              <Text style={ui.muted}>
+                Chưa thể ghi nhận. Nhiệm vụ bàn giao cần được phân công và bắt đầu đúng trạng thái.
+              </Text>
+            )}
+          {draft.status === 'PendingOwnerReview' && (
             <Text style={ui.muted}>
-              Chưa thể ghi nhận. Nhiệm vụ bàn giao cần được phân công và bắt đầu đúng trạng thái.
+              Đã gửi kết quả kiểm tra cho Owner. Bạn sẽ nhận được yêu cầu cụ thể nếu cần kiểm tra
+              lại.
             </Text>
+          )}
+          {draft.status === 'ReinspectionRequested' && (
+            <View style={wizardStyles.section}>
+              <Text variant="titleMedium">Các mục Owner yêu cầu kiểm tra lại</Text>
+              {!!draft.reinspectionHistory?.length && (
+                <Text>
+                  {draft.reinspectionHistory[draft.reinspectionHistory.length - 1]?.reason}
+                </Text>
+              )}
+              {(draft.reinspectionItems ?? []).map((item, index) => (
+                <View key={`${item.kind}:${item.code ?? item.assetId ?? index}`}>
+                  <Button
+                    mode="outlined"
+                    disabled={busy || !started}
+                    onPress={() => openReinspectionItem(item.kind, item.code, item.assetId)}
+                  >
+                    {moveInReinspectionLabel(item, draft)} · Mở kiểm tra
+                  </Button>
+                  <Text
+                    variant="bodySmall"
+                    style={isReinspectionItemComplete(item) ? ui.green : ui.muted}
+                  >
+                    {isReinspectionItemComplete(item)
+                      ? 'Staff đã lưu kết quả kiểm tra lại'
+                      : 'Cần ghi nhận kiểm tra lại'}
+                  </Text>
+                  {item.kind === 'Asset' && !!draft.moveInTask?.inventoryTaskId && (
+                    <Text variant="bodySmall" style={ui.muted}>
+                      Mở phiếu kiểm kê gốc, ghi nhận tình trạng Đạt và chụp ảnh minh chứng mới sau
+                      khi Owner yêu cầu kiểm tra lại. Ảnh cũ không thay thế kết quả mới.
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
           )}
           {!!error && !activeItem && (
             <Text accessibilityRole="alert" style={ui.red}>
@@ -1031,7 +1170,7 @@ export function MoveInDraftHandoverPanel({
                     />
                     <Text variant="bodySmall" style={[ui.muted, { lineHeight: 20 }]}>
                       {savedWizardSteps.every(Boolean)
-                        ? 'Đã lưu đủ 4 mục kiểm tra. Owner sẽ tiếp tục xem xét các điều kiện bàn giao.'
+                        ? 'Đã lưu đủ 4 mục. Xác nhận hoàn thành để Owner xem xét biên bản.'
                         : `Chọn một mục để làm việc. Gợi ý tiếp theo: ${staffSteps[recommendedStep]!.title}.`}
                     </Text>
                   </>
@@ -1247,225 +1386,48 @@ export function MoveInDraftHandoverPanel({
               )}
             </View>
           )}
+          {started && (
+            <View style={wizardStyles.section}>
+              <Text variant="titleMedium">
+                {draft.status === 'ReinspectionRequested'
+                  ? 'Hoàn thành kiểm tra lại'
+                  : 'Hoàn thành nhiệm vụ kiểm tra'}
+              </Text>
+              <Text style={ui.muted}>
+                {inspectionReady
+                  ? 'Đã ghi nhận đủ 4 mục, kể cả hạng mục thiếu hoặc hỏng. Xác nhận hoàn thành để Owner duyệt và quyết định xử lý.'
+                  : draft.status === 'ReinspectionRequested' && !reinspectionReady
+                    ? 'Bạn cần mở và lưu lại từng hạng mục Owner yêu cầu kiểm tra trước khi gửi duyệt.'
+                    : `Cần lưu đủ 4 mục trước khi xác nhận. Hiện đã hoàn thành ${savedWizardSteps.filter(Boolean).length}/4 mục.`}
+              </Text>
+              <Action
+                disabled={busy || !inspectionReady || !!activeItem}
+                onPress={() =>
+                  void run(
+                    submitInspection,
+                    draft.status === 'ReinspectionRequested'
+                      ? 'Đã nộp kết quả kiểm tra lại cho Owner.'
+                      : 'Đã xác nhận hoàn thành kiểm tra. Biên bản đang chờ Owner duyệt.',
+                  )
+                }
+              >
+                {draft.status === 'ReinspectionRequested'
+                  ? 'Xác nhận hoàn thành kiểm tra lại'
+                  : 'Xác nhận hoàn thành'}
+              </Action>
+            </View>
+          )}
         </View>
       )}
       {draft && !editing && tenant && (
-        <>
-          <Row spread>
-            <Pill
-              tone={
-                draft.status === 'Confirmed' ? 'green' : draft.status === 'Ready' ? 'blue' : 'amber'
-              }
-            >
-              {statusLabels[draft.status] ?? draft.status}
-            </Pill>
-            <Text>Phiên bản {draft.version}</Text>
-          </Row>
-          <Text>
-            Phòng {draft.roomNumber} · {draft.locationName}
-          </Text>
-          {!!draft.locationAddress && <Text>{draft.locationAddress}</Text>}
-          <Text>
-            Hợp đồng: {displayContractDate(draft.startDate)} – {displayContractDate(draft.endDate)}
-          </Text>
-          {tenant && (
-            <Text>
-              Giá thuê: {formatContractMoney(String(draft.monthlyRent))} / tháng · Cọc:{' '}
-              {formatContractMoney(String(draft.requiredDeposit))}
-            </Text>
-          )}
-          {tenant && !!draft.terms && <Text>Điều khoản: {draft.terms}</Text>}
-          <Text>Hiện trạng phòng: {draft.roomCondition || 'Chưa kiểm tra'}</Text>
-          <Text>
-            Chìa khóa bàn giao:{' '}
-            {draft.accessItems?.find((item) => item.type === 'RoomKey')?.quantity ??
-              'Chưa kiểm đếm'}{' '}
-            chiếc
-          </Text>
-          {!!draft.notes && <Text>Ghi chú: {draft.notes}</Text>}
-          <Heading
-            title="Kiểm tra hiện trạng (7 mục)"
-            detail="Ghi nhận kết quả, ghi chú và ảnh của từng khu vực"
-          />
-          {roomHandoverChecks.map(({ code, label }) => {
-            const check = (draft.roomChecks ?? []).find((item) => item.code === code);
-            return (
-              <Box key={code} style={ui.soft}>
-                <Row spread>
-                  <Text>{label}</Text>
-                  <Pill
-                    tone={
-                      check?.status === 'Passed'
-                        ? 'green'
-                        : check?.status === 'Issue'
-                          ? 'red'
-                          : 'neutral'
-                    }
-                  >
-                    {check ? roomStatusLabels[check.status] : 'Chưa kiểm tra'}
-                  </Pill>
-                </Row>
-                {!!check?.notes && <Text>{check.notes}</Text>}
-                {(check?.evidenceIds ?? []).map((id, index) => (
-                  <ContractEvidence
-                    key={id}
-                    api={api}
-                    contractId={contract.id}
-                    evidenceId={id}
-                    draftHandoverEvidence
-                    label={`Xem ảnh ${label} · ${index + 1}`}
-                  />
-                ))}
-              </Box>
-            );
-          })}
-          <Heading title="Ảnh chìa khóa bàn giao" />
-          {(draft.keyEvidenceIds ?? []).map((id, index) => (
-            <ContractEvidence
-              key={`keys-${id}`}
-              api={api}
-              contractId={contract.id}
-              evidenceId={id}
-              draftHandoverEvidence
-              label={`Xem ảnh chìa khóa ${index + 1}`}
-            />
-          ))}
-          {!!draft.accessItems?.find((item) => item.type === 'RoomKey')?.notes && (
-            <Text>
-              Ghi chú chìa khóa: {draft.accessItems.find((item) => item.type === 'RoomKey')!.notes}
-            </Text>
-          )}
-          {(draft.outstandingIssues ?? []).length > 0 && <Heading title="Ghi nhận liên quan" />}
-          {(draft.outstandingIssues ?? []).length
-            ? (draft.outstandingIssues ?? []).map((issue, index) => (
-                <Text key={`${issue.code}-${index}`}>
-                  {roomHandoverChecks.find((check) => check.code === issue.code)?.label ??
-                    issue.code}
-                  : {issue.description}
-                </Text>
-              ))
-            : null}
-          <Text>
-            Điện khởi tạo: {draft.electricity ? `${draft.electricity.value} kWh` : 'Chưa xác nhận'}
-          </Text>
-          <Text>Nước khởi tạo: {draft.water ? `${draft.water.value} m³` : 'Chưa xác nhận'}</Text>
-          {draft.electricity && (
-            <ContractEvidence
-              api={api}
-              contractId={contract.id}
-              readingId={draft.electricity.id}
-              label="Mở hoặc lưu ảnh công tơ điện"
-            />
-          )}
-          {draft.water && (
-            <ContractEvidence
-              api={api}
-              contractId={contract.id}
-              readingId={draft.water.id}
-              label="Mở hoặc lưu ảnh công tơ nước"
-            />
-          )}
-          <Heading title={`Tài sản bàn giao (${draft.assets.length})`} />
-          {draft.assets.map((asset) => (
-            <Text key={asset.id}>{handoverAssetSummary(asset)}</Text>
-          ))}
-          {draft.assets.flatMap((asset) =>
-            (asset.evidenceIds ?? []).map((id, index) => (
-              <ContractEvidence
-                key={`${asset.id}-${id}`}
-                api={api}
-                contractId={contract.id}
-                evidenceId={id}
-                draftHandoverEvidence
-                label={`Mở ảnh ${asset.name} · ${index + 1}`}
-              />
-            )),
-          )}
-          {draft.evidenceIds.map((id, index) => (
-            <ContractEvidence
-              key={id}
-              api={api}
-              contractId={contract.id}
-              evidenceId={id}
-              draftHandoverEvidence
-              label={`Mở ảnh hiện trạng ${index + 1}`}
-            />
-          ))}
-          {!draft.assets.length && (
-            <Text>
-              {draft.noAssetsConfirmed
-                ? 'Owner xác nhận phòng không có tài sản.'
-                : 'Chưa kiểm kê tài sản.'}
-            </Text>
-          )}
-          {draft.missing.length > 0 && (
-            <>
-              <Heading title="Còn thiếu để bàn giao" />
-              {draft.missing.map((item, index) => (
-                <Text key={`${item}-${index}`} style={ui.muted}>
-                  • {moveInMissingMessage(item)}
-                </Text>
-              ))}
-            </>
-          )}
-          {draft.ownerReadyAt && (
-            <Text>Owner xác nhận sẵn sàng: {formatInstant(draft.ownerReadyAt)}</Text>
-          )}
-          {draft.tenantConfirmedAt && (
-            <Text>Tenant xác nhận: {formatInstant(draft.tenantConfirmedAt)}</Text>
-          )}
-          {draft.status !== 'Confirmed' && (
-            <ContractEvidence
-              api={api}
-              contractId={contract.id}
-              draftHandoverPdf
-              label="Xem PDF biên bản nháp"
-            />
-          )}
-          {current?.documents.map((document) => (
-            <ContractEvidence
-              key={document.id}
-              api={api}
-              contractId={contract.id}
-              handoverDocumentId={document.id}
-              label="Mở hoặc lưu biên bản cuối cùng"
-            />
-          ))}
-          {draft.status === 'Confirmed' && current?.documentsError && (
-            <Text accessibilityRole="alert" style={ui.red}>
-              Không tải được PDF bàn giao cuối cùng: {current.documentsError}
-            </Text>
-          )}
-          {draft.status === 'Confirmed' &&
-            !current?.documentsError &&
-            !current?.documents.length && (
-              <Text style={ui.muted}>
-                Biên bản đã xác nhận nhưng PDF cuối cùng chưa có. Hãy tải lại hoặc liên hệ Owner để
-                kiểm tra tài liệu.
-              </Text>
-            )}
-          {draft.requests.length > 0 && (
-            <>
-              <Heading title="Yêu cầu sửa biên bản" />
-              {draft.requests.map((request) => (
-                <Box key={request.id}>
-                  <Text>
-                    Phiên bản {request.version} ·{' '}
-                    {request.status === 'Pending'
-                      ? 'Chờ Owner xử lý'
-                      : request.status === 'Approved'
-                        ? 'Owner đã chấp nhận'
-                        : 'Owner từ chối'}
-                  </Text>
-                  <Text>{request.reason}</Text>
-                  {!!request.decisionReason && (
-                    <Text>Phản hồi Owner: {request.decisionReason}</Text>
-                  )}
-                </Box>
-              ))}
-            </>
-          )}
-        </>
+        <TenantMoveInHandoverSummary
+          api={api}
+          contractId={contract.id}
+          draft={draft}
+          documents={current?.documents ?? []}
+          documentsError={current?.documentsError}
+          documentsLoading={current?.documentsLoading}
+        />
       )}
 
       {staff && draft?.status === 'Ready' && (
@@ -1491,11 +1453,6 @@ export function MoveInDraftHandoverPanel({
                     <Text variant="titleMedium" style={wizardStyles.rowTitle}>
                       {modalTitle}
                     </Text>
-                    {activeItem === 'meter' && (
-                      <Text variant="bodySmall" style={ui.muted}>
-                        Chụp ảnh, kiểm tra kết quả OCR và tự xác nhận chỉ số.
-                      </Text>
-                    )}
                   </View>
                   <Button mode="text" disabled={busy} onPress={closeItem}>
                     Đóng
@@ -1683,51 +1640,136 @@ export function MoveInDraftHandoverPanel({
         <>
           {canTenantRespondToMoveIn(draft) ? (
             <>
-              <Input
-                label="Ghi chú / nội dung cần sửa"
-                multiline
-                value={note}
-                disabled={busy}
-                onChange={setNote}
-              />
-              <Checkbox.Item
-                label={`Tôi đã kiểm tra nội dung biên bản phiên bản ${draft.version}`}
-                status={acknowledged ? 'checked' : 'unchecked'}
-                disabled={busy}
-                onPress={() => setAcknowledged(!acknowledged)}
+              <Heading
+                title="Ký biên bản bàn giao"
+                detail="Đọc PDF Owner đã ký và ký trực tiếp bằng tài khoản Tenant đang đăng nhập"
               />
               {contract.status !== 'Active' && (
-                <Text style={ui.muted}>Chờ hợp đồng được kích hoạt để xác nhận nhận phòng.</Text>
+                <Text style={ui.muted}>Chờ hợp đồng được kích hoạt để ký nhận bàn giao.</Text>
+              )}
+              {contract.status === 'Active' && (
+                <>
+                  <Text variant="titleSmall">Chữ ký của Tenant</Text>
+                  <SignaturePad disabled={busy} onChange={setTenantDrawing} />
+                  <Checkbox.Item
+                    label="Tôi đã kiểm tra nội dung biên bản"
+                    status={acknowledged ? 'checked' : 'unchecked'}
+                    disabled={busy}
+                    onPress={() => setAcknowledged(!acknowledged)}
+                  />
+                  <Action
+                    disabled={busy || !acknowledged || !tenantDrawing}
+                    onPress={() =>
+                      void run(
+                        signTenantInSession,
+                        'Đã ký và hoàn thành bàn giao. PDF có đủ chữ ký đã được lưu.',
+                      )
+                    }
+                  >
+                    Ký và hoàn tất bàn giao
+                  </Action>
+                </>
               )}
               <Action
-                disabled={busy || !acknowledged || contract.status !== 'Active'}
-                onPress={() =>
-                  void run(
-                    () => tenantDecision(false),
-                    'Đã xác nhận bàn giao; vui lòng kiểm tra PDF cuối cùng đã lưu.',
-                  )
-                }
-              >
-                Xác nhận biên bản bàn giao
-              </Action>
-              <Action
                 secondary
-                disabled={busy || !acknowledged || !note.trim()}
-                onPress={() =>
-                  void run(() => tenantDecision(true), 'Đã gửi yêu cầu sửa biên bản cho Owner.')
-                }
+                disabled={busy}
+                onPress={() => {
+                  setActionError('');
+                  setCorrectionReason('');
+                  setCorrectionOpen(true);
+                }}
               >
                 Gửi yêu cầu chỉnh sửa
               </Action>
-              <Text style={ui.muted}>Chưa cần ký biên bản ở bước này.</Text>
             </>
           ) : (
             <Text>
-              Biên bản đang được Staff và Owner chuẩn bị hoặc xử lý yêu cầu sửa. Bạn sẽ xác nhận khi
-              Owner đánh dấu sẵn sàng.
+              Biên bản đang được Staff kiểm tra hoặc Owner xem xét. Bạn sẽ nhận được bản PDF đã ký
+              của Owner trước khi ký nhận bàn giao.
             </Text>
           )}
         </>
+      )}
+      {tenant && draft && correctionOpen && (
+        <Modal visible transparent animationType="slide" onRequestClose={closeCorrection}>
+          <KeyboardAvoidingView
+            style={[wizardStyles.modalOverlay, compactPhone && wizardStyles.phoneModalOverlay]}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <View
+              style={[
+                wizardStyles.modalCard,
+                { maxWidth: 460 },
+                compactPhone && wizardStyles.phoneModalCard,
+              ]}
+            >
+              <View
+                style={[wizardStyles.modalHeader, compactPhone && wizardStyles.phoneModalHeader]}
+              >
+                <Row spread>
+                  <Text variant="titleMedium" style={wizardStyles.rowTitle}>
+                    Yêu cầu chỉnh sửa biên bản
+                  </Text>
+                  <Button mode="text" disabled={busy} onPress={closeCorrection}>
+                    Đóng
+                  </Button>
+                </Row>
+              </View>
+              <ScrollView
+                style={{ flexShrink: 1 }}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={[
+                  wizardStyles.modalBody,
+                  compactPhone && wizardStyles.phoneModalBody,
+                ]}
+              >
+                <Text style={ui.muted}>Mô tả nội dung cần Owner kiểm tra và chỉnh sửa.</Text>
+                <Input
+                  label="Lý do yêu cầu chỉnh sửa"
+                  multiline
+                  value={correctionReason}
+                  disabled={busy}
+                  onChange={(value) => setCorrectionReason(value.slice(0, 2000))}
+                />
+                {!!actionError && (
+                  <Text accessibilityRole="alert" style={ui.red}>
+                    {actionError}
+                  </Text>
+                )}
+              </ScrollView>
+              <View
+                style={[wizardStyles.modalFooter, compactPhone && wizardStyles.phoneModalFooter]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Button mode="outlined" disabled={busy} onPress={closeCorrection}>
+                    Hủy
+                  </Button>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    mode="contained"
+                    loading={busy}
+                    disabled={busy || !correctionReason.trim()}
+                    onPress={() => {
+                      void (async () => {
+                        const succeeded = await run(
+                          requestTenantCorrection,
+                          'Đã gửi yêu cầu sửa biên bản cho Owner.',
+                        );
+                        if (succeeded) {
+                          setCorrectionOpen(false);
+                          setCorrectionReason('');
+                        }
+                      })();
+                    }}
+                  >
+                    Gửi yêu cầu
+                  </Button>
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       )}
       {(!staff || !draft) && !!error && (
         <Text accessibilityRole="alert" style={ui.red}>

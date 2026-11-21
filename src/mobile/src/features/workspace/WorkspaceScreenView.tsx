@@ -34,6 +34,7 @@ import { StaffHome, WorkOrders, MeterReading } from '../../screens/StaffScreens'
 import { StaffNotificationScreen } from '../../screens/StaffNotificationScreen';
 import { StaffScheduleScreen } from '../../screens/StaffScheduleScreen';
 import { StaffMoveInInventoryScreen } from '../../screens/StaffMoveInInventoryScreen';
+import { StaffMoveOutInspectionScreen } from '../../screens/StaffMoveOutInspectionScreen';
 import {
   StaffIncidentReportScreen,
   StaffMaintenanceScreen,
@@ -216,7 +217,6 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
         'contract',
         'contract-request',
         'prepare-contract',
-        'move-out',
         'move-in',
         'checklist',
       ].includes(screen)
@@ -271,6 +271,9 @@ export function WorkspaceScreenView({ screen }: { screen: string }) {
           break;
         case 'meter-reading':
           content = <MeterTasksScreen />;
+          break;
+        case 'move-out':
+          content = <StaffMoveOutInspectionScreen />;
           break;
         case 'notifications':
           content = <NotificationsScreen />;

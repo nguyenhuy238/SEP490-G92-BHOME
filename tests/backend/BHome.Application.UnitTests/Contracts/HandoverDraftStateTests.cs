@@ -119,6 +119,25 @@ public sealed class HandoverDraftStateTests
     }
 
     [Fact]
+    public void PassedRoomClearsPreviousNotesAndPersistsNullEvenWhenClientSendsStaleText()
+    {
+        const string code = "doors_windows_locks";
+        var issue = new HandoverRoomCheck(code, "Issue", "Khóa cửa bị kẹt", [Guid.NewGuid()]);
+        var changed = HandoverRoomChecklist.Merge([issue],
+            [new HandoverRoomCheck(code, "Passed", "Khóa cửa bị kẹt", [])]);
+        Assert.Null(Assert.Single(changed).Notes);
+        Assert.Empty(Assert.Single(changed).EvidenceIds);
+
+        // Saving an unrelated section also cleans up an older mutable draft.
+        HandoverRoomCheck[] prior = [new HandoverRoomCheck(code, "Passed", "Ghi chú từ trước", [])];
+        Assert.Null(Assert.Single(HandoverRoomChecklist.Merge(prior, null)).Notes);
+        Assert.Null(Assert.Single(HandoverRoomChecklist.Merge([], [
+            new HandoverRoomCheck(code, "Passed", null, [])])).Notes);
+        Assert.Throws<ContractException>(() => HandoverRoomChecklist.Merge([], [
+            new HandoverRoomCheck(code, "Issue", null, [])]));
+    }
+
+    [Fact]
     public void KeyPhotoCannotReuseAnotherInspectionPhoto()
     {
         var fileId = Guid.NewGuid();

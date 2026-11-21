@@ -34,7 +34,7 @@ public sealed partial class InvoiceApiTests
         var evidence = await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{task.Id}/evidence", content));
         return await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task.Id}/confirm", new MeterConfirmation(true, value, evidence.Id)));
     }
-    internal async Task FinalUtilitiesUseBilledBaselineAndPreserveContractRates(bool settlementFirst = false, bool failuresOnly = false, bool raceInvoice = false, bool sameDayFinals = false, bool reviewRefund = false, bool offsetAllDeposit = false)
+    internal async Task FinalUtilitiesUseBilledBaselineAndPreserveContractRates(bool settlementFirst = false, bool failuresOnly = false, bool raceInvoice = false, bool sameDayFinals = false, bool reviewRefund = false, bool offsetAllDeposit = false, bool autoFinancialClose = false)
     {
         if (raceInvoice) settlementFirst = true;
         var period = new DateOnly(Today.Year, Today.Month, 1).AddMonths(-1);
@@ -220,7 +220,7 @@ public sealed partial class InvoiceApiTests
         var tenantView = await Success<SettlementReceivablesView>(await w.OtherTenant.Client.GetAsync($"/api/v1/contracts/{w.Contract}/move-out/receivables"));
         Assert.Equal(charge.Id, Assert.Single(tenantView.Receivables).Charge.Id);
         var receivablesRoute = $"/api/v1/contracts/{w.Contract}/move-out/receivables";
-        if (reviewRefund) { await ReviewChargesOffsetAndRefundRemainder(w, charge, finalDate, offsetAllDeposit ? invoice.Total + 95750 : 4000000); return; }
+        if (reviewRefund) { await ReviewChargesOffsetAndRefundRemainder(w, charge, finalDate, offsetAllDeposit ? invoice.Total + 95750 : 4000000, autoFinancialClose, autoFinancialClose && offsetAllDeposit); return; }
         var instructions = await Success<SettlementTransferInstructions>(await w.OtherTenant.Client.GetAsync(receivablesRoute + $"/{charge.Id}/transfer-instructions"));
         var receipt = await Success<TransferView>(await UtilityPost(w.Owner.Client, "/api/v1/payment-transactions",
             new PaymentTransferInput("SYNTHETIC-UTILITY", "SYN-UTILITY-" + Guid.NewGuid(), charge.Amount, "VND", DateTimeOffset.UtcNow.AddSeconds(-1),

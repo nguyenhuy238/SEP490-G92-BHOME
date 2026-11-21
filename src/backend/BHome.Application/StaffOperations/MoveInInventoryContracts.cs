@@ -8,11 +8,14 @@ namespace BHome.Application.StaffOperations;
 public sealed record MoveInInventoryItem(Guid Id, Guid? AssetId, string Name, int ExpectedQuantity,
     int? ActualQuantity = null, string? Condition = null, string? Notes = null,
     Guid[]? EvidenceIds = null, Guid? IncidentId = null);
-public sealed record MoveInInventorySnapshot(string SourceToken, MoveInInventoryItem[] Items);
+public sealed record MoveInInventorySnapshot(string SourceToken, MoveInInventoryItem[] Items,
+    Guid[]? ReinspectionItemIds = null, DateTimeOffset? ReinspectionRequestedAt = null);
 
 public sealed record MoveInInventoryView(Guid TaskId, Guid ContractId, Guid RoomId, Guid LocationId,
     string Status, string? Outcome, int Version, DateTimeOffset? DueAt, DateTimeOffset? CompletedAt,
-    bool ReadyForHandover, IReadOnlyList<MoveInInventoryItem> Items);
+    bool ReadyForHandover, IReadOnlyList<MoveInInventoryItem> Items,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid[]? ReinspectionItemIds = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? ReinspectionRequestedAt = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record MoveInInventoryItemWrite(int Version, [Range(0, 1000000)] int ActualQuantity,

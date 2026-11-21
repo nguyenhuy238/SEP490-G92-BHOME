@@ -39,6 +39,7 @@ export function CameraCapture({
   onPhotoCaptured,
   onPhotoCleared,
   meterStep = 1,
+  meterCompact = false,
   autoOpen = false,
   captureInstruction,
   retryOnly = false,
@@ -57,6 +58,7 @@ export function CameraCapture({
   retryOnly?: boolean;
   uploadError?: string;
   meterStep?: number;
+  meterCompact?: boolean;
   autoOpen?: boolean;
   captureInstruction?: string;
   onManual?: () => void;
@@ -408,6 +410,7 @@ export function CameraCapture({
         camera={liveCamera}
         label={label}
         step={meterStep}
+        compact={meterCompact}
         preview={preview}
         disabled={disabled}
         working={working}

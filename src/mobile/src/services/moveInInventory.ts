@@ -25,6 +25,9 @@ export interface MoveInInventory {
   completedAt: string | null;
   readyForHandover: boolean;
   items: MoveInInventoryItem[];
+  /** Present only when Owner has reopened selected asset groups for reinspection. */
+  reinspectionItemIds?: string[] | null;
+  reinspectionRequestedAt?: string | null;
 }
 export interface InventoryItemUpdate {
   version: number;
@@ -62,12 +65,14 @@ export function validateInventoryItem(
   return '';
 }
 
-export function readyToComplete(items: MoveInInventoryItem[]) {
+export function readyToComplete(items: MoveInInventoryItem[], reinspectionItemIds: string[] = []) {
   return items.every(
     (item) =>
       item.actualQuantity !== null &&
       !!item.condition &&
       (item.condition === 'Good' || (item.evidenceIds ?? []).length > 0) &&
+      (!reinspectionItemIds.includes(item.id) ||
+        (item.condition === 'Good' && item.actualQuantity === item.expectedQuantity)) &&
       !validateInventoryItem(
         { actualQuantity: item.actualQuantity, condition: item.condition, notes: item.notes ?? '' },
         item.expectedQuantity,

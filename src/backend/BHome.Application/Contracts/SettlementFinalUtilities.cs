@@ -101,6 +101,8 @@ public sealed partial class SettlementReceivablesService
                 return previous;
             }
             await AuthorizeAsync(id, true, token);
+            if (await repository.LatestFinancialCloseAsync(id, token) is not null)
+                throw ContractException.Conflict("settlement_financial_already_closed");
             var preview = await UtilityPreviewAsync(id, input.UtilityType, token);
             if (preview.Reference != input.ExpectedReference) throw ContractException.Conflict("settlement_review_changed");
             if (preview.ExistingReceivableId is not null) throw ContractException.Conflict("settlement_source_already_charged");

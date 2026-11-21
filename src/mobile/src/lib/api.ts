@@ -186,6 +186,14 @@ export function errorMessage(error: unknown): string {
       'Kiểm tra họ tên, ngày sinh và ngày cấp CCCD. Ngày sinh và ngày cấp không được ở tương lai.',
     invalid_input: 'Kiểm tra các ô bắt buộc và độ dài thông tin đã nhập.',
     stale_version: 'Công việc đã thay đổi. Hãy tải lại và kiểm tra trước khi gửi tiếp.',
+    move_in_inventory_reinspection_not_passed:
+      'Tài sản Owner yêu cầu kiểm tra lại chưa đạt hoặc thiếu số lượng. Hãy kiểm tra thực tế và lưu kết quả mới.',
+    move_in_inventory_reinspection_new_evidence_required:
+      'Chưa có ảnh mới sau yêu cầu kiểm tra lại của Owner. Hãy chụp ảnh mới cho tài sản được chọn, kể cả khi đã Đạt.',
+    move_in_inventory_checklist_incomplete:
+      'Phiếu kiểm kê chưa đủ tình trạng, số lượng, ghi chú hoặc ảnh minh chứng bắt buộc.',
+    move_in_inventory_evidence_missing:
+      'Không tìm thấy một số ảnh kiểm kê đã liên kết. Hãy mở tài sản để kiểm tra và bổ sung ảnh.',
     no_responsible_staff:
       'Cơ sở chưa có nhân viên phụ trách có hiệu lực. Owner cần cập nhật phân công.',
     completion_evidence_required: 'Cần chọn ảnh kết quả trước khi gửi Owner kiểm tra.',

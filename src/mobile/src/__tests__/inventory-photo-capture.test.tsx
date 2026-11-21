@@ -9,7 +9,13 @@ const state = vi.hoisted(() => ({
   imageBytes: vi.fn(),
 }));
 vi.mock('react-native', () => ({
-  View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  View: ({ children }: { children: React.ReactNode }) => {
+    // React Native Web warns if even an empty string is a direct child of View.
+    // Keep this regression to catch truthy/falsy JSX accidentally returning ''.
+    if (React.Children.toArray(children).some((child) => typeof child === 'string'))
+      throw new Error('Unexpected text node: A text node cannot be a child of a View');
+    return <div>{children}</div>;
+  },
   Image: ({
     accessibilityLabel,
     source,

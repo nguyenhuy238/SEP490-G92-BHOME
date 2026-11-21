@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { MoveInInventory } from '../services/moveInInventory';
+import { MobileApiError } from '../lib/api';
 
 const taskId = '11111111-1111-4111-8111-111111111111';
 const itemId = '22222222-2222-4222-8222-222222222222';
@@ -601,7 +602,7 @@ it('preserves a saved asset and offers only an error retry if automatic completi
   fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
   fireEvent.click(screen.getByText('Lưu'));
   expect(
-    await screen.findByText(/Đã lưu tài sản nhưng chưa đồng bộ hoàn tất kiểm kê/),
+    await screen.findByText(/Đã lưu tài sản, nhưng chưa xác nhận được hoàn tất kiểm kê/),
   ).toBeTruthy();
   expect(state.data!.items[0]!.condition).toBe('Good');
   expect(state.data!.status).toBe('InProgress');
@@ -610,4 +611,100 @@ it('preserves a saved asset and offers only an error retry if automatic completi
   view.rerender(<StaffMoveInInventoryScreen />);
   expect(screen.queryByRole('button', { name: 'Thử gửi lại kết quả đã lưu' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Hoàn thành kiểm kê' })).toBeNull();
+});
+
+it('requires a new photo when Owner-selected damaged inventory is saved as Good', async () => {
+  const previousPhoto = '77777777-7777-4777-8777-777777777777';
+  state.data = {
+    ...inventory('InProgress', 2, 'Damaged', [previousPhoto]),
+    reinspectionItemIds: [itemId],
+    reinspectionRequestedAt: '2026-11-21T04:00:00Z',
+  };
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  expect(screen.getByText(/Owner yêu cầu kiểm tra lại 1 nhóm tài sản/)).toBeTruthy();
+  expect(screen.getByText(/Owner yêu cầu kiểm tra lại · Cần đối chiếu thực tế/)).toBeTruthy();
+  fireEvent.click(screen.getByText('Xem kiểm kê'));
+  expect(screen.getByText(/Owner yêu cầu kiểm tra lại tài sản này/)).toBeTruthy();
+  expect(screen.getByText(/Ảnh cũ không thay thế lần kiểm tra lại/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  expect(screen.getByText('Chụp ảnh')).toBeTruthy();
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(await screen.findByText(/Kiểm tra lại tài sản đã sửa cần chụp ảnh mới/)).toBeTruthy();
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(false);
+  fireEvent.click(screen.getByText('Chụp ảnh'));
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() =>
+    expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(true),
+  );
+  const submitted = state.request.mock.calls.find(
+    ([path, init]) => path.endsWith(`/items/${itemId}`) && init.method === 'PUT',
+  );
+  expect(JSON.parse(submitted![1].body).evidenceIds).toContain(evidenceId);
+});
+
+it('hides historical Owner reinspection warnings once the server has completed the inventory', () => {
+  state.data = {
+    ...inventory('Completed', 2, 'Good', [evidenceId]),
+    completedAt: '2026-11-21T05:00:00Z',
+    readyForHandover: true,
+    reinspectionItemIds: [itemId],
+    reinspectionRequestedAt: '2026-11-21T04:00:00Z',
+  };
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  expect(screen.getByText('Hoàn thành')).toBeTruthy();
+  expect(screen.getByText('Đã hoàn thành kiểm kê lại theo yêu cầu của Owner.')).toBeTruthy();
+  expect(screen.queryByText(/Owner yêu cầu kiểm tra lại/)).toBeNull();
+  fireEvent.click(screen.getByText('Xem kiểm kê'));
+  expect(screen.queryByText(/Owner yêu cầu kiểm tra lại/)).toBeNull();
+  expect(screen.queryByText(/cần ảnh mới cho lần kiểm tra lại/)).toBeNull();
+  expect(screen.getByText('Đạt: tài sản đã được kiểm kê đủ số lượng và lưu kết quả.')).toBeTruthy();
+  expect(screen.queryByText('Chụp ảnh')).toBeNull();
+  expect(screen.queryByText('Lưu')).toBeNull();
+  expect(state.request).not.toHaveBeenCalled();
+});
+
+it('keeps the Owner-requested reinspection in progress while the asset is still damaged', async () => {
+  state.data = {
+    ...inventory('InProgress', 2, 'Damaged', [evidenceId]),
+    reinspectionItemIds: [itemId],
+    reinspectionRequestedAt: '2026-11-21T04:00:00Z',
+  };
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  fireEvent.click(screen.getByText('Xem kiểm kê'));
+  fireEvent.change(screen.getByLabelText('Lý do / ghi chú – Giường đơn'), {
+    target: { value: 'Khung giường chưa được sửa' },
+  });
+  fireEvent.click(screen.getByText('Lưu'));
+  await waitFor(() =>
+    expect(state.request.mock.calls.some(([path]) => path.includes('/items/'))).toBe(true),
+  );
+  expect(state.request.mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(false);
+  expect(state.data!.status).toBe('InProgress');
+  expect(screen.queryByText('Thử gửi lại kết quả đã lưu')).toBeNull();
+});
+
+it('does not retry a 409 when a selected asset lacks a fresh reinspection photo', async () => {
+  state.data = {
+    ...inventory('InProgress', 2, 'Good', [evidenceId]),
+    reinspectionItemIds: [itemId],
+    reinspectionRequestedAt: '2026-11-21T04:00:00Z',
+  };
+  const originalRequest = state.request.getMockImplementation()!;
+  state.request.mockImplementation(
+    async (path: string, init?: { method: string; body: string }) => {
+      if (path.endsWith('/complete'))
+        throw new MobileApiError(409, 'move_in_inventory_reinspection_new_evidence_required', path);
+      return originalRequest(path, init);
+    },
+  );
+  render(<StaffMoveInInventoryScreen embeddedTaskId={taskId} />);
+  fireEvent.click(screen.getByText('Xem kiểm kê'));
+  fireEvent.click(screen.getByRole('button', { name: 'Hư hỏng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Đạt' }));
+  fireEvent.click(screen.getByText('Lưu'));
+  expect(
+    await screen.findByText(/Chưa có ảnh mới sau yêu cầu kiểm tra lại của Owner/),
+  ).toBeTruthy();
+  expect(screen.queryByText('Thử gửi lại kết quả đã lưu')).toBeNull();
+  expect(state.data!.status).toBe('InProgress');
 });

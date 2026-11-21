@@ -4,6 +4,33 @@ Quyết định nguồn: yêu cầu được duyệt BR-15/19/20/21/22/23 (attac
 
 ## Phạm vi đã thực hiện
 
+### 21/11/2026 — Định giá theo từng mục kiểm tra trả phòng
+
+- GET receivables bổ sung **roomCheckChargesSupported: true** chỉ ở Owner. Backend cũ không có thuộc tính; Tenant nhận false. Owner Web dùng cờ này để tránh gửi field bị phiên bản Backend cũ bỏ qua.
+- POST receivables/damage nhận **roomCheckCode** tùy chọn, phải là một trong bảy mã HandoverRoomChecklist.RequiredCodes, với assetId=null. Chỉ chấp nhận mục biên bản Staff có status=Issue và ảnh bằng chứng gắn riêng đúng mục. Mỗi mã nguồn **damage:{contractId}:{roomCheckCode}** được thu một lần, có idempotency/review reference. Chứng từ trả về vẫn là SettlementReceivable và Tenant thấy roomCheckCode, mô tả, tiền, số dư.
+- Với assetId, đối chiếu **biên bản đầu vào có chữ ký**: chỉ thu tài sản thiếu/hỏng hoặc chưa trả đủ phát sinh mới, không thu hao hụt đã ghi nhận trước khi Tenant nhận phòng. Ảnh phải gắn đúng tài sản cần định giá, không dùng ảnh tổng hợp hoặc mục khác.
+- Chìa khóa thiếu có mã **roomCheckCode=access_room_key** riêng. Chỉ Owner được tạo nếu RoomKey trả lại ít hơn số bàn giao đầu vào và có ảnh trong keyEvidenceIds riêng; không được gán phí chìa khóa khi đã trả đủ hoặc không có baseline có cấu trúc.
+- Nhánh cũ assetId=null và không có roomCheckCode vẫn đọc được từ lịch sử. Không cho tạo mới nhánh tổng hợp cho hồ sơ đã có bảy checklist, hoặc thu trùng cùng nguồn phòng bằng cả hình thức cũ và mới.
+- Không sinh Invoice mới cho số tiền đã ghi thành receivable: cọc là một khoản phân bổ lên đúng nghĩa vụ, phần vượt cọc là số dư receivable và không thể thu lần thứ hai bằng Invoice độc lập.
+
+### Owner chốt tài chính một lần (21/11/2026)
+
+**POST /api/v1/contracts/{id}/move-out/receivables/final-close** — Owner thật đã đăng nhập, Idempotency-Key UUID bắt buộc.
+
+Input: expectedReference (CHARGE-...), expectedChargeReviewId (UUID hoặc null), beneficiaryResidentId (UUID hoặc null), beneficiaryVerified, waivedIssueKeys (string[]), reason, humanConfirmed.
+
+- expectedReference là tham chiếu mới nhất từ GET /move-out/receivables. expectedChargeReviewId là ID duyệt giá hiện hành (GET /charge-review); null chỉ khi Owner đã duyệt NoAdditionalCharges. Owner phải liệt kê chính xác mọi lỗi miễn phí, chưa định giá trong waivedIssueKeys: asset:<guid> hoặc room:<code> (bao gồm room:access_room_key). Backend so với lỗi Staff ghi nhận và khoản TenantDamage đã có, không mặc định giá 0; chưa đủ / mâu thuẫn phải 409.
+- Một transaction có khóa payment-ledger → Location → Room tuần tự cấn cọc khả dụng vào từng khoản TenantDamage còn nợ, thông qua ApproveOffsetAsync và khóa idempotency con ổn định. Không tự phân bổ sang hóa đơn kỳ cũ, không giả giao dịch ngân hàng, không phát hành Invoice khác cho cùng nghĩa vụ.
+- Nếu cọc thiếu: số thiếu vẫn nằm trong chính SettlementReceivable (có QR/tham chiếu và ledger phân bổ riêng), refundRequestId là null. Nếu còn cọc dương nhưng nghĩa vụ chưa giải quyết hoặc source có blocker: toàn bộ lệnh rollback.
+- Khi số hoàn cọc bằng 0, không cần người thụ hưởng: beneficiaryResidentId=null, beneficiaryVerified=false vẫn hợp lệ. Với số hoàn dương, Owner bắt buộc chỉ rõ Resident đủ điều kiện và beneficiaryVerified=true; không dùng người đại diện mặc định.
+- Nếu hoàn tất các khoản phải thu, nguồn deposit không có blocker, tiền hoàn dương và người nhận Resident đã được Owner xác minh: dùng chính RefundService.CreateDepositAsync dưới phiên đăng nhập Owner và financialReference mới, chỉ tạo REQUESTED. Owner còn phải duyệt và nhập chứng từ chuyển khoản thật; không tự APPROVED/COMPLETED.
+- Response gồm contractId, reference, offsetIds, refundRequestId, refundStatus, outstandingAmount, remainingDeposit và metadata kiểm toán. Lịch sử SettlementFinancialCloseV1 bất biến trong contracts.history; cùng actor/key/payload replay ra kết quả cũ; khác payload hoặc snapshot hiện hành trả 409. Mọi thao tác thành công hoặc rollback đồng thời.
+- Khi đã chốt thành công, backend chặn tạo thêm khoản thiệt hại, phí cuối kỳ, cấn cọc hoặc duyệt lại danh sách giá (lỗi settlement_financial_already_closed). Đối soát ngân hàng cho khoản phải thu còn nợ vẫn hoạt động; thay đổi giá sau khi chốt cần luồng mở lại riêng và không ghi đè lịch sử.
+
+Endpoint không đóng hợp đồng, không tự thanh toán refund và không tạo nghĩa vụ Invoice thứ hai.
+
+**Chưa tự động cấn cọc/hoàn tiền:** Thiếu quyết định miễn phí riêng cho từng lỗi và nguồn xác minh người nhận cọc trong trường hợp nhiều người thuê. Chỉ sau khi Owner chốt hết giá/miễn phí, đối chiếu hóa đơn, deposit và beneficiary mới được chạy orchestrator tạo offset/refund reservation; tuyệt đối không tự chuyển khoản.
+
 - Owner duyệt khoản thiệt hại theo biên bản kiểm tra cuối kỳ đã xác nhận. Lưu nguồn phòng/tài sản, phiên bản biên bản, mô tả chi phí, chính sách tính là chi phí Owner xác nhận, ảnh và hash, người/thời điểm duyệt, nhóm người thuê của phòng tại thời điểm phát sinh. Không tự tạo chi phí, mức phạt hoặc hóa đơn quyết toán riêng.
 - Khoản phải thu có thể lớn hơn cọc. Một nguồn phòng/tài sản trong cùng lần chuyển ra chỉ được ghi nhận một lần, kể cả khi biên bản được lập lại. Bản đã duyệt bất biến; chưa cung cấp thao tác sửa trực tiếp.
 - Cấn trừ là quyết định riêng, chỉ Owner, chọn chính xác nguồn cọc và khoản phải thu hoặc hóa đơn Final thuộc chuỗi hợp đồng. Lưu snapshot số dư và tham chiếu đã xem. Một `payment_allocations` gắn một quyết định duyệt; không tạo người trả giả cho khoản cấn trừ.
