@@ -26,7 +26,7 @@ function HandoverLookup() {
     <Stack spacing={2}>
       <PageHeader
         title="Bàn giao nhận phòng"
-        subtitle="Owner xem biên bản, chỉ số đầu kỳ và xác nhận. Staff và Tenant thực hiện bàn giao trên Mobile."
+        subtitle="Theo dõi bản nháp ngay sau khi lập hợp đồng, kiểm tra phần Staff cập nhật và phản hồi yêu cầu chỉnh sửa của Tenant."
       />
       <FilterToolbar>
         <OwnerLocationPicker
@@ -72,7 +72,22 @@ function HandoverLookup() {
       >
         {contract ? 'Mở hợp đồng và kiểm tra trả phòng' : 'Chọn từ danh sách hợp đồng'}
       </Button>
-      {contract && <ContractHandoverPanel key={contract} api={api} id={contract} />}
+      {contract && (
+        <ContractHandoverPanel
+          key={contract}
+          api={api}
+          id={contract}
+          contractStatus={
+            history.data?.periods.find((period) => period.contractId === contract)?.contractStatus
+          }
+          showDraft={
+            !['Cancelled', 'Terminated', 'Expired'].includes(
+              history.data?.periods.find((period) => period.contractId === contract)
+                ?.contractStatus ?? '',
+            )
+          }
+        />
+      )}
     </Stack>
   );
 }

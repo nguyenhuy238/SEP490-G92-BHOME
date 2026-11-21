@@ -17,12 +17,19 @@ const s = vi.hoisted(() => ({
   back: vi.fn(),
   push: vi.fn(),
   expired: vi.fn(),
+  pushRegister: vi.fn(),
+  pushUnregister: vi.fn(),
 }));
 vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({
     api: s.api,
     session: s.signedIn ? { userId: s.userId, roles: [s.role] } : null,
+    baseUrl: 'https://api.example.invalid',
   }),
+}));
+vi.mock('../services/pushRegistration', () => ({
+  registerPushDevice: s.pushRegister,
+  unregisterPushDevice: s.pushUnregister,
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => ({
@@ -230,11 +237,34 @@ beforeEach(() => {
   s.role = 'Tenant';
   s.userId = 'synthetic-a';
   s.signedIn = true;
+  s.pushRegister.mockResolvedValue({ registered: true, message: 'Đã đăng ký thông báo' });
+  s.pushUnregister.mockResolvedValue({ removed: true, message: 'Đã tắt thông báo' });
 });
 afterEach(() => {
   cleanup();
   caches.forEach((api) => api.queryCache.dispose());
   caches.length = 0;
+});
+it('only enables or disables push registration after an explicit Notifications button tap', async () => {
+  server();
+  render(<NotificationsScreen />);
+  await screen.findByRole('button', { name: 'Thông báo 1' });
+  expect(s.pushRegister).not.toHaveBeenCalled();
+  expect(s.pushUnregister).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Bật thông báo đẩy' }));
+  await screen.findByText('Đã đăng ký thông báo');
+  expect(s.pushRegister).toHaveBeenCalledWith(s.api, {
+    userId: s.userId,
+    baseUrl: 'https://api.example.invalid',
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Tắt thông báo đẩy trên thiết bị này' }));
+  await screen.findByText('Đã tắt thông báo');
+  expect(s.pushUnregister).toHaveBeenCalledWith(s.api, {
+    userId: s.userId,
+    baseUrl: 'https://api.example.invalid',
+  });
 });
 it.each(['Owner', 'Staff', 'Tenant'])(
   'renders one compact %s inbox and only navigates using the authorized target',

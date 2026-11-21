@@ -1,0 +1,12 @@
+{
+  "solution": {
+    "path": "BHome.sln",
+    "projects": [
+      "..\\..\\tests\\backend\\BHome.Application.UnitTests\\BHome.Application.UnitTests.csproj",
+      "..\\..\\tests\\backend\\BHome.Domain.UnitTests\\BHome.Domain.UnitTests.csproj",
+      "..\\..\\tests\\backend\\BHome.Infrastructure.UnitTests\\BHome.Infrastructure.UnitTests.csproj",
+      "..\\..\\tests\\backend\\BHome.IntegrationTests\\BHome.IntegrationTests.csproj",
+      "..\\digital-signing\\tests\\BHome.DigitalSigning.UnitTests\\BHome.DigitalSigning.UnitTests.csproj"
+    ]
+  }
+}

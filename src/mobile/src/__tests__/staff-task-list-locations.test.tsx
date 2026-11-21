@@ -95,7 +95,7 @@ vi.mock('../theme/theme', () => ({
   },
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ go: state.go }),
+  useWorkspace: () => ({ go: state.go, staffLocationId: loc1 }),
 }));
 vi.mock('../components/WorkspaceHeaderContext', () => ({
   useWorkspaceHeaderRefresh: () => false,
@@ -205,6 +205,7 @@ it('loads the Location directory once for all visible task kinds and preserves p
   });
   render(<StaffTaskListScreen />);
   await waitFor(() => expect(screen.getAllByText('Cơ sở: Cơ sở Phú Thọ')).toHaveLength(10));
+  expect(state.request.mock.calls[0]?.[0]).toContain(`locationId=${loc1}`);
   expect(screen.getAllByText('Cơ sở: Cơ sở Hà Nội')).toHaveLength(10);
   expect(
     state.request.mock.calls.filter(([path]) => path === '/api/v1/locations/assigned-to-me'),

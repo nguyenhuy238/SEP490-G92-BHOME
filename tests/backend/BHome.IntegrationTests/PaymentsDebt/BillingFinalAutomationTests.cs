@@ -2,8 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using BHome.Application.Billing;
 using BHome.Application.Jobs;
+using BHome.Application.Notifications;
 using BHome.Application.Ocr;
 using BHome.Application.PaymentsDebt.SePay;
+using BHome.Application.PropertyManagement;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
@@ -78,6 +80,51 @@ public sealed partial class PaymentLedgerTests
         var blocked = (await RunPhase(w, "Final"))!; Assert.Contains("invoice_adjustment_pending", blocked.ExceptionsJson);
         (await Post(owner, $"/api/v1/invoice-adjustments/{request.Id}/approve", new AdjustmentDecisionInput(1, draft.Version, 0, 90000, "RENT", "Owner approved synthetic correction", true))).EnsureSuccessStatusCode();
         Assert.Equal("Completed", (await RunPhase(w, "Final"))!.Status); var final = (await tenant.GetFromJsonAsync<InvoiceView>($"/api/v1/invoices/{draft.Id}"))!; Assert.Equal("Final", final.Status); Assert.Equal(90050, final.Total); Assert.Equal(request.Id, final.Lines.Single(l => l.ChargeCode == "RENT").CorrectionRequestId);
+    }
+    [Fact]
+    public async Task PendingAdjustmentBlocksManualAndScheduledFinalAndNotifiesOwnerAndTenantsOnce()
+    {
+        var (w, _, draft) = await FinalWorkspace();
+        using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenants[0]);
+        var submitted = await Post(tenant, $"/api/v1/invoices/{draft.Id}/adjustment-requests",
+            new AdjustmentSubmit(draft.Lines.Single(l => l.ChargeCode == "RENT").Id, 90000,
+                "PRIVATE_REVIEW_REASON", [], draft.Version));
+        submitted.EnsureSuccessStatusCode();
+        var request = (await submitted.Content.ReadFromJsonAsync<AdjustmentView>())!;
+        var manual = await owner.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize", new InvoiceFinalizeInput(draft.Version));
+        Assert.Equal(HttpStatusCode.Conflict, manual.StatusCode);
+        Assert.Contains("invoice_adjustment_pending", await manual.Content.ReadAsStringAsync());
+        var scheduled = (await RunPhase(w, "Final"))!;
+        Assert.Equal("PendingInputs", scheduled.Status);
+        Assert.Contains("invoice_adjustment_pending", scheduled.ExceptionsJson);
+        await PumpNotifications(); await PumpNotifications();
+        var ownerNotices = (await owner.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications?category=Adjustment"))!.Items;
+        var blockedForOwner = Assert.Single(ownerNotices, n => n.EventType == "INVOICE_FINALIZATION_BLOCKED");
+        Assert.Equal("Adjustment", blockedForOwner.RelatedObjectType);
+        Assert.Equal(request.Id, blockedForOwner.RelatedObjectId);
+        Assert.DoesNotContain("PRIVATE_", blockedForOwner.Summary);
+        foreach (var id in w.Tenants)
+        {
+            using var recipient = await Client(id);
+            var notices = (await recipient.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications?category=Invoice"))!.Items;
+            var blocked = Assert.Single(notices, n => n.EventType == "INVOICE_FINALIZATION_BLOCKED");
+            Assert.Equal(draft.Id, blocked.RelatedObjectId);
+            Assert.DoesNotContain("PRIVATE_", blocked.Summary);
+        }
+        using var staff = await Client(w.Staff);
+        Assert.DoesNotContain((await staff.GetFromJsonAsync<PagedResult<NotificationView>>("/api/v1/notifications"))!.Items,
+            n => n.RelatedObjectId == draft.Id || n.RelatedObjectId == request.Id);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            Assert.Equal(InvoiceStatus.Draft, (await db.Set<Invoice>().SingleAsync(i => i.Id == draft.Id)).Status);
+            Assert.False(await db.Set<InvoiceIssuedEvent>().AnyAsync(i => i.InvoiceId == draft.Id));
+        }
+        (await Post(owner, $"/api/v1/invoice-adjustments/{request.Id}/reject",
+            new AdjustmentDecisionInput(1, draft.Version, 0, null, null, "Reviewed and rejected", true))).EnsureSuccessStatusCode();
+        (await owner.PostAsJsonAsync($"/api/v1/invoices/{draft.Id}/finalize",
+            new InvoiceFinalizeInput(draft.Version))).EnsureSuccessStatusCode();
+        Assert.Equal("Final", (await owner.GetFromJsonAsync<InvoiceView>($"/api/v1/invoices/{draft.Id}"))!.Status);
     }
     [Fact]
     public async Task LateConfirmedReadingsMakePendingDraftEligibleWithoutEstimatedUsage()

@@ -111,7 +111,7 @@ export function LiveCaptureCamera({
     }
   }, [camera, reportLenses, settle]);
   const handleLenses: CameraViewProps['onAvailableLensesChanged'] = useCallback(
-    ({ lenses: reported }) => reportLenses(reported),
+    ({ lenses: reported }: { lenses: unknown }) => reportLenses(reported),
     [reportLenses],
   );
   const blocked = disabled || settling;

@@ -16,6 +16,7 @@ import { meterService } from '../services/meterService';
 import { meterOcrFeedback } from '../services/meterOcrFeedback';
 import { MeterRoomOverview } from '../screens/MeterRoomOverview';
 import { meterRoundLabel, roomMeterTasks } from '../features/workspace/roomMeterTasks';
+import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import {
   estimatedConsumption,
   normalizedReading,
@@ -26,6 +27,7 @@ import {
 export default function MeterScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   const { api, session } = useSession();
+  const { staffLocationId } = useWorkspace();
   if (!api || !session) return <Redirect href="/" />;
   if (!session.roles.includes('Staff'))
     return (
@@ -33,16 +35,28 @@ export default function MeterScreen() {
         <Text>Chỉ Staff được giao cơ sở mới có thể ghi chỉ số.</Text>
       </Page>
     );
+  if (!staffLocationId)
+    return (
+      <WorkspaceShell screen="meter-reading">
+        <Text>Chưa có cơ sở được phân công để ghi chỉ số.</Text>
+      </WorkspaceShell>
+    );
   if (!taskId)
     return (
       <WorkspaceShell screen="meter-reading">
         <Text>Không tìm thấy mã tác vụ.</Text>
       </WorkspaceShell>
     );
-  return <RoomMeterScreen key={`${session.userId}:${taskId}`} taskId={taskId} />;
+  return (
+    <RoomMeterScreen
+      key={`${session.userId}:${staffLocationId}:${taskId}`}
+      taskId={taskId}
+      staffLocationId={staffLocationId}
+    />
+  );
 }
 
-function RoomMeterScreen({ taskId }: { taskId: string }) {
+function RoomMeterScreen({ taskId, staffLocationId }: { taskId: string; staffLocationId: string }) {
   const { api } = useSession();
   const [tasks, setTasks] = useState<MeterTask[]>([]);
   const [readings, setReadings] = useState<Record<string, ConfirmedReading>>({});
@@ -74,6 +88,10 @@ function RoomMeterScreen({ taskId }: { taskId: string }) {
       try {
         const client = meterService(api);
         const current = await client.task(taskId, controller.signal);
+        if (current.locationId !== staffLocationId)
+          throw new Error(
+            'Nhiệm vụ không thuộc cơ sở đang làm việc. Hãy chọn đúng cơ sở ở trang chủ.',
+          );
         const candidates: MeterTask[] = [];
         if (current.roomId && current.locationId) {
           for (let page = 1; ; page++) {
@@ -107,7 +125,7 @@ function RoomMeterScreen({ taskId }: { taskId: string }) {
       }
     })();
     return () => controller.abort();
-  }, [api, taskId, revision, setError]);
+  }, [api, taskId, staffLocationId, revision, setError]);
   useEffect(() => {
     const listener = AppState.addEventListener('change', (state) => {
       if (state === 'active' && !selected) reload();
@@ -133,7 +151,15 @@ function RoomMeterScreen({ taskId }: { taskId: string }) {
   );
 }
 
-function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () => void }) {
+export function MeterTaskScreen({
+  taskId,
+  onReturn,
+  embedded = false,
+}: {
+  taskId: string;
+  onReturn: () => void;
+  embedded?: boolean;
+}) {
   const { api } = useSession();
   const [task, setTask] = useState<MeterTask | null>(null);
   const [reading, setReading] = useState('');
@@ -210,7 +236,8 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
   const captureLabel = task?.utilityType === 0 ? 'Chụp công tơ điện' : 'Chụp đồng hồ nước';
   const isInitial = task?.purpose === 0;
   const validation = task ? readingError(reading, task.decimalPlaces) : '';
-  const decreased = !isInitial && readingDecreased(reading, task?.previousValue ?? null);
+  // A new contract baseline on a reused physical meter must also be monotonic.
+  const decreased = readingDecreased(reading, task?.previousValue ?? null);
   const consumption = isInitial ? null : estimatedConsumption(reading, task?.previousValue ?? null);
   const editable = !!task && task.status < 2;
 
@@ -310,9 +337,9 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
       if (mounted.current) setBusy(false);
     }
   }
-  return (
-    <WorkspaceShell screen="meter-reading" onBack={back} backDisabled={busy} contentRevision={step}>
-      <Heading title="Ghi chỉ số điện nước" detail="Quản lý ghi chỉ số theo phòng" />
+  const content = (
+    <>
+      {!embedded && <Heading title="Ghi chỉ số điện nước" detail="Quản lý ghi chỉ số theo phòng" />}
       {loading && <ActivityIndicator accessibilityLabel="Đang tải tác vụ" />}
       {!!error && (
         <Text accessibilityRole="alert" style={styles.error}>
@@ -366,7 +393,9 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
           </Text>
           <Text variant="bodySmall" style={ui.muted}>
             {isInitial
-              ? 'Giá trị này được lưu làm mốc chỉ số ban đầu cho phòng, không tính tiền tiêu thụ định kỳ.'
+              ? task.contractId
+                ? 'Giá trị này là mốc khởi tạo riêng cho hợp đồng nhận phòng, không tính lượng điện/nước của người thuê trước.'
+                : 'Giá trị này được lưu làm mốc chỉ số ban đầu cho phòng, không tính tiền tiêu thụ định kỳ.'
               : 'Chỉ số và mức tiêu thụ đã lưu vào hệ thống để tổng hợp vào hóa đơn kỳ theo lịch cấu hình.'}
           </Text>
           <Button mode="contained" contentStyle={{ minHeight: 48 }} onPress={onReturn}>
@@ -405,7 +434,9 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
                 </Text>
                 {isInitial && (
                   <Text style={ui.muted}>
-                    Loại ghi: Chỉ số ban đầu (mốc khởi tạo, không tính tiêu thụ tháng)
+                    {task.contractId
+                      ? 'Loại ghi: Khởi tạo chỉ số cho hợp đồng (chụp mới cả khi công tơ tái sử dụng)'
+                      : 'Loại ghi: Chỉ số ban đầu (mốc khởi tạo, không tính tiêu thụ tháng)'}
                   </Text>
                 )}
                 {!!proposal?.proposedFields.reading && (
@@ -459,6 +490,13 @@ function MeterTaskScreen({ taskId, onReturn }: { taskId: string; onReturn: () =>
           </>
         )
       )}
+    </>
+  );
+  return embedded ? (
+    content
+  ) : (
+    <WorkspaceShell screen="meter-reading" onBack={back} backDisabled={busy} contentRevision={step}>
+      {content}
     </WorkspaceShell>
   );
 }

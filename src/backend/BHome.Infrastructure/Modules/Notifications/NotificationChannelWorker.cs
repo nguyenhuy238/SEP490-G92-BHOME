@@ -246,6 +246,16 @@ internal sealed class NotificationChannelWorker(Compact24DbContext db, CompactNo
     }
     private async Task<bool> Relevant(NotificationView n, CancellationToken t)
     {
+        if (n.EventType == "INVOICE_FINALIZATION_BLOCKED")
+        {
+            var today = BillingAutomationDates.BusinessDate(sql.Now);
+            if (n.RelatedObjectType == "Adjustment")
+                return await HeldInvoiceFinalNotifications.StillHeldForOriginal(
+                    db.Set<InvoiceAdjustmentRequest>(), n.RelatedObjectId, today).AnyAsync(t);
+            if (n.RelatedObjectType == "Invoice")
+                return await db.Set<Invoice>().AnyAsync(i => i.Id == n.RelatedObjectId && i.Status == InvoiceStatus.Draft &&
+                    i.ScheduledFinalDate <= today && db.Set<InvoiceAdjustmentRequest>().Any(r => r.InvoiceId == i.Id && r.Decision == null), t);
+        }
         if (n.EventType == "EXCESS_PAYMENT_OR_REFUND_STATUS" && await db.Set<BHome.Domain.Notifications.UserNotification>()
             .AnyAsync(notice => notice.Id == n.Id && notice.EventKey.StartsWith("deposit-refund:"), t))
             return await NotificationEventPublisher.DepositRefundNotices(db).AnyAsync(r =>

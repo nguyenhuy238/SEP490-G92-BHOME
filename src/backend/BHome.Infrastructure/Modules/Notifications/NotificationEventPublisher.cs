@@ -83,6 +83,38 @@ internal sealed partial class NotificationEventPublisher(BHomePersistenceContext
             var i = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == e.InvoiceId, t);
             return i.Status != InvoiceStatus.Final ? [] : await InvoiceAudience(i, "Invoice", "Hóa đơn đã phát hành", $"Kỳ {i.BillingPeriod:MM/yyyy} đã có hóa đơn chính thức. Mở hóa đơn để xem nghĩa vụ hiện hành.", t, e.OwnerUserId);
         }, t);
+        // Finalization rejects pending adjustments in both manual and scheduled modes.
+        // A rejected transaction cannot persist an outbox event, so derive one
+        // durable, deduplicated notification per due Draft from committed requests.
+        // Never disclose another tenant's adjustment reason or evidence.
+        var today = BillingAutomationDates.BusinessDate(clock.GetUtcNow());
+        var held = await db.Set<InvoiceAdjustmentRequest>().AsNoTracking()
+            .Where(r => r.Decision == null && r.Invoice.Status == InvoiceStatus.Draft &&
+                r.Invoice.ScheduledFinalDate <= today &&
+                !db.Set<NotificationPublication>().Any(p => p.EventKey == "invoice-finalization-held:" + r.InvoiceId.ToString()))
+            .OrderBy(r => r.SubmittedAt).ThenBy(r => r.Id).Take(50).Select(r => new { r.Id, r.InvoiceId }).ToArrayAsync(t);
+        foreach (var request in held.DistinctBy(r => r.InvoiceId))
+            count += await Publish("invoice-finalization-held:" + request.InvoiceId, async () =>
+            {
+                var invoice = await db.Set<Invoice>().AsNoTracking().SingleAsync(i => i.Id == request.InvoiceId, t);
+                if (invoice.Status != InvoiceStatus.Draft || invoice.ScheduledFinalDate > BillingAutomationDates.BusinessDate(clock.GetUtcNow()) ||
+                    !await db.Set<InvoiceAdjustmentRequest>().AnyAsync(r => r.InvoiceId == invoice.Id && r.Decision == null, t))
+                    return [];
+                var recipients = new List<Intent>
+                {
+                    new(invoice.CreatedByUserId, Roles.Owner, invoice.LocationId, "Adjustment",
+                        "Cần xác nhận điều chỉnh trước khi phát hành",
+                        $"Hóa đơn phòng {invoice.RoomNumber} kỳ {invoice.BillingPeriod:MM/yyyy} đang tạm dừng phát hành. Hãy xử lý tất cả yêu cầu điều chỉnh đang chờ rồi phát hành lại.",
+                        "Adjustment", request.Id, EventType: "INVOICE_FINALIZATION_BLOCKED", Channels: ["IN_APP", "PUSH", "EMAIL"])
+                };
+                foreach (var tenant in await db.Set<InvoiceRecipient>().AsNoTracking()
+                    .Where(r => r.InvoiceId == invoice.Id).Select(r => r.TenantUserId).Distinct().ToArrayAsync(t))
+                    recipients.Add(new(tenant, Roles.Tenant, invoice.LocationId, "Invoice",
+                        "Hóa đơn đang chờ xử lý điều chỉnh",
+                        $"Hóa đơn phòng {invoice.RoomNumber} kỳ {invoice.BillingPeriod:MM/yyyy} chưa được phát hành vì còn yêu cầu cần Owner xem xét. Bạn có thể theo dõi trạng thái trong ứng dụng.",
+                        "Invoice", invoice.Id, EventType: "INVOICE_FINALIZATION_BLOCKED", Channels: ["IN_APP", "PUSH", "EMAIL"]));
+                return recipients;
+            }, t);
         var payments = await db.Set<PaymentConfirmedEvent>().AsNoTracking().Where(e => !db.Set<NotificationPublication>().Any(p => p.EventKey == "payment:" + e.AllocationId.ToString())).OrderBy(e => e.OccurredAt).Take(25).ToArrayAsync(t);
         foreach (var e in payments) count += await Publish("payment:" + e.AllocationId, async () =>
         {

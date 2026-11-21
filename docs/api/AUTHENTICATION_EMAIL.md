@@ -26,6 +26,19 @@ HTTP. Envelope protected đã lưu trước thay đổi vẫn được worker hi
 Lỗi socket trước submit retry an toàn; sau khi bắt đầu submit giữ PendingReview.
 Xem [audit và bằng chứng](../development/BHOME_EMAIL_AUDIT_2026-11-20.md).
 
+## Tích hợp develop 21/11/2026 — Staff active khi tạo
+
+Đã tích hợp quyết định BF-02/UC-08 từ `develop` (`430dacd2`, `3f77773b`):
+Owner tạo Staff với `IsActive=true`, `EmailConfirmed=true`, không tạo pending
+invitation. Mật khẩu ban đầu là giá trị ngẫu nhiên không được tiết lộ; tạo tài
+khoản chưa tự gửi email. Owner dùng `POST /api/v1/staff/{id}/issue-password`
+để cấp mật khẩu 12 ký tự qua protected outbox; client không nhận password trong
+response. Staff cũ chưa xác nhận cũng được cấp credential bằng luồng này;
+activation, password hash, revoke sessions và queue cùng transaction.
+Template v2 tiếp tục render credential riêng; không quay lại cơ chế invitation
+cho Staff mới. Endpoint invitation và kiểm thử token lifecycle vẫn được giữ
+cho lời mời cũ. Điều kiện kích hoạt Tenant không thay đổi.
+
 ## Cấu hình sử dụng
 
 Mỗi máy Development cần cấu hình Email:AppPassword, Email:Enabled và sender bằng .NET User Secrets

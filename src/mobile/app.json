@@ -47,6 +47,7 @@
         }
       ],
       "expo-sharing",
+      "expo-notifications",
       "expo-status-bar"
     ]
   }

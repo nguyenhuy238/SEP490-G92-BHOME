@@ -161,6 +161,12 @@ public static class DependencyInjection
                 "SMTP requires Email:AllowedRecipients:0 (and optional :1, :2, ...) in Development/Testing/Staging. Development can explicitly opt in with Email:AllowAnyRecipientInDevelopment=true. For an existing local test mailbox, run scripts/Initialize-LocalEmail.ps1 -UseConfiguredTestRecipient, then restart the API. Email:TestRecipient alone is not an allowlist.")
             .ValidateOnStart();
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.MailKitEmailSender>();
+        services.AddOptions<BHome.Infrastructure.Modules.Notifications.ExpoPushOptions>()
+            .BindConfiguration("ExpoPush")
+            .Validate(o => o.Valid(), "ExpoPush requires Enabled, a secret AccessToken and a 1-45 second timeout.")
+            .ValidateOnStart();
+        services.AddHttpClient<BHome.Infrastructure.Modules.Notifications.ExpoPushSender>()
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddScoped<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
         services.AddScoped<BHome.Application.Notifications.IDevelopmentEmailTest, BHome.Infrastructure.Modules.Notifications.DevelopmentEmailTest>();
         services.AddScoped<BHome.Application.Notifications.INotificationChannelProvider, BHome.Infrastructure.Modules.Notifications.NotificationChannelProvider>();
@@ -216,6 +222,9 @@ public static class DependencyInjection
             () => p.GetRequiredService<BHome.Application.PropertyManagement.PropertyService>()));
         services.AddScoped<BHome.Application.PropertyManagement.ISetupWorkspaceStore,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SetupWorkspaceStore>();
+        // Staff-scoped synthetic onboarding fixture; its service rejects every
+        // environment other than explicitly enabled loopback Development.
+        services.AddScoped<BHome.Infrastructure.Development.DevelopmentOnboardingSeedService>();
         services.AddScoped<BHome.Application.PropertyManagement.ISharedConfigurationStore,
             BHome.Infrastructure.Modules.PropertyManagement.Persistence.SharedConfigurationStore>();
         services.AddScoped<BHome.Application.PropertyManagement.ISharedDataValidator, BHome.Application.PropertyManagement.SharedDataValidator>();
@@ -288,6 +297,8 @@ public static class DependencyInjection
         services.AddScoped<INotificationProvider, UnconfiguredNotificationProvider>();
         services.AddScoped<IElectronicContractProvider, UnconfiguredElectronicContractProvider>();
         services.AddScoped<BHome.Application.Contracts.IContractRepository, BHome.Infrastructure.Contracts.ContractRepository>();
+        services.AddScoped<BHome.Application.Contracts.IHandoverDraftRepository, BHome.Infrastructure.Contracts.HandoverDraftRepository>();
+        services.AddScoped<BHome.Application.Contracts.IHandoverDraftPdfRenderer, BHome.Infrastructure.Contracts.HandoverPdfRenderer>();
         services.AddScoped<BHome.Application.Contracts.ContractService>();
         services.AddScoped<BHome.Application.Billing.ITenantMeterReadings, BHome.Infrastructure.Billing.TenantMeterReadingsRepository>();
         services.AddScoped<BHome.Application.Billing.TenantMeterReadingService>();

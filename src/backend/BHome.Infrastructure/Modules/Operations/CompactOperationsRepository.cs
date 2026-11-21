@@ -124,13 +124,15 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             UserName = input.Email,
             Email = input.Email,
             PhoneNumber = input.Phone,
-            EmailConfirmed = false,
+            // Owner provisions Staff directly: no separate invitation/activation email.
+            // The initial credential remains an unguessable, never-disclosed random value
+            // until the Owner explicitly issues a new password via the protected outbox.
+            EmailConfirmed = true,
             IsActive = true,
             SecurityStamp = Guid.NewGuid().ToString("N"),
             ConcurrencyStamp = Guid.NewGuid().ToString("N")
         };
         db.PrepareUserRole(user, Roles.Staff);
-        AccountInvitations.MarkPendingSetup(db, user, now);
         // Legacy InitialPassword is accepted for request compatibility but never used or delivered.
         var created = await users.CreateAsync(user, Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)) + "!aA1");
         if (!created.Succeeded) throw OperationsException.Invalid("invalid_staff_account");

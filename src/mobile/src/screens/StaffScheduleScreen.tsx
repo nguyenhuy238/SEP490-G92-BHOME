@@ -1,6 +1,5 @@
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Button,
@@ -10,29 +9,26 @@ import {
   TouchableRipple,
 } from 'react-native-paper';
 import { Box, ui } from '../components/WorkspaceKit';
-import { ChoiceField } from '../components/WorkflowControls';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
-import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { useSession } from '../lib/SessionProvider';
-import type { Named } from '../lib/api';
 import { colors as c } from '../theme/theme';
 
 // UC-09: read-only. The current API exposes assigned locations, but no shifts.
 export function StaffScheduleScreen() {
-  const { role, preview, go } = useWorkspace();
+  const {
+    role,
+    preview,
+    go,
+    staffLocationId,
+    staffLocations,
+    staffLocationsLoading,
+    staffLocationsError,
+    reloadStaffLocations,
+  } = useWorkspace();
   const { session } = useSession();
   const allowed = role === 'Staff' && (preview || !!session?.roles.includes('Staff'));
   const enabled = allowed && !preview;
-  const locations = useWorkspaceQuery<Named[]>(enabled ? '/api/v1/capture/locations' : null);
-  const { reload } = locations;
-  const [locationId, setLocationId] = useState('');
-  useFocusEffect(
-    useCallback(() => {
-      if (enabled) reload();
-    }, [enabled, reload]),
-  );
-  const items = enabled ? (locations.data ?? []) : [];
-  const selected = items.some((item) => item.id === locationId) ? locationId : '';
+  const selectedLocation = staffLocations.find((item) => item.id === staffLocationId);
 
   if (!allowed) return <Text>Bạn không có quyền xem lịch làm việc của Staff.</Text>;
   return (
@@ -48,14 +44,14 @@ export function StaffScheduleScreen() {
           <IconButton
             icon="refresh"
             accessibilityLabel="Tải lại cơ sở được phân công"
-            disabled={locations.loading}
-            onPress={reload}
+            disabled={staffLocationsLoading}
+            onPress={reloadStaffLocations}
             style={styles.refresh}
           />
         )}
       </View>
 
-      {enabled && locations.loading && (
+      {enabled && staffLocationsLoading && (
         <Box style={styles.compact}>
           <View style={ui.row}>
             <ActivityIndicator size="small" accessibilityLabel="Đang tải cơ sở được phân công" />
@@ -65,18 +61,18 @@ export function StaffScheduleScreen() {
           </View>
         </Box>
       )}
-      {enabled && !!locations.error && (
+      {enabled && !!staffLocationsError && (
         <Box style={styles.compact}>
           <Text accessibilityRole="alert" variant="bodyMedium">
             Không thể tải cơ sở được phân công.
           </Text>
           <Text variant="bodySmall" style={ui.muted}>
-            {locations.error}
+            {staffLocationsError}
           </Text>
           <Button
             compact
             icon="refresh"
-            onPress={reload}
+            onPress={reloadStaffLocations}
             style={styles.retry}
             contentStyle={styles.touch}
           >
@@ -84,28 +80,21 @@ export function StaffScheduleScreen() {
           </Button>
         </Box>
       )}
-      {items.length === 1 && (
+      {selectedLocation && (
         <Box style={styles.compact}>
           <View style={ui.row}>
             <Icon source="map-marker-outline" size={22} color={c.navy} />
             <View style={ui.grow}>
               <Text variant="labelSmall" style={ui.muted}>
-                Cơ sở được phân công
+                Cơ sở đang làm việc
               </Text>
-              <Text variant="titleSmall">{items[0].label}</Text>
+              <Text variant="titleSmall">{selectedLocation.label}</Text>
             </View>
           </View>
         </Box>
       )}
-      {items.length > 1 && (
-        <Box style={styles.compact}>
-          <ChoiceField
-            label="Cơ sở được phân công"
-            value={selected}
-            options={[{ id: '', label: 'Tất cả cơ sở' }, ...items]}
-            onChange={setLocationId}
-          />
-        </Box>
+      {enabled && !staffLocationsLoading && !selectedLocation && (
+        <Text accessibilityRole="alert">Chưa có cơ sở được phân công.</Text>
       )}
 
       <Box style={styles.empty}>
