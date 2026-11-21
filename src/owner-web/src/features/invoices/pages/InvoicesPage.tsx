@@ -1246,6 +1246,11 @@ export function LiveInvoicesPage() {
             {error && (
               <Alert severity="error" sx={{ mb: 1 }}>
                 {error}
+                {error.includes('yêu cầu điều chỉnh') && (
+                  <Button component={Link} to="/invoice-adjustments" size="small" sx={{ ml: 1 }}>
+                    Xử lý yêu cầu điều chỉnh
+                  </Button>
+                )}
               </Alert>
             )}
             <Stack spacing={1.5}>

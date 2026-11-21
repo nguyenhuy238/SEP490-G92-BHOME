@@ -360,7 +360,16 @@ vi.mock('../../../src/mobile/src/lib/SessionProvider', () => ({
   }),
 }));
 vi.mock('../../../src/mobile/src/features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ role: mocks.role, go: mocks.go }),
+  useWorkspace: () => ({
+    role: mocks.role,
+    go: mocks.go,
+    staffLocationId: id,
+    staffLocations: [{ id, label: 'Cơ sở tổng hợp' }],
+    staffLocationsLoading: false,
+    staffLocationsError: '',
+    selectStaffLocation: vi.fn(),
+    reloadStaffLocations: vi.fn(),
+  }),
 }));
 import {
   OperationalTaskDetail,
@@ -1082,7 +1091,9 @@ it('filters on the server, resets pagination and clears the filter from an empty
   fireEvent.click(screen.getByRole('tab', { name: 'Cần làm' }));
   await screen.findByText('Không có công việc phù hợp');
   expect(listCalls()).toHaveLength(3);
-  expect(String(listCalls()[2]![0])).toContain('page=1&pageSize=20&status=Assigned');
+  expect(String(listCalls()[2]![0])).toContain(
+    `page=1&pageSize=20&locationId=${id}&status=Assigned`,
+  );
   expect(screen.queryByText(task.title)).toBeNull();
   expect(screen.getByRole('tab', { name: 'Cần làm' }).getAttribute('aria-selected')).toBe('true');
   fireEvent.click(screen.getByText('Xem tất cả'));

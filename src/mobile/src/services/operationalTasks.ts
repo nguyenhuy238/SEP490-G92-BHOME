@@ -31,6 +31,27 @@ export interface OperationalTask {
     contractId?: string | null;
   } | null;
 }
+// Main handover is one Staff work card. The historical pre-move-in inventory
+// checkpoint is reached from its Assets section, not a parallel queue item.
+export function isEmbeddedMoveInInventory(task: OperationalTask): boolean {
+  return task.kind === 'MoveInInventory' && !!task.target?.contractId;
+}
+
+export function isEmbeddedInitialMeterTask(task: OperationalTask): boolean {
+  // Contract-created Initial tasks are still genuine capture records, but not
+  // standalone items in the Staff general-work queue. Routine meter work stays.
+  return (
+    task.kind === 'MeterReading' && /^Chụp chỉ số (?:điện|nước) khi nhận phòng\s/u.test(task.title)
+  );
+}
+
+export function isMainMoveInWork(task: OperationalTask): boolean {
+  return (
+    task.kind === 'AdHoc' &&
+    !!task.target?.contractId &&
+    task.title.startsWith('Bàn giao vào phòng')
+  );
+}
 export interface TaskHistory {
   id: string;
   action: string;

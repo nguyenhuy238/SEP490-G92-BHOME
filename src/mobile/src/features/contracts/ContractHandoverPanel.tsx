@@ -1,7 +1,6 @@
 import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
-import { router } from 'expo-router';
 import { Checkbox, Text } from 'react-native-paper';
 import { randomUUID } from '../../lib/randomUUID';
 import {
@@ -27,21 +26,20 @@ import {
   quantityFields,
 } from '../../../../../packages/client-core/src/handoverForm';
 import { ContractAssetChangesPanel } from './ContractAssetChangesPanel';
+import { ContractInitialMeterTasks } from './ContractInitialMeterTasks';
 
 export function ContractHandoverPanel({
   api,
   contract,
   role,
+  autoRefreshMs = 10000,
 }: {
   api: ContractClient;
   contract: ContractView;
   role: string;
+  autoRefreshMs?: number;
 }) {
   const staff = role === 'Staff' && contract.status === 'Active' && contract.kind === 'Main';
-  const query = useContractHandover(api, contract.id, staff),
-    h = query.data?.record,
-    choices = query.data?.choices;
-  const sourceId = h?.sourceContractId ?? contract.id;
   const [editing, setEditing] = useState(false),
     [values, setValues] = useState<Record<string, string>>({}),
     [selected, setSelected] = useState<string[]>([]);
@@ -49,6 +47,10 @@ export function ContractHandoverPanel({
     [error, setError] = useFeedbackState('warning', false),
     [notice, setNotice] = useFeedbackState('success'),
     [safePhoto, setSafePhoto] = useState(false);
+  const query = useContractHandover(api, contract.id, staff, !editing && !busy ? autoRefreshMs : 0),
+    h = query.data?.record,
+    choices = query.data?.choices;
+  const sourceId = h?.sourceContractId ?? contract.id;
   const confirmationKey = `${contract.id}:${h?.version ?? ''}`;
   const [confirmation, setConfirmation] = useState({ key: '', checked: false, note: '' });
   const checked = confirmation.key === confirmationKey && confirmation.checked;
@@ -141,6 +143,7 @@ export function ContractHandoverPanel({
         title="Bàn giao nhận phòng (UC-17)"
         detail="Tenant xác nhận nội dung · Staff hoàn tất cùng phiên bản"
       />
+      {staff && <ContractInitialMeterTasks contract={contract} />}
       {query.loading && <Text>Đang tải bàn giao…</Text>}
       {!!query.error && <ContractNotice message={query.error} />}
       {!query.loading && !query.error && !h && <Text>Chưa có biên bản nhận phòng.</Text>}
@@ -274,9 +277,9 @@ export function ContractHandoverPanel({
               onChange={(v) => set(String(name), v)}
             />
           ))}
-          <Action secondary disabled={busy} onPress={() => router.push('/capture')}>
-            Mở tác vụ điện / nước
-          </Action>
+          <Text>
+            Chọn nhiệm vụ khởi tạo điện và nước của hợp đồng ở trên để chụp và xác nhận chỉ số.
+          </Text>
           <Text>
             Ảnh toàn cảnh phòng; tối đa 10 ảnh được chọn, mỗi ảnh tối đa 5 MB. Ảnh riêng của nhóm
             chọn ở trên. Không chụp giấy tờ cá nhân.
@@ -429,9 +432,6 @@ export function ContractHandoverPanel({
       )}
       {!!error && <ContractNotice message={error} />}
       {!!notice && <Text style={ui.green}>{notice}</Text>}
-      <Action secondary disabled={query.loading || busy} onPress={query.reload}>
-        Tải lại bàn giao
-      </Action>
     </Box>
   );
 }

@@ -73,7 +73,11 @@ export function MeterRoomOverview({
             <Box style={{ padding: 14, gap: 6 }}>
               <Row spread>
                 <Text variant="titleSmall" style={{ color: c.primary, fontWeight: '700' }}>
-                  {first.purpose === 0 ? 'Đã lưu chỉ số ban đầu' : 'Đã lưu chỉ số định kỳ'}
+                  {first.purpose === 0
+                    ? first.contractId
+                      ? 'Đã lưu chỉ số khởi tạo hợp đồng'
+                      : 'Đã lưu chỉ số ban đầu'
+                    : 'Đã lưu chỉ số định kỳ'}
                 </Text>
                 <Pill tone="blue">
                   {first.purpose === 0 ? 'Mốc khởi tạo' : 'Chờ tổng hợp hóa đơn'}
@@ -81,7 +85,9 @@ export function MeterRoomOverview({
               </Row>
               <Text variant="bodySmall" style={ui.muted}>
                 {first.purpose === 0
-                  ? 'Chỉ số điện và nước đã được lưu làm mốc chỉ số ban đầu của phòng. Hệ thống không tính tiêu thụ định kỳ hay phát sinh hóa đơn cho lần ghi ban đầu.'
+                  ? first.contractId
+                    ? 'Chỉ số điện và nước đã được chụp, xác nhận riêng cho hợp đồng nhận phòng này. Mốc khởi tạo không tính lượng tiêu thụ từ người thuê trước.'
+                    : 'Chỉ số điện và nước đã được lưu làm mốc chỉ số ban đầu của phòng. Hệ thống không tính tiêu thụ định kỳ hay phát sinh hóa đơn cho lần ghi ban đầu.'
                   : 'Chỉ số và mức tiêu thụ đã lưu vào hệ thống. Hóa đơn tạm tính và hóa đơn phát hành sẽ được tạo theo lịch chốt sổ của cơ sở.'}
               </Text>
             </Box>
@@ -118,7 +124,9 @@ export function MeterRoomOverview({
                     </Text>
                     {isInitial && (
                       <Text variant="bodySmall" style={ui.muted}>
-                        Mốc chỉ số ban đầu — không tính tiêu thụ kỳ
+                        {task.contractId
+                          ? 'Mốc khởi tạo của hợp đồng — không tính tiêu thụ từ người thuê trước'
+                          : 'Mốc chỉ số ban đầu — không tính tiêu thụ kỳ'}
                       </Text>
                     )}
                     {done && (

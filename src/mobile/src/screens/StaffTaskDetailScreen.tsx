@@ -59,8 +59,10 @@ const forms = {
 
 export function StaffTaskDetailScreen({ id }: { id: string }) {
   const model = useStaffTaskDetail(id);
-  const { go } = useWorkspace();
+  const { go, role, staffLocationId } = useWorkspace();
   const { task, detail, busy, allowed, setSheet } = model;
+  const inSelectedLocation =
+    role !== 'Staff' || (!!staffLocationId && (!task || task.locationId === staffLocationId));
   const assignedLocations = useWorkspaceQuery<Named[]>(
     task?.kind === 'LocationAssetHandover' ? '/api/v1/capture/locations' : null,
     { cache: queryPolicies.rooms, notifyError: false },
@@ -82,7 +84,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
     }, [refresh]),
   );
   const footer = useMemo(() => {
-    if (!task || (!allowed.length && !model.pendingAction)) return null;
+    if (!task || !inSelectedLocation || (!allowed.length && !model.pendingAction)) return null;
     return (
       <View style={styles.actionBar}>
         <Button
@@ -105,6 +107,7 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
     );
   }, [
     task,
+    inSelectedLocation,
     allowed.length,
     busy,
     model.syncedVersion,
@@ -116,6 +119,15 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
     title: 'Chi tiết công việc',
     footer,
   });
+  if (!inSelectedLocation)
+    return (
+      <View style={styles.section}>
+        <Text accessibilityRole="alert" variant="titleMedium">
+          Công việc này không thuộc cơ sở đang làm việc.
+        </Text>
+        <Button onPress={() => go('work-orders')}>Về công việc của cơ sở đã chọn</Button>
+      </View>
+    );
   if (!task)
     return (
       <>

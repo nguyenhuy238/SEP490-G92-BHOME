@@ -2,6 +2,9 @@ import React, { createContext, useCallback, useContext, useRef, useState } from 
 import { router, useSegments } from 'expo-router';
 import { Dialog, Portal, Button, Text } from 'react-native-paper';
 import { useSession } from '../../lib/SessionProvider';
+import { StaffLocationProvider } from './StaffLocationProvider';
+import { useStaffLocation } from './StaffLocationProvider';
+import type { Named } from '../../lib/api';
 import {
   homeScreen,
   sessionRole,
@@ -12,6 +15,12 @@ import {
 } from './navigation';
 
 interface WorkspaceContext {
+  staffLocationId: string;
+  staffLocations: Named[];
+  staffLocationsLoading: boolean;
+  staffLocationsError: string;
+  selectStaffLocation: (id: string) => void;
+  reloadStaffLocations: () => void;
   registerExitGuard: (guard: () => boolean, onLeave: () => void) => () => void;
   requestNavigation: (action: () => void) => void;
   scrollRevision: number;
@@ -29,10 +38,15 @@ const Context = createContext<WorkspaceContext | null>(null);
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { session } = useSession();
   const identity = session ? `${session.userId}:${session.roles.join(',')}` : 'anonymous';
-  return <WorkspaceSessionProvider key={identity}>{children}</WorkspaceSessionProvider>;
+  return (
+    <StaffLocationProvider key={identity}>
+      <WorkspaceSessionProvider>{children}</WorkspaceSessionProvider>
+    </StaffLocationProvider>
+  );
 }
 function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
   const { session } = useSession();
+  const staffLocation = useStaffLocation();
   const segments = useSegments();
   const [previewRole, setPreviewRole] = useState<MobileRole | null>(null);
   const [message, setMessage] = useState('');
@@ -70,6 +84,15 @@ function WorkspaceSessionProvider({ children }: { children: React.ReactNode }) {
   return (
     <Context.Provider
       value={{
+        staffLocationId: role === 'Staff' && !preview ? staffLocation.selectedLocationId : '',
+        staffLocations: role === 'Staff' && !preview ? staffLocation.locations : [],
+        staffLocationsLoading: role === 'Staff' && !preview && staffLocation.loading,
+        staffLocationsError: role === 'Staff' && !preview ? staffLocation.error : '',
+        selectStaffLocation: (id) =>
+          requestNavigation(() => {
+            staffLocation.selectLocation(id);
+          }),
+        reloadStaffLocations: staffLocation.reload,
         role,
         registerExitGuard,
         requestNavigation,

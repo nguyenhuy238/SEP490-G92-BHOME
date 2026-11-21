@@ -135,7 +135,10 @@ hợp đồng cá nhân không gửi cho Tenant khác cùng Room.
 
 ## Chạy và cấu hình provider
 
-Development mặc định bật `NotificationChannels.Enabled=true`, `AutomationEnabled=true`, `Mode=Sandbox`.
+Mặc định hệ thống bật worker chỉ xuất bản thông báo nội bộ
+(`NotificationChannels.AutomationEnabled=true`) nhưng **chưa bật gửi ra ngoài**
+(`NotificationChannels.Enabled=false`, `Mode=Unconfigured`), kể cả Development.
+Chỉ bật kênh EMAIL/PUSH sau khi có credential thật và đã kiểm tra outbox còn tồn.
 Notification-only worker xử lý inbox/nhắc/kênh gửi khi Jobs.Enabled=false; **không bật các job thay đổi
 hóa đơn, hợp đồng hoặc thanh toán**. Khi Jobs.Enabled=true, scheduler/queue hiện có xử lý notification,
 worker riêng nhường lại để không chạy hai lịch độc lập. Dedup/lease vẫn bảo vệ nhiều API instance.
@@ -143,15 +146,16 @@ worker riêng nhường lại để không chạy hai lịch độc lập. Dedup
 Sandbox chỉ dùng được ở Development/Testing; receipt `sandbox:*` không chứng minh email/push đã đến thiết bị.
 Production mặc định Unconfigured/tắt. EMAIL hiện dùng MailKit với STARTTLS bắt buộc;
 cấu hình, retry và endpoint kiểm tra được cập nhật tại [Gmail SMTP](GMAIL_SMTP.md).
-PUSH production chưa chọn Firebase/Expo; thay INotificationChannelProvider bằng adapter được duyệt,
-còn MVP dùng sandbox/mock như Q7. Không gọi provider thật khi chưa cấu hình.
+PUSH production dùng Expo Push Service qua HTTPS. Provider chỉ hoạt động khi
+`ExpoPush.Enabled=true` và có `ExpoPush.AccessToken` trong secret store; mặc định
+không cấu hình và không gọi Expo. [Cấu hình và giới hạn](EXPO_PUSH.md).
 
 Biến môi trường được Start-Api.ps1 và DevelopmentEnvironmentFile hỗ trợ:
 
 ```text
-NotificationChannels__Enabled=true
+NotificationChannels__Enabled=false
 NotificationChannels__AutomationEnabled=true
-NotificationChannels__Mode=Sandbox
+NotificationChannels__Mode=Unconfigured
 NotificationChannels__MaxAttempts=4
 NotificationChannels__RetrySeconds=30
 NotificationChannels__TimeoutSeconds=15
@@ -159,6 +163,8 @@ NotificationChannels__TimeoutSeconds=15
 
 SMTP mới dùng Email.Enabled và Email:AppPassword qua environment/user-secrets; mapping cấu hình
 Mode=Smtp/SmtpHost/SmtpPort/SmtpUseTls/SmtpUser/SmtpPassword/FromAddress cũ vẫn được giữ.
+Expo Push dùng `ExpoPush__Enabled` và `ExpoPush__AccessToken` theo quy trình riêng;
+không xem ticket Expo là xác nhận điện thoại đã nhận thông báo.
 Không commit credential. `.env.example` chỉ có giá trị không bí mật.
 Staff lịch sử và production provider là giới hạn vận hành cần giữ rõ khi tích hợp UI.
 

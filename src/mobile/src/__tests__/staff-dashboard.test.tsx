@@ -7,13 +7,25 @@ const state = vi.hoisted(() => ({
   go: vi.fn(),
   push: vi.fn(),
   reload: vi.fn(),
+  selectLocation: vi.fn(),
+  selectedId: 'loc',
+  locations: [{ id: 'loc', label: 'Cơ sở kiểm thử' }],
   tasks: null as null | { totalCount: number },
   overdue: [] as { id: string; title: string; locationId: string; status: string; kind?: string }[],
   failed: false,
 }));
 vi.mock('expo-router', () => ({ router: { push: state.push } }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ preview: state.preview, go: state.go }),
+  useWorkspace: () => ({
+    preview: state.preview,
+    go: state.go,
+    staffLocationId: state.selectedId,
+    staffLocations: state.locations,
+    staffLocationsLoading: false,
+    staffLocationsError: '',
+    selectStaffLocation: state.selectLocation,
+    reloadStaffLocations: state.reload,
+  }),
 }));
 vi.mock('../features/workspace/useStaffDashboard', () => ({
   useStaffDashboard: () => ({
@@ -27,6 +39,7 @@ vi.mock('../features/workspace/useStaffDashboard', () => ({
 }));
 vi.mock('react-native', () => ({
   View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  ScrollView: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   StyleSheet: { create: (s: unknown) => s, hairlineWidth: 1 },
 }));
 vi.mock('react-native-paper', () => {
@@ -54,7 +67,7 @@ vi.mock('react-native-paper', () => {
     Dialog: Object.assign(
       ({ visible, children }: { visible: boolean; children?: React.ReactNode }) =>
         visible ? <div role="dialog">{children}</div> : null,
-      { Title: Content, Content, Actions: Content },
+      { Title: Content, Content, Actions: Content, ScrollArea: Content },
     ),
   };
 });
@@ -89,6 +102,21 @@ beforeEach(() => {
   state.tasks = null;
   state.overdue = [];
   state.failed = false;
+  state.selectedId = 'loc';
+  state.locations = [{ id: 'loc', label: 'Cơ sở kiểm thử' }];
+});
+it('lets Staff choose between two assigned Locations directly on Home', () => {
+  state.locations = [
+    { id: 'loc', label: 'Cơ sở kiểm thử' },
+    { id: 'loc-2', label: 'Cơ sở thứ hai' },
+  ];
+  render(<StaffDashboard />);
+  fireEvent.click(screen.getByRole('button', { name: 'Chuyển cơ sở' }));
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByRole('button', { name: 'Cơ sở kiểm thử' })).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cơ sở thứ hai' }));
+  expect(state.selectLocation).toHaveBeenCalledWith('loc-2');
+  expect(screen.queryByRole('dialog')).toBeNull();
 });
 it('does not show a sample name, shift status or manufactured counts in authenticated mode', () => {
   render(<StaffDashboard />);

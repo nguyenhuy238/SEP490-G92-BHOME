@@ -19,6 +19,14 @@ DB triggers cấm sửa/xóa/truncate hóa đơn Final, lines và recipient, ki�
 Hạn thanh toán lấy từ snapshot schedule, không tự áp số ngày sau ngày phát hành.
 Endpoint finalize trực tiếp là thao tác Owner; automatic Final chỉ qua delegation Owner đã lưu.
 Không có lịch mặc định tự phát hành thay Owner khi chưa cấu hình/ủy quyền.
+Khi còn bất kỳ `InvoiceAdjustmentRequest` chưa được Owner duyệt hoặc từ chối,
+**cả phát hành thủ công lẫn JOB-10 Final** đều trả `409 invoice_adjustment_pending`;
+không tạo `InvoiceIssuedEvent`, không chuyển Draft thành Final. Owner xử lý
+yêu cầu điều chỉnh trước, cập nhật/review lại Draft nếu dữ liệu thay đổi, sau
+đó mới phát hành lại. Đến/ngày vượt mốc Final, notification publisher sẽ tạo
+inbox một lần/hóa đơn cho Owner (link Adjustment cần quyết định) và các Tenant
+trong snapshot (link Invoice, chỉ thông báo trì hoãn, không lộ reason/evidence).
+Email/push phụ thuộc provider được cấu hình, không thực hiện trong transaction Final.
 
 Nguồn nghiệp vụ: [quyết định và traceability](../development/BH21_TRACEABILITY.md).
 Thay DBR-06 bằng unique Room + tháng theo quyết định người dùng 01/11/2026.

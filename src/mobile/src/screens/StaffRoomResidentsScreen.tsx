@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, TextInput, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
@@ -99,11 +99,6 @@ function RoomDirectory() {
   const [filter, setFilter] = useState<RoomFilter>('all');
   const [page, setPage] = useState(1);
   const list = useRef<FlatList>(null);
-  const { location, locations, selectLocation } = scope;
-  useEffect(() => {
-    if (!location && locations.length) selectLocation(locations[0].id);
-  }, [location, locations, selectLocation]);
-
   const rooms = useMemo(() => {
     const grouped = new Map<string, Resident[]>();
     for (const resident of scope.residents) {

@@ -222,7 +222,17 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                 db.Set<ContractMoveOut>().Any(m => m.ContractId == c.Id && m.Status == MoveOutStatus.Approved && m.ProposedDate <= x.ReadingDate), t))
                 throw new CaptureConflictException("approved_contract_move_out_required");
         }
-        else if (x.ContractId is not null) throw new CaptureValidationException("final_contract_reference_only");
+        else if (x.ContractId is not null)
+        {
+            // A confirmed initial reading belongs to the new tenancy, not the
+            // physical meter's lifetime. The Owner may retry/backfill only for
+            // an active Main contract of this very room.
+            if (x.Purpose != ReadingPurpose.Initial) throw new CaptureValidationException("initial_or_final_contract_reference_only");
+            if (!await db.Set<Contract>().AnyAsync(c => c.Id == x.ContractId && c.RoomId == meter.RoomId &&
+                c.Kind == ContractKind.Main && c.PreviousContractId == null && c.Status == ContractStatus.Active &&
+                c.StartDate <= x.ReadingDate, t))
+                throw new CaptureConflictException("active_contract_initial_required");
+        }
         var task = new OperationalTask { LocationId = meter.LocationId, Title = "Meter reading", MeterId = x.MeterId, Purpose = x.Purpose, ReadingDate = x.ReadingDate, BillingPeriod = x.BillingPeriod, ContractId = x.ContractId };
         db.Add(task); Audit("MeterTaskAssigned", "Task", task.Id); await Save(t); return new(task.Id);
     }
@@ -233,7 +243,9 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
                 ? db.Set<MeterReading>().Where(r => r.TaskId == x.Id).Select(r => r.PreviousValue).FirstOrDefault()
                 : db.Set<MeterReading>().Where(r => r.MeterId == x.MeterId &&
                     db.Set<OperationalTask>().Any(previous => previous.Id == r.TaskId &&
-                        (previous.ReadingDate < x.ReadingDate || (x.Purpose == ReadingPurpose.Periodic && previous.Purpose == ReadingPurpose.Initial && previous.ReadingDate == x.ReadingDate) ||
+                        (previous.ReadingDate < x.ReadingDate ||
+                         (x.Purpose == ReadingPurpose.Initial && x.ContractId != null && previous.ReadingDate == x.ReadingDate && previous.ContractId != x.ContractId) ||
+                         (x.Purpose == ReadingPurpose.Periodic && previous.Purpose == ReadingPurpose.Initial && previous.ReadingDate == x.ReadingDate) ||
                         (x.Purpose == ReadingPurpose.Final && previous.ReadingDate == x.ReadingDate &&
                             (previous.Purpose != ReadingPurpose.Final || previous.ContractId != x.ContractId)))))
                     .OrderByDescending(r => r.ConfirmedAt).ThenBy(r => r.Id).Select(r => (decimal?)r.ConfirmedValue).FirstOrDefault(),
@@ -312,7 +324,13 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         var evidence = await db.Locked<MeterEvidence>(x.EvidenceId).SingleOrDefaultAsync(t);
         if (evidence is null || evidence.TaskId != taskId || evidence.UploadedByUserId != Actor || !evidence.IsUploaded || evidence.IsLinked || evidence.CleanupAfter <= clock.GetUtcNow()) throw new CaptureConflictException("evidence_not_available");
         var previous = await db.Set<MeterReading>().Where(r => r.MeterId == meter.Id).OrderByDescending(r => r.ConfirmedAt).FirstOrDefaultAsync(t);
-        if (task.Purpose == ReadingPurpose.Initial && previous != null) throw new CaptureConflictException("baseline_already_confirmed");
+        var tenancyOpening = task.Purpose == ReadingPurpose.Initial && task.ContractId is not null;
+        if (tenancyOpening && !await db.Set<Contract>().AnyAsync(c => c.Id == task.ContractId && c.RoomId == meter.RoomId &&
+                c.Kind == ContractKind.Main && c.PreviousContractId == null && c.Status == ContractStatus.Active &&
+                c.StartDate <= task.ReadingDate, t))
+            throw new CaptureConflictException("active_contract_initial_required");
+        if (task.Purpose == ReadingPurpose.Initial && previous != null && !tenancyOpening)
+            throw new CaptureConflictException("baseline_already_confirmed");
         if (task.Purpose != ReadingPurpose.Initial && previous is null) throw new CaptureConflictException("confirmed_baseline_required");
         if (previous is not null)
         {
@@ -327,7 +345,12 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             // remain out of order; the meter still must not roll backwards.
             var periodicAfterInitialOnSameDay = task.Purpose == ReadingPurpose.Periodic && previousTask.Purpose == ReadingPurpose.Initial &&
                 task.ReadingDate == previousTask.ReadingDate;
-            if ((!finalOnSameDay && !periodicAfterInitialOnSameDay && task.ReadingDate <= previousTask.ReadingDate) ||
+            // Two distinct contracts can hand over the same physical meter on
+            // the same day. They still need separate images/confirmations and
+            // must not roll the meter backwards.
+            var tenancyOpeningOnSameDay = tenancyOpening && previousTask.ContractId != task.ContractId &&
+                task.ReadingDate == previousTask.ReadingDate;
+            if ((!finalOnSameDay && !periodicAfterInitialOnSameDay && !tenancyOpeningOnSameDay && task.ReadingDate <= previousTask.ReadingDate) ||
                 (previousTask.BillingPeriod is not null && task.BillingPeriod <= previousTask.BillingPeriod))
                 throw new CaptureConflictException("reading_period_out_of_order");
             if (x.ConfirmedValue < previous.ConfirmedValue) throw new CaptureConflictException("meter_reset_or_rollover_requires_review");
@@ -346,7 +369,9 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             PreviousValue = previous?.ConfirmedValue,
             ConfirmedValue = x.ConfirmedValue,
             OcrProposedValue = proposed,
-            Consumption = previous is null ? null : x.ConfirmedValue - previous.ConfirmedValue,
+            // A tenancy's opening reading is a baseline, not billable usage
+            // since the physical meter's previous (possibly other-tenant) value.
+            Consumption = task.Purpose == ReadingPurpose.Initial || previous is null ? null : x.ConfirmedValue - previous.ConfirmedValue,
             Status = proposed.HasValue && proposed != x.ConfirmedValue ? MeterReadingStatus.Corrected : MeterReadingStatus.Confirmed,
             ConfirmedByUserId = Actor,
             ConfirmedAt = confirmedAt

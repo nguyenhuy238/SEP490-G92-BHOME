@@ -61,7 +61,7 @@ public sealed class EnvironmentConfigurationTests
     }
 
     [Theory]
-    [InlineData("Staging", "https://api-sepay-test.103.146.23.157.sslip.io")]
+    [InlineData("Staging", "https://owner-staging.103.146.23.157.sslip.io")]
     [InlineData("Production", "https://owner.103.146.23.157.sslip.io")]
     [InlineData("Production", "https://owner.bhome.example")]
     public void DeploymentDerivesAllCallbacksFromConfiguredOrigins(string environment, string owner)
@@ -119,6 +119,63 @@ public sealed class EnvironmentConfigurationTests
         EnvironmentConfiguration.ApplyDeploymentDefaults(c);
         Assert.Equal("https://legacy.example/reset-password", c["AuthenticationEmail:WebResetUrl"]);
         Assert.Contains(EnvironmentConfiguration.Errors(c, "Staging"), e => e.Contains("WebResetUrl"));
+    }
+
+    private static ConfigurationManager RenamedStaging()
+    {
+        var c = new ConfigurationManager();
+        c.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Deployment:Environment"] = "Staging",
+            ["Deployment:OwnerOrigin"] = "https://owner-staging.103.146.23.157.sslip.io",
+            ["Deployment:ApiOrigin"] = "https://api-staging.103.146.23.157.sslip.io",
+            ["Deployment:PublicOrigin"] = "https://public-staging.103.146.23.157.sslip.io",
+            ["Deployment:LegacyOwnerOrigin"] = "https://owner-sepay-test.103.146.23.157.sslip.io",
+            ["Deployment:LegacyApiOrigin"] = "https://api-sepay-test.103.146.23.157.sslip.io",
+            ["Deployment:LegacyPublicOrigin"] = "https://public-sepay-test.103.146.23.157.sslip.io",
+            ["AllowedHosts"] = "owner-staging.103.146.23.157.sslip.io;api-staging.103.146.23.157.sslip.io;public-staging.103.146.23.157.sslip.io;owner-sepay-test.103.146.23.157.sslip.io;api-sepay-test.103.146.23.157.sslip.io;public-sepay-test.103.146.23.157.sslip.io",
+            ["AuthWeb:AllowedOrigins:0"] = "https://owner-staging.103.146.23.157.sslip.io",
+            ["AuthWeb:AllowedOrigins:1"] = "https://owner-sepay-test.103.146.23.157.sslip.io",
+            ["Cors:AllowedOrigins:0"] = "https://owner-staging.103.146.23.157.sslip.io",
+            ["Cors:AllowedOrigins:1"] = "https://public-staging.103.146.23.157.sslip.io",
+            ["Cors:AllowedOrigins:2"] = "https://owner-sepay-test.103.146.23.157.sslip.io",
+            ["Cors:AllowedOrigins:3"] = "https://public-sepay-test.103.146.23.157.sslip.io",
+            ["SePay:Mode"] = "Test"
+        });
+        EnvironmentConfiguration.ApplyDeploymentDefaults(c);
+        return c;
+    }
+
+    [Fact]
+    public void StagingRenameKeepsLegacyAuthOriginsButIssuesOnlyCanonicalLinks()
+    {
+        var c = RenamedStaging();
+        Assert.Empty(EnvironmentConfiguration.Errors(c, "Staging"));
+        Assert.Equal("https://owner-staging.103.146.23.157.sslip.io/reset-password", c["AuthenticationEmail:WebResetUrl"]);
+        Assert.Equal("https://api-staging.103.146.23.157.sslip.io/open/sign-contract", c["ContractSigning:InvitationLink:PublicOpenUrl"]);
+        Assert.Contains("https://owner-sepay-test.103.146.23.157.sslip.io", c.GetSection("AuthenticationEmail:TrustedOrigins").Get<string[]>()!);
+    }
+
+    [Theory]
+    [InlineData("Deployment:LegacyOwnerOrigin", "https://owner.103.146.23.157.sslip.io")]
+    [InlineData("Deployment:LegacyPublicOrigin", "https://www.103.146.23.157.sslip.io")]
+    [InlineData("Deployment:LegacyApiOrigin", "https://api.103.146.23.157.sslip.io")]
+    [InlineData("Deployment:LegacyOwnerOrigin", "https://owner-sepay-test.103.146.23.157.sslip.io.evil.invalid")]
+    public void StagingCompatibilityCannotAuthorizeAnotherEnvironmentOrLookalike(string key, string value)
+    {
+        var c = RenamedStaging(); c[key] = value;
+        Assert.Contains(EnvironmentConfiguration.Errors(c, "Staging"), e => e.Contains(key));
+    }
+
+    [Fact]
+    public void ProductionCannotEnableStagingCompatibilityAndLegacyCallbacksCannotRemainCanonical()
+    {
+        var c = RenamedStaging();
+        Assert.Contains(EnvironmentConfiguration.Errors(c, "Production"), e => e.Contains("LegacyOwnerOrigin"));
+        c["AuthenticationEmail:WebResetUrl"] = "https://owner-sepay-test.103.146.23.157.sslip.io/reset-password";
+        Assert.Contains(EnvironmentConfiguration.Errors(c, "Staging"), e => e.Contains("WebResetUrl"));
+        c = RenamedStaging(); c["AuthWeb:AllowedOrigins:2"] = c["Deployment:LegacyPublicOrigin"];
+        Assert.Contains(EnvironmentConfiguration.Errors(c, "Staging"), e => e.StartsWith("AuthWeb:AllowedOrigins must use"));
     }
 
     [Fact]

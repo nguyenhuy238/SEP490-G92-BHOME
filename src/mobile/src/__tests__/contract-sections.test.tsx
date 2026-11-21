@@ -173,6 +173,9 @@ vi.mock('../features/contracts/ContractWorkflowPanel', () => ({
 vi.mock('../features/contracts/ContractHandoverPanel', () => ({
   ContractHandoverPanel: () => <span>Handover panel</span>,
 }));
+vi.mock('../features/contracts/MoveInDraftHandoverPanel', () => ({
+  MoveInDraftHandoverPanel: () => <span>Handover draft panel</span>,
+}));
 vi.mock('../features/contracts/ContractLifecyclePanel', () => ({
   ContractLifecyclePanel: () => <span>Lifecycle panel</span>,
 }));
@@ -395,7 +398,7 @@ it('opens the handover section directly for the selected Tenant contract', () =>
   state.role = 'Tenant';
   state.section = 'handover';
   render(<ContractScreen />);
-  expect(screen.getByText('Handover panel')).toBeTruthy();
+  expect(screen.getByText('Handover draft panel')).toBeTruthy();
   expect(screen.queryByText('Điều khoản đưa đi ký')).toBeNull();
 });
 it('ignores an invalid initial contract section', () => {
@@ -484,7 +487,7 @@ it('defaults to overview and switches sections without displaying all forms at o
   expect(screen.getByText('Điều khoản test đã lưu')).toBeTruthy();
   expect(screen.queryByText('Handover panel')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Bàn giao' }));
-  expect(screen.getByText('Handover panel')).toBeTruthy();
+  expect(screen.getByText('Handover draft panel')).toBeTruthy();
   expect(screen.queryByText('Điều khoản test đã lưu')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Lịch sử' }));
   expect(screen.getByText('Workflow history')).toBeTruthy();
@@ -514,12 +517,18 @@ it('keeps Staff restrictions in the signing section', () => {
   expect(screen.queryByRole('button', { name: 'Kích hoạt hợp đồng' })).toBeNull();
   expect(screen.getByText(/Staff theo dõi hồ sơ/)).toBeTruthy();
 });
-it('does not open handover forms before activation', () => {
-  state.contract.status = 'Draft';
+it('shows the handover draft before contract activation for Staff', () => {
+  state.contract.status = 'PendingActivation';
   render(<ContractScreen />);
   fireEvent.click(screen.getByRole('button', { name: 'Bàn giao' }));
-  expect(screen.getByText(/Chỉ thực hiện bàn giao sau khi hợp đồng được kích hoạt/)).toBeTruthy();
+  expect(screen.getByText('Handover draft panel')).toBeTruthy();
   expect(screen.queryByText('Handover panel')).toBeNull();
+});
+it('keeps active Main contracts on the new handover with historic fallback available', () => {
+  state.role = 'Tenant';
+  state.section = 'handover';
+  render(<ContractScreen />);
+  expect(screen.getByText('Handover draft panel')).toBeTruthy();
 });
 it('puts renewal actions in lifecycle and closes an action when changing sections', () => {
   render(<ContractScreen />);

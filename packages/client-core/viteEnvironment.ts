@@ -52,5 +52,24 @@ export function validateWebEnvironment(env: Record<string, string>, build: boole
   }
   if (build && env.VITE_API_MODE === 'mock')
     throw new Error('Deploy builds require VITE_API_MODE=api.');
+  const environment = env.VITE_DEPLOYMENT_ENVIRONMENT;
+  if (environment) {
+    const hosts: Record<string, string[]> = {
+      Staging: [
+        'api-staging.103.146.23.157.sslip.io',
+        'owner-staging.103.146.23.157.sslip.io',
+        'public-staging.103.146.23.157.sslip.io',
+      ],
+      Production: [
+        'api.103.146.23.157.sslip.io',
+        'owner.103.146.23.157.sslip.io',
+        'www.103.146.23.157.sslip.io',
+      ],
+    };
+    if (!hosts[environment]?.includes(api.hostname) || api.port)
+      throw new Error('API origin does not belong to VITE_DEPLOYMENT_ENVIRONMENT.');
+    if (env.VITE_API_MODE !== 'api')
+      throw new Error('A release requires explicit VITE_API_MODE=api.');
+  }
   return api;
 }

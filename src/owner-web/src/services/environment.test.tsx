@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { validateWebEnvironment } from '../../../../packages/client-core/viteEnvironment';
 
 describe('environment build boundary', () => {
+  it('rejects the legacy API as the base of a new Staging release', () => {
+    expect(() =>
+      validateWebEnvironment(
+        {
+          VITE_API_BASE_URL: 'https://api-sepay-test.103.146.23.157.sslip.io',
+          VITE_DEPLOYMENT_ENVIRONMENT: 'Staging',
+          VITE_API_MODE: 'api',
+        },
+        true,
+      ),
+    ).toThrow('does not belong');
+  });
   it('supports two independent local developers without tunnels', () => {
     for (const port of [7240, 7241]) {
       expect(
@@ -37,7 +49,7 @@ describe('environment build boundary', () => {
   });
   it('keeps a staging portal on its own API and accepts sslip/custom deployment hosts', () => {
     for (const origin of [
-      'https://api-sepay-test.103.146.23.157.sslip.io',
+      'https://api-staging.103.146.23.157.sslip.io',
       'https://owner.bhome.example',
     ]) {
       expect(
@@ -57,6 +69,28 @@ describe('environment build boundary', () => {
   });
   it('requires an explicit API for a build', () => {
     expect(() => validateWebEnvironment({}, true)).toThrow('required');
+  });
+  it.each([
+    ['Production', 'https://api-staging.103.146.23.157.sslip.io'],
+    ['Staging', 'https://api.103.146.23.157.sslip.io'],
+  ])('rejects a cross-environment API in %s', (environment, api) => {
+    expect(() =>
+      validateWebEnvironment(
+        { VITE_API_BASE_URL: api, VITE_DEPLOYMENT_ENVIRONMENT: environment, VITE_API_MODE: 'api' },
+        true,
+      ),
+    ).toThrow('does not belong');
+  });
+  it('requires API mode for environment-specific artifacts', () => {
+    expect(() =>
+      validateWebEnvironment(
+        {
+          VITE_API_BASE_URL: 'https://owner.103.146.23.157.sslip.io',
+          VITE_DEPLOYMENT_ENVIRONMENT: 'Production',
+        },
+        true,
+      ),
+    ).toThrow('explicit');
   });
   it('does not expose malformed URL credentials', () => {
     expect(() =>

@@ -32,7 +32,11 @@ const state = vi.hoisted(() => ({
   foreground: null as null | ((state: string) => void),
 }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ role: state.role, go: state.go }),
+  useWorkspace: () => ({
+    role: state.role,
+    go: state.go,
+    staffLocationId: '00000000-0000-4000-8000-000000000001',
+  }),
 }));
 
 vi.mock('../features/contracts/HoldingNewTenant', () => ({
@@ -325,17 +329,11 @@ it('filters available rooms by assigned location and shows their capacity', asyn
     pageSize: 100,
   });
   mount(api);
-  await waitFor(() => expect(screen.getByLabelText('Cơ sở được phân công *')).toBeTruthy());
-  expect(screen.queryByText('P101 · Cơ sở A · 2 người')).toBeNull();
-  fireEvent.change(screen.getByLabelText('Cơ sở được phân công *'), { target: { value: ids[0] } });
   expect(await screen.findByText('P101 · Cơ sở A · 2 người')).toBeTruthy();
   expect(screen.queryByText('P201 · Cơ sở B · 4 người')).toBeNull();
+  expect(screen.queryByLabelText('Cơ sở được phân công *')).toBeNull();
   fireEvent.change(screen.getByLabelText('Phòng giữ chỗ *'), { target: { value: ids[1] } });
   expect(await screen.findByText('Sức chứa: 2 người')).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Cơ sở được phân công *'), { target: { value: ids[3] } });
-  expect(screen.getByText('P201 · Cơ sở B · 4 người')).toBeTruthy();
-  expect(screen.queryByText('P101 · Cơ sở A · 2 người')).toBeNull();
-  expect(screen.getByLabelText('Phòng giữ chỗ *')).toHaveProperty('value', '');
 });
 it('loads preparation and readiness for the selected room/location, without any Tenant selection', async () => {
   const { api } = mount();

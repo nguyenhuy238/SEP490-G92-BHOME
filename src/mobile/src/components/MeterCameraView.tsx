@@ -19,6 +19,7 @@ export function MeterCameraView({
   onClose,
   onUse,
   onRetake,
+  onUseDemo,
 }: {
   camera: React.ReactNode;
   preview: string;
@@ -34,6 +35,7 @@ export function MeterCameraView({
   onClose: () => void;
   onUse: () => void;
   onRetake: () => void;
+  onUseDemo?: () => void;
 }) {
   const blocked = disabled || working || requestingPermission;
   return (
@@ -122,6 +124,17 @@ export function MeterCameraView({
             {label}
           </Button>
         </>
+      )}
+      {onUseDemo && !preview && (
+        <View style={{ gap: 4 }}>
+          <Button mode="outlined" disabled={disabled || working} onPress={onUseDemo}>
+            Dùng ảnh mẫu để test
+          </Button>
+          <Text variant="bodySmall" style={{ color: c.muted }}>
+            Chỉ dành cho Web local. Ảnh giả sẽ gửi tới Backend; phải kiểm tra và xác nhận chỉ số thủ
+            công, không dùng cho dữ liệu thực tế.
+          </Text>
+        </View>
       )}
       {!!error && (
         <Text accessibilityRole="alert" style={{ color: c.red }}>

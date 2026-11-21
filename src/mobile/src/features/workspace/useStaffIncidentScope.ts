@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useWorkspaceQuery } from './useWorkspaceQuery';
 import type { Named } from '../../lib/api';
+import { useWorkspace } from './WorkspaceProvider';
 
 // Existing Property AssetDto fields used by the local-only reporting form.
 interface IncidentAssetOption {
@@ -23,13 +24,18 @@ export function useStaffIncidentScope(
   enabled: boolean,
   initial?: { locationId?: string; roomId?: string; commonArea?: string },
 ) {
-  const [locationId, setLocationId] = useState(initial?.locationId ?? '');
+  const { staffLocationId, selectStaffLocation } = useWorkspace();
   const [area, setArea] = useState(initial?.roomId ?? (initial?.commonArea ? 'common' : ''));
   const [assetId, setAssetId] = useState('');
   const [page, setPage] = useState(1);
   const locations = useWorkspaceQuery<Named[]>(enabled ? '/api/v1/capture/locations' : null);
+  // An inventory report stays on its source task's Location. Normal reporting
+  // follows the shared Staff selection; both require a current assignment.
+  const requestedLocation = initial?.locationId || staffLocationId;
   const location =
-    enabled && locations.data?.some((item) => item.id === locationId) ? locationId : '';
+    enabled && locations.data?.some((item) => item.id === requestedLocation)
+      ? requestedLocation
+      : '';
   const rooms = useWorkspaceQuery<Named[]>(
     location ? `/api/v1/capture/locations/${encodeURIComponent(location)}/rooms` : null,
   );
@@ -66,7 +72,7 @@ export function useStaffIncidentScope(
     options,
     page,
     selectLocation: (id: string) => {
-      setLocationId(id);
+      selectStaffLocation(id);
       setArea('');
       setAssetId('');
       setPage(1);

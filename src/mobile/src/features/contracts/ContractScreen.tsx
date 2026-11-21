@@ -34,6 +34,7 @@ import { CameraCapture } from '../../components/CameraCapture';
 import { ContractEvidence } from './ContractEvidence';
 import { ContractWorkflowPanel } from './ContractWorkflowPanel';
 import { ContractHandoverPanel } from './ContractHandoverPanel';
+import { MoveInDraftHandoverPanel } from './MoveInDraftHandoverPanel';
 import { ContractLifecyclePanel } from './ContractLifecyclePanel';
 import { ContractExpiryPanel } from './ContractExpiryPanel';
 import { ContractProgress } from './ContractProgress';
@@ -612,17 +613,6 @@ function LiveContractDetail({
       {section === 'overview' && !rental && !holding && !ownerMain && c.kind !== 'Holding' && (
         <ContractProgress contract={c} readiness={r} />
       )}
-      {!holding && (
-        <Button
-          disabled={uploading}
-          onPress={() => {
-            setSelectedAction('');
-            detail.reload();
-          }}
-        >
-          Tải lại trạng thái
-        </Button>
-      )}
       {!!notice && <Text style={ui.blue}>{notice}</Text>}
       {section === 'overview' && !rental && !holding && !ownerMain && (
         <>
@@ -734,15 +724,52 @@ function LiveContractDetail({
           onChanged={detail.reload}
         />
       )}
-      {section === 'handover' && ['Active', 'Terminated', 'Superseded'].includes(c.status) && (
-        <ContractHandoverPanel api={api} contract={c} role={role} />
-      )}
-      {section === 'handover' && !['Active', 'Terminated', 'Superseded'].includes(c.status) && (
-        <Box>
-          <Heading title="Bàn giao nhận phòng" />
-          <Text>Chỉ thực hiện bàn giao sau khi hợp đồng được kích hoạt.</Text>
-        </Box>
-      )}
+      {section === 'handover' &&
+        c.kind === 'Main' &&
+        [
+          'Draft',
+          'PendingSigning',
+          'PendingActivation',
+          'Active',
+          'Terminated',
+          'Superseded',
+        ].includes(c.status) &&
+        (role === 'Owner' ? (
+          ['Active', 'Terminated', 'Superseded'].includes(c.status) ? (
+            <ContractHandoverPanel api={api} contract={c} role={role} />
+          ) : (
+            <Box>
+              <Text>Owner kiểm tra và duyệt biên bản bàn giao nháp tại Web Chủ cơ sở.</Text>
+            </Box>
+          )
+        ) : (
+          <MoveInDraftHandoverPanel
+            api={api}
+            contract={c}
+            role={role}
+            onUpdated={detail.reload}
+            legacyFallback={
+              ['Active', 'Terminated', 'Superseded'].includes(c.status) ? (
+                <ContractHandoverPanel api={api} contract={c} role={role} />
+              ) : undefined
+            }
+          />
+        ))}
+      {section === 'handover' &&
+        (c.kind !== 'Main' ||
+          ![
+            'Draft',
+            'PendingSigning',
+            'PendingActivation',
+            'Active',
+            'Terminated',
+            'Superseded',
+          ].includes(c.status)) && (
+          <Box>
+            <Heading title="Bàn giao nhận phòng" />
+            <Text>Biên bản bàn giao chỉ áp dụng cho hợp đồng thuê chính đủ điều kiện.</Text>
+          </Box>
+        )}
       {section === 'signing' && !rental && !holding && role === 'Staff' && (
         <Text style={ui.muted}>
           Staff chuẩn bị và theo dõi hồ sơ. Owner/Tenant thực hiện ký; Owner xác minh cọc và kích
@@ -933,7 +960,7 @@ function LiveContractDetail({
           }}
           onSuccess={(next) => {
             setSelectedAction('');
-            setNotice('Máy chủ đã ghi nhận thao tác. Trạng thái đã được yêu cầu tải lại.');
+            setNotice('Máy chủ đã ghi nhận thao tác. Trạng thái đang được đồng bộ tự động.');
             detail.reload();
             if (next) onNext(next);
           }}

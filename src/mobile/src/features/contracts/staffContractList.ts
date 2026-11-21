@@ -53,11 +53,15 @@ export function staffContractTabView(
   return { ...view, [dimension]: toggle && view[dimension] === tab.id ? '' : tab.id, page: 1 };
 }
 
-export async function loadStaffContracts(api: ContractClient, signal: AbortSignal) {
+export async function loadStaffContracts(
+  api: ContractClient,
+  signal: AbortSignal,
+  locationId = '',
+) {
   const contracts = new Map<string, ContractSummary>();
   let expectedTotal: number | undefined;
   for (let page = 1; ; page++) {
-    const batch = await api.list(page, '', '', signal);
+    const batch = await api.list(page, '', locationId, signal);
     if (signal.aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
     if (expectedTotal === undefined) expectedTotal = batch.totalCount;
     if (batch.totalCount !== expectedTotal)

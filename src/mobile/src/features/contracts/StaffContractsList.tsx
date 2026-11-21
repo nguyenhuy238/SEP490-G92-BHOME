@@ -43,6 +43,7 @@ type Schedule = Awaited<ReturnType<ContractClient['moveOutAssignments']>>[number
 type Snapshot = {
   api: ContractClient;
   revision: number;
+  locationId: string;
   contracts: ContractSummary[];
   schedules: Schedule[];
   error: string;
@@ -64,7 +65,7 @@ export function StaffContractsList({
   viewState?: StaffContractListView;
   onViewStateChange?: (view: StaffContractListView) => void;
 }) {
-  const { resetScroll } = useWorkspace();
+  const { go, resetScroll, staffLocationId } = useWorkspace();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [revision, setRevision] = useState(0);
   const [localView, setLocalView] = useState({ ...defaultStaffContractListView });
@@ -81,28 +82,56 @@ export function StaffContractsList({
     }, [refresh]),
   );
   useEffect(() => {
-    if (!revision) return;
+    if (!revision || !staffLocationId) return;
     const controller = new AbortController();
     pending.current = controller;
     void (async () => {
       const [contracts, schedules] = await Promise.allSettled([
-        loadStaffContracts(api, controller.signal),
+        loadStaffContracts(api, controller.signal, staffLocationId),
         api.moveOutAssignments(controller.signal),
       ]);
       if (controller.signal.aborted) return;
+      const scopedContracts = contracts.status === 'fulfilled' ? contracts.value : [];
+      const scopedContractIds = new Set(scopedContracts.map((contract) => contract.id));
       setSnapshot({
         api,
         revision,
-        contracts: contracts.status === 'fulfilled' ? contracts.value : [],
-        schedules: schedules.status === 'fulfilled' ? schedules.value : [],
+        locationId: staffLocationId,
+        contracts: scopedContracts,
+        // This endpoint returns all assigned Locations without a locationId filter.
+        // Resolve through the contracts already scoped by the server, not a mutable label.
+        schedules:
+          contracts.status === 'fulfilled' && schedules.status === 'fulfilled'
+            ? schedules.value.filter((schedule) => scopedContractIds.has(schedule.contractId))
+            : [],
         error: contracts.status === 'rejected' ? contractError(contracts.reason) : '',
-        scheduleError: schedules.status === 'rejected' ? contractError(schedules.reason) : '',
+        scheduleError:
+          contracts.status === 'rejected'
+            ? 'Chưa xác định được cơ sở của lịch kiểm tra. Hãy tải lại danh sách hợp đồng.'
+            : schedules.status === 'rejected'
+              ? contractError(schedules.reason)
+              : '',
       });
     })();
     return () => controller.abort();
-  }, [api, revision]);
-  const loading = !snapshot || snapshot.api !== api || snapshot.revision !== revision;
+  }, [api, revision, staffLocationId]);
+  const loading =
+    !snapshot ||
+    snapshot.api !== api ||
+    snapshot.revision !== revision ||
+    snapshot.locationId !== staffLocationId;
   const contracts = useMemo(() => (loading ? [] : snapshot.contracts), [loading, snapshot]);
+  // Main move-in inspection may still be open after activation. The contract
+  // list does not expose handover status, so this is a neutral entry point,
+  // not a claim that every Active contract is unfinished.
+  const handoverQueue = contracts
+    .filter(
+      (contract) =>
+        contract.kind === 'Main' &&
+        !contract.onboardingDraft &&
+        ['PendingSigning', 'PendingActivation', 'Active'].includes(contract.status),
+    )
+    .sort((a, b) => Number(a.status === 'Active') - Number(b.status === 'Active'));
   const error = !loading ? snapshot.error : '';
   const schedules = !loading ? snapshot.schedules : [];
   const scheduleError = !loading ? snapshot.scheduleError : '';
@@ -141,6 +170,31 @@ export function StaffContractsList({
           />
         )}
       </View>
+      {!loading && !error && handoverQueue.length > 0 && (
+        <View style={styles.scheduleDetails}>
+          <Text variant="titleMedium">Công việc bàn giao phòng ({handoverQueue.length})</Text>
+          <Text style={ui.muted}>
+            Mở từng phòng để bắt đầu hoặc xem tiến độ. Công việc gồm điện nước, hiện trạng và tài
+            sản.
+          </Text>
+          {handoverQueue.slice(0, 5).map((contract) => (
+            <Button
+              key={contract.id}
+              mode="outlined"
+              icon="clipboard-text-outline"
+              onPress={() => go('move-in', { contractId: contract.id, section: 'handover' })}
+            >
+              {contract.status === 'Active' ? 'Xem bàn giao' : 'Mở bàn giao'} phòng{' '}
+              {contract.roomNumber}
+            </Button>
+          ))}
+          {handoverQueue.length > 5 && (
+            <Text style={ui.muted}>
+              Còn {handoverQueue.length - 5} hồ sơ; xem tiếp trong danh sách hợp đồng.
+            </Text>
+          )}
+        </View>
+      )}
       {onCreateHolding && (
         <Button
           mode="outlined"
