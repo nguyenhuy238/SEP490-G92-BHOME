@@ -245,6 +245,8 @@ public sealed class SignInTests(PlanSessions sessions)
     [Trait("TestCase", "IT-AUTH-LOGIN-009")]
     public async Task IT_AUTH_LOGIN_009()
     {
+        // Skip before entering the rate-limit cleanup delay when external tests are disabled.
+        PlanExecutionGate.RequireAuthorized();
         // An unregistered email is used so the burst never locks a real account.
         var payload = new { email = "ratelimit.ghost@bhome.vn", password = "Wrong@Password2026" };
         try

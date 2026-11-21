@@ -10,6 +10,7 @@ public static class PlanDb
 {
     public static async Task<NpgsqlConnection> OpenAsync()
     {
+        PlanExecutionGate.RequireAuthorized();
         var cs = PlanSettings.Current.Database;
         Skip.If(cs is null, "This test case checks the database. Set BHOME_IT_DB to the Npgsql connection string of the API database.");
         var connection = new NpgsqlConnection(cs);
