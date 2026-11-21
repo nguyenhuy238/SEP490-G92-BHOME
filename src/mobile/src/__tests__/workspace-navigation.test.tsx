@@ -582,8 +582,7 @@ it('renders four labeled Staff tabs at 60dp and applies Android bottom inset exa
   expect(tabs[0].parentElement?.style.paddingBottom).toBe('24px');
   expect(view.container.querySelector('main')?.getAttribute('data-edges')).toBe('top,left,right');
   expect(
-    (screen.getByRole('tab', { name: 'Phòng' }).querySelector('span') as HTMLElement).style
-      .color,
+    (screen.getByRole('tab', { name: 'Phòng' }).querySelector('span') as HTMLElement).style.color,
   ).toBe('rgb(37, 99, 235)');
 });
 

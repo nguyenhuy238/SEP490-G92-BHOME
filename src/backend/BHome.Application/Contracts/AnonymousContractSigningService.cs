@@ -142,7 +142,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
                 // A correction only changes the representative's pending delivery address.
                 if (!input.Resend) return new SigningInvitationResult(pending.Id, pending.DeliveryStatus, pending.ExpiresAt);
                 if (!security.EmailConfigured) throw new ContractException(503, "signing_email_not_configured");
-                if (emailHistory.Any(i => i.OtpSentAt > Now.AddMinutes(-1)))
+                if (emailHistory.Any(i => i.OtpSendCount >= 5 || i.OtpSentAt > Now.AddMinutes(-1)))
                     throw new ContractException(429, "signing_otp_retry_later");
             }
             if (input.Resend && pending is null) throw ContractException.Conflict("signing_invitation_not_active");

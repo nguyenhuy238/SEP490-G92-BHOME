@@ -87,10 +87,10 @@ internal sealed class MainInitialPayments(BHomePersistenceContext db, ContractSe
                     }
                 }
                 var invoices = await (from invoice in db.Set<BHome.Domain.Billing.Invoice>()
-                    join representative in db.Set<Contract>() on invoice.RepresentativeContractId equals representative.Id
-                    where invoice.RoomId == c.RoomId && invoice.BillingPeriod == period && invoice.Type == "PERIODIC" &&
-                        invoice.Status == BHome.Domain.Billing.InvoiceStatus.Final && invoice.Lines.Any(line => line.ChargeCode == "RENT")
-                    select new { invoice.Id, Representative = representative }).ToArrayAsync(token);
+                                      join representative in db.Set<Contract>() on invoice.RepresentativeContractId equals representative.Id
+                                      where invoice.RoomId == c.RoomId && invoice.BillingPeriod == period && invoice.Type == "PERIODIC" &&
+                                          invoice.Status == BHome.Domain.Billing.InvoiceStatus.Final && invoice.Lines.Any(line => line.ChargeCode == "RENT")
+                                      select new { invoice.Id, Representative = representative }).ToArrayAsync(token);
                 var invoiceId = rentSource is null
                     ? invoiceSource ?? invoices.Where(invoice => ContractPaymentModes.Of(invoice.Representative) == roomScopeMode)
                         .Select(invoice => (Guid?)invoice.Id).SingleOrDefault()

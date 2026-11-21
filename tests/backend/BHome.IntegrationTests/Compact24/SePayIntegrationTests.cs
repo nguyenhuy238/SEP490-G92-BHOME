@@ -63,15 +63,24 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         var secondResident = new Resident { RoomId = room.Id, OwnerUserId = scenario.Owner, TenantUserId = scenario.Tenants[1], DisplayLabel = "SYNTHETIC SECOND", ContactEmail = "second@example.invalid", VerificationStatus = IdentityVerificationStatus.Verified };
         var second = new Contract
         {
-            RoomId = room.Id, OwnerSignerId = scenario.Owner, TenantUserId = scenario.Tenants[1],
-            RepresentativeResidentId = secondResident.Id, StartDate = today, EndDate = c.EndDate, MonthlyRent = c.MonthlyRent,
-            RequiredDeposit = c.RequiredDeposit, Terms = c.Terms, SigningMode = c.SigningMode,
-            Status = ContractStatus.PendingActivation, InitialPaymentRequired = true,
+            RoomId = room.Id,
+            OwnerSignerId = scenario.Owner,
+            TenantUserId = scenario.Tenants[1],
+            RepresentativeResidentId = secondResident.Id,
+            StartDate = today,
+            EndDate = c.EndDate,
+            MonthlyRent = c.MonthlyRent,
+            RequiredDeposit = c.RequiredDeposit,
+            Terms = c.Terms,
+            SigningMode = c.SigningMode,
+            Status = ContractStatus.PendingActivation,
+            InitialPaymentRequired = true,
             Residents = [new ContractResident { ResidentId = secondResident.Id, Role = ResidentType.Representative, ResidenceFrom = today }]
         };
         second.SnapshotHash = ContractDocumentSnapshot.Hash(new ContractDocument(second.Id, second.RoomId, second.OwnerSignerId,
             Guid.Empty, second.RepresentativeResidentId, [secondResident.Id], second.StartDate, second.EndDate, second.MonthlyRent,
-            second.RequiredDeposit, null, 0, second.Terms, "") { IsInternalResidentAcceptance = true });
+            second.RequiredDeposit, null, 0, second.Terms, "")
+        { IsInternalResidentAcceptance = true });
         second.InternalAcceptance = JsonSerializer.Serialize(source with { ResidentId = secondResident.Id, SnapshotHash = second.SnapshotHash });
         db.AddRange(secondResident, second);
         await db.SaveChangesAsync();
@@ -462,8 +471,13 @@ public sealed class SePayIntegrationTests(Compact24Fixture fixture) : IClassFixt
         var deposit = await Issue("Deposit", scenario.Contract); Assert.NotEqual(scenario.Code, deposit);
         (await scenario.Send(75000, code: deposit)).EnsureSuccessStatusCode();
         await using var scope = scenario.Host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        Assert.Empty(await db.Set<PaymentAllocation>().Where(a => a.TargetDepositContractId == scenario.Contract).ToArrayAsync());
+        using var owner = await scenario.Client(scenario.Owner);
+        var reviews = (await owner.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<SePayEventView>>("/api/v1/integrations/sepay/events"))!;
+        Assert.Contains(reviews.Items, e => e.Reason == "payment_amount_requires_review");
+        (await scenario.Send(100000, code: deposit)).EnsureSuccessStatusCode();
         var allocation = Assert.Single(await db.Set<PaymentAllocation>().Where(a => a.TargetDepositContractId == scenario.Contract).ToArrayAsync());
-        Assert.Equal(75000, allocation.Amount); Assert.Null(allocation.PaidByUserId);
+        Assert.Equal(100000, allocation.Amount); Assert.Null(allocation.PaidByUserId);
         Assert.True(await db.IsSchemaReadyAsync());
         var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM operational_tasks WHERE source_key={"payment-code:" + scenario.Code}"));
         Assert.Contains(error.SqlState, new[] { "23514", "P0001" });

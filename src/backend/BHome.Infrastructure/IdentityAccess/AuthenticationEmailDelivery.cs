@@ -174,8 +174,12 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
                 .Where(c => c.TenantUserId == recipient && c.Kind == BHome.Domain.TenantContracts.ContractKind.Main &&
                     c.Status == BHome.Domain.TenantContracts.ContractStatus.Active)
                 .OrderByDescending(c => c.ActivatedAt)
-                .Select(c => new { c.Id, SeparateConfirmation = c.InitialPaymentRequired &&
-                    c.SigningMode == BHome.Application.Contracts.ContractSigningModes.Internal }).FirstOrDefaultAsync(t);
+                .Select(c => new
+                {
+                    c.Id,
+                    SeparateConfirmation = c.InitialPaymentRequired &&
+                    c.SigningMode == BHome.Application.Contracts.ContractSigningModes.Internal
+                }).FirstOrDefaultAsync(t);
             if (contract is { SeparateConfirmation: false } && await contractEmail.MainConfirmationAsync(contract.Id, recipient, t) is { } confirmed)
             {
                 title = confirmed.Title;

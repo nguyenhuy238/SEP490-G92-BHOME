@@ -73,11 +73,17 @@ public sealed partial class Compact24NotificationMvpTests(Compact24Fixture fixtu
             c.SigningMode = BHome.Application.Contracts.ContractSigningModes.Internal;
             var invitation = new ContractSigningInvitation
             {
-                ContractId = c.Id, ResidentId = resident.Id, ApprovedByUserId = owner.Id,
-                TokenHash = Guid.NewGuid().ToString("N"), SnapshotHash = c.SnapshotHash,
-                RecipientEmail = user.Email!, ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
-                AcceptedAt = DateTimeOffset.UtcNow, DeliveryStatus = "Accepted",
-                DocumentObjectKey = key, DocumentHash = hash
+                ContractId = c.Id,
+                ResidentId = resident.Id,
+                ApprovedByUserId = owner.Id,
+                TokenHash = Guid.NewGuid().ToString("N"),
+                SnapshotHash = c.SnapshotHash,
+                RecipientEmail = user.Email!,
+                ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+                AcceptedAt = DateTimeOffset.UtcNow,
+                DeliveryStatus = "Accepted",
+                DocumentObjectKey = key,
+                DocumentHash = hash
             };
             signingInvitations.Add(invitation);
             c.InternalAcceptance = JsonSerializer.Serialize(new BHome.Application.Contracts.InternalAcceptanceEvidence(invitation.Id, resident.Id,

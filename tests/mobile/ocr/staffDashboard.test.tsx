@@ -104,12 +104,7 @@ it('does not present sample identity, shift or counts to a signed-in account', (
 
 it('shows four quick actions and hides management shortcuts', () => {
   render(<StaffDashboard />);
-  for (const title of [
-    'Công việc',
-    'Ghi điện nước',
-    'Bàn giao / Trả phòng',
-    'Xử lý sự cố',
-  ])
+  for (const title of ['Công việc', 'Ghi điện nước', 'Bàn giao / Trả phòng', 'Xử lý sự cố'])
     expect(screen.getAllByRole('button', { name: title }).length).toBeGreaterThan(0);
   for (const title of ['Hóa đơn', 'Công nợ', 'Gửi thông báo'])
     expect(screen.queryByRole('button', { name: title })).toBeNull();

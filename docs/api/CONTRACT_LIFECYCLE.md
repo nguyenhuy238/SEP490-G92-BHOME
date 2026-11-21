@@ -248,6 +248,7 @@ available null và blocker `deposit_ledger_reconciliation_required`.
 không khấu trừ có thể xác nhận 0 deduction sau khi trả đủ. Mọi thay đổi position đổi reference;
 `financialReference` riêng giữ source obligations khi reservation/return thay đổi. Reader legacy
 offline trả unknown, không truy cập database khác.
+
 ### Mức tiền giữ chỗ và tiền cọc với bản nháp mới
 
 Theo quyết định nghiệp vụ cho BF-03A/BF-03B, UC-13–16, mức tiền giữ chỗ và tiền cọc thuê chính thức khi tạo mới đều bằng một tháng tiền thuê ghi trong bản nháp. Khi chuyển đổi hồ sơ cũ, BHOME giữ nguyên dữ liệu hợp đồng giữ chỗ và kế thừa đúng khoản đã xác minh. Hợp đồng chính ghi mức cọc ít nhất bằng một tháng tiền thuê đã chốt và giữ đủ khoản đã nộp nếu mức cọc cũ cao hơn. Phần chưa đủ được thể hiện trong số dư cọc và chặn kích hoạt cho đến khi được xác minh. Các trường cấu hình cọc cũ vẫn tồn tại trong API để tương thích.
