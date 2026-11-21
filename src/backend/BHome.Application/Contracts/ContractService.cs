@@ -978,7 +978,22 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (c.Status != ContractStatus.Active || await repository.OpenRenewalAsync(id, t)) throw ContractException.Conflict("contract_not_terminable");
             if (x.ProposedDate < Today || x.ProposedDate < c.StartDate || (!expiry && x.ProposedDate >= c.EndDate) || (expiry && x.ProposedDate < c.EndDate))
                 throw ContractException.Invalid("invalid_move_out_date");
-            if (await repository.MoveOutAsync(id, t) is not null) throw ContractException.Conflict("move_out_already_requested");
+            var previous = await repository.MoveOutAsync(id, t);
+            if (previous is not null)
+            {
+                if (previous.Status != MoveOutStatus.Rejected) throw ContractException.Conflict("move_out_already_requested");
+                previous.Status = MoveOutStatus.Requested;
+                previous.ProposedDate = x.ProposedDate;
+                previous.Reason = x.Reason.Trim();
+                previous.RequestedByUserId = Actor;
+                previous.IsExpiry = expiry;
+                previous.PendingReason = "inspection_and_financial_dependencies";
+                previous.Version++;
+                MoveOutEvent(previous, "Requested");
+                Audit("ContractMoveOutRequested", id);
+                Remember(key, expiry ? "expiry" : "terminate-request", new { id, x }, previous.Id);
+                return View(previous);
+            }
             var m = new ContractMoveOut
             {
                 ContractId = id,
@@ -1011,6 +1026,21 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         if (c.Status != ContractStatus.Active || m.Status != MoveOutStatus.Requested) throw ContractException.Conflict("move_out_not_pending_approval");
         m.Status = MoveOutStatus.Approved; m.ApprovedByUserId = Actor; m.ApprovedAt = clock.GetUtcNow(); m.Version++; MoveOutEvent(m, "Approved");
         Audit("ContractMoveOutApproved", id); Remember(key, "terminate-approve", id, m.Id); return View(m);
+    }, t);
+    public Task<MoveOutView> RejectTerminationAsync(Guid id, TerminationRejectionInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
+    {
+        var reason = x.Reason?.Trim() ?? "";
+        if (reason.Length is < 1 or > 2000) throw ContractException.Invalid("rejection_reason_required");
+        var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
+        if (await Replay(key, "terminate-reject", new { id, reason }, t) is not null) return View(m);
+        if (c.Status != ContractStatus.Active || m.Status != MoveOutStatus.Requested) throw ContractException.Conflict("move_out_not_pending_approval");
+        m.Status = MoveOutStatus.Rejected;
+        m.PendingReason = reason;
+        m.Version++;
+        MoveOutEvent(m, "Rejected");
+        Audit("ContractMoveOutRejected", id);
+        Remember(key, "terminate-reject", new { id, reason }, m.Id);
+        return View(m);
     }, t);
     public Task<MoveOutView> ScheduleInspectionAsync(Guid id, InspectionScheduleInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner, Roles.Staff], async c =>
     {

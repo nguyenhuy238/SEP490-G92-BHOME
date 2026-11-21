@@ -121,6 +121,7 @@ export function ContractDetailPanel({
   const actions = contractActions(c, m, 'Owner', actorId, signingMethods?.methods).filter(
     (a) =>
       !['move-out/settlement', 'move-out/schedule'].includes(a.operation) &&
+      !(m?.status === 'Requested' && ['move-out/approve', 'move-out/reject'].includes(a.operation)) &&
       !(c.kind === 'Holding' && a.operation === 'holding-approval') &&
       !(c.signingMode === 'INTERNAL_OTP_DRAWN' && a.operation.startsWith('signing')),
   );
@@ -545,7 +546,43 @@ export function ContractDetailPanel({
           </Typography>
         </ChartCard>
       )}
-      {m && (
+      {m?.status === 'Requested' && (
+        <Paper id={`move-out-${c.id}`} variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
+          <Stack spacing={2}>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="h6" component="h3" fontWeight={700}>Yêu cầu kết thúc hợp đồng</Typography>
+              <Chip size="small" color="warning" variant="outlined" label="Chờ Owner quyết định" />
+            </Stack>
+            <Typography variant="body2" color="text.secondary">
+              Người thuê đề nghị trả phòng {c.roomNumber} · {c.locationName} vào ngày{' '}
+              <strong>{displayContractDate(m.proposedDate)}</strong>.
+            </Typography>
+            <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
+              <Typography variant="caption" color="text.secondary">Lý do của người thuê</Typography>
+              <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.reason}</Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              Chấp nhận để chuyển sang bước lập lịch và giao kiểm tra trả phòng cho Staff phụ trách cơ sở. Hợp đồng chưa kết thúc và chưa quyết toán ở bước này.
+            </Typography>
+            <Stack direction={{ xs: 'column-reverse', sm: 'row' }} spacing={1} justifyContent="flex-end">
+              <Button variant="outlined" color="error" onClick={() => setAction(contractActions(c, m, 'Owner', actorId, signingMethods?.methods).find(a => a.operation === 'move-out/reject') ?? null)}>
+                Từ chối
+              </Button>
+              <Button variant="contained" onClick={() => setAction(contractActions(c, m, 'Owner', actorId, signingMethods?.methods).find(a => a.operation === 'move-out/approve') ?? null)}>
+                Chấp nhận
+              </Button>
+            </Stack>
+          </Stack>
+        </Paper>
+      )}
+      {m?.status === 'Rejected' && (
+        <Paper id={`move-out-${c.id}`} variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+          <Typography fontWeight={700}>Yêu cầu kết thúc hợp đồng đã bị từ chối</Typography>
+          <Typography variant="body2" color="text.secondary">Hợp đồng vẫn còn hiệu lực. Người thuê có thể gửi lại yêu cầu khác.</Typography>
+          <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>Lý do từ chối: {m.pendingReason}</Typography>
+        </Paper>
+      )}
+      {m && !['Requested', 'Rejected'].includes(m.status) && (
         <>
           {m.status === 'Approved' && (
             <FinalMeterTask

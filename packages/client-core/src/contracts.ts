@@ -1586,8 +1586,12 @@ export function contractActions(
     );
   if (active && !m && owner && c.kind !== 'Holding')
     result.push(action('expiry-move-out', 'Lập yêu cầu trả phòng khi hết hạn', proposedFields));
-  if (owner && m?.status === 'Requested')
-    result.push(action('move-out/approve', 'Duyệt yêu cầu trả phòng'));
+  if (owner && m?.status === 'Requested') {
+    result.push(action('move-out/approve', 'Chấp nhận yêu cầu'));
+    result.push(action('move-out/reject', 'Từ chối yêu cầu', [
+      { name: 'reason', label: 'Lý do từ chối', type: 'multiline', max: 2000 },
+    ], 'Nêu rõ lý do để người thuê có thể điều chỉnh và gửi yêu cầu mới. Hợp đồng vẫn có hiệu lực.'));
+  }
   if ((owner || staff) && m?.status === 'Approved')
     result.push(
       action('move-out/schedule', 'Đặt lịch kiểm tra', [

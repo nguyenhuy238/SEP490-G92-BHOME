@@ -82,6 +82,7 @@ public sealed record DepositInput([Required, StringLength(150, MinimumLength = 1
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount, [Required, StringLength(2000, MinimumLength = 1)] string VerificationReason);
 public sealed record TerminationInput(DateOnly ProposedDate,
     [Required, StringLength(2000, MinimumLength = 1)] string Reason);
+public sealed record TerminationRejectionInput([Required, StringLength(2000, MinimumLength = 1)] string Reason);
 public sealed record InspectionScheduleInput(DateTimeOffset ScheduledAt, Guid? StaffUserId = null, int? ExpectedVersion = null);
 public sealed record InspectionInput(Guid ElectricityReadingId, Guid WaterReadingId,
     [Required, StringLength(4000, MinimumLength = 1)] string Notes,
