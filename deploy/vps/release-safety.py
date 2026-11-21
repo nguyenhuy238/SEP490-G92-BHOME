@@ -28,9 +28,12 @@ def env(name):
 
 
 def webhook_policy(target):
-    enabled = env(CONTAINERS[target][0]).get('SePay__Enabled', '').lower()
+    settings = env(CONTAINERS[target][0])
+    enabled = settings.get('SePay__Enabled', '').lower()
     if enabled not in ('true', 'false'):
         raise ValueError('SePay enablement must be explicit before webhook smoke')
+    if target == 'staging' and (enabled != 'true' or settings.get('SePay__Mode') != 'Test'):
+        raise ValueError('Staging SePay must remain enabled in Test mode')
     # SePayWebhookSecurity rejects disabled integrations before authenticating.
     return (401, 'sepay_authentication_failed') if enabled == 'true' else (503, 'sepay_disabled')
 

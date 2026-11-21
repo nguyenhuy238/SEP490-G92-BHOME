@@ -161,12 +161,12 @@ candidate develop; phải xác nhận lại source và image từ main trước 
 
 | Test                                 | Status                         | Evidence/phạm vi                                                                                                        |
 | ------------------------------------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| Backend/frontend CI develop mới      | PASS hai jobs                  | Run 44868982084; build/publish/deploy Staging còn đang chạy                                                             |
+| Backend/frontend CI develop mới      | PASS                           | Run 44868982084: backend/frontend/images/Staging deploy đều SUCCESS                                                     |
 | CI bản sửa #148                      | PENDING cho head cuối          | Xem checks của PR; các run trước khi bổ sung smoke/report không chứng minh head mới                                     |
-| CI PR release #149                   | RUNNING                        | Run 44869833857                                                                                                         |
-| Staging CD trước đó                  | PASS                           | Run 44865114303 attempt 2, SHA 882469362552e8d58d5e3dd1b0b8dc4597a3f88b                                                 |
-| Deployment Python tests              | PASS 28                        | Linux VPS, gồm regression backup và webhook shell/policy; bash syntax PASS                                              |
-| Deployment Node tests                | PASS 17                        | Máy phát triển                                                                                                          |
+| CI PR release #149                   | PASS                           | Run 44869833857; chưa merge main, chưa phát hành Production                                                             |
+| Staging CD hiện tại                  | PASS                           | Run 44868982084, SHA 28b24f0f82fe0cbfefdf0a58fae527178f185c62, DEPLOY_PASS                                              |
+| Deployment Python tests              | PASS 29                        | Linux VPS; backup, webhook policy/shell và Staging Test guard; bash syntax PASS                                         |
+| Deployment Node tests                | PASS 20                        | Gồm 3 regression tests cho browser cancellation; targeted ESLint và Prettier PASS                                       |
 | Postman live Staging                 | PASS 3 assertions / 2 requests | Saved request subset, public list + anonymous auth rejection, không report lên cloud                                    |
 | Staging authenticated read smoke     | PASS 27 checks                 | Owner/Staff/Tenant tổng hợp; read API chính, auth/logout, SePay Test, role rejection, cross-environment token rejection |
 | Tenant isolation                     | PASS phạm vi contract fixture  | Tenant1 đọc contract được; Tenant2 nhận 404. Hai Tenant là recipients hợp lệ của cùng invoice                           |
@@ -183,6 +183,30 @@ Lượt smoke đầu giả định Tenant2 không được đọc invoice fixtur
 không sửa ứng dụng/assertions nghiệp vụ để che một lỗi truy cập.
 Chưa kiểm cross-Location Staff với hai Locations thực hoặc cross-invoice Tenant không
 cùng recipients do fixture không có các tiền điều kiện đó. CI không thay thế kiểm thử live.
+
+## Browser và Staging release cập nhật
+
+Sau deploy SHA `28b24f0f…`, browser Staging desktop/mobile đã PASS TLS, login,
+refresh rotation, Secure/HttpOnly/Strict cookie, profile, SePay Test context,
+từ chối token Staging ở Production và logout. Evidence và screenshot tổng hợp
+giữ riêng trên VPS tại thư mục preflight, các thư mục `browser-staging-*-navigation-check`.
+
+Harness ban đầu coi fetch bị chính reload/goto hủy là transport error. Đã sửa để
+ghi nhận request của document cũ, kể cả request bắt đầu trong khoảng từ khi test
+khởi tạo điều hướng đến lúc document mới commit. Chỉ ERR_ABORTED thuộc khoảng này
+được ghi riêng; abort không giải thích được và mọi lỗi mạng khác vẫn FAIL. Không
+thay browser fetch hoặc mã ứng dụng; session tổng hợp được logout trong cleanup
+nếu một assertion thất bại. Đã thêm regression tests cho các ranh giới này.
+
+Staging manifest thực tế của run 44868982084:
+
+| Image            | Digest                                                                    |
+| ---------------- | ------------------------------------------------------------------------- |
+| bhome-api        | `sha256:4d8781ff0350df6a7dfc08194d15e3deeee39577bec270b32fea49f9639f5c7a` |
+| bhome-owner-web  | `sha256:08a2524044181ce3e5c31514b4a813a41612c034987c531d5184645261fd5d26` |
+| bhome-public-web | `sha256:edd0250213aca65515e209b4390a087ee0d17358aa61700e0807f02ed99150c0` |
+
+Đây là Staging digests; không dùng thay ba Production images từ main.
 
 ## Các bước cần review/phê duyệt và điều kiện tiếp tục
 
