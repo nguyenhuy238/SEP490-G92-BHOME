@@ -1,0 +1,12 @@
+[Unit]
+Description=BHOME Production private backup and isolated restore verification
+OnFailure=bhome-operations-alert.service
+[Service]
+Type=oneshot
+UMask=0077
+Environment=BHOME_BACKUP_RETENTION_DAYS=7
+ExecStart=/usr/bin/python3 /opt/bhome-deploy/production/production-operations.py backup
+TimeoutStartSec=1800
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
