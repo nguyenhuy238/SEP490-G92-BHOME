@@ -521,6 +521,25 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         }
         throw new InvalidOperationException();
     }
+    [Theory]
+    [InlineData(ContractStatus.Active, true)]
+    [InlineData(ContractStatus.Expired, true)]
+    [InlineData(ContractStatus.Terminated, false)]
+    public async Task OtherMainContractKeepsRoomOccupiedUntilTermination(ContractStatus status, bool expected)
+    {
+        var w = await Setup();
+        var id = await Active(w);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var contract = await db.Set<Contract>().SingleAsync(c => c.Id == id);
+        contract.Status = status;
+        await db.SaveChangesAsync();
+
+        var repository = scope.ServiceProvider.GetRequiredService<IContractRepository>();
+        Assert.Equal(expected, await repository.HasOtherActiveContractsAsync(w.Room, Guid.NewGuid(), default));
+        Assert.False(await repository.HasOtherActiveContractsAsync(w.Room, id, default));
+    }
+
     [Fact]
     public async Task T10_T11_T12_T13_T14_InspectionFinalMetersPendingSettlementAndCompletedMoveOut()
     {
@@ -661,7 +680,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await Success<ContractView>(await Post(w.Owner, Path(holding, "holding-approval"), new HoldingDecisionInput("Owner reviewed and approved")));
         if (depositFirst)
         {
-            await Deposit(w, holding, 1000000);
+            await Deposit(w, holding, 3000000);
             Assert.Null((await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(holding)))!.PriceLockedAt);
             Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(holding, "holding-activation"))).StatusCode);
             await Signed(w, holding);
@@ -671,7 +690,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
             await Signed(w, holding);
             Assert.Null((await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(holding)))!.PriceLockedAt);
             Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(holding, "holding-activation"))).StatusCode);
-            await Deposit(w, holding, 1000000);
+            await Deposit(w, holding, 3000000);
         }
         var activeHolding = await Success<ContractView>(await Post(w.Owner, Path(holding, "holding-activation")));
         Assert.Equal("Active", activeHolding.Status);

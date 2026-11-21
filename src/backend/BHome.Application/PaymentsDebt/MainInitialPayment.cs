@@ -4,7 +4,9 @@ namespace BHome.Application.PaymentsDebt;
 public sealed record MainInitialCharge(string Code, string Name,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Amount);
 public sealed record MainInitialOrder(Guid ContractId, Guid LocationId, string SnapshotHash,
-    decimal RequiredDeposit, decimal MonthlyRent, MainInitialCharge[] Charges, DateTimeOffset CreatedAt);
+    decimal RequiredDeposit, decimal MonthlyRent, MainInitialCharge[] Charges, DateTimeOffset CreatedAt,
+    Guid? SharedDepositContractId = null, Guid? SharedRentContractId = null, Guid? SharedInvoiceId = null,
+    bool RoomScopeResolved = false, string? RoomScopeMode = null);
 public sealed record MainInitialMeteredRate(string Code, string Name, string Unit,
     [property: JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)] decimal Rate);
 public sealed record MainInitialPaymentView(Guid ContractId, string Availability, string ContractStatus, bool SigningComplete,
@@ -28,6 +30,8 @@ public interface IMainInitialPayments
 public interface IMainInitialPaymentLedger
 {
     Task<MainInitialOrder?> ReadAsync(Guid contractId, CancellationToken token);
+    Task<(decimal Deposit, decimal RentAndFees)> OutstandingAsync(MainInitialOrder order, CancellationToken token);
+    Task<Guid?> PendingSharedContractAsync(MainInitialOrder order, CancellationToken token);
     Task<bool> SatisfiedAsync(Guid contractId, CancellationToken token);
     Task AllocateAsync(Guid contractId, BHome.Domain.PaymentsDebt.PaymentTransfer receipt, CancellationToken token);
 }

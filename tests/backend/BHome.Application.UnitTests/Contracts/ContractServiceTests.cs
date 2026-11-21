@@ -636,6 +636,7 @@ public sealed class ContractServiceTests
         var r = new Rig(); var id = await r.Service.CreateHoldingAsync(r.HoldingDraft, Guid.NewGuid(), default);
         await r.Service.ApproveHoldingAsync(id.Id, new("Owner approved terms"), Guid.NewGuid(), default);
         var holding = r.Contracts.Single(); holding.Status = ContractStatus.Active;
+        holding.RequiredDeposit = 2000000; // Historical signed Holding, created before the one-month rule.
         holding.PriceLockedAt = new Clock().GetUtcNow(); r.Room.Status = RoomStatus.OnHold;
         var charges = ContractChargeSnapshot.Read(holding).Charges;
         r.Repo.ClearReceivedCalls();
@@ -644,8 +645,10 @@ public sealed class ContractServiceTests
         var mainId = await r.Service.ConvertHoldingAsync(holding.Id, new(clientDeposit), Guid.NewGuid(), default);
         var main = r.Contracts.Single(c => c.Id == mainId.Id);
         Assert.Equal(holding.Id, main.HoldingContractId); Assert.Equal(2000000, main.AppliedHoldingDeposit);
-        Assert.Equal(holding.RequiredDeposit, main.RequiredDeposit);
-        await r.Holdings.Received(1).ApplyAsync(holding.Id, main.Id, main.RoomId, main.TenantUserId, holding.RequiredDeposit, default);
+        Assert.Equal(3000000, main.RequiredDeposit);
+        Assert.Equal(1000000, main.RequiredDeposit - main.AppliedHoldingDeposit);
+        Assert.Equal(2000000, holding.RequiredDeposit);
+        await r.Holdings.Received(1).ApplyAsync(holding.Id, main.Id, main.RoomId, main.TenantUserId, main.RequiredDeposit, default);
         Assert.Equal(ContractStatus.Active, holding.Status); Assert.Null(holding.ConvertedMainContractId);
         Assert.Equal(charges, ContractChargeSnapshot.Read(main).Charges);
         Assert.True(ContractChargeSnapshot.IsIntact(main));

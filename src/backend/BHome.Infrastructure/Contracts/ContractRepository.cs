@@ -128,7 +128,8 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
         return pending.Where(AnonymousContractSigningService.MainAwaitsOwnerSignature).Select(c => c.RoomId).ToHashSet();
     }
     public Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t) =>
-        db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Status == ContractStatus.Active, t);
+        db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Kind == ContractKind.Main &&
+            (c.Status == ContractStatus.Active || c.Status == ContractStatus.Expired), t);
     public Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t) => db.Set<Contract>().AnyAsync(c => c.PreviousContractId == contractId &&
         (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation), t);
     public async Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t) =>

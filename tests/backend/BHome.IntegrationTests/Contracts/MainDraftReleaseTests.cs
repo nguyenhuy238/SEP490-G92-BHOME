@@ -87,7 +87,8 @@ public sealed partial class MainDraftApiTests
             using var message = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/contracts/{draft.Id}/signing") { Content = JsonContent.Create(new SigningInput(Guid.Empty)) }; message.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
             await Success(await party.SendAsync(message)); await Success(await party.PostAsJsonAsync($"/api/v1/contracts/{draft.Id}/signing/sync", new { }));
         }
-        using (var deposit = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/contracts/{draft.Id}/deposit-verifications") { Content = JsonContent.Create(new DepositInput("SYNTHETIC-RELEASE-" + Guid.NewGuid(), 6200000, "Synthetic bank statement confirmed")) })
+        var depositAmount = draft.Preparation.Charges.Single(p => p.ChargeCode == "RENT").Rate;
+        using (var deposit = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/contracts/{draft.Id}/deposit-verifications") { Content = JsonContent.Create(new DepositInput("SYNTHETIC-RELEASE-" + Guid.NewGuid(), depositAmount, "Synthetic bank statement confirmed")) })
         { deposit.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString()); await Success(await owner.SendAsync(deposit)); }
         // The Compact24 checkout must settle initial rent as well as the security deposit.
         await using (var paymentScope = host.Services.CreateAsyncScope())

@@ -97,7 +97,8 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
                 member?.Phone ?? await data.PhoneAsync(roomId, r.Id, t), r.Id == representative ? await data.EmailAsync(roomId, r.Id, t) : null, identity.DateOfBirth, member?.Relationship));
         }
         return new(roomId, room.LocationId, room.Location.Name, room.RoomNumber, room.Location.Address, on, summaries, pricing.Charges,
-            settings?.SecurityDeposit, settings?.PaymentTerms, settings?.Owner.FullName, blockers.Distinct().ToArray());
+            pricing.Charges.SingleOrDefault(p => p.ChargeCode == "RENT")?.Rate,
+            settings?.PaymentTerms, settings?.Owner.FullName, blockers.Distinct().ToArray());
     }
     private static void Validate(MainDraftInput x)
     {
@@ -165,7 +166,7 @@ public sealed class MainDraftService(IContractRepository repository, IMainDraftD
             foreach (var resident in c.Residents) resident.ResidenceFrom = x.StartDate;
             c.MonthlyRent = preparation.Charges.Single(p => p.ChargeCode == "RENT").Rate;
             if (c.MonthlyRent <= 0 || decimal.Truncate(c.MonthlyRent) != c.MonthlyRent) throw ContractException.Invalid("invalid_vnd_amount");
-            c.RequiredDeposit = settings.SecurityDeposit; c.Terms = settings.AdditionalTerms + "\n" + x.Notes.Trim();
+            c.RequiredDeposit = c.MonthlyRent; c.Terms = settings.AdditionalTerms + "\n" + x.Notes.Trim();
             await ContractChargeSnapshot.RejectUtilityProfileAsync(repository, c, t);
             ContractChargeSnapshot.Store(c, ContractChargeSnapshot.FromPolicies(c, preparation.Charges), "MainDraft", clock.GetUtcNow());
             c.OperatingPolicySnapshot = "";

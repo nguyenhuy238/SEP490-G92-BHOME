@@ -218,7 +218,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 StartDate = x.StartDate,
                 EndDate = x.EndDate,
                 MonthlyRent = x.MonthlyRent,
-                RequiredDeposit = x.RequiredDeposit,
+                RequiredDeposit = x.MonthlyRent,
                 IsDevelopmentDemo = DemoEnabled,
                 PaymentMode = ConfiguredPaymentMode((await repository.RoomAsync(x.RoomId, t))!.LocationId),
                 Terms = x.Terms.Trim()
@@ -389,10 +389,15 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         }
         var root = c;
         while (root.PreviousContractId is { } previous) root = await repository.FindAsync(previous, t) ?? throw ContractException.Missing();
-        var deposit = root.AppliedHoldingDeposit + await repository.DepositTotalAsync(root.Id, t);
-        if (deposit < c.RequiredDeposit) blockers.Add("security_deposit_insufficient");
+        var paymentOrder = root.InitialPaymentRequired && initialPayments is not null ? await initialPayments.ReadAsync(root.Id, t) : null;
+        var sharedDeposit = paymentOrder?.SharedDepositContractId is { } source
+            ? await repository.FindAsync(source, t) ?? throw ContractException.Missing() : null;
+        var depositContract = sharedDeposit ?? root;
+        var requiredDeposit = sharedDeposit?.RequiredDeposit ?? c.RequiredDeposit;
+        var deposit = depositContract.AppliedHoldingDeposit + await repository.DepositTotalAsync(depositContract.Id, t);
+        if (deposit < requiredDeposit) blockers.Add("security_deposit_insufficient");
         if (await repository.ConflictsAsync(c.RoomId, c.PreviousContractId ?? c.Id, c.StartDate, c.EndDate, c.Residents.Select(r => r.ResidentId).ToArray(), t)) blockers.Add("room_contract_conflict");
-        return new(blockers.Count == 0, deposit, Math.Max(0, c.RequiredDeposit - deposit), blockers.Distinct().ToArray());
+        return new(blockers.Count == 0, deposit, Math.Max(0, requiredDeposit - deposit), blockers.Distinct().ToArray());
     }
     public async Task<ActivationReadiness> ReadinessAsync(Guid id, CancellationToken t)
     {

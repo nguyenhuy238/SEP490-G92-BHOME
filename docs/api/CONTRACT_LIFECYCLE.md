@@ -220,3 +220,16 @@ available null và blocker `deposit_ledger_reconciliation_required`.
 không khấu trừ có thể xác nhận 0 deduction sau khi trả đủ. Mọi thay đổi position đổi reference;
 `financialReference` riêng giữ source obligations khi reservation/return thay đổi. Reader legacy
 offline trả unknown, không truy cập database khác.
+### Mức tiền giữ chỗ và tiền cọc với bản nháp mới
+
+Theo quyết định nghiệp vụ cho BF-03A/BF-03B, UC-13–16, mức tiền giữ chỗ và tiền cọc thuê chính thức khi tạo mới đều bằng một tháng tiền thuê ghi trong bản nháp. Khi chuyển đổi hồ sơ cũ, BHOME giữ nguyên dữ liệu hợp đồng giữ chỗ và kế thừa đúng khoản đã xác minh. Hợp đồng chính ghi mức cọc ít nhất bằng một tháng tiền thuê đã chốt và giữ đủ khoản đã nộp nếu mức cọc cũ cao hơn. Phần chưa đủ được thể hiện trong số dư cọc và chặn kích hoạt cho đến khi được xác minh. Các trường cấu hình cọc cũ vẫn tồn tại trong API để tương thích.
+
+Theo BF-06, giao dịch SePay chỉ được tự động phân bổ khi số tiền nhận khớp toàn bộ số dư của nghĩa vụ. Giao dịch lệch số tiền vẫn được lưu làm bằng chứng và chuyển sang đối soát, với số dư nghĩa vụ giữ nguyên.
+
+### Thanh toán và hoàn cọc khi phòng có nhiều hợp đồng thuê
+
+Khi lập nghĩa vụ ban đầu, backend khóa phòng và liên kết khoản cọc với nghĩa vụ của chu kỳ còn mở. Tiền thuê dùng kỳ tháng bắt đầu hợp đồng. Nếu đã có nghĩa vụ tiền thuê ban đầu hoặc hóa đơn phòng đã chốt cho kỳ đó, backend tái sử dụng nghĩa vụ có sẵn và mã chuyển khoản của nó. Các phí theo người vẫn được tính theo từng hợp đồng. Khi số dư phải trả bằng 0, API không phát hành QR.
+
+Trong Sandbox đã được cấp phạm vi, hợp đồng chưa lưu chế độ thanh toán có thể đối chiếu khoản chung Sandbox của cùng phòng. Hợp đồng đã ghi rõ Live vẫn đối chiếu theo Live.
+
+Khi một Tenant kết thúc trước, khoản cọc chung được giữ cho hồ sơ bàn giao cuối của chu kỳ. Owner xác nhận người nhận đã được xác minh từ hồ sơ của Tenant bàn giao cuối. Nguồn tiền hoàn vẫn tham chiếu đúng khoản cọc gốc và quy trình đối soát, bằng chứng chuyển tiền vẫn được áp dụng.

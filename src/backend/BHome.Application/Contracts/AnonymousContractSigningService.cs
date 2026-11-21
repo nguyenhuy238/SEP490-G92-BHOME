@@ -196,7 +196,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
             await security.SendAsync(recipient, input.Resend ? $"internal-signing-invitation:{result.Id:N}:resend:{attempt}" : $"internal-signing-invitation:{result.Id:N}", subject,
                 $"Mã OTP của bạn: {invitationOtp}. Mã có hiệu lực 5 phút. Không chia sẻ mã này.\n" +
                 $"Bạn được mời ký {contractLabel}. Mở liên kết dưới đây, nhập mã OTP trong email này, đọc PDF và đồng ý trước khi ký nội bộ. " +
-                (result.Url is { } url ? "Mở liên kết: " + url :
+                (security.InvitationUrl(result.Token!) is { } url ? "Mở liên kết: " + url :
                     "Mở BHOME Mobile > Mở lời mời ký hợp đồng và dán mã: " + result.Token) +
                 $"\nLời mời hết hạn lúc {result.ExpiresAt:O}. Đây không phải chữ ký số CA.", t);
         }
