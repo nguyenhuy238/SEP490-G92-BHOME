@@ -1,5 +1,8 @@
 # Phát hành Production BHOME
 
+Checkpoint 21/11/2026: [preflight thực tế và các phê duyệt còn thiếu](BHOME_PRODUCTION_PREFLIGHT_2026-11-21.md).
+Các kết quả commissioning/candidate ngày 20/11 bên dưới là lịch sử, không phải bằng chứng go-live mới.
+
 Migration Staging mới: [biên bản hostname](BHOME_STAGING_HOSTNAME_MIGRATION_2026-11-20.md).
 Staging canonical hiện là owner-staging/public-staging/api-staging; các hostname
 sepay-test cũ chỉ giữ compatibility. Không thay bất kỳ hostname/image Production nào
@@ -17,9 +20,10 @@ secret Production → deploy application → smoke/rollback. Không lấy develo
 frontend Staging để phát hành Production. `production-plan.yml` chỉ lập kế hoạch từ
 main có CI success, không SSH/deploy.
 
-Main hiện `6bd145e796dd7e4a43990648abd2146ab74e249f`, **chỉ có README.md**. Cần review/
-merge source ứng dụng và workflows đã kiểm chứng từ develop trước release main.
-Không tự merge/push trong nhiệm vụ này.
+Main xác minh 21/11 là `52f7a186a9ef3d598b729d72481102e75322783d`, **chỉ có README.md**.
+[PR release #149](https://github.com/nguyenhuy238/SEP490-G92-BHOME/pull/149) chuẩn bị
+source từ develop; phụ thuộc bản sửa backup #148, CI và review từ người khác.
+Chỉ merge qua PR sau khi các yêu cầu review/protection được đáp ứng; không push trực tiếp main.
 
 | Thành phần   | Giá trị                                                              |
 | ------------ | -------------------------------------------------------------------- |
