@@ -17,7 +17,7 @@ describe('mobile workspace access boundaries', () => {
     expect(tabs.Staff.map((tab) => tab.screen)).toEqual([
       'staff-home',
       'work-orders',
-      'notifications',
+      'rooms',
       'profile',
     ]);
     expect(tabs.Owner).toHaveLength(4);
