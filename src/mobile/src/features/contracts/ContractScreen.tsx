@@ -436,6 +436,7 @@ function LiveContractDetail({
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
+  const tenantAwaitingMoveOutApproval = role === 'Tenant' && m?.status === 'Requested';
   if (isMainOnboardingDraft(c) && ['Owner', 'Staff'].includes(role))
     return (
       <MainDraftScreen
@@ -900,7 +901,7 @@ function LiveContractDetail({
           </Text>
         </Box>
       )}
-      {section === 'lifecycle' && !!history.length && (
+      {section === 'lifecycle' && !tenantAwaitingMoveOutApproval && !!history.length && (
         <Box>
           <Heading title="Lịch sử xem xét quyết toán" />
           {history.map((h) => (
@@ -913,7 +914,7 @@ function LiveContractDetail({
           ))}
         </Box>
       )}
-      {section === 'lifecycle' && m && (
+      {section === 'lifecycle' && m && !tenantAwaitingMoveOutApproval && (
         <ContractLifecyclePanel
           api={api}
           id={id}

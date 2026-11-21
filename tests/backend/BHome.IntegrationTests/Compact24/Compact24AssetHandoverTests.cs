@@ -243,6 +243,77 @@ public sealed partial class Compact24OwnerSetupTests
     }
 
     [CompactPostgresFact]
+    public async Task OwnerCanReviewAndRejectMoveOutExactlyOnce()
+    {
+        var w = await Seed(); using var host = Host();
+        var id = (await SeedAssetHandover(w, host.Services, 0, 0)).Contract;
+        using var owner = await Client(w.Owner, host);
+        using var staff = await Client(w.Staff, host);
+        using var tenant = await Client(w.Tenant, host);
+        var input = new TerminationInput(Today, "Synthetic tenant request");
+        var root = $"/api/v1/contracts/{id}";
+        await Read<MoveOutView>(await HandoverPost(tenant, id, "termination-requests", input));
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync(root + "/move-out/review")).StatusCode);
+        var before = await Read<TerminationReview>(await owner.GetAsync(root + "/move-out/review"));
+        Assert.Equal("Requested", before.Status);
+        Assert.Equal(input.Reason, before.Reason);
+        Assert.Equal(Today, before.ProposedDate);
+        Assert.False(string.IsNullOrWhiteSpace(before.TenantName));
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await HandoverPost(staff, id, "move-out/reject", new TerminationRejection("Synthetic"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await HandoverPost(owner, id, "move-out/reject", new TerminationRejection("   "))).StatusCode);
+        var key = Guid.NewGuid();
+        var rejection = new TerminationRejection("  Synthetic rejection  ");
+        Assert.Equal("Rejected", (await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/reject", rejection, key))).Status);
+        Assert.Equal("Rejected", (await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/reject", rejection, key))).Status);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await HandoverPost(owner, id, "move-out/reject", rejection)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await HandoverPost(owner, id, "move-out/approve", new { })).StatusCode);
+        var after = await Read<TerminationReview>(await owner.GetAsync(root + "/move-out/review"));
+        Assert.Equal("Rejected", after.Status);
+        Assert.Equal("Synthetic rejection", after.RejectionReason);
+        Assert.NotNull(after.DecidedAt);
+        Assert.False(string.IsNullOrWhiteSpace(after.DecidedBy));
+        Assert.Equal("Active", (await Read<ContractView>(await owner.GetAsync(root))).Status);
+        var history = await Read<MoveOutHistoryView[]>(await owner.GetAsync(root + "/move-out/history"));
+        Assert.Equal(w.Owner.Id, Assert.Single(history, h => h.Action == "Rejected").ActorId);
+        Assert.Contains("Synthetic rejection", Assert.Single(history, h => h.Action == "Rejected").Snapshot);
+
+        var expiry = await Read<MoveOutView>(await HandoverPost(owner, id, "expiry-move-out",
+            new TerminationInput(before.EndDate, "Synthetic expiry")));
+        Assert.Equal("Requested", expiry.Status);
+        Assert.True(expiry.Version > after.Version);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await HandoverPost(owner, id, $"move-out/approve?expectedVersion={before.Version}", new { })).StatusCode);
+        Assert.Equal("Approved", (await Read<MoveOutView>(await HandoverPost(owner, id,
+            $"move-out/approve?expectedVersion={expiry.Version}", new { }))).Status);
+        var retained = await Read<MoveOutHistoryView[]>(await owner.GetAsync(root + "/move-out/history"));
+        Assert.Contains("Synthetic rejection", Assert.Single(retained, h => h.Action == "Rejected").Snapshot);
+    }
+
+    [CompactPostgresFact]
+    public async Task OwnerReviewReadsPersistedAcceptanceWithoutClosingContract()
+    {
+        var w = await Seed(); using var host = Host();
+        var id = (await SeedAssetHandover(w, host.Services, 0, 0)).Contract;
+        using var owner = await Client(w.Owner, host);
+        using var tenant = await Client(w.Tenant, host);
+        var root = $"/api/v1/contracts/{id}";
+        await Read<MoveOutView>(await HandoverPost(tenant, id, "termination-requests", new TerminationInput(Today, "Synthetic request")));
+        Assert.Equal("Approved", (await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/approve", new { }))).Status);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await HandoverPost(owner, id, "move-out/reject", new TerminationRejection("Synthetic"))).StatusCode);
+        var review = await Read<TerminationReview>(await owner.GetAsync(root + "/move-out/review"));
+        Assert.Equal("Approved", review.Status);
+        Assert.NotNull(review.DecidedAt);
+        Assert.False(string.IsNullOrWhiteSpace(review.DecidedBy));
+        Assert.Null(review.RejectionReason);
+        Assert.Equal("Active", (await Read<ContractView>(await owner.GetAsync(root))).Status);
+    }
+
+    [CompactPostgresFact]
     public async Task TenantMoveOutRequestNotifiesOwnerAndAssignedStaffOnce()
     {
         var w = await Seed(); using var host = Host();

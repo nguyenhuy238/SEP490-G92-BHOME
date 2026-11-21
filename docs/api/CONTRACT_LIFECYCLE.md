@@ -165,6 +165,17 @@ báo đọc audit đã lưu, chống gửi trùng theo hợp đồng và ngườ
 duyệt. Nội dung thông báo không chứa lý do trả phòng. Owner vẫn thực hiện bước phê duyệt theo
 luồng hiện có.
 
+Owner Web mở riêng trang **Yêu cầu kết thúc hợp đồng** từ thông báo hoặc chi tiết hợp đồng.
+`GET /api/v1/contracts/{id}/move-out/review` chỉ dành cho Owner, trả thông tin đề nghị và
+kết quả xét duyệt. Owner chấp nhận bằng endpoint `move-out/approve` hiện có hoặc từ chối
+bằng `POST /api/v1/contracts/{id}/move-out/reject` với `{ "reason": "..." }` và
+`Idempotency-Key`. Từ chối chỉ áp dụng cho hồ sơ `Requested` của hợp đồng `Active`,
+lưu `Rejected` cùng lý do, người xử lý và thời điểm trong lịch sử. Gửi lại cùng khóa
+không ghi thêm quyết định. Quyết định mới trên hồ sơ đã xử lý trả HTTP 409.
+Owner Web gửi phiên bản đã xem qua `expectedVersion` (query của approve, body của reject);
+phiên bản cũ trả HTTP 409. Một yêu cầu bị từ chối vẫn được lưu trong lịch sử khi Owner lập
+hồ sơ trả phòng lúc hết hạn về sau. Trạng thái và lý do dùng dữ liệu hiện có, không cần migration.
+
 Mutation JSON cần Idempotency-Key GUID. Auth ở service, object scope lấy từ DB.
 
 - GET `{id}/versions`: Owner/Tenant sở hữu, Staff assigned; cùng chain previous/next;

@@ -118,9 +118,15 @@ export function ContractDetailPanel({
         }}
       />
     );
-  const actions = contractActions(c, m, 'Owner', actorId, signingMethods?.methods).filter(
+  const actions = contractActions(
+    c,
+    m?.status === 'Rejected' ? null : m,
+    'Owner',
+    actorId,
+    signingMethods?.methods,
+  ).filter(
     (a) =>
-      !['move-out/settlement', 'move-out/schedule'].includes(a.operation) &&
+      !['move-out/approve', 'move-out/settlement', 'move-out/schedule'].includes(a.operation) &&
       !(c.kind === 'Holding' && a.operation === 'holding-approval') &&
       !(c.signingMode === 'INTERNAL_OTP_DRAWN' && a.operation.startsWith('signing')),
   );
@@ -214,7 +220,10 @@ export function ContractDetailPanel({
         <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
           Mã hợp đồng {c.id}
         </Typography>
-        <ContractNavigation id={c.id} />
+        <ContractNavigation
+          id={c.id}
+          reviewRequest={m?.status === 'Requested' || m?.status === 'Rejected'}
+        />
         <Stepper
           activeStep={activeStep}
           alternativeLabel
@@ -298,6 +307,11 @@ export function ContractDetailPanel({
             </Box>
           )}
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+            {m && (
+              <TerminationReviewLink id={id}>
+                {m.status === 'Requested' ? 'Xét duyệt yêu cầu kết thúc' : 'Xem kết quả xét duyệt'}
+              </TerminationReviewLink>
+            )}
             {actions.map((a) => (
               <Button
                 key={a.operation}
@@ -317,7 +331,7 @@ export function ContractDetailPanel({
               </Button>
             ))}
           </Stack>
-          {!actions.length && (
+          {!actions.length && !m && (
             <Typography color="text.secondary">
               Không có thao tác phù hợp với trạng thái hiện tại.
             </Typography>
@@ -545,7 +559,7 @@ export function ContractDetailPanel({
           </Typography>
         </ChartCard>
       )}
-      {m && (
+      {m && m.status !== 'Requested' && m.status !== 'Rejected' && (
         <>
           {m.status === 'Approved' && (
             <FinalMeterTask
@@ -619,7 +633,21 @@ export function ContractDetailPanel({
     </Stack>
   );
 }
-function ContractNavigation({ id }: { id: string }) {
+function TerminationReviewLink({ id, children }: { id: string; children: ReactNode }) {
+  const routed = useInRouterContext();
+  const path = `/contracts/${id}/termination-review`;
+  return routed ? (
+    <Button variant="outlined" component={RouterLink} to={path}>
+      {children}
+    </Button>
+  ) : (
+    <Button variant="outlined" href={path}>
+      {children}
+    </Button>
+  );
+}
+
+function ContractNavigation({ id, reviewRequest }: { id: string; reviewRequest: boolean }) {
   const routed = useInRouterContext();
   if (!routed) return null;
   return (
@@ -630,15 +658,21 @@ function ContractNavigation({ id }: { id: string }) {
       <Button component={RouterLink} to="/temporary-residence">
         Theo dõi tạm trú
       </Button>
-      <Button
-        onClick={() =>
-          document
-            .getElementById(`move-out-${id}`)
-            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }
-      >
-        Kết thúc hợp đồng
-      </Button>
+      {reviewRequest ? (
+        <Button component={RouterLink} to={`/contracts/${id}/termination-review`}>
+          Kết thúc hợp đồng
+        </Button>
+      ) : (
+        <Button
+          onClick={() =>
+            document
+              .getElementById(`move-out-${id}`)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
+        >
+          Kết thúc hợp đồng
+        </Button>
+      )}
       <Button component={RouterLink} to="/maintenance">
         Bảo trì sau bàn giao
       </Button>

@@ -141,6 +141,13 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
          join r in db.Roles on ur.RoleId equals r.Id
          where u.Id == id && u.IsActive && r.Name == role
          select u.Id).AnyAsync(t);
+    public Task<string?> DecisionActorNameAsync(Guid userId, CancellationToken t)
+    {
+        var users = db.Users.AsNoTracking().Where(u => u.Id == userId);
+        return db.Model.FindEntityType(typeof(ApplicationUser))?.FindProperty("full_name") is not null
+            ? users.Select(u => EF.Property<string?>(u, "full_name") ?? u.UserName).SingleOrDefaultAsync(t)
+            : users.Select(u => u.UserName).SingleOrDefaultAsync(t);
+    }
     public async Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, Guid[] residentIds, CancellationToken t)
     {
         var capacity = await db.Set<Room>().Where(r => r.Id == roomId).Select(r => r.Capacity).SingleAsync(t);

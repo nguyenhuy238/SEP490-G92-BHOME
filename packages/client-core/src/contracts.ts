@@ -292,6 +292,21 @@ export interface HandoverChoices {
   inventoryState?: string | null;
   noAssetsConfirmed?: boolean;
 }
+export interface TerminationReview {
+  status: 'Requested' | 'Approved' | 'Rejected';
+  version: number;
+  locationName: string;
+  roomNumber: string;
+  tenantName: string | null;
+  startDate: string;
+  endDate: string;
+  proposedDate: string;
+  reason: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  rejectionReason: string | null;
+}
+
 export interface MoveOut {
   id: string;
   status: string;
@@ -971,6 +986,8 @@ export function contractClient(request: ContractRequest) {
       request<Readiness>(`${root}/${id}/activation-readiness`, { signal }),
     moveOut: (id: string, signal?: AbortSignal) =>
       request<MoveOut>(`${root}/${id}/move-out`, { signal }),
+    terminationReview: (id: string, signal?: AbortSignal) =>
+      request<TerminationReview>(`${root}/${guid(id)}/move-out/review`, { signal }),
     history: (id: string, signal?: AbortSignal) =>
       request<SettlementReview[]>(`${root}/${id}/move-out/settlement-history`, { signal }),
     certificates: (signal?: AbortSignal) => request<Certificate[]>(certificates, { signal }),

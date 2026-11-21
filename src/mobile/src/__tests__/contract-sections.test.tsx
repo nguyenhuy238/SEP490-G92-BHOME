@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
   ContractAction,
   ContractSummary,
+  MoveOut,
   Readiness,
 } from '../../../../packages/client-core/src/contracts';
 import { contractActionSection, groupContracts } from '../features/contracts/contractSections';
@@ -17,6 +18,7 @@ const state = vi.hoisted(() => ({
   request: vi.fn(),
   contract: {} as Record<string, unknown>,
   readiness: null as Readiness | null,
+  moveOut: null as MoveOut | null,
   back: vi.fn(),
   headerBack: undefined as (() => void) | undefined,
   viewedId: '',
@@ -60,7 +62,12 @@ vi.mock('../../../../packages/client-core/src/useContractDetail', () => ({
       loading: false,
       error: '',
       reload: vi.fn(),
-      data: { contract: state.contract, moveOut: null, readiness: state.readiness, history: [] },
+      data: {
+        contract: state.contract,
+        moveOut: state.moveOut,
+        readiness: state.readiness,
+        history: [],
+      },
     };
   },
 }));
@@ -216,6 +223,7 @@ beforeEach(() => {
   state.params = null;
   state.section = undefined;
   state.readiness = null;
+  state.moveOut = null;
   state.contract = {
     ...summary('Active'),
     id,
@@ -262,6 +270,26 @@ it('shows the early termination form directly in the Tenant lifecycle section', 
   fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }));
   expect(screen.getByText('Yêu cầu đang chờ Owner duyệt.')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Gửi yêu cầu' })).toBeNull();
+});
+
+it('shows the submitted request and waits for Owner approval before showing Tenant settlement', () => {
+  state.role = 'Tenant';
+  state.section = 'lifecycle';
+  state.moveOut = {
+    status: 'Requested',
+    proposedDate: '2099-11-05',
+    reason: 'Chuyển nơi ở',
+    version: 1,
+  } as MoveOut;
+  const { rerender } = render(<ContractScreen />);
+
+  expect(screen.getByText('Lý do: Chuyển nơi ở')).toBeTruthy();
+  expect(screen.queryByText('Lifecycle panel')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Gửi yêu cầu' })).toBeNull();
+
+  state.moveOut = { ...state.moveOut, status: 'Approved' };
+  rerender(<ContractScreen />);
+  expect(screen.getByText('Lifecycle panel')).toBeTruthy();
 });
 
 it('removes the duplicate detail back button and registers previous-screen navigation on the topbar', () => {
