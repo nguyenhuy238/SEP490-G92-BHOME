@@ -117,10 +117,11 @@ def main():
         raise ValueError('Use root and the health or backup operation')
     STATE.mkdir(mode=0o700, exist_ok=True)
     mode = sys.argv[1]
-    # A nonblocking lock makes monitoring skip a concurrent approved release.
+    # Health can retry at the next five-minute tick. A daily backup must wait
+    # for a release/health check rather than silently lose its scheduled run.
     with open('/run/lock/bhome-vps-application-release.lock', 'a') as lock:
         try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if mode == 'health' else 0))
         except BlockingIOError:
             print('SKIP: application release in progress; next timer run will retry')
             return
