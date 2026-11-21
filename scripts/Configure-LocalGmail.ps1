@@ -5,8 +5,10 @@ param(
     [string]$Sender,
     [string[]]$AllowedRecipients,
     [switch]$AllowAnyRecipient,
+    [switch]$UseExistingCredentials,
     [Security.SecureString]$AppPassword,
     [switch]$CheckOnly,
+    [string]$Recipient,
     [string]$EnvironmentFile = '.env',
     [string]$UserSecretsId
 )
@@ -83,6 +85,13 @@ if ($CheckOnly) {
         @($allowed | Where-Object { !(Valid-Email ([string]$effective[$_])) }).Count -eq 0
     if ($AllowAnyRecipient) { $ready = $ready -and $allowAnyConfigured }
     if (!$ready) { throw 'Local Gmail SMTP is NOT configured. Current local email may be captured by Mailpit. Run Configure-LocalGmail.ps1 to opt in.' }
+    if ($Recipient) {
+        if (!(Valid-Email $Recipient)) { throw 'Recipient must be one valid email address.' }
+        $approved = @($allowed | ForEach-Object { [string]$effective[$_] })
+        if (!$allowAnyConfigured -and $approved -notcontains $Recipient) {
+            throw 'Recipient is blocked by the local SMTP allowlist. Explicitly opt in with -AllowAnyRecipient or review the approved recipients. No email sent.'
+        }
+    }
     $scope = if ($allowAnyConfigured) { 'all valid recipients (Development opt-in)' } else { 'approved recipients only' }
     Write-Output ('PASS: Local Gmail SMTP configuration is present; destination scope: ' + $scope + '. Credentials withheld; SMTP acceptance/inbox delivery not tested.')
     return
@@ -91,6 +100,18 @@ if ($CheckOnly) {
 # Process environment overrides User Secrets: do not misleadingly report success if they exist.
 if (@(Get-ChildItem Env:Email__* -ErrorAction SilentlyContinue).Count) {
     throw 'Process Email__* overrides are set. Remove them before configuring local Gmail SMTP.'
+}
+if ($Recipient) { throw '-Recipient is supported only with -CheckOnly. No configuration changed.' }
+if ($UseExistingCredentials) {
+    if ($Sender -or $AppPassword) { throw '-UseExistingCredentials cannot be combined with -Sender or -AppPassword.' }
+    if (![string]::IsNullOrWhiteSpace([string]$secrets['Email:AppPassword']) -and
+        (Valid-Email ([string]$secrets['Email:Username'])) -and
+        $secrets['Email:Username'] -eq $secrets['Email:FromEmail']) {
+        $Sender = [string]$secrets['Email:Username']
+        $AppPassword = ConvertTo-SecureString ([string]$secrets['Email:AppPassword']) -AsPlainText -Force
+    } else {
+        throw 'Existing SMTP credentials are missing or inconsistent in API User Secrets. Run without -UseExistingCredentials to enter them securely. No configuration changed.'
+    }
 }
 if (!$Sender) { $Sender = Read-Host 'Gmail sender address' }
 $Sender = $Sender.Trim()

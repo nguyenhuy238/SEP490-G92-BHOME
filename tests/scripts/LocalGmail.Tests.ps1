@@ -23,6 +23,11 @@ try {
     catch { $failure = $_.Exception.Message.Contains('Sender must be') }
     Assert $failure 'Invalid sender should be rejected.'
     Assert (!(Test-Path -LiteralPath $secretFile)) 'Invalid input wrote credentials.'
+    $failure = $false
+    try { & $command -EnvironmentFile $profile -UserSecretsId $id -UseExistingCredentials -AllowAnyRecipient }
+    catch { $failure = $_.Exception.Message.Contains('credentials are missing') }
+    Assert $failure 'Missing existing credentials must fail without prompting or writing.'
+    Assert (!(Test-Path -LiteralPath $secretFile)) 'Missing credentials wrote secrets.'
     & $command -EnvironmentFile $profile -UserSecretsId $id -Sender 'bhome.testing@gmail.com' -AllowedRecipients @('approved@example.invalid') -AppPassword $password
     Assert ($LASTEXITCODE -eq 0) 'Could not write isolated local Gmail secrets.'
     & $command -EnvironmentFile $profile -UserSecretsId $id -CheckOnly
@@ -41,13 +46,21 @@ try {
     catch { $failure = $_.Exception.Message.Contains('existing SMTP allowlist differs') }
     Assert $failure 'Previously approved recipient list must not change implicitly.'
     Assert ($before -eq (Get-FileHash -LiteralPath $secretFile -Algorithm SHA256).Hash) 'Rejected change touched secrets.'
+    & $command -EnvironmentFile $profile -UserSecretsId $id -CheckOnly -Recipient 'APPROVED@example.invalid'
+    $failure = $false
+    try { & $command -EnvironmentFile $profile -UserSecretsId $id -CheckOnly -Recipient 'blocked@example.invalid' }
+    catch { $failure = $_.Exception.Message.Contains('blocked by the local SMTP allowlist') }
+    Assert $failure 'Configuration check must detect the actual recipient restriction.'
+    Assert ($before -eq (Get-FileHash -LiteralPath $secretFile -Algorithm SHA256).Hash) 'Recipient check changed secrets.'
     # Explicit Development-wide opt-in bypasses the former allowlist without deleting it.
-    & $command -EnvironmentFile $profile -UserSecretsId $id -Sender 'bhome.testing@gmail.com' -AllowAnyRecipient -AppPassword $password
+    & $command -EnvironmentFile $profile -UserSecretsId $id -UseExistingCredentials -AllowAnyRecipient
     & $command -EnvironmentFile $profile -UserSecretsId $id -AllowAnyRecipient -CheckOnly
+    & $command -EnvironmentFile $profile -UserSecretsId $id -CheckOnly -Recipient 'outside@example.invalid'
     $data = Get-Content -LiteralPath $secretFile -Raw | ConvertFrom-Json
     Assert ($data.'Email:AllowAnyRecipientInDevelopment' -eq 'True') 'Explicit all-recipient opt-in was not persisted.'
     Assert ($data.'Email:TestEnabled' -eq 'False') 'Development test endpoint must remain off for unrestricted recipients.'
     Assert ($data.'Email:AllowedRecipients:0' -eq 'approved@example.invalid') 'Existing recipient list was destroyed.'
+    Assert ($data.'Email:AppPassword' -eq 'SYNTHETIC_PRIVATE_TEST_1234') 'Existing SMTP credential changed.'
     Assert ($hash -eq (Get-FileHash -LiteralPath $profile -Algorithm SHA256).Hash) 'Existing .env changed by opt-in.'
     $before = (Get-FileHash -LiteralPath $secretFile -Algorithm SHA256).Hash
     [IO.File]::WriteAllText($profile, "ASPNETCORE_ENVIRONMENT=Production`n")

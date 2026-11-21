@@ -203,6 +203,19 @@ qua dấu nhắc ẩn. Tùy chọn này lưu `Email:AllowAnyRecipientInDevelopme
 vào User Secrets, ưu tiên hơn allowlist cũ **chỉ trong Development SMTP**;
 Testing/Staging vẫn bắt buộc allowlist. Kiểm tra với
 `scripts/Configure-LocalGmail.ps1 -AllowAnyRecipient -CheckOnly`.
+Nếu máy đã lưu đúng Gmail sender/App Password trong API User Secrets, có thể dùng lại
+mà không nhập hoặc sao chép secret:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Configure-LocalGmail.ps1 -UseExistingCredentials -AllowAnyRecipient
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Configure-LocalGmail.ps1 -CheckOnly -Recipient 'your-approved-mailbox@example.com'
+```
+
+`-UseExistingCredentials` dừng nếu thiếu hoặc không khớp sender; không lấy credential
+từ Staging/Production. `-Recipient` chỉ kiểm tra quyền gửi, không gửi thư và không đổi
+cấu hình. Sau cấu hình phải khởi động lại API. Thành viên chưa có secrets chạy lệnh
+cấu hình tương tác ở trên một lần; pull Git không tự cấp Gmail App Password.
+
 Các email được tạo từ dữ liệu thực sẽ đi ra Internet; kiểm tra người nhận,
 trạng thái thông báo và tránh dùng dữ liệu nhạy cảm chưa được phép trước khi
 gửi. Thư đã được ghi nhận `Sent` trong Mailpit không tự gửi lại khi đổi SMTP:
