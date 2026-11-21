@@ -60,6 +60,7 @@ public sealed record SandboxSignatures(bool SandboxOnly, string SnapshotHash, Da
 public sealed record InternalAcceptedDocument(byte[] SignaturePng, byte[] Pdf);
 public interface IAnonymousSigningRepository
 {
+    Task<bool> MatchesAccountEmailAsync(Guid userId, string email, CancellationToken t);
     Task<ContractSigningInvitation?> FindByTokenHashAsync(string hash, CancellationToken t);
     Task<ContractSigningInvitation?> FindAsync(Guid id, CancellationToken t);
     Task<IReadOnlyList<ContractSigningInvitation>> ListAsync(Guid contractId, CancellationToken t);

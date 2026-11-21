@@ -9,6 +9,11 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('react-native', () => ({
   View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Modal: ({ children, transparent }: { children: React.ReactNode; transparent: boolean }) => (
+    <div data-testid={transparent ? 'calendar-popup' : 'opaque-calendar'}>{children}</div>
+  ),
+  Pressable: () => null,
+  StyleSheet: { create: (styles: unknown) => styles, absoluteFill: {} },
   AppState: {
     addEventListener: (_: string, callback: (value: string) => void) => {
       state.background = callback;
@@ -17,6 +22,7 @@ vi.mock('react-native', () => ({
   },
 }));
 vi.mock('react-native-paper', () => ({
+  useTheme: () => ({ colors: { backdrop: 'black', elevation: { level3: 'white' } } }),
   TextInput: ({
     accessibilityLabel,
     value,
@@ -45,9 +51,8 @@ vi.mock('react-native-paper', () => ({
     disabled: boolean;
   }) => <button aria-label={accessibilityLabel} onClick={onPress} disabled={disabled} />,
 }));
-vi.mock('react-native-paper-dates', () => ({
-  registerTranslation: vi.fn(),
-  DatePickerModal: (props: {
+vi.mock('react-native-paper-dates', () => {
+  const MockPicker = (props: {
     locale: string;
     mode: string;
     date?: Date;
@@ -61,8 +66,13 @@ vi.mock('react-native-paper-dates', () => ({
         <button onClick={props.onDismiss}>Đóng lịch</button>
       </div>
     );
-  },
-}));
+  };
+  return {
+    registerTranslation: vi.fn(),
+    DatePickerModal: MockPicker,
+    DatePickerModalContent: MockPicker,
+  };
+});
 import { IdentityDateField } from '../components/IdentityDateField';
 
 beforeEach(() => {
@@ -122,4 +132,39 @@ it('closes the identity calendar when the app goes to the background', () => {
   act(() => state.background?.('background'));
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(change).not.toHaveBeenCalled();
+});
+
+it('inserts hyphens while typing a move-out date and lets Backspace remove them', () => {
+  function MoveOutDate() {
+    const [value, setValue] = React.useState('');
+    return (
+      <IdentityDateField
+        label="Ngày dự kiến trả phòng"
+        accessibilityLabel="Ngày dự kiến trả phòng"
+        value={value}
+        onChange={setValue}
+        disabled={false}
+        hyphenated
+        compactCalendar
+      />
+    );
+  }
+  render(<MoveOutDate />);
+  const input = screen.getByRole<HTMLInputElement>('textbox');
+  for (const [typed, displayed] of [
+    ['05', '05-'],
+    ['05-11', '05-11-'],
+    ['05-11', '05-11'],
+    ['05-1', '05-1'],
+    ['05112028', '05-11-2028'],
+  ]) {
+    fireEvent.change(input, { target: { value: typed } });
+    expect(input.value).toBe(displayed);
+  }
+  fireEvent.click(screen.getByLabelText('Chọn Ngày dự kiến trả phòng'));
+  expect(screen.getByTestId('calendar-popup')).toBeTruthy();
+  expect(state.picker?.date?.getDate()).toBe(5);
+  expect(state.picker?.date?.getMonth()).toBe(10);
+  fireEvent.click(screen.getByText('Chọn ngày'));
+  expect(input.value).toBe('29-02-2028');
 });

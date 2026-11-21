@@ -209,9 +209,19 @@ describe('Staff resident directory', () => {
   });
   afterEach(cleanup);
 
+  it('opens contract actions from the assigned rooms screen', () => {
+    render(<RoomOverview />);
+    fireEvent.click(screen.getByText('Hợp đồng thuê'));
+    expect(mockWorkspace.go).toHaveBeenLastCalledWith('signing');
+    fireEvent.click(screen.getByText('Tạo hợp đồng thuê'));
+    expect(mockWorkspace.go).toHaveBeenLastCalledWith('onboarding');
+    fireEvent.click(screen.getByText('Tạo hợp đồng giữ chỗ'));
+    expect(mockWorkspace.go).toHaveBeenLastCalledWith('prepare-contract', { kind: 'Holding' });
+  });
+
   it('shows counts with units and compact rooms without individual residents', () => {
     render(<RoomOverview />);
-    expect(screen.getByText('Phòng & Cư dân')).toBeTruthy();
+    expect(screen.getByText('Phòng được phân công')).toBeTruthy();
     expect(screen.getByText('cư dân chờ xác minh')).toBeTruthy();
     expect(screen.getByLabelText('Phòng 101, 2 cư dân, 1 chờ xác minh')).toBeTruthy();
     expect(screen.queryByText('Nguyễn Văn An')).toBeNull();

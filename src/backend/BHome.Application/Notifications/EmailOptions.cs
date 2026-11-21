@@ -19,6 +19,7 @@ public sealed class EmailOptions
     public bool TestEnabled { get; set; }
     public string TestRecipient { get; set; } = "";
     public string[] AllowedRecipients { get; set; } = [];
+    public bool AllowAnyDevelopmentSigningRecipient { get; set; }
     // Explicit opt-in for local Development only; Testing and Staging retain an allowlist.
     public bool AllowAnyRecipientInDevelopment { get; set; }
 

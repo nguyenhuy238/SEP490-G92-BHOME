@@ -66,7 +66,11 @@ public static class EnvironmentConfiguration
                 (originOnly && uri.AbsolutePath != "/") ||
                 ((https || !development) && uri.Scheme != "https") ||
                 (deployed && uri.IsLoopback) ||
-                ((deployed || environment == "Development") && TemporaryHost(uri.Host)))
+                ((deployed || environment == "Development") && TemporaryHost(uri.Host) &&
+                    !(environment == "Development" && key == "AnonymousSigning:PublicSigningUrl" &&
+                      uri.Host.EndsWith(".trycloudflare.com", StringComparison.OrdinalIgnoreCase) &&
+                      uri.IsDefaultPort && uri.AbsolutePath == "/contract-signing" &&
+                      string.Equals(uri.GetLeftPart(UriPartial.Authority), config["AnonymousSigning:DevelopmentTunnelOrigin"], StringComparison.OrdinalIgnoreCase))))
             {
                 errors.Add($"{key} must be a trusted absolute {(https || !development ? "HTTPS" : "HTTP(S)")} URL without credentials, query or fragment; temporary tunnels are not supported. Migrate old local URL settings with scripts/Initialize-LocalUrls.ps1 -Apply; deployed URLs cannot use loopback.");
                 return false;

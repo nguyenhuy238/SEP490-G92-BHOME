@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { ContractNotice } from './ContractNotice';
 import {
   AppState,
   FlatList,
@@ -303,9 +304,7 @@ export function ContractPdfPreview({
         )}
         {!!error && (
           <View style={styles.message}>
-            <Text accessibilityRole="alert" style={{ color: c.red }}>
-              {error}
-            </Text>
+            <ContractNotice message={error} />
             <Button
               mode="outlined"
               icon="reload"

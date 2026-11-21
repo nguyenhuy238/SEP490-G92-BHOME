@@ -52,6 +52,34 @@ it('keeps persisted data visible and reports a background refresh error', async 
   expect(view.result.current.error).toBe('');
   expect(view.result.current.refreshError).not.toBe('');
 });
+it('continues refreshing a Main contract if a related request fails on the first Active response', async () => {
+  vi.useFakeTimers();
+  const pending = { id: 'main', kind: 'Main', status: 'PendingActivation' };
+  const active = { ...pending, status: 'Active' };
+  const get = vi.fn().mockResolvedValueOnce(pending).mockResolvedValue(active);
+  const moveOut = vi
+    .fn()
+    .mockResolvedValueOnce(null)
+    .mockRejectedValueOnce({ status: 503 })
+    .mockResolvedValue(null);
+  const api = {
+    get,
+    moveOut,
+    readiness: vi.fn().mockResolvedValue(null),
+  } as unknown as ContractClient;
+  const view = renderHook(() => useContractDetail(api, 'main', 'Staff', 1000));
+  await act(async () => {});
+  await act(async () => {
+    vi.advanceTimersByTime(1000);
+  });
+  expect(view.result.current.data?.contract.status).toBe('PendingActivation');
+  expect(view.result.current.refreshError).not.toBe('');
+  await act(async () => {
+    vi.advanceTimersByTime(1000);
+  });
+  expect(view.result.current.data?.contract.status).toBe('Active');
+  expect(view.result.current.refreshError).toBe('');
+});
 it('keeps the current detail mounted during an explicit reload and on a temporary failure', async () => {
   const draft = { id: 'holding', kind: 'Holding', status: 'Draft' };
   const get = vi.fn().mockResolvedValue(draft);

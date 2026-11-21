@@ -58,11 +58,12 @@ export function useContractDetail(
       }
       try {
         const contract = await client.get(id, signal);
-        pollingEligible =
+        const shouldPoll =
           (contract.kind === 'Holding' || contract.kind === 'Main') &&
           ['Draft', 'PendingSigning', 'PendingActivation'].includes(contract.status);
         if (contract.kind === 'Main' && contract.onboardingDraft) {
           if (!signal.aborted) {
+            pollingEligible = shouldPoll;
             const data = { contract, moveOut: null, readiness: null, history: [] };
             cached.current = { client, id, role, data };
             setState({
@@ -101,6 +102,7 @@ export function useContractDetail(
             : Promise.resolve([]),
         ]);
         if (!signal.aborted) {
+          pollingEligible = shouldPoll;
           setRefreshError('');
           const data = { contract, moveOut, readiness, history, historyError };
           cached.current = { client, id, role, data };

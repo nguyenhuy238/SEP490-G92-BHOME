@@ -297,6 +297,44 @@ it('starts at room selection without a duplicate header, refresh icon or locatio
   expect(screen.queryByLabelText('Cơ sở')).toBeNull();
   expect(api.preparation).not.toHaveBeenCalled();
 });
+it('filters available rooms by assigned location and shows their capacity', async () => {
+  const api = makeApi();
+  vi.mocked(api.locations).mockResolvedValue([
+    { id: ids[0], label: 'Cơ sở A' },
+    { id: ids[3], label: 'Cơ sở B' },
+  ]);
+  vi.mocked(api.holdingRooms).mockResolvedValue({
+    items: [
+      {
+        id: ids[1],
+        locationId: ids[0],
+        roomNumber: 'P101',
+        status: 0,
+        capacity: 2,
+        floor: null,
+        version: 1,
+      },
+      {
+        id: ids[2],
+        locationId: ids[3],
+        roomNumber: 'P201',
+        status: 0,
+        capacity: 4,
+        floor: null,
+        version: 1,
+      },
+    ],
+    totalCount: 2,
+    page: 1,
+    pageSize: 100,
+  });
+  mount(api);
+  expect(await screen.findByText('P101 · Cơ sở A · 2 người')).toBeTruthy();
+  expect(screen.queryByText('P201 · Cơ sở B · 4 người')).toBeNull();
+  expect(screen.queryByLabelText('Cơ sở được phân công *')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Phòng giữ chỗ *'), { target: { value: ids[1] } });
+  expect(await screen.findByText('Sức chứa: 2 người')).toBeTruthy();
+});
 it('loads preparation and readiness for the selected room/location, without any Tenant selection', async () => {
   const { api } = mount();
   await chooseRoom();

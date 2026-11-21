@@ -56,6 +56,7 @@ export function InternalSigningPanel({
   const liveInvitation = status.data?.invitations.find(
     (i) => !['Accepted', 'Revoked', 'Expired'].includes(i.status),
   );
+  const signerLabel = contract.kind === 'Holding' ? 'người giữ chỗ' : 'người đại diện thuê';
   async function run(work: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true;
@@ -74,7 +75,7 @@ export function InternalSigningPanel({
   }
   if (!contract.isDevelopmentDemo)
     return <RealInternalSigning api={api} contract={contract} onChanged={onChanged} />;
-  if (contract.kind === 'Main' && status.data?.sandboxAvailable)
+  if (contract.kind === 'Main' && status.data?.sandboxAvailable && !liveInvitation)
     return (
       <Stack spacing={2}>
         <Typography variant="h6">Xác nhận ký hợp đồng · Sandbox</Typography>
@@ -200,12 +201,12 @@ export function InternalSigningPanel({
           severity={liveInvitation.status === 'InvitationPendingManualDelivery' ? 'error' : 'info'}
         >
           {liveInvitation.status === 'InvitationAcceptedByProvider'
-            ? 'Dịch vụ email đã tiếp nhận lời mời. Chờ người giữ chỗ mở email và ký.'
+            ? `Dịch vụ email đã tiếp nhận lời mời. Chờ ${signerLabel} mở email và ký.`
             : liveInvitation.status === 'OtpVerified'
-              ? 'Đã xác minh OTP, người giữ chỗ chưa hoàn tất ký.'
+              ? `Đã xác minh OTP, ${signerLabel} chưa hoàn tất ký.`
               : liveInvitation.status === 'InvitationPendingManualDelivery'
                 ? 'Gửi email thất bại. Kiểm tra cấu hình, thu hồi lời mời rồi gửi lại.'
-                : 'Đã tạo lời mời. Chưa xác nhận gửi email hoặc đang chờ người giữ chỗ ký.'}
+                : `Đã tạo lời mời. Chưa xác nhận gửi email hoặc đang chờ ${signerLabel} ký.`}
         </Alert>
       )}
       {status.data?.invitations

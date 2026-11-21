@@ -104,8 +104,8 @@ public sealed partial class Compact24NotificationMvpTests
             await queue.EnqueueAsync(new("auth-audit-business-job-must-not-run", key, "{}"), default);
         }
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        while (!probe.Messages.Any(m => m.Destination == w.Tenants[0].Email && m.EventType == "ACCOUNT_INVITATION")) await Task.Delay(100, deadline.Token);
-        var mail = Assert.Single(probe.Messages, m => m.EventType == "ACCOUNT_INVITATION");
+        while (!probe.Messages.Any(m => m.Destination == w.Tenants[0].Email && m.EventType == "TENANT_SETUP_AFTER_ACTIVATION")) await Task.Delay(100, deadline.Token);
+        var mail = Assert.Single(probe.Messages, m => m.EventType == "TENANT_SETUP_AFTER_ACTIVATION");
         Assert.Equal(w.Tenants[0].Email, mail.Destination);
         Assert.Contains("Hợp đồng thuê của bạn đã hoạt động", mail.Body);
         Assert.Contains("1.000.000", mail.Body);

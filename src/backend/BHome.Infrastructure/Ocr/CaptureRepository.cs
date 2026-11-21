@@ -23,7 +23,8 @@ namespace BHome.Infrastructure.Ocr;
 internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope scope, IIdentityProtection protection,
     IObjectStorage storage, UserManager<ApplicationUser> users, TimeProvider clock,
     ILocationAssignments locationAssignments,
-    BHome.Application.PropertyManagement.IPropertyRepository properties) : ICaptureRepository
+    BHome.Application.PropertyManagement.IPropertyRepository properties,
+    BHome.Application.Contracts.IContractRepository contracts) : ICaptureRepository
 {
     private Guid Actor => scope.UserId;
     private Task<Guid> IdentityOwnerAsync(CancellationToken t) => db.Users.Where(u => u.IsActive &&
@@ -48,12 +49,46 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         if (!await scope.VisibleLocations.AnyAsync(l => l.Id == id, t)) throw new OcrAccessException();
         var rooms = await scope.VisibleRooms.AsNoTracking().Where(r => r.LocationId == id).OrderBy(r => r.RoomNumber).Take(100).ToArrayAsync(t);
         var ids = rooms.Select(r => r.Id).ToArray();
+        var waitingForOwner = await contracts.RoomsAwaitingMainOwnerSignatureAsync(ids, Guid.Empty, t);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
         var occupants = await db.Set<Contract>().AsNoTracking().Where(c => ids.Contains(c.RoomId) &&
             c.Kind != ContractKind.Holding && c.Status == ContractStatus.Active && c.StartDate <= today && c.EndDate >= today)
             .SelectMany(c => c.Residents.Select(person => new { c.RoomId, person.ResidentId })).Distinct().ToArrayAsync(t);
+        var currentTenants = await db.Set<Contract>().AsNoTracking()
+            .Where(c => ids.Contains(c.RoomId) && c.Kind != ContractKind.Holding &&
+                c.Status == ContractStatus.Active && c.StartDate <= today && c.EndDate >= today)
+            .Join(db.Set<Resident>(), c => c.RepresentativeResidentId, r => r.Id,
+                (c, r) => new { c.RoomId, ResidentId = r.Id, r.OwnerUserId, r.IdentityData })
+            .Distinct().ToArrayAsync(t);
+        var tenantNames = currentTenants.ToLookup(p => p.RoomId,
+            p => CurrentTenantName(p.ResidentId, p.OwnerUserId, p.IdentityData));
         return rooms.Select(r => new NamedResource(r.Id, r.RoomNumber, r.LocationId, r.Status.ToString(), r.Capacity,
-            Math.Max(0, r.Capacity - occupants.Count(p => p.RoomId == r.Id)))).ToArray();
+            Math.Max(0, r.Capacity - occupants.Count(p => p.RoomId == r.Id)))
+        {
+            CurrentTenantLabels = tenantNames[r.Id].OrderBy(label => label, StringComparer.CurrentCulture).ToArray(),
+            WaitingForOwnerSignature = waitingForOwner.Contains(r.Id)
+        }).ToArray();
+    }
+    private string CurrentTenantName(Guid residentId, Guid ownerId, string encryptedIdentity)
+    {
+        if (string.IsNullOrWhiteSpace(encryptedIdentity) || encryptedIdentity == "{}")
+            return "Chưa có tên xác minh";
+        try
+        {
+            var identity = JsonSerializer.Deserialize<EncryptedIdentity>(encryptedIdentity);
+            if (identity is null) return "Chưa có tên xác minh";
+            var bytes = protection.Decrypt(identity, new(ownerId, residentId));
+            try
+            {
+                var name = JsonSerializer.Deserialize<IdentityConfirmation>(bytes)?.FullName;
+                return string.IsNullOrWhiteSpace(name) ? "Chưa có tên xác minh" : name;
+            }
+            finally { CryptographicOperations.ZeroMemory(bytes); }
+        }
+        catch (Exception e) when (e is JsonException or CryptographicException or InvalidOperationException)
+        {
+            return "Chưa có tên xác minh";
+        }
     }
     public async Task<IReadOnlyList<NamedResource>> StaffAsync(CancellationToken t) => await db.Users.AsNoTracking()
         .Where(u => u.IsActive && db.UserRoles.Any(ur => ur.UserId == u.Id &&

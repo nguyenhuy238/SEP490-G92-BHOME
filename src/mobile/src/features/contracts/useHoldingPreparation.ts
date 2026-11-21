@@ -11,7 +11,7 @@ import {
 interface HoldingRooms {
   configuration: ContractConfiguration;
   locations: Preparation['locations'];
-  rooms: Preparation['rooms'];
+  rooms: (Preparation['rooms'][number] & { capacity?: number })[];
   blockedRooms: { id: string; label: string; codes: string[] }[];
 }
 
@@ -67,7 +67,7 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
           api.locations(controller.signal),
           api.holdingRooms(1, controller.signal),
         ]);
-        const candidates: Preparation['rooms'] = [];
+        const candidates: HoldingRooms['rooms'] = [];
         let loaded = 0;
         for (let page = 1; ; page++) {
           const result = page === 1 ? firstPage : await api.holdingRooms(page, controller.signal);
@@ -84,6 +84,7 @@ export function useHoldingPreparation(api: ContractClient, selectedRoomId = '') 
                 locationId: room.locationId,
                 label: room.roomNumber,
                 status: 'Available',
+                capacity: room.capacity,
               })),
           );
           loaded += result.items.length;

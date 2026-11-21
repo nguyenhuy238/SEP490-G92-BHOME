@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
+import { earlyTerminationDate } from '../../../../packages/client-core/src/contracts';
 import React, { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { ContractSummary, Readiness } from '../../../../packages/client-core/src/contracts';
+import type {
+  ContractAction,
+  ContractSummary,
+  MoveOut,
+  Readiness,
+} from '../../../../packages/client-core/src/contracts';
 import { contractActionSection, groupContracts } from '../features/contracts/contractSections';
 
 const state = vi.hoisted(() => ({
@@ -12,6 +18,7 @@ const state = vi.hoisted(() => ({
   request: vi.fn(),
   contract: {} as Record<string, unknown>,
   readiness: null as Readiness | null,
+  moveOut: null as MoveOut | null,
   back: vi.fn(),
   headerBack: undefined as (() => void) | undefined,
   viewedId: '',
@@ -55,7 +62,12 @@ vi.mock('../../../../packages/client-core/src/useContractDetail', () => ({
       loading: false,
       error: '',
       reload: vi.fn(),
-      data: { contract: state.contract, moveOut: null, readiness: state.readiness, history: [] },
+      data: {
+        contract: state.contract,
+        moveOut: state.moveOut,
+        readiness: state.readiness,
+        history: [],
+      },
     };
   },
 }));
@@ -123,7 +135,18 @@ vi.mock('../features/contracts/ContractProgress', () => ({
   ContractProgress: () => <span>Contract progress</span>,
 }));
 vi.mock('../features/contracts/ContractActionForm', () => ({
-  ContractActionForm: () => <span>Action form</span>,
+  ContractActionForm: ({ action, onSuccess }: { action: ContractAction; onSuccess: () => void }) =>
+    action.operation === 'termination-requests' ? (
+      <>
+        <h2>{action.label}</h2>
+        {action.fields.map((field) => (
+          <label key={field.name}>{field.label}</label>
+        ))}
+        <button onClick={() => onSuccess()}>Gửi yêu cầu</button>
+      </>
+    ) : (
+      <span>Action form</span>
+    ),
   SigningCertificates: () => null,
 }));
 vi.mock('../features/contracts/ContractDraftForm', () => ({
@@ -200,6 +223,7 @@ beforeEach(() => {
   state.params = null;
   state.section = undefined;
   state.readiness = null;
+  state.moveOut = null;
   state.contract = {
     ...summary('Active'),
     id,
@@ -233,6 +257,41 @@ beforeEach(() => {
   );
 });
 afterEach(cleanup);
+it('shows the early termination form directly in the Tenant lifecycle section', () => {
+  state.role = 'Tenant';
+  state.section = 'lifecycle';
+  render(<ContractScreen />);
+
+  expect(screen.getByRole('heading', { name: 'Yêu cầu chấm dứt trước hạn' })).toBeTruthy();
+  expect(screen.getByText('Ngày dự kiến trả phòng')).toBeTruthy();
+  expect(screen.getByText('Lý do')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Yêu cầu chấm dứt trước hạn' })).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }));
+  expect(screen.getByText('Yêu cầu đang chờ Owner duyệt.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Gửi yêu cầu' })).toBeNull();
+});
+
+it('shows the submitted request and waits for Owner approval before showing Tenant settlement', () => {
+  state.role = 'Tenant';
+  state.section = 'lifecycle';
+  state.moveOut = {
+    status: 'Requested',
+    proposedDate: '2099-11-05',
+    reason: 'Chuyển nơi ở',
+    version: 1,
+  } as MoveOut;
+  const { rerender } = render(<ContractScreen />);
+
+  expect(screen.getByText('Lý do: Chuyển nơi ở')).toBeTruthy();
+  expect(screen.queryByText('Lifecycle panel')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Gửi yêu cầu' })).toBeNull();
+
+  state.moveOut = { ...state.moveOut, status: 'Approved' };
+  rerender(<ContractScreen />);
+  expect(screen.getByText('Lifecycle panel')).toBeTruthy();
+});
+
 it('removes the duplicate detail back button and registers previous-screen navigation on the topbar', () => {
   render(<ContractScreen />);
   expect(screen.queryByRole('button', { name: 'Về danh sách hợp đồng' })).toBeNull();
@@ -463,6 +522,21 @@ it('defaults to overview and switches sections without displaying all forms at o
   expect(screen.getByText('Workflow history')).toBeTruthy();
   expect(screen.queryByText('Handover panel')).toBeNull();
 });
+it.each(['PendingSigning', 'PendingActivation', 'Active'] as const)(
+  'hides the section tabs in the Staff guided Main contract flow in %s',
+  (status) => {
+    state.contract = { ...state.contract, status, initialPaymentRequired: true };
+    render(<ContractScreen />);
+    for (const name of [
+      'Tổng quan',
+      'Ký & kích hoạt',
+      'Bàn giao',
+      'Gia hạn & trả phòng',
+      'Lịch sử',
+    ])
+      expect(screen.queryByRole('button', { name })).toBeNull();
+  },
+);
 it('keeps Staff restrictions in the signing section', () => {
   state.contract.status = 'PendingSigning';
   render(<ContractScreen />);
@@ -503,3 +577,13 @@ it.each([
 ])('routes %s actions to %s without changing permissions', (operation, section) =>
   expect(contractActionSection(operation)).toBe(section),
 );
+
+it('validates the typed early termination date before it can be sent', () => {
+  const contract = { startDate: '2099-01-01', endDate: '2099-12-31' };
+  expect(() => earlyTerminationDate('05-11-', contract)).toThrow(/dd\/MM\/yyyy/);
+  expect(() => earlyTerminationDate('31-02-2099', contract)).toThrow(/dd\/MM\/yyyy/);
+  expect(() => earlyTerminationDate('09-10-2024', contract)).toThrow(/quá khứ/);
+  expect(() => earlyTerminationDate('31-12-2098', contract)).toThrow(/bắt đầu/);
+  expect(() => earlyTerminationDate('31-12-2099', contract)).toThrow(/hết hạn/);
+  expect(earlyTerminationDate('05-11-2099', contract)).toBe('2099-11-05');
+});

@@ -48,9 +48,9 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
             $"Tiền giữ chỗ đã áp dụng: {c.AppliedHoldingDeposit.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} VND\n" +
             $"Trạng thái hợp đồng: Đang hoạt động\nTài khoản đăng nhập: {account.UserName}\nTrạng thái tài khoản: Đang hoạt động.\n");
     }
-    internal async Task<IReadOnlyList<EmailAttachment>> MainAttachmentsAsync(Guid id, Guid tenant, CancellationToken t)
+    internal async Task<IReadOnlyList<EmailAttachment>> MainAttachmentsAsync(Guid id, Guid tenant, string destination, CancellationToken t)
     {
-        var c = await db.Set<Contract>().AsNoTracking().Include(c => c.Signatures)
+        var c = await db.Set<Contract>().AsNoTracking().Include(c => c.Signatures).Include(c => c.Room).ThenInclude(r => r.Location)
             .SingleOrDefaultAsync(c => c.Id == id && c.Kind == ContractKind.Main && c.Status == ContractStatus.Active &&
                 c.TenantUserId == tenant && !c.IsDevelopmentDemo, t)
             ?? throw new ChannelDeliveryException("main_confirmation_document_invalid");
@@ -60,6 +60,12 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         {
             if (!AnonymousContractSigningService.Complete(c) || evidence.SnapshotHash != c.SnapshotHash || evidence.OwnerId != c.OwnerSignerId)
                 throw new ChannelDeliveryException("main_confirmation_document_invalid");
+            var signedEmail = await db.Set<ContractSigningInvitation>().AsNoTracking()
+                .Where(i => i.Id == evidence.InvitationId && i.ContractId == c.Id && i.ResidentId == c.RepresentativeResidentId &&
+                    i.SnapshotHash == c.SnapshotHash && i.AcceptedAt != null && i.RevokedAt == null)
+                .Select(i => i.RecipientEmail).SingleOrDefaultAsync(t);
+            if (!string.Equals(signedEmail, destination, StringComparison.OrdinalIgnoreCase))
+                throw new ChannelDeliveryException("main_confirmation_recipient_mismatch");
             key = evidence.FinalDocumentKey; hash = evidence.FinalDocumentHash;
         }
         else
@@ -82,7 +88,30 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         if (bytes.Length is < 5 or > 10_485_760 || !bytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8) ||
             !string.Equals(Convert.ToHexString(SHA256.HashData(bytes)), hash, StringComparison.OrdinalIgnoreCase))
             throw new ChannelDeliveryException("main_confirmation_document_invalid");
-        return [new($"Hop-dong-thue-{id:N}.pdf", "application/pdf", bytes)];
+        var contract = new EmailAttachment($"Hop-dong-thue-{id:N}.pdf", "application/pdf", bytes);
+        if (!c.InitialPaymentRequired) return [contract];
+        var receipts = await db.Database.SqlQuery<ReceiptRow>($"""
+            SELECT p.id AS "Id",COALESCE(p.verification_data->'sepay'->>'bankReference',p.transaction_reference) AS "Reference",
+              sum(a.amount) AS "Amount",p.received_at AS "PaidAt"
+            FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id
+            WHERE (a.target_deposit_contract_id={id} OR a.target_initial_contract_id={id}) AND p.status='VERIFIED'
+            GROUP BY p.id ORDER BY p.received_at,p.id
+            """).ToArrayAsync(t);
+        if (receipts.Length == 0) return [contract];
+        var receipt = PaymentReceipt(c, "Biên nhận thanh toán ban đầu", receipts,
+            $"Tiền giữ chỗ đã cấn vào cọc: {c.AppliedHoldingDeposit.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} VND.");
+        return [contract, new($"Bien-nhan-thanh-toan-{id:N}.pdf", "application/pdf", receipt)];
+    }
+    internal async Task<(string Destination, string Title, string Body, IReadOnlyList<EmailAttachment> Attachments)?> MainPaidConfirmationAsync(
+        Guid id, Guid tenant, CancellationToken t)
+    {
+        if (initialPayments is null || !await db.Set<Contract>().AnyAsync(c => c.Id == id && c.TenantUserId == tenant &&
+            c.InitialPaymentRequired && c.SigningMode == ContractSigningModes.Internal, t)) return null;
+        if (await MainConfirmationAsync(id, tenant, t) is not { } confirmation) return null;
+        var destination = await db.Users.AsNoTracking().Where(u => u.Id == tenant && u.IsActive).Select(u => u.Email).SingleOrDefaultAsync(t);
+        if (!EmailOptions.ValidAddress(destination)) throw new ChannelDeliveryException("email_recipient_unavailable");
+        var attachments = await MainAttachmentsAsync(id, tenant, destination!, t);
+        return (destination!, confirmation.Title, confirmation.Body, attachments);
     }
     internal async Task<(string Destination, string Title, string Body, IReadOnlyList<EmailAttachment> Attachments)?> HoldingConfirmationAsync(Guid id, Guid owner, CancellationToken t)
     {
@@ -122,13 +151,13 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
             try { tenant = System.Text.Json.JsonSerializer.Deserialize<BHome.Application.Ocr.IdentityConfirmation>(bytes)!.FullName; }
             finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(bytes); }
         }
-        var receipts = await db.Database.SqlQuery<HoldingReceiptRow>($"""
+        var receipts = await db.Database.SqlQuery<ReceiptRow>($"""
             SELECT a.id AS "Id",COALESCE(p.verification_data->'sepay'->>'bankReference',p.transaction_reference) AS "Reference",
               a.amount AS "Amount",p.received_at AS "PaidAt"
             FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id
             WHERE a.target_deposit_contract_id={id} AND p.status='VERIFIED' ORDER BY p.received_at,a.id
             """).ToArrayAsync(t);
-        var receipt = HoldingReceipt(c, tenant, receipts);
+        var receipt = PaymentReceipt(c, "Biên nhận tiền giữ chỗ", receipts, $"Người giữ chỗ: {tenant}");
         return (invitation.RecipientEmail, "BHOME – Xác nhận giữ chỗ thành công",
             $"Xin chào {tenant},\n\nHợp đồng giữ chỗ của bạn đã hoàn tất và thanh toán đã được xác minh.\n\n" +
             $"Thông tin:\n- Cơ sở: {c.Room.Location.Name}\n- Phòng: {c.Room.RoomNumber}\n- Hợp đồng: {c.Id:D}\n" +
@@ -139,14 +168,14 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
              new($"Bien-nhan-giu-cho-{id:N}.pdf", "application/pdf", receipt)]);
     }
 
-    private sealed record HoldingReceiptRow(Guid Id, string Reference, decimal Amount, DateTimeOffset PaidAt);
+    private sealed record ReceiptRow(Guid Id, string Reference, decimal Amount, DateTimeOffset PaidAt);
     private static readonly Lazy<byte[]> ReceiptFont = new(() =>
     {
         using var source = typeof(NotificationEmailContent).Assembly.GetManifestResourceStream("BHome.Contracts.Tinos-Regular.ttf")
             ?? throw new ChannelDeliveryException("holding_receipt_font_unavailable");
         using var bytes = new MemoryStream(); source.CopyTo(bytes); return bytes.ToArray();
     });
-    private static byte[] HoldingReceipt(Contract c, string tenant, IReadOnlyList<HoldingReceiptRow> rows)
+    private static byte[] PaymentReceipt(Contract c, string title, IReadOnlyList<ReceiptRow> rows, string detail)
     {
         using var output = new MemoryStream();
         using (var pdf = new PdfDocument(new PdfWriter(output)))
@@ -154,11 +183,11 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
         {
             var font = PdfFontFactory.CreateFont(ReceiptFont.Value, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.FORCE_EMBEDDED);
             doc.SetFont(font).SetFontSize(11).SetMargins(40, 40, 40, 40);
-            pdf.GetDocumentInfo().SetTitle("Biên nhận tiền giữ chỗ").SetCreator("BHOME");
-            doc.Add(new Paragraph("BHOME – BIÊN NHẬN TIỀN GIỮ CHỖ").SetFontSize(17));
-            doc.Add(new Paragraph($"Hợp đồng: {c.Id:D}\nNgười giữ chỗ: {tenant}\nCơ sở: {c.Room.Location.Name}\nPhòng: {c.Room.RoomNumber}\nThời hạn giữ chỗ: {c.StartDate:dd/MM/yyyy} – {c.EndDate:dd/MM/yyyy}"));
+            pdf.GetDocumentInfo().SetTitle(title).SetCreator("BHOME");
+            doc.Add(new Paragraph($"BHOME – {title.ToUpperInvariant()}").SetFontSize(17));
+            doc.Add(new Paragraph($"Hợp đồng: {c.Id:D}\nCơ sở: {c.Room.Location.Name}\nPhòng: {c.Room.RoomNumber}\nThời hạn: {c.StartDate:dd/MM/yyyy} – {c.EndDate:dd/MM/yyyy}\n{detail}"));
             var table = new Table(UnitValue.CreatePercentArray([30f, 45f, 25f])).UseAllAvailableWidth();
-            foreach (var label in new[] { "Ngày giao dịch", "Tham chiếu giao dịch", "Tiền cọc ghi nhận (VND)" }) table.AddHeaderCell(new Cell().Add(new Paragraph(label)));
+            foreach (var label in new[] { "Ngày giao dịch", "Tham chiếu giao dịch", "Số tiền ghi nhận (VND)" }) table.AddHeaderCell(new Cell().Add(new Paragraph(label)));
             foreach (var row in rows)
             {
                 table.AddCell(new Paragraph(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(row.PaidAt, "Asia/Ho_Chi_Minh").ToString("HH:mm dd/MM/yyyy")));
@@ -166,8 +195,7 @@ internal sealed class NotificationEmailContent(Compact24DbContext db,
                 table.AddCell(new Paragraph(row.Amount.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))).SetTextAlignment(TextAlignment.RIGHT));
             }
             doc.Add(table);
-            doc.Add(new Paragraph($"Tổng tiền giữ chỗ đã xác minh: {rows.Sum(r => r.Amount).ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} VND").SetFontSize(13));
-            doc.Add(new Paragraph("Khoản tiền trên đã được đối soát và ghi nhận cho hợp đồng giữ chỗ đang hoạt động."));
+            doc.Add(new Paragraph($"Tổng tiền đã xác minh: {rows.Sum(r => r.Amount).ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} VND").SetFontSize(13));
         }
         return output.ToArray();
     }

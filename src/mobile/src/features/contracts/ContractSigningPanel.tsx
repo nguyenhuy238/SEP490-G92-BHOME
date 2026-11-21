@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, TextInput, View } from 'react-native';
 import { Checkbox, Text } from 'react-native-paper';
@@ -241,7 +242,7 @@ function OtpStart({
         disabled={busy}
         position="leading"
       />
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       <Action disabled={busy || !agreed} onPress={() => void sign()}>
         {busy ? (session ? 'Đang ký…' : 'Đang gửi mã…') : 'Ký hợp đồng'}
       </Action>
@@ -344,7 +345,7 @@ function OtpStep({
   return (
     <Box>
       <Heading title="Xác thực chữ ký" detail="Nhập mã 6 số trong email" />
-      {!!loadError && <Text style={ui.red}>{loadError}</Text>}
+      {!!loadError && <ContractNotice message={loadError} />}
       {challenge && (
         <View style={ui.soft}>
           <Text variant="titleSmall">Đã gửi mã xác nhận</Text>
@@ -393,7 +394,7 @@ function OtpStep({
           {resendIn > 0 ? `Gửi lại mã (${mmss(resendIn)})` : 'Gửi lại mã'}
         </Text>
       </View>
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       <Text style={ui.muted}>Không thấy email? Kiểm tra thư mục Spam/Quảng cáo.</Text>
       <Text style={ui.muted}>Không chia sẻ mã này với bất kỳ ai, kể cả nhân viên BHOME.</Text>
       <Action disabled={busy || code.length !== 6 || left === 0} onPress={() => void confirm()}>
@@ -436,7 +437,7 @@ function UploadStart({
         Dùng chứng thư MySign của bạn (đăng ký qua VNeID). Ký bằng app MySign hoặc MySign Desktop,
         rồi tải bản đã ký lên. Chữ ký số có giá trị như chữ ký tay.
       </Text>
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       <Action disabled={busy} onPress={() => void start()}>
         {busy ? 'Đang chuẩn bị…' : 'Bắt đầu ký'}
       </Action>
@@ -585,7 +586,7 @@ function UploadStep({
           ))}
         </View>
       )}
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       <Text style={ui.muted}>
         Kiểm tra PDF và tên bên cấp chứng thư chưa bao gồm xác minh đầy đủ chuỗi tin cậy CA hoặc
         trạng thái thu hồi.

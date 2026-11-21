@@ -12,12 +12,8 @@ it('allows Tenant report detail but not maintenance finance screens', () => {
   expect(activeWorkspaceTab('Tenant', 'incident-detail')).toBe('tenant-requests');
 });
 it('keeps maintenance distinct from operational tasks and preserves Staff navigation', () => {
-  const group = staffFeatureGroups.find((item) => item.title === 'SỰ CỐ & BẢO TRÌ')!;
-  expect(group.items.map((item) => item.screen)).toEqual([
-    'report-incident',
-    'staff-maintenance',
-    'staff-emergencies',
-  ]);
+  const group = staffFeatureGroups.find((item) => item.title === 'Sự cố & bảo trì')!;
+  expect(group.items.map((item) => item.screen)).toEqual(['staff-incidents']);
   expect(activeWorkspaceTab('Staff', 'maintenance-detail')).toBe('work-orders');
   expect(activeWorkspaceTab('Owner', 'owner-maintenance')).toBe('operations');
 });

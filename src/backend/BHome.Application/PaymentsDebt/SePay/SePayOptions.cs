@@ -12,7 +12,7 @@ public sealed class SePayOptions
     public string PaymentCodePrefix { get; set; } = "BH";
     public int RequestTimeoutSeconds { get; set; } = 15;
     public int SignatureToleranceSeconds { get; set; } = 300;
-    public int PollIntervalSeconds { get; set; } = 60;
+    public int PollIntervalSeconds { get; set; } = 30;
     public List<SePayReceivingAccount> ReceivingAccounts { get; set; } = [];
 
     public bool TestingAvailable(string environment) => Enabled && Mode == "Test" && environment is "Development" or "Testing" or "Staging";
