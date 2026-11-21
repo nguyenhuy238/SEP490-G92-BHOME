@@ -381,6 +381,8 @@ public static class DependencyInjection
         services.AddScoped<BHome.DigitalSigning.Application.ISignatureImageStore, BHome.Infrastructure.Contracts.CompactSignatureImageStore>();
         BHome.DigitalSigning.Infrastructure.DependencyInjection.AddContractSigningAccounts(services, configuration);
         services.AddSingleton<BHome.Infrastructure.Contracts.SignaturePictureGenerator>();
+        services.AddSingleton<BHome.Application.Contracts.IHandoverSignatureInkRenderer>(
+            provider => provider.GetRequiredService<BHome.Infrastructure.Contracts.SignaturePictureGenerator>());
         services.AddSingleton<BHome.Application.Contracts.IContractSigningPages, BHome.Infrastructure.Contracts.ContractSigningPages>();
         BHome.DigitalSigning.MySign.MySignRegistration.AddMySignClient(services);
         services.AddScoped<BHome.DigitalSigning.Application.ISigningCertificateStore, BHome.Infrastructure.Contracts.ContractSigningCertificateStore>();

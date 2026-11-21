@@ -94,6 +94,17 @@ it('allows Good without photo and issues with photos/notes without requiring Sta
   expect(readyToComplete([])).toBe(true);
 });
 
+it('does not auto-complete an Owner-requested reinspection while the selected asset remains damaged', () => {
+  const damaged = {
+    ...item,
+    condition: 'Damaged' as const,
+    notes: 'Khung giường bị hỏng',
+  };
+  expect(readyToComplete([damaged])).toBe(true); // First-time inspection records issues.
+  expect(readyToComplete([damaged], [item.id])).toBe(false); // Reinspection requires Good.
+  expect(readyToComplete([item], [item.id])).toBe(true); // Server still checks fresh proof.
+});
+
 it('uses the Backend inventory routes, version and idempotency headers with zero-asset confirmation', async () => {
   const request = vi.fn().mockResolvedValue({ taskId, version: 2, items: [] });
   const client = moveInInventoryClient({ request });

@@ -31,7 +31,12 @@ internal sealed partial class RefundRepository
         }
         else if (summary.Receivables is { Count: > 0 })
         {
-            if (summary.ChargeReview is null || summary.Receivables.Any(r => r.Outstanding > 0)) blockers.Add("settlement_charge_sources_incomplete");
+            // Unpaid receivables already produce the separate
+            // settlement_receivable_outstanding blocker in SummaryAsync.
+            // Duplicating that as a missing source review would incorrectly
+            // reject an Owner final-close that leaves TenantDamage overage on
+            // the SAME receivable after exhausting the verified deposit.
+            if (summary.ChargeReview is null) blockers.Add("settlement_charge_sources_incomplete");
             if (chargeEvidence is null) throw new FinanceException(503, "settlement_evidence_unavailable");
             foreach (var charge in summary.Receivables) await chargeEvidence.VerifyAsync(charge.Charge, t);
         }

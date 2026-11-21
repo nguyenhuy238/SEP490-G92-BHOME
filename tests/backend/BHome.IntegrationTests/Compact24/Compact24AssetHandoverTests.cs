@@ -166,7 +166,10 @@ public sealed partial class Compact24OwnerSetupTests
         using (var rendered = new iText.Kernel.Pdf.PdfDocument(new iText.Kernel.Pdf.PdfReader(new MemoryStream(pdf))))
         {
             var captions = string.Join("\n", Enumerable.Range(1, rendered.GetNumberOfPages()).Select(p => iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor.GetTextFromPage(rendered.GetPage(p))));
-            Assert.Contains("Ghế tổng hợp 8, Ghế tổng hợp 9", captions);
+            // The concise administrative PDF lists inventory items as rows,
+            // rather than joining unmatched asset names with commas.
+            Assert.Contains("Ghế tổng hợp 8", captions);
+            Assert.Contains("Ghế tổng hợp 9", captions);
         }
         Assert.Equal(pdf, await owner.GetByteArrayAsync(route + "/documents/" + document.Id));
         Assert.Equal(HttpStatusCode.NotFound, (await otherTenant.GetAsync(route + "/documents/" + document.Id)).StatusCode);
@@ -592,10 +595,33 @@ public sealed partial class Compact24OwnerSetupTests
         var preparation = (await staff.GetFromJsonAsync<InspectionPreparation>(route + "/move-out/inspection-preparation"))!;
         Assert.Equal(sharedRoom, preparation.OtherTenantsRemain);
         var overall = await HandoverPhoto(staff, id, true); var problem = await HandoverPhoto(staff, id, true);
+        var roomIssuePhoto = await HandoverPhoto(staff, id, true);
+        var keyPhoto = await HandoverPhoto(staff, id, true);
+        var roomChecks = HandoverRoomChecklist.RequiredCodes.Select(code =>
+            new HandoverRoomCheck(code, code == "walls_ceiling_floor" ? "Issue" : "Passed",
+                code == "walls_ceiling_floor" ? "Quan sát vết xước ở tường, chờ Owner định giá" : "Đã kiểm tra",
+                code == "walls_ceiling_floor" ? [roomIssuePhoto] : [])).ToArray();
         var inspection = new InspectionInput(finalReadings[0], finalReadings[1], "Thiếu một ghế; kiểm tra thực tế", [overall],
             [new(source.Id, "Hiện trạng tổng hợp đã kiểm tra", observed, observed, observed - worn - damaged, worn, damaged, 4 - observed, true, "Ghi nhận hiện trạng; chưa kết luận trách nhiệm", [problem])], "Đã kiểm tra tường sàn cửa", "Đã thu chìa khóa riêng của Tenant", InventoryToken: preparation.Inventory!.StateToken,
-            ProposedCompensation: "Đề nghị Owner đối chiếu bằng chứng, chưa tạo khoản phải thu");
+            ProposedCompensation: "Đề nghị Owner đối chiếu bằng chứng, chưa tạo khoản phải thu",
+            RoomChecks: roomChecks, AccessItems: [new HandoverAccessItem("RoomKey", 0, "Staff chưa nhận được chìa khóa")],
+            KeyEvidenceIds: [keyPhoto]);
+        Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "move-out/inspection",
+            inspection with { RoomChecks = roomChecks[..^1] })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "move-out/inspection",
+            inspection with
+            {
+                RoomChecks = roomChecks.Select(check => check.Code == "walls_ceiling_floor"
+                ? check with { EvidenceIds = [] } : check).ToArray()
+            })).StatusCode);
         await Read<MoveOutView>(await HandoverPost(staff, id, "move-out/inspection", inspection));
+        var observedInspection = Assert.Single((await tenant.GetFromJsonAsync<FinalInspectionView[]>(
+            route + "/move-out/inspections"))!);
+        Assert.Equal(7, observedInspection.Observed.RoomChecks!.Length);
+        Assert.Single(observedInspection.Observed.RoomChecks, x => x.Code == "walls_ceiling_floor" && x.Status == "Issue");
+        Assert.Equal(0, Assert.Single(observedInspection.Observed.AccessItems!).Quantity);
+        Assert.Contains(keyPhoto, observedInspection.Observed.KeyEvidenceIds!);
+        Assert.Contains(roomIssuePhoto, observedInspection.Observed.EvidenceHashes!.Keys);
         await using (var check = host.Services.CreateAsyncScope())
         {
             var metadata = await check.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().AssetMetadataAsync([source.PhysicalAssets![0].Id], default); Assert.Equal(4, metadata.Values.Single().Quantity);

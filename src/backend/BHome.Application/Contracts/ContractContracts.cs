@@ -67,7 +67,10 @@ public sealed record SignaturePlacementInput(int Page, double X, double Y, doubl
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsValid => Page is >= 1 and <= 500 && X is >= 0 and < 1 && Y is >= 0 and < 1 && Width is >= 0.08 and <= 0.6 && X + Width <= 1.0001;
 }
-public sealed record SigningAppearance(SignaturePlacementInput? Placement, bool UsePicture, string? Method = null);
+public sealed record SigningAppearance(SignaturePlacementInput? Placement, bool UsePicture, string? Method = null,
+    // Only trusted server-rendered PNG bytes from Owner's own strokes for
+    // the one handover PDF being signed. Never falls back to a profile image.
+    byte[]? HandwrittenInkPng = null);
 // What a signer sees before choosing where to sign: the pages of the PDF they will sign, and their suggested box.
 public sealed record SigningPageSize(double Width, double Height);
 public sealed record SigningLayout(int PageCount, IReadOnlyList<SigningPageSize> Pages, SignaturePlacementInput? Suggested,
@@ -87,7 +90,9 @@ public sealed record InspectionInput(Guid ElectricityReadingId, Guid WaterReadin
     [Required, StringLength(4000, MinimumLength = 1)] string Notes,
     [Required, MinLength(1), MaxLength(10)] Guid[] EvidenceIds,
     HandoverAssetInput[]? Assets = null, string? RoomCondition = null, string? KeysAndAccess = null, int? ExpectedVersion = null,
-    string? InventoryToken = null, string? ProposedCompensation = null);
+    string? InventoryToken = null, string? ProposedCompensation = null,
+    HandoverRoomCheck[]? RoomChecks = null, HandoverAccessItem[]? AccessItems = null,
+    Guid[]? KeyEvidenceIds = null);
 public sealed record InspectionReviewInput(int Version, bool Confirmed, string Reason, bool NoAdditionalCharges = false,
     bool TenantException = false, string? TenantExceptionReason = null);
 public sealed record FinalInspectionView(Guid Id, int Version, Guid BaselineContractId, int BaselineVersion, HandoverSnapshot? Baseline,

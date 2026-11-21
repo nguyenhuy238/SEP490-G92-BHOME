@@ -55,7 +55,7 @@ export function StatusChip({ label }: { label: string }) {
       ? 'neutral'
       : /chờ|nháp|cần |sắp |giữ chỗ|chưa xác|chưa duyệt|yêu cầu|hết hạn|tạm ngừng/.test(status)
         ? 'warning'
-        : /hoàn thành|đã (xác minh|xác nhận|đối soát|duyệt|giải quyết|công bố|xuất bản|phát hành|ký|thanh toán|liên kết|nghiệm thu|ghi nhận|thu)|đang (hiệu lực|hoạt động|vận hành|làm việc|áp dụng)|vận hành tốt|trống khai thác/.test(
+        : /hoàn (thành|tất)|đã (xác minh|xác nhận|đối soát|duyệt|giải quyết|công bố|xuất bản|phát hành|ký|thanh toán|liên kết|nghiệm thu|ghi nhận|thu)|đang (hiệu lực|hoạt động|vận hành|làm việc|áp dụng)|vận hành tốt|trống khai thác/.test(
               status,
             )
           ? 'success'

@@ -8,6 +8,18 @@ public sealed partial class ContractService
 {
     private IHandoverDraftRepository Drafts => handoverDrafts ?? throw new ContractException(503, "handover_draft_unavailable");
 
+    public Task<HandoverInboxPage> ListHandoverInboxAsync(int page, int pageSize,
+        Guid? locationId, string? status, string? roomSearch, CancellationToken token)
+    {
+        Role(Roles.Owner);
+        if (page < 1 || page > 100_000 || pageSize < 1 || pageSize > 50 ||
+            (status is not null && status.Length > 64) ||
+            (roomSearch is not null && roomSearch.Length > 80))
+            throw ContractException.Invalid("invalid_handover_inbox_filter");
+        return Drafts.ListAsync(page, pageSize, locationId, string.IsNullOrWhiteSpace(status) ? null : status,
+            roomSearch?.Trim() ?? "", token);
+    }
+
     private static void RequireMainHandover(Contract contract)
     {
         if (contract.Kind != ContractKind.Main || contract.PreviousContractId is not null ||
@@ -81,6 +93,13 @@ public sealed partial class ContractService
             PhysicalObservations = input.PhysicalObservations
         };
 
+    private static bool LegacyAssetPassed(HandoverAsset asset) =>
+        asset.Checked && asset.ObservedCondition.Trim() is ("Good" or "Tốt" or "Đạt") &&
+        asset.ObservedQuantity is { } observed && asset.HandedOverQuantity == observed &&
+        asset.GoodQuantity == observed && asset.WornQuantity == 0 &&
+        asset.DamagedQuantity == 0 && asset.MissingQuantity == 0 &&
+        (asset.ConfiguredQuantity is null || observed == asset.ConfiguredQuantity);
+
     private async Task<HandoverDraftView> DraftView(Contract contract, HandoverDraftState state, CancellationToken token)
     {
         var moveInTask = await Handovers.MoveInTaskAsync(contract.Id, contract.RoomId,
@@ -93,6 +112,8 @@ public sealed partial class ContractService
         var source = inventory?.Groups ?? (await Handovers.AssetsAsync(contract.RoomId, token))
             .Select(a => new HandoverAsset(a.Id, a.Name, a.Condition, "")).ToArray();
         var assets = source.Select(a => WithDraftObservations(a, state.Assets.SingleOrDefault(s => s.Id == a.Id))).ToArray();
+        var canonical = await Handovers.CompletedInventoryAsync(contract.Id, token);
+        var canonicalTask = moveInTask?.InventoryTaskId is not null || canonical is not null;
         var missing = new List<string>();
         if (contract.Status != ContractStatus.Active) missing.Add("contract_active");
         if (contract.TenantUserId is null) missing.Add("tenant_account");
@@ -108,37 +129,85 @@ public sealed partial class ContractService
         // evidence collection and never become general room/asset evidence.
         missing.AddRange(HandoverRoomChecklist.Missing(state.RoomChecks, state.AccessItems, state.OutstandingIssues)
             .Where(reason => !legacyApproved || reason != "access_inventory"));
-        if (inventory is { Groups.Length: 0, NoAssetsConfirmed: false } ||
-            source.Length != state.Assets.Length || assets.Any(a => !a.Checked)) missing.Add("assets");
+        if (canonicalTask)
+        {
+            // Completed MoveInInventory is the factual Staff inspection. An
+            // older optional draft.assets copy or draft.InventoryToken must
+            // never fabricate incomplete or changed-inventory warnings.
+            // Tenant is intentionally not given the internal inventory-task ID
+            // or status. The verified Completed snapshot itself is authoritative
+            // for every role; checking the redacted task status would falsely
+            // block Tenant OTP signing after a valid Owner signature.
+            if (canonical is null)
+                missing.Add("move_in_inventory");
+            else if (inventory is not null && inventory.StateToken != canonical.SourceToken)
+                missing.Add("inventory_changed");
+        }
         else
         {
-            try
+            if (inventory is { Groups.Length: 0, NoAssetsConfirmed: false } ||
+                source.Length != state.Assets.Length || assets.Any(a => !a.Checked)) missing.Add("assets");
+            else
             {
-                var inspected = HandoverChecklist.Inspect(source, state.Assets, inventory is not null);
-                HandoverChecklist.RequireSeparateEvidence(state.EvidenceIds, inspected);
+                try
+                {
+                    var inspected = HandoverChecklist.Inspect(source, state.Assets, inventory is not null);
+                    HandoverChecklist.RequireSeparateEvidence(state.EvidenceIds, inspected);
+                }
+                catch (ContractException) { missing.Add("asset_quantities_or_evidence"); }
             }
-            catch (ContractException)
-            {
-                // Do not report a fully complete checklist for Staff inputs
-                // whose quantities/physical mapping/evidence would fail Ready.
-                missing.Add("asset_quantities_or_evidence");
-            }
+            if (inventory is not null && state.InventoryToken != inventory.StateToken)
+                missing.Add("inventory_changed");
         }
-        if (inventory is not null && state.InventoryToken != inventory.StateToken) missing.Add("inventory_changed");
         if (state.StaffPreparedBy is null) missing.Add("staff_inspection");
         if (state.Status == "Draft" && state.StaffPreparedBy is null && moveInTask?.CanInspect != true &&
             user.IsInRole(Roles.Staff)) missing.Add("move_in_task_not_started");
         if (state.ContractSnapshotHash != contract.SnapshotHash) missing.Add("contract_changed");
-        if (moveInTask?.InventoryTaskId is not null && moveInTask.InventoryStatus != "Completed")
-            missing.Add("move_in_inventory");
+        // Staff may submit physical defects for Owner reinspection. These are
+        // signing blockers only, and never rewrite historic signed records.
+        if (state.Status is "Draft" or "PendingOwnerReview" or "ReinspectionRequested")
+        {
+            if ((state.RoomChecks ?? []).Any(check => check.Status != "Passed"))
+                missing.Add("room_check_failed");
+            if (state.AccessItems is { Length: 1 } access && access[0].Quantity <= 0)
+                missing.Add("access_not_ready");
+            if (canonical?.Items.Any(asset =>
+                    asset.Condition != "Good" || asset.ActualQuantity != asset.ExpectedQuantity) == true)
+                missing.Add("inventory_issue");
+            if (!canonicalTask && assets.Any(asset => asset.Checked && !LegacyAssetPassed(asset)))
+                missing.Add("asset_not_passed");
+        }
+        var selectedReinspection = state.ReinspectionItems ?? [];
+        var latestRequestAt = state.ReinspectionHistory?.LastOrDefault()?.RequestedAt;
+        if (latestRequestAt is not null && canonical is not null &&
+            canonical.CompletedAt > latestRequestAt)
+        {
+            selectedReinspection = selectedReinspection.Select(item => item with
+            {
+                Rechecked = item.Rechecked || item.Kind == "Asset" &&
+                    canonical.Items.Any(asset => asset.Id == item.AssetId &&
+                        asset.Condition == "Good" && asset.ActualQuantity == asset.ExpectedQuantity &&
+                        canonical.LatestEvidenceAt.TryGetValue(asset.Id, out var uploadedAt) &&
+                        uploadedAt > latestRequestAt)
+            }).ToArray();
+        }
         return new(state.Version, state.Status, contract.Id, contract.Room.RoomNumber,
             contract.Room.Location.Name, contract.Room.Location.Address,
             contract.StartDate, contract.EndDate, contract.MonthlyRent, contract.RequiredDeposit,
             contract.Terms, electricity, water, assets, state.RoomCondition, state.KeysAndAccess,
-            state.Notes, state.EvidenceIds, inventory?.StateToken, inventory?.NoAssetsConfirmed ?? false,
+            state.Notes, state.EvidenceIds, inventory?.StateToken,
+            canonical?.Items.Length == 0 || (inventory?.NoAssetsConfirmed ?? false),
             state.OwnerReadyAt, state.TenantConfirmedAt, state.Requests, missing.Distinct().ToArray(),
             state.RoomChecks ?? [], state.AccessItems ?? [], state.OutstandingIssues ?? [], moveInTask,
-            await Handovers.InventoryHasIssuesAsync(contract.Id, token), state.KeyEvidenceIds);
+            canonical?.Items.Any(a => a.Condition != "Good" || a.ActualQuantity != a.ExpectedQuantity)
+                ?? await Handovers.InventoryHasIssuesAsync(contract.Id, token), state.KeyEvidenceIds,
+            state.StaffSubmittedAt, state.OwnerSignature?.SignedAt, state.TenantSignature?.SignedAt,
+            selectedReinspection, state.ReinspectionHistory ?? [],
+            state.OwnerSignature?.FileHash, state.OwnerSignature?.Id, state.TenantSigning is not null,
+            state.OwnerReadyReason, state.OwnerHandlingPlan,
+            user.IsInRole(Roles.Owner) || user.IsInRole(Roles.Staff) ? state.StaffSubmittedBy : null,
+            canonical?.Items,
+            user.IsInRole(Roles.Owner) && handoverInkRenderer is not null);
     }
 
     public async Task<HandoverDraftView> GetHandoverDraftAsync(Guid id, CancellationToken token)
@@ -146,7 +215,31 @@ public sealed partial class ContractService
         var contract = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], token);
         RequireMainHandover(contract);
         var state = await DraftState(contract, token);
-        return await DraftView(contract, state, token);
+        var view = await DraftView(contract, state, token);
+        // The inspection under Staff/Owner review is not yet a handover offer
+        // to the Tenant. Retain status visibility without leaking draft photos
+        // or unapproved notes and asset observations.
+        if (user.IsInRole(Roles.Tenant) && state.Status is not ("Ready" or "Confirmed" or "ChangesRequested"))
+            return view with
+            {
+                RoomCondition = "",
+                KeysAndAccess = "",
+                Notes = "",
+                Assets = [],
+                EvidenceIds = [],
+                KeyEvidenceIds = [],
+                RoomChecks = [],
+                AccessItems = [],
+                OutstandingIssues = [],
+                ReinspectionItems = [],
+                ReinspectionHistory = [],
+                Missing = [],
+                Electricity = null,
+                Water = null,
+                MoveInTask = null,
+                InspectedAssets = null
+            };
+        return view;
     }
 
     public Task<HandoverDraftView> SaveHandoverDraftAsync(Guid id, HandoverDraftWrite input,
@@ -156,7 +249,7 @@ public sealed partial class ContractService
         var prior = await DraftState(contract, token);
         if (await Replay(key, "handover-draft-write", new { id, input }, token) is not null)
             return await DraftView(contract, prior, token);
-        if (prior.Status != "Draft" || prior.Version != input.Version)
+        if (prior.Status is not ("Draft" or "ReinspectionRequested") || prior.Version != input.Version)
             throw ContractException.Conflict("handover_draft_version_changed");
         await RequireStartedMoveInWork(contract, token);
         if (input.Assets is { Length: > 200 } || input.EvidenceIds is { Length: > 10 } ||
@@ -205,6 +298,23 @@ public sealed partial class ContractService
         }
         HandoverRoomChecklist.RequireSeparateKeyEvidence(input.KeyEvidenceIds ?? prior.KeyEvidenceIds,
             input.EvidenceIds ?? prior.EvidenceIds, roomChecks, assets);
+        var canonicalInventoryTaskExists = (await Handovers.MoveInTaskAsync(
+            contract.Id, contract.RoomId, Actor, false, token))?.InventoryTaskId is not null;
+        var reinspection = (prior.ReinspectionItems ?? []).Select(item => item with
+        {
+            Rechecked = item.Rechecked || (item.Kind switch
+            {
+                "RoomCheck" => input.RoomChecks?.Any(check => check.Code == item.Code) == true,
+                // A completed canonical task must be re-opened, inspected and
+                // completed again through its own versioned evidence API.
+                // Writing a duplicate draft.assets entry cannot fake rework.
+                "Asset" => !canonicalInventoryTaskExists &&
+                    input.Assets?.Any(asset => asset.Id == item.AssetId) == true,
+                "Room" => input.RoomCondition is not null,
+                "Access" => input.AccessItems is not null,
+                _ => false
+            })
+        }).ToArray();
         var next = prior with
         {
             Version = prior.Version + 1,
@@ -224,12 +334,209 @@ public sealed partial class ContractService
             StaffPreparedBy = Actor,
             StaffPreparedAt = clock.GetUtcNow(),
             OwnerReadyBy = null,
-            OwnerReadyAt = null
+            OwnerReadyAt = null,
+            ReinspectionItems = reinspection,
+            OwnerSignature = null,
+            TenantSigning = null,
+            TenantSignature = null
         };
         await SaveDraftState(contract, prior, next, "Updated", token);
         Remember(key, "handover-draft-write", new { id, input }, id);
         return await DraftView(contract, next, token);
     }, token);
+
+    // Staff explicitly submits a complete, independently validated inspection.
+    // Saving a partial checklist is never equivalent to completing the task.
+    public Task<HandoverDraftView> SubmitHandoverDraftAsync(Guid id, HandoverDraftSubmit input,
+        Guid key, CancellationToken token) => Mutate(id, [Roles.Staff], async contract =>
+    {
+        RequireMainHandover(contract);
+        var prior = await DraftState(contract, token);
+        if (await Replay(key, "handover-draft-submit", new { id, input }, token) is not null)
+            return await DraftView(contract, prior, token);
+        if (prior.Status != "Draft" || prior.Version != input.Version)
+            throw ContractException.Conflict("handover_draft_version_changed");
+        await SubmitInspectedDraft(contract, prior, key, input, token);
+        return await DraftView(contract, (await Drafts.GetAsync(id, token))!, token);
+    }, token);
+
+    public Task<HandoverDraftView> ResubmitHandoverDraftAsync(Guid id, HandoverDraftSubmit input,
+        Guid key, CancellationToken token) => Mutate(id, [Roles.Staff], async contract =>
+    {
+        RequireMainHandover(contract);
+        var prior = await DraftState(contract, token);
+        if (await Replay(key, "handover-draft-resubmit", new { id, input }, token) is not null)
+            return await DraftView(contract, prior, token);
+        if (prior.Status != "ReinspectionRequested" || prior.Version != input.Version)
+            throw ContractException.Conflict("handover_draft_version_changed");
+        await SubmitInspectedDraft(contract, prior, key, input, token, true);
+        return await DraftView(contract, (await Drafts.GetAsync(id, token))!, token);
+    }, token);
+
+    private async Task SubmitInspectedDraft(Contract contract, HandoverDraftState prior,
+        Guid key, HandoverDraftSubmit input, CancellationToken token, bool reinspection = false)
+    {
+        await RequireStartedMoveInWork(contract, token);
+        if (prior.StaffPreparedBy != Actor || prior.StaffPreparedAt is null)
+            throw ContractException.Conflict("handover_staff_inspection_required");
+        var view = await DraftView(contract, prior, token);
+        // Staff certifies that the four physical inspection sections were
+        // recorded, including factual Missing/Damaged/Issue observations. The
+        // Owner separately decides exceptions and validates the final PDF at
+        // Ready. In particular, this step must not demand a second copy of the
+        // already completed MoveInInventory observations in draft.assets.
+        var missing = new List<string>();
+        if (view.Electricity is null) missing.Add("electricity");
+        if (view.Water is null) missing.Add("water");
+        if (string.IsNullOrWhiteSpace(prior.RoomCondition)) missing.Add("room_condition");
+        try
+        {
+            var checks = HandoverRoomChecklist.Merge(null, prior.RoomChecks);
+            var access = HandoverRoomChecklist.NormalizeAccess(prior.AccessItems);
+            missing.AddRange(HandoverRoomChecklist.Missing(checks, access, prior.OutstandingIssues));
+        }
+        catch (ContractException)
+        {
+            missing.Add("room_checklist_or_keys");
+        }
+        if (view.MoveInTask?.InventoryTaskId is not null)
+        {
+            if (view.MoveInTask.InventoryStatus != "Completed" ||
+                !await Handovers.InventoryReadyAsync(contract.Id, token))
+                missing.Add("move_in_inventory");
+        }
+        else
+        {
+            // Legacy Main contracts may lack the separate inventory task.
+            // Preserve their original Staff asset-inspection requirements;
+            // only a completed canonical task replaces draft.assets as source.
+            if (!view.NoAssetsConfirmed &&
+                (view.Assets.Length == 0 || view.Assets.Any(asset => !asset.Checked)))
+                missing.Add("assets");
+            else
+            {
+                try
+                {
+                    var inspected = HandoverChecklist.Inspect(view.Assets, prior.Assets,
+                        handoverInventory is not null);
+                    HandoverChecklist.RequireSeparateEvidence(view.EvidenceIds, inspected);
+                }
+                catch (ContractException) { missing.Add("asset_quantities_or_evidence"); }
+            }
+        }
+        if (missing.Count != 0)
+            throw ContractException.Conflict("handover_staff_sections_incomplete:" + string.Join(',', missing.Distinct()));
+        // Every referenced Room/Issue/Key image must really belong to this
+        // contract and still pass the private-storage integrity check. The
+        // separate inventory task already verifies its own attached evidence.
+        foreach (var evidenceId in prior.EvidenceIds
+                     .Concat((prior.RoomChecks ?? []).SelectMany(check => check.EvidenceIds))
+                     .Concat(prior.KeyEvidenceIds ?? [])
+                     .Concat(view.MoveInTask?.InventoryTaskId is null
+                         ? prior.Assets.SelectMany(asset => asset.EvidenceIds ?? []) : []).Distinct())
+        {
+            var file = await Workflow.FileAsync(contract.Id, evidenceId, token)
+                ?? throw ContractException.Invalid("invalid_handover_evidence");
+            if (file.Kind != ContractFileKind.HandoverEvidence)
+                throw ContractException.Invalid("invalid_handover_evidence");
+            await CopyVerifiedFile(file, Stream.Null, token);
+        }
+        if (reinspection)
+        {
+            if ((view.ReinspectionItems ?? []).Any(item => !item.Rechecked))
+                throw ContractException.Conflict("handover_reinspection_incomplete");
+        }
+        var next = prior with
+        {
+            Version = prior.Version + 1,
+            Status = "PendingOwnerReview",
+            StaffSubmittedBy = Actor,
+            StaffSubmittedAt = clock.GetUtcNow(),
+            ReinspectionItems = (view.ReinspectionItems ?? []).Select(item => item with { Rechecked = true }).ToArray()
+        };
+        await Handovers.SubmitMoveInTaskAsync(contract.Id, Actor, clock.GetUtcNow(), token);
+        await SaveDraftState(contract, prior, next, reinspection ? "StaffResubmitted" : "StaffSubmitted", token);
+        Remember(key, reinspection ? "handover-draft-resubmit" : "handover-draft-submit",
+            new { id = contract.Id, input }, contract.Id);
+    }
+
+    public Task<HandoverDraftView> RequestHandoverReinspectionAsync(Guid id,
+        HandoverDraftReinspection input, Guid key, CancellationToken token) =>
+        Mutate(id, [Roles.Owner], async contract =>
+    {
+        RequireMainHandover(contract);
+        var prior = await DraftState(contract, token);
+        if (await Replay(key, "handover-draft-reinspection", new { id, input }, token) is not null)
+            return await DraftView(contract, prior, token);
+        if (prior.Status != "PendingOwnerReview" || prior.Version != input.Version)
+            throw ContractException.Conflict("handover_draft_not_pending_owner_review");
+        var reason = DraftText(input.Reason, 2000, true);
+        var view = await DraftView(contract, prior, token);
+        var items = ValidateReinspectionItems(input.Items, view);
+        if ((prior.ReinspectionHistory ?? []).Length >= 30)
+            throw ContractException.Conflict("handover_reinspection_limit");
+        var history = new HandoverReinspectionRecord(prior.Version, reason, Actor, clock.GetUtcNow(), items);
+        await Handovers.ReopenMoveInTaskAsync(id, Actor, clock.GetUtcNow(), token);
+        // Only a selected asset needs the canonical inventory task reopened.
+        // Staff rechecks through the existing task's versioned evidence and
+        // item APIs; its historical Missing/Damaged observation is retained.
+        if (items.Any(item => item.Kind == "Asset") &&
+            view.MoveInTask?.InventoryTaskId is not null)
+            await Handovers.ReopenMoveInInventoryAsync(id, Actor, clock.GetUtcNow(),
+                items.Where(item => item.Kind == "Asset")
+                    .Select(item => item.AssetId!.Value).ToArray(), token);
+        var next = prior with
+        {
+            Version = prior.Version + 1,
+            Status = "ReinspectionRequested",
+            ReinspectionItems = items,
+            ReinspectionHistory = [.. (prior.ReinspectionHistory ?? []), history],
+            StaffSubmittedAt = null,
+            StaffSubmittedBy = null,
+            OwnerReadyBy = null,
+            OwnerReadyAt = null,
+            OwnerSignature = null,
+            TenantSigning = null,
+            TenantSignature = null
+        };
+        await SaveDraftState(contract, prior, next, "OwnerReinspectionRequested", token);
+        Remember(key, "handover-draft-reinspection", new { id, input }, id);
+        return await DraftView(contract, next, token);
+    }, token);
+
+    private static HandoverReinspectionItem[] ValidateReinspectionItems(
+        HandoverReinspectionItem[]? selected, HandoverDraftView view)
+    {
+        if (selected is not { Length: > 0 and <= 30 } || selected.Any(item => item is null))
+            throw ContractException.Invalid("handover_reinspection_items_required");
+        foreach (var item in selected)
+        {
+            var valid = item.Kind switch
+            {
+                "RoomCheck" => item.AssetId is null && item.Code is not null &&
+                    HandoverRoomChecklist.RequiredCodes.Contains(item.Code),
+                "Asset" => item.AssetId is not null && item.Code is null &&
+                    (view.InspectedAssets?.Any(asset => asset.Id == item.AssetId) == true ||
+                     view.InspectedAssets is null && view.Assets.Any(asset => asset.Id == item.AssetId)),
+                "Access" => item.AssetId is null && item.Code == "RoomKey",
+                // Re-capturing an immutable Initial meter reading needs a
+                // separate evidence/confirmation API and agreed correction
+                // policy. Avoid creating a reinspection task Staff cannot close.
+                "Meter" => false,
+                "Room" => item.AssetId is null && item.Code is null,
+                _ => false
+            };
+            if (!valid || item.Rechecked || item.ReadingId is not null)
+                throw ContractException.Invalid("invalid_handover_reinspection_item");
+        }
+        if (selected.DistinctBy(item => (item.Kind, item.Code, item.AssetId)).Count() != selected.Length)
+            throw ContractException.Invalid("duplicate_handover_reinspection_item");
+        return selected.Select(item => item with
+        {
+            ReadingId = item.Kind == "Meter" ? item.Code == "Electricity" ?
+                view.Electricity?.Id : view.Water?.Id : null
+        }).ToArray();
+    }
 
     public Task<HandoverDraftView> ReadyHandoverDraftAsync(Guid id, HandoverDraftReady input,
         Guid key, CancellationToken token) => Mutate(id, [Roles.Owner], async contract =>
@@ -238,38 +545,81 @@ public sealed partial class ContractService
         var prior = await DraftState(contract, token);
         if (await Replay(key, "handover-draft-ready", new { id, input }, token) is not null)
             return await DraftView(contract, prior, token);
-        if (prior.Status != "Draft" || prior.Version != input.Version)
+        if (prior.Status != "PendingOwnerReview" || prior.Version != input.Version ||
+            prior.StaffSubmittedAt is null || prior.StaffSubmittedBy is null)
             throw ContractException.Conflict("handover_draft_version_changed");
         var view = await DraftView(contract, prior, token);
         if (view.Missing.Length != 0) throw ContractException.Conflict("handover_draft_incomplete:" + string.Join(',', view.Missing));
         if (!await Handovers.InventoryReadyAsync(id, token))
             throw ContractException.Conflict("move_in_inventory_required");
-        var inspected = HandoverChecklist.Inspect(view.Assets,
-            prior.Assets, handoverInventory is not null);
+        var inspected = ReadyAssets(view, prior.Assets, handoverInventory is not null);
         HandoverChecklist.RequireSeparateEvidence(view.EvidenceIds, inspected);
         var snapshot = DraftSnapshot(contract, view, inspected, null);
-        // Missing, damaged or unverified inventory requires an explicit Owner
-        // decision, matching the existing signed handover exception policy.
-        var exception = view.InventoryHasIssues || HandoverChecklist.RequiresOwner(snapshot) ||
-            (view.RoomChecks ?? []).Any(check => check.Status == "Issue");
-        var reason = DraftText(input.Reason ?? "", 2000, required: exception);
-        var handlingPlan = DraftText(input.HandlingPlan ?? "", 2000, required: exception);
+        // Owner cannot accept actual Issue/Missing/Damaged/NotApplicable via
+        // a reason or plan. Staff must first complete factual reinspection.
+        if ((view.RoomChecks ?? []).Any(check => check.Status != "Passed") ||
+            view.AccessItems is not { Length: 1 } access || access[0].Quantity <= 0)
+            throw ContractException.Conflict("handover_items_not_passed");
+        var reason = DraftText(input.Reason ?? "", 2000);
+        var handlingPlan = DraftText(input.HandlingPlan ?? "", 2000);
         await ValidateHandoverEvidence(contract, snapshot, token);
+        var signature = await SignOwnerHandoverAsync(contract,
+            view with { OwnerReadyReason = reason, OwnerHandlingPlan = handlingPlan },
+            input.Signature, input.Ink, token);
         var next = prior with
         {
             Version = prior.Version + 1,
             Status = "Ready",
             OwnerReadyBy = Actor,
-            OwnerReadyAt = clock.GetUtcNow(),
+            OwnerReadyAt = signature.SignedAt,
             ApprovedElectricityReadingId = view.Electricity!.Id,
             ApprovedWaterReadingId = view.Water!.Id,
             OwnerReadyReason = reason,
-            OwnerHandlingPlan = handlingPlan
+            OwnerHandlingPlan = handlingPlan,
+            OwnerSignature = signature,
+            TenantSigning = null,
+            TenantSignature = null
         };
         await SaveDraftState(contract, prior, next, "OwnerReady", token);
         Remember(key, "handover-draft-ready", new { id, input }, id);
         return await DraftView(contract, next, token);
     }, token);
+
+    private static HandoverAsset[] ReadyAssets(HandoverDraftView view,
+        HandoverAssetInput[] legacyDraftAssets, bool quantitiesRequired)
+    {
+        if (view.InspectedAssets is not { } canonical)
+            return HandoverChecklist.Inspect(view.Assets, legacyDraftAssets, quantitiesRequired);
+        if (canonical.Length != view.Assets.Length ||
+            canonical.Select(asset => asset.Id).Distinct().Count() != canonical.Length)
+            throw ContractException.Conflict("handover_asset_inventory_changed");
+        var source = view.Assets.ToDictionary(asset => asset.Id);
+        return canonical.Select(observation =>
+        {
+            if (observation.Condition != "Good" ||
+                observation.ActualQuantity != observation.ExpectedQuantity ||
+                !source.TryGetValue(observation.Id, out var asset) ||
+                (asset.ConfiguredQuantity is { } expected && expected != observation.ExpectedQuantity))
+                throw ContractException.Conflict("handover_inventory_not_passed");
+            // The quantities become the accepted baseline only after all
+            // canonical observations pass AND Owner explicitly signs Ready.
+            // An unresolved quantity is never silently declared handed over.
+            return asset with
+            {
+                ObservedCondition = "Tốt",
+                ObservedQuantity = observation.ActualQuantity,
+                HandedOverQuantity = observation.ActualQuantity,
+                GoodQuantity = observation.ActualQuantity,
+                WornQuantity = 0,
+                DamagedQuantity = 0,
+                MissingQuantity = 0,
+                Checked = true,
+                OwnerChecked = true,
+                Notes = observation.Notes,
+                EvidenceIds = []
+            };
+        }).ToArray();
+    }
 
     private static HandoverSnapshot DraftSnapshot(Contract contract, HandoverDraftView view,
         HandoverAsset[] assets, HandoverOwnerAcceptance? acceptance) =>
@@ -303,7 +653,8 @@ public sealed partial class ContractService
             Status = "ChangesRequested",
             Requests = [.. prior.Requests, request],
             OwnerReadyAt = null,
-            OwnerReadyBy = null
+            OwnerReadyBy = null,
+            TenantSigning = null
         };
         await SaveDraftState(contract, prior, next, "TenantChangeRequested", token);
         Remember(key, "handover-draft-request", new { id, input }, id);
@@ -329,12 +680,19 @@ public sealed partial class ContractService
             current.Electricity?.Id != prior.ApprovedElectricityReadingId ||
             current.Water?.Id != prior.ApprovedWaterReadingId;
         var reopen = input.Accepted || mustReviewAgain;
+        if (reopen && prior.StaffSubmittedAt is not null)
+            await Handovers.ReopenMoveInTaskAsync(id, Actor, clock.GetUtcNow(), token);
         var next = prior with
         {
             Version = prior.Version + 1,
             Status = reopen ? "Draft" : "Ready",
             OwnerReadyBy = reopen ? null : Actor,
-            OwnerReadyAt = reopen ? null : clock.GetUtcNow(),
+            OwnerReadyAt = reopen ? null : prior.OwnerSignature?.SignedAt ?? clock.GetUtcNow(),
+            OwnerSignature = reopen ? null : prior.OwnerSignature,
+            TenantSigning = null,
+            TenantSignature = null,
+            StaffSubmittedAt = reopen ? null : prior.StaffSubmittedAt,
+            StaffSubmittedBy = reopen ? null : prior.StaffSubmittedBy,
             Requests = prior.Requests.Select(r => r.Id != requestId ? r : r with
             {
                 Status = input.Accepted ? "Approved" : "Rejected",
@@ -357,6 +715,11 @@ public sealed partial class ContractService
         var prior = await DraftState(contract, token);
         if (await Replay(key, "handover-draft-tenant-confirm", new { id, input }, token) is not null)
             return await DraftView(contract, prior, token);
+        // Historic Ready drafts (created before mandatory PDF signing) retain
+        // their original completion route. Newly owner-signed documents must
+        // complete via an OTP-verified signature on the SAME PDF.
+        if (prior.OwnerSignature is not null || prior.StaffSubmittedAt is not null)
+            throw ContractException.Conflict("handover_digital_signature_required");
         if (prior.Status != "Ready" || prior.OwnerReadyAt is null || prior.OwnerReadyBy is null ||
             prior.StaffPreparedBy is null || prior.StaffPreparedAt is null || prior.Version != input.Version ||
             prior.Requests.Any(r => r.Status == "Pending"))
@@ -368,13 +731,8 @@ public sealed partial class ContractService
         if (view.Electricity?.Id != prior.ApprovedElectricityReadingId ||
             view.Water?.Id != prior.ApprovedWaterReadingId)
             throw ContractException.Conflict("handover_meter_readings_changed_since_owner_review");
-        var assets = HandoverChecklist.Inspect(view.Assets, prior.Assets, handoverInventory is not null);
+        var assets = ReadyAssets(view, prior.Assets, handoverInventory is not null);
         HandoverChecklist.RequireSeparateEvidence(view.EvidenceIds, assets);
-        if ((view.InventoryHasIssues || HandoverChecklist.RequiresOwner(DraftSnapshot(contract, view, assets, null)) ||
-            (view.RoomChecks ?? []).Any(check => check.Status == "Issue")) &&
-            (string.IsNullOrWhiteSpace(prior.OwnerReadyReason) ||
-                string.IsNullOrWhiteSpace(prior.OwnerHandlingPlan)))
-            throw ContractException.Conflict("owner_exception_decision_required");
         var h = await Handovers.GetAsync(id, token);
         if (h?.Status == ContractHandoverStatus.Confirmed)
             throw ContractException.Conflict("handover_already_confirmed");
@@ -400,6 +758,12 @@ public sealed partial class ContractService
         h.TenantConfirmedAt = feedback.At; h.StaffConfirmedBy = prior.StaffPreparedBy;
         h.StaffConfirmedAt = prior.StaffPreparedAt;
         HandoverEvent(h, "Completed", "Owner reviewed and Tenant confirmed without digital signature");
+        // A Ready snapshot written before Staff submission existed may still
+        // have its native move-in task InProgress. Preserve that historical
+        // completion route while modern submitted/signed drafts remain OTP-only.
+        var legacyTask = await Handovers.MoveInTaskAsync(id, contract.RoomId, prior.StaffPreparedBy, false, token);
+        if (legacyTask?.Status == "InProgress")
+            await Handovers.SubmitMoveInTaskAsync(id, prior.StaffPreparedBy.Value, clock.GetUtcNow(), token);
         await Handovers.CompleteMoveInTaskAsync(id, prior.StaffPreparedBy.Value, clock.GetUtcNow(), token);
         // The final PDF is immutable, so include the Tenant's requests and each
         // recorded Owner decision at the moment of completion as an audit trail.
@@ -425,6 +789,10 @@ public sealed partial class ContractService
     public async Task<byte[]> HandoverDraftPdfAsync(Guid id, CancellationToken token)
     {
         var view = await GetHandoverDraftAsync(id, token);
+        if (user.IsInRole(Roles.Tenant) && view.Status is not ("Ready" or "Confirmed" or "ChangesRequested"))
+            throw ContractException.Missing();
+        if (view.Status is "Ready" or "Confirmed" or "ChangesRequested" && view.OwnerDocumentId is not null)
+            return await HandoverOwnerSignedPdfAsync(id, token);
         return await (handoverDraftPdf ?? throw new ContractException(503, "handover_draft_template_unavailable"))
             .RenderDraftAsync(view, token);
     }
@@ -435,6 +803,8 @@ public sealed partial class ContractService
         var contract = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], token);
         RequireMainHandover(contract);
         var state = await DraftState(contract, token);
+        if (user.IsInRole(Roles.Tenant) && state.Status is not ("Ready" or "Confirmed" or "ChangesRequested"))
+            throw ContractException.Missing();
         // A stored draft reference is mandatory; guessing a private file ID
         // must not reveal another Tenant's or another draft's uploads.
         if (!state.EvidenceIds.Contains(fileId) &&
@@ -469,7 +839,8 @@ public sealed partial class ContractService
         {
             RequireMainHandover(current);
             var draft = await DraftState(current, token);
-            if (draft.Status != "Draft") throw ContractException.Conflict("handover_draft_not_editable");
+            if (draft.Status is not ("Draft" or "ReinspectionRequested"))
+                throw ContractException.Conflict("handover_draft_not_editable");
             await RequireStartedMoveInWork(current, token);
             if ((await Workflow.FilesAsync(id, ContractFileKind.HandoverEvidence, token)).Count >= 200)
                 throw ContractException.Conflict("handover_evidence_limit");

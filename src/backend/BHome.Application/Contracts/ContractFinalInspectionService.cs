@@ -79,6 +79,27 @@ public sealed partial class ContractService
         }
         if (x.Assets is null || x.RoomCondition is null || x.KeysAndAccess is null) throw ContractException.Invalid("inspection_checklist_required");
         var baseline = h is null ? null : await EffectiveBaseline(c, Snapshot(h), t);
+        // New signed Move-In baselines have the seven canonical room checks and
+        // a counted RoomKey bundle. The complete Move-Out must inspect the same
+        // four modules, while old contracts without those structured fields
+        // retain their historical read/submit compatibility.
+        var requireRoomChecks = baseline?.RoomChecks is { Length: > 0 };
+        var requireAccess = baseline?.AccessItems is { Length: > 0 };
+        if (requireRoomChecks && x.RoomChecks is null ||
+            requireAccess && x.AccessItems is null)
+            throw ContractException.Invalid("move_out_four_sections_required");
+        var roomChecks = HandoverRoomChecklist.Merge(null, x.RoomChecks);
+        var accessItems = HandoverRoomChecklist.NormalizeAccess(x.AccessItems);
+        if (x.RoomChecks is not null &&
+            HandoverRoomChecklist.Missing(roomChecks, accessItems.Length > 0 ? accessItems : baseline?.AccessItems, null)
+                .Any(code => code is "room_checklist" or "room_issue_evidence"))
+            throw ContractException.Invalid("move_out_room_checklist_incomplete");
+        if (requireAccess && accessItems.Length == 0)
+            throw ContractException.Invalid("move_out_access_checklist_required");
+        var keyEvidence = x.KeyEvidenceIds ?? [];
+        if (keyEvidence.Length > 5 || keyEvidence.Contains(Guid.Empty) ||
+            keyEvidence.Distinct().Count() != keyEvidence.Length)
+            throw ContractException.Invalid("invalid_move_out_key_evidence");
         var inventory = handoverInventory is null ? null : await handoverInventory.PrepareAsync(c.RoomId, t);
         if (inventory is not null && inventory.StateToken != x.InventoryToken) throw ContractException.Conflict("handover_asset_inventory_changed");
         if (inventory is { Groups.Length: 0, NoAssetsConfirmed: false }) throw ContractException.Conflict("owner_no_assets_confirmation_required");
@@ -86,12 +107,24 @@ public sealed partial class ContractService
         var inspected = HandoverChecklist.Inspect(groups, x.Assets, inventory is not null, !missingQuantities);
         HandoverChecklist.RequireSeparateEvidence(x.EvidenceIds, inspected);
         if (inspected.Any(a => !a.Checked)) throw ContractException.Invalid("handover_checklist_incomplete");
+        HandoverRoomChecklist.RequireSeparateKeyEvidence(keyEvidence, x.EvidenceIds, roomChecks, x.Assets);
+        var roomEvidence = roomChecks.SelectMany(check => check.EvidenceIds).ToArray();
+        if (roomEvidence.Distinct().Count() != roomEvidence.Length ||
+            roomEvidence.Intersect(x.EvidenceIds).Any() ||
+            roomEvidence.Intersect(inspected.SelectMany(asset => asset.EvidenceIds ?? [])).Any())
+            throw ContractException.Invalid("move_out_room_evidence_must_be_separate");
+        if (accessItems is { Length: 1 } &&
+            baseline?.AccessItems?.SingleOrDefault(a => a.Type == "RoomKey") is { } receivedKeys &&
+            accessItems[0].Quantity < receivedKeys.Quantity &&
+            (keyEvidence.Length == 0 || string.IsNullOrWhiteSpace(accessItems[0].Notes)))
+            throw ContractException.Invalid("move_out_missing_keys_evidence_required");
         var readings = await repository.FinalReadingsAsync(c.Id, c.RoomId, Today, t);
         var electricity = readings.Single(r => r.Id == x.ElectricityReadingId); var water = readings.Single(r => r.Id == x.WaterReadingId);
         foreach (var r in new[] { electricity, water }) { using var bytes = new MemoryStream(); await storage.CopyToAsync(r.EvidenceObjectKey, bytes, t); if (FileHash(bytes.ToArray()) != r.EvidenceHash) throw ContractException.Conflict("inspection_evidence_integrity_failed"); }
         var hashes = new Dictionary<Guid, string>();
         var evidence = await repository.InspectionEvidenceAsync(c.Id, t);
-        foreach (var id in x.EvidenceIds.Concat(inspected.SelectMany(a => a.EvidenceIds ?? [])).Distinct())
+        foreach (var id in x.EvidenceIds.Concat(inspected.SelectMany(a => a.EvidenceIds ?? []))
+                     .Concat(roomEvidence).Concat(keyEvidence).Distinct())
         {
             var item = evidence.SingleOrDefault(e => e.Id == id && e.UploadedByUserId == Actor) ?? throw ContractException.Invalid("invalid_handover_evidence");
             using var bytes = new MemoryStream(); await storage.CopyToAsync(item.ObjectKey, bytes, t);
@@ -100,7 +133,8 @@ public sealed partial class ContractService
         var observed = new HandoverSnapshot(Today, c.Room.RoomNumber, HandoverText(x.RoomCondition, 2000), HandoverText(x.KeysAndAccess, 2000), x.Notes.Trim(),
             inspected, electricity, water, x.EvidenceIds, inventory?.StateToken, inventory?.State, inventory?.NoAssetsConfirmed ?? false,
             MissingBaselineReason: legacy, OtherTenantsRemain: await repository.HasOtherActiveContractsAsync(c.RoomId, c.Id, t), EvidenceHashes: hashes,
-            ProposedCompensation: HandoverText(x.ProposedCompensation, 2000, false));
+            ProposedCompensation: HandoverText(x.ProposedCompensation, 2000, false),
+            RoomChecks: roomChecks, AccessItems: accessItems, KeyEvidenceIds: keyEvidence);
         repository.Add(new ContractFinalInspection
         {
             ContractId = c.Id,

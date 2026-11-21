@@ -174,6 +174,33 @@ it('shows a real private photo thumbnail without public URLs and cleans the brow
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
 });
 
+it('previews confirmed initial meter photo in the handover detail without offering download', async () => {
+  const meter = vi
+    .fn()
+    .mockResolvedValue(browserBlob(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), 'image/png'));
+  const { unmount } = render(
+    <ContractEvidence
+      api={{ ...api, handoverMeterEvidence: meter } as ContractClient}
+      contractId={contractId}
+      readingId="40000000-0000-4000-8000-000000000008"
+      thumbnail
+      thumbnailHeight={240}
+      label="Ảnh công tơ điện"
+    />,
+  );
+  const image = await screen.findByRole('img', { name: 'Ảnh công tơ điện' });
+  expect(image.getAttribute('src')).toBe('blob:private-test');
+  expect(meter).toHaveBeenCalledWith(
+    contractId,
+    '40000000-0000-4000-8000-000000000008',
+    expect.any(AbortSignal),
+  );
+  expect(state.transport).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Tải ảnh' })).toBeNull();
+  unmount();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
+});
+
 it('shows an unsaved photo immediately from the local preview without fetching a not-yet-linked private file', () => {
   render(
     <ContractEvidence
