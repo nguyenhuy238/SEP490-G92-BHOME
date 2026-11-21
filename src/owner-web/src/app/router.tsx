@@ -1,0 +1,167 @@
+import { lazy, Suspense } from 'react';
+import { Navigate, Route, Routes } from 'react-router';
+import { LoginRoute, ProtectedRoute } from './routeGuards';
+import { AppShell } from '../components/layout/AppShell';
+import { LoadingState } from '../components/common/PortalUI';
+import { SharedConfigurationProvider } from '../features/configuration/SharedConfigurationContext';
+const NotificationsPage = lazy(() => import('../features/notifications/pages/NotificationsPage'));
+const LocationsPage = lazy(() => import('../features/locations/pages/LocationsPage'));
+const RoomsPage = lazy(() => import('../features/rooms/pages/RoomsPage'));
+const CreateRooms = lazy(() =>
+  import('../features/property/Rooms').then((m) => ({ default: m.CreateRooms })),
+);
+const RoomDetail = lazy(() =>
+  import('../features/property/Rooms').then((m) => ({ default: m.RoomDetail })),
+);
+const AssetAllocation = lazy(() =>
+  import('../features/property/Assets').then((m) => ({ default: m.AssetAllocation })),
+);
+const RoomTypesPage = lazy(() => import('../features/room-types/pages/RoomTypesPage'));
+const AssetsPage = lazy(() => import('../features/assets/pages/AssetsPage'));
+const PricingPage = lazy(() => import('../features/pricing/pages/PricingPage'));
+const StaffPage = lazy(() => import('../features/staff/pages/StaffPage'));
+const StaffAssignmentsPage = lazy(() => import('../features/staff/pages/StaffAssignmentsPage'));
+const TasksPage = lazy(() => import('../features/tasks/pages/TasksPage'));
+const TenantsPage = lazy(() => import('../features/tenants/pages/TenantsPage'));
+const ContractsPage = lazy(() => import('../features/contracts/pages/ContractsPage'));
+const DigitalSigningPage = lazy(() => import('../features/contracts/pages/DigitalSigningPage'));
+const HandoversPage = lazy(() => import('../features/handovers/pages/HandoversPage'));
+const TemporaryResidencePage = lazy(
+  () => import('../features/temporary-residence/pages/TemporaryResidencePage'),
+);
+const MetersPage = lazy(() => import('../features/meters/pages/MetersPage'));
+const InvoicesPage = lazy(() => import('../features/invoices/pages/InvoicesPage'));
+const AutomationPage = lazy(() => import('../features/invoices/AutomationPage'));
+const AdjustmentsPage = lazy(() => import('../features/adjustments/AdjustmentsPage'));
+const PaymentsPage = lazy(() => import('../features/payments/pages/PaymentsPage'));
+const TenantRefundRequestsPage = lazy(
+  () => import('../features/payments/pages/TenantRefundRequestsPage'),
+);
+const DebtsPage = lazy(() => import('../features/debts/pages/DebtsPage'));
+const IncidentsPage = lazy(() => import('../features/incidents/pages/IncidentsPage'));
+const MaintenancePage = lazy(() => import('../features/maintenance/pages/MaintenancePage'));
+const ExpensesPage = lazy(() => import('../features/expenses/pages/ExpensesPage'));
+const TaxTrackingPage = lazy(() => import('../features/finance/TaxTrackingPage'));
+const LocationFinanceWorkspace = lazy(() =>
+  import('../features/locations/pages/LocationFinanceWorkspace').then((module) => ({
+    default: module.LocationFinanceWorkspace,
+  })),
+);
+const DashboardPage = lazy(() => import('../features/dashboard/pages/DashboardPage'));
+const FinanceHomePage = lazy(() => import('../features/finance/FinanceHomePage'));
+const ReportsPage = lazy(() => import('../features/reports/pages/ReportsPage'));
+const WhatIfPage = lazy(() => import('../features/what-if/pages/WhatIfPage'));
+const PublicContentPage = lazy(() => import('../features/public-content/pages/PublicContentPage'));
+const LocationWorkspace = lazy(() =>
+  import('../features/locations/pages/LocationWorkspace').then((module) => ({
+    default: module.LocationWorkspace,
+  })),
+);
+const RoomTypeTemplatesPage = lazy(() =>
+  import('../features/configuration/pages/ConfigurationLibraryPage').then((module) => ({
+    default: module.RoomTypeTemplatesPage,
+  })),
+);
+const AssetCatalogPage = lazy(() =>
+  import('../features/configuration/pages/ConfigurationLibraryPage').then((module) => ({
+    default: module.AssetCatalogPage,
+  })),
+);
+const PricingFeeTemplatesPage = lazy(() =>
+  import('../features/configuration/pages/ConfigurationLibraryPage').then((module) => ({
+    default: module.PricingFeeTemplatesPage,
+  })),
+);
+const PolicyTemplatesPage = lazy(() =>
+  import('../features/configuration/pages/ConfigurationLibraryPage').then((module) => ({
+    default: module.PolicyTemplatesPage,
+  })),
+);
+const ResetPasswordPage = lazy(() => import('../features/auth/pages/ResetPasswordPage'));
+const HoldingSettingsPage = lazy(() => import('../features/contracts/pages/HoldingSettingsPage'));
+const SmsRecoveryPage = lazy(() => import('../features/auth/pages/SmsRecoveryPage'));
+const DemoSmsInboxPage =
+  import.meta.env.DEV && import.meta.env.VITE_SMS_DEMO_ENABLED === 'true'
+    ? lazy(() => import('../features/notifications/pages/DemoSmsInboxPage'))
+    : null;
+const ConfirmEmailPage = lazy(() => import('../features/auth/pages/ConfirmEmailPage'));
+const AcceptInvitationPage = lazy(() => import('../features/auth/pages/AcceptInvitationPage'));
+const AnonymousSigningPage = lazy(() => import('../features/contracts/pages/AnonymousSigningPage'));
+const AccountProfilePage = lazy(() => import('../features/auth/pages/AccountProfilePage'));
+export function AppRouter() {
+  return (
+    <SharedConfigurationProvider>
+      <Suspense fallback={<LoadingState />}>
+        <Routes>
+          <Route path="/login" element={<LoginRoute />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/forgot-password" element={<SmsRecoveryPage />} />
+          <Route path="/confirm-email" element={<ConfirmEmailPage />} />
+          <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+          <Route path="/contract-signing" element={<AnonymousSigningPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppShell />}>
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
+              {DemoSmsInboxPage && <Route path="/demo/sms" element={<DemoSmsInboxPage />} />}
+              <Route path="/account/profile" element={<AccountProfilePage />} />
+              <Route path="/locations" element={<LocationsPage />} />
+              <Route path="/configuration/room-types" element={<RoomTypeTemplatesPage />} />
+              <Route path="/configuration/assets" element={<AssetCatalogPage />} />
+              <Route path="/configuration/pricing-fees" element={<PricingFeeTemplatesPage />} />
+              <Route path="/configuration/policies" element={<PolicyTemplatesPage />} />
+              <Route path="/configuration/holding-contracts" element={<HoldingSettingsPage />} />
+              <Route path="/locations/:locationId" element={<LocationWorkspace />}>
+                <Route index element={<Navigate to="overview" replace />} />
+                <Route path="overview" element={<></>} />
+                <Route path="rooms/new" element={<CreateRooms />} />
+                <Route path="rooms" element={<RoomsPage />} />
+                <Route path="room-types" element={<RoomTypesPage />} />
+                <Route path="assets" element={<AssetsPage />} />
+                <Route path="pricing" element={<PricingPage />} />
+                <Route path="utilities" element={<></>} />
+                <Route path="rules" element={<></>} />
+                <Route path="history" element={<></>} />
+                <Route path="settings" element={<></>} />
+                <Route path="investment" element={<LocationFinanceWorkspace />} />
+              </Route>
+              <Route path="/rooms" element={<RoomsPage />} />
+              <Route path="/rooms/new" element={<CreateRooms />} />
+              <Route path="/rooms/:id" element={<RoomDetail />} />
+              <Route path="/asset-allocation" element={<AssetAllocation />} />
+              <Route path="/room-types" element={<RoomTypesPage />} />
+              <Route path="/assets" element={<AssetsPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/staff" element={<StaffPage />} />
+              <Route path="/staff-assignments" element={<StaffAssignmentsPage />} />
+              <Route path="/operational-tasks" element={<TasksPage />} />
+              <Route path="/tasks" element={<Navigate to="/operational-tasks" replace />} />
+              <Route path="/tenants" element={<TenantsPage />} />
+              <Route path="/contracts" element={<ContractsPage />} />
+              <Route path="/digital-signing" element={<DigitalSigningPage />} />
+              <Route path="/handovers" element={<HandoversPage />} />
+              <Route path="/temporary-residence" element={<TemporaryResidencePage />} />
+              <Route path="/meters" element={<MetersPage />} />
+              <Route path="/finance" element={<FinanceHomePage />} />
+              <Route path="/invoices" element={<InvoicesPage />} />
+              <Route path="/billing-automation" element={<AutomationPage />} />
+              <Route path="/invoice-adjustments" element={<AdjustmentsPage />} />
+              <Route path="/payments" element={<PaymentsPage />} />
+              <Route path="/tenant-refund-requests" element={<TenantRefundRequestsPage />} />
+              <Route path="/debts" element={<DebtsPage />} />
+              <Route path="/incidents" element={<IncidentsPage />} />
+              <Route path="/maintenance" element={<MaintenancePage />} />
+              <Route path="/expenses" element={<ExpensesPage />} />
+              <Route path="/finance/tax-records" element={<TaxTrackingPage />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/what-if" element={<WhatIfPage />} />
+              <Route path="/public-content" element={<PublicContentPage />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Route>
+          </Route>
+        </Routes>
+      </Suspense>
+    </SharedConfigurationProvider>
+  );
+}

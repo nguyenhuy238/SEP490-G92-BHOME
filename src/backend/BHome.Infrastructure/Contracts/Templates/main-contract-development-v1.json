@@ -1,0 +1,22 @@
+{
+  "id": "main-contract-development-v1",
+  "version": 1,
+  "title": "BHOME — MẪU DỮ LIỆU HỢP ĐỒNG THUÊ PHÒNG",
+  "notice": "CHỈ DÙNG CHO PHÁT TRIỂN/KIỂM THỬ — CHƯA PHÊ DUYỆT CHO SỬ DỤNG THỰC TẾ. Mẫu chỉ hiển thị dữ liệu đã lưu, không bổ sung điều khoản pháp lý.",
+  "fields": [
+    { "key": "ContractId", "label": "Mã hợp đồng / phiên bản" },
+    { "key": "SnapshotHash", "label": "SHA-256 của bản chụp" },
+    { "key": "RoomId", "label": "Mã phòng" },
+    { "key": "OwnerSignerId", "label": "Tài khoản Owner ký" },
+    { "key": "TenantUserId", "label": "Tài khoản Tenant ký" },
+    { "key": "RepresentativeResidentId", "label": "Mã người đại diện" },
+    { "key": "ResidentIds", "label": "Mã những người cư trú" },
+    { "key": "StartDate", "label": "Ngày bắt đầu" },
+    { "key": "EndDate", "label": "Ngày kết thúc" },
+    { "key": "MonthlyRent", "label": "Tiền thuê mỗi tháng" },
+    { "key": "RequiredDeposit", "label": "Tiền cọc yêu cầu" },
+    { "key": "HoldingContractId", "label": "Mã Holding Contract" },
+    { "key": "AppliedHoldingDeposit", "label": "Holding Deposit đã áp dụng" },
+    { "key": "Terms", "label": "Nội dung đã lưu trong bản chụp hợp đồng" }
+  ]
+}

@@ -1,0 +1,282 @@
+{
+  "runtime": {
+    "images": 52,
+    "fullyLabeled": 33,
+    "baseline": {
+      "proposals": 26,
+      "exact": 4,
+      "falseOnFullyLabeled": 17,
+      "fallbacks": 26,
+      "p50Milliseconds": 209,
+      "p95Milliseconds": 712,
+      "maxMilliseconds": 829,
+      "within10Seconds": 52
+    },
+    "typed": {
+      "proposals": 3,
+      "exact": 3,
+      "falseOnFullyLabeled": 0,
+      "fallbacks": 49,
+      "p50Milliseconds": 220,
+      "p95Milliseconds": 801,
+      "maxMilliseconds": 1019,
+      "within10Seconds": 52
+    },
+    "automatic": {
+      "proposals": 1,
+      "exact": 1,
+      "falseOnFullyLabeled": 0,
+      "fallbacks": 51,
+      "p50Milliseconds": 3498,
+      "p95Milliseconds": 6171,
+      "maxMilliseconds": 6962,
+      "within10Seconds": 52
+    },
+    "automaticCategoryCounts": {
+      "unknown": 52
+    }
+  },
+  "cropComparisons": [
+    {
+      "set": "previously-selected-10",
+      "images": 10,
+      "fullyLabeled": 7,
+      "variants": {
+        "legacy": {
+          "pp": {
+            "proposed": 4,
+            "exact": 1,
+            "falseProposal": 3
+          },
+          "ppDirect": {
+            "proposed": 4,
+            "exact": 2,
+            "falseProposal": 2
+          },
+          "ppContrast": {
+            "proposed": 4,
+            "exact": 1,
+            "falseProposal": 3
+          },
+          "stage2": {
+            "proposed": 3,
+            "exact": 3,
+            "falseProposal": 0
+          },
+          "combined": {
+            "proposed": 1,
+            "exact": 1,
+            "falseProposal": 0
+          }
+        },
+        "canonical": {
+          "pp": {
+            "proposed": 4,
+            "exact": 1,
+            "falseProposal": 3
+          },
+          "ppDirect": {
+            "proposed": 4,
+            "exact": 2,
+            "falseProposal": 2
+          },
+          "ppContrast": {
+            "proposed": 4,
+            "exact": 1,
+            "falseProposal": 3
+          },
+          "stage2": {
+            "proposed": 3,
+            "exact": 3,
+            "falseProposal": 0
+          },
+          "combined": {
+            "proposed": 1,
+            "exact": 1,
+            "falseProposal": 0
+          }
+        },
+        "margin03": {
+          "pp": {
+            "proposed": 4,
+            "exact": 0,
+            "falseProposal": 4
+          },
+          "ppDirect": {
+            "proposed": 0,
+            "exact": 0,
+            "falseProposal": 0
+          },
+          "ppContrast": {
+            "proposed": 0,
+            "exact": 0,
+            "falseProposal": 0
+          },
+          "stage2": {
+            "proposed": 4,
+            "exact": 3,
+            "falseProposal": 1
+          },
+          "combined": {
+            "proposed": 1,
+            "exact": 1,
+            "falseProposal": 0
+          }
+        },
+        "margin08": {
+          "pp": {
+            "proposed": 2,
+            "exact": 1,
+            "falseProposal": 1
+          },
+          "ppDirect": {
+            "proposed": 0,
+            "exact": 0,
+            "falseProposal": 0
+          },
+          "ppContrast": {
+            "proposed": 0,
+            "exact": 0,
+            "falseProposal": 0
+          },
+          "stage2": {
+            "proposed": 4,
+            "exact": 3,
+            "falseProposal": 1
+          },
+          "combined": {
+            "proposed": 3,
+            "exact": 2,
+            "falseProposal": 1
+          }
+        }
+      }
+    },
+    {
+      "set": "previously-unused-author-test-42",
+      "images": 42,
+      "fullyLabeled": 26,
+      "variants": {
+        "legacy": {
+          "pp": {
+            "proposed": 18,
+            "exact": 2,
+            "falseProposal": 11
+          },
+          "ppDirect": {
+            "proposed": 25,
+            "exact": 4,
+            "falseProposal": 16
+          },
+          "ppContrast": {
+            "proposed": 25,
+            "exact": 2,
+            "falseProposal": 18
+          },
+          "stage2": {
+            "proposed": 23,
+            "exact": 20,
+            "falseProposal": 1
+          },
+          "combined": {
+            "proposed": 13,
+            "exact": 11,
+            "falseProposal": 1
+          }
+        },
+        "canonical": {
+          "pp": {
+            "proposed": 18,
+            "exact": 2,
+            "falseProposal": 11
+          },
+          "ppDirect": {
+            "proposed": 25,
+            "exact": 4,
+            "falseProposal": 16
+          },
+          "ppContrast": {
+            "proposed": 25,
+            "exact": 2,
+            "falseProposal": 18
+          },
+          "stage2": {
+            "proposed": 23,
+            "exact": 20,
+            "falseProposal": 1
+          },
+          "combined": {
+            "proposed": 13,
+            "exact": 11,
+            "falseProposal": 1
+          }
+        },
+        "margin03": {
+          "pp": {
+            "proposed": 15,
+            "exact": 1,
+            "falseProposal": 12
+          },
+          "ppDirect": {
+            "proposed": 10,
+            "exact": 0,
+            "falseProposal": 8
+          },
+          "ppContrast": {
+            "proposed": 11,
+            "exact": 0,
+            "falseProposal": 9
+          },
+          "stage2": {
+            "proposed": 24,
+            "exact": 21,
+            "falseProposal": 1
+          },
+          "combined": {
+            "proposed": 12,
+            "exact": 12,
+            "falseProposal": 0
+          }
+        },
+        "margin08": {
+          "pp": {
+            "proposed": 14,
+            "exact": 2,
+            "falseProposal": 9
+          },
+          "ppDirect": {
+            "proposed": 9,
+            "exact": 0,
+            "falseProposal": 8
+          },
+          "ppContrast": {
+            "proposed": 6,
+            "exact": 0,
+            "falseProposal": 5
+          },
+          "stage2": {
+            "proposed": 21,
+            "exact": 17,
+            "falseProposal": 3
+          },
+          "combined": {
+            "proposed": 13,
+            "exact": 10,
+            "falseProposal": 3
+          }
+        }
+      }
+    }
+  ],
+  "productionReady": false,
+  "representativeFourTypeAcceptance": false,
+  "groundTruthChanged": false,
+  "trainingPerformed": false,
+  "limitations": [
+    "Same author water-meter test split, repeated meters; not an independent BHOME four-category dataset.",
+    "Original annotations include unclear digits and apparent coverage gaps; retained unchanged.",
+    "Crop comparison uses original resolution; runtime uses mobile 1600/JPEG85, actual scene/profile/parser guards.",
+    "Exact denominator excludes annotations with u; unknown ground truth is never counted as exact or false.",
+    "No billing decimal ground truth for public water images. These are exact annotated digit-string metrics."
+  ]
+}

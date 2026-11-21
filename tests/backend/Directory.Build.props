@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="../../src/backend/Directory.Build.props" />
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+</Project>

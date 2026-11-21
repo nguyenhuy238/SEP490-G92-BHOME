@@ -1,0 +1,301 @@
+﻿{
+  "date": "2026-11-04",
+  "scope": "Meter OCR proposals; synthetic text-layout evaluation and one existing real meter photo; no trained meter detector",
+  "backendTests": {
+    "domain": 83,
+    "failed": 0,
+    "application": 191,
+    "skipped": 0,
+    "compact24MeterCapture": 5,
+    "ocrIntegration": 78
+  },
+  "mobileTests": {
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "failed": 0,
+    "passed": 331
+  },
+  "build": {
+    "result": "PASS",
+    "errors": 0,
+    "warnings": 0
+  },
+  "localizationSmoke": {
+    "adapter": "deterministic fixture boxes/categories; real PP-OCR; not detector/classifier accuracy",
+    "total": 32,
+    "passed": 32
+  },
+  "originalSynthetic": {
+    "before": {
+      "dataset": "synthetic",
+      "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-layout4"],
+      "sourceCount": 9,
+      "total": 68,
+      "exactMatches": 68,
+      "expectedRejections": 4,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 0,
+      "missingExpectedFields": 0,
+      "fallbacks": 4,
+      "meterProposalMetrics": null,
+      "proposalOrFallbackWithin10Seconds": null,
+      "maxMilliseconds": null,
+      "profiles": {
+        "MechanicalElectricity": {
+          "total": 17,
+          "exactMatches": 17,
+          "expectedRejections": 1,
+          "sourceCount": 3,
+          "p95Milliseconds": 4567
+        },
+        "DigitalElectricity": {
+          "total": 17,
+          "exactMatches": 17,
+          "expectedRejections": 1,
+          "sourceCount": 3,
+          "p95Milliseconds": 3651
+        },
+        "MechanicalWater": {
+          "total": 17,
+          "exactMatches": 17,
+          "expectedRejections": 1,
+          "sourceCount": 3,
+          "p95Milliseconds": 3659
+        },
+        "DigitalWater": {
+          "total": 17,
+          "exactMatches": 17,
+          "expectedRejections": 1,
+          "sourceCount": 3,
+          "p95Milliseconds": 3603
+        }
+      },
+      "p50Milliseconds": 1577,
+      "p95Milliseconds": 3603
+    },
+    "after": {
+      "dataset": "synthetic",
+      "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-meter5"],
+      "sourceCount": 9,
+      "total": 68,
+      "exactMatches": 68,
+      "expectedRejections": 4,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 0,
+      "missingExpectedFields": 0,
+      "fallbacks": 4,
+      "meterProposalMetrics": {
+        "positiveCases": 64,
+        "exactReadings": 64,
+        "emittedReadings": 64,
+        "falseReadings": 0,
+        "exactReadingAccuracyPercent": 100,
+        "falseReadingRatePercent": 0
+      },
+      "proposalOrFallbackWithin10Seconds": 68,
+      "maxMilliseconds": 5305,
+      "profiles": {
+        "MechanicalElectricity": {
+          "total": 17,
+          "exactMatches": 17,
+          "expectedRejections": 1,
+          "sourceCount": 3,
+          "p95Milliseconds": 5058
+        },
+        "DigitalElectricity": {
+          "total": 17,
+          "exactMatches": 17,
+          "expectedRejections": 1,
+          "sourceCount": 3,
+          "p95Milliseconds": 5171
+        },
+        "MechanicalWater": {
+          "total": 17,
+          "exactMatches": 17,
+          "expectedRejections": 1,
+          "sourceCount": 3,
+          "p95Milliseconds": 5305
+        },
+        "DigitalWater": {
+          "total": 17,
+          "exactMatches": 17,
+          "expectedRejections": 1,
+          "sourceCount": 3,
+          "p95Milliseconds": 5263
+        }
+      },
+      "p50Milliseconds": 2128,
+      "p95Milliseconds": 5058
+    }
+  },
+  "safetySynthetic": {
+    "before": {
+      "dataset": "synthetic",
+      "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-layout4"],
+      "sourceCount": 16,
+      "total": 16,
+      "exactMatches": 12,
+      "expectedRejections": 12,
+      "falseProposals": 4,
+      "incorrectExpectedFields": 0,
+      "missingExpectedFields": 0,
+      "fallbacks": 8,
+      "meterProposalMetrics": null,
+      "proposalOrFallbackWithin10Seconds": null,
+      "maxMilliseconds": null,
+      "profiles": {
+        "MechanicalElectricity": {
+          "total": 4,
+          "exactMatches": 3,
+          "expectedRejections": 3,
+          "sourceCount": 4,
+          "p95Milliseconds": 2007
+        },
+        "DigitalElectricity": {
+          "total": 4,
+          "exactMatches": 3,
+          "expectedRejections": 3,
+          "sourceCount": 4,
+          "p95Milliseconds": 2105
+        },
+        "MechanicalWater": {
+          "total": 4,
+          "exactMatches": 3,
+          "expectedRejections": 3,
+          "sourceCount": 4,
+          "p95Milliseconds": 2035
+        },
+        "DigitalWater": {
+          "total": 4,
+          "exactMatches": 3,
+          "expectedRejections": 3,
+          "sourceCount": 4,
+          "p95Milliseconds": 2030
+        }
+      },
+      "p50Milliseconds": 1145,
+      "p95Milliseconds": 2105
+    },
+    "after": {
+      "dataset": "synthetic",
+      "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-meter5"],
+      "sourceCount": 16,
+      "total": 16,
+      "exactMatches": 16,
+      "expectedRejections": 12,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 0,
+      "missingExpectedFields": 0,
+      "fallbacks": 12,
+      "meterProposalMetrics": {
+        "positiveCases": 4,
+        "exactReadings": 4,
+        "emittedReadings": 4,
+        "falseReadings": 0,
+        "exactReadingAccuracyPercent": 100,
+        "falseReadingRatePercent": 0
+      },
+      "proposalOrFallbackWithin10Seconds": 16,
+      "maxMilliseconds": 2487,
+      "profiles": {
+        "MechanicalElectricity": {
+          "total": 4,
+          "exactMatches": 4,
+          "expectedRejections": 3,
+          "sourceCount": 4,
+          "p95Milliseconds": 2373
+        },
+        "DigitalElectricity": {
+          "total": 4,
+          "exactMatches": 4,
+          "expectedRejections": 3,
+          "sourceCount": 4,
+          "p95Milliseconds": 2311
+        },
+        "MechanicalWater": {
+          "total": 4,
+          "exactMatches": 4,
+          "expectedRejections": 3,
+          "sourceCount": 4,
+          "p95Milliseconds": 2487
+        },
+        "DigitalWater": {
+          "total": 4,
+          "exactMatches": 4,
+          "expectedRejections": 3,
+          "sourceCount": 4,
+          "p95Milliseconds": 2425
+        }
+      },
+      "p50Milliseconds": 1424,
+      "p95Milliseconds": 2487
+    }
+  },
+  "existingRealPhoto": {
+    "before": {
+      "dataset": "meter-evaluation",
+      "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-layout4"],
+      "sourceCount": 1,
+      "total": 1,
+      "exactMatches": 1,
+      "expectedRejections": 0,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 0,
+      "missingExpectedFields": 0,
+      "fallbacks": 0,
+      "meterProposalMetrics": null,
+      "proposalOrFallbackWithin10Seconds": null,
+      "maxMilliseconds": null,
+      "profiles": {
+        "DigitalElectricity": {
+          "total": 1,
+          "exactMatches": 1,
+          "expectedRejections": 0,
+          "sourceCount": 1,
+          "p95Milliseconds": 2650
+        }
+      },
+      "p50Milliseconds": 2650,
+      "p95Milliseconds": 2650
+    },
+    "after": {
+      "dataset": "meter-evaluation",
+      "engineVersions": ["ocrdoc-ppocrv6-vi-run6-9b534643-meter5"],
+      "sourceCount": 1,
+      "total": 1,
+      "exactMatches": 1,
+      "expectedRejections": 0,
+      "falseProposals": 0,
+      "incorrectExpectedFields": 0,
+      "missingExpectedFields": 0,
+      "fallbacks": 0,
+      "meterProposalMetrics": {
+        "positiveCases": 1,
+        "exactReadings": 1,
+        "emittedReadings": 1,
+        "falseReadings": 0,
+        "exactReadingAccuracyPercent": 100,
+        "falseReadingRatePercent": 0
+      },
+      "proposalOrFallbackWithin10Seconds": 1,
+      "maxMilliseconds": 2622,
+      "profiles": {
+        "DigitalElectricity": {
+          "total": 1,
+          "exactMatches": 1,
+          "expectedRejections": 0,
+          "sourceCount": 1,
+          "p95Milliseconds": 2622
+        }
+      },
+      "p50Milliseconds": 2622,
+      "p95Milliseconds": 2622
+    }
+  },
+  "limitations": [
+    "Docker/real MinIO not run; PostgreSQL 16.15 disposable plus explicit storage substitute used",
+    "No meter/display annotated dataset or detector/classifier weights; recall and visual classification accuracy not measured",
+    "Timing is local sequential service inference, with ordinary machine activity; no 100-session or device E2E qualification",
+    "Synthetic regression fixtures are not independent real-world held-out accuracy evidence"
+  ]
+}

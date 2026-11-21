@@ -1,0 +1,102 @@
+export interface ApiProblem {
+  code?: string;
+  title?: string;
+  detail?: string;
+  status?: number;
+  correlationId?: string;
+  errors?: Record<string, string[]>;
+}
+export function infrastructureError(error: unknown): string | undefined {
+  const value = error as { code?: string; problem?: { code?: string } } | null;
+  if ((value?.code ?? value?.problem?.code) === 'database_schema_incompatible')
+    return 'Máy chủ và cơ sở dữ liệu chưa đồng bộ. Cần quản trị viên cập nhật hệ thống.';
+  return undefined;
+}
+export function requestDiagnostic(error: {
+  status?: number;
+  requestPath?: string;
+  correlationId?: string;
+  method?: string;
+}): string {
+  const path = error.requestPath?.split('?')[0];
+  const route = path && /^\/(?:api\/v1\/[a-zA-Z0-9/-]+|health\/ready)$/.test(path) ? path : '';
+  const id =
+    error.correlationId &&
+    /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(error.correlationId)
+      ? ` · Mã truy vết: ${error.correlationId}`
+      : '';
+  return `${route ? ` · ${/^(GET|POST|PUT|DELETE|PATCH)$/.test(error.method ?? '') ? error.method : 'GET'} ${route}` : ''}${error.status ? ` · HTTP ${error.status}` : ''}${id}`;
+}
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly problem?: ApiProblem,
+  ) {
+    super('Không thể hoàn thành yêu cầu. Vui lòng thử lại.');
+    this.name = 'ApiError';
+  }
+}
+export function createApiClient(
+  baseUrl: string,
+  getToken: () => string | undefined = () => undefined,
+  onUnauthorized: () => void = () => {},
+  refresh?: () => Promise<string | undefined>,
+) {
+  return async function request<T>(
+    path: string,
+    init: RequestInit = {},
+    responseType: 'json' | 'blob' | 'bytes' = 'json',
+  ): Promise<T> {
+    if (!path.startsWith('/api/v1/') || path.includes('..') || path.includes('://')) {
+      throw new Error('Expected a versioned relative API path.');
+    }
+    const headers = new Headers(init.headers);
+    if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+    const multipart = typeof FormData !== 'undefined' && init.body instanceof FormData;
+    if (init.body && !multipart && !headers.has('Content-Type'))
+      headers.set('Content-Type', 'application/json');
+    const token = getToken();
+    if (token) headers.set('Authorization', 'Bearer ' + token);
+    let response: Response;
+    try {
+      response = await fetch(baseUrl + path, {
+        ...init,
+        headers,
+        credentials: 'omit',
+        cache: 'no-store',
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+      throw new ApiError(0);
+    }
+    if (response.status === 401 && refresh && token) {
+      const nextToken = getToken() !== token ? getToken() : await refresh();
+      if (nextToken) {
+        headers.set('Authorization', 'Bearer ' + nextToken);
+        try {
+          response = await fetch(baseUrl + path, {
+            ...init,
+            headers,
+            credentials: 'omit',
+            cache: 'no-store',
+          });
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') throw error;
+          throw new ApiError(0);
+        }
+      }
+    }
+    if (!response.ok) {
+      if (response.status === 401) onUnauthorized();
+      const problem = response.headers.get('content-type')?.includes('json')
+        ? ((await response.json().catch(() => undefined)) as ApiProblem | undefined)
+        : undefined;
+      throw new ApiError(response.status, problem);
+    }
+    if (response.status === 204) return undefined as T;
+    if (responseType === 'bytes') return new Uint8Array(await response.arrayBuffer()) as T;
+    return responseType === 'blob'
+      ? (response.blob() as Promise<T>)
+      : (response.json() as Promise<T>);
+  };
+}

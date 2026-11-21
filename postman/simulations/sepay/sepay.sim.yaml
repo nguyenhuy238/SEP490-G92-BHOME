@@ -1,0 +1,7 @@
+simulation: sepay
+routing: path
+mocks:
+  - name: sepay
+    routeKey: sepay
+    origin: userapi-sandbox.sepay.vn
+    path: postman/mocks/sepay

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MySign giả lập</title>
+    <style>
+      :root {
+        --bg: #f2f4f7;
+        --card: #fff;
+        --text: #17202a;
+        --muted: #5f6b78;
+        --line: #dfe4ea;
+        --brand: #ee0033;
+        --ok: #1e8e3e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1419;
+          --card: #1a2028;
+          --text: #e6ebf0;
+          --muted: #9aa6b2;
+          --line: #2b3540;
+          --ok: #5cc27b;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          16px/1.5 system-ui,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      header {
+        background: var(--brand);
+        color: #fff;
+        padding: 18px 16px 14px;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+      header p {
+        margin: 2px 0 0;
+        opacity: 0.85;
+        font-size: 13px;
+      }
+      main {
+        padding: 16px;
+        max-width: 520px;
+        margin: 0 auto;
+      }
+      label {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        font: inherit;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--card);
+        color: var(--text);
+        margin-top: 4px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 16px;
+        margin-top: 14px;
+      }
+      .card h2 {
+        margin: 0 0 6px;
+        font-size: 17px;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 13px;
+        overflow-wrap: anywhere;
+      }
+      .buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      button {
+        font: inherit;
+        font-weight: 600;
+        padding: 12px;
+        border-radius: 10px;
+        border: 0;
+        cursor: pointer;
+      }
+      .ok {
+        background: var(--ok);
+        color: #fff;
+      }
+      .bad {
+        background: transparent;
+        color: var(--brand);
+        border: 1px solid var(--brand);
+      }
+      .empty {
+        text-align: center;
+        color: var(--muted);
+        padding: 40px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>MySign (giả lập)</h1>
+      <p>Chỉ dùng để thử nghiệm BHome — không phải ứng dụng của Viettel</p>
+    </header>
+    <main>
+      <label for="user">Mã thuê bao của bạn</label>
+      <input id="user" inputmode="numeric" autocomplete="off" />
+      <div id="list"><p class="empty">Đang chờ yêu cầu ký…</p></div>
+    </main>
+    <script>
+      const userInput = document.getElementById('user');
+      try {
+        userInput.value = localStorage.getItem('mysign-user') || '079000000001';
+      } catch {
+        userInput.value = '079000000001';
+      }
+      userInput.oninput = () => {
+        try {
+          localStorage.setItem('mysign-user', userInput.value);
+        } catch {}
+        refresh();
+      };
+      const esc = (text) =>
+        String(text ?? '').replace(
+          /[&<>"]/g,
+          (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c],
+        );
+
+      async function refresh() {
+        const list = document.getElementById('list');
+        try {
+          const response = await fetch(
+            `/sandbox/phone/requests?userId=${encodeURIComponent(userInput.value)}`,
+          );
+          const requests = response.ok ? await response.json() : [];
+          if (!requests.length) {
+            list.innerHTML = '<p class="empty">Không có yêu cầu ký nào đang chờ.</p>';
+            return;
+          }
+          list.innerHTML = '';
+          for (const request of requests) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `<h2>Yêu cầu ký số</h2>
+          <div>${esc(request.description)}</div>
+          <div class="muted">Mã tài liệu: ${esc(request.documentId)}<br>
+            Lúc ${new Date(request.createdAt).toLocaleTimeString('vi-VN')}</div>
+          <div class="buttons"><button class="bad">Từ chối</button><button class="ok">Xác nhận</button></div>`;
+            card.querySelector('.ok').onclick = () => answer(request.id, 'approve');
+            card.querySelector('.bad').onclick = () => answer(request.id, 'reject');
+            list.appendChild(card);
+          }
+        } catch {
+          list.innerHTML = '<p class="empty">Không kết nối được máy chủ sandbox.</p>';
+        }
+      }
+      async function answer(id, action) {
+        await fetch(`/sandbox/phone/requests/${id}/${action}`, { method: 'POST' });
+        refresh();
+      }
+      refresh();
+      setInterval(refresh, 2000);
+    </script>
+  </body>
+</html>

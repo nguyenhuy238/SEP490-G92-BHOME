@@ -1,0 +1,50 @@
+using BHome.Application.Contracts;
+using BHome.Domain.TenantContracts;
+using BHome.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using BHome.Domain.IdentityAccess;
+
+namespace BHome.Infrastructure.Contracts;
+
+internal sealed class AnonymousSigningRepository(BHomePersistenceContext db) : IAnonymousSigningRepository
+{
+    public Task<ContractSigningInvitation?> FindByTokenHashAsync(string hash, CancellationToken t) =>
+        db.Set<ContractSigningInvitation>().SingleOrDefaultAsync(i => i.TokenHash == hash, t);
+    public Task<ContractSigningInvitation?> FindAsync(Guid id, CancellationToken t) =>
+        db.Set<ContractSigningInvitation>().SingleOrDefaultAsync(i => i.Id == id, t);
+    public async Task<IReadOnlyList<ContractSigningInvitation>> ListAsync(Guid contractId, CancellationToken t) =>
+        await db.Set<ContractSigningInvitation>().Where(i => i.ContractId == contractId).OrderByDescending(i => i.CreatedAt).Take(100).ToArrayAsync(t);
+    public async Task<bool> IsEmailInUseAsync(Guid contractId, Guid residentId, string email, CancellationToken t)
+    {
+        email = email.Trim().ToLowerInvariant();
+        if (db.Database.IsNpgsql() && db.Database.CurrentTransaction is not null)
+            await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"bhome-signing-email:" + email},0))", t);
+        if (await (from u in db.Users
+                   join ur in db.UserRoles on u.Id equals ur.UserId
+                   join role in db.Roles on ur.RoleId equals role.Id
+                   where role.Name == Roles.Staff && u.Email != null && u.Email.Trim().ToLower() == email
+                   select u.Id).AnyAsync(t)) return true;
+
+        var mains = db.Set<Contract>().Where(c => c.Kind == ContractKind.Main);
+        if (await (from c in mains
+                   join cr in db.Set<ContractResident>() on c.Id equals cr.ContractId
+                   join r in db.Set<Resident>() on cr.ResidentId equals r.Id
+                   where (c.Id != contractId && c.Status == ContractStatus.Active || r.Id != residentId) &&
+                       (r.ContactEmail != null && r.ContactEmail.Trim().ToLower() == email ||
+                        db.Users.Any(u => u.Email != null && u.Email.Trim().ToLower() == email &&
+                            (u.Id == r.TenantUserId || r.Id == c.RepresentativeResidentId && u.Id == c.TenantUserId)))
+                   select c.Id).AnyAsync(t)) return true;
+
+        // Accepted invitation contacts remain evidence even if the profile email is later edited.
+        var accepted = await (from c in mains
+                              join i in db.Set<ContractSigningInvitation>() on c.Id equals i.ContractId
+                              where i.AcceptedAt != null && i.RevokedAt == null &&
+                                  (i.RecipientEmail.Trim().ToLower() == email ||
+                                   i.ContactEmails != null && i.ContactEmails.ToLower().Contains(email))
+                              select new { Invitation = i, Active = c.Id != contractId && c.Status == ContractStatus.Active }).ToArrayAsync(t);
+        return accepted.Any(row => SigningContacts.Read(row.Invitation).Any(contact =>
+            string.Equals(contact.Value.Trim(), email, StringComparison.OrdinalIgnoreCase) &&
+            (row.Active || contact.Key != residentId)));
+    }
+    public void Add(ContractSigningInvitation invitation) => db.Add(invitation);
+}

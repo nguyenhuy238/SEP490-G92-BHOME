@@ -1,0 +1,80 @@
+# File thay đổi — Contract Management
+
+Danh sách 65 file thuộc đợt Contract Management trên `member/QHuy`, được tổ chức thành 7 commit local theo [thứ tự và kết quả kiểm tra](CONTRACT_MANAGEMENT_WORKFLOW.md#nhóm-file-thay-đổi-và-commit-local). Chức năng, API, migration và dependencies được mô tả tại [hướng dẫn bàn giao](CONTRACT_MANAGEMENT_WORKFLOW.md). Không bao gồm `.tools`, `.env*`, secrets hay dữ liệu demo local. Không push, merge hoặc deploy. Phần BH-16 đã commit trước đó không được commit lại.
+
+## Backend và schema
+
+- [src/backend/BHome.Api/Controllers/ContractsController.cs](../../src/backend/BHome.Api/Controllers/ContractsController.cs)
+- [src/backend/BHome.Application/Contracts/ContractContracts.cs](../../src/backend/BHome.Application/Contracts/ContractContracts.cs)
+- [src/backend/BHome.Application/Contracts/ContractHandoverContracts.cs](../../src/backend/BHome.Application/Contracts/ContractHandoverContracts.cs)
+- [src/backend/BHome.Application/Contracts/ContractHandoverService.cs](../../src/backend/BHome.Application/Contracts/ContractHandoverService.cs)
+- [src/backend/BHome.Application/Contracts/ContractService.cs](../../src/backend/BHome.Application/Contracts/ContractService.cs)
+- [src/backend/BHome.Application/Contracts/ContractWorkflowContracts.cs](../../src/backend/BHome.Application/Contracts/ContractWorkflowContracts.cs)
+- [src/backend/BHome.Application/Contracts/ContractWorkflowService.cs](../../src/backend/BHome.Application/Contracts/ContractWorkflowService.cs)
+- [src/backend/BHome.Domain/TenantContracts/Contract.cs](../../src/backend/BHome.Domain/TenantContracts/Contract.cs)
+- [src/backend/BHome.Domain/TenantContracts/ContractDocumentFile.cs](../../src/backend/BHome.Domain/TenantContracts/ContractDocumentFile.cs)
+- [src/backend/BHome.Domain/TenantContracts/ContractHandover.cs](../../src/backend/BHome.Domain/TenantContracts/ContractHandover.cs)
+- [src/backend/BHome.Domain/TenantContracts/Resident.cs](../../src/backend/BHome.Domain/TenantContracts/Resident.cs)
+- [src/backend/BHome.Infrastructure/Contracts/ContractFiles.cs](../../src/backend/BHome.Infrastructure/Contracts/ContractFiles.cs)
+- [src/backend/BHome.Infrastructure/Contracts/ContractHandoverRepository.cs](../../src/backend/BHome.Infrastructure/Contracts/ContractHandoverRepository.cs)
+- [src/backend/BHome.Infrastructure/Contracts/ContractPdfRenderer.cs](../../src/backend/BHome.Infrastructure/Contracts/ContractPdfRenderer.cs)
+- [src/backend/BHome.Infrastructure/Contracts/ContractWorkflowRepository.cs](../../src/backend/BHome.Infrastructure/Contracts/ContractWorkflowRepository.cs)
+- [src/backend/BHome.Infrastructure/Contracts/DevelopmentContractSigningAdapter.cs](../../src/backend/BHome.Infrastructure/Contracts/DevelopmentContractSigningAdapter.cs)
+- [src/backend/BHome.Infrastructure/DependencyInjection.cs](../../src/backend/BHome.Infrastructure/DependencyInjection.cs)
+- [src/backend/BHome.Infrastructure/Persistence/CaptureConfiguration.cs](../../src/backend/BHome.Infrastructure/Persistence/CaptureConfiguration.cs)
+- [src/backend/BHome.Infrastructure/Persistence/ContractHandoverConfiguration.cs](../../src/backend/BHome.Infrastructure/Persistence/ContractHandoverConfiguration.cs)
+- [src/backend/BHome.Infrastructure/Persistence/ContractWorkflowConfiguration.cs](../../src/backend/BHome.Infrastructure/Persistence/ContractWorkflowConfiguration.cs)
+- [src/backend/BHome.Infrastructure/Persistence/Migrations/20261101101629_ContractWorkflowDocuments.Designer.cs](../../src/backend/BHome.Infrastructure/Persistence/Migrations/20261101101629_ContractWorkflowDocuments.Designer.cs)
+- [src/backend/BHome.Infrastructure/Persistence/Migrations/20261101101629_ContractWorkflowDocuments.cs](../../src/backend/BHome.Infrastructure/Persistence/Migrations/20261101101629_ContractWorkflowDocuments.cs)
+- [src/backend/BHome.Infrastructure/Persistence/Migrations/20261101103049_ContractMoveInHandover.Designer.cs](../../src/backend/BHome.Infrastructure/Persistence/Migrations/20261101103049_ContractMoveInHandover.Designer.cs)
+- [src/backend/BHome.Infrastructure/Persistence/Migrations/20261101103049_ContractMoveInHandover.cs](../../src/backend/BHome.Infrastructure/Persistence/Migrations/20261101103049_ContractMoveInHandover.cs)
+- [src/backend/BHome.Infrastructure/Persistence/Migrations/20261101105753_ContractHandoverReadingReferences.Designer.cs](../../src/backend/BHome.Infrastructure/Persistence/Migrations/20261101105753_ContractHandoverReadingReferences.Designer.cs)
+- [src/backend/BHome.Infrastructure/Persistence/Migrations/20261101105753_ContractHandoverReadingReferences.cs](../../src/backend/BHome.Infrastructure/Persistence/Migrations/20261101105753_ContractHandoverReadingReferences.cs)
+- [src/backend/BHome.Infrastructure/Persistence/Migrations/20261101110658_ContractHandoverConfirmationInvariant.Designer.cs](../../src/backend/BHome.Infrastructure/Persistence/Migrations/20261101110658_ContractHandoverConfirmationInvariant.Designer.cs)
+- [src/backend/BHome.Infrastructure/Persistence/Migrations/20261101110658_ContractHandoverConfirmationInvariant.cs](../../src/backend/BHome.Infrastructure/Persistence/Migrations/20261101110658_ContractHandoverConfirmationInvariant.cs)
+- [src/backend/BHome.Infrastructure/Persistence/Migrations/BHomeDbContextModelSnapshot.cs](../../src/backend/BHome.Infrastructure/Persistence/Migrations/BHomeDbContextModelSnapshot.cs)
+
+## Owner Web, Mobile và shared client
+
+- [packages/client-core/src/contracts.ts](../../packages/client-core/src/contracts.ts)
+- [packages/client-core/src/useContractHandover.ts](../../packages/client-core/src/useContractHandover.ts)
+- [packages/client-core/src/useContractPreparation.ts](../../packages/client-core/src/useContractPreparation.ts)
+- [src/mobile/src/app/workspace/[screen].tsx](../../src/mobile/src/app/workspace/%5Bscreen%5D.tsx)
+- [src/mobile/src/components/CameraCapture.tsx](../../src/mobile/src/components/CameraCapture.tsx)
+- [src/mobile/src/features/contracts/ContractActionForm.tsx](../../src/mobile/src/features/contracts/ContractActionForm.tsx)
+- [src/mobile/src/features/contracts/ContractDraftForm.tsx](../../src/mobile/src/features/contracts/ContractDraftForm.tsx)
+- [src/mobile/src/features/contracts/ContractEvidence.tsx](../../src/mobile/src/features/contracts/ContractEvidence.tsx)
+- [src/mobile/src/features/contracts/ContractHandoverPanel.tsx](../../src/mobile/src/features/contracts/ContractHandoverPanel.tsx)
+- [src/mobile/src/features/contracts/ContractScreen.tsx](../../src/mobile/src/features/contracts/ContractScreen.tsx)
+- [src/mobile/src/features/contracts/ContractWorkflowPanel.tsx](../../src/mobile/src/features/contracts/ContractWorkflowPanel.tsx)
+- [src/mobile/src/screens/LiveWorkspaceScreens.tsx](../../src/mobile/src/screens/LiveWorkspaceScreens.tsx)
+- [src/owner-web/src/features/contracts/ContractActionDialog.tsx](../../src/owner-web/src/features/contracts/ContractActionDialog.tsx)
+- [src/owner-web/src/features/contracts/ContractDetailPanel.tsx](../../src/owner-web/src/features/contracts/ContractDetailPanel.tsx)
+- [src/owner-web/src/features/contracts/ContractDraftDialog.tsx](../../src/owner-web/src/features/contracts/ContractDraftDialog.tsx)
+- [src/owner-web/src/features/contracts/ContractHandoverPanel.tsx](../../src/owner-web/src/features/contracts/ContractHandoverPanel.tsx)
+- [src/owner-web/src/features/contracts/ContractWorkflowPanel.tsx](../../src/owner-web/src/features/contracts/ContractWorkflowPanel.tsx)
+- [src/owner-web/src/features/contracts/Contracts.test.tsx](../../src/owner-web/src/features/contracts/Contracts.test.tsx)
+- [src/owner-web/src/features/contracts/pages/ContractsPage.tsx](../../src/owner-web/src/features/contracts/pages/ContractsPage.tsx)
+- [src/owner-web/src/features/handovers/pages/HandoversPage.tsx](../../src/owner-web/src/features/handovers/pages/HandoversPage.tsx)
+
+## Demo và kiểm thử
+
+- [deploy/docker/compose.contract-demo.yml](../../deploy/docker/compose.contract-demo.yml)
+- [scripts/ContractDemoEnvironment.ps1](../../scripts/ContractDemoEnvironment.ps1)
+- [scripts/ContractDemoHandoverSmoke.cjs](../../scripts/ContractDemoHandoverSmoke.cjs)
+- [scripts/Export-ContractDemoMobile.ps1](../../scripts/Export-ContractDemoMobile.ps1)
+- [scripts/Initialize-ContractDemo.ps1](../../scripts/Initialize-ContractDemo.ps1)
+- [scripts/Seed-ContractDemoWorkflow.cjs](../../scripts/Seed-ContractDemoWorkflow.cjs)
+- [scripts/Start-ContractDemo.ps1](../../scripts/Start-ContractDemo.ps1)
+- [scripts/Test-ContractDemo.cjs](../../scripts/Test-ContractDemo.cjs)
+- [scripts/Test-ContractDemo.ps1](../../scripts/Test-ContractDemo.ps1)
+- [tests/backend/BHome.IntegrationTests/Contracts/ContractLifecycleApiTests.cs](../../tests/backend/BHome.IntegrationTests/Contracts/ContractLifecycleApiTests.cs)
+- [tests/backend/BHome.IntegrationTests/Contracts/ContractPdfRendererTests.cs](../../tests/backend/BHome.IntegrationTests/Contracts/ContractPdfRendererTests.cs)
+- [tests/backend/BHome.IntegrationTests/Contracts/ContractWorkflowGuardTests.cs](../../tests/backend/BHome.IntegrationTests/Contracts/ContractWorkflowGuardTests.cs)
+- [tools/BHome.LocalDevelopment/ContractDemoSeed.cs](../../tools/BHome.LocalDevelopment/ContractDemoSeed.cs)
+- [tools/BHome.LocalDevelopment/LocalDevelopmentCli.cs](../../tools/BHome.LocalDevelopment/LocalDevelopmentCli.cs)
+
+## Tài liệu
+
+- [docs/development/CONTRACT_MANAGEMENT_WORKFLOW.md](../../docs/development/CONTRACT_MANAGEMENT_WORKFLOW.md)
+- [docs/development/CONTRACT_WORKFLOW_CHANGED_FILES.md](CONTRACT_WORKFLOW_CHANGED_FILES.md)

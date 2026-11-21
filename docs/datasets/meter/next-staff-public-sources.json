@@ -1,0 +1,89 @@
+{
+  "scope": "small_targeted_LCD_domain_data_not_independent_acceptance",
+  "assets": [
+    {
+      "id": "commons_122443403",
+      "title": "File:Smart card prepaid electric meter.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Smart_card_prepaid_electric_meter.jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e6/Smart_card_prepaid_electric_meter.jpg/1920px-Smart_card_prepaid_electric_meter.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:MD_MIM_YT\" title=\"User:MD MIM YT\">MD MIM YT</a>",
+      "status": "agent_visual_provisional_no_human_verification",
+      "humanReviewCount": 0,
+      "sha256": "7f658474d2633f8911976b04724bb69d65a8dc537ae3e6b551adc2b7547a3a59",
+      "image": ".tools/ocr-next-staff/new-public/commons_122443403.jpg",
+      "sourceGroup": "author_949bede84189a9517209"
+    },
+    {
+      "id": "commons_175839602",
+      "title": "File:Hexing HXE118-KP prepaid electricity meter in Indonesia (2025-09-30).jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hexing_HXE118-KP_prepaid_electricity_meter_in_Indonesia_(2025-09-30).jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/Hexing_HXE118-KP_prepaid_electricity_meter_in_Indonesia_%282025-09-30%29.jpg/1920px-Hexing_HXE118-KP_prepaid_electricity_meter_in_Indonesia_%282025-09-30%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:VulcanSphere\" title=\"User:VulcanSphere\">VulcanSphere</a>",
+      "status": "agent_visual_provisional_no_human_verification",
+      "humanReviewCount": 0,
+      "sha256": "f7e7a638a10e60c95557bb0d87a7ea162daf8f44db3f99fc8747a48ddbda735a",
+      "image": ".tools/ocr-next-staff/new-public/commons_175839602.jpg",
+      "sourceGroup": "author_da22bb631fbaa77305af"
+    },
+    {
+      "id": "commons_105770219",
+      "title": "File:13. Dezember (11352026703).jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:13._Dezember_(11352026703).jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fe/13._Dezember_%2811352026703%29.jpg/1920px-13._Dezember_%2811352026703%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "license": "CC BY-SA 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "author": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/77704362@N00\">Cornelius Kibelka</a> from Berlin, Germany",
+      "status": "EXCLUDED_historical_evaluation_image_found_under_alias",
+      "humanReviewCount": 0,
+      "sha256": "76d2d6ce638ee3c481b6eea2f75d178f916ae4923a1d6777f4fb96d7eba527be",
+      "image": ".tools/ocr-next-staff/new-public/commons_105770219.jpg",
+      "sourceGroup": "author_1a03fe5564c6086ae3d3"
+    },
+    {
+      "id": "commons_152002068",
+      "title": "File:Water meter 2.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Water_meter_2.jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d0/Water_meter_2.jpg/1920px-Water_meter_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "author": "<a href=\"//commons.wikimedia.org/w/index.php?title=User:Vaibhavratnaparkhi&amp;action=edit&amp;redlink=1\" class=\"new\" title=\"User:Vaibhavratnaparkhi (page does not exist)\">Vaibhavratnaparkhi</a>",
+      "status": "EXCLUDED_historical_evaluation_image_found_under_alias",
+      "humanReviewCount": 0,
+      "sha256": "ad68d7a69c2f3a30aa4459aabe9b2edf81aafbf8bfe90ed73854e588daf87600",
+      "image": ".tools/ocr-next-staff/new-public/commons_152002068.jpg",
+      "sourceGroup": "author_cdaf67406c5749c512bb"
+    },
+    {
+      "id": "commons_179987587",
+      "title": "File:Digital Water Meter.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Digital_Water_Meter.jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/62/Digital_Water_Meter.jpg/1920px-Digital_Water_Meter.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:Aliva_Sahoo\" title=\"User:Aliva Sahoo\">Aliva Sahoo</a>",
+      "status": "EXCLUDED_already_in_historical_training_or_evaluation",
+      "humanReviewCount": 0,
+      "sha256": "d88d8ab323be084fbcf89bcfda8b8d1bf69e018115dd73bd77625bc383029ba0",
+      "image": ".tools/ocr-next-staff/new-public/commons_179987587.jpg",
+      "sourceGroup": "author_0d79d735fc0cc303bb94"
+    },
+    {
+      "id": "commons_135182584",
+      "title": "File:\u05de\u05d5\u05e0\u05d4 \u05d7\u05e9\u05de\u05dc \u05de\u05ea\"\u05de - \u05de\u05d5\u05e0\u05d4 \u05ea\u05e9\u05dc\u05d5\u05dd \u05de\u05e8\u05d0\u05e9.jpg",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:%D7%9E%D7%95%D7%A0%D7%94_%D7%97%D7%A9%D7%9E%D7%9C_%D7%9E%D7%AA%22%D7%9E_-_%D7%9E%D7%95%D7%A0%D7%94_%D7%AA%D7%A9%D7%9C%D7%95%D7%9D_%D7%9E%D7%A8%D7%90%D7%A9.jpg",
+      "downloadUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/29/%D7%9E%D7%95%D7%A0%D7%94_%D7%97%D7%A9%D7%9E%D7%9C_%D7%9E%D7%AA%22%D7%9E_-_%D7%9E%D7%95%D7%A0%D7%94_%D7%AA%D7%A9%D7%9C%D7%95%D7%9D_%D7%9E%D7%A8%D7%90%D7%A9.jpg/1920px-%D7%9E%D7%95%D7%A0%D7%94_%D7%97%D7%A9%D7%9E%D7%9C_%D7%9E%D7%AA%22%D7%9E_-_%D7%9E%D7%95%D7%A0%D7%94_%D7%AA%D7%A9%D7%9C%D7%95%D7%9D_%D7%9E%D7%A8%D7%90%D7%A9.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "author": "<a href=\"//commons.wikimedia.org/wiki/User:Mr.Shoval\" title=\"User:Mr.Shoval\">Yoram Shoval</a>",
+      "status": "agent_visual_provisional_no_human_verification",
+      "humanReviewCount": 0,
+      "sha256": "50dce186f3408820bbc7360e0445d9d50401eed5e132ce5336ea2ce161d76988",
+      "image": ".tools/ocr-next-staff/new-public/commons_135182584.jpg",
+      "sourceGroup": "author_4217954536026f1eb0e8"
+    }
+  ]
+}

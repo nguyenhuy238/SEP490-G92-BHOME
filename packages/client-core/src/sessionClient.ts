@@ -1,0 +1,206 @@
+import { ApiError, type ApiProblem } from './api';
+import type { Session } from './auth';
+import { sessionFromTokenResponse } from './jwtSession';
+import { loginPayload } from './loginValidation';
+
+type SessionResponse = Session & { refreshToken?: string | null };
+export type AuthTransport = 'web' | 'mobile';
+
+// Credentials live only here in memory. Web refresh credentials are managed by the HttpOnly cookie.
+export class SessionClient {
+  private current: SessionResponse | null = null;
+  private pendingRefresh: Promise<string | undefined> | undefined;
+  private revision = 0;
+  private listeners = new Set<(session: Session | null) => void>();
+
+  constructor(
+    private readonly baseUrl: string,
+    private readonly transport: AuthTransport,
+  ) {}
+
+  get token() {
+    return this.current?.accessToken;
+  }
+  get session() {
+    return this.current;
+  }
+
+  subscribe(listener: (session: Session | null) => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  accept = (session: Session) => {
+    this.revision++;
+    this.publish(session);
+  };
+
+  clear = () => {
+    this.revision++;
+    this.publish(null);
+  };
+
+  private publish(session: SessionResponse | null) {
+    this.current = session;
+    for (const listener of this.listeners) listener(session);
+  }
+
+  async login(email: string, password: string) {
+    if (this.pendingRefresh) await this.pendingRefresh.catch(() => undefined);
+    const version = ++this.revision;
+    const raw = await this.send<unknown>('login', loginPayload(email, password));
+    const response = sessionFromTokenResponse(raw, this.transport === 'mobile');
+    if (version === this.revision) this.publish(response);
+  }
+
+  refresh = (): Promise<string | undefined> => {
+    if (this.pendingRefresh) return this.pendingRefresh;
+    if (this.transport === 'mobile' && !this.current?.refreshToken)
+      return Promise.resolve(undefined);
+    const version = this.revision;
+    this.pendingRefresh = this.send<unknown>(
+      'refresh',
+      this.transport === 'web' ? {} : { refreshToken: this.current?.refreshToken },
+    )
+      .then((raw) => {
+        const response = sessionFromTokenResponse(raw, this.transport === 'mobile');
+        if (version !== this.revision) return undefined;
+        this.publish(response);
+        return response.accessToken;
+      })
+      .catch((error: unknown) => {
+        if (version === this.revision && error instanceof ApiError && error.status === 401)
+          this.clear();
+        throw error;
+      })
+      .finally(() => {
+        this.pendingRefresh = undefined;
+      });
+    return this.pendingRefresh;
+  };
+
+  async logout(allDevices = false) {
+    // Wait for rotation first so a late Set-Cookie cannot recreate a logged-out web credential.
+    if (this.pendingRefresh) await this.pendingRefresh.catch(() => undefined);
+    if (!this.current) {
+      this.clear();
+      return;
+    }
+    await this.send(allDevices ? 'logout-all' : 'logout', {});
+    this.clear();
+  }
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    await this.send('change-password', { currentPassword, newPassword });
+    this.clear();
+  }
+
+  requestPasswordReset(userName: string) {
+    return this.send('forgot-password', { userName });
+  }
+  requestEmailVerification(userName: string) {
+    return this.send('request-email-verification', { userName });
+  }
+  confirmEmail(userName: string, token: string) {
+    return this.send('confirm-email', { userName, token });
+  }
+  resetPassword(userName: string, token: string, newPassword: string) {
+    return this.send('reset-password', { userName, token, newPassword });
+  }
+  requestSmsRecovery(identifier: string) {
+    return this.send<{ challengeId: string; retryAfterSeconds: number; expiresInSeconds: number }>(
+      'sms-recovery/request',
+      { identifier },
+    );
+  }
+  verifySmsRecovery(identifier: string, challengeId: string, otp: string) {
+    return this.send<{ authorization: string; expiresInSeconds: number }>('sms-recovery/verify', {
+      identifier,
+      challengeId,
+      otp,
+    });
+  }
+  async resetSmsPassword(
+    identifier: string,
+    challengeId: string,
+    authorization: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) {
+    await this.send('sms-recovery/reset', {
+      identifier,
+      challengeId,
+      authorization,
+      newPassword,
+      confirmPassword,
+    });
+    this.clear();
+  }
+
+  private async send<T>(action: string, body: unknown, retry = true): Promise<T> {
+    // Web Locks also serializes cookie mutations across tabs on supporting browsers.
+    const operation =
+      this.transport === 'web' && typeof navigator !== 'undefined' && navigator.locks
+        ? navigator.locks.request('bhome-auth-cookie', () => this.fetchAuth<T>(action, body))
+        : this.fetchAuth<T>(action, body);
+    const response = await operation.catch(async (error: unknown) => {
+      if (
+        retry &&
+        error instanceof ApiError &&
+        error.status === 401 &&
+        this.current &&
+        !action.startsWith('sms-recovery/') &&
+        ![
+          'login',
+          'refresh',
+          'forgot-password',
+          'reset-password',
+          'request-email-verification',
+          'confirm-email',
+        ].includes(action)
+      ) {
+        if (await this.refresh()) return this.send<T>(action, body, false);
+      }
+      throw error;
+    });
+    return response;
+  }
+
+  private async fetchAuth<T>(action: string, body: unknown): Promise<T> {
+    const headers = new Headers({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    if (this.transport === 'web') headers.set('X-BHome-Client', 'web');
+    if (
+      this.current?.accessToken &&
+      !action.startsWith('sms-recovery/') &&
+      ![
+        'login',
+        'refresh',
+        'forgot-password',
+        'reset-password',
+        'request-email-verification',
+        'confirm-email',
+      ].includes(action)
+    )
+      headers.set('Authorization', 'Bearer ' + this.current.accessToken);
+    let response: Response;
+    try {
+      response = await fetch(this.baseUrl + '/api/v1/auth/' + action, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        credentials: this.transport === 'web' ? 'include' : 'omit',
+      });
+    } catch {
+      throw new ApiError(0);
+    }
+    if (!response.ok) {
+      const problem = response.headers.get('content-type')?.includes('json')
+        ? ((await response.json().catch(() => undefined)) as ApiProblem | undefined)
+        : undefined;
+      throw new ApiError(response.status, problem);
+    }
+    return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>);
+  }
+}

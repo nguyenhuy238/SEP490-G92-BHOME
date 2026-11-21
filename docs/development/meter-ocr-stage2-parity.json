@@ -1,0 +1,75 @@
+{
+  "passed": true,
+  "rows": [
+    {
+      "file": "wm_clean_000013-legacy.png",
+      "inputMaxDelta": 0,
+      "nativeDetectionParity": true,
+      "nativeDetections": 8,
+      "dotnetDetections": 8
+    },
+    {
+      "file": "wm_clean_000014-legacy.png",
+      "inputMaxDelta": 0,
+      "nativeDetectionParity": true,
+      "nativeDetections": 8,
+      "dotnetDetections": 8
+    },
+    {
+      "file": "wm_clean_000016-legacy.png",
+      "inputMaxDelta": 0,
+      "nativeDetectionParity": true,
+      "nativeDetections": 8,
+      "dotnetDetections": 8
+    },
+    {
+      "file": "wm_clean_000017-legacy.png",
+      "inputMaxDelta": 0,
+      "nativeDetectionParity": true,
+      "nativeDetections": 8,
+      "dotnetDetections": 8
+    },
+    {
+      "file": "wm_clean_000072-legacy.png",
+      "inputMaxDelta": 0,
+      "nativeDetectionParity": true,
+      "nativeDetections": 8,
+      "dotnetDetections": 8
+    },
+    {
+      "file": "wm_clean_000080-legacy.png",
+      "inputMaxDelta": 0,
+      "nativeDetectionParity": true,
+      "nativeDetections": 8,
+      "dotnetDetections": 8
+    },
+    {
+      "file": "wm_clean_000082-legacy.png",
+      "inputMaxDelta": 0,
+      "nativeDetectionParity": true,
+      "nativeDetections": 8,
+      "dotnetDetections": 8
+    },
+    {
+      "file": "wm_clean_000111-legacy.png",
+      "inputMaxDelta": 0,
+      "nativeDetectionParity": true,
+      "nativeDetections": 8,
+      "dotnetDetections": 8
+    },
+    {
+      "file": "wm_clean_000112-legacy.png",
+      "inputMaxDelta": 0,
+      "nativeDetectionParity": true,
+      "nativeDetections": 8,
+      "dotnetDetections": 8
+    },
+    {
+      "file": "wm_clean_000113-legacy.png",
+      "inputMaxDelta": 0,
+      "nativeDetectionParity": true,
+      "nativeDetections": 7,
+      "dotnetDetections": 7
+    }
+  ]
+}

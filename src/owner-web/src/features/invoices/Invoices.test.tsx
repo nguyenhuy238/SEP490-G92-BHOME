@@ -1,0 +1,379 @@
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ThemeProvider } from '@mui/material';
+import { MemoryRouter } from 'react-router';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { theme } from '../../theme/theme';
+import type { Invoice } from '../../../../../packages/client-core/src/invoices';
+import InvoicesPage, { LiveInvoicesPage } from './pages/InvoicesPage';
+import { BillingConfigurationPage } from './BillingConfigurationPage';
+
+const mocks = vi.hoisted(() => ({
+  api: {
+    request: vi.fn(),
+    list: vi.fn(),
+    get: vi.fn(),
+    draft: vi.fn(),
+    refresh: vi.fn(),
+    finalize: vi.fn(),
+    schedule: vi.fn(),
+    policies: vi.fn(),
+    saveSchedule: vi.fn(),
+  },
+}));
+vi.mock('./useInvoiceApi', () => ({ useInvoiceApi: () => mocks.api }));
+vi.mock('../../services/config', () => ({ isMockMode: false, apiBaseUrl: '' }));
+vi.mock('../property-api/propertyApi', () => ({
+  usePropertyApi: () => ({
+    roomTypes: vi.fn().mockResolvedValue({ items: [] }),
+    rooms: vi.fn().mockResolvedValue({ items: [] }),
+  }),
+}));
+vi.mock('../payments/OwnerInvoicePaymentPanel', () => ({ OwnerInvoicePaymentPanel: () => null }));
+vi.mock('../../../../../packages/client-core/src/auth', () => ({
+  useAuth: () => ({ session: { userId: 'owner' } }),
+}));
+const invoice: Invoice = {
+  id: 'bill',
+  roomId: 'room',
+  locationId: 'location',
+  roomNumber: 'P101',
+  locationName: 'Synthetic',
+  billingPeriod: '2026-10-01',
+  status: 'Draft',
+  version: 2,
+  total: '3119250',
+  missingInputs: [],
+  scheduledFinalDate: '2026-11-01',
+  dueDate: '2026-11-10',
+  finalizedAt: null,
+  representativeTenantUserId: 'tenant',
+  lines: [
+    {
+      id: 'line',
+      category: 'Electricity',
+      chargeCode: 'ELECTRICITY',
+      name: 'Điện tổng hợp',
+      policyId: 'policy',
+      policyVersion: 1,
+      rateDate: '2026-10-01',
+      rate: '3500',
+      quantity: '25.5',
+      occupiedDays: 31,
+      periodDays: 31,
+      amount: '89250',
+      meterReadingId: 'reading',
+      previousReading: '100',
+      confirmedReading: '125.5',
+    },
+  ],
+};
+function mount(element: React.ReactNode) {
+  return render(
+    <ThemeProvider theme={theme}>
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <MemoryRouter>{element}</MemoryRouter>
+      </QueryClientProvider>
+    </ThemeProvider>,
+  );
+}
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.mocked(window.matchMedia).mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+  mocks.api.request.mockResolvedValue([]);
+  mocks.api.list.mockResolvedValue({ items: [invoice], page: 1, pageSize: 20, totalCount: 1 });
+  mocks.api.get.mockResolvedValue(invoice);
+  mocks.api.schedule.mockResolvedValue(undefined);
+  mocks.api.policies.mockResolvedValue({ items: [], page: 1, totalCount: 0 });
+});
+afterEach(cleanup);
+it('renders the actual live invoice route (not demo) when API mode is enabled', async () => {
+  mount(<InvoicesPage />);
+  await screen.findByRole('table', { name: 'Danh sách hóa đơn' });
+  expect(mocks.api.list).toHaveBeenCalled();
+  expect(screen.getByRole('group', { name: 'Lọc nhanh trạng thái hóa đơn' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Bản nháp' })).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.queryByText('Bạn cần làm gì?')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Mọi thao tác tại trang này chỉ thay đổi bản xem thử/)).toBeNull();
+});
+it('keeps creation out of the operational list and sends status/month filters to the server', async () => {
+  mount(<LiveInvoicesPage />);
+  expect(screen.queryByLabelText('Hợp đồng đại diện phòng trong kỳ')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Kỳ hóa đơn cần lọc'), { target: { value: '2026-11' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Bản nháp' }));
+  expect(screen.getByRole('button', { name: 'Bản nháp' })).toHaveAttribute('aria-pressed', 'true');
+  await waitFor(() =>
+    expect(mocks.api.list).toHaveBeenCalledWith(
+      1,
+      expect.any(AbortSignal),
+      '',
+      expect.objectContaining({ billingPeriod: '2026-11-01', status: 'Draft' }),
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Lập hóa đơn nháp' }));
+  expect(screen.getByRole('dialog', { name: 'Lập hóa đơn nháp' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Tạo / mở bản nháp' })).toBeDisabled();
+  expect(screen.getByLabelText('Hợp đồng đại diện phòng trong kỳ')).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  expect(screen.queryByRole('stepper')).not.toBeInTheDocument();
+  expect(mocks.api.draft).not.toHaveBeenCalled();
+});
+it('creates in one form from room history and preserves input after a server conflict', async () => {
+  const room = '00000000-0000-4000-8000-000000000001';
+  const contract = '00000000-0000-4000-8000-000000000002';
+  mocks.api.request.mockImplementation(async (path: string) =>
+    path.endsWith('/occupancy-history')
+      ? {
+          periods: [
+            {
+              contractId: contract,
+              contractStatus: 'Active',
+              from: '2026-01-01',
+              to: '2027-01-01',
+              occupants: [{ displayLabel: 'Người ở tổng hợp' }],
+            },
+          ],
+        }
+      : [
+          {
+            id: path.endsWith('/locations') ? 'location' : room,
+            label: path.endsWith('/locations') ? 'Cơ sở tổng hợp' : 'Phòng tổng hợp',
+          },
+        ],
+  );
+  mocks.api.draft.mockRejectedValue({ status: 409 });
+  mount(<LiveInvoicesPage />);
+  fireEvent.click(screen.getByRole('button', { name: 'Lập hóa đơn nháp' }));
+  const dialog = screen.getByRole('dialog', { name: 'Lập hóa đơn nháp' });
+  fireEvent.mouseDown(within(dialog).getByLabelText('Cơ sở'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Cơ sở tổng hợp' }));
+  fireEvent.mouseDown(within(dialog).getByLabelText('Phòng'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Phòng tổng hợp' }));
+  fireEvent.change(within(dialog).getByLabelText('Kỳ hóa đơn'), { target: { value: '2026-11' } });
+  const contractSelector = within(dialog).getByLabelText('Hợp đồng đại diện phòng trong kỳ');
+  await waitFor(() => expect(contractSelector).not.toHaveAttribute('aria-disabled', 'true'));
+  fireEvent.mouseDown(contractSelector);
+  fireEvent.click(await screen.findByRole('option', { name: /Người ở tổng hợp/ }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo / mở bản nháp' }));
+  expect(
+    await within(dialog).findByText(
+      'Cấu hình đã thay đổi hoặc bị xung đột. Tải lại và kiểm tra trước khi lưu.',
+    ),
+  ).toBeInTheDocument();
+  await waitFor(() => expect(mocks.api.draft).toHaveBeenCalledWith(room, '2026-11-01', contract));
+  expect(within(dialog).getByLabelText('Kỳ hóa đơn')).toHaveValue('2026-11');
+  expect(within(dialog).getByLabelText('Hợp đồng đại diện phòng trong kỳ')).toHaveTextContent(
+    'Người ở tổng hợp',
+  );
+});
+it('shows persisted charges and finalizes only after explicit review confirmation, blocking duplicate clicks', async () => {
+  let resolve!: (value: Invoice) => void;
+  mocks.api.finalize.mockImplementation(
+    () =>
+      new Promise<Invoice>((done) => {
+        resolve = done;
+      }),
+  );
+  mount(<LiveInvoicesPage />);
+  fireEvent.click(await screen.findByText('Xem chi tiết'));
+  await screen.findByText('Điện tổng hợp');
+  expect(screen.getByText('100 → 125,5')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Phát hành hóa đơn'));
+  expect(mocks.api.finalize).not.toHaveBeenCalled();
+  const dialog = screen.getByRole('dialog');
+  const submit = within(dialog).getByText('Xác nhận phát hành');
+  fireEvent.click(submit);
+  fireEvent.click(submit);
+  expect(mocks.api.finalize).toHaveBeenCalledTimes(1);
+  expect(mocks.api.finalize).toHaveBeenCalledWith('bill', 2);
+  mocks.api.get.mockResolvedValue({ ...invoice, status: 'Final', version: 3 });
+  resolve({ ...invoice, status: 'Final', version: 3 });
+  await screen.findByText('Đã phát hành — chi phí được giữ nguyên');
+  expect(screen.queryByText('Phát hành hóa đơn')).toBeNull();
+});
+it('keeps incomplete drafts visible and disables finalization', async () => {
+  mocks.api.get.mockResolvedValue({ ...invoice, missingInputs: ['confirmed_reading_Water'] });
+  mount(<LiveInvoicesPage />);
+  fireEvent.click(await screen.findByText('Xem chi tiết'));
+  await screen.findByText(/Chỉ số nước hợp lệ đã xác nhận/);
+  expect(screen.getByText('Phát hành hóa đơn')).toBeDisabled();
+});
+it('opens invoice detail immediately in a dismissible panel with contextual draft actions', async () => {
+  mocks.api.get.mockResolvedValue({
+    ...invoice,
+    missingInputs: ['confirmed_reading_Water'],
+  });
+  mount(<LiveInvoicesPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết' }));
+  const drawer = await screen.findByLabelText('Chi tiết hóa đơn');
+  expect(await within(drawer).findByText('Điện tổng hợp')).toBeInTheDocument();
+  expect(within(drawer).getByRole('button', { name: 'Phát hành hóa đơn' })).toBeDisabled();
+  expect(within(drawer).getByRole('link', { name: 'Kiểm tra chỉ số' })).toHaveAttribute(
+    'href',
+    '/meters',
+  );
+  fireEvent.click(within(drawer).getByRole('button', { name: 'Đóng chi tiết hóa đơn' }));
+  await waitFor(() => expect(screen.queryByLabelText('Chi tiết hóa đơn')).not.toBeInTheDocument());
+  expect(screen.getByRole('table', { name: 'Danh sách hóa đơn' })).toBeInTheDocument();
+});
+it('keeps the amount, incomplete state and detail action in the mobile invoice row', async () => {
+  vi.mocked(window.matchMedia).mockImplementation((query) => ({
+    matches: query.includes('max-width:599px'),
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+  const incomplete = { ...invoice, missingInputs: ['WaterReading'], total: '9007199254740993' };
+  mocks.api.list.mockResolvedValue({ items: [incomplete], page: 1, pageSize: 20, totalCount: 1 });
+  mocks.api.get.mockResolvedValue(incomplete);
+  mount(<LiveInvoicesPage />);
+  const table = await screen.findByRole('table', { name: 'Danh sách hóa đơn' });
+  expect(within(table).getAllByRole('columnheader')).toHaveLength(2);
+  const identity = within(table).getByRole('rowheader');
+  expect(within(identity).getByText('Bản nháp')).toBeVisible();
+  expect(within(identity).getByText('Thiếu dữ liệu')).toBeVisible();
+  expect(within(identity).getByText('9.007.199.254.740.993 ₫')).toBeVisible();
+  expect(within(identity).getByText('Tạm tính')).toBeVisible();
+  fireEvent.click(within(table).getByRole('button', { name: 'Xem chi tiết' }));
+  expect(await screen.findByRole('button', { name: 'Phát hành hóa đơn' })).toBeDisabled();
+  expect(mocks.api.finalize).not.toHaveBeenCalled();
+});
+it('shows the signed per-person fee and actual person-days without claiming prior settlement', async () => {
+  mocks.api.get.mockResolvedValue({
+    ...invoice,
+    lines: [
+      {
+        ...invoice.lines[0],
+        category: 'ServiceFee',
+        chargeCode: 'CLEANING',
+        name: 'Vệ sinh theo người',
+        rate: '30000',
+        quantity: '2',
+        amount: '45000',
+        meterReadingId: null,
+        previousReading: null,
+        confirmedReading: null,
+        utilityCalculationSnapshot: JSON.stringify({
+          kind: 'FixedChargeCoverage/v1',
+          source: {
+            ResidentCount: 2,
+            PersonDays: 45,
+            PeriodDays: 30,
+            PartialMonth: 1,
+            AlreadyPricedAmount: 0,
+          },
+        }),
+      },
+    ],
+  });
+  mount(<LiveInvoicesPage />);
+  fireEvent.click(await screen.findByText('Xem chi tiết'));
+  await screen.findByText('Vệ sinh theo người');
+  expect(screen.getByText('30.000 đ/người/tháng')).toBeInTheDocument();
+  expect(screen.getByText('45 người-ngày')).toBeInTheDocument();
+  expect(screen.queryByText(/Đã ghi nhận trong quyết toán/)).not.toBeInTheDocument();
+});
+it('shows an empty list and a retryable failure without inventing financial values', async () => {
+  mocks.api.list.mockRejectedValue({ status: 403 });
+  mount(<LiveInvoicesPage />);
+  await screen.findByText('Tài khoản không có quyền thực hiện thao tác này.');
+  mocks.api.list.mockResolvedValue({ items: [], page: 1, pageSize: 20, totalCount: 0 });
+  fireEvent.click(screen.getByText('Thử lại'));
+  await screen.findByText('Chưa có hóa đơn.');
+});
+it('guides a first-time Owner from an empty invoice list to verified inputs and the draft action', async () => {
+  mocks.api.list.mockResolvedValue({ items: [], page: 1, pageSize: 20, totalCount: 0 });
+  mount(<LiveInvoicesPage />);
+  await screen.findByText('Chưa có hóa đơn.');
+  expect(screen.getByRole('link', { name: 'Kiểm tra chỉ số' })).toHaveAttribute('href', '/meters');
+  expect(screen.getByRole('link', { name: 'Kiểm tra biểu giá' })).toHaveAttribute(
+    'href',
+    '/pricing',
+  );
+  fireEvent.click(screen.getAllByRole('button', { name: 'Lập hóa đơn nháp' })[1]);
+  expect(screen.getByRole('dialog', { name: 'Lập hóa đơn nháp' })).toBeInTheDocument();
+  expect(mocks.api.draft).not.toHaveBeenCalled();
+});
+it('requires Owner to choose every billing rule when the location has no schedule', async () => {
+  mocks.api.request.mockResolvedValue([{ id: 'location', label: 'Synthetic' }]);
+  mount(<BillingConfigurationPage />);
+  fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic' }));
+  await screen.findByText('Chọn đầy đủ các quy tắc trước khi lập hóa đơn đầu tiên.');
+  expect(screen.getByRole('link', { name: 'Thiết lập lịch' })).toHaveAttribute(
+    'href',
+    '#billing-schedule',
+  );
+  expect(screen.getByText('Lưu quy tắc hóa đơn')).toBeDisabled();
+  expect(mocks.api.saveSchedule).not.toHaveBeenCalled();
+  await waitFor(() =>
+    expect(
+      screen.getByText('Chưa có biểu giá. Thêm giá thuê, điện và nước để lập hóa đơn.'),
+    ).toBeInTheDocument(),
+  );
+});
+it('keeps existing schedule folded until Owner requests a change', async () => {
+  mocks.api.schedule.mockResolvedValue({
+    version: 7,
+    rentSource: 1,
+    rateDate: 0,
+    partialMonth: 0,
+    rounding: 0,
+    draftDay: 5,
+    draftMonthOffset: 0,
+    finalDay: 10,
+    finalMonthOffset: 0,
+    dueDay: 15,
+    dueMonthOffset: 0,
+  });
+  mocks.api.request.mockResolvedValue([{ id: 'location', label: 'Synthetic' }]);
+  mount(<BillingConfigurationPage />);
+  fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic' }));
+  expect(await screen.findByText(/Nháp ngày 5 · Phát hành 10/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Lưu quy tắc hóa đơn' })).not.toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: /Lịch & quy tắc hóa đơn/ })).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: /Lịch & quy tắc hóa đơn/ }));
+  expect(await screen.findByRole('button', { name: 'Lưu quy tắc hóa đơn' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Lịch & quy tắc hóa đơn/ }));
+  expect(screen.queryByRole('button', { name: 'Lưu quy tắc hóa đơn' })).not.toBeInTheDocument();
+});
+it('identifies schedule month offsets in the saved summary', async () => {
+  mocks.api.schedule.mockResolvedValue({
+    version: 8,
+    rentSource: 1,
+    rateDate: 0,
+    partialMonth: 0,
+    rounding: 0,
+    draftDay: 5,
+    draftMonthOffset: 0,
+    finalDay: 10,
+    finalMonthOffset: 1,
+    dueDay: 15,
+    dueMonthOffset: 2,
+  });
+  mocks.api.request.mockResolvedValue([{ id: 'location', label: 'Synthetic' }]);
+  mount(<BillingConfigurationPage />);
+  fireEvent.mouseDown(await screen.findByLabelText('Cơ sở cấu hình'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Synthetic' }));
+  expect(
+    await screen.findByText('Nháp ngày 5 · Phát hành 10 (+1 tháng) · Hạn trả 15 (+2 tháng)'),
+  ).toBeInTheDocument();
+});

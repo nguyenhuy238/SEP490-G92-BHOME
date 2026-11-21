@@ -1,0 +1,29 @@
+{
+  "scope": "separate_inputs_reusing_existing_packages_no_new_annotation_tool",
+  "distinctImages": 9,
+  "reviewSlots": [
+    {
+      "slot": "A",
+      "assignedReviewer": null,
+      "completedReviews": 0,
+      "input": ".tools/ocr-activation-next/reviewer-A/index.html",
+      "images": 9,
+      "modelSuggestionsIncluded": false,
+      "archive": "C:/Users/Admin/Documents/KLTN_FALL2026/BHome_Project/SEP490-G92-BHOME/.tools/ocr-activation-next/reviewer-A.zip",
+      "archiveSha256": "4e090d30574480fd26b83dc34ce493010ed1b3468ade7d18b655a62670331b76"
+    },
+    {
+      "slot": "B",
+      "assignedReviewer": null,
+      "completedReviews": 0,
+      "input": ".tools/ocr-activation-next/reviewer-B/index.html",
+      "images": 9,
+      "modelSuggestionsIncluded": false,
+      "archive": "C:/Users/Admin/Documents/KLTN_FALL2026/BHome_Project/SEP490-G92-BHOME/.tools/ocr-activation-next/reviewer-B.zip",
+      "archiveSha256": "4e090d30574480fd26b83dc34ce493010ed1b3468ade7d18b655a62670331b76"
+    }
+  ],
+  "humanReviews": 0,
+  "exportsCreated": 0,
+  "reviewerIdentitiesFabricated": false
+}

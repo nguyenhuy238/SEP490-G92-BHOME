@@ -1,0 +1,13 @@
+version: 1
+name: sepay
+slug: sepay
+protocol: http
+port: 4500
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true
+generatedFrom:
+  type: spec
+  mode: static
+  path: ./provider.openapi.yaml

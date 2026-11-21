@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "mobile",
+    "slug": "mobile",
+    "version": "1.0.0",
+    "scheme": "bhome",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Kết nối BHOME API trong mạng nội bộ để xử lý OCR."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép BHOME chụp CCCD và đồng hồ để nhập dữ liệu.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      "expo-font",
+      "../../scripts/mobile/withCameraFocus.cjs",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép BHOME chọn ảnh minh chứng sự cố và bảo trì.",
+          "cameraPermission": "Cho phép BHOME chụp ảnh tác nghiệp và minh chứng sự cố.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-sharing",
+      "expo-notifications",
+      "expo-status-bar"
+    ]
+  }
+}

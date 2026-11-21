@@ -1,0 +1,139 @@
+{
+  "date": "2026-11-06",
+  "startHead": "8f5c751",
+  "branch": "member/QHuy",
+  "engine": "ocrdoc-ppocrv6-vi-run6-9b534643-yolo2-cache1-category1",
+  "status": "partial_not_production_ready",
+  "modelHashes": {
+    "detection.onnx": "eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1",
+    "recognition.onnx": "767305d37d06728fe9578ff8132595ce23f66139df5e2937fd4131bd1dc34f12",
+    "charset.txt": "5d801bf60472c4c1b184b6b6843aa2c754d8daf1429247e07658ee0bd79ab448",
+    "water-stage1.onnx": "5311b093b39a2ef752c2052e2755ab8f595613d37d612e48c10dc26f6ecb9d44",
+    "water-stage2.onnx": "2100d78ae1d762327cb871ee521a8dd9e84afc34de1cd8cf58876332e5834006"
+  },
+  "waterBaseline": {
+    "typed": {
+      "inputs": 52,
+      "fullyLabeled": 33,
+      "exact": 10,
+      "falseProposalsOnFullyLabeled": 0,
+      "proposed": 10,
+      "fallback": 42,
+      "correctOverAllInputs": 0.19230769230769232,
+      "exactOverFullyLabeled": 0.30303030303030304,
+      "conditionalCorrectAmongProposals": 1.0,
+      "latencyMs": {
+        "p50": 282.0,
+        "p95": 892.4499999999999,
+        "max": 1220.0
+      }
+    },
+    "automatic": {
+      "inputs": 52,
+      "fullyLabeled": 33,
+      "exact": 1,
+      "falseProposalsOnFullyLabeled": 0,
+      "proposed": 1,
+      "fallback": 51,
+      "correctOverAllInputs": 0.019230769230769232,
+      "exactOverFullyLabeled": 0.030303030303030304,
+      "conditionalCorrectAmongProposals": 1.0,
+      "latencyMs": {
+        "p50": 4390.0,
+        "p95": 7034.299999999998,
+        "max": 8020.0
+      }
+    }
+  },
+  "waterScope": "Repeated author analog-water corpus, unknown image license for new training; existing historical evaluation only; 33 fully labeled /52 inputs; decimal billing precision not GT. No new independent acceptance.",
+  "categoryBaseline": {
+    "electricity_digital": {
+      "inputs": 3,
+      "correctCategory": 0,
+      "wrongCategory": 0,
+      "unclassified": 3
+    },
+    "electricity_mechanical": {
+      "inputs": 3,
+      "correctCategory": 0,
+      "wrongCategory": 0,
+      "unclassified": 3
+    },
+    "not_meter": {
+      "inputs": 6,
+      "correctCategory": 0,
+      "wrongCategory": 0,
+      "unclassified": 6
+    },
+    "water_digital": {
+      "inputs": 1,
+      "correctCategory": 0,
+      "wrongCategory": 0,
+      "unclassified": 1
+    },
+    "water_mechanical": {
+      "inputs": 2,
+      "correctCategory": 0,
+      "wrongCategory": 0,
+      "unclassified": 2
+    }
+  },
+  "categoryScope": "15 reused public development holdout images; no numeric reading GT; four-class weights absent, adapter disabled.",
+  "evidence": {
+    ".tools\\ocr-20261106-meter-baseline.json": "9140f0f94b9c6d6f55e75685df96cff88fad91ccd5cef381dc08a3d963046e41",
+    ".tools\\ocr-20261106-public-baseline.json": "542fb1aa8ef892d25a57be73fbbf54fd4225133fdb70df2a4607b084c044781c",
+    ".tools\\ocr-20261106-dotnet-parity.json": "fef91bee386567349dc87653a4350d4bc650ae1dd7973d1bef92a11e83105475"
+  },
+  "checks": {
+    "releaseBuild": {
+      "passed": true,
+      "warnings": 0,
+      "errors": 0
+    },
+    "applicationUnit": {
+      "passed": 276
+    },
+    "domainUnit": {
+      "passed": 90
+    },
+    "ocrIntegration": {
+      "passed": 127,
+      "skipped": 0,
+      "includesRealMinioCaptureScenarios": 8
+    },
+    "finalCategoryAdapter": {
+      "passed": 13,
+      "overlapsOcrIntegration": 12,
+      "constantOnnxFixtureIsAccuracyEvidence": false
+    },
+    "confirmationAndLegacyInvoice": {
+      "passed": 6,
+      "skipped": 0
+    },
+    "mobile": {
+      "passed": 381,
+      "typecheck": true,
+      "lint": true
+    },
+    "datasetNode": {
+      "passed": 28
+    },
+    "modelToolPython": {
+      "passed": 14
+    },
+    "newLcdNativeOnnxParity": {
+      "passed": 6
+    },
+    "newLcdDotnetParity": {
+      "passed": 6
+    },
+    "physicalPhone": "NOT RUN; no available camera/device automation session or adb",
+    "representativeIndependentFourClassAcceptance": "NOT RUN; insufficient eligible water digital data and GT",
+    "compact24InvoiceFinalization": {
+      "passed": 1,
+      "skipped": 0,
+      "storage": "explicit test substitute; real MinIO measured separately"
+    }
+  },
+  "newLcdModelDecision": "rejected; validation zero exact, test 2 false /4; see ocr-20261106-lcd-results.json"
+}

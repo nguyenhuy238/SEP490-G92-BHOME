@@ -1,0 +1,16 @@
+# Optional overlay for an EXISTING reviewed VPS stack; never a replacement stack.
+# --env-file supplies interpolation; service env_file below supplies API options.
+# Existing environment entries override env_file entries. Review stale URL overrides
+# before adopting this overlay; startup rejects any disagreement.
+services:
+  api:
+    env_file:
+      - ${BHOME_API_ENV_FILE:?Select the existing private Staging or Production API env file}
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:?Choose Staging or Production explicitly}
+  owner-web:
+    build:
+      args:
+        APP: owner-web
+        VITE_API_BASE_URL: ${BHOME_OWNER_ORIGIN:?HTTPS origin of the selected Owner portal}
+    # Caddy routes /api/* to this environment's API and page routes to this build.

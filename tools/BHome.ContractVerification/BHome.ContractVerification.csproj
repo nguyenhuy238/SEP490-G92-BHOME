@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Reuse only CaptureFixture's disposable PostgreSQL/MinIO and production registrations.
+         Never use ContractFixture: that fixture replaces signing and financial boundaries. -->
+    <ProjectReference Include="../../tests/backend/BHome.IntegrationTests/BHome.IntegrationTests.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,172 @@
+# BHOME NQH E2E và validation
+
+Baseline trước triển khai: f318ffcfe79fc5f6e9b829412a3f1257103331c1, member/QHuy. Mỗi kết quả ghi đúng lớp bằng chứng; không kế thừa PASS từ audit.
+
+| Check                                       | Command / scope                                                                                                                                              | Result                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Restore                                     | dotnet restore src/backend/BHome.sln                                                                                                                         | PASS                                                                   |
+| Persistence foundation build                | dotnet build src/backend/BHome.sln -c Release --no-restore                                                                                                   | PASS, 0 warnings/errors                                                |
+| Migration/metadata regression               | Exact filter LifecycleMigrationTests và Compact24MigrationBaselineTests.SnapshotMatchesRuntimeAndContainsOnlyTheRuntimeBaseline, disposable local PostgreSQL | PASS 2/2                                                               |
+| Broad filter invocation                     | Filter SnapshotMatchesRuntime còn match PostgresFoundationTests                                                                                              | 2 PASS; 1 DockerUnavailable infrastructure failure; exact rerun ở trên |
+| E2E-01 new Tenant anonymous signing/account | UI                                                                                                                                                           | NOT RUN                                                                |
+| E2E-02 Holding → Main                       | UI                                                                                                                                                           | NOT RUN                                                                |
+| E2E-03 Meter → Draft/Final                  | UI                                                                                                                                                           | NOT RUN                                                                |
+| E2E-04 real bank sandbox                    | Provider/UI                                                                                                                                                  | BLOCKED access/provider docs                                           |
+| E2E-05 manual reconciliation                | UI                                                                                                                                                           | NOT RUN                                                                |
+| E2E-06 renewal                              | UI                                                                                                                                                           | NOT RUN                                                                |
+| E2E-07 normal move-out                      | UI                                                                                                                                                           | NOT RUN                                                                |
+| E2E-08 debt/damage/release                  | UI                                                                                                                                                           | NOT RUN                                                                |
+| E2E-09 shared room payer                    | UI                                                                                                                                                           | NOT RUN                                                                |
+| E2E-10 authorization/replay/immutability    | Integration + UI                                                                                                                                             | NOT RUN for changed workflow                                           |
+
+Migration test không chạm database làm việc; credentials chỉ truyền process-local, không commit. Real MySign/Email/SMS chưa verify vì chưa có access. Simulator/test doubles không được báo là real sandbox.
+
+Phase 2: PreAccountOnboardingTests 1/1 PASS trên PostgreSQL disposable; onboarding-state, onboarding-ui và OCR workflows Mobile 3 files/48 tests PASS. Mobile tsc --noEmit PASS; ESLint các file thay đổi PASS. Đây là API/persistence và component tests, chưa phải UI E2E.
+
+Phase 3: Application unit 387 PASS. Exact filter AnonymousSigningTests + Compact24ContractRegressionTests + Compact24MigrationBaselineTests.SnapshotMatchesRuntimeAndContainsOnlyTheRuntimeBaseline: 21 PASS trên disposable PostgreSQL. Owner auth/contracts 67 PASS; Mobile anonymous/onboarding 24 PASS. New API tests thực thi Main chưa tài khoản → OTP sai/đúng/replay → exact PDF → consent/concurrent acceptance → Owner → thiếu/đủ cọc → Main Active/accounts → durable invitation job lặp → one-time password → Tenant đọc hợp đồng. Holding test: ký/cọc → OnHold, không account; convert lặp cùng Main, transfer một lần; thiếu cọc chặn; đủ chênh lệch → Occupied và account. Orphan cleanup giữ accepted PDF. Storage/email test doubles; không MinIO/SMTP/provider thật. E2E-01/02 UI thật vẫn NOT RUN.
+
+Phase 6: TenantPreInvoiceReadingsTests + Compact24InvoiceRegressionTests + ExpiryAndMeterNotices/DeliveryRetry/RevalidateTarget: 12 PASS. Staff upload ảnh/confirm số đo qua API; Tenant/co-occupant xem trước khi có Invoice, outsider bị chặn cả ảnh/notice target, historical access sau Terminated, publication replay không trùng, EMAIL intent được lưu. Mobile meter-history + notification-state: 6 PASS. Đây là API/persistence và component, E2E-03 UI thật chưa chạy.
+
+Bàn giao BR-23/25: ContractServiceTests 39 PASS. Filter PhysicalReleaseRegressionTests + Compact24ContractRegressionTests.MoveOut + DepositReturnAndClosure + LifecycleMigrationTests + exact snapshot: 8 PASS. Có unpaid room debt không đổi sau release; other occupancy vẫn Occupied; profile current room null nhưng tenancy/invoice/contract access còn; pending adjustment/refund không giữ phòng; refund thực hiện sau Terminated; completion replay không nhân hiệu ứng. Owner contracts/tenants: 21 component tests PASS. Chưa UI E2E thật.
+
+## Kết quả slice điện/nước chốt — 11/11/2026
+
+BR-14/15/19: Owner Web xem preview baseline đã tính tiền, chỉ số chốt, lượng đã thu, lượng bổ sung và số tiền; duyệt đúng reference/idempotency key. Khoản phải thu bất biến lưu trong contracts.history, dùng phân bổ ngân hàng/cấn trừ hiện có; Tenant Mobile xem và thanh toán theo quyền lịch sử của khoảng tiêu thụ. Không tạo Final Settlement Invoice, không thêm bảng/migration. Utility snapshot giữ biểu giá/định mức tích lũy; tính F(total)-F(previous) để không cấp lại bậc thấp hay thu lại khoản giảm giá. Hóa đơn Draft phải refresh/review nếu phí được duyệt trước; dòng utility đã phủ mang nguồn rõ và không giả chỉ số vật lý. Hai hợp đồng cùng phòng có thể xác nhận Final cùng ngày với chỉ số không giảm.
+
+Files: SettlementFinalUtilities/Repository, SettlementChargeEvidence, MeterBillingCoverage, UtilityIncrementCalculation, InvoiceService/Repository, CaptureRepository, shared client, FinalUtilitiesPanel, TenantSettlementReceivables/TenantInvoiceCharges. Thiếu quota, baseline, phân bổ đồng hồ thay thế, policy lịch sử hoặc bằng chứng thì Amount=null/Pending; không ước lượng để tạo phí chính thức.
+
+Đã chạy: Application unit 394 PASS; PostgreSQL disposable FinalUtilityRegressionTests (5 ca), Compact24InvoiceRegressionTests và SettlementReceivableRegressionTests: tổng 16 PASS. Owner/Mobile typecheck và changed-file ESLint PASS. Storage là test substitute; không phải MinIO live, bank sandbox hoặc UI E2E. Tiền thuê/phí khác theo BR-13 và xác nhận đầy đủ danh sách phí tiếp tục ở slice sau.
+
+## 11/11/2026 — Tiền thuê/phí cố định tháng cuối theo chính sách
+
+BR-13/15/19: nguồn FinalFixed bất biến trong contracts.history giữ kỳ, mã phí, giá, policy/version hoặc hash hợp đồng đại diện, lựa chọn FullMonth/OccupiedCalendarDays/làm tròn, số ngày phòng có người và giá lũy kế. Owner Web phải xác nhận chính sách áp dụng đúng điều khoản đã ký; backend tính tiền, không đọc tự động free text để đoán thỏa thuận. Khoản mới chỉ là chênh lệch giá chính sách chưa ghi nhận; hóa đơn định kỳ sau đó loại phần đã ghi nhận, Final cũ không đổi. Khoản giảm đã duyệt không bị thu lại. Tenant Mobile hiển thị căn cứ và số dư backend; không tự chia nợ phòng cho cá nhân.
+
+Thiếu lịch, bản hợp đồng hoặc dữ liệu khoảng ở giữ Amount=null. Khi người khác còn tiếp tục thuê, tiền thuê vẫn đối chiếu qua hóa đơn chung của phòng, không bịa phần tiền riêng cho người đi. Tất cả khoản phải thu có thể thu tiền/cấn trừ qua ledger đã có. Không thêm bảng hoặc migration; database làm việc không thay đổi.
+
+Files: FixedChargeCalculation, FixedChargeCoverageRepository, SettlementFinalFixedCharges/Repository, InvoiceService, SettlementReceivablesRepository/Controller, shared client, FinalFixedChargesPanel, TenantSettlementReceivables và thông tin nguồn trên dòng hóa đơn.
+
+Đã chạy: Release solution build PASS; Application unit 398 PASS; PostgreSQL disposable final-fixed/final-utility/invoice regression 16 PASS (bao gồm thiếu policy, còn người tiếp tục thuê, từ chối Staff/Tenant, xác nhận điều khoản, concurrent replay, thứ tự invoice/charge); Owner UI 20 PASS; Mobile 4 PASS; Owner/Mobile typecheck và changed-file ESLint PASS. Inspection metadata trong test fixed-charge là fixture synthetic; không coi đó là UI E2E hay kiểm thử live storage. Tiếp tục xác nhận đầy đủ danh sách phí, hoàn cọc sau offset, Holding và các phase còn lại.
+
+## 11/11/2026 — Owner xác nhận đủ khoản thu và hoàn cọc sau cấn trừ
+
+BR-15/20/21/22/23: SettlementChargeReviewV1 bất biến gắn phiên bản/Owner decision/biên bản và danh sách khoản thu. Backend yêu cầu đủ điện, nước, rent/phí đã đối chiếu; nguồn thiếu hoặc reference cũ trả 409. Owner Web có bước xem/chấp thuận riêng, không biến việc duyệt phí thành nhận tiền. Tháng cuối đã phủ bằng khoản phải thu và review không cần Final Settlement Invoice. Từng offset khớp native allocation và Owner approval; deposit-refund source cho hoàn phần còn lại sau offset, cần xác minh người nộp và xác nhận offset. Cọc dùng hết không tạo refund giả. Refund vẫn Requested → Approved → Completed chỉ sau bằng chứng thực chi private; giữ phòng đã Available và quyền lịch sử.
+
+Files: SettlementChargeReview, SettlementReceivablesRepository/Controller, ContractSettlementLedger/LifecycleService/Contracts, RefundService/Repository/DepositRefundSource; shared client; FinalChargeReviewPanel, RefundPanel. JSON history, không đổi schema/migration. Tenant summary che operation keys/fingerprints và charge IDs ngoài quyền.
+
+Đã chạy: Application unit 398 PASS; PostgreSQL disposable final charge/fixed/utility/contract/receivable/physical release regression 36 PASS; Owner review/receivable/refund UI 15 PASS; Owner/Mobile typecheck, changed-file ESLint PASS. Luồng mới kiểm incomplete/stale review, partial/full offsets, physical release trước thanh toán, full cọc không cần refund, phần dư thực chi sau release và execute lặp không hoàn hai lần. Object-storage substitute và synthetic bank evidence, không phải provider hay UI E2E thật.
+
+Các lần chạy đầu đã phát hiện và sửa: test variable name trùng, TextField API không hỗ trợ inputProps, thiếu mốc InspectedAt trong fixture. Hồi quy recovery rộng phát hiện fault injection đứt kết nối ngay khi seed ảnh meter; đã giới hạn lỗi vào upload refund để giữ đúng assertion phục hồi intended. Kết quả rerun recovery/payment/invoice/snapshot sẽ ghi tiếp sau khi hoàn tất.
+
+Còn tiếp tục: điều chỉnh rent đã Final trước ngày đi thực tế, legacy deduction creation/corrections, Holding cancellation, whole/external-payer excess, finance aggregation, Owner Mobile scope, retention/residence, demo/UI E2E và full CI-equivalent. Không coi toàn bộ dự án hoàn thành.
+
+Rerun sau sửa fault injection: Compact24DepositRecoveryTests + Compact24InvoiceRegressionTests + Compact24PaymentRegressionTests + exact runtime migration snapshot: 49/49 PASS. Assertion về durable upload intent, sai ảnh khi retry, reserved balance và không double refund vẫn giữ nguyên. Full CI-equivalent và provider/native UI E2E chưa chạy.
+
+## 11/11/2026 — Đối chiếu ngày đi sớm với điều chỉnh rent đã duyệt
+
+BR-13/16/19: hóa đơn Final tính trước ngày bàn giao không bị sửa. Nếu daily policy cho tiền thuê thấp hơn, preview giữ Pending cho tới khi phần giảm đủ được Owner duyệt trên đúng mã phí; Pending/Rejected không có hiệu lực, các quyết định tăng lại được tính net. Snapshot lưu ID quyết định, giá policy theo ngày thực tế và vị trí giá gốc đã ghi nhận; không thu lại discount ở lần tính sau. FullMonth vẫn theo lựa chọn Owner, không tự giảm theo ngày. Owner Web hiển thị căn cứ giảm và số phải thu thêm; Tenant Mobile nêu nguồn điều chỉnh.
+
+Files: FixedChargeCalculation, FixedChargeCoverageRepository, shared contracts, FinalFixedChargesPanel, TenantSettlementReceivables và regression tests. Không schema/migration. Đã chạy: Application unit 399 PASS; PostgreSQL disposable fixed/utility/invoice regression 19 PASS, gồm Tenant gửi điều chỉnh → Pending chưa được dùng → Owner approve → zero acknowledgement, Final không đổi; Owner fixed-charge component 3 PASS; Owner/Mobile typecheck, changed-file ESLint PASS trước lần bổ sung hiển thị cuối (sẽ kiểm tra lại trong commit gate). Storage/inspection fixtures synthetic, không UI E2E/provider thật.
+
+## 11/11/2026 — Hủy Holding: mất cọc hoặc hoàn do Owner không cung cấp phòng
+
+BR-08/09/10/11/18: Owner phải chọn Cause TenantVoluntary/OwnerCannotProvideRoom và HumanConfirmed. Voluntary ghi nhận forfeiture; Owner failure tạo nghĩa vụ hoàn số tiền verified, không tự Completed. Cancellation review bất biến giữ nguyên nhân/tiền/actor/ref; chặn nguồn đã chuyển, đang dùng hoặc đã hoàn. Refund sử dụng request/approve/evidence/execute hiện có, classification HoldingDepositRefundV1 riêng với Security Deposit. Có thể hoàn cho Resident verified chưa có User; không tạo account/Resident giả. Canceled Holding không chuyển Main; phòng được giải phóng, history/payment/signing evidence giữ lại. Expiry không tự bị coi là tự nguyện hủy, không thêm max duration.
+
+Owner Web chọn nguyên nhân và xác nhận riêng, xem disposition/hoàn thực chi; đóng entry phân bổ cọc đã hủy. Mobile chỉ theo dõi tiền/trạng thái Holding, hướng dẫn xử lý tại Owner Web. Staff không nhận thêm chi tiết refund/forfeiture qua HoldingDeposit DTO. Thông báo cancellation/refund có dedup, Owner được nhận khi chưa có Tenant account. Finance phân loại Holding principal return; đồng thời nhận đúng Security Deposit return sau explicit offsets, tránh gắn nhầm là expense hoặc unknown.
+
+Files: HoldingCancellation, ContractHoldingService/Contracts/Controller, ContractService DI; HoldingRefundSource, RefundService/Repository/ContractDepositPosition; FinancialReportRefunds, SettlementNotificationPublisher; shared client, ContractActionDialog/HoldingDepositPanel/RefundPanel, Mobile ContractScreen/WorkflowPanel; tests. Vẫn Compact24/5 migrations, không schema change và không migrate DB làm việc.
+
+Đã chạy: Application unit 400 PASS; PostgreSQL Holding/anonymous/finance/new-offset-refund nhóm 6 PASS, rồi contract/finance/recovery/Holding/final-utility hồi quy 29 PASS; Owner contracts/refund UI 24 PASS; Mobile holding/sections 13 PASS. Typecheck Owner/Mobile và changed-file ESLint tiếp tục qua commit gate. Storage/PDF/email test substitutes và bank evidence synthetic; không phải real provider hoặc UI E2E.
+
+Lần chạy đầu đã sửa helper test thiếu idempotency-key argument, raw JSON fingerprint thay đổi sau jsonb canonicalization (nay hash typed v1), SQL dùng nhầm string status (nay dùng enum smallint thực tế). Assertions về source reference, money, không account, no duplicate refund, notifications và report classification đều được giữ và chạy lại.
+
+## 11/11/2026 — Báo cáo nguồn phải thu/tiền thu/cấn trừ
+
+BR-15/17/18/19/20/21/22, FE-08: financial report cộng khoản phải thu trả phòng vào issued/debt theo Room/Location, chỉ cộng verified bank allocation vào collections. Breakdown riêng cho approved charges/outstanding/bank collections/deposit offsets/Holding forfeitures; offset không là tiền chuyển mới, dư/unmatched/simulator không là doanh thu. Giữ công thức lợi nhuận/cashflow hiện có; Holding forfeiture chỉ hiện riêng, principal return không OPEX. Unknown/invalid source trả 409 cần đối chiếu. Owner Web và CSV hiển thị nguồn, decimal strings và date basis; What-if vẫn read-only.
+
+Files: FinancialReportSettlements/Repository/Service, shared finance, FinancialReportsApiPage/financeExport và tests. Không schema/migration, database làm việc giữ nguyên. API/basis: docs/api/SETTLEMENT_FINANCIAL_REPORTING.md.
+
+Đã chạy: Release solution build PASS; Application unit 401 PASS; PostgreSQL disposable receivable/Holding/finance/final-utility/fixed regression 17 PASS; Owner report/export/What-if 23 PASS. Owner typecheck PASS; Mobile typecheck và changed-file lint/format qua commit gate. Ca 600.000 damage + 400.000 offset → 200.000 debt sau release; receipt 50.000 + 150.000 đúng nguồn, 50.000 dư được hoàn không cộng collections; unknown kind buộc 409; đúng scope/date. Các lỗi đầu: sai tên kind (TenantDamage) trong source guard, số expected fixture bank 200.000/offset 400.000, và thiếu required fields ở CSV fixture đã sửa và rerun.
+
+Chưa phải toàn bộ CI/E2E. Tiếp tục corrections/legacy deduction, whole/external-payer excess, Owner Mobile scope, retention/residence, isolated demo, UI E2E và final validation. Real bank/MySign/Email/SMS còn chờ cấu hình đã xác nhận từ người dùng.
+
+# 11/11/2026 — Receipt dư 100%
+
+Thực thi trên PostgreSQL disposable: migration/baseline 9 PASS; WholeReceiptExcessRegressionTests 3 PASS; HoldingCancellationTests + SettlementReceivableRegressionTests nhóm 7 PASS; Compact24RefundTests/DepositRecovery/InvoiceRegression/PaymentRegression 53 PASS. Không sửa database làm việc. Coverage gồm Owner-only, no-account Resident, stale balance, invalid beneficiary, duplicate/parallel confirmation/execution, native allocation reject, durable status filters/history, refund sau physical release, không tăng invoice payment/revenue, principal classification. Owner payments/refund UI 24 PASS; Owner/Mobile typecheck PASS. Browser/native và real provider chưa chạy cho slice này. Chi tiết/lỗi đã sửa trong implementation results; không suy các số này thành tỷ lệ pass toàn hệ thống.
+
+## 11/11/2026 — Tenant refund status
+
+Application unit 406 PASS, Mobile refund/history 29 PASS, Owner/Mobile typecheck và changed-file lint PASS. PostgreSQL WholeReceiptExcessRegressionTests 3 PASS có thêm Tenant role/pagination/own-beneficiary isolation sau RoomId null, cùng phòng không thấy refund người khác, DTO chỉ tám trường và COMPLETED thực chi. Bổ sung Security Deposit history đi cùng closure: nhóm 4 PASS. Không thêm quyền duyệt/execution/evidence cho Tenant; không chạy native/provider E2E trong slice này.
+
+## 11/11/2026 — Owner Mobile monitoring boundary
+
+Mobile affected regression 107 PASS (Owner contract/read-only finance, lifecycle, navigation, incident/Staff), component announcement/finance sau bổ sung 3 PASS; typecheck và changed-file ESLint PASS. Owner Web actions/shared contracts/backend không đổi. Old Mobile Owner mutation scenarios được thay bằng read-only acceptance theo BR-26, giữ Staff Emergency version/evidence/concurrency regression. Không có native device/browser E2E cho slice này.
+
+## 11/11/2026 — Retention review only
+
+Force rebuild Release integration project: 0 warning/error. Application unit 411 PASS; PostgreSQL retention + whole-excess + resident administration 6 PASS sau rebuild; Owner retention/resident UI 5 PASS; Owner force typecheck/Mobile typecheck và changed-file lint/format PASS. Khóa source/parallel/replay/hold-release/sai quyền, không leak/change identity, nghĩa vụ hoàn dư chưa tạo request đều có assert. Không xóa/ẩn danh hóa, không đặt ngày luật định, không migrate DB làm việc. Lượt incremental ban đầu discover thiếu retention do timestamp/DLL cũ không được tính là test retention đã chạy; bản rebuilt mới đã được chạy lại. Browser/native/legal acceptance chưa thực hiện.
+
+## 11/11/2026 — Residence reminders và delivery source
+
+Release non-incremental build 0 warning/error; PostgreSQL notification/residence 15 PASS. Window WEEKLY được advance bằng clock tổng hợp, concurrency/retry không duplicate, Owner-confirmed legacy stamp không thay Completed, actual closure dừng, không Staff, và kênh delivery không dùng contract mới để gửi reminder của contract cũ. First run 13 PASS/1 FAIL do clock fixture UTC+7; đã sửa UTC, rebuild test và nhóm mở rộng 15 PASS. Channel probe chỉ local test boundary, không là provider acceptance.
+
+## 11/11/2026 — Legacy deduction retirement
+
+Non-incremental Release integration build 0 warning/error; Application unit 412 PASS; historical legacy + canonical settlement receivable PostgreSQL 6 PASS; Owner legacy/lifecycle/refund 19 PASS; Owner force typecheck/Mobile typecheck/lint/format PASS. New legacy/revision requests bị chặn, đúng old key replay được, production demo không replay; fixture historical versions/proof hash/audit giữ nguyên nghĩa vụ/refund/report/original invoice/tamper assertions. Không migrate working DB hoặc chuyển đổi lịch sử; không phải browser/provider E2E.
+
+## 11/11/2026 — External payer receipt refund
+
+Release non-incremental build 0 warning/error; Application unit 415 PASS; disposable external payer/migration 2 PASS, expanded external + whole + receivable + refund/historical 16 PASS; Owner payments/refund UI 27 PASS; force Owner typecheck/Mobile typecheck/lint/format PASS. Có legacy 6→7 preservation/tampered schema function, role/source/key/race/native relabel rejection, actual external partial/whole return, no dummy Resident/User, no double revenue/cost, Tenant data isolation và pending settlement until actual refund. Mọi statement/photo/channel đều synthetic/local test boundaries, không là real provider hoặc browser/native acceptance. Không thay DB làm việc.
+
+## 11/11/2026 — Bảo vệ xác minh cọc trực tiếp
+
+BR-09/11/17/18: Main chỉ nhận số tiền sao kê không vượt RequiredDeposit trừ AppliedHoldingDeposit và cọc đã xác minh. Cọc bằng 0/đủ cọc, hợp đồng đóng/renewal/addendum không được nhận khoản cọc mới; exact-key replay vẫn được trả lại. Không cắt số tiền receipt hoặc tự biến phần dư thành cọc. Owner Web ẩn action trên trạng thái đã đóng và giải thích lỗi phần dư. Fixtures hoàn cọc khai báo số cọc thỏa thuận tương ứng trước khi nhận tiền, thay vì tạo cọc trên hợp đồng RequiredDeposit=0.
+
+Đã chạy: Release backend non-incremental build 0 warning/error, Application unit 423 PASS, PostgreSQL direct-cap/concurrency + refund/recovery/receivable + anonymous signing 12 PASS, Owner contract UI 14 PASS, Owner force typecheck và changed-file ESLint/Prettier PASS. Chỉ disposable DB, không migrate working DB. Luồng receipt phân bổ cọc Main/Holding trước account và hoàn phần dư còn cần triển khai tiếp; chặn đường ghi trực tiếp chưa là hoàn tất luồng E2E hoặc native DB constraint.
+
+## 11/11/2026 — Receipt cọc Main/Holding và đúng người thực trả
+
+Đã nối Owner Web → receipt VERIFIED → min(receipt, cọc thiếu) → actual-payer snapshot → request/Owner approval/external execution proof hoàn phần dư. Resident chưa có User và external attestation đều được hỗ trợ; không tạo User/Resident giả, không Tenant Credit, không ghi excess thành cọc. GET deposit position/context cung cấp tham chiếu và số tiền backend; receipt picker thay nhập UUID, giữ key khi mất phản hồi, history filter theo contract, form vừa ghi receipt quay về đối chiếu cọc.
+
+Bổ sung nguồn canonical vào readiness/history/settlement/Room commitment, pending refund và retention review/report classification. Legacy deposit ID/JSON shape trong reference được giữ nguyên; migration thứ 8 giữ 24 bảng và không sửa allocation cũ đã vượt cọc. Native budget/snapshot/refund-payer guards chống over-credit, duplicate/sửa payer và hoàn sai người. Chi tiết API và giới hạn: docs/api/DEPOSIT_RECEIPTS.md.
+
+Đã chạy: non-incremental Release integration build 0 warning/error; Application unit 423 PASS; PostgreSQL expanded deposit/migration/refund/retention/final-utility/settlement/anonymous-signing/whole-excess/recovery + offline migration snapshot 32 PASS; Owner related UI 45 PASS; Owner force typecheck/Mobile typecheck, changed-file ESLint/Prettier và dotnet format whitespace trên C# thay đổi PASS. Các lượt đầu FAIL do guard đăng ký còn Holding-only, assertion status/trigger cũ và fixture ghi deposit trước khi persist agreed cap đã được sửa; kết quả cuối chạy lại trên source rebuilt. Dữ liệu/bằng chứng đều synthetic; chỉ disposable DB, không migrate DB làm việc. Chưa browser/native/live-provider hoặc toàn bộ CI acceptance.
+
+Còn tiếp: receipt hoàn toàn dư khi cọc Main đã đủ, excess sau adjustment/reversal, principal deposit payer ngoài, thông báo refund receipt và full CI/UI E2E. Bank/MySign/SMTP/SMS thật vẫn chờ cấu hình theo câu trả lời trước của người dùng.
+
+## 11/11/2026 — Toàn bộ receipt dư cho cọc Main
+
+ReceiptExcessTarget bổ sung depositContractId (null không đổi JSON fingerprint cũ), alias Holding giữ nguyên. Main đủ cọc/đã đóng xác nhận toàn bộ receipt phải hoàn đúng actual Resident hoặc external attestation, không allocation 0. Owner Web tự chuyển sang whole-excess review và lọc lịch sử phải hoàn/đã hoàn theo contract. Pending settlement đi theo receipt sau physical release; kiểm tra đúng beneficiary/proof và tổng hoàn chính xác, imported over-return không xóa blocker. Main đã hủy trước account có thể hoàn receipt ngoài ý muốn; retention đọc metadata và giữ policy-review/CanDelete=false thay vì gọi tenancy settlement bắt có User.
+
+Đã chạy: Release non-incremental integration build 0 warning/error; Application unit 426 PASS; expanded PostgreSQL/offline migration snapshot 35 PASS; Owner receipt/excess/external UI 9 PASS; Owner force typecheck/Mobile typecheck/changed ESLint/Prettier/new-C# whitespace/git diff check PASS. Có stale/mixed target/replay/concurrent confirmation, cọc còn thiếu không được coi toàn bộ dư, giữ trace after handover, no fake account/allocation 0, native actual-payer history và inconsistent over-return. Test mới cancelled-Main đầu tiên phát hiện lỗi retention active_tenant_account_required; đã sửa và chạy lại toàn nhóm. Không schema mới, không migrate DB làm việc, chưa browser/native/provider acceptance.
+
+Docker đã kiểm tra lại: engine 29.7.2 hoạt động, có image PostgreSQL16/MinIO/LibreOffice dùng cho test. Hạn chế Docker cũ không còn là blocker cho lần kiểm chứng kế tiếp; chưa đồng nghĩa full CI đã pass. Tiếp tục full regression và các gap adjustment/reversal/external principal/notification. Payer có Resident ngoài cohort mục tiêu vẫn cần luồng chọn nguồn phù hợp; không gán thành người đại diện hoặc khai không có Resident sai thực tế.
+
+## 11/11/2026 — Full local regression, chưa là browser acceptance
+
+| Kiểm tra đã thực hiện                                          | Kết quả                                                               |
+| -------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Restore + full solution Release non-incremental build          | PASS, 0 warning/error                                                 |
+| Application / Domain unit                                      | 426 / 106 PASS                                                        |
+| Full backend integration, native PostgreSQL + Docker MinIO/PDF | 857 PASS, 20 SKIP, 0 FAIL / 877                                       |
+| SQL-log independence, container PostgreSQL riêng               | 1 PASS; là một ca đã SKIP trong full run, còn 19 OCR opt-in chưa chạy |
+| Digital-signing unit ngoài BHome.sln                           | 41 PASS                                                               |
+| Full Owner Web / Mobile                                        | 332 / 882 PASS                                                        |
+| Owner affected Room/wizard/rate tests, sau thay đổi cuối       | PASS                                                                  |
+| Owner force TS / Mobile TS / root ESLint                       | PASS                                                                  |
+| Owner + Public production build                                | PASS                                                                  |
+| Expo Mobile web export, URL synthetic, không nạp dotenv        | PASS; chưa phải Android/iOS build hay acceptance                      |
+| dotnet format verify / Prettier / git diff check               | PASS                                                                  |
+
+Evidence: .tools/ci-validation-2026-11-11/backend-final-retry/_.trx, independence/_.trx, digital-signing/*.trx, frontend-full-verified.log, mobile-verified.log, mobile-export-verified.log. Chỉ dữ liệu tổng hợp và DB/container tách biệt. Query-log container đã xóa, hai container local có sẵn không bị thay đổi. Không dùng .tools logs cũ làm bằng chứng cho lượt này.
+
+Regression mới gồm rollback toàn bộ migration target khi allocation cọc sinh thêm bị sửa amount; từ chối unknown column/money guard khi property refresh; Room API chặn retired/null/unknown fields; Owner form/wizard không gọi catalog/bulk RoomType cũ; applied defaults không phát query cho Staff; malformed financial page hiển thị lỗi, số tiền không mất chính xác và rate/day-count đúng wire JSON. Các lượt đầu thất bại được giữ log, đã sửa và rebuild/rerun; Owner lazy-route timeout đã chạy lại riêng và full suite thành công, không bỏ test.
+
+NOT RUN: GitHub Actions Linux, real-browser full lifecycle, native-device acceptance, 19 opt-in OCR/model-reference cases và accuracy >=50 ảnh; provider bank/MySign/SMTP/SMS thật chưa được cấu hình theo câu trả lời người dùng. Chưa có bằng chứng hoàn tất toàn bộ BR hoặc chỉ tiêu coverage/performance/accuracy; còn các gap tiền được ghi trong implementation plan.
+
+## 12/11/2026 — Receipt refund notifications
+
+Đã chạy regression native/PostgreSQL + notification/refund/deposit: **45 PASS / 0 SKIP / 0 FAIL**, có 5 ca mới. Full frontend: **Owner 335 PASS / Mobile 885 PASS**; related focused UI 20/35 PASS trước full run. Release non-incremental integration build 0 warning/error; Owner/Mobile typecheck, root ESLint, Owner/Public build, Expo Mobile web export và dotnet format verify PASS.
+
+Ca mới chứng minh đúng actual beneficiary, không co-occupants/Staff, Owner-only cho external/pre-account, không User/Resident giả, replay/parallel không nhân inbox, target bị gắn sai recipient vẫn 404, đọc lịch sử không cần current Room. Completion chưa được phát khi imported proof hash sai; sửa proof rồi pump chỉ có một event hợp lệ. EMAIL outbox đã enqueue nhưng proof không còn hợp lệ bị Suppressed trước synthetic provider; inbox còn và trạng thái tài chính không bị sửa. Không có email/push thật đã gửi, không có tiền thật đã chuyển.
+
+Evidence: .tools/ci-validation-2026-11-11/refund-notification-final/*.trx, frontend-refund-notification.log, mobile-refund-notification-export.log. Full integration baseline ee3f816 không được gộp thành kết quả full suite của source mới. Chưa browser E2E/native/provider acceptance mới; các giới hạn và gap tiền trước đó vẫn còn trừ receipt notifications vừa hoàn tất.

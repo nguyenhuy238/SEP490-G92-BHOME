@@ -1,0 +1,11 @@
+{
+  "modelSha256": "c40c7f3bf9acb774528179e4b78749d1ed19c0872c63d46ee117e873a1b5ced7",
+  "coldModelLoadMs": 139.435,
+  "concurrentChecks": {
+    "runs": 4,
+    "consistent": true,
+    "elapsedMs": 74.9818,
+    "limitation": "Same validation image on one model/session; checks thread safety, not classification correctness or HTTP load."
+  },
+  "classificationQuality": "Rejected candidate; repeated benchmark is runtime verification, not a new independent accuracy measurement"
+}

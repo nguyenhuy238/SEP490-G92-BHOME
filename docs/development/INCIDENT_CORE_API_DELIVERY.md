@@ -1,0 +1,72 @@
+> B?n c?p nh?t 04/11/2026: incident-core d?ng Compact24 native, kh?ng kh?i ph?c migration t?o 10 b?ng ???c m? t? ? m?c c? b?n d??i. Report d?ng incident_reports; Work Order d?ng operational_tasks; expense d?ng expenses; history/evidence/emergency d?ng JSON ?? c?; command/upload/notification d?ng h? t?ng hi?n h?nh. K?t qu? ch?y m?i ? [bi?n b?n reset](API_RESET_REVIEW_2026-11-04.md).
+
+# Bàn giao Incident core API
+
+Ngày 30/10/2026. D013, Backend, BF-07 / FE-06 / UC-26–30. Người dùng đã chốt **D1–D8 toàn bộ A**; [decision record](../api/INCIDENT_CORE_API_PROPOSAL.md) và [API contract](../api/INCIDENT_MAINTENANCE.md) mô tả lựa chọn và giới hạn.
+
+Backend slice đã có report → Owner review/assign → Staff inspect/propose → Owner approve → Staff start/progress/submit → Owner verify/rework, cùng Emergency, direct handling, evidence, history, notification và chi phí Maintenance. Không thay đổi frontend/mobile; không claim hoàn tất toàn bộ SRS/NFR hay các OQ còn mở.
+
+## Nguồn và acceptance
+
+Đã đọc bốn report hiện có trong docs/reports, đặc biệt SRS local cập nhật đến 21/10/2026: BF-07 §2.7, UC-26–30 §4.1–4.5, FE-06 §6.1–6.4, GBR-01–03/11–14/18, DBR-09/10/13, NFR evidence/security và OQ-04/05. Đã xem BF-07 diagram và hai class/ba sequence diagram Incident của Report 4 §6. Không có Report 5/test workbook để cập nhật bằng chứng vào mẫu đó.
+
+| Requirement / acceptance                                                                                | Thay đổi chính                                                                                                            | Bằng chứng tự động                                                                                                            |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| UC-26 / GBR-01–02 / DBR-09: report đúng tenancy/Location, description/evidence/severity hợp lệ          | IncidentService, reporting lookup DTO/query, scoped repositories, multipart controller                                    | TenantIsolation, ReportingLookups, CommonAreaUsesActiveResidence, InputScopeLimits                                            |
+| UC-27 / GBR-11/14/18: routing, ack, append-only action/cost claim; notification không rollback workflow | IncidentActivity/EmergencyAction, IncidentNotification, durable job + delivery adapter                                    | EmergencyPersistsNotifications, NotificationFailure, ExpiredStaffDoesNotReceiveQueuedDelivery                                 |
+| UC-28: Owner-only review, classify, duplicate/reject/cancel, multi-work assignment/direct completion    | IncidentReport, review/decision/assignment/direct commands                                                                | DirectCompletion, InputScopeLimits, ConcurrentAddingWork, NonOwnerCannotReview                                                |
+| UC-29: đề xuất versioned, Owner approval, Staff start sau duyệt, result/evidence và rework              | MaintenanceWorkOrder rules + IncidentService, staged typed evidence                                                       | WorkOrderRules, ProposalRevisionInvalidatesApproval, FullWorkflow                                                             |
+| UC-30 / GBR-12 / DBR-10: verify/expense/history/Asset/closure nhất quán                                 | MaintenanceExpense → OperatingExpenses, MaintenanceHistory, Asset recompute và Property guard                             | FullWorkflow, CancelledOnlyWork, StaleCompetingVerification, PropertyApiCannotOverrideAsset                                   |
+| Authorization và nhiều role: quyền đọc/ghi/file/count phải theo role thực sự có scope                   | ActiveRole + current Location + effective response scope; Tenant ownership không mở Staff DTO                             | MultiRoleTenantCannotUseUnassignedStaffRole, ReplacementStaff, CrossTenantRead, DisabledOrRemovedOwnerRole                    |
+| Retry, race và failure: không double expense/notification/transition, history nguyên vẹn                | actor/key fingerprint/result, Location/Room locks, versions, unique constraints, append-only EF/DB guards, upload intents | parallel create/verify/direct/cost commands, verify-vs-cancel/add, upload rollback/cleanup, DatabaseGuardsHistoryAndDowngrade |
+
+## Files và thiết kế
+
+- `BHome.Domain/IncidentMaintenance/IncidentRecords.cs`: IncidentReport, Work Order lifecycle, activities, typed evidence, emergency claim, Maintenance expense/history, command, notification và upload intent.
+- `BHome.Application/IncidentMaintenance/IncidentContracts.cs`, `IncidentService.cs`: DTO/ports, server authorization, scope, state/cost orchestration và role projections.
+- `BHome.Infrastructure/Modules/IncidentMaintenance/Persistence/*`: EF mapping, projected/paged scope queries và transaction repository. File/storage/cleanup và notification adapter nằm tại module Infrastructure.
+- `BHome.Api/Controllers/IncidentMaintenance/*`: Incident/Work Order API; OpenAPI operation filter, DI, error mapping, no-store và fixed permission grants được nối vào foundation hiện có.
+- `PropertyService.cs`: chặn đổi Asset condition/status qua API cấu hình trong khi còn Work Order mở, kể cả Assigned; dùng cùng Location lock.
+- `BHomeDbContext.cs`: append-only checks; `PostgresJobWorker.MaxAttempts` được mở internal để handler dùng cùng retry limit hiện có, không tạo policy mới.
+- Migration `20261030162807_IncidentMaintenanceCore` và snapshot: thêm 10 bảng, FK/check/index/unique keys, PostgreSQL append-only triggers và downgrade guard. Không đổi bảng Task/Meter hay numeric values cũ.
+- Test mới ở ba project backend dưới `IncidentMaintenance`; cập nhật permission acceptance matrix. API docs, module/permission docs, Postman README và collection Incident riêng được bổ sung.
+
+Transaction command: actor/key advisory lock → Location advisory lock → Room row lock khi có tenancy/Room. Scope và trạng thái đọc lại sau lock. Work Order transition, expense, history, audit, notification intent và command result commit cùng transaction. Không gọi external notification trong transaction nghiệp vụ; queue delivery xử lý sau commit. File intent riêng giữ quyền cleanup qua rollback, không phụ thuộc business FK chưa commit.
+
+Owner/Staff/Tenant response khác nhau; Tenant không có cost/vendor/internal JSON/repair receipt; Staff chưa là assignee không có cost/vendor của Work Order. Scope của role Staff phải đúng Location trước khi dùng Staff projection, kể cả account đồng thời có role Tenant.
+
+## Kiểm chứng thực tế
+
+Working tree ban đầu chỉ có proposal do lượt phân tích trước tạo; không có thay đổi code của người dùng bị ghi đè. Nhánh vẫn `THuy/feature-incident-core-api`. Không commit, push, merge hoặc đổi branch. Quy ước member/<name> trong AGENTS.md cần được xử lý trước commit theo quy trình nhóm.
+
+| Lệnh / kiểm tra                                                                                                                                                                                                                                      | Kết quả                                                                                                                                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `dotnet build src/backend/BHome.sln --no-restore --nologo --verbosity minimal`                                                                                                                                                                       | PASS, 0 warning / 0 error                                                                                                                                                                  |
+| `dotnet test src/backend/BHome.sln --no-build --filter 'Category!=Docker' --nologo --verbosity minimal --logger trx --results-directory TestResults/incident-core/final-non-docker`                                                                  | PASS 375/375: Domain 74, Application 178, Integration không Docker 123; 0 fail / 0 skip                                                                                                    |
+| `dotnet test tests/backend/BHome.IntegrationTests/BHome.IntegrationTests.csproj --no-build --filter 'FullyQualifiedName~IncidentMaintenance' --nologo --verbosity minimal --logger trx --results-directory TestResults/incident-core/final-postgres` | PASS 19/19 trên PostgreSQL local trong DB tạm; 0 fail / 0 skip                                                                                                                             |
+| `dotnet format src/backend/BHome.sln --verify-no-changes --no-restore --verbosity minimal`                                                                                                                                                           | PASS                                                                                                                                                                                       |
+| Migration metadata / PostgreSQL thật                                                                                                                                                                                                                 | PASS: snapshot khớp model, upgrade đầy đủ; downgrade/upgrade trên DB tạm giữ Room có sẵn; từ chối downgrade có Incident; DB check chặn InProgress chưa approval; EF và DB chặn sửa history |
+| OpenAPI                                                                                                                                                                                                                                              | PASS trong integration: multipart submit, 201, required command header, binary PNG body                                                                                                    |
+| Postman collection                                                                                                                                                                                                                                   | 63 request; 64 scripts compile, token trống. Kiểm tra JSON/payload/script bằng runtime cục bộ; không chạy collection với tài khoản thật                                                    |
+
+Tổng hai tập cuối: **394/394 PASS**, không cộng lặp các lượt trung gian. TRX ở thư mục ignored `TestResults/incident-core/`.
+
+Kiểm tra cuối: PostgreSQL local **18.3**; migration Incident xuất hiện **0 lần** trong history DB `bhome`; **0 DB tạm** mang prefix fixture còn lại sau khi kết thúc. `git diff --check` PASS (Git chỉ cảnh báo chuẩn hóa CRLF của snapshot); Prettier check các tài liệu/collection thay đổi PASS. Postman: JSON/payload hợp lệ sau thay version placeholder, 64 script compile và **126 lượt response giả lập** kiểm tra không ghi đè biến khi lỗi; đây không phải 126 lượt gọi API thật.
+
+Integration dùng `IncidentFixture`: mặc định PostgreSQL 16 Docker; lượt này cung cấp biến `BHOME_INCIDENT_TEST_ADMIN` trong process từ cấu hình local, chỉ nhận loopback và tạo tên DB `bhome_incident_test_<UUID>`. Fixture migrate và drop chính DB tạm đó, không migrate DB `bhome`. Chỉ dùng synthetic identities/accounts/financial records; không đọc dữ liệu Tenant thật. Storage được thay bằng `IncidentMemoryStorage`: dùng image validator thực và kiểm tra lỗi/rollback/cleanup, nhưng **không phải MinIO/S3 end-to-end**. Provider delivery là unconfigured/fake idempotent adapter trong test, không phải push production.
+
+Các lần lỗi/giới hạn khi chạy công cụ:
+
+- `docker info --format '{{.ServerVersion}}'`: FAIL do Docker Desktop Linux engine chưa chạy; dùng PostgreSQL local tách DB thay thế, không sửa cấu hình Docker hay bật dịch vụ.
+- Lượt đọc metadata đầu bằng PowerShell DbConnectionStringBuilder dừng ở guard loopback trước SQL; parser được thay bằng key/value parser, kiểm tra lại host/database trước đọc metadata thành công. Không in password/connection string.
+- Các lượt build/test Incident đã chạy đều PASS; đã bổ sung test rồi chạy lại sau các thay đổi cost-required, Asset guard, multi-role và reporting lookups. Không xem kết quả bộ ít ca trước đó là bằng chứng cho source cuối.
+
+## Rollout và giới hạn còn lại
+
+- **Chưa áp migration lên DB phát triển `bhome` hoặc production**. Đã đọc metadata DB local trước scaffold để xác nhận chưa có module này. Cần review/backup và áp EF migration trước chạy API mới; không drop/reset DB. Downgrade khi có Incident/upload intent bị chặn để giữ history.
+- Private MinIO/S3 phải sẵn sàng cho upload/download/verify mandatory evidence. Không có secret mới trong source. Cleanup lease là giới hạn kỹ thuật cho upload không hoàn tất, không phải policy xóa bằng chứng nghiệp vụ.
+- External delivery dùng queue hiện có, mặc định `Jobs:Enabled=false`; provider notification vẫn unconfigured. In-app durable hoạt động; không claim push/email đã gửi. Failed job cần operator review/replay cùng business key.
+- D3-A: không reminder 15/30 phút hoặc acknowledgement-overdue; OQ-04 vẫn mở. Chưa có lịch ca; route theo Staff Location hiện hành.
+- D6-A: chưa mở account mapping co-occupant; Tenant chỉ theo Contract.TenantUserId và representative residence period. Lịch sử report riêng còn đọc được sau tenancy; không thêm evidence vào tenancy cũ.
+- Không thêm Owner submit/post-incident role; Owner vẫn review/assign/direct-handle report có sẵn. Không tự charge Tenant, trừ cọc, thanh toán vendor hoặc xây finance dashboard.
+- NOT RUN: toàn bộ Docker suite Task/OCR/Contract, MinIO end-to-end, provider thật, frontend/mobile E2E, load/performance, coverage và UAT. Các target NFR/coverage của report chưa được đo trong task này.

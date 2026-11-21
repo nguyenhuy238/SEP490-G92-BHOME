@@ -1,0 +1,46 @@
+# Build and local tooling
+**/bin/
+**/obj/
+**/node_modules/
+**/.expo/
+**/dist/
+**/build/
+**/coverage/
+.tools/
+.artifacts/
+.playwright-mcp/
+__pycache__/
+.tmp/
+TestResults/
+**/TestResults/
+*.user
+*.suo
+*.log
+.idea/
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+# Impeccable live session state is local; keep only its shared project configuration.
+**/.impeccable/live/*
+!**/.impeccable/live/config.json
+.DS_Store
+Thumbs.db
+# Environment files may contain credentials; examples are safe to track.
+.env
+.env.*
+!.env.example
+!.env.neon.example
+!.env.sepay.example
+!**/.env.example
+!**/.env.*.example
+**/appsettings.Local.json
+**/secrets.json
+# Private database exports and recovery artifacts.
+*.dump
+*.pgdump
+**/database-backups/
+# Generated native projects are added intentionally after platform selection.
+src/mobile/android/
+src/mobile/ios/

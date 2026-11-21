@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../BHome.DigitalSigning.Application/BHome.DigitalSigning.Application.csproj" />
+    <ProjectReference Include="../BHome.DigitalSigning.Domain/BHome.DigitalSigning.Domain.csproj" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
+    <!-- iText is AGPL-3.0 (or a commercial licence): see README before shipping. -->
+    <PackageReference Include="itext" Version="9.6.0" />
+    <PackageReference Include="itext.bouncy-castle-adapter" Version="9.6.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Pdf/Fonts/Tinos-Regular.ttf" LogicalName="BHome.DigitalSigning.Tinos-Regular.ttf" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BHome.DigitalSigning.UnitTests" />
+  </ItemGroup>
+</Project>

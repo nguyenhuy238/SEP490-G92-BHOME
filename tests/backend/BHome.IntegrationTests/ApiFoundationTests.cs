@@ -1,0 +1,197 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using BHome.Application.IdentityAccess;
+using BHome.Domain.IdentityAccess;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace BHome.IntegrationTests;
+
+public sealed class ApiFoundationTests : IClassFixture<ApiFactory>
+{
+    private readonly ApiFactory factory;
+    private readonly HttpClient client;
+
+    public ApiFoundationTests(ApiFactory factory)
+    {
+        this.factory = factory;
+        client = factory.CreateClient();
+    }
+
+    [Fact]
+    public async Task LivenessDoesNotRequireDatabaseOrAuthentication()
+    {
+        var response = await client.GetAsync("/health/live");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(Guid.TryParse(response.Headers.GetValues("X-Correlation-ID").Single(), out _));
+    }
+
+    [Fact]
+    public async Task ReadinessRejectsUnavailableDatabase()
+    {
+        var response = await client.GetAsync("/health/ready");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProtectedControllerRejectsAnonymousWithProblemDetails()
+    {
+        var response = await client.GetAsync("/api/v1/session");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/invoice-adjustments/11111111-1111-1111-1111-111111111111/evidence/22222222-2222-2222-2222-222222222222")]
+    [InlineData("/api/v1/refund-requests/11111111-1111-1111-1111-111111111111/evidence")]
+    [InlineData("/api/v1/capture/readings/11111111-1111-1111-1111-111111111111/evidence")]
+    public async Task PrivateEvidenceEndpointsStillRejectAnonymousBeforeObjectLookup(string path)
+    {
+        var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Theory]
+    [InlineData(Roles.Owner)]
+    [InlineData(Roles.Staff)]
+    [InlineData(Roles.Tenant)]
+    public async Task SignedJwtWithoutDurableSessionCannotAuthorizeAnyRole(string role)
+    {
+        using var scope = factory.Services.CreateScope();
+        var settings = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<BHome.Infrastructure.IdentityAccess.JwtOptions>>().Value;
+        var token = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().WriteToken(
+            new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(settings.Issuer, settings.Audience,
+                [new System.Security.Claims.Claim("sub", Guid.NewGuid().ToString()), new System.Security.Claims.Claim("role", role)],
+                DateTime.UtcNow.AddSeconds(-1), DateTime.UtcNow.AddMinutes(5),
+                new Microsoft.IdentityModel.Tokens.SigningCredentials(
+                    new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(settings.SigningKey)),
+                    Microsoft.IdentityModel.Tokens.SecurityAlgorithms.HmacSha256)));
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/test-probes/owner");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(request)).StatusCode);
+    }
+
+    [Fact]
+    public async Task ValidationErrorsUseProblemDetailsAndCorrelation()
+    {
+        var response = await client.PostAsJsonAsync("/test-probes/validation", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("errors", body);
+        Assert.Contains(response.Headers.GetValues("X-Correlation-ID").Single(), body);
+    }
+
+    [Fact]
+    public async Task InvalidJwtIsRejected()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/session");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "invalid.jwt.value");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(request)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/test-probes/error", HttpStatusCode.InternalServerError)]
+    [InlineData("/test-probes/ocr", HttpStatusCode.ServiceUnavailable)]
+    [InlineData("/test-probes/oversized", HttpStatusCode.RequestEntityTooLarge)]
+    public async Task ErrorsAreSanitizedAndCorrelated(string path, HttpStatusCode expected)
+    {
+        var correlation = Guid.NewGuid().ToString();
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Add("X-Correlation-ID", correlation);
+        var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains(correlation, body);
+        Assert.DoesNotContain("PRIVATE_TEST_DETAIL", body);
+        Assert.DoesNotContain("stackTrace", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("/test-probes/private-object-missing", 404, "private_evidence_file_missing")]
+    [InlineData("/test-probes/unrelated-file-missing", 500, null)]
+    [InlineData("/test-probes/private-storage-unavailable", 503, null)]
+    public async Task PrivateObjectNotFoundUsesSafeCodeWithoutChangingOtherErrorClassifications(
+        string path, int expectedStatus, string? expectedCode)
+    {
+        var correlation = Guid.NewGuid().ToString();
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        // Private evidence fetches can request binary; errors must remain ProblemDetails.
+        request.Headers.Accept.ParseAdd("application/octet-stream");
+        request.Headers.Add("X-Correlation-ID", correlation);
+        var response = await client.SendAsync(request);
+        Assert.Equal((HttpStatusCode)expectedStatus, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(expectedStatus, body.GetProperty("status").GetInt32());
+        Assert.Equal(correlation, body.GetProperty("correlationId").GetString());
+        if (expectedCode is null) Assert.False(body.TryGetProperty("code", out _));
+        else Assert.Equal(expectedCode, body.GetProperty("code").GetString());
+        Assert.DoesNotContain("PRIVATE_TEST_DETAIL", body.ToString());
+        Assert.DoesNotContain("stackTrace", body.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.False(body.TryGetProperty("detail", out _));
+    }
+
+    [Theory]
+    [InlineData("42703", false, 503)]
+    [InlineData("42P01", false, 503)]
+    [InlineData("42883", false, 503)]
+    [InlineData("42703", true, 503)]
+    [InlineData("23514", false, 500)]
+    public async Task SchemaMismatchIsUnavailableWithoutExposingDatabaseDetails(string state, bool wrapped, int status)
+    {
+        var response = await client.GetAsync($"/test-probes/schema-error/{state}/{wrapped}");
+        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(response.Headers.GetValues("X-Correlation-ID").Single(), body.GetProperty("correlationId").GetString());
+        if (status == 503) Assert.Equal("database_schema_incompatible", body.GetProperty("code").GetString());
+        else Assert.False(body.TryGetProperty("code", out _));
+        Assert.DoesNotContain("PRIVATE_TEST_DETAIL", body.ToString());
+        Assert.False(body.TryGetProperty("exception", out _));
+    }
+
+    [Theory]
+    [InlineData(400)]
+    [InlineData(403)]
+    [InlineData(404)]
+    [InlineData(409)]
+    public async Task PropertyRejectionsPreserveStatusSafeCodeAndCorrelation(int status)
+    {
+        var correlation = Guid.NewGuid().ToString();
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/test-probes/property-error/{status}");
+        request.Headers.Add("X-Correlation-ID", correlation);
+        var response = await client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(status, body.GetProperty("status").GetInt32());
+        Assert.Equal("synthetic_property_rejection", body.GetProperty("code").GetString());
+        Assert.Equal(correlation, body.GetProperty("correlationId").GetString());
+        Assert.False(body.TryGetProperty("stackTrace", out _));
+        Assert.False(body.TryGetProperty("detail", out _));
+    }
+
+    [Theory]
+    [InlineData("/test-probes/property-error/400", 400, "application/pdf")]
+    [InlineData("/test-probes/property-error/403", 403, "application/octet-stream")]
+    [InlineData("/test-probes/property-error/404", 404, "image/jpeg")]
+    [InlineData("/test-probes/property-error/409", 409, "application/pdf")]
+    [InlineData("/test-probes/error", 500, "application/pdf")]
+    public async Task BinaryAcceptPreservesProblemStatusInsteadOfThrowingAnotherException(string path, int status, string accept)
+    {
+        var correlation = Guid.NewGuid().ToString();
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Accept.ParseAdd(accept);
+        request.Headers.Add("X-Correlation-ID", correlation);
+        var response = await client.SendAsync(request);
+        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(status, body.GetProperty("status").GetInt32());
+        Assert.Equal(correlation, body.GetProperty("correlationId").GetString());
+        Assert.DoesNotContain("PRIVATE_TEST_DETAIL", body.ToString());
+        Assert.False(body.TryGetProperty("exception", out _));
+    }
+}

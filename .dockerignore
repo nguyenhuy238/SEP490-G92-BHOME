@@ -1,0 +1,12 @@
+.git
+.tools
+**/node_modules
+**/bin
+**/obj
+**/dist
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+**/appsettings.Local.json
+**/secrets.json

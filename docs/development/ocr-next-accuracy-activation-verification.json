@@ -1,0 +1,282 @@
+{
+  "date": "2026-11-08",
+  "startingHead": "f61d6c5dac46f879bbe4d2444aaf3c0f4cb658ea",
+  "ordinaryApplicationRuntimeUnchanged": true,
+  "verifiedResearchHead": "8e2b877fc24821b24cff72f252ba9fa7742ad22d",
+  "checks": [
+    {
+      "name": "backend_release_build",
+      "status": "PASS",
+      "exitCode": 0,
+      "warnings": 0,
+      "errors": 0,
+      "command": "dotnet build src/backend/BHome.sln -c Release --no-restore",
+      "localLog": ".tools/ocr-activation-next/build-final.log",
+      "sha256": "bcfeee46ac4c89fb09882b12523d082f7eae9aa1fa52067078ecae578cd9ae19"
+    },
+    {
+      "name": "application",
+      "status": "PASS",
+      "passed": 349,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "command": "dotnet test tests/backend/BHome.Application.UnitTests -c Release --no-build --no-restore",
+      "localLog": ".tools/ocr-activation-next/application.log",
+      "sha256": "a7369419e7292a3bbdf85bd27110020897b437183cec35c712de00e9d095a871"
+    },
+    {
+      "name": "ocr_integration",
+      "status": "PASS",
+      "passed": 164,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --settings .tools/ocr-next-staff/serial.runsettings --filter FullyQualifiedName~BHome.IntegrationTests.Ocr&Category!=Docker&Category!=CompactPostgres",
+      "localLog": ".tools/ocr-activation-next/integration.log",
+      "sha256": "2894729fbf55d4326c63a813c4ec24eab19db13f17d6262b1cf9deb65d21803b",
+      "runnerSettings": {
+        "MaxParallelThreads": 1,
+        "ParallelizeTestCollections": false
+      }
+    },
+    {
+      "name": "candidate_native_source_parity",
+      "status": "PASS",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "command": "BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-restore --filter FullyQualifiedName~AdditionalLcdTechnologyHeadMatchesRealOnnxReferencesWithoutBypassingInputValidation",
+      "localLog": ".tools/ocr-activation-next/classifier-dotnet.log",
+      "sha256": "2e88002c99dec84c9a31b6e577fed59d852d442378f07fa7b8892cf69532bd80",
+      "includedAlsoIn": "ocr_integration",
+      "classificationAccuracyOutcome": "REJECTED; execution/parity test is not accuracy certification"
+    },
+    {
+      "name": "postgres_staff_confirmed_billing",
+      "status": "PASS",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "command": "Owned loopback15493 disposable DB; BHOME_COMPACT24_TEST_ADMIN=<local admin>; BHOME_OCR_LOCAL_EVALUATION_ROOT=<repo>; dotnet test tests/backend/BHome.IntegrationTests -c Release --no-build --no-restore --filter FullyQualifiedName~CompactMeterOcrWorkflowTests|FullyQualifiedName~Compact24InvoiceRegressionTests.Finalization|FullyQualifiedName~Compact24PaymentRegressionTests.MeterAutomation",
+      "localLog": ".tools/ocr-activation-next/postgres.log",
+      "sha256": "554c68e7faa96bcadb84b14529c5ef31256a180f70e1e0b5336ca5a1738f6d06",
+      "storage": "explicit in-memory substitute",
+      "postgresStopped": true
+    },
+    {
+      "name": "english_parity",
+      "status": "PASS",
+      "passed": 4,
+      "exitCode": 0,
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --english-meter-parity .tools/ocr-recovery-english .tools/ocr-recovery-validation .tools/ocr-recovery-english-reference.json .tools/ocr-activation-next/english-parity.json",
+      "localResultSha256": "1bc173687244bade5c30411388671ee09bc229a4533c8a87683218b0fc8da7bc",
+      "localLogSha256": "98f8baa20a36592ed8d2784fe6a650dd6349a1189a99635b867218049d1a7f79"
+    },
+    {
+      "name": "stage2_parity",
+      "status": "PASS",
+      "passed": 10,
+      "exitCode": 0,
+      "command": "dotnet run --project tools/BHome.OcrSmoke -c Release --no-build --no-restore -- --stage2-parity .tools/meter-detection-models .tools/stage2-parity-crops .tools/ocr-activation-next/stage2-parity.json",
+      "localResultSha256": "53d1aad92df6d2017d408fb8fb7c4d79f93503b52de0502cec9a95adbde3a4c4",
+      "localLogSha256": "c49562297d7b70ad0dda401898854b15b7e55abc49215473e85a0d251c45c8cd"
+    },
+    {
+      "name": "old_classifier_native_parity",
+      "status": "PASS",
+      "includedIn": "ocr_integration",
+      "passed": 9,
+      "inputMaxDelta": 0,
+      "logitMaxDelta": 2.2947788e-6,
+      "sha256": "c71e492f75958200dcb0a3bad394cb5a5a0be95e44d6c51483541f95a19b2b9a"
+    },
+    {
+      "name": "new_classifier_pytorch_onnx_parity",
+      "status": "PASS",
+      "passed": 9,
+      "maxLogitDelta": 3.993511199951172e-6,
+      "receiptSha256": "12b93ead2014673a66ae17905a026f00c5d05559d84318443834750b692fbbca",
+      "accuracyOutcome": "REJECTED"
+    },
+    {
+      "name": "source_and_separate_review_kit_integrity",
+      "status": "PASS",
+      "newSourceImages": 17,
+      "reviewKits": 2,
+      "uniquePriorityImages": 9,
+      "humanReviews": 0,
+      "receiptSha256": "2231b64b3aa4580cef41c515fb80885084bab5d54968e55ee2d9f698b6a66433"
+    },
+    {
+      "name": "postman_environment_status",
+      "status": "PASS",
+      "command": "postman status --json",
+      "initialized": false,
+      "auth": "unauthenticated",
+      "collectionAssertionsRun": false,
+      "sha256": "222866f7731083c75931df247434b05b8fee4165a37596f832a1042eb40b2a0b"
+    }
+  ],
+  "experiments": [
+    {
+      "name": "historical_water_three_way",
+      "status": "COMPLETED_GEOMETRY_REJECTED",
+      "command": "BHome.OcrSmoke --water-digit-geometry-study .tools/ocr-models .tools/meter-detection-models .tools/ocr-recovery-english .tools/meter-detection-all-test tools/BHome.OcrSmoke/model_tools/evaluation-full-test-manifest.json .tools/ocr-activation-next/water-geometry-regression.json",
+      "inputs": 52,
+      "sha256": "094a387d11b6e57b6e71071720dc756a9e3ab252d3f9b89c662dd0a7fcf0be7e",
+      "notes": "No algorithm/threshold changed after run. Later serializer cleanup marks the unused English threshold null; raw run retained the legacy field."
+    },
+    {
+      "name": "new_water_source_frames",
+      "status": "COMPLETED_NO_ADDITIONAL_VALID_READING",
+      "command": "BHome.OcrSmoke --water-source-probes .tools/ocr-models .tools/meter-detection-models docs/datasets/meter/activation-next-source-probes.json . .tools/ocr-activation-next/water-source-results.json",
+      "inputs": 17,
+      "inputRejected": 1,
+      "sha256": "6a338f79f01dc1fcefe5e3f0c109bea6c55faf3e41ced59a6f530ef5704b0e6a"
+    },
+    {
+      "name": "numeric_fragment_components",
+      "status": "COMPLETED_EXPERIMENTAL",
+      "command": "BHome.OcrSmoke --experimental-meter-context .tools/ocr-models .tools/ocr-recovery-english .tools/ocr-activation-next/admitted-source-context-manifest.json . .tools/ocr-activation-next/admitted-source-text-groups",
+      "inputs": 16,
+      "sha256": "ed72e89374ebb20da9f6d43cbd4f5f55ff43bf77a9cf8869a2a7ddf0067a8d0c",
+      "acceptedConsumptionReadingsProduced": 0
+    },
+    {
+      "name": "technology_only_adaptation",
+      "status": "COMPLETED_REJECTED",
+      "command": "Local Python wrapper adds existing package paths; adapt_meter_technology_head.py .tools/ocr-four-clip .tools/ocr-runtime-focus/classifier-cv2 docs/datasets/meter/runtime-supervised-provisional.json docs/datasets/meter/activation-next-technology-training.json docs/datasets/meter/accuracy-next-evaluation.json docs/datasets/meter/activation-next-source-probes.json . .tools/ocr-activation-next/lcd-tech-heads",
+      "trainingFrames": 83,
+      "epochs": 50,
+      "thresholds": [0.55, 0.75],
+      "sha256": "12b93ead2014673a66ae17905a026f00c5d05559d84318443834750b692fbbca"
+    }
+  ],
+  "earlierInputFailures": [
+    {
+      "localLog": ".tools/ocr-activation-next/water-source-results.log",
+      "status": "FAILED_ATTEMPT_RECORDED",
+      "reason": "Original source frame09 has unsupported JPEG header geometry. Source runner now records input rejection; component run explicitly excludes this input. Native validation was not weakened and source bytes were not repaired.",
+      "sha256": "f705ade10485453a333fc5c2d7ce9df28507993b15f4a88b05cb6b33b3591539"
+    },
+    {
+      "localLog": ".tools/ocr-activation-next/source-text-groups.log",
+      "status": "FAILED_ATTEMPT_RECORDED",
+      "reason": "Original source frame09 has unsupported JPEG header geometry. Source runner now records input rejection; component run explicitly excludes this input. Native validation was not weakened and source bytes were not repaired.",
+      "sha256": "780be466d809594cd80bdaad04a4f76797f9b1f4f9dbea595bf355ecfb9ebc2f"
+    }
+  ],
+  "frozenDigitalReadingCohorts": {
+    "historical_exploratory": {
+      "previous": {
+        "inputs": 4,
+        "categoryCorrect": 1,
+        "categoryWrong": 0,
+        "categoryUnknown": 3,
+        "positiveLabels": 3,
+        "exactDigits": 0,
+        "wrongDigits": 0,
+        "invalidControls": 1,
+        "invalidRejected": 1,
+        "fallback": 4
+      },
+      "current": {
+        "inputs": 4,
+        "positiveDraftLabels": 3,
+        "exactStrings": 0,
+        "wrongStrings": 0,
+        "invalidInputsRejected": 1,
+        "fallback": 4
+      }
+    },
+    "historical_negative_control": {
+      "previous": {
+        "inputs": 2,
+        "categoryCorrect": 0,
+        "categoryWrong": 0,
+        "categoryUnknown": 2,
+        "positiveLabels": 0,
+        "exactDigits": 0,
+        "wrongDigits": 0,
+        "invalidControls": 2,
+        "invalidRejected": 2,
+        "fallback": 2
+      },
+      "current": {
+        "inputs": 2,
+        "positiveDraftLabels": 0,
+        "exactStrings": 0,
+        "wrongStrings": 0,
+        "invalidInputsRejected": 2,
+        "fallback": 2
+      }
+    },
+    "historical_validation": {
+      "previous": {
+        "inputs": 2,
+        "categoryCorrect": 1,
+        "categoryWrong": 0,
+        "categoryUnknown": 1,
+        "positiveLabels": 1,
+        "exactDigits": 1,
+        "wrongDigits": 0,
+        "invalidControls": 1,
+        "invalidRejected": 1,
+        "fallback": 1
+      },
+      "current": {
+        "inputs": 2,
+        "positiveDraftLabels": 1,
+        "exactStrings": 1,
+        "wrongStrings": 0,
+        "invalidInputsRejected": 1,
+        "fallback": 1
+      }
+    },
+    "provisional_development": {
+      "previous": {
+        "inputs": 5,
+        "categoryCorrect": 0,
+        "categoryWrong": 0,
+        "categoryUnknown": 5,
+        "positiveLabels": 2,
+        "exactDigits": 1,
+        "wrongDigits": 0,
+        "invalidControls": 3,
+        "invalidRejected": 3,
+        "fallback": 4
+      },
+      "current": {
+        "inputs": 5,
+        "positiveDraftLabels": 2,
+        "exactStrings": 1,
+        "wrongStrings": 0,
+        "invalidInputsRejected": 3,
+        "fallback": 4
+      }
+    }
+  },
+  "digitalReplaySha256": "83825912562d3894069a1ebab442d55c9edd4d48862bb836d97d926edd79f9e7",
+  "gatedDataSource": {
+    "sourceUrl": "https://huggingface.co/datasets/utilitimetersai/Annotated-LCD-Utility-Meter-Dials-Dataset",
+    "revision": "dca763d137b4eb22cc87ea0b85ae577a79c5177b",
+    "gated": "manual",
+    "publicMetadataRead": true,
+    "imageDownloads": 0,
+    "accessRequestSubmitted": false
+  },
+  "notRun": [
+    "Independent human acceptance, register/precision verification and final source/device holdout",
+    "Physical camera E2E; no configured device session",
+    "Real MinIO; no local9000/9001 listener; PG uses declared storage substitute",
+    "Mobile tests/lint/typecheck; no source/DTO change",
+    "Gated LCD image inference; no authorized access",
+    "Postman collection assertions"
+  ],
+  "newStaffReadersPromoted": 0,
+  "productionActivated": false,
+  "pushedMergedResetOrDeployed": false
+}

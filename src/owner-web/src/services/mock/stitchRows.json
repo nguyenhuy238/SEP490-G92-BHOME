@@ -1,0 +1,843 @@
+{
+  "dashboard": [
+    {
+      "code": "P.203",
+      "name": "Vũ Minh Khang",
+      "location": "22/10/2024",
+      "status": "5.200.000 ₫"
+    },
+    {
+      "code": "P.402",
+      "name": "Lê Thị Thanh Mai",
+      "location": "26/10/2024",
+      "status": "4.800.000 ₫"
+    },
+    {
+      "code": "P.101",
+      "name": "Đoàn Văn Nam",
+      "location": "29/10/2024",
+      "status": "6.500.000 ₫"
+    },
+    {
+      "code": "P.305",
+      "name": "Ngô Bảo Trâm",
+      "location": "02/11/2024",
+      "status": "5.800.000 ₫"
+    }
+  ],
+  "locations": [
+    {
+      "name": "BHOME Central 1 - Bạch Đằng CS-01 • 5 Tầng",
+      "address": "184/12 Bạch Đằng, P.24, Q.Bình Thạnh",
+      "capacity": "25 Phòng 24 thuê • 1 bảo trì",
+      "occupancy": "96.0%",
+      "amount": "104.20 Tr/tháng",
+      "manager": "Trần Minh Quân 0908.123.456"
+    },
+    {
+      "name": "BHOME Riverside 2 - Phan Xích Long CS-02 • 4 Tầng",
+      "address": "45/8 Phan Xích Long, P.2, Q.Phú Nhuận",
+      "capacity": "20 Phòng 18 thuê • 1 cọc • 1 trống",
+      "occupancy": "90.0%",
+      "amount": "76.80 Tr/tháng",
+      "manager": "Lê Thị Thu Hà 0912.789.012"
+    },
+    {
+      "name": "BHOME Garden 3 - Nguyễn Thị Thập CS-03 • 3 Tầng",
+      "address": "120/4 Nguyễn Thị Thập, P.Tân Hưng, Q.7",
+      "capacity": "11 Phòng 9 thuê • 2 trống",
+      "occupancy": "81.8%",
+      "amount": "37.45 Tr/tháng",
+      "manager": "Nguyễn Hoàng Nam 0988.345.678"
+    }
+  ],
+  "room-types": [
+    {
+      "name": "Studio Ban Công Thoáng LP-ST-01",
+      "location": "Central 1, Riverside 2",
+      "capacity": "24 - 28 m² 2 người",
+      "amount": "5.200.000 ₫ Cọc 1 tháng",
+      "occupancy": "18 phòng 17 thuê / 1 trống (94%)",
+      "assetSummary": "6 danh mục"
+    },
+    {
+      "name": "Căn Hộ Gác Lửng Cao Cấp LP-GL-02",
+      "location": "Central 1, BHOME Garden 3",
+      "capacity": "28 - 32 m² 3 người",
+      "amount": "5.800.000 ₫ Cọc 1 tháng",
+      "occupancy": "20 phòng 19 thuê / 1 bảo trì (95%)",
+      "assetSummary": "8 danh mục"
+    },
+    {
+      "name": "Căn Hộ 1 Phòng Ngủ (1PN) LP-1PN-03",
+      "location": "Riverside 2, BHOME Garden 3",
+      "capacity": "35 m² 3 người",
+      "amount": "7.200.000 ₫ Cọc 2 tháng",
+      "occupancy": "12 phòng 10 thuê / 2 giữ chỗ (83%)",
+      "assetSummary": "10 danh mục"
+    },
+    {
+      "name": "Studio Tiết Kiệm LP-ST-ECO",
+      "location": "BHOME Garden 3",
+      "capacity": "20 - 22 m² 2 người",
+      "amount": "4.500.000 ₫ Cọc 1 tháng",
+      "occupancy": "6 phòng 5 thuê / 1 trống (83%)",
+      "assetSummary": "4 danh mục"
+    }
+  ],
+  "assets": [
+    {
+      "code": "TS-ML-204",
+      "name": "Máy lạnh Daikin 1.5HP FTKC35 Inverter • R32 • Tiết kiệm điện",
+      "category": "Điện lạnh",
+      "location": "CS1 - P.204 Tầng 2 • Lê Văn Sỹ",
+      "date": "15/02/2023 BH: 15/02/2025",
+      "amount": "10.500.000 ₫",
+      "status": "Rò gas / Chờ sửa"
+    },
+    {
+      "code": "TS-TL-102",
+      "name": "Tủ lạnh Sharp 165L SJ-X176E J-Tech Inverter • 2 cánh",
+      "category": "Điện lạnh",
+      "location": "CS1 - P.102 Tầng 1 • Lê Văn Sỹ",
+      "date": "10/01/2023 BH: 10/01/2025",
+      "amount": "4.850.000 ₫",
+      "status": "Tốt"
+    },
+    {
+      "code": "TS-KVT-C1",
+      "name": "Khóa vân tay Yale YDM7116 Smart Cổng an ninh trung tâm • Thẻ từ/Mã",
+      "category": "Khóa & Cam",
+      "location": "CS2 - Cổng chính Khu công cộng • Nguyễn Trãi",
+      "date": "05/08/2023 BH: 05/08/2026",
+      "amount": "8.900.000 ₫",
+      "status": "Tốt"
+    },
+    {
+      "code": "TS-ML-301",
+      "name": "Máy lạnh Panasonic 1.0HP PU9WKH-8M Nanoe-G lọc bụi • Tiêu chuẩn",
+      "category": "Điện lạnh",
+      "location": "CS1 - P.301 Tầng 3 • Lê Văn Sỹ",
+      "date": "12/03/2022 Hết BH (12/03/2024)",
+      "amount": "7.890.000 ₫",
+      "status": "Cần kiểm tra"
+    },
+    {
+      "code": "TS-TG-101",
+      "name": "Tủ quần áo gỗ MDF An Cường 3 cánh Gỗ chống ẩm Melamine sồi",
+      "category": "Đồ gỗ",
+      "location": "CS3 - P.101 Tầng 1 • Điện Biên Phủ",
+      "date": "18/06/2023 BH: 18/06/2026",
+      "amount": "5.200.000 ₫",
+      "status": "Tốt"
+    },
+    {
+      "code": "TS-NL-202",
+      "name": "Máy nước nóng Ariston Slim2 20R Bình chứa tráng men Titan chống giật",
+      "category": "TB Vệ sinh",
+      "location": "CS1 - P.202 Tầng 2 • Lê Văn Sỹ",
+      "date": "22/11/2022 BH: 22/11/2025",
+      "amount": "3.290.000 ₫",
+      "status": "Tốt"
+    }
+  ],
+  "pricing": [
+    {
+      "location": "Central 1 Bạch Đằng, Bình Thạnh",
+      "category": "Studio Ban Công",
+      "capacity": "28 m²",
+      "minimum": "6.200.000 ₫",
+      "amount": "6.800.000 ₫",
+      "holdingDeposit": "2.000.000 ₫",
+      "deposit": "01 tháng tiền phòng",
+      "roomCount": "16 phòng"
+    },
+    {
+      "location": "Central 1 Bạch Đằng, Bình Thạnh",
+      "category": "Duplex Gác Lửng",
+      "capacity": "35 m²",
+      "minimum": "7.500.000 ₫",
+      "amount": "8.200.000 ₫",
+      "holdingDeposit": "2.000.000 ₫",
+      "deposit": "01 tháng tiền phòng",
+      "roomCount": "8 phòng"
+    },
+    {
+      "location": "Riverside 2 Phan Xích Long, Phú Nhuận",
+      "category": "1 Phòng Ngủ (1PN)",
+      "capacity": "42 m²",
+      "minimum": "8.500.000 ₫",
+      "amount": "9.500.000 ₫",
+      "holdingDeposit": "2.000.000 ₫",
+      "deposit": "02 tháng tiền phòng",
+      "roomCount": "12 phòng"
+    },
+    {
+      "location": "Riverside 2 Phan Xích Long, Phú Nhuận",
+      "category": "Studio Tiêu Chuẩn",
+      "capacity": "25 m²",
+      "minimum": "5.800.000 ₫",
+      "amount": "6.400.000 ₫",
+      "holdingDeposit": "2.000.000 ₫",
+      "deposit": "01 tháng tiền phòng",
+      "roomCount": "10 phòng"
+    },
+    {
+      "location": "Garden 3 Nguyễn Thị Thập, Quận 7",
+      "category": "Duplex Sân Vườn",
+      "capacity": "38 m²",
+      "minimum": "7.200.000 ₫",
+      "amount": "7.800.000 ₫",
+      "holdingDeposit": "2.000.000 ₫",
+      "deposit": "01 tháng tiền phòng",
+      "roomCount": "14 phòng"
+    }
+  ],
+  "staff": [
+    {
+      "name": "Trần Minh Quân Trưởng CS1 NV-001",
+      "contact": "0918.234.567 quan.tm@bhome.vn",
+      "category": "Quản lý cơ sở",
+      "location": "BHOME Central 1 25 phòng • Bạch Đằng",
+      "date": "15/03/2022 2 năm 1 tháng",
+      "amount": "14.500.000 ₫ + 1.500.000 ₫ PC",
+      "status": "Đang trực ca"
+    },
+    {
+      "name": "Lê Thị Mai Hương NV-002",
+      "contact": "0932.112.890 huong.ltm@bhome.vn",
+      "category": "Quản lý cơ sở",
+      "location": "BHOME Riverside 2 18 phòng • Phú Nhuận",
+      "date": "01/08/2022 1 năm 8 tháng",
+      "amount": "13.500.000 ₫ + 1.200.000 ₫ PC",
+      "status": "Đang trực ca"
+    },
+    {
+      "name": "Hoàng Văn Đức NV-003",
+      "contact": "0977.891.223 duc.hv@bhome.vn",
+      "category": "Quản lý cơ sở",
+      "location": "BHOME Eco 3 20 phòng • Q.7",
+      "date": "10/01/2023 1 năm 3 tháng",
+      "amount": "14.000.000 ₫ + 1.200.000 ₫ PC",
+      "status": "Đổi ca chiều"
+    },
+    {
+      "name": "VT Vũ Văn Tuấn NV-004",
+      "contact": "0903.456.789 tuan.vv@bhome.vn",
+      "category": "Kỹ thuật & Bảo trì",
+      "location": "Chuỗi CS1 & CS2 Phụ trách điện lạnh",
+      "date": "05/06/2021 2 năm 10 tháng",
+      "amount": "11.000.000 ₫ + 800.000 ₫ PC xăng xe",
+      "status": "Đang trực ca"
+    },
+    {
+      "name": "NA Đặng Nam Anh NV-005",
+      "contact": "0945.678.910 anh.dn@bhome.vn",
+      "category": "Kỹ thuật & Bảo trì",
+      "location": "BHOME Eco 3 Phụ trách điện nước Q.7",
+      "date": "18/09/2023 7 tháng",
+      "amount": "10.500.000 ₫ + 500.000 ₫ PC",
+      "status": "Đang trực ca"
+    },
+    {
+      "name": "NT Nguyễn Văn Thành NV-006",
+      "contact": "0981.233.445 thanh.nv@bhome.vn",
+      "category": "An ninh & Giữ xe",
+      "location": "BHOME Central 1 Trực đêm 18h-06h",
+      "date": "02/02/2022 2 năm 2 tháng",
+      "amount": "8.500.000 ₫ + 700.000 ₫ PC đêm",
+      "status": "Đang trực ca"
+    },
+    {
+      "name": "LH Lê Thị Hoa NV-007",
+      "contact": "0938.882.119 hoa.lt@bhome.vn",
+      "category": "Vệ sinh & Buồng phòng",
+      "location": "BHOME Eco 3 Vệ sinh hành lang & bàn giao",
+      "date": "12/11/2023 5 tháng",
+      "amount": "7.800.000 ₫ + 400.000 ₫ PC phụ cấp",
+      "status": "Nghỉ phép tuần"
+    }
+  ],
+  "schedules": [
+    {
+      "name": "Trần Minh Quân Full-time Quản lý cơ sở 1 (Lê Văn Sỹ) Tổng: 48h / tuần",
+      "mon": "Ca Sáng wb_sunny 08:00 - 16:30 CS1 - Lê Văn Sỹ",
+      "tue": "Ca Sáng wb_sunny 08:00 - 16:30 CS1 - Lê Văn Sỹ",
+      "wed": "Ca Sáng wb_sunny 08:00 - 16:30 CS1 - Lê Văn Sỹ",
+      "thu": "Đang trực • Ca Sáng schedule 08:00 - 16:30 CS1 - Lê Văn Sỹ Bàn giao P.204",
+      "fri": "Ca Sáng wb_sunny 08:00 - 16:30 CS1 - Lê Văn Sỹ",
+      "sat": "Ca Sáng wb_sunny 08:00 - 16:30 CS1 - Lê Văn Sỹ",
+      "sun": "hotel OFF — Nghỉ tuần Theo quy chế ca"
+    },
+    {
+      "name": "Lê Thị Thu Hà Full-time Quản lý cơ sở 2 (Điện Biên Phủ) Tổng: 48h / tuần",
+      "mon": "Ca Sáng wb_sunny 08:00 - 16:30 CS2 - Điện Biên Phủ",
+      "tue": "Ca Sáng wb_sunny 08:00 - 16:30 CS2 - Điện Biên Phủ",
+      "wed": "event_busy OFF (Đổi ca) Nghỉ bù lịch CN",
+      "thu": "Đang trực • Ca Sáng schedule 08:00 - 16:30 CS2 - Điện Biên Phủ",
+      "fri": "Ca Sáng wb_sunny 08:00 - 16:30 CS2 - Điện Biên Phủ",
+      "sat": "Ca Sáng wb_sunny 08:00 - 16:30 CS2 - Điện Biên Phủ",
+      "sun": "Ca Chiều wb_twilight 13:30 - 21:30 CS2 - Ký kết hợp đồng mới"
+    },
+    {
+      "name": "Nguyễn Hoàng Nam Kỹ thuật chuỗi Kỹ thuật trưởng (Lưu động 3 CS) Tổng: 44h / tuần",
+      "mon": "Kiểm định CS1 build 08:30 - 17:00 Kiểm tra tủ điện tầng 1-4",
+      "tue": "Khảo sát CS2 water_drop 08:30 - 17:00 Bảo dưỡng bơm tăng áp",
+      "wed": "Kiểm tra CS3 router 08:30 - 17:00 Hạ tầng mạng & camera CS3",
+      "thu": "Bảo trì CS1 engineering 09:00 - 17:30 Thay cảm biến báo cháy T3",
+      "fri": "Ca Khẩn cấp 08:00 - 16:30 Xử lý rò rỉ P.302 (CS1)",
+      "sat": "Trực Kỹ thuật support_agent 08:00 - 12:00 Trực hotline kỹ thuật",
+      "sun": "hotel OFF Nghỉ cuối tuần"
+    },
+    {
+      "name": "Đỗ Văn Tuấn Part-time Kỹ thuật điện lạnh (CS2 & CS3) Tổng: 32h / tuần",
+      "mon": "event_busy OFF Không có ca",
+      "tue": "Điện Lạnh CS2 ac_unit 09:00 - 17:00 Vệ sinh 8 máy lạnh lầu 2",
+      "wed": "Điện Lạnh CS2 ac_unit 09:00 - 17:00 Nạp gas máy lạnh P.401, 403",
+      "thu": "Bảo trì CS3 ac_unit 09:00 - 17:00 Bảo dưỡng tổng CS3",
+      "fri": "Xử lý CS3 hvac 09:00 - 17:00 Khắc phục máy lạnh P.202",
+      "sat": "hotel OFF Nghỉ định kỳ",
+      "sun": "hotel OFF Nghỉ định kỳ"
+    },
+    {
+      "name": "Bùi Văn Hùng An ninh đêm Bảo vệ đêm CS1 (Lê Văn Sỹ) Tổng: 54h / tuần",
+      "mon": "Ca Đêm bedtime 21:00 - 06:00 CS1 - Tuần tra hầm xe",
+      "tue": "Ca Đêm bedtime 21:00 - 06:00 CS1 - Tuần tra hầm xe",
+      "wed": "Ca Đêm bedtime 21:00 - 06:00 CS1 - Tuần tra hầm xe",
+      "thu": "Ca Đêm Nay security 21:00 - 06:00 CS1 - Điểm danh cổng",
+      "fri": "Ca Đêm bedtime 21:00 - 06:00 CS1 - Tuần tra hầm xe",
+      "sat": "Ca Đêm bedtime 21:00 - 06:00 CS1 - Tuần tra hầm xe",
+      "sun": "hotel OFF Giao ca ngoài"
+    },
+    {
+      "name": "Phạm Quốc Việt An ninh đêm Bảo vệ đêm CS2 (Điện Biên Phủ) Tổng: 54h / tuần",
+      "mon": "Ca Đêm bedtime 21:00 - 06:00 CS2 - Giám sát camera",
+      "tue": "Ca Đêm bedtime 21:00 - 06:00 CS2 - Giám sát camera",
+      "wed": "Ca Đêm bedtime 21:00 - 06:00 CS2 - Giám sát camera",
+      "thu": "Ca Đêm Nay security 21:00 - 06:00 CS2 - Khóa chốt 23:00",
+      "fri": "Ca Đêm bedtime 21:00 - 06:00 CS2 - Giám sát camera",
+      "sat": "Ca Đêm bedtime 21:00 - 06:00 CS2 - Giám sát camera",
+      "sun": "hotel OFF Đội dịch vụ trực thay"
+    }
+  ],
+  "tasks": [
+    {
+      "name": "#TASK-2410-01 Bảo trì Bảo dưỡng máy lạnh định kỳ 1 biên bản",
+      "location": "BHOME Central 1 P.204",
+      "staff": "VT KTV Vũ Văn Tuấn",
+      "date": "16:00 Hôm nay",
+      "status": "Đang thực hiện"
+    },
+    {
+      "name": "#TASK-2410-02 Khẩn cấp Xử lý rò rỉ van nước P.302 photo_camera 2 ảnh đính kèm",
+      "location": "BHOME Riverside 2 P.302",
+      "staff": "VT KTV Vũ Văn Tuấn",
+      "date": "Hôm nay, 14:00",
+      "status": "Chờ nghiệm thu"
+    },
+    {
+      "name": "#TASK-2410-03 Điện nước Chốt chỉ số điện nước T10 checklist 18/20 phòng",
+      "location": "BHOME Garden 3 Toàn tòa",
+      "staff": "MQ QL Trần Minh Quân",
+      "date": "18/10/2024",
+      "status": "Đang thực hiện"
+    },
+    {
+      "name": "#TASK-2410-04 Vệ sinh Dọn vệ sinh bàn giao P.102 Sẵn sàng đón khách",
+      "location": "BHOME Central 1 P.102",
+      "staff": "LH Tạp vụ Lê Thị Hoa",
+      "date": "17/10/2024",
+      "status": "Hoàn thành"
+    },
+    {
+      "name": "#TASK-2410-05 An toàn Kiểm định bình PCCC hành lang verified_user 12 bình đạt chuẩn",
+      "location": "BHOME Garden 3 Tầng 1 - 4",
+      "staff": "HN KTV N. Hoàng Nam",
+      "date": "19/10/2024",
+      "status": "Hoàn thành"
+    },
+    {
+      "name": "#TASK-2410-06 Khách thuê Bàn giao chìa khóa & thẻ từ P.204 key HĐ #HD-204-09",
+      "location": "BHOME Central 1 P.204",
+      "staff": "MQ QL Trần Minh Quân",
+      "date": "20/10/2024",
+      "status": "Chờ nghiệm thu"
+    }
+  ],
+  "tenants": [
+    {
+      "name": "Trần Quốc Bảo Mã: KT-0204",
+      "contact": "0933.112.233 079200***891",
+      "room": "P.204 CS1: 24/8 Lê Văn Sỹ",
+      "category": "Đại diện HĐ",
+      "contract": "Hiệu lực",
+      "residence": "Đã duyệt"
+    },
+    {
+      "name": "Lê Thị Thu Thảo Mã: KT-0204-B",
+      "contact": "0982.554.190 082199***432",
+      "room": "P.204 CS1: 24/8 Lê Văn Sỹ",
+      "category": "Người ở cùng",
+      "contract": "Theo HĐ #089",
+      "residence": "Đã duyệt"
+    },
+    {
+      "name": "HN Nguyễn Văn Hải Nam Mã: KT-0201",
+      "contact": "0912.884.221 038096***115",
+      "room": "P.201 CS1: 24/8 Lê Văn Sỹ",
+      "category": "Đại diện HĐ",
+      "contract": "Đang thuê",
+      "residence": "Đã duyệt"
+    },
+    {
+      "name": "MK Vũ Minh Khang Mã: KT-0203",
+      "contact": "0903.771.624 001094***653",
+      "room": "P.203 CS1: 24/8 Lê Văn Sỹ",
+      "category": "Đại diện HĐ",
+      "contract": "Sắp hết hạn (12n)",
+      "residence": "hourglass_top Gia hạn CT07"
+    },
+    {
+      "name": "PL Trần Phương Linh Mã: KT-0402",
+      "contact": "0977.340.912 Chưa bổ sung",
+      "room": "P.402 CS3: 180 Nguyễn Thị Minh Khai",
+      "category": "Đại diện HĐ",
+      "contract": "Giữ chỗ (Vào 01/11)",
+      "residence": "pending Chờ CCCD"
+    }
+  ],
+  "contracts": [
+    {
+      "code": "#HD-2024-089 VNPT-CA: 98112-VN",
+      "room": "CS1 — Phòng 204 HĐ Thuê chính thức",
+      "tenant": "Trần Quốc Bảo 0903 847 219",
+      "period": "15/01/24 → 15/01/25 Còn 314 ngày",
+      "amount": "5.200.000 ₫/th Cọc 2 th: 10.400.000 ₫",
+      "signature": "Đã ký hai bên 15/01 16:05 (SmartCA)",
+      "status": "Đang hiệu lực"
+    },
+    {
+      "code": "#HDC-2024-012 HĐ Giữ chỗ 15 ngày",
+      "room": "CS3 — Phòng 402 bookmark_border HĐ Giữ chỗ cọc",
+      "tenant": "Lê Hoàng Nam 0978 112 344",
+      "period": "01/02/24 → 15/02/24 alarm Hạn ký: Còn 1 ngày",
+      "amount": "6.800.000 ₫/th Giữ chỗ: 3.000.000 ₫",
+      "signature": "send Chờ khách ký Chủ nhà đã ký số",
+      "status": "Giữ chỗ phòng"
+    },
+    {
+      "code": "#HD-2024-071 VNPT-CA: 61502-VN",
+      "room": "CS2 — Phòng 102 HĐ Thuê chính thức",
+      "tenant": "Phạm Thị Mai Trinh 0912 994 881",
+      "period": "20/02/23 → 20/02/24 Còn 18 ngày",
+      "amount": "4.500.000 ₫/th Cọc 1 th: 4.500.000 ₫",
+      "signature": "Đã ký hai bên 20/02/2023",
+      "status": "Sắp hết hạn"
+    },
+    {
+      "code": "#HD-2024-055 VNPT-CA: Draft-Pending",
+      "room": "CS1 — Phòng 301 HĐ Thuê chính thức",
+      "tenant": "Võ Thị Thu Hà 0933 421 908",
+      "period": "01/03/24 → 01/03/25 calendar_today Bắt đầu từ tháng tới",
+      "amount": "7.500.000 ₫/th Cọc 2 th: 15.000.000 ₫",
+      "signature": "hourglass_top Chờ chủ chuỗi ký Khách đã ký số xong",
+      "status": "Đang khởi tạo"
+    },
+    {
+      "code": "#HDC-2024-009 HĐ Giữ chỗ (Đã xong)",
+      "room": "CS3 — Phòng 201 transform Chuyển đổi → #HD-2024-082",
+      "tenant": "Đỗ Văn Minh 0988 776 554",
+      "period": "05/01/24 → 20/01/24 Thời hạn cọc hoàn tất",
+      "amount": "5.800.000 ₫/th Đã cọc: 2.500.000 ₫",
+      "signature": "Ký giấy tờ bàn giao Đã quyết toán cọc",
+      "status": "Đã chuyển đổi"
+    }
+  ],
+  "temporary-residence": [
+    {
+      "code": "#TT-2024-103 DVC-2024-8839211",
+      "tenant": "NA Đặng Nam Anh CCCD: 034201***554",
+      "room": "CS2 - P.102 BHOME Riverside 2",
+      "date": "10/10/2024 Đã ở 3 ngày",
+      "status": "Chờ chủ nhà xác nhận"
+    },
+    {
+      "code": "Chưa có mã Chưa gửi VNeID",
+      "tenant": "QB Trần Quốc Bảo CCCD: 079200***891",
+      "room": "CS1 - P.204 BHOME Riverside 1",
+      "date": "02/10/2024 Đã ở 11 ngày",
+      "status": "Chưa nộp VNeID - Trễ 4 ngày"
+    },
+    {
+      "code": "#TT-2024-102 DVC-2024-7749102",
+      "tenant": "TT Lê Thị Thu Thảo CCCD: 079198***432",
+      "room": "CS3 - P.402 BHOME Gateway 3",
+      "date": "06/10/2024 Chủ trọ đã duyệt",
+      "status": "Chờ Công an P.An Phú duyệt"
+    },
+    {
+      "code": "#TT-2024-098 DVC-2024-6638100",
+      "tenant": "HM Hoàng Minh Trí CCCD: 025200***112",
+      "room": "CS2 - P.301 BHOME Riverside 2",
+      "date": "15/09/2024 Hết hạn: 15/09/2026",
+      "status": "Đã cấp mã định danh tạm trú"
+    },
+    {
+      "code": "#TT-2024-097 DVC-2024-5541998",
+      "tenant": "PA Phạm Phương Anh CCCD: 031199***776",
+      "room": "CS1 - P.103 BHOME Riverside 1",
+      "date": "01/09/2024 Hết hạn: 01/09/2026",
+      "status": "Đã cấp mã định danh tạm trú"
+    }
+  ],
+  "meters": [
+    {
+      "room": "P.204 CS1 - Bạch Đằng",
+      "tenant": "Trần Quốc Bảo HĐ #HD-2408",
+      "electricity": "1.482 → 1.698 216 kWh",
+      "water": "246 → 250 4 m³",
+      "evidence": "photo_camera 2 ảnh",
+      "staff": "KTV Vũ Văn Tuấn 10:15 - 24/10",
+      "status": "Đã chốt & Xác nhận"
+    },
+    {
+      "room": "P.302 CS1 - Bạch Đằng",
+      "tenant": "Trịnh Hoàng Yến HĐ #HD-2412",
+      "electricity": "890 → 1.045 155 kWh",
+      "water": "112 → 115 3 m³",
+      "evidence": "photo_camera 2 ảnh",
+      "staff": "KTV Vũ Văn Tuấn 09:40 - 24/10",
+      "status": "search_check Chờ xác nhận OCR"
+    },
+    {
+      "room": "P.402 CS3 - Garden 3",
+      "tenant": "Trần Phương Linh HĐ #HD-2391",
+      "electricity": "520 → Chưa ghi -- kWh",
+      "water": "84 → Chưa ghi -- m³",
+      "evidence": "hide_image Thiếu ảnh",
+      "staff": "Chưa thực hiện",
+      "status": "schedule Quá hạn 1 ngày"
+    },
+    {
+      "room": "P.102 CS2 - Riverside 2",
+      "tenant": "Đặng Nam Anh HĐ #HD-2419",
+      "electricity": "1.120 → 1.340 220 kWh",
+      "water": "180 → 185 5 m³",
+      "evidence": "photo_camera 2 ảnh",
+      "staff": "KTV Lê Bảo Huy 08:10 - 24/10",
+      "status": "Đã chốt & Xác nhận"
+    },
+    {
+      "room": "P.201 CS1 - Bạch Đằng",
+      "tenant": "Nguyễn Văn Hải Nam HĐ #HD-2388",
+      "electricity": "910 → 1.155 245 kWh (+35%)",
+      "water": "130 → 134 4 m³",
+      "evidence": "photo_camera 2 ảnh",
+      "staff": "KTV Vũ Văn Tuấn 11:00 - 24/10",
+      "status": "Đã chốt & Xác nhận"
+    }
+  ],
+  "invoices": [
+    {
+      "code": "#HD-202410-0204",
+      "room": "P.204 CS1 Bạch Đằng",
+      "tenant": "Trần Quốc Bảo 0933.112.233",
+      "rent": "5.200.000 ₫",
+      "utilities": "920.800 ₫",
+      "service": "330.000 ₫",
+      "amount": "6.450.800 ₫",
+      "debt": "0 ₫",
+      "status": "Đã thanh toán (VietQR)"
+    },
+    {
+      "code": "#HD-202410-0302",
+      "room": "P.302 CS1 Bạch Đằng",
+      "tenant": "Trịnh Hoàng Yến 0918.442.119",
+      "rent": "5.000.000 ₫",
+      "utilities": "820.000 ₫",
+      "service": "330.000 ₫",
+      "amount": "6.150.000 ₫",
+      "debt": "6.150.000 ₫",
+      "status": "alarm Quá hạn 3 ngày"
+    },
+    {
+      "code": "#HD-202410-0402",
+      "room": "P.402 CS3 Garden 3",
+      "tenant": "Trần Phương Linh 0903.882.771",
+      "rent": "6.500.000 ₫",
+      "utilities": "970.000 ₫",
+      "service": "350.000 ₫",
+      "amount": "7.820.000 ₫",
+      "debt": "4.820.000 ₫",
+      "status": "incomplete_circle Trả một phần (3M)"
+    },
+    {
+      "code": "#HD-202410-0102",
+      "room": "P.102 CS2 Riverside 2",
+      "tenant": "Đặng Nam Anh 0982.551.442",
+      "rent": "5.200.000 ₫",
+      "utilities": "850.000 ₫",
+      "service": "330.000 ₫",
+      "amount": "6.380.000 ₫",
+      "debt": "0 ₫",
+      "status": "Đã thanh toán"
+    },
+    {
+      "code": "#HD-202410-0203",
+      "room": "P.203 CS1 Bạch Đằng",
+      "tenant": "Vũ Minh Khang 0977.332.990",
+      "rent": "4.800.000 ₫",
+      "utilities": "850.000 ₫",
+      "service": "330.000 ₫",
+      "amount": "5.980.000 ₫",
+      "debt": "5.980.000 ₫",
+      "status": "history_edu Chờ duyệt -150k"
+    }
+  ],
+  "payments": [
+    {
+      "code": "FT2428800192 VietinBank • STK 1088...",
+      "date": "14:20 15/10/2024",
+      "amount": "+6.150.000 ₫",
+      "tenant": "NGUYEN VAN TRUONG Vietcombank CN HCM",
+      "description": "\"Nguyen Van Truong chuyen tien phong P302 CS1\" Thiếu mã HĐ #HD-202410-0302",
+      "status": "Chờ khớp thủ công"
+    },
+    {
+      "code": "radio_button_unchecked FT2428800185 MBBank • STK 0988...",
+      "date": "11:05 15/10/2024",
+      "amount": "+3.000.000 ₫",
+      "tenant": "TRAN PHUONG LINH Techcombank",
+      "description": "\"P402 CS3 thanh toan dot 1\" Còn thiếu: 4.820.000 ₫",
+      "status": "Gạch 1 phần (3tr / 7.82tr)"
+    },
+    {
+      "code": "radio_button_unchecked FT242789123 MBBank • STK 0988...",
+      "date": "09:15 04/10/2024",
+      "amount": "+6.450.800 ₫",
+      "tenant": "NGO BAO TRAM ACB • CN Sai Gon",
+      "description": "\"BHOME VQR98273618392 HD2024100204\" Phòng 204 · CS2",
+      "status": "Đã khớp tự động (VietQR)"
+    },
+    {
+      "code": "radio_button_unchecked FT242770054 VietinBank • STK 1088...",
+      "date": "16:40 02/10/2024",
+      "amount": "+5.200.000 ₫",
+      "tenant": "DANG NAM ANH VPBank",
+      "description": "\"Dang Nam Anh TT tien phong P101 thang 10\" Khớp số điện thoại + Phòng 101",
+      "status": "Đã khớp tự động"
+    }
+  ],
+  "debts": [
+    {
+      "room": "P.302 CS1 Bạch Đằng",
+      "tenant": "Trịnh Hoàng Yến 0912.443.xxx",
+      "date": "05/10/2024 #HD-202410-0302",
+      "amount": "6.150.000 ₫",
+      "debt": "6.150.000 ₫",
+      "aging": "10 ngày +500k phạt",
+      "reminder": "SMS + Zalo lần 2 Gửi ngày 12/10"
+    },
+    {
+      "room": "P.402 CS3 Garden 3",
+      "tenant": "Trần Phương Linh 0977.340.912",
+      "date": "07/10/2024 #HD-202410-0402",
+      "amount": "7.820.000 ₫ Đã nộp: 3.000.000 ₫",
+      "debt": "4.820.000 ₫",
+      "aging": "8 ngày",
+      "reminder": "Hẹn đóng nốt Trước 20/10"
+    },
+    {
+      "room": "P.203 CS1 Bạch Đằng",
+      "tenant": "Vũ Minh Khang 0903.882.112",
+      "date": "05/10/2024 #HD-202410-0203",
+      "amount": "5.980.000 ₫",
+      "debt": "5.980.000 ₫",
+      "aging": "10 ngày",
+      "reminder": "Chờ duyệt giảm trừ 150k"
+    },
+    {
+      "room": "P.104 CS2 Thảo Điền",
+      "tenant": "Lê Văn An 0988.120.334",
+      "date": "20/10/2024 #HD-202410-0104",
+      "amount": "5.600.000 ₫",
+      "debt": "5.600.000 ₫",
+      "aging": "Trong hạn",
+      "reminder": "Còn 5 ngày nộp"
+    }
+  ],
+  "incidents": [
+    {
+      "code": "#SC-2410-09 Khẩn cấp",
+      "room": "P.302 · CS1 CS Bạch Đằng Rò rỉ ống nhánh KT",
+      "tenant": "Trịnh Hoàng Yến 0912.443.xxx 10:42 18/10",
+      "description": "Hộp gen kỹ thuật ống cấp nước vỡ ren van góc, nước tràn sàn lan sang hành lang. Nguy cơ ngấm trần P.202",
+      "evidence": "2 ảnh",
+      "staff": "QL Trần Q. Cường KTV Nguyễn H. Nam",
+      "status": "Đang sửa chữa (Đã khóa van)"
+    },
+    {
+      "code": "#SC-2410-08 Thường",
+      "room": "P.102 · CS2 Riverside 2 (Q7)",
+      "tenant": "Võ Minh Đạt 0908.112.xxx 08:15 18/10",
+      "description": "Máy lạnh Daikin 1.5HP chảy nước máng sau, nhỏ giọt xuống sàn gỗ phòng ngủ.",
+      "evidence": "1 ảnh",
+      "staff": "Đỗ Văn Tuấn KTV Điện Lạnh",
+      "status": "Chờ duyệt chi phí"
+    },
+    {
+      "code": "#SC-2410-07 Thường",
+      "room": "Cổng chính · CS2 Riverside 2 (Q7)",
+      "tenant": "Bảo vệ ca sáng Bùi Tấn Tài 21:30 17/10",
+      "description": "Khóa cổng vân tay điện tử chập chờn sau mưa lớn, cư dân phải quẹt thẻ từ phụ.",
+      "evidence": "Không kèm ảnh",
+      "staff": "Nguyễn Hoàng Nam KTV Toàn thời gian",
+      "status": "Đã xử lý (Thay pin/seal)"
+    },
+    {
+      "code": "#SC-2410-06 Thấp",
+      "room": "P.204 · CS1 CS Bạch Đằng",
+      "tenant": "Lê Phương Thảo 0933.821.xxx 14:20 17/10",
+      "description": "Đèn LED rọi gác lửng nhấp nháy liên tục khi bật công tắc trần.",
+      "evidence": "1 video ngắn",
+      "staff": "Vũ Văn Tuấn KTV Điện",
+      "status": "Hoàn tất đóng phiếu"
+    }
+  ],
+  "maintenance": [
+    {
+      "code": "#WO-2410-09 18/10/2024 · 10:45",
+      "room": "P.302 · CS1 Bạch Đằng Cụm van ngắt nước PPR D21 LK: #SC-2410-09",
+      "staff": "HN KTV Nguyễn H. Nam",
+      "amount": "350.000 ₫ Dự toán: 350.000 ₫",
+      "status": "Chờ duyệt chi phí"
+    },
+    {
+      "code": "#WO-2410-08 15/10/2024 · 14:20",
+      "room": "Khu giặt T.5 · CS1 Bạch Đằng Máy giặt Electrolux kêu to rung lắc",
+      "staff": "PK Đơn vị ngoài (Phúc Khang)",
+      "amount": "580.000 ₫ Dự toán: 650.000 ₫",
+      "status": "Đã nghiệm thu"
+    },
+    {
+      "code": "#WO-2410-07 12/10/2024 · 09:15",
+      "room": "P.102 · CS2 Phan Xích Long Nạp gas R32 máy lạnh Daikin 1.5HP",
+      "staff": "VT KTV Đỗ Văn Tuấn",
+      "amount": "420.000 ₫ Dự toán: 450.000 ₫",
+      "status": "Đang sửa chữa"
+    },
+    {
+      "code": "#WO-2410-06 10/10/2024 · 16:30",
+      "room": "Sảnh G · CS3 Lê Văn Sỹ Bảo trì mắt thần & chuông cửa khóa từ",
+      "staff": "HN KTV Nguyễn H. Nam",
+      "amount": "250.000 ₫ Dự toán: 300.000 ₫",
+      "status": "Đã nghiệm thu"
+    },
+    {
+      "code": "#WO-2410-05 08/10/2024 · 11:00",
+      "room": "P.204 · CS2 Phan Xích Long Sửa bản lề giảm chấn tủ bếp trên",
+      "staff": "VT KTV Đỗ Văn Tuấn",
+      "amount": "150.000 ₫ Dự toán: 150.000 ₫",
+      "status": "Chờ duyệt chi phí"
+    },
+    {
+      "code": "#WO-2410-04 05/10/2024 · 08:30",
+      "room": "Toàn toà nhà · CS1 Bạch Đằng Kiểm định định kỳ bình xịt PCCC",
+      "staff": "PC Cty CP PCCC An Toàn",
+      "amount": "1.500.000 ₫ Dự toán: 1.500.000 ₫",
+      "status": "Đã thanh toán"
+    }
+  ],
+  "expenses": [
+    {
+      "code": "#PC-202410-01",
+      "date": "28/10/2024",
+      "location": "CS1 + CS2",
+      "category": "Lương quản trị cơ sở & Kỹ thuật trực đêm Định kỳ hàng tháng - Chuyển khoản bảng lương",
+      "staff": "TT Trần Đình Trọng",
+      "amount": "16.500.000 ₫",
+      "evidence": "UNC Bank",
+      "status": "Đã thanh toán"
+    },
+    {
+      "code": "#PC-202410-04",
+      "date": "25/10/2024",
+      "location": "CS3 Tân Bình",
+      "category": "Thay cụm bơm tăng áp biến tần Panasonic CAPEX khắc phục áp lực nước yếu phòng 401-404",
+      "staff": "LN Lê Khắc Nam",
+      "amount": "6.800.000 ₫",
+      "evidence": "description Hóa đơn VAT",
+      "status": "Đã thanh toán"
+    },
+    {
+      "code": "#PC-202410-08",
+      "date": "21/10/2024",
+      "location": "Toàn chuỗi",
+      "category": "Tiền điện hành lang, thang máy, máy giặt chung Phần bù chênh lệch sau khi đối soát chỉ số phòng",
+      "staff": "NH Nguyễn Thị Hoa",
+      "amount": "5.320.000 ₫",
+      "evidence": "bolt HĐ Điện tử",
+      "status": "Đã thanh toán"
+    },
+    {
+      "code": "#PC-202410-12",
+      "date": "17/10/2024",
+      "location": "Toàn chuỗi",
+      "category": "Internet cáp quang băng thông cao 3 cơ sở 3 đường truyền FTTH 300Mbps hỗ trợ sinh viên & NV văn phòng",
+      "staff": "TT Trần Đình Trọng",
+      "amount": "3.150.000 ₫",
+      "evidence": "wifi Biên lai mạng",
+      "status": "Đã thanh toán"
+    },
+    {
+      "code": "#PC-202410-15",
+      "date": "12/10/2024",
+      "location": "CS2 Phú Nhuận",
+      "category": "Kiểm định & Sạc 18 bình chữa cháy CO2/ABC Nghiệm thu an toàn quý 4 theo quy định công an phường",
+      "staff": "NH Nguyễn Thị Hoa",
+      "amount": "2.750.000 ₫",
+      "evidence": "local_fire_department Biên bản PCCC",
+      "status": "Đã thanh toán"
+    },
+    {
+      "code": "#PC-202410-18",
+      "date": "05/10/2024",
+      "location": "Toàn chuỗi",
+      "category": "Thu gom rác sinh hoạt & Tẩy rửa sàn để xe định kỳ 3 tòa nhà (tần suất thu gom hàng ngày)",
+      "staff": "TT Trần Đình Trọng",
+      "amount": "3.750.000 ₫",
+      "evidence": "cleaning_services Hợp đồng & Phiếu thu",
+      "status": "Đã thanh toán"
+    }
+  ],
+  "reports": [
+    {
+      "code": "location_on BHOME Central 1 148 Bạch Đằng, Bình Thạnh",
+      "name": "25 phòng",
+      "location": "104.200.000 ₫",
+      "status": "18.500.000 ₫",
+      "description": "Tối ưu"
+    },
+    {
+      "code": "location_on BHOME Riverside 2 42 Phan Xích Long, Phú Nhuận",
+      "name": "20 phòng",
+      "location": "76.800.000 ₫",
+      "status": "14.800.000 ₫",
+      "description": "Ổn định"
+    },
+    {
+      "code": "location_on BHOME Garden 3 88 Nguyễn Thị Thập, Quận 7",
+      "name": "11 phòng",
+      "location": "37.450.000 ₫",
+      "status": "8.880.000 ₫",
+      "description": "Còn 2 phòng"
+    },
+    {
+      "code": "domain_verification TỔNG CỘNG TOÀN CHUỖI",
+      "name": "56 phòng",
+      "location": "218.450.000 ₫",
+      "status": "42.180.000 ₫",
+      "description": "Vượt 2.4% KPI"
+    }
+  ]
+}

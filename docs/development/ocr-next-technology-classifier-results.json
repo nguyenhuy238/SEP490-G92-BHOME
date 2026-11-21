@@ -1,0 +1,642 @@
+{
+  "date": "2026-11-08",
+  "status": "REJECTED",
+  "reason": "Additional LCD data makes technology scores more confident while wrong utility argmaxes and domain shift persist. Added5 wrong on16 native-admitted new-source images and2 non-meter false acceptances in validation. No threshold retuning.",
+  "baselineSha256": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3",
+  "candidateSha256": "f5a123743a79b8b5adae2af45b936466b137897348891d4caea7359af9e848c7",
+  "originalTechnologyTrainFrames": 33,
+  "additionalTechnologyOnlyFrames": 50,
+  "utilityHeadFrozen": true,
+  "visionEncoderFrozen": true,
+  "epochs": 50,
+  "thresholds": [0.55, 0.75],
+  "utilityLabelsInventedForNewData": false,
+  "uniquePhysicalDeviceCount": null,
+  "licenseScope": "CC-BY-NC-4.0 noncommercial offline research only",
+  "modelCandidateActivated": false,
+  "pytorchOnnxParityImages": 9,
+  "pytorchOnnxMaxLogitDelta": 3.993511199951172e-6,
+  "decodedComponentCohorts": {
+    "fresh_source_development": {
+      "baseline": {
+        "inputs": 2,
+        "correct": 0,
+        "wrong": 0,
+        "unknown": 2,
+        "acceptedPrecision": null,
+        "nonMeterInputs": 0,
+        "nonMeterFalseAccepted": 0,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        }
+      },
+      "candidate": {
+        "inputs": 2,
+        "correct": 0,
+        "wrong": 2,
+        "unknown": 0,
+        "acceptedPrecision": 0.0,
+        "nonMeterInputs": 0,
+        "nonMeterFalseAccepted": 0,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": 0.0
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 1,
+            "unknown": 0,
+            "recall": 0.0,
+            "acceptedPrecision": 0.0
+          },
+          "water_mechanical": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 1,
+            "unknown": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        }
+      }
+    },
+    "fresh_source_provisional": {
+      "baseline": {
+        "inputs": 17,
+        "correct": 0,
+        "wrong": 0,
+        "unknown": 17,
+        "acceptedPrecision": null,
+        "nonMeterInputs": 0,
+        "nonMeterFalseAccepted": 0,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 17,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 17,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        }
+      },
+      "candidate": {
+        "inputs": 17,
+        "correct": 0,
+        "wrong": 5,
+        "unknown": 12,
+        "acceptedPrecision": 0.0,
+        "nonMeterInputs": 0,
+        "nonMeterFalseAccepted": 0,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": 0.0
+          },
+          "water_mechanical": {
+            "inputs": 17,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 5,
+            "unknown": 12,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": 0.0
+          }
+        }
+      }
+    },
+    "historical_test": {
+      "baseline": {
+        "inputs": 9,
+        "correct": 1,
+        "wrong": 1,
+        "unknown": 7,
+        "acceptedPrecision": 0.5,
+        "nonMeterInputs": 2,
+        "nonMeterFalseAccepted": 0,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 2,
+            "correctAccepted": 1,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.5,
+            "acceptedPrecision": 1.0
+          },
+          "electricity_digital": {
+            "inputs": 2,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 2,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 2,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 2,
+            "recall": 0.0,
+            "acceptedPrecision": 0.0
+          },
+          "water_digital": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 1,
+            "unknown": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          }
+        }
+      },
+      "candidate": {
+        "inputs": 9,
+        "correct": 2,
+        "wrong": 1,
+        "unknown": 6,
+        "acceptedPrecision": 0.6666666666666666,
+        "nonMeterInputs": 2,
+        "nonMeterFalseAccepted": 0,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 2,
+            "correctAccepted": 1,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.5,
+            "acceptedPrecision": 1.0
+          },
+          "electricity_digital": {
+            "inputs": 2,
+            "correctAccepted": 1,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.5,
+            "acceptedPrecision": 1.0
+          },
+          "water_mechanical": {
+            "inputs": 2,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 2,
+            "recall": 0.0,
+            "acceptedPrecision": 0.0
+          },
+          "water_digital": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 1,
+            "unknown": 0,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          }
+        }
+      }
+    },
+    "historical_validation": {
+      "baseline": {
+        "inputs": 7,
+        "correct": 1,
+        "wrong": 0,
+        "unknown": 6,
+        "acceptedPrecision": 1.0,
+        "nonMeterInputs": 4,
+        "nonMeterFalseAccepted": 0,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 1,
+            "correctAccepted": 1,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": 1.0,
+            "acceptedPrecision": 1.0
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        }
+      },
+      "candidate": {
+        "inputs": 7,
+        "correct": 1,
+        "wrong": 2,
+        "unknown": 4,
+        "acceptedPrecision": 0.3333333333333333,
+        "nonMeterInputs": 4,
+        "nonMeterFalseAccepted": 2,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.0,
+            "acceptedPrecision": 0.0
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 1,
+            "correctAccepted": 1,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": 1.0,
+            "acceptedPrecision": 1.0
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        }
+      }
+    },
+    "previous_source_probes": {
+      "baseline": {
+        "inputs": 4,
+        "correct": 0,
+        "wrong": 0,
+        "unknown": 4,
+        "acceptedPrecision": null,
+        "nonMeterInputs": 2,
+        "nonMeterFalseAccepted": 0,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        }
+      },
+      "candidate": {
+        "inputs": 4,
+        "correct": 0,
+        "wrong": 0,
+        "unknown": 4,
+        "acceptedPrecision": null,
+        "nonMeterInputs": 2,
+        "nonMeterFalseAccepted": 0,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 1,
+            "recall": 0.0,
+            "acceptedPrecision": null
+          },
+          "water_mechanical": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        }
+      }
+    },
+    "same_author_new_photo": {
+      "baseline": {
+        "inputs": 1,
+        "correct": 1,
+        "wrong": 0,
+        "unknown": 0,
+        "acceptedPrecision": 1.0,
+        "nonMeterInputs": 0,
+        "nonMeterFalseAccepted": 0,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correctAccepted": 1,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": 1.0,
+            "acceptedPrecision": 1.0
+          },
+          "water_mechanical": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        }
+      },
+      "candidate": {
+        "inputs": 1,
+        "correct": 1,
+        "wrong": 0,
+        "unknown": 0,
+        "acceptedPrecision": 1.0,
+        "nonMeterInputs": 0,
+        "nonMeterFalseAccepted": 0,
+        "perClass": {
+          "electricity_mechanical": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          },
+          "electricity_digital": {
+            "inputs": 1,
+            "correctAccepted": 1,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": 1.0,
+            "acceptedPrecision": 1.0
+          },
+          "water_mechanical": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          },
+          "water_digital": {
+            "inputs": 0,
+            "correctAccepted": 0,
+            "wrongAcceptedForTheseImages": 0,
+            "unknown": 0,
+            "recall": null,
+            "acceptedPrecision": null
+          }
+        }
+      }
+    }
+  },
+  "nativeAdmittedNewSource": {
+    "baseline": {
+      "inputs": 16,
+      "correct": 0,
+      "wrong": 0,
+      "unknown": 16,
+      "acceptedPrecision": null,
+      "nonMeterInputs": 0,
+      "nonMeterFalseAccepted": 0,
+      "perClass": {
+        "electricity_mechanical": {
+          "inputs": 0,
+          "correctAccepted": 0,
+          "wrongAcceptedForTheseImages": 0,
+          "unknown": 0,
+          "recall": null,
+          "acceptedPrecision": null
+        },
+        "electricity_digital": {
+          "inputs": 0,
+          "correctAccepted": 0,
+          "wrongAcceptedForTheseImages": 0,
+          "unknown": 0,
+          "recall": null,
+          "acceptedPrecision": null
+        },
+        "water_mechanical": {
+          "inputs": 16,
+          "correctAccepted": 0,
+          "wrongAcceptedForTheseImages": 0,
+          "unknown": 16,
+          "recall": 0.0,
+          "acceptedPrecision": null
+        },
+        "water_digital": {
+          "inputs": 0,
+          "correctAccepted": 0,
+          "wrongAcceptedForTheseImages": 0,
+          "unknown": 0,
+          "recall": null,
+          "acceptedPrecision": null
+        }
+      }
+    },
+    "candidate": {
+      "inputs": 16,
+      "correct": 0,
+      "wrong": 5,
+      "unknown": 11,
+      "acceptedPrecision": 0.0,
+      "nonMeterInputs": 0,
+      "nonMeterFalseAccepted": 0,
+      "perClass": {
+        "electricity_mechanical": {
+          "inputs": 0,
+          "correctAccepted": 0,
+          "wrongAcceptedForTheseImages": 0,
+          "unknown": 0,
+          "recall": null,
+          "acceptedPrecision": null
+        },
+        "electricity_digital": {
+          "inputs": 0,
+          "correctAccepted": 0,
+          "wrongAcceptedForTheseImages": 0,
+          "unknown": 0,
+          "recall": null,
+          "acceptedPrecision": 0.0
+        },
+        "water_mechanical": {
+          "inputs": 16,
+          "correctAccepted": 0,
+          "wrongAcceptedForTheseImages": 5,
+          "unknown": 11,
+          "recall": 0.0,
+          "acceptedPrecision": null
+        },
+        "water_digital": {
+          "inputs": 0,
+          "correctAccepted": 0,
+          "wrongAcceptedForTheseImages": 0,
+          "unknown": 0,
+          "recall": null,
+          "acceptedPrecision": 0.0
+        }
+      }
+    }
+  },
+  "nativeInputRejectedPerMode": 1,
+  "rawTrainingReceiptSha256": "12b93ead2014673a66ae17905a026f00c5d05559d84318443834750b692fbbca",
+  "nativeReceiptSha256": "321a2114f3d8fd40bbafb70857ca78bf912c43dd11707c35d697b3bb005ee865",
+  "finalIndependentHumanHoldout": "NOT_RUN",
+  "knownPhysicalSourceOverlap": "Not established; same-source/device frames remain grouped and labels provisional"
+}

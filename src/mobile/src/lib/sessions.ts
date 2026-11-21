@@ -1,0 +1,253 @@
+import {
+  MobileApi,
+  MobileApiError,
+  apiBaseUrl,
+  checkApiConnection,
+  errorMessage,
+  mobileResponse,
+  type Session,
+} from './api';
+import { sessionFromTokenResponse } from '../../../../packages/client-core/src/jwtSession';
+import { loginPayload } from '../../../../packages/client-core/src/loginValidation';
+
+export interface CredentialStore {
+  read(): Promise<string | null>;
+  write(value: string): Promise<void>;
+  remove(): Promise<void>;
+}
+export interface SessionView {
+  session: Session | null;
+  baseUrl: string;
+  ready: boolean;
+  api: MobileApi | null;
+  restoreError?: string;
+  reconnecting?: boolean;
+}
+// Refresh, restore and Keychain writes are serialized, including React Strict Mode/remounts.
+export class MobileSessions {
+  private value: SessionView;
+  private epoch = 0;
+  private credential: string | undefined;
+  private refreshTask: Promise<string | undefined> | null = null;
+  private restoreTask: Promise<void> | null = null;
+  private waitingForConnection = false;
+  private writes: Promise<void> = Promise.resolve();
+  private listeners = new Set<(view: SessionView) => void>();
+  constructor(
+    private store: CredentialStore,
+    private configuredBase = '',
+    private transport: typeof fetch = fetch,
+    private serverId?: string,
+  ) {
+    this.value = { session: null, baseUrl: configuredBase, ready: false, api: null };
+  }
+  get snapshot() {
+    return this.value;
+  }
+  subscribe(callback: (view: SessionView) => void) {
+    this.listeners.add(callback);
+    return () => {
+      this.listeners.delete(callback);
+    };
+  }
+  private emit(change: Partial<SessionView>) {
+    this.value = { ...this.value, ...change };
+    for (const callback of this.listeners) callback(this.value);
+  }
+  private persist(epoch: number, value: string | null) {
+    const work = this.writes
+      .catch(() => {})
+      .then(async () => {
+        if (epoch === this.epoch) {
+          if (value === null) await this.store.remove();
+          else await this.store.write(value);
+        }
+      });
+    const protectedWork = work.catch(() => {
+      throw new MobileApiError(0, 'secure_storage_unavailable');
+    });
+    this.writes = protectedWork;
+    return protectedWork;
+  }
+  async clear() {
+    const epoch = ++this.epoch;
+    this.value.api?.queryCache.dispose();
+    this.credential = undefined;
+    this.waitingForConnection = false;
+    this.emit({ session: null, api: null, restoreError: undefined, reconnecting: false });
+    await this.persist(epoch, null);
+  }
+  private api(base: string) {
+    const epoch = this.epoch;
+    return new MobileApi(
+      base,
+      () => (epoch === this.epoch ? this.value.session?.accessToken : undefined),
+      () => (epoch === this.epoch ? this.refresh() : Promise.resolve(undefined)),
+      () => {
+        if (epoch === this.epoch) void this.clear().catch(() => {});
+      },
+      this.transport,
+    );
+  }
+  private async auth(base: string, route: string, body: unknown): Promise<Session> {
+    try {
+      return await mobileResponse(
+        base,
+        '/api/v1/auth/' + route,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+        this.transport,
+        async (response) => {
+          return sessionFromTokenResponse(await response.json(), true) as Session;
+        },
+      );
+    } catch (error) {
+      if (error instanceof MobileApiError && route === 'login' && error.status === 401)
+        error.code = 'invalid_credentials';
+      throw error;
+    }
+  }
+  restore() {
+    if (this.restoreTask) return this.restoreTask;
+    const epoch = this.epoch;
+    this.restoreTask = (async () => {
+      try {
+        const encoded = await this.store.read();
+        if (epoch !== this.epoch) return;
+        if (encoded) {
+          const saved = JSON.parse(encoded) as {
+            base: string;
+            refreshToken: string;
+            serverId?: string;
+          };
+          if (typeof saved.refreshToken !== 'string' || !saved.refreshToken.trim())
+            throw new MobileApiError(502, 'invalid_response');
+          const base = apiBaseUrl(saved.base);
+          if (
+            (this.configuredBase && apiBaseUrl(this.configuredBase) !== base) ||
+            saved.serverId !== this.serverId
+          ) {
+            await this.clear();
+            return;
+          }
+          this.credential = saved.refreshToken;
+          this.emit({ baseUrl: base });
+          await this.refresh();
+        }
+      } catch (error) {
+        if (this.epoch === epoch || !this.value.session) {
+          if (!this.waitingForConnection && !this.credential) await this.clear().catch(() => {});
+          this.emit({ restoreError: errorMessage(error), reconnecting: true });
+        }
+      } finally {
+        this.emit({ ready: true });
+      }
+    })();
+    return this.restoreTask;
+  }
+  refresh() {
+    if (this.refreshTask) return this.refreshTask;
+    const previous = this.credential;
+    if (!previous) return Promise.resolve(undefined);
+    const epoch = this.epoch;
+    const base = this.value.baseUrl;
+    this.refreshTask = (async () => {
+      // A failed anonymous probe cannot consume a rotating refresh token. Keep it for
+      // reconnection; once refresh has been sent, ambiguous failures still clear it.
+      try {
+        await checkApiConnection(base, this.transport);
+      } catch (error) {
+        if (epoch === this.epoch) {
+          this.waitingForConnection = true;
+          this.emit({ restoreError: errorMessage(error) });
+        }
+        throw error;
+      }
+      if (epoch !== this.epoch) return undefined;
+      this.waitingForConnection = false;
+      try {
+        const next = await this.auth(base, 'refresh', { refreshToken: previous });
+        if (epoch !== this.epoch) return undefined;
+        await this.persist(
+          epoch,
+          JSON.stringify({ base, refreshToken: next.refreshToken, serverId: this.serverId }),
+        );
+        if (epoch !== this.epoch) return undefined;
+        this.credential = next.refreshToken;
+        const changedPrincipal =
+          this.value.session &&
+          (this.value.session.userId !== next.userId ||
+            [...this.value.session.roles].sort().join(',') !== [...next.roles].sort().join(','));
+        if (changedPrincipal) this.value.api?.queryCache.dispose();
+        this.emit({
+          session: next,
+          api: changedPrincipal ? this.api(base) : this.value.api || this.api(base),
+          restoreError: undefined,
+          reconnecting: false,
+        });
+        return next.accessToken;
+      } catch (error) {
+        if (epoch === this.epoch) {
+          if (error instanceof MobileApiError && (error.status === 403 || error.status === 429)) {
+            // These responses precede refresh execution, so the credential was not consumed.
+            this.waitingForConnection = error.status === 429;
+            this.emit({
+              restoreError: errorMessage(error),
+              reconnecting: this.waitingForConnection,
+            });
+          } else if (
+            error instanceof MobileApiError &&
+            (error.status === 0 || error.status >= 500) &&
+            this.value.session &&
+            (!this.value.session.expiresAt || Date.parse(this.value.session.expiresAt) > Date.now())
+          ) {
+            // The rotation outcome is unknown. Never replay the old refresh token. Keep
+            // the currently validated access session until it expires, requiring sign-in then.
+            this.credential = undefined;
+            await this.persist(epoch, null);
+            this.emit({
+              restoreError:
+                'Kết nối bị gián đoạn khi gia hạn phiên. Bạn có thể tiếp tục trong phiên hiện tại và cần đăng nhập lại khi phiên hết hạn.',
+              reconnecting: false,
+            });
+          } else await this.clear();
+        }
+        throw error;
+      }
+    })().finally(() => {
+      this.refreshTask = null;
+    });
+    return this.refreshTask;
+  }
+  async reconnect() {
+    if (this.waitingForConnection) await this.refresh().catch(() => {});
+  }
+  async login(input: string, email: string, password: string) {
+    const base = apiBaseUrl(input);
+    await this.clear();
+    this.emit({ baseUrl: base, restoreError: undefined });
+    const epoch = this.epoch;
+    const next = await this.auth(base, 'login', {
+      ...loginPayload(email, password),
+      device: 'BHOME Mobile',
+    });
+    if (epoch !== this.epoch) return;
+    await this.persist(
+      epoch,
+      JSON.stringify({ base, refreshToken: next.refreshToken, serverId: this.serverId }),
+    );
+    if (epoch !== this.epoch) return;
+    this.credential = next.refreshToken;
+    this.emit({ baseUrl: base, session: next, api: this.api(base), ready: true });
+  }
+  async logout() {
+    try {
+      if (this.value.api) await this.value.api.json('/api/v1/auth/logout', {});
+    } finally {
+      await this.clear();
+    }
+  }
+}

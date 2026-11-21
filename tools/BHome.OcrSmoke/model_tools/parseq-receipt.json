@@ -1,0 +1,10 @@
+{
+  "url": "https://github.com/baudm/parseq/releases/download/v1.0.0/parseq-bb5792a6.pt",
+  "sha256": "bb5792a68e367476abca029cbf8699abc805f3d3dc7e57aae45c8ec4f7b7cd00",
+  "bytes": 95392675,
+  "sourceRevision": "1902db043c029a7e03a3818c616c06600af574be",
+  "license": "Apache-2.0",
+  "source": "https://github.com/baudm/parseq",
+  "isolatedDependency": "timm==0.9.16",
+  "weightsOnlyLoad": true
+}

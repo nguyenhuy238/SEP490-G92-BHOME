@@ -1,0 +1,46 @@
+{
+  "scope": "two_new_real_full_frame_LCD_sources_not_the_prior38_only",
+  "baseManifestSha256": "faef0390cc3c2e675fc9481b58197dd63a3505384f0beaab42e06c68d866651c",
+  "effectiveSamplesSha256": "ae9f5b027ea513c4c2039218a16e7b869a770fb48033617bfbf787e57d007c45",
+  "humanReviewCount": 0,
+  "samples": [
+    {
+      "id": "commons_122443403",
+      "image": ".tools/ocr-next-staff/new-public/commons_122443403.jpg",
+      "sha256": "7f658474d2633f8911976b04724bb69d65a8dc537ae3e6b551adc2b7547a3a59",
+      "category": "electricity_digital",
+      "split": "train",
+      "sourceGroup": "author_949bede84189a9517209",
+      "labelStatus": "agent_pixels_provisional_before_inference",
+      "humanReviewCount": 0,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Smart_card_prepaid_electric_meter.jpg",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:MD_MIM_YT\" title=\"User:MD MIM YT\">MD MIM YT</a>",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0"
+      },
+      "expectedDigits": null,
+      "decimalPlaces": null,
+      "registerVerified": false
+    },
+    {
+      "id": "commons_175839602",
+      "image": ".tools/ocr-next-staff/new-public/commons_175839602.jpg",
+      "sha256": "f7e7a638a10e60c95557bb0d87a7ea162daf8f44db3f99fc8747a48ddbda735a",
+      "category": "electricity_digital",
+      "split": "train",
+      "sourceGroup": "author_da22bb631fbaa77305af",
+      "labelStatus": "agent_pixels_provisional_before_inference",
+      "humanReviewCount": 0,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hexing_HXE118-KP_prepaid_electricity_meter_in_Indonesia_(2025-09-30).jpg",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:VulcanSphere\" title=\"User:VulcanSphere\">VulcanSphere</a>",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0"
+      },
+      "expectedDigits": null,
+      "decimalPlaces": null,
+      "registerVerified": false
+    }
+  ]
+}

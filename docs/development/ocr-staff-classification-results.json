@@ -1,0 +1,253 @@
+{
+  "scope": "provisional_development_not_independent_acceptance",
+  "startingHead": "f740ba3130c552da672ebee734ae5348259e7f4d",
+  "humanReviewCount": 0,
+  "runtimeClassifierUnchanged": true,
+  "runtimeClassifierSha256": "f7277b0570a4d6a959cbba52a6492d304029a63c22a372ca37764787df8921f3",
+  "caseDiagnostics": [
+    {
+      "id": "105770219",
+      "utilityLogits": [0.5751840472221375, -0.6491451263427734, -0.16943776607513428],
+      "technologyLogits": [0.33719635009765625, -0.27570104598999023],
+      "utility": [0.5653330683708191, 0.16618238389492035, 0.26848453283309937],
+      "technology": [0.6486014723777771, 0.3513985574245453]
+    },
+    {
+      "id": "54903199",
+      "utilityLogits": [1.5394970178604126, -0.5902333855628967, -1.0636110305786133],
+      "technologyLogits": [-0.34401965141296387, 0.46932122111320496],
+      "utility": [0.8382845520973206, 0.09964632242918015, 0.062069185078144073],
+      "technology": [0.3071790337562561, 0.6928209662437439]
+    }
+  ],
+  "baselineClassifierTest9": {
+    "correct": 1,
+    "wrong": 1,
+    "unknown": 7,
+    "negativeFalseAccepted": 0,
+    "negatives": 2
+  },
+  "experiments": [
+    {
+      "name": "last_vision_block_balanced_augmentation",
+      "status": "REJECTED",
+      "reason": "No validation coverage improvement; trained checkpoints introduce negative false acceptance; selected checkpoint is epoch0 baseline, not an improved trained model.",
+      "validationSelection": {
+        "candidates": [
+          {
+            "epoch": 0,
+            "counts": {
+              "inputs": 7,
+              "meters": 3,
+              "correct": 1,
+              "wrong": 0,
+              "unknown": 6,
+              "negativeFalseAccepted": 0
+            },
+            "confusion": {
+              "electricity_mechanical->unknown": 1,
+              "electricity_digital->unknown": 1,
+              "water_mechanical->water_mechanical": 1,
+              "not_meter->unknown": 4
+            }
+          },
+          {
+            "epoch": 2,
+            "counts": {
+              "inputs": 7,
+              "meters": 3,
+              "correct": 1,
+              "wrong": 1,
+              "unknown": 5,
+              "negativeFalseAccepted": 1
+            },
+            "confusion": {
+              "electricity_mechanical->unknown": 1,
+              "electricity_digital->unknown": 1,
+              "water_mechanical->water_mechanical": 1,
+              "not_meter->unknown": 3,
+              "not_meter->electricity_mechanical": 1
+            }
+          },
+          {
+            "epoch": 4,
+            "counts": {
+              "inputs": 7,
+              "meters": 3,
+              "correct": 1,
+              "wrong": 1,
+              "unknown": 5,
+              "negativeFalseAccepted": 1
+            },
+            "confusion": {
+              "electricity_mechanical->unknown": 1,
+              "electricity_digital->unknown": 1,
+              "water_mechanical->water_mechanical": 1,
+              "not_meter->unknown": 3,
+              "not_meter->electricity_mechanical": 1
+            }
+          },
+          {
+            "epoch": 8,
+            "counts": {
+              "inputs": 7,
+              "meters": 3,
+              "correct": 1,
+              "wrong": 1,
+              "unknown": 5,
+              "negativeFalseAccepted": 1
+            },
+            "confusion": {
+              "electricity_mechanical->unknown": 1,
+              "electricity_digital->unknown": 1,
+              "water_mechanical->water_mechanical": 1,
+              "not_meter->unknown": 3,
+              "not_meter->electricity_mechanical": 1
+            }
+          },
+          {
+            "epoch": 12,
+            "counts": {
+              "inputs": 7,
+              "meters": 3,
+              "correct": 1,
+              "wrong": 2,
+              "unknown": 4,
+              "negativeFalseAccepted": 2
+            },
+            "confusion": {
+              "electricity_mechanical->unknown": 1,
+              "electricity_digital->unknown": 1,
+              "water_mechanical->water_mechanical": 1,
+              "not_meter->electricity_mechanical": 2,
+              "not_meter->unknown": 2
+            }
+          }
+        ],
+        "thresholds": [0.55, 0.75],
+        "passesDevelopmentReplacementGate": false,
+        "selected": {
+          "epoch": 0,
+          "counts": {
+            "inputs": 7,
+            "meters": 3,
+            "correct": 1,
+            "wrong": 0,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 1,
+            "electricity_digital->unknown": 1,
+            "water_mechanical->water_mechanical": 1,
+            "not_meter->unknown": 4
+          }
+        }
+      },
+      "test": {
+        "counts": {
+          "inputs": 9,
+          "meters": 7,
+          "correct": 1,
+          "wrong": 1,
+          "unknown": 7,
+          "negativeFalseAccepted": 0
+        },
+        "confusion": {
+          "electricity_mechanical->electricity_mechanical": 1,
+          "electricity_mechanical->unknown": 1,
+          "electricity_digital->unknown": 2,
+          "water_mechanical->unknown": 2,
+          "water_digital->water_mechanical": 1,
+          "not_meter->unknown": 2
+        }
+      },
+      "exportedEpoch": 0,
+      "modelSha256": "9f957127a69eb8248e26a217c27e208564fa309ba83148187e54f8f4f9bf8859",
+      "nativeOnnxMaxLogitDelta": 3.993511199951172e-6
+    },
+    {
+      "name": "three_targeted_real_LCD_keypad_TRAIN_crops",
+      "status": "REJECTED",
+      "reason": "Domain coverage added from one licensed source capture group, but validation still1/7 and9/9 test unknown at validation-selected thresholds.",
+      "trainingManifest": "../datasets/meter/staff-classification-provisional.json",
+      "validationSelection": {
+        "epoch": 50,
+        "thresholds": [0.55, 0.85],
+        "counts": {
+          "inputs": 7,
+          "meters": 3,
+          "correct": 1,
+          "wrong": 0,
+          "unknown": 6,
+          "negativeFalseAccepted": 0
+        },
+        "confusion": {
+          "electricity_mechanical->unknown": 1,
+          "electricity_digital->unknown": 1,
+          "water_mechanical->water_mechanical": 1,
+          "not_meter->unknown": 4
+        }
+      },
+      "test": {
+        "counts": {
+          "inputs": 9,
+          "meters": 7,
+          "correct": 0,
+          "wrong": 0,
+          "unknown": 9,
+          "negativeFalseAccepted": 0
+        },
+        "confusion": {
+          "electricity_mechanical->unknown": 2,
+          "electricity_digital->unknown": 2,
+          "water_mechanical->unknown": 2,
+          "water_digital->unknown": 1,
+          "not_meter->unknown": 2
+        }
+      },
+      "modelSha256": "1aeadf1480e608de6a7b74dd09cc16e0aac279598d474a19a48b3f7a8c0185a9",
+      "nativeOnnxMaxLogitDelta": 4.410743713378906e-6,
+      "expandedTrainingManifestSha256": "505dd92b0de4004efceecb8a26132423221c170e4be7c3a3b2ec30a8047b2d86",
+      "expandedTrainingManifestLocalFile": ".tools/ocr-staff-focus/keypad-training-manifest.json",
+      "compositionManifestSha256": "8aa7ddfed9d7b513e9c941f1a5c6131b12bb50f16c035207f990249b7f6ab7cb",
+      "effectiveSamplesSha256": "9450ca9e0e01b966a190308ac001be6fd43c6e6047ee2cf95c3032e87f61a8d1"
+    },
+    {
+      "name": "fixed_pixel_contrast_view",
+      "status": "REJECTED",
+      "reason": "Validation coverage unchanged; no test-based selection or runtime integration.",
+      "validation": {
+        "selectionOnly": "validation",
+        "method": "fixed_LabL_CLAHE2_tile8_no_threshold_change",
+        "metrics": {
+          "counts": {
+            "inputs": 7,
+            "meters": 3,
+            "correct": 1,
+            "wrong": 0,
+            "unknown": 6,
+            "negativeFalseAccepted": 0
+          },
+          "confusion": {
+            "electricity_mechanical->unknown": 1,
+            "electricity_digital->unknown": 1,
+            "water_mechanical->water_mechanical": 1,
+            "not_meter->unknown": 4
+          }
+        }
+      }
+    }
+  ],
+  "sourceImageAudit": {
+    "training38VisuallyInspected": true,
+    "labelChanges": 0,
+    "keypadCoverageGap": true,
+    "excludedAsTraining": [
+      "commons_55279016: mixed gas/electricity product montage",
+      "commons_9436967: water lid, misleading title",
+      "commons_4249823: obscured meter; LCD technology not verifiable"
+    ]
+  },
+  "businessProposalEnabled": false
+}

@@ -1,0 +1,64 @@
+[
+  {
+    "file": "water-stage1.pt",
+    "ptSha256": "f2882a477bc12ecc5526cf73438d254945271c3e1b2b4214aa8e4deb637c3be9",
+    "onnx": "water-stage1.onnx",
+    "onnxSha256": "5311b093b39a2ef752c2052e2755ab8f595613d37d612e48c10dc26f6ecb9d44",
+    "task": "obb",
+    "names": {
+      "0": "meter",
+      "1": "window",
+      "2": "0",
+      "3": "1",
+      "4": "2",
+      "5": "3",
+      "6": "4",
+      "7": "5",
+      "8": "6",
+      "9": "7",
+      "10": "8",
+      "11": "9",
+      "12": "u"
+    },
+    "input": [1, 3, 640, 640],
+    "output": [1, 18, 8400],
+    "sampleCount": 10,
+    "maxAbsoluteRawTensorDelta": 0.007110595703125,
+    "assertAllClose": {
+      "rtol": 0.002,
+      "atol": 0.002,
+      "passed": true
+    }
+  },
+  {
+    "file": "rwanda-best.pt",
+    "ptSha256": "7215bf64c237d7b376c4f0ac85141ace5b75acdbf5f8be805e2b8ac573269167",
+    "onnx": "rwanda-best.onnx",
+    "onnxSha256": "00ea1d0b455c4d1081b0293e1a606c798529a21dd8b5e0bdf0140232d4ca7d21",
+    "task": "detect",
+    "names": {
+      "0": "meter",
+      "1": "window",
+      "2": "0",
+      "3": "1",
+      "4": "2",
+      "5": "3",
+      "6": "4",
+      "7": "5",
+      "8": "6",
+      "9": "7",
+      "10": "8",
+      "11": "9",
+      "12": "u"
+    },
+    "input": [1, 3, 640, 640],
+    "output": [1, 17, 8400],
+    "sampleCount": 10,
+    "maxAbsoluteRawTensorDelta": 0.00238800048828125,
+    "assertAllClose": {
+      "rtol": 0.002,
+      "atol": 0.002,
+      "passed": true
+    }
+  }
+]

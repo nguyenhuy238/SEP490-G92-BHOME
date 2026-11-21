@@ -1,0 +1,267 @@
+import { useFeedbackState } from '../lib/useFeedbackState';
+import React, { useState } from 'react';
+import { ScrollView, View } from 'react-native';
+import { Button, Dialog, Icon, Portal, RadioButton, Text, TextInput } from 'react-native-paper';
+import { useWorkspace } from '../features/workspace/WorkspaceProvider';
+import { CameraCapture } from './CameraCapture';
+import { MoneyTextInput } from './MoneyTextInput';
+import { Action, Box, Heading, Pill, Row, ui } from './WorkspaceKit';
+import { colors as c } from '../theme/theme';
+
+export interface Choice {
+  id: string;
+  label: string;
+}
+export function ChoiceField({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+  searchable = false,
+  placeholder = 'Chọn…',
+  icon,
+}: {
+  label: string;
+  value: string;
+  options: Choice[];
+  onChange: (id: string) => void;
+  disabled?: boolean;
+  searchable?: boolean;
+  placeholder?: string;
+  icon?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const visibleOptions = open
+    ? options.filter(
+        (item) =>
+          !searchable ||
+          item.label.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi')),
+      )
+    : [];
+  return (
+    <View style={{ gap: 4 }}>
+      <Text variant="labelMedium">{label}</Text>
+      <Button
+        mode="outlined"
+        icon={icon ?? 'chevron-down'}
+        accessibilityLabel={label}
+        disabled={disabled}
+        onPress={() => {
+          setSearch('');
+          setOpen(true);
+        }}
+        contentStyle={{
+          flexDirection: 'row-reverse',
+          justifyContent: 'space-between',
+          minHeight: 48,
+        }}
+        style={{ borderRadius: 10, borderColor: c.border }}
+      >
+        {options.find((item) => item.id === value)?.label ?? placeholder}
+      </Button>
+      <Portal>
+        {open && (
+          <Dialog visible={open} onDismiss={() => setOpen(false)} style={{ maxHeight: '80%' }}>
+            <Dialog.Title>{label}</Dialog.Title>
+            {searchable && (
+              <TextInput
+                label="Tìm kiếm"
+                value={search}
+                onChangeText={setSearch}
+                mode="outlined"
+                style={{ marginHorizontal: 24, marginBottom: 12 }}
+              />
+            )}
+            <Dialog.ScrollArea>
+              <ScrollView>
+                {visibleOptions.map((item) => (
+                  <RadioButton.Item
+                    key={item.id}
+                    label={item.label}
+                    value={item.id}
+                    status={value === item.id ? 'checked' : 'unchecked'}
+                    onPress={() => {
+                      onChange(item.id);
+                      setOpen(false);
+                    }}
+                  />
+                ))}
+                {!options.length && (
+                  <Text style={{ padding: 20 }}>Không có lựa chọn trong phạm vi được phép.</Text>
+                )}
+                {!!options.length && !visibleOptions.length && (
+                  <Text style={{ padding: 20 }}>Không tìm thấy lựa chọn phù hợp.</Text>
+                )}
+              </ScrollView>
+            </Dialog.ScrollArea>
+            <Dialog.Actions>
+              <Button onPress={() => setOpen(false)}>Đóng</Button>
+            </Dialog.Actions>
+          </Dialog>
+        )}
+      </Portal>
+    </View>
+  );
+}
+export function Input({
+  label,
+  value,
+  onChange,
+  numeric = false,
+  money = false,
+  multiline = false,
+  disabled = false,
+  email = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  numeric?: boolean;
+  money?: boolean;
+  multiline?: boolean;
+  disabled?: boolean;
+  email?: boolean;
+}) {
+  if (money)
+    return (
+      <MoneyTextInput
+        mode="outlined"
+        label={label}
+        accessibilityLabel={label}
+        value={value}
+        onChangeText={onChange}
+        disabled={disabled}
+        autoCapitalize="none"
+        style={{ backgroundColor: c.white }}
+      />
+    );
+  return (
+    <TextInput
+      mode="outlined"
+      label={label}
+      accessibilityLabel={label}
+      value={value}
+      onChangeText={onChange}
+      keyboardType={email ? 'email-address' : numeric ? 'decimal-pad' : 'default'}
+      multiline={multiline}
+      disabled={disabled}
+      autoCapitalize={numeric || email ? 'none' : 'sentences'}
+      style={{ backgroundColor: c.white }}
+    />
+  );
+}
+export function EvidenceInput({
+  label = 'Ảnh bằng chứng',
+  count,
+  onChange,
+}: {
+  label?: string;
+  count: number;
+  onChange: (count: number) => void;
+}) {
+  const { preview } = useWorkspace();
+  const [error, setError] = useFeedbackState();
+  const [revision, setRevision] = useState(0);
+  return (
+    <View style={{ gap: 8 }}>
+      <Heading title={label} detail={`${count}/5 ảnh • Tối đa 5 MB/ảnh`} />
+      {preview ? (
+        <Button
+          mode="outlined"
+          icon="image-plus-outline"
+          disabled={count >= 5}
+          onPress={() => onChange(count + 1)}
+        >
+          Thêm ảnh mẫu (không tải lên)
+        </Button>
+      ) : (
+        <CameraCapture
+          key={revision}
+          label="Chụp ảnh minh chứng"
+          disabled={count >= 5}
+          retainPreview
+          onCapture={async (bytes) => {
+            if (bytes.byteLength > 5 * 1024 * 1024) {
+              setError('Ảnh vượt quá 5 MB.');
+              return;
+            }
+            onChange(count + 1);
+          }}
+        />
+      )}
+      {count > 0 && (
+        <Row>
+          <Icon source="image-multiple-outline" color={c.blue} size={22} />
+          <Text variant="bodySmall" style={ui.grow}>
+            {count} ảnh {preview ? 'minh họa' : 'tạm thời, chưa tải máy chủ'}
+          </Text>
+          <Button
+            onPress={() => {
+              onChange(0);
+              setRevision((value) => value + 1);
+            }}
+          >
+            Xóa tất cả
+          </Button>
+        </Row>
+      )}
+      {!!error && <Text style={ui.red}>{error}</Text>}
+    </View>
+  );
+}
+export function SubmissionResult({
+  title,
+  onEdit,
+  status = 'Chờ Owner xem xét',
+}: {
+  title: string;
+  onEdit: () => void;
+  status?: string;
+}) {
+  return (
+    <Box>
+      <Icon source="check-circle-outline" size={46} color={c.green} />
+      <Heading title={title} />
+      <Pill tone="amber">{status} • MÔ PHỎNG</Pill>
+      <Text>
+        Bản xem trước đã ghi nhận trạng thái trong màn hình này. Chưa gửi API, chưa thay đổi hợp
+        đồng, thanh toán hay trạng thái phòng.
+      </Text>
+      <Action secondary onPress={onEdit}>
+        Quay lại chỉnh sửa bản mẫu
+      </Action>
+    </Box>
+  );
+}
+export function NotConnected({ title }: { title: string }) {
+  return (
+    <Box>
+      <Heading title={title} />
+      <Text>
+        Chưa có API nghiệp vụ được xác nhận để tải hoặc lưu dữ liệu của tài khoản này. Hãy dùng chế
+        độ xem mẫu để kiểm tra form và trạng thái tương tác.
+      </Text>
+    </Box>
+  );
+}
+export function RequestHistory({ kind }: { kind: string }) {
+  const { requests } = useWorkspace();
+  const items = requests.filter((item) => item.kind === kind);
+  if (!items.length) return null;
+  return (
+    <Box>
+      <Heading title="Yêu cầu vừa tạo trong phiên xem mẫu" />
+      {items.map((item) => (
+        <View key={item.id} style={ui.soft}>
+          <Pill tone="amber">Chờ xử lý • Mô phỏng</Pill>
+          <Text variant="labelSmall" style={ui.muted}>
+            {item.id}
+          </Text>
+          <Text variant="bodySmall">{item.summary}</Text>
+        </View>
+      ))}
+    </Box>
+  );
+}

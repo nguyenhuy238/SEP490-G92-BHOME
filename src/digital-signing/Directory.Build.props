@@ -1,0 +1,4 @@
+<Project>
+  <!-- Same compiler settings as the BHome backend (net8.0, nullable, warnings as errors). -->
+  <Import Project="../backend/Directory.Build.props" />
+</Project>

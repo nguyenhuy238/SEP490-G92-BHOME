@@ -1,0 +1,69 @@
+{
+  "scope": "three_provisional_TRAIN_crops_from_one_licensed_keypad_capture_group",
+  "baseManifest": "runtime-supervised-provisional.json",
+  "baseManifestSha256": "faef0390cc3c2e675fc9481b58197dd63a3505384f0beaab42e06c68d866651c",
+  "effectiveSamplesSha256": "9450ca9e0e01b966a190308ac001be6fd43c6e6047ee2cf95c3032e87f61a8d1",
+  "humanReviewCount": 0,
+  "samples": [
+    {
+      "id": "commons_169007819_train_crop0",
+      "image": ".tools/ocr-staff-focus/keypad-train-0.jpg",
+      "sha256": "f068f6a039edf2fcf15f2978f9eea95330c495cc4668d15f1f42ad764f24831b",
+      "category": "electricity_digital",
+      "split": "train",
+      "sourceGroup": "author_37bacac5ff4163d737ad",
+      "captureGroup": "commons_169007819",
+      "labelStatus": "agent_visual_provisional_before_inference",
+      "humanReviewCount": 0,
+      "parentImage": ".tools/master-dataset/commons/commons_169007819.jpg",
+      "parentSha256": "385b3f4af3acb04607f4ff6852c23f9df3764f9d2b58c6670f4809399b51bf14",
+      "cropXyxy": [220, 670, 380, 865],
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Automatic_electricity_meter_testing_arrangement.jpg",
+        "license": "CC BY-SA 4.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Rht_bd\" title=\"User:Rht bd\">Rht bd</a>"
+      },
+      "notes": "One capture group; real LCD and keypad structures, not independent acceptance."
+    },
+    {
+      "id": "commons_169007819_train_crop1",
+      "image": ".tools/ocr-staff-focus/keypad-train-1.jpg",
+      "sha256": "3bfdac325864b3e6e40feb81b1630e3f43c761f5b2674435dcf0bcf363902547",
+      "category": "electricity_digital",
+      "split": "train",
+      "sourceGroup": "author_37bacac5ff4163d737ad",
+      "captureGroup": "commons_169007819",
+      "labelStatus": "agent_visual_provisional_before_inference",
+      "humanReviewCount": 0,
+      "parentImage": ".tools/master-dataset/commons/commons_169007819.jpg",
+      "parentSha256": "385b3f4af3acb04607f4ff6852c23f9df3764f9d2b58c6670f4809399b51bf14",
+      "cropXyxy": [425, 665, 575, 865],
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Automatic_electricity_meter_testing_arrangement.jpg",
+        "license": "CC BY-SA 4.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Rht_bd\" title=\"User:Rht bd\">Rht bd</a>"
+      },
+      "notes": "One capture group; real LCD and keypad structures, not independent acceptance."
+    },
+    {
+      "id": "commons_169007819_train_crop2",
+      "image": ".tools/ocr-staff-focus/keypad-train-2.jpg",
+      "sha256": "696a9f008fd1e062dfeab66f8b685be91dcef153a62d6e26d1ecd70e45c44401",
+      "category": "electricity_digital",
+      "split": "train",
+      "sourceGroup": "author_37bacac5ff4163d737ad",
+      "captureGroup": "commons_169007819",
+      "labelStatus": "agent_visual_provisional_before_inference",
+      "humanReviewCount": 0,
+      "parentImage": ".tools/master-dataset/commons/commons_169007819.jpg",
+      "parentSha256": "385b3f4af3acb04607f4ff6852c23f9df3764f9d2b58c6670f4809399b51bf14",
+      "cropXyxy": [595, 665, 735, 865],
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Automatic_electricity_meter_testing_arrangement.jpg",
+        "license": "CC BY-SA 4.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Rht_bd\" title=\"User:Rht bd\">Rht bd</a>"
+      },
+      "notes": "One capture group; real LCD and keypad structures, not independent acceptance."
+    }
+  ]
+}

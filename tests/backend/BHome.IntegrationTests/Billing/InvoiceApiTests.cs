@@ -1,0 +1,280 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using BHome.Application.Billing;
+using BHome.Application.Contracts;
+using BHome.Application.IdentityAccess;
+using BHome.Application.Ocr;
+using BHome.Domain.Billing;
+using BHome.Domain.IdentityAccess;
+using BHome.Domain.Locations;
+using BHome.Domain.PropertyManagement;
+using BHome.Domain.TenantContracts;
+using BHome.Infrastructure.Persistence;
+using BHome.IntegrationTests.Ocr;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
+using OpenCvSharp;
+
+namespace BHome.IntegrationTests.Billing;
+
+[Trait("Category", "Docker")]
+public sealed partial class InvoiceApiTests(CaptureFixture fixture) : IClassFixture<CaptureFixture>
+{
+    private static DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+    private sealed record Actor(Guid Id, HttpClient Client);
+    private sealed record Workspace(Actor Owner, Actor Staff, Actor Tenant, Actor OtherTenant, Guid Location, Guid Room, Guid Contract, DateOnly Period);
+    private async Task<Actor> User(string role)
+    {
+        var id = Guid.NewGuid(); var email = id + "@example.invalid";
+        const string password = BHome.IntegrationTests.Compact24.WorkflowTestUsers.Password;
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var account = await BHome.IntegrationTests.Compact24.WorkflowTestUsers.CreateAsync(scope.ServiceProvider,
+                new ApplicationUser { Id = id, UserName = email, Email = email }, role, password);
+            id = account.Id; email = account.Email!;
+        }
+        var client = fixture.Factory.CreateClient();
+        var login = await Success<LoginResult>(await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password }));
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
+        return new(id, client);
+    }
+    private static async Task<T> Success<T>(HttpResponseMessage response)
+    {
+        Assert.True(response.IsSuccessStatusCode, $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()} {string.Join(Environment.NewLine, BHome.IntegrationTests.Compact24.Compact24WorkflowFixture.Diagnostics.TakeLast(2))}");
+        return (await response.Content.ReadFromJsonAsync<T>())!;
+    }
+    private async Task<Workspace> Setup(DateTimeOffset? activatedAt = null, bool includeService = false, DateOnly? primaryStart = null, decimal primaryDeposit = 0, bool personFee = false)
+    {
+        var owner = await User(Roles.Owner); var staff = await User(Roles.Staff);
+        var tenant = await User(Roles.Tenant); var other = await User(Roles.Tenant);
+        var period = new DateOnly(Today.Year, Today.Month, 1).AddMonths(-1);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var location = new Location("Synthetic Billing") { ChainId = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? null : await db.Set<BHome.Domain.PropertyManagement.Chain>().Select(c => c.Id).SingleAsync(), Address = "Synthetic address" };
+        var room = new Room { LocationId = location.Id, RoomNumber = "SYNTHETIC-BILL", Capacity = 2, Status = RoomStatus.Occupied };
+        var resident = new Resident { RoomId = room.Id, TenantUserId = tenant.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Tenant", VerificationStatus = IdentityVerificationStatus.Verified };
+        var second = new Resident { RoomId = room.Id, TenantUserId = other.Id, OwnerUserId = owner.Id, DisplayLabel = "Synthetic Other", VerificationStatus = IdentityVerificationStatus.Verified };
+        Contract ContractFor(Resident person, bool primary = false) => new()
+        {
+            RoomId = room.Id,
+            OwnerSignerId = owner.Id,
+            TenantUserId = person.TenantUserId!.Value,
+            RepresentativeResidentId = person.Id,
+            Status = ContractStatus.Active,
+            StartDate = primary ? primaryStart ?? period.AddMonths(-1) : period.AddMonths(-1),
+            EndDate = period.AddMonths(4),
+            MonthlyRent = 3000000,
+            RequiredDeposit = primary ? primaryDeposit : 0,
+            Terms = "SYNTHETIC TEST",
+            ActivatedAt = activatedAt ?? DateTimeOffset.UtcNow,
+            ActivatedByUserId = owner.Id,
+            Residents = [new ContractResident { ResidentId = person.Id, ResidenceFrom = primary ? primaryStart ?? period.AddMonths(-1) : period.AddMonths(-1), Role = ResidentType.Representative }]
+        };
+        var contract = ContractFor(resident, true); var secondContract = ContractFor(second);
+        db.AddRange(location, room, resident, second, contract, secondContract,
+            new StaffLocationAssignment(location.Id, staff.Id, owner.Id, Today.AddYears(-1), Today.AddYears(1)));
+        var fees = new List<(ChargeCategory Category, string Code, decimal Rate)> { (ChargeCategory.Rent, "RENT", 3000000m), (ChargeCategory.Electricity, "ELECTRICITY", 3500m), (ChargeCategory.Water, "WATER", 15000m) };
+        if (includeService) fees.Add((ChargeCategory.ServiceFee, "INTERNET", 100000m));
+        if (personFee) fees.Add((ChargeCategory.ServiceFee, "CLEANING", 100001m));
+        var policies = new List<BillingPolicy>();
+        foreach (var (category, code, rate) in fees)
+        {
+            var policy = new BillingPolicy
+            {
+                LocationId = location.Id,
+                Category = category,
+                ChargeCode = code,
+                Name = "Synthetic " + code,
+                Method = category is ChargeCategory.Electricity or ChargeCategory.Water ? ChargingMethod.Metered :
+                    code == "CLEANING" ? ChargingMethod.FixedPerPersonPerMonth : ChargingMethod.FixedPerRoomPerMonth,
+                Rate = rate,
+                EffectiveFrom = period.AddYears(-1)
+            };
+            policies.Add(policy); db.Add(policy);
+        }
+        foreach (var tenancy in new[] { contract, secondContract })
+        {
+            tenancy.AgreedPriceSnapshot = JsonSerializer.Serialize(new HoldingPriceSnapshot(tenancy.MonthlyRent, tenancy.RequiredDeposit,
+                tenancy.StartDate, tenancy.EndDate, default, "SyntheticSigned", DateTimeOffset.UtcNow,
+                policies.Select(p => new HoldingPriceCharge(p.Id, p.ChargeCode, (int)p.Category, (int)p.Method,
+                    p.Rate, p.EffectiveFrom, p.EffectiveTo, p.Version)
+                { Name = p.Name }).ToArray())
+            { SnapshotVersion = 1 });
+            SealFixture(tenancy);
+        }
+        await db.SaveChangesAsync();
+        return new(owner, staff, tenant, other, location.Id, room.Id, contract.Id, period);
+    }
+    private static void SealFixture(Contract c)
+    {
+        var document = new ContractDocument(c.Id, c.RoomId, c.OwnerSignerId, c.TenantUserId!.Value, c.RepresentativeResidentId,
+            c.Residents.Select(r => r.ResidentId).Order().ToArray(), c.StartDate, c.EndDate, c.MonthlyRent, c.RequiredDeposit,
+            c.HoldingContractId, c.AppliedHoldingDeposit, c.Terms, c.SnapshotHash)
+        { AgreedCharges = ContractChargeSnapshot.Read(c).Charges };
+        c.SnapshotHash = ContractDocumentSnapshot.Hash(document);
+    }
+    private static BillingScheduleWrite Schedule(Workspace w) => new(w.Location, BillingRateDate.PeriodStart, BillingRentSource.RoomPolicy,
+        PartialMonthRule.FullMonth, VndRounding.AwayFromZero, 1, 0, 1, 1, 10, 1, 0);
+    private async Task<InvoiceView> Draft(Workspace w)
+    {
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w)));
+        return await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract)));
+    }
+
+    private async Task ConfirmUtilities(Workspace w)
+    {
+        foreach (var utility in new[] { UtilityType.Electricity, UtilityType.Water })
+        {
+            var meter = await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meters", new MeterInput(w.Room,
+                "SYNTHETIC-" + utility, utility, MeterDisplay.Digital, 2, w.Period.AddMonths(-1))));
+            foreach (var purpose in new[] { ReadingPurpose.Initial, ReadingPurpose.Periodic })
+            {
+                var date = purpose == ReadingPurpose.Initial ? w.Period.AddDays(-1) : w.Period.AddMonths(1).AddDays(-1);
+                var task = await Success<IdResult>(await w.Owner.Client.PostAsJsonAsync("/api/v1/capture/meter-tasks", new MeterTaskInput(meter.Id, purpose, date, purpose == ReadingPurpose.Periodic ? w.Period : null)));
+                using var image = new Mat(120, 300, MatType.CV_8UC3, Scalar.White);
+                Cv2.PutText(image, "SYNTHETIC 125.5", new(10, 70), HersheyFonts.HersheySimplex, .6, Scalar.Black, 1);
+                using var content = new ByteArrayContent(image.ImEncode(".png")); content.Headers.ContentType = new("image/png");
+                var evidence = await Success<IdResult>(await w.Staff.Client.PutAsync($"/api/v1/capture/meter-tasks/{task.Id}/evidence", content));
+                await Success<ConfirmedReading>(await w.Staff.Client.PostAsJsonAsync($"/api/v1/capture/meter-tasks/{task.Id}/confirm", new MeterConfirmation(true,
+                    purpose == ReadingPurpose.Initial ? 100 : utility == UtilityType.Electricity ? 125.5m : 102m, evidence.Id)));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task FinalizationRequiresReviewedConfirmedDataIsConcurrentSafeImmutableAndHistoricallyScoped()
+    {
+        var w = await Setup(); var draft = await Draft(w);
+        var path = $"/api/v1/invoices/{draft.Id}";
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
+        await ConfirmUtilities(w);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(draft.Version))).StatusCode);
+        var ready = await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(draft.Version)));
+        Assert.Equal(draft.Id, ready.Id);
+        Assert.Equal("Draft", ready.Status);
+        Assert.Null(ready.FinalizedAt);
+        Assert.Equal(draft.Version + 1, ready.Version);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(draft.Version))).StatusCode);
+        Assert.Empty(ready.MissingInputs); Assert.Equal(3119250m, ready.Total);
+        Assert.Equal(25.5m, ready.Lines.Single(l => l.Category == "Electricity").Quantity);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(draft.Version))).StatusCode);
+        var finals = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => w.Owner.Client.PostAsJsonAsync(path + "/finalize", new InvoiceFinalizeInput(ready.Version))));
+        foreach (var response in finals)
+        {
+            var result = await Success<InvoiceView>(response); Assert.Equal("Final", result.Status); Assert.Equal(ready.Total, result.Total);
+        }
+        var filtered = await Success<BHome.Application.PropertyManagement.PagedResult<InvoiceView>>(await w.Tenant.Client.GetAsync($"/api/v1/invoices?roomId={w.Room}&status=Final&billingPeriod={w.Period:yyyy-MM-dd}"));
+        Assert.Equal(draft.Id, Assert.Single(filtered.Items).Id);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync(path + "/refresh", new InvoiceFinalizeInput(ready.Version + 1))).StatusCode);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        Assert.Equal(1, await db.SecurityAudit.CountAsync(a => a.TargetId == draft.Id && a.Event == "InvoiceFinalized"));
+        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+        {
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE invoices SET base_total_amount=1 WHERE id={draft.Id}"));
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE invoice_items SET amount=1 WHERE invoice_id={draft.Id}"));
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE invoices SET recipient_user_ids=ARRAY[]::uuid[] WHERE id={draft.Id}"));
+        }
+        else
+        {
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"Invoices\" SET \"Total\"=1 WHERE \"Id\"={draft.Id}"));
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"InvoiceLines\" SET \"Amount\"=1 WHERE \"InvoiceId\"={draft.Id}"));
+            await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"InvoiceRecipients\" WHERE \"InvoiceId\"={draft.Id}"));
+        }
+        foreach (var contract in await db.Set<Contract>().Where(c => c.RoomId == w.Room).ToArrayAsync())
+        { contract.Status = ContractStatus.Terminated; contract.ActualEndDate = Today; }
+        await db.SaveChangesAsync();
+        Assert.Equal(HttpStatusCode.OK, (await w.OtherTenant.Client.GetAsync(path)).StatusCode);
+        var newcomer = await User(Roles.Tenant);
+        Assert.Equal(HttpStatusCode.NotFound, (await newcomer.Client.GetAsync(path)).StatusCode);
+        var body = await w.Tenant.Client.GetStringAsync(path);
+        Assert.DoesNotContain("Paid", body); Assert.DoesNotContain("objectKey", body);
+    }
+
+    [Fact]
+    public async Task SharedRoomDraftIsPersistedIdempotentScopedAndExplicitlyMissingReadings()
+    {
+        var w = await Setup(); var invoice = await Draft(w);
+        var policyJson = await w.Owner.Client.GetStringAsync($"/api/v1/billing-policies?locationId={w.Location}");
+        Assert.Contains("\"rate\":\"", policyJson);
+        Assert.Equal("Draft", invoice.Status); Assert.Equal(3000000m, invoice.Total);
+        Assert.Contains("confirmed_reading_Electricity", invoice.MissingInputs); Assert.Contains("confirmed_reading_Water", invoice.MissingInputs);
+        var replies = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract))));
+        foreach (var reply in replies) Assert.Equal(invoice.Id, (await Success<InvoiceView>(reply)).Id);
+        foreach (var tenant in new[] { w.Tenant, w.OtherTenant })
+            Assert.Equal(invoice.Id, (await Success<InvoiceView>(await tenant.Client.GetAsync($"/api/v1/invoices/{invoice.Id}"))).Id);
+        var outsider = await User(Roles.Tenant);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.Client.GetAsync($"/api/v1/invoices/{invoice.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync($"/api/v1/invoices/{invoice.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract))).StatusCode);
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        Assert.Equal(1, await db.Set<Invoice>().CountAsync(i => i.RoomId == w.Room));
+        Assert.Equal(2, await db.Set<InvoiceRecipient>().CountAsync(i => i.InvoiceId == invoice.Id));
+        Assert.NotNull((await db.Set<BillingPolicy>().SingleAsync(p => p.LocationId == w.Location && p.Category == ChargeCategory.Electricity)).FirstUsedAt);
+        Assert.Equal(2, await db.Set<Contract>().CountAsync(c => c.RoomId == w.Room && c.Status == ContractStatus.Active));
+    }
+
+    [Fact]
+    public async Task InvoiceFiltersApplyBeforePaginationAndPreserveRecipientIsolation()
+    {
+        var w = await Setup(); var draft = await Draft(w);
+        var secondPeriod = w.Period.AddMonths(-1);
+        await Success<InvoiceView>(await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, secondPeriod, w.Contract)));
+        var query = $"/api/v1/invoices?locationId={w.Location}&billingPeriod={w.Period:yyyy-MM-dd}&status=Draft&pageSize=1";
+        var result = await Success<BHome.Application.PropertyManagement.PagedResult<InvoiceView>>(await w.Owner.Client.GetAsync(query));
+        Assert.Equal(1, result.TotalCount); Assert.Equal(draft.Id, Assert.Single(result.Items).Id);
+        var tenant = await Success<BHome.Application.PropertyManagement.PagedResult<InvoiceView>>(await w.Tenant.Client.GetAsync(query));
+        Assert.Equal(draft.Id, Assert.Single(tenant.Items).Id);
+        var outsider = await User(Roles.Tenant);
+        var hidden = await Success<BHome.Application.PropertyManagement.PagedResult<InvoiceView>>(await outsider.Client.GetAsync(query));
+        Assert.Equal(0, hidden.TotalCount); Assert.Empty(hidden.Items);
+        foreach (var mismatch in new[] { query.Replace("status=Draft", "status=Final"), query.Replace(w.Location.ToString(), Guid.NewGuid().ToString()), query + $"&roomId={Guid.NewGuid()}" })
+            Assert.Empty((await Success<BHome.Application.PropertyManagement.PagedResult<InvoiceView>>(await w.Owner.Client.GetAsync(mismatch))).Items);
+        foreach (var invalid in new[] { "status=999", "status=Unknown", "locationId=" + Guid.Empty, "billingPeriod=2026-11-15", "billingPeriod=bad-date" })
+            Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.GetAsync("/api/v1/invoices?" + invalid)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(query)).StatusCode);
+        using var anonymous = fixture.Factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(query)).StatusCode);
+    }
+
+    [Fact]
+    public async Task ScheduleRequiresOwnerAndValidDatesAndStaleVersionsConflict()
+    {
+        var w = await Setup();
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PostAsJsonAsync("/api/v1/invoices/drafts", new DraftInvoiceInput(w.Room, w.Period, w.Contract))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w) with { FinalDay = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w) with { DueMonthOffset = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w))).StatusCode);
+        await Success<BillingSchedule>(await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w)));
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Owner.Client.PutAsJsonAsync("/api/v1/billing-schedules", Schedule(w))).StatusCode);
+    }
+
+    [Fact]
+    public async Task SharedTenancyDatabaseGuardRejectsOverCapacityAndDuplicateTenant()
+    {
+        var w = await Setup();
+        await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var existing = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == w.Contract);
+        var duplicate = new Contract
+        {
+            RoomId = w.Room,
+            OwnerSignerId = existing.OwnerSignerId,
+            TenantUserId = existing.TenantUserId,
+            RepresentativeResidentId = existing.RepresentativeResidentId,
+            StartDate = existing.StartDate,
+            EndDate = existing.EndDate,
+            MonthlyRent = existing.MonthlyRent,
+            RequiredDeposit = 0,
+            Status = ContractStatus.Active,
+            ActivatedAt = DateTimeOffset.UtcNow,
+            ActivatedByUserId = existing.OwnerSignerId
+        };
+        db.Add(duplicate);
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        Assert.Equal("23514", Assert.IsType<PostgresException>(error.InnerException).SqlState);
+    }
+}

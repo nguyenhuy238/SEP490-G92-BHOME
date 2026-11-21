@@ -1,0 +1,128 @@
+{
+  "date": "2026-11-08",
+  "startingHead": "f61d6c5dac46f879bbe4d2444aaf3c0f4cb658ea",
+  "scope": "provisional_research_no_reader_promotion",
+  "historicalWaterRegression": {
+    "baseline": {
+      "inputs": 52,
+      "completePublisherLabels": 33,
+      "exact": 10,
+      "wrong": 0,
+      "unknownGtProposals": 0,
+      "fallback": 42
+    },
+    "existingFullRow": {
+      "inputs": 52,
+      "completePublisherLabels": 33,
+      "exact": 11,
+      "wrong": 0,
+      "unknownGtProposals": 0,
+      "fallback": 41
+    },
+    "digitGeometryCandidate": {
+      "inputs": 52,
+      "completePublisherLabels": 33,
+      "exact": 11,
+      "wrong": 0,
+      "unknownGtProposals": 0,
+      "fallback": 41
+    },
+    "candidateStatus": "REJECTED",
+    "registerAndPrecisionHumanVerified": false,
+    "geometry": "All valid Stage2 quadrilaterals,0.15 median glyph height real-pixel margin; no glyph deletion; complete PP contradictions preserved",
+    "oracleBoxesUsed": false,
+    "rawReceiptSha256": "094a387d11b6e57b6e71071720dc756a9e3ab252d3f9b89c662dd0a7fcf0be7e"
+  },
+  "newSourcePartialBodyFrames": {
+    "statuses": "EXPERIMENTAL; no independent human acceptance",
+    "profile": "MechanicalWater supplied to all readers; not inferred visual category",
+    "baseline": {
+      "totalInputs": 17,
+      "admittedInputs": 16,
+      "inputRejected": 1,
+      "draftCompleteLabels": 3,
+      "exactOnDraftComplete": 0,
+      "wrongOnDraftComplete": 0,
+      "unresolvedProposals": 1,
+      "fallbackAmongAdmitted": 15
+    },
+    "existingFullRow": {
+      "totalInputs": 17,
+      "admittedInputs": 16,
+      "inputRejected": 1,
+      "draftCompleteLabels": 3,
+      "exactOnDraftComplete": 0,
+      "wrongOnDraftComplete": 0,
+      "unresolvedProposals": 1,
+      "fallbackAmongAdmitted": 15
+    },
+    "digitGeometryCandidate": {
+      "totalInputs": 17,
+      "admittedInputs": 16,
+      "inputRejected": 1,
+      "draftCompleteLabels": 3,
+      "exactOnDraftComplete": 0,
+      "wrongOnDraftComplete": 0,
+      "unresolvedProposals": 1,
+      "fallbackAmongAdmitted": 15
+    },
+    "dimensions": [320, 240],
+    "pretrainingOverlap": "unknown",
+    "independentPhysicalGroupingVerified": false,
+    "unresolvedCase": "quanhui_water_01:00000 on a wheel transition; present in all three readers; not counted correct",
+    "rawReceiptSha256": "6a338f79f01dc1fcefe5e3f0c109bea6c55faf3e41ced59a6f530ef5704b0e6a"
+  },
+  "numericGroupingComponent": {
+    "status": "EXPERIMENTAL",
+    "registeredInApplication": false,
+    "admittedSourceFrames": 16,
+    "draftCompleteLabels": 3,
+    "rawEnglishExactBefore": 2,
+    "rawEnglishExactAfter": 3,
+    "additionalCase": {
+      "id": "quanhui_water_14",
+      "bounds": [41, 108, 197, 60],
+      "Text": "00458",
+      "Confidence": 0.9923913,
+      "MinimumCharacterScore": 0.9829503,
+      "pp": [
+        {
+          "Text": "010458",
+          "Confidence": 0.9666543
+        }
+      ],
+      "registerVerified": false,
+      "billingValueProduced": false
+    },
+    "validConsumptionReadingsRecovered": 0,
+    "reasonNotPromoted": "PP reads010458 rather than00458; m3 evidence is low-confidence and clipped at the right boundary. No unit/precision invention or disagreement override.",
+    "quantityStringsConcatenated": false,
+    "oracleBoxesUsed": false,
+    "sourceReceiptSha256": "ed72e89374ebb20da9f6d43cbd4f5f55ff43bf77a9cf8869a2a7ddf0067a8d0c",
+    "unitProbe": [
+      {
+        "id": "quanhui_water_14",
+        "unitBox": [254, 124, 320, 172],
+        "numberBox": [41, 108, 238, 168],
+        "unit": {
+          "raw": "m3",
+          "digits": null,
+          "minimumCharacterScore": 0.33277446031570435,
+          "meanCharacterScore": 0.6658977568149567,
+          "forwardMs": 15.706700000009732
+        },
+        "value": {
+          "raw": "00458",
+          "digits": "00458",
+          "minimumCharacterScore": 0.9829503297805786,
+          "meanCharacterScore": 0.9923912644386291,
+          "forwardMs": 12.63199999993958
+        }
+      }
+    ]
+  },
+  "newStaffReaders": 0,
+  "humanReviews": 0,
+  "billingValuesIndependentlyVerified": 0,
+  "ordinaryRuntimeChanged": false
+}

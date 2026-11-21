@@ -1,0 +1,561 @@
+import { useState } from 'react';
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Alert,
+  Button,
+  Chip,
+  Stack,
+  Tab,
+  Tabs,
+  Typography,
+} from '@mui/material';
+import { ChevronDown } from 'lucide-react';
+import { Link } from 'react-router';
+import { usePortal } from '../../app/PortalProvider';
+import { KPIGrid, PageHeader } from '../../components/common/PortalUI';
+import { makeRecord, DEMO_DATE } from '../../services/mock/seed';
+import type { DemoDatabase, PortalRecord } from '../../types/portal';
+import { investmentSummary } from './model';
+import { DataList, EditDrawer, Panel, PropertyBoundary, Select } from './PropertyUI';
+import { currency, dateLabel, matches } from './propertyUtils';
+import { usePropertyMutation } from './usePropertyMutation';
+import { isMockMode } from '../../services/config';
+import {
+  BillingConfigurationPage,
+  DemoBillingConfigurationGuide,
+} from '../invoices/BillingConfigurationPage';
+import { ExpensesApiPage } from '../expenses/ExpensesApiPage';
+
+export function Pricing() {
+  if (!isMockMode) return <BillingConfigurationPage />;
+  return (
+    <PropertyBoundary>
+      {(db) => (
+        <>
+          <DemoBillingConfigurationGuide />
+          <PricingContent db={db} />
+        </>
+      )}
+    </PropertyBoundary>
+  );
+}
+function PricingContent({ db }: { db: DemoDatabase }) {
+  const portal = usePortal(),
+    save = usePropertyMutation();
+  const [editing, setEditing] = useState<{
+    location: string;
+    scope: string;
+    base?: PortalRecord;
+  } | null>(null);
+  const [scope, setScope] = useState(''),
+    [tab, setTab] = useState(0),
+    [newPrice, setNewPrice] = useState(false),
+    [location, setLocation] = useState(
+      portal.locationId === 'all' ? db.records.locations[0]?.id || '' : portal.locationId,
+    ),
+    [newScope, setNewScope] = useState('location');
+  const labels: Record<string, string> = {
+    location: 'Cơ sở',
+    type: 'Loại phòng',
+    room: 'Phòng riêng lẻ',
+  };
+  const rows = db.records.pricing.filter(
+    (r) =>
+      (portal.locationId === 'all' || r.locationId === portal.locationId) &&
+      (!scope || r.attributes.scope === scope) &&
+      matches(r.name + r.code, portal.search) &&
+      (tab === 1 || (r.date <= DEMO_DATE && (!r.endDate || r.endDate >= DEMO_DATE))),
+  );
+  return (
+    <>
+      <PageHeader
+        title="Giá thuê & Chính sách phí"
+        subtitle="Lưu các phiên bản theo ngày hiệu lực. Giá cấu hình không tự thay đổi nghĩa vụ hợp đồng hoặc hóa đơn đã chốt."
+        actions={
+          <Button variant="contained" onClick={() => setNewPrice(true)}>
+            Thêm phiên bản giá
+          </Button>
+        }
+      />
+      <Alert severity="info" sx={{ mb: 2 }}>
+        Đây là cấu hình minh họa. Thứ tự áp dụng và tính tiền chính thức do backend quyết định; giao
+        diện chưa thực hiện tính hóa đơn.
+      </Alert>
+      <Alert severity="warning" sx={{ mb: 2 }}>
+        Điện phải đối chiếu Thông tư 60/2025/TT-BCT và biểu giá đang có hiệu lực. Giá nước do UBND
+        cấp tỉnh ban hành theo khu vực. Phí vệ sinh, an ninh và dịch vụ khác phải ghi rõ căn cứ,
+        phạm vi và thỏa thuận; không được gắn nhãn “phí Nhà nước” nếu không có văn bản áp dụng.
+        <Stack direction="row" sx={{ gap: 1, mt: 1, flexWrap: 'wrap' }}>
+          <Button
+            component="a"
+            href="https://vanban.chinhphu.vn/?classid=1&docid=216125&orggroupid=4&pageid=27160"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Quy định giá điện
+          </Button>
+          <Button
+            component="a"
+            href="https://vanban.chinhphu.vn/?docid=203448&pageid=27160"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Khung giá nước sạch
+          </Button>
+        </Stack>
+      </Alert>
+      <Panel title="Chính sách giá">
+        <Stack
+          direction="row"
+          sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2 }}
+        >
+          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+            <Tab label="Hiệu lực ngày demo" />
+            <Tab label="Tất cả phiên bản / Lịch sử" />
+          </Tabs>
+          <Select
+            label="Phạm vi áp dụng"
+            value={scope}
+            all="Tất cả"
+            options={Object.entries(labels).map(([id, name]) => ({ id, name }))}
+            onChange={setScope}
+          />
+        </Stack>
+        <DataList
+          rows={rows}
+          noun="chính sách"
+          searchText={(r) => r.name + r.code}
+          columns={[
+            {
+              label: 'Chính sách',
+              value: (r) => (
+                <>
+                  <Typography sx={{ fontWeight: 650 }}>{r.name}</Typography>
+                  <Typography variant="caption">{r.code}</Typography>
+                </>
+              ),
+            },
+            {
+              label: 'Phạm vi',
+              value: (r) => (
+                <>
+                  {labels[r.attributes.scope]}
+                  <Typography variant="caption" sx={{ display: 'block' }}>
+                    {
+                      (r.attributes.scope === 'room'
+                        ? db.records.rooms
+                        : r.attributes.scope === 'type'
+                          ? db.records['room-types']
+                          : db.records.locations
+                      ).find((t) => t.id === r.attributes.targetId)?.name
+                    }
+                  </Typography>
+                  {r.attributes.scope === 'room' && <Chip size="small" label="Giá riêng phòng" />}
+                </>
+              ),
+            },
+            { label: 'Giá thuê / tháng', value: (r) => currency(r.amount) },
+            {
+              label: 'Điện / kWh',
+              value: (r) => currency(Number(r.attributes.electricityRate || 0)),
+            },
+            { label: 'Nước / m³', value: (r) => currency(Number(r.attributes.waterRate || 0)) },
+            {
+              label: 'Vệ sinh / An ninh / Khác',
+              value: (r) =>
+                [
+                  r.attributes.environmentRate,
+                  r.attributes.securityRate,
+                  r.attributes.otherServiceRate || r.attributes.serviceRate,
+                ]
+                  .map((value) => currency(Number(value || 0)))
+                  .join(' / '),
+            },
+            { label: 'Hiệu lực', value: (r) => `${dateLabel(r.date)} → ${dateLabel(r.endDate)}` },
+            {
+              label: 'Thao tác',
+              value: (r) => (
+                <Button
+                  onClick={() =>
+                    setEditing({ location: r.locationId, scope: r.attributes.scope, base: r })
+                  }
+                >
+                  Tạo phiên bản mới
+                </Button>
+              ),
+            },
+          ]}
+        />
+      </Panel>
+      {newPrice && (
+        <Panel
+          title="Chọn phạm vi phiên bản mới"
+          actions={<Button onClick={() => setNewPrice(false)}>Hủy</Button>}
+        >
+          <Stack direction="row" sx={{ gap: 2 }}>
+            <Select
+              label="Cơ sở áp dụng"
+              value={location}
+              options={db.records.locations}
+              onChange={setLocation}
+            />
+            <Select
+              label="Cấp cấu hình"
+              value={newScope}
+              options={Object.entries(labels).map(([id, name]) => ({ id, name }))}
+              onChange={setNewScope}
+            />
+            <Button
+              variant="contained"
+              onClick={() => {
+                setNewPrice(false);
+                setEditing({ location, scope: newScope });
+              }}
+            >
+              Nhập mức giá
+            </Button>
+          </Stack>
+        </Panel>
+      )}
+      {editing && (
+        <PriceEditor
+          key={`${editing.location}-${editing.scope}`}
+          location={editing.location}
+          scope={editing.scope}
+          db={db}
+          onClose={() => setEditing(null)}
+          save={save}
+          base={editing.base}
+        />
+      )}
+    </>
+  );
+}
+
+function PriceEditor({
+  location,
+  scope,
+  db,
+  onClose,
+  save,
+  base,
+}: {
+  location: string;
+  scope: string;
+  db: DemoDatabase;
+  onClose: () => void;
+  save: ReturnType<typeof usePropertyMutation>;
+  base?: PortalRecord;
+}) {
+  const targets =
+    scope === 'location'
+      ? db.records.locations.filter((l) => l.id === location)
+      : scope === 'type'
+        ? db.records['room-types'].filter((t) => t.locationId === location)
+        : db.records.rooms
+            .filter((r) => r.locationId === location)
+            .map((r) => ({ id: r.id, name: r.code }));
+  return (
+    <EditDrawer
+      title={base ? 'Tạo phiên bản chính sách kế tiếp' : 'Phiên bản giá & Phí'}
+      description={
+        base
+          ? 'Phiên bản cũ được giữ nguyên lịch sử và kết thúc vào ngày liền trước ngày hiệu lực mới.'
+          : 'Mỗi chính sách có phạm vi và khoảng hiệu lực riêng; không ghi đè hóa đơn hoặc hợp đồng đã chốt.'
+      }
+      initial={{
+        target: base?.attributes.targetId || targets[0]?.id || '',
+        name: base ? `${base.name} — phiên bản mới` : '',
+        rent: String(base?.amount || 0),
+        electricityRate: base?.attributes.electricityRate || '0',
+        waterRate: base?.attributes.waterRate || '0',
+        environmentRate: base?.attributes.environmentRate || '0',
+        securityRate: base?.attributes.securityRate || '0',
+        otherServiceRate: base?.attributes.otherServiceRate || base?.attributes.serviceRate || '0',
+        start: base ? '' : DEMO_DATE,
+        end: '',
+      }}
+      fields={[
+        { key: 'target', label: 'Áp dụng cho', options: targets, required: true },
+        { key: 'name', label: 'Tên phiên bản', required: true },
+        { key: 'rent', label: 'Giá thuê (VND/tháng)', type: 'money', required: true },
+        { key: 'electricityRate', label: 'Điện (VND/kWh)', type: 'money' },
+        { key: 'waterRate', label: 'Nước (VND/m³)', type: 'money' },
+        { key: 'environmentRate', label: 'Vệ sinh môi trường (VND/tháng)', type: 'money' },
+        { key: 'securityRate', label: 'Dịch vụ an ninh trật tự (VND/tháng)', type: 'money' },
+        { key: 'otherServiceRate', label: 'Dịch vụ khác (VND/tháng)', type: 'money' },
+        { key: 'start', label: 'Hiệu lực từ', type: 'date', required: true },
+        { key: 'end', label: 'Hiệu lực đến (để trống nếu chưa xác định)', type: 'date' },
+      ]}
+      onClose={onClose}
+      onSave={(v) => {
+        const record = makeRecord('pricing', {
+          name: v.name,
+          code: `GIA-${crypto.randomUUID().slice(0, 8)}`,
+          locationId: location,
+          amount: Number(v.rent),
+          date: v.start,
+          endDate: v.end,
+          attributes: {
+            scope,
+            targetId: v.target,
+            electricityRate: v.electricityRate,
+            waterRate: v.waterRate,
+            environmentRate: v.environmentRate,
+            securityRate: v.securityRate,
+            otherServiceRate: v.otherServiceRate,
+          },
+        });
+        return base
+          ? save({ kind: 'priceVersion', previousId: base.id, record })
+          : save({ kind: 'price', record });
+      }}
+    />
+  );
+}
+
+export function Investments() {
+  if (!isMockMode) return <ExpensesApiPage />;
+  return <PropertyBoundary>{(db) => <InvestmentContent db={db} />}</PropertyBoundary>;
+}
+function InvestmentContent({ db }: { db: DemoDatabase }) {
+  const portal = usePortal(),
+    save = usePropertyMutation();
+  const [tab, setTab] = useState(2),
+    [adding, setAdding] = useState(false),
+    [location, setLocation] = useState(
+      portal.locationId === 'all' ? db.records.locations[0]?.id || '' : portal.locationId,
+    ),
+    [editor, setEditor] = useState(false);
+  const summary = investmentSummary(db, portal.locationId);
+  const locations = db.records.locations.filter(
+    (l) => portal.locationId === 'all' || l.id === portal.locationId,
+  );
+  const expenses = db.records.expenses.filter(
+    (e) =>
+      (portal.locationId === 'all' || e.locationId === portal.locationId) &&
+      matches(e.name + e.code, portal.search),
+  );
+  return (
+    <>
+      <PageHeader
+        title="Đầu tư ban đầu & Chi phí"
+        subtitle="Nguyên giá được ghi một lần tại phiếu mua; cấp phát chỉ phân bổ nơi sử dụng vốn."
+        actions={
+          <>
+            <Button component={Link} to="/assets" variant="outlined">
+              Nhập mua tài sản
+            </Button>
+            <Button variant="contained" onClick={() => setAdding(true)}>
+              Ghi khoản đầu tư / chi phí khác
+            </Button>
+          </>
+        }
+      />
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        aria-label="Xem đầu tư và chi phí minh họa"
+        sx={{
+          mb: 1,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          '& .MuiTab-root': { minHeight: 44 },
+        }}
+      >
+        <Tab label="Vốn theo cơ sở" />
+        <Tab label="Phân bổ theo phòng" />
+        <Tab label="Danh sách khoản chi" />
+      </Tabs>
+      <Accordion variant="outlined" disableGutters sx={{ mb: 1.5 }}>
+        <AccordionSummary expandIcon={<ChevronDown size={18} />}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
+            Tổng quan vốn đầu tư (dữ liệu minh họa)
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <KPIGrid
+            items={[
+              { label: 'Tổng đầu tư ban đầu', value: currency(summary.total) },
+              { label: 'Đầu tư tài sản', value: currency(summary.assetValue) },
+              { label: 'Đầu tư khác', value: currency(summary.other) },
+              { label: 'Tài sản cấp cho phòng', value: currency(summary.roomValue) },
+              { label: 'Tài sản khu vực chung', value: currency(summary.commonValue) },
+              { label: 'Giá trị chưa phân bổ', value: currency(summary.unallocated) },
+            ]}
+          />
+          <Typography variant="caption" color="text.secondary">
+            Giá trị phân bổ là nguyên giá, không cộng thêm vào vốn ban đầu. Bảo trì nằm trong chi
+            phí vận hành.
+          </Typography>
+        </AccordionDetails>
+      </Accordion>
+      {tab === 0 && (
+        <Panel title="Vốn & Chi phí theo cơ sở">
+          <DataList
+            rows={locations}
+            noun="cơ sở"
+            searchText={(l) => l.name}
+            columns={[
+              { label: 'Cơ sở', value: (l) => l.name },
+              { label: 'Tổng đầu tư', value: (l) => currency(investmentSummary(db, l.id).total) },
+              { label: 'Tài sản', value: (l) => currency(investmentSummary(db, l.id).assetValue) },
+              { label: 'Đầu tư khác', value: (l) => currency(investmentSummary(db, l.id).other) },
+              {
+                label: 'Chi phí vận hành',
+                value: (l) => currency(investmentSummary(db, l.id).operating),
+              },
+              {
+                label: 'Trong đó: bảo trì',
+                value: (l) => currency(investmentSummary(db, l.id).maintenance),
+              },
+            ]}
+          />
+        </Panel>
+      )}
+      {tab === 1 && (
+        <Panel title="Nguyên giá tài sản đang phân bổ theo phòng">
+          <DataList
+            rows={db.records.rooms.filter((r) => locations.some((l) => l.id === r.locationId))}
+            noun="phòng"
+            searchText={(r) => r.code + r.name}
+            columns={[
+              {
+                label: 'Phòng',
+                value: (r) => (
+                  <Button component={Link} to={`/rooms/${r.id}`}>
+                    {r.code}
+                  </Button>
+                ),
+              },
+              {
+                label: 'Cơ sở',
+                value: (r) => db.records.locations.find((l) => l.id === r.locationId)?.name,
+              },
+              {
+                label: 'Tài sản được cấp',
+                value: (r) => currency(investmentSummary(db, r.locationId, r.id).roomValue),
+              },
+              {
+                label: 'Đầu tư khác cho phòng',
+                value: (r) => currency(investmentSummary(db, r.locationId, r.id).other),
+              },
+            ]}
+          />
+        </Panel>
+      )}
+      {tab === 2 && (
+        <Panel title="Sổ đầu tư khác & Chi phí minh họa">
+          <DataList
+            rows={expenses}
+            noun="khoản chi"
+            searchText={(e) => e.name + e.code + e.category}
+            columns={[
+              {
+                label: 'Mã / Nội dung',
+                value: (e) => (
+                  <>
+                    {e.code}
+                    <Typography>{e.name}</Typography>
+                  </>
+                ),
+              },
+              {
+                label: 'Cơ sở',
+                value: (e) => db.records.locations.find((l) => l.id === e.locationId)?.name,
+              },
+              { label: 'Nhóm', value: (e) => e.category },
+              {
+                label: 'Phòng',
+                value: (e) => db.records.rooms.find((r) => r.id === e.roomId)?.code || 'Toàn cơ sở',
+              },
+              { label: 'Ngày ghi nhận', value: (e) => dateLabel(e.date) },
+              { label: 'Số tiền', value: (e) => currency(e.amount) },
+              { label: 'Chứng từ / ghi chú', value: (e) => e.description },
+            ]}
+          />
+        </Panel>
+      )}
+      {adding && (
+        <Panel title="Chọn cơ sở ghi nhận">
+          <Stack direction="row" sx={{ gap: 2 }}>
+            <Select
+              label="Cơ sở"
+              value={location}
+              options={db.records.locations}
+              onChange={setLocation}
+            />
+            <Button onClick={() => setAdding(false)}>Hủy</Button>
+            <Button
+              variant="contained"
+              onClick={() => {
+                setAdding(false);
+                setEditor(true);
+              }}
+            >
+              Tiếp tục
+            </Button>
+          </Stack>
+        </Panel>
+      )}
+      {editor && (
+        <EditDrawer
+          title="Ghi đầu tư / chi phí khác"
+          description="Mua thiết bị cần ghi tại Kho tài sản, không ghi lại ở đây. Bản ghi này chỉ phục vụ demo, không phải chứng từ tài chính đã xác minh."
+          initial={{
+            name: '',
+            code: '',
+            category: 'Đầu tư ban đầu',
+            amount: '0',
+            roomId: '',
+            date: DEMO_DATE,
+            description: '',
+          }}
+          fields={[
+            { key: 'name', label: 'Nội dung', required: true },
+            { key: 'code', label: 'Mã tham chiếu duy nhất', required: true },
+            {
+              key: 'category',
+              label: 'Nhóm ghi nhận',
+              options: ['Đầu tư ban đầu', 'Vận hành', 'Bảo trì'].map((id) => ({ id, name: id })),
+            },
+            { key: 'amount', label: 'Số tiền (VND)', type: 'money', required: true },
+            {
+              key: 'roomId',
+              label: 'Phòng liên quan',
+              options: [
+                { id: '', name: 'Toàn cơ sở / khu vực chung' },
+                ...db.records.rooms
+                  .filter((r) => r.locationId === location)
+                  .map((r) => ({ id: r.id, name: r.code })),
+              ],
+            },
+            { key: 'date', label: 'Ngày ghi nhận', type: 'date', required: true },
+            { key: 'description', label: 'Chứng từ / ghi chú', required: true },
+          ]}
+          onClose={() => setEditor(false)}
+          onSave={(v) =>
+            save({
+              kind: 'investment',
+              record: makeRecord('expenses', {
+                code: v.code,
+                name: v.name,
+                category: v.category,
+                amount: Number(v.amount),
+                date: v.date,
+                locationId: location,
+                roomId: v.roomId,
+                description: v.description,
+              }),
+            })
+          }
+        />
+      )}
+    </>
+  );
+}

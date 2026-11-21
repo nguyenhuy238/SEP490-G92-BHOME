@@ -1,0 +1,86 @@
+{
+  "scope": "frozen4_source_author_disjoint_provisional_probes_not_human_acceptance",
+  "physicalIndependenceVerified": false,
+  "samples": [
+    {
+      "id": "commons_135182584",
+      "image": ".tools/ocr-next-staff/new-public/commons_135182584.jpg",
+      "sha256": "50dce186f3408820bbc7360e0445d9d50401eed5e132ce5336ea2ce161d76988",
+      "sourceGroup": "author_4217954536026f1eb0e8",
+      "category": "electricity_digital",
+      "split": "test",
+      "labelStatus": "agent_pixels_provisional_before_candidate_inference",
+      "humanReviewCount": 0,
+      "expectedDigits": null,
+      "decimalPlaces": null,
+      "registerVerified": false,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:%D7%9E%D7%95%D7%A0%D7%94_%D7%97%D7%A9%D7%9E%D7%9C_%D7%9E%D7%AA%22%D7%9E_-_%D7%9E%D7%95%D7%A0%D7%94_%D7%AA%D7%A9%D7%9C%D7%95%D7%9D_%D7%9E%D7%A8%D7%90%D7%A9.jpg",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:Mr.Shoval\" title=\"User:Mr.Shoval\">Yoram Shoval</a>"
+      },
+      "note": "Covered/muddy faces count as unsupported not_meter; no numeric ground truth. New benchmark membership, not independently human verified."
+    },
+    {
+      "id": "commons_18649568",
+      "image": ".tools/ocr-continued/commons_18649568.jpg",
+      "sha256": "373448330b30bc345318fb76864375f3c3e5d507d0e3554ed10e379e46542d81",
+      "sourceGroup": "author_d084fa85bf80eae00964",
+      "category": "electricity_mechanical",
+      "split": "test",
+      "labelStatus": "agent_pixels_provisional_before_candidate_inference",
+      "humanReviewCount": 0,
+      "expectedDigits": null,
+      "decimalPlaces": null,
+      "registerVerified": false,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:An_electricity_meter.jpg",
+        "license": "CC BY-SA 3.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "author": "<a href=\"//commons.wikimedia.org/wiki/User:W457137120\" title=\"User:W457137120\">W457137120</a>"
+      },
+      "note": "Covered/muddy faces count as unsupported not_meter; no numeric ground truth. New benchmark membership, not independently human verified."
+    },
+    {
+      "id": "commons_6286401",
+      "image": ".tools/master-dataset/commons/commons_6286401.jpg",
+      "sha256": "d8e14bad4586e6b1084926dd766c0f4a95d8fcfbfbdf73e3728abb07e51e15b1",
+      "sourceGroup": "author_20bd4120b62c33135bac",
+      "category": "not_meter",
+      "split": "test",
+      "labelStatus": "agent_pixels_provisional_before_candidate_inference",
+      "humanReviewCount": 0,
+      "expectedDigits": null,
+      "decimalPlaces": null,
+      "registerVerified": false,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:2009-03-20_Submerged_water_meter_in_Durham.jpg",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "author": "Ildar Sagdejev (<a href=\"//commons.wikimedia.org/wiki/User:Specious\" title=\"User:Specious\">Specious</a>)"
+      },
+      "note": "Covered/muddy faces count as unsupported not_meter; no numeric ground truth. New benchmark membership, not independently human verified."
+    },
+    {
+      "id": "commons_37919761",
+      "image": ".tools/master-dataset/commons/commons_37919761.jpg",
+      "sha256": "db6f4bb7401c11f339096247e45b881ec1320be289ab7cd866219b0de86aa157",
+      "sourceGroup": "author_e64e56266815b09ea1af",
+      "category": "not_meter",
+      "split": "test",
+      "labelStatus": "agent_pixels_provisional_before_candidate_inference",
+      "humanReviewCount": 0,
+      "expectedDigits": null,
+      "decimalPlaces": null,
+      "registerVerified": false,
+      "provenance": {
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:City_Laundromat,_BF,_southwestern_quoin.jpg",
+        "license": "Public domain",
+        "licenseUrl": "",
+        "author": "<a href=\"https://en.wikipedia.org/wiki/User:Nyttend\" class=\"extiw\" title=\"w:User:Nyttend\">Nyttend</a>"
+      },
+      "note": "Covered/muddy faces count as unsupported not_meter; no numeric ground truth. New benchmark membership, not independently human verified."
+    }
+  ]
+}
