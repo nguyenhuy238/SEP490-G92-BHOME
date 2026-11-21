@@ -284,6 +284,22 @@ export function OwnerResidenceRecord({
                 {imageError}
               </Alert>
             )}
+            {task.trackingActive && !task.accommodationConfirmed && (
+              <AccommodationConfirmation
+                task={task}
+                api={api}
+                disabled={record.busy || record.review || record.loading}
+                mutate={record.mutate}
+              />
+            )}
+            {task.accommodationConfirmed && (
+              <Typography>Đã ghi nhận xác nhận chỗ ở trên kênh chính thức.</Typography>
+            )}
+            {task.registrationDeadline && (
+              <Typography>
+                Hạn đăng ký được ghi nhận {displayContractDate(task.registrationDeadline)}
+              </Typography>
+            )}
             {task.status === 'Completed' && task.hasEvidence && !task.ownerConfirmed && (
               <>
                 <TextField
@@ -321,5 +337,50 @@ export function OwnerResidenceRecord({
         )}
       </Stack>
     </Paper>
+  );
+}
+
+function AccommodationConfirmation({
+  task,
+  api,
+  disabled,
+  mutate,
+}: {
+  task: ResidenceTask;
+  api: ResidenceClient;
+  disabled: boolean;
+  mutate: (write: () => Promise<ResidenceTask>, message: string) => Promise<boolean>;
+}) {
+  const [note, setNote] = useState('');
+  const [deadline, setDeadline] = useState('');
+  return (
+    <Stack spacing={1}>
+      <TextField
+        label="Ghi chú xác nhận chỗ ở trên kênh chính thức"
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+        disabled={disabled}
+        slotProps={{ htmlInput: { maxLength: 1000 } }}
+      />
+      <TextField
+        type="date"
+        label="Hạn đăng ký nếu đã xác định"
+        value={deadline}
+        onChange={(event) => setDeadline(event.target.value)}
+        disabled={disabled}
+        slotProps={{ inputLabel: { shrink: true } }}
+      />
+      <Button
+        disabled={disabled || !note.trim()}
+        onClick={() =>
+          void mutate(
+            () => api.confirmAccommodation(task, note, deadline || null),
+            'Đã ghi nhận xác nhận chỗ ở.',
+          )
+        }
+      >
+        Ghi nhận xác nhận chỗ ở
+      </Button>
+    </Stack>
   );
 }

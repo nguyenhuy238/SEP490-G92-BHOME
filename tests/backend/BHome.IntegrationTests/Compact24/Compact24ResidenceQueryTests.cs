@@ -80,6 +80,21 @@ public sealed class Compact24ResidenceQueryTests(Compact24Fixture fixture) : ICl
         Assert.True(update.IsSuccessStatusCode, await update.Content.ReadAsStringAsync());
         var record = (await update.Content.ReadFromJsonAsync<ResidenceTaskView>())!;
         Assert.Equal("InProgress", record.Status);
+        Assert.True(record.TrackingActive); Assert.NotNull(record.Reference);
+        using var ownerReview = await User(Roles.Owner);
+        var confirmation = await ownerReview.PostAsJsonAsync(route + "/accommodation-confirmation",
+            new ResidenceAccommodationConfirmation("Synthetic official-channel accommodation confirmation", record.Reference!, from.AddDays(20)));
+        Assert.True(confirmation.IsSuccessStatusCode, await confirmation.Content.ReadAsStringAsync());
+        var confirmed = (await confirmation.Content.ReadFromJsonAsync<ResidenceTaskView>())!;
+        Assert.True(confirmed.AccommodationConfirmed); Assert.False(confirmed.OwnerConfirmed);
+        Assert.Equal("InProgress", confirmed.Status); Assert.Equal(from.AddDays(20), confirmed.RegistrationDeadline);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PutAsJsonAsync(route,
+            new ResidenceUpdate(from, "InProgress", null, "Stale synthetic edit", record.Reference))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await ownerReview.PostAsJsonAsync(route + "/accommodation-confirmation",
+            new ResidenceAccommodationConfirmation("Repeated confirmation", confirmed.Reference!))).StatusCode);
+        using var staffClient = await User(Roles.Staff);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staffClient.PostAsJsonAsync(route + "/accommodation-confirmation",
+            new ResidenceAccommodationConfirmation("Denied", confirmed.Reference!))).StatusCode);
         var repository = scope.ServiceProvider.GetRequiredService<IOperationsRepository>();
         var attached = await repository.AttachResidenceEvidenceAsync(identity.UserId, contract.Id, resident.Id,
             new OperationsFile("synthetic-regression-only.png", "image/png", 128), DateTimeOffset.UtcNow, default);

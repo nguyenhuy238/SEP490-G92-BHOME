@@ -27,6 +27,17 @@ def env(name):
     return dict(v.split('=', 1) for v in inspect(name)['Config']['Env'] if '=' in v)
 
 
+def webhook_policy(target):
+    settings = env(CONTAINERS[target][0])
+    enabled = settings.get('SePay__Enabled', '').lower()
+    if enabled not in ('true', 'false'):
+        raise ValueError('SePay enablement must be explicit before webhook smoke')
+    if target == 'staging' and (enabled != 'true' or settings.get('SePay__Mode') != 'Test'):
+        raise ValueError('Staging SePay must remain enabled in Test mode')
+    # SePayWebhookSecurity rejects disabled integrations before authenticating.
+    return (401, 'sepay_authentication_failed') if enabled == 'true' else (503, 'sepay_disabled')
+
+
 def protected(target):
     names = ['bhome-vps-postgres-1', 'bhome-vps-minio-1', 'bhome-vps-caddy-1', 'bhome-sepay-vps-stage', 'bhome-sepay-stage-minio', 'bhome-staging-owner-legacy', 'bhome-staging-public-legacy']
     names += CONTAINERS['production' if target == 'staging' else 'staging']
@@ -109,6 +120,9 @@ def main():
     command, target, *args = sys.argv[1:]
     if target not in CONTAINERS:
         raise ValueError('Unknown environment')
+    if command == 'webhook-policy':
+        print(*webhook_policy(target))
+        return
     if command == 'snapshot':
         Path(args[0]).write_text(json.dumps({'containers': protected(target), 'config': check_environment(target)}, sort_keys=True))
     elif command == 'unchanged':

@@ -58,8 +58,8 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         var user = await security.LockUserAsync(userId, t);
         if (user is null || !user.IsActive || !(await security.RolesAsync(userId, t)).Contains(Roles.Staff))
             throw new NotificationException(404, "staff_not_found");
-        if (!user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email))
-            throw new NotificationException(409, "staff_account_requires_invitation");
+        if (string.IsNullOrWhiteSpace(user.Email))
+            throw new NotificationException(409, "staff_email_required");
         delivery.ValidateInvitationRecipient(user.Email);
         // Row locking serializes concurrent requests for the same Staff; a rapid retry
         // preserves the queued credential rather than silently replacing it again.
@@ -69,6 +69,10 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
             """, t, ("user", user.Id), ("since", sql.Now.AddSeconds(-emailOptions.Value.ResendCooldownSeconds)));
         if (recentlyIssued) return new(user.Id, "ExistingRequestPreserved");
 
+        // Legacy Staff created before direct provisioning can receive credentials
+        // without an invitation. Keep the state change in the same transaction
+        // as the password hash, revoked sessions and protected email outbox.
+        user.EmailConfirmed = true;
         var password = NewStaffPassword();
         var result = await users.ResetPasswordAsync(user, await users.GeneratePasswordResetTokenAsync(user), password);
         if (!result.Succeeded) throw new NotificationException(409, "staff_password_update_failed");

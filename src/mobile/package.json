@@ -44,5 +44,19 @@
     "lint": "eslint src --max-warnings 0",
     "test": "vitest run --config vitest.config.ts"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": [
+          "expo-camera"
+        ]
+      },
+      "ios": {
+        "buildFromSource": [
+          "expo-camera"
+        ]
+      }
+    }
+  }
 }

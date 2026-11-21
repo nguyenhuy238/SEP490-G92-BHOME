@@ -10,7 +10,8 @@ using BHome.Domain.StaffOperations;
 namespace BHome.Application.StaffOperations;
 
 public sealed partial class OperationalTaskService(IOperationalTaskRepository repository, ICurrentUser user,
-    PermissionAccess permissions, ITaskEvidenceFiles files, TaskEvidenceLimits limits, TimeProvider clock)
+    PermissionAccess permissions, ITaskEvidenceFiles files, TaskEvidenceLimits limits, TimeProvider clock,
+    BHome.Application.PropertyManagement.ISetupWorkspaceStore? inspectionRecords = null)
 {
     private Guid Actor => user.UserId is { } id && id != Guid.Empty ? id : throw new OperationalTaskException(401, "authentication_required");
     private DateTimeOffset Now => clock.GetUtcNow();
@@ -201,6 +202,12 @@ public sealed partial class OperationalTaskService(IOperationalTaskRepository re
             throw OperationalTaskException.Invalid("task_note_required");
         return MutateAsync(id, input.Version, key, action, input, async (task, responsible) =>
         {
+            if (inspectionRecords is not null && action is "submit" or "verify" or "rework" or "cancel")
+            {
+                var inspection = await inspectionRecords.GetAsync(BHome.Application.PropertyManagement.EquipmentInspectionScheduler.InspectionId(id), "EquipmentInspection", t);
+                var expected = action switch { "submit" => "Submitted", "verify" => "Verified", "rework" => "Draft", _ => "Cancelled" };
+                if (inspection is not null && inspection.Status != expected) throw OperationalTaskException.Conflict("equipment_inspection_workflow_required");
+            }
             if (task.Kind == OperationalTaskKind.LocationAssetHandover && action == "submit")
                 await ValidateLocationAssetInventorySubmissionAsync(task, t);
             if (task.ContractId is not null && action is "submit" or "verify" or "cancel")

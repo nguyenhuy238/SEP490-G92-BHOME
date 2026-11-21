@@ -40,6 +40,9 @@ public sealed class PlanApi : IDisposable
         Func<HttpContent>? content = null,
         bool waitWhenRateLimited = true)
     {
+        PlanExecutionGate.RequireAuthorized();
+        // All plan routes must remain relative to the approved disposable API.
+        Skip.If(Uri.TryCreate(path, UriKind.Absolute, out _), "Plan API requests must use relative paths.");
         for (var attempt = 0; ; attempt++)
         {
             using var request = new HttpRequestMessage(method, path.TrimStart('/'));

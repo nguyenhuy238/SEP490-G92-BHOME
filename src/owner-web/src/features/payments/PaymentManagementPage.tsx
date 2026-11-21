@@ -1415,6 +1415,8 @@ function ReceivingAccountForm({ locationId }: { locationId: string }) {
   const api = usePaymentApi();
   const { session } = useAuth();
   const actor = session?.userId ?? '';
+  const cache = useQueryClient();
+  const [lastSaved, setLastSaved] = useState<{ locationId: string; version: number } | null>(null);
   const account = useQuery({
     queryKey: ['receiving-account', actor, locationId],
     queryFn: ({ signal }) => api.account(locationId, signal),
@@ -1431,12 +1433,24 @@ function ReceivingAccountForm({ locationId }: { locationId: string }) {
         </Alert>
       )}
       {account.isSuccess && (
-        <AccountEditor
-          key={locationId + ':' + (account.data?.version ?? 0)}
-          current={account.data}
-          locationId={locationId}
-          saved={() => void account.refetch()}
-        />
+        <>
+          {lastSaved?.locationId === locationId && lastSaved.version === account.data?.version && (
+            <Alert severity="success" role="status">
+              Đã lưu tài khoản nhận tiền thành công (phiên bản {lastSaved.version}).
+            </Alert>
+          )}
+          <AccountEditor
+            key={locationId + ':' + (account.data?.version ?? 0)}
+            current={account.data}
+            locationId={locationId}
+            edited={() => setLastSaved(null)}
+            saved={(value) => {
+              setLastSaved({ locationId, version: value.version });
+              cache.setQueryData(['receiving-account', actor, locationId], value);
+              void account.refetch();
+            }}
+          />
+        </>
       )}
     </>
   );
@@ -1444,11 +1458,13 @@ function ReceivingAccountForm({ locationId }: { locationId: string }) {
 function AccountEditor({
   current,
   locationId,
+  edited,
   saved,
 }: {
   current: BankAccount | null;
   locationId: string;
-  saved: () => void;
+  edited: () => void;
+  saved: (value: BankAccount) => void;
 }) {
   const api = usePaymentApi();
   const cache = useQueryClient();
@@ -1457,10 +1473,22 @@ function AccountEditor({
     [holder, setHolder] = useState(current?.accountHolder ?? '');
   const [enabled, setEnabled] = useState(current?.enabled ?? false),
     [demo, setDemo] = useState(current?.isDevelopmentDemo ?? false),
-    [checked, setChecked] = useState(false),
+    [checked, setChecked] = useState(Boolean(current)),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const lock = useRef(false);
+  const unchanged = Boolean(
+    current &&
+    bank === current.bankIdentifier &&
+    number === current.accountNumber &&
+    holder === current.accountHolder &&
+    enabled === current.enabled &&
+    demo === current.isDevelopmentDemo,
+  );
+  const markEdited = () => {
+    setChecked(false);
+    edited();
+  };
   return (
     <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2.5 } }}>
       <Stack
@@ -1469,7 +1497,7 @@ function AccountEditor({
         sx={{ maxWidth: 860 }}
         onSubmit={(event) => {
           event.preventDefault();
-          if (lock.current) return;
+          if (lock.current || !checked || unchanged) return;
           lock.current = true;
           setBusy(true);
           setError('');
@@ -1483,9 +1511,9 @@ function AccountEditor({
               isDevelopmentDemo: demo,
               version: current?.version ?? 0,
             })
-            .then(() => {
+            .then((value) => {
               void cache.invalidateQueries({ queryKey: ['transfer-instructions'] });
-              saved();
+              saved(value);
             })
             .catch((e) => setError(paymentError(e)))
             .finally(() => {
@@ -1500,6 +1528,11 @@ function AccountEditor({
             Kiểm tra thông tin ngân hàng trước khi lưu để hướng dẫn chuyển khoản của cơ sở chính
             xác.
           </Typography>
+          {current && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Đã xác nhận và lưu cấu hình phiên bản {current.version}.
+            </Typography>
+          )}
         </Box>
         <Box
           sx={{
@@ -1511,32 +1544,35 @@ function AccountEditor({
           <TextField
             size="small"
             required
+            disabled={busy}
             label="BIN ngân hàng (6 số)"
             value={bank}
             onChange={(e) => {
               setBank(e.target.value);
-              setChecked(false);
+              markEdited();
             }}
           />
           <TextField
             size="small"
             required
+            disabled={busy}
             label="Số tài khoản nhận tiền"
             value={number}
             onChange={(e) => {
               setNumber(e.target.value);
-              setChecked(false);
+              markEdited();
             }}
           />
           <TextField
             size="small"
             required
+            disabled={busy}
             label="Chủ tài khoản (in hoa không dấu)"
             value={holder}
             sx={{ gridColumn: { md: '1 / -1' } }}
             onChange={(e) => {
               setHolder(e.target.value.toUpperCase());
-              setChecked(false);
+              markEdited();
             }}
           />
         </Box>
@@ -1549,9 +1585,10 @@ function AccountEditor({
               control={
                 <Checkbox
                   checked={enabled}
+                  disabled={busy}
                   onChange={(e) => {
                     setEnabled(e.target.checked);
-                    setChecked(false);
+                    markEdited();
                   }}
                 />
               }
@@ -1561,9 +1598,10 @@ function AccountEditor({
               control={
                 <Checkbox
                   checked={demo}
+                  disabled={busy}
                   onChange={(e) => {
                     setDemo(e.target.checked);
-                    setChecked(false);
+                    markEdited();
                   }}
                 />
               }
@@ -1572,7 +1610,13 @@ function AccountEditor({
           </Stack>
           <Divider sx={{ my: 1 }} />
           <FormControlLabel
-            control={<Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)} />}
+            control={
+              <Checkbox
+                checked={checked}
+                disabled={busy}
+                onChange={(e) => setChecked(e.target.checked)}
+              />
+            }
             label="Tôi đã kiểm tra và phê duyệt thông tin tài khoản nhận"
           />
         </Box>
@@ -1580,7 +1624,7 @@ function AccountEditor({
         <Button
           type="submit"
           variant="contained"
-          disabled={busy || !checked}
+          disabled={busy || !checked || unchanged}
           sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
         >
           Lưu tài khoản nhận tiền

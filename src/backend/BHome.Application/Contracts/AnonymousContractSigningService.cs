@@ -185,10 +185,9 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         {
             await security.SendAsync(recipient, input.Resend ? $"internal-signing-invitation:{result.Id:N}:resend:{attempt}" : $"internal-signing-invitation:{result.Id:N}", "BHOME — Lời mời ký hợp đồng",
                 $"Mã OTP của bạn: {invitationOtp}. Mã có hiệu lực 5 phút. Không chia sẻ mã này.\n" +
-                "Bạn được mời ký hợp đồng. Mở liên kết dưới đây, nhập mã OTP trong email này, đọc PDF và đồng ý trước khi ký nội bộ. " +
-                (result.Url is { } url ? "Mở liên kết: " + url :
-                    "Mở BHOME Mobile > Mở lời mời ký hợp đồng và dán mã: " + result.Token) +
-                $"\nLời mời hết hạn lúc {result.ExpiresAt:O}. Đây không phải chữ ký số CA.", t);
+                "Bạn được mời ký hợp đồng. Mở lời mời, nhập mã OTP trong email này, đọc PDF và đồng ý trước khi ký nội bộ. " +
+                (result.Url is not null ? "" : "Mở BHOME Mobile > Mở lời mời ký hợp đồng và dán mã: " + result.Token) +
+                $"\nLời mời hết hạn lúc {TimeZoneInfo.ConvertTimeBySystemTimeZoneId(result.ExpiresAt, "Asia/Ho_Chi_Minh"):HH:mm dd/MM/yyyy} (giờ Việt Nam). Đây không phải chữ ký số CA.", t, result.Url);
         }
         catch (Exception e) when (e is not OperationCanceledException) { deliveryStatus = "InvitationPendingManualDelivery"; }
         await WithToken(result.Token!, (invite, _) => { invite.DeliveryStatus = deliveryStatus; return Task.FromResult(true); }, t);
@@ -285,8 +284,7 @@ public sealed class AnonymousContractSigningService(IContractRepository contract
         try
         {
             await security.SendAsync(pending.RecipientEmail, $"internal-signing:{pending.Id}:{pending.OtpSendCount}", "BHOME — Mã xác nhận ký hợp đồng",
-                $"Mã xác nhận của bạn: {pending.otp}. Mã có hiệu lực 5 phút. Không chia sẻ mã này." +
-                (security.InvitationUrl(token) is { } url ? "\nMở liên kết ký hợp đồng: " + url : ""), t);
+                $"Mã xác nhận của bạn: {pending.otp}. Mã có hiệu lực 5 phút. Không chia sẻ mã này.", t, security.InvitationUrl(token));
             await WithToken(token, (invite, _) =>
             {
                 if (invite.OtpHash is not null && invite.OtpSendCount == pending.OtpSendCount) invite.DeliveryStatus = "OtpAcceptedByProvider";

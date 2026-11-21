@@ -37,10 +37,15 @@ export default defineConfig(({ mode, command }) => {
       : undefined;
   const https = process.env.BHOME_WEB_HTTPS === 'true';
   const pem = new URL('../../.tools/team-tls/localhost.pem', import.meta.url);
+  const crt = new URL('../../.tools/team-tls/localhost.crt', import.meta.url);
   const key = new URL('../../.tools/team-tls/localhost.key', import.meta.url);
-  if (https && (!existsSync(pem) || !existsSync(key)))
+  // Local mobile certificate preparation exports a matching .crt/.key pair.
+  // The team setup script may instead export .pem/.key. Support both without
+  // downgrading signing links to HTTP or skipping certificate verification.
+  const certificate = existsSync(pem) ? pem : crt;
+  if (https && (!existsSync(certificate) || !existsSync(key)))
     throw new Error(
-      'Run scripts/Initialize-TeamEnvironment.ps1 after trusting dotnet dev-certs https.',
+      'HTTPS signing requires a trusted localhost certificate (.pem or .crt) and matching .key in .tools/team-tls.',
     );
   return {
     plugins: [react()],
@@ -50,8 +55,11 @@ export default defineConfig(({ mode, command }) => {
       host: 'localhost',
       port: https ? 5176 : 5173,
       strictPort: true,
-      https: https ? { cert: readFileSync(pem), key: readFileSync(key) } : undefined,
-      proxy: { '/api': { target: target.origin, changeOrigin: true, secure: true, agent } },
+      https: https ? { cert: readFileSync(certificate), key: readFileSync(key) } : undefined,
+      proxy: {
+        '/api': { target: target.origin, changeOrigin: true, secure: true, agent },
+        '/open/sign-contract': { target: target.origin, changeOrigin: true, secure: true, agent },
+      },
     },
   };
 });

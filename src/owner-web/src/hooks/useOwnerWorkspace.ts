@@ -39,7 +39,7 @@ export function ownerError(error: unknown) {
       email_recipient_not_allowed:
         'Địa chỉ nhận chưa được cho phép trong môi trường thử nghiệm. Liên hệ người quản trị môi trường trước khi gửi lại.',
       staff_account_requires_invitation:
-        'Tài khoản nhân viên chưa kích hoạt email. Hãy hoàn tất bước mời và kích hoạt tài khoản trước khi cấp mật khẩu mới.',
+        'Phiên bản Backend cũ yêu cầu kích hoạt tài khoản. Hãy cập nhật Backend rồi thử gửi lại thông tin đăng nhập.',
       staff_password_update_failed:
         'Chưa thể cấp mật khẩu mới cho tài khoản này. Vui lòng thử lại hoặc kiểm tra cấu hình xác thực.',
       identity_retention_review_changed:

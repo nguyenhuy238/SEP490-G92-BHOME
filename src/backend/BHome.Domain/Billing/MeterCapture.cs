@@ -24,6 +24,12 @@ public sealed class Meter : AuditableEntity
 }
 public sealed class OperationalTask : AuditableEntity
 {
+    public OperationalTask() { }
+    public OperationalTask(Guid id)
+    {
+        if (id == Guid.Empty) throw new ArgumentException("A task identifier is required.", nameof(id));
+        Id = id;
+    }
     public OperationalTaskKind Kind { get; set; }
     public Guid LocationId { get; set; }
     public BHome.Domain.Locations.Location Location { get; set; } = null!;

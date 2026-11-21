@@ -530,13 +530,20 @@ it('filters the scoped native RoomDefaults collection without calling retired Ro
 });
 
 it('uses the confirmed Location version for a subsequent settings save', async () => {
-  state.request.mockResolvedValue({
+  const savedLocation = {
     id: 'location',
     name: 'Cơ sở tổng hợp',
     address: 'Địa chỉ tổng hợp',
     isActive: true,
     version: 5,
-  });
+  };
+  state.request.mockImplementation((path: string) =>
+    Promise.resolve(
+      path.includes('/legal-records?')
+        ? { items: [], totalCount: 0, page: 1, pageSize: 20 }
+        : savedLocation,
+    ),
+  );
   mount(
     <LocationWorkspaceSettings
       location={{
@@ -569,10 +576,17 @@ it('uses the confirmed Location version for a subsequent settings save', async (
 });
 
 it('blocks closure when the server reports open Location obligations, then asks for confirmation after recheck', async () => {
-  state.request.mockResolvedValue({
+  const closureState = {
     canClose: false,
     blockers: [{ code: 'OPEN_CONTRACTS', count: 2 }],
-  });
+  };
+  state.request.mockImplementation((path: string) =>
+    Promise.resolve(
+      path.includes('/legal-records?')
+        ? { items: [], totalCount: 0, page: 1, pageSize: 20 }
+        : closureState,
+    ),
+  );
   mount(
     <LocationWorkspaceSettings
       location={{

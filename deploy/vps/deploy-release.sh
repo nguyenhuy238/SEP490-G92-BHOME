@@ -30,6 +30,8 @@ current=json.load(open(sys.argv[1])); incoming=tuple(map(int,sys.argv[2].split('
 assert incoming > tuple(map(int,current['run'].split('-'))), 'Refusing an older or repeated release; resume its existing worker instead.'
 PY
 fi
+# Bootstrap the private backup parent before allocating per-release evidence.
+mkdir -p -m 700 /opt/bhome-backups
 run=$(mktemp -d "/opt/bhome-backups/$target-cd-$(date -u +%Y%m%dT%H%M%S)-${sha:0:12}-XXXX")
 exec > >(tee -a "$run/deploy.log") 2>&1
 echo "Release target=$target sha=$sha run=$run_id evidence=$run"
@@ -119,8 +121,9 @@ python3 "$root/release-safety.py" verify-running "$target" "$api" "$owner" "$pub
 python3 "$root/release-safety.py" unchanged "$target" "$run/protected.json"
 python3 - "$sha" "$run_id" "$api" "$owner" "$public" "$run/manifest.json" <<'PY'
 import json,sys
+from datetime import datetime,timezone
 sha,run,api,owner,public,path=sys.argv[1:]
-json.dump({'sha':sha,'run':run,'images':{'api':api,'owner-web':owner,'public-web':public}},open(path,'w'),indent=2)
+json.dump({'sha':sha,'run':run,'deployedAt':datetime.now(timezone.utc).isoformat(),'images':{'api':api,'owner-web':owner,'public-web':public}},open(path,'w'),indent=2)
 PY
 cp "$run/manifest.json" "$root/current.json.tmp"
 mv "$root/current.json.tmp" "$root/current.json"

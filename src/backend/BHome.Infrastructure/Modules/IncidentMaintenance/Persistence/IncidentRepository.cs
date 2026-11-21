@@ -16,6 +16,14 @@ internal sealed class IncidentRepository(BHomePersistenceContext db,
 {
     public async Task<T> TransactionAsync<T>(Guid locationId, Guid? roomId, Guid actorId, Guid key, Func<Task<T>> work, CancellationToken t)
     {
+        // Equipment remediation shares the enclosing Location transaction and durable command key.
+        if (db.Database.CurrentTransaction is not null)
+        {
+            if (roomId is { } nestedRoom && !await db.Locked<Room>(nestedRoom).AnyAsync(t)) throw IncidentException.Missing();
+            var nestedResult = await work();
+            await db.SaveChangesAsync(t);
+            return nestedResult;
+        }
         db.ChangeTracker.Clear();
         await using var tx = await db.Database.BeginTransactionAsync(t);
         try

@@ -1,0 +1,7 @@
+[Unit]
+Description=Daily verified BHOME Production backup
+[Timer]
+OnCalendar=*-*-* 02:15:00 Asia/Ho_Chi_Minh
+Persistent=true
+[Install]
+WantedBy=timers.target

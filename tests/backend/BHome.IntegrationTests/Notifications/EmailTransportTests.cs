@@ -265,16 +265,17 @@ public sealed class EmailTransportTests
     [InlineData("http://localhost:5173/confirm-email#userName=owner%40example.invalid&token=synthetic-token", "EMAIL_CONFIRMATION_REQUESTED", "Xác nhận email")]
     [InlineData("https://owner.example.invalid/reset-password#userName=owner&token=synthetic-token", "PASSWORD_RESET_REQUESTED", "Đặt lại mật khẩu")]
     [InlineData("bhome://accept-invitation?userName=staff&token=synthetic-token", "ACCOUNT_INVITATION", "Thiết lập tài khoản")]
-    public void AuthenticationHtmlKeepsTheFullCopyableUrlBeforeRepeatedContentEvenWhenTheClientRemovesAnchors(string url, string eventType, string label)
+    public void AuthenticationHtmlPreservesActionAndFallbackWithoutExposingTokenInVisibleText(string url, string eventType, string label)
     {
         var html = EmailTemplate.Html("BHOME", "Repeated authentication body", url, EmailTemplate.ActionLabel(eventType));
         Assert.Contains(">" + WebUtility.HtmlEncode(label) + "</a>", html);
         Assert.Contains("href=\"" + WebUtility.HtmlEncode(url) + "\"", html);
-        // Strip tags just as a client that does not preserve the href might do.
+        // Credentials belong to hrefs, not visible content; plain text keeps a usable fallback.
         var visible = WebUtility.HtmlDecode(Regex.Replace(html, "<[^>]*>", ""));
-        Assert.Contains(url, visible);
-        Assert.True(visible.IndexOf(url, StringComparison.Ordinal) < visible.IndexOf("Repeated authentication body", StringComparison.Ordinal));
-        Assert.Contains("sao chép toàn bộ liên kết", visible);
+        Assert.DoesNotContain(url, visible);
+        Assert.DoesNotContain("synthetic-token", visible);
+        Assert.Contains("liên kết dự phòng", visible);
+        Assert.Contains(url, EmailTemplate.Text(new("synthetic", "EMAIL", "test@example.invalid", eventType, "BHOME", "Repeated authentication body", url)));
     }
 
     [Fact]
@@ -283,7 +284,7 @@ public sealed class EmailTransportTests
         var html = EmailTemplate.Html("BHOME", "Nội dung", "https://example.invalid/#token=synthetic&value=\"<tag>", "<img src=x>");
         Assert.DoesNotContain("<img", html); Assert.Contains("&lt;img", html); Assert.Contains("&quot;&lt;tag&gt;", html);
         var ordinary = EmailTemplate.Html("BHOME", "Nội dung");
-        Assert.DoesNotContain("href=", ordinary); Assert.DoesNotContain("sao chép toàn bộ liên kết", ordinary);
+        Assert.DoesNotContain("href=", ordinary); Assert.DoesNotContain("liên kết dự phòng", ordinary);
     }
 
     [Fact]
@@ -291,6 +292,10 @@ public sealed class EmailTransportTests
     {
         var connection = MailKitEmailSender.Classify(new IOException("PRIVATE_PROVIDER_DATA"), false);
         Assert.True(connection.Retryable); Assert.False(connection.OutcomeUnknown);
+        var refused = MailKitEmailSender.Classify(new SocketException((int)SocketError.ConnectionRefused), false);
+        Assert.True(refused.Retryable); Assert.False(refused.OutcomeUnknown); Assert.Equal("email_connection_failed", refused.Code);
+        var disconnected = MailKitEmailSender.Classify(new SocketException((int)SocketError.ConnectionReset), true);
+        Assert.True(disconnected.OutcomeUnknown); Assert.False(disconnected.Retryable);
         var submission = MailKitEmailSender.Classify(new TimeoutException("PRIVATE_PROVIDER_DATA"), true);
         Assert.True(submission.OutcomeUnknown); Assert.False(submission.Retryable);
         var authentication = MailKitEmailSender.Classify(new MailKit.Security.AuthenticationException("PRIVATE_PROVIDER_DATA"), false);

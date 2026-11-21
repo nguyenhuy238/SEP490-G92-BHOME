@@ -10,6 +10,24 @@ spec.loader.exec_module(safety)
 
 
 class ReleaseSafetyTests(unittest.TestCase):
+    def test_enabled_provider_requires_authentication_rejection(self):
+        with patch.object(safety, 'env', return_value={'SePay__Enabled': 'true', 'SePay__Mode': 'Test'}):
+            self.assertEqual(safety.webhook_policy('staging'), (401, 'sepay_authentication_failed'))
+
+    def test_staging_smoke_cannot_accept_disabled_or_live_provider(self):
+        for settings in ({'SePay__Enabled': 'false', 'SePay__Mode': 'Test'}, {'SePay__Enabled': 'true', 'SePay__Mode': 'Live'}):
+            with self.subTest(settings=settings), patch.object(safety, 'env', return_value=settings), self.assertRaises(ValueError):
+                safety.webhook_policy('staging')
+
+    def test_disabled_production_provider_requires_explicit_disabled_rejection(self):
+        with patch.object(safety, 'env', return_value={'SePay__Enabled': 'false'}):
+            self.assertEqual(safety.webhook_policy('production'), (503, 'sepay_disabled'))
+
+    def test_missing_or_invalid_provider_flag_cannot_weaken_webhook_smoke(self):
+        for settings in ({}, {'SePay__Enabled': 'yes'}, {'SePay__Enabled': ''}):
+            with self.subTest(settings=settings), patch.object(safety, 'env', return_value=settings), self.assertRaises(ValueError):
+                safety.webhook_policy('production')
+
     def configuration(self, target):
         stage = target == 'staging'
         return {
