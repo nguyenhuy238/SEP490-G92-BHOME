@@ -185,9 +185,13 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         SigningAppearance appearance, CancellationToken t)
     {
         // Fail before anything is stored: without an email channel or an address the code could never arrive.
-        var session = SigningMethods.IsOwnerSession(appearance.Method);
-        if (session && (!user.IsInRole(BHome.Domain.IdentityAccess.Roles.Owner) || document.OwnerSignerId != Actor))
+        var ownerSession = SigningMethods.IsOwnerSession(appearance.Method);
+        var tenantSession = SigningMethods.IsTenantSession(appearance.Method);
+        var session = ownerSession || tenantSession;
+        if (ownerSession && (!user.IsInRole(BHome.Domain.IdentityAccess.Roles.Owner) || document.OwnerSignerId != Actor))
             throw new ContractException(403, "owner_session_signing_owner_only");
+        if (tenantSession && (!user.IsInRole(BHome.Domain.IdentityAccess.Roles.Tenant) || document.TenantUserId != Actor))
+            throw new ContractException(403, "tenant_session_signing_contract_tenant_only");
         if (appearance.HandwrittenInkPng is not null && (!session || !appearance.UsePicture))
             throw ContractException.Invalid("handover_owner_ink_invalid");
         if (!session && !channel.IsConfigured("EMAIL")) throw new ContractException(503, "otp_email_unavailable");
@@ -235,7 +239,8 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         catch (ArgumentException) { throw ContractException.Invalid("signature_placement_invalid"); }
         return new(source, prepared.PreparedPdf, prepared.FieldName, Convert.ToBase64String(prepared.DocumentDigest),
             Convert.ToBase64String(prepared.DataToSignDigest), seal.EncodedChain, Actor.ToString(),
-            session ? ContractSigningRouter.OwnerSessionCredential : ContractSigningRouter.OtpCredential);
+            tenantSession ? ContractSigningRouter.TenantSessionCredential :
+                ownerSession ? ContractSigningRouter.OwnerSessionCredential : ContractSigningRouter.OtpCredential);
     }
 
     public async Task<string> RequestAsync(ContractSignature signature, CancellationToken t)
@@ -251,6 +256,12 @@ internal sealed class OtpContractSigningAdapter(ICurrentUser user, IPdfSigner pd
         {
             if (signature.SignerUserId != Actor || !user.IsInRole(BHome.Domain.IdentityAccess.Roles.Owner))
                 throw new ContractException(403, "owner_session_signing_owner_only");
+            return Seal(signature, preparedPdf);
+        }
+        if (signature.CredentialId == ContractSigningRouter.TenantSessionCredential)
+        {
+            if (signature.SignerUserId != Actor || !user.IsInRole(BHome.Domain.IdentityAccess.Roles.Tenant))
+                throw new ContractException(403, "tenant_session_signing_contract_tenant_only");
             return Seal(signature, preparedPdf);
         }
         return (await challenges.ReadAsync(signature.Id, t)) is { Locked: true } ? new("Failed") : new("Pending");

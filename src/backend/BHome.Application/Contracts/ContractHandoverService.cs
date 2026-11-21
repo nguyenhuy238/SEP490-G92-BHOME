@@ -49,6 +49,9 @@ public sealed partial class ContractService
     private async Task ValidateHandoverEvidence(Contract c, HandoverSnapshot snapshot, CancellationToken t, bool existingSnapshot = false)
     {
         var readings = await Handovers.ReadingsAsync(c.Id, c.RoomId, c.StartDate, t);
+        // Resolve repository metadata before starting parallel work: repositories
+        // share an EF DbContext and must never execute queries concurrently.
+        var objects = new List<Func<Task>>();
         foreach (var reading in new[] { snapshot.Electricity, snapshot.Water })
         {
             var current = readings.SingleOrDefault(r => r.Id == reading.Id && r.Date == snapshot.Date && r.UtilityType == reading.UtilityType && r.Value == reading.Value && r.EvidenceHash == reading.EvidenceHash);
@@ -64,17 +67,41 @@ public sealed partial class ContractService
                     current = historical;
             }
             if (current is null) throw ContractException.Invalid("confirmed_handover_readings_required");
-            using var image = new MemoryStream(); await storage.CopyToAsync(current.EvidenceObjectKey, image, t);
-            if (FileHash(image.ToArray()) != current.EvidenceHash) throw ContractException.Conflict("handover_evidence_integrity_failed");
+            var key = current.EvidenceObjectKey;
+            var hash = current.EvidenceHash;
+            objects.Add(async () =>
+            {
+                using var image = new MemoryStream();
+                await storage.CopyToAsync(key, image, t);
+                if (FileHash(image.ToArray()) != hash)
+                    throw ContractException.Conflict("handover_evidence_integrity_failed");
+            });
         }
-        foreach (var evidenceId in snapshot.EvidenceIds.Concat(snapshot.Assets.SelectMany(a => a.EvidenceIds ?? []))
-                     .Concat((snapshot.RoomChecks ?? []).SelectMany(check => check.EvidenceIds))
-                     .Concat(snapshot.KeyEvidenceIds ?? []).Distinct())
+        var evidenceIds = snapshot.EvidenceIds.Concat(snapshot.Assets.SelectMany(a => a.EvidenceIds ?? []))
+            .Concat((snapshot.RoomChecks ?? []).SelectMany(check => check.EvidenceIds))
+            .Concat(snapshot.KeyEvidenceIds ?? []).Distinct().ToArray();
+        // A single contract-scoped query normally resolves all evidence files.
+        // FilesAsync is limited to the latest 50; retain exact-ID fallback for
+        // older signed histories instead of loosening scope or skipping proof.
+        var available = (await Workflow.FilesAsync(c.Id, ContractFileKind.HandoverEvidence, t))
+            .ToDictionary(f => f.Id);
+        foreach (var evidenceId in evidenceIds)
         {
-            var f = await Workflow.FileAsync(c.Id, evidenceId, t) ?? throw ContractException.Invalid("invalid_handover_evidence");
+            var f = available.TryGetValue(evidenceId, out var found)
+                ? found : await Workflow.FileAsync(c.Id, evidenceId, t)
+                    ?? throw ContractException.Invalid("invalid_handover_evidence");
             if (f.Kind != ContractFileKind.HandoverEvidence) throw ContractException.Invalid("invalid_handover_evidence");
-            await CopyVerifiedFile(f, Stream.Null, t);
+            objects.Add(() => CopyVerifiedFile(f, Stream.Null, t));
         }
+        // MinIO opens an independent client per object. Bound parallel reads to
+        // reduce serial network latency while fully verifying every byte/hash.
+        using var limit = new SemaphoreSlim(4);
+        await Task.WhenAll(objects.Select(async verify =>
+        {
+            await limit.WaitAsync(t);
+            try { await verify(); }
+            finally { limit.Release(); }
+        }));
     }
     public Task<HandoverView> SaveHandoverAsync(Guid id, HandoverInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Staff], async c =>
     {
@@ -192,16 +219,42 @@ public sealed partial class ContractService
     public async Task CopyHandoverMeterEvidenceAsync(Guid id, Guid readingId, Stream output, CancellationToken t)
     {
         var contract = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
-        var handover = await Handovers.GetAsync(id, t) ?? throw ContractException.Missing();
-        var snapshot = Snapshot(handover);
-        var recorded = new[] { snapshot.Electricity, snapshot.Water }.SingleOrDefault(r => r.Id == readingId);
-        if (recorded is null)
+        var handover = await Handovers.GetAsync(id, t);
+        HandoverReading? recorded = null;
+        if (handover is not null)
         {
-            var history = await Handovers.HistoryForReadingAsync(id, readingId, t) ?? throw ContractException.Missing();
-            var previous = JsonSerializer.Deserialize<HandoverSnapshot>(history) ?? throw ContractException.Conflict("handover_integrity_failed");
-            recorded = new[] { previous.Electricity, previous.Water }.SingleOrDefault(r => r.Id == readingId) ?? throw ContractException.Missing();
+            var snapshot = Snapshot(handover);
+            recorded = new[] { snapshot.Electricity, snapshot.Water }.SingleOrDefault(r => r.Id == readingId);
+            if (recorded is null)
+            {
+                var history = await Handovers.HistoryForReadingAsync(id, readingId, t);
+                if (history is not null)
+                {
+                    var previous = JsonSerializer.Deserialize<HandoverSnapshot>(history)
+                        ?? throw ContractException.Conflict("handover_integrity_failed");
+                    recorded = new[] { previous.Electricity, previous.Water }.SingleOrDefault(r => r.Id == readingId);
+                }
+            }
         }
+        // Before Tenant confirms OTP there is no immutable ContractHandover yet.
+        // The Owner-signed draft already exposes these two readings to the
+        // authorized Tenant; permit only those approved reading IDs, never an
+        // arbitrary reading of another contract or an unapproved draft.
+        if (recorded is null && handover is null)
+        {
+            var draft = await DraftState(contract, t);
+            if (draft.Status is not ("Ready" or "Confirmed") || draft.OwnerSignature is null ||
+                readingId != draft.ApprovedElectricityReadingId &&
+                readingId != draft.ApprovedWaterReadingId)
+                throw ContractException.Missing();
+            var readings = await Handovers.ReadingsAsync(contract.Id, contract.RoomId, contract.StartDate, t);
+            recorded = readings.SingleOrDefault(r => r.Id == readingId);
+        }
+        if (recorded is null) throw ContractException.Missing();
         var current = await Handovers.ReadingAsync(contract.RoomId, readingId, t) ?? throw ContractException.Missing();
+        if (current.EvidenceHash != recorded.EvidenceHash || current.Value != recorded.Value ||
+            current.Date != recorded.Date || current.UtilityType != recorded.UtilityType)
+            throw ContractException.Conflict("handover_evidence_integrity_failed");
         using var buffer = new MemoryStream(); await storage.CopyToAsync(current.EvidenceObjectKey, buffer, t);
         if (FileHash(buffer.ToArray()) != recorded.EvidenceHash) throw ContractException.Conflict("handover_evidence_integrity_failed");
         buffer.Position = 0; await buffer.CopyToAsync(output, t);

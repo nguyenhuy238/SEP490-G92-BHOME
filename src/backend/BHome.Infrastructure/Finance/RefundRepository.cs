@@ -46,6 +46,15 @@ internal sealed partial class RefundRepository(BHomePersistenceContext db, BHome
     }
     public async Task<T> TransactionAsync<T>(Func<Task<T>> work, CancellationToken t)
     {
+        // A higher-level Owner financial-close transaction already holds this
+        // same payment-ledger advisory lock and owns rollback of all offsets.
+        if (db.Database.CurrentTransaction is not null && BHome.Application.Contracts.SettlementFinancialCloseTransactionContext.Active)
+        {
+            // A reentrant acquisition is harmless under the ordered outer
+            // lock and preserves the ledger invariant even on future callers.
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", t);
+            return await work();
+        }
         await using var transaction = await db.Database.BeginTransactionAsync(t);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", t);
         var result = await work(); await transaction.CommitAsync(t); return result;

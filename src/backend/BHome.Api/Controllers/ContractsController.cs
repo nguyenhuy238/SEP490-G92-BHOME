@@ -184,6 +184,11 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     [HttpPost("{id:guid}/handover/draft/tenant-sign"), Authorize(Roles = Roles.Tenant)]
     public Task<HandoverDraftView> RequestTenantHandoverSigning(Guid id, HandoverDraftTenantSign input, CancellationToken t)
         => service.RequestTenantHandoverSigningAsync(id, input, Key(), t);
+    [HttpPost("{id:guid}/handover/draft/tenant-sign/session"), Authorize(Roles = Roles.Tenant),
+     RequestSizeLimit(512 * 1024)]
+    public Task<HandoverDraftView> SignTenantHandoverInSession(Guid id,
+        HandoverDraftTenantSessionSign input, CancellationToken t)
+        => service.SignTenantHandoverInSessionAsync(id, input, Key(), t);
     [HttpGet("{id:guid}/handover/draft/tenant-sign/otp"), Authorize(Roles = Roles.Tenant)]
     public Task<SigningOtpView> TenantHandoverSigningOtp(Guid id, CancellationToken t)
         => service.TenantHandoverSigningOtpAsync(id, t);

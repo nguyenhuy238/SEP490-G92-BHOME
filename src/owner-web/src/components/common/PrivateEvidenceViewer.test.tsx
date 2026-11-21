@@ -86,6 +86,27 @@ it('keeps short PDF buttons in the compact handover view with the same private p
   expect(fetchBlob).toHaveBeenCalledTimes(2);
 });
 
+it('uses a specific confirmed-handover preview label with compact icon download', async () => {
+  const fetchBlob = vi.fn(async () => makeBlob(pdf, 'application/pdf'));
+  render(
+    <PrivateEvidenceViewer
+      label="PDF bàn giao đã xác nhận"
+      previewButtonLabel="Xem biên bản bàn giao đã xác nhận"
+      filename="bien-ban-ban-giao-chinh-thuc.pdf"
+      compactActions
+      fetchBlob={fetchBlob}
+    />,
+  );
+  expect(screen.queryByRole('button', { name: 'Xem PDF' })).toBeNull();
+  const download = screen.getByRole('button', { name: 'Tải xuống' });
+  expect(download.querySelector('svg.lucide-download')).not.toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản bàn giao đã xác nhận' }));
+  expect(await screen.findByTitle('Nội dung PDF: PDF bàn giao đã xác nhận')).toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Đóng' }));
+  fireEvent.click(download);
+  await waitFor(() => expect(clicked[0]?.filename).toBe('bien-ban-ban-giao-chinh-thuc.pdf'));
+});
+
 it('downloads verified JPEG with a sanitized name and releases the object URL on unmount', async () => {
   const fetchBlob = vi.fn(async () => makeBlob(jpeg, 'image/jpeg'));
   const result = render(

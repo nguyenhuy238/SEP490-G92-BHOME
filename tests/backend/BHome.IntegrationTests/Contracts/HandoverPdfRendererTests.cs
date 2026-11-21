@@ -23,7 +23,7 @@ public sealed class HandoverPdfRendererTests
             3500000, 3500000, "Điều khoản thử nghiệm", null, null, [],
             "Phòng được kiểm tra đạt", "2 chìa", "", [], null, true, null, null, [], [],
             RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
-                new HandoverRoomCheck(code, "Passed", "", [])).ToArray(),
+                new HandoverRoomCheck(code, "Passed", "Ghi chú cũ: khóa cửa hỏng", [])).ToArray(),
             AccessItems: [new HandoverAccessItem("RoomKey", 2, "")],
             InspectedAssets: []);
         var renderer = scope.ServiceProvider.GetRequiredService<IHandoverDraftPdfRenderer>();
@@ -64,6 +64,7 @@ public sealed class HandoverPdfRendererTests
             n => verified.GetPdfObject(n) is PdfStream stream &&
                  PdfName.Image.Equals(stream.GetAsName(PdfName.Subtype)));
         Assert.DoesNotContain("PHỤ LỤC BẰNG CHỨNG", ContractPdfRendererTests.Text(verified));
+        Assert.DoesNotContain("Ghi chú cũ: khóa cửa hỏng", ContractPdfRendererTests.Text(verified));
     }
 
     private static void NoEmbeddedPhotos(PdfDocument pdf)
@@ -127,6 +128,7 @@ public sealed class HandoverPdfRendererTests
         Assert.Contains("Trạng thái: Cần xử lý", content);
         Assert.Contains("Lý do: Tường có vết nứt cần sửa", content);
         Assert.DoesNotContain("Đã kiểm tra và đạt, không in vào PDF", content);
+        Assert.DoesNotContain("Đã kiểm tra và đạt, không in vào PDF", ContractPdfRendererTests.Text(preview));
         Assert.DoesNotContain("PendingOwnerReview", content);
         Assert.DoesNotContain("Chưa duyệt", content);
         Assert.DoesNotContain("Chưa xác nhận", content);
@@ -236,7 +238,12 @@ public sealed class HandoverPdfRendererTests
         var assets = Enumerable.Range(1, 60).Select(i => new HandoverAsset(Guid.NewGuid(), $"Nhóm ghế {i}", "Tốt", "Đã kiểm tra: Nguyễn Ánh, Đặng Thị Hồng",
             ConfiguredQuantity: 4, Unit: "cái", ObservedQuantity: 3, HandedOverQuantity: 3, GoodQuantity: 2, WornQuantity: 1, DamagedQuantity: 0, MissingQuantity: 1)).ToArray();
         var snapshot = new HandoverSnapshot(new(2026, 11, 16), "S101", "Tường, sàn, cửa đã kiểm tra", "Hai chìa khóa", "Ghi chú tổng hợp", assets, reading, reading with { UtilityType = 1 }, [],
-            MissingBaselineReason: type == "MoveOut" ? "Hợp đồng cũ không có baseline" : null, OtherTenantsRemain: type == "MoveOut");
+            MissingBaselineReason: type == "MoveOut" ? "Hợp đồng cũ không có baseline" : null, OtherTenantsRemain: type == "MoveOut",
+            RoomChecks: type == "MoveIn" ?
+            [
+                new HandoverRoomCheck("doors_windows_locks", "Passed", "Ghi chú cũ trên biên bản đã ký", []),
+                new HandoverRoomCheck("walls_ceiling_floor", "Issue", "Tường có vết nứt cũ", [])
+            ] : null);
         using var bitmap = new SKBitmap(80, 80);
         bitmap.Erase(SKColors.Red);
         using var skImage = SKImage.FromBitmap(bitmap);
@@ -253,6 +260,11 @@ public sealed class HandoverPdfRendererTests
         Assert.DoesNotContain("124,7", text);
         Assert.DoesNotContain("Ảnh bí mật không nhúng", text);
         Assert.DoesNotContain("PHỤ LỤC BẰNG CHỨNG", text);
+        if (type == "MoveIn")
+        {
+            Assert.DoesNotContain("Ghi chú cũ trên biên bản đã ký", text);
+            Assert.Contains("Lý do: Tường có vết nứt cũ", text);
+        }
         NoEmbeddedPhotos(pdf);
         Assert.Contains("không phải chữ ký số", text); Assert.Empty(new iText.Signatures.SignatureUtil(pdf).GetSignatureNames());
         if (type == "MoveOut") { Assert.Contains("Giới hạn dữ liệu đối chiếu", text); Assert.Contains("còn người thuê chung", text); }

@@ -53,6 +53,16 @@ it('still bounds conversion requests to 60 seconds and never replays a timed-out
   expect(await result).toMatchObject({ code: 'request_timeout' });
   expect(transport).toHaveBeenCalledTimes(1);
 });
+it('keeps authenticated handover signing at 15 seconds without automatically resending a potentially committed signature', async () => {
+  vi.useFakeTimers();
+  const { api, transport } = setup(20000);
+  const result = api.request(`/api/v1/contracts/${id}/handover/draft/tenant-sign/session`, {
+    method: 'POST',
+  }).catch((error) => error);
+  await vi.advanceTimersByTimeAsync(15000);
+  expect(await result).toMatchObject({ code: 'request_timeout' });
+  expect(transport).toHaveBeenCalledTimes(1);
+});
 it('keeps ordinary API requests bounded to 15 seconds', async () => {
   vi.useFakeTimers();
   const { api } = setup(20000);

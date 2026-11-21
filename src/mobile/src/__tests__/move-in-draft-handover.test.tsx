@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ContractClient, ContractView } from '../../../../packages/client-core/src/contracts';
 import type { MoveInDraft } from '../services/moveInHandover';
@@ -591,7 +591,7 @@ it('translates handover readiness blockers, including invalid asset quantities o
   ).toBeNull();
 });
 
-it('Tenant requires acknowledgement and reason before requesting a revision, sends versioned request', async () => {
+it('Tenant opens a correction modal without signing consent and sends a versioned reason', async () => {
   state.draft = draft('Ready');
   render(
     <MoveInDraftHandoverPanel
@@ -601,17 +601,19 @@ it('Tenant requires acknowledgement and reason before requesting a revision, sen
       onUpdated={state.updated}
     />,
   );
-  const acknowledge = await screen.findByRole('button', {
-    name: 'Tôi đã kiểm tra nội dung biên bản phiên bản 7',
-  });
-  const correction = screen.getByRole('button', { name: 'Gửi yêu cầu chỉnh sửa' });
-  expect((correction as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(acknowledge);
-  expect((correction as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText('Ghi chú / nội dung cần sửa'), {
+  const correction = await screen.findByRole('button', { name: 'Gửi yêu cầu chỉnh sửa' });
+  expect((correction as HTMLButtonElement).disabled).toBe(false);
+  expect(screen.queryByLabelText('Ghi chú / nội dung cần sửa')).toBeNull();
+  expect(screen.queryByLabelText('Lý do yêu cầu chỉnh sửa')).toBeNull();
+  fireEvent.click(correction);
+  expect(screen.getByText('Yêu cầu chỉnh sửa biên bản')).toBeTruthy();
+  const submit = screen.getByRole('button', { name: 'Gửi yêu cầu' });
+  expect((submit as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Lý do yêu cầu chỉnh sửa'), {
     target: { value: 'Sửa số lượng tài sản bàn giao' },
   });
-  fireEvent.click(correction);
+  expect((submit as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(submit);
   await waitFor(() =>
     expect(state.transport).toHaveBeenCalledWith(
       `/api/v1/contracts/${contract.id}/handover/draft/requests`,
@@ -623,23 +625,40 @@ it('Tenant requires acknowledgement and reason before requesting a revision, sen
     ),
   );
   expect(state.updated).toHaveBeenCalledOnce();
+  await waitFor(() => expect(screen.queryByText('Yêu cầu chỉnh sửa biên bản')).toBeNull());
 });
 
-it('Tenant signs a reviewed PDF with drawn signature and OTP before the handover completes', async () => {
+it('Tenant keeps the correction dialog and reason when sending fails, then retries', async () => {
+  state.draft = draft('Ready');
+  let attempts = 0;
+  state.transport.mockImplementation(async (path: string) => {
+    if (path.endsWith('/handover/draft/requests') && ++attempts === 1)
+      throw { status: 503, message: 'Server unavailable' };
+    return state.draft;
+  });
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Tenant" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Gửi yêu cầu chỉnh sửa' }));
+  fireEvent.change(screen.getByLabelText('Lý do yêu cầu chỉnh sửa'), {
+    target: { value: 'Kiểm tra lại cửa phòng' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }));
+  await waitFor(() => expect(attempts).toBe(1));
+  expect(screen.getByText('Yêu cầu chỉnh sửa biên bản')).toBeTruthy();
+  expect((screen.getByLabelText('Lý do yêu cầu chỉnh sửa') as HTMLInputElement).value).toBe(
+    'Kiểm tra lại cửa phòng',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }));
+  await waitFor(() => expect(attempts).toBe(2));
+  await waitFor(() => expect(screen.queryByText('Yêu cầu chỉnh sửa biên bản')).toBeNull());
+});
+
+it('Tenant directly signs the Owner-reviewed PDF in their account without OTP', async () => {
   state.draft = draft('Ready');
   state.transport.mockImplementation(async (path: string) => {
-    if (path.endsWith('/tenant-sign')) {
-      state.draft = { ...state.draft, version: 8, tenantSigningPending: true };
+    if (path.endsWith('/tenant-sign/session')) {
+      state.draft = { ...state.draft, version: 8, status: 'Confirmed' };
       return state.draft;
     }
-    if (path.endsWith('/tenant-sign/otp'))
-      return {
-        signatureId: '22222222-2222-4222-8222-222222222222',
-        status: 'Sent',
-        maskedEmail: 't***@example.test',
-        expiresAt: '2026-11-20T16:00:00Z',
-        resendAfterSeconds: 60,
-      };
     return state.draft;
   });
   render(
@@ -649,53 +668,143 @@ it('Tenant signs a reviewed PDF with drawn signature and OTP before the handover
       role="Tenant"
     />,
   );
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản phiên bản 7' }),
-  );
+  const acknowledge = await screen.findByRole('button', {
+    name: 'Tôi đã kiểm tra nội dung biên bản',
+  });
+  const drawing = screen.getByRole('button', { name: 'Vẽ chữ ký Tenant' });
+  expect(drawing.compareDocumentPosition(acknowledge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.queryByText(/Vẽ chữ ký vào khung\. Chữ ký sẽ/)).toBeNull();
+  expect(screen.queryByText('Ghi chú / nội dung cần sửa')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Biên bản và chữ ký' }));
   expect(screen.getByTestId('draft-handover-pdf').textContent).toContain('Owner đã ký');
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  expect((screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Vẽ chữ ký Tenant' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi mã OTP để ký biên bản' }));
+  expect((screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(acknowledge);
+  fireEvent.click(screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }));
   await waitFor(() =>
     expect(state.transport).toHaveBeenCalledWith(
-      `/api/v1/contracts/${contract.id}/handover/draft/tenant-sign`,
+      `/api/v1/contracts/${contract.id}/handover/draft/tenant-sign/session`,
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
           version: 7,
-          signature: {
-            certificateId: '00000000-0000-0000-0000-000000000000',
-            method: 'OTP',
-            usePicture: true,
+          consent: true,
+          ink: {
+            width: 320,
+            height: 200,
+            strokes: [[[10, 10], [15, 15], [30, 20], [35, 27], [60, 40]]],
           },
+          note: '',
         }),
       }),
     ),
   );
-  expect(state.transport).toHaveBeenCalledWith(
-    '/api/v1/digital-signing/signature-image/drawn',
-    expect.objectContaining({ method: 'POST' }),
-  );
-  fireEvent.change(await screen.findByLabelText('Mã OTP gồm 6 số'), {
-    target: { value: '123456' },
+  expect(await screen.findByText('Đã xác nhận')).toBeTruthy();
+  expect(state.transport.mock.calls.every(([path]) => !path.includes('/otp'))).toBe(true);
+  expect(state.transport.mock.calls.every(([path]) => !path.includes('signature-image/drawn'))).toBe(true);
+});
+
+it('verifies a committed Tenant signature by GET when the POST response times out, without sending another POST', async () => {
+  state.draft = draft('Ready');
+  let sessionSignPosts = 0;
+  state.transport.mockImplementation(async (path: string) => {
+    if (path.endsWith('/tenant-sign/session')) {
+      sessionSignPosts++;
+      state.draft = {
+        ...state.draft,
+        status: 'Confirmed',
+        tenantSignedAt: '2026-11-21T09:00:00Z',
+        version: 8,
+      };
+      throw { status: 0, code: 'request_timeout', requestPath: path };
+    }
+    return state.draft;
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận OTP và ký biên bản' }));
-  await waitFor(() =>
-    expect(state.transport).toHaveBeenCalledWith(
-      `/api/v1/contracts/${contract.id}/handover/draft/tenant-sign/otp/confirm`,
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ version: 8, code: '123456', note: '' }),
+  render(<MoveInDraftHandoverPanel api={api} contract={{ ...contract, status: 'Active' }} role="Tenant" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Vẽ chữ ký Tenant' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }));
+  expect(await screen.findByText('Đã xác nhận')).toBeTruthy();
+  expect(sessionSignPosts).toBe(1);
+});
+
+it('does not claim signed or auto-retry when a timed-out Tenant signature is still unconfirmed', async () => {
+  state.draft = draft('Ready');
+  let sessionSignPosts = 0;
+  state.transport.mockImplementation(async (path: string) => {
+    if (path.endsWith('/tenant-sign/session')) {
+      sessionSignPosts++;
+      throw { status: 0, code: 'request_timeout', requestPath: path };
+    }
+    return state.draft;
+  });
+  render(<MoveInDraftHandoverPanel api={api} contract={{ ...contract, status: 'Active' }} role="Tenant" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Vẽ chữ ký Tenant' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ký và hoàn tất bàn giao' }));
+  expect(await screen.findByText(/Máy chủ không phản hồi trong 15 giây/)).toBeTruthy();
+  expect(screen.queryByText('Đã xác nhận')).toBeNull();
+  expect(sessionSignPosts).toBe(1);
+});
+
+it('shows the confirmed handover without waiting for the separate signed PDF document request', async () => {
+  state.draft = draft('Confirmed');
+  let resolveDocuments!: (value: never[]) => void;
+  state.documents.mockImplementationOnce(
+    () =>
+      new Promise<never[]>((resolve) => {
+        resolveDocuments = resolve;
       }),
-    ),
   );
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Tenant" />);
+
+  expect(await screen.findByText('Đã xác nhận')).toBeTruthy();
+  expect(state.documents).toHaveBeenCalledWith(contract.id, expect.any(AbortSignal));
+  fireEvent.click(screen.getByRole('button', { name: 'Biên bản và chữ ký' }));
+  expect(screen.queryByText(/Biên bản đã ký chưa có PDF cuối cùng/)).toBeNull();
+
+  await act(async () => resolveDocuments([]));
+  expect(await screen.findByText(/Biên bản đã ký chưa có PDF cuối cùng/)).toBeTruthy();
+});
+
+it('Tenant sees integer-only meter values and verified canonical asset counts in compact details', async () => {
+  state.draft = draft('Ready');
+  state.draft.electricity = {
+    id: '60000000-0000-4000-8000-000000000001',
+    meterCode: 'E-1', utilityType: 0, date: '2026-11-20', value: '2000.9900',
+    evidenceId: 'e-photo', evidenceHash: 'e-hash',
+  };
+  state.draft.water = {
+    id: '60000000-0000-4000-8000-000000000002',
+    meterCode: 'W-1', utilityType: 1, date: '2026-11-20', value: '2.0000',
+    evidenceId: 'w-photo', evidenceHash: 'w-hash',
+  };
+  state.draft.inspectedAssets = [{
+    id: state.draft.assets[0]!.id,
+    name: 'Quạt', expectedQuantity: 4, actualQuantity: 3, condition: 'Good',
+  }];
+  render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Tenant" />);
+  expect(await screen.findByText('Sẵn sàng bàn giao')).toBeTruthy();
+  expect(screen.getByText(/Điện: 2\.000 kWh · Nước: 2 m³/)).toBeTruthy();
+  expect(screen.getByText(/3 tài sản đã kiểm kê/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Điện và nước' }));
+  expect(screen.getByText('Điện: 2.000 kWh')).toBeTruthy();
+  expect(screen.getByText('Nước: 2 m³')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tài sản' }));
+  expect(screen.getByText(/kiểm kê 3 \/ dự kiến 4/)).toBeTruthy();
+  expect(screen.queryByText(/Dữ liệu cũ chưa có số lượng/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Quạt' }));
+  expect(screen.getByText(/kiểm kê 3 \/ dự kiến 4/)).toBeTruthy();
 });
 
 it('Tenant may request correction while activation is pending but cannot confirm occupancy', async () => {
   state.draft = draft('Ready');
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Tenant" />);
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản phiên bản 7' }),
-  );
+  expect(await screen.findByRole('button', { name: 'Gửi yêu cầu chỉnh sửa' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Tôi đã kiểm tra nội dung biên bản' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Gửi mã OTP để ký biên bản' })).toBeNull();
   expect(screen.getByText(/Chờ hợp đồng được kích hoạt để ký nhận bàn giao/)).toBeTruthy();
 });
@@ -1589,7 +1698,7 @@ it('saves only the room checks edited during this visit and requires a reason wh
   );
   const body = JSON.parse(mutation![1].body);
   expect(body.roomChecks).toEqual([
-    { code: 'walls_ceiling_floor', status: 'Passed', notes: '', evidenceIds: [] },
+    { code: 'walls_ceiling_floor', status: 'Passed', notes: null, evidenceIds: [] },
     {
       code: 'doors_windows_locks',
       status: 'NotApplicable',
@@ -1638,7 +1747,10 @@ it('Tenant can review seven room inspections, attached Issue image, access items
     code,
     status: index === 2 ? 'Issue' : 'Passed',
     notes: index === 2 ? 'Ổ điện bị hỏng' : '',
-    evidenceIds: index === 2 ? ['30000000-0000-4000-8000-000000000001'] : [],
+    evidenceIds:
+      index === 2
+        ? ['30000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000002']
+        : [],
   }));
   state.draft.accessItems = [{ type: 'RoomKey', quantity: 2, notes: 'Đã thử khóa' }];
   state.draft.outstandingIssues = [
@@ -1651,13 +1763,24 @@ it('Tenant can review seven room inspections, attached Issue image, access items
   ];
   render(<MoveInDraftHandoverPanel api={api} contract={contract} role="Tenant" />);
   expect(await screen.findByText('Sẵn sàng bàn giao')).toBeTruthy();
+  expect(screen.queryByText(/Ổ điện bị hỏng/)).toBeNull();
+  expect(screen.queryByText(/Sửa ổ điện/)).toBeNull();
+  expect(screen.queryByText('Tải ảnh')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Hiện trạng phòng' }));
   for (const { label } of roomHandoverChecks) {
     expect(screen.getByText(label)).toBeTruthy();
   }
-  expect(screen.getByText(/Chìa khóa bàn giao: 2 chiếc/)).toBeTruthy();
   expect(screen.getByText(/Sửa ổ điện/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Hệ thống điện, đèn và ổ cắm' }));
   expect(screen.getByText(/Ổ điện bị hỏng/)).toBeTruthy();
-  expect(screen.getAllByTestId('private-handover-photo')).toHaveLength(1);
+  expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Ảnh sau' }));
+  expect(screen.getByText('Ảnh kiểm tra 2')).toBeTruthy();
+  expect(screen.getAllByTestId('private-photo-thumbnail')).toHaveLength(1);
+  expect(screen.queryByText('Tải ảnh')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chìa khóa' }));
+  expect(screen.getByText('2 chìa khóa phòng')).toBeTruthy();
 });
 
 it('saves a room problem as a factual inspection with notes and photo, without assigning repairs', async () => {
@@ -1884,7 +2007,7 @@ it('shows existing photos only inside their assigned room check and X unlinks th
   saveWork();
   await waitFor(() => expect(saves).toHaveLength(1));
   expect(saves[0].roomChecks).toEqual([
-    { code: 'doors_windows_locks', status: 'Passed', notes: 'Cửa kẹt', evidenceIds: [] },
+    { code: 'doors_windows_locks', status: 'Passed', notes: null, evidenceIds: [] },
   ]);
   expect(saves[0].evidenceIds).not.toContain(photoId);
 });
@@ -2126,6 +2249,8 @@ it('Confirmed exposes only the newest immutable MoveInReport belonging to this c
       role="Tenant"
     />,
   );
+  await screen.findByRole('button', { name: 'Biên bản và chữ ký' });
+  fireEvent.click(screen.getByRole('button', { name: 'Biên bản và chữ ký' }));
   const document = await screen.findByTestId('final-handover-pdf');
   expect(document.getAttribute('data-document-id')).toBe(finalId);
   expect(screen.getAllByTestId('final-handover-pdf')).toHaveLength(1);
@@ -2143,7 +2268,8 @@ it('Confirmed reports a missing or inaccessible final PDF without offering a wat
       role="Tenant"
     />,
   );
-  expect(await screen.findByText(/Không tải được PDF bàn giao cuối cùng/)).toBeTruthy();
+  fireEvent.click(await screen.findByRole('button', { name: 'Biên bản và chữ ký' }));
+  expect(await screen.findByText(/Không tải được PDF/)).toBeTruthy();
   expect(screen.queryByTestId('draft-handover-pdf')).toBeNull();
   expect(screen.queryByTestId('final-handover-pdf')).toBeNull();
   page.unmount();
@@ -2155,6 +2281,7 @@ it('Confirmed reports a missing or inaccessible final PDF without offering a wat
       role="Tenant"
     />,
   );
-  expect(await screen.findByText(/PDF cuối cùng chưa có/)).toBeTruthy();
+  fireEvent.click(await screen.findByRole('button', { name: 'Biên bản và chữ ký' }));
+  expect(await screen.findByText(/PDF cuối cùng/)).toBeTruthy();
   expect(screen.queryByTestId('draft-handover-pdf')).toBeNull();
 });

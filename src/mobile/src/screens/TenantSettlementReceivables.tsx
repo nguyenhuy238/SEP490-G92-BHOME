@@ -28,8 +28,30 @@ export function TenantSettlementReceivables() {
       {(query.data?.items ?? []).map((source) => (
         <Box key={source.contractId}>
           <Text variant="titleSmall">Phòng {source.roomNumber}</Text>
+          <Text>
+            Cọc còn khả dụng để đối chiếu: {formatContractMoney(source.availableDeposit)}
+          </Text>
+          <Text style={ui.muted}>
+            Số cọc khả dụng chưa phải số tiền hoàn. Owner duyệt từng khoản phải thu, việc cấn trừ
+            và yêu cầu hoàn tiền được xác minh riêng.
+          </Text>
+          {source.receivables.some((row) => row.charge.kind === 'TenantDamage') && (
+            <Heading
+              title="Thiệt hại đã được Owner duyệt"
+              detail="Các khoản bên dưới được ghi nhận theo biên bản trả phòng"
+            />
+          )}
           {source.receivables.map((r) => (
             <Box key={r.charge.id}>
+              <Text variant="titleSmall">
+                {r.charge.kind === 'TenantDamage'
+                  ? r.charge.assetId
+                    ? 'Thiệt hại tài sản'
+                    : 'Thiệt hại phòng'
+                  : r.charge.kind === 'FinalUtility'
+                    ? 'Điện/nước cuối kỳ'
+                    : 'Khoản phải thu cuối kỳ'}
+              </Text>
               <Text>{r.charge.description}</Text>
               {r.charge.fixedCharge && (
                 <Text>
@@ -57,6 +79,12 @@ export function TenantSettlementReceivables() {
                 Đã phân bổ: {formatContractMoney(r.allocated)} · Còn nợ:{' '}
                 {formatContractMoney(r.outstanding)}
               </Text>
+              {source.offsets.filter((offset) => offset.receivableId === r.charge.id).map((offset) => (
+                <Text key={offset.id}>
+                  Cấn trừ cọc đã duyệt cho khoản này: {formatContractMoney(offset.amount)}
+                  {' · '}{offset.reason}
+                </Text>
+              ))}
               <Text>
                 {r.status === 'Paid'
                   ? 'Đã thanh toán'
@@ -76,7 +104,8 @@ export function TenantSettlementReceivables() {
               )}
             </Box>
           ))}
-          {source.offsets.map((o) => (
+          {source.offsets.filter((offset) => !offset.receivableId ||
+            !source.receivables.some((r) => r.charge.id === offset.receivableId)).map((o) => (
             <Text key={o.id}>
               Cấn trừ cọc đã duyệt: {formatContractMoney(o.amount)} · {o.reason}
             </Text>

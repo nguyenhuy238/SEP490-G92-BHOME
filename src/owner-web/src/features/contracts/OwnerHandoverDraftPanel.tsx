@@ -1145,11 +1145,16 @@ function ConfirmedHandoverDocuments({ api, id }: { api: ContractClient; id: stri
           <Stack spacing={0.5} key={document.id}>
             <Typography variant="body2" color="text.secondary">
               Lưu lúc {formatInstant(document.recordedAt)}
-              {document.templateVersion != null ? ` · Phiên bản ${document.templateVersion}` : ''}
             </Typography>
             <PrivateEvidenceViewer
               label={
                 index === 0 ? 'PDF bàn giao đã xác nhận' : `PDF bàn giao đã xác nhận ${index + 1}`
+              }
+              compactActions
+              previewButtonLabel={
+                index === 0
+                  ? 'Xem biên bản bàn giao đã xác nhận'
+                  : `Xem biên bản bàn giao đã xác nhận ${index + 1}`
               }
               filename="bien-ban-ban-giao-chinh-thuc.pdf"
               contentType="application/pdf"
@@ -1579,7 +1584,6 @@ export function OwnerHandoverDraftPanel({
               label={statusLabel[draft.status] ?? draft.status}
               color={draft.status === 'Confirmed' ? 'success' : 'default'}
             />
-            <Chip size="small" label={`v${draft.version}`} variant="outlined" />
           </Stack>
           {draft.status === 'Confirmed' && (
             <ConfirmedHandoverDocuments key={`${id}-${revision}`} api={api} id={id} />

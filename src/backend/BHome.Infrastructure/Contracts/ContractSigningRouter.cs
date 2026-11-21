@@ -33,6 +33,7 @@ internal sealed class ContractSigningRouter(IContractSigningMethods methods, ICo
 {
     internal const string OtpCredential = "BHOME-OTP";
     internal const string OwnerSessionCredential = "BHOME-OWNER-SESSION";
+    internal const string TenantSessionCredential = "BHOME-TENANT-SESSION";
     internal const string UploadCredential = "BHOME-UPLOAD-PROOF";
 
     private IContractSigningProvider Otp() => methods.IsEnabled(SigningMethods.Otp)
@@ -55,11 +56,13 @@ internal sealed class ContractSigningRouter(IContractSigningMethods methods, ICo
     {
         OtpCredential => Otp(),
         OwnerSessionCredential => services.GetRequiredService<OtpContractSigningAdapter>(),
+        TenantSessionCredential => services.GetRequiredService<OtpContractSigningAdapter>(),
         UploadCredential => Upload(),
         _ => Certificate()
     };
     private IContractSigningProvider For(SigningAppearance appearance) =>
-        SigningMethods.IsOwnerSession(appearance.Method) ? services.GetRequiredService<OtpContractSigningAdapter>() :
+        SigningMethods.IsOwnerSession(appearance.Method) || SigningMethods.IsTenantSession(appearance.Method)
+            ? services.GetRequiredService<OtpContractSigningAdapter>() :
         SigningMethods.IsOtp(appearance.Method) ? Otp() : SigningMethods.IsUploadProof(appearance.Method) ? Upload() : Certificate();
 
     public Task<SigningPreparation> PrepareAsync(ContractDocument document, Guid certificateId, byte[]? previousPdf, CancellationToken t)

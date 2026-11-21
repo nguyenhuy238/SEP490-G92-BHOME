@@ -232,7 +232,7 @@ it('uses a synthetic JPEG without camera permission only in local web meter test
       onCapture={capture}
     />,
   );
-  const demo = screen.getByRole('button', { name: 'Dùng ảnh mẫu để test' });
+  const demo = screen.getByRole('button', { name: 'Dùng ảnh mẫu (test)' });
   expect(demo).toBeTruthy();
   fireEvent.click(demo);
   await waitFor(() => expect(capture).toHaveBeenCalledOnce());
@@ -266,12 +266,12 @@ it('hides local meter demo on ordinary mobile capture and disables it while busy
       onCapture={vi.fn()}
     />,
   );
-  expect(screen.queryByRole('button', { name: 'Dùng ảnh mẫu để test' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Dùng ảnh mẫu (test)' })).toBeNull();
   native.allowMeterDemo = true;
   view.rerender(
     <CameraCapture label="Chụp công tơ" disabled presentation="meter" onCapture={vi.fn()} />,
   );
-  expect(screen.getByRole('button', { name: 'Dùng ảnh mẫu để test' })).toHaveProperty(
+  expect(screen.getByRole('button', { name: 'Dùng ảnh mẫu (test)' })).toHaveProperty(
     'disabled',
     true,
   );

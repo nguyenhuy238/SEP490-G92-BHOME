@@ -11,6 +11,26 @@ public sealed class HandoverBaselineTests
         return new(new(2026, 11, 16), "SYN", "Synthetic", "Keys", "", [new(Group, "Ghế", "Tốt", "Tốt", Group, 4, "cái", "BulkQuantity",
             [new(Old, 1, 4, "Tốt", "Active")], true, 3, 3, 3, 0, 0, 1)], reading, reading with { UtilityType = 1 }, []);
     }
+    [Fact]
+    public void DamagePricingRequiresNewVerifiedLossComparedToMoveIn()
+    {
+        var baseline = new HandoverAsset(Guid.NewGuid(), "Synthetic chair", "Good", "Good",
+            HandedOverQuantity: 4, ObservedQuantity: 4, GoodQuantity: 3,
+            DamagedQuantity: 1, MissingQuantity: 0, Checked: true);
+        Assert.False(HandoverChecklist.NewDamageAgainstBaseline(baseline, baseline));
+        Assert.False(HandoverChecklist.NewDamageAgainstBaseline(
+            baseline with { DamagedQuantity = 1 }, baseline));
+        Assert.False(HandoverChecklist.NewDamageAgainstBaseline(
+            baseline with { DamagedQuantity = 2 }, null));
+        Assert.False(HandoverChecklist.NewDamageAgainstBaseline(
+            baseline with { DamagedQuantity = 2, Checked = false }, baseline));
+        Assert.True(HandoverChecklist.NewDamageAgainstBaseline(
+            baseline with { DamagedQuantity = 2 }, baseline));
+        Assert.True(HandoverChecklist.NewDamageAgainstBaseline(
+            baseline with { MissingQuantity = 1 }, baseline));
+        Assert.True(HandoverChecklist.NewDamageAgainstBaseline(
+            baseline with { HandedOverQuantity = 3 }, baseline));
+    }
     private static AssetChangeView Change(string kind, int added, int withdrawn, Guid? old, Guid? next) => new(Guid.NewGuid(), 1, "Confirmed",
         new(Guid.NewGuid(), Guid.NewGuid(), kind, new(2026, 11, 16), "Synthetic approved operation", Guid.NewGuid(),
             [new(Group, old, next, added, withdrawn, "Tốt", [])], [Original().Assets[0] with { PhysicalAssets = [new(next ?? Old, 2, 4, "Tốt", "Active")] }],

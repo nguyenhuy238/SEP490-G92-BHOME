@@ -357,7 +357,18 @@ export function MeterTaskScreen({
           Thử tải lại tác vụ
         </Button>
       )}
-      {task && (
+      {task && (embedded ? (
+        <View style={{ paddingHorizontal: 2, paddingVertical: 2, gap: 4 }}>
+          <Text variant="titleMedium" style={{ fontWeight: '700' }}>
+            Phòng {task.room}
+          </Text>
+          <Text variant="bodySmall" style={ui.muted}>
+            Chỉ số trước: {task.previousValue !== null
+              ? formatMeterReading(task.previousValue, unit)
+              : 'Chưa có'}
+          </Text>
+        </View>
+      ) : (
         <Box style={{ padding: 14, gap: 6 }}>
           <Heading
             title={`${meterLabel} · Phòng ${task.room}`}
@@ -373,7 +384,7 @@ export function MeterTaskScreen({
             </Text>
           )}
         </Box>
-      )}
+      ))}
       {saved ? (
         <Box style={{ padding: 14, gap: 10 }}>
           <Pill tone="green">Đã lưu chỉ số</Pill>
@@ -409,6 +420,7 @@ export function MeterTaskScreen({
             <CameraCapture
               label={captureLabel}
               presentation="meter"
+              meterCompact={embedded}
               meterStep={step}
               retainPreview
               reviewBeforeSubmit
@@ -424,15 +436,15 @@ export function MeterTaskScreen({
               </View>
             )}
             {step >= 2 && (
-              <Box style={{ padding: 14, gap: 10 }}>
+              <Box style={{ padding: embedded ? 10 : 14, gap: embedded ? 8 : 10 }}>
                 {step === 2 && !!notice && <Text accessibilityLiveRegion="polite">{notice}</Text>}
-                <Text>
+                {!embedded && <Text>
                   Chỉ số trước:{' '}
                   {task.previousValue !== null
                     ? formatMeterReading(task.previousValue, unit)
                     : 'Chưa có'}
-                </Text>
-                {isInitial && (
+                </Text>}
+                {isInitial && !embedded && (
                   <Text style={ui.muted}>
                     {task.contractId
                       ? 'Loại ghi: Khởi tạo chỉ số cho hợp đồng (chụp mới cả khi công tơ tái sử dụng)'

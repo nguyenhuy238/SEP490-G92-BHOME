@@ -90,7 +90,9 @@ public sealed record InspectionInput(Guid ElectricityReadingId, Guid WaterReadin
     [Required, StringLength(4000, MinimumLength = 1)] string Notes,
     [Required, MinLength(1), MaxLength(10)] Guid[] EvidenceIds,
     HandoverAssetInput[]? Assets = null, string? RoomCondition = null, string? KeysAndAccess = null, int? ExpectedVersion = null,
-    string? InventoryToken = null, string? ProposedCompensation = null);
+    string? InventoryToken = null, string? ProposedCompensation = null,
+    HandoverRoomCheck[]? RoomChecks = null, HandoverAccessItem[]? AccessItems = null,
+    Guid[]? KeyEvidenceIds = null);
 public sealed record InspectionReviewInput(int Version, bool Confirmed, string Reason, bool NoAdditionalCharges = false,
     bool TenantException = false, string? TenantExceptionReason = null);
 public sealed record FinalInspectionView(Guid Id, int Version, Guid BaselineContractId, int BaselineVersion, HandoverSnapshot? Baseline,

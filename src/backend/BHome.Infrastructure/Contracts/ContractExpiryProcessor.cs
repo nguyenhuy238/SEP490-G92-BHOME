@@ -5,6 +5,7 @@ using BHome.Domain.PropertyManagement;
 using BHome.Infrastructure.IdentityAccess;
 using BHome.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimeProvider clock) : IBackgroundJobHandler, IContractExpiryRepository
@@ -100,6 +101,59 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                                 Stage = stage,
                                 CreatedAt = clock.GetUtcNow()
                             });
+                    // The Main contract stays Active until physical handover is
+                    // reviewed/completed. Starting a move-out only when it has
+                    // become Terminated would deadlock Staff inspection.
+                    //
+                    // Room + Location advisory locks above serialize concurrent
+                    // job replays with normal Owner/Tenant contract operations.
+                    // There is one ContractMoveOut per ContractId in both schemas.
+                    if (c.Kind is ContractKind.Main or ContractKind.Renewal &&
+                        c.EndDate < today &&
+                        !await db.Set<Contract>().AnyAsync(next => next.PreviousContractId == c.Id &&
+                            (next.Status == ContractStatus.Draft ||
+                             next.Status == ContractStatus.PendingSigning ||
+                             next.Status == ContractStatus.PendingActivation ||
+                             next.Status == ContractStatus.Active), t) &&
+                        !await db.Set<ContractMoveOut>().AnyAsync(m => m.ContractId == c.Id, t))
+                    {
+                        var move = new ContractMoveOut
+                        {
+                            ContractId = c.Id,
+                            ProposedDate = c.EndDate,
+                            Reason = "Hợp đồng hết hạn; hệ thống mở quy trình kiểm tra trả phòng.",
+                            RequestedByUserId = c.OwnerSignerId, // Responsible owner; system origin below.
+                            IsExpiry = true,
+                            Status = MoveOutStatus.Approved,
+                            ApprovedAt = now,
+                            ApprovedByUserId = null, // NOT a human Owner approval.
+                            PendingReason = "inspection_staff_assignment_required"
+                        };
+                        db.Add(move);
+                        db.Add(new ContractMoveOutHistory
+                        {
+                            ContractId = c.Id,
+                            Version = move.Version,
+                            Action = "ExpiryInspectionOpenedBySystem",
+                            ActorId = c.OwnerSignerId, // Historical schema requires a real user FK.
+                            OccurredAt = now,
+                            Snapshot = JsonSerializer.Serialize(new
+                            {
+                                move.Id, move.ContractId, move.ProposedDate,
+                                Status = move.Status.ToString(), move.IsExpiry,
+                                Origin = "ContractExpiryJob", OwnerApproved = false
+                            })
+                        });
+                        db.SecurityAudit.Add(new SecurityAuditRecord
+                        {
+                            UserId = c.OwnerSignerId,
+                            Event = "ContractExpiryInspectionOpenedBySystem",
+                            TargetId = c.Id,
+                            TargetType = "Contract",
+                            Succeeded = true,
+                            OccurredAt = now
+                        });
+                    }
                     await db.SaveChangesAsync(t);
                 }
                 await tx.CommitAsync(t);

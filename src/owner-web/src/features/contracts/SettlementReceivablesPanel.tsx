@@ -4,8 +4,10 @@ import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
+  Box,
   Button,
   Checkbox,
+  Chip,
   FormControlLabel,
   MenuItem,
   Paper,
@@ -28,6 +30,35 @@ import { FinalUtilitiesPanel } from './FinalUtilitiesPanel';
 import { FinalFixedChargesPanel } from './FinalFixedChargesPanel';
 import { FinalChargeReviewPanel } from './FinalChargeReviewPanel';
 import { offsetAmountError } from './termination';
+import { MoveOutFinancialClosePanel, type MoveOutPricingIssue } from './MoveOutFinancialClosePanel';
+
+const roomCheckNames: Record<string, string> = {
+  walls_ceiling_floor: 'Tường, trần và sàn',
+  doors_windows_locks: 'Cửa, cửa sổ và khóa',
+  electrical_lighting_outlets: 'Đèn, công tắc và ổ điện',
+  water_plumbing_drainage: 'Cấp nước, vòi và thoát nước',
+  bathroom_toilet: 'Nhà vệ sinh và thiết bị vệ sinh',
+  cleanliness: 'Vệ sinh và hiện trạng phòng',
+  safety_equipment: 'Thiết bị an toàn',
+};
+
+function assetHasDamage(
+  asset: FinalInspection['observed']['assets'][number],
+  inspection: FinalInspection,
+) {
+  const prior = inspection.baseline?.assets.find((item) => item.id === asset.id);
+  // Match the server's HandoverChecklist.NewDamageAgainstBaseline. Existing
+  // damage at move-in is not a new financial liability for this Tenant.
+  return (
+    !!asset.checked &&
+    !!prior &&
+    ((asset.missingQuantity ?? 0) > (prior.missingQuantity ?? 0) ||
+      (asset.damagedQuantity ?? 0) > (prior.damagedQuantity ?? 0) ||
+      (asset.handedOverQuantity != null &&
+        prior.handedOverQuantity != null &&
+        asset.handedOverQuantity < prior.handedOverQuantity))
+  );
+}
 
 export function SettlementReceivablesPanel({
   api,
@@ -60,6 +91,66 @@ export function SettlementReceivablesPanel({
   const [keys] = useState(() => mutationKeys(() => crypto.randomUUID()));
   const lock = useRef(false);
   const data = query.data;
+  const damageBalances =
+    data?.receivables.filter((item) => item.charge.kind === 'TenantDamage') ?? [];
+  const damageOutstanding = damageBalances.every((item) => /^\d+$/.test(item.outstanding))
+    ? damageBalances.reduce((sum, item) => sum + BigInt(item.outstanding), 0n).toString()
+    : null;
+  const damagedAssets = inspection.observed.assets.filter((item) =>
+    assetHasDamage(item, inspection),
+  );
+  const roomIssues = (inspection.observed.roomChecks ?? []).filter(
+    (check) => check.status === 'Issue',
+  );
+  const baselineRoomKeys = inspection.baseline?.accessItems?.find(
+    (item) => item.type === 'RoomKey',
+  )?.quantity;
+  const returnedRoomKeys = inspection.observed.accessItems?.find(
+    (item) => item.type === 'RoomKey',
+  )?.quantity;
+  const missingRoomKeys =
+    baselineRoomKeys !== undefined &&
+    returnedRoomKeys !== undefined &&
+    returnedRoomKeys < baselineRoomKeys;
+  const pricedRoomKeys = data?.receivables.find(
+    (entry) => entry.charge.roomCheckCode === 'access_room_key',
+  );
+  const legacyRoomInspection = !inspection.observed.roomChecks?.length;
+  const selectedRoomCheckCode = asset.startsWith('room-check:')
+    ? asset.slice('room-check:'.length)
+    : null;
+  const selectedAsset = damagedAssets.find((item) => item.id === asset);
+  const selectedRoomCheck = roomIssues.find((check) => check.code === selectedRoomCheckCode);
+  const selectedMissingKeys = selectedRoomCheckCode === 'access_room_key' && missingRoomKeys;
+  const availableProofs = selectedRoomCheck
+    ? (selectedRoomCheck.evidenceIds ?? [])
+    : selectedMissingKeys
+      ? (inspection.observed.keyEvidenceIds ?? [])
+      : selectedAsset
+        ? (selectedAsset.evidenceIds ?? [])
+        : legacyRoomInspection
+          ? inspection.observed.evidenceIds
+          : [];
+  const canPriceSelection =
+    !!selectedAsset ||
+    (!!selectedRoomCheck && data?.roomCheckChargesSupported === true) ||
+    (selectedMissingKeys && data?.roomCheckChargesSupported === true) ||
+    (legacyRoomInspection && !asset);
+  const closingIssues: MoveOutPricingIssue[] = [
+    ...damagedAssets.map((item) => ({
+      key: `asset:${item.id}`,
+      label: item.name,
+      charged: data?.receivables.some((entry) => entry.charge.assetId === item.id) ?? false,
+    })),
+    ...roomIssues.map((item) => ({
+      key: `room:${item.code}`,
+      label: roomCheckNames[item.code] ?? item.code,
+      charged: data?.receivables.some((entry) => entry.charge.roomCheckCode === item.code) ?? false,
+    })),
+    ...(missingRoomKeys
+      ? [{ key: 'room:access_room_key', label: 'Chìa khóa trả thiếu', charged: !!pricedRoomKeys }]
+      : []),
+  ];
   const targetOutstanding = target.startsWith('charge:')
     ? data?.receivables.find((r) => r.charge.id === target.slice(7))?.outstanding
     : data?.invoices?.find((i) => i.id === target.slice(8))?.outstanding;
@@ -90,7 +181,8 @@ export function SettlementReceivablesPanel({
           expectedReference: data.reference,
           inspectionId: inspection.id,
           inspectionVersion: inspection.version,
-          assetId: asset || null,
+          assetId: selectedRoomCheckCode ? null : asset || null,
+          ...(selectedRoomCheckCode ? { roomCheckCode: selectedRoomCheckCode } : {}),
           amount: vnd(amount, true),
           description: description.trim(),
           evidenceIds: proofs,
@@ -101,6 +193,7 @@ export function SettlementReceivablesPanel({
         setAmount('');
         setDescription('');
         setProofs([]);
+        setAsset('');
         setChecked(false);
       } else {
         const body = {
@@ -183,6 +276,14 @@ export function SettlementReceivablesPanel({
                 bổ {formatContractMoney(r.allocated)} · Còn nợ {formatContractMoney(r.outstanding)}
               </Alert>
             ))}
+            {damageOutstanding !== null && damageOutstanding !== '0' && (
+              <Alert severity="warning">
+                Bồi thường còn phải thu sau các khoản đã thanh toán/cấn trừ:{' '}
+                <strong>{formatContractMoney(damageOutstanding)}</strong>. Khoản này đã nằm trong sổ
+                phải thu của Tenant và có thể đối soát chuyển khoản phía dưới; không lập thêm khoản
+                nợ thứ hai cho cùng thiệt hại.
+              </Alert>
+            )}
             {data.offsets.map((o) => (
               <Typography key={o.id} variant="body2">
                 Đã cấn {formatContractMoney(o.amount)} · {o.reason}
@@ -190,7 +291,169 @@ export function SettlementReceivablesPanel({
             ))}
             {summary.unresolvedItems.includes('final_charges_and_damage_policy_pending') && (
               <>
-                <Typography variant="subtitle1">Ghi nhận thiệt hại theo biên bản</Typography>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  Định giá từng hạng mục hỏng, thiếu
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Owner xem kết quả Staff đã ghi nhận, xác nhận số tiền và ảnh của từng hạng mục.
+                  Khoản được duyệt sẽ xuất hiện trên sổ phải thu của Tenant; không tạo thêm nghĩa vụ
+                  trùng với hóa đơn.
+                </Typography>
+                {!damagedAssets.length &&
+                  !roomIssues.length &&
+                  !missingRoomKeys &&
+                  !legacyRoomInspection && (
+                    <Alert severity="success">
+                      Không có tài sản hoặc hạng mục phòng ghi nhận hư hỏng, thiếu cần định giá.
+                    </Alert>
+                  )}
+                {(!!roomIssues.length || missingRoomKeys) &&
+                  data.roomCheckChargesSupported !== true && (
+                    <Alert severity="warning">
+                      API hiện tại chưa hỗ trợ định giá độc lập từng hạng mục phòng. Cần cập nhật
+                      Backend để tránh ghi nhầm nhiều thiệt hại thành một khoản chung.
+                    </Alert>
+                  )}
+                {damagedAssets.map((item) => {
+                  const charged = data.receivables.find(
+                    (entry) => entry.charge.assetId === item.id,
+                  );
+                  return (
+                    <Box key={item.id} sx={{ borderBottom: 1, borderColor: 'divider', pb: 1 }}>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        useFlexGap
+                        sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {item.name}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          color={charged ? 'success' : 'warning'}
+                          label={
+                            charged
+                              ? `Đã duyệt ${formatContractMoney(charged.charge.amount)}`
+                              : 'Cần định giá'
+                          }
+                        />
+                        {!charged && (
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setAsset(item.id);
+                              setDescription(item.notes?.trim() || `Bồi thường ${item.name}`);
+                              setProofs([]);
+                              setChecked(false);
+                            }}
+                          >
+                            Nhập giá
+                          </Button>
+                        )}
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary">
+                        Thiếu {item.missingQuantity ?? 0} · Hỏng {item.damagedQuantity ?? 0} ·{' '}
+                        {item.notes?.trim() || 'Xem ảnh kiểm kê Staff'}
+                      </Typography>
+                    </Box>
+                  );
+                })}
+                {roomIssues.map((item) => {
+                  const charged = data.receivables.find(
+                    (entry) =>
+                      entry.charge.roomCheckCode === item.code ||
+                      entry.charge.sourceKey.endsWith(`:${item.code}`),
+                  );
+                  return (
+                    <Box key={item.code} sx={{ borderBottom: 1, borderColor: 'divider', pb: 1 }}>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        useFlexGap
+                        sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {roomCheckNames[item.code] ?? item.code}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          color={charged ? 'success' : 'warning'}
+                          label={
+                            charged
+                              ? `Đã duyệt ${formatContractMoney(charged.charge.amount)}`
+                              : 'Cần xem xét'
+                          }
+                        />
+                        {!charged && data.roomCheckChargesSupported === true && (
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setAsset(`room-check:${item.code}`);
+                              setDescription(
+                                item.notes?.trim() ||
+                                  `Bồi thường ${roomCheckNames[item.code] ?? item.code}`,
+                              );
+                              setProofs([]);
+                              setChecked(false);
+                            }}
+                          >
+                            Nhập giá
+                          </Button>
+                        )}
+                      </Stack>
+                      {!!item.notes?.trim() && (
+                        <Typography variant="caption" color="text.secondary">
+                          {item.notes}
+                        </Typography>
+                      )}
+                    </Box>
+                  );
+                })}
+                {missingRoomKeys && (
+                  <Box sx={{ borderBottom: 1, borderColor: 'divider', pb: 1 }}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      useFlexGap
+                      sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                    >
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        Chìa khóa trả thiếu
+                      </Typography>
+                      <Chip
+                        size="small"
+                        color={pricedRoomKeys ? 'success' : 'warning'}
+                        label={
+                          pricedRoomKeys
+                            ? `Đã duyệt ${formatContractMoney(pricedRoomKeys.charge.amount)}`
+                            : 'Cần định giá'
+                        }
+                      />
+                      {!pricedRoomKeys &&
+                        data.roomCheckChargesSupported === true &&
+                        !!inspection.observed.keyEvidenceIds?.length && (
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setAsset('room-check:access_room_key');
+                              setDescription(
+                                `Bồi thường ${baselineRoomKeys! - returnedRoomKeys!} chìa khóa chưa trả`,
+                              );
+                              setProofs([]);
+                              setChecked(false);
+                            }}
+                          >
+                            Nhập giá
+                          </Button>
+                        )}
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      Bàn giao {baselineRoomKeys} · Nhận lại {returnedRoomKeys}. Cần ảnh chìa khóa
+                      riêng để duyệt giá.
+                    </Typography>
+                  </Box>
+                )}
                 <TextField
                   select
                   label="Nguồn thiệt hại"
@@ -198,15 +461,29 @@ export function SettlementReceivablesPanel({
                   disabled={busy}
                   onChange={(e) => {
                     setAsset(e.target.value);
+                    setProofs([]);
                     setChecked(false);
                   }}
                 >
-                  <MenuItem value="">Phòng</MenuItem>
-                  {inspection.observed.assets.map((a) => (
+                  <MenuItem value="">
+                    {legacyRoomInspection ? 'Phòng (biên bản cũ)' : 'Chọn hạng mục cần định giá'}
+                  </MenuItem>
+                  {damagedAssets.map((a) => (
                     <MenuItem key={a.id} value={a.id}>
-                      {a.name}
+                      {a.name} · hư hỏng/thiếu
                     </MenuItem>
                   ))}
+                  {data.roomCheckChargesSupported === true &&
+                    roomIssues.map((check) => (
+                      <MenuItem key={check.code} value={`room-check:${check.code}`}>
+                        {roomCheckNames[check.code] ?? check.code} · có vấn đề
+                      </MenuItem>
+                    ))}
+                  {data.roomCheckChargesSupported === true &&
+                    missingRoomKeys &&
+                    !!inspection.observed.keyEvidenceIds?.length && (
+                      <MenuItem value="room-check:access_room_key">Chìa khóa trả thiếu</MenuItem>
+                    )}
                 </TextField>
                 <MoneyField
                   label="Số tiền phải thu thiệt hại (VND)"
@@ -227,7 +504,7 @@ export function SettlementReceivablesPanel({
                     setChecked(false);
                   }}
                 />
-                {inspection.observed.evidenceIds.map((proof, i) => (
+                {availableProofs.map((proof, i) => (
                   <Stack
                     key={proof}
                     direction={{ xs: 'column', sm: 'row' }}
@@ -283,6 +560,7 @@ export function SettlementReceivablesPanel({
                     query.isFetching ||
                     !!query.error ||
                     !checked ||
+                    !canPriceSelection ||
                     !amount ||
                     !description.trim() ||
                     !proofs.length
@@ -386,6 +664,18 @@ export function SettlementReceivablesPanel({
                 await saved();
               }}
             />
+            {data.roomCheckChargesSupported === true && (
+              <MoveOutFinancialClosePanel
+                api={api}
+                id={id}
+                data={data}
+                issues={closingIssues}
+                saved={async () => {
+                  await query.refetch();
+                  await saved();
+                }}
+              />
+            )}
           </>
         )}
       </Stack>

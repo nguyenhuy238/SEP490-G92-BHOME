@@ -76,8 +76,8 @@ internal sealed class HandoverPdfRenderer : IHandoverDocumentRenderer, IHandover
     private static string StatusAndNotes(string status, string? reason)
     {
         // A passed inspection is self-contained in the issued document. Preserve
-        // Staff's original notes in the canonical record/history, but do not
-        // print remarks beside an item that the final PDF marks as passed.
+        // Legacy signed snapshots can contain notes from a prior failed check.
+        // Do not print them beside an item whose final status is passed.
         // Real deficiencies must still show their reason verbatim.
         if (status is "Đạt" or "Đã kiểm kê") return "Trạng thái: " + status;
         var detailLabel = status is "Cần xử lý" or "Không áp dụng" ? "Lý do" : "Ghi chú";

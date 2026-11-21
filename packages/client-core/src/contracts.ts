@@ -252,6 +252,17 @@ export interface HandoverSnapshot {
   electricity: HandoverReading;
   water: HandoverReading;
   evidenceIds: string[];
+  /** Seven canonical room checks recorded by Staff during the handover. */
+  roomChecks?:
+    | {
+        code: string;
+        status: 'Passed' | 'Issue' | 'NotApplicable';
+        notes: string | null;
+        evidenceIds: string[];
+      }[]
+    | null;
+  accessItems?: { type: string; quantity: number; notes: string }[] | null;
+  keyEvidenceIds?: string[] | null;
   inventoryToken?: string | null;
   inventoryState?: string | null;
   noAssetsConfirmed?: boolean;
@@ -452,6 +463,7 @@ export interface SettlementReceivable {
   inspectionId: string;
   inspectionVersion: number;
   assetId: string | null;
+  roomCheckCode?: string | null;
   amount: string;
   description: string;
   calculationPolicy: string;
@@ -519,12 +531,17 @@ export interface SettlementReceivables {
   availableDeposit: string;
   receivables: SettlementReceivableBalance[];
   offsets: DepositOffsetApproval[];
+  /** Explicitly set by the API when independent room-check charges are supported. */
+  roomCheckChargesSupported?: boolean;
+  /** Explicit Owner inspection confirmation that no extra damage is chargeable. */
+  noAdditionalCharges?: boolean;
 }
 export interface DamageChargeInput {
   expectedReference: string;
   inspectionId: string;
   inspectionVersion: number;
   assetId: string | null;
+  roomCheckCode?: string | null;
   amount: string;
   description: string;
   evidenceIds: string[];
@@ -1297,6 +1314,26 @@ export const labels: Record<string, string> = {
     'Biên bản đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',
   move_out_not_settled: 'Chưa thể đóng hợp đồng: kiểm tra quyết toán và ngày biên bản.',
   move_out_handover_required: 'Cần biên bản đã kiểm tra và ngày bàn giao thực tế hợp lệ.',
+  move_out_financial_close_confirmation_required:
+    'Cần Owner xác nhận danh sách hạng mục, miễn thu, người nhận hoàn và lý do chốt quyết toán.',
+  settlement_financial_close_not_ready:
+    'Chưa thể chốt: điện nước, phí cuối kỳ, các khoản phải thu hoặc nguồn cọc còn cần đối chiếu.',
+  settlement_financial_already_closed:
+    'Quyết toán đã được Owner chốt. Hãy tải lại kết quả, không lập yêu cầu chốt mới.',
+  move_out_issues_require_price_or_waiver:
+    'Có mục hư hỏng/chìa khóa thiếu chưa được định giá hoặc chưa xác nhận miễn thu riêng.',
+  settlement_charge_review_required:
+    'Owner cần xác nhận toàn bộ khoản thu cuối kỳ theo phiên bản mới nhất trước khi chốt.',
+  refund_beneficiary_owner_confirmation_required:
+    'Owner cần chọn và xác minh đúng người nhận cọc theo thỏa thuận trước khi lập yêu cầu hoàn.',
+  deposit_refund_already_requested:
+    'Đã có yêu cầu hoàn cọc đang xử lý. Không thể tạo thêm yêu cầu cho cùng nguồn cọc.',
+  deposit_refund_not_ready:
+    'Còn nghĩa vụ chưa được giải quyết hoặc số dư chưa được xác minh. Chưa thể tạo yêu cầu hoàn.',
+  settlement_other_obligations_unpaid:
+    'Còn khoản thuê, điện, nước hoặc phí cuối kỳ chưa được giải quyết; cần đối soát trước khi chốt.',
+  settlement_deposit_allocation_incomplete:
+    'Cọc khả dụng chưa được cấn trừ hết cho khoản bồi thường đủ điều kiện. Hãy tải lại số dư.',
   owner_confirmed_inspection_required:
     'Owner cần duyệt biên bản kiểm tra và chỉ số chốt trước khi bàn giao.',
   inspection_snapshot_invalid: 'Biên bản hoặc chỉ số chốt đã thay đổi; cần kiểm tra lại.',

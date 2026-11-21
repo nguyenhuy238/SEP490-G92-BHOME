@@ -92,6 +92,8 @@ export interface PrivateEvidenceViewerProps {
   disabled?: boolean;
   /** Short action labels for the compact Owner handover PDF row only. */
   compactActions?: boolean;
+  /** Optional precise preview CTA; does not change the private document title or download. */
+  previewButtonLabel?: string;
 }
 
 function classify(blob: Blob, declaredType?: string): Promise<SafeFile> {
@@ -162,6 +164,7 @@ export function PrivateEvidenceViewer({
   errorMessage,
   disabled = false,
   compactActions = false,
+  previewButtonLabel,
 }: PrivateEvidenceViewerProps) {
   const dialogTitleId = useId();
   const [open, setOpen] = useState(false);
@@ -301,7 +304,7 @@ export function PrivateEvidenceViewer({
           disabled={disabled || !!busy}
           onClick={() => void fetchFile('preview')}
         >
-          {compactActions ? 'Xem PDF' : `Xem ${label}`}
+          {previewButtonLabel ?? (compactActions ? 'Xem PDF' : `Xem ${label}`)}
         </Button>
         <Button
           size="small"

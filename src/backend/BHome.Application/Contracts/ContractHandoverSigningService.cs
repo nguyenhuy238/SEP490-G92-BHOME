@@ -57,8 +57,11 @@ public sealed partial class ContractService
         var inkPng = (handoverInkRenderer ??
             throw new ContractException(503, "handover_ink_renderer_unavailable")).Render(ink);
         var pdfRenderer = handoverDraftPdf ?? throw new ContractException(503, "handover_draft_template_unavailable");
-        var photos = await HandoverSigningEvidenceAsync(contract, view, token);
-        var unsignedPdf = await pdfRenderer.RenderSigningAsync(view, photos, token);
+        // The administrative PDF intentionally excludes evidence photos. Verify
+        // each private object's integrity, but avoid retaining all image bytes
+        // in memory merely to pass an unused photo collection to the renderer.
+        await VerifyHandoverSigningEvidenceAsync(contract, view, token);
+        var unsignedPdf = await pdfRenderer.RenderSigningAsync(view, [], token);
         if (unsignedPdf.Length > 10 * 1024 * 1024)
             throw ContractException.Conflict("handover_signing_pdf_too_large");
         var prepared = await signing.PrepareAsync(Document(contract), Guid.Empty, unsignedPdf,
@@ -90,10 +93,9 @@ public sealed partial class ContractService
         return signed;
     }
 
-    private async Task<HandoverDocumentPhoto[]> HandoverSigningEvidenceAsync(Contract contract,
+    private async Task VerifyHandoverSigningEvidenceAsync(Contract contract,
         HandoverDraftView view, CancellationToken token)
     {
-        var photos = new List<HandoverDocumentPhoto>();
         foreach (var fileId in view.EvidenceIds.Concat(view.Assets.SelectMany(asset => asset.EvidenceIds ?? []))
                      .Concat((view.RoomChecks ?? []).SelectMany(check => check.EvidenceIds))
                      .Concat(view.KeyEvidenceIds ?? []).Distinct())
@@ -102,21 +104,12 @@ public sealed partial class ContractService
                 ?? throw ContractException.Invalid("invalid_handover_evidence");
             if (file.Kind != ContractFileKind.HandoverEvidence)
                 throw ContractException.Invalid("invalid_handover_evidence");
-            using var bytes = new MemoryStream();
-            await CopyVerifiedFile(file, bytes, token);
-            if (bytes.Length > 5 * 1024 * 1024)
+            if (file.Length > 5 * 1024 * 1024)
                 throw ContractException.Invalid("inspection_image_too_large");
-            var labels = view.Assets.Where(asset => asset.EvidenceIds?.Contains(fileId) == true)
-                .Select(asset => asset.Name)
-                .Concat((view.RoomChecks ?? []).Where(check => check.EvidenceIds.Contains(fileId))
-                    .Select(check => HandoverRoomChecklist.Labels[check.Code]))
-                .Concat((view.KeyEvidenceIds ?? []).Contains(fileId) ? ["Chìa khóa bàn giao"] : [])
-                .Distinct().ToArray();
-            photos.Add(new(fileId, (labels.Length == 0 ? "Ảnh phòng" : string.Join(", ", labels)) +
-                " · SHA256 " + file.FileHash, bytes.ToArray()));
+            await CopyVerifiedFile(file, Stream.Null, token);
         }
         var recorded = await Handovers.ReadingsAsync(contract.Id, contract.RoomId, contract.StartDate, token);
-        foreach (var (label, reading) in new[] { ("điện", view.Electricity), ("nước", view.Water) })
+        foreach (var reading in new[] { view.Electricity, view.Water })
         {
             if (reading is null) throw ContractException.Conflict("confirmed_handover_readings_required");
             var stored = recorded.SingleOrDefault(x => x.Id == reading.Id &&
@@ -126,11 +119,7 @@ public sealed partial class ContractService
             await storage.CopyToAsync(stored.EvidenceObjectKey, bytes, token);
             if (bytes.Length > 5 * 1024 * 1024 || FileHash(bytes.ToArray()) != reading.EvidenceHash)
                 throw ContractException.Conflict("handover_evidence_integrity_failed");
-            photos.Add(new(reading.EvidenceId,
-                $"Chỉ số {label} lần đầu · {reading.Value} · {reading.MeterCode} · {reading.Date:dd/MM/yyyy}" +
-                " · SHA256 " + reading.EvidenceHash, bytes.ToArray()));
         }
-        return photos.ToArray();
     }
 
     public async Task<byte[]> HandoverOwnerSignedPdfAsync(Guid id, CancellationToken token)
@@ -219,6 +208,76 @@ public sealed partial class ContractService
         return await signing.ResendAsync(ToSignature(id, pending), token);
     }, token);
 
+    // A one-action handover signature using the authenticated Tenant session.
+    // This is intentionally restricted to the Move-In report; it does not
+    // change the regular contract signing/OTP policy or allow plain approval.
+    public Task<HandoverDraftView> SignTenantHandoverInSessionAsync(Guid id,
+        HandoverDraftTenantSessionSign input, Guid key, CancellationToken token) =>
+        Mutate(id, [Roles.Tenant], async contract =>
+    {
+        RequireMainHandover(contract);
+        if (contract.TenantUserId != Actor)
+            throw new ContractException(403, "contract_tenant_required");
+        var prior = await DraftState(contract, token);
+        if (await Replay(key, "handover-tenant-session-sign", new { id, input }, token) is not null)
+            return await DraftView(contract, prior, token);
+        if (prior.Status != "Ready" || prior.Version != input.Version ||
+            prior.OwnerSignature is not { } ownerSigned ||
+            prior.Requests.Any(request => request.Status == "Pending"))
+            throw ContractException.Conflict("handover_not_ready_for_tenant_signing");
+        if (!input.Consent || input.Ink is null)
+            throw ContractException.Invalid("handover_tenant_signature_consent_and_ink_required");
+        if (signingMethods?.IsEnabled(SigningMethods.OwnerSession) != true)
+            throw new ContractException(503, "signing_method_disabled");
+        // DraftView uses EF/inspection repositories; the immutable Owner PDF is
+        // fetched exclusively from object storage. Overlap those independent
+        // reads without ever executing two EF operations concurrently.
+        var viewTask = DraftView(contract, prior, token);
+        var ownerPdfTask = VerifiedHandoverPdf(contract, ownerSigned, token);
+        await Task.WhenAll(viewTask, ownerPdfTask);
+        var current = await viewTask;
+        if (current.Missing.Length != 0 || current.Electricity?.Id != prior.ApprovedElectricityReadingId ||
+            current.Water?.Id != prior.ApprovedWaterReadingId ||
+            !await Handovers.InventoryReadyAsync(id, token))
+            throw ContractException.Conflict("handover_changed_since_owner_signature");
+
+        // Fresh strokes are rendered server-side, bound into the Tenant's PDF
+        // signature, and not reused from a mutable profile picture or typed name.
+        var inkPng = (handoverInkRenderer ??
+            throw new ContractException(503, "handover_ink_renderer_unavailable")).Render(input.Ink);
+        var ownerPdf = await ownerPdfTask;
+        var prepared = await signing.PrepareAsync(Document(contract), Guid.Empty, ownerPdf,
+            new SigningAppearance(null, true, SigningMethods.TenantSession, inkPng), token);
+        if (FileHash(prepared.SourcePdf) != ownerSigned.FileHash)
+            throw ContractException.Conflict("handover_signing_source_changed");
+        var signature = new ContractSignature
+        {
+            ContractId = id,
+            SignerUserId = Actor,
+            SourceHash = FileHash(prepared.SourcePdf),
+            PreparedHash = FileHash(prepared.PreparedPdf),
+            FieldName = prepared.FieldName,
+            DocumentDigest = prepared.DocumentDigest,
+            DataToSignDigest = prepared.DataToSignDigest,
+            CertificateChain = prepared.CertificateChain,
+            ProviderUserId = prepared.ProviderUserId,
+            CredentialId = prepared.CredentialId,
+            Status = SignatureStatus.Pending
+        };
+        var signed = await signing.PollAsync(signature, prepared.PreparedPdf, token);
+        if (signed.State != "Signed" || signed.SignedPdf is not { Length: > 0 } tenantPdf)
+            throw ContractException.Conflict("handover_tenant_signature_failed");
+        var completedAt = clock.GetUtcNow();
+        var finalDocument = new HandoverSignatureDocument(signature.Id, Actor, completedAt,
+            $"contracts/{id:N}/handover-signatures/{signature.Id:N}/final.pdf",
+            FileHash(tenantPdf), SigningMethods.TenantSession);
+        // An old outstanding OTP attempt, if any, is superseded only once this
+        // fully authenticated PDF is committed. It cannot complete afterward.
+        return await CompleteTenantSignedHandoverAsync(contract, prior, current, ownerSigned,
+            finalDocument, tenantPdf, input.Note, key, "handover-tenant-session-sign",
+            new { id, input }, token);
+    }, token);
+
     public Task<HandoverDraftView> ConfirmTenantHandoverSigningAsync(Guid id,
         HandoverDraftTenantSignOtp input, Guid key, CancellationToken token) =>
         Mutate(id, [Roles.Tenant], async contract =>
@@ -249,6 +308,18 @@ public sealed partial class ContractService
         var finalDocument = new HandoverSignatureDocument(pending.Id, Actor, completedAt,
             $"contracts/{id:N}/handover-signatures/{pending.Id:N}/final.pdf",
             FileHash(tenantPdf), SigningMethods.Otp);
+        return await CompleteTenantSignedHandoverAsync(contract, prior, current, ownerSigned,
+            finalDocument, tenantPdf, input.Note, key, "handover-tenant-sign-confirm",
+            new { id, input }, token);
+    }, token);
+
+    private async Task<HandoverDraftView> CompleteTenantSignedHandoverAsync(Contract contract,
+        HandoverDraftState prior, HandoverDraftView current,
+        HandoverSignatureDocument ownerSigned, HandoverSignatureDocument finalDocument,
+        byte[] tenantPdf, string? note, Guid key, string replayAction,
+        object replayInput, CancellationToken token)
+    {
+        var id = contract.Id;
         var h = await Handovers.GetAsync(id, token);
         if (h?.Status == ContractHandoverStatus.Confirmed)
             throw ContractException.Conflict("handover_already_confirmed");
@@ -258,7 +329,8 @@ public sealed partial class ContractService
         var acceptance = new HandoverOwnerAcceptance(h.Version, prior.OwnerReadyBy!.Value,
             ownerSigned.SignedAt, prior.OwnerReadyReason ?? "Owner đã ký biên bản",
             prior.OwnerHandlingPlan ?? "Không có ngoại lệ cần xử lý");
-        var feedback = new HandoverFeedback(Actor, completedAt, true, DraftText(input.Note ?? "", 2000));
+        var completedAt = finalDocument.SignedAt;
+        var feedback = new HandoverFeedback(Actor, completedAt, true, DraftText(note ?? "", 2000));
         var snapshot = DraftSnapshot(contract, current, assets, acceptance) with { TenantFeedback = feedback };
         await ValidateHandoverEvidence(contract, snapshot, token);
         await files.PutAsync(contract.RoomId, finalDocument.ObjectKey, tenantPdf, "application/pdf", token);
@@ -299,7 +371,7 @@ public sealed partial class ContractService
             TenantConfirmedAt = completedAt
         };
         await SaveDraftState(contract, prior, next, "TenantDigitallySigned", token);
-        Remember(key, "handover-tenant-sign-confirm", new { id, input }, id);
+        Remember(key, replayAction, replayInput, id);
         return await DraftView(contract, next, token);
-    }, token);
+    }
 }

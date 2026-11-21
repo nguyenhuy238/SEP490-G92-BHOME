@@ -8,14 +8,16 @@ vi.mock('../../components/common/PrivateEvidenceViewer', () => ({
     label,
     fetchBlob,
     compactActions,
+    previewButtonLabel,
   }: {
     label: string;
     fetchBlob: (signal: AbortSignal) => Promise<Blob>;
     compactActions?: boolean;
+    previewButtonLabel?: string;
   }) => (
     <>
       <button type="button" onClick={() => void fetchBlob(new AbortController().signal)}>
-        {compactActions ? 'Xem PDF' : label}
+        {previewButtonLabel ?? (compactActions ? 'Xem PDF' : label)}
       </button>
       {compactActions && <button type="button">Tải xuống</button>}
     </>
@@ -1238,13 +1240,15 @@ it('prefers the persisted confirmed MoveIn PDF over the watermarked draft and fe
   render(<OwnerHandoverDraftPanel api={api} id="contract-1" contractStatus="Active" />);
   expect(await screen.findByText('PDF biên bản bàn giao chính thức')).toBeInTheDocument();
   expect(
-    await screen.findByRole('button', { name: 'PDF bàn giao đã xác nhận' }),
+    await screen.findByRole('button', { name: 'Xem biên bản bàn giao đã xác nhận' }),
   ).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'PDF bàn giao đã xác nhận 2' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Xem biên bản bàn giao đã xác nhận 2' })).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: 'Tải xuống' })).toHaveLength(2);
+  expect(screen.queryByText(/Phiên bản 6/)).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /PDF bản nháp bàn giao/ })).not.toBeInTheDocument();
   expect(screen.getByText(/Đây là phần tóm tắt dữ liệu/)).toBeInTheDocument();
   expect(handoverDocuments).toHaveBeenCalledWith('contract-1', expect.any(AbortSignal));
-  fireEvent.click(screen.getByRole('button', { name: 'PDF bàn giao đã xác nhận' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Xem biên bản bàn giao đã xác nhận' }));
   expect(handoverDocument).toHaveBeenCalledWith(
     'contract-1',
     'move-in-pdf',
@@ -1268,7 +1272,7 @@ it('does not disguise a missing confirmed PDF as the official record, and can re
   fireEvent.click(screen.getByRole('button', { name: 'Tải lại biên bản' }));
   await waitFor(() => expect(handoverDocuments).toHaveBeenCalledTimes(2));
   expect(
-    await screen.findByRole('button', { name: 'PDF bàn giao đã xác nhận' }),
+    await screen.findByRole('button', { name: 'Xem biên bản bàn giao đã xác nhận' }),
   ).toBeInTheDocument();
 });
 

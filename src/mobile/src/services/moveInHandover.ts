@@ -41,7 +41,7 @@ export type MoveInAccessType = (typeof moveInAccessKinds)[number]['type'];
 export interface MoveInRoomCheck {
   code: string;
   status: MoveInRoomCheckStatus;
-  notes: string;
+  notes: string | null;
   evidenceIds: string[];
 }
 
@@ -107,6 +107,14 @@ export interface MoveInDraft {
   electricity: HandoverReading | null;
   water: HandoverReading | null;
   assets: HandoverAsset[];
+  inspectedAssets?: {
+    id: string;
+    name: string;
+    expectedQuantity: number;
+    actualQuantity: number;
+    condition: string;
+    notes?: string | null;
+  }[] | null;
   roomCondition: string;
   keysAndAccess: string;
   notes: string;
@@ -202,6 +210,13 @@ export function moveInHandover(api: ContractClient) {
         },
         key,
       ),
+    signTenantInSession: (
+      id: string,
+      version: number,
+      ink: { width: number; height: number; strokes: number[][][] },
+      note: string,
+      key: string,
+    ) => mutate(id, '/tenant-sign/session', { version, consent: true, ink, note: note.trim() }, key),
     tenantSigningOtp: (id: string, signal?: AbortSignal) =>
       request<SigningOtpView>(`${endpoint(id)}/tenant-sign/otp`, { signal }),
     resendTenantSigningOtp: (id: string) =>

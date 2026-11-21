@@ -23,7 +23,7 @@ public sealed record HandoverPendingSignature(Guid Id, Guid SignerId, string Sou
 
 // A fixed room checklist prevents a single free-text answer from hiding an
 // uninspected wall, door, electrical outlet or safety installation.
-public sealed record HandoverRoomCheck(string Code, string Status, string Notes, Guid[] EvidenceIds);
+public sealed record HandoverRoomCheck(string Code, string Status, string? Notes, Guid[] EvidenceIds);
 public sealed record HandoverAccessItem(string Type, int Quantity, string Notes);
 public sealed record HandoverOutstandingIssue(string Code, string Description, string ResponsibleParty,
     DateOnly? DueDate);
@@ -127,6 +127,9 @@ public sealed record HandoverDraftCorrectionDecision(int Version, bool Accepted,
 public sealed record HandoverDraftTenantConfirmation(int Version, string? Note = null);
 public sealed record HandoverDraftTenantSign(int Version, SigningInput Signature);
 public sealed record HandoverDraftTenantSignOtp(int Version, string Code, string? Note = null);
+// Explicit account-session consent + freshly drawn signature, never generated from typed text.
+public sealed record HandoverDraftTenantSessionSign(int Version, bool Consent,
+    HandoverInkInput? Ink, string? Note = null);
 
 public interface IHandoverDraftRepository
 {
