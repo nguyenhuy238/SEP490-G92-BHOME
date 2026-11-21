@@ -8,6 +8,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import { LifecycleAttention } from '../LifecycleAttention';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { ArrowRight, Building2, ClipboardList, DoorOpen, Receipt, Wallet } from 'lucide-react';
@@ -102,6 +103,7 @@ export default function LiveDashboardPage() {
           </Button>
         }
       />
+      <LifecycleAttention request={api.request} actor={actor} />
       <Box component="section" aria-label="Tình hình khai thác">
         <Stack
           direction="row"

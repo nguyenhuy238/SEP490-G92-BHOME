@@ -30,6 +30,8 @@ current=json.load(open(sys.argv[1])); incoming=tuple(map(int,sys.argv[2].split('
 assert incoming > tuple(map(int,current['run'].split('-'))), 'Refusing an older or repeated release; resume its existing worker instead.'
 PY
 fi
+# Bootstrap the private backup parent before allocating per-release evidence.
+mkdir -p -m 700 /opt/bhome-backups
 run=$(mktemp -d "/opt/bhome-backups/$target-cd-$(date -u +%Y%m%dT%H%M%S)-${sha:0:12}-XXXX")
 exec > >(tee -a "$run/deploy.log") 2>&1
 echo "Release target=$target sha=$sha run=$run_id evidence=$run"

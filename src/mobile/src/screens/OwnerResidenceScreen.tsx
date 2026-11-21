@@ -263,6 +263,20 @@ function OwnerResidenceRecord({
               Tôi đã đối chiếu hồ sơ tải lại
             </Action>
           )}
+          {task.trackingActive && !task.accommodationConfirmed && (
+            <AccommodationConfirmation
+              task={task}
+              service={service}
+              disabled={record.busy || record.review || record.loading}
+              mutate={record.mutate}
+            />
+          )}
+          {task.accommodationConfirmed && (
+            <Text>Đã ghi nhận xác nhận chỗ ở trên kênh chính thức.</Text>
+          )}
+          {task.registrationDeadline && (
+            <Text>Hạn đăng ký {displayContractDate(task.registrationDeadline)}</Text>
+          )}
           {!task.ownerConfirmed && task.status === 'Completed' && (
             <>
               <Input
@@ -298,6 +312,44 @@ function OwnerResidenceRecord({
           )}
         </>
       )}
+    </Box>
+  );
+}
+
+function AccommodationConfirmation({
+  task,
+  service,
+  disabled,
+  mutate,
+}: {
+  task: import('../../../../packages/client-core/src/residence').ResidenceTask;
+  service: ResidenceClient;
+  disabled: boolean;
+  mutate: (
+    write: () => Promise<import('../../../../packages/client-core/src/residence').ResidenceTask>,
+    message: string,
+  ) => Promise<boolean>;
+}) {
+  const [note, setNote] = useState('');
+  return (
+    <Box>
+      <Input
+        label="Ghi chú xác nhận chỗ ở trên kênh chính thức"
+        value={note}
+        onChange={setNote}
+        disabled={disabled}
+      />
+      <Action
+        disabled={disabled || !note.trim() || note.length > 1000}
+        onPress={() =>
+          void mutate(
+            () => service.confirmAccommodation(task, note, null),
+            'Đã ghi nhận xác nhận chỗ ở.',
+          )
+        }
+      >
+        Ghi nhận xác nhận chỗ ở
+      </Action>
     </Box>
   );
 }

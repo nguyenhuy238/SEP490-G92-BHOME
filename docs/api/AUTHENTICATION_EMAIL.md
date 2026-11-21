@@ -1,7 +1,43 @@
 # Email xác thực và tài khoản
 
 Tiếp nối [Gmail SMTP](GMAIL_SMTP.md), dùng cùng MailKit, notification inbox/outbox,
-lease/history và worker JOB-04. Không thêm bảng/migration hoặc gửi mật khẩu dạng rõ.
+lease/history và worker JOB-04. Không thêm bảng/migration. Reset/invitation dùng
+token một lần. Endpoint cấp mật khẩu Staff hiện có gửi credential qua email theo
+quyết định nghiệp vụ; chỉ hash trong User và envelope Data Protection trong outbox.
+Không lưu mật khẩu dạng rõ vào DB/audit/log hoặc trả về Owner.
+
+## Cập nhật template 20/11/2026
+
+Layout v2 dùng chung HTML table/inline CSS, màu xanh BHOME, footer thống nhất,
+UTF-8 và plain-text alternative. CTA và liên kết dự phòng giữ nguyên URL chính
+xác trong `href`; HTML không in token/URL dài thành nội dung nhìn thấy.
+Mobile custom scheme nằm ở liên kết có nhãn, không lặp trong body. Plain text
+vẫn chứa đường dẫn đầy đủ để thao tác trên client không hiển thị HTML.
+Không thêm short-link subsystem, redirect, bảng, token hoặc domain mới.
+
+Email cấp mật khẩu Staff có subject `BHOME | Thông tin tài khoản nhân viên`,
+khối credential riêng và hướng dẫn đổi tại Hồ sơ cá nhân. Nút đăng nhập chỉ xuất
+hiện khi `StaffPortalUrl` đã cấu hình và trusted; không dùng Owner portal làm
+fallback cho Staff. Luồng tạo/kích hoạt Staff do member khác phụ trách theo
+xác nhận người dùng, không đổi trong bản sửa template này. Invitation cũ vẫn dùng được.
+
+Thông tin action/credential bổ sung vào message nội bộ, không đổi JSON contract
+HTTP. Envelope protected đã lưu trước thay đổi vẫn được worker hiện tại giải mã.
+Lỗi socket trước submit retry an toàn; sau khi bắt đầu submit giữ PendingReview.
+Xem [audit và bằng chứng](../development/BHOME_EMAIL_AUDIT_2026-11-20.md).
+
+## Tích hợp develop 21/11/2026 — Staff active khi tạo
+
+Đã tích hợp quyết định BF-02/UC-08 từ `develop` (`430dacd2`, `3f77773b`):
+Owner tạo Staff với `IsActive=true`, `EmailConfirmed=true`, không tạo pending
+invitation. Mật khẩu ban đầu là giá trị ngẫu nhiên không được tiết lộ; tạo tài
+khoản chưa tự gửi email. Owner dùng `POST /api/v1/staff/{id}/issue-password`
+để cấp mật khẩu 12 ký tự qua protected outbox; client không nhận password trong
+response. Staff cũ chưa xác nhận cũng được cấp credential bằng luồng này;
+activation, password hash, revoke sessions và queue cùng transaction.
+Template v2 tiếp tục render credential riêng; không quay lại cơ chế invitation
+cho Staff mới. Endpoint invitation và kiểm thử token lifecycle vẫn được giữ
+cho lời mời cũ. Điều kiện kích hoạt Tenant không thay đổi.
 
 ## Cấu hình sử dụng
 

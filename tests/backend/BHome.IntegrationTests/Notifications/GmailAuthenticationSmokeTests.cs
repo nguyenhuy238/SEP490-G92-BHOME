@@ -92,9 +92,10 @@ public sealed class GmailAuthenticationSmokeTests(Compact24Fixture fixture, ITes
                     Assert.True(message.TextBody.Contains(verification ? "bhome://confirm-email?" : "bhome://reset-password?", StringComparison.Ordinal), "Native callback must remain available alongside the browser action.");
                     Assert.True(html.Contains(">" + WebUtility.HtmlEncode(label) + "</a>", StringComparison.Ordinal), "Received HTML must contain the named authentication action.");
                     Assert.True(html.Contains("href=\"" + WebUtility.HtmlEncode(link) + "\"", StringComparison.Ordinal), "HTML action must preserve the exact trusted callback and token.");
-                    Assert.True(visible.Contains(link, StringComparison.Ordinal), "Received HTML must expose the complete URL as copyable text even if href is removed.");
-                    Assert.True(visible.IndexOf(link, StringComparison.Ordinal) < visible.IndexOf("Xin chào", StringComparison.Ordinal), "Authentication URL must precede repeated body content.");
-                    output.WriteLine("AUTH_HTML_LINK_CONFIRMED: named action and complete copyable URL received before repeated content; link credentials omitted.");
+                    Assert.False(visible.Contains(link, StringComparison.Ordinal), "Received HTML must keep the full link in anchors only.");
+                    Assert.True(visible.Contains("liên kết dự phòng", StringComparison.Ordinal), "Received HTML must provide a labelled fallback.");
+                    Assert.True(visible.IndexOf("Xin chào", StringComparison.Ordinal) < visible.IndexOf(label, StringComparison.Ordinal), "Greeting must precede the action.");
+                    output.WriteLine("AUTH_HTML_LINK_CONFIRMED: exact trusted action, labelled fallback and hidden link credentials received.");
                     var values = QueryHelpers.ParseQuery(uri!.Fragment.TrimStart('#'));
                     output.WriteLine("AUTH_INBOX_CONFIRMED: exact " + eventType + " test message found; no unrelated mail fetched.");
                     if (verification)

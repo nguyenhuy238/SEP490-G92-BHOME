@@ -1,0 +1,73 @@
+{
+  "Date": "2026-11-20",
+  "Baseline": "d048cec7",
+  "Candidate": "Uncommitted workspace changes on member/QHuy",
+  "Environment": "Windows; .NET 8.0.427; Node 22; Docker PostgreSQL 16; dedicated loopback Mailpit v1.27.10; repository MinIO/LibreOffice fixtures",
+  "BackendCommand": "dotnet test src/backend/BHome.sln -c Release --no-build --settings tests/backend/ci.runsettings --logger trx -m:1",
+  "BackendExitCode": 0,
+  "BackendProjects": [
+    {
+      "Project": "bhome.application.unittests",
+      "Total": 650,
+      "Passed": 650,
+      "Failed": 0,
+      "Skipped": 0,
+      "Trx": "Admin_DESKTOP-FOVLAML_2026-11-20_22_05_48.trx"
+    },
+    {
+      "Project": "bhome.domain.unittests",
+      "Total": 115,
+      "Passed": 115,
+      "Failed": 0,
+      "Skipped": 0,
+      "Trx": "Admin_DESKTOP-FOVLAML_2026-11-20_22_05_50.trx"
+    },
+    {
+      "Project": "bhome.integrationtests",
+      "Total": 1343,
+      "Passed": 1315,
+      "Failed": 0,
+      "Skipped": 28,
+      "Trx": "Admin_DESKTOP-FOVLAML_2026-11-20_22_06_03.trx"
+    },
+    {
+      "Project": "bhome.infrastructure.unittests",
+      "Total": 100,
+      "Passed": 100,
+      "Failed": 0,
+      "Skipped": 0,
+      "Trx": "Admin_DESKTOP-FOVLAML_2026-11-20_22_20_48.trx"
+    },
+    {
+      "Project": "bhome.planintegrationtests",
+      "Total": 142,
+      "Passed": 0,
+      "Failed": 0,
+      "Skipped": 142,
+      "Trx": "Admin_DESKTOP-FOVLAML_2026-11-20_22_20_58.trx"
+    },
+    {
+      "Project": "bhome.digitalsigning.unittests",
+      "Total": 41,
+      "Passed": 41,
+      "Failed": 0,
+      "Skipped": 0,
+      "Trx": "Admin_DESKTOP-FOVLAML_2026-11-20_22_22_00.trx"
+    }
+  ],
+  "RawBackendEvidenceDirectory": ".tools/email-audit/results/full-backend/",
+  "BackendLog": ".tools/email-audit/full-backend.log",
+  "OwnerWebPassed": 826,
+  "MobilePassed": 1418,
+  "SeparateStaffPasswordQaPassed": 5,
+  "FocusedEmailPostgres18Passed": 150,
+  "RealMailpitAndEmailBrowserTests": "All three new opt-in tests passed again in the full PostgreSQL 16 run",
+  "NotVerified": [
+    "GitHub Actions",
+    "Real sender SMTP inbox and SPF/DKIM/DMARC",
+    "Gmail/Outlook native clients and Android/iPhone App Links",
+    "Deployment Data Protection key-ring persistence/protection",
+    "New Staff creation handled by another member"
+  ],
+  "Notes": "Skipped tests and CI-filtered QA cases are not counted as passes. All email test recipients and databases were synthetic; no real-user emails were sent."
+}

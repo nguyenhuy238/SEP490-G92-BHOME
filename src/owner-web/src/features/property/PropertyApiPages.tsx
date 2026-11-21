@@ -1175,7 +1175,33 @@ export function PropertyApiPage({
                 <>
                   {field('name', 'Tên tài sản')}
                   {field('code', 'Mã tài sản', false)}
-                  {field('category', 'Nhóm tài sản', false)}
+                  <TextField
+                    select
+                    label="Nhóm tài sản"
+                    value={values.category ?? ''}
+                    onChange={(event) =>
+                      setValues((old) => ({ ...old, category: event.target.value }))
+                    }
+                  >
+                    {![
+                      'Furniture',
+                      'ElectricalEquipment',
+                      'FireSafetyEquipment',
+                      'SafetyEquipment',
+                      'TechnicalEquipment',
+                      'Other',
+                    ].includes(values.category ?? '') && (
+                      <MenuItem value={values.category ?? ''}>
+                        {values.category || 'Chọn nhóm tài sản'}
+                      </MenuItem>
+                    )}
+                    <MenuItem value="Furniture">Nội thất</MenuItem>
+                    <MenuItem value="ElectricalEquipment">Thiết bị điện</MenuItem>
+                    <MenuItem value="FireSafetyEquipment">Thiết bị PCCC</MenuItem>
+                    <MenuItem value="SafetyEquipment">Thiết bị an toàn</MenuItem>
+                    <MenuItem value="TechnicalEquipment">Thiết bị kỹ thuật</MenuItem>
+                    <MenuItem value="Other">Khác</MenuItem>
+                  </TextField>
                   {!editing && (
                     <>
                       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>

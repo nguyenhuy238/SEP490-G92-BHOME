@@ -46,6 +46,8 @@ public sealed class ResidenceTasksController(OperationsService service) : Contro
     [HttpGet("{contractId:guid}/{residentId:guid}")] public Task<ResidenceTaskView> Get(Guid contractId, Guid residentId, CancellationToken t) => service.ResidenceAsync(contractId, residentId, t);
     [HttpPut("{contractId:guid}/{residentId:guid}")] public Task<ResidenceTaskView> Update(Guid contractId, Guid residentId, ResidenceUpdate input, CancellationToken t) => service.UpdateResidenceAsync(contractId, residentId, input, t);
     [HttpPost("{contractId:guid}/{residentId:guid}/owner-confirmation")] public Task<ResidenceTaskView> Confirm(Guid contractId, Guid residentId, ResidenceOwnerConfirmation input, CancellationToken t) => service.ConfirmResidenceAsync(contractId, residentId, input, t);
+    [HttpPost("{contractId:guid}/{residentId:guid}/accommodation-confirmation")]
+    public Task<ResidenceTaskView> Accommodation(Guid contractId, Guid residentId, ResidenceAccommodationConfirmation input, CancellationToken t) => service.ConfirmAccommodationAsync(contractId, residentId, input, t);
     [HttpPut("{contractId:guid}/{residentId:guid}/evidence"), Consumes("image/png", "image/jpeg"), RequestSizeLimit(5 * 1024 * 1024)]
     public Task<ResidenceTaskView> Upload(Guid contractId, Guid residentId, CancellationToken t) => service.UploadResidenceEvidenceAsync(contractId, residentId, Request.Body, t);
     [HttpGet("{contractId:guid}/{residentId:guid}/evidence")]

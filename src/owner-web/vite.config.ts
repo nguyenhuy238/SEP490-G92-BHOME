@@ -56,7 +56,10 @@ export default defineConfig(({ mode, command }) => {
       port: https ? 5176 : 5173,
       strictPort: true,
       https: https ? { cert: readFileSync(certificate), key: readFileSync(key) } : undefined,
-      proxy: { '/api': { target: target.origin, changeOrigin: true, secure: true, agent } },
+      proxy: {
+        '/api': { target: target.origin, changeOrigin: true, secure: true, agent },
+        '/open/sign-contract': { target: target.origin, changeOrigin: true, secure: true, agent },
+      },
     },
   };
 });

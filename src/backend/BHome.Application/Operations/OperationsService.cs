@@ -147,7 +147,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     {
         if (!user.IsInRole(Roles.Tenant)) throw OperationsException.Forbidden();
         Validate(input);
-        if (input.ActualResidenceFrom == default || input.ResultAt is { } result && result > Now.AddMinutes(5) ||
+        if (input.ActualResidenceFrom == default || input.ActualResidenceFrom > Today || input.ResultAt is { } result && result > Now.AddMinutes(5) ||
             input.Status == "Completed" && input.ResultAt is null)
             throw OperationsException.Invalid("invalid_residence_state");
         _ = await repository.ResidenceAsync(contractId, residentId, Actor, t) ?? throw OperationsException.Missing();
@@ -165,12 +165,22 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
             input with { Note = input.Note.Trim() }, Now, t);
     }
 
+    public async Task<ResidenceTaskView> ConfirmAccommodationAsync(Guid contractId, Guid residentId,
+        ResidenceAccommodationConfirmation input, CancellationToken t)
+    {
+        if (!user.IsInRole(Roles.Owner)) throw OperationsException.Forbidden();
+        Validate(input);
+        if (string.IsNullOrWhiteSpace(input.Note) || string.IsNullOrWhiteSpace(input.ExpectedReference))
+            throw OperationsException.Invalid("confirmation_note_and_reference_required");
+        return await repository.ConfirmAccommodationAsync(Actor, contractId, residentId,
+            input with { Note = input.Note.Trim() }, Now, t);
+    }
+
     public async Task<ResidenceTaskView> UploadResidenceEvidenceAsync(Guid contractId, Guid residentId,
         Stream input, CancellationToken t)
     {
         if (!user.IsInRole(Roles.Tenant)) throw OperationsException.Forbidden();
-        _ = await repository.ResidenceAsync(contractId, residentId, Actor, t) ?? throw OperationsException.Missing();
-        var previous = await repository.ResidenceEvidenceAsync(contractId, residentId, Actor, t);
+        var current = await repository.ResidenceAsync(contractId, residentId, Actor, t) ?? throw OperationsException.Missing();
         var content = await ReadImageAsync(input, t);
         var type = files.ValidateImage(content);
         var key = $"residence/{contractId:N}/{residentId:N}/{Guid.NewGuid():N}";
@@ -178,8 +188,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
         try
         {
             var result = await repository.AttachResidenceEvidenceAsync(Actor, contractId, residentId,
-                new(key, type, content.LongLength), Now, t);
-            if (previous is not null) await files.DeleteAsync(previous.ObjectKey, t);
+                new(key, type, content.LongLength, current.Reference), Now, t);
             return result;
         }
         catch

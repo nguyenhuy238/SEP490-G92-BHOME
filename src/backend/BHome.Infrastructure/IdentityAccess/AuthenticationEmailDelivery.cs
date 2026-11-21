@@ -40,7 +40,7 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
     public bool IsDurable => true;
     private sealed record Envelope(AuthenticationEmailRequest Request);
     internal sealed record Content(string Destination, string Title, string Body, string? ActionUrl,
-        IReadOnlyList<EmailAttachment>? Attachments = null);
+        IReadOnlyList<EmailAttachment>? Attachments = null, string? MobileActionUrl = null, EmailCredentials? Credentials = null);
 
     internal static string CallbackLink(string callback, string userName, string token) =>
         callback + (new Uri(callback).Scheme == "bhome" ? "?" : "#") +
@@ -120,11 +120,12 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
                 staff.PasswordHash is null || users.PasswordHasher.VerifyHashedPassword(staff, staff.PasswordHash, request.Token) == PasswordVerificationResult.Failed)
                 return null;
             var staffName = await db.Users.Where(u => u.Id == recipient).Select(u => EF.Property<string>(u, "full_name")).SingleAsync(t);
-            var credentialBody = $"Xin chào {staffName ?? "bạn"},\n\nOwner đã thiết lập mật khẩu mới cho tài khoản Staff của bạn.\n" +
-                $"Tài khoản: {staff.UserName}\nEmail: {request.Destination}\nMật khẩu mới: {request.Token}\n\n" +
-                "Bạn có thể đăng nhập ứng dụng BHOME bằng mật khẩu này và đổi mật khẩu tại Hồ sơ cá nhân. " +
-                "Không chia sẻ mật khẩu qua tin nhắn hoặc cho người khác. Nếu không nhận ra thao tác này, hãy liên hệ Owner.";
-            return new(request.Destination, "Mật khẩu mới cho tài khoản Staff BHOME", credentialBody, null);
+            var credentialBody = $"Xin chào {staffName ?? "bạn"},\n\nNgười quản lý đã cấp mật khẩu mới cho tài khoản Nhân viên vận hành của bạn trên BHOME.";
+            var portal = options.Value.StaffPortalUrl;
+            if (!string.IsNullOrWhiteSpace(portal) && !options.Value.Trusted(portal, environment.IsDevelopment()))
+                throw new ChannelDeliveryException("authentication_email_url_invalid");
+            return new(request.Destination, "Thông tin tài khoản nhân viên", credentialBody,
+                string.IsNullOrWhiteSpace(portal) ? null : portal, Credentials: new(request.Destination, request.Token));
         }
         var verification = request.Kind == "EmailConfirmation";
         var hash = IdentitySecurityStore.Hash(request.Token);
@@ -162,7 +163,6 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
         var body = $"Xin chào {name ?? "bạn"},\n\n" + (verification ? "Vui lòng xác nhận địa chỉ email đã đăng ký với BHOME bằng liên kết trong email này. Sau khi xác nhận, bạn có thể yêu cầu đặt lại mật khẩu." :
             reset ? "BHOME nhận được yêu cầu đặt lại mật khẩu của bạn." : "Bạn được mời sử dụng tài khoản BHOME. Hãy thiết lập mật khẩu trước khi đăng nhập trên ứng dụng BHOME.") +
             $"\nTài khoản: {request.Destination}\nLiên kết chỉ dùng một lần, hết hạn lúc {expiry:HH:mm dd/MM/yyyy} (giờ Việt Nam).\n\nNếu không yêu cầu thao tác này, hãy bỏ qua email hoặc liên hệ Owner. Không chia sẻ liên kết này.";
-        if (nativeLink is not null) body += "\n\nNếu đã cài ứng dụng BHOME, bạn cũng có thể mở liên kết ứng dụng này:\n" + nativeLink;
         IReadOnlyList<EmailAttachment>? attachments = null;
         if (request.Kind == "TenantInvitation")
         {
@@ -177,6 +177,6 @@ internal sealed class AuthenticationEmailDelivery(Compact24DbContext db, Compact
                 body = confirmed.Body + "\nHãy dùng liên kết trong email này để tự đặt mật khẩu trước khi đăng nhập. Không chia sẻ liên kết này.\n\n" + body;
             }
         }
-        return new(request.Destination, title, body, link, attachments);
+        return new(request.Destination, title, body, link, attachments, nativeLink);
     }
 }

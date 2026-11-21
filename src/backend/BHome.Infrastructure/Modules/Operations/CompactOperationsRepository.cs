@@ -311,10 +311,12 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             FROM residents r,contracts c WHERE cr.contract_id=@contract AND cr.resident_id=@resident
               AND r.id=cr.resident_id AND r.user_id=@actor AND c.id=cr.contract_id AND c.status=3
               AND @actual>=cr.residence_from
+              AND (@reference::text IS NULL OR md5(cr.history::text)=@reference)
               AND (COALESCE(cr.registration_status,'Pending')<>'Completed' OR @status='Completed')
               AND (@status<>'Completed' OR (cr.registration_evidence_key IS NOT NULL AND @result IS NOT NULL))
             """);
         command.Parameters.AddWithValue("actual", input.ActualResidenceFrom); command.Parameters.AddWithValue("status", input.Status);
+        command.Parameters.AddWithValue("reference", NpgsqlDbType.Text, (object?)input.ExpectedReference ?? DBNull.Value);
         command.Parameters.AddWithValue("result", NpgsqlDbType.TimestampTz, (object?)input.ResultAt ?? DBNull.Value); command.Parameters.AddWithValue("actor", actorId);
         command.Parameters.AddWithValue("now", now); command.Parameters.AddWithValue("note", NpgsqlDbType.Text, (object?)input.Note ?? DBNull.Value);
         command.Parameters.AddWithValue("contract", contractId); command.Parameters.AddWithValue("resident", residentId);
@@ -335,6 +337,29 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         if (await command.ExecuteNonQueryAsync(t) != 1) throw OperationsException.Conflict("residence_not_ready_for_confirmation");
     });
 
+    public Task<ResidenceTaskView> ConfirmAccommodationAsync(Guid actorId, Guid contractId, Guid residentId,
+        ResidenceAccommodationConfirmation input, DateTimeOffset now, CancellationToken t) => ResidenceMutation(actorId, contractId, residentId, now, t, async () =>
+    {
+        await using var command = Command("""
+            UPDATE contract_residents cr SET history=cr.history||jsonb_build_array(jsonb_build_object(
+                'action','AccommodationConfirmed','actorId',@actor,'occurredAt',@now,'note',@note,
+                'actualResidenceFrom',cr.actual_residence_from,'registrationDeadline',@deadline))
+            FROM contracts c WHERE c.id=cr.contract_id AND c.status=3
+                AND cr.contract_id=@contract AND cr.resident_id=@resident
+                AND cr.actual_residence_from IS NOT NULL AND cr.actual_move_out_date IS NULL
+                AND (@deadline::date IS NULL OR @deadline>=cr.actual_residence_from)
+                AND md5(cr.history::text)=@reference
+                AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(cr.history) h
+                    WHERE h->>'action'='AccommodationConfirmed'
+                    AND h->>'actualResidenceFrom'=cr.actual_residence_from::text)
+            """);
+        command.Parameters.AddWithValue("actor", actorId); command.Parameters.AddWithValue("now", now);
+        command.Parameters.AddWithValue("note", input.Note); command.Parameters.AddWithValue("reference", input.ExpectedReference);
+        command.Parameters.AddWithValue("deadline", NpgsqlDbType.Date, (object?)input.RegistrationDeadline ?? DBNull.Value);
+        command.Parameters.AddWithValue("contract", contractId); command.Parameters.AddWithValue("resident", residentId);
+        if (await command.ExecuteNonQueryAsync(t) != 1) throw OperationsException.Conflict("accommodation_state_changed_or_not_applicable");
+    });
+
     public Task<ResidenceTaskView> AttachResidenceEvidenceAsync(Guid actorId, Guid contractId, Guid residentId,
         OperationsFile file, DateTimeOffset now, CancellationToken t) => ResidenceMutation(actorId, contractId, residentId, now, t, async () =>
     {
@@ -342,11 +367,13 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
             UPDATE contract_residents cr SET registration_evidence_key=@key,
                 owner_confirmed_by_user_id=NULL,owner_confirmed_at=NULL,
                 history=cr.history||jsonb_build_array(jsonb_build_object('action','EvidenceUploaded','actorId',@actor,
-                  'occurredAt',@now,'contentType',@type,'length',@length))
+                  'occurredAt',@now,'contentType',@type,'length',@length,'objectKey',@key))
             FROM residents r,contracts c WHERE cr.contract_id=@contract AND cr.resident_id=@resident
               AND r.id=cr.resident_id AND r.user_id=@actor AND c.id=cr.contract_id AND c.status=3
+              AND (@reference::text IS NULL OR md5(cr.history::text)=@reference)
             """);
         command.Parameters.AddWithValue("key", file.ObjectKey); command.Parameters.AddWithValue("actor", actorId); command.Parameters.AddWithValue("now", now);
+        command.Parameters.AddWithValue("reference", NpgsqlDbType.Text, (object?)file.ExpectedReference ?? DBNull.Value);
         command.Parameters.AddWithValue("type", file.ContentType); command.Parameters.AddWithValue("length", file.Length);
         command.Parameters.AddWithValue("contract", contractId); command.Parameters.AddWithValue("resident", residentId);
         if (await command.ExecuteNonQueryAsync(t) != 1) throw OperationsException.Missing();
@@ -899,7 +926,8 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
         r.GetString(4), r.GetString(5), r.GetInt16(6) == 0 ? "Representative" : "CoOccupant", r.IsDBNull(7) ? null : r.GetGuid(7),
         r.GetFieldValue<DateOnly>(8), r.IsDBNull(9) ? null : r.GetFieldValue<DateOnly>(9), r.GetString(10), r.GetBoolean(11),
         r.IsDBNull(12) ? null : r.GetFieldValue<DateTimeOffset>(12), !r.IsDBNull(13), r.IsDBNull(14) ? null : r.GetFieldValue<DateTimeOffset>(14),
-        ParseResidenceHistory(r.GetString(15)));
+        ParseResidenceHistory(r.GetString(15)), r.GetString(16), r.GetBoolean(17),
+        r.IsDBNull(18) ? null : r.GetFieldValue<DateOnly>(18), r.GetBoolean(19));
 
     private static IReadOnlyList<ResidenceHistoryView> ParseResidenceHistory(string json)
     {
@@ -962,7 +990,12 @@ internal sealed class CompactOperationsRepository(Compact24DbContext db, UserMan
     private const string ResidenceSelect = """
         SELECT cr.contract_id,cr.resident_id,l.id,rm.id,rm.room_number,r.display_label,cr.resident_role,r.user_id,
           cr.residence_from,cr.actual_residence_from,COALESCE(cr.registration_status,'Pending'),
-          cr.registration_evidence_key IS NOT NULL,cr.registration_result_at,cr.owner_confirmed_by_user_id,cr.owner_confirmed_at,cr.history::text
+          cr.registration_evidence_key IS NOT NULL,cr.registration_result_at,cr.owner_confirmed_by_user_id,cr.owner_confirmed_at,cr.history::text,
+          md5(cr.history::text), EXISTS(SELECT 1 FROM jsonb_array_elements(cr.history) h
+              WHERE h->>'action'='AccommodationConfirmed' AND h->>'actualResidenceFrom'=cr.actual_residence_from::text),
+          (SELECT (h.value->>'registrationDeadline')::date FROM jsonb_array_elements(cr.history) WITH ORDINALITY h(value,seq)
+              WHERE h.value->>'action'='AccommodationConfirmed' AND h.value->>'actualResidenceFrom'=cr.actual_residence_from::text ORDER BY h.seq DESC LIMIT 1),
+          c.status=3 AND cr.actual_residence_from IS NOT NULL AND cr.actual_move_out_date IS NULL
         FROM contract_residents cr JOIN contracts c ON c.id=cr.contract_id JOIN rooms rm ON rm.id=c.room_id
         JOIN locations l ON l.id=rm.location_id JOIN residents r ON r.id=cr.resident_id
         """;

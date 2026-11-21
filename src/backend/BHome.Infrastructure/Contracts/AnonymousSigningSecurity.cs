@@ -31,6 +31,6 @@ internal sealed class AnonymousSigningSecurity(IOptions<AnonymousSigningOptions>
         try { return Convert.ToHexString(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes($"internal-signing-otp-v1:{invitationId:N}:{tokenHash}:{otp}"))); }
         finally { CryptographicOperations.ZeroMemory(key); }
     }
-    public async Task SendAsync(string email, string eventKey, string title, string body, CancellationToken t) =>
-        _ = await channel.SendAsync(new(eventKey, "EMAIL", email, "InternalContractSigning", title, body), t);
+    public async Task SendAsync(string email, string eventKey, string title, string body, CancellationToken t, string? actionUrl = null) =>
+        _ = await channel.SendAsync(new(eventKey, "EMAIL", email, "CONTRACT_SIGNING_INVITATION", title, body, actionUrl), t);
 }

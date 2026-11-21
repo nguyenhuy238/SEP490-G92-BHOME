@@ -47,7 +47,9 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal("STAFF_PASSWORD_ISSUED", mail.EventType);
         Assert.Equal(email, mail.Destination);
         Assert.Null(mail.ActionUrl);
-        var password = mail.Body.Split('\n').Single(line => line.StartsWith("Mật khẩu mới: ", StringComparison.Ordinal))["Mật khẩu mới: ".Length..].Trim();
+        var credentials = Assert.IsType<EmailCredentials>(mail.Credentials);
+        Assert.Equal(email, credentials.Account);
+        var password = credentials.Password;
         Assert.Equal(12, password.Length);
         Assert.Equal(HttpStatusCode.OK,
             (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password })).StatusCode);
@@ -83,11 +85,13 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal("STAFF_PASSWORD_ISSUED", mail.EventType);
         Assert.Equal(w.Staff.Email, mail.Destination);
         Assert.Null(mail.ActionUrl);
-        Assert.Contains("Tài khoản:", mail.Body);
-        Assert.Contains("Email: " + w.Staff.Email, mail.Body);
-        Assert.Contains("Hồ sơ cá nhân", mail.Body);
+        Assert.Equal(w.Staff.Email, mail.Credentials!.Account);
+        using var mime = new MimeKit.MimeMessage { Body = MailKitEmailSender.BuildBody(mail) };
+        Assert.Contains("Tài khoản:", mime.TextBody);
+        Assert.Contains("Hồ sơ cá nhân", mime.TextBody);
         Assert.DoesNotContain("reset-password", mail.Body);
-        var password = mail.Body.Split('\n').Single(x => x.StartsWith("Mật khẩu mới: ", StringComparison.Ordinal))["Mật khẩu mới: ".Length..].Trim();
+        var password = mail.Credentials.Password;
+        Assert.DoesNotContain(password, mail.Body);
         Assert.Equal(12, password.Length);
         Assert.Contains(password, char.IsUpper);
         Assert.Contains(password, char.IsLower);
@@ -185,10 +189,11 @@ public sealed partial class Compact24NotificationMvpTests
         var delivery = await AuthenticationDelivery(host, w.Tenants[0].Id);
         await SendEmail(host, delivery);
         var mail = Assert.Single(probe.Messages); Assert.StartsWith("https://owner.example.invalid/reset-password#", mail.ActionUrl);
-        Assert.Contains("bhome://reset-password?", mail.Body);
+        Assert.StartsWith("bhome://reset-password?", mail.MobileActionUrl);
+        Assert.DoesNotContain("bhome://", mail.Body);
         var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));
         var token = query["token"].ToString(); Assert.NotEmpty(token);
-        var nativeQuery = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.Body.Split('\n').Last()).Query);
+        var nativeQuery = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.MobileActionUrl!).Query);
         Assert.Equal(token, nativeQuery["token"].ToString());
         Assert.Equal(query["userName"].ToString(), nativeQuery["userName"].ToString());
         await using var scope = host.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
@@ -305,8 +310,9 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Null(mail.ActionUrl);
         Assert.DoesNotContain("accept-invitation", mail.Body);
         Assert.DoesNotContain("reset-password", mail.Body);
-        var passwordLine = Assert.Single(mail.Body.Split('\n'), line => line.Contains(": ") && line.Contains("kh", StringComparison.OrdinalIgnoreCase) && line.Contains("i:", StringComparison.OrdinalIgnoreCase));
-        var password = passwordLine[(passwordLine.IndexOf(": ", StringComparison.Ordinal) + 2)..].Trim();
+        var credentials = Assert.IsType<EmailCredentials>(mail.Credentials);
+        Assert.Equal(email, credentials.Account);
+        var password = credentials.Password;
         Assert.Equal(12, password.Length);
         var login = await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
@@ -319,6 +325,88 @@ public sealed partial class Compact24NotificationMvpTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await relogin.PostAsJsonAsync("/api/v1/auth/login", new { email, password })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await relogin.PostAsJsonAsync("/api/v1/auth/login", new { email, password = changedPassword })).StatusCode);
     }
+    [CompactPostgresFact]
+    public async Task LegacyStaffInvitationsPreservePendingSetupAndAreOneTime()
+    {
+        var w = await Seed(); var probe = new SmtpProbe(); using var host = AuthenticationHost(probe);
+        using var owner = await Client(w.Owner, host);
+        var email = Guid.NewGuid().ToString("N") + "@example.invalid";
+        host.Services.GetRequiredService<IOptions<EmailOptions>>().Value.AllowedRecipients = [email];
+        // Compatibility fixture for invitations issued before direct active Staff provisioning.
+        await using var legacyScope = host.Services.CreateAsyncScope();
+        var legacyDb = legacyScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var legacyUser = new BHome.Infrastructure.Persistence.ApplicationUser { Id = Guid.NewGuid(), UserName = email, Email = email, EmailConfirmed = false };
+        AccountInvitations.MarkPendingSetup(legacyDb, legacyUser, DateTimeOffset.UtcNow);
+        await WorkflowTestUsers.CreateAsync(legacyScope.ServiceProvider, legacyUser, "Staff", Password);
+        var staff = new { UserId = legacyUser.Id };
+        using var beforeInvitation = host.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await beforeInvitation.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await beforeInvitation.PostAsJsonAsync("/api/v1/auth/request-email-verification", new { userName = email })).StatusCode);
+        await using var pendingScope = host.Services.CreateAsyncScope();
+        var pendingDb = pendingScope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        Assert.False(await pendingDb.Database.SqlQuery<bool>($"SELECT EXISTS(SELECT 1 FROM notifications WHERE event_data->>'recipient'={staff.UserId.ToString()} AND event_data->>'authenticationKind'='EmailConfirmation') AS \"Value\"").SingleAsync());
+        Assert.Equal(1, await pendingDb.Users.CountAsync(u => u.NormalizedEmail == email.ToUpperInvariant()));
+        var response = await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null); response.EnsureSuccessStatusCode();
+        Assert.Equal("Queued", (await response.Content.ReadFromJsonAsync<TenantInvitationResult>())!.DeliveryState);
+        var repeated = await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null); repeated.EnsureSuccessStatusCode();
+        Assert.Equal("ExistingInvitationPreserved", (await repeated.Content.ReadFromJsonAsync<TenantInvitationResult>())!.DeliveryState);
+        using var anonymous = host.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password })).StatusCode);
+        var delivery = await AuthenticationDelivery(host, staff.UserId); await SendEmail(host, delivery);
+        var mail = Assert.Single(probe.Messages); Assert.Contains("Staff", mail.Title);
+        Assert.DoesNotContain(Password, mail.Body); Assert.StartsWith("https://owner.example.invalid/accept-invitation#", mail.ActionUrl);
+        Assert.StartsWith("bhome://accept-invitation?", mail.MobileActionUrl);
+        Assert.DoesNotContain("bhome://", mail.Body);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(mail.ActionUrl!).Fragment.TrimStart('#'));
+        var accept = new AcceptInvitationRequest(query["userName"].ToString(), query["token"].ToString(), "Synthetic!Invited-725");
+        const string validationUrl = "/api/v1/auth/accept-invitation/validate";
+        async Task<InvitationValidationResult> Validate(string token) =>
+            (await (await anonymous.PostAsJsonAsync(validationUrl, new InvitationValidationRequest(token))).Content.ReadFromJsonAsync<InvitationValidationResult>())!;
+        var validated = await Validate(accept.Token); Assert.Equal("Valid", validated.Status); Assert.Equal(email, validated.Email);
+        await pendingDb.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET is_active=false WHERE id={staff.UserId}");
+        Assert.Equal("Revoked", (await Validate(accept.Token)).Status);
+        await pendingDb.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET is_active=true WHERE id={staff.UserId}");
+        Assert.Equal("Invalid", (await Validate("tampered")).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept with { UserName = "another@example.invalid" })).StatusCode);
+        // Failed password validation rolls back the reset and does not consume the invitation.
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept with { NewPassword = "lowercaseonlylong" })).StatusCode);
+        Assert.Equal("Valid", (await Validate(accept.Token)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept with { Token = "invalid" })).StatusCode);
+        await pendingDb.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET reset_expires_at={DateTimeOffset.UtcNow.AddSeconds(-1)} WHERE id={staff.UserId}");
+        Assert.Equal("Expired", (await Validate(accept.Token)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
+        (await owner.PostAsync($"/api/v1/staff/{staff.UserId}/invitation", null)).EnsureSuccessStatusCode();
+        await SendEmail(host, await AuthenticationDelivery(host, staff.UserId));
+        Assert.Equal(2, probe.Messages.Count); Assert.All(probe.Messages, m => Assert.Equal(email, m.Destination));
+        var fresh = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(probe.Messages[1].ActionUrl!).Fragment.TrimStart('#'));
+        var oldAccept = accept;
+        accept = accept with { Token = fresh["token"].ToString() };
+        Assert.NotEqual(oldAccept.Token, accept.Token);
+        Assert.Equal("Invalid", (await Validate(oldAccept.Token)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", oldAccept)).StatusCode);
+        var concurrent = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", new { token = accept.Token, newPassword = accept.NewPassword, role = "Owner", locationId = Guid.NewGuid() })));
+        Assert.Single(concurrent, r => r.StatusCode == HttpStatusCode.NoContent);
+        Assert.Single(concurrent, r => r.StatusCode == HttpStatusCode.BadRequest);
+        Assert.Equal("AlreadyActivated", (await Validate(accept.Token)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsJsonAsync("/api/v1/auth/accept-invitation", accept)).StatusCode);
+        var login = await anonymous.PostAsJsonAsync("/api/v1/auth/login", new { email, password = accept.NewPassword });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var session = await TestAuthResponse.ReadAsync(login.Content);
+        anonymous.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
+        Assert.Equal("[]", await anonymous.GetStringAsync("/api/v1/capture/locations"));
+        Assert.Equal(HttpStatusCode.Forbidden, (await anonymous.GetAsync("/api/v1/staff")).StatusCode);
+        const string changedPassword = "Synthetic!StaffChanged-826";
+        var changed = await anonymous.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = accept.NewPassword, newPassword = changedPassword });
+        changed.EnsureSuccessStatusCode();
+        using var relogin = host.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await relogin.PostAsJsonAsync("/api/v1/auth/login", new { email, password = accept.NewPassword })).StatusCode);
+        var changedLogin = await relogin.PostAsJsonAsync("/api/v1/auth/login", new { email, password = changedPassword });
+        Assert.Equal(HttpStatusCode.OK, changedLogin.StatusCode);
+        anonymous.DefaultRequestHeaders.Authorization = new("Bearer", (await TestAuthResponse.ReadAsync(changedLogin.Content)).AccessToken);
+        await pendingDb.Database.ExecuteSqlInterpolatedAsync($"UPDATE users SET is_active=false WHERE id={staff.UserId}");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
     [CompactPostgresFact]
     public async Task AuthenticationTenantProvisionIsOwnerScopedAndSmtpFailureKeepsAccountAndEncryptedGrant()
     {

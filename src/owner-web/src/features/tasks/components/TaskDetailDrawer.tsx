@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { TaskInspectionReview } from '../../property/EquipmentInspectionsPanel';
 import {
   Alert,
   Box,
@@ -180,6 +181,7 @@ export function TaskDetailDrawer({
         {!!detail.error && <Button onClick={() => void detail.refetch()}>Tải lại công việc</Button>}
         {task && (
           <>
+            <TaskInspectionReview taskId={task.id} />
             <Box sx={{ '& p': { fontSize: 14, mb: 1 } }}>
               <Typography>Cơ sở: {locationName(task.locationId)}</Typography>
               <Typography>Vị trí: {task.target?.label ?? 'Toàn cơ sở'}</Typography>

@@ -121,7 +121,12 @@ export interface SharedUsage {
   page: number;
   pageSize: number;
 }
-export type CopyGroup = 'RoomDefaults' | 'AssetTemplates' | 'FeePolicies' | 'OperatingPolicies';
+export type CopyGroup =
+  | 'RoomDefaults'
+  | 'AssetTemplates'
+  | 'FeePolicies'
+  | 'OperatingPolicies'
+  | 'AssetLifecyclePolicies';
 export interface ConfigurationCopy {
   sourceLocationId: string;
   targetLocationId: string;

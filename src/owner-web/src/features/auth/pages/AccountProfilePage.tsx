@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { PersonalDataRequestsPanel } from '../components/PersonalDataRequestsPanel';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
@@ -381,6 +382,9 @@ export default function AccountProfilePage() {
           Đã đổi mật khẩu. Vui lòng đăng nhập lại.
         </Alert>
       </Snackbar>
+      <Box sx={{ mt: 3 }}>
+        <PersonalDataRequestsPanel />
+      </Box>
       <Snackbar open={logoutError} autoHideDuration={8000} onClose={() => setLogoutError(false)}>
         <Alert severity="error" onClose={() => setLogoutError(false)}>
           Chưa thể xác nhận đăng xuất trên máy chủ. Phiên vẫn được giữ để bạn thử lại.
