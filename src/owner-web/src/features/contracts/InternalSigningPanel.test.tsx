@@ -36,6 +36,7 @@ it.each(['Holding', 'Main'])(
         };
       if (path.endsWith('/signing-methods'))
         return { methods: ['OWNER_SESSION'], default: 'OWNER_SESSION' };
+      if (path.endsWith('/signature-image')) return { present: true };
       if (path.endsWith('/signing')) return { id: 'signature', status: 'Signed' };
       if (path.endsWith(c.id)) return c;
       throw new Error(path);
@@ -60,6 +61,10 @@ it.each(['Holding', 'Main'])(
     expect(screen.getByRole('button', { name: 'Xem PDF hợp đồng' })).toBeEnabled();
     expect(button).toBeDisabled();
     fireEvent.click(screen.getByRole('checkbox'));
+    expect(button).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Ảnh chữ ký cho hợp đồng'), {
+      target: { files: [new File(['synthetic'], 'signature.png', { type: 'image/png' })] },
+    });
     fireEvent.click(button);
     await waitFor(() => expect(changed).toHaveBeenCalledOnce());
     const start = request.mock.calls.find(([path]) => path.endsWith('/signing'));
@@ -80,7 +85,7 @@ const contract = {
   snapshotHash: 'snapshot',
   isDevelopmentDemo: true,
 } as ContractView;
-function show(sandboxAvailable = true, reject = false, kind = 'Holding') {
+function show(sandboxAvailable = true, reject = false, kind = 'Holding', hasInvitation = false) {
   let confirmed = false;
   const request = vi.fn(async (path: string) => {
     if (path.endsWith('/owner-confirmation')) {
@@ -89,7 +94,9 @@ function show(sandboxAvailable = true, reject = false, kind = 'Holding') {
       return;
     }
     return {
-      invitations: [],
+      invitations: hasInvitation
+        ? [{ id: 'invite', status: 'InvitationAcceptedByProvider', expiresAt: '2099-01-01' }]
+        : [],
       tenantAcceptedAt: null,
       ownerAcceptedAt: confirmed ? '2026-11-13T01:00:00Z' : null,
       documentHash: kind === 'Holding' ? 'outdated-before-approval' : 'snapshot',
@@ -111,6 +118,11 @@ function show(sandboxAvailable = true, reject = false, kind = 'Holding') {
   );
   return { request, changed };
 }
+it('shows a real Main invitation to the notified Owner instead of offering sandbox confirmation', async () => {
+  show(true, false, 'Main', true);
+  expect(await screen.findByText(/Chờ người đại diện thuê mở email và ký/)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Owner xác nhận ký (Sandbox)' })).toBeNull();
+});
 it('lets the Owner confirm Main Sandbox without selecting an account or requiring Tenant OTP', async () => {
   const { request, changed } = show(true, false, 'Main');
   const button = await screen.findByRole('button', { name: 'Owner xác nhận ký (Sandbox)' });

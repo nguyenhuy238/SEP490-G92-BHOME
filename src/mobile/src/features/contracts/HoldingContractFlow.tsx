@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { Button, Checkbox, Text } from 'react-native-paper';
@@ -41,6 +42,7 @@ import {
   HoldingSectionCard,
   HoldingStatusBadge,
 } from './HoldingUi';
+import { PaymentStatusCountdown, PAYMENT_STATUS_REFRESH_MS } from './PaymentStatusCountdown';
 
 const signed = (c: ContractView) => ['PendingActivation', 'Active'].includes(c.status);
 // Invitation creation has no backend idempotency key. Retain ambiguous attempts across
@@ -336,11 +338,7 @@ function HoldingDraftDocument({
           ))}
         </>
       )}
-      {!!error && (
-        <Text accessibilityRole="alert" style={ui.red}>
-          {error}
-        </Text>
-      )}
+      {!!error && <ContractNotice message={error} />}
     </HoldingSectionCard>
   );
 }
@@ -526,11 +524,7 @@ function HoldingInternalSigning({
               : 'Owner đã phê duyệt. Đang chờ Owner gửi lời mời ký.'}
           </Text>
         )}
-        {!!error && (
-          <Text accessibilityRole="alert" style={ui.red}>
-            {error}
-          </Text>
-        )}
+        {!!error && <ContractNotice message={error} />}
       </HoldingSectionCard>
       {owner && (
         <>
@@ -633,6 +627,7 @@ function HoldingPayment({
   onChanged: () => void;
 }) {
   const [data, setData] = useState<{ deposit: HoldingDepositStatus; room: number } | null>(null);
+  const [checkedAt, setCheckedAt] = useState(Date.now);
   const [reference, setReference] = useState<string | null>(null);
   const [qr, setQr] = useState<ContractDepositInstructions | null>(null);
   const [qrError, setQrError] = useState('');
@@ -679,6 +674,7 @@ function HoldingPayment({
     const load = () => {
       if (loading) return;
       loading = true;
+      setCheckedAt(Date.now());
       void Promise.all([
         api.transport<HoldingDepositStatus>(`/api/v1/contracts/${c.id}/holding-deposit`, {
           signal: controller.signal,
@@ -708,7 +704,7 @@ function HoldingPayment({
         });
     };
     load();
-    const timer = setInterval(load, 5000);
+    const timer = setInterval(load, PAYMENT_STATUS_REFRESH_MS);
     if (owner)
       void paymentClient(api.transport)
         .depositPosition(c.id, controller.signal)
@@ -746,6 +742,12 @@ function HoldingPayment({
           }
           tone={success || data?.deposit.status === 'Verified' ? 'success' : 'warning'}
         />
+        {data &&
+          !success &&
+          data.deposit.status !== 'Verified' &&
+          !data.deposit.requiresManualReview &&
+          qr?.transferReference &&
+          !previewRequested && <PaymentStatusCountdown checkedAt={checkedAt} />}
         {!data && !error && (
           <Text style={ui.muted}>Đang kiểm tra thanh toán và trạng thái phòng…</Text>
         )}
@@ -763,11 +765,7 @@ function HoldingPayment({
             {success && reference && <ReadOnly label="Tham chiếu tiền cọc" value={reference} />}
           </>
         )}
-        {!!error && (
-          <Text accessibilityRole="alert" style={ui.red}>
-            {error}
-          </Text>
-        )}
+        {!!error && <ContractNotice message={error} />}
       </HoldingSectionCard>
       {!success && data?.deposit.status !== 'Verified' && (
         <HoldingSectionCard title="Thông tin chuyển khoản">
@@ -818,11 +816,7 @@ function HoldingPayment({
               )}
             </>
           )}
-          {!!qrError && (
-            <Text accessibilityRole="alert" style={ui.red}>
-              {qrError}
-            </Text>
-          )}
+          {!!qrError && <ContractNotice message={qrError} />}
           {canPreview && (
             <>
               <Text style={ui.muted}>

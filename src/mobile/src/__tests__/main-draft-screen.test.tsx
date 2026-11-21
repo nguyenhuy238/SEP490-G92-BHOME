@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { getToastSnapshot } from '../lib/toast';
 const state = vi.hoisted(() => ({
   request: vi.fn(),
+  signingPreview: vi.fn(),
   roles: ['Staff'],
   params: vi.fn(),
   share: vi.fn(),
@@ -37,7 +38,15 @@ vi.mock('expo-file-system', () => ({
   Paths: { cache: { uri: 'cache://' } },
 }));
 vi.mock('../lib/SessionProvider', () => {
-  const api = { request: state.request };
+  const api = {
+    request: async (path: string, ...args: unknown[]) => {
+      if (!path.endsWith('/signing-review')) return state.request(path, ...args);
+      state.signingPreview(path);
+      const preview = await state.request(path.replace(/signing-review$/, 'documents'), ...args);
+      if (!preview.pdf) throw { code: preview.previewError };
+      return preview.pdf;
+    },
+  };
   return { useSession: () => ({ api, session: { roles: state.roles } }) };
 });
 vi.mock('react-native', () => ({
@@ -72,12 +81,14 @@ vi.mock('react-native-paper', () => ({
     children,
     onPress,
     disabled,
+    accessibilityLabel,
   }: {
     children: React.ReactNode;
     onPress: () => void;
     disabled: boolean;
+    accessibilityLabel?: string;
   }) => (
-    <button onClick={onPress} disabled={disabled}>
+    <button onClick={onPress} disabled={disabled} aria-label={accessibilityLabel}>
       {children}
     </button>
   ),
@@ -209,16 +220,13 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
-it('observes Owner release while Staff waits without saving another draft', async () => {
+it('uses the PDF from step 4 to open Staff email signing without regenerating it', async () => {
   const original = state.request.getMockImplementation()!;
-  let releasedByOwner = false;
   state.request.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path.endsWith('/documents'))
       return { docx: { id: 'docx' }, pdf: { id: 'pdf' }, previewError: null };
-    const result = await original(path, init);
-    return path.endsWith('/draft-id') && !init?.method
-      ? { ...result, status: releasedByOwner ? 'PendingSigning' : 'Draft' }
-      : result;
+    if (path.endsWith('/release')) return { id: 'draft-id' };
+    return original(path, init);
   });
   const released = vi.fn();
   render(
@@ -231,27 +239,18 @@ it('observes Owner release while Staff waits without saving another draft', asyn
       onReleased={released}
     />,
   );
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
-  fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
+  fireEvent.click(saveContractAction());
   await screen.findByText('Bản hợp đồng PDF');
-  vi.useFakeTimers();
-  try {
-    await act(async () =>
-      fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục ký hợp đồng' })),
-    );
-    expect(screen.getByText('Chờ Chủ cơ sở duyệt để ký')).toBeTruthy();
-    releasedByOwner = true;
-    await act(async () => vi.advanceTimersByTimeAsync(5000));
-    expect(released).toHaveBeenCalledWith('draft-id');
-    expect(
-      state.request.mock.calls.filter(
-        ([path, init]) => path === '/api/v1/contracts/main-drafts' && init?.method === 'POST',
-      ),
-    ).toHaveLength(1);
-  } finally {
-    vi.useRealTimers();
-  }
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục ký hợp đồng' }));
+  await waitFor(() => expect(released).toHaveBeenCalledWith('draft-id'));
+  expect(state.signingPreview).toHaveBeenCalledOnce();
+  const release = state.request.mock.calls.find(([path]) => path.endsWith('/release'))!;
+  expect(JSON.parse(release[1].body)).toMatchObject({ reviewedFileId: 'pdf', emailSigning: true });
+  expect(screen.queryByText('Tạo bản PDF để kiểm tra')).toBeNull();
 });
 function setup(initialId?: string) {
   return render(
@@ -265,15 +264,23 @@ function setup(initialId?: string) {
     />,
   );
 }
+function saveContractAction() {
+  return screen.getByRole('button', {
+    name: state.roles.includes('Owner') ? 'Xem trước hợp đồng' : 'Lưu hợp đồng',
+  });
+}
 function fill() {
-  for (const [label, value] of [
-    ['Ngày bắt đầu (dd/MM/yyyy)', '02/11/2026'],
-    ['Ngày kết thúc (dd/MM/yyyy)', '02/11/2027'],
-    ['Số điện thoại người thuê', '0000000001'],
-
-    ['Điều khoản bổ sung / ghi chú', 'Ghi chú giữ nguyên'],
-  ])
-    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  if (state.roles.includes('Owner')) {
+    fireEvent.change(screen.getByLabelText('Ngày kết thúc (dd/MM/yyyy)'), {
+      target: { value: '02/11/2027' },
+    });
+    fireEvent.change(screen.getByLabelText('Số điện thoại người thuê'), {
+      target: { value: '0000000001' },
+    });
+  } else {
+    fireEvent.click(screen.getByRole('button', { name: 'Kỳ thuê' }));
+    fireEvent.click(screen.getByRole('button', { name: '1 năm' }));
+  }
 }
 it('opens a saved Owner draft for review without editing or releasing before PDF confirmation', async () => {
   state.roles = ['Owner'];
@@ -289,7 +296,7 @@ it('opens a saved Owner draft for review without editing or releasing before PDF
       onList={vi.fn()}
     />,
   );
-  const release = await screen.findByText('Duyệt và chuyển sang chờ ký');
+  const release = await screen.findByText('Chuyển sang chờ ký');
   expect((release as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByText('Lưu nháp')).toBeNull();
   expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
@@ -314,7 +321,9 @@ it('returns to identity without discarding the in-progress contract form', async
     onList: vi.fn(),
   };
   const page = render(<MainDraftScreen {...props} visible />);
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
   fireEvent.click(screen.getByRole('button', { name: 'Quay lại: CCCD' }));
   expect(previous).toHaveBeenCalledOnce();
@@ -322,11 +331,8 @@ it('returns to identity without discarding the in-progress contract form', async
   page.rerender(<MainDraftScreen {...props} visible={false} />);
   page.rerender(<MainDraftScreen {...props} visible />);
   expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
-  expect(screen.getByLabelText('Ngày kết thúc (dd/MM/yyyy)')).toHaveProperty('value', '02/11/2027');
-  expect(screen.getByLabelText('Điều khoản bổ sung / ghi chú')).toHaveProperty(
-    'value',
-    'Ghi chú giữ nguyên',
-  );
+  expect(screen.getByRole('button', { name: 'Kỳ thuê' }).textContent).toBe('1 năm');
+  expect(screen.queryByLabelText('Điều khoản bổ sung / ghi chú')).toBeNull();
   expect(state.request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 });
 it('recovers an outdated file using the latest draft version and a new document reference', async () => {
@@ -347,9 +353,11 @@ it('recovers an outdated file using the latest draft version and a new document 
     return path.endsWith('/draft-id') && !init?.method ? { ...result, version: 2 } : result;
   });
   setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
-  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  fireEvent.click(saveContractAction());
   await screen.findAllByText('Tài liệu thuộc phiên bản cũ. Hãy tạo lại bản xem trước.');
   fireEvent.click(screen.getByText('Tải phiên bản mới'));
   await waitFor(() =>
@@ -371,9 +379,11 @@ it('requires an explicit save after a configuration conflict instead of regenera
       : original(path, init),
   );
   setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
-  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  fireEvent.click(saveContractAction());
   await screen.findAllByText(
     'Cấu hình đã thay đổi. Tải lại giá và lưu nháp trước khi tạo tài liệu.',
   );
@@ -399,9 +409,11 @@ it('shows an Owner document conflict once and clears it after one locked recover
     return original(path, init);
   });
   setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
-  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  fireEvent.click(saveContractAction());
   await screen.findByText('Tải phiên bản mới');
   expect(
     screen.getAllByText('Tài liệu thuộc phiên bản cũ. Hãy tạo lại bản xem trước.'),
@@ -443,9 +455,11 @@ it('moves an Owner to the current workflow if the contract is released during do
       onReleased={onReleased}
     />,
   );
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
-  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  fireEvent.click(saveContractAction());
   await screen.findByText('Tải phiên bản mới');
   released = true;
   fireEvent.click(screen.getByText('Tải phiên bản mới'));
@@ -482,10 +496,12 @@ it.each(['Owner', 'Staff'])(
 it('previews an unchanged Owner draft without saving a new version', async () => {
   state.roles = ['Owner'];
   setup('draft-id');
-  await screen.findByText('CCCD: ********0123');
-  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
   await screen.findByText(
-    'Máy chủ chưa cấu hình LibreOffice để tạo PDF. Bản nháp và DOCX đã được giữ lại.',
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
+  fireEvent.click(saveContractAction());
+  await screen.findByText(
+    'Máy chủ chưa cấu hình LibreOffice để tạo PDF. Bản nháp đã được giữ lại.',
   );
   expect(state.request.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0);
   expect(state.request.mock.calls.filter(([path]) => path.endsWith('/documents'))).toHaveLength(1);
@@ -518,13 +534,17 @@ it('aborts the previous resource and ignores a late document generation after th
     onList: vi.fn(),
   };
   const rendered = render(<MainDraftScreen {...props} initialId="first" />);
-  await screen.findByText('CCCD: ********0123');
-  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
+  fireEvent.click(saveContractAction());
   await waitFor(() => expect(finish).toBeDefined());
   rendered.rerender(<MainDraftScreen {...props} initialId="second" />);
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   expect(signal?.aborted).toBe(true);
-  fireEvent.click(screen.getByText('Xem trước hợp đồng'));
+  fireEvent.click(saveContractAction());
   await screen.findByText('Hiển thị trang kiểm thử');
   await act(async () =>
     finish!({ docx: { id: 'old-docx' }, pdf: { id: 'old-pdf' }, previewError: null }),
@@ -535,11 +555,13 @@ it('aborts the previous resource and ignores a late document generation after th
 });
 it('saves draft without collecting or persisting a tenant email', async () => {
   setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
   expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
-  await screen.findByText('Mã hợp đồng: draft-id');
+  fireEvent.click(saveContractAction());
+  await screen.findByText('Xem trước hợp đồng');
   const post = state.request.mock.calls.find((call) => call[1]?.method === 'POST')!;
   expect(JSON.parse(post[1].body)).toMatchObject({ tenantEmail: null, tenantPlaceOfIssue: '' });
   expect(state.request.mock.calls.some((call) => call[0].includes('/invitation'))).toBe(false);
@@ -562,12 +584,8 @@ it('shows one configuration notice and blocks save/preview when the server requi
     ),
   ).toBeTruthy();
   expect(screen.getByText('Chưa có giá nước hiệu lực tại ngày bắt đầu.')).toBeTruthy();
-  expect((screen.getByRole('button', { name: 'Lưu nháp' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
-  expect(
-    (screen.getByRole('button', { name: 'Xem trước hợp đồng' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
+  expect((saveContractAction() as HTMLButtonElement).disabled).toBe(true);
+  expect((saveContractAction() as HTMLButtonElement).disabled).toBe(true);
 });
 it('prefills only the authorized representative contact, keeping email when returning from preview', async () => {
   const original = state.request.getMockImplementation()!;
@@ -588,27 +606,49 @@ it('prefills only the authorized representative contact, keeping email when retu
       : original(path, init),
   );
   setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
   fill();
-  fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
+  fireEvent.click(saveContractAction());
   await screen.findByText('Bản hợp đồng PDF');
   fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa thông tin' }));
   expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
 });
-it('loads authoritative read-only identity and validates editable fields without posting invalid data', async () => {
+it('saves a six-month Staff draft from configured data without manual contact or terms', async () => {
   setup();
   await screen.findByText('Cơ sở kiểm thử · Phòng 101');
-  expect(screen.getByText('CCCD: ********0123')).toBeTruthy();
+  expect(screen.getByText('Đại diện thuê: NGƯỜI KIỂM THỬ')).toBeTruthy();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryByText(/Mã hợp đồng/)).toBeNull();
+  expect(screen.queryByText('Lưu nháp')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Kỳ thuê' }).textContent).toBe('6 tháng');
+  expect(screen.queryByRole('button', { name: '1 năm' })).toBeNull();
   expect(screen.getAllByText(/3\.100\.000/).length).toBeGreaterThan(0);
   expect(screen.queryByRole('textbox', { name: 'Họ và tên' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
-  expect(screen.getByText('Nhập ngày kết thúc hợp lệ theo dd/MM/yyyy.')).toBeTruthy();
-  expect(state.request.mock.calls.some((call) => call[1]?.method === 'POST')).toBe(false);
+  fireEvent.click(saveContractAction());
+  await screen.findByText('Xem trước hợp đồng');
+  const save = state.request.mock.calls.find(([, init]) => init?.method === 'POST')!;
+  const body = JSON.parse(save[1].body);
+  const [year, month] = body.startDate.split('-').map(Number);
+  expect(body.endDate.slice(0, 7)).toBe(
+    `${year + (month > 6 ? 1 : 0)}-${String(((month + 5) % 12) + 1).padStart(2, '0')}`,
+  );
+  expect(body).toMatchObject({
+    notes: '',
+    tenantPhone: '',
+    tenantPlaceOfIssue: '',
+    tenantEmail: null,
+  });
+  expect(screen.queryByLabelText('Số điện thoại người thuê')).toBeNull();
+  expect(screen.queryByLabelText('Điều khoản bổ sung / ghi chú')).toBeNull();
 });
 it('keeps the form after an API failure and retries with the same idempotency key', async () => {
   setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
   const base = state.request.getMockImplementation()!;
   let fail = true;
@@ -619,47 +659,41 @@ it('keeps the form after an API failure and retries with the same idempotency ke
     }
     return base(path, init);
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+  fireEvent.click(saveContractAction());
   await screen.findByText(/Bản nháp đã thay đổi/);
   expect(getToastSnapshot().toast?.type).not.toBe('error');
-  expect((screen.getByLabelText('Điều khoản bổ sung / ghi chú') as HTMLInputElement).value).toBe(
-    'Ghi chú giữ nguyên',
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
-  await screen.findByText('Mã hợp đồng: draft-id');
+  expect(screen.getByText(/\d{2}\/\d{2}\/\d{4} – \d{2}\/\d{2}\/\d{4}/)).toBeTruthy();
+  fireEvent.click(saveContractAction());
+  await screen.findByText('Xem trước hợp đồng');
   expect(getToastSnapshot().toast?.type).toBe('success');
-  const posts = state.request.mock.calls.filter((call) => call[1]?.method === 'POST');
+  const posts = state.request.mock.calls.filter(
+    ([path, init]) => path === '/api/v1/contracts/main-drafts' && init?.method === 'POST',
+  );
   expect(posts).toHaveLength(2);
   expect(posts[0][1].headers['Idempotency-Key']).toBe(posts[1][1].headers['Idempotency-Key']);
   expect(state.params).toHaveBeenCalledWith({ mainDraftId: 'draft-id' });
 });
 it('preserves edits across preview, reports missing PDF honestly and exposes no lifecycle actions', async () => {
   setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
-  fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
+  fireEvent.click(saveContractAction());
   await screen.findByText(/Máy chủ chưa cấu hình LibreOffice/);
   expect(getToastSnapshot().toast?.type).toBe('success');
-  expect(screen.getByRole('button', { name: 'Mở hoặc lưu DOCX' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Mở hoặc lưu DOCX' })).toBeNull();
   expect(screen.queryByRole('button', { name: /Ký hợp đồng|Kích hoạt|QR/ })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa thông tin' }));
-  expect((screen.getByLabelText('Điều khoản bổ sung / ghi chú') as HTMLInputElement).value).toBe(
-    'Ghi chú giữ nguyên',
-  );
-  expect((screen.getByLabelText('Ngày kết thúc (dd/MM/yyyy)') as HTMLInputElement).value).toBe(
-    '02/11/2027',
-  );
+  expect(screen.queryByLabelText('Điều khoản bổ sung / ghi chú')).toBeNull();
+  expect(screen.getByText(/\d{2}\/\d{2}\/\d{4} – \d{2}\/\d{2}\/\d{4}/)).toBeTruthy();
 });
 it('reopens the persisted draft from the server', async () => {
   setup('draft-id');
-  await waitFor(() =>
-    expect((screen.getByLabelText('Điều khoản bổ sung / ghi chú') as HTMLInputElement).value).toBe(
-      'Đã lưu trước',
-    ),
-  );
+  await screen.findByText('02/11/2026 – 02/11/2027');
   expect(state.request.mock.calls[0][0]).toBe('/api/v1/contracts/main-drafts/draft-id');
 });
-it('autofills and locks a contact phone already supplied by the server', async () => {
+it('keeps the stored contact in the save payload without showing it on the Staff form', async () => {
   const original = state.request.getMockImplementation()!;
   state.request.mockImplementation((path: string, init?: RequestInit) =>
     path.includes('/preparation?')
@@ -670,21 +704,24 @@ it('autofills and locks a contact phone already supplied by the server', async (
       : original(path, init),
   );
   setup();
-  await waitFor(() =>
-    expect((screen.getByLabelText('Số điện thoại người thuê') as HTMLInputElement).value).toBe(
-      '0000000002',
-    ),
-  );
-  expect((screen.getByLabelText('Số điện thoại người thuê') as HTMLInputElement).disabled).toBe(
-    true,
-  );
+  await screen.findByText('Cơ sở kiểm thử · Phòng 101');
+  expect(screen.queryByText(/0000000002/)).toBeNull();
+  expect(screen.queryByLabelText('Số điện thoại người thuê')).toBeNull();
+  fireEvent.click(saveContractAction());
+  await screen.findByText('Xem trước hợp đồng');
+  const save = state.request.mock.calls.find(
+    ([path, init]) => path === '/api/v1/contracts/main-drafts' && init?.method === 'POST',
+  )!;
+  expect(JSON.parse(save[1].body).tenantPhone).toBe('0000000002');
 });
 it('keeps its saved result when promoting reference params to a persisted draft route', async () => {
   const page = setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
-  await screen.findByText('Mã hợp đồng: draft-id');
+  fireEvent.click(saveContractAction());
+  await screen.findByText('Xem trước hợp đồng');
   page.rerender(
     <MainDraftScreen
       initialId="draft-id"
@@ -695,7 +732,7 @@ it('keeps its saved result when promoting reference params to a persisted draft 
       onList={vi.fn()}
     />,
   );
-  await waitFor(() => expect(screen.getByText('Mã hợp đồng: draft-id')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Xem trước hợp đồng')).toBeTruthy());
   expect(
     state.request.mock.calls.filter(
       (call) => call[0] === '/api/v1/contracts/main-drafts/draft-id' && !call[1]?.method,
@@ -709,9 +746,11 @@ it('does not report a cancelled idempotent replay as a saved draft', async () =>
     return init?.method === 'POST' ? { ...result, status: 'Cancelled' } : result;
   });
   setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+  fireEvent.click(saveContractAction());
   await screen.findByText(/Bản nháp đã thay đổi/);
   expect(screen.queryByText('Đã tạo hợp đồng nháp')).toBeNull();
   expect(getToastSnapshot().toast?.type).not.toBe('error');
@@ -728,9 +767,11 @@ it('waits for backend confirmation before showing success and prevents repeated 
     return original(path, init);
   });
   setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
-  const save = screen.getByRole('button', { name: 'Lưu nháp' });
+  const save = saveContractAction();
   fireEvent.click(save);
   fireEvent.click(save);
   await waitFor(() => expect(typeof finish).toBe('function'));
@@ -739,10 +780,11 @@ it('waits for backend confirmation before showing success and prevents repeated 
   expect(getToastSnapshot().toast).toBeNull();
   await act(async () => finish(view(JSON.parse(posts[0][1].body))));
   expect(getToastSnapshot().toast?.type).toBe('success');
-  expect(getToastSnapshot().toast?.message).toBe('Đã lưu hợp đồng nháp.');
+  expect(getToastSnapshot().toast?.message).toBe('Đã lưu hợp đồng.');
 });
 
 it('downloads PDF and DOCX through the authenticated client and cleans private cache files after sharing or failure', async () => {
+  state.roles = ['Owner'];
   const original = state.request.getMockImplementation()!;
   state.request.mockImplementation((path: string, init?: RequestInit) => {
     if (path.endsWith('/documents'))
@@ -757,9 +799,11 @@ it('downloads PDF and DOCX through the authenticated client and cleans private c
     return original(path, init);
   });
   setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
-  fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
+  fireEvent.click(saveContractAction());
   await screen.findByText('Bản hợp đồng PDF');
   fireEvent.click(screen.getByRole('button', { name: 'Xem PDF' }));
   await waitFor(() => expect(state.deleted).toHaveBeenCalledTimes(1));
@@ -793,7 +837,7 @@ it('downloads PDF and DOCX through the authenticated client and cleans private c
   expect(state.deleted).toHaveBeenCalledTimes(3);
 });
 
-it('keeps the same saved draft and entered contact data when returning from signing to edit', async () => {
+it('keeps the same saved draft when returning from the PDF to edit', async () => {
   const original = state.request.getMockImplementation()!;
   state.request.mockImplementation((path: string, init?: RequestInit) => {
     if (path.endsWith('/documents'))
@@ -805,17 +849,16 @@ it('keeps the same saved draft and entered contact data when returning from sign
     return original(path, init);
   });
   setup();
-  await screen.findByText('CCCD: ********0123');
+  await screen.findByText(
+    state.roles.includes('Owner') ? 'CCCD: ********0123' : 'Cơ sở kiểm thử · Phòng 101',
+  );
   fill();
 
-  fireEvent.click(screen.getByRole('button', { name: 'Xem trước hợp đồng' }));
+  fireEvent.click(saveContractAction());
   await screen.findByText('Bản hợp đồng PDF');
-  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục ký hợp đồng' }));
-  await screen.findByText('Chờ Chủ cơ sở duyệt để ký');
-  fireEvent.click(screen.getByRole('button', { name: 'Xem hợp đồng' }));
   fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa thông tin' }));
   expect(screen.queryByLabelText('Email người thuê *')).toBeNull();
-  expect(screen.getByText('Mã hợp đồng: draft-id')).toBeTruthy();
+  expect(saveContractAction()).toBeTruthy();
   expect(
     state.request.mock.calls.filter(
       (call) => call[0] === '/api/v1/contracts/main-drafts' && call[1]?.method === 'POST',

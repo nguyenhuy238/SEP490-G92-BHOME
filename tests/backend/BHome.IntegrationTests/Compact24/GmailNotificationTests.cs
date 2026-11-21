@@ -145,12 +145,16 @@ public sealed partial class Compact24NotificationMvpTests
     {
         public ChannelDeliveryException? Failure;
         public bool Available = true;
-        public List<ChannelMessage> Messages { get; } = [];
+        private readonly List<ChannelMessage> messages = [];
+        public IReadOnlyList<ChannelMessage> Messages
+        {
+            get { lock (messages) return messages.ToArray(); }
+        }
         public bool IsConfigured(string channel) => Available && channel == "EMAIL";
         public bool SupportsIdempotency(string channel) => false;
         public Task<string> SendAsync(ChannelMessage message, CancellationToken t)
         {
-            lock (Messages) Messages.Add(message);
+            lock (messages) messages.Add(message);
             return Failure is null ? Task.FromResult("smtp-accepted:synthetic") : Task.FromException<string>(Failure);
         }
     }

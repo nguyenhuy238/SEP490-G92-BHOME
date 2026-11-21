@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-native';
 import { Button, Text } from 'react-native-paper';
@@ -273,11 +274,7 @@ export function HoldingSandboxFlow({
           </Button>
         </HoldingSectionCard>
       )}
-      {!!error && (
-        <Text accessibilityRole="alert" style={ui.red}>
-          {error}
-        </Text>
-      )}
+      {!!error && <ContractNotice message={error} />}
     </>
   );
 }

@@ -10,8 +10,11 @@ namespace BHome.IntegrationTests.Notifications;
 
 public sealed class EmailCaptureTests
 {
-    [Fact]
-    public async Task LocalSmtpCaptureReceivesGeneratedEmailWithoutExternalNetworkOrCredentials()
+    [Theory]
+    [InlineData("Testing", "TEST", false)]
+    [InlineData("Development", "HOLDING_CONFIRMED", true)]
+    [InlineData("Development", "TENANT_SETUP_AFTER_ACTIVATION", true)]
+    public async Task LocalSmtpCaptureReceivesGeneratedEmailWithoutExternalNetworkOrCredentials(string environment, string eventType, bool allowSigningRecipient)
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -44,11 +47,13 @@ public sealed class EmailCaptureTests
             DeliveryMode = "Capture",
             Host = "127.0.0.1",
             Port = ((IPEndPoint)listener.LocalEndpoint).Port,
-            FromEmail = "sender@example.invalid"
+            FromEmail = "sender@example.invalid",
+            AllowedRecipients = allowSigningRecipient ? ["allowed@example.invalid"] : [],
+            AllowAnyDevelopmentSigningRecipient = allowSigningRecipient
         };
         var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance,
-            new HostingEnvironment { EnvironmentName = "Testing" });
-        var result = await sender.SendAsync(new("synthetic-capture", "EMAIL", "recipient@example.invalid", "TEST",
+            new HostingEnvironment { EnvironmentName = environment });
+        var result = await sender.SendAsync(new("synthetic-capture", "EMAIL", "recipient@example.invalid", eventType,
             "Synthetic invitation", "Open the local page", "https://localhost:5176/contract-signing#token=SYNTHETIC"), timeout.Token);
         await server;
         Assert.StartsWith("smtp-accepted:", result);
@@ -68,12 +73,13 @@ public sealed class EmailCaptureTests
             Username = "sender@example.invalid",
             FromEmail = "sender@example.invalid",
             AppPassword = "synthetic",
-            AllowedRecipients = ["allowed@example.invalid"]
+            AllowedRecipients = ["allowed@example.invalid"],
+            AllowAnyDevelopmentSigningRecipient = true
         };
         var sender = new MailKitEmailSender(Options.Create(options), NullLogger<MailKitEmailSender>.Instance,
             new HostingEnvironment { EnvironmentName = "Staging" });
         var error = await Assert.ThrowsAsync<ChannelDeliveryException>(() => sender.SendAsync(
-            new("synthetic", "EMAIL", "blocked@example.invalid", "TEST", "Test", "Test"), default));
+            new("synthetic", "EMAIL", "blocked@example.invalid", "HOLDING_CONFIRMED", "Test", "Test"), default));
         Assert.Equal("email_recipient_not_allowed", error.Code);
     }
 }

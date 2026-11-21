@@ -303,6 +303,21 @@ export interface HandoverChoices {
   inventoryState?: string | null;
   noAssetsConfirmed?: boolean;
 }
+export interface TerminationReview {
+  status: 'Requested' | 'Approved' | 'Rejected';
+  version: number;
+  locationName: string;
+  roomNumber: string;
+  tenantName: string | null;
+  startDate: string;
+  endDate: string;
+  proposedDate: string;
+  reason: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  rejectionReason: string | null;
+}
+
 export interface MoveOut {
   id: string;
   status: string;
@@ -988,6 +1003,8 @@ export function contractClient(request: ContractRequest) {
       request<Readiness>(`${root}/${id}/activation-readiness`, { signal }),
     moveOut: (id: string, signal?: AbortSignal) =>
       request<MoveOut>(`${root}/${id}/move-out`, { signal }),
+    terminationReview: (id: string, signal?: AbortSignal) =>
+      request<TerminationReview>(`${root}/${guid(id)}/move-out/review`, { signal }),
     history: (id: string, signal?: AbortSignal) =>
       request<SettlementReview[]>(`${root}/${id}/move-out/settlement-history`, { signal }),
     certificates: (signal?: AbortSignal) => request<Certificate[]>(certificates, { signal }),
@@ -1249,6 +1266,7 @@ export const labels: Record<string, string> = {
   invalid_contract_signers: 'Tài khoản bên ký chưa hợp lệ.',
   security_deposit_insufficient: 'Tiền cọc đã xác minh chưa đủ.',
   room_contract_conflict: 'Phòng đã đủ chỗ hoặc có hợp đồng đang xung đột.',
+  room_waiting_for_owner_signature: 'Phòng có hợp đồng đang chờ Owner ký.',
   household_version_changed:
     'Thông tin hộ gia đình đã được cập nhật ở phiên khác. Tải lại hồ sơ trước khi lưu tiếp.',
   household_member_mismatch: 'Thành viên không khớp hộ gia đình đang nhập. Hãy tải lại hồ sơ.',
@@ -1694,6 +1712,18 @@ export function contractActions(
     );
   return result;
 }
+export function earlyTerminationDate(
+  value: string,
+  contract: Pick<ContractView, 'startDate' | 'endDate'>,
+): string {
+  const date = dateOnly(/^\d{2}-\d{2}-\d{4}$/.test(value) ? value.replaceAll('-', '/') : value);
+  if (date < businessToday()) throw new Error('Ngày trả phòng không được trong quá khứ.');
+  if (date < contract.startDate) throw new Error('Ngày trả phòng phải từ ngày bắt đầu hợp đồng.');
+  if (date >= contract.endDate)
+    throw new Error('Yêu cầu trước hạn cần ngày trả phòng trước ngày hết hạn.');
+  return date;
+}
+
 export function actionPayload(
   a: ContractAction,
   values: Record<string, string>,
@@ -1708,7 +1738,9 @@ export function actionPayload(
     const value = values[f.name] ?? '';
     body[f.name] =
       f.type === 'date'
-        ? dateOnly(value)
+        ? a.operation === 'termination-requests' && f.name === 'proposedDate'
+          ? earlyTerminationDate(value, c)
+          : dateOnly(value)
         : f.type === 'money'
           ? vnd(value, true)
           : f.type === 'schedule'
@@ -1725,12 +1757,10 @@ export function actionPayload(
     body.cause = Number(values.cause);
     body.humanConfirmed = true;
   }
-  if (a.operation === 'termination-requests' || a.operation === 'expiry-move-out') {
+  if (a.operation === 'expiry-move-out') {
     if (String(body.proposedDate) < businessToday())
       throw new Error('Ngày trả phòng không được trong quá khứ.');
-    if (a.operation === 'termination-requests' && String(body.proposedDate) >= c.endDate)
-      throw new Error('Yêu cầu trước hạn cần ngày trả phòng trước ngày hết hạn.');
-    if (a.operation === 'expiry-move-out' && String(body.proposedDate) < c.endDate)
+    if (String(body.proposedDate) < c.endDate)
       throw new Error('Trả phòng hết hạn cần ngày từ ngày hết hạn trở đi.');
   }
   if (a.operation === 'move-out/inspection') {

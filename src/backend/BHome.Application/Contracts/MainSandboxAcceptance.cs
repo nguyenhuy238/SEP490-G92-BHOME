@@ -5,7 +5,7 @@ namespace BHome.Application.Contracts;
 
 // Test-only acceptance; never deserialize or display this as Tenant OTP/legal signing evidence.
 public sealed record MainSandboxAcceptance(string RecordType, Guid OwnerId, string SnapshotHash,
-    DateTimeOffset ConfirmedAt, string DocumentKey, string DocumentHash,
+    DateTimeOffset? ConfirmedAt, string DocumentKey, string DocumentHash,
     Guid? TenantSimulatedBy = null, DateTimeOffset? TenantSimulatedAt = null, Guid? OwnerSimulatedBy = null,
     bool RebuiltTestArtifact = false)
 {

@@ -1,15 +1,16 @@
+import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
 import { Image, Platform, View } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { ui } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
 import {
   contractError,
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
-import { ui } from '../../components/WorkspaceKit';
 
 export function ContractEvidence({
   api,
@@ -47,7 +48,7 @@ export function ContractEvidence({
   localThumbnailUri?: string;
 }) {
   const [busy, setBusy] = useState(false),
-    [error, setError] = useFeedbackState(),
+    [error, setError] = useFeedbackState('warning', false),
     [previewUri, setPreviewUri] = useState(''),
     [thumbnailState, setThumbnailState] = useState({ key: '', uri: '', error: '' });
   const thumbnailKey = `${contractId}:${evidenceId ?? ''}:${readingId ?? ''}:${draftHandoverEvidence}`;
@@ -349,7 +350,7 @@ export function ContractEvidence({
                       : `Mở hoặc lưu ảnh hiện trạng ${number ?? ''}`)}
             </Button>
           )}
-          {!!error && <Text style={ui.red}>{error}</Text>}
+          {!!error && <ContractNotice message={error} />}
         </>
       )}
     </>

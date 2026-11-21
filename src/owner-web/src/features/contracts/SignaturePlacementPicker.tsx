@@ -36,6 +36,7 @@ export function SignaturePlacementPicker({
   onChange,
   disabled,
   caption,
+  showSignatureImage = true,
 }: {
   signing: SigningClient;
   contractId: string;
@@ -44,6 +45,7 @@ export function SignaturePlacementPicker({
   disabled?: boolean;
   /** The lines the server writes in the box; MySign wording by default. */
   caption?: string;
+  showSignatureImage?: boolean;
 }) {
   const layout = useQuery({
     staleTime: 0,
@@ -56,13 +58,14 @@ export function SignaturePlacementPicker({
     },
   });
   const picture = useQuery({
+    enabled: showSignatureImage,
     staleTime: 0,
     queryKey: ['signature-image'],
     queryFn: ({ signal }) => signing.image(signal),
   });
   const pictureUrl = useObjectUrl(
     'signature-image:' + (picture.data?.version ?? ''),
-    picture.data?.present ? (signal) => signing.imageBlob(signal) : null,
+    showSignatureImage && picture.data?.present ? (signal) => signing.imageBlob(signal) : null,
   );
   const pageNumber =
     value.placement?.page ?? layout.data?.suggested?.page ?? layout.data?.pageCount ?? 1;
@@ -74,7 +77,7 @@ export function SignaturePlacementPicker({
   const drag = useRef<{ dx: number; dy: number } | null>(null);
   const pages = layout.data?.pages ?? [];
   const size = pages[pageNumber - 1] ?? { width: 595, height: 842 };
-  const shownPicture = picture.data?.present ? picture.data : null;
+  const shownPicture = showSignatureImage && picture.data?.present ? picture.data : null;
 
   // First load: start from the suggested box (the signer's place in the signature block).
   useEffect(() => {
@@ -173,20 +176,22 @@ export function SignaturePlacementPicker({
           </Button>
         )}
       </Stack>
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={value.usePicture && !!shownPicture}
-            disabled={disabled || !shownPicture}
-            onChange={(e) => set({}, e.target.checked)}
-          />
-        }
-        label={
-          shownPicture
-            ? 'Hiển thị ảnh chữ ký của tôi trong ô ký'
-            : 'Chưa có ảnh chữ ký: ô ký chỉ ghi "Ký bởi / Ngày ký" (thêm ảnh ở phần Ảnh chữ ký)'
-        }
-      />
+      {showSignatureImage && (
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={value.usePicture && !!shownPicture}
+              disabled={disabled || !shownPicture}
+              onChange={(e) => set({}, e.target.checked)}
+            />
+          }
+          label={
+            shownPicture
+              ? 'Hiển thị ảnh chữ ký của tôi trong ô ký'
+              : 'Chưa có ảnh chữ ký: ô ký chỉ ghi "Ký bởi / Ngày ký" (thêm ảnh ở phần Ảnh chữ ký)'
+          }
+        />
+      )}
       <Box
         ref={surface}
         role="application"

@@ -45,13 +45,59 @@ vi.mock('../features/workspace/useWorkspaceQuery', () => ({
             reserved: '100000',
           },
         }
-      : [],
+      : path?.endsWith('/versions')
+        ? [
+            {
+              id: 'current',
+              status: 'PendingSigning',
+              startDate: '2026-11-19',
+              endDate: '2027-05-19',
+              terms: 'SHA256 noisy terms',
+              monthlyRent: '2300000',
+            },
+            {
+              id: 'previous',
+              status: 'Superseded',
+              startDate: '2026-05-19',
+              endDate: '2026-11-19',
+            },
+          ]
+        : [],
     error: '',
     reload: vi.fn(),
   }),
 }));
 import { ContractWorkflowPanel } from '../features/contracts/ContractWorkflowPanel';
 afterEach(cleanup);
+it('summarizes contract history and omits technical events and raw version terms', async () => {
+  const api = contractClient(
+    async <T,>() =>
+      [
+        'ContractSigningPrepared',
+        'UnknownTechnicalEvent',
+        'ContractActivated',
+        'ContractDepositVerified',
+        'InternalOwnerAcceptanceConfirmed',
+        'InternalTenantAcceptanceRecorded',
+        'MainSigningSubmitted',
+        'ContractDraftCreated',
+      ].map((action) => ({ action, occurredAt: '2026-11-19T00:00:00Z' })) as T,
+  );
+  render(
+    <ContractWorkflowPanel
+      api={api}
+      contract={{ id: 'current', kind: 'Main' } as ContractView}
+      role="Staff"
+      section="history"
+    />,
+  );
+  await screen.findByText(/Kích hoạt hợp đồng/);
+  expect(screen.getByText(/Chờ ký \(đang xem\).*19\/11\/2026/)).toBeTruthy();
+  expect(screen.queryByText(/SHA256|Chuẩn bị tài liệu ký|Trạng thái hoặc điều kiện/)).toBeNull();
+  expect(screen.queryByText(/Lập bản nháp hợp đồng/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Xem thêm lịch sử' }));
+  expect(screen.getByText(/Lập bản nháp hợp đồng/)).toBeTruthy();
+});
 it.each(['Draft', 'PendingSigning'])(
   'Staff sees and generates the %s Main preview without fetching privileged deposit data',
   async (status) => {

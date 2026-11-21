@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
 import { Checkbox, Text } from 'react-native-paper';
@@ -49,7 +50,7 @@ export function ContractLifecyclePanel({
     [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false),
     [confirmedInspectionInput, setConfirmedInspectionInput] = useState<string | null>(null);
-  const [error, setError] = useFeedbackState(),
+  const [error, setError] = useFeedbackState('warning', false),
     [notice, setNotice] = useFeedbackState('success');
   const [keys] = useState(() => mutationKeys(randomUUID));
   const lock = useRef(false);
@@ -113,7 +114,7 @@ export function ContractLifecyclePanel({
         Tải lại biên bản & quyết toán
       </Action>
       {q.loading && <Text>Đang đối chiếu dữ liệu…</Text>}
-      {!!(error || q.error) && <Text style={ui.red}>{error || q.error}</Text>}
+      {!!(error || q.error) && <ContractNotice message={error || q.error} />}
       {!!notice && <Text style={ui.blue}>{notice}</Text>}
       {q.inspections.map((i) => (
         <Box key={i.id}>

@@ -312,39 +312,54 @@ it.each([true, false])(
     expect(screen.getByText('Tiền cọc hợp đồng')).toBeTruthy();
   },
 );
-it('offers Staff Owner simulation only after backend enables Sandbox and waits for persisted state', async () => {
+it('Staff step 5 sends the invitation for the released snapshot and offers no generation or simulation actions', async () => {
   const c = {
     ...contract(),
-    kind: 'Main',
-    status: 'PendingSigning',
     signingMode: 'INTERNAL_OTP_DRAWN',
     isDevelopmentDemo: true,
     snapshotHash: 'snapshot',
   };
-  state.request.mockImplementation(async (path: string) =>
-    path.endsWith('/internal-signing') ? { sandboxAvailable: true } : { canContinue: false },
+  state.request.mockImplementation(async (path: string) => {
+    if (path.endsWith('/internal-signing'))
+      return { invitations: [], canContinue: false, sandboxAvailable: true };
+    if (path.endsWith('/signing-invitations'))
+      return { id: 'invite', status: 'InvitationAcceptedByProvider', expiresAt: '2099-01-01' };
+    if (path.endsWith('/contract')) return c;
+    throw new Error(path);
+  });
+  const reload = vi.fn();
+  render(
+    <RentalContractFlow
+      api={contractClient(state.request)}
+      contract={c}
+      role="Staff"
+      actorId="staff"
+      readiness={null}
+      onChanged={reload}
+      onList={vi.fn()}
+    />,
   );
-  const { reload } = flow(c, 'Staff');
-  const ownerButton = await screen.findByRole('button', { name: 'Mô phỏng Owner ký' });
-  await waitFor(() => expect(ownerButton).toHaveProperty('disabled', false));
-  expect(screen.getByRole('button', { name: 'Mô phỏng Tenant ký' })).toHaveProperty(
-    'disabled',
-    true,
-  );
-  fireEvent.click(ownerButton);
+  const send = await screen.findByRole<HTMLButtonElement>('button', {
+    name: 'Gửi lời mời ký qua email',
+  });
+  expect(send.disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Email nhận lời mời · Đại diện tổng hợp'), {
+    target: { value: 'tenant@example.invalid' },
+  });
+  await waitFor(() => expect(send.disabled).toBe(false));
+  fireEvent.click(send);
   await waitFor(() => expect(reload).toHaveBeenCalledOnce());
-  expect(state.request).toHaveBeenCalledWith(
-    '/api/v1/contracts/contract/internal-signing/owner-simulation',
-    expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({
-        documentHash: 'snapshot',
-        consent: true,
-        consentVersion: 'internal-acceptance-v1',
-      }),
-    }),
-  );
-  expect(screen.getByRole('button', { name: 'Tiếp tục' })).toHaveProperty('disabled', true);
+  const [path, init] = state.request.mock.calls.find(([path]) =>
+    path.endsWith('/signing-invitations'),
+  )!;
+  expect(path).toContain('/contract/');
+  expect(JSON.parse(init.body)).toMatchObject({
+    snapshotHash: 'snapshot',
+    recipientEmail: 'tenant@example.invalid',
+  });
+  expect(screen.queryByText('Tạo bản PDF để kiểm tra')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Mô phỏng Owner ký' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Tiếp tục thanh toán' })).toBeNull();
 });
 it('blocks QR after Owner-only confirmation until Staff simulation is persisted and the contract is reloaded', async () => {
   const c = {
@@ -454,6 +469,13 @@ it('renders success only from Active and returns to the existing list', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Quay về danh sách hợp đồng' }));
   expect(list).toHaveBeenCalledOnce();
 });
+it('reviews the PDF without exposing raw contract terms in the Staff preview step', () => {
+  const draft = { ...contract(), status: 'Draft' } as ContractView;
+  flow(draft, 'Staff');
+  expect(screen.getByText('Private documents')).toBeTruthy();
+  expect(screen.queryByText('Nội dung hợp đồng')).toBeNull();
+  expect(screen.queryByText(draft.terms)).toBeNull();
+});
 it('does not offer Owner signing or financial controls to Staff', () => {
   flow(contract(), 'Staff');
   expect(screen.queryByRole('button', { name: 'Yêu cầu ký MySign' })).toBeNull();
@@ -482,13 +504,13 @@ it('releases with the verified linked signer, exact reviewed file and explicit c
     />,
   );
   const submit = screen.getByRole('button', {
-    name: 'Duyệt và chuyển sang chờ ký',
+    name: 'Chuyển sang chờ ký',
   }) as HTMLButtonElement;
   expect(submit.disabled).toBe(true);
   await screen.findByText('Viettel MySign · Tài khoản đã liên kết');
   expect(screen.queryByRole('combobox')).toBeNull();
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/accounts'))).toBe(false);
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo bản PDF để duyệt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo bản PDF để kiểm tra' }));
   await screen.findByText('Private PDF review');
   expect(submit.disabled).toBe(true);
   fireEvent.click(screen.getByRole('checkbox'));
@@ -518,7 +540,7 @@ it('blocks review when the resident endpoint does not match the persisted repres
     />,
   );
   await screen.findByText(mainDraftMessages.verified_contract_signer_required!);
-  expect((screen.getByText('Tạo bản PDF để duyệt') as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByText('Tạo bản PDF để kiểm tra') as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByRole('combobox')).toBeNull();
   expect(state.request).not.toHaveBeenCalled();
 });
@@ -540,10 +562,10 @@ it('releases an Owner-reviewed new Tenant draft through the supported anonymous 
     />,
   );
   await screen.findByText('Email OTP · Chấp thuận nội bộ');
-  fireEvent.click(screen.getByRole('button', { name: 'Tạo bản PDF để duyệt' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo bản PDF để kiểm tra' }));
   await screen.findByText('Private PDF review');
   fireEvent.click(screen.getByRole('checkbox'));
-  fireEvent.click(screen.getByRole('button', { name: 'Duyệt và chuyển sang chờ ký' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Chuyển sang chờ ký' }));
   await waitFor(() => expect(released).toHaveBeenCalledWith('draft'));
   const release = state.request.mock.calls.find(([path]) => path.endsWith('/release'))!;
   expect(JSON.parse(release[1].body)).toEqual({
@@ -552,19 +574,6 @@ it('releases an Owner-reviewed new Tenant draft through the supported anonymous 
     reviewedFileId: 'review',
     humanReviewed: true,
   });
-});
-it('shows Staff handoff without requesting accounts, signing-review or release', () => {
-  state.roles = ['Staff'];
-  render(
-    <MainDraftSigningReview
-      client={mainDraftClient(state.request)}
-      draft={{ id: 'draft' } as MainDraftView}
-      onReleased={vi.fn()}
-      onOpenPdf={vi.fn()}
-    />,
-  );
-  expect(screen.getByText('Chờ Chủ cơ sở duyệt để ký')).toBeTruthy();
-  expect(state.request).not.toHaveBeenCalled();
 });
 it('clears the reviewed document when the server Draft version changes before release', async () => {
   let currentVersion = 4;
@@ -585,18 +594,16 @@ it('clears the reviewed document when the server Draft version changes before re
     />,
   );
   await screen.findByText('Email OTP · Chấp thuận nội bộ');
-  fireEvent.click(screen.getByText('Tạo bản PDF để duyệt'));
+  fireEvent.click(screen.getByText('Tạo bản PDF để kiểm tra'));
   await screen.findByText('Private PDF review');
   fireEvent.click(screen.getByRole('checkbox'));
   currentVersion = 5;
-  fireEvent.click(screen.getByText('Duyệt và chuyển sang chờ ký'));
+  fireEvent.click(screen.getByText('Chuyển sang chờ ký'));
   await screen.findByText('Bản nháp đã thay đổi hoặc không còn ở trạng thái Draft. Hãy tải lại.');
   expect(changed).toHaveBeenCalledWith(expect.objectContaining({ version: 5 }));
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/release'))).toBe(false);
   expect(screen.queryByText('Private PDF review')).toBeNull();
-  expect((screen.getByText('Duyệt và chuyển sang chờ ký') as HTMLButtonElement).disabled).toBe(
-    true,
-  );
+  expect((screen.getByText('Chuyển sang chờ ký') as HTMLButtonElement).disabled).toBe(true);
 });
 it('keeps a signing-review recovery action after integrity failure and requires a fresh confirmation', async () => {
   let generation = 0;
@@ -616,7 +623,7 @@ it('keeps a signing-review recovery action after integrity failure and requires 
     />,
   );
   await screen.findByText('Email OTP · Chấp thuận nội bộ');
-  fireEvent.click(screen.getByText('Tạo bản PDF để duyệt'));
+  fireEvent.click(screen.getByText('Tạo bản PDF để kiểm tra'));
   await screen.findByText('Private PDF review-1');
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByText('Fail private PDF'));
@@ -627,8 +634,6 @@ it('keeps a signing-review recovery action after integrity failure and requires 
   fireEvent.click(screen.getByText('Tạo lại PDF'));
   await screen.findByText('Private PDF review-2');
   expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
-  expect((screen.getByText('Duyệt và chuyển sang chờ ký') as HTMLButtonElement).disabled).toBe(
-    true,
-  );
+  expect((screen.getByText('Chuyển sang chờ ký') as HTMLButtonElement).disabled).toBe(true);
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/release'))).toBe(false);
 });

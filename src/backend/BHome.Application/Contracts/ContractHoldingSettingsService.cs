@@ -35,7 +35,7 @@ public sealed partial class ContractService
         Money(decimal.Truncate(rent), false);
         var end = Today.AddMonths(settings.HoldingMonths);
         var expiry = new DateTimeOffset(end.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime();
-        var deposit = decimal.Truncate(rent * settings.DepositRentMonths); Money(deposit, false);
+        var deposit = decimal.Truncate(rent);
         return new(roomId, room.LocationId, room.RoomNumber, settings.Version, settings.HoldingMonths,
             Today, end, expiry, decimal.Truncate(rent), deposit, settings.Terms);
     }

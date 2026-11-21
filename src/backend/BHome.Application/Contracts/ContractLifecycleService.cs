@@ -5,6 +5,7 @@ namespace BHome.Application.Contracts;
 
 public sealed partial class ContractService
 {
+    private sealed record RejectedMoveOutSnapshot(MoveOutView Request, string Reason);
     public Task<ContractSettlementSummary> SettlementSummaryAsync(Guid id, CancellationToken t) => Mutate(id, [Roles.Owner, Roles.Tenant], async c =>
     {
         var summary = ledger is IContractSettlementDetails details ? await details.SummaryAsync(id, t) : throw new ContractException(503, "settlement_summary_unavailable");
@@ -15,17 +16,61 @@ public sealed partial class ContractService
                 .Select(r => r with { Charge = r.Charge with { RecipientUserIds = [], OperationKey = Guid.Empty, Fingerprint = "" } }).ToArray()
         };
     }, t);
-    private void MoveOutEvent(ContractMoveOut m, string action) => repository.Add(new ContractMoveOutHistory
+    private void MoveOutEvent(ContractMoveOut m, string action, string? rejectionReason = null) => repository.Add(new ContractMoveOutHistory
     {
         ContractId = m.ContractId,
         Version = m.Version,
         Action = action,
-        Snapshot = System.Text.Json.JsonSerializer.Serialize(View(m)),
+        Snapshot = rejectionReason is null ? System.Text.Json.JsonSerializer.Serialize(View(m))
+            : System.Text.Json.JsonSerializer.Serialize(new RejectedMoveOutSnapshot(View(m), rejectionReason)),
         ActorId = Actor,
         OccurredAt = clock.GetUtcNow()
     });
     public async Task<IReadOnlyList<MoveOutHistoryView>> MoveOutHistoryAsync(Guid id, CancellationToken t)
-    { await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t); return (await repository.MoveOutHistoryAsync(id, t)).Select(h => new MoveOutHistoryView(h.Version, h.Action, h.ActorId, h.OccurredAt, h.Snapshot)).ToArray(); }
+    {
+        await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
+        var owner = user.IsInRole(Roles.Owner);
+        return (await repository.MoveOutHistoryAsync(id, t)).Select(h => new MoveOutHistoryView(
+            h.Version, h.Action, h.ActorId, h.OccurredAt, !owner && h.Action == "Rejected" ? "{}" : h.Snapshot)).ToArray();
+    }
+
+    public async Task<TerminationReview> GetTerminationReviewAsync(Guid id, CancellationToken t)
+    {
+        var contract = await Load(id, [Roles.Owner], t);
+        var move = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
+        var tenant = (await repository.OccupantsAsync(id, t)).FirstOrDefault(o => o.Representative)?.Label;
+        var rejected = move.Status == MoveOutStatus.Rejected
+            ? (await repository.MoveOutHistoryAsync(id, t)).FirstOrDefault(h => h.Action == "Rejected" && h.Version == move.Version)
+            : null;
+        var actor = rejected?.ActorId ?? move.ApprovedByUserId;
+        var status = move.Status is MoveOutStatus.Requested or MoveOutStatus.Rejected ? move.Status.ToString() : "Approved";
+        return new(status, move.Version, contract.Room.Location.Name, contract.Room.RoomNumber, tenant, contract.StartDate, contract.EndDate,
+            move.ProposedDate, move.Reason, rejected?.OccurredAt ?? move.ApprovedAt,
+            actor is { } actorId ? await repository.DecisionActorNameAsync(actorId, t) : null,
+            rejected is null ? null : System.Text.Json.JsonSerializer.Deserialize<RejectedMoveOutSnapshot>(rejected.Snapshot)?.Reason);
+    }
+
+    public Task<MoveOutView> RejectTerminationAsync(Guid id, TerminationRejection input, Guid key, CancellationToken t)
+    {
+        Validate(input);
+        var reason = input.Reason.Trim();
+        if (reason.Length == 0) throw ContractException.Invalid("move_out_rejection_reason_required");
+        var fingerprint = new { id, reason, input.ExpectedVersion };
+        return Mutate(id, [Roles.Owner], async contract =>
+        {
+            var move = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
+            if (await Replay(key, "terminate-reject", fingerprint, t) is not null) return View(move);
+            if (contract.Status != ContractStatus.Active || move.Status != MoveOutStatus.Requested ||
+                input.ExpectedVersion is { } version && move.Version != version)
+                throw ContractException.Conflict("move_out_not_pending_approval");
+            move.Status = MoveOutStatus.Rejected;
+            move.Version++;
+            MoveOutEvent(move, "Rejected", reason);
+            Audit("ContractMoveOutRejected", id);
+            Remember(key, "terminate-reject", fingerprint, move.Id);
+            return View(move);
+        }, t);
+    }
     public Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(CancellationToken t)
     { Role(Roles.Staff); return repository.AssignmentsAsync(Actor, Today, t); }
     public async Task<IReadOnlyList<ContractVersionView>> VersionsAsync(Guid id, CancellationToken t)

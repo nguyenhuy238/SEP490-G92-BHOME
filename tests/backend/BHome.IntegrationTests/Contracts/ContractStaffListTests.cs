@@ -38,7 +38,7 @@ public sealed partial class ContractLifecycleApiTests
         Assert.Equal(HttpStatusCode.NoContent, (await w.Owner.Client.PutAsJsonAsync(path, config)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await w.Owner.Client.PutAsJsonAsync($"/api/v1/contracts/holding-settings/{outside.Location}", new HoldingSettingsInput(1, 1m, "Synthetic location B terms", 0))).StatusCode);
         var quote = await Success<HoldingPreparation>(await w.Staff.Client.GetAsync($"/api/v1/contracts/holdings/preparation?roomId={w.Room}"));
-        Assert.Equal(4500000, quote.HoldingDeposit); Assert.Equal(2, quote.HoldingMonths);
+        Assert.Equal(3000000, quote.HoldingDeposit); Assert.Equal(2, quote.HoldingMonths);
         var other = await Success<HoldingPreparation>(await outside.Staff.Client.GetAsync($"/api/v1/contracts/holdings/preparation?roomId={outside.Room}"));
         Assert.Equal(4000000, other.HoldingDeposit); Assert.Equal(1, other.HoldingMonths);
         Assert.Equal(HttpStatusCode.NotFound, (await outside.Staff.Client.GetAsync($"/api/v1/contracts/holdings/preparation?roomId={w.Room}")).StatusCode);
@@ -50,7 +50,7 @@ public sealed partial class ContractLifecycleApiTests
         var id = (await Success<ContractId>(await Post(w.Staff, "/api/v1/contracts/holdings", stale with { StartDate = quote.StartDate, EndDate = quote.EndDate, ExpiresAt = quote.ExpiresAt, HoldingDeposit = quote.HoldingDeposit, SettingsVersion = quote.SettingsVersion }))).Id;
         Assert.Equal(HttpStatusCode.NoContent, (await w.Owner.Client.PutAsJsonAsync(path, config with { HoldingMonths = 4, ExpectedVersion = 2 })).StatusCode);
         var created = await Success<ContractView>(await w.Staff.Client.GetAsync(Path(id)));
-        Assert.Equal(6000000, created.RequiredDeposit); Assert.Equal(quote.EndDate, created.EndDate);
+        Assert.Equal(3000000, created.RequiredDeposit); Assert.Equal(quote.EndDate, created.EndDate);
     }
     [Fact]
     public async Task StaffListIncludesHoldingAndMainWithTypeSpecificFieldsAndPreservesLocationScope()
@@ -92,7 +92,7 @@ public sealed partial class ContractLifecycleApiTests
         Assert.Contains(page.Items, c => c.Id == mainId && c.Kind == "Main");
         var item = Assert.Single(page.Items, c => c.Id == holdingId);
         Assert.Equal("Holding", item.Kind); Assert.Equal("Draft", item.Status);
-        Assert.False(item.OnboardingDraft); Assert.Equal(750000, item.RequiredDeposit);
+        Assert.False(item.OnboardingDraft); Assert.Equal(3000000, item.RequiredDeposit);
         Assert.NotNull(item.HoldingExpiresAt);
         Assert.InRange(Math.Abs((item.HoldingExpiresAt.Value - expiry).TotalSeconds), 0, 1);
         Assert.DoesNotContain(page.Items, c => c.Id == outsideId);

@@ -38,7 +38,11 @@ public sealed record IdentityConfirmation(
 }
 public sealed record MeterConfirmation(bool HumanConfirmed, [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal ConfirmedValue, Guid EvidenceId);
 public sealed record IdResult(Guid Id);
-public sealed record NamedResource(Guid Id, string Label, Guid? ParentId = null, string? Status = null, int? Capacity = null, int? RemainingCapacity = null);
+public sealed record NamedResource(Guid Id, string Label, Guid? ParentId = null, string? Status = null, int? Capacity = null, int? RemainingCapacity = null)
+{
+    public IReadOnlyList<string>? CurrentTenantLabels { get; init; }
+    public bool? WaitingForOwnerSignature { get; init; }
+}
 public sealed record ResidentSummary(Guid Id, Guid RoomId, string DisplayLabel, ResidentType ResidentType,
     IdentityVerificationStatus VerificationStatus, DateTimeOffset? ConfirmedAt, string? Email = null);
 public sealed record IdentityConfirmationResult(Guid Id, IdentityVerificationStatus VerificationStatus, DateTimeOffset? ConfirmedAt);
