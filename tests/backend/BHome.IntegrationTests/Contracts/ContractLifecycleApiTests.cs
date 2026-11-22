@@ -69,6 +69,18 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
     private static string Path(Guid id, string operation = "") => $"/api/v1/contracts/{id}" + (operation.Length == 0 ? "" : "/" + operation);
     private static HandoverRoomCheck[] PassedMoveOutRoomChecks() => HandoverRoomChecklist.RequiredCodes
         .Select(code => new HandoverRoomCheck(code, "Passed", null, [])).ToArray();
+    private async Task StartMoveOutTaskForInspection(Workspace workspace, Guid contractId)
+    {
+        if (!await UsesCompact24()) return;
+        var tasks = await Success<TaskPage<TaskView>>(await workspace.Staff.Client.GetAsync(
+            $"/api/v1/operational-tasks?locationId={workspace.Location}&pageSize=100"));
+        var task = Assert.Single(tasks.Items, item => item.Target?.ContractId == contractId &&
+            item.Title.StartsWith("Kiểm tra trả phòng", StringComparison.Ordinal));
+        if (task.Status == "Assigned")
+            task = await Success<TaskView>(await Post(workspace.Staff,
+                $"/api/v1/operational-tasks/{task.Id}/start", new TaskAction(task.Version)));
+        Assert.Equal("InProgress", task.Status);
+    }
     [Fact]
     public async Task AssignedStaffReadsReadinessButCannotActivateOrReadOtherLocations()
     {
@@ -719,6 +731,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await Success<MoveOutView>(await Post(w.Tenant, Path(id, "termination-requests"), new TerminationInput(Today, "Synthetic moveout")));
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/schedule"), new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(1), w.Staff.Id)));
+        await StartMoveOutTaskForInspection(w, id);
         var electricity = await FinalReading(w, id, UtilityType.Electricity); var water = await FinalReading(w, id, UtilityType.Water);
         using var finalPhoto = new ByteArrayContent(Image()); finalPhoto.Headers.ContentType = new("image/png");
         var finalFile = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), finalPhoto))).Id;

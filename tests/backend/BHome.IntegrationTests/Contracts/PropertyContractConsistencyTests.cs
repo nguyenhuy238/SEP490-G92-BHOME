@@ -73,6 +73,7 @@ public sealed partial class ContractLifecycleApiTests
         await Success<MoveOutView>(await Post(w.Tenant, Path(id, "termination-requests"), new TerminationInput(Today, "Synthetic reviewed move-out")));
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/schedule"), new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(5))));
+        await StartMoveOutTaskForInspection(w, id);
         var electricity = await FinalReading(w, id, BHome.Domain.Billing.UtilityType.Electricity);
         var water = await FinalReading(w, id, BHome.Domain.Billing.UtilityType.Water);
         var choices = await EmptyRoomHandoverChoices(w, id);
