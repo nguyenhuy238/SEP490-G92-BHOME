@@ -231,7 +231,7 @@ public sealed class HandoverPdfRendererTests
     [InlineData("MoveIn")]
     [InlineData("MoveOut")]
     [InlineData("AssetChange")]
-    public async Task VietnameseMultiPageReportHasVersionQuantitiesAndNoDigitalSignature(string type)
+    public async Task VietnameseMultiPageReportHasVersionQuantitiesAndNoDigitalSignatureOrRejectsMoveOut(string type)
     {
         using var backend = ContractPdfRendererTests.Backend(); using var scope = backend.CreateScope();
         var reading = new HandoverReading(Guid.NewGuid(), "E-SYN", 0, new(2026, 11, 16), 124.7m, Guid.NewGuid(), "private", "hash");
@@ -251,7 +251,16 @@ public sealed class HandoverPdfRendererTests
         var report = new HandoverDocumentReport(Guid.NewGuid(), Guid.NewGuid(), type, 3, "Cơ sở thử nghiệm", "Địa chỉ tổng hợp", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow, snapshot, null, [], ["Owner chấp thuận ngoại lệ có bằng chứng"],
             [new HandoverDocumentPhoto(Guid.NewGuid(), "Ảnh bí mật không nhúng", png.ToArray())]);
-        var bytes = await scope.ServiceProvider.GetRequiredService<IHandoverDocumentRenderer>().RenderAsync(report, default);
+        var renderer = scope.ServiceProvider.GetRequiredService<IHandoverDocumentRenderer>();
+        if (type == "MoveOut")
+        {
+            // Move-out is saved as a private inspection snapshot, not a newly generated
+            // or signed PDF. Only archived historic MoveOut PDFs remain downloadable.
+            var error = await Assert.ThrowsAsync<ContractException>(() => renderer.RenderAsync(report, default));
+            Assert.Equal("move_out_pdf_not_supported", error.Code);
+            return;
+        }
+        var bytes = await renderer.RenderAsync(report, default);
         using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
         Assert.True(pdf.GetNumberOfPages() > 2); Assert.Equal("3", pdf.GetDocumentInfo().GetMoreInfo("BHomeVersion"));
         var text = ContractPdfRendererTests.Text(pdf);
@@ -267,6 +276,5 @@ public sealed class HandoverPdfRendererTests
         }
         NoEmbeddedPhotos(pdf);
         Assert.Contains("không phải chữ ký số", text); Assert.Empty(new iText.Signatures.SignatureUtil(pdf).GetSignatureNames());
-        if (type == "MoveOut") { Assert.Contains("Giới hạn dữ liệu đối chiếu", text); Assert.Contains("còn người thuê chung", text); }
     }
 }

@@ -11,6 +11,14 @@ public sealed class SettlementReceivablesController(SettlementReceivablesService
 {
     private Guid Key() => Guid.TryParse(Request.Headers["Idempotency-Key"], out var key) ? key : Guid.Empty;
     [HttpGet] public Task<SettlementReceivablesView> Get(Guid id, CancellationToken token) => service.GetAsync(id, token);
+    [HttpGet("proposal")]
+    public Task<MoveOutChargeProposalPreview> Proposal(Guid id, CancellationToken token) => service.GetProposalAsync(id, token);
+    [HttpPost("proposal"), Authorize(Roles = Roles.Owner)]
+    public Task<MoveOutChargeProposal> SendProposal(Guid id, MoveOutChargeProposalInput input, CancellationToken token) =>
+        service.SendProposalAsync(id, input, Key(), token);
+    [HttpPost("proposal/tenant-feedback"), Authorize(Roles = Roles.Tenant)]
+    public Task<MoveOutChargeProposalFeedback> RespondToProposal(Guid id, MoveOutChargeProposalFeedbackInput input, CancellationToken token) =>
+        service.RespondToProposalAsync(id, input, Key(), token);
     [HttpGet("charge-review"), Authorize(Roles = Roles.Owner)]
     public Task<SettlementChargeReviewPreview> Review(Guid id, CancellationToken token) => service.PreviewChargeReviewAsync(id, token);
     [HttpPost("charge-review"), Authorize(Roles = Roles.Owner)]

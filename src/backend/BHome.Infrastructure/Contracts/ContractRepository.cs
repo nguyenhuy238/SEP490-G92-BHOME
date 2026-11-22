@@ -60,6 +60,17 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
          join e in db.Set<MeterEvidence>() on r.EvidenceId equals e.Id
          where task.ContractId == contractId && meter.RoomId == roomId && meter.IsActive && task.Purpose == ReadingPurpose.Final && task.ReadingDate == today && task.Status == MeterTaskStatus.Completed && e.IsUploaded && e.IsLinked
          select new HandoverReading(r.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate, r.ConfirmedValue, e.Id, e.ObjectKey, e.ImageHash)).ToArrayAsync(t);
+    public Task<HandoverReading?> ConfirmedFinalInspectionReadingAsync(Guid contractId, Guid roomId, Guid readingId, CancellationToken t) =>
+        (from reading in db.Set<MeterReading>().AsNoTracking()
+         join task in db.Set<OperationalTask>().AsNoTracking() on reading.TaskId equals task.Id
+         join meter in db.Set<Meter>().AsNoTracking() on reading.MeterId equals meter.Id
+         join evidence in db.Set<MeterEvidence>().AsNoTracking() on reading.EvidenceId equals evidence.Id
+         where reading.Id == readingId && task.ContractId == contractId && meter.RoomId == roomId &&
+               task.Purpose == ReadingPurpose.Final && task.Status == MeterTaskStatus.Completed &&
+               task.MeterId == reading.MeterId && evidence.TaskId == task.Id &&
+               evidence.IsUploaded && evidence.IsLinked
+         select new HandoverReading(reading.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate,
+             reading.ConfirmedValue, evidence.Id, evidence.ObjectKey, evidence.ImageHash)).SingleOrDefaultAsync(t);
     public Task<bool> StaffAssignedAsync(Guid staffId, Guid locationId, DateOnly today, CancellationToken t) =>
         db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == staffId && a.LocationId == locationId &&
             a.StartDate <= today && a.EndDate >= today && EligibleStaff(today).Contains(staffId), t);
@@ -67,11 +78,43 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
     public async Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId, DateOnly today, CancellationToken t) => await
         (from m in db.Set<ContractMoveOut>().AsNoTracking()
          join c in db.Set<Contract>() on m.ContractId equals c.Id
-         where m.InspectionStaffId == staffId && m.Status != MoveOutStatus.Completed && m.InspectionScheduledAt != null && c.Room.Location.IsActive &&
+         where (m.InspectionStaffId == null || m.InspectionStaffId == staffId) &&
+           m.Status != MoveOutStatus.Requested && m.Status != MoveOutStatus.Completed &&
+           c.Status == ContractStatus.Active && c.Room.Location.IsActive &&
            EligibleStaff(today).Contains(staffId) &&
            db.StaffLocationAssignments.Any(a => a.StaffUserId == staffId && a.LocationId == c.Room.LocationId && a.StartDate <= today && a.EndDate >= today)
-         orderby m.InspectionScheduledAt
-         select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt!.Value, m.Version)).Take(100).ToArrayAsync(t);
+         orderby m.ProposedDate, m.ContractId
+         select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt, m.Version)).Take(100).ToArrayAsync(t);
+    public async Task<OwnerMoveOutInboxPage> OwnerMoveOutInboxAsync(int page, int pageSize,
+        Guid? locationId, MoveOutStatus? status, string? room, CancellationToken t)
+    {
+        var moves = db.Set<ContractMoveOut>().AsNoTracking().AsQueryable();
+        if (status is { } state) moves = moves.Where(move => move.Status == state);
+        var contracts = db.Set<Contract>().AsNoTracking().AsQueryable();
+        if (locationId is { } location) contracts = contracts.Where(c => c.Room.LocationId == location);
+        if (!string.IsNullOrWhiteSpace(room)) contracts = contracts.Where(c => EF.Functions.ILike(c.Room.RoomNumber, "%" + room + "%"));
+        var query = from move in moves
+                    join contract in contracts on move.ContractId equals contract.Id
+                    select new
+                    {
+                        ContractId = contract.Id,
+                        contract.Room.RoomNumber,
+                        LocationId = contract.Room.LocationId,
+                        LocationName = contract.Room.Location.Name,
+                        move.Status,
+                        move.ProposedDate,
+                        InspectedAt = db.Set<ContractFinalInspection>().Where(i => i.ContractId == contract.Id)
+                            .OrderByDescending(i => i.Version).Select(i => (DateTimeOffset?)i.InspectedAt).FirstOrDefault(),
+                        OwnerDecision = db.Set<ContractFinalInspection>().Where(i => i.ContractId == contract.Id)
+                            .OrderByDescending(i => i.Version).Select(i => i.OwnerDecision).FirstOrDefault()
+                    };
+        var total = await query.CountAsync(t);
+        var rows = await query.OrderByDescending(m => m.ProposedDate).ThenBy(m => m.ContractId)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(t);
+        return new(rows.Select(row => new OwnerMoveOutInboxItem(row.ContractId, row.RoomNumber,
+            row.LocationId, row.LocationName, row.Status.ToString(), row.ProposedDate, row.InspectedAt,
+            row.OwnerDecision == "Confirmed")).ToArray(), page, pageSize, total);
+    }
     public async Task<T> InTransactionAsync<T>(Guid roomId, Func<Task<T>> work, CancellationToken t)
     {
         // Order: payment ledger -> Location advisory -> Room row. Property and Invoice start at

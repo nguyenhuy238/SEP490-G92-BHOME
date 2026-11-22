@@ -14,12 +14,14 @@ import {
   Paper,
   Skeleton,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tabs,
   Typography,
 } from '@mui/material';
 import { FileText, RefreshCw, X } from 'lucide-react';
@@ -34,6 +36,7 @@ import { PageHeader, FilterToolbar, StatusChip } from '../../../components/commo
 import { isMockMode } from '../../../services/config';
 import { useContractsApi } from '../../contracts/useContractsApi';
 import { OwnerHandoverDraftPanel } from '../../contracts/OwnerHandoverDraftPanel';
+import { OwnerMoveOutInbox } from '../OwnerMoveOutInbox';
 
 interface HandoverInboxItem {
   contractId: string;
@@ -80,7 +83,37 @@ function handoverActivity(item: HandoverInboxItem) {
 }
 
 export default function HandoversPage() {
-  return isMockMode ? <ResourcePage kind="handovers" variant="handover" /> : <LiveHandoversPage />;
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') === 'move-out' ? 'move-out' : 'handover';
+  return (
+    <Stack spacing={2}>
+      <PageHeader title="Bàn giao & trả phòng" />
+      <Paper variant="outlined" sx={{ borderRadius: 2, px: 1 }}>
+        <Tabs
+          value={tab}
+          onChange={(_, next: string) =>
+            setParams((previous) => {
+              const updated = new URLSearchParams(previous);
+              updated.set('tab', next);
+              updated.delete('contractId');
+              return updated;
+            })
+          }
+          aria-label="Chọn quy trình nhận và trả phòng"
+        >
+          <Tab value="handover" label="Bàn giao" />
+          <Tab value="move-out" label="Trả phòng" />
+        </Tabs>
+      </Paper>
+      {tab === 'move-out' ? (
+        <OwnerMoveOutInbox />
+      ) : isMockMode ? (
+        <ResourcePage kind="handovers" variant="handover" />
+      ) : (
+        <LiveHandoversPage />
+      )}
+    </Stack>
+  );
 }
 
 function LiveHandoversPage() {
@@ -138,19 +171,15 @@ function LiveHandoversPage() {
 
   return (
     <Stack spacing={2}>
-      <PageHeader
-        title="Bàn giao nhận phòng"
-        subtitle="Theo dõi biên bản Staff đã lập, ưu tiên hồ sơ cần duyệt và mở chi tiết ngay tại đây."
-        actions={
-          <Button
-            startIcon={<RefreshCw size={16} />}
-            disabled={inbox.isFetching}
-            onClick={() => void inbox.refetch()}
-          >
-            Tải lại
-          </Button>
-        }
-      />
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          startIcon={<RefreshCw size={16} />}
+          disabled={inbox.isFetching}
+          onClick={() => void inbox.refetch()}
+        >
+          Tải lại
+        </Button>
+      </Box>
       <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2 }}>
         <Stack spacing={1.5}>
           <FilterToolbar>

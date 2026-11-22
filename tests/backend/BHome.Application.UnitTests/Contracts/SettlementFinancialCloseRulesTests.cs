@@ -4,6 +4,17 @@ namespace BHome.Application.UnitTests.Contracts;
 
 public sealed class SettlementFinancialCloseRulesTests
 {
+    [Fact]
+    public void MissingKeyRequiresReviewEvenWithNoEvidencePhoto()
+    {
+        var opening = new[] { new HandoverAccessItem("RoomKey", 3, "") };
+        var returned = new[] { new HandoverAccessItem("RoomKey", 2, "") };
+        Assert.True(SettlementFinancialCloseRules.MissingRoomKeys(opening, returned));
+        Assert.False(SettlementFinancialCloseRules.MissingRoomKeys(opening,
+            [new HandoverAccessItem("RoomKey", 3, "")]));
+        Assert.False(SettlementFinancialCloseRules.MissingRoomKeys(null, returned));
+        Assert.False(SettlementFinancialCloseRules.MissingRoomKeys(opening, null));
+    }
     private static readonly string Asset = "asset:11111111-1111-4111-8111-111111111111";
     private static readonly string Room = "room:walls_ceiling_floor";
     private static readonly string Keys = "room:access_room_key";

@@ -108,7 +108,6 @@ describe('contract role and state actions', () => {
     expect(operations({ ...draft, status: 'Active' }, null, 'Staff')).toEqual(['renewals']);
     expect(operations({ ...draft, status: 'Active' }, move('Approved'), 'Staff')).toEqual([
       'move-out/schedule',
-      'move-out/inspection',
     ]);
     expect(operations({ ...draft, status: 'Active' }, move('PendingSettlement'), 'Staff')).toEqual(
       [],
@@ -125,6 +124,15 @@ describe('contract role and state actions', () => {
     expect(operations({ ...draft, status: 'Active' }, move('Requested'), 'Tenant', tenant)).toEqual(
       [],
     );
+  });
+  it('lets Owner and Tenant reopen rejected requests but never restores the old Staff inspection form', () => {
+    const active = { ...draft, status: 'Active' };
+    expect(operations(active, move('Rejected'), 'Owner')).toContain('expiry-move-out');
+    expect(operations(active, move('Rejected'), 'Tenant', tenant)).toContain(
+      'termination-requests',
+    );
+    expect(operations(active, move('Requested'), 'Owner')).toContain('move-out/reject');
+    expect(operations(active, move('Approved'), 'Staff')).not.toContain('move-out/inspection');
   });
   it('never resends an ambiguous signing request or infers Signed from dispatch/recovery', () => {
     const c = {
@@ -191,7 +199,7 @@ describe('contract input and exact Vietnamese values', () => {
     expect(() => draftPayload({ ...values, endDate: values.startDate }, [resident])).toThrow();
     expect(() => draftPayload({ ...values, monthlyRent: '0' }, [resident])).toThrow();
   });
-  it('requires expiry extension and confirmed final readings plus evidence', () => {
+  it('requires expiry extension and routes Final inspection to the Staff checklist, not the retired contract form', () => {
     const c = { ...draft, status: 'Active' };
     const renewal = contractActions(c, null, 'Staff', id)[0]!;
     expect(() =>
@@ -201,25 +209,7 @@ describe('contract input and exact Vietnamese values', () => {
         c,
       ),
     ).toThrow();
-    const inspection = contractActions(c, move('Approved'), 'Staff', id).find(
-      (a) => a.operation === 'move-out/inspection',
-    )!;
-    expect(() =>
-      actionPayload(
-        inspection,
-        { electricityReadingId: owner, waterReadingId: tenant, notes: 'Synthetic' },
-        c,
-        [],
-      ),
-    ).toThrow();
-    expect(
-      actionPayload(
-        inspection,
-        { electricityReadingId: owner, waterReadingId: tenant, notes: 'Synthetic' },
-        c,
-        [resident],
-      ),
-    ).toMatchObject({ evidenceIds: [resident] });
+    expect(operations(c, move('Approved'), 'Staff', id)).not.toContain('move-out/inspection');
   });
 });
 describe('contract transport and safe retries', () => {

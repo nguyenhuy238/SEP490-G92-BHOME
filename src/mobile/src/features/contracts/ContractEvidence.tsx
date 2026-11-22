@@ -13,6 +13,13 @@ import {
   type ContractClient,
 } from '../../../../../packages/client-core/src/contracts';
 
+function finalReadingAccessError(cause: unknown): string {
+  const status = (cause as { status?: number } | null)?.status;
+  if (status === 401) return 'Vui lòng đăng nhập lại để xem ảnh công tơ chốt.';
+  if (status === 403) return 'Tài khoản không có quyền xem ảnh công tơ chốt của hợp đồng này.';
+  return contractError(cause);
+}
+
 export function ContractEvidence({
   api,
   contractId,
@@ -26,6 +33,7 @@ export function ContractEvidence({
   handoverDocumentId,
   draftHandoverPdf = false,
   draftHandoverEvidence = false,
+  finalMeterReading = false,
   assetChangeId,
   thumbnail = false,
   thumbnailHeight = 110,
@@ -43,6 +51,8 @@ export function ContractEvidence({
   handoverDocumentId?: string;
   draftHandoverPdf?: boolean;
   draftHandoverEvidence?: boolean;
+  /** Final move-out meter evidence is verified against this contract (Tenant-safe). */
+  finalMeterReading?: boolean;
   assetChangeId?: string;
   thumbnail?: boolean;
   thumbnailHeight?: number;
@@ -52,7 +62,7 @@ export function ContractEvidence({
     [error, setError] = useFeedbackState('warning', false),
     [previewUri, setPreviewUri] = useState(''),
     [thumbnailState, setThumbnailState] = useState({ key: '', uri: '', error: '' });
-  const thumbnailKey = `${contractId}:${evidenceId ?? ''}:${readingId ?? ''}:${draftHandoverEvidence}`;
+  const thumbnailKey = `${contractId}:${evidenceId ?? ''}:${readingId ?? ''}:${draftHandoverEvidence}:${finalMeterReading}`;
   const thumbnailUri =
     localThumbnailUri || (thumbnailState.key === thumbnailKey ? thumbnailState.uri : '');
   const thumbnailError = thumbnailState.key === thumbnailKey ? thumbnailState.error : '';
@@ -67,8 +77,7 @@ export function ContractEvidence({
     [],
   );
   useEffect(() => {
-    if (!thumbnail || localThumbnailUri || !((draftHandoverEvidence && evidenceId) || readingId))
-      return;
+    if (!thumbnail || localThumbnailUri || !(evidenceId || readingId)) return;
     const controller = new AbortController();
     let objectUrl: string | null = null;
     let cachedPhoto: File | null = null;
@@ -77,8 +86,12 @@ export function ContractEvidence({
         const path = `/api/v1/contracts/${encodeURIComponent(contractId)}/handover/draft/evidence/${encodeURIComponent(evidenceId ?? '')}`;
         if (Platform.OS === 'web') {
           const blob = readingId
-            ? await api.handoverMeterEvidence(contractId, readingId, controller.signal)
-            : await api.transport<Blob>(path, { signal: controller.signal }, 'blob');
+            ? finalMeterReading
+              ? await api.moveOutMeterEvidence(contractId, readingId, controller.signal)
+              : await api.handoverMeterEvidence(contractId, readingId, controller.signal)
+            : draftHandoverEvidence
+              ? await api.transport<Blob>(path, { signal: controller.signal }, 'blob')
+              : await api.evidence(contractId, evidenceId!, controller.signal);
           if (controller.signal.aborted) return;
           if (blob.size > 5 * 1024 * 1024) throw new UserFeedbackError('Ảnh vượt quá 5 MB.');
           const signature = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
@@ -92,8 +105,12 @@ export function ContractEvidence({
           setThumbnailState({ key: thumbnailKey, uri: objectUrl, error: '' });
         } else {
           const bytes = readingId
-            ? await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
-            : await api.transport<Uint8Array>(path, { signal: controller.signal }, 'bytes');
+            ? finalMeterReading
+              ? await api.moveOutMeterEvidenceBytes(contractId, readingId, controller.signal)
+              : await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
+            : draftHandoverEvidence
+              ? await api.transport<Uint8Array>(path, { signal: controller.signal }, 'bytes')
+              : await api.evidenceBytes(contractId, evidenceId!, controller.signal);
           if (controller.signal.aborted) return;
           if (bytes.length > 5 * 1024 * 1024) throw new UserFeedbackError('Ảnh vượt quá 5 MB.');
           const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => bytes[i] === byte);
@@ -115,7 +132,12 @@ export function ContractEvidence({
           setThumbnailState({
             key: thumbnailKey,
             uri: '',
-            error: cause instanceof UserFeedbackError ? cause.message : contractError(cause),
+            error:
+              finalMeterReading && !(cause instanceof UserFeedbackError)
+                ? finalReadingAccessError(cause)
+                : cause instanceof UserFeedbackError
+                  ? cause.message
+                  : contractError(cause),
           });
       }
     })();
@@ -129,6 +151,7 @@ export function ContractEvidence({
     contractId,
     evidenceId,
     draftHandoverEvidence,
+    finalMeterReading,
     thumbnail,
     thumbnailKey,
     localThumbnailUri,
@@ -207,7 +230,9 @@ export function ContractEvidence({
                     controller.signal,
                   )
                 : readingId
-                  ? await api.handoverMeterEvidence(contractId, readingId, controller.signal)
+                  ? finalMeterReading
+                    ? await api.moveOutMeterEvidence(contractId, readingId, controller.signal)
+                    : await api.handoverMeterEvidence(contractId, readingId, controller.signal)
                   : handover
                     ? await api.handoverEvidence(contractId, evidenceId!, controller.signal)
                     : previewId
@@ -254,7 +279,9 @@ export function ContractEvidence({
                     controller.signal,
                   )
                 : readingId
-                  ? await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
+                  ? finalMeterReading
+                    ? await api.moveOutMeterEvidenceBytes(contractId, readingId, controller.signal)
+                    : await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
                   : handover
                     ? await api.handoverEvidenceBytes(contractId, evidenceId!, controller.signal)
                     : previewId
@@ -288,7 +315,8 @@ export function ContractEvidence({
         });
       }
     } catch (e) {
-      if (!controller.signal.aborted) setError(contractError(e));
+      if (!controller.signal.aborted)
+        setError(finalMeterReading ? finalReadingAccessError(e) : contractError(e));
     } finally {
       if (temporary?.exists) temporary.delete();
       lock.current = false;
@@ -315,7 +343,11 @@ export function ContractEvidence({
             />
           ) : (
             <Text variant="bodySmall" style={ui.muted}>
-              {thumbnailError ? 'Không xem được ảnh' : 'Đang tải ảnh…'}
+              {thumbnailError
+                ? finalMeterReading
+                  ? thumbnailError
+                  : 'Không xem được ảnh'
+                : 'Đang tải ảnh…'}
             </Text>
           )}
         </View>
@@ -346,7 +378,9 @@ export function ContractEvidence({
             <Button disabled={busy} loading={busy} onPress={() => void download()}>
               {label ??
                 (readingId
-                  ? 'Mở hoặc lưu ảnh chỉ số bàn giao'
+                  ? finalMeterReading
+                    ? 'Mở hoặc lưu ảnh công tơ chốt'
+                    : 'Mở hoặc lưu ảnh chỉ số bàn giao'
                   : previewId
                     ? 'Mở hoặc lưu PDF xem trước'
                     : pdf

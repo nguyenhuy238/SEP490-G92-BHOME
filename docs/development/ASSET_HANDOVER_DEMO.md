@@ -63,7 +63,9 @@ Chỉ số đầu kỳ 100/100 và ảnh PNG tổng hợp được seed làm đi
    Tenant xác nhận tại cùng tab Bàn giao. Biên bản ban đầu vẫn ghi 4, baseline đối chiếu hiện tại ghi 5.
    Thay thế/thu hồi có lựa chọn tài sản cũ và số thu hồi; máy chủ kiểm tra nguồn thực tế.
 10. **Tenant → Gia hạn & trả phòng → Yêu cầu chấm dứt trước hạn**. Chọn ngày demo hiện tại và lý do;
-    xác nhận thao tác. **Owner → Hợp đồng** duyệt yêu cầu, lưu lịch và phân công Staff đang phụ trách cơ sở.
+    xác nhận thao tác. **Owner → Hợp đồng** duyệt yêu cầu: nhiệm vụ trả phòng mở ngay cho Staff tại cơ sở,
+    không cần lịch hoặc người phụ trách riêng. Để test luồng Owner chủ động, có thể dùng hợp đồng Active
+    khác và nhấn **Lập yêu cầu trả phòng**, chọn ngày trước, đúng hoặc sau hạn; nhiệm vụ cũng mở ngay.
 11. **Owner/Staff → điện nước**: tạo tác vụ chốt đúng hợp đồng, chụp ảnh và xác nhận chỉ số cuối kỳ.
     Demo tự động dùng 101/101 qua capture API, không tự xác nhận OCR hoặc reset công tơ.
 12. **Staff → Gia hạn & trả phòng**: tải lại trạng thái và biên bản/quyết toán; chụp ảnh cuối kỳ.

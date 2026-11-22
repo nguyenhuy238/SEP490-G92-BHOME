@@ -54,7 +54,7 @@ import { ContractLoading } from './ContractLoading';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
-  const { role } = useWorkspace();
+  const { role, go } = useWorkspace();
   const [staffListView, setStaffListView] = useState({ ...defaultStaffContractListView });
   const params = useLocalSearchParams<{
     contractId?: string;
@@ -318,7 +318,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         onViewStateChange={setStaffListView}
         onCreateHolding={() => setCreateHolding(true)}
         onOpen={(contract) => setSelected(contract.id)}
-        onInspection={setSelected}
+        onInspection={() => go('work-orders')}
       />
     );
   return (
@@ -800,7 +800,6 @@ function LiveContractDetail({
           action={terminationAction}
           contract={c}
           keys={keys}
-          evidenceIds={availableEvidence}
           onSuccess={() => {
             setTerminationRequested(true);
             detail.reload();
@@ -826,20 +825,29 @@ function LiveContractDetail({
         <Box>
           <Heading title="Trả phòng" detail={text(m.status)} />
           <Text>Ngày đề nghị: {displayContractDate(m.proposedDate)}</Text>
-          <Text>Lý do: {m.reason}</Text>
-          {m.inspectionScheduledAt && (
+          {!!m.reason?.trim() && <Text>Lý do: {m.reason}</Text>}
+          {role !== 'Tenant' && m.inspectionScheduledAt && (
             <Text>Lịch kiểm tra: {formatInstant(m.inspectionScheduledAt)} (giờ Việt Nam)</Text>
           )}
-          {!!m.pendingReason && <Text style={ui.red}>{text(m.pendingReason)}</Text>}
-          {m.inspectionNotes && <Text>Biên bản: {m.inspectionNotes}</Text>}
-          {m.inspectedAt && <Text>Lập lúc: {formatInstant(m.inspectedAt)}</Text>}
-          {m.electricityReadingId && (
+          {role !== 'Tenant' && !!m.pendingReason && (
+            <Text style={ui.red}>{text(m.pendingReason)}</Text>
+          )}
+          {role !== 'Tenant' && !!m.inspectionNotes && (
+            <Text>Kết quả kiểm tra: {m.inspectionNotes}</Text>
+          )}
+          {role !== 'Tenant' && m.inspectedAt && (
+            <Text>Ghi nhận lúc: {formatInstant(m.inspectedAt)}</Text>
+          )}
+          {role !== 'Tenant' && m.electricityReadingId && (
             <Text selectable>Mã chỉ số điện: {m.electricityReadingId}</Text>
           )}
-          {m.waterReadingId && <Text selectable>Mã chỉ số nước: {m.waterReadingId}</Text>}
-          {(m.evidenceIds ?? []).map((e, i) => (
-            <ContractEvidence key={e} api={api} contractId={id} evidenceId={e} number={i + 1} />
-          ))}
+          {role !== 'Tenant' && m.waterReadingId && (
+            <Text selectable>Mã chỉ số nước: {m.waterReadingId}</Text>
+          )}
+          {role !== 'Tenant' &&
+            (m.evidenceIds ?? []).map((e, i) => (
+              <ContractEvidence key={e} api={api} contractId={id} evidenceId={e} number={i + 1} />
+            ))}
         </Box>
       )}
       {section === 'lifecycle' && role === 'Staff' && m?.status === 'Approved' && (
@@ -920,7 +928,6 @@ function LiveContractDetail({
           id={id}
           role={role}
           moveOut={m}
-          evidenceIds={availableEvidence}
           onChanged={() => {
             setEvidence([]);
             detail.reload();
@@ -954,7 +961,6 @@ function LiveContractDetail({
           action={action}
           contract={c}
           keys={keys}
-          evidenceIds={availableEvidence}
           onCancel={() => {
             setSelectedAction('');
             detail.reload();

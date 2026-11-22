@@ -30,7 +30,12 @@ import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import type { Named } from '../lib/api';
 import { queryPolicies } from '../lib/queryPolicies';
-import { taskActionLabels, type TaskEvidence } from '../services/operationalTasks';
+import {
+  isMainMoveInWork,
+  isMainMoveOutWork,
+  taskActionLabels,
+  type TaskEvidence,
+} from '../services/operationalTasks';
 import { LocationAssetInventoryChecklist } from './LocationAssetInventoryChecklist';
 import { LocationAssetHandoverSigning } from './LocationAssetHandoverSigning';
 import { colors as c } from '../theme/theme';
@@ -193,14 +198,16 @@ export function StaffTaskDetailScreen({ id }: { id: string }) {
             </Button>
           </View>
         )}
-        {task.target?.contractId && (
+        {task.target?.contractId && (isMainMoveInWork(task) || isMainMoveOutWork(task)) && (
           <Button
             mode="contained"
             onPress={() =>
-              go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
+              isMainMoveOutWork(task)
+                ? go('move-out', { contractId: task.target!.contractId!, taskId: task.id })
+                : go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
             }
           >
-            Mở bàn giao nhận phòng
+            {isMainMoveOutWork(task) ? 'Mở kiểm tra trả phòng' : 'Mở bàn giao nhận phòng'}
           </Button>
         )}
         <View style={styles.row}>

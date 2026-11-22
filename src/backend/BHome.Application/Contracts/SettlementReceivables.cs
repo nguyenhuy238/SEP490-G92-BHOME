@@ -41,7 +41,7 @@ public sealed record SettlementChargeContext(SettlementReceivablesView View, Gui
     Guid[] AssetIds, Guid[] EvidenceIds, Guid[] RecipientUserIds, bool HasLegacyDeductions, bool IsDevelopmentDemo = false,
     IReadOnlyDictionary<Guid, Guid[]>? IssueAssetEvidence = null,
     IReadOnlyDictionary<string, Guid[]>? IssueRoomCheckEvidence = null,
-    bool HasStructuredRoomChecks = false);
+    bool HasStructuredRoomChecks = false, decimal VerifiedDeposit = 0);
 public interface ISettlementReceivablesRepository
 {
     Task<T> TransactionAsync<T>(Guid contractId, Func<Task<T>> work, CancellationToken token);
@@ -64,6 +64,13 @@ public interface ISettlementReceivablesRepository
     Task<SettlementFinancialClose?> FinancialCloseOperationAsync(Guid actor, Guid key, CancellationToken token);
     Task<SettlementFinancialClose?> LatestFinancialCloseAsync(Guid contractId, CancellationToken token);
     Task SaveFinancialCloseAsync(SettlementFinancialClose result, CancellationToken token);
+    Task<MoveOutChargeProposalSource> ProposalSourceAsync(Guid contractId, CancellationToken token);
+    Task<MoveOutChargeProposal?> ProposalOperationAsync(Guid actor, Guid key, CancellationToken token);
+    Task<MoveOutChargeProposalFeedback?> ProposalFeedbackOperationAsync(Guid actor, Guid key, CancellationToken token);
+    Task<MoveOutChargeProposal?> LatestProposalAsync(Guid contractId, CancellationToken token);
+    Task<MoveOutChargeProposalFeedback?> ProposalFeedbackAsync(Guid contractId, Guid proposalId, CancellationToken token);
+    Task SaveProposalAsync(MoveOutChargeProposal proposal, CancellationToken token);
+    Task SaveProposalFeedbackAsync(MoveOutChargeProposalFeedback feedback, CancellationToken token);
 }
 
 public sealed partial class SettlementReceivablesService(ISettlementReceivablesRepository repository,

@@ -76,6 +76,20 @@ const draft: ContractView = {
   appliedHoldingDeposit: '0',
 };
 
+it('lets Owner open a Location move-out task before contract expiry while Tenant remains request-only', () => {
+  const active = { ...draft, status: 'Active', endDate: '2100-12-31' } as ContractView;
+  const ownerAction = contractActions(active, null, 'Owner', owner).find(
+    (a) => a.operation === 'expiry-move-out',
+  );
+  expect(ownerAction?.label).toBe('Lập yêu cầu trả phòng');
+  expect(
+    actionPayload(ownerAction!, { proposedDate: '2099-01-01', reason: 'Trả phòng sớm' }, active),
+  ).toMatchObject({ proposedDate: '2099-01-01', reason: 'Trả phòng sớm' });
+  expect(contractActions(active, null, 'Tenant', tenant).map((a) => a.operation)).toContain(
+    'termination-requests',
+  );
+});
+
 it('keeps new deposit verification off closed contracts and explains excess without changing the receipt', () => {
   for (const status of [
     'Terminated',

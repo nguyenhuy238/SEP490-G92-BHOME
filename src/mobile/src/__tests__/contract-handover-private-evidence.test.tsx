@@ -2,7 +2,10 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { ContractClient } from '../../../../packages/client-core/src/contracts';
+import {
+  contractClient,
+  type ContractClient,
+} from '../../../../packages/client-core/src/contracts';
 
 const state = vi.hoisted(() => ({
   platform: 'web',
@@ -80,11 +83,17 @@ import { ContractEvidence } from '../features/contracts/ContractEvidence';
 const contractId = '00000000-0000-4000-8000-000000000001';
 const evidenceId = '20000000-0000-4000-8000-000000000002';
 const documentId = '30000000-0000-4000-8000-000000000003';
+const finalReadingId = '40000000-0000-4000-8000-000000000008';
+const finalMeterPath = `/api/v1/contracts/${contractId}/move-out/meter-evidence/${finalReadingId}`;
 const api = {
   transport: state.transport,
   handoverDocument: state.handoverDocument,
   handoverDocumentBytes: state.handoverDocumentBytes,
 } as unknown as ContractClient;
+const finalApi = contractClient(
+  <T,>(path: string, init?: RequestInit, responseType?: 'json' | 'blob' | 'bytes') =>
+    state.transport(path, init, responseType) as Promise<T>,
+);
 
 // jsdom's Blob does not implement arrayBuffer(), unlike browser Blob.
 function browserBlob(bytes: Uint8Array, type: string) {
@@ -199,6 +208,179 @@ it('previews confirmed initial meter photo in the handover detail without offeri
   expect(screen.queryByRole('button', { name: 'Tải ảnh' })).toBeNull();
   unmount();
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
+});
+
+it('loads a Tenant final meter thumbnail only from the authenticated contract-scoped Blob endpoint', async () => {
+  const { unmount } = render(
+    <ContractEvidence
+      api={finalApi}
+      contractId={contractId}
+      readingId={finalReadingId}
+      finalMeterReading
+      thumbnail
+      label="Ảnh công tơ chốt"
+    />,
+  );
+  const image = await screen.findByRole('img', { name: 'Ảnh công tơ chốt' });
+  expect(image.getAttribute('src')).toBe('blob:private-test');
+  expect(state.transport).toHaveBeenCalledExactlyOnceWith(
+    finalMeterPath,
+    { signal: expect.any(AbortSignal) },
+    'blob',
+  );
+  expect(
+    state.transport.mock.calls.some(([path]) => String(path).startsWith('/api/v1/capture/')),
+  ).toBe(false);
+  unmount();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-test');
+});
+
+it('uses the same contract-scoped endpoint when opening the final meter image on web', async () => {
+  render(
+    <ContractEvidence
+      api={finalApi}
+      contractId={contractId}
+      readingId={finalReadingId}
+      finalMeterReading
+      label="Mở ảnh công tơ chốt"
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Mở ảnh công tơ chốt' }));
+  await waitFor(() =>
+    expect(state.transport).toHaveBeenCalledExactlyOnceWith(
+      finalMeterPath,
+      { signal: expect.any(AbortSignal) },
+      'blob',
+    ),
+  );
+  expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledOnce();
+});
+
+it('reads final meter evidence as authenticated native bytes for both thumbnail and share', async () => {
+  state.platform = 'android';
+  const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  state.transport.mockResolvedValue(bytes);
+  const { unmount } = render(
+    <ContractEvidence
+      api={finalApi}
+      contractId={contractId}
+      readingId={finalReadingId}
+      finalMeterReading
+      thumbnail
+      label="Ảnh số chốt trên máy"
+    />,
+  );
+  expect(await screen.findByRole('img', { name: 'Ảnh số chốt trên máy' })).toBeTruthy();
+  expect(state.transport).toHaveBeenCalledExactlyOnceWith(
+    finalMeterPath,
+    { signal: expect.any(AbortSignal) },
+    'bytes',
+  );
+  expect(state.write).toHaveBeenCalledWith(bytes);
+  unmount();
+  expect(state.remove).toHaveBeenCalledOnce();
+
+  render(
+    <ContractEvidence
+      api={finalApi}
+      contractId={contractId}
+      readingId={finalReadingId}
+      finalMeterReading
+      label="Mở ảnh số chốt"
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Mở ảnh số chốt' }));
+  await waitFor(() => expect(state.share).toHaveBeenCalledOnce());
+  expect(state.transport).toHaveBeenLastCalledWith(
+    finalMeterPath,
+    { signal: expect.any(AbortSignal) },
+    'bytes',
+  );
+  expect(state.share).toHaveBeenCalledWith(
+    'file:///private-cache/temporary.pdf',
+    expect.objectContaining({ mimeType: 'image/png' }),
+  );
+  expect(state.transport.mock.calls.every(([path]) => path === finalMeterPath)).toBe(true);
+});
+
+it('shows Tenant authorization errors for final meter evidence without falling back to Capture', async () => {
+  state.transport.mockRejectedValue({ status: 403, code: 'forbidden' });
+  render(
+    <ContractEvidence
+      api={finalApi}
+      contractId={contractId}
+      readingId={finalReadingId}
+      finalMeterReading
+      thumbnail
+    />,
+  );
+  expect(
+    await screen.findByText('Tài khoản không có quyền xem ảnh công tơ chốt của hợp đồng này.'),
+  ).toBeTruthy();
+  expect(state.transport).toHaveBeenCalledExactlyOnceWith(
+    finalMeterPath,
+    { signal: expect.any(AbortSignal) },
+    'blob',
+  );
+  expect(screen.queryByRole('img')).toBeNull();
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+  expect(state.share).not.toHaveBeenCalled();
+});
+
+it('does not download or share denied Tenant final evidence on either platform', async () => {
+  state.transport.mockRejectedValue({ status: 403, code: 'forbidden' });
+  const web = render(
+    <ContractEvidence
+      api={finalApi}
+      contractId={contractId}
+      readingId={finalReadingId}
+      finalMeterReading
+      label="Mở ảnh số chốt"
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Mở ảnh số chốt' }));
+  expect(
+    await screen.findByText('Tài khoản không có quyền xem ảnh công tơ chốt của hợp đồng này.'),
+  ).toBeTruthy();
+  expect(state.transport).toHaveBeenCalledExactlyOnceWith(
+    finalMeterPath,
+    { signal: expect.any(AbortSignal) },
+    'blob',
+  );
+  expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+  web.unmount();
+
+  state.platform = 'ios';
+  state.transport.mockClear();
+  state.transport.mockRejectedValue({ status: 401, code: 'unauthorized' });
+  render(
+    <ContractEvidence
+      api={finalApi}
+      contractId={contractId}
+      readingId={finalReadingId}
+      finalMeterReading
+      label="Mở ảnh số chốt"
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Mở ảnh số chốt' }));
+  expect(await screen.findByText('Vui lòng đăng nhập lại để xem ảnh công tơ chốt.')).toBeTruthy();
+  expect(state.transport).toHaveBeenCalledExactlyOnceWith(
+    finalMeterPath,
+    { signal: expect.any(AbortSignal) },
+    'bytes',
+  );
+  expect(state.share).not.toHaveBeenCalled();
+  expect(state.write).not.toHaveBeenCalled();
+});
+
+it('preserves the Owner/Staff capture reading client method separately from Tenant final evidence', async () => {
+  await finalApi.readingEvidence(finalReadingId);
+  expect(state.transport).toHaveBeenCalledExactlyOnceWith(
+    `/api/v1/capture/readings/${finalReadingId}/evidence`,
+    { signal: undefined },
+    'blob',
+  );
 });
 
 it('shows an unsaved photo immediately from the local preview without fetching a not-yet-linked private file', () => {

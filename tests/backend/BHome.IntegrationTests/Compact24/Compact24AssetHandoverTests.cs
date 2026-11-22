@@ -7,6 +7,7 @@ using BHome.Application.Contracts;
 using BHome.Application.Notifications;
 using BHome.Domain.Notifications;
 using BHome.Application.PropertyManagement;
+using BHome.Application.StaffOperations;
 using BHome.Application.Storage;
 using BHome.Domain.Billing;
 using BHome.Domain.PropertyManagement;
@@ -130,6 +131,18 @@ public sealed partial class Compact24OwnerSetupTests
     {
         using var body = new ByteArrayContent(ReviewEvidenceImage()); body.Headers.ContentType = new("image/png");
         return (await Read<ContractId>(await client.PostAsync($"/api/v1/contracts/{contract}/{(moveOut ? "move-out" : "handover")}/evidence", body))).Id;
+    }
+    private static async Task StartMoveOutTask(HttpClient staff, Guid contract)
+    {
+        var route = $"/api/v1/operational-tasks/{HandoverTestKey($"contract-move-out:{contract:N}")}";
+        var task = await Read<TaskView>(await staff.GetAsync(route));
+        Assert.Equal("Assigned", task.Status);
+        using var request = new HttpRequestMessage(HttpMethod.Post, route + "/start")
+        {
+            Content = JsonContent.Create(new TaskAction(task.Version))
+        };
+        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        Assert.Equal("InProgress", (await Read<TaskView>(await staff.SendAsync(request))).Status);
     }
 
     [CompactPostgresFact]
@@ -286,12 +299,16 @@ public sealed partial class Compact24OwnerSetupTests
 
         var expiry = await Read<MoveOutView>(await HandoverPost(owner, id, "expiry-move-out",
             new TerminationInput(before.EndDate, "Synthetic expiry")));
-        Assert.Equal("Requested", expiry.Status);
+        // The Owner expiry path opens an already-approved departure. Only Tenant
+        // requests enter Requested and can be rejected by Owner.
+        Assert.Equal("Approved", expiry.Status);
         Assert.True(expiry.Version > after.Version);
         Assert.Equal(HttpStatusCode.Conflict,
             (await HandoverPost(owner, id, $"move-out/approve?expectedVersion={before.Version}", new { })).StatusCode);
-        Assert.Equal("Approved", (await Read<MoveOutView>(await HandoverPost(owner, id,
-            $"move-out/approve?expectedVersion={expiry.Version}", new { }))).Status);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await HandoverPost(owner, id, $"move-out/approve?expectedVersion={expiry.Version}", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await HandoverPost(owner, id, "move-out/reject", rejection)).StatusCode);
         var retained = await Read<MoveOutHistoryView[]>(await owner.GetAsync(root + "/move-out/history"));
         Assert.Contains("Synthetic rejection", Assert.Single(retained, h => h.Action == "Rejected").Snapshot);
     }
@@ -361,7 +378,7 @@ public sealed partial class Compact24OwnerSetupTests
     [InlineData(true, "Active")]
     [InlineData(false, "UnderRepair")]
     [InlineData(false, "OpenWorkOrder")]
-    public async Task LegacyBaselineRequiresOwnerExceptionAndDoesNotInventHistoricalQuantities(bool textOnly, string assetState)
+    public async Task LegacyBaselineAllowsInspectionWithoutInventingHistoricalQuantitiesOrBypassingOwnerReview(bool textOnly, string assetState)
     {
         var w = await Seed(); using var host = Host(); var seeded = await SeedAssetHandover(w, host.Services, 1, 1);
         using var owner = await Client(w.Owner, host); using var staff = await Client(w.Staff, host); using var tenant = await Client(w.Tenant, host);
@@ -392,6 +409,7 @@ public sealed partial class Compact24OwnerSetupTests
         await Read<MoveOutView>(await HandoverPost(tenant, id, "termination-requests", new TerminationInput(Today, "Synthetic legacy leaving")));
         await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/approve", new { }));
         await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/schedule", new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(1), w.Staff.Id)));
+        await StartMoveOutTask(staff, id);
         var readings = await FinalHandoverReadings(host.Services, owner, staff, id, w.Room);
         if (assetState != "Active")
         {
@@ -414,18 +432,25 @@ public sealed partial class Compact24OwnerSetupTests
         }
         var preparation = (await staff.GetFromJsonAsync<InspectionPreparation>(route + "/move-out/inspection-preparation"))!;
         if (textOnly) Assert.Null(preparation.Baseline!.Snapshot.Assets[0].HandedOverQuantity); else Assert.Null(preparation.Baseline);
-        Assert.True(preparation.LegacyExceptionRequired);
+        Assert.False(preparation.LegacyExceptionRequired);
+        Assert.Null(preparation.LegacyExceptionReason);
         var photo = await HandoverPhoto(staff, id, true); var group = Assert.Single(preparation.InspectionGroups!);
         var input = new InspectionInput(readings[0], readings[1], "Legacy observed only", [photo],
-            [new(group.Id, "Đã kiểm tra tình trạng mới", 4, 4, 4, 0, 0, 0, true)], "Observed room", "Keys returned", InventoryToken: preparation.Inventory!.StateToken);
-        Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(staff, id, "move-out/inspection", input)).StatusCode);
+            [new(group.Id, "Đã kiểm tra tình trạng mới", ObservedQuantity: 4, GoodQuantity: 4,
+                WornQuantity: 0, DamagedQuantity: 0, Checked: true, Notes: "Chưa có số lượng bàn giao được xác thực")],
+            "Observed room", "Keys returned", InventoryToken: preparation.Inventory!.StateToken,
+            RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code =>
+                new HandoverRoomCheck(code, "Passed", null, [])).ToArray(),
+            AccessItems: [new HandoverAccessItem("RoomKey", 1, "Đã nhận chìa khóa")]);
+        Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(staff, id, "move-out/inspection",
+            input with { RoomChecks = null })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await HandoverPost(staff, id, "move-out/legacy-baseline-exception", new LegacyHandoverException("Not permitted"))).StatusCode);
-        await Read<ContractId>(await HandoverPost(owner, id, "move-out/legacy-baseline-exception", new LegacyHandoverException("No historical baseline; inspect current state without inferring liability")));
         await Read<MoveOutView>(await HandoverPost(staff, id, "move-out/inspection", input));
         var inspection = Assert.Single((await tenant.GetFromJsonAsync<FinalInspectionView[]>(route + "/move-out/inspections"))!);
         if (textOnly) Assert.Null(inspection.Baseline!.Assets[0].HandedOverQuantity); else Assert.Null(inspection.Baseline);
-        Assert.NotNull(inspection.Observed.MissingBaselineReason); Assert.Equal(0, inspection.Observed.Assets[0].MissingQuantity);
-        Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(owner, id, "move-out/inspection-review", new InspectionReviewInput(1, true, "Owner review"))).StatusCode);
+        Assert.NotNull(inspection.Observed.MissingBaselineReason);
+        Assert.Null(inspection.Observed.Assets[0].HandedOverQuantity);
+        Assert.Null(inspection.Observed.Assets[0].MissingQuantity);
         if (assetState != "Active")
         {
             var response = await HandoverPost(owner, id, "move-out/inspection-review", new InspectionReviewInput(1, true, "Do not overwrite maintenance state", false, true, "Tenant absent"));
@@ -582,18 +607,23 @@ public sealed partial class Compact24OwnerSetupTests
             await Read<MoveOutView>(await HandoverPost(party.Tenant, party.Id, "termination-requests", new TerminationInput(Today, "Synthetic shared departure")));
             await Read<MoveOutView>(await HandoverPost(owner, party.Id, "move-out/approve", new { }));
             await Read<MoveOutView>(await HandoverPost(owner, party.Id, "move-out/schedule", new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(1), w.Staff.Id)));
+            await StartMoveOutTask(staff, party.Id);
             var readings = await FinalHandoverReadings(host.Services, owner, staff, party.Id, w.Room);
             var comparison = (await staff.GetFromJsonAsync<InspectionPreparation>($"/api/v1/contracts/{party.Id}/move-out/inspection-preparation"))!;
             var photo = await HandoverPhoto(staff, party.Id, true);
+            var keyPhoto = await HandoverPhoto(staff, party.Id, true);
             await Read<MoveOutView>(await HandoverPost(staff, party.Id, "move-out/inspection", new InspectionInput(readings[0], readings[1], "Shared chair stays in room", [photo],
-                [new(group.Id, "Tốt", 1, 1, 1, 0, 0, 0, true)], "Synthetic", "Tenant private key returned", InventoryToken: comparison.Inventory!.StateToken)));
+                [new(group.Id, "Tốt", 1, 1, 1, 0, 0, 0, true)], "Synthetic", "Tenant private key returned", InventoryToken: comparison.Inventory!.StateToken,
+                RoomChecks: HandoverRoomChecklist.RequiredCodes.Select(code => new HandoverRoomCheck(code, "Passed", null, [])).ToArray(),
+                AccessItems: [new HandoverAccessItem("RoomKey", 0, "Keys returned")], KeyEvidenceIds: [keyPhoto])));
             await Read<MoveOutView>(await HandoverPost(party.Tenant, party.Id, "move-out/tenant-feedback", new InspectionTenantFeedback(1, true, "Current state confirmed")));
             await Read<MoveOutView>(await HandoverPost(owner, party.Id, "move-out/inspection-review", new InspectionReviewInput(1, true, "Observed state only")));
         }
         var completed = await Task.WhenAll(parties.Select(p => HandoverPost(owner, p.Id, "move-out/complete", new CompletionInput(Today, "Available"))));
         Assert.All(completed, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
-        var secondPdf = (await secondTenant.GetFromJsonAsync<ContractDocumentView[]>($"/api/v1/contracts/{secondId}/handover/documents"))!.Single(d => d.Kind == "MoveOutReport");
-        Assert.Equal(HttpStatusCode.NotFound, (await tenant.GetAsync($"/api/v1/contracts/{secondId}/handover/documents/{secondPdf.Id}")).StatusCode);
+        var secondDocuments = (await secondTenant.GetFromJsonAsync<ContractDocumentView[]>($"/api/v1/contracts/{secondId}/handover/documents"))!;
+        Assert.DoesNotContain(secondDocuments, document => document.Kind == "MoveOutReport");
+        Assert.Equal(HttpStatusCode.NotFound, (await tenant.GetAsync($"/api/v1/contracts/{secondId}/handover/documents")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await tenant.GetAsync($"/api/v1/contracts/{secondId}/move-out/settlement-summary")).StatusCode);
         await using var verify = host.Services.CreateAsyncScope(); var final = verify.ServiceProvider.GetRequiredService<Compact24DbContext>();
         Assert.Equal(1, await final.Set<Asset>().CountAsync(a => a.RoomId == w.Room));
@@ -704,6 +734,7 @@ public sealed partial class Compact24OwnerSetupTests
         await Read<MoveOutView>(await HandoverPost(tenant, id, "termination-requests", new TerminationInput(Today, "Synthetic leaving")));
         await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/approve", new { }));
         await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/schedule", new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(1), w.Staff.Id)));
+        await StartMoveOutTask(staff, id);
         var finalReadings = await FinalHandoverReadings(host.Services, owner, staff, id, w.Room);
         var preparation = (await staff.GetFromJsonAsync<InspectionPreparation>(route + "/move-out/inspection-preparation"))!;
         Assert.Equal(sharedRoom, preparation.OtherTenantsRemain);
@@ -725,7 +756,7 @@ public sealed partial class Compact24OwnerSetupTests
             inspection with
             {
                 RoomChecks = roomChecks.Select(check => check.Code == "walls_ceiling_floor"
-                ? check with { EvidenceIds = [] } : check).ToArray()
+                ? check with { Notes = "" } : check).ToArray()
             })).StatusCode);
         await Read<MoveOutView>(await HandoverPost(staff, id, "move-out/inspection", inspection));
         var observedInspection = Assert.Single((await tenant.GetFromJsonAsync<FinalInspectionView[]>(
@@ -740,7 +771,7 @@ public sealed partial class Compact24OwnerSetupTests
             var metadata = await check.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>().AssetMetadataAsync([source.PhysicalAssets![0].Id], default); Assert.Equal(4, metadata.Values.Single().Quantity);
         }
         Assert.Equal(HttpStatusCode.Forbidden, (await HandoverPost(staff, id, "move-out/inspection-review", new InspectionReviewInput(1, true, "Not permitted"))).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await HandoverPost(owner, id, "move-out/inspection-review", new InspectionReviewInput(1, true, "Owner review"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await HandoverPost(owner, id, "move-out/inspection-review", new InspectionReviewInput(1, true, ""))).StatusCode);
         await Read<MoveOutView>(await HandoverPost(tenant, id, "move-out/tenant-feedback", new InspectionTenantFeedback(1, false, "Tôi không đồng ý nguyên nhân thiếu ghế")));
         var reviewKey = Guid.NewGuid(); var review = new InspectionReviewInput(1, true, "Chỉ xác nhận hiện trạng, tài chính xử lý riêng", false, true, "Đã ghi nhận ý kiến tranh chấp của Tenant; chưa kết luận trách nhiệm");
         await Read<MoveOutView>(await HandoverPost(owner, id, "move-out/inspection-review", review, reviewKey));
@@ -754,8 +785,8 @@ public sealed partial class Compact24OwnerSetupTests
         }
         var result = await Read<ContractView>(await HandoverPost(owner, id, "move-out/complete", new CompletionInput(Today, "Unavailable")));
         Assert.Equal("Terminated", result.Status);
-        var documents = (await tenant.GetFromJsonAsync<ContractDocumentView[]>(route + "/handover/documents"))!; var finalDocument = Assert.Single(documents, d => d.Kind == "MoveOutReport");
-        Assert.True((await staff.GetByteArrayAsync(route + "/handover/documents/" + finalDocument.Id)).AsSpan(0, 5).SequenceEqual("%PDF-"u8));
+        var documents = (await tenant.GetFromJsonAsync<ContractDocumentView[]>(route + "/handover/documents"))!;
+        Assert.DoesNotContain(documents, document => document.Kind == "MoveOutReport");
         await using var verify = host.Services.CreateAsyncScope(); var finalDb = verify.ServiceProvider.GetRequiredService<Compact24DbContext>();
         Assert.Equal(sharedRoom ? RoomStatus.Occupied : RoomStatus.Unavailable, (await finalDb.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
         if (secondId is { } otherId) Assert.Equal(ContractStatus.Active, (await finalDb.Set<Contract>().SingleAsync(c => c.Id == otherId)).Status);

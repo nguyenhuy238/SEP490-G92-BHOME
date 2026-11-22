@@ -76,6 +76,22 @@ public sealed partial class ContractService
     }
     public Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(CancellationToken t)
     { Role(Roles.Staff); return repository.AssignmentsAsync(Actor, Today, t); }
+    public Task<OwnerMoveOutInboxPage> OwnerMoveOutInboxAsync(int page, int pageSize,
+        Guid? locationId, string? status, string? room, CancellationToken t)
+    {
+        Role(Roles.Owner);
+        if (page is < 1 or > 100000 || pageSize is < 1 or > 100 || room?.Length > 100 ||
+            locationId == Guid.Empty)
+            throw ContractException.Invalid("invalid_pagination");
+        MoveOutStatus? state = null;
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            if (!Enum.TryParse<MoveOutStatus>(status, true, out var parsed) || !Enum.IsDefined(parsed))
+                throw ContractException.Invalid("invalid_move_out_status");
+            state = parsed;
+        }
+        return repository.OwnerMoveOutInboxAsync(page, pageSize, locationId, state, room?.Trim(), t);
+    }
     public async Task<IReadOnlyList<ContractVersionView>> VersionsAsync(Guid id, CancellationToken t)
     {
         var contract = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);

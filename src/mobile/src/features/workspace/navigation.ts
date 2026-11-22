@@ -143,6 +143,7 @@ export function activeWorkspaceTab(role: MobileRole, screen: WorkspaceScreen): W
       [
         'work-orders',
         'task-detail',
+        'move-out',
         'shifts',
         'report-incident',
         'move-in-inventory',

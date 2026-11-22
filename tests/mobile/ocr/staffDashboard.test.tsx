@@ -2,14 +2,25 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-const state = vi.hoisted(() => ({ preview: false, go: vi.fn() }));
+const state = vi.hoisted(() => ({
+  preview: false,
+  go: vi.fn(),
+  inspections: [] as Array<{
+    contractId: string;
+    roomNumber: string;
+    locationName: string;
+    proposedDate: string;
+    status: string;
+    scheduledAt: string | null;
+  }>,
+}));
 vi.mock('expo-router', () => ({ router: { push: vi.fn() } }));
 vi.mock('../../../src/mobile/src/features/workspace/useStaffDashboard', () => ({
   useStaffDashboard: () => ({
     locations: { data: null },
     tasks: { data: null },
     overdue: { data: null },
-    inspections: { data: null },
+    inspections: { data: state.inspections.length ? state.inspections : null },
     meters: { data: null },
     reload: vi.fn(),
   }),
@@ -70,6 +81,7 @@ import { StaffNotificationScreen } from '../../../src/mobile/src/screens/StaffNo
 beforeEach(() => {
   state.preview = false;
   state.go.mockClear();
+  state.inspections = [];
 });
 afterEach(cleanup);
 
@@ -100,6 +112,24 @@ it('does not present sample identity, shift or counts to a signed-in account', (
   expect(screen.queryByText('4/6')).toBeNull();
   expect(screen.getAllByText('—')).toHaveLength(3);
   expect(screen.queryByText('Chưa có dữ liệu ca làm')).toBeNull();
+});
+
+it('shows location move-out work on the dashboard even without a schedule, while identifying future inspection dates', () => {
+  state.inspections = [
+    {
+      contractId: 'contract-101',
+      roomNumber: 'R.101',
+      locationName: 'Cơ sở A',
+      proposedDate: '2099-11-18',
+      status: 'Approved',
+      scheduledAt: null,
+    },
+  ];
+  render(<StaffDashboard />);
+  expect(screen.getByText('Chờ ngày trả ›')).toBeTruthy();
+  expect(screen.getByText(/Phòng R\.101 · Cơ sở A · Ngày trả 18\/11\/2099/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: /Kiểm tra trả phòng, Phòng R\.101/ }));
+  expect(state.go).toHaveBeenCalledWith('work-orders');
 });
 
 it('shows four quick actions and hides management shortcuts', () => {

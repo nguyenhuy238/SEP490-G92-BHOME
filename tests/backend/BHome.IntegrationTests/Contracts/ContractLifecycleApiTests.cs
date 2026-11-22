@@ -8,6 +8,7 @@ using BHome.Application.Contracts;
 using BHome.Application.PropertyManagement;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Ocr;
+using BHome.Application.StaffOperations;
 using BHome.Domain.Billing;
 using BHome.Domain.IdentityAccess;
 using BHome.Domain.Locations;
@@ -66,6 +67,20 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await db.SaveChangesAsync(); return new(owner, staff, tenant, location.Id, room.Id, resident.Id);
     }
     private static string Path(Guid id, string operation = "") => $"/api/v1/contracts/{id}" + (operation.Length == 0 ? "" : "/" + operation);
+    private static HandoverRoomCheck[] PassedMoveOutRoomChecks() => HandoverRoomChecklist.RequiredCodes
+        .Select(code => new HandoverRoomCheck(code, "Passed", null, [])).ToArray();
+    private async Task StartMoveOutTaskForInspection(Workspace workspace, Guid contractId)
+    {
+        if (!await UsesCompact24()) return;
+        var tasks = await Success<TaskPage<TaskView>>(await workspace.Staff.Client.GetAsync(
+            $"/api/v1/operational-tasks?locationId={workspace.Location}&pageSize=100"));
+        var task = Assert.Single(tasks.Items, item => item.Target?.ContractId == contractId &&
+            item.Title.StartsWith("Kiểm tra trả phòng", StringComparison.Ordinal));
+        if (task.Status == "Assigned")
+            task = await Success<TaskView>(await Post(workspace.Staff,
+                $"/api/v1/operational-tasks/{task.Id}/start", new TaskAction(task.Version)));
+        Assert.Equal("InProgress", task.Status);
+    }
     [Fact]
     public async Task AssignedStaffReadsReadinessButCannotActivateOrReadOtherLocations()
     {
@@ -96,6 +111,163 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await Success<ContractId>(await Post(w.Owner, Path(id, "deposit-verifications"), new DepositInput("SYNTHETIC-" + Guid.NewGuid(), amount, "Verified synthetic bank statement")));
     private async Task<Guid> Active(Workspace w)
     { var id = await Draft(w); await Signed(w, id); await Deposit(w, id); await Success<ContractView>(await Post(w.Owner, Path(id, "activate"))); return id; }
+
+    [Theory]
+    [InlineData(0)] // Before the lease end date.
+    [InlineData(30)] // On the lease end date.
+    [InlineData(45)] // After the lease end date.
+    public async Task OwnerOpensMoveOutImmediatelyForLocationWithoutStaffAssignmentOrSchedule(int daysFromToday)
+    {
+        var w = await Setup(); var outsider = await Setup(); var id = await Active(w);
+        var date = Today.AddDays(daysFromToday);
+        var input = new TerminationInput(date, "Synthetic owner move-out request");
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Tenant, Path(id, "expiry-move-out"), input)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, Path(id, "expiry-move-out"), input)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(outsider.Tenant, Path(id, "termination-requests"), input)).StatusCode);
+
+        var key = Guid.NewGuid();
+        var opened = await Success<MoveOutView>(await Post(w.Owner, Path(id, "expiry-move-out"), input, key));
+        Assert.Equal("Approved", opened.Status);
+        Assert.Equal(date, opened.ProposedDate);
+        Assert.Null(opened.InspectionScheduledAt);
+        Assert.Null(opened.InspectionStaffId);
+        Assert.Equal(opened.Id, (await Success<MoveOutView>(await Post(w.Owner, Path(id, "expiry-move-out"), input, key))).Id);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "expiry-move-out"), input, Guid.NewGuid())).StatusCode);
+        if (await UsesCompact24())
+        {
+            var tasksPage = await w.Staff.Client.GetFromJsonAsync<TaskPage<TaskView>>(
+                $"/api/v1/operational-tasks?locationId={w.Location}");
+            var work = Assert.Single(tasksPage!.Items,
+                task => task.Target?.ContractId == id && task.Title.StartsWith("Kiểm tra trả phòng"));
+            Assert.Equal("Assigned", work.Status);
+            Assert.Null(work.RecordedStaffUserId);
+            Assert.Equal(w.Staff.Id, work.CurrentResponsibleStaffUserId);
+            Assert.Equal(HttpStatusCode.NotFound,
+                (await outsider.Staff.Client.GetAsync($"/api/v1/operational-tasks/{work.Id}")).StatusCode);
+        }
+
+        var tasks = (await w.Staff.Client.GetFromJsonAsync<MoveOutAssignment[]>("/api/v1/contracts/move-out-assignments"))!;
+        var item = Assert.Single(tasks, task => task.ContractId == id);
+        Assert.Equal(w.Room, item.RoomId);
+        Assert.Null(item.ScheduledAt);
+        Assert.DoesNotContain((await outsider.Staff.Client.GetFromJsonAsync<MoveOutAssignment[]>("/api/v1/contracts/move-out-assignments"))!, task => task.ContractId == id);
+        Assert.Equal("Active", (await w.Owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
+            Assert.Single(await db.Set<ContractMoveOut>().Where(m => m.ContractId == id).ToArrayAsync());
+        }
+        Assert.Single((await w.Owner.Client.GetFromJsonAsync<MoveOutHistoryView[]>(Path(id, "move-out/history")))!, h => h.Action == "OwnerMoveOutOpened");
+        if (daysFromToday > 0)
+        {
+            var premature = await Post(w.Staff, Path(id, "move-out/inspection"), new InspectionInput(Guid.NewGuid(), Guid.NewGuid(), "Premature synthetic", [Guid.NewGuid()]));
+            Assert.Equal(HttpStatusCode.Conflict, premature.StatusCode);
+            Assert.Contains("move_out_not_ready_for_inspection", await premature.Content.ReadAsStringAsync());
+        }
+    }
+    [Fact(Skip = "Executed against Compact24 PostgreSQL by Compact24ContractRegressionTests.MoveOutDraft.")]
+    public async Task MoveOutDraftPersistsPartialItemsWithVersionedStaffOnlyAccess()
+    {
+        var w = await Setup();
+        var outsider = await Setup();
+        var id = await Active(w);
+        await Success<MoveOutView>(await Post(w.Owner, Path(id, "expiry-move-out"),
+            new TerminationInput(Today, "Synthetic draft inspection")));
+        var draftPath = Path(id, "move-out/inspection-draft");
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Owner.Client.GetAsync(draftPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Tenant.Client.GetAsync(draftPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.Staff.Client.GetAsync(draftPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.Client.GetAsync(draftPath)).StatusCode);
+
+        var available = (await w.Staff.Client.GetFromJsonAsync<TaskPage<TaskView>>(
+            $"/api/v1/operational-tasks?locationId={w.Location}"))!;
+        var task = Assert.Single(available.Items, t => t.Target?.ContractId == id &&
+            t.Title.StartsWith("Kiểm tra trả phòng"));
+        task = await Success<TaskView>(await Post(w.Staff,
+            $"/api/v1/operational-tasks/{task.Id}/start", new TaskAction(task.Version)));
+        Assert.Equal("InProgress", task.Status);
+        var initial = await Success<MoveOutInspectionDraftView>(await w.Staff.Client.GetAsync(draftPath));
+        Assert.Equal(0, initial.Version);
+        Assert.Empty(initial.RoomChecks);
+
+        static async Task<HttpResponseMessage> Patch(Actor user, string path,
+            MoveOutInspectionDraftWrite input, Guid? idempotency = null)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Patch, path)
+            { Content = JsonContent.Create(input) };
+            request.Headers.Add("Idempotency-Key", (idempotency ?? Guid.NewGuid()).ToString());
+            return await user.Client.SendAsync(request);
+        }
+        var firstWrite = new MoveOutInspectionDraftWrite(initial.Version,
+            RoomCondition: "Synthetic inspected walls", Notes: "Synthetic working note");
+        var key = Guid.NewGuid();
+        var first = await Success<MoveOutInspectionDraftView>(
+            await Patch(w.Staff, draftPath, firstWrite, key));
+        Assert.Equal(1, first.Version);
+        Assert.Equal("Synthetic inspected walls", first.RoomCondition);
+        var replay = await Success<MoveOutInspectionDraftView>(
+            await Patch(w.Staff, draftPath, firstWrite, key));
+        Assert.Equal(first.Version, replay.Version);
+        Assert.Equal(first.RoomCondition, replay.RoomCondition);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Patch(w.Staff, draftPath, firstWrite)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Patch(outsider.Staff, draftPath, new(first.Version, Notes: "forged"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Patch(w.Tenant, draftPath, new(first.Version, Notes: "forged"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Patch(w.Staff, draftPath, new(first.Version,
+                EvidenceIds: [Guid.NewGuid()]))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Patch(w.Staff, draftPath, new(first.Version,
+                Assets: [new(Guid.NewGuid(), "Good")]))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Patch(w.Staff, draftPath, new(first.Version,
+                ElectricityReadingId: Guid.NewGuid()))).StatusCode);
+
+        using var evidenceBody = new ByteArrayContent(Image());
+        evidenceBody.Headers.ContentType = new("image/png");
+        var photo = (await Success<ContractId>(
+            await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), evidenceBody))).Id;
+        var roomCode = HandoverRoomChecklist.RequiredCodes[0];
+        var second = await Success<MoveOutInspectionDraftView>(
+            await Patch(w.Staff, draftPath, new(first.Version,
+                RoomChecks: [new(roomCode, "Issue", "Synthetic scratch", [photo])])));
+        Assert.Equal(2, second.Version);
+        Assert.Equal(first.RoomCondition, second.RoomCondition);
+        Assert.Equal(photo, Assert.Single(second.RoomChecks).EvidenceIds.Single());
+        Assert.Empty(second.EvidenceIds);
+        var third = await Success<MoveOutInspectionDraftView>(
+            await Patch(w.Staff, draftPath, new(second.Version, KeysAndAccess: "Synthetic returned key")));
+        Assert.Equal(3, third.Version);
+        Assert.Single(third.RoomChecks);
+        var resumed = await Success<MoveOutInspectionDraftView>(await w.Staff.Client.GetAsync(draftPath));
+        Assert.Equal(third.Version, resumed.Version);
+        Assert.Equal(third.RoomCondition, resumed.RoomCondition);
+        Assert.Equal(third.KeysAndAccess, resumed.KeysAndAccess);
+        Assert.Equal(third.RoomChecks[0].Code, resumed.RoomChecks[0].Code);
+        Assert.Equal(photo, resumed.RoomChecks[0].EvidenceIds.Single());
+        var competing = await Task.WhenAll(
+            Patch(w.Staff, draftPath, new(third.Version, Notes: "Synthetic concurrent A")),
+            Patch(w.Staff, draftPath, new(third.Version, Notes: "Synthetic concurrent B")));
+        Assert.Single(competing, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.Single(competing, response => response.StatusCode == HttpStatusCode.Conflict);
+        var resolved = await Success<MoveOutInspectionDraftView>(await w.Staff.Client.GetAsync(draftPath));
+        Assert.Equal(third.Version + 1, resolved.Version);
+        Assert.Contains(resolved.Notes, new[] { "Synthetic concurrent A", "Synthetic concurrent B" });
+        await using var scope = fixture.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+        var persisted = await db.Database.SqlQuery<string>($"""
+            SELECT move_out->'inspectionDraft'->>'roomCondition' AS "Value"
+            FROM contracts WHERE id={id}
+            """).SingleAsync();
+        Assert.Equal(third.RoomCondition, persisted);
+        Assert.Equal(MoveOutStatus.Approved, (await db.Set<ContractMoveOut>()
+            .SingleAsync(move => move.ContractId == id)).Status);
+        Assert.Single(await db.Set<ContractInspectionEvidence>()
+            .Where(file => file.Id == photo && !file.IsLinked).ToArrayAsync());
+    }
 
     private async Task<Meter[]> InstallHandoverMeters(Workspace w)
     {
@@ -559,11 +731,13 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         await Success<MoveOutView>(await Post(w.Tenant, Path(id, "termination-requests"), new TerminationInput(Today, "Synthetic moveout")));
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/schedule"), new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(1), w.Staff.Id)));
+        await StartMoveOutTaskForInspection(w, id);
         var electricity = await FinalReading(w, id, UtilityType.Electricity); var water = await FinalReading(w, id, UtilityType.Water);
         using var finalPhoto = new ByteArrayContent(Image()); finalPhoto.Headers.ContentType = new("image/png");
         var finalFile = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), finalPhoto))).Id;
         var preparation = await Success<InspectionPreparation>(await w.Staff.Client.GetAsync(Path(id, "move-out/inspection-preparation")));
-        var inspected = await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), new InspectionInput(electricity, water, "Synthetic final inspection", [finalFile], [], "SYNTHETIC final condition", "Keys returned", InventoryToken: preparation.Inventory?.StateToken)));
+        var inspected = await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), new InspectionInput(electricity, water, "Synthetic final inspection", [finalFile], [], "SYNTHETIC final condition", "Keys returned", InventoryToken: preparation.Inventory?.StateToken,
+            RoomChecks: PassedMoveOutRoomChecks(), AccessItems: [new HandoverAccessItem("RoomKey", 0, "Returned")])));
         var comparison = Assert.Single((await w.Owner.Client.GetFromJsonAsync<FinalInspectionView[]>(Path(id, "move-out/inspections")))!);
         Assert.Equal("SYNTHETIC corrected", Assert.IsType<HandoverSnapshot>(comparison.Baseline).RoomCondition); Assert.Equal("SYNTHETIC final condition", comparison.Observed.RoomCondition);
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, Path(id, "move-out/inspection-review"), new InspectionReviewInput(1, true, "Checked"))).StatusCode);
@@ -744,12 +918,40 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         Assert.Equal("Active", (await w.Tenant.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await Post(w.Staff, Path(id, "move-out/approve"))).StatusCode);
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/approve")));
+        TaskView? moveOutTask = null;
+        if (await UsesCompact24())
+        {
+            var tasks = await w.Staff.Client.GetFromJsonAsync<TaskPage<TaskView>>($"/api/v1/operational-tasks?locationId={w.Location}");
+            var task = Assert.Single(tasks!.Items, item => item.Target?.ContractId == id && item.Title.StartsWith("Kiểm tra trả phòng"));
+            Assert.Equal("Assigned", task.Status);
+            Assert.Equal(w.Staff.Id, task.CurrentResponsibleStaffUserId);
+            Assert.Null(task.RecordedStaffUserId);
+            var outsiderStaff = await User(Roles.Staff);
+            Assert.Equal(HttpStatusCode.NotFound,
+                (await Post(outsiderStaff, $"/api/v1/operational-tasks/{task.Id}/start", new TaskAction(task.Version))).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden,
+                (await Post(w.Tenant, $"/api/v1/operational-tasks/{task.Id}/start", new TaskAction(task.Version))).StatusCode);
+            using var earlyPhoto = new ByteArrayContent(Image());
+            earlyPhoto.Headers.ContentType = new("image/png");
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), earlyPhoto)).StatusCode);
+            var startKey = Guid.NewGuid();
+            task = await Success<TaskView>(await Post(w.Staff,
+                $"/api/v1/operational-tasks/{task.Id}/start", new TaskAction(task.Version), startKey));
+            Assert.Equal("InProgress", task.Status);
+            Assert.Equal(w.Staff.Id, task.RecordedStaffUserId);
+            var replayed = await Success<TaskView>(await Post(w.Staff,
+                $"/api/v1/operational-tasks/{task.Id}/start", new TaskAction(task.Version - 1), startKey));
+            Assert.Equal(task.Version, replayed.Version);
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await Post(w.Staff, $"/api/v1/operational-tasks/{task.Id}/start", new TaskAction(task.Version - 1))).StatusCode);
+            moveOutTask = task;
+        }
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today, "Available"))).StatusCode);
-        await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/schedule"), new InspectionScheduleInput(DateTimeOffset.UtcNow.AddMinutes(5))));
         var assignment = (await w.Staff.Client.GetFromJsonAsync<MoveOutAssignment[]>("/api/v1/contracts/move-out-assignments"))!.Single(a => a.ContractId == id);
-        Assert.Equal("Approved", assignment.Status); Assert.Equal(w.Room, assignment.RoomId);
+        Assert.Equal("Approved", assignment.Status); Assert.Equal(w.Room, assignment.RoomId); Assert.Null(assignment.ScheduledAt);
         var history = (await w.Owner.Client.GetFromJsonAsync<MoveOutHistoryView[]>(Path(id, "move-out/history")))!;
-        Assert.Equal(3, history.Length); Assert.Equal("Scheduled", history[0].Action);
+        Assert.Equal(2, history.Length); Assert.Equal("Approved", history[0].Action);
         var electricity = await FinalReading(w, id, UtilityType.Electricity); var water = await FinalReading(w, id, UtilityType.Water);
         var choices = await EmptyRoomHandoverChoices(w, id);
         var openingElectricity = choices.Readings.First(r => r.UtilityType == 0);
@@ -764,16 +966,213 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
         var evidence = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), photo))).Id;
         var preparation = await Success<InspectionPreparation>(await w.Staff.Client.GetAsync(Path(id, "move-out/inspection-preparation")));
+        var electricityPhotoPath = Path(id, $"move-out/meter-evidence/{electricity}");
+        var waterPhotoPath = Path(id, $"move-out/meter-evidence/{water}");
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await w.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await w.Tenant.Client.GetAsync($"/api/v1/capture/readings/{electricity}/evidence")).StatusCode);
+        var inspectedRooms = HandoverRoomChecklist.RequiredCodes.Select(code =>
+            new HandoverRoomCheck(code, code == "cleanliness" ? "Issue" : "Passed",
+                code == "cleanliness" ? "Synthetic cleaning observation" : null, [])).ToArray();
         var inspect = new InspectionInput(electricity, water, "Synthetic room and asset condition", [evidence],
-            [], "Synthetic final room", "Synthetic returned keys", InventoryToken: preparation.Inventory?.StateToken);
+            [], "Synthetic final room", "Synthetic returned keys", InventoryToken: preparation.Inventory?.StateToken,
+            RoomChecks: inspectedRooms, AccessItems: [new HandoverAccessItem("RoomKey", 0, "")]);
+        if (moveOutTask is not null)
+        {
+            var emptyDraft = await Success<MoveOutInspectionDraftView>(
+                await w.Staff.Client.GetAsync(Path(id, "move-out/inspection-draft")));
+            using var draftRequest = new HttpRequestMessage(HttpMethod.Patch,
+                Path(id, "move-out/inspection-draft"))
+            {
+                Content = JsonContent.Create(new MoveOutInspectionDraftWrite(emptyDraft.Version,
+                    RoomCondition: inspect.RoomCondition, EvidenceIds: [evidence],
+                    ElectricityReadingId: electricity, WaterReadingId: water))
+            };
+            draftRequest.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            var saved = await Success<MoveOutInspectionDraftView>(
+                await w.Staff.Client.SendAsync(draftRequest));
+            Assert.Equal(1, saved.Version);
+            Assert.Equal(electricity, saved.ElectricityReadingId);
+            Assert.Contains(evidence, saved.EvidenceIds);
+        }
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Staff, Path(id, "move-out/inspection"), inspect with { WaterReadingId = electricity })).StatusCode);
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), inspect));
+        foreach (var path in new[] { electricityPhotoPath, waterPhotoPath })
+        {
+            var tenantPhoto = await w.Tenant.Client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, tenantPhoto.StatusCode);
+            Assert.Equal("application/octet-stream", tenantPhoto.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(Image(), await tenantPhoto.Content.ReadAsByteArrayAsync());
+            Assert.Equal(HttpStatusCode.OK, (await w.Owner.Client.GetAsync(path)).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await w.Staff.Client.GetAsync(path)).StatusCode);
+        }
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await fixture.Factory.CreateClient().GetAsync(electricityPhotoPath)).StatusCode);
+        var unrelatedTenantForMeter = await User(Roles.Tenant);
+        var unassignedStaffForMeter = await User(Roles.Staff);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await unrelatedTenantForMeter.Client.GetAsync(electricityPhotoPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await unassignedStaffForMeter.Client.GetAsync(electricityPhotoPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await w.Tenant.Client.GetAsync(Path(id, $"move-out/meter-evidence/{openingElectricity.Id}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await w.Tenant.Client.GetAsync(Path(id, $"move-out/meter-evidence/{Guid.NewGuid()}"))).StatusCode);
+        var otherContract = await Setup();
+        var otherContractId = await Active(otherContract);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await otherContract.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await w.Tenant.Client.GetAsync(Path(otherContractId,
+                $"move-out/meter-evidence/{electricity}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await w.Owner.Client.GetAsync(Path(otherContractId,
+                $"move-out/meter-evidence/{electricity}"))).StatusCode);
+        // A stored evidence object is never trusted on its own: its live
+        // metadata and SHA-256 must still match the immutable inspection.
+        await using (var meterEvidenceScope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var meterEvidenceDb = meterEvidenceScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var reading = await meterEvidenceDb.Set<MeterReading>().SingleAsync(r => r.Id == electricity);
+            var proof = await meterEvidenceDb.Set<MeterEvidence>().SingleAsync(e => e.Id == reading.EvidenceId);
+            var originalHash = proof.ImageHash;
+            proof.ImageHash = new string('0', 64);
+            await meterEvidenceDb.SaveChangesAsync();
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await w.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+            proof.ImageHash = originalHash;
+            await meterEvidenceDb.SaveChangesAsync();
+            Assert.Equal(HttpStatusCode.OK,
+                (await w.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+            var objectStorage = meterEvidenceScope.ServiceProvider.GetRequiredService<IObjectStorage>();
+            var originalBytes = Image();
+            var corruptedBytes = (byte[])originalBytes.Clone();
+            corruptedBytes[^1] ^= 1;
+            using (var altered = new MemoryStream(corruptedBytes))
+                await objectStorage.PutAsync(proof.ObjectKey, altered, corruptedBytes.Length, "image/png", default);
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await w.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+            using (var restored = new MemoryStream(originalBytes))
+                await objectStorage.PutAsync(proof.ObjectKey, restored, originalBytes.Length, "image/png", default);
+            Assert.Equal(HttpStatusCode.OK,
+                (await w.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+        }
+        var proposalPath = Path(id, "move-out/receivables/proposal");
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(proposalPath)).StatusCode);
+        var unrelatedTenant = await User(Roles.Tenant);
+        Assert.Equal(HttpStatusCode.NotFound, (await unrelatedTenant.Client.GetAsync(proposalPath)).StatusCode);
+        if (await UsesCompact24())
+        {
+            var preview = await Success<MoveOutChargeProposalPreview>(await w.Owner.Client.GetAsync(proposalPath));
+            Assert.Contains(preview.Items, item => item.Kind == "RoomCheck" &&
+                item.RoomCheckCode == "cleanliness" && item.Chargeable);
+            Assert.Contains(preview.Items, item => item.Kind == "Access" && item.AccessType == "RoomKey");
+            var proposed = new MoveOutChargeProposalInput(preview.Reference, preview.InspectionId,
+                preview.InspectionVersion,
+                [new MoveOutProposedCharge("RoomCheck", null, "cleanliness", null, 125000, "Synthetic cleaning cost")],
+                "Synthetic proposal only; no ledger action");
+            var proposalKey = Guid.NewGuid();
+            var sent = await Success<MoveOutChargeProposal>(await Post(w.Owner, proposalPath, proposed, proposalKey));
+            Assert.Equal(sent.Id, (await Success<MoveOutChargeProposal>(
+                await Post(w.Owner, proposalPath, proposed, proposalKey))).Id);
+            Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, proposalPath,
+                proposed with { Note = "Different payload" }, proposalKey)).StatusCode);
+            var tenantPreview = await Success<MoveOutChargeProposalPreview>(await w.Tenant.Client.GetAsync(proposalPath));
+            Assert.Equal("PendingTenant", tenantPreview.Status);
+            Assert.Equal(sent.Id, tenantPreview.LatestProposal?.Id);
+            Assert.Equal(Guid.Empty, tenantPreview.LatestProposal!.OwnerUserId);
+            Assert.Equal(Guid.Empty, tenantPreview.LatestProposal.OperationKey);
+            var answer = new MoveOutChargeProposalFeedbackInput(sent.Id, preview.Reference,
+                false, "Synthetic disagreement");
+            var answerKey = Guid.NewGuid();
+            var feedback = await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
+                proposalPath + "/tenant-feedback", answer, answerKey));
+            Assert.False(feedback.Confirmed);
+            Assert.Equal(feedback.Id, (await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
+                proposalPath + "/tenant-feedback", answer, answerKey))).Id);
+            Assert.Equal("Disputed", (await Success<MoveOutChargeProposalPreview>(
+                await w.Owner.Client.GetAsync(proposalPath))).Status);
+            var revisedProposal = proposed with
+            {
+                Items = [new MoveOutProposedCharge("RoomCheck", null, "cleanliness", null, 90000,
+                "Synthetic revised cleaning cost")],
+                Note = "Synthetic revised proposal"
+            };
+            var revision = await Success<MoveOutChargeProposal>(await Post(w.Owner, proposalPath, revisedProposal));
+            Assert.NotEqual(sent.Id, revision.Id);
+            var revisedPreview = await Success<MoveOutChargeProposalPreview>(
+                await w.Tenant.Client.GetAsync(proposalPath));
+            Assert.Equal(revision.Id, revisedPreview.LatestProposal?.Id);
+            Assert.Equal("PendingTenant", revisedPreview.Status);
+            Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Tenant, proposalPath + "/tenant-feedback",
+                answer)).StatusCode);
+            Assert.Empty((await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
+                Path(id, "move-out/receivables")))).Receivables);
+        }
+        else
+        {
+            // Receivable proposals are Compact24-only. The legacy persistence
+            // scenario still verifies the entire physical move-out lifecycle.
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, (await w.Owner.Client.GetAsync(proposalPath)).StatusCode);
+        }
+        if (moveOutTask is not null)
+        {
+            var submitted = (await w.Staff.Client.GetFromJsonAsync<TaskView>($"/api/v1/operational-tasks/{moveOutTask.Id}"))!;
+            Assert.Equal("PendingVerification", submitted.Status);
+        }
         var reviewedInspection = (await w.Owner.Client.GetFromJsonAsync<MoveOutView>(Path(id, "move-out")))!;
         Assert.Equal(inspect.Notes, reviewedInspection.InspectionNotes); Assert.Contains(evidence, reviewedInspection.EvidenceIds!);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, Path(id, "move-out/complete"), new CompletionInput(Today, "Available"))).StatusCode);
+        if (moveOutTask is not null)
+        {
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await w.Staff.Client.GetAsync(Path(id, "move-out/inspection-draft"))).StatusCode);
+            var firstInspection = (await Success<FinalInspectionView[]>(
+                await w.Owner.Client.GetAsync(Path(id, "move-out/inspections")))).First();
+            await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/inspection-review"),
+                new InspectionReviewInput(firstInspection.Version, false, "Synthetic reinspection required")));
+            var reopened = await Success<MoveOutInspectionDraftView>(
+                await w.Staff.Client.GetAsync(Path(id, "move-out/inspection-draft")));
+            Assert.Equal(2, reopened.Version);
+            Assert.Empty(reopened.EvidenceIds);
+            Assert.Null(reopened.ElectricityReadingId);
+            Assert.Empty(reopened.RoomChecks);
+            using (var staleRequest = new HttpRequestMessage(HttpMethod.Patch,
+                Path(id, "move-out/inspection-draft"))
+            {
+                Content = JsonContent.Create(new MoveOutInspectionDraftWrite(reopened.Version, EvidenceIds: [evidence]))
+            })
+            {
+                staleRequest.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+                Assert.Equal(HttpStatusCode.Conflict, (await w.Staff.Client.SendAsync(staleRequest)).StatusCode);
+            }
+            using var freshPhoto = new ByteArrayContent(Image());
+            freshPhoto.Headers.ContentType = new("image/png");
+            var freshEvidence = (await Success<ContractId>(
+                await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), freshPhoto))).Id;
+            inspect = inspect with { EvidenceIds = [freshEvidence] };
+            await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), inspect));
+            var resubmitted = await w.Staff.Client.GetFromJsonAsync<TaskView>(
+                $"/api/v1/operational-tasks/{moveOutTask.Id}");
+            Assert.Equal("PendingVerification", resubmitted!.Status);
+            var immutableInspections = await Success<FinalInspectionView[]>(
+                await w.Owner.Client.GetAsync(Path(id, "move-out/inspections")));
+            Assert.Equal(2, immutableInspections.Length);
+            Assert.Contains(evidence, immutableInspections.Single(row => row.Version == 1).Observed.EvidenceIds);
+            Assert.Contains(freshEvidence, immutableInspections.Single(row => row.Version == 2).Observed.EvidenceIds);
+        }
         var finalInspection = (await Success<FinalInspectionView[]>(await w.Owner.Client.GetAsync(Path(id, "move-out/inspections")))).First();
         await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/inspection-review"),
             new InspectionReviewInput(finalInspection.Version, true, "Synthetic reviewed physical handover", TenantException: true, TenantExceptionReason: "Synthetic Tenant unavailable; record exception explicitly")));
+        if (moveOutTask is not null)
+        {
+            var verified = (await w.Owner.Client.GetFromJsonAsync<TaskView>($"/api/v1/operational-tasks/{moveOutTask.Id}"))!;
+            Assert.Equal("Completed", verified.Status);
+            Assert.Equal(w.Owner.Id, verified.VerifiedByUserId);
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await w.Staff.Client.GetAsync(Path(id, "move-out/inspection-draft"))).StatusCode);
+        }
         var pending = await Success<MoveOutView>(await Post(w.Owner, Path(id, "move-out/settlement"), new SettlementInput("Pending approved financial module")));
         Assert.Equal("PendingSettlement", pending.Status);
         Assert.Equal("PendingReview", pending.FinancialReviewStatus);
@@ -831,7 +1230,7 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var next = (await Success<ContractId>(await Post(w.Owner, Path(id, "renewals"), new RenewalInput(Today.AddYears(1), 4000000, "SYNTHETIC renewal")))).Id;
         await Success<ContractView>(await Post(w.Owner, Path(next, "renewal-cancellation")));
         var expiry = await Success<MoveOutView>(await Post(w.Owner, Path(id, "expiry-move-out"), new TerminationInput(Today.AddDays(30), "SYNTHETIC end of term")));
-        Assert.Equal("Requested", expiry.Status); Assert.Equal("Active", (await w.Tenant.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
+        Assert.Equal("Approved", expiry.Status); Assert.Equal("Active", (await w.Tenant.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
         await using var scope = fixture.Factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
         Assert.Equal(RoomStatus.Occupied, (await db.Set<Room>().SingleAsync(r => r.Id == w.Room)).Status);
         Assert.Equal(ContractStatus.Cancelled, (await db.Set<Contract>().SingleAsync(c => c.Id == next)).Status);
