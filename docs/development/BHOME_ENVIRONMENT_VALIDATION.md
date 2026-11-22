@@ -1,5 +1,11 @@
 > Checkpoint mới nhất: [migration hostname Staging 20/11/2026](BHOME_STAGING_HOSTNAME_MIGRATION_2026-11-20.md). Canonical dùng owner-staging/public-staging/api-staging; secrets Staging đã thiết lập. Bằng chứng cũ bên dưới được giữ nguyên theo thời điểm kiểm tra.
 
+> Cập nhật 22/11/2026: các hướng dẫn cũ yêu cầu allowlist hoặc cờ mở riêng trong
+> Development dưới đây chỉ là lịch sử. Chính sách mới nằm trong source, cho phép
+> mọi địa chỉ hợp lệ mà không cần thay User Secrets. Xem [audit và nghiệm thu mới](BHOME_EMAIL_RECIPIENT_POLICY_2026-11-22.md)
+> và [hướng dẫn nhóm hiện hành](BHOME_TEAM_ENVIRONMENT_SETUP.md).
+> Staging/Production giữ nguyên chính sách; các số kiểm thử bên dưới thuộc phiên lịch sử.
+
 # Báo cáo chuẩn hóa cấu hình BHOME — 19/11/2026
 
 Checkpoint CI/CD mới nhất 20/11/2026: [nghiệm thu develop/main](BHOME_CICD_ACCEPTANCE_2026-11-20.md).

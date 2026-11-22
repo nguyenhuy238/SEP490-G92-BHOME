@@ -21,9 +21,7 @@ internal sealed class MailKitEmailSender(IOptions<EmailOptions> options, ILogger
         var config = options.Value;
         if (!IsConfigured) throw new ChannelDeliveryException("email_configuration_invalid");
         if (!EmailOptions.ValidAddress(message.Destination)) throw new ChannelDeliveryException("email_recipient_invalid");
-        var developmentSigning = environment.IsDevelopment() && config.AllowAnyDevelopmentSigningRecipient &&
-            message.EventType is "InternalContractSigning" or "HOLDING_CONFIRMED" or "MAIN_CONFIRMED" or "TENANT_SETUP_AFTER_ACTIVATION";
-        if (!developmentSigning && !config.RecipientAllowed(message.Destination, environment.EnvironmentName))
+        if (!config.RecipientAllowed(message.Destination, environment.EnvironmentName))
             throw new ChannelDeliveryException("email_recipient_not_allowed");
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(message.IdempotencyKey))).ToLowerInvariant();
         using var mail = new MimeMessage();

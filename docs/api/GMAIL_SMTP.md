@@ -8,6 +8,20 @@ Lỗi gửi tài khoản Staff trên cả ba môi trường ngày 21/11/2026 là
 localhost có allowlist cũ; Staging/Production tắt `Email.Enabled` và
 `NotificationChannels.Enabled`. Xem [nguyên nhân, cấu hình đã áp dụng và kiểm thử](../development/BHOME_EMAIL_REPAIR_2026-11-21.md).
 
+## Chính sách người nhận theo môi trường (22/11/2026)
+
+Development mặc định cho phép mọi email hợp lệ khi đã chọn SMTP và cấu hình credential
+hợp lệ. Không cần `AllowedRecipients`, `AllowAnyRecipientInDevelopment` hoặc người nhận
+trùng `TestRecipient`; các khóa allowlist cũ trong User Secrets không giới hạn Development.
+Capture vẫn chỉ kết nối loopback, không gửi Gmail. Testing/Staging giữ allowlist bắt buộc
+cho SMTP. Production giữ nguyên: danh sách trống không giới hạn, danh sách có phần tử
+chỉ cho các địa chỉ trong đó; không thay cấu hình triển khai trong bản sửa này.
+
+Mọi lời mời, credential, reset/confirmation, OTP/ký và notification qua sender chung
+dùng chính sách này. `TestRecipient` chỉ phục vụ endpoint thử email. Sau khi tích hợp/pull
+commit, rebuild/restart Backend; từng máy vẫn cần credential riêng nếu muốn SMTP thật.
+Xem [audit, phạm vi và kết quả kiểm thử](../development/BHOME_EMAIL_RECIPIENT_POLICY_2026-11-22.md).
+
 ## Cấu hình
 
 Các giá trị không bí mật đã có tại `BHome.Api/appsettings.json`. Mặc định repository tắt EMAIL.
