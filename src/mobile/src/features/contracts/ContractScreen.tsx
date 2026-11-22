@@ -792,20 +792,29 @@ function LiveContractDetail({
         <Box>
           <Heading title="Trả phòng" detail={text(m.status)} />
           <Text>Ngày đề nghị: {displayContractDate(m.proposedDate)}</Text>
-          <Text>Lý do: {m.reason}</Text>
-          {m.inspectionScheduledAt && (
+          {!!m.reason?.trim() && <Text>Lý do: {m.reason}</Text>}
+          {role !== 'Tenant' && m.inspectionScheduledAt && (
             <Text>Lịch kiểm tra: {formatInstant(m.inspectionScheduledAt)} (giờ Việt Nam)</Text>
           )}
-          {!!m.pendingReason && <Text style={ui.red}>{text(m.pendingReason)}</Text>}
-          {m.inspectionNotes && <Text>Biên bản: {m.inspectionNotes}</Text>}
-          {m.inspectedAt && <Text>Lập lúc: {formatInstant(m.inspectedAt)}</Text>}
-          {m.electricityReadingId && (
+          {role !== 'Tenant' && !!m.pendingReason && (
+            <Text style={ui.red}>{text(m.pendingReason)}</Text>
+          )}
+          {role !== 'Tenant' && !!m.inspectionNotes && (
+            <Text>Kết quả kiểm tra: {m.inspectionNotes}</Text>
+          )}
+          {role !== 'Tenant' && m.inspectedAt && (
+            <Text>Ghi nhận lúc: {formatInstant(m.inspectedAt)}</Text>
+          )}
+          {role !== 'Tenant' && m.electricityReadingId && (
             <Text selectable>Mã chỉ số điện: {m.electricityReadingId}</Text>
           )}
-          {m.waterReadingId && <Text selectable>Mã chỉ số nước: {m.waterReadingId}</Text>}
-          {(m.evidenceIds ?? []).map((e, i) => (
-            <ContractEvidence key={e} api={api} contractId={id} evidenceId={e} number={i + 1} />
-          ))}
+          {role !== 'Tenant' && m.waterReadingId && (
+            <Text selectable>Mã chỉ số nước: {m.waterReadingId}</Text>
+          )}
+          {role !== 'Tenant' &&
+            (m.evidenceIds ?? []).map((e, i) => (
+              <ContractEvidence key={e} api={api} contractId={id} evidenceId={e} number={i + 1} />
+            ))}
         </Box>
       )}
       {section === 'lifecycle' && role === 'Staff' && m?.status === 'Approved' && (

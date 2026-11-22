@@ -1,3 +1,4 @@
+import { View } from 'react-native';
 import { Text } from 'react-native-paper';
 import {
   displayContractDate,
@@ -18,6 +19,7 @@ import { OwnerMoveOutDecisions } from '../owner/OwnerMoveOutDecisions';
 import { handoverAssetSummary } from '../../../../../packages/client-core/src/handoverForm';
 import { ContractEvidence } from './ContractEvidence';
 import { TenantMoveOutProposalPanel } from './TenantMoveOutProposalPanel';
+import { TenantMoveOutInspectionSummary } from './TenantMoveOutInspectionSummary';
 
 export function ContractLifecyclePanel({
   api,
@@ -36,6 +38,46 @@ export function ContractLifecyclePanel({
   const q = useContractLifecycle(api, id, role);
   const summary = q.summary;
   const money = (v: string | null) => (v === null ? 'Chờ xác minh' : formatContractMoney(v));
+
+  if (role === 'Tenant') {
+    const latest = q.inspections[0];
+    return (
+      <View style={{ gap: 14, minWidth: 0 }}>
+        {q.loading && (
+          <Box>
+            <Text style={ui.muted}>Đang tải kết quả trả phòng…</Text>
+          </Box>
+        )}
+        {!!q.error && (
+          <Box>
+            <Text style={ui.red}>{q.error}</Text>
+          </Box>
+        )}
+        {!!latest && (
+          <Box>
+            <TenantMoveOutInspectionSummary api={api} contractId={id} inspection={latest} />
+          </Box>
+        )}
+        {!q.loading && !q.error && !latest && (
+          <Box>
+            <Heading title="Kiểm tra trả phòng" />
+            <Text style={ui.muted}>Staff chưa gửi kết quả kiểm kê cho hợp đồng này.</Text>
+          </Box>
+        )}
+        {!!latest && (
+          <TenantMoveOutProposalPanel
+            api={api}
+            contractId={id}
+            onChanged={() => {
+              q.reload();
+              onChanged();
+            }}
+          />
+        )}
+      </View>
+    );
+  }
+
   return (
     <Box>
       <Heading title="Kết quả kiểm tra trả phòng" />
