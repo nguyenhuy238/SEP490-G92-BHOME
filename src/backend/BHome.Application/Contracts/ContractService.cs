@@ -125,7 +125,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         c.OwnerSignerId, c.TenantUserId, c.RepresentativeResidentId, c.HoldingContractId, c.AppliedHoldingDeposit, c.Room.LocationId, c.IsDevelopmentDemo, c.Room.RoomNumber, c.Room.Location?.Name ?? "", ActualEndDate: c.ActualEndDate, OnboardingDraft: c.Kind == ContractKind.Main && c.DraftMetadata != "{}" && c.Status == ContractStatus.Draft,
         HoldingExpiresAt: c.HoldingExpiryAt, ReservedCapacity: c.ReservedCapacity, ApprovedAt: c.ApprovedAt,
         PriceLockedAt: c.PriceLockedAt, PriceLockTrigger: c.PriceLockTrigger, ConvertedMainContractId: c.ConvertedMainContractId,
-        SigningMode: c.SigningMode, SnapshotHash: c.SnapshotHash, AgreedCharges: ContractChargeSnapshot.ViewCharges(c), InitialPaymentRequired: c.InitialPaymentRequired, OwnerOnlySandboxConfirmed: MainSandboxAcceptance.Read(c) is not null, SandboxTenantSimulated: MainSandboxAcceptance.Read(c)?.TenantSimulatedAt is not null, PaymentMode: ContractPaymentModes.Of(c));
+        SigningMode: c.SigningMode, SnapshotHash: c.SnapshotHash, AgreedCharges: ContractChargeSnapshot.ViewCharges(c), InitialPaymentRequired: c.InitialPaymentRequired, OwnerOnlySandboxConfirmed: MainSandboxAcceptance.Read(c)?.ConfirmedAt is not null, SandboxTenantSimulated: MainSandboxAcceptance.Read(c)?.TenantSimulatedAt is not null, PaymentMode: ContractPaymentModes.Of(c));
     // What a signing screen shows: the method (from the provider credential), the deadline and the signing certificate.
     private static SignatureView SignatureOf(ContractSignature s)
     {
@@ -220,7 +220,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
                 StartDate = x.StartDate,
                 EndDate = x.EndDate,
                 MonthlyRent = x.MonthlyRent,
-                RequiredDeposit = x.RequiredDeposit,
+                RequiredDeposit = x.MonthlyRent,
                 IsDevelopmentDemo = DemoEnabled,
                 PaymentMode = ConfiguredPaymentMode((await repository.RoomAsync(x.RoomId, t))!.LocationId),
                 Terms = x.Terms.Trim()
@@ -246,7 +246,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         return Mutate(id, [Roles.Owner, Roles.Staff], async c =>
         {
             if (await Replay(key, "renewal", new { id, x }, t) is { } prior) return new ContractId(prior);
-            if (c.Status != ContractStatus.Active || c.EndDate.Year >= 9999 || x.EndDate <= c.EndDate || await repository.MoveOutAsync(c.Id, t) is not null)
+            if (c.Status != ContractStatus.Active || c.EndDate.Year >= 9999 || x.EndDate <= c.EndDate || await repository.MoveOutAsync(c.Id, t) is { Status: not MoveOutStatus.Rejected })
                 throw ContractException.Conflict("contract_not_renewable");
             if (await repository.OpenRenewalAsync(c.Id, t)) throw ContractException.Conflict("renewal_already_pending");
             var next = new Contract
@@ -352,7 +352,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         {
             var parent = await repository.FindAsync(parentId, t);
             if (parent is null || parent.Status != ContractStatus.Active || parent.RoomId != c.RoomId || parent.TenantUserId != c.TenantUserId ||
-                parent.EndDate.AddDays(1) != c.StartDate || await repository.MoveOutAsync(parentId, t) is not null) blockers.Add("renewal_parent_not_active");
+                parent.EndDate.AddDays(1) != c.StartDate || await repository.MoveOutAsync(parentId, t) is { Status: not MoveOutStatus.Rejected }) blockers.Add("renewal_parent_not_active");
         }
         if (c.HoldingContractId is { } holdingId)
         {
@@ -391,10 +391,15 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         }
         var root = c;
         while (root.PreviousContractId is { } previous) root = await repository.FindAsync(previous, t) ?? throw ContractException.Missing();
-        var deposit = root.AppliedHoldingDeposit + await repository.DepositTotalAsync(root.Id, t);
-        if (deposit < c.RequiredDeposit) blockers.Add("security_deposit_insufficient");
+        var paymentOrder = root.InitialPaymentRequired && initialPayments is not null ? await initialPayments.ReadAsync(root.Id, t) : null;
+        var sharedDeposit = paymentOrder?.SharedDepositContractId is { } source
+            ? await repository.FindAsync(source, t) ?? throw ContractException.Missing() : null;
+        var depositContract = sharedDeposit ?? root;
+        var requiredDeposit = sharedDeposit?.RequiredDeposit ?? c.RequiredDeposit;
+        var deposit = depositContract.AppliedHoldingDeposit + await repository.DepositTotalAsync(depositContract.Id, t);
+        if (deposit < requiredDeposit) blockers.Add("security_deposit_insufficient");
         if (await repository.ConflictsAsync(c.RoomId, c.PreviousContractId ?? c.Id, c.StartDate, c.EndDate, c.Residents.Select(r => r.ResidentId).ToArray(), t)) blockers.Add("room_contract_conflict");
-        return new(blockers.Count == 0, deposit, Math.Max(0, c.RequiredDeposit - deposit), blockers.Distinct().ToArray());
+        return new(blockers.Count == 0, deposit, Math.Max(0, requiredDeposit - deposit), blockers.Distinct().ToArray());
     }
     public async Task<ActivationReadiness> ReadinessAsync(Guid id, CancellationToken t)
     {
@@ -473,7 +478,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         if (c.PreviousContractId is { } previous)
         {
             var parent = await repository.FindAsync(previous, t) ?? throw ContractException.Missing();
-            if (parent.Status != ContractStatus.Active || await repository.MoveOutAsync(previous, t) is not null) throw ContractException.Conflict("renewal_parent_not_active");
+            if (parent.Status != ContractStatus.Active || await repository.MoveOutAsync(previous, t) is { Status: not MoveOutStatus.Rejected }) throw ContractException.Conflict("renewal_parent_not_active");
             parent.Status = ContractStatus.Superseded;
             foreach (var r in parent.Residents) r.ResidenceTo = parent.EndDate;
             // Release the filtered active-room index before updating the new version, within this same transaction.
@@ -979,19 +984,21 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (c.Status != ContractStatus.Active || await repository.OpenRenewalAsync(id, t)) throw ContractException.Conflict("contract_not_terminable");
             if (x.ProposedDate < Today || x.ProposedDate < c.StartDate || (!expiry && x.ProposedDate >= c.EndDate))
                 throw ContractException.Invalid("invalid_move_out_date");
-            if (await repository.MoveOutAsync(id, t) is not null) throw ContractException.Conflict("move_out_already_requested");
-            var m = new ContractMoveOut
-            {
-                ContractId = id,
-                ProposedDate = x.ProposedDate,
-                Reason = x.Reason.Trim(),
-                RequestedByUserId = Actor,
-                IsExpiry = expiry && x.ProposedDate >= c.EndDate,
-                Status = expiry ? MoveOutStatus.Approved : MoveOutStatus.Requested,
-                ApprovedByUserId = expiry ? Actor : null,
-                ApprovedAt = expiry ? clock.GetUtcNow() : null
-            };
-            repository.Add(m);
+            var previous = await repository.MoveOutAsync(id, t);
+            if (previous is not null && (!expiry || previous.Status != MoveOutStatus.Rejected))
+                throw ContractException.Conflict("move_out_already_requested");
+            // Reuse a rejected request only for a new Owner-initiated move-out.
+            // Keep its previous Tenant request and Owner decision in append-only history.
+            var m = previous ?? new ContractMoveOut { ContractId = id };
+            m.ProposedDate = x.ProposedDate;
+            m.Reason = x.Reason.Trim();
+            m.RequestedByUserId = Actor;
+            m.IsExpiry = expiry && x.ProposedDate >= c.EndDate;
+            m.Status = expiry ? MoveOutStatus.Approved : MoveOutStatus.Requested;
+            m.ApprovedByUserId = expiry ? Actor : null;
+            m.ApprovedAt = expiry ? clock.GetUtcNow() : null;
+            if (previous is null) repository.Add(m);
+            else m.Version++;
             if (expiry && handoverRepository is not null)
                 await handoverRepository.EnsureMoveOutTaskAsync(c, m, Actor, clock.GetUtcNow(), t);
             MoveOutEvent(m, expiry ? "OwnerMoveOutOpened" : "Requested");
@@ -1013,15 +1020,17 @@ public sealed partial class ContractService(IContractRepository repository, ICur
         };
         return view with { EvidenceIds = (await repository.InspectionEvidenceAsync(id, t)).Where(e => e.IsLinked || e.UploadedByUserId == Actor).Select(e => e.Id).ToArray() };
     }
-    public Task<MoveOutView> ApproveTerminationAsync(Guid id, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner], async c =>
+    public Task<MoveOutView> ApproveTerminationAsync(Guid id, Guid key, CancellationToken t, int? expectedVersion = null) => Mutate(id, [Roles.Owner], async c =>
     {
         var m = await repository.MoveOutAsync(id, t) ?? throw ContractException.Missing();
-        if (await Replay(key, "terminate-approve", id, t) is not null) return View(m);
-        if (c.Status != ContractStatus.Active || m.Status != MoveOutStatus.Requested) throw ContractException.Conflict("move_out_not_pending_approval");
+        object fingerprint = expectedVersion is null ? id : new { id, expectedVersion };
+        if (await Replay(key, "terminate-approve", fingerprint, t) is not null) return View(m);
+        if (c.Status != ContractStatus.Active || m.Status != MoveOutStatus.Requested ||
+            expectedVersion is { } version && m.Version != version) throw ContractException.Conflict("move_out_not_pending_approval");
         m.Status = MoveOutStatus.Approved; m.ApprovedByUserId = Actor; m.ApprovedAt = clock.GetUtcNow(); m.Version++; MoveOutEvent(m, "Approved");
         if (handoverRepository is not null)
             await handoverRepository.EnsureMoveOutTaskAsync(c, m, Actor, clock.GetUtcNow(), t);
-        Audit("ContractMoveOutApproved", id); Remember(key, "terminate-approve", id, m.Id); return View(m);
+        Audit("ContractMoveOutApproved", id); Remember(key, "terminate-approve", fingerprint, m.Id); return View(m);
     }, t);
     public Task<MoveOutView> ScheduleInspectionAsync(Guid id, InspectionScheduleInput x, Guid key, CancellationToken t) => Mutate(id, [Roles.Owner, Roles.Staff], async c =>
     {

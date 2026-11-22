@@ -146,7 +146,7 @@ function RoomDirectory() {
       <View style={styles.controls}>
         <View style={styles.heading}>
           <Text variant="titleLarge" style={styles.title}>
-            Phòng & Cư dân
+            Phòng được phân công
           </Text>
           <IconButton
             icon="refresh"
@@ -157,6 +157,17 @@ function RoomDirectory() {
             size={22}
           />
         </View>
+        <View style={styles.heading}>
+          <Button compact icon="file-document-outline" onPress={() => go('signing')}>
+            Hợp đồng thuê
+          </Button>
+          <Button compact icon="plus" onPress={() => go('onboarding')}>
+            Tạo hợp đồng thuê
+          </Button>
+        </View>
+        <Button compact onPress={() => go('prepare-contract', { kind: 'Holding' })}>
+          Tạo hợp đồng giữ chỗ
+        </Button>
         {scope.locations.length > 1 ? (
           <View style={styles.locations}>
             {scope.locations.map((location) => (

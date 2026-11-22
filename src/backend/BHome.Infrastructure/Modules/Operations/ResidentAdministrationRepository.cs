@@ -61,7 +61,7 @@ internal sealed class ResidentAdministrationRepository(Compact24DbContext db) : 
               AND task_data->>'name'='post-activation-account-invitation'
               AND task_data->'payload'->>'ResidentId'=r.id::text ORDER BY next_run_at DESC,id DESC LIMIT 1) j ON TRUE
             LEFT JOIN LATERAL (SELECT delivery_status FROM notifications WHERE record_kind='OUTBOX'
-              AND event_data->>'recipient'=u.id::text AND event_data->>'authenticationKind'='TenantInvitation'
+              AND event_data->>'recipient'=u.id::text AND event_data->>'authenticationKind' IN ('TenantInvitation','PostActivationTenantInvitation')
               ORDER BY event_at DESC,id DESC LIMIT 1) n ON TRUE
             WHERE r.id=@resident
             """);

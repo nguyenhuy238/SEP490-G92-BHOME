@@ -291,6 +291,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, root + "/signing-invitations", invitationInput with { Contacts = [new(Guid.NewGuid(), email)] })).StatusCode);
         }
         Assert.Equal(HttpStatusCode.OK, (await Post(staff, root + "/signing-invitations", invitationInput)).StatusCode);
+        Assert.Equal("Lời mời ký hợp đồng thuê chính thức", delivery.Messages.Last().Title);
         var firstInvite = await Result<SigningInvitationResult>(await Post(owner, root + "/signing-invitations", invitationInput));
         // Replaying the Staff-created invitation deliberately does not disclose its bearer token.
         firstInvite = firstInvite with { Token = Regex.Match(delivery.Messages.Last().Body, @"\b[A-F0-9]{64}\b").Value };
@@ -304,6 +305,32 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.NotFound, (await Post(anonymous, "/api/v1/contract-signing/info", new AnonymousSigningToken(firstInvite.Token!))).StatusCode);
         var invite = await Result<SigningInvitationResult>(await Post(owner, root + "/signing-invitations", invitationInput));
         Assert.Equal(HttpStatusCode.NotFound, (await Post(anonymous, "/api/v1/contract-signing/info", new AnonymousSigningToken(firstInvite.Token!))).StatusCode);
+        var resendInput = invitationInput with { Resend = true };
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await Post(owner, root + "/signing-invitations", resendInput)).StatusCode);
+        DateTimeOffset storedExpiry;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var previous = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == firstInvite.Id);
+            var current = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == invite.Id);
+            storedExpiry = current.ExpiresAt;
+            previous.OtpSendCount = 5;
+            previous.OtpSentAt = current.OtpSentAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await Post(owner, root + "/signing-invitations", resendInput)).StatusCode);
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var previous = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == firstInvite.Id);
+            previous.OtpSendCount = 1;
+            await db.SaveChangesAsync();
+        }
+        var resent = await Result<SigningInvitationResult>(await Post(owner, root + "/signing-invitations", resendInput));
+        Assert.Equal(invite.Id, resent.Id);
+        Assert.Equal(storedExpiry, resent.ExpiresAt);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(anonymous, "/api/v1/contract-signing/info", new AnonymousSigningToken(invite.Token!))).StatusCode);
+        invite = resent;
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post(anonymous, "/api/v1/contract-signing/document", new AnonymousSigningSession(invite.Token!, new string('A', 64)))).StatusCode);
         Assert.Contains("Mã OTP của bạn:", delivery.Messages.Last().Body);
         Assert.Equal(HttpStatusCode.TooManyRequests, (await Post(anonymous, "/api/v1/contract-signing/otp", new AnonymousSigningToken(invite.Token!))).StatusCode);
@@ -312,7 +339,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             var expired = await db.Set<ContractSigningInvitation>().SingleAsync(i => i.Id == invite.Id);
-            Assert.Equal(1, expired.OtpSendCount);
+            Assert.Equal(2, expired.OtpSendCount);
             Assert.NotEqual(otp, expired.OtpHash);
             Assert.Equal(6, otp.Length);
             expired.OtpExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
@@ -345,6 +372,27 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         Assert.Equal(access.DocumentHash, Convert.ToHexString(SHA256.HashData(pdf))); Assert.Equal("%PDF-", System.Text.Encoding.ASCII.GetString(pdf[..5]));
         var acceptance = new AnonymousAcceptanceInput(invite.Token!, access.Session, access.DocumentHash, access.ConsentVersion, true,
             [[new(.1, .2), new(.7, .4), new(.4, .9)]]);
+        if (deferredContacts)
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var unrelated = new Resident
+            {
+                OwnerUserId = Compact24SampleSeed.Id(1),
+                DisplayLabel = "Synthetic resident without a contract",
+                ContactEmail = email.ToUpperInvariant()
+            };
+            db.Add(unrelated);
+            await db.SaveChangesAsync();
+            var blockedResend = await Post(owner, root + "/signing-invitations", resendInput);
+            Assert.Equal(HttpStatusCode.Conflict, blockedResend.StatusCode);
+            Assert.Equal("signing_email_already_in_use", (await blockedResend.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+            var blocked = await Post(anonymous, "/api/v1/contract-signing/accept", acceptance);
+            Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+            Assert.Equal("signing_email_already_in_use", (await blocked.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+            unrelated.ContactEmail = null;
+            await db.SaveChangesAsync();
+        }
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(anonymous, "/api/v1/contract-signing/accept", acceptance with { Consent = false })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(anonymous, "/api/v1/contract-signing/accept", acceptance with { DocumentHash = "changed" })).StatusCode);
         foreach (var response in await Task.WhenAll(Post(anonymous, "/api/v1/contract-signing/accept", acceptance), Post(anonymous, "/api/v1/contract-signing/accept", acceptance)))
@@ -365,7 +413,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, root + "/activate", new { })).StatusCode);
         await using (var scope = host.Services.CreateAsyncScope())
             Assert.Equal(usersBefore, await scope.ServiceProvider.GetRequiredService<Compact24DbContext>().Users.CountAsync());
-        (await Post(owner, root + "/deposit-verifications", new DepositInput("SYNTHETIC-" + Guid.NewGuid(), 1000000, "Synthetic bank statement verified"))).EnsureSuccessStatusCode();
+        (await Post(owner, root + "/deposit-verifications", new DepositInput("SYNTHETIC-" + Guid.NewGuid(), view.RequiredDeposit, "Synthetic bank statement verified"))).EnsureSuccessStatusCode();
         var active = await Result<ContractView>(await Post(owner, root + "/activate", new { }));
         Assert.Equal("Active", active.Status); Assert.NotNull(active.TenantUserId);
         var dispatches = new List<(Guid Id, string Key, string Payload)>();
@@ -466,6 +514,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         {
             if (qrPreview) b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["NotificationChannels:Enabled"] = "true",
                 ["SePay:Enabled"] = "false",
                 ["SePay:Mode"] = "Test",
                 ["SePay:WebhookSecret"] = sandboxSecret,
@@ -604,6 +653,12 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             db.Add(new BHome.Domain.PaymentsDebt.ReceivingBankAccount { LocationId = Compact24SampleSeed.Id(10), BankIdentifier = "970416", AccountNumber = "12345678", AccountHolder = "SYNTHETIC TEST", Enabled = true, IsDevelopmentDemo = true, Version = 1, ConfirmedByUserId = Compact24SampleSeed.Id(1), ConfirmedAt = DateTimeOffset.UtcNow });
             await db.SaveChangesAsync();
             Assert.Equal(HttpStatusCode.Conflict, (await assignedStaff.GetAsync(qrPath)).StatusCode);
+            var publisher = scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>();
+            await publisher.PublishPendingAsync(default);
+            await publisher.PublishPendingAsync(default);
+            var draftNotice = Assert.Single(await db.Set<BHome.Domain.Notifications.UserNotification>().AsNoTracking()
+                .Where(n => n.RelatedObjectId == holding.Id && n.EventType == "HOLDING_DRAFT_CREATED").ToArrayAsync());
+            Assert.Equal(Compact24SampleSeed.Id(1), draftNotice.RecipientUserId);
         }
         (await Post(owner, root + "/holding-approval", new HoldingDecisionInput("Synthetic Owner review"))).EnsureSuccessStatusCode();
         async Task Sign(string path)
@@ -649,7 +704,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             await SignOwnerWithOtp(owner, assignedStaff, path, delivery, externalOwner ? host.Services : null, ownerSession);
         }
         // Payment before signing must not mark the room held or create a login.
-        if (!qrPreview) (await Post(owner, root + "/deposit-verifications", new DepositInput("HOLD-SYNTHETIC-" + Guid.NewGuid(), 100000, "Synthetic statement verified"))).EnsureSuccessStatusCode();
+        const decimal holdingDeposit = 3000000;
+        if (!qrPreview) (await Post(owner, root + "/deposit-verifications", new DepositInput("HOLD-SYNTHETIC-" + Guid.NewGuid(), holdingDeposit, "Synthetic statement verified"))).EnsureSuccessStatusCode();
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var service = scope.ServiceProvider.GetRequiredService<ContractService>();
@@ -662,7 +718,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         {
             var qr = (await assignedStaff.GetFromJsonAsync<BHome.Application.PaymentsDebt.ContractDepositInstructions>(qrPath))!;
             Assert.False(qr.PreviewOnly); Assert.Equal("Test", qr.Mode);
-            Assert.Equal("100000", qr.OutstandingAmount);
+            Assert.Equal("3000000", qr.OutstandingAmount);
             Assert.StartsWith("data:image/png;base64,", qr.QrImageDataUri);
             Assert.Matches("^BH[0-9]{8}$", qr.TransferReference);
             var repeat = (await assignedStaff.GetFromJsonAsync<BHome.Application.PaymentsDebt.ContractDepositInstructions>(qrPath))!;
@@ -673,9 +729,9 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal(0m, unpaid.Verified);
             await using (var scope = host.Services.CreateAsyncScope())
                 Assert.False(await scope.ServiceProvider.GetRequiredService<ContractService>().AutomaticActivationReadyAsync(holding.Id, default));
-            (await SendSandbox(qr.TransferReference, 100000)).EnsureSuccessStatusCode();
-            (await SendSandbox(qr.TransferReference, 100000)).EnsureSuccessStatusCode();
-            Assert.Equal(100000m, (await owner.GetFromJsonAsync<HoldingDepositStatus>(root + "/holding-deposit"))!.Verified);
+            (await SendSandbox(qr.TransferReference, holdingDeposit)).EnsureSuccessStatusCode();
+            (await SendSandbox(qr.TransferReference, holdingDeposit)).EnsureSuccessStatusCode();
+            Assert.Equal(holdingDeposit, (await owner.GetFromJsonAsync<HoldingDepositStatus>(root + "/holding-deposit"))!.Verified);
         }
         var ready = await owner.GetFromJsonAsync<ActivationReadiness>(root + "/activation-readiness"); Assert.True(ready!.Ready);
         await RunAutomaticActivation(holding.Id);
@@ -702,7 +758,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, root + "/holding-cancellation", cancel with { Cause = cause == HoldingCancellationCause.TenantVoluntary ? HoldingCancellationCause.OwnerCannotProvideRoom : HoldingCancellationCause.TenantVoluntary }, cancellationKey)).StatusCode);
             var status = await owner.GetFromJsonAsync<HoldingDepositStatus>(root + "/holding-deposit");
             Assert.Equal(cause == HoldingCancellationCause.TenantVoluntary ? "Forfeited" : "RefundPending", status!.Disposition!.Status);
-            Assert.Equal(cause == HoldingCancellationCause.TenantVoluntary ? 100000 : 0, status.Disposition.ForfeitedAmount);
+            Assert.Equal(cause == HoldingCancellationCause.TenantVoluntary ? holdingDeposit : 0, status.Disposition.ForfeitedAmount);
             await using (var savedScope = host.Services.CreateAsyncScope())
             {
                 var savedReview = await savedScope.ServiceProvider.GetRequiredService<Compact24DbContext>().Set<ContractSettlementReview>().SingleAsync(r => r.ContractId == holding.Id);
@@ -710,7 +766,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
                 Assert.Equal(HoldingCancellationRules.Reference(holding.Id, savedReview), savedReview.LedgerReference);
             }
             var source = await Result<BHome.Application.Finance.RefundSource>(await owner.GetAsync(root + "/deposit-refunds"));
-            var refundInput = new BHome.Application.Finance.DepositRefundInput(new(residentId, 100000, "Synthetic verified original depositor", true), source.FinancialReference!, true, true);
+            var refundInput = new BHome.Application.Finance.DepositRefundInput(new(residentId, holdingDeposit, "Synthetic verified original depositor", true), source.FinancialReference!, true, true);
             if (cause == HoldingCancellationCause.TenantVoluntary)
             {
                 Assert.Contains("holding_deposit_forfeited", source.Blockers!);
@@ -719,7 +775,7 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             }
             else
             {
-                Assert.Empty(source.Blockers!); Assert.Equal(100000, source.AvailableAmount);
+                Assert.Empty(source.Blockers!); Assert.Equal(holdingDeposit, source.AvailableAmount);
                 var refund = await Result<BHome.Application.Finance.RefundView>(await Post(owner, root + "/deposit-refunds", refundInput)); Assert.Equal("REQUESTED", refund.Status);
                 var decision = await Result<BHome.Application.Finance.RefundView>(await Post(owner, $"/api/v1/refund-requests/{refund.Id}/decision", new BHome.Application.Finance.RefundDecision(1, true, "Synthetic verified external refund obligation", true)));
                 Assert.Equal("APPROVED", decision.Status);
@@ -742,8 +798,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal(1, await cancelledDb.Set<ContractSettlementReview>().CountAsync(r => r.ContractId == holding.Id));
             var finances = await cancellationScope.ServiceProvider.GetRequiredService<BHome.Application.Finance.IFinancialReportRepository>()
                 .ReadAsync(new(Today.AddDays(-1), Today, RoomId: cancelled.RoomId), default);
-            Assert.False(finances.HasUnclassifiedRefunds); Assert.Equal(cause == HoldingCancellationCause.OwnerCannotProvideRoom ? 100000 : 0, finances.VerifiedDepositReturns);
-            Assert.Equal(cause == HoldingCancellationCause.TenantVoluntary ? 100000 : 0, Assert.Single(finances.Locations).HoldingForfeitures);
+            Assert.False(finances.HasUnclassifiedRefunds); Assert.Equal(cause == HoldingCancellationCause.OwnerCannotProvideRoom ? holdingDeposit : 0, finances.VerifiedDepositReturns);
+            Assert.Equal(cause == HoldingCancellationCause.TenantVoluntary ? holdingDeposit : 0, Assert.Single(finances.Locations).HoldingForfeitures);
             for (var pass = 0; pass < 3; pass++)
                 await cancellationScope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(default);
             var notices = (await owner.GetFromJsonAsync<BHome.Application.PropertyManagement.PagedResult<NotificationView>>("/api/v1/notifications?category=Contract&pageSize=100"))!.Items;
@@ -767,9 +823,14 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
         {
             var quote = await Result<BHome.Application.PaymentsDebt.MainInitialPaymentView>(await owner.PostAsync(mainRoot + "/initial-payment/transfer-instructions", null));
             Assert.True(quote.IsDevelopmentDemo);
-            Assert.Equal(100000m, quote.HoldingCredit); Assert.Equal(100000m, quote.VerifiedDeposit);
+            Assert.Equal(holdingDeposit, quote.HoldingCredit); Assert.Equal(holdingDeposit, quote.VerifiedDeposit);
+            Assert.Equal(0m, quote.OutstandingDeposit);
             Assert.Contains(quote.Charges, p => p.Code == "SYN_INTERNET" && p.Amount == 50000m);
             Assert.Contains(quote.Charges, p => p.Code == "SYN_PERSON" && p.Amount == 10000m);
+            Assert.Contains(quote.MeteredRates, p => p.Code == "ELECTRICITY" && p.Unit == "kWh");
+            Assert.Contains(quote.MeteredRates, p => p.Code == "WATER" && p.Unit == "m³");
+            Assert.DoesNotContain(quote.Charges, p => p.Code is "ELECTRICITY" or "WATER");
+            Assert.Equal(quote.Charges.Sum(p => p.Amount), quote.OutstandingRentAndFees);
             var mainView = (await owner.GetFromJsonAsync<ContractView>(mainRoot))!;
             Assert.Equal(quote.RequiredDeposit - quote.VerifiedDeposit + quote.Charges.Sum(p => p.Amount), quote.OutstandingAmount);
             Assert.Equal(mainView.MonthlyRent, Assert.Single(quote.Charges, p => p.Code == "RENT").Amount);
@@ -787,6 +848,36 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             Assert.Equal(ContractStatus.Converted, (await db.Set<Contract>().SingleAsync(c => c.Id == holding.Id)).Status);
             Assert.Equal(BHome.Domain.PropertyManagement.RoomStatus.Occupied, (await db.Set<BHome.Domain.PropertyManagement.Room>().SingleAsync(r => r.Id == activated.RoomId)).Status);
             Assert.Equal(1, await db.Set<BHome.Domain.PaymentsDebt.PaymentAllocation>().CountAsync(a => a.TransferId != null && (a.TargetDepositContractId == main.Id || a.TargetInitialContractId == main.Id)));
+            var tenant = (await db.Set<Contract>().SingleAsync(c => c.Id == main.Id)).TenantUserId!.Value;
+            var mailContent = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationEmailContent>();
+            var attachments = await mailContent.MainAttachmentsAsync(main.Id, tenant, deliveryEmail, default);
+            Assert.Equal(2, attachments.Count);
+            var receipt = Assert.Single(attachments, a => a.FileName.StartsWith("Bien-nhan-thanh-toan-", StringComparison.Ordinal));
+            Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(receipt.Content));
+            Assert.False((await db.Users.SingleAsync(u => u.Id == tenant)).EmailConfirmed);
+            await scope.ServiceProvider.GetRequiredService<INotificationEventPublisher>().PublishPendingAsync(default);
+            var notice = await db.Set<BHome.Domain.Notifications.UserNotification>().SingleAsync(n =>
+                n.RelatedObjectId == main.Id && n.RecipientUserId == tenant && n.EventType == "CONTRACT_ACTIVATED");
+            var worker = scope.ServiceProvider.GetRequiredService<BHome.Infrastructure.Modules.Notifications.NotificationChannelWorker>();
+            await worker.EnqueueDueAsync(default);
+            var emailDelivery = await db.Database.SqlQuery<Guid>($"""
+                SELECT id AS "Value" FROM notifications WHERE record_kind='OUTBOX'
+                AND event_data->>'notificationId'={notice.Id.ToString()} AND event_data->>'channel'='EMAIL'
+                """).SingleAsync();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO notifications(id,record_kind,event_key,notification_type,event_data,event_at,delivery_status,next_delivery_at)
+                SELECT gen_random_uuid(),'OUTBOX','synthetic-push:'||gen_random_uuid(),'CHANNEL_DELIVERY',
+                  jsonb_build_object('schemaVersion',1,'recordType','ChannelDelivery','notificationId',{notice.Id},
+                    'recipient',{tenant},'role','Tenant','channel','PUSH','eventType','CONTRACT_ACTIVATED'),
+                  now()-interval '1 day','Pending',now()-interval '1 day'
+                FROM generate_series(1,51)
+                """);
+            await worker.ProcessPendingAsync(default);
+            var confirmation = Assert.Single(delivery.Messages, m => m.EventType == "MAIN_CONFIRMED");
+            Assert.Equal(deliveryEmail, confirmation.Destination);
+            Assert.Equal(2, confirmation.Attachments!.Count);
+            await worker.DeliverAsync(emailDelivery, default);
+            Assert.Single(delivery.Messages, m => m.EventType == "MAIN_CONFIRMED");
             return;
         }
         if (LiveRecipient is not null)
@@ -795,8 +886,8 @@ public sealed class AnonymousSigningTests(Compact24Fixture fixture) : IClassFixt
             return; // Live SMTP smoke stops before account provisioning; all data is disposable.
         }
         var active = await Result<ContractView>(await Post(owner, mainRoot + "/activate", new { }));
-        Assert.Equal(100000, active.RequiredDeposit);
-        Assert.Equal("Active", active.Status); Assert.Equal(100000, active.AppliedHoldingDeposit);
+        Assert.Equal(holdingDeposit, active.RequiredDeposit);
+        Assert.Equal("Active", active.Status); Assert.Equal(holdingDeposit, active.AppliedHoldingDeposit);
         await using var final = host.Services.CreateAsyncScope();
         var context = final.ServiceProvider.GetRequiredService<Compact24DbContext>();
         Assert.Equal(usersBefore + 1, await context.Users.CountAsync());

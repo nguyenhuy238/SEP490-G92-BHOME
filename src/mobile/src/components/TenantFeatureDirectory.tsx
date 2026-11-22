@@ -119,7 +119,14 @@ export function TenantFeatureDirectory({
             tenantFeatureGroups[0].items[0],
             tenantFeatureGroups[0].items[2],
             tenantFeatureGroups[1].items[0],
-            ...tenantFeatureGroups[2].items,
+            tenantFeatureGroups[2].items[0],
+            {
+              title: 'Kết thúc hợp đồng sớm',
+              icon: 'file-document-remove-outline',
+              screen: 'contract' as const,
+              params: { section: 'lifecycle' },
+            },
+            tenantFeatureGroups[2].items[2],
           ],
         },
       ];

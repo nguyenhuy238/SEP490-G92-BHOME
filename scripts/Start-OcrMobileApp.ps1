@@ -36,10 +36,15 @@ function Assert-LocalApiProcess {
 function Get-CheckoutApiProcess {
     # A debugger can pause startup before Kestrel binds either port. Port checks
     # alone must not launch a second API against the same database/checkout.
+    # An API already listening on other ports is not the mobile API.
+    $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue)
     Get-CimInstance Win32_Process -Filter "Name = 'BHome.Api.exe' OR Name = 'dotnet.exe'" | Where-Object {
         $identity = $_.CommandLine + ' ' + $_.ExecutablePath
+        $processId = $_.ProcessId
+        $boundPorts = @($listeners | Where-Object OwningProcess -eq $processId | Select-Object -ExpandProperty LocalPort)
         $identity.IndexOf($repo, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
-            $identity -match 'BHome\.Api(?:\.dll|\.exe)?(?:\s|"|$)'
+            $identity -match 'BHome\.Api(?:\.dll|\.exe)?(?:\s|"|$)' -and
+            ($boundPorts.Count -eq 0 -or $boundPorts -contains 7240 -or $boundPorts -contains 5240)
     } | Select-Object -First 1
 }
 

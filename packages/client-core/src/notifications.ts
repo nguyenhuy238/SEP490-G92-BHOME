@@ -9,6 +9,7 @@ export type NotificationItem = {
   createdAt: string;
   readAt: string | null;
   deliveryState: string;
+  eventType?: string;
 };
 export type NotificationTarget = {
   objectType: string;

@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Text } from 'react-native-paper';
 import {
@@ -33,7 +34,7 @@ function signingComplete(c: ContractView, status: InternalSigningStatus | null) 
       );
 }
 
-// Shared Step 6. All completion decisions come from persisted backend state.
+// Both contract flows use persisted signing status to decide when payment can start.
 export function ContractSigningStep({
   api,
   contract,
@@ -51,6 +52,7 @@ export function ContractSigningStep({
 }) {
   const internal = contract.signingMode === 'INTERNAL_OTP_DRAWN';
   const owner = role === 'Owner' && actorId === contract.ownerSignerId;
+  const staffMain = role === 'Staff' && contract.kind === 'Main';
   const signer = owner || (role === 'Tenant' && actorId === contract.tenantUserId);
   const service = useMemo(() => internalSigningClient(api.transport), [api]);
   const signing = useMemo(() => signingClient(api.transport), [api]);
@@ -68,7 +70,6 @@ export function ContractSigningStep({
   const [busy, setBusy] = useState(false);
   const [uncertainInvitation, setUncertainInvitation] = useState(false);
   const [operation, setOperation] = useState('');
-  const [showDetails, setShowDetails] = useState(false);
   const [resendAfter, setResendAfter] = useState<number | null>(null);
   const [revision, setRevision] = useState(0);
   const [keys] = useState(() => mutationKeys(randomUUID));
@@ -212,8 +213,10 @@ export function ContractSigningStep({
               ? emails[c.representativeResidentId].trim().replace(/^([^@])[^@]*(@.*)$/, '$1***$2')
               : latest.maskedEmail,
             invitations: [
-              ...latest.invitations.filter((i) => i.id !== result.id),
               { id: result.id, status: result.status, expiresAt: result.expiresAt },
+              ...latest.invitations.filter(
+                (i) => i.id !== result.id && (!resend || i.id !== activeInvitation?.id),
+              ),
             ],
           },
         });
@@ -242,14 +245,22 @@ export function ContractSigningStep({
   return (
     <>
       <Box>
-        <Heading title={c.kind === 'Holding' ? 'Ký hợp đồng' : 'Bước 6 · Ký hợp đồng'} />
-        {c.kind !== 'Holding' && (
+        <Heading
+          title={
+            staffMain
+              ? 'Gửi hợp đồng để ký'
+              : c.kind === 'Holding'
+                ? 'Ký hợp đồng'
+                : 'Bước 5 · Ký hợp đồng'
+          }
+        />
+        {c.kind !== 'Holding' && !staffMain && (
           <Text style={ui.muted}>
             Phòng {c.roomNumber} · {c.locationName} · Đại diện:{' '}
             {c.occupants?.find((p) => p.representative)?.label ?? 'Theo hồ sơ hợp đồng'}
           </Text>
         )}
-        {c.kind !== 'Holding' && (
+        {c.kind !== 'Holding' && !staffMain && (
           <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: '700', color: '#193653' }}>
             Tiến độ chữ ký
           </Text>
@@ -274,7 +285,7 @@ export function ContractSigningStep({
               >
                 {p.label}: {at ? 'Đã ký' : 'Chờ ký'}
               </Text>
-              {!!at && (c.kind !== 'Holding' || showDetails) && (
+              {!!at && c.kind !== 'Holding' && (
                 <Text style={{ fontSize: 12, lineHeight: 18, color: '#526581' }}>
                   {formatInstant(at)} ·{' '}
                   {signature?.method ? signingMethodLabel(signature.method) : 'OTP qua lời mời'}
@@ -283,7 +294,7 @@ export function ContractSigningStep({
             </React.Fragment>
           );
         })}
-        {(c.kind !== 'Holding' || showDetails) && (
+        {c.kind !== 'Holding' && !staffMain && (
           <Text
             style={{
               backgroundColor: '#F2F6FB',
@@ -298,7 +309,7 @@ export function ContractSigningStep({
             {nextSignerMessage}
           </Text>
         )}
-        {(c.kind !== 'Holding' || showDetails) && (
+        {c.kind !== 'Holding' && !staffMain && (
           <Text style={{ fontSize: 12, lineHeight: 18, color: '#526581' }}>
             OTP và chữ ký vẽ là chữ ký điện tử; dấu PDF BHOME không phải chứng thư số cá nhân của
             người ký.
@@ -312,22 +323,24 @@ export function ContractSigningStep({
                   currentInvitation.status === 'InvitationAcceptedByProvider' ? ui.green : ui.muted
                 }
               >
-                {signingInvitationLabel(currentInvitation.status)} · {status?.maskedEmail}
+                {staffMain && currentInvitation.status === 'InvitationAcceptedByProvider'
+                  ? 'Máy chủ email đã tiếp nhận · Chờ ký'
+                  : signingInvitationLabel(currentInvitation.status)}{' '}
+                · {status?.maskedEmail}
               </Text>
             )}
             {currentInvitation &&
               ['OwnerApprovedLink', 'InvitationPendingManualDelivery'].includes(
                 currentInvitation.status,
               ) && (
-                <Text accessibilityRole="alert" style={ui.red}>
-                  Email chưa được xác nhận gửi thành công. Kiểm tra cấu hình email hoặc thử gửi lại.
-                </Text>
+                <ContractNotice message="Email chưa được xác nhận gửi thành công. Kiểm tra cấu hình email hoặc thử gửi lại." />
               )}
             {uncertainInvitation && !busy && (
               <Text style={ui.muted}>
                 Chưa xác định được kết quả gửi. Hãy làm mới trạng thái trước khi gửi lại.
               </Text>
             )}
+            {staffMain && !!displayedError && <ContractNotice message={displayedError} />}
             {currentInvitation &&
               ['Owner', 'Staff'].includes(role) &&
               ['Holding', 'Main'].includes(c.kind) && (
@@ -389,20 +402,32 @@ export function ContractSigningStep({
                     disabled={busy}
                   />
                 ))}
-                {c.kind !== 'Holding' && (
+                {staffMain && (
+                  <Text style={ui.muted}>
+                    Người thuê nhận liên kết ký qua email. Chủ cơ sở nhận thông báo để mở hợp đồng
+                    ký trên web hoặc mobile.
+                  </Text>
+                )}
+                {c.kind !== 'Holding' && !staffMain && (
                   <Text style={ui.muted}>
                     Email dùng cho lời mời ký, không tự tạo tài khoản Tenant.
                   </Text>
                 )}
                 <Action
-                  disabled={busy || uncertainInvitation || !status || !!currentInvitation}
+                  disabled={
+                    busy ||
+                    uncertainInvitation ||
+                    !status ||
+                    !!currentInvitation ||
+                    (c.kind === 'Main' && !emails[c.representativeResidentId]?.trim())
+                  }
                   onPress={() => void invite()}
                 >
                   {busy ? 'Đang gửi lời mời…' : 'Gửi lời mời ký qua email'}
                 </Action>
               </>
             )}
-            {owner && currentInvitation && (c.kind !== 'Holding' || showDetails) && (
+            {owner && currentInvitation && (
               <Action
                 secondary
                 disabled={busy}
@@ -426,28 +451,16 @@ export function ContractSigningStep({
             )}
           </>
         )}
-        {!!displayedError && (
-          <Text accessibilityRole="alert" style={ui.red}>
-            {displayedError}
-          </Text>
+        {!!displayedError && (!staffMain || !internal || !!status?.tenantAcceptedAt) && (
+          <ContractNotice message={displayedError} />
         )}
         {c.kind === 'Holding' && busy && (
           <Text style={ui.muted}>Đang gửi email, vui lòng chờ…</Text>
         )}
-        {c.kind === 'Holding' && (
-          <Action secondary onPress={() => setShowDetails((value) => !value)}>
-            {showDetails ? 'Ẩn chi tiết ký' : 'Chi tiết ký'}
-          </Action>
-        )}
-        {(c.kind !== 'Holding' ||
-          showDetails ||
-          !!displayedError ||
-          (uncertainInvitation && !busy)) && (
-          <Action secondary disabled={busy} onPress={() => setRevision((v) => v + 1)}>
-            Làm mới trạng thái ký
-          </Action>
-        )}
-        {onContinue && (c.kind !== 'Holding' || complete) && (
+        <Action secondary disabled={busy} onPress={() => setRevision((v) => v + 1)}>
+          Làm mới trạng thái ký
+        </Action>
+        {onContinue && ((c.kind !== 'Holding' && !staffMain) || complete) && (
           <Action
             disabled={!complete || busy || !!displayedError}
             onPress={() => {

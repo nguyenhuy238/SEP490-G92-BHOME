@@ -94,6 +94,9 @@ export function StaffTaskListScreen() {
           Chưa có cơ sở được phân công để xem công việc.
         </Text>
       )}
+      <Button icon="calendar-month-outline" onPress={() => go('shifts')}>
+        Lịch làm việc
+      </Button>
       <TaskFilterBar
         status={status}
         onChange={(next) => {

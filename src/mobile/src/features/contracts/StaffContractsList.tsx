@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -227,9 +228,7 @@ export function StaffContractsList({
         <View style={styles.scheduleDetails}>
           {!!scheduleError && (
             <>
-              <Text accessibilityRole="alert" style={ui.red}>
-                {scheduleError}
-              </Text>
+              <ContractNotice message={scheduleError} />
               <Button onPress={refresh}>Thử lại nhiệm vụ trả phòng</Button>
             </>
           )}
@@ -361,9 +360,7 @@ export function StaffContractsList({
         </View>
       ) : error ? (
         <View style={styles.state}>
-          <Text accessibilityRole="alert" style={ui.red}>
-            {error}
-          </Text>
+          <ContractNotice message={error} />
           <Button onPress={refresh}>Thử tải lại hợp đồng</Button>
         </View>
       ) : (

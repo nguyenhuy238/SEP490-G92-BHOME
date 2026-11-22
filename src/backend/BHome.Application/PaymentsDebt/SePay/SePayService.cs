@@ -108,13 +108,15 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
                 return await Review("deposit_not_payable");
             if (ContractPaymentModes.IsTest(contract) != receipt.IsDevelopmentDemo) return await Review("sepay_environment_mismatch");
             outstanding = Math.Max(0, contract.RequiredDeposit - await payments.DepositAllocatedAsync(contract.Id, token));
+            if (outstanding <= 0) return await Review("deposit_already_satisfied");
+            if (receipt.Amount != outstanding) return await Review("payment_amount_requires_review");
             if (contract.Kind == ContractKind.Holding)
             {
                 if ((contract.ApprovedAt is null && !BHome.Application.Contracts.AnonymousContractSigningService.HoldingOwnerHasSigned(contract)) || contract.HoldingExpiryAt is null || contract.HoldingExpiryAt <= clock.GetUtcNow())
                     return await Review("holding_deposit_requires_manual_review");
                 try
                 {
-                    if (outstanding > 0 && !await contracts.ConfirmProviderHoldingDepositAsync(contract.Id, Math.Min(receipt.Amount, outstanding), receipt.VerifiedAt, token))
+                    if (!await contracts.ConfirmProviderHoldingDepositAsync(contract.Id, receipt.Amount, receipt.VerifiedAt, token))
                         return await Review("holding_room_commitment_requires_manual_review");
                 }
                 catch (ContractException error) when (error.Status == 409)
@@ -122,17 +124,18 @@ public sealed class SePayService(ISePayRepository repository, IPaymentRepository
             }
         }
         if (outstanding <= 0) return await Review(target.Kind == "Invoice" ? "invoice_already_settled" : "deposit_already_satisfied");
+        if (receipt.Amount != outstanding) return await Review("payment_amount_requires_review");
         if (await payments.ReferenceClaimedAsync(reference, token)) return await Review("bank_reference_already_credited");
         var allocation = new PaymentAllocation
         {
             TransferId = receipt.Id,
             InvoiceId = invoice?.Id,
             TargetDepositContractId = invoice is null ? target.ObligationId : null,
-            Amount = Math.Min(receipt.Amount, outstanding),
+            Amount = outstanding,
             AllocatedAt = receipt.VerifiedAt
         };
         payments.Add(allocation);
-        var reason = receipt.Amount < outstanding ? "verified_partial_payment" : receipt.Amount > outstanding ? "verified_excess_payment_pending_review" : "verified_full_payment";
+        const string reason = "verified_full_payment";
         payments.Add(new PaymentReconciliation
         {
             TransferId = receipt.Id,

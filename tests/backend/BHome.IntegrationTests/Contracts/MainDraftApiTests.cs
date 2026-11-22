@@ -83,7 +83,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         var key = Guid.NewGuid(); var draft = await Save(w, key: key); var replay = await Save(w, key: key);
         Assert.Equal(draft.Id, replay.Id); Assert.Equal("Draft", draft.Status);
         Assert.Equal(3100000, draft.Preparation.Charges.Single(p => p.ChargeCode == "RENT").Rate);
-        Assert.Equal(6200000, draft.Preparation.SecurityDeposit); Assert.Equal(new DateOnly(2021, 6, 15), draft.Preparation.Residents.Single().DateOfIssue);
+        Assert.Equal(draft.Preparation.Charges.Single(p => p.ChargeCode == "RENT").Rate, draft.Preparation.SecurityDeposit); Assert.Equal(new DateOnly(2021, 6, 15), draft.Preparation.Residents.Single().DateOfIssue);
         Assert.Equal("********0123", draft.Preparation.Residents.Single().MaskedCitizenNumber);
         var contract = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == draft.Id);
         Assert.Null(contract.TenantUserId); Assert.Equal(ContractStatus.Draft, contract.Status); Assert.Null(contract.ActivatedAt); Assert.Equal(0, contract.AppliedHoldingDeposit);
@@ -239,7 +239,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
         Assert.Equal(draft.Version, unchanged.Version);
         Assert.Equal(draft.Preparation.SecurityDeposit, unchanged.Preparation.SecurityDeposit);
         var saved = await Save(w, Input(w) with { ExpectedVersion = draft.Version }, id: draft.Id);
-        Assert.Equal(current.SecurityDeposit + 100000, saved.Preparation.SecurityDeposit);
+        Assert.Equal(draft.Preparation.SecurityDeposit, saved.Preparation.SecurityDeposit);
         await Success(await w.Owner.PostAsync($"{Root}/{draft.Id}/documents", null));
     }
     [Theory]
@@ -333,7 +333,7 @@ public sealed partial class MainDraftApiTests(ContractFixture fixture) : IClassF
             await db.SaveChangesAsync();
         }
         var result = await w.Staff.GetFromJsonAsync<MainDraftPreparation>($"{Root}/preparation?roomId={w.Room}&representativeResidentId={w.Resident}&residentIds={w.Resident}&effectiveOn={end.AddDays(2):yyyy-MM-dd}");
-        Assert.Empty(result!.Blockers); Assert.Equal(7000000, result.SecurityDeposit); Assert.Equal(3400000, result.Charges.Single(p => p.ChargeCode == "RENT").Rate);
+        Assert.Empty(result!.Blockers); Assert.Equal(3400000, result.SecurityDeposit); Assert.Equal(3400000, result.Charges.Single(p => p.ChargeCode == "RENT").Rate);
     }
     [Fact]
     public async Task RejectsUnavailableRoomAndConcurrentCreationReplaysOneDraft()

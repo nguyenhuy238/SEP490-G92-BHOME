@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 import { Text } from 'react-native-paper';
+import { ContractNotice } from './ContractNotice';
 import {
   displayContractDate,
   formatContractMoney,
@@ -84,7 +85,7 @@ export function ContractLifecyclePanel({
         Tải lại kết quả và quyết toán
       </Action>
       {q.loading && <Text>Đang đối chiếu dữ liệu…</Text>}
-      {!!q.error && <Text style={ui.red}>{q.error}</Text>}
+      {!!q.error && <ContractNotice message={q.error} />}
       {q.inspections.map((i) => (
         <Box key={i.id}>
           <Heading

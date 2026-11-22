@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Dialog, Portal, Text, TouchableRipple } from 'react-native-paper';
 import { router } from 'expo-router';
-import { DashboardHeading, DashboardStatus, dashboardStyles } from '../components/DashboardKit';
+import { DashboardHeading, dashboardStyles } from '../components/DashboardKit';
 import { StaffFeatureDirectory } from '../components/StaffFeatureDirectory';
+import { StaffFeatureCard } from '../components/StaffFeatureCard';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useStaffDashboard } from '../features/workspace/useStaffDashboard';
 import { type WorkspaceScreen } from '../features/workspace/navigation';
@@ -30,6 +31,7 @@ export function StaffDashboard() {
   } = useWorkspace();
   const data = useStaffDashboard();
   const [handover, setHandover] = useState(false);
+  const [contracts, setContracts] = useState(false);
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const availableLocations = staffLocations ?? data.locations.data ?? [];
   const activeLocation = availableLocations.find(
@@ -158,20 +160,6 @@ export function StaffDashboard() {
             Cơ sở hiện tại: {activeLocation?.label ?? 'Chọn cơ sở'} · Đổi cơ sở
           </Button>
         )}
-        <TouchableRipple
-          onPress={() => go('shifts')}
-          accessibilityRole="button"
-          accessibilityLabel="Xem lịch ca"
-        >
-          <View style={styles.shift}>
-            <DashboardStatus tone="neutral">
-              {preview ? 'Ca sáng · 07:30–16:30 · Mẫu' : 'Chưa có dữ liệu ca làm'}
-            </DashboardStatus>
-            <Text variant="labelSmall" style={[styles.muted, typography.status]}>
-              Xem lịch ca ›
-            </Text>
-          </View>
-        </TouchableRipple>
         <View style={styles.metrics}>
           {[
             { label: 'Hạn hôm nay', value: taskValue, screen: 'work-orders' as const },
@@ -210,12 +198,6 @@ export function StaffDashboard() {
             </TouchableRipple>
           ))}
         </View>
-        {!preview && (
-          <Text variant="labelSmall" style={[styles.muted, typography.status]}>
-            Bàn giao nhận phòng chưa hoàn tất được theo dõi trong Công việc của tôi. Mở tác vụ để
-            kiểm tra và lấy xác nhận của Tenant.
-          </Text>
-        )}
         {!preview && !!data.incidents?.error && (
           <Text style={styles.muted}>Chưa tải đủ số sự cố mở. Chạm Làm mới để thử lại.</Text>
         )}
@@ -224,6 +206,18 @@ export function StaffDashboard() {
             Chưa tải được công việc hôm nay. Chạm Làm mới để thử lại.
           </Text>
         )}
+      </View>
+      <StaffFeatureDirectory onOpen={open} />
+      <View style={styles.section}>
+        <StaffFeatureCard
+          title="Hợp đồng"
+          description="Tạo và theo dõi hợp đồng"
+          icon="file-document-outline"
+          color={s.blue}
+          background={s.blueSoft}
+          onPress={() => setContracts(true)}
+          compact
+        />
       </View>
       {priorities.length > 0 && (
         <View style={styles.section}>
@@ -254,11 +248,50 @@ export function StaffDashboard() {
           </View>
         </View>
       )}
+      {!preview && priorities.length === 0 && !priorityError && (
+        <View style={styles.section}>
+          <DashboardHeading title="Cần xử lý" />
+          <Text style={styles.muted}>
+            {data.overdue.loading || data.inspections.loading || data.meters.loading
+              ? 'Đang tải việc ưu tiên…'
+              : 'Chưa có việc ưu tiên cần xử lý.'}
+          </Text>
+        </View>
+      )}
       {!preview && priorityError && (
         <Button onPress={data.reload}>Chưa tải đủ tác vụ ưu tiên · Thử lại</Button>
       )}
-      <StaffFeatureDirectory onOpen={open} />
       <Portal>
+        <Dialog visible={contracts} onDismiss={() => setContracts(false)}>
+          <Dialog.Title>Hợp đồng</Dialog.Title>
+          <Dialog.Actions style={styles.dialogActions}>
+            <Button
+              onPress={() => {
+                setContracts(false);
+                go('onboarding');
+              }}
+            >
+              Tạo hợp đồng thuê
+            </Button>
+            <Button
+              onPress={() => {
+                setContracts(false);
+                go('prepare-contract', { kind: 'Holding' });
+              }}
+            >
+              Tạo hợp đồng giữ chỗ
+            </Button>
+            <Button
+              onPress={() => {
+                setContracts(false);
+                go('signing');
+              }}
+            >
+              Xem hợp đồng
+            </Button>
+            <Button onPress={() => setContracts(false)}>Đóng</Button>
+          </Dialog.Actions>
+        </Dialog>
         <Dialog visible={locationPickerOpen} onDismiss={() => setLocationPickerOpen(false)}>
           <Dialog.Title>Chuyển cơ sở</Dialog.Title>
           <Dialog.ScrollArea>
@@ -290,6 +323,14 @@ export function StaffDashboard() {
             <Button
               onPress={() => {
                 setHandover(false);
+                go('move-in-inventory');
+              }}
+            >
+              Kiểm kê trước nhận phòng
+            </Button>
+            <Button
+              onPress={() => {
+                setHandover(false);
                 go('move-in');
               }}
             >
@@ -316,7 +357,6 @@ const styles = StyleSheet.create({
   greeting: { flex: 1, minWidth: 100, gap: 4 },
   title: { color: s.navy },
   muted: { ...typography.body, color: c.muted },
-  shift: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   metrics: { flexDirection: 'row' },
   metric: { flex: 1 },
   metricContent: { alignItems: 'center', paddingHorizontal: 4, paddingVertical: 8, gap: 5 },

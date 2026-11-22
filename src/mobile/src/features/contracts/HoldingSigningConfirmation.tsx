@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Text } from 'react-native-paper';
 import type {
@@ -220,11 +221,7 @@ export function HoldingSigningConfirmation({
         </Button>
       )}
       {!!success && <Text style={ui.green}>{success}</Text>}
-      {!!error && (
-        <Text accessibilityRole="alert" style={ui.red}>
-          {error}
-        </Text>
-      )}
+      {!!error && <ContractNotice message={error} />}
     </HoldingSectionCard>
   );
 }

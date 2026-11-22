@@ -83,6 +83,10 @@ public interface IContractSigningPages
 public sealed record SigningLayoutInfo(IReadOnlyList<SigningPageSize> Pages, SignaturePlacementInput? Suggested);
 public sealed record DepositInput([Required, StringLength(150, MinimumLength = 1)] string BankTransactionReference,
     [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString)] decimal Amount, [Required, StringLength(2000, MinimumLength = 1)] string VerificationReason);
+public sealed record TerminationRejection([Required, StringLength(2000)] string Reason, int? ExpectedVersion = null);
+public sealed record TerminationReview(string Status, int Version, string LocationName, string RoomNumber, string? TenantName,
+    DateOnly StartDate, DateOnly EndDate, DateOnly ProposedDate, string Reason,
+    DateTimeOffset? DecidedAt, string? DecidedBy, string? RejectionReason);
 public sealed record TerminationInput(DateOnly ProposedDate,
     [Required, StringLength(2000, MinimumLength = 1)] string Reason);
 public sealed record InspectionScheduleInput(DateTimeOffset ScheduledAt, Guid? StaffUserId = null, int? ExpectedVersion = null);
@@ -251,10 +255,12 @@ public interface IContractRepository
     Task<bool> ActiveUserInRoleAsync(Guid id, string role, CancellationToken t);
     Task<bool> StaffAssignedAsync(Guid staffId, Guid locationId, DateOnly today, CancellationToken t);
     Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, Guid[] residentIds, CancellationToken t);
+    Task<IReadOnlySet<Guid>> RoomsAwaitingMainOwnerSignatureAsync(Guid[] roomIds, Guid exceptContractId, CancellationToken t);
     Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t);
     Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t);
     Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t);
     Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId, CancellationToken t);
+    Task<string?> DecisionActorNameAsync(Guid userId, CancellationToken t);
     Task<IReadOnlyList<ContractFinalInspection>> FinalInspectionsAsync(Guid contractId, CancellationToken t);
     Task<IReadOnlyList<HandoverReading>> FinalReadingsAsync(Guid contractId, Guid roomId, DateOnly today, CancellationToken t);
     Task<HandoverReading?> ConfirmedFinalInspectionReadingAsync(Guid contractId, Guid roomId, Guid readingId, CancellationToken t);

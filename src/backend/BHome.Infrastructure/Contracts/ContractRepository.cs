@@ -8,12 +8,13 @@ using BHome.Infrastructure.Persistence;
 using BHome.Infrastructure.Persistence.Compact24;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorkspaceStore? setup = null,
-    IContractHandoverRepository? handoverTasks = null) : IContractRepository
+internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<ContractRepository> logger,
+    ISetupWorkspaceStore? setup = null, IContractHandoverRepository? handoverTasks = null) : IContractRepository
 {
     // Sidecar Draft initialization is deliberately attached to persistence, not to
     // any particular contract-creation API (direct draft, Holding conversion, etc.).
@@ -157,7 +158,13 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
         catch (DbUpdateConcurrencyException)
         { throw ContractException.Conflict("contract_concurrent_operation_retry"); }
         catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: "23505" or "23P01" or "23514" })
-        { throw ContractException.Conflict("contract_concurrent_or_duplicate_operation"); }
+        {
+            var postgres = (PostgresException)e.InnerException!;
+            logger.LogWarning("Contract database conflict with SQL state {SqlState} and constraint {Constraint}", postgres.SqlState, postgres.ConstraintName);
+            if (postgres.SqlState == "23505" && postgres.ConstraintName == "ux_resident_contact_email")
+                throw ContractException.Conflict("signing_email_already_in_use");
+            throw ContractException.Conflict("contract_concurrent_or_duplicate_operation");
+        }
         catch (PostgresException e) when (e.SqlState is "40001" or "40P01" or "23514" or "23505" or "23P01")
         { throw ContractException.Conflict("contract_concurrent_operation_retry"); }
     }
@@ -173,6 +180,13 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
          join r in db.Roles on ur.RoleId equals r.Id
          where u.Id == id && u.IsActive && r.Name == role
          select u.Id).AnyAsync(t);
+    public Task<string?> DecisionActorNameAsync(Guid userId, CancellationToken t)
+    {
+        var users = db.Users.AsNoTracking().Where(u => u.Id == userId);
+        return db.Model.FindEntityType(typeof(ApplicationUser))?.FindProperty("full_name") is not null
+            ? users.Select(u => EF.Property<string?>(u, "full_name") ?? u.UserName).SingleOrDefaultAsync(t)
+            : users.Select(u => u.UserName).SingleOrDefaultAsync(t);
+    }
     public async Task<bool> ConflictsAsync(Guid roomId, Guid exceptId, DateOnly from, DateOnly to, Guid[] residentIds, CancellationToken t)
     {
         var capacity = await db.Set<Room>().Where(r => r.Id == roomId).Select(r => r.Capacity).SingleAsync(t);
@@ -182,8 +196,16 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
         var dates = others.Select(c => c.StartDate < from ? from : c.StartDate).Append(from).Distinct();
         return dates.Any(date => residentIds.Length + others.Where(c => c.StartDate <= date && c.EndDate >= date).SelectMany(c => c.Residents).Select(r => r.ResidentId).Distinct().Count() > capacity);
     }
+    public async Task<IReadOnlySet<Guid>> RoomsAwaitingMainOwnerSignatureAsync(Guid[] roomIds, Guid exceptContractId, CancellationToken t)
+    {
+        var pending = await db.Set<Contract>().AsNoTracking().Include(c => c.Signatures)
+            .Where(c => roomIds.Contains(c.RoomId) && c.Id != exceptContractId &&
+                c.Kind == ContractKind.Main && c.Status == ContractStatus.PendingSigning).ToArrayAsync(t);
+        return pending.Where(AnonymousContractSigningService.MainAwaitsOwnerSignature).Select(c => c.RoomId).ToHashSet();
+    }
     public Task<bool> HasOtherActiveContractsAsync(Guid roomId, Guid exceptId, CancellationToken t) =>
-        db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Status == ContractStatus.Active, t);
+        db.Set<Contract>().AnyAsync(c => c.RoomId == roomId && c.Id != exceptId && c.Kind == ContractKind.Main &&
+            (c.Status == ContractStatus.Active || c.Status == ContractStatus.Expired), t);
     public Task<bool> OpenRenewalAsync(Guid contractId, CancellationToken t) => db.Set<Contract>().AnyAsync(c => c.PreviousContractId == contractId &&
         (c.Status == ContractStatus.Draft || c.Status == ContractStatus.PendingSigning || c.Status == ContractStatus.PendingActivation), t);
     public async Task<IReadOnlyList<Contract>> VersionsAsync(Guid roomId, Guid tenantId, CancellationToken t) =>

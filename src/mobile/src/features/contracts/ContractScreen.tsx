@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import { RentalContractFlow } from './RentalContractFlow';
 import { HoldingContractFlow } from './HoldingContractFlow';
 import { conciseMessage, showError } from '../../lib/toast';
@@ -347,7 +348,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         </Button>
       </Row>
       {listing.loading && <ActivityIndicator accessibilityLabel="Đang tải hợp đồng" />}
-      {!!listing.error && <Text style={ui.red}>{conciseMessage(listing.error)}</Text>}
+      {!!listing.error && <ContractNotice message={listing.error} />}
       {!listing.loading && !listing.error && !listing.data?.items.length && (
         <Box>
           <Text>Chưa có hợp đồng phù hợp trong phạm vi tài khoản.</Text>
@@ -416,6 +417,7 @@ function LiveContractDetail({
   });
   const signingMethods = useSigningMethods(api);
   const [selectedAction, setSelectedAction] = useState('');
+  const [terminationRequested, setTerminationRequested] = useState(false);
   const [section, setSection] = useState<ContractSection>(initialSection);
   const [keys] = useState(() => mutationKeys(randomUUID));
   const [evidence, setEvidence] = useState<string[]>([]);
@@ -428,12 +430,13 @@ function LiveContractDetail({
   if (detail.error)
     return (
       <Box>
-        <Text style={ui.red}>{conciseMessage(detail.error)}</Text>
+        <ContractNotice message={detail.error} />
         <Action onPress={detail.reload}>Tải lại hợp đồng</Action>
       </Box>
     );
   if (!detail.data) return null;
   const { contract: c, moveOut: m, readiness: r, history } = detail.data;
+  const tenantAwaitingMoveOutApproval = role === 'Tenant' && m?.status === 'Requested';
   if (isMainOnboardingDraft(c) && ['Owner', 'Staff'].includes(role))
     return (
       <MainDraftScreen
@@ -466,6 +469,11 @@ function LiveContractDetail({
     c.kind === 'Holding' &&
     ['Owner', 'Staff'].includes(role) &&
     ['Draft', 'PendingSigning', 'PendingActivation', 'Active'].includes(c.status);
+  const hideSectionTabs =
+    rental &&
+    role === 'Staff' &&
+    c.initialPaymentRequired &&
+    ['overview', 'signing'].includes(section);
   const availableEvidence = [...new Set([...(m?.evidenceIds ?? []), ...evidence])];
   const actions = mobileContractActions(c, m, role, actorId, signingMethods?.methods).filter(
     (item) =>
@@ -483,6 +491,10 @@ function LiveContractDetail({
         (!!c.approvedAt && !!r && !r.blockers.includes('verified_signature_evidence_required'))),
   );
   const action = actions.find((a) => a.operation === selectedAction);
+  const terminationAction = actions.find((a) => a.operation === 'termination-requests');
+  const sectionActions = actions.filter(
+    (a) => a !== terminationAction && contractActionSection(a.operation) === section,
+  );
   const signer =
     (role === 'Tenant' && c.tenantUserId === actorId) ||
     (c.kind === 'Holding' && role === 'Owner' && c.ownerSignerId === actorId);
@@ -505,65 +517,67 @@ function LiveContractDetail({
       )}
       {!holding && <Pill tone={c.status === 'Active' ? 'green' : 'amber'}>{text(c.status)}</Pill>}
       {!!detail.refreshError && (
-        <Text accessibilityRole="alert" style={ui.red}>
-          Chưa cập nhật được trạng thái mới. Nội dung trước đó vẫn được giữ lại.{' '}
-          {detail.refreshError}
-        </Text>
+        <ContractNotice
+          message={`Chưa cập nhật được trạng thái mới. Nội dung trước đó vẫn được giữ lại. ${conciseMessage(detail.refreshError)}`}
+        />
       )}
-      {c.kind === 'Holding' ? (
-        <View style={holdingTabs.styles.container}>
-          {(
-            [
-              ['overview', 'Tổng quan'],
-              ['signing', 'Ký hợp đồng'],
-              ['history', 'Lịch sử'],
-            ] as const
-          ).map(([key, label]) => (
-            <Button
-              key={key}
-              compact
-              style={[holdingTabs.styles.tab, section === key && holdingTabs.styles.activeTab]}
-              labelStyle={[
-                holdingTabs.styles.label,
-                section === key && holdingTabs.styles.activeLabel,
-              ]}
-              contentStyle={{ minHeight: 42 }}
-              mode="text"
-              accessibilityState={{ selected: section === key }}
-              onPress={() => {
-                setSection(key);
-                setSelectedAction('');
-              }}
-            >
-              {label}
-            </Button>
-          ))}
-        </View>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8 }}
-        >
-          {contractSections
-            .filter((item) => c.kind !== 'Holding' || !['handover', 'lifecycle'].includes(item.id))
-            .map((item) => (
+      {!hideSectionTabs &&
+        (c.kind === 'Holding' ? (
+          <View style={holdingTabs.styles.container}>
+            {(
+              [
+                ['overview', 'Tổng quan'],
+                ['signing', 'Ký hợp đồng'],
+                ['history', 'Lịch sử'],
+              ] as const
+            ).map(([key, label]) => (
               <Button
-                key={item.id}
-                mode={section === item.id ? 'contained' : 'outlined'}
-                contentStyle={{ minHeight: 44 }}
-                disabled={uploading}
-                accessibilityState={{ selected: section === item.id }}
+                key={key}
+                compact
+                style={[holdingTabs.styles.tab, section === key && holdingTabs.styles.activeTab]}
+                labelStyle={[
+                  holdingTabs.styles.label,
+                  section === key && holdingTabs.styles.activeLabel,
+                ]}
+                contentStyle={{ minHeight: 42 }}
+                mode="text"
+                accessibilityState={{ selected: section === key }}
                 onPress={() => {
-                  setSection(item.id);
+                  setSection(key);
                   setSelectedAction('');
                 }}
               >
-                {item.label}
+                {label}
               </Button>
             ))}
-        </ScrollView>
-      )}
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8 }}
+          >
+            {contractSections
+              .filter(
+                (item) => c.kind !== 'Holding' || !['handover', 'lifecycle'].includes(item.id),
+              )
+              .map((item) => (
+                <Button
+                  key={item.id}
+                  mode={section === item.id ? 'contained' : 'outlined'}
+                  contentStyle={{ minHeight: 44 }}
+                  disabled={uploading}
+                  accessibilityState={{ selected: section === item.id }}
+                  onPress={() => {
+                    setSection(item.id);
+                    setSelectedAction('');
+                  }}
+                >
+                  {item.label}
+                </Button>
+              ))}
+          </ScrollView>
+        ))}
       {rental && (section === 'overview' || section === 'signing') && (
         <RentalContractFlow
           key={`${c.id}:${section}`}
@@ -779,7 +793,26 @@ function LiveContractDetail({
           )}
         </Box>
       )}
-      {section === 'lifecycle' && !m && (
+      {section === 'lifecycle' && terminationAction && !terminationRequested && (
+        <ContractActionForm
+          key={terminationAction.operation}
+          api={api}
+          action={terminationAction}
+          contract={c}
+          keys={keys}
+          onSuccess={() => {
+            setTerminationRequested(true);
+            detail.reload();
+          }}
+        />
+      )}
+      {section === 'lifecycle' && !m && terminationRequested && (
+        <Box>
+          <Heading title="Đã gửi yêu cầu chấm dứt trước hạn" />
+          <Text>Yêu cầu đang chờ Owner duyệt.</Text>
+        </Box>
+      )}
+      {section === 'lifecycle' && !m && !terminationAction && !terminationRequested && (
         <Box>
           <Heading title="Gia hạn & trả phòng" />
           <Text>
@@ -876,7 +909,7 @@ function LiveContractDetail({
           </Text>
         </Box>
       )}
-      {section === 'lifecycle' && !!history.length && (
+      {section === 'lifecycle' && !tenantAwaitingMoveOutApproval && !!history.length && (
         <Box>
           <Heading title="Lịch sử xem xét quyết toán" />
           {history.map((h) => (
@@ -889,7 +922,7 @@ function LiveContractDetail({
           ))}
         </Box>
       )}
-      {section === 'lifecycle' && m && (
+      {section === 'lifecycle' && m && !tenantAwaitingMoveOutApproval && (
         <ContractLifecyclePanel
           api={api}
           id={id}
@@ -901,31 +934,26 @@ function LiveContractDetail({
           }}
         />
       )}
-      {!ownerMain &&
-        !(rental && section === 'signing') &&
-        actions.some((a) => contractActionSection(a.operation) === section) && (
-          <Box>
-            <Heading title="Thao tác theo trạng thái" />
-            {actions
-              .filter((a) => contractActionSection(a.operation) === section)
-              .map((a) => (
-                <Action
-                  key={a.operation}
-                  disabled={
-                    uploading ||
-                    (['activate', 'holding-activation'].includes(a.operation) && !r?.ready)
-                  }
-                  secondary={!['activate', 'holding-activation'].includes(a.operation)}
-                  onPress={() => {
-                    setSelectedAction(a.operation);
-                    setNotice('');
-                  }}
-                >
-                  {a.label}
-                </Action>
-              ))}
-          </Box>
-        )}
+      {!ownerMain && !(rental && section === 'signing') && sectionActions.length > 0 && (
+        <Box>
+          <Heading title="Thao tác theo trạng thái" />
+          {sectionActions.map((a) => (
+            <Action
+              key={a.operation}
+              disabled={
+                uploading || (['activate', 'holding-activation'].includes(a.operation) && !r?.ready)
+              }
+              secondary={!['activate', 'holding-activation'].includes(a.operation)}
+              onPress={() => {
+                setSelectedAction(a.operation);
+                setNotice('');
+              }}
+            >
+              {a.label}
+            </Action>
+          ))}
+        </Box>
+      )}
       {action && (
         <ContractActionForm
           key={action.operation}

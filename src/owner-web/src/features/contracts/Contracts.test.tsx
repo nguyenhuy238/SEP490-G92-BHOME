@@ -427,6 +427,31 @@ it('validates deposit input and retains its idempotency key after network uncert
   expect(mutation.mock.calls[0]).toEqual(mutation.mock.calls[1]);
   expect(success).not.toHaveBeenCalled();
 });
+it('links a pending request to the dedicated review without rendering settlement or inline approval', async () => {
+  const moveOut: MoveOut = {
+    id,
+    status: 'Requested',
+    proposedDate: '2026-11-24',
+    reason: 'Lý do kiểm thử',
+    inspectionScheduledAt: null,
+    pendingReason: '',
+    inspectionNotes: null,
+    inspectedAt: null,
+    electricityReadingId: null,
+    waterReadingId: null,
+    evidenceIds: [],
+  };
+  const { api } = setup({ ...draft, status: 'Active' }, false, moveOut);
+  mount(
+    <ContractDetailPanel api={api} id={id} actorId={owner} locationId={id} onChanged={vi.fn()} />,
+  );
+  expect(await screen.findByRole('link', { name: 'Xét duyệt yêu cầu kết thúc' })).toHaveAttribute(
+    'href',
+    `/contracts/${id}/termination-review`,
+  );
+  expect(screen.queryByRole('button', { name: 'Duyệt yêu cầu trả phòng' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Lịch sử xem xét quyết toán')).not.toBeInTheDocument();
+});
 it('keeps settlement pending with visible history and does not offer room release', async () => {
   const m: MoveOut = {
     id,

@@ -3,7 +3,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 const flatten = (style: unknown): Record<string, unknown> =>
   Array.isArray(style)
@@ -58,15 +58,23 @@ vi.mock('react-native-paper', async () => {
     ),
   };
 });
-vi.mock('../features/workspace/WorkspaceProvider', () => ({
-  useWorkspace: () => ({ go: vi.fn() }),
-}));
+const { go } = vi.hoisted(() => ({ go: vi.fn() }));
+vi.mock('../features/workspace/WorkspaceProvider', () => ({ useWorkspace: () => ({ go }) }));
 import { theme } from '../theme/theme';
 import { typography, fontFaces } from '../theme/typography';
 import { StaffFeatureCard } from '../components/StaffFeatureCard';
 import { TenantFeatureDirectory, tenantFeatureGroups } from '../components/TenantFeatureDirectory';
 afterEach(cleanup);
 const styleOf = (node: Element | null) => JSON.parse(node?.getAttribute('data-rn-style') ?? '{}');
+it('opens early termination from the Tenant dashboard for the current contract', () => {
+  render(<TenantFeatureDirectory contractId="current-contract" />);
+  expect(screen.queryByRole('button', { name: 'Yêu cầu của tôi' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Kết thúc hợp đồng sớm' }));
+  expect(go).toHaveBeenLastCalledWith('contract', {
+    section: 'lifecycle',
+    contractId: 'current-contract',
+  });
+});
 it('uses loaded static Inter faces for every Paper slot, including unvarianted text', () => {
   for (const font of Object.values(theme.fonts)) {
     expect(Object.values(fontFaces)).toContain(font.fontFamily);

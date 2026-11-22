@@ -125,6 +125,14 @@ describe('contract role and state actions', () => {
       [],
     );
   });
+  it('lets Owner reopen a rejected Tenant request but never restores the old Staff inspection form', () => {
+    const active = { ...draft, status: 'Active' };
+    expect(operations(active, move('Rejected'), 'Owner')).toContain('expiry-move-out');
+    expect(operations(active, move('Rejected'), 'Tenant', tenant)).not.toContain(
+      'termination-requests',
+    );
+    expect(operations(active, move('Approved'), 'Staff')).not.toContain('move-out/inspection');
+  });
   it('never resends an ambiguous signing request or infers Signed from dispatch/recovery', () => {
     const c = {
       ...draft,
