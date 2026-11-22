@@ -257,6 +257,7 @@ public interface IContractRepository
     Task<IReadOnlyList<ContractMoveOutHistory>> MoveOutHistoryAsync(Guid contractId, CancellationToken t);
     Task<IReadOnlyList<ContractFinalInspection>> FinalInspectionsAsync(Guid contractId, CancellationToken t);
     Task<IReadOnlyList<HandoverReading>> FinalReadingsAsync(Guid contractId, Guid roomId, DateOnly today, CancellationToken t);
+    Task<HandoverReading?> ConfirmedFinalInspectionReadingAsync(Guid contractId, Guid roomId, Guid readingId, CancellationToken t);
     Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId, DateOnly today, CancellationToken t);
     Task<OwnerMoveOutInboxPage> OwnerMoveOutInboxAsync(int page, int pageSize,
         Guid? locationId, MoveOutStatus? status, string? room, CancellationToken t);

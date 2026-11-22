@@ -61,7 +61,12 @@ vi.mock('../components/WorkspaceKit', () => ({
   Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 vi.mock('../features/contracts/ContractEvidence', () => ({
-  ContractEvidence: ({ label }: { label?: string }) => <span>{label}</span>,
+  ContractEvidence: ({ label, evidenceId }: { label?: string; evidenceId?: string }) => (
+    <span>
+      {label}
+      {evidenceId ? ` · ${evidenceId}` : ''}
+    </span>
+  ),
 }));
 
 import { TenantMoveOutInspectionSummary } from '../features/contracts/TenantMoveOutInspectionSummary';
@@ -95,6 +100,14 @@ it('shows the four MoveIn-style result rows with whole-number final meters and n
           evidenceIds: [],
         },
       ],
+      physicalItemEvidence: [
+        {
+          assetId: 'bed',
+          physicalAssetId: 'bed-physical-1',
+          notes: 'Trầy cạnh giường',
+          evidenceIds: ['private-move-out-asset-photo'],
+        },
+      ],
       accessItems: [{ type: 'RoomKey', quantity: 5 }],
       keyEvidenceIds: [],
       evidenceIds: [],
@@ -113,6 +126,7 @@ it('shows the four MoveIn-style result rows with whole-number final meters and n
   expect(screen.getByRole('button', { name: 'Tài sản' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Chìa khóa' })).toBeTruthy();
   expect(screen.getByText('5 chiếc đã nhận lại')).toBeTruthy();
+  expect(screen.queryByText(/private-move-out-asset-photo/)).toBeNull();
   expect(screen.queryByText(/biên bản/i)).toBeNull();
   expect(screen.queryByText(/final-electricity/)).toBeNull();
 
@@ -128,6 +142,8 @@ it('shows the four MoveIn-style result rows with whole-number final meters and n
   fireEvent.click(screen.getByRole('button', { name: 'Tài sản' }));
   fireEvent.click(screen.getByRole('button', { name: 'Giường' }));
   expect(screen.getByText('Số lượng hiện tại')).toBeTruthy();
+  expect(screen.getByText('Trầy cạnh giường')).toBeTruthy();
+  expect(screen.getByText(/private-move-out-asset-photo/)).toBeTruthy();
   expect(screen.queryByText('Số lượng lúc bàn giao')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
 

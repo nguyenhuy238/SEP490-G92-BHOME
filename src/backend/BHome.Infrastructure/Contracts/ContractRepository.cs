@@ -59,6 +59,17 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
          join e in db.Set<MeterEvidence>() on r.EvidenceId equals e.Id
          where task.ContractId == contractId && meter.RoomId == roomId && meter.IsActive && task.Purpose == ReadingPurpose.Final && task.ReadingDate == today && task.Status == MeterTaskStatus.Completed && e.IsUploaded && e.IsLinked
          select new HandoverReading(r.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate, r.ConfirmedValue, e.Id, e.ObjectKey, e.ImageHash)).ToArrayAsync(t);
+    public Task<HandoverReading?> ConfirmedFinalInspectionReadingAsync(Guid contractId, Guid roomId, Guid readingId, CancellationToken t) =>
+        (from reading in db.Set<MeterReading>().AsNoTracking()
+         join task in db.Set<OperationalTask>().AsNoTracking() on reading.TaskId equals task.Id
+         join meter in db.Set<Meter>().AsNoTracking() on reading.MeterId equals meter.Id
+         join evidence in db.Set<MeterEvidence>().AsNoTracking() on reading.EvidenceId equals evidence.Id
+         where reading.Id == readingId && task.ContractId == contractId && meter.RoomId == roomId &&
+               task.Purpose == ReadingPurpose.Final && task.Status == MeterTaskStatus.Completed &&
+               task.MeterId == reading.MeterId && evidence.TaskId == task.Id &&
+               evidence.IsUploaded && evidence.IsLinked
+         select new HandoverReading(reading.Id, meter.Code, (int)meter.UtilityType, task.ReadingDate,
+             reading.ConfirmedValue, evidence.Id, evidence.ObjectKey, evidence.ImageHash)).SingleOrDefaultAsync(t);
     public Task<bool> StaffAssignedAsync(Guid staffId, Guid locationId, DateOnly today, CancellationToken t) =>
         db.StaffLocationAssignments.AnyAsync(a => a.StaffUserId == staffId && a.LocationId == locationId &&
             a.StartDate <= today && a.EndDate >= today && EligibleStaff(today).Contains(staffId), t);

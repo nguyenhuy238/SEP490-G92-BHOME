@@ -192,8 +192,8 @@ export function TenantMoveOutInspectionSummary({
   const observed = inspection.observed;
   const checks = observed.roomChecks ?? [];
   const totalChecks = roomHandoverChecks.length;
-  const checkedCount = checks.filter(
-    (item) => item.status === 'Passed' || item.status === 'Issue',
+  const checkedCount = checks.filter((item) =>
+    ['Passed', 'Issue', 'NotApplicable'].includes(item.status),
   ).length;
   const roomIssues = checks.filter((item) => item.status === 'Issue').length;
   const assetIssues = observed.assets.filter(assetIssue).length;
@@ -206,6 +206,9 @@ export function TenantMoveOutInspectionSummary({
     detail?.section === 'assets' && detail.item
       ? observed.assets.find((item) => item.id === detail.item)
       : undefined;
+  const physicalAssetEvidence = asset
+    ? (observed.physicalItemEvidence ?? []).filter((item) => item.assetId === asset.id)
+    : [];
   const roomTitle = roomHandoverChecks.find((item) => item.code === detail?.item)?.label;
   const title =
     detail?.section === 'room'
@@ -408,6 +411,18 @@ export function TenantMoveOutInspectionSummary({
                     ids={asset.evidenceIds}
                     label="Ảnh tài sản"
                   />
+                  {physicalAssetEvidence.map((item, index) => (
+                    <View key={`${item.physicalAssetId}-${index}`} style={styles.detailBlock}>
+                      <Text style={styles.detailLabel}>Ảnh kiểm kê tài sản riêng {index + 1}</Text>
+                      {!!item.notes?.trim() && <Text style={styles.detailText}>{item.notes}</Text>}
+                      <EvidenceGallery
+                        api={api}
+                        contractId={contractId}
+                        ids={item.evidenceIds}
+                        label={`Ảnh hiện trạng tài sản riêng ${index + 1}`}
+                      />
+                    </View>
+                  ))}
                 </>
               )}
               {detail?.section === 'keys' && (

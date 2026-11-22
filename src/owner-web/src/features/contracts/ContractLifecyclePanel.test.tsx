@@ -248,7 +248,7 @@ it('keeps financial review available after physical move-out completion', async 
       />
     </QueryClientProvider>,
   );
-  expect(await screen.findByText(/Đã hoàn tất bàn giao vật lý/)).toBeVisible();
+  expect(await screen.findByText(/Đã hoàn tất kiểm tra và trả phòng/)).toBeVisible();
   fireEvent.change(await screen.findByLabelText('Lý do / căn cứ của Owner'), {
     target: { value: 'Tiếp tục đối chiếu khoản nợ sau bàn giao' },
   });

@@ -141,15 +141,17 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         var baselineAssets = (baseline?.Assets ?? []).ToDictionary(a => a.Id);
         var issueAssets = (observed?.Assets ?? []).Where(a =>
                 HandoverChecklist.NewDamageAgainstBaseline(a, baselineAssets.GetValueOrDefault(a.Id)))
-            .ToDictionary(a => a.Id, a => a.EvidenceIds ?? []);
+            .ToDictionary(a => a.Id, a => (a.EvidenceIds ?? [])
+                .Concat((observed?.PhysicalItemEvidence ?? [])
+                    .Where(item => item.AssetId == a.Id).SelectMany(item => item.EvidenceIds))
+                .Distinct().ToArray());
         var issueRoomChecks = (observed?.RoomChecks ?? []).Where(item => item.Status == "Issue")
             .ToDictionary(item => item.Code, item => item.EvidenceIds);
-        var originallyHandedKeys = baseline?.AccessItems?.SingleOrDefault(k => k.Type == "RoomKey");
-        var returnedKeys = observed?.AccessItems?.SingleOrDefault(k => k.Type == "RoomKey");
-        if (originallyHandedKeys is not null && returnedKeys is not null &&
-            returnedKeys.Quantity < originallyHandedKeys.Quantity &&
-            observed?.KeyEvidenceIds is { Length: > 0 } keyProofs)
-            issueRoomChecks["access_room_key"] = keyProofs;
+        // A missing key is still an issue to price or explicitly waive even if
+        // Staff did not upload a photo. Charging it separately still requires
+        // the Owner's verified evidence and approval in ApproveDamageAsync.
+        if (SettlementFinancialCloseRules.MissingRoomKeys(baseline?.AccessItems, observed?.AccessItems))
+            issueRoomChecks["access_room_key"] = observed?.KeyEvidenceIds ?? [];
         // Every proof has already been validated and its digest captured in
         // the immutable inspection snapshot by Staff. Do not infer proof
         // ownership from the overall evidence pool.
@@ -240,7 +242,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         }
         await AppendAsync(charge.ContractId, charge.Id, SettlementChargeRecords.ChargeKind, charge, charge.ApprovedByUserId, charge.ApprovedAt, token);
         await db.SaveChangesAsync(token);
-        await NotifyAsync(charge, "settlement-charge:" + charge.Id, "Có khoản phải thu chuyển ra", "Owner đã duyệt khoản phải thu theo biên bản. Mở hóa đơn và khoản phải thu để kiểm tra.", token);
+        await NotifyAsync(charge, "settlement-charge:" + charge.Id, "Có khoản phải thu chuyển ra", "Owner đã duyệt khoản phải thu theo kết quả kiểm tra. Mở hóa đơn và khoản phải thu để kiểm tra.", token);
     }
     public async Task SaveOffsetAsync(DepositOffsetApproval approval, CancellationToken token)
     {

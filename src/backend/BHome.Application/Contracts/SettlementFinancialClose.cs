@@ -43,6 +43,13 @@ public sealed record SettlementFinancialClose(Guid Id, Guid ContractId, string R
 
 public static class SettlementFinancialCloseRules
 {
+    public static bool MissingRoomKeys(HandoverAccessItem[]? opening, HandoverAccessItem[]? returned)
+    {
+        var given = opening?.SingleOrDefault(item => item.Type == "RoomKey")?.Quantity;
+        var received = returned?.SingleOrDefault(item => item.Type == "RoomKey")?.Quantity;
+        return given is { } baseline && received is { } current && current < baseline;
+    }
+
     public static Guid ChildKey(Guid operationKey, Guid source, string kind)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"move-out-final-close:{kind}:{operationKey:N}:{source:N}"));

@@ -108,7 +108,6 @@ describe('contract role and state actions', () => {
     expect(operations({ ...draft, status: 'Active' }, null, 'Staff')).toEqual(['renewals']);
     expect(operations({ ...draft, status: 'Active' }, move('Approved'), 'Staff')).toEqual([
       'move-out/schedule',
-      'move-out/inspection',
     ]);
     expect(operations({ ...draft, status: 'Active' }, move('PendingSettlement'), 'Staff')).toEqual(
       [],
@@ -191,7 +190,7 @@ describe('contract input and exact Vietnamese values', () => {
     expect(() => draftPayload({ ...values, endDate: values.startDate }, [resident])).toThrow();
     expect(() => draftPayload({ ...values, monthlyRent: '0' }, [resident])).toThrow();
   });
-  it('requires expiry extension and confirmed final readings plus evidence', () => {
+  it('requires expiry extension and routes Final inspection to the Staff checklist, not the retired contract form', () => {
     const c = { ...draft, status: 'Active' };
     const renewal = contractActions(c, null, 'Staff', id)[0]!;
     expect(() =>
@@ -201,25 +200,7 @@ describe('contract input and exact Vietnamese values', () => {
         c,
       ),
     ).toThrow();
-    const inspection = contractActions(c, move('Approved'), 'Staff', id).find(
-      (a) => a.operation === 'move-out/inspection',
-    )!;
-    expect(() =>
-      actionPayload(
-        inspection,
-        { electricityReadingId: owner, waterReadingId: tenant, notes: 'Synthetic' },
-        c,
-        [],
-      ),
-    ).toThrow();
-    expect(
-      actionPayload(
-        inspection,
-        { electricityReadingId: owner, waterReadingId: tenant, notes: 'Synthetic' },
-        c,
-        [resident],
-      ),
-    ).toMatchObject({ evidenceIds: [resident] });
+    expect(operations(c, move('Approved'), 'Staff', id)).not.toContain('move-out/inspection');
   });
 });
 describe('contract transport and safe retries', () => {

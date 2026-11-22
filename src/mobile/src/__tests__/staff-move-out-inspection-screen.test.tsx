@@ -53,6 +53,12 @@ const state = vi.hoisted(() => {
     scopedRoom: true,
     noBaseline: false,
     noInventory: false,
+    openingRoomCheck: null as null | {
+      code: string;
+      status: 'Passed' | 'Issue';
+      notes: string;
+      evidenceIds: string[];
+    },
     ensureEmpty: false,
     proposedDate: '2026-11-18',
     taskStatus: 'InProgress',
@@ -367,6 +373,7 @@ beforeEach(() => {
   state.scopedRoom = true;
   state.noBaseline = false;
   state.noInventory = false;
+  state.openingRoomCheck = null;
   state.ensureEmpty = false;
   state.proposedDate = '2026-11-18';
   state.taskStatus = 'InProgress';
@@ -476,7 +483,7 @@ beforeEach(() => {
                   keysAndAccess: '2 chìa khóa',
                   accessItems: [{ type: 'RoomKey', quantity: 2, notes: '' }],
                   assets: [{ id: assetId, handedOverQuantity: 2, condition: 'Tốt' }],
-                  roomChecks: [],
+                  roomChecks: state.openingRoomCheck ? [state.openingRoomCheck] : [],
                 },
               },
           legacyExceptionRequired: state.noBaseline,
@@ -628,13 +635,13 @@ it('previews and removes a photo attached only to the selected room check', asyn
   expect(screen.queryByText('Xác nhận hoàn thành')).toBeNull();
   fireEvent.click(screen.getByText('Chụp ảnh'));
   await screen.findByRole('img', { name: 'Ảnh minh chứng 1' });
-  expect(screen.getByText(/Ảnh kiểm tra khu vực .*1 ảnh đã tải/)).toBeTruthy();
+  expect(screen.getByText(/Ảnh kiểm tra khu vực .*1 ảnh/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Xóa ảnh minh chứng 1' }));
   await waitFor(() => {
     expect(screen.queryByRole('img', { name: 'Ảnh minh chứng 1' })).toBeNull();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private-preview');
   });
-  expect(screen.getByText(/Ảnh kiểm tra khu vực .*0 ảnh đã tải/)).toBeTruthy();
+  expect(screen.getByText('Ảnh kiểm tra khu vực (tùy chọn)')).toBeTruthy();
   expect(state.request.mock.calls.some(([path]) => path.endsWith('/move-out/inspection'))).toBe(
     false,
   );
@@ -692,7 +699,7 @@ it('loads a saved room-check photo through the private evidence API after remoun
   await screen.findByText('4 phần kiểm tra trả phòng');
   fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
   fireEvent.click(screen.getByRole('button', { name: roomHandoverChecks[0]!.label }));
-  expect(screen.getByText(/Ảnh kiểm tra khu vực .*1 ảnh đã tải/)).toBeTruthy();
+  expect(screen.getByText(/Ảnh kiểm tra khu vực .*1 ảnh/)).toBeTruthy();
   await screen.findByRole('img', { name: 'Ảnh minh chứng 1' });
   expect(state.request.mock.calls.some(([path]) => path.endsWith(`/move-out/evidence/${id}`))).toBe(
     true,
@@ -714,7 +721,7 @@ it('discards unsaved item changes on Để sau without sending a draft PATCH', a
   fireEvent.click(screen.getByRole('button', { name: roomHandoverChecks[0]!.label }));
   expect(screen.queryByLabelText('Lý do có vấn đề')).toBeNull();
   fireEvent.click(screen.getByText('Xong'));
-  expect(await screen.findByText(new RegExp("Chọn Tốt hoặc Có vấn đề"))).toBeTruthy();
+  expect(await screen.findByText(new RegExp('Chọn Tốt hoặc Có vấn đề'))).toBeTruthy();
   expect(state.draft?.version).toBe(0);
   expect(
     state.request.mock.calls.filter(
@@ -803,9 +810,13 @@ it('inspects MoveOut independently without any MoveIn handover or asset baseline
   await screen.findByText('4 phần kiểm tra trả phòng');
   expect(screen.queryByText(/Thiếu biên bản bàn giao đầu vào hợp lệ/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
-  expect(screen.getAllByRole('button').filter((item) =>
-    roomHandoverChecks.some(({ label }) => item.getAttribute('aria-label') === label),
-  )).toHaveLength(7);
+  expect(
+    screen
+      .getAllByRole('button')
+      .filter((item) =>
+        roomHandoverChecks.some(({ label }) => item.getAttribute('aria-label') === label),
+      ),
+  ).toHaveLength(7);
   fireEvent.click(screen.getByRole('button', { name: roomHandoverChecks[0]!.label }));
   fireEvent.click(screen.getByRole('button', { name: 'Tốt' }));
   fireEvent.click(screen.getByText('Chụp ảnh'));
@@ -830,7 +841,7 @@ it('requires a reason for a room issue and saves its private evidence only on th
   fireEvent.click(screen.getByRole('button', { name: label }));
   fireEvent.click(screen.getByRole('button', { name: 'Có vấn đề' }));
   fireEvent.click(screen.getByText('Xong'));
-  expect(await screen.findByText(new RegExp("Nhập lý do:"))).toBeTruthy();
+  expect(await screen.findByText(new RegExp('Nhập lý do:'))).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Lý do có vấn đề'), {
     target: { value: 'Trần có vết ẩm' },
   });
@@ -846,21 +857,37 @@ it('requires a reason for a room issue and saves its private evidence only on th
     },
   ]);
   expect(screen.getByRole('button', { name: label }).textContent).toContain('Có vấn đề · đã lưu');
-  expect(screen.getByText(/1 khu vực có vấn đề/)).toBeTruthy();
+  fireEvent.click(screen.getByText('Về 4 mục trả phòng'));
+  expect(screen.getByText('1/7 đã kiểm tra')).toBeTruthy();
+});
+
+it('shows the verified handover room condition next to the current inspection without changing the draft', async () => {
+  state.openingRoomCheck = {
+    code: roomHandoverChecks[0]!.code,
+    status: 'Issue',
+    notes: 'Tường từng bị ố trước khi nhận',
+    evidenceIds: [],
+  };
+  render(<StaffMoveOutInspectionScreen />);
+  await screen.findByText('4 phần kiểm tra trả phòng');
+  fireEvent.click(screen.getByRole('button', { name: /2\. Hiện trạng phòng/ }));
+  fireEvent.click(screen.getByRole('button', { name: roomHandoverChecks[0]!.label }));
+  expect(screen.getByText('Khi bàn giao: Có vấn đề · Tường từng bị ố trước khi nhận')).toBeTruthy();
+  expect(state.draft?.roomChecks).toHaveLength(0);
 });
 
 it('compares opening asset quantity with actual count, requiring a reason for a difference', async () => {
   render(<StaffMoveOutInspectionScreen />);
   await screen.findByText('4 phần kiểm tra trả phòng');
   fireEvent.click(screen.getByRole('button', { name: /3\. Kiểm kê tài sản/ }));
-  expect(screen.getByRole('button', { name: 'Giường đơn' }).textContent).toContain('Số cũ: 2');
   fireEvent.click(screen.getByRole('button', { name: 'Giường đơn' }));
   expect(screen.getByText(/Số lượng lúc nhận: 2/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Số lượng hiện tại'), { target: { value: '1' } });
+  expect(screen.queryByLabelText('Nội dung vấn đề')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Số lượng lúc trả'), { target: { value: '1' } });
   fireEvent.click(screen.getByRole('button', { name: 'Tốt' }));
   fireEvent.click(screen.getByText('Xong'));
   expect(await screen.findByText(/Cần ghi chú tài sản có vấn đề/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Lý do có vấn đề / chênh lệch số lượng'), {
+  fireEvent.change(screen.getByLabelText('Nội dung vấn đề'), {
     target: { value: 'Thiếu một giường so với khi nhận' },
   });
   await saveCurrentItem();
@@ -872,14 +899,12 @@ it('compares opening asset quantity with actual count, requiring a reason for a 
     missingQuantity: 1,
     notes: 'Thiếu một giường so với khi nhận',
   });
-  expect(screen.getByRole('button', { name: 'Giường đơn' }).textContent).toContain(
-    'Có chênh lệch · đã lưu',
-  );
+  expect(screen.getByRole('button', { name: 'Giường đơn' }).textContent).toContain('Có vấn đề');
 });
 
 it('ensures Final meter tasks from started MoveOut before opening camera, and explains absent meters', async () => {
   state.ensureEmpty = true;
-  render(<StaffMoveOutInspectionScreen />);
+  const view = render(<StaffMoveOutInspectionScreen />);
   await screen.findByText('4 phần kiểm tra trả phòng');
   fireEvent.click(screen.getByRole('button', { name: /1\. Ghi chỉ số điện nước/ }));
   await screen.findByText(/Phòng chưa có công tơ điện\/nước đang hoạt động/);
@@ -889,6 +914,28 @@ it('ensures Final meter tasks from started MoveOut before opening camera, and ex
   expect(request?.[1]?.headers?.['Idempotency-Key']).toBeTruthy();
   expect(request?.[1]?.body).toBeUndefined();
   expect(screen.queryByText('Chụp chỉ số điện')).toBeNull();
+  view.rerender(<StaffMoveOutInspectionScreen />);
+  expect(
+    state.request.mock.calls.filter(
+      ([path, init]) => path.endsWith('/final-meter-tasks/ensure') && init?.method === 'POST',
+    ),
+  ).toHaveLength(1);
+});
+
+it('does not provision duplicate Final tasks when React replays the effect in StrictMode', async () => {
+  render(
+    <React.StrictMode>
+      <StaffMoveOutInspectionScreen />
+    </React.StrictMode>,
+  );
+  await screen.findByText('4 phần kiểm tra trả phòng');
+  fireEvent.click(screen.getByRole('button', { name: /1\. Ghi chỉ số điện nước/ }));
+  await screen.findByText('Chụp chỉ số điện');
+  expect(
+    state.request.mock.calls.filter(
+      ([path, init]) => path.endsWith('/final-meter-tasks/ensure') && init?.method === 'POST',
+    ),
+  ).toHaveLength(1);
 });
 
 it('records four factual sections and submits authenticated versioned inspection for Owner review', async () => {
@@ -924,7 +971,7 @@ it('records four factual sections and submits authenticated versioned inspection
   fireEvent.click(screen.getByRole('button', { name: /3\. Kiểm kê tài sản/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Giường đơn' }));
   expect(screen.getByText(/Số lượng lúc nhận: 2/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Số lượng hiện tại'), {
+  fireEvent.change(screen.getByLabelText('Số lượng lúc trả'), {
     target: { value: '2' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Tốt' }));
@@ -934,7 +981,7 @@ it('records four factual sections and submits authenticated versioned inspection
   fireEvent.click(screen.getByText('Về 4 mục trả phòng'));
   fireEvent.click(screen.getByRole('button', { name: /4\. Chìa khóa/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Chìa khóa thu lại' }));
-  fireEvent.change(screen.getByLabelText('Số chìa khóa phòng thực tế đã nhận lại'), {
+  fireEvent.change(screen.getByLabelText('Số chìa khóa lúc trả'), {
     target: { value: '2' },
   });
   fireEvent.click(screen.getByText('Xong'));

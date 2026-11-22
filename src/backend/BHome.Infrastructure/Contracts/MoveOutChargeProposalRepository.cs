@@ -49,7 +49,12 @@ internal sealed partial class SettlementReceivablesRepository
         foreach (var asset in observed?.Assets ?? [])
         {
             var opening = openingAssets.GetValueOrDefault(asset.Id);
-            var proofs = asset.EvidenceIds ?? [];
+            // Individual physical-item photos are attached to this asset group
+            // and are valid private evidence for its proposal/Owner review.
+            var proofs = (asset.EvidenceIds ?? [])
+                .Concat((observed?.PhysicalItemEvidence ?? [])
+                    .Where(item => item.AssetId == asset.Id).SelectMany(item => item.EvidenceIds))
+                .Distinct().ToArray();
             items.Add(new("Asset", asset.Id, null, null, asset.Name,
                 opening is null ? null : DescribeAsset(opening), DescribeAsset(asset),
                 available && asset.Checked &&
@@ -124,9 +129,22 @@ internal sealed partial class SettlementReceivablesRepository
         return json is null ? default : JsonSerializer.Deserialize<T>(json, SettlementChargeRecords.Json);
     }
 
-    public async Task<MoveOutChargeProposal?> LatestProposalAsync(Guid id, CancellationToken token) =>
-        (await SettlementChargeRecords.ReadAsync<MoveOutChargeProposal>(db, id,
-            SettlementChargeRecords.ProposalKind, token)).OrderByDescending(p => p.SentAt).ThenByDescending(p => p.Id).FirstOrDefault();
+    public async Task<MoveOutChargeProposal?> LatestProposalAsync(Guid id, CancellationToken token)
+    {
+        if (db is not Compact24DbContext) return null;
+        // AppendAsync preserves proposal order in contracts.history. Timestamps
+        // can tie when the clock is fixed (or two revisions arrive together),
+        // so Guid ordering must never decide which proposal Tenant sees.
+        var json = await db.Database.SqlQuery<string>($"""
+            SELECT (entry.value->'state')::text AS "Value"
+            FROM contracts c CROSS JOIN LATERAL
+                jsonb_array_elements(c.history) WITH ORDINALITY AS entry(value, position)
+            WHERE c.id={id} AND entry.value->>'recordType'={SettlementChargeRecords.ProposalKind}
+            ORDER BY entry.position DESC LIMIT 1
+            """).SingleOrDefaultAsync(token);
+        return json is null ? null : JsonSerializer.Deserialize<MoveOutChargeProposal>(json,
+            SettlementChargeRecords.Json) ?? throw ContractException.Conflict("move_out_proposal_integrity_failed");
+    }
 
     public async Task<MoveOutChargeProposalFeedback?> ProposalFeedbackAsync(Guid id, Guid proposalId, CancellationToken token)
     {

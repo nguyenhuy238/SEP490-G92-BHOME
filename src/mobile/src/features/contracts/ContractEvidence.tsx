@@ -11,6 +11,13 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { ui } from '../../components/WorkspaceKit';
 
+function finalReadingAccessError(cause: unknown): string {
+  const status = (cause as { status?: number } | null)?.status;
+  if (status === 401) return 'Vui lòng đăng nhập lại để xem ảnh công tơ chốt.';
+  if (status === 403) return 'Tài khoản không có quyền xem ảnh công tơ chốt của hợp đồng này.';
+  return contractError(cause);
+}
+
 export function ContractEvidence({
   api,
   contractId,
@@ -42,7 +49,7 @@ export function ContractEvidence({
   handoverDocumentId?: string;
   draftHandoverPdf?: boolean;
   draftHandoverEvidence?: boolean;
-  /** Final move-out meter evidence uses capture/readings rather than move-in handover. */
+  /** Final move-out meter evidence is verified against this contract (Tenant-safe). */
   finalMeterReading?: boolean;
   assetChangeId?: string;
   thumbnail?: boolean;
@@ -78,7 +85,7 @@ export function ContractEvidence({
         if (Platform.OS === 'web') {
           const blob = readingId
             ? finalMeterReading
-              ? await api.readingEvidence(readingId, controller.signal)
+              ? await api.moveOutMeterEvidence(contractId, readingId, controller.signal)
               : await api.handoverMeterEvidence(contractId, readingId, controller.signal)
             : draftHandoverEvidence
               ? await api.transport<Blob>(path, { signal: controller.signal }, 'blob')
@@ -97,7 +104,7 @@ export function ContractEvidence({
         } else {
           const bytes = readingId
             ? finalMeterReading
-              ? await api.readingEvidenceBytes(readingId, controller.signal)
+              ? await api.moveOutMeterEvidenceBytes(contractId, readingId, controller.signal)
               : await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
             : draftHandoverEvidence
               ? await api.transport<Uint8Array>(path, { signal: controller.signal }, 'bytes')
@@ -120,7 +127,11 @@ export function ContractEvidence({
         }
       } catch (cause) {
         if (!controller.signal.aborted)
-          setThumbnailState({ key: thumbnailKey, uri: '', error: contractError(cause) });
+          setThumbnailState({
+            key: thumbnailKey,
+            uri: '',
+            error: finalMeterReading ? finalReadingAccessError(cause) : contractError(cause),
+          });
       }
     })();
     return () => {
@@ -214,7 +225,7 @@ export function ContractEvidence({
                   )
                 : readingId
                   ? finalMeterReading
-                    ? await api.readingEvidence(readingId, controller.signal)
+                    ? await api.moveOutMeterEvidence(contractId, readingId, controller.signal)
                     : await api.handoverMeterEvidence(contractId, readingId, controller.signal)
                   : handover
                     ? await api.handoverEvidence(contractId, evidenceId!, controller.signal)
@@ -263,7 +274,7 @@ export function ContractEvidence({
                   )
                 : readingId
                   ? finalMeterReading
-                    ? await api.readingEvidenceBytes(readingId, controller.signal)
+                    ? await api.moveOutMeterEvidenceBytes(contractId, readingId, controller.signal)
                     : await api.handoverMeterEvidenceBytes(contractId, readingId, controller.signal)
                   : handover
                     ? await api.handoverEvidenceBytes(contractId, evidenceId!, controller.signal)
@@ -298,7 +309,8 @@ export function ContractEvidence({
         });
       }
     } catch (e) {
-      if (!controller.signal.aborted) setError(contractError(e));
+      if (!controller.signal.aborted)
+        setError(finalMeterReading ? finalReadingAccessError(e) : contractError(e));
     } finally {
       if (temporary?.exists) temporary.delete();
       lock.current = false;
@@ -325,7 +337,11 @@ export function ContractEvidence({
             />
           ) : (
             <Text variant="bodySmall" style={ui.muted}>
-              {thumbnailError ? 'Không xem được ảnh' : 'Đang tải ảnh…'}
+              {thumbnailError
+                ? finalMeterReading
+                  ? thumbnailError
+                  : 'Không xem được ảnh'
+                : 'Đang tải ảnh…'}
             </Text>
           )}
         </View>
@@ -356,7 +372,9 @@ export function ContractEvidence({
             <Button disabled={busy} loading={busy} onPress={() => void download()}>
               {label ??
                 (readingId
-                  ? 'Mở hoặc lưu ảnh chỉ số bàn giao'
+                  ? finalMeterReading
+                    ? 'Mở hoặc lưu ảnh công tơ chốt'
+                    : 'Mở hoặc lưu ảnh chỉ số bàn giao'
                   : previewId
                     ? 'Mở hoặc lưu PDF xem trước'
                     : pdf

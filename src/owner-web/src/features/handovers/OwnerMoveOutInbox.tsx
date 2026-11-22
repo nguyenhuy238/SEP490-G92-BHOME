@@ -39,8 +39,6 @@ interface MoveOutInboxItem {
   locationName: string;
   status: string;
   proposedDate: string;
-  inspectedAt?: string | null;
-  ownerConfirmedInspection?: boolean;
 }
 
 interface MoveOutInboxPage {
@@ -187,6 +185,12 @@ export function OwnerMoveOutInbox() {
               </Button>
             )}
           </FilterToolbar>
+          {locations.error && (
+            <Alert severity="warning">
+              Không tải được danh sách cơ sở.{' '}
+              <Button onClick={() => void locations.refetch()}>Thử lại</Button>
+            </Alert>
+          )}
           <Typography variant="body2" color="text.secondary">
             {inbox.data
               ? `${inbox.data.totalCount} yêu cầu trả phòng phù hợp`

@@ -15,8 +15,8 @@ export function moveOutProgress(
     { label: 'Yêu cầu', done: true },
     { label: 'Phê duyệt', done: approved },
     { label: 'Mở nhiệm vụ trả phòng', done: approved },
-    { label: 'Biên bản', done: inspected },
-    { label: 'Duyệt biên bản', done: inspectionConfirmed },
+    { label: 'Kết quả kiểm tra', done: inspected },
+    { label: 'Rà soát kết quả', done: inspectionConfirmed },
     {
       label: 'Quyết toán',
       done: resolved === true && move.financialReviewStatus === 'OwnerReviewed',

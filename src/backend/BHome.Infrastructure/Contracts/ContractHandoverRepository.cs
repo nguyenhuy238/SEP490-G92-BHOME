@@ -76,7 +76,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
             TargetRoomId = contract.RoomId,
             TargetLabel = contract.Room.RoomNumber,
             Title = $"Kiểm tra trả phòng {contract.Room.RoomNumber}",
-            Requirements = "Kiểm tra hiện trạng phòng, tài sản, chìa khóa và quyền ra vào; chụp bằng chứng, xác nhận chỉ số điện nước cuối kỳ và gửi biên bản cho Owner kiểm tra.",
+            Requirements = "Kiểm tra hiện trạng phòng, tài sản, chìa khóa và quyền ra vào; có thể đính kèm ảnh, xác nhận chỉ số điện nước cuối kỳ và gửi kết quả cho Owner xem xét.",
             Priority = OperationalTaskPriority.Normal,
             Status = MeterTaskStatus.Assigned,
             ReadingDate = moveOut.ProposedDate,
@@ -120,7 +120,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         await RequireMoveOutTaskStartedAsync(contractId, staffId, t);
         var task = await MoveOutTaskAsync(contractId, t);
         task.ApplyAction("submit", now, staffId); task.Version++;
-        task.Result = "Staff đã gửi biên bản kiểm tra trả phòng cho Owner duyệt.";
+        task.Result = "Staff đã gửi kết quả kiểm tra trả phòng cho Owner xem xét.";
         db.Add(new OperationalTaskHistory
         {
             TaskId = task.Id, ActorId = staffId, Action = "MoveOutSubmitted",
@@ -134,7 +134,7 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         if (task.Status != MeterTaskStatus.PendingVerification)
             throw ContractException.Conflict("move_out_task_not_submitted");
         task.ApplyAction(confirmed ? "verify" : "rework", now, ownerId); task.Version++;
-        task.Result = confirmed ? "Owner đã xác nhận biên bản kiểm tra trả phòng." : "Owner yêu cầu Staff kiểm tra lại.";
+        task.Result = confirmed ? "Owner đã xác nhận kết quả kiểm tra trả phòng." : "Owner yêu cầu Staff kiểm tra lại.";
         db.Add(new OperationalTaskHistory
         {
             TaskId = task.Id, ActorId = ownerId,

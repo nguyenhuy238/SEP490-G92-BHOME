@@ -247,7 +247,8 @@ it('Outdated proposal cannot be accepted, and disputing an active proposal requi
   );
   expect(await screen.findByText(/Đề xuất cũ đã thay đổi/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Đồng ý với đề xuất' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Tường phòng' }));
+  // Stale proposals must not pick the room/asset label or evidence from a newer inspection.
+  fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Tình trạng phòng' }));
   expect(screen.queryByText('Lúc bàn giao')).toBeNull();
   expect(screen.queryByTestId('private-evidence')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));

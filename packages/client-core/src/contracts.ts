@@ -264,12 +264,14 @@ export interface HandoverSnapshot {
   accessItems?: { type: string; quantity: number; notes: string }[] | null;
   keyEvidenceIds?: string[] | null;
   /** Item-specific private evidence for Move-Out observations (not used in signed Move-In). */
-  physicalItemEvidence?: {
-    assetId: string;
-    physicalAssetId: string;
-    notes: string | null;
-    evidenceIds: string[];
-  }[] | null;
+  physicalItemEvidence?:
+    | {
+        assetId: string;
+        physicalAssetId: string;
+        notes: string | null;
+        evidenceIds: string[];
+      }[]
+    | null;
   inventoryToken?: string | null;
   inventoryState?: string | null;
   noAssetsConfirmed?: boolean;
@@ -945,17 +947,24 @@ export function contractClient(request: ContractRequest) {
       request<Uint8Array>(root + '/' + id + '/handover/evidence/' + fileId, { signal }, 'bytes'),
     handoverMeterEvidence: (id: string, readingId: string, signal?: AbortSignal) =>
       request<Blob>(root + '/' + id + '/handover/meter-evidence/' + readingId, { signal }, 'blob'),
+    /** Final reading evidence is authorized against this contract, including Tenant access. */
+    moveOutMeterEvidence: (id: string, readingId: string, signal?: AbortSignal) =>
+      request<Blob>(
+        `${root}/${encodeURIComponent(id)}/move-out/meter-evidence/${encodeURIComponent(readingId)}`,
+        { signal },
+        'blob',
+      ),
+    moveOutMeterEvidenceBytes: (id: string, readingId: string, signal?: AbortSignal) =>
+      request<Uint8Array>(
+        `${root}/${encodeURIComponent(id)}/move-out/meter-evidence/${encodeURIComponent(readingId)}`,
+        { signal },
+        'bytes',
+      ),
     readingEvidence: (readingId: string, signal?: AbortSignal) =>
       request<Blob>(
         `/api/v1/capture/readings/${encodeURIComponent(readingId)}/evidence`,
         { signal },
         'blob',
-      ),
-    readingEvidenceBytes: (readingId: string, signal?: AbortSignal) =>
-      request<Uint8Array>(
-        `/api/v1/capture/readings/${encodeURIComponent(readingId)}/evidence`,
-        { signal },
-        'bytes',
       ),
     handoverMeterEvidenceBytes: (id: string, readingId: string, signal?: AbortSignal) =>
       request<Uint8Array>(
@@ -1302,7 +1311,7 @@ export const labels: Record<string, string> = {
   deposit_deduction_exceeds_available:
     'Tổng khấu trừ vượt cọc còn khả dụng. Cần xử lý phần nghĩa vụ còn thiếu.',
   invalid_deposit_deduction_item:
-    'Kiểm tra loại thiệt hại, số tiền nguyên và ảnh đúng biên bản/phạm vi.',
+    'Kiểm tra loại thiệt hại, số tiền nguyên và ảnh đúng hạng mục kiểm tra.',
   duplicate_deposit_deduction: 'Mỗi phòng hoặc tài sản chỉ được ghi một khoản trong quyết định.',
   deposit_deduction_idempotency_conflict:
     'Mã quyết định đã dùng với nội dung khác. Hãy tải lại để kiểm tra.',
@@ -1317,7 +1326,7 @@ export const labels: Record<string, string> = {
   settlement_idempotency_conflict:
     'Mã thao tác đã được dùng với nội dung khác. Kiểm tra kết quả trước khi tạo quyết định mới.',
   settlement_charge_not_ready:
-    'Cần biên bản đã được Owner duyệt và nhóm người thuê đủ điều kiện trước khi ghi nhận khoản phải thu.',
+    'Cần kết quả kiểm tra đã được xác minh và nhóm người thuê đủ điều kiện trước khi ghi nhận khoản phải thu.',
   settlement_evidence_integrity_failed:
     'Ảnh nguồn không còn khớp với bản đã duyệt. Cần đối chiếu lại trước khi ghi giảm nợ.',
   deposit_offset_not_available:
@@ -1326,11 +1335,11 @@ export const labels: Record<string, string> = {
     'Khoản đích hoặc số tiền cấn trừ không còn hợp lệ. Tải lại số dư nghĩa vụ.',
   payer_not_settlement_recipient:
     'Tài khoản người trả chưa thuộc nhóm người thuê của khoản phải thu. Kiểm tra lại người thực chuyển tiền.',
-  move_out_version_changed: 'Lịch / biên bản đã thay đổi. Tải lại trước khi thực hiện.',
+  move_out_version_changed: 'Lịch hoặc kết quả kiểm tra đã thay đổi. Tải lại trước khi thực hiện.',
   inspection_changed_or_reviewed:
-    'Biên bản đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',
-  move_out_not_settled: 'Chưa thể đóng hợp đồng: kiểm tra quyết toán và ngày biên bản.',
-  move_out_handover_required: 'Cần biên bản đã kiểm tra và ngày bàn giao thực tế hợp lệ.',
+    'Kết quả kiểm tra đã thay đổi hoặc đã được xem xét. Tải lại phiên bản hiện tại.',
+  move_out_not_settled: 'Chưa thể đóng hợp đồng: kiểm tra quyết toán và ngày kết thúc thực tế.',
+  move_out_handover_required: 'Cần kết quả kiểm tra trả phòng và ngày kết thúc thực tế hợp lệ.',
   move_out_financial_close_confirmation_required:
     'Cần Owner xác nhận danh sách hạng mục, miễn thu, người nhận hoàn và lý do chốt quyết toán.',
   settlement_financial_close_not_ready:
@@ -1352,11 +1361,12 @@ export const labels: Record<string, string> = {
   settlement_deposit_allocation_incomplete:
     'Cọc khả dụng chưa được cấn trừ hết cho khoản bồi thường đủ điều kiện. Hãy tải lại số dư.',
   owner_confirmed_inspection_required:
-    'Owner cần duyệt biên bản kiểm tra và chỉ số chốt trước khi bàn giao.',
-  inspection_snapshot_invalid: 'Biên bản hoặc chỉ số chốt đã thay đổi; cần kiểm tra lại.',
+    'Owner cần xác minh kết quả kiểm tra và chỉ số chốt trước khi hoàn tất trả phòng.',
+  inspection_snapshot_invalid: 'Kết quả kiểm tra hoặc chỉ số chốt đã thay đổi; cần kiểm tra lại.',
   signer_already_requested: 'Đã có yêu cầu ký. Hãy kiểm tra trạng thái trước khi thử lại.',
   previous_signature_pending: 'Bên ký trước chưa hoàn tất. Hãy chờ xác minh.',
-  inspection_evidence_not_available: 'Ảnh không thuộc người lập biên bản hoặc đã được sử dụng.',
+  inspection_evidence_not_available:
+    'Ảnh không thuộc người ghi nhận kết quả kiểm tra hoặc đã được sử dụng.',
   inspection_upload_not_allowed: 'Chưa được tải ảnh hoặc đã đủ 5 ảnh.',
   invalid_contract_period_or_residents: 'Kiểm tra kỳ thuê, người đại diện và danh sách người ở.',
   contract_price_snapshot_missing:
@@ -1699,7 +1709,7 @@ export function contractActions(
         'move-out/complete',
         'Hoàn tất trả phòng',
         [{ name: 'actualEndDate', label: 'Ngày kết thúc thực tế', type: 'date' }],
-        'Xác nhận hoàn tất bàn giao vật lý theo biên bản Owner đã duyệt. Nợ, cọc và hoàn tiền tiếp tục được theo dõi riêng. Ngày phải trùng ngày lập biên bản.',
+        'Hoàn tất trả phòng dựa trên kết quả kiểm tra thực tế đã xác minh. Nợ, cọc và hoàn tiền tiếp tục được theo dõi riêng. Ngày kết thúc phải trùng ngày kiểm tra.',
       ),
     );
   return result;
@@ -1708,7 +1718,6 @@ export function actionPayload(
   a: ContractAction,
   values: Record<string, string>,
   c: ContractView,
-  evidenceIds: string[] = [],
 ): Record<string, unknown> | undefined {
   if (a.operation === 'signing' && c.isDevelopmentDemo)
     return { certificateId: '00000000-0000-0000-0000-000000000000' };
@@ -1740,11 +1749,6 @@ export function actionPayload(
       throw new Error('Ngày trả phòng không được trong quá khứ.');
     if (a.operation === 'termination-requests' && String(body.proposedDate) >= c.endDate)
       throw new Error('Yêu cầu trước hạn cần ngày trả phòng trước ngày hết hạn.');
-  }
-  if (a.operation === 'move-out/inspection') {
-    if (!evidenceIds.length || evidenceIds.length > 5)
-      throw new Error('Cần từ 1 đến 5 ảnh hiện trạng đã tải lên.');
-    body.evidenceIds = evidenceIds.map(guid);
   }
   return body;
 }

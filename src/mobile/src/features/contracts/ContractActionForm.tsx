@@ -1,17 +1,15 @@
 import { conciseMessage } from '../../lib/toast';
 import { useFeedbackState } from '../../lib/useFeedbackState';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Button, Checkbox, Text } from 'react-native-paper';
 import {
   actionPayload,
-  businessToday,
   canUseCertificate,
   certificateStatus,
   contractError,
   type ContractAction,
   type ContractClient,
   type ContractView,
-  type FinalMeterTask,
   type mutationKeys,
 } from '../../../../../packages/client-core/src/contracts';
 import { useSigningCertificates } from '../../../../../packages/client-core/src/useSigningCertificates';
@@ -34,7 +32,6 @@ export function ContractActionForm({
   action,
   contract,
   keys,
-  evidenceIds,
   onCancel,
   onSuccess,
 }: {
@@ -42,7 +39,6 @@ export function ContractActionForm({
   action: ContractAction;
   contract: ContractView;
   keys: ReturnType<typeof mutationKeys>;
-  evidenceIds: string[];
   onCancel: () => void;
   onSuccess: (id?: string) => void;
 }) {
@@ -65,31 +61,7 @@ export function ContractActionForm({
   const remoteSigning = action.operation === 'signing' && !contract.isDevelopmentDemo;
   const signing = useMemo(() => signingClient(api.transport), [api]);
   const [choice, setChoice] = useState<PlacementChoice>({ placement: null, usePicture: true });
-  const [readings, setReadings] = useState<FinalMeterTask[]>([]);
   const lock = useRef(false);
-  useEffect(() => {
-    if (action.operation !== 'move-out/inspection') return;
-    const c = new AbortController();
-    void api
-      .meterTasks(c.signal)
-      .then((tasks) => {
-        if (!c.signal.aborted)
-          setReadings(
-            tasks.filter(
-              (t) =>
-                t.contractId === contract.id &&
-                t.purpose === 2 &&
-                t.status === 2 &&
-                t.readingDate === businessToday() &&
-                t.confirmedReadingId,
-            ),
-          );
-      })
-      .catch((e) => {
-        if (!c.signal.aborted) setError(contractError(e));
-      });
-    return () => c.abort();
-  }, [api, action.operation, contract.id, setError]);
   async function submit() {
     if (lock.current || !checked || signingBlocked) return;
     if (
@@ -108,7 +80,6 @@ export function ContractActionForm({
               ? { ...values, humanConfirmed: String(checked) }
               : values,
             contract,
-            evidenceIds,
           );
     } catch (e) {
       setError((e as Error).message);
@@ -166,23 +137,6 @@ export function ContractActionForm({
               id: c.id,
               label: `${c.provider} · ${c.serialNumber} · ${c.providerUserIdHint}`,
             }))}
-            onChange={(v) => {
-              setValues((before) => ({ ...before, [f.name]: v }));
-              setChecked(false);
-            }}
-          />
-        ) : f.name === 'electricityReadingId' || f.name === 'waterReadingId' ? (
-          <ChoiceField
-            key={f.name}
-            label={f.label}
-            value={values[f.name] ?? ''}
-            disabled={busy}
-            options={readings
-              .filter((r) => r.utilityType === (f.name === 'electricityReadingId' ? 0 : 1))
-              .map((r) => ({
-                id: r.confirmedReadingId!,
-                label: `${r.meterCode} · ${r.readingDate} · ${r.confirmedReadingId}`,
-              }))}
             onChange={(v) => {
               setValues((before) => ({ ...before, [f.name]: v }));
               setChecked(false);
@@ -246,15 +200,6 @@ export function ContractActionForm({
             }}
             disabled={busy}
           />
-        </>
-      )}
-      {action.operation === 'move-out/inspection' && (
-        <>
-          <Text>{evidenceIds.length} ảnh đã tải sẽ được gắn với biên bản.</Text>
-          <Text>
-            Chọn chỉ số chốt đúng hợp đồng, đã được xác nhận trong ngày kiểm tra. Nếu chưa có, hoàn
-            tất tác vụ điện/nước rồi mở lại biên bản.
-          </Text>
         </>
       )}
       <Checkbox.Item

@@ -60,6 +60,10 @@ public sealed partial class SettlementReceivablesService
     private async Task<MoveOutChargeProposalPreview> ProposalPreviewAsync(Guid id, CancellationToken token)
     {
         var source = await repository.ProposalSourceAsync(id, token);
+        // Access to an older receivable is not permission to inspect the
+        // current move-out proposal or its private opening/closing photo IDs.
+        if (!user.IsInRole(Roles.Owner) && !source.Context.RecipientUserIds.Contains(Actor))
+            throw ContractException.Missing();
         if (source.Context.IsDevelopmentDemo && mode?.AllowDevelopmentDemo != true)
             throw ContractException.Conflict("development_payment_unavailable");
         var latest = await repository.LatestProposalAsync(id, token);

@@ -32,7 +32,6 @@ export function ContractLifecyclePanel({
   id: string;
   role: string;
   moveOut: MoveOut;
-  evidenceIds: string[];
   onChanged: () => void;
 }) {
   const q = useContractLifecycle(api, id, role);
@@ -162,16 +161,6 @@ export function ContractLifecyclePanel({
           </Text>
         </Box>
       ))}
-      {role === 'Tenant' && q.inspections.length > 0 && (
-        <TenantMoveOutProposalPanel
-          api={api}
-          contractId={id}
-          onChanged={() => {
-            q.reload();
-            onChanged();
-          }}
-        />
-      )}
       {summary && (
         <>
           <Heading title="Quyết toán từ máy chủ" />

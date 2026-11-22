@@ -1061,7 +1061,7 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             // would make that later ownership/integrity check reject it.
             m.ElectricityReadingId = x.ElectricityReadingId; m.WaterReadingId = x.WaterReadingId; m.InspectionNotes = x.Notes?.Trim() ?? "";
             m.InspectedByUserId = Actor; m.InspectedAt = clock.GetUtcNow(); m.Status = MoveOutStatus.Inspected;
-            await RecordFinalInspection(c, m, x, t); m.Version++; MoveOutEvent(m, "Inspected");
+            await RecordFinalInspection(c, x, t); m.Version++; MoveOutEvent(m, "Inspected");
             if (handoverRepository is not null)
                 await handoverRepository.SubmitMoveOutTaskAsync(id, Actor, clock.GetUtcNow(), t);
             m.PendingReason = "financial_ledger_and_deposit_policy"; Audit("ContractMoveOutInspected", id);

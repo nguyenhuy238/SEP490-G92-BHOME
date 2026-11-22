@@ -272,6 +272,17 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     [HttpGet("{id:guid}/move-out/evidence/{evidenceId:guid}")]
     public async Task<IActionResult> Evidence(Guid id, Guid evidenceId, CancellationToken t)
     { var buffer = new MemoryStream(); await service.CopyInspectionEvidenceAsync(id, evidenceId, buffer, t); buffer.Position = 0; return File(buffer, "application/octet-stream", "bang-chung-kiem-tra"); }
+    // Tenant cannot use /capture/readings/{id}/evidence: it is Owner/Staff-only.
+    // This private route checks both the contract entitlement and the exact
+    // submitted Final inspection before reading any object from storage.
+    [HttpGet("{id:guid}/move-out/meter-evidence/{readingId:guid}")]
+    public async Task<IActionResult> MoveOutMeterEvidence(Guid id, Guid readingId, CancellationToken t)
+    {
+        var buffer = new MemoryStream();
+        await service.CopyMoveOutFinalMeterEvidenceAsync(id, readingId, buffer, t);
+        buffer.Position = 0;
+        return File(buffer, "application/octet-stream");
+    }
     [HttpPost("{id:guid}/move-out/settlement"), Authorize(Roles = Roles.Owner)]
     public Task<MoveOutView> Settle(Guid id, SettlementInput x, CancellationToken t) => service.SettleAsync(id, x, Key(), t);
     [HttpGet("{id:guid}/move-out/settlement-history"), Authorize(Roles = Roles.Owner + "," + Roles.Tenant)]

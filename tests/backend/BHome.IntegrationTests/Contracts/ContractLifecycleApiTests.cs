@@ -911,8 +911,18 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         using var photo = new ByteArrayContent(Image()); photo.Headers.ContentType = new("image/png");
         var evidence = (await Success<ContractId>(await w.Staff.Client.PostAsync(Path(id, "move-out/evidence"), photo))).Id;
         var preparation = await Success<InspectionPreparation>(await w.Staff.Client.GetAsync(Path(id, "move-out/inspection-preparation")));
+        var electricityPhotoPath = Path(id, $"move-out/meter-evidence/{electricity}");
+        var waterPhotoPath = Path(id, $"move-out/meter-evidence/{water}");
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await w.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await w.Tenant.Client.GetAsync($"/api/v1/capture/readings/{electricity}/evidence")).StatusCode);
+        var inspectedRooms = HandoverRoomChecklist.RequiredCodes.Select(code =>
+            new HandoverRoomCheck(code, code == "cleanliness" ? "Issue" : "Passed",
+                code == "cleanliness" ? "Synthetic cleaning observation" : null, [])).ToArray();
         var inspect = new InspectionInput(electricity, water, "Synthetic room and asset condition", [evidence],
-            [], "Synthetic final room", "Synthetic returned keys", InventoryToken: preparation.Inventory?.StateToken);
+            [], "Synthetic final room", "Synthetic returned keys", InventoryToken: preparation.Inventory?.StateToken,
+            RoomChecks: inspectedRooms, AccessItems: [new HandoverAccessItem("RoomKey", 0, "")]);
         if (moveOutTask is not null)
         {
             var emptyDraft = await Success<MoveOutInspectionDraftView>(
@@ -933,6 +943,114 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         }
         Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Staff, Path(id, "move-out/inspection"), inspect with { WaterReadingId = electricity })).StatusCode);
         await Success<MoveOutView>(await Post(w.Staff, Path(id, "move-out/inspection"), inspect));
+        foreach (var path in new[] { electricityPhotoPath, waterPhotoPath })
+        {
+            var tenantPhoto = await w.Tenant.Client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, tenantPhoto.StatusCode);
+            Assert.Equal("application/octet-stream", tenantPhoto.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(Image(), await tenantPhoto.Content.ReadAsByteArrayAsync());
+            Assert.Equal(HttpStatusCode.OK, (await w.Owner.Client.GetAsync(path)).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await w.Staff.Client.GetAsync(path)).StatusCode);
+        }
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await fixture.Factory.CreateClient().GetAsync(electricityPhotoPath)).StatusCode);
+        var unrelatedTenantForMeter = await User(Roles.Tenant);
+        var unassignedStaffForMeter = await User(Roles.Staff);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await unrelatedTenantForMeter.Client.GetAsync(electricityPhotoPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await unassignedStaffForMeter.Client.GetAsync(electricityPhotoPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await w.Tenant.Client.GetAsync(Path(id, $"move-out/meter-evidence/{openingElectricity.Id}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await w.Tenant.Client.GetAsync(Path(id, $"move-out/meter-evidence/{Guid.NewGuid()}"))).StatusCode);
+        var otherContract = await Setup();
+        var otherContractId = await Active(otherContract);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await otherContract.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await w.Tenant.Client.GetAsync(Path(otherContractId,
+                $"move-out/meter-evidence/{electricity}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await w.Owner.Client.GetAsync(Path(otherContractId,
+                $"move-out/meter-evidence/{electricity}"))).StatusCode);
+        // A stored evidence object is never trusted on its own: its live
+        // metadata and SHA-256 must still match the immutable inspection.
+        await using (var meterEvidenceScope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var meterEvidenceDb = meterEvidenceScope.ServiceProvider.GetRequiredService<BHomePersistenceContext>();
+            var reading = await meterEvidenceDb.Set<MeterReading>().SingleAsync(r => r.Id == electricity);
+            var proof = await meterEvidenceDb.Set<MeterEvidence>().SingleAsync(e => e.Id == reading.EvidenceId);
+            var originalHash = proof.ImageHash;
+            proof.ImageHash = new string('0', 64);
+            await meterEvidenceDb.SaveChangesAsync();
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await w.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+            proof.ImageHash = originalHash;
+            await meterEvidenceDb.SaveChangesAsync();
+            Assert.Equal(HttpStatusCode.OK,
+                (await w.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+            var objectStorage = meterEvidenceScope.ServiceProvider.GetRequiredService<IObjectStorage>();
+            var originalBytes = Image();
+            var corruptedBytes = (byte[])originalBytes.Clone();
+            corruptedBytes[^1] ^= 1;
+            using (var altered = new MemoryStream(corruptedBytes))
+                await objectStorage.PutAsync(proof.ObjectKey, altered, corruptedBytes.Length, "image/png", default);
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await w.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+            using (var restored = new MemoryStream(originalBytes))
+                await objectStorage.PutAsync(proof.ObjectKey, restored, originalBytes.Length, "image/png", default);
+            Assert.Equal(HttpStatusCode.OK,
+                (await w.Tenant.Client.GetAsync(electricityPhotoPath)).StatusCode);
+        }
+        var proposalPath = Path(id, "move-out/receivables/proposal");
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Staff.Client.GetAsync(proposalPath)).StatusCode);
+        var unrelatedTenant = await User(Roles.Tenant);
+        Assert.Equal(HttpStatusCode.NotFound, (await unrelatedTenant.Client.GetAsync(proposalPath)).StatusCode);
+        var preview = await Success<MoveOutChargeProposalPreview>(await w.Owner.Client.GetAsync(proposalPath));
+        Assert.Contains(preview.Items, item => item.Kind == "RoomCheck" &&
+            item.RoomCheckCode == "cleanliness" && item.Chargeable);
+        Assert.Contains(preview.Items, item => item.Kind == "Access" && item.AccessType == "RoomKey");
+        var proposed = new MoveOutChargeProposalInput(preview.Reference, preview.InspectionId,
+            preview.InspectionVersion,
+            [new MoveOutProposedCharge("RoomCheck", null, "cleanliness", null, 125000, "Synthetic cleaning cost")],
+            "Synthetic proposal only; no ledger action");
+        var proposalKey = Guid.NewGuid();
+        var sent = await Success<MoveOutChargeProposal>(await Post(w.Owner, proposalPath, proposed, proposalKey));
+        Assert.Equal(sent.Id, (await Success<MoveOutChargeProposal>(
+            await Post(w.Owner, proposalPath, proposed, proposalKey))).Id);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Owner, proposalPath,
+            proposed with { Note = "Different payload" }, proposalKey)).StatusCode);
+        var tenantPreview = await Success<MoveOutChargeProposalPreview>(await w.Tenant.Client.GetAsync(proposalPath));
+        Assert.Equal("PendingTenant", tenantPreview.Status);
+        Assert.Equal(sent.Id, tenantPreview.LatestProposal?.Id);
+        Assert.Equal(Guid.Empty, tenantPreview.LatestProposal!.OwnerUserId);
+        Assert.Equal(Guid.Empty, tenantPreview.LatestProposal.OperationKey);
+        var answer = new MoveOutChargeProposalFeedbackInput(sent.Id, preview.Reference,
+            false, "Synthetic disagreement");
+        var answerKey = Guid.NewGuid();
+        var feedback = await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
+            proposalPath + "/tenant-feedback", answer, answerKey));
+        Assert.False(feedback.Confirmed);
+        Assert.Equal(feedback.Id, (await Success<MoveOutChargeProposalFeedback>(await Post(w.Tenant,
+            proposalPath + "/tenant-feedback", answer, answerKey))).Id);
+        Assert.Equal("Disputed", (await Success<MoveOutChargeProposalPreview>(
+            await w.Owner.Client.GetAsync(proposalPath))).Status);
+        var revisedProposal = proposed with
+        {
+            Items = [new MoveOutProposedCharge("RoomCheck", null, "cleanliness", null, 90000,
+                "Synthetic revised cleaning cost")], Note = "Synthetic revised proposal"
+        };
+        var revision = await Success<MoveOutChargeProposal>(await Post(w.Owner, proposalPath, revisedProposal));
+        Assert.NotEqual(sent.Id, revision.Id);
+        var revisedPreview = await Success<MoveOutChargeProposalPreview>(
+            await w.Tenant.Client.GetAsync(proposalPath));
+        Assert.Equal(revision.Id, revisedPreview.LatestProposal?.Id);
+        Assert.Equal("PendingTenant", revisedPreview.Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(w.Tenant, proposalPath + "/tenant-feedback",
+            answer)).StatusCode);
+        Assert.Empty((await Success<SettlementReceivablesView>(await w.Owner.Client.GetAsync(
+            Path(id, "move-out/receivables")))).Receivables);
         if (moveOutTask is not null)
         {
             var submitted = (await w.Staff.Client.GetFromJsonAsync<TaskView>($"/api/v1/operational-tasks/{moveOutTask.Id}"))!;

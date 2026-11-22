@@ -9,6 +9,7 @@ import {
 } from '../../../../../packages/client-core/src/contracts';
 import { Action, Pill } from '../../components/WorkspaceKit';
 import { randomUUID } from '../../lib/randomUUID';
+import { roomHandoverChecks } from '../../services/moveInHandover';
 import { colors } from '../../theme/theme';
 import { ContractEvidence } from './ContractEvidence';
 
@@ -208,14 +209,16 @@ function matchingInspectionItem(
   );
 }
 
-function proposalItemName(item: ProposalItem, view: ProposalView): string {
-  const eligible = matchingInspectionItem(item, view);
+function proposalItemName(item: ProposalItem, view?: ProposalView): string {
+  const eligible = view ? matchingInspectionItem(item, view) : undefined;
   return (
     eligible?.label ||
+    item.label ||
     (item.kind === 'Asset'
       ? 'Tài sản trong phòng'
       : item.kind === 'RoomCheck'
-        ? 'Tình trạng phòng'
+        ? (roomHandoverChecks.find((check) => check.code === item.roomCheckCode)?.label ??
+          'Tình trạng phòng')
         : 'Chìa khóa và quyền truy cập')
   );
 }
@@ -275,7 +278,7 @@ function ProposalChargeRow({
   onPress,
 }: {
   item: ProposalItem;
-  view: ProposalView;
+  view?: ProposalView;
   onPress: () => void;
 }) {
   return (
@@ -381,6 +384,8 @@ export function TenantMoveOutProposalPanel({
     detailItem && current?.view?.status !== 'Outdated' && current?.view
       ? matchingInspectionItem(detailItem, current.view)
       : null;
+  const currentItemLabels =
+    current?.view?.status !== 'Outdated' ? (current?.view ?? undefined) : undefined;
   const decision =
     selection &&
     selection.proposalId === proposal?.id &&
@@ -495,7 +500,7 @@ export function TenantMoveOutProposalPanel({
                     {index > 0 && <View style={styles.separator} />}
                     <ProposalChargeRow
                       item={item}
-                      view={current.view!}
+                      view={currentItemLabels}
                       onPress={() => setDetail({ proposalId: proposal.id, index })}
                     />
                   </React.Fragment>
@@ -648,7 +653,7 @@ export function TenantMoveOutProposalPanel({
           <View style={[styles.modalSheet, phone && styles.phoneSheet]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalHeading} numberOfLines={2}>
-                {detailItem && current?.view ? proposalItemName(detailItem, current.view) : ''}
+                {detailItem ? proposalItemName(detailItem, currentItemLabels) : ''}
               </Text>
               <Button compact onPress={() => setDetail(null)}>
                 Đóng

@@ -244,7 +244,7 @@ public sealed partial class ContractService
             // may be unknown, but that must never prevent Staff observations.
             false);
     }
-    private async Task RecordFinalInspection(Contract c, ContractMoveOut m, InspectionInput x, CancellationToken t)
+    private async Task RecordFinalInspection(Contract c, InspectionInput x, CancellationToken t)
     {
         var (root, h) = await Baseline(c, t);
         var missingQuantities = !HasQuantityBaseline(h);
@@ -376,6 +376,42 @@ public sealed partial class ContractService
         await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
         return (await repository.FinalInspectionsAsync(id, t)).Select(i => new FinalInspectionView(i.Id, i.Version, i.BaselineContractId, i.BaselineVersion,
             JsonSerializer.Deserialize<HandoverSnapshot>(i.BaselineSnapshot), JsonSerializer.Deserialize<HandoverSnapshot>(i.ObservedSnapshot)!, i.StaffId, i.InspectedAt, i.OwnerDecision, i.OwnerReason, i.ReviewedAt)).ToArray();
+    }
+    public async Task CopyMoveOutFinalMeterEvidenceAsync(Guid id, Guid readingId, Stream output, CancellationToken t)
+    {
+        var contract = await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
+        if (readingId == Guid.Empty) throw ContractException.Missing();
+
+        // Only the two readings actually committed with an immutable Staff
+        // Final inspection qualify. An uploaded photo, confirmed meter reading
+        // or working draft alone never grants the Tenant access to its bytes.
+        HandoverReading? recorded = null;
+        foreach (var inspection in await repository.FinalInspectionsAsync(id, t))
+        {
+            var snapshot = JsonSerializer.Deserialize<HandoverSnapshot>(inspection.ObservedSnapshot)
+                ?? throw ContractException.Conflict("move_out_inspection_integrity_failed");
+            recorded = new[] { snapshot.Electricity, snapshot.Water }
+                .SingleOrDefault(reading => reading.Id == readingId);
+            if (recorded is not null) break;
+        }
+        if (recorded is null) throw ContractException.Missing();
+
+        // Recheck persistence, task purpose, completed confirmation, linked
+        // evidence, room and exact ContractId. Never trust client IDs or a
+        // snapshot alone for access to MinIO.
+        var current = await repository.ConfirmedFinalInspectionReadingAsync(id, contract.RoomId, readingId, t)
+            ?? throw ContractException.Missing();
+        if (recorded.EvidenceId != current.EvidenceId || recorded.EvidenceHash != current.EvidenceHash ||
+            recorded.UtilityType != current.UtilityType || recorded.Date != current.Date ||
+            recorded.Value != current.Value || recorded.MeterCode != current.MeterCode)
+            throw ContractException.Conflict("inspection_evidence_integrity_failed");
+
+        using var buffer = new MemoryStream();
+        await storage.CopyToAsync(current.EvidenceObjectKey, buffer, t);
+        var bytes = buffer.ToArray();
+        if (FileHash(bytes) != recorded.EvidenceHash)
+            throw ContractException.Conflict("inspection_evidence_integrity_failed");
+        await output.WriteAsync(bytes, t);
     }
     public Task<MoveOutView> RespondToInspectionAsync(Guid id, InspectionTenantFeedback x, Guid key, CancellationToken t) => Mutate(id, [Roles.Tenant], async c =>
     {

@@ -12,6 +12,8 @@ Owner xử lý tại `/handovers?tab=move-out` ngay sau khi Staff gửi xong k�
 
 Kết quả còn có `baselineContractId` (hợp đồng có bàn giao đầu vào đã xác nhận, hoặc `null`) và `items[].baselineEvidenceIds` (ảnh lúc nhận của đúng hạng mục). `items[].evidenceIds` vẫn là ảnh kiểm kê lúc trả. Owner xem trực tiếp ảnh bàn giao bằng API riêng tư `GET /api/v1/contracts/{baselineContractId}/handover/evidence/{fileId}`, ảnh trả phòng bằng `GET /api/v1/contracts/{id}/move-out/evidence/{fileId}`; không sử dụng URL công khai. Trường hợp không có ảnh thật trả mảng rỗng, không tự tạo ảnh.
 
+`items[].evidenceIds` của nhóm tài sản bao gồm cả ảnh riêng của các tài sản vật lý thuộc nhóm đó, nếu Staff đã chụp. Ảnh này được xác thực theo người tải, hợp đồng, ID tài sản và hash trong kết quả kiểm tra cuối; Owner có thể dùng đúng ảnh liên quan làm căn cứ duyệt phí thực tế ở bước riêng.
+
 Trên Owner Web, tab **Bàn giao** còn hiển thị ảnh đang lưu trong `GET /api/v1/contracts/{id}/handover/draft`, qua `GET /api/v1/contracts/{id}/handover/draft/evidence/{fileId}`. Tab **Trả phòng** ưu tiên đọc **cùng nguồn bản nháp bàn giao** để ảnh đã hiển thị ở tab Bàn giao không bị biến mất khi snapshot lịch sử chưa mang ID ảnh theo từng mục. Nếu bản nháp không có ảnh, giao diện dùng `baselineEvidenceIds` từ snapshot đã xác nhận làm dự phòng. Tất cả thao tác đều qua quyền truy cập file riêng tư.
 
 `POST /api/v1/contracts/{id}/move-out/receivables/proposal` — Owner gửi đề xuất từ kết quả kiểm kê Staff đã hoàn thành, không cần thao tác xác nhận kiểm kê riêng. Bắt buộc `Idempotency-Key: <UUID>`.
@@ -47,6 +49,8 @@ Mỗi hạng mục đã kiểm kê (7 mục hiện trạng phòng, tài sản, c
 ```
 
 `confirmed=true` nghĩa là Tenant đồng ý, `confirmed=false` bắt buộc có lý do; trạng thái `PendingTenant`, `Accepted`, `Disputed` hoặc `Outdated`. Nếu tranh chấp, Owner có thể điều chỉnh và gửi một đề xuất mới. Mỗi đề xuất và phản hồi được ghi lịch sử JSONB/audit và có thông báo trong ứng dụng.
+
+Khi Owner gửi bản sửa sau phản hồi tranh chấp, bản mới nhất được lấy theo **thứ tự ghi vào lịch sử** (không dựa vào thứ tự UUID khi hai lần gửi cùng thời điểm). Tenant phản hồi bản cũ sẽ bị từ chối; lịch sử đề xuất/ý kiến cũ được giữ nguyên.
 
 ## Số tiền
 

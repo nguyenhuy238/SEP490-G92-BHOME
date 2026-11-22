@@ -490,7 +490,6 @@ export function ContractSigningStep({
           contract={c}
           action={action}
           keys={keys}
-          evidenceIds={[]}
           onCancel={() => setOperation('')}
           onSuccess={changed}
         />

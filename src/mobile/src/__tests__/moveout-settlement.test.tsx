@@ -136,7 +136,6 @@ it('Tenant reads inspection results without any MoveOut report, signing or conse
       id="tenant-contract"
       role="Tenant"
       moveOut={{ status: 'Inspected' } as MoveOut}
-      evidenceIds={[]}
       onChanged={vi.fn()}
     />,
   );
@@ -206,7 +205,6 @@ function setup(summary = data, fail = false) {
         id={id}
         role={role}
         moveOut={{ status: 'PendingSettlement', version: 4 } as MoveOut}
-        evidenceIds={[]}
         onChanged={vi.fn()}
       />
     ),
@@ -310,7 +308,6 @@ it('Staff cannot create a duplicate inspection report or bypass the started 4-st
       moveOut={
         { status: 'Approved', version: 3, inspectionScheduledAt: '2026-11-06T00:00:00Z' } as MoveOut
       }
-      evidenceIds={['new-evidence']}
       onChanged={vi.fn()}
     />,
   );

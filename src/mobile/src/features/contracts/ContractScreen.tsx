@@ -895,7 +895,6 @@ function LiveContractDetail({
           id={id}
           role={role}
           moveOut={m}
-          evidenceIds={availableEvidence}
           onChanged={() => {
             setEvidence([]);
             detail.reload();
@@ -934,7 +933,6 @@ function LiveContractDetail({
           action={action}
           contract={c}
           keys={keys}
-          evidenceIds={availableEvidence}
           onCancel={() => {
             setSelectedAction('');
             detail.reload();
