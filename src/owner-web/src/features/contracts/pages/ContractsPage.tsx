@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
@@ -15,7 +16,6 @@ import {
   Pagination,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';

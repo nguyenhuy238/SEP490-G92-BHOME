@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../packages/client-core/src/auth';
 import {
   ApiError,
+  UserFeedbackError,
   infrastructureError,
   getUserFriendlyMessage,
 } from '../../../../packages/client-core/src/api';
@@ -33,6 +34,7 @@ export function ownerQuery(values: Record<string, unknown>) {
   return result.toString();
 }
 export function ownerError(error: unknown) {
+  if (error instanceof UserFeedbackError) return getUserFriendlyMessage(error);
   const infrastructure = infrastructureError(error);
   if (infrastructure) return infrastructure;
   if (error instanceof ApiError) {

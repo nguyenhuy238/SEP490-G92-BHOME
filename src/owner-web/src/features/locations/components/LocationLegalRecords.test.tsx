@@ -25,6 +25,13 @@ it('shows an empty legal workspace and retains form data after a rejected save',
   expect(await screen.findByText('Chưa có hồ sơ pháp lý.')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Thêm hồ sơ' }));
   fireEvent.change(screen.getByLabelText(/Tên tài liệu/), { target: { value: 'Hồ sơ tổng hợp' } });
+  fireEvent.change(screen.getByLabelText(/Loại tài liệu/), {
+    target: { value: 'Giấy phép tổng hợp' },
+  });
+  fireEvent.change(screen.getByLabelText(/Ngày cấp/), { target: { value: '2026-01-01' } });
+  fireEvent.change(screen.getByLabelText(/Tệp tài liệu/), {
+    target: { files: [new File(['synthetic'], 'synthetic.pdf', { type: 'application/pdf' })] },
+  });
   request.mockRejectedValueOnce({ status: 409 });
   const form = screen.getByRole('button', { name: 'Lưu phiên bản' }).closest('form')!;
   fireEvent.submit(form);

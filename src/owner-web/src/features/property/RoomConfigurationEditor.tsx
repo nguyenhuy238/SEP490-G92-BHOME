@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useEffect, useRef, useState } from 'react';
 import { getFieldErrors } from '../../../../../packages/client-core/src/api';
 import {
@@ -11,7 +12,6 @@ import {
   Divider,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -200,7 +200,7 @@ function RoomConfigurationForm({
   return (
     <Box
       ref={formRef}
-      component="form"
+      component={ValidatedForm}
       sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}
       onSubmit={(event) => {
         event.preventDefault();

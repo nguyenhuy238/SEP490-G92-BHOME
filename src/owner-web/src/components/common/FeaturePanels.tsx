@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from './ValidatedForm';
 import { MoneyField } from './MoneyField';
 import { useState } from 'react';
 import {
@@ -13,7 +14,6 @@ import {
   Stack,
   Tab,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import dayjs from 'dayjs';
@@ -129,7 +129,7 @@ export function PricingPanel() {
       )}
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="xs">
         <Box
-          component="form"
+          component={ValidatedForm}
           onSubmit={(event) => {
             event.preventDefault();
             if (row)

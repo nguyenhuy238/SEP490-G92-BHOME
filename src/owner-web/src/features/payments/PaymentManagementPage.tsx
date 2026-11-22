@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
@@ -21,7 +22,6 @@ import {
   Stack,
   Tab,
   Tabs,
-  TextField,
   Tooltip,
   Typography,
   Chip,
@@ -1492,7 +1492,7 @@ function AccountEditor({
   return (
     <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2.5 } }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         sx={{ maxWidth: 860 }}
         onSubmit={(event) => {

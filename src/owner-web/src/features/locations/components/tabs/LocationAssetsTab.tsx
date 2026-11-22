@@ -1,3 +1,4 @@
+import { TextField } from '../../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -22,7 +23,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
   Switch,
 } from '@mui/material';

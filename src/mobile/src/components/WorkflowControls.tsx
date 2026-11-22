@@ -1,5 +1,5 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import {
   Button,
@@ -30,6 +30,7 @@ export function ChoiceField({
   searchable = false,
   placeholder = 'Chọn…',
   icon,
+  error,
 }: {
   label: string;
   value: string;
@@ -39,6 +40,7 @@ export function ChoiceField({
   searchable?: boolean;
   placeholder?: string;
   icon?: string;
+  error?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -56,6 +58,7 @@ export function ChoiceField({
         mode="outlined"
         icon={icon ?? 'chevron-down'}
         accessibilityLabel={label}
+        accessibilityHint={error}
         disabled={disabled}
         onPress={() => {
           setSearch('');
@@ -66,10 +69,15 @@ export function ChoiceField({
           justifyContent: 'space-between',
           minHeight: 48,
         }}
-        style={{ borderRadius: 10, borderColor: c.border }}
+        style={{ borderRadius: 10, borderColor: error ? c.red : c.border }}
       >
         {options.find((item) => item.id === value)?.label ?? placeholder}
       </Button>
+      {!!error && (
+        <HelperText type="error" accessibilityRole="alert">
+          {error}
+        </HelperText>
+      )}
       <Portal>
         {open && (
           <Dialog visible={open} onDismiss={() => setOpen(false)} style={{ maxHeight: '80%' }}>
@@ -124,6 +132,7 @@ export function Input({
   disabled = false,
   email = false,
   error,
+  focusOnError = false,
 }: {
   label: string;
   value: string;
@@ -134,11 +143,20 @@ export function Input({
   disabled?: boolean;
   email?: boolean;
   error?: string;
+  focusOnError?: boolean;
 }) {
+  const input = useRef<unknown>(null);
+  useEffect(() => {
+    const target = input.current as { focus?: () => void } | null;
+    if (error && focusOnError && !disabled && typeof target?.focus === 'function') target.focus();
+  }, [error, focusOnError, disabled]);
   if (money)
     return (
       <View>
         <MoneyTextInput
+          ref={(target: unknown) => {
+            input.current = target;
+          }}
           mode="outlined"
           label={label}
           accessibilityLabel={label}
@@ -159,6 +177,9 @@ export function Input({
   return (
     <View>
       <TextInput
+        ref={(target: unknown) => {
+          input.current = target;
+        }}
         mode="outlined"
         label={label}
         accessibilityLabel={label}

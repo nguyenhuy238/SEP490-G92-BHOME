@@ -1,3 +1,4 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import { Alert, Button, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -104,7 +105,7 @@ export function ExpenseEvidencePanel({
           )}
         </Stack>
       ))}
-      <input
+      <ValidatedInput
         ref={input}
         aria-label="Chọn ảnh chứng từ khoản chi"
         type="file"

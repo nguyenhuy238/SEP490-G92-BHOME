@@ -1,5 +1,6 @@
+import { TextField } from './ValidatedForm';
 import { useEffect, useState } from 'react';
-import { Autocomplete, Button, Stack, TextField } from '@mui/material';
+import { Autocomplete, Button, Stack } from '@mui/material';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { useMeterApi } from '../../features/meters/useMeterApi';

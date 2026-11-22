@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -12,7 +13,6 @@ import {
   LinearProgress,
   Paper,
   Stack,
-  TextField,
   Typography,
   useMediaQuery,
 } from '@mui/material';

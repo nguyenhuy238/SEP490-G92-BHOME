@@ -43,16 +43,25 @@ vi.mock('react-native-paper', () => ({
     accessibilityRole?: string;
   }) => <span role={accessibilityRole}>{children}</span>,
   TextInput: ({
+    ref,
     accessibilityLabel,
     value,
     onChangeText,
+    error,
+    disabled,
   }: {
+    ref?: React.Ref<HTMLInputElement>;
     accessibilityLabel: string;
     value: string;
     onChangeText: (v: string) => void;
+    error?: boolean;
+    disabled?: boolean;
   }) => (
     <input
+      ref={ref}
       aria-label={accessibilityLabel}
+      aria-invalid={error}
+      disabled={disabled}
       value={value}
       onChange={(e) => onChangeText(e.target.value)}
     />
@@ -92,6 +101,26 @@ it('requires confirmation matching before contacting the server', () => {
   fill('Synthetic!Current-725', 'Synthetic!Next-725', 'Different!Next-725');
   expect(screen.getByRole('alert').textContent).toContain('Xác nhận mật khẩu mới không khớp.');
   expect(s.json).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(screen.getByLabelText('Xác nhận mật khẩu mới'));
+  expect(screen.getByLabelText('Xác nhận mật khẩu mới').getAttribute('aria-invalid')).toBe('true');
+});
+
+it('maps backend password validation inline, focuses it and preserves the draft for correction', async () => {
+  s.json.mockRejectedValueOnce(
+    new MobileApiError(400, 'validation_error', undefined, undefined, 'POST', {
+      errors: { NewPassword: ['Mật khẩu mới chưa đáp ứng yêu cầu.'] },
+    }),
+  );
+  render(<AccountSecurityScreen />);
+  fill('Synthetic!Current-725', 'Synthetic!Next-725');
+  expect((await screen.findByRole('alert')).textContent).toContain('Mật khẩu mới chưa đáp ứng');
+  expect(document.activeElement).toBe(screen.getByLabelText('Mật khẩu mới'));
+  expect(screen.getByLabelText('Mật khẩu mới')).toHaveProperty('value', 'Synthetic!Next-725');
+  fireEvent.change(screen.getByLabelText('Mật khẩu mới'), {
+    target: { value: 'Synthetic!Corrected-725' },
+  });
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(s.logout).not.toHaveBeenCalled();
 });
 it('informs the user if the authenticated API is unavailable', () => {
   s.apiAvailable = false;

@@ -1,5 +1,6 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
-import { Alert, Button, LinearProgress, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, LinearProgress, Stack, Typography } from '@mui/material';
 import {
   contractError,
   mutationKeys,

@@ -308,4 +308,115 @@ public sealed class ApiFoundationTests : IClassFixture<ApiFactory>
         var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.Equal("required_field", body.GetProperty("fieldErrors").GetProperty("employment")[0].GetProperty("code").GetString());
     }
+
+    [Fact]
+    public async Task OcrControllerPreservesTheInputCodeInsteadOfReplacingItWithInvalidRequest()
+    {
+        var response = await client.PostAsync("/test-probes/ocr-invalid-side", null);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("invalid_identity_side", body.GetProperty("code").GetString());
+        Assert.Contains("mặt trước", body.GetProperty("message").GetString());
+    }
+
+    [Theory]
+    [InlineData("missing_image", 400, "Chọn ảnh")]
+    [InlineData("image_too_large", 413, "giới hạn")]
+    [InlineData("unsupported_image_format", 400, "PNG hoặc JPEG")]
+    public async Task OcrInputRejectionsKeepActionableCatalogMessagesAndStatus(string code, int status, string expected)
+    {
+        var response = await client.GetAsync($"/test-probes/ocr-input/{code}");
+        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(code, body.GetProperty("code").GetString());
+        Assert.Contains(expected, body.GetProperty("message").GetString());
+        Assert.Equal(body.GetProperty("traceId").GetString(), body.GetProperty("correlationId").GetString());
+    }
+
+    [Fact]
+    public async Task OcrStateConflictKeepsItsWorkflowCode()
+    {
+        var response = await client.GetAsync("/test-probes/ocr-workflow-state");
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("ocr_workflow_state_conflict", body.GetProperty("code").GetString());
+        Assert.Contains("Tác vụ", body.GetProperty("message").GetString());
+    }
+
+    [Theory]
+    [InlineData("Unauthenticated", 401)]
+    [InlineData("Forbidden", 403)]
+    [InlineData("NotFound", 404)]
+    [InlineData("ProviderUnavailable", 503)]
+    public async Task SigningRejectionsDoNotExposeExceptionDetails(string error, int status)
+    {
+        var response = await client.GetAsync($"/test-probes/signing-error/{error}");
+        Assert.Equal((HttpStatusCode)status, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.False(body.TryGetProperty("detail", out _));
+        Assert.DoesNotContain("PRIVATE_TEST_DETAIL", body.ToString());
+        Assert.Equal("digital_signing_" + error.ToLowerInvariant(), body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task SigningValidationStillShowsTheIntentionallySafeUseCaseMessage()
+    {
+        var response = await client.GetAsync("/test-probes/signing-error/Invalid");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("Ảnh phải có nền trong suốt.", body.GetProperty("message").GetString());
+        Assert.False(body.TryGetProperty("detail", out _));
+    }
+
+    [Fact]
+    public async Task SmsPasswordMismatchTargetsConfirmPasswordBeforeRecoveryIsCalled()
+    {
+        var response = await client.PostAsJsonAsync("/api/v1/auth/sms-recovery/reset", new
+        {
+            identifier = "synthetic@example.invalid",
+            challengeId = Guid.NewGuid(),
+            authorization = "synthetic-grant",
+            newPassword = "Synthetic-Password-2026",
+            confirmPassword = "Different-Password-2026"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("validation_error", body.GetProperty("code").GetString());
+        var error = body.GetProperty("fieldErrors").GetProperty("confirmPassword")[0];
+        Assert.Equal("password_mismatch", error.GetProperty("code").GetString());
+        Assert.Equal("Mật khẩu xác nhận không khớp.", error.GetProperty("message").GetString());
+        Assert.True(body.GetProperty("errors").TryGetProperty("ConfirmPassword", out _));
+        Assert.DoesNotContain("Synthetic-Password-2026", body.ToString());
+        Assert.DoesNotContain("Different-Password-2026", body.ToString());
+    }
+
+    [Fact]
+    public async Task LoginPhoneFormatUsesThePhoneErrorCode()
+    {
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new { phone = "abc", password = "Synthetic-Password-2026" });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal("invalid_phone_number", body.GetProperty("fieldErrors").GetProperty("phone")[0].GetProperty("code").GetString());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CaptureAccountIdentityErrorsCannotLeakDescriptionsOrUntrustedCodes(bool known)
+    {
+        var response = await client.GetAsync($"/test-probes/capture-account-error/{known}");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(known ? "validation_error" : "staff_account_invalid", body.GetProperty("code").GetString());
+        if (known)
+        {
+            var fields = body.GetProperty("fieldErrors");
+            Assert.Contains("đã được sử dụng", fields.GetProperty("email")[0].GetProperty("message").GetString());
+            Assert.Contains("bảo mật", fields.GetProperty("password")[0].GetProperty("message").GetString());
+        }
+        Assert.DoesNotContain("PRIVATE_TEST_DETAIL", body.ToString());
+        Assert.DoesNotContain("synthetic@example.invalid", body.ToString());
+        Assert.False(body.TryGetProperty("detail", out _));
+    }
 }

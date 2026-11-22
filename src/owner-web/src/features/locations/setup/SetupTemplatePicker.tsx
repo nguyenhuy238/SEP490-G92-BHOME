@@ -1,5 +1,6 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState, type DragEvent, type ReactNode } from 'react';
-import { Box, Button, Chip, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, Chip, MenuItem, Paper, Stack, Typography } from '@mui/material';
 import { GripVertical, Plus, Search } from 'lucide-react';
 
 export const setupDragMime = 'application/x-bhome-setup-template';

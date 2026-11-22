@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
@@ -14,7 +15,6 @@ import {
   Tab,
   Tabs,
   TablePagination,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';

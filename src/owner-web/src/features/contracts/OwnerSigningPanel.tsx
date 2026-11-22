@@ -1,3 +1,5 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
+import { TextField } from '../../components/common/ValidatedForm';
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -8,7 +10,6 @@ import {
   FormControlLabel,
   Paper,
   Stack,
-  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -308,7 +309,7 @@ function UploadStep({
           <Typography variant="caption" color="text.secondary">
             {file ? 'Bấm để đổi file' : 'hoặc bấm để chọn file · PDF, tối đa 10 MB'}
           </Typography>
-          <input
+          <ValidatedInput
             ref={input}
             hidden
             type="file"
@@ -409,7 +410,7 @@ function OtpStart({
       <DrawPad onChange={setDrawing} disabled={busy} />
       <Button component="label" disabled={busy}>
         Tải ảnh chữ ký PNG
-        <input
+        <ValidatedInput
           hidden
           type="file"
           aria-label="Ảnh chữ ký cho hợp đồng"

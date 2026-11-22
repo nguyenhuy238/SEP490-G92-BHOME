@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Box,
@@ -8,7 +9,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ArrowRight, Building2, Copy, Plus, Trash2, UserRound } from 'lucide-react';

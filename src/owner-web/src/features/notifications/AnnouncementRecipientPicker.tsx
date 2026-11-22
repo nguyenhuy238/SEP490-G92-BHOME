@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -9,7 +10,6 @@ import {
   DialogContent,
   DialogTitle,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { FilterToolbar } from '../../components/common/PortalUI';

@@ -1,3 +1,5 @@
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -6,7 +8,6 @@ import {
   FormControlLabel,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ChartCard, ConfirmDialog } from '../../components/common/PortalUI';
@@ -98,7 +99,7 @@ export function NotificationManagement() {
     if (type === 'USER' || type === 'SELECTED_USERS') {
       const userIds = [...new Set(recipients.map((r) => guid(r.id)))];
       if (!userIds.length || (type === 'USER' && userIds.length !== 1))
-        throw new Error('Chọn đúng tài khoản người nhận.');
+        throw new UserFeedbackError('Chọn đúng tài khoản người nhận.');
       return { type, userIds };
     }
     return { type };

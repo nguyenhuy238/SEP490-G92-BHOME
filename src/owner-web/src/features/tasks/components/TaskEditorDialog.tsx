@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -11,7 +12,6 @@ import {
   FormControlLabel,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { OwnerLocationPicker, OwnerRoomPicker } from '../../../components/common/OwnerSelectors';
@@ -217,7 +217,7 @@ export function TaskEditorDialog({
       <DialogTitle>{task ? 'Chỉnh sửa công việc' : 'Tạo công việc'}</DialogTitle>
       <DialogContent>
         <Stack
-          component="form"
+          component={ValidatedForm}
           id="task-editor"
           spacing={2}
           sx={{ pt: 1 }}

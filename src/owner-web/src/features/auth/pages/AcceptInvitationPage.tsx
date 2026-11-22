@@ -1,14 +1,6 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  Box,
-  Button,
-  CircularProgress,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Paper, Stack, Typography } from '@mui/material';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { readAuthenticationFragment } from '../../../../../../packages/client-core/src/authLinks';
 import { createApiClient } from '../../../../../../packages/client-core/src/api';

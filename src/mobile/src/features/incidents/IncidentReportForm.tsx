@@ -255,11 +255,7 @@ function ReportForm() {
       }
       go('move-in-inventory', { taskId: params.inventoryTaskId! });
     } catch (failure) {
-      setLinkError(
-        failure instanceof Error && failure.message !== 'Yêu cầu không thành công.'
-          ? failure.message
-          : errorMessage(failure),
-      );
+      setLinkError(errorMessage(failure));
     } finally {
       setLinking(false);
     }

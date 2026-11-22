@@ -1,3 +1,5 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
+import { TextField } from '../../components/common/ValidatedForm';
 import { useEffect, useState } from 'react';
 import {
   Alert,
@@ -20,7 +22,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -382,7 +383,7 @@ export function RoomInventoryReviewPanel({
         sx={{ alignSelf: 'flex-start' }}
       >
         {uploading ? 'Đang tải ảnh…' : evidence.length ? 'Thêm ảnh bằng chứng' : 'Chụp / tải ảnh'}
-        <input
+        <ValidatedInput
           hidden
           type="file"
           accept="image/png,image/jpeg"

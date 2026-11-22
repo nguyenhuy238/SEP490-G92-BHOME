@@ -1,5 +1,6 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useEffect, useState } from 'react';
-import { Alert, Button, Chip, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Chip, MenuItem, Paper, Stack, Typography } from '@mui/material';
 import { useMeterApi } from '../../meters/useMeterApi';
 import type { DemoSms } from '../../../../../../packages/client-core/src/smsDemo';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';

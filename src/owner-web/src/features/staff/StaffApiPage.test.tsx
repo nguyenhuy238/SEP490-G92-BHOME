@@ -329,8 +329,10 @@ it('rejects reversed dates before a write request', async () => {
 it('renders multiple structured field errors and focuses the first invalid field without discarding input', async () => {
   mount();
   fireEvent.click(screen.getByRole('button', { name: 'Thêm nhân viên' }));
-  fireEvent.change(screen.getByLabelText(/Họ tên/), { target: { value: 'N' } });
-  fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: 'invalid' } });
+  fireEvent.change(screen.getByLabelText(/Họ tên/), { target: { value: 'Người dùng tổng hợp' } });
+  fireEvent.change(screen.getByLabelText(/^Email/), {
+    target: { value: 'synthetic@example.invalid' },
+  });
   fireEvent.change(screen.getByLabelText(/Loại công việc/), { target: { value: 'Task' } });
   const original = mocks.request.getMockImplementation()!;
   mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
@@ -349,8 +351,8 @@ it('renders multiple structured field errors and focuses the first invalid field
   expect(await screen.findByText('Email không đúng định dạng.')).toBeInTheDocument();
   expect(screen.getByText('Họ tên phải có từ 2 đến 150 ký tự.')).toBeInTheDocument();
   await waitFor(() => expect(screen.getByLabelText(/Họ tên/)).toHaveFocus());
-  expect(screen.getByLabelText(/Họ tên/)).toHaveValue('N');
-  expect(screen.getByLabelText(/^Email/)).toHaveValue('invalid');
+  expect(screen.getByLabelText(/Họ tên/)).toHaveValue('Người dùng tổng hợp');
+  expect(screen.getByLabelText(/^Email/)).toHaveValue('synthetic@example.invalid');
   expect(screen.getByLabelText(/^Email/)).toHaveAttribute('aria-invalid', 'true');
 });
 

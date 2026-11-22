@@ -483,5 +483,20 @@
   "withheld_asset_reason_required": "Nhập lý do khi số lượng bàn giao nhỏ hơn số lượng thực tế.",
   "work_order_closed": "Lệnh sửa chữa đã kết thúc.",
   "work_order_not_in_progress": "Chỉ cập nhật tiến độ khi lệnh sửa chữa đang thực hiện.",
-  "work_order_verification_required": "Các lệnh sửa chữa phải được Owner xác minh trước khi đóng."
+  "work_order_verification_required": "Các lệnh sửa chữa phải được Owner xác minh trước khi đóng.",
+  "password_mismatch": "Mật khẩu xác nhận không khớp.",
+  "missing_image": "Chọn ảnh trước khi gửi yêu cầu nhận dạng.",
+  "image_too_large": "Ảnh vượt giới hạn tải lên. Giảm dung lượng hoặc chọn ảnh nhỏ hơn rồi thử lại.",
+  "image_dimensions": "Kích thước ảnh không hợp lệ hoặc quá lớn. Chụp lại hoặc giảm kích thước ảnh rồi thử lại.",
+  "unsupported_image_format": "Ảnh phải có nội dung PNG hoặc JPEG hợp lệ. Chọn ảnh khác hoặc nhập thủ công.",
+  "unsupported_profile": "Loại ảnh nhận dạng không được hỗ trợ. Chọn đúng loại giấy tờ hoặc đồng hồ.",
+  "invalid_identity_side": "Chọn mặt trước hoặc mặt sau của giấy tờ trước khi nhận dạng.",
+  "invalid_meter_precision": "Chọn độ chính xác đồng hồ từ 0 đến 4 chữ số thập phân; thông tin này chỉ áp dụng cho ảnh đồng hồ.",
+  "invalid_experimental_opt_in": "Lựa chọn nhận dạng thử nghiệm không hợp lệ. Chỉ gửi một lựa chọn cho mỗi yêu cầu.",
+  "invalid_experimental_task": "Tác vụ nhận dạng thử nghiệm không hợp lệ. Chọn một tác vụ và bật chế độ thử nghiệm trước khi gửi.",
+  "ocr_workflow_state_conflict": "Tác vụ không cho phép ghi nhận dữ liệu. Tải lại để kiểm tra trạng thái trước khi chụp lại hoặc nhập thủ công.",
+  "digital_signing_invalid": "Thông tin ký điện tử chưa hợp lệ. Kiểm tra dữ liệu và tài liệu trước khi gửi lại.",
+  "digital_signing_conflict": "Trạng thái ký điện tử đã thay đổi hoặc chưa cho phép thao tác này. Tải lại để kiểm tra.",
+  "digital_signing_providerunavailable": "Dịch vụ ký điện tử đang tạm gián đoạn. Kiểm tra trạng thái ký trước khi thử lại.",
+  "staff_account_invalid": "Chưa thể tạo tài khoản nhân viên. Kiểm tra thông tin tài khoản và yêu cầu bảo mật của mật khẩu rồi thử lại."
 }

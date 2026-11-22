@@ -409,3 +409,21 @@ xác nhận thành công.
 tạo bằng câu an toàn. Không bọc exception mạng/provider tùy ý vào loại này; các
 exception đó đi qua normalizer. Cách phân biệt này giữ được hướng dẫn nhập liệu
 cụ thể mà không đưa raw technical error lên màn hình.
+
+### Kiểm tra form trên trình duyệt và rà soát toàn hệ thống
+
+`ValidatedForm` của Owner Web dùng `noValidate` cùng kiểm tra các constraint HTML hiện có,
+hiển thị lỗi tiếng Việt tại `TextField`/`ValidatedInput`, giữ giá trị và focus trường lỗi đầu.
+Các thuộc tính `required`, type, độ dài và khoảng giá trị vẫn được giữ. Login và Accept
+Invitation giữ cơ chế validation tiếng Việt riêng đã có. Đây là kiểm tra trải nghiệm nhập
+liệu; backend vẫn quyết định quyền, trạng thái, ngày hiệu lực và điều kiện tài chính.
+
+OCR giữ nguyên mã lỗi đầu vào thay vì đổi thành `invalid_request`. SMS reset-password
+trả lỗi `confirmPassword` khi xác nhận không khớp. Lỗi Identity của luồng tạo Staff cũ
+được ánh xạ theo danh sách mã cho phép; không đưa `IdentityError.Description` vào mã lỗi
+hoặc response. Signing không đưa exception text vào `detail`, kể cả lỗi từ chối truy cập.
+
+Kiểm chứng Chromium dùng fixture được chặn trên loopback qua
+`scripts/Test-ValidationFeedbackBrowser.mjs` và bộ browser Public Web. Bằng chứng này
+không thay thế integration với PostgreSQL hoặc kiểm thử Android/iOS. Inventory nguồn,
+ma trận chấp nhận và các giới hạn nằm trong `BHOME_FULL_SYSTEM_VALIDATION_UX_CI_REPORT.md`.

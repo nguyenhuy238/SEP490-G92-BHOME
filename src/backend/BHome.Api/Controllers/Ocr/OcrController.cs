@@ -15,30 +15,18 @@ public sealed class OcrController(OcrWorkflowService workflow) : ControllerBase
     [Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     [Consumes("image/jpeg", "image/png")]
     [RequestSizeLimit(5 * 1024 * 1024)]
-    public Task<ActionResult<OcrProposal>> Identity(Guid residentId, string side, CancellationToken token)
-        => Execute(() => workflow.IdentityAsync(residentId, side switch
+    public async Task<ActionResult<OcrProposal>> Identity(Guid residentId, string side, CancellationToken token)
+        => await workflow.IdentityAsync(residentId, side switch
         {
             "front" => OcrDocumentKind.IdentityFront,
             "back" => OcrDocumentKind.IdentityBack,
             _ => throw new OcrInputException("invalid_identity_side")
-        }, Request.Body, token));
+        }, Request.Body, token);
 
     [HttpPost("meter-tasks/{taskId:guid}")]
     [Authorize(Roles = Roles.Staff)]
     [Consumes("image/jpeg", "image/png")]
     [RequestSizeLimit(5 * 1024 * 1024)]
-    public Task<ActionResult<OcrProposal>> Meter(Guid taskId, CancellationToken token)
-        => Execute(() => workflow.MeterAsync(taskId, Request.Body, token));
-
-    private async Task<ActionResult<OcrProposal>> Execute(Func<Task<OcrProposal>> action)
-    {
-        try { return Ok(await action()); }
-        catch (OcrInputException ex)
-        {
-            return Problem(statusCode: ex.Code == "image_too_large" ? 413 : 400,
-                title: "Ảnh không hợp lệ. Vui lòng chụp lại hoặc nhập thủ công.");
-        }
-        catch (OcrAccessException) { return Problem(statusCode: 404, title: "Không tìm thấy tài nguyên."); }
-        catch (OcrWorkflowStateException) { return Problem(statusCode: 409, title: "Tác vụ không cho phép ghi nhận dữ liệu."); }
-    }
+    public async Task<ActionResult<OcrProposal>> Meter(Guid taskId, CancellationToken token)
+        => await workflow.MeterAsync(taskId, Request.Body, token);
 }

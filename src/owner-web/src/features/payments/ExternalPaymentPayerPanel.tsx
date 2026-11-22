@@ -1,13 +1,6 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Checkbox,
-  FormControlLabel,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Button, Checkbox, FormControlLabel, Stack, Typography } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { formatInstant } from '../../../../../packages/client-core/src/localization';

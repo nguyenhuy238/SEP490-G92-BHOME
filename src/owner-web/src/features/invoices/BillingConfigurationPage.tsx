@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
@@ -11,7 +12,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
@@ -396,7 +396,7 @@ export function ScheduleForm({
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
@@ -583,7 +583,7 @@ export function PolicyForm({
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();

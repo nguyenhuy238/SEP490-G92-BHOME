@@ -101,6 +101,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             CaptureConflictException conflict => conflict.Code,
             CaptureValidationException validation => validation.Code,
             OcrInputException input => input.Code,
+            OcrWorkflowStateException => "ocr_workflow_state_conflict",
             PrivateObjectNotFoundException => "private_evidence_file_missing",
             DbUpdateConcurrencyException => "data_concurrency_conflict",
             BHome.Application.Common.InputValidationException => "validation_error",
@@ -117,8 +118,8 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
                 Status = status,
                 Title = title,
                 Type = $"https://httpstatuses.com/{status}",
-                // Digital-signing refusals are written for the person on screen ("Ảnh phải có nền trong suốt.").
-                Detail = exception is DigitalSigningException readable ? readable.Message : null,
+                // Expected signing messages belong in the safe public title below. Never
+                // repeat exception text in detail, particularly for neutral 401/403/404.
                 Extensions = code is null ? new Dictionary<string, object?>() : new Dictionary<string, object?> { ["code"] = code }
             }
         };

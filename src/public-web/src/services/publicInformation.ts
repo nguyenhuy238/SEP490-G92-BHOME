@@ -36,12 +36,14 @@ export interface PublicRoom {
 const baseUrl = import.meta.env.DEV ? '' : getApiBaseUrl(import.meta.env.VITE_API_BASE_URL, false);
 const request = createApiClient(baseUrl);
 export const publicInformation = {
-  locations: () => request<PublicLocation[]>('/api/v1/public/locations'),
-  location: (id: string) =>
-    request<PublicLocation>(`/api/v1/public/locations/${encodeURIComponent(id)}`),
-  rooms: (id: string) =>
-    request<PublicRoom[]>(`/api/v1/public/locations/${encodeURIComponent(id)}/rooms`),
-  room: (id: string) => request<PublicRoom>(`/api/v1/public/rooms/${encodeURIComponent(id)}`),
+  locations: (signal?: AbortSignal) =>
+    request<PublicLocation[]>('/api/v1/public/locations', { signal }),
+  location: (id: string, signal?: AbortSignal) =>
+    request<PublicLocation>(`/api/v1/public/locations/${encodeURIComponent(id)}`, { signal }),
+  rooms: (id: string, signal?: AbortSignal) =>
+    request<PublicRoom[]>(`/api/v1/public/locations/${encodeURIComponent(id)}/rooms`, { signal }),
+  room: (id: string, signal?: AbortSignal) =>
+    request<PublicRoom>(`/api/v1/public/rooms/${encodeURIComponent(id)}`, { signal }),
 };
 // Only the backend's anonymous photo routes may be used, never private object keys.
 export function publicPhotoUrl(photo: PublicPhoto): string | undefined {

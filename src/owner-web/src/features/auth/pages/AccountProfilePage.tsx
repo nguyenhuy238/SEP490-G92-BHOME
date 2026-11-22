@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PersonalDataRequestsPanel } from '../components/PersonalDataRequestsPanel';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,7 +13,6 @@ import {
   Paper,
   Snackbar,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { KeyRound, LogOut, Save, ShieldCheck, UserRound } from 'lucide-react';
@@ -223,7 +223,7 @@ export default function AccountProfilePage() {
       >
         <Paper
           ref={formRef}
-          component="form"
+          component={ValidatedForm}
           onSubmit={submit}
           sx={{ p: { xs: 2, md: 3 }, border: '1px solid', borderColor: 'divider' }}
         >

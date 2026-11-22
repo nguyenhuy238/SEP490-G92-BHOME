@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { TaskInspectionReview } from '../../property/EquipmentInspectionsPanel';
 import {
@@ -15,7 +16,6 @@ import {
   Drawer,
   IconButton,
   Stack,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -420,7 +420,7 @@ function TaskActionDialog({
       <DialogContent>
         <Stack
           spacing={2}
-          component="form"
+          component={ValidatedForm}
           id="task-action"
           sx={{ pt: 1 }}
           onSubmit={(event) => {

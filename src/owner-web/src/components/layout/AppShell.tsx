@@ -1,3 +1,4 @@
+import { TextField } from '../common/ValidatedForm';
 import { useState } from 'react';
 import {
   Avatar,
@@ -15,7 +16,6 @@ import {
   Paper,
   Popover,
   Stack,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';

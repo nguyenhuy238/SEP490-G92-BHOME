@@ -264,6 +264,14 @@ it('shows API failure without demo rows or false success and preserves the retry
   expect(screen.queryByText('Bảo trì')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
   mock.createExpense.mockRejectedValue({ status: 503 });
+  fireEvent.change(screen.getByLabelText(/Số tiền/), { target: { value: '200000' } });
+  fireEvent.change(screen.getByLabelText(/Ngày phát sinh/), { target: { value: '2026-11-02' } });
+  fireEvent.change(screen.getByLabelText(/Danh mục khoản chi/), {
+    target: { value: 'Chi tổng hợp' },
+  });
+  fireEvent.change(screen.getByLabelText(/Nội dung \/ tham chiếu chứng từ/), {
+    target: { value: 'Chứng từ tổng hợp' },
+  });
   fireEvent.submit(document.getElementById('expense-editor')!);
   await waitFor(() => expect(mock.createExpense).toHaveBeenCalledTimes(1));
   await waitFor(() =>

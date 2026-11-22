@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { MoneyField } from '../../../components/common/MoneyField';
 import {
   contactPhoneError,
@@ -17,7 +18,6 @@ import {
   FormControlLabel,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ConfirmDialog } from '../../../components/common/PortalUI';
@@ -200,7 +200,7 @@ export function StaffEditor({
             : 'Thêm nhân viên'}
       </DialogTitle>
       <DialogContent>
-        <form
+        <ValidatedForm
           ref={formRef}
           id="staff-editor"
           onSubmit={(e) => {
@@ -423,7 +423,7 @@ export function StaffEditor({
               </>
             )}
           </Stack>
-        </form>
+        </ValidatedForm>
       </DialogContent>
       <DialogActions>
         <Button disabled={action.busy} onClick={close}>

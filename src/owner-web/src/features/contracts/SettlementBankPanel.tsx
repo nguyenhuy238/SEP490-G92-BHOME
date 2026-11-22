@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { useMemo, useRef, useState } from 'react';
 import {
@@ -7,7 +8,6 @@ import {
   FormControlLabel,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';

@@ -51,6 +51,12 @@ export function ContractActionForm({
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const firstInvalidField = action.fields.find((field) => fieldErrors[field.name])?.name;
+  const update = (name: string, value: string) => {
+    setValues((before) => ({ ...before, [name]: value }));
+    setFieldErrors((before) => ({ ...before, [name]: '' }));
+    setChecked(false);
+  };
   const [error, setError] = useFeedbackState('warning', false),
     [busy, setBusy] = useState(false),
     [checked, setChecked] = useState(false);
@@ -163,14 +169,14 @@ export function ContractActionForm({
         <ChoiceField
           label="Nguyên nhân hủy giữ chỗ"
           value={values.cause ?? ''}
+          error={fieldErrors.cause}
           options={[
             { id: '0', label: 'Người thuê tự nguyện hủy' },
             { id: '1', label: 'Owner không cung cấp được phòng' },
           ]}
           disabled={busy}
           onChange={(cause) => {
-            setValues((before) => ({ ...before, cause }));
-            setChecked(false);
+            update('cause', cause);
           }}
         />
       )}
@@ -180,14 +186,14 @@ export function ContractActionForm({
             key={f.name}
             label={f.label}
             value={values[f.name] ?? ''}
+            error={fieldErrors[f.name]}
             disabled={busy || directory.loading}
             options={directory.certificates.filter(canUseCertificate).map((c) => ({
               id: c.id,
               label: `${c.provider} · ${c.serialNumber} · ${c.providerUserIdHint}`,
             }))}
             onChange={(v) => {
-              setValues((before) => ({ ...before, [f.name]: v }));
-              setChecked(false);
+              update(f.name, v);
             }}
           />
         ) : f.name === 'electricityReadingId' || f.name === 'waterReadingId' ? (
@@ -195,6 +201,7 @@ export function ContractActionForm({
             key={f.name}
             label={f.label}
             value={values[f.name] ?? ''}
+            error={fieldErrors[f.name]}
             disabled={busy}
             options={readings
               .filter((r) => r.utilityType === (f.name === 'electricityReadingId' ? 0 : 1))
@@ -203,8 +210,7 @@ export function ContractActionForm({
                 label: `${r.meterCode} · ${r.readingDate} · ${r.confirmedReadingId}`,
               }))}
             onChange={(v) => {
-              setValues((before) => ({ ...before, [f.name]: v }));
-              setChecked(false);
+              update(f.name, v);
             }}
           />
         ) : earlyTermination && f.name === 'proposedDate' ? (
@@ -216,16 +222,15 @@ export function ContractActionForm({
               disabled={busy}
               hyphenated
               compactCalendar
-              error={showDateError}
+              error={showDateError || !!fieldErrors[f.name]}
               onBlur={() => setDateTouched(true)}
               onChange={(v) => {
-                setValues((before) => ({ ...before, [f.name]: v }));
-                setChecked(false);
+                update(f.name, v);
               }}
             />
-            {showDateError && (
+            {(showDateError || !!fieldErrors[f.name]) && (
               <HelperText type="error" accessibilityRole="alert">
-                {dateError}
+                {showDateError ? dateError : fieldErrors[f.name]}
               </HelperText>
             )}
           </React.Fragment>
@@ -233,6 +238,7 @@ export function ContractActionForm({
           <Input
             key={f.name}
             error={fieldErrors[f.name]}
+            focusOnError={firstInvalidField === f.name}
             label={
               f.label +
               (f.type === 'date'
@@ -246,8 +252,7 @@ export function ContractActionForm({
             multiline={f.type === 'multiline'}
             disabled={busy}
             onChange={(v) => {
-              setValues((before) => ({ ...before, [f.name]: v }));
-              setChecked(false);
+              update(f.name, v);
             }}
           />
         ),

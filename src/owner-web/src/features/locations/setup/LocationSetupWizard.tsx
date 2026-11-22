@@ -1,3 +1,5 @@
+import { getUserFriendlyMessage } from '../../../../../../packages/client-core/src/api';
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -29,7 +31,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
   useMediaQuery,
   useTheme,
@@ -85,7 +86,6 @@ import {
   formatBillingDecimal,
   invoiceError,
 } from '../../../../../../packages/client-core/src/invoices';
-import { ApiError } from '../../../../../../packages/client-core/src/api';
 import { suggestedLocationCode } from './locationCode';
 
 const steps = [
@@ -1385,13 +1385,7 @@ export function LocationSetupWizard({
       committed.current = true;
       sessionStorage.removeItem(storageKey);
     } catch (e) {
-      setError(
-        e instanceof ApiError
-          ? invoiceError(e)
-          : e instanceof Error
-            ? e.message
-            : 'Không thể hoàn tất thiết lập. Dữ liệu nháp được giữ để thử lại.',
-      );
+      setError(getUserFriendlyMessage(e));
     } finally {
       lock.current = false;
       setBusy(false);

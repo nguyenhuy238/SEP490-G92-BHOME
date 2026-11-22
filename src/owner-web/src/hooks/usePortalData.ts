@@ -1,3 +1,4 @@
+import { getUserFriendlyMessage } from '../../../../packages/client-core/src/api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePortal } from '../app/PortalProvider';
 import { usePropertyApi } from '../features/property-api/propertyApi';
@@ -123,10 +124,6 @@ export function usePortalAction() {
       await queryClient.invalidateQueries({ queryKey: ['portal'] });
       notify('Đã lưu thay đổi vào dữ liệu demo.');
     },
-    onError: (error) =>
-      notify(
-        error instanceof Error ? error.message : 'Không thể lưu dữ liệu. Vui lòng thử lại.',
-        true,
-      ),
+    onError: (error) => notify(getUserFriendlyMessage(error), true),
   });
 }

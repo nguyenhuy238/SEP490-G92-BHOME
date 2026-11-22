@@ -152,6 +152,7 @@ export function getUserFriendlyMessage(error: unknown): string {
   );
 }
 export function catalogError(error: unknown): string | undefined {
+  if (error instanceof UserFeedbackError) return error.message;
   const value = record(error),
     problem = record(value?.problem);
   const code = value?.code ?? problem?.code;

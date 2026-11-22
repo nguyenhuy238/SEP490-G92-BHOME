@@ -75,7 +75,9 @@ internal sealed class LocalizedValidationMetadata : IValidationMetadataProvider,
     {
         var s when s.StartsWith("Vui lòng nhập", StringComparison.Ordinal) => "required_field",
         var s when s.StartsWith("Email không", StringComparison.Ordinal) => "invalid_email_format",
-        var s when s.StartsWith("Nhập số điện thoại", StringComparison.Ordinal) => "invalid_phone_number",
+        var s when s.StartsWith("Nhập số điện thoại", StringComparison.Ordinal) ||
+            s.StartsWith("Số điện thoại không", StringComparison.Ordinal) => "invalid_phone_number",
+        "Mật khẩu xác nhận không khớp." => "password_mismatch",
         var s when s.Contains("ký tự", StringComparison.Ordinal) => "invalid_length",
         var s when s.Contains("khoảng từ", StringComparison.Ordinal) => "out_of_range",
         _ => "invalid_field"

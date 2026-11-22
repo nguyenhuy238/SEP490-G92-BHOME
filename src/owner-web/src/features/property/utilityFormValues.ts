@@ -1,3 +1,4 @@
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
 import { useRef, useState } from 'react';
 import { usePropertySetupApi } from './usePropertySetupApi';
 
@@ -7,7 +8,8 @@ export const utilityTypes = [
   { id: '1', label: 'Nước' },
 ];
 export function periodStart(value: string) {
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) throw new Error('A valid billing month is required.');
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value))
+    throw new UserFeedbackError('Vui lòng chọn tháng tính phí hợp lệ.');
   return `${value}-01`;
 }
 export function setupDecimal(value: string | number) {
@@ -22,7 +24,7 @@ export function usePrivateSetupEvidence(locationId: string) {
     file,
     setFile,
     getKey: async () => {
-      if (!file) throw new Error('Evidence must be selected.');
+      if (!file) throw new UserFeedbackError('Vui lòng chọn tệp bằng chứng.');
       if (uploaded.current?.file !== file)
         uploaded.current = { file, key: (await api.uploadEvidence(locationId, file)).objectKey };
       return uploaded.current.key;
