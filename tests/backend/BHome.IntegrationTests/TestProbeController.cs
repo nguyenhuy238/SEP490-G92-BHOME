@@ -18,6 +18,12 @@ public sealed class TestProbeController : ControllerBase
     [HttpPost("validation")]
     [AllowAnonymous]
     public IActionResult Validate(ValidationProbe request) => Ok();
+    [HttpPost("staff-validation"), AllowAnonymous]
+    public IActionResult ValidateStaff(BHome.Application.Operations.StaffCreate request) => Ok();
+    [HttpGet("rate-limited"), AllowAnonymous, Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("Auth")]
+    public IActionResult RateLimited() => Ok();
+    [HttpGet("stale-data"), AllowAnonymous]
+    public IActionResult StaleData() => throw new Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException("PRIVATE_TEST_DETAIL");
     [HttpGet("owner")]
     [Authorize(Policy = Roles.Owner)]
     public IActionResult Owner() => Ok();
@@ -56,9 +62,9 @@ public sealed class TestProbeController : ControllerBase
 
     [HttpGet("schema-error/{state}/{wrapped:bool}")]
     [AllowAnonymous]
-    public IActionResult SchemaError(string state, bool wrapped)
+    public IActionResult SchemaError(string state, bool wrapped, string? constraintName = null)
     {
-        var error = new Npgsql.PostgresException("PRIVATE_TEST_DETAIL", "ERROR", "ERROR", state);
+        var error = new Npgsql.PostgresException("PRIVATE_TEST_DETAIL", "ERROR", "ERROR", state, constraintName: constraintName);
         throw wrapped ? new Microsoft.EntityFrameworkCore.DbUpdateException("PRIVATE_TEST_DETAIL", error) : error;
     }
 

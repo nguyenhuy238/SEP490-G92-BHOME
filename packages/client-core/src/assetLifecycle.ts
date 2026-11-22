@@ -1,4 +1,5 @@
 import type { SetupDocument, SetupRequest } from './propertySetup';
+import { catalogError } from './api';
 
 export interface RecordPage<T> {
   items: SetupDocument<T>[];
@@ -113,6 +114,8 @@ export function assetLifecycleClient(request: SetupRequest) {
   };
 }
 export function lifecycleError(error: unknown): string {
+  const shared = catalogError(error);
+  if (shared) return shared;
   const value = error as { status?: number; code?: string; problem?: { code?: string } };
   if (value.status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
   if (value.status === 403 || value.status === 404)

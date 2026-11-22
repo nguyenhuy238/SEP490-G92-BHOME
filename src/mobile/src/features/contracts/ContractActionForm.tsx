@@ -1,4 +1,5 @@
 import { ContractNotice } from './ContractNotice';
+import { getFieldErrors } from '../../../../../packages/client-core/src/api';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Checkbox, HelperText, Text } from 'react-native-paper';
@@ -49,6 +50,7 @@ export function ContractActionForm({
   onSuccess: (id?: string) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useFeedbackState('warning', false),
     [busy, setBusy] = useState(false),
     [checked, setChecked] = useState(false);
@@ -130,6 +132,7 @@ export function ContractActionForm({
       return;
     }
     lock.current = true;
+    setFieldErrors({});
     setBusy(true);
     setError('');
     const scope = contract.id + '/' + action.operation;
@@ -145,6 +148,7 @@ export function ContractActionForm({
         ['renewals', 'holding-conversion'].includes(action.operation) ? result.id : undefined,
       );
     } catch (e) {
+      setFieldErrors(getFieldErrors(e));
       setError(contractError(e));
     } finally {
       lock.current = false;
@@ -228,6 +232,7 @@ export function ContractActionForm({
         ) : (
           <Input
             key={f.name}
+            error={fieldErrors[f.name]}
             label={
               f.label +
               (f.type === 'date'

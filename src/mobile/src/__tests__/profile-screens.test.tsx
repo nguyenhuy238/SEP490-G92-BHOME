@@ -72,13 +72,16 @@ vi.mock('react-native-paper', () => {
       value,
       onChangeText,
       disabled,
+      ref,
     }: {
       accessibilityLabel: string;
       value: string;
       onChangeText: (value: string) => void;
       disabled?: boolean;
+      ref?: React.Ref<HTMLInputElement>;
     }) => (
       <input
+        ref={ref}
         aria-label={accessibilityLabel}
         value={value}
         disabled={disabled}
@@ -202,6 +205,33 @@ it('does not automatically repeat a failed mutation or claim that it was saved',
   expect(s.back).not.toHaveBeenCalled();
   expect(s.logout).not.toHaveBeenCalled();
   expect(getToastSnapshot().toast?.type).toBe('error');
+});
+it('shows all server field errors inline, focuses the first field and preserves the draft', async () => {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (_url, init) =>
+    json(
+      init?.method === 'PUT'
+        ? {
+            code: 'validation_error',
+            fieldErrors: {
+              fullName: [{ code: 'invalid_length', message: 'Họ tên phải có từ 2 đến 150 ký tự.' }],
+              email: [{ code: 'invalid_email_format', message: 'Email không đúng định dạng.' }],
+            },
+          }
+        : initial,
+      init?.method === 'PUT' ? 400 : 200,
+    ),
+  );
+  setup(fetcher);
+  render(<ProfileEditScreen />);
+  const name = await screen.findByDisplayValue(initial.fullName);
+  fireEvent.change(name, { target: { value: 'Bản nháp đang sửa' } });
+  fireEvent.click(screen.getByText('Lưu thay đổi'));
+  expect(await screen.findByText('Họ tên phải có từ 2 đến 150 ký tự.')).toBeTruthy();
+  expect(screen.getByText('Email không đúng định dạng.')).toBeTruthy();
+  await waitFor(() => expect(document.activeElement).toBe(name));
+  expect((name as HTMLInputElement).value).toBe('Bản nháp đang sửa');
+  expect(s.back).not.toHaveBeenCalled();
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
 });
 it.each([
   ['Tenant', 'Khách thuê'],
@@ -370,12 +400,16 @@ it.each(['email_already_used', 'phone_already_used'])(
     render(<ProfileEditScreen />);
     await screen.findByDisplayValue(initial.fullName);
     fireEvent.change(screen.getByLabelText('Họ và tên'), { target: { value: 'Bản Nháp' } });
+    const previousToast = getToastSnapshot().toast;
     fireEvent.click(screen.getByText('Lưu thay đổi'));
     await screen.findByRole('alert');
     expect(screen.getByDisplayValue('Bản Nháp')).toBeTruthy();
     expect(screen.queryByText(code)).toBeNull();
     expect(s.back).not.toHaveBeenCalled();
-    expect(getToastSnapshot().toast?.type).toBe('error');
+    expect(getToastSnapshot().toast).toBe(previousToast);
+    expect(document.activeElement).toBe(
+      screen.getByLabelText(code === 'email_already_used' ? 'Email' : 'Số điện thoại'),
+    );
   },
 );
 it('requires explicit refresh after a stale version and retries only with that freshly viewed version', async () => {

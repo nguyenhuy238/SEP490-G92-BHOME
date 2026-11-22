@@ -8,6 +8,28 @@ namespace BHome.Application.UnitTests.Operations;
 
 public sealed class OperationsServiceTests
 {
+    [Fact]
+    public async Task StaffCreationCollectsFormatAndEmploymentErrorsBeforePersistence()
+    {
+        var repository = Substitute.For<IOperationsRepository>();
+        var service = Service(repository, new User(Guid.NewGuid(), Roles.Owner));
+        var input = new StaffCreate("invalid", " ", "abc", null,
+            new EmploymentWrite(null, "", new DateOnly(2026, 6, 1), new DateOnly(2026, 5, 1), null, 1.5m, "Active"));
+        var error = await Assert.ThrowsAsync<BHome.Application.Common.InputValidationException>(() => service.CreateStaffAsync(input, default));
+        foreach (var field in new[] { "email", "fullName", "phone", "employment.employmentType", "employment.endDate", "employment.baseRate" })
+            Assert.True(error.Errors.ContainsKey(field), field);
+        await repository.DidNotReceiveWithAnyArgs().CreateStaffAsync(default, default!, default, default);
+    }
+
+    [Fact]
+    public async Task StaffCreationRejectsMissingEmploymentWithoutNullReference()
+    {
+        var repository = Substitute.For<IOperationsRepository>();
+        var service = Service(repository, new User(Guid.NewGuid(), Roles.Owner));
+        var error = await Assert.ThrowsAsync<BHome.Application.Common.InputValidationException>(() =>
+            service.CreateStaffAsync(new StaffCreate("synthetic@example.invalid", "Synthetic", null, null, null!), default));
+        Assert.Contains("employment", error.Errors.Keys);
+    }
     private sealed class User(Guid? id, params string[] roles) : ICurrentUser
     {
         public Guid? UserId { get; } = id;

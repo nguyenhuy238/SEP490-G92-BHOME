@@ -1,5 +1,6 @@
 import type { MobileApi } from '../lib/api';
 import { MobileApiError, errorMessage } from '../lib/api';
+import { requestDiagnostic, UserFeedbackError } from '../../../../packages/client-core/src/api';
 
 // IncidentContracts.cs / IncidentRecords.cs. Work Orders are not Operational Tasks.
 export const incidentRoot = '/api/v1/incidents';
@@ -290,7 +291,7 @@ function utf8(value: string) {
 // Raw multipart bytes work with the existing native/web authenticated transport.
 // Do not serialize FormData as JSON, and never send file:// URIs or object keys.
 export function incidentMultipart(input: IncidentSubmit, photos: IncidentPhoto[], key: string) {
-  if (photos.length > 5) throw new Error('Chỉ gửi tối đa 5 ảnh.');
+  if (photos.length > 5) throw new UserFeedbackError('Chỉ gửi tối đa 5 ảnh.');
   const boundary = 'bhome-' + key;
   const chunks: Uint8Array[] = [];
   const fields = {
@@ -309,7 +310,7 @@ export function incidentMultipart(input: IncidentSubmit, photos: IncidentPhoto[]
   }
   photos.forEach((photo, index) => {
     const error = validateIncidentPhoto(photo.bytes);
-    if (error) throw new Error(error);
+    if (error) throw new UserFeedbackError(error);
     chunks.push(
       utf8(
         `--${boundary}\r\nContent-Disposition: form-data; name="images"; filename="evidence-${index}.${photo.contentType === 'image/png' ? 'png' : 'jpg'}"\r\nContent-Type: ${photo.contentType}\r\n\r\n`,
@@ -361,7 +362,9 @@ export function incidentClient(api: Pick<MobileApi, 'request'>) {
         signal,
       });
       if (!result.incidentId)
-        throw new Error('Máy chủ chưa trả mã báo cáo. Tải lại để kiểm tra trước khi gửi lại.');
+        throw new UserFeedbackError(
+          'Máy chủ chưa trả mã báo cáo. Tải lại để kiểm tra trước khi gửi lại.',
+        );
       return { ...result, incidentId: result.incidentId };
     },
     command: <K extends keyof IncidentCommands>(
@@ -529,15 +532,14 @@ export function incidentError(error: unknown) {
     open_work_orders_require_cancellation:
       'Cần xử lý các lệnh sửa chữa còn mở trước khi đóng báo cáo.',
   };
-  const base =
-    error instanceof MobileApiError
-      ? errorMessage(error)
-      : error instanceof Error
-        ? error.message
-        : 'Thao tác chưa thành công.';
-  return error instanceof MobileApiError && error.code && codes[error.code]
-    ? `${codes[error.code]} ${base}`
-    : base;
+  if (
+    error instanceof MobileApiError &&
+    ![401, 403, 404].includes(error.status) &&
+    error.code &&
+    codes[error.code]
+  )
+    return codes[error.code] + requestDiagnostic(error);
+  return errorMessage(error);
 }
 export function workActions(work: WorkOrder, role: string, actor: string): (keyof WorkCommands)[] {
   if (role === 'Owner')

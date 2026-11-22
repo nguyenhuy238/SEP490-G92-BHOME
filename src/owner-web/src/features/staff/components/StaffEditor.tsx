@@ -3,7 +3,7 @@ import {
   contactPhoneError,
   normalizeContactPhone,
 } from '../../../../../../packages/client-core/src/contactPhone';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -30,7 +30,7 @@ import {
   type StaffResponsibilities,
 } from '../staffContracts';
 import { StaffResponsibilitiesPanel } from './StaffPresentation';
-import { ApiError } from '../../../../../../packages/client-core/src/api';
+import { ApiError, getFieldErrors } from '../../../../../../packages/client-core/src/api';
 export function StaffEditor({
   staff,
   renewal = false,
@@ -79,6 +79,11 @@ export function StaffEditor({
   const [baseRate, setBaseRate] = useState(String(staff?.employment?.baseRate ?? ''));
   const [confirm, setConfirm] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (!confirm && Object.keys(fieldErrors).length)
+      formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [fieldErrors, confirm]);
   const responsibilities = useOwnerQuery<StaffResponsibilities>(
     ['staff-responsibilities', staff?.userId],
     `/api/v1/staff/${staff?.userId}/responsibilities`,
@@ -101,6 +106,7 @@ export function StaffEditor({
       ? 'Ngày kết thúc không được trước ngày bắt đầu.'
       : '';
   const fieldError = (field: string) => ({
+    name: field,
     error: !!fieldErrors[field],
     helperText: fieldErrors[field],
   });
@@ -149,14 +155,16 @@ export function StaffEditor({
               setStale(true);
               setLatest(undefined);
             }
+            const errors = getFieldErrors(error);
             setFieldErrors(
               Object.fromEntries(
-                Object.entries(error.problem?.errors ?? {}).map(([key, messages]) => [
+                Object.entries(errors).map(([key, message]) => [
                   key.split('.').pop()!.toLowerCase(),
-                  messages.join(' '),
+                  message,
                 ]),
               ),
             );
+            if (Object.keys(errors).length) setConfirm(false);
           }
           throw error;
         }
@@ -193,6 +201,7 @@ export function StaffEditor({
       </DialogTitle>
       <DialogContent>
         <form
+          ref={formRef}
           id="staff-editor"
           onSubmit={(e) => {
             e.preventDefault();

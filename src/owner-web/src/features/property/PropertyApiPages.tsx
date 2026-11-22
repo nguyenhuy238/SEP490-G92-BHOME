@@ -32,6 +32,7 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { ASSET_UNITS } from '../../../../../packages/client-core/src/assetUnits';
 import { invoiceError, type Page } from '../../../../../packages/client-core/src/invoices';
+import { getFieldErrors } from '../../../../../packages/client-core/src/api';
 import type {
   LocationConfiguration,
   PhysicalAsset,
@@ -144,6 +145,12 @@ export function PropertyApiPage({
   const [retirementReason, setRetirementReason] = useState('');
   const [editing, setEditing] = useState<Row | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const editorRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (Object.keys(fieldErrors).length)
+      editorRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [fieldErrors]);
   const [newCommonArea, setNewCommonArea] = useState('');
   const [notice, setNotice] = useState('');
   const createIntent = scopedRooms && urlParams.get('action') === 'create' ? routeKey : null;
@@ -352,6 +359,10 @@ export function PropertyApiPage({
       setConfirmInactive(false);
       setNotice('Máy chủ đã lưu cấu hình.');
     },
+    onError: (error) => {
+      setFieldErrors(getFieldErrors(error));
+      setConfirmInactive(false);
+    },
   });
   const retire = useMutation({
     mutationFn: async () => {
@@ -385,6 +396,7 @@ export function PropertyApiPage({
       return;
     }
     save.reset();
+    setFieldErrors({});
     setEditing(row);
     setNotice('');
     setNewCommonArea('');
@@ -437,10 +449,13 @@ export function PropertyApiPage({
   const field = (key: string, label: string, required = true, type = 'text') => (
     <TextField
       key={key}
+      name={key}
       required={required}
       label={label}
       type={type}
       value={values[key] ?? ''}
+      error={!!fieldErrors[key]}
+      helperText={fieldErrors[key]}
       onChange={(event) => setValues((old) => ({ ...old, [key]: event.target.value }))}
       slotProps={type === 'number' ? { htmlInput: { min: 1, max: 32767, step: 1 } } : undefined}
     />
@@ -1002,6 +1017,7 @@ export function PropertyApiPage({
         fullWidth
       >
         <form
+          ref={editorRef}
           onSubmit={(event) => {
             event.preventDefault();
             if (

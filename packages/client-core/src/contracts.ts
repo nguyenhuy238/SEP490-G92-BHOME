@@ -1,5 +1,5 @@
 // D011/D012 REST contract. Amounts remain decimal strings throughout the clients.
-import { ApiError, infrastructureError, requestDiagnostic } from './api';
+import { ApiError, infrastructureError, requestDiagnostic, catalogError } from './api';
 import { groupVietnameseIntegerDigits } from './localization';
 import type { RoomConfiguration } from './propertySetup';
 import type { Page } from './invoices';
@@ -1397,6 +1397,8 @@ export function contractError(error: unknown): string {
       diagnostic
     );
   if (code && labels[code]) return labels[code] + diagnostic;
+  const shared = catalogError(error);
+  if (shared) return shared + diagnostic;
   return (
     ((
       {

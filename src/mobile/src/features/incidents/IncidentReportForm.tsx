@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
 import { useLocalSearchParams } from 'expo-router';
 import { Text } from 'react-native-paper';
 import { useSession } from '../../lib/SessionProvider';
@@ -198,10 +199,13 @@ function ReportForm() {
           item.commonArea !== (common ? commonName : null) ||
           item.assetId !== (selectedAsset || null)
         )
-          throw new Error('Phạm vi sự cố khác mục kiểm kê. Kiểm tra lại trước khi liên kết.');
-        if (item.inherited) throw new Error('Không thể sửa mục kiểm kê kế thừa Tenant.');
+          throw new UserFeedbackError(
+            'Phạm vi sự cố khác mục kiểm kê. Kiểm tra lại trước khi liên kết.',
+          );
+        if (item.inherited)
+          throw new UserFeedbackError('Không thể sửa mục kiểm kê kế thừa Tenant.');
         if (item.incidentId && item.incidentId !== incidentId)
-          throw new Error('Mục này đã liên kết với báo cáo sự cố khác.');
+          throw new UserFeedbackError('Mục này đã liên kết với báo cáo sự cố khác.');
         if (!item.incidentId) {
           await client.updateItem(
             params.inventoryTaskId!,
@@ -227,13 +231,13 @@ function ReportForm() {
         view.roomId !== roomId ||
         (item.assetId && item.assetId !== selectedAsset)
       )
-        throw new Error(
+        throw new UserFeedbackError(
           'Phạm vi phòng hoặc tài sản đã thay đổi. Kiểm tra lại mục kiểm kê trước khi liên kết.',
         );
       if (!item.condition || item.condition === 'Good' || item.actualQuantity === null)
-        throw new Error('Mục kiểm kê chưa lưu tình trạng thiếu hoặc hư hỏng.');
+        throw new UserFeedbackError('Mục kiểm kê chưa lưu tình trạng thiếu hoặc hư hỏng.');
       if (item.incidentId && item.incidentId !== incidentId)
-        throw new Error('Mục này đã được liên kết với báo cáo sự cố khác.');
+        throw new UserFeedbackError('Mục này đã được liên kết với báo cáo sự cố khác.');
       if (!item.incidentId) {
         await client.saveItem(
           params.inventoryTaskId!,

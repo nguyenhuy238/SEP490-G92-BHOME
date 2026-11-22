@@ -28,38 +28,52 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             if (current is PostgresException) break;
             if (current is NpgsqlException) { databaseUnavailable = true; break; }
         }
-        var status = schemaMismatch || databaseUnavailable ? StatusCodes.Status503ServiceUnavailable : exception switch
+        var databaseError = exception as PostgresException ?? exception.InnerException as PostgresException;
+        var constraintCode = databaseError?.SqlState switch
         {
-            BHome.Application.Operations.OperationsException operations => operations.Status,
-            BHome.Application.Finance.FinanceException finance => finance.Status,
-            BHome.Application.Notifications.NotificationException notification => notification.Status,
-            BHome.Application.Billing.AdjustmentException adjustment => adjustment.Status,
-            BHome.Application.PaymentsDebt.PaymentException payment => payment.Status,
-            BHome.Application.Billing.InvoiceException invoice => invoice.Status,
-            PropertyException property => property.Status,
-            BHome.Application.IncidentMaintenance.IncidentException incident => incident.Status,
-            BHome.Application.StaffOperations.OperationalTaskException task => task.Status,
-            ContractException contract => contract.Status,
-            DigitalSigningException signing => signing.Error switch
-            {
-                DigitalSigningError.Invalid => 400,
-                DigitalSigningError.Unauthenticated => 401,
-                DigitalSigningError.Forbidden => 403,
-                DigitalSigningError.NotFound => 404,
-                DigitalSigningError.Conflict => 409,
-                DigitalSigningError.ProviderUnavailable => 503,
-                _ => 500
-            },
-            IntegrationUnavailableException => StatusCodes.Status503ServiceUnavailable,
-            PrivateObjectNotFoundException => StatusCodes.Status404NotFound,
-            OcrAccessException => StatusCodes.Status404NotFound,
-            CaptureConflictException or OcrWorkflowStateException => StatusCodes.Status409Conflict,
-            CaptureValidationException => StatusCodes.Status400BadRequest,
-            OcrInputException { Code: "image_too_large" } => StatusCodes.Status413PayloadTooLarge,
-            OcrInputException => StatusCodes.Status400BadRequest,
-            BadHttpRequestException { StatusCode: >= 400 and < 500 } request => request.StatusCode,
-            _ => StatusCodes.Status500InternalServerError
+            "23505" => "data_unique_conflict",
+            "23503" => "data_reference_conflict",
+            // Unknown CHECK/NOT NULL failures can be internal write/outbox outages.
+            "23514" when databaseError?.ConstraintName is "ck_resident_actual_dates" or "ck_billing_policy_calculation_method" => "data_constraint_invalid",
+            "23P01" => "data_overlap_conflict",
+            "40001" or "40P01" => "data_concurrency_conflict",
+            _ => null
         };
+        var status = schemaMismatch || databaseUnavailable ? StatusCodes.Status503ServiceUnavailable :
+            constraintCode is not null ? (constraintCode == "data_constraint_invalid" ? 400 : 409) : exception switch
+            {
+                BHome.Application.Operations.OperationsException operations => operations.Status,
+                BHome.Application.Finance.FinanceException finance => finance.Status,
+                BHome.Application.Notifications.NotificationException notification => notification.Status,
+                BHome.Application.Billing.AdjustmentException adjustment => adjustment.Status,
+                BHome.Application.PaymentsDebt.PaymentException payment => payment.Status,
+                BHome.Application.Billing.InvoiceException invoice => invoice.Status,
+                PropertyException property => property.Status,
+                BHome.Application.IncidentMaintenance.IncidentException incident => incident.Status,
+                BHome.Application.StaffOperations.OperationalTaskException task => task.Status,
+                ContractException contract => contract.Status,
+                DigitalSigningException signing => signing.Error switch
+                {
+                    DigitalSigningError.Invalid => 400,
+                    DigitalSigningError.Unauthenticated => 401,
+                    DigitalSigningError.Forbidden => 403,
+                    DigitalSigningError.NotFound => 404,
+                    DigitalSigningError.Conflict => 409,
+                    DigitalSigningError.ProviderUnavailable => 503,
+                    _ => 500
+                },
+                IntegrationUnavailableException => StatusCodes.Status503ServiceUnavailable,
+                DbUpdateConcurrencyException => StatusCodes.Status409Conflict,
+                BHome.Application.Common.InputValidationException => StatusCodes.Status400BadRequest,
+                PrivateObjectNotFoundException => StatusCodes.Status404NotFound,
+                OcrAccessException => StatusCodes.Status404NotFound,
+                CaptureConflictException or OcrWorkflowStateException => StatusCodes.Status409Conflict,
+                CaptureValidationException => StatusCodes.Status400BadRequest,
+                OcrInputException { Code: "image_too_large" } => StatusCodes.Status413PayloadTooLarge,
+                OcrInputException => StatusCodes.Status400BadRequest,
+                BadHttpRequestException { StatusCode: >= 400 and < 500 } request => request.StatusCode,
+                _ => StatusCodes.Status500InternalServerError
+            };
         var title = status switch
         {
             StatusCodes.Status413PayloadTooLarge => "Request body too large.",
@@ -67,11 +81,11 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             StatusCodes.Status503ServiceUnavailable => "Service temporarily unavailable.",
             _ => "An unexpected error occurred."
         };
-        logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning, exception,
-            "Request {CorrelationId} failed with {ErrorCode}", context.TraceIdentifier, exception.GetType().Name);
+        // Exception text can contain SQL parameters, identity fields or provider secrets.
+        // Record classification and trace only; do not serialize the exception into logs.
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/problem+json";
-        var code = schemaMismatch ? "database_schema_incompatible" : databaseUnavailable ? "database_temporarily_unavailable" : exception switch
+        var code = schemaMismatch ? "database_schema_incompatible" : databaseUnavailable ? "database_temporarily_unavailable" : constraintCode ?? (exception switch
         {
             BHome.Application.Operations.OperationsException operations => operations.Code,
             BHome.Application.Finance.FinanceException finance => finance.Code,
@@ -83,12 +97,18 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
             BHome.Application.IncidentMaintenance.IncidentException incident => incident.Code,
             BHome.Application.StaffOperations.OperationalTaskException task => task.Code,
             ContractException contract => contract.Code,
+            DigitalSigningException signing => "digital_signing_" + signing.Error.ToString().ToLowerInvariant(),
             CaptureConflictException conflict => conflict.Code,
             CaptureValidationException validation => validation.Code,
             OcrInputException input => input.Code,
             PrivateObjectNotFoundException => "private_evidence_file_missing",
-            _ => null
-        };
+            DbUpdateConcurrencyException => "data_concurrency_conflict",
+            BHome.Application.Common.InputValidationException => "validation_error",
+            _ => ApiProblems.DefaultCode(status)
+        });
+        logger.Log(status >= 500 ? LogLevel.Error : LogLevel.Warning,
+            "Request {CorrelationId} failed with {ErrorCode} ({StatusCode}, {ExceptionType}, PostgreSQL {SqlState})",
+            context.TraceIdentifier, code, status, exception.GetType().Name, databaseError?.SqlState);
         var problem = new ProblemDetailsContext
         {
             HttpContext = context,
@@ -102,6 +122,15 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problems, ILogg
                 Extensions = code is null ? new Dictionary<string, object?>() : new Dictionary<string, object?> { ["code"] = code }
             }
         };
+        if (exception is DigitalSigningException readableSigning && status is not (401 or 403 or 404))
+            problem.ProblemDetails.Title = readableSigning.Message;
+        if (exception is BHome.Application.Common.InputValidationException fields)
+        {
+            var validation = new ValidationProblemDetails(fields.Errors.ToDictionary(x => x.Key, x => x.Value)) { Status = status };
+            validation.Extensions["code"] = code;
+            problem.ProblemDetails = validation;
+        }
+        ApiProblems.Enrich(context, problem.ProblemDetails);
         if (!await problems.TryWriteAsync(problem))
         {
             // A private-file client requests PDF/octet-stream, but rejected downloads still use

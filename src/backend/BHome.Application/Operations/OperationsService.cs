@@ -74,8 +74,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
 
     public async Task<StaffView> CreateStaffAsync(StaffCreate input, CancellationToken t)
     {
-        Require(Permissions.StaffAccounts.Manage); Validate(input); Validate(input.Employment);
-        ValidateEmployment(input.Employment);
+        Require(Permissions.StaffAccounts.Manage); StaffInputValidation.Validate(input, input.Employment, input.Phone);
         return await repository.CreateStaffAsync(Actor, input with
         {
             Email = input.Email.Trim(),
@@ -87,8 +86,7 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
 
     public async Task<StaffView> UpdateStaffAsync(Guid id, StaffUpdate input, CancellationToken t)
     {
-        Require(Permissions.StaffAccounts.Manage); Validate(input); Validate(input.Employment);
-        ValidateEmployment(input.Employment);
+        Require(Permissions.StaffAccounts.Manage); StaffInputValidation.Validate(input, input.Employment, input.Phone);
         if (string.IsNullOrWhiteSpace(input.Reason)) throw OperationsException.Invalid("reason_required");
         return await repository.UpdateStaffAsync(Actor, id, input with
         {

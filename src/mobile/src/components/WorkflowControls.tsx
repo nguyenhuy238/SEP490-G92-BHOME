@@ -1,7 +1,16 @@
 import { useFeedbackState } from '../lib/useFeedbackState';
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { Button, Dialog, Icon, Portal, RadioButton, Text, TextInput } from 'react-native-paper';
+import {
+  Button,
+  Dialog,
+  HelperText,
+  Icon,
+  Portal,
+  RadioButton,
+  Text,
+  TextInput,
+} from 'react-native-paper';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { CameraCapture } from './CameraCapture';
 import { MoneyTextInput } from './MoneyTextInput';
@@ -114,6 +123,7 @@ export function Input({
   multiline = false,
   disabled = false,
   email = false,
+  error,
 }: {
   label: string;
   value: string;
@@ -123,33 +133,50 @@ export function Input({
   multiline?: boolean;
   disabled?: boolean;
   email?: boolean;
+  error?: string;
 }) {
   if (money)
     return (
-      <MoneyTextInput
+      <View>
+        <MoneyTextInput
+          mode="outlined"
+          label={label}
+          accessibilityLabel={label}
+          value={value}
+          error={!!error}
+          onChangeText={onChange}
+          disabled={disabled}
+          autoCapitalize="none"
+          style={{ backgroundColor: c.white }}
+        />
+        {!!error && (
+          <HelperText type="error" accessibilityRole="alert">
+            {error}
+          </HelperText>
+        )}
+      </View>
+    );
+  return (
+    <View>
+      <TextInput
         mode="outlined"
         label={label}
         accessibilityLabel={label}
         value={value}
+        error={!!error}
         onChangeText={onChange}
+        keyboardType={email ? 'email-address' : numeric ? 'decimal-pad' : 'default'}
+        multiline={multiline}
         disabled={disabled}
-        autoCapitalize="none"
+        autoCapitalize={numeric || email ? 'none' : 'sentences'}
         style={{ backgroundColor: c.white }}
       />
-    );
-  return (
-    <TextInput
-      mode="outlined"
-      label={label}
-      accessibilityLabel={label}
-      value={value}
-      onChangeText={onChange}
-      keyboardType={email ? 'email-address' : numeric ? 'decimal-pad' : 'default'}
-      multiline={multiline}
-      disabled={disabled}
-      autoCapitalize={numeric || email ? 'none' : 'sentences'}
-      style={{ backgroundColor: c.white }}
-    />
+      {!!error && (
+        <HelperText type="error" accessibilityRole="alert">
+          {error}
+        </HelperText>
+      )}
+    </View>
   );
 }
 export function EvidenceInput({

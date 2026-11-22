@@ -8,6 +8,7 @@ COPY global.json Directory.Build.targets ./
 COPY .config/ .config/
 COPY src/backend/ src/backend/
 COPY src/digital-signing/ src/digital-signing/
+COPY packages/client-core/src/errorMessages.json packages/client-core/src/errorMessages.json
 COPY docs/database/ docs/database/
 COPY docs/mau-hop-dong-thue-nha-tro-ngan-gon.docx docs/
 COPY tools/BHome.LocalDevelopment/ tools/BHome.LocalDevelopment/
