@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -10,7 +11,6 @@ import {
   FormControlLabel,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
@@ -279,7 +279,7 @@ export function AssignmentDialog({
       <DialogTitle>{titles[intent.mode]}</DialogTitle>
       <DialogContent>
         <Stack
-          component="form"
+          component={ValidatedForm}
           id="assignment-editor"
           spacing={2}
           sx={{ pt: 1 }}

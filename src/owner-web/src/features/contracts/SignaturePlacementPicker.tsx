@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { useObjectUrl } from './useObjectUrl';
 import { useQuery } from '@tanstack/react-query';
@@ -11,7 +12,6 @@ import {
   MenuItem,
   Slider,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import {

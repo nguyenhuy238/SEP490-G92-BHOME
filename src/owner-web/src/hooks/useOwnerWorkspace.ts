@@ -1,7 +1,12 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../packages/client-core/src/auth';
-import { ApiError, infrastructureError } from '../../../../packages/client-core/src/api';
+import {
+  ApiError,
+  UserFeedbackError,
+  infrastructureError,
+  getUserFriendlyMessage,
+} from '../../../../packages/client-core/src/api';
 import { invoiceError } from '../../../../packages/client-core/src/invoices';
 import { useMeterApi } from '../features/meters/useMeterApi';
 
@@ -29,12 +34,10 @@ export function ownerQuery(values: Record<string, unknown>) {
   return result.toString();
 }
 export function ownerError(error: unknown) {
+  if (error instanceof UserFeedbackError) return getUserFriendlyMessage(error);
   const infrastructure = infrastructureError(error);
   if (infrastructure) return infrastructure;
   if (error instanceof ApiError) {
-    const fields = Object.values(error.problem?.errors ?? {})
-      .flat()
-      .join(' ');
     const codes: Record<string, string> = {
       email_recipient_not_allowed:
         'Địa chỉ nhận chưa được cho phép trong môi trường thử nghiệm. Liên hệ người quản trị môi trường trước khi gửi lại.',
@@ -100,7 +103,7 @@ export function ownerError(error: unknown) {
       announcement_idempotency_conflict:
         'Mã tạo nháp đã dùng cho nội dung khác. Mở lại nháp đã lưu để kiểm tra.',
     };
-    return fields || codes[error.problem?.code ?? ''] || invoiceError(error);
+    return codes[error.problem?.code ?? ''] || getUserFriendlyMessage(error);
   }
   return invoiceError(error);
 }

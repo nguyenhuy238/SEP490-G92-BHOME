@@ -37,7 +37,7 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
         var result = string.IsNullOrWhiteSpace(token) ? null : await sessions.RefreshAsync(token, cancellationToken);
         if (result is not null) return Ok(Transport(result));
         ClearCookie();
-        return Problem(statusCode: 401, title: "Session is unavailable.");
+        return Problem(statusCode: 401, title: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.");
     }
 
     [HttpPost("logout")]
@@ -57,7 +57,7 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
     {
         if (!await passwords.ChangeAsync(UserId, SessionId, request.CurrentPassword!, request.NewPassword!, cancellationToken))
-            return Problem(statusCode: 400, title: "Password change failed.");
+            return Problem(statusCode: 400, title: "Chưa thể đổi mật khẩu. Kiểm tra mật khẩu hiện tại và yêu cầu bảo mật của mật khẩu mới.");
         ClearCookie();
         return NoContent();
     }
@@ -75,7 +75,7 @@ public sealed class AuthController(LoginService login, IAuthenticationSessions s
     public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken cancellationToken)
     {
         if (!await passwords.ResetAsync(request.UserName!, request.Token!, request.NewPassword!, cancellationToken))
-            return Problem(statusCode: 400, title: "Password reset failed.");
+            return Problem(statusCode: 400, title: "Chưa thể đặt lại mật khẩu. Kiểm tra liên kết, mã xác nhận và yêu cầu bảo mật của mật khẩu mới.");
         ClearCookie();
         return NoContent();
     }

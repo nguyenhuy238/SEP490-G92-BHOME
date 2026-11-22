@@ -3,6 +3,7 @@
     <UserSecretsId>bhome-api-development</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../../packages/client-core/src/errorMessages.json" LogicalName="BHome.Api.ErrorMessages.json" />
     <ProjectReference Include="../BHome.Application/BHome.Application.csproj" />
     <ProjectReference Include="../BHome.Infrastructure/BHome.Infrastructure.csproj" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />

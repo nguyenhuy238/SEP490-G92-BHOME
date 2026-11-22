@@ -1,3 +1,4 @@
+import { getUserFriendlyMessage, knownApiMessage } from './api';
 import {
   contractError,
   type ContractRequest,
@@ -291,7 +292,10 @@ export function signingMethodLabel(method: string | undefined) {
 
 /** Prefers the server's own sentence (digital-signing refusals are written for the signer), then BHOME's codes. */
 export function signingError(error: unknown): string {
-  const e = error as { problem?: { detail?: string; code?: string }; status?: number } | null;
+  const e = error as {
+    problem?: { detail?: string; code?: string; message?: string };
+    status?: number;
+  } | null;
   // OTP / upload / drawing refusals have BHOME's own sentence; the server detail for them is generic.
   const code = e?.problem?.code ?? '';
   if (
@@ -299,7 +303,9 @@ export function signingError(error: unknown): string {
     /^(otp_|signed_pdf_|signature_drawing|signer_email|upload_proof|signing_)/.test(code)
   )
     return codes[code];
-  if (e?.problem?.detail) return e.problem.detail;
+  if (e?.problem?.code?.startsWith('digital_signing_')) return getUserFriendlyMessage(error);
+  const legacy = knownApiMessage(e?.problem?.detail ?? e?.problem?.message);
+  if (legacy) return legacy;
   if (error instanceof Error && !['ApiError', 'AbortError'].includes(error.name))
     return error.message;
   if (e?.problem?.code && codes[e.problem.code]) return codes[e.problem.code];

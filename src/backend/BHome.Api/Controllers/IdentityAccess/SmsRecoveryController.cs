@@ -25,7 +25,6 @@ public sealed class SmsRecoveryController(ISmsPasswordRecovery recovery) : Contr
     public async Task<IActionResult> Reset(SmsRecoveryReset input, CancellationToken t)
     {
         PrivateResponse();
-        if (input.NewPassword != input.ConfirmPassword) return Problem(statusCode: 400, title: "Mật khẩu xác nhận không khớp.");
         if (!await recovery.ResetAsync(input.Identifier, input.ChallengeId, input.Authorization, input.NewPassword, t))
             return Problem(statusCode: 400, title: "Không thể đặt lại mật khẩu. Kiểm tra mã xác minh và yêu cầu mật khẩu.");
         Response.Cookies.Delete(AuthTransportFilter.CookieName, AuthTransportFilter.CookieOptions()); return NoContent();
@@ -38,5 +37,12 @@ public sealed record SmsRecoveryVerify([Required, StringLength(LoginService.MaxU
 public sealed record SmsRecoveryReset([Required, StringLength(LoginService.MaxUserNameLength)] string Identifier, Guid ChallengeId,
     [Required, StringLength(256)] string Authorization,
     [Required, StringLength(LoginService.MaxPasswordLength, MinimumLength = 12)] string NewPassword,
-    [Required, StringLength(LoginService.MaxPasswordLength)] string ConfirmPassword)
-{ public override string ToString() => "SMS password reset (redacted)"; }
+    [Required, StringLength(LoginService.MaxPasswordLength)] string ConfirmPassword) : IValidatableObject
+{
+    public IEnumerable<ValidationResult> Validate(ValidationContext context)
+    {
+        if (NewPassword != ConfirmPassword)
+            yield return new("Mật khẩu xác nhận không khớp.", [nameof(ConfirmPassword)]);
+    }
+    public override string ToString() => "SMS password reset (redacted)";
+}

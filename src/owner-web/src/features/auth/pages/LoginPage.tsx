@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState, type FormEvent } from 'react';
 import {
   Alert,
@@ -12,7 +13,6 @@ import {
   Link,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { Apartment, LockOutlined, PhoneOutlined, VerifiedUserOutlined } from '@mui/icons-material';
@@ -226,7 +226,7 @@ export function LoginPage() {
         fullWidth
         maxWidth="xs"
       >
-        <Box component="form" onSubmit={submitReset}>
+        <Box component={ValidatedForm} onSubmit={submitReset}>
           <DialogTitle>Quên mật khẩu?</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

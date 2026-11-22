@@ -69,6 +69,7 @@ internal sealed class LoopbackBrowserApiBridge : IAsyncDisposable
             // Closing that disconnected response must not replace the actual test failure.
             try { context.Response.Close(); }
             catch (HttpListenerException) { }
+            catch (ObjectDisposedException) when (stop.IsCancellationRequested) { }
         }
     }
     public async ValueTask DisposeAsync()

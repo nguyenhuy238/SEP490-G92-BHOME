@@ -331,3 +331,23 @@ it('rejects HTML masquerading as a private image instead of rendering it inline'
   expect(screen.queryByRole('img')).toBeNull();
   expect(URL.createObjectURL).not.toHaveBeenCalled();
 });
+
+it('masks runtime details during private preview and allows retry after failure', async () => {
+  state.transport.mockRejectedValueOnce(new Error('Native filesystem password=secret failed'));
+  render(
+    <ContractEvidence
+      api={api}
+      contractId={contractId}
+      draftHandoverEvidence
+      evidenceId={evidenceId}
+      label="Thử mở ảnh"
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Thử mở ảnh' }));
+  await waitFor(() => expect(state.transport).toHaveBeenCalledOnce());
+  expect(await screen.findByText(/Không kết nối được máy chủ/)).toBeTruthy();
+  expect(screen.queryByText(/password=secret/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Thử mở ảnh' }));
+  expect(await screen.findByRole('img', { name: 'Thử mở ảnh' })).toBeTruthy();
+  expect(state.transport).toHaveBeenCalledTimes(2);
+});

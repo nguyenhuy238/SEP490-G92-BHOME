@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -18,7 +19,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { AlertTriangle, CheckCircle2, History, Info, Sparkles, X } from 'lucide-react';

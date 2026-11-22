@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState, type FormEvent } from 'react';
 import {
   Alert,
@@ -7,7 +8,6 @@ import {
   InputAdornment,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
@@ -30,7 +30,7 @@ export default function SmsRecoveryPage() {
   return (
     <Box component="main" sx={{ minHeight: '100svh', display: 'grid', placeItems: 'center', p: 3 }}>
       <Paper sx={{ p: 4, width: '100%', maxWidth: 440 }}>
-        <Stack component="form" onSubmit={submit} spacing={2}>
+        <Stack component={ValidatedForm} onSubmit={submit} spacing={2}>
           <Typography variant="overline" color="primary">
             BHOME
           </Typography>

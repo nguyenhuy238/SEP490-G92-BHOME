@@ -1,3 +1,5 @@
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -20,7 +22,6 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  TextField,
   Tooltip,
   ToggleButton,
   ToggleButtonGroup,
@@ -32,6 +33,7 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { ASSET_UNITS } from '../../../../../packages/client-core/src/assetUnits';
 import { invoiceError, type Page } from '../../../../../packages/client-core/src/invoices';
+import { getFieldErrors } from '../../../../../packages/client-core/src/api';
 import type {
   LocationConfiguration,
   PhysicalAsset,
@@ -144,6 +146,12 @@ export function PropertyApiPage({
   const [retirementReason, setRetirementReason] = useState('');
   const [editing, setEditing] = useState<Row | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const editorRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (Object.keys(fieldErrors).length)
+      editorRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [fieldErrors]);
   const [newCommonArea, setNewCommonArea] = useState('');
   const [notice, setNotice] = useState('');
   const createIntent = scopedRooms && urlParams.get('action') === 'create' ? routeKey : null;
@@ -285,7 +293,7 @@ export function PropertyApiPage({
           Number(values.rent) < 0 ||
           (values.effectiveFrom || todayVietnam()) < todayVietnam()
         )
-          throw new Error(
+          throw new UserFeedbackError(
             'Gợi ý đã thay đổi hoặc giá thuê chưa hợp lệ. Chọn lại gợi ý trước khi lưu.',
           );
         const input = {
@@ -322,10 +330,10 @@ export function PropertyApiPage({
           ? newCommonArea.trim() || null
           : values.commonArea?.trim() || null;
       if (!values.roomId && !commonArea)
-        throw new Error('Chọn khu vực chung hoặc nhập tên khu vực mới.');
+        throw new UserFeedbackError('Chọn khu vực chung hoặc nhập tên khu vực mới.');
       const quantity = Number(values.quantity);
       if (!editing && (!Number.isInteger(quantity) || quantity < 1 || quantity > 10000))
-        throw new Error('Số lượng phải là số nguyên từ 1 đến 10.000.');
+        throw new UserFeedbackError('Số lượng phải là số nguyên từ 1 đến 10.000.');
       return api.saveAsset(editing?.id ?? null, {
         locationId: location,
         roomId: values.roomId || null,
@@ -352,11 +360,15 @@ export function PropertyApiPage({
       setConfirmInactive(false);
       setNotice('Máy chủ đã lưu cấu hình.');
     },
+    onError: (error) => {
+      setFieldErrors(getFieldErrors(error));
+      setConfirmInactive(false);
+    },
   });
   const retire = useMutation({
     mutationFn: async () => {
       if (!canManage || !retiringAsset || !retirementReason.trim())
-        throw new Error('Nhập lý do ngừng sử dụng tài sản.');
+        throw new UserFeedbackError('Nhập lý do ngừng sử dụng tài sản.');
       const { id, locationId, roomId, commonArea, code, name, category, condition, version } =
         retiringAsset;
       return api.saveAsset(id, {
@@ -385,6 +397,7 @@ export function PropertyApiPage({
       return;
     }
     save.reset();
+    setFieldErrors({});
     setEditing(row);
     setNotice('');
     setNewCommonArea('');
@@ -437,10 +450,13 @@ export function PropertyApiPage({
   const field = (key: string, label: string, required = true, type = 'text') => (
     <TextField
       key={key}
+      name={key}
       required={required}
       label={label}
       type={type}
       value={values[key] ?? ''}
+      error={!!fieldErrors[key]}
+      helperText={fieldErrors[key]}
       onChange={(event) => setValues((old) => ({ ...old, [key]: event.target.value }))}
       slotProps={type === 'number' ? { htmlInput: { min: 1, max: 32767, step: 1 } } : undefined}
     />
@@ -1001,7 +1017,8 @@ export function PropertyApiPage({
         maxWidth="sm"
         fullWidth
       >
-        <form
+        <ValidatedForm
+          ref={editorRef}
           onSubmit={(event) => {
             event.preventDefault();
             if (
@@ -1372,7 +1389,7 @@ export function PropertyApiPage({
               Lưu cấu hình
             </Button>
           </DialogActions>
-        </form>
+        </ValidatedForm>
       </Dialog>
       {bulkOpen && <BulkRoomsDialog locationId={location} close={() => setBulkOpen(false)} />}
       {editingRoom && canManage && (

@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useRef, useState, type ReactNode } from 'react';
 import {
   Accordion,
@@ -16,7 +17,6 @@ import {
   Step,
   StepLabel,
   Stepper,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';

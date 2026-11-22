@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
-import { createApiClient, ApiError } from '../../../../../packages/client-core/src/api';
+import {
+  createApiClient,
+  getUserFriendlyMessage,
+} from '../../../../../packages/client-core/src/api';
 import { apiBaseUrl } from '../../services/config';
 
 export interface Page<T> {
@@ -161,13 +164,5 @@ export function usePropertyApi() {
 }
 
 export function propertyError(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.status === 403) return 'Tài khoản không có quyền thực hiện thao tác này.';
-    if (error.status === 404) return 'Không tìm thấy dữ liệu trong phạm vi tài khoản.';
-    if (error.status === 409)
-      return error.problem?.title || 'Dữ liệu đã thay đổi hoặc bị trùng. Hãy tải lại.';
-    const first = error.problem?.errors && Object.values(error.problem.errors)[0]?.[0];
-    return first || error.problem?.detail || error.problem?.title || error.message;
-  }
-  return error instanceof Error ? error.message : 'Không thể hoàn thành yêu cầu.';
+  return getUserFriendlyMessage(error);
 }

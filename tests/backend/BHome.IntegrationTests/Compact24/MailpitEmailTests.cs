@@ -106,6 +106,8 @@ public sealed partial class Compact24NotificationMvpTests
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Email:DeliveryMode"] = "Capture",
+            // Capture fixtures never inherit the workstation's SMTP-only Development override.
+            ["Email:AllowAnyRecipientInDevelopment"] = "false",
             ["Email:Host"] = "127.0.0.1",
             ["Email:Port"] = MailpitPort("BHOME_MAILPIT_SMTP_PORT").ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["Email:TimeoutSeconds"] = "5",

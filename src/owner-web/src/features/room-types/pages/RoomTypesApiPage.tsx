@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -11,7 +12,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
   TablePagination,
 } from '@mui/material';
@@ -331,7 +331,7 @@ function RoomDefaultsWorkspace({
         </DialogActions>
       </Dialog>
       <Dialog open={open} onClose={() => !save.isPending && setOpen(false)} fullWidth maxWidth="sm">
-        <form
+        <ValidatedForm
           onSubmit={(event) => {
             event.preventDefault();
             if (!valid || !canManage || lock.current) return;
@@ -473,7 +473,7 @@ function RoomDefaultsWorkspace({
               Lưu
             </Button>
           </DialogActions>
-        </form>
+        </ValidatedForm>
       </Dialog>
     </Stack>
   );

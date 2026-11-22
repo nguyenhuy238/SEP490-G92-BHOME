@@ -1,5 +1,6 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
-import { Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, MenuItem, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import type { LocalAssetItem } from '../../../../../packages/client-core/src/propertySetup';

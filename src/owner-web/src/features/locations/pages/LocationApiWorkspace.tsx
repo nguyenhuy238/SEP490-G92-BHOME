@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useEffect, useState } from 'react';
 import { LocationWorkspaceOverview } from './LocationWorkspaceOverview';
 import { LocationWorkspaceSettings } from './LocationWorkspaceSettings';
@@ -14,7 +15,6 @@ import {
   Stack,
   Tab,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';

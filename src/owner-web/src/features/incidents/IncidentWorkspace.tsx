@@ -1,6 +1,9 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { Link, useInRouterContext, useSearchParams } from 'react-router';
-import { Alert, Button, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, MenuItem, Paper, Stack, Typography } from '@mui/material';
 import { PageHeader, ChartCard, FilterToolbar, StatusChip } from '../../components/common/PortalUI';
 import { OwnerLocationPicker, OwnerRoomPicker } from '../../components/common/OwnerSelectors';
 import { OwnerFeedback, OwnerPagination, OwnerTable } from '../../components/common/OwnerWorkspace';
@@ -569,7 +572,7 @@ function DirectEvidenceUpload({
         Ảnh {kind === 'Direct' ? 'xử lý trực tiếp' : 'ứng phó khẩn cấp'}: PNG/JPEG, tối đa 5 MB/ảnh
         và 5 ảnh theo giới hạn máy chủ.
       </Typography>
-      <input
+      <ValidatedInput
         aria-label={kind === 'Direct' ? 'Ảnh xử lý trực tiếp' : 'Ảnh ứng phó khẩn cấp'}
         type="file"
         accept="image/png,image/jpeg"
@@ -586,7 +589,7 @@ function DirectEvidenceUpload({
               file.size > 5 * 1024 * 1024 ||
               !['image/png', 'image/jpeg'].includes(file.type)
             )
-              throw new Error('Chọn ảnh PNG/JPEG không quá 5 MB.');
+              throw new UserFeedbackError('Chọn ảnh PNG/JPEG không quá 5 MB.');
             const bytes = await file.arrayBuffer();
             const fingerprint = Array.from(
               new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),

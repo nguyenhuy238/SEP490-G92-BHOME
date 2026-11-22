@@ -1,5 +1,6 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
-import { Alert, Button, Checkbox, FormControlLabel, Stack, TextField } from '@mui/material';
+import { Alert, Button, Checkbox, FormControlLabel, Stack } from '@mui/material';
 import { contractError } from '../../../../../packages/client-core/src/contracts';
 import { usePropertySetupApi } from './usePropertySetupApi';
 

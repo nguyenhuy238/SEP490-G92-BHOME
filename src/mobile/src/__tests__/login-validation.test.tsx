@@ -49,17 +49,20 @@ vi.mock('react-native-paper', () => ({
   Icon: () => null,
   TextInput: Object.assign(
     ({
+      ref,
       accessibilityLabel,
       value,
       onChangeText,
       disabled,
     }: {
+      ref?: React.Ref<HTMLInputElement>;
       accessibilityLabel: string;
       value: string;
       onChangeText: (s: string) => void;
       disabled?: boolean;
     }) => (
       <input
+        ref={ref}
         aria-label={accessibilityLabel}
         value={value}
         disabled={disabled}
@@ -96,12 +99,15 @@ it('shows both missing-field errors and only clears the corrected error', () => 
   fireEvent.click(screen.getByText('Đăng nhập', { selector: 'button' }));
   expect(screen.getByText('Vui lòng nhập email hoặc số điện thoại.')).toBeTruthy();
   expect(screen.getByText('Vui lòng nhập mật khẩu.')).toBeTruthy();
+  expect(document.activeElement).toBe(screen.getByLabelText('Email hoặc số điện thoại đăng nhập'));
   fireEvent.change(screen.getByLabelText('Email hoặc số điện thoại đăng nhập'), {
     target: { value: '0901234567' },
   });
   expect(screen.queryByText('Vui lòng nhập email hoặc số điện thoại.')).toBeNull();
   expect(screen.getByText('Vui lòng nhập mật khẩu.')).toBeTruthy();
   expect(state.login).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('Đăng nhập', { selector: 'button' }));
+  expect(document.activeElement).toBe(screen.getByLabelText('Mật khẩu đăng nhập'));
 });
 it('accepts phone input for every supported role using the shared login screen', async () => {
   render(<LoginScreen />);

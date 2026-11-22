@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -7,7 +8,6 @@ import {
   FormControlLabel,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { createApiClient } from '../../../../../../packages/client-core/src/api';

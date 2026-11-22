@@ -761,7 +761,8 @@ it('loads only Published templates, saves provenance, and retries an uncertain r
   expect(screen.getByRole('checkbox', { name: /Tôi xác nhận giá thuê/ })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('checkbox', { name: /Tôi xác nhận giá thuê/ }));
   fireEvent.click(button('Xác nhận hoàn tất thiết lập'));
-  expect(await screen.findByText('Synthetic connection failure')).toBeInTheDocument();
+  expect(await screen.findByText(/Máy chủ chưa xử lý được yêu cầu/)).toBeInTheDocument();
+  expect(screen.queryByText('Synthetic connection failure')).not.toBeInTheDocument();
   expect(completed).not.toHaveBeenCalled();
   expect(writes()).toHaveLength(1);
   expect(sessionStorage.getItem(draftKey)).not.toBeNull();

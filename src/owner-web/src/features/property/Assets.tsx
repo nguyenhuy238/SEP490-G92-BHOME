@@ -1,5 +1,7 @@
+import { getUserFriendlyMessage } from '../../../../../packages/client-core/src/api';
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
-import { Alert, Box, Button, Chip, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, Stack, Tab, Tabs, Typography } from '@mui/material';
 import { Link, useSearchParams } from 'react-router';
 import { Package, Plus } from 'lucide-react';
 import { usePortal } from '../../app/PortalProvider';
@@ -743,7 +745,7 @@ function AllocationContent({ db }: { db: DemoDatabase }) {
               setConfirm(false);
             })
             .catch((e) => {
-              setError(e.message);
+              setError(getUserFriendlyMessage(e));
               setConfirm(false);
             })
             .finally(() => setBusy(false));

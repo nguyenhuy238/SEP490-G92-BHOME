@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { MoneyField } from '../../components/common/MoneyField';
 import {
   contactPhoneError,
@@ -13,7 +14,6 @@ import {
   DialogTitle,
   MenuItem,
   Stack,
-  TextField,
 } from '@mui/material';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
 import { createApiClient } from '../../../../../packages/client-core/src/api';
@@ -161,7 +161,7 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
       >
         <DialogTitle>Cấu hình hợp đồng nháp theo cơ sở</DialogTitle>
         <DialogContent>
-          <form
+          <ValidatedForm
             id="main-contract-settings"
             onSubmit={(event) => {
               event.preventDefault();
@@ -262,7 +262,7 @@ export function MainDraftSettingsPanel({ api }: { api: ContractClient }) {
                 </>
               )}
             </Stack>
-          </form>
+          </ValidatedForm>
         </DialogContent>
         <DialogActions>
           <Button

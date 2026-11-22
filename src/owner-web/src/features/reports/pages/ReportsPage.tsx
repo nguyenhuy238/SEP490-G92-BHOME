@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Accordion,
@@ -12,7 +13,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ChevronDown } from 'lucide-react';

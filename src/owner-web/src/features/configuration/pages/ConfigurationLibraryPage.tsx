@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { MoneyField } from '../../../components/common/MoneyField';
 import { useState } from 'react';
 import { isMockMode } from '../../../services/config';
@@ -21,7 +22,6 @@ import {
   Paper,
   Tab,
   Tabs,
-  TextField,
   Typography,
   Stack,
 } from '@mui/material';

@@ -1,3 +1,4 @@
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
@@ -249,7 +250,7 @@ function handoverDemoJpeg(): Uint8Array<ArrayBuffer> {
   canvas.width = 960;
   canvas.height = 540;
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('Không tạo được ảnh mẫu trên trình duyệt.');
+  if (!context) throw new UserFeedbackError('Không tạo được ảnh mẫu trên trình duyệt.');
   context.fillStyle = '#f1f5f9';
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.fillStyle = '#991b1b';
@@ -422,14 +423,11 @@ export function MoveInDraftHandoverPanel({
               { signal: controller.signal },
             );
             if (result.taskId !== taskId || result.contractId !== contract.id)
-              throw new Error('Kết quả kiểm kê không thuộc hợp đồng này.');
+              throw new UserFeedbackError('Kết quả kiểm kê không thuộc hợp đồng này.');
             inventory = result;
           } catch (cause) {
             if (controller.signal.aborted) return;
-            inventoryError =
-              cause instanceof Error && !('status' in cause)
-                ? cause.message
-                : conciseMessage(contractError(cause));
+            inventoryError = conciseMessage(contractError(cause));
           }
         }
         if (staff && loadedWizardContract.current !== contract.id) {
@@ -532,11 +530,7 @@ export function MoveInDraftHandoverPanel({
       }
       return true;
     } catch (cause) {
-      setActionError(
-        cause instanceof Error && !('status' in cause)
-          ? cause.message
-          : conciseMessage(contractError(cause)),
-      );
+      setActionError(conciseMessage(contractError(cause)));
       // CameraCapture must retain its preview for retry after a failed private upload.
       return false;
     } finally {
@@ -612,15 +606,17 @@ export function MoveInDraftHandoverPanel({
         const evidenceIds = availableEvidence.filter(
           (id) => values[`roomCheck.${code}.evidence.${id}`] === 'true',
         );
-        if (!status) throw new Error(`Hãy chọn kết quả kiểm tra: ${label}.`);
+        if (!status) throw new UserFeedbackError(`Hãy chọn kết quả kiểm tra: ${label}.`);
         if (status !== 'Passed' && !notes) {
-          throw new Error(`Hãy ghi lý do cho mục "${label}".`);
+          throw new UserFeedbackError(`Hãy ghi lý do cho mục "${label}".`);
         }
         if (status === 'Issue' && !evidenceIds.length) {
-          throw new Error(`Mục "${label}" có vấn đề cần gắn ít nhất một ảnh bằng chứng riêng.`);
+          throw new UserFeedbackError(
+            `Mục "${label}" có vấn đề cần gắn ít nhất một ảnh bằng chứng riêng.`,
+          );
         }
         if (evidenceIds.length > 5) {
-          throw new Error(`Mục "${label}" chỉ được gắn tối đa 5 ảnh.`);
+          throw new UserFeedbackError(`Mục "${label}" chỉ được gắn tối đa 5 ảnh.`);
         }
         return { code, status, notes: status === 'Passed' ? null : notes, evidenceIds };
       },
@@ -629,9 +625,9 @@ export function MoveInDraftHandoverPanel({
     if (keysTouched) {
       const quantity = Number(keyQuantity);
       if (!keyQuantity.trim() || !Number.isInteger(quantity) || quantity < 0 || quantity > 100)
-        throw new Error('Số lượng chìa khóa bàn giao phải là số nguyên từ 0 đến 100.');
+        throw new UserFeedbackError('Số lượng chìa khóa bàn giao phải là số nguyên từ 0 đến 100.');
       if (quantity === 0 && !keyNotes.trim())
-        throw new Error('Nếu không bàn giao chìa khóa, hãy ghi rõ lý do.');
+        throw new UserFeedbackError('Nếu không bàn giao chìa khóa, hãy ghi rõ lý do.');
       validatedAccessItems = [{ type: 'RoomKey', quantity, notes: keyNotes.trim() }];
     }
     // Unchecked groups remain untouched. Each checked group can be saved separately.
@@ -767,8 +763,8 @@ export function MoveInDraftHandoverPanel({
     kind: 'room' | 'asset' | 'keys',
     targetId?: string,
   ) {
-    if (!started) throw new Error('Hãy bắt đầu công việc trước khi chụp ảnh kiểm kê.');
-    if (bytes.byteLength > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
+    if (!started) throw new UserFeedbackError('Hãy bắt đầu công việc trước khi chụp ảnh kiểm kê.');
+    if (bytes.byteLength > 5 * 1024 * 1024) throw new UserFeedbackError('Ảnh vượt quá 5 MB.');
     const file = await client.uploadEvidence(contract.id, bytes, 'image/jpeg');
     // Newly uploaded private files cannot be GET-previewed until Save links them
     // into the draft. Retain a short-lived local preview instead of weakening

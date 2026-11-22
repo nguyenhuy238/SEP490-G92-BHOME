@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -11,7 +12,6 @@ import {
   FormControlLabel,
   MenuItem,
   Stack,
-  TextField,
 } from '@mui/material';
 import { Controller, useForm } from 'react-hook-form';
 import { MoneyField } from '../common/MoneyField';
@@ -103,7 +103,7 @@ export function RecordEditor({
   );
   return (
     <Dialog open onClose={action.isPending ? undefined : onClose} maxWidth="sm" fullWidth>
-      <Box component="form" onSubmit={form.handleSubmit(submit)}>
+      <Box component={ValidatedForm} onSubmit={form.handleSubmit(submit)}>
         <DialogTitle>
           {record ? 'Chỉnh sửa' : 'Tạo mới'} • {definition.title}
         </DialogTitle>

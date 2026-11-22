@@ -1,5 +1,6 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
-import { Alert, Button, MenuItem, Paper, Stack, Tab, Tabs, TextField } from '@mui/material';
+import { Alert, Button, MenuItem, Paper, Stack, Tab, Tabs } from '@mui/material';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';

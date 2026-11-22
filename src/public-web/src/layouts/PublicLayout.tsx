@@ -10,7 +10,7 @@ export default function PublicLayout() {
             BHOME
           </Typography>
 
-          <Box sx={{ display: 'flex', gap: 3 }}>
+          <Box component="nav" aria-label="Điều hướng chính" sx={{ display: 'flex', gap: 3 }}>
             <Link to="/" style={{ color: 'white' }}>
               Trang chủ
             </Link>
@@ -21,7 +21,11 @@ export default function PublicLayout() {
         </Toolbar>
       </AppBar>
 
-      <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, md: 6 }, minHeight: '70vh' }}>
+      <Container
+        component="main"
+        maxWidth="lg"
+        sx={{ py: { xs: 4, md: 6 }, minHeight: '70vh', overflowWrap: 'anywhere' }}
+      >
         <Outlet />
       </Container>
 

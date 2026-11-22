@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { Fragment, useId, useState } from 'react';
 import { lifecycleCategories } from '../../../../../../packages/client-core/src/assetLifecycle';
 import {
@@ -13,7 +14,6 @@ import {
   FormControlLabel,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -339,7 +339,7 @@ export function SharedTemplateEditor({
         </Stack>
       </DialogTitle>
       <Box
-        component="form"
+        component={ValidatedForm}
         sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: '1 1 auto' }}
         onSubmit={(event) => {
           event.preventDefault();

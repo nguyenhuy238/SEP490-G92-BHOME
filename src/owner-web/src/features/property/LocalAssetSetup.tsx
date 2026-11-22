@@ -1,3 +1,5 @@
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -19,7 +21,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -425,7 +426,7 @@ export function LocalAssetSetup({
                 await templates.refetch({ throwOnError: true });
                 const latest = result.data?.find((item) => item.id === editingType.id);
                 if (!latest || latest.status === 'Archived')
-                  throw new Error('Loại phòng đã ngừng sử dụng.');
+                  throw new UserFeedbackError('Loại phòng đã ngừng sử dụng.');
                 setEditingType(latest);
               }}
             />
@@ -552,7 +553,7 @@ function RoomTypeAssetEditor({
   return (
     <>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         sx={{ pt: 1 }}
         onSubmit={(event) => {
@@ -639,7 +640,7 @@ function LocalTemplateEditor({
   return (
     <Box>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
@@ -929,7 +930,7 @@ function AssetVerificationForm({
   const uploaded = useRef<{ file: File; key: string } | null>(null);
   return (
     <Stack
-      component="form"
+      component={ValidatedForm}
       spacing={2}
       sx={{ p: 2, bgcolor: 'background.default', borderRadius: '12px' }}
       onSubmit={(event) => {

@@ -1,3 +1,5 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
@@ -15,7 +17,6 @@ import {
   LinearProgress,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { CheckCircle2, FileCheck2, Landmark, ReceiptText } from 'lucide-react';
@@ -410,7 +411,7 @@ export function RecordTransferForm({
     );
   return (
     <Stack
-      component="form"
+      component={ValidatedForm}
       spacing={2.25}
       sx={{ minWidth: 0 }}
       onSubmit={(event) => {
@@ -571,7 +572,7 @@ export function RecordTransferForm({
               sx={{ minHeight: 44 }}
             >
               {evidence ? 'Thay ảnh sao kê' : 'Chọn ảnh sao kê'}
-              <input
+              <ValidatedInput
                 hidden
                 type="file"
                 accept="image/png,image/jpeg"

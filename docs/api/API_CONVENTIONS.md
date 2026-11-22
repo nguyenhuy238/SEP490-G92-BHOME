@@ -335,6 +335,95 @@ chỉ vì browser timeout. Tham chiếu [Finance](FINANCE.md) cho report/What-if
 
 ## Runtime schema mismatch
 
-PostgreSQL undefined column/table/function (`42703`, `42P01`, `42883`), trực tiếp hoặc trong DbUpdateException, trả HTTP 503 với safe code `database_schema_incompatible` và correlation ID. Không trả tên bảng/cột, SQL hoặc exception detail trong response. Constraint violations và lỗi khác giữ mapping hiện hành; không đánh đồng mọi lỗi database với schema drift.
+PostgreSQL undefined column/table/function (`42703`, `42P01`, `42883`), trực tiếp hoặc trong DbUpdateException, trả HTTP 503 với safe code `database_schema_incompatible` và correlation ID. Không trả tên bảng/cột, SQL hoặc exception detail trong response. Constraint violations được phân loại theo bảng bên dưới; không đánh đồng mọi lỗi database với schema drift.
 
 Owner clients giải thích máy chủ/database chưa đồng bộ và cần quản trị viên cập nhật. Không giả danh sách rỗng/thành công, không tự migrate hoặc retry giao dịch tài chính. Operator dùng DatabaseProbe/readiness và quy trình migration có backup; frontend không có quyền DDL. Các lỗi 401/403 và object-level authorization giữ nguyên.
+
+## Validation và phản hồi lỗi — 22/11/2026
+
+Nguồn yêu cầu: task chuẩn hóa Validation/Error Handling/User Feedback; SRS v1.3
+NFR “Error Message” (yêu cầu nêu hướng sửa, không lộ thông tin nhạy cảm), GBR-01/02
+(phân quyền và phạm vi dữ liệu), GBR-18 (không lặp tác động). Đây là thay đổi cách
+diễn đạt lỗi, không thay đổi điều kiện kích hoạt hợp đồng, xác nhận thanh toán,
+phân quyền tạm trú hay nhà cung cấp ký. Các quyết định nghiệp vụ đang tranh luận
+trong AGENTS.md không được triển khai lại trong thay đổi này.
+
+| Phạm vi                                                 | Mã liên quan                 | Thành phần                                                                                         | Kiểm chứng                                                                                            |
+| ------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| API validation, binding, middleware, lỗi không mong đợi | NFR Error Message; GBR-01/02 | ApiProblemDetailsFactory, LocalizedValidationMetadata, ApiExceptionHandler, ApiProblemResultFilter | ApiFoundationTests: nhiều trường, JSON sai, bảo mật, Accept binary, 401, 429, concurrency, constraint |
+| Staff và công việc                                      | BF-02; UC-08..12             | StaffInputValidation, StaffEditor, useTaskAction                                                   | OperationsServiceTests; StaffApiPage.test.tsx                                                         |
+| Cơ sở/phòng                                             | BF-01; UC-04..07             | PropertyApiPages, RoomConfigurationEditor                                                          | bộ test property hiện có; cần nghiệm thu giao diện thực tế                                            |
+| Hồ sơ                                                   | UC-03; GBR-02                | AccountProfilePage, ProfileEditScreen, accountProfile                                              | bộ test profile và chuẩn hóa số điện thoại                                                            |
+| Hợp đồng/hóa đơn/thanh toán/tài chính                   | BF-03..06; GBR-04/09/10/18   | client-core catalog/normalizer và formatter từng module; Mobile ContractActionForm                 | bộ test module hiện có và api-errors; kiểm thử luồng tích hợp riêng                                   |
+
+Response vẫn là `application/problem+json`. Giữ `status`, `title`, `type`, các mã
+nghiệp vụ đã có, `correlationId` và `errors: Record<string,string[]>`. Bổ sung:
+
+- `code`: mã ổn định dạng snake_case, bao gồm cả lỗi trước đây chưa có mã.
+- `message`: câu tiếng Việt an toàn, có hướng xử lý.
+- `traceId`: cùng giá trị correlation ID đã được máy chủ kiểm tra/tạo.
+- `fieldErrors`: đường dẫn camelCase đầy đủ, ví dụ `employment.endDate`, với mảng
+  `{code,message}`. `errors` cũ vẫn giữ tên trường tương thích với MVC.
+
+Lỗi model validation có mã `validation_error`. Thông báo binding không chứa giá trị
+bị từ chối, exception, tên CLR hay nội dung JSON lỗi. Quy tắc DataAnnotations giữ
+giới hạn hiện có; giá trị enum không được định nghĩa bị từ chối. Staff service thu
+thập lỗi dữ liệu và quan hệ ngày trước khi ghi repository; quyền Owner được kiểm
+tra trước validation trong service.
+
+Phone của Staff/profile còn được kiểm tra ngay tại model validation bằng
+`ContactPhoneNumberAttribute`, tái sử dụng `ContactPhone.Normalize`, để trả cùng
+lúc với lỗi email/họ tên. Chuẩn hóa contact write không thay đổi các alias số
+điện thoại mà luồng đăng nhập cũ vẫn đọc.
+
+| Nguồn lỗi                                                | HTTP | Code                             |
+| -------------------------------------------------------- | ---- | -------------------------------- |
+| PostgreSQL 23505                                         | 409  | data_unique_conflict             |
+| PostgreSQL 23503                                         | 409  | data_reference_conflict          |
+| PostgreSQL 23514 với constraint đầu vào đã xác định      | 400  | data_constraint_invalid          |
+| PostgreSQL 23P01                                         | 409  | data_overlap_conflict            |
+| PostgreSQL 40001/40P01 hoặc DbUpdateConcurrencyException | 409  | data_concurrency_conflict        |
+| Mất kết nối PostgreSQL                                   | 503  | database_temporarily_unavailable |
+| Exception không được phân loại                           | 500  | internal_error                   |
+
+Không suy diễn trường sai từ tên constraint. Các duplicate đã có mã nghiệp vụ
+(email/phone/roomNumber/asset code) được gắn vào đúng trường. Không tự retry mutation
+khi mất phản hồi. Lỗi 401/403/404 không hiển thị field details để tránh lộ dữ liệu.
+
+Chỉ `ck_resident_actual_dates` và `ck_billing_policy_calculation_method` hiện được
+phân loại là lỗi đầu vào 23514. CHECK không xác định và NOT NULL (23502) giữ 500;
+đặc biệt lỗi ghi token/outbox không được giả thành lỗi người dùng. Mở rộng danh
+sách cần đối chiếu schema thực tế và có test; không dựa vào nội dung exception.
+
+`packages/client-core/src/errorMessages.json` là danh mục thông báo dùng chung,
+được nhúng vào API khi build và đọc trực tiếp ở client. Thông báo được tái sử dụng
+từ formatter nghiệp vụ hiện có; mã chưa có câu riêng vẫn có fallback tiếng Việt
+theo HTTP status. Danh mục này không phải bằng chứng đã nghiệm thu mọi nhánh nghiệp vụ.
+Đối với lỗi ký số được application chủ động công bố bằng DigitalSigningException,
+chỉ message tiếng Việt an toàn của loại này hoặc câu legacy khớp chính xác danh mục
+được phép hiển thị; không dùng raw provider exception. Field errors được hiển thị tại trường; thông báo cấp form không
+gom toàn bộ lỗi thành toast. Giữ nguyên dữ liệu nhập và chỉ đóng form khi server
+xác nhận thành công.
+
+Ở client, `UserFeedbackError` chỉ dành cho lỗi validation do mã nội bộ chủ động
+tạo bằng câu an toàn. Không bọc exception mạng/provider tùy ý vào loại này; các
+exception đó đi qua normalizer. Cách phân biệt này giữ được hướng dẫn nhập liệu
+cụ thể mà không đưa raw technical error lên màn hình.
+
+### Kiểm tra form trên trình duyệt và rà soát toàn hệ thống
+
+`ValidatedForm` của Owner Web dùng `noValidate` cùng kiểm tra các constraint HTML hiện có,
+hiển thị lỗi tiếng Việt tại `TextField`/`ValidatedInput`, giữ giá trị và focus trường lỗi đầu.
+Các thuộc tính `required`, type, độ dài và khoảng giá trị vẫn được giữ. Login và Accept
+Invitation giữ cơ chế validation tiếng Việt riêng đã có. Đây là kiểm tra trải nghiệm nhập
+liệu; backend vẫn quyết định quyền, trạng thái, ngày hiệu lực và điều kiện tài chính.
+
+OCR giữ nguyên mã lỗi đầu vào thay vì đổi thành `invalid_request`. SMS reset-password
+trả lỗi `confirmPassword` khi xác nhận không khớp. Lỗi Identity của luồng tạo Staff cũ
+được ánh xạ theo danh sách mã cho phép; không đưa `IdentityError.Description` vào mã lỗi
+hoặc response. Signing không đưa exception text vào `detail`, kể cả lỗi từ chối truy cập.
+
+Kiểm chứng Chromium dùng fixture được chặn trên loopback qua
+`scripts/Test-ValidationFeedbackBrowser.mjs` và bộ browser Public Web. Bằng chứng này
+không thay thế integration với PostgreSQL hoặc kiểm thử Android/iOS. Inventory nguồn,
+ma trận chấp nhận và các giới hạn nằm trong `BHOME_FULL_SYSTEM_VALIDATION_UX_CI_REPORT.md`.

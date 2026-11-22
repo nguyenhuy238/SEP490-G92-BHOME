@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState, type FormEvent } from 'react';
 import {
   Alert,
@@ -10,7 +11,6 @@ import {
   IconButton,
   InputAdornment,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
@@ -122,7 +122,7 @@ export function ChangePasswordDialog({
       <DialogTitle>Đổi mật khẩu</DialogTitle>
       <DialogContent>
         <Stack
-          component="form"
+          component={ValidatedForm}
           id="change-password-form"
           spacing={2}
           sx={{ pt: 1 }}

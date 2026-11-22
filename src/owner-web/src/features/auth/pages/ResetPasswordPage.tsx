@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   Alert,
@@ -10,7 +11,6 @@ import {
   Link,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { Apartment, LockOutlined, Visibility, VisibilityOff } from '@mui/icons-material';
@@ -134,7 +134,7 @@ export default function ResetPasswordPage() {
             Dùng liên kết hoặc mã một lần được gửi đến email của bạn
           </Typography>
 
-          <Box component="form" onSubmit={(event) => void submit(event)} aria-busy={busy}>
+          <Box component={ValidatedForm} onSubmit={(event) => void submit(event)} aria-busy={busy}>
             <Stack spacing={2.5}>
               {error && <Alert severity="error">{error}</Alert>}
               <TextField

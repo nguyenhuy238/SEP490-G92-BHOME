@@ -1,5 +1,8 @@
 import { MobileApiError, type MobileApi } from '../lib/api';
-import { normalizeLoginPhone } from '../../../../packages/client-core/src/loginValidation';
+import {
+  normalizeContactPhone,
+  contactPhoneError,
+} from '../../../../packages/client-core/src/contactPhone';
 
 // OperationsContracts.cs: ProfileView / ProfileUpdate (UC-03).
 export interface AccountProfile {
@@ -68,11 +71,10 @@ export async function updateAccountProfile(
 export function profileFields(p: AccountProfile): ProfileFields {
   return { fullName: p.fullName, phone: p.phone ?? '', email: p.email ?? '' };
 }
-// Mirrors LoginIdentifier.NormalizePhone: 8–15 ASCII digits, optional leading +,
-// at most 30 input characters; spaces, -, ., (, ) are accepted separators.
+// Profile writes use ContactPhone.Normalize; login aliases remain separate.
 export function normalizeProfilePhone(value: string): string | null | undefined {
   if (!value.trim()) return null;
-  return normalizeLoginPhone(value);
+  return normalizeContactPhone(value);
 }
 export function validateProfile(
   fields: ProfileFields,
@@ -95,7 +97,7 @@ export function validateProfile(
   )
     errors.email = 'Nhập email hợp lệ, tối đa 256 ký tự.';
   if (normalizeProfilePhone(fields.phone) === undefined)
-    errors.phone = 'Nhập số điện thoại gồm 8–15 chữ số, có thể bắt đầu bằng +.';
+    errors.phone = contactPhoneError(fields.phone);
   if (tenant && !fields.phone.trim()) errors.phone = 'Vui lòng nhập số điện thoại.';
   return errors;
 }

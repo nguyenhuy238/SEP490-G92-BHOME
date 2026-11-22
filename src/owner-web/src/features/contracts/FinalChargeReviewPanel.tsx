@@ -1,14 +1,7 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { useRef, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Checkbox,
-  FormControlLabel,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Button, Checkbox, FormControlLabel, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import {
   contractError,

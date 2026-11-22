@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { MoneyField } from '../../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,7 +18,6 @@ import {
   TableHead,
   TableRow,
   TableContainer,
-  TextField,
   Typography,
 } from '@mui/material';
 import { Link } from 'react-router';
@@ -139,7 +139,7 @@ export function BulkRoomsDialog({ locationId, close }: { locationId: string; clo
             Quy tắc đặt số phòng
           </Typography>
           <Box
-            component="form"
+            component={ValidatedForm}
             onSubmit={(e) => {
               e.preventDefault();
               if (!validGenerator || !selected || save.isPending) return;

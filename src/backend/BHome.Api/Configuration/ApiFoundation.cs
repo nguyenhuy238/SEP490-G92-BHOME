@@ -13,7 +13,23 @@ public static class ApiFoundation
 {
     public static IServiceCollection AddApiFoundation(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddControllers().AddJsonOptions(options =>
+        services.AddControllers(options =>
+        {
+            options.Filters.Add<ApiProblemResultFilter>();
+            options.ModelMetadataDetailsProviders.Add(new LocalizedValidationMetadata());
+            var messages = options.ModelBindingMessageProvider;
+            messages.SetMissingRequestBodyRequiredValueAccessor(() => "Vui lòng gửi đầy đủ thông tin yêu cầu.");
+            messages.SetValueMustNotBeNullAccessor(_ => "Vui lòng nhập giá trị bắt buộc.");
+            messages.SetAttemptedValueIsInvalidAccessor((_, _) => "Dữ liệu không đúng định dạng. Vui lòng kiểm tra lại.");
+            messages.SetNonPropertyAttemptedValueIsInvalidAccessor(_ => "Dữ liệu không đúng định dạng. Vui lòng kiểm tra lại.");
+            messages.SetValueIsInvalidAccessor(_ => "Dữ liệu không đúng định dạng. Vui lòng kiểm tra lại.");
+            messages.SetValueMustBeANumberAccessor(_ => "Vui lòng nhập số hợp lệ.");
+            messages.SetUnknownValueIsInvalidAccessor(_ => "Giá trị không được hỗ trợ. Vui lòng kiểm tra lại.");
+            messages.SetNonPropertyUnknownValueIsInvalidAccessor(() => "Giá trị không được hỗ trợ. Vui lòng kiểm tra lại.");
+            messages.SetNonPropertyValueMustBeANumberAccessor(() => "Vui lòng nhập số hợp lệ.");
+            messages.SetMissingBindRequiredValueAccessor(_ => "Vui lòng nhập giá trị bắt buộc.");
+            messages.SetMissingKeyOrValueAccessor(() => "Thông tin gửi lên chưa đầy đủ. Vui lòng kiểm tra lại.");
+        }).AddJsonOptions(options =>
         {
             options.JsonSerializerOptions.Converters.Add(new RetiredRoomTypeJsonConverterFactory());
             options.JsonSerializerOptions.TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver
@@ -28,6 +44,7 @@ public static class ApiFoundation
             };
         });
         services.AddHttpContextAccessor();
+        services.AddTransient<Microsoft.AspNetCore.Mvc.Infrastructure.ProblemDetailsFactory, ApiProblemDetailsFactory>();
         services.AddScoped<AuthTransportFilter>();
         services.AddOptions<AuthRateLimitOptions>().Bind(configuration.GetSection("AuthRateLimit"))
             .Validate(o => o.PermitLimit is >= 1 and <= 10000 && o.WindowSeconds is >= 1 and <= 3600,
@@ -51,11 +68,8 @@ public static class ApiFoundation
             {
                 if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retry))
                     context.HttpContext.Response.Headers.RetryAfter = Math.Ceiling(retry.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                await context.HttpContext.RequestServices.GetRequiredService<IProblemDetailsService>().WriteAsync(new ProblemDetailsContext
-                {
-                    HttpContext = context.HttpContext,
-                    ProblemDetails = new Microsoft.AspNetCore.Mvc.ProblemDetails { Status = 429, Title = "Too many requests." }
-                });
+                await ApiProblems.WriteAsync(context.HttpContext,
+                    new Microsoft.AspNetCore.Mvc.ProblemDetails { Status = 429 }, cancellationToken);
             };
         });
         services.AddScoped<ICurrentUser, HttpCurrentUser>();
@@ -76,9 +90,7 @@ public static class ApiFoundation
         }));
         services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
         {
-            context.ProblemDetails.Extensions["correlationId"] = context.HttpContext.TraceIdentifier;
-            // Default framework exception metadata is never suitable for client responses.
-            context.ProblemDetails.Extensions.Remove("exception");
+            ApiProblems.Enrich(context.HttpContext, context.ProblemDetails);
         });
         services.AddExceptionHandler<ApiExceptionHandler>();
         services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("postgresql", tags: ["ready"]);

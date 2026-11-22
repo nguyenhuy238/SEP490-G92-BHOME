@@ -1,3 +1,5 @@
+import { getUserFriendlyMessage } from '../../../../../packages/client-core/src/api';
+import { TextField } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -8,7 +10,6 @@ import {
   DialogTitle,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -94,9 +95,7 @@ export function InitialMeterTask({
       setError(
         failure.status === 409
           ? 'Công tơ đã có nhiệm vụ ban đầu hoặc dữ liệu đã thay đổi. Tải lại danh sách để kiểm tra trước khi tạo lại.'
-          : e instanceof Error && !failure.status
-            ? e.message
-            : contractError(e),
+          : getUserFriendlyMessage(e),
       );
     } finally {
       lock.current = false;
