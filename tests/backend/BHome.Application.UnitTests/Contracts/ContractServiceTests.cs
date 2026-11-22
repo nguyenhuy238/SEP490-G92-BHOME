@@ -901,6 +901,40 @@ public sealed class ContractServiceTests
             Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RejectedMoveOutCanBeResubmittedByTenantOrReplacedByOwnerExpiryWithoutLosingVersion(bool expiry)
+    {
+        var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        var move = new ContractMoveOut
+        {
+            ContractId = c.Id,
+            Status = MoveOutStatus.Rejected,
+            ProposedDate = Today,
+            Reason = "Original request",
+            PendingReason = "Original rejection",
+            Version = 2
+        };
+        r.Moves.Add(move);
+        r.User.Role = expiry ? Roles.Owner : Roles.Tenant;
+        r.User.UserId = expiry ? c.OwnerSignerId : c.TenantUserId;
+        var date = expiry ? c.EndDate : Today;
+        var updated = await r.Service.RequestTerminationAsync(c.Id, new(date, "Revised request"), Guid.NewGuid(), expiry, default);
+
+        Assert.Single(r.Moves);
+        Assert.Equal(move.Id, updated.Id);
+        Assert.Equal(expiry ? "Approved" : "Requested", updated.Status);
+        Assert.Equal(3, updated.Version);
+        Assert.Equal("Revised request", move.Reason);
+        Assert.Equal("inspection_and_financial_dependencies", move.PendingReason);
+        Assert.Equal(expiry, move.IsExpiry);
+        Assert.Equal(expiry ? c.OwnerSignerId : null, move.ApprovedByUserId);
+        Assert.Equal(ContractStatus.Active, c.Status);
+        var error = await Assert.ThrowsAsync<ContractException>(() =>
+            r.Service.RequestTerminationAsync(c.Id, new(date, "Duplicate request"), Guid.NewGuid(), expiry, default));
+        Assert.Equal("move_out_already_requested", error.Code);
+    }
+    [Theory]
     [InlineData(MoveOutStatus.Approved)]
     [InlineData(MoveOutStatus.Inspected)]
     [InlineData(MoveOutStatus.PendingSettlement)]

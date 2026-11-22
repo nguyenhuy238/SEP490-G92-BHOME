@@ -1679,7 +1679,7 @@ export function contractActions(
         'Hủy bản gia hạn đang chờ; giữ nguyên hợp đồng gốc và lịch sử.',
       ),
     );
-  if (active && !m && tenant)
+  if (active && (!m || m.status === 'Rejected') && tenant)
     result.push(
       action(
         'termination-requests',
@@ -1697,8 +1697,17 @@ export function contractActions(
         'Owner mở hồ sơ và giao công việc kiểm tra trả phòng cho Staff của cơ sở ngay khi xác nhận. Có thể chọn ngày trước hoặc sau ngày hết hạn hợp đồng. Chỉ hoàn tất bàn giao khi đã đủ điều kiện kiểm tra thực tế.',
       ),
     );
-  if (owner && m?.status === 'Requested')
+  if (owner && m?.status === 'Requested') {
     result.push(action('move-out/approve', 'Duyệt yêu cầu trả phòng'));
+    result.push(
+      action(
+        'move-out/reject',
+        'Từ chối yêu cầu',
+        [{ name: 'reason', label: 'Lý do từ chối', type: 'multiline', max: 2000 }],
+        'Nêu rõ lý do để người thuê có thể điều chỉnh và gửi yêu cầu mới. Hợp đồng vẫn có hiệu lực.',
+      ),
+    );
+  }
   if ((owner || staff) && m?.status === 'Approved')
     result.push(
       action('move-out/schedule', 'Đặt lịch kiểm tra', [

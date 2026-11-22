@@ -28,6 +28,7 @@ interface InventoryItem {
   quantity: number;
   commonArea: string | null;
   checked: boolean;
+  condition?: 'Unassessed' | 'Intact' | 'Missing' | 'Damaged' | 'NotAccessible';
   inherited: boolean;
   sourceHandoverContractId: string | null;
   note: string | null;
@@ -47,6 +48,13 @@ interface InventoryView {
   pendingOwnerRooms?: string[];
   pendingOwnerCommonAssets?: boolean;
 }
+const conditionLabels: Record<string, string> = {
+  Unassessed: 'Chưa ghi nhận hiện trạng',
+  Intact: 'Đủ và nguyên vẹn',
+  Missing: 'Thiếu tài sản',
+  Damaged: 'Tài sản hư hỏng',
+  NotAccessible: 'Không thể kiểm tra',
+};
 interface ReconcilePreview {
   taskId: string;
   version: number;
@@ -289,6 +297,23 @@ export function LocationAssetInventoryReport({
                           variant="outlined"
                           label={item.checked ? 'Đã kiểm tra' : 'Chưa kiểm tra'}
                         />
+                        {item.checked && (
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            color={
+                              item.condition === 'Intact'
+                                ? 'success'
+                                : item.condition === 'Missing' || item.condition === 'Damaged'
+                                  ? 'warning'
+                                  : 'default'
+                            }
+                            label={
+                              conditionLabels[item.condition ?? 'Unassessed'] ??
+                              'Chưa ghi nhận hiện trạng'
+                            }
+                          />
+                        )}
                         {item.inherited && (
                           <Chip size="small" variant="outlined" label="Kế thừa bàn giao Tenant" />
                         )}

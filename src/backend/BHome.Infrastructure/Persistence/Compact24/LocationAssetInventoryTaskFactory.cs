@@ -22,16 +22,22 @@ internal static class LocationAssetInventoryTaskFactory
     internal static Guid TaskId(Guid assignmentId) =>
         new(SHA256.HashData(Encoding.UTF8.GetBytes($"location-asset-inventory:{assignmentId:N}")).AsSpan(0, 16));
 
-    private static int Quantity(string? metadata)
+    private static Guid SetupKey(string value) =>
+        new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
+
+    private static int? Quantity(string? metadata)
     {
         if (string.IsNullOrWhiteSpace(metadata)) return 1;
         try
         {
             using var json = JsonDocument.Parse(metadata);
-            return json.RootElement.TryGetProperty("quantity", out var value) &&
-                   value.TryGetInt32(out var count) && count > 0 ? count : 1;
+            if (json.RootElement.ValueKind != JsonValueKind.Object) return null;
+            if (!json.RootElement.TryGetProperty("quantity", out var value))
+                return json.RootElement.TryGetProperty("trackingMode", out _) ? null : 1;
+            return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var count) && count > 0
+                ? count : null;
         }
-        catch (JsonException) { return 1; }
+        catch (JsonException) { return null; }
     }
 
     private static bool SameUnit(string? metadata, string? expected)
@@ -40,6 +46,9 @@ internal static class LocationAssetInventoryTaskFactory
         try
         {
             using var json = JsonDocument.Parse(metadata);
+            if (json.RootElement.ValueKind != JsonValueKind.Object) return false;
+            if (json.RootElement.TryGetProperty("unit", out var unitValue) && unitValue.ValueKind != JsonValueKind.String)
+                return false;
             var unit = json.RootElement.TryGetProperty("unit", out var value) &&
                 value.ValueKind == JsonValueKind.String ? value.GetString() : null;
             return string.Equals(unit?.Trim(), expected?.Trim(), StringComparison.OrdinalIgnoreCase);
@@ -54,6 +63,16 @@ internal static class LocationAssetInventoryTaskFactory
         Guid locationId, Guid assignmentId,
         Guid staffId, DateOnly effectiveFrom, Guid actor, DateTimeOffset now, CancellationToken token)
     {
+        // There is one open handover task per Location. Assignment changes transfer
+        // responsibility on that task; they must never manufacture a second task ID.
+        var openTasks = await db.Set<OperationalTask>().AsNoTracking()
+            .Where(task => task.LocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover &&
+                task.Status != MeterTaskStatus.Completed && task.Status != MeterTaskStatus.Cancelled)
+            .Select(task => task.Id).Take(2).ToArrayAsync(token);
+        if (openTasks.Length > 1)
+            throw new InvalidOperationException("A Location has more than one open asset handover task.");
+        if (openTasks.Length == 1) return;
+
         var taskId = TaskId(assignmentId);
         if (await db.Set<OperationalTask>().AsNoTracking().AnyAsync(t => t.Id == taskId, token)) return;
         var baseline = await BuildConfirmedSnapshotAsync(db, workspace, locationId, assignmentId, effectiveFrom, now, token);
@@ -169,6 +188,41 @@ internal static class LocationAssetInventoryTaskFactory
         await db.SaveChangesAsync(token);
     }
 
+    // Item IDs are initially assignment-scoped for compatibility with existing snapshots.
+    // When responsibility transfers on the same task, rebind the freshly-built Owner source
+    // to the existing physical item IDs so comparison/reconciliation does not treat every row
+    // as removed and re-added. New physical items keep their newly generated IDs.
+    internal static LocationAssetInventorySnapshot PreserveExistingItemIds(
+        LocationAssetInventorySnapshot confirmed, string? existingInventoryJson)
+    {
+        if (string.IsNullOrWhiteSpace(existingInventoryJson)) return confirmed;
+        LocationAssetInventorySnapshot existing;
+        try
+        {
+            existing = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(existingInventoryJson, Json)
+                ?? throw new JsonException("Missing inventory snapshot.");
+        }
+        catch (JsonException)
+        {
+            throw new InvalidOperationException("Cannot compare Owner inventory with an invalid Location task snapshot.");
+        }
+        if (existing.Items is null || existing.Items.Select(item => item.Id).Distinct().Count() != existing.Items.Length)
+            throw new InvalidOperationException("Cannot compare Owner inventory with an inconsistent Location task snapshot.");
+
+        static (Guid? RoomId, Guid? AssetId, string? CommonArea) PhysicalKey(LocationAssetInventoryItem item) =>
+            (item.RoomId, item.AssetId, item.CommonArea);
+
+        var existingByPhysicalItem = existing.Items
+            .GroupBy(PhysicalKey)
+            .Where(group => group.Count() == 1)
+            .ToDictionary(group => group.Key, group => group.Single());
+        var rebound = confirmed.Items.Select(item =>
+            existingByPhysicalItem.TryGetValue(PhysicalKey(item), out var prior)
+                ? item with { Id = prior.Id }
+                : item).ToArray();
+        return confirmed with { Items = rebound };
+    }
+
     // Single source for initial task creation AND explicit Owner reconciliation.
     // Merely configured items and unverified physical Assets are never entrusted to Staff.
     internal static async Task<LocationAssetInventorySnapshot> BuildConfirmedSnapshotAsync(
@@ -193,13 +247,18 @@ internal static class LocationAssetInventoryTaskFactory
         // Query Owner's durable inventory verification documents once per Location.
         var setup = await workspace.ReviewDocumentsAsync(locationId,
             assets.Select(asset => asset.Id).ToArray(), token);
+        var templates = setup.Where(document => document.Kind == "AssetTemplate")
+            .ToDictionary(document => document.Id);
+        var assignments = setup.Where(document => document.Kind == "AssetTemplateAssignment")
+            .ToDictionary(document => document.Id);
+        var roomProvenance = setup.Where(document => document.Kind == "RoomProvenance")
+            .ToDictionary(document => document.Id);
         var desired = setup.Where(document => document.Kind == "DesiredAssets")
             .Select(document => (Document: document, Config: document.Data.Deserialize<DesiredAssets>(Json)))
             .Where(row => row.Config is not null)
-            .GroupBy(row => row.Config!.RoomId)
-            .ToDictionary(group => group.Key,
-                group => group.OrderByDescending(row => row.Document.RecordedAt).ThenByDescending(row => row.Document.Version)
-                    .First().Config!);
+            .ToLookup(row => row.Config!.RoomId);
+        var legacyDefault = templates.Values.Where(AssetInventoryService.IsLocationDefault)
+            .OrderByDescending(document => document.RecordedAt).ThenBy(document => document.Id).FirstOrDefault();
         var ownerMappings = setup.Where(document => document.Kind == "AssetVerification" && document.Status == "Verified" &&
                 document.Data.TryGetProperty("source", out var source) && source.GetString() == "OwnerAttestation" &&
                 document.Data.TryGetProperty("roomId", out _) && document.Data.TryGetProperty("templateId", out _) &&
@@ -292,16 +351,27 @@ internal static class LocationAssetInventoryTaskFactory
         {
             var roomAssets = assets.Where(a => a.RoomId == room.Id).OrderBy(a => a.Name).ThenBy(a => a.Id).ToArray();
             var hasBaseline = inherited.TryGetValue(room.Id, out var source);
-            var configuration = desired.GetValueOrDefault(room.Id);
+            var assignment = assignments.GetValueOrDefault(SetupKey($"asset-template-assignment:{room.Id}"));
+            var selectedTemplate = assignment?.Data.Deserialize<AssetTemplateAssignment>(Json)?.TemplateId;
+            var provenance = roomProvenance.GetValueOrDefault(SetupKey($"room-provenance:{room.Id}"));
+            var effectiveTemplate = selectedTemplate is { } selected
+                ? templates.GetValueOrDefault(selected)
+                : assignment?.Status != "None" && provenance is null ? legacyDefault : null;
+            var invalidConfiguration = selectedTemplate.HasValue && effectiveTemplate is null ||
+                effectiveTemplate is not null && effectiveTemplate.Status != "Published";
+            var candidates = effectiveTemplate is null ? [] : desired[room.Id]
+                .Where(row => row.Config!.TemplateId == effectiveTemplate.Id &&
+                    row.Config.TemplateVersion == effectiveTemplate.Version).ToArray();
+            invalidConfiguration |= effectiveTemplate is not null && candidates.Length != 1;
+            var currentDesired = !invalidConfiguration && candidates.Length == 1
+                ? candidates[0].Document : null;
+            var configuration = currentDesired is null ? null : candidates[0].Config;
             var configured = configuration?.Items ?? [];
             var review = reviews.GetValueOrDefault(room.Id);
-            var latestDesired = setup.Where(d => d.Kind == "DesiredAssets" &&
-                    d.Data.TryGetProperty("roomId", out var rid) && rid.GetGuid() == room.Id)
-                .OrderByDescending(d => d.RecordedAt).ThenByDescending(d => d.Version).FirstOrDefault();
-            var checkedIds = review is null || configuration is null || latestDesired is null ||
+            var checkedIds = review is null || configuration is null || currentDesired is null ||
                 !review.Data.TryGetProperty("desiredId", out var desiredId) ||
                 !review.Data.TryGetProperty("desiredVersion", out var desiredVersion) ||
-                desiredId.GetGuid() != latestDesired.Id || desiredVersion.GetInt32() != latestDesired.Version
+                desiredId.GetGuid() != currentDesired.Id || desiredVersion.GetInt32() != currentDesired.Version
                 ? new HashSet<Guid>()
                 : review.Data.GetProperty("items").EnumerateArray()
                     .Where(entry => entry.TryGetProperty("checked", out var yes) && yes.ValueKind == JsonValueKind.True)
@@ -327,14 +397,9 @@ internal static class LocationAssetInventoryTaskFactory
                     matched.Id, requirement.Name, requirement.Quantity, null,
                     checkedByTenant, checkedByTenant, checkedByTenant ? source.ContractId : null));
             }
-            if (roomAssets.Length == 0 && configured.Length == 0)
+            if (roomAssets.Length == 0 && configured.Length == 0 && !invalidConfiguration)
             {
                 var confirmation = setup.Where(d => d.Kind == "RoomNoAssets" && d.Status == "Confirmed" &&
-                    d.Data.TryGetProperty("roomId", out var id) && id.GetGuid() == room.Id)
-                    .OrderByDescending(d => d.RecordedAt).ThenByDescending(d => d.Version).FirstOrDefault();
-                var assignment = setup.FirstOrDefault(d => d.Kind == "AssetTemplateAssignment" &&
-                    d.Id == new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"asset-template-assignment:{room.Id}")).AsSpan(0, 16)));
-                var currentDesired = setup.Where(d => d.Kind == "DesiredAssets" &&
                     d.Data.TryGetProperty("roomId", out var id) && id.GetGuid() == room.Id)
                     .OrderByDescending(d => d.RecordedAt).ThenByDescending(d => d.Version).FirstOrDefault();
                 var expected = Fingerprint(new

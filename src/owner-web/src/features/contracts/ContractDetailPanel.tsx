@@ -126,7 +126,9 @@ export function ContractDetailPanel({
     signingMethods?.methods,
   ).filter(
     (a) =>
-      !['move-out/approve', 'move-out/settlement', 'move-out/schedule'].includes(a.operation) &&
+      !['move-out/approve', 'move-out/reject', 'move-out/settlement', 'move-out/schedule'].includes(
+        a.operation,
+      ) &&
       !(c.kind === 'Holding' && a.operation === 'holding-approval') &&
       !(c.signingMode === 'INTERNAL_OTP_DRAWN' && a.operation.startsWith('signing')),
   );

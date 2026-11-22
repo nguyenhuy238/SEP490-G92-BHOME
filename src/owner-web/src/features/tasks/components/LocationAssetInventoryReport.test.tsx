@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router';
 import { LocationAssetInventoryReport } from './LocationAssetInventoryReport';
 
 const state = vi.hoisted(() => ({
@@ -18,6 +19,7 @@ const state = vi.hoisted(() => ({
     canApply: true,
     blockedReason: null as null | string,
   },
+  items: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock('../../../hooks/useOwnerWorkspace', () => ({
@@ -38,7 +40,7 @@ vi.mock('../../../hooks/useOwnerWorkspace', () => ({
             version: 2,
             totalCount: 42,
             checkedCount: 0,
-            items: [],
+            items: state.items,
             pendingOwnerRooms: ['P.201', 'P.202'],
             pendingOwnerCommonAssets: true,
           },
@@ -66,11 +68,16 @@ beforeEach(() => {
   state.refetchPreview.mockReset().mockResolvedValue({});
   state.preview.canApply = true;
   state.preview.blockedReason = null;
+  state.items = [];
 });
 afterEach(cleanup);
 
 it('requires explicit Owner confirmation before replacing an old 42-item task with 12 attested items', async () => {
-  render(<LocationAssetInventoryReport taskId={state.preview.taskId} />);
+  render(
+    <MemoryRouter>
+      <LocationAssetInventoryReport taskId={state.preview.taskId} />
+    </MemoryRouter>,
+  );
   expect(screen.getByText(/Checklist hiện tại: 42 mục/)).toBeTruthy();
   expect(screen.getByText(/Đã được Owner kiểm kê: 12 mục/)).toBeTruthy();
   expect(screen.getByText(/Còn 2 phòng/)).toBeTruthy();
@@ -97,4 +104,36 @@ it('never applies an Owner baseline replacement that would discard checked Staff
   expect(screen.getByText(/Cần đối soát thủ công để tránh mất dữ liệu/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Đồng bộ checklist đã xác nhận' })).toBeNull();
   expect(state.command).not.toHaveBeenCalled();
+});
+
+it('shows Staff-observed asset condition and linked incident context for Owner review', () => {
+  state.items = [
+    {
+      id: '44444444-4444-4444-8444-444444444444',
+      roomId: '55555555-5555-4555-8555-555555555555',
+      roomNumber: '101',
+      assetId: '66666666-6666-4666-8666-666666666666',
+      name: 'Quạt trần',
+      quantity: 1,
+      commonArea: null,
+      checked: true,
+      condition: 'Damaged',
+      inherited: false,
+      sourceHandoverContractId: null,
+      note: 'Quạt không quay khi bật công tắc.',
+      incidentId: '77777777-7777-4777-8777-777777777777',
+    },
+  ];
+  render(
+    <MemoryRouter>
+      <LocationAssetInventoryReport taskId={state.preview.taskId} />
+    </MemoryRouter>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Phòng 101/ }));
+  expect(screen.getByText('Tài sản hư hỏng')).toBeTruthy();
+  expect(screen.getByText('Quạt không quay khi bật công tắc.')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Xem báo cáo sự cố' })).toHaveAttribute(
+    'href',
+    '/incidents?locationId=22222222-2222-4222-8222-222222222222&incidentId=77777777-7777-4777-8777-777777777777',
+  );
 });

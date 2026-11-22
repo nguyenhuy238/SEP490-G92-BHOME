@@ -49,6 +49,26 @@ public sealed class LocationAssetHandoverPdfTests
         Assert.Equal(report.SnapshotHash, pdf.GetDocumentInfo().GetMoreInfo("BHomeInventorySnapshotSHA256"));
     }
 
+    [Fact]
+    public void PreviewIncludesStaffObservedConditionInTheFrozenAssetTable()
+    {
+        var report = MakeReport();
+        var priorStaffId = Guid.NewGuid();
+        var damaged = report.Items[1] with { Condition = "Damaged", PriorStaffUserId = priorStaffId };
+        var inaccessible = report.Items[0] with { Condition = "NotAccessible" };
+        var bytes = LocationAssetHandoverPdfRenderer.Render(report with
+        {
+            Items = [damaged, inaccessible]
+        }, CancellationToken.None);
+
+        using var pdf = new PdfDocument(new PdfReader(new MemoryStream(bytes)));
+        var text = Text(pdf);
+        Assert.Contains("Hiện trạng: Tài sản hư hỏng", text);
+        Assert.Contains("Hiện trạng: Không thể kiểm tra", text);
+        Assert.Contains("Kế thừa kết quả kiểm kê từ Staff trước", text);
+        Assert.Contains(priorStaffId.ToString(), string.Concat(text.Where(character => !char.IsWhiteSpace(character))));
+    }
+
     private static string Text(PdfDocument pdf) => string.Join("\n",
         Enumerable.Range(1, pdf.GetNumberOfPages())
             .Select(page => PdfTextExtractor.GetTextFromPage(pdf.GetPage(page))));

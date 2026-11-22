@@ -56,7 +56,8 @@ public sealed class OperationalTask : AuditableEntity
     // Stored inside Compact24 operational_tasks.task_data.state; no second asset ledger.
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string MoveInInventoryJson { get; set; } = "";
-    // Frozen checklist for each effective Staff/Location assignment. Compact24 persists it in task_data.state.
+    // Frozen checklist for Location-owned work. AssignmentId tracks current responsibility;
+    // Compact24 persists this snapshot in task_data.state across Staff replacements.
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string LocationAssetInventoryJson { get; set; } = "";
     public Guid? BillingRoomId { get; set; }

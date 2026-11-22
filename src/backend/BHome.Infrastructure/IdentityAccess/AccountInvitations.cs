@@ -162,6 +162,10 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
                 UserName = request.Email,
                 Email = request.Email,
                 EmailConfirmed = false,
+                // Pending invitation accounts must be addressable by the protected
+                // delivery/validation pipeline. EmailConfirmed remains false, so they
+                // cannot sign in until the one-time invitation is accepted.
+                IsActive = true,
                 SecurityStamp = Guid.NewGuid().ToString("N"),
                 ConcurrencyStamp = Guid.NewGuid().ToString("N"),
                 LockoutEnabled = true

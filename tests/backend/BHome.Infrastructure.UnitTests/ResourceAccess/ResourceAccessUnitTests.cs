@@ -20,6 +20,9 @@ public sealed class ResourceAccessUnitTests(PostgresContainerFixture postgres) :
     private static readonly Guid Sample2Id = Guid.Parse("c2400000-0000-4000-8000-000000000011"); // "BHOME SAMPLE 2"
     private static readonly Guid MeterTenantId = Guid.Parse("bd110000-0000-4000-8000-000000000041"); // bhome.e2e.meter.tenant@example.com
     private static readonly Guid MaiNguyenId = Guid.Parse("bd110000-0000-4000-8000-000000000042");   // mainguyen@bhome.test
+    private static readonly Guid Room101Id = Guid.Parse("c2400000-0000-4000-8000-000000000040");
+    private static readonly Guid TenantResidentId = Guid.Parse("bd110000-0000-4000-8000-000000000030");
+    private static readonly Guid MaiResidentId = Guid.Parse("bd110000-0000-4000-8000-000000000043");
     private static readonly DateTimeOffset Today = new(2026, 11, 12, 9, 0, 0, TimeSpan.FromHours(7)); // "Today is 2026-11-12"
 
     // Permission names written on the sheet -> BHOME permission codes.
@@ -160,6 +163,26 @@ public sealed class ResourceAccessUnitTests(PostgresContainerFixture postgres) :
     {
         await world.AddTenantSampleAsync();
         await world.AddUserAsync(MaiNguyenId, "mainguyen@bhome.test", Roles.Tenant, TenantPassword);
+        await world.ExecAsync("insert into rooms(id,location_id,room_number,capacity,status) values (@room,@location,'101',2,2)",
+            ("room", Room101Id), ("location", Sample1Id));
+        await world.ExecAsync("""
+            insert into residents(id,user_id,current_room_id,identity_owner_scope_id,display_label,verification_status)
+            values (@representative,@representative_user,@room,@owner,'Tenant Sample',1),
+                   (@member,@member_user,@room,@owner,'Nguyen Thi Mai',1)
+            """, ("representative", TenantResidentId), ("representative_user", TenantSampleId),
+            ("member", MaiResidentId), ("member_user", MaiNguyenId), ("room", Room101Id), ("owner", OwnerId));
+        var contractId = Guid.NewGuid();
+        await world.ExecAsync("""
+            insert into contracts(id,room_id,representative_resident_id,tenant_user_id,owner_signer_id,contract_type,
+                start_date,end_date,monthly_rent,deposit_required,terms,status,activated_at,activated_by_user_id)
+            values (@contract,@room,@representative,@tenant,@owner,'MAIN',date '2026-11-01',date '2027-10-31',
+                3500000,3500000,'Synthetic terms',3,timestamptz '2026-11-01 02:00+00',@owner)
+            """, ("contract", contractId), ("room", Room101Id), ("representative", TenantResidentId),
+            ("tenant", TenantSampleId), ("owner", OwnerId));
+        await world.ExecAsync("""
+            insert into contract_residents(contract_id,resident_id,resident_role,residence_from)
+            values (@contract,@representative,0,date '2026-11-01'),(@contract,@member,1,date '2026-11-01')
+            """, ("contract", contractId), ("representative", TenantResidentId), ("member", MaiResidentId));
         world.CurrentUser.Set(MaiNguyenId, Roles.Tenant);
 
         // The shared Room Invoice belongs to the representative Tenant tenant.sample@example.invalid.

@@ -2,7 +2,10 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using BHome.Application.IdentityAccess;
+using BHome.Application.IncidentMaintenance;
 using BHome.Application.Locations;
 using BHome.Application.PropertyManagement;
 using BHome.Application.StaffOperations;
@@ -18,6 +21,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using OpenCvSharp;
 
 namespace BHome.IntegrationTests.Compact24;
 
@@ -27,6 +31,26 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
     private const string Password = "Synthetic!Handover-492";
     private static DateOnly Today => DateOnly.FromDateTime(
         TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+
+    private static Guid SetupKey(string value) =>
+        new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
+
+    private static byte[] EvidenceImage()
+    {
+        using var image = new Mat(16, 16, MatType.CV_8UC3, Scalar.White);
+        return image.ImEncode(".png");
+    }
+
+    private static async Task SaveRoomTemplateAsync(ISetupWorkspaceStore workspace, Guid locationId,
+        Guid roomId, Guid ownerId, Guid templateId, AssetTemplateItem[] items)
+    {
+        await workspace.SaveAsync(templateId, locationId, "AssetTemplate", "Published",
+            new AssetTemplateWrite(locationId, "Synthetic room asset template", items,
+                Scoped: true, ScopeRoomId: roomId), 0, ownerId, default);
+        await workspace.SaveAsync(SetupKey($"asset-template-assignment:{roomId}"), locationId,
+            "AssetTemplateAssignment", "Assigned", new AssetTemplateAssignment(templateId),
+            0, ownerId, default);
+    }
 
     [CompactPostgresFact]
     public async Task OwnerApprovalThenTwoVersionMatchedAcceptancesCompleteTaskAndSealPdf()
@@ -66,6 +90,7 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
                 "Furniture", "BulkQuantity", 1);
             var templateId = Guid.NewGuid();
             var workspace = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+            await SaveRoomTemplateAsync(workspace, locationId, room.Id, owner.Id, templateId, [item]);
             var desired = await workspace.SaveAsync(Guid.NewGuid(), locationId, "DesiredAssets",
                 "Verified", new DesiredAssets(templateId, 1, room.Id, [item], "Verified"),
                 0, owner.Id, default);
@@ -243,10 +268,609 @@ public sealed class LocationAssetHandoverSigningTests(Compact24Fixture fixture) 
             new { revision = newReport.Revision, snapshotSha256 = newReport.SnapshotSha256, confirmed = true })).StatusCode);
     }
 
+    [CompactPostgresFact]
+    public async Task HandoverRequiresCurrentEmploymentForApprovalAndStaffSignatureButKeepsOwnerHistoryAndSameAssignmentResumable()
+    {
+        var blobs = new InMemoryHandoverDocuments();
+        using var host = fixture.Factory!.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IObjectStorage>();
+            services.AddSingleton<IObjectStorage>(blobs);
+        }));
+        var owner = await Seed(host.Services, "Owner");
+        var staff = await Seed(host.Services, "Staff");
+        var locationId = Guid.NewGuid();
+        Guid roomId;
+        Guid assetId;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"INSERT INTO locations(id,name,address) VALUES ({locationId},'Synthetic employment handover', 'Synthetic address')");
+            var room = new Room { LocationId = locationId, RoomNumber = "E-101" };
+            db.Add(room);
+            await db.SaveChangesAsync();
+            roomId = room.Id;
+            var physical = new Asset
+            {
+                LocationId = locationId,
+                RoomId = room.Id,
+                Name = "Synthetic employment chair",
+                Category = "Furniture",
+                Status = AssetStatus.Active
+            };
+            db.Add(physical);
+            await db.SaveChangesAsync();
+            assetId = physical.Id;
+            var item = new AssetTemplateItem(Guid.NewGuid(), "Synthetic employment chair", "Furniture", "BulkQuantity", 1);
+            var templateId = Guid.NewGuid();
+            var workspace = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+            await SaveRoomTemplateAsync(workspace, locationId, room.Id, owner.Id, templateId, [item]);
+            var desired = await workspace.SaveAsync(Guid.NewGuid(), locationId, "DesiredAssets", "Verified",
+                new DesiredAssets(templateId, 1, room.Id, [item], "Verified"), 0, owner.Id, default);
+            await workspace.SaveAsync(Guid.NewGuid(), locationId, "AssetVerification", "Verified", new
+            {
+                roomId = room.Id,
+                templateId,
+                itemId = item.Id,
+                assetId = physical.Id,
+                quantity = 1,
+                source = "OwnerAttestation"
+            }, 0, owner.Id, default);
+            await workspace.SaveAsync(Guid.NewGuid(), locationId, "RoomInventoryChecklistReview", "Matched", new
+            {
+                roomId = room.Id,
+                desiredId = desired.Id,
+                desiredVersion = desired.Version,
+                baseline = "synthetic-employment-owner-baseline",
+                state = "Matched",
+                requestId = Guid.NewGuid(),
+                items = new[] { new { itemId = item.Id, @checked = true, evidenceIds = Array.Empty<Guid>() } },
+                unlinkedAssetIds = Array.Empty<Guid>()
+            }, 0, owner.Id, default);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO staff_employments(id,staff_user_id,start_date,end_date,status,history)
+                VALUES ({Guid.NewGuid()},{staff.Id},{Today},NULL,'Active','[]'::jsonb)
+                """);
+            var assignments = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
+            Assert.Equal(CreateAssignmentStatus.Created, (await assignments.CreateAssignmentAsync(
+                owner.Id, locationId, staff.Id, Today, Today.AddDays(14), default)).Status);
+        }
+
+        Guid taskId;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            taskId = await db.Set<OperationalTask>().AsNoTracking()
+                .Where(t => t.LocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Select(t => t.Id).SingleAsync();
+        }
+        using var ownerClient = await Login(host.CreateClient(), owner);
+        using var staffClient = await Login(host.CreateClient(), staff);
+        var route = $"/api/v1/operational-tasks/{taskId}";
+        var handover = route + "/location-asset-handover";
+        var inventory = (await staffClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            route + "/location-asset-inventory"))!;
+        var started = await Post(staffClient, route + "/start", new { version = inventory.Version });
+        Assert.Equal(HttpStatusCode.OK, started.StatusCode);
+        var task = (await started.Content.ReadFromJsonAsync<TaskView>())!;
+        var itemToCheck = Assert.Single(inventory.Items);
+        using (var change = new HttpRequestMessage(HttpMethod.Put,
+            route + "/location-asset-inventory/items/" + itemToCheck.Id)
+        {
+            Content = JsonContent.Create(new
+            { version = task.Version, @checked = true, condition = "Damaged", note = "Cánh quạt bị nứt." })
+        })
+        {
+            change.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            Assert.Equal(HttpStatusCode.OK, (await staffClient.SendAsync(change)).StatusCode);
+        }
+        task = (await staffClient.GetFromJsonAsync<TaskView>(route))!;
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(staffClient, route + "/submit",
+            new { version = task.Version, note = "Đã kiểm tra nhưng còn tài sản hỏng" })).StatusCode);
+
+        using (var incidentForm = new MultipartFormDataContent())
+        {
+            incidentForm.Add(new StringContent(locationId.ToString()), "LocationId");
+            incidentForm.Add(new StringContent(roomId.ToString()), "RoomId");
+            incidentForm.Add(new StringContent(assetId.ToString()), "AssetId");
+            incidentForm.Add(new StringContent("Normal"), "Severity");
+            incidentForm.Add(new StringContent("Quạt trần phòng E-101 bị nứt cánh, cần kiểm tra và sửa chữa."), "Description");
+            using var incidentRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/incidents")
+            { Content = incidentForm };
+            incidentRequest.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            var incidentResponse = await staffClient.SendAsync(incidentRequest);
+            Assert.Equal(HttpStatusCode.Created, incidentResponse.StatusCode);
+            var incident = (await incidentResponse.Content.ReadFromJsonAsync<IncidentCommandResult>())!;
+            Assert.NotNull(incident.IncidentId);
+            using var link = new HttpRequestMessage(HttpMethod.Put,
+                route + "/location-asset-inventory/items/" + itemToCheck.Id)
+            {
+                Content = JsonContent.Create(new
+                {
+                    version = task.Version,
+                    @checked = true,
+                    condition = "Damaged",
+                    note = "Cánh quạt bị nứt.",
+                    incidentId = incident.IncidentId
+                })
+            };
+            link.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            Assert.Equal(HttpStatusCode.OK, (await staffClient.SendAsync(link)).StatusCode);
+            task = (await staffClient.GetFromJsonAsync<TaskView>(route))!;
+            Assert.Equal(HttpStatusCode.OK, (await Post(staffClient, route + "/submit",
+                new { version = task.Version, note = "Đã kiểm kê và liên kết sự cố tài sản hỏng" })).StatusCode);
+            var ownerInventory = (await ownerClient.GetFromJsonAsync<LocationAssetInventoryView>(
+                route + "/location-asset-inventory"))!;
+            var ownerItem = Assert.Single(ownerInventory.Items);
+            Assert.Equal("Damaged", ownerItem.Condition);
+            Assert.Equal(incident.IncidentId, ownerItem.IncidentId);
+            var ownerIncident = (await ownerClient.GetFromJsonAsync<IncidentView>(
+                $"/api/v1/incidents/{incident.IncidentId}"))!;
+            Assert.Equal(HttpStatusCode.OK, (await Post(ownerClient,
+                $"/api/v1/incidents/{incident.IncidentId}/resolve",
+                new { version = ownerIncident.Version, reason = "Owner đã kiểm tra và xác nhận phương án xử lý." })).StatusCode);
+        }
+
+        // An ended employment invalidates the current responsibility even while the
+        // historical Location assignment row still covers today's date.
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE staff_employments SET start_date={Today.AddDays(-2)},end_date={Today.AddDays(-1)},status='Ended'
+                WHERE staff_user_id={staff.Id}
+                """);
+        }
+        task = (await ownerClient.GetFromJsonAsync<TaskView>(route))!;
+        Assert.Equal(HttpStatusCode.Conflict, (await ownerClient.PostAsJsonAsync(handover + "/approve",
+            new { taskVersion = task.Version })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(route + "/location-asset-inventory")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await staffClient.GetAsync(route)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await staffClient.GetAsync(route + "/location-asset-inventory")).StatusCode);
+
+        // Reactivating the same employment restores access to the same task and assignment;
+        // it must not generate a duplicate LocationAssetHandover task.
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE staff_employments SET start_date={Today},end_date=NULL,status='Active'
+                WHERE staff_user_id={staff.Id}
+                """);
+        }
+        Assert.Equal(HttpStatusCode.OK, (await staffClient.GetAsync(route)).StatusCode);
+        task = (await ownerClient.GetFromJsonAsync<TaskView>(route))!;
+        var approved = await ownerClient.PostAsJsonAsync(handover + "/approve", new { taskVersion = task.Version });
+        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+        var report = (await approved.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!;
+        var ownerSigned = await ownerClient.PostAsJsonAsync(handover + "/sign", new
+        {
+            revision = report.Revision,
+            snapshotSha256 = report.SnapshotSha256,
+            confirmed = true
+        });
+        Assert.Equal(HttpStatusCode.OK, ownerSigned.StatusCode);
+
+        // Once employment ends again, the old Staff cannot read an unsigned report,
+        // download its document or add a signature; Owner's historical access remains.
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE staff_employments SET start_date={Today.AddDays(-2)},end_date={Today.AddDays(-1)},status='Ended'
+                WHERE staff_user_id={staff.Id}
+                """);
+        }
+        Assert.Equal(HttpStatusCode.NotFound, (await staffClient.GetAsync(handover)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await staffClient.GetAsync(handover + "/document")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await staffClient.PostAsJsonAsync(handover + "/sign", new
+        {
+            revision = report.Revision,
+            snapshotSha256 = report.SnapshotSha256,
+            confirmed = true
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover + "/document")).StatusCode);
+
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE staff_employments SET start_date={Today},end_date=NULL,status='Active'
+                WHERE staff_user_id={staff.Id}
+                """);
+        }
+        var staffSigned = await staffClient.PostAsJsonAsync(handover + "/sign", new
+        {
+            revision = report.Revision,
+            snapshotSha256 = report.SnapshotSha256,
+            confirmed = true
+        });
+        Assert.Equal(HttpStatusCode.OK, staffSigned.StatusCode);
+        Assert.Equal("Completed", (await staffSigned.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!.Status);
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(t =>
+                t.LocationId == locationId && t.Kind == OperationalTaskKind.LocationAssetHandover));
+        }
+
+        // A former Staff signer keeps read-only access to their own completed report.
+        // The idempotent signing endpoint is still an action and must reject them.
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE staff_employments SET start_date={Today.AddDays(-2)},end_date={Today.AddDays(-1)},status='Ended'
+                WHERE staff_user_id={staff.Id}
+                """);
+        }
+        Assert.Equal(HttpStatusCode.OK, (await staffClient.GetAsync(handover)).StatusCode);
+        var historicalReport = (await staffClient.GetFromJsonAsync<LocationAssetHandoverReportView>(handover))!;
+        Assert.Equal("Completed", historicalReport.Status);
+        Assert.Equal(staff.Id, historicalReport.StaffId);
+        Assert.Equal(HttpStatusCode.OK, (await staffClient.GetAsync(handover + "/document")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await staffClient.PostAsJsonAsync(handover + "/sign", new
+        {
+            revision = report.Revision,
+            snapshotSha256 = report.SnapshotSha256,
+            confirmed = true
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover + "/document")).StatusCode);
+    }
+
+    [CompactPostgresFact]
+    public async Task SuccessorContinuesSameLocationHandoverTaskAndFormerStaffLosesCurrentAccess()
+    {
+        var blobs = new InMemoryHandoverDocuments();
+        using var host = fixture.Factory!.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IObjectStorage>();
+            services.AddSingleton<IObjectStorage>(blobs);
+        }));
+        var owner = await Seed(host.Services, "Owner");
+        var formerStaff = await Seed(host.Services, "Staff");
+        var successor = await Seed(host.Services, "Staff");
+        var locationId = Guid.NewGuid();
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"INSERT INTO locations(id,name,address) VALUES ({locationId},'Synthetic successor handover', 'Synthetic address')");
+            var room = new Room { LocationId = locationId, RoomNumber = "S-201" };
+            db.Add(room);
+            await db.SaveChangesAsync();
+            var assets = new[]
+            {
+                new Asset { LocationId = locationId, RoomId = room.Id, Name = "Synthetic desk", Category = "Furniture", Status = AssetStatus.Active },
+                new Asset { LocationId = locationId, RoomId = room.Id, Name = "Synthetic chair", Category = "Furniture", Status = AssetStatus.Active }
+            };
+            db.AddRange(assets);
+            await db.SaveChangesAsync();
+            var items = new[]
+            {
+                new AssetTemplateItem(Guid.NewGuid(), "Synthetic desk", "Furniture", "BulkQuantity", 1),
+                new AssetTemplateItem(Guid.NewGuid(), "Synthetic chair", "Furniture", "BulkQuantity", 1)
+            };
+            var templateId = Guid.NewGuid();
+            var workspace = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+            await SaveRoomTemplateAsync(workspace, locationId, room.Id, owner.Id, templateId, items);
+            var desired = await workspace.SaveAsync(Guid.NewGuid(), locationId, "DesiredAssets", "Verified",
+                new DesiredAssets(templateId, 1, room.Id, items, "Verified"), 0, owner.Id, default);
+            for (var index = 0; index < items.Length; index++)
+            {
+                await workspace.SaveAsync(Guid.NewGuid(), locationId, "AssetVerification", "Verified", new
+                {
+                    roomId = room.Id,
+                    templateId,
+                    itemId = items[index].Id,
+                    assetId = assets[index].Id,
+                    quantity = 1,
+                    source = "OwnerAttestation"
+                }, 0, owner.Id, default);
+            }
+            await workspace.SaveAsync(Guid.NewGuid(), locationId, "RoomInventoryChecklistReview", "Matched", new
+            {
+                roomId = room.Id,
+                desiredId = desired.Id,
+                desiredVersion = desired.Version,
+                baseline = "synthetic-successor-owner-baseline",
+                state = "Matched",
+                requestId = Guid.NewGuid(),
+                items = items.Select(item => new
+                {
+                    itemId = item.Id,
+                    @checked = true,
+                    evidenceIds = Array.Empty<Guid>()
+                }).ToArray(),
+                unlinkedAssetIds = Array.Empty<Guid>()
+            }, 0, owner.Id, default);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO staff_employments(id,staff_user_id,start_date,end_date,status,history)
+                VALUES ({Guid.NewGuid()},{formerStaff.Id},{Today},NULL,'Active','[]'::jsonb),
+                    ({Guid.NewGuid()},{successor.Id},{Today},NULL,'Active','[]'::jsonb)
+                """);
+            var assignments = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
+            Assert.Equal(CreateAssignmentStatus.Created, (await assignments.CreateAssignmentAsync(
+                owner.Id, locationId, formerStaff.Id, Today, Today.AddDays(14), default)).Status);
+        }
+
+        Guid taskId;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            taskId = await db.Set<OperationalTask>().AsNoTracking()
+                .Where(task => task.LocationId == locationId && task.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Select(task => task.Id).SingleAsync();
+        }
+        using var ownerClient = await Login(host.CreateClient(), owner);
+        using var formerClient = await Login(host.CreateClient(), formerStaff);
+        using var successorClient = await Login(host.CreateClient(), successor);
+        var route = $"/api/v1/operational-tasks/{taskId}";
+        var handover = route + "/location-asset-handover";
+        var initial = (await formerClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            route + "/location-asset-inventory"))!;
+        Assert.Equal(2, initial.TotalCount);
+        var started = await Post(formerClient, route + "/start", new { version = initial.Version });
+        Assert.Equal(HttpStatusCode.OK, started.StatusCode);
+        var task = (await started.Content.ReadFromJsonAsync<TaskView>())!;
+        var firstItem = initial.Items.OrderBy(item => item.Name).First();
+        var remainingItem = initial.Items.Single(item => item.Id != firstItem.Id);
+        using (var check = new HttpRequestMessage(HttpMethod.Put,
+            route + "/location-asset-inventory/items/" + firstItem.Id)
+        {
+            Content = JsonContent.Create(new
+            {
+                version = task.Version,
+                @checked = true,
+                condition = "Intact",
+                note = "Staff đầu đã kiểm tra mục này."
+            })
+        })
+        {
+            check.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            Assert.Equal(HttpStatusCode.OK, (await formerClient.SendAsync(check)).StatusCode);
+        }
+
+        task = (await formerClient.GetFromJsonAsync<TaskView>(route))!;
+        using (var check = new HttpRequestMessage(HttpMethod.Put,
+            route + "/location-asset-inventory/items/" + remainingItem.Id)
+        {
+            Content = JsonContent.Create(new
+            {
+                version = task.Version,
+                @checked = true,
+                condition = "Intact",
+                note = "Staff đầu đã kiểm tra mục còn lại."
+            })
+        })
+        {
+            check.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            Assert.Equal(HttpStatusCode.OK, (await formerClient.SendAsync(check)).StatusCode);
+        }
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var changes = await db.Set<OperationalTaskHistory>().AsNoTracking()
+                .Where(history => history.TaskId == taskId && history.Action == "location_asset_inventory_item_checked" &&
+                    history.ActorId == formerStaff.Id).ToArrayAsync();
+            Guid ChangedItem(OperationalTaskHistory history)
+            {
+                using var document = System.Text.Json.JsonDocument.Parse(history.ChangesJson);
+                return document.RootElement.GetProperty("ItemId").GetGuid();
+            }
+            var firstChange = Assert.Single(changes, history => ChangedItem(history) == firstItem.Id);
+            using var firstChangeJson = System.Text.Json.JsonDocument.Parse(firstChange.ChangesJson);
+            var firstAfter = firstChangeJson.RootElement.GetProperty("After");
+            Assert.Equal("Intact", firstAfter.GetProperty("Condition").GetString());
+            Assert.Equal("Staff đầu đã kiểm tra mục này.", firstAfter.GetProperty("Note").GetString());
+        }
+        using var evidenceContent = new ByteArrayContent(EvidenceImage());
+        evidenceContent.Headers.ContentType = new("image/png");
+        using var evidenceRequest = new HttpRequestMessage(HttpMethod.Put, route + "/evidence")
+        {
+            Content = evidenceContent
+        };
+        evidenceRequest.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        using var evidenceResponse = await formerClient.SendAsync(evidenceRequest);
+        Assert.Equal(HttpStatusCode.OK, evidenceResponse.StatusCode);
+        var predecessorEvidence = (await evidenceResponse.Content.ReadFromJsonAsync<TaskEvidenceView>())!;
+        Assert.Equal(formerStaff.Id, predecessorEvidence.UploadedByUserId);
+        task = (await formerClient.GetFromJsonAsync<TaskView>(route))!;
+        Assert.Equal(HttpStatusCode.OK, (await Post(formerClient, route + "/submit",
+            new { version = task.Version, note = "Staff đầu đã gửi đủ checklist chờ Owner xác nhận.", evidenceIds = new[] { predecessorEvidence.Id } })).StatusCode);
+        var ownerTask = (await ownerClient.GetFromJsonAsync<TaskView>(route))!;
+        var predecessorApproval = await ownerClient.PostAsJsonAsync(handover + "/approve",
+            new { taskVersion = ownerTask.Version });
+        Assert.Equal(HttpStatusCode.OK, predecessorApproval.StatusCode);
+        var predecessorReport = (await predecessorApproval.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!;
+        Assert.Equal("PendingOwnerSignature", predecessorReport.Status);
+        var predecessorOwnerSign = await ownerClient.PostAsJsonAsync(handover + "/sign", new
+        {
+            revision = predecessorReport.Revision,
+            snapshotSha256 = predecessorReport.SnapshotSha256,
+            confirmed = true
+        });
+        Assert.Equal(HttpStatusCode.OK, predecessorOwnerSign.StatusCode);
+        Assert.Equal("PendingStaffSignature",
+            (await predecessorOwnerSign.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!.Status);
+
+        // An employment gap hides the pending-verification task and unsigned report
+        // from the former Staff while Owner can still read the Location-owned work.
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE staff_employments SET start_date={Today.AddDays(-2)},end_date={Today.AddDays(-1)},status='Ended'
+                WHERE staff_user_id={formerStaff.Id}
+                """);
+        }
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(route)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(route + "/location-asset-inventory")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(handover)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(handover + "/document")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(route + "/evidence")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.PostAsJsonAsync(handover + "/sign", new
+        {
+            revision = predecessorReport.Revision,
+            snapshotSha256 = predecessorReport.SnapshotSha256,
+            confirmed = true
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(route)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(route + "/location-asset-inventory")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover + "/document")).StatusCode);
+
+        // Restoring the same current assignment makes the same open task available again.
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE staff_employments SET start_date={Today},end_date=NULL,status='Active'
+                WHERE staff_user_id={formerStaff.Id}
+                """);
+        }
+        Assert.Equal(HttpStatusCode.OK, (await formerClient.GetAsync(route)).StatusCode);
+
+        // Replace the now-current Staff assignment while the predecessor's submission
+        // is still PendingVerification and Owner-signed. Reconciliation must reopen the
+        // same Location task for the successor and preserve the predecessor's checks.
+        Guid successorAssignmentId;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var locationVersion = await db.Locations.Where(location => location.Id == locationId)
+                .Select(location => location.Version).SingleAsync();
+            var replaced = await scope.ServiceProvider.GetRequiredService<ILocationAssignments>()
+                .ReplaceAssignmentAsync(owner.Id, locationId, successor.Id, Today, locationVersion,
+                    "Synthetic Location handover successor", default);
+            Assert.Equal(ChangeAssignmentStatus.Changed, replaced.Status);
+            successorAssignmentId = replaced.Assignment!.Id;
+            var transferred = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(item => item.Id == taskId);
+            Assert.Equal(successor.Id, transferred.AssignedStaffUserId);
+            Assert.Equal(successorAssignmentId, transferred.AssignmentId);
+            Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(item =>
+                item.LocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover));
+        }
+
+        // The Location keeps one task ID. The successor inherits checked-item provenance
+        // and can review/resubmit the checklist; the previous Staff loses all live access.
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(route)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(route + "/location-asset-inventory")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(handover)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(handover + "/document")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.PostAsJsonAsync(handover + "/sign", new
+        {
+            revision = predecessorReport.Revision,
+            snapshotSha256 = predecessorReport.SnapshotSha256,
+            confirmed = true
+        })).StatusCode);
+        var supersededReport = (await ownerClient.GetFromJsonAsync<LocationAssetHandoverReportView>(handover))!;
+        Assert.Equal("Superseded", supersededReport.Status);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover + "/document")).StatusCode);
+        var successorTask = (await successorClient.GetFromJsonAsync<TaskView>(route))!;
+        Assert.Equal(taskId, successorTask.Id);
+        Assert.Equal(successor.Id, successorTask.CurrentResponsibleStaffUserId);
+        Assert.Equal(successor.Id, successorTask.RecordedStaffUserId);
+        var transferredInventory = (await successorClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            route + "/location-asset-inventory"))!;
+        var successorEvidenceRows = (await successorClient.GetFromJsonAsync<TaskEvidenceView[]>(route + "/evidence"))!;
+        var successorEvidence = Assert.Single(successorEvidenceRows);
+        Assert.Equal(predecessorEvidence.Id, successorEvidence.Id);
+        Assert.Equal(formerStaff.Id, successorEvidence.UploadedByUserId);
+        Assert.Equal(predecessorEvidence.Length, successorEvidence.Length);
+        Assert.Equal(successorAssignmentId, transferredInventory.AssignmentId);
+        Assert.Equal("InProgress", transferredInventory.Status);
+        Assert.Equal(2, transferredInventory.CheckedCount);
+        Assert.All(transferredInventory.Items, item =>
+        {
+            Assert.True(item.Checked);
+            Assert.Equal(taskId, item.PriorStaffTaskId);
+            Assert.Equal(formerStaff.Id, item.PriorStaffUserId);
+        });
+        var predecessorChecked = Assert.Single(transferredInventory.Items, item => item.Id == firstItem.Id);
+        Assert.Equal("Intact", predecessorChecked.Condition);
+        Assert.Equal("Staff đầu đã kiểm tra mục này.", predecessorChecked.Note);
+
+        using (var check = new HttpRequestMessage(HttpMethod.Put,
+            route + "/location-asset-inventory/items/" + firstItem.Id)
+        {
+            Content = JsonContent.Create(new
+            {
+                version = successorTask.Version,
+                @checked = true,
+                condition = "Intact",
+                note = "Staff kế nhiệm đã đối chiếu lại tài sản đã kiểm trước đó."
+            })
+        })
+        {
+            check.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            Assert.Equal(HttpStatusCode.OK, (await successorClient.SendAsync(check)).StatusCode);
+        }
+        var continuedInventory = (await successorClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            route + "/location-asset-inventory"))!;
+        Assert.Equal(2, continuedInventory.CheckedCount);
+        var successorRechecked = Assert.Single(continuedInventory.Items, item => item.Id == firstItem.Id);
+        Assert.Equal("Intact", successorRechecked.Condition);
+        Assert.Equal("Staff kế nhiệm đã đối chiếu lại tài sản đã kiểm trước đó.", successorRechecked.Note);
+        var retainedProvenance = Assert.Single(continuedInventory.Items,
+            item => item.PriorStaffTaskId == taskId);
+        Assert.Equal(formerStaff.Id, retainedProvenance.PriorStaffUserId);
+        Assert.Equal("Staff đầu đã kiểm tra mục còn lại.", retainedProvenance.Note);
+        successorTask = (await successorClient.GetFromJsonAsync<TaskView>(route))!;
+        Assert.Equal(HttpStatusCode.OK, (await Post(successorClient, route + "/submit",
+            new { version = successorTask.Version, note = "Staff kế nhiệm đã đối chiếu và gửi lại checklist." })).StatusCode);
+        var successorOwnerTask = (await ownerClient.GetFromJsonAsync<TaskView>(route))!;
+        var approved = await ownerClient.PostAsJsonAsync(handover + "/approve",
+            new { taskVersion = successorOwnerTask.Version });
+        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+        var report = (await approved.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!;
+        Assert.Equal(successor.Id, report.StaffId);
+        Assert.Equal(predecessorReport.Revision + 1, report.Revision);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(handover)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(handover + "/document")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.PostAsJsonAsync(handover + "/sign", new
+        {
+            revision = report.Revision,
+            snapshotSha256 = report.SnapshotSha256,
+            confirmed = true
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.GetAsync(handover)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerClient.PostAsJsonAsync(handover + "/sign", new
+        {
+            revision = report.Revision,
+            snapshotSha256 = report.SnapshotSha256,
+            confirmed = true
+        })).StatusCode);
+        var successorSigned = await successorClient.PostAsJsonAsync(handover + "/sign", new
+        {
+            revision = report.Revision,
+            snapshotSha256 = report.SnapshotSha256,
+            confirmed = true
+        });
+        Assert.Equal(HttpStatusCode.OK, successorSigned.StatusCode);
+        Assert.Equal("Completed", (await successorSigned.Content.ReadFromJsonAsync<LocationAssetHandoverReportView>())!.Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await formerClient.GetAsync(route)).StatusCode);
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(item =>
+                item.LocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover));
+            Assert.Equal(taskId, await db.Set<OperationalTask>().AsNoTracking()
+                .Where(item => item.LocationId == locationId && item.Kind == OperationalTaskKind.LocationAssetHandover)
+                .Select(item => item.Id).SingleAsync());
+        }
+    }
+
     private static async Task<ApplicationUser> Seed(IServiceProvider provider, string role)
     {
         await using var scope = provider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        if (role == "Owner" && await db.Users.FirstOrDefaultAsync(user =>
+            EF.Property<string[]>(user, "roles").Contains(role)) is { } existingOwner)
+            return existingOwner;
         var id = Guid.NewGuid();
         var user = new ApplicationUser
         {

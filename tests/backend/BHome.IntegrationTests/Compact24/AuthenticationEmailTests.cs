@@ -423,7 +423,9 @@ public sealed partial class Compact24NotificationMvpTests
         var delivery = await AuthenticationDelivery(host, invited.UserId); await SendEmail(host, delivery);
         var mail = Assert.Single(probe.Messages); Assert.Contains("Chào mừng", mail.Title);
         Assert.Equal(invited.UserId, await db.Set<BHome.Domain.TenantContracts.Resident>().Where(r => r.Id == w.Residents[0]).Select(r => r.TenantUserId).SingleAsync());
-        Assert.False((await db.Users.AsNoTracking().SingleAsync(u => u.Id == invited.UserId)).EmailConfirmed);
+        var invitedUser = await db.Users.AsNoTracking().SingleAsync(u => u.Id == invited.UserId);
+        Assert.True(invitedUser.IsActive);
+        Assert.False(invitedUser.EmailConfirmed);
         Assert.Equal("Pending", await db.Database.SqlQuery<string>($"SELECT delivery_status AS \"Value\" FROM notifications WHERE id={delivery}").SingleAsync());
         var accountStatus = await owner.GetFromJsonAsync<BHome.Application.Operations.ResidentAdministrationView>($"/api/v1/residents/{w.Residents[0]}");
         Assert.Equal("Pending", accountStatus!.Account!.DeliveryState);

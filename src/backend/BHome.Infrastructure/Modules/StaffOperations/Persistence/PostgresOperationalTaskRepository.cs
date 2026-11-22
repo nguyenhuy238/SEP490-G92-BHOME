@@ -74,8 +74,16 @@ internal sealed class PostgresOperationalTaskRepository(BHomePersistenceContext 
     public Task<LocationAssetInventorySnapshot> OwnerConfirmedInventoryAsync(OperationalTask task, CancellationToken t)
     {
         if (db is not Compact24DbContext compact) throw OperationalTaskException.Conflict("owner_inventory_compact_required");
-        return LocationAssetInventoryTaskFactory.BuildConfirmedSnapshotAsync(compact, workspace,
+        return BuildOwnerConfirmedInventoryAsync(compact, task, t);
+    }
+    private async Task<LocationAssetInventorySnapshot> BuildOwnerConfirmedInventoryAsync(
+        Compact24DbContext compact, OperationalTask task, CancellationToken t)
+    {
+        var confirmed = await LocationAssetInventoryTaskFactory.BuildConfirmedSnapshotAsync(compact, workspace,
             task.LocationId, task.AssignmentId ?? Guid.Empty, task.ReadingDate, DateTimeOffset.UtcNow, t);
+        return task.Kind == OperationalTaskKind.LocationAssetHandover
+            ? LocationAssetInventoryTaskFactory.PreserveExistingItemIds(confirmed, task.LocationAssetInventoryJson)
+            : confirmed;
     }
     public async Task<IReadOnlyList<TaskIncidentTarget>> IncidentTargetsAsync(Guid[] ids, CancellationToken t) =>
         await db.Set<IncidentReport>().AsNoTracking().Where(x => ids.Contains(x.Id))

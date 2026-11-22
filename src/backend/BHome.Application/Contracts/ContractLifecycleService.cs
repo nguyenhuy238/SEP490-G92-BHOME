@@ -64,6 +64,9 @@ public sealed partial class ContractService
                 input.ExpectedVersion is { } version && move.Version != version)
                 throw ContractException.Conflict("move_out_not_pending_approval");
             move.Status = MoveOutStatus.Rejected;
+            // Tenant-facing status keeps the decision reason; the immutable audit
+            // snapshot retains the original text even after a later resubmission.
+            move.PendingReason = reason;
             move.Version++;
             MoveOutEvent(move, "Rejected", reason);
             Audit("ContractMoveOutRejected", id);

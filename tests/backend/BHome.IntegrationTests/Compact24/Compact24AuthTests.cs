@@ -327,7 +327,14 @@ public sealed class Compact24Fixture : IAsyncLifetime
             await using var command = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", connection);
             await command.ExecuteNonQueryAsync();
         }
-        settings.Database = name; Connection = settings.ConnectionString;
+        settings.Database = name;
+        // Bound per-database request pools to prevent Windows loopback ephemeral-port
+        // exhaustion during the full integration suite. The admin connection
+        // remains separate and only creates or drops disposable databases.
+        settings.Pooling = true;
+        settings.MinPoolSize = 0;
+        settings.MaxPoolSize = 16;
+        Connection = settings.ConnectionString;
         await using (var connection = new NpgsqlConnection(Connection))
         {
             await connection.OpenAsync();
@@ -350,6 +357,11 @@ public sealed class Compact24Fixture : IAsyncLifetime
         {
             if (admin is not null && name is not null && System.Text.RegularExpressions.Regex.IsMatch(name, "^bhome_compact24_[a-f0-9]{32}$"))
             {
+                if (!string.IsNullOrWhiteSpace(Connection))
+                {
+                    await using var pooledConnection = new NpgsqlConnection(Connection);
+                    NpgsqlConnection.ClearPool(pooledConnection);
+                }
                 await using var connection = new NpgsqlConnection(admin); await connection.OpenAsync();
                 await using var command = new NpgsqlCommand($"DROP DATABASE \"{name}\" WITH (FORCE)", connection);
                 await command.ExecuteNonQueryAsync();

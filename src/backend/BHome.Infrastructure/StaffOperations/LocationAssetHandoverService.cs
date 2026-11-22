@@ -23,7 +23,8 @@ namespace BHome.Infrastructure.StaffOperations;
 // are private object-storage objects. A task is completed only after both acceptances.
 public sealed class LocationAssetHandoverService(
     Compact24DbContext db, ICurrentUser currentUser, IObjectStorage storage,
-    TimeProvider clock, ISetupWorkspaceStore workspace)
+    TimeProvider clock, ISetupWorkspaceStore workspace,
+    BHome.Application.StaffOperations.IOperationalTaskRepository taskRepository)
 {
     private readonly CompactNotificationWriter inbox = new(db, clock);
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -98,6 +99,10 @@ public sealed class LocationAssetHandoverService(
                     ? sourceId : (Guid?)null;
                 var incident = Guid.TryParse(ReadString(item, "incidentId"), out var incidentId)
                     ? incidentId : (Guid?)null;
+                var priorTask = Guid.TryParse(ReadString(item, "priorStaffTaskId"), out var priorTaskId)
+                    ? priorTaskId : (Guid?)null;
+                var priorStaff = Guid.TryParse(ReadString(item, "priorStaffUserId"), out var priorStaffId)
+                    ? priorStaffId : (Guid?)null;
                 if (id == Guid.Empty || !ids.Add(id) || name.Length is < 1 or > 300 ||
                     quantity is < 0 or > 1000000 || !checkedItem || inherited && source is null)
                     throw OperationalTaskException.Conflict("location_inventory_checklist_incomplete");
@@ -106,7 +111,10 @@ public sealed class LocationAssetHandoverService(
                 var scope = !string.IsNullOrWhiteSpace(room) ? "Phòng " + room :
                     !string.IsNullOrWhiteSpace(common) ? common : "Khu vực chung";
                 result.Add(new(id, scope, name, quantity, inherited, source, incident,
-                    ReadString(item, "note")));
+                    ReadString(item, "note"), priorTask, priorStaff)
+                {
+                    Condition = ReadString(item, "condition") ?? "Unassessed"
+                });
             }
             return result;
         }
@@ -165,27 +173,37 @@ public sealed class LocationAssetHandoverService(
             throw new OperationalTaskException(403, "location_handover_permission_denied");
     }
 
-    private bool StaffAssigned(TaskState task, Guid staff)
+    private async Task<bool> StaffAssignedAsync(TaskState task, Guid staff, CancellationToken token)
     {
         if (task.StaffId != staff || task.AssignmentId is null) return false;
         using var doc = JsonDocument.Parse(task.AssignmentHistory);
         if (doc.RootElement.ValueKind != JsonValueKind.Array) return false;
-        return doc.RootElement.EnumerateArray().Any(assignment =>
+        var recordedAssignment = doc.RootElement.EnumerateArray().Any(assignment =>
             ReadString(assignment, "id") == task.AssignmentId.Value.ToString("D") &&
             ReadString(assignment, "staffUserId") == staff.ToString("D") &&
             DateOnly.TryParse(ReadString(assignment, "startDate"), out var start) &&
             DateOnly.TryParse(ReadString(assignment, "endDate"), out var end) &&
             start <= Today && Today <= end);
+        if (!recordedAssignment) return false;
+
+        // Use the same authoritative current-responsibility query as task detail and
+        // checklist access. Assignment history alone does not prove active employment.
+        var location = await taskRepository.LocationAsync(task.LocationId, token);
+        if (location is null || !location.IsActive) return false;
+        var responsible = await taskRepository.ResponsibilityAsync(task.LocationId, Today, token);
+        return responsible?.StaffUserId == staff && responsible.AssignmentId == task.AssignmentId;
     }
 
-    private async Task PermitReadAsync(TaskState task, ReportState? report, CancellationToken token)
+    private async Task PermitReadAsync(TaskState task, ReportState? report, CancellationToken token,
+        bool requireCurrentAssignment = false)
     {
         if (currentUser.IsInRole(Roles.Owner)) { await RequireRoleAsync(Roles.Owner, token); return; }
         await RequireRoleAsync(Roles.Staff, token);
         // A former Staff member may still access their own signed handover, not the
         // ongoing checklist or documents of the succeeding staff member.
-        if (!StaffAssigned(task, Actor) &&
-            !(report?.Manifest.StaffId == Actor && report.StaffSignature?.ActorId == Actor))
+        var currentlyAssigned = await StaffAssignedAsync(task, Actor, token);
+        var ownSignedHistory = report?.Manifest.StaffId == Actor && report.StaffSignature?.ActorId == Actor;
+        if (!currentlyAssigned && (requireCurrentAssignment || !ownSignedHistory))
             throw OperationalTaskException.Missing();
     }
 
@@ -326,6 +344,11 @@ public sealed class LocationAssetHandoverService(
 
         var authoritative = await LocationAssetInventoryTaskFactory.BuildConfirmedSnapshotAsync(
             db, workspace, task.LocationId, persisted.AssignmentId, persisted.EffectiveFrom, Now, token);
+        // The Location task keeps its physical checklist item IDs when responsibility
+        // changes. Rebind the freshly resolved Owner source to those stable IDs before
+        // comparing the baseline; assignment-scoped IDs here would reject every
+        // successor report even though the same physical assets remain attested.
+        authoritative = LocationAssetInventoryTaskFactory.PreserveExistingItemIds(authoritative, task.InventoryJson);
         if (authoritative.PendingOwnerRooms.Length > 0 || authoritative.PendingOwnerCommonAssets)
             throw OperationalTaskException.Conflict("location_asset_inventory_pending_owner_confirmation");
 
@@ -473,7 +496,8 @@ public sealed class LocationAssetHandoverService(
         var task = await LoadAsync(taskId, true, token);
         await RequireRoleAsync(Roles.Owner, token);
         if (task.Version != input.TaskVersion || task.Status != "4" ||
-            task.AssignmentId is null || task.StaffId is null || !StaffAssigned(task, task.StaffId.Value))
+            task.AssignmentId is null || task.StaffId is null ||
+            !await StaffAssignedAsync(task, task.StaffId.Value, token))
             throw OperationalTaskException.Conflict("location_handover_task_not_ready");
         await ValidateOwnerSourceAsync(task, token);
         var prior = Latest(task.LocationHistory, taskId);
@@ -542,7 +566,7 @@ public sealed class LocationAssetHandoverService(
         await RequireRoleAsync(Roles.Owner, token);
         if (task.Status != "4" || task.Version != input.TaskVersion ||
             task.AssignmentId is null || task.StaffId is null ||
-            !StaffAssigned(task, task.StaffId.Value))
+            !await StaffAssignedAsync(task, task.StaffId.Value, token))
             throw OperationalTaskException.Conflict("location_handover_task_not_reworkable");
         var report = Latest(task.LocationHistory, taskId);
         if (report?.StaffSignature is not null)
@@ -569,6 +593,7 @@ public sealed class LocationAssetHandoverService(
                 snapshot.Items[i] = item with
                 {
                     Checked = false,
+                    Condition = "Unassessed",
                     Inherited = false,
                     SourceHandoverContractId = null,
                     IncidentId = null,
@@ -630,7 +655,9 @@ public sealed class LocationAssetHandoverService(
         var state = Latest(task.LocationHistory, taskId) ?? throw OperationalTaskException.Missing();
         // Check disclosure before comparing a document hash or returning a version error:
         // unrelated Staff must never learn another Location's handover state.
-        await PermitReadAsync(task, state, token);
+        // Signed historical reports are readable by their former Staff signer, but
+        // the signing endpoint remains an action and always requires current responsibility.
+        await PermitReadAsync(task, state, token, requireCurrentAssignment: true);
         var report = state.Manifest;
         if (input.Revision != report.Revision ||
             !string.Equals(input.SnapshotSha256, report.SnapshotSha256, StringComparison.OrdinalIgnoreCase))
@@ -645,7 +672,7 @@ public sealed class LocationAssetHandoverService(
         }
         if (task.Status != "4" || task.Version != report.TaskVersion ||
             task.AssignmentId != report.AssignmentId || task.StaffId != report.StaffId ||
-            !StaffAssigned(task, report.StaffId))
+            !await StaffAssignedAsync(task, report.StaffId, token))
             throw OperationalTaskException.Conflict("location_handover_version_changed");
         if (state.OwnerSignature is null)
         {

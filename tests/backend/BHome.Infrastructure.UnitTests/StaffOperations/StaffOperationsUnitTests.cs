@@ -62,6 +62,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
     private ILocationAssignments Assignments => world.Get<ILocationAssignments>();
     private IOperationalTaskRepository TaskRepository => world.Get<IOperationalTaskRepository>();
     private IOperationsRepository OperationsRepository => world.Get<IOperationsRepository>();
+    private OperationsService Operations => world.Get<OperationsService>();
     // The real Owner property service with its real lifecycle checks (built by hand: the test host has no IHostEnvironment
     // for the unrelated contract-readiness dependency).
     private PropertyService Property => new(world.Get<IPropertyRepository>(), world.CurrentUser, world.Get<PermissionAccess>(),
@@ -254,7 +255,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
 
     // StaffChangeAsync has no signed-in user input; it is called through the Owner entry point
     // PropertyService.StaffChangePreviewAsync, which checks the signed-in user and delegates with the same locationId.
-    [Fact(DisplayName = "UTC04 - StaffChangeAsync: Owner xem truoc doi Staff BHOME SAMPLE 2 -> 2 task chua xong can chuyen, khong thay doi gi")]
+    [Fact(DisplayName = "UTC04 - StaffChangeAsync: Owner xem truoc doi Staff BHOME SAMPLE 2 -> ca 2 task nghiep vu va task kiem ke dang mo can chuyen, khong thay doi gi")]
     [Trait("Function", "StaffChangeAsync")]
     public async Task UTC04()
     {
@@ -264,8 +265,9 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
 
         var preview = await Property.StaffChangePreviewAsync(Sample2Id, default);
 
-        // The two unfinished tasks are listed; the Completed one is not.
-        Assert.Equal(2, preview.OpenResponsibilities.Sum(r => r.Count));
+        // The two unfinished AdHoc tasks and the Location-owned inventory task are listed;
+        // the Completed task is not.
+        Assert.Equal(3, preview.OpenResponsibilities.Sum(r => r.Count));
         Assert.Equal(Staff1Id, await ResponsibleAsync(Sample2Id));
         Assert.Equal(versionBefore, await LocationVersionAsync(Sample2Id));
         foreach (var id in new[] { corridor, pump, gateLock!.Value })
@@ -295,6 +297,8 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
     public async Task UTC06()
     {
         var (corridor, pump, gateLock) = await Sample2TasksOfStaff1Async(withCompleted: true);
+        var inventoryTask = await world.ReadAsync(db => db.Set<OperationalTask>().AsNoTracking()
+            .SingleAsync(task => task.LocationId == Sample2Id && task.Kind == OperationalTaskKind.LocationAssetHandover));
         await AddBinhLeAsync();
         world.SignInAsOwner();
 
@@ -307,6 +311,12 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         Assert.Equal(BinhLeId, (await StoredTaskAsync(corridor)).AssignedStaffUserId);
         Assert.Equal(BinhLeId, (await StoredTaskAsync(pump)).AssignedStaffUserId);
         Assert.Equal(Staff1Id, (await StoredTaskAsync(gateLock!.Value)).AssignedStaffUserId);
+        var transferredInventory = await StoredTaskAsync(inventoryTask.Id);
+        Assert.Equal(BinhLeId, transferredInventory.AssignedStaffUserId);
+        Assert.Equal(result.Assignment!.Id, transferredInventory.AssignmentId);
+        Assert.Equal(MeterTaskStatus.Assigned, transferredInventory.Status);
+        Assert.Contains((await TaskRepository.HistoryAsync(inventoryTask.Id, 1, 20, default)).Items,
+            h => h.Action == "responsibility_changed" && h.ResponsibleStaffUserId == BinhLeId);
         foreach (var id in new[] { corridor, pump })
             Assert.Contains((await TaskRepository.HistoryAsync(id, 1, 20, default)).Items, h => h.Action == "responsibility_changed" && h.ResponsibleStaffUserId == BinhLeId);
         Assert.True(await LocationNoticeCountAsync(Staff1Id, Sample2Id, "STAFF_ASSIGNMENT_CHANGED") >= 1);
@@ -340,7 +350,9 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
     public async Task UTC08()
     {
         await world.AddStaffSampleAsync();
-        await AssignAsync(Sample1Id, StaffSampleId);
+        var assignment = await AssignAsync(Sample1Id, StaffSampleId);
+        var inventoryTask = await world.ReadAsync(db => db.Set<OperationalTask>().AsNoTracking()
+            .SingleAsync(task => task.LocationId == Sample1Id && task.Kind == OperationalTaskKind.LocationAssetHandover));
         world.SignInAsOwner();
         var auditBefore = await LocationAuditCountAsync(Sample1Id, OwnerId);
 
@@ -350,6 +362,10 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         Assert.Equal(ChangeAssignmentStatus.Changed, result.Status);
         Assert.Null(await ResponsibleAsync(Sample1Id));
         Assert.False(await world.Get<IStaffLocationAccess>().IsAssignedAsync(StaffSampleId, Sample1Id, default));
+        var retainedInventory = await StoredTaskAsync(inventoryTask.Id);
+        Assert.Equal(MeterTaskStatus.Assigned, retainedInventory.Status);
+        Assert.Equal(assignment, retainedInventory.AssignmentId);
+        Assert.Equal(StaffSampleId, retainedInventory.AssignedStaffUserId);
         Assert.True(await LocationAuditCountAsync(Sample1Id, OwnerId) > auditBefore);
     }
 
@@ -616,7 +632,9 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
 
         var page = await TaskRepository.ListAsync(new TaskQuery { Page = 1, PageSize = 20 }, StaffSampleId, Nov12, Today, default);
 
-        Assert.Equal(["Clean floor 2 corridor", "Fix water pump"], page.Items.Select(t => t.Title).Order().ToArray());
+        Assert.Equal(["Clean floor 2 corridor", "Fix water pump", "Kiểm tra tài sản toàn cơ sở"],
+            page.Items.Select(t => t.Title).Order().ToArray());
+        Assert.Single(page.Items, task => task.Kind == "LocationAssetHandover");
     }
 
     [Fact(DisplayName = "UTC24 - ListAsync: task In Progress han 2026-11-10 09:00, bay gio 09:01 -> Overdue, nguoi lam va han khong doi")]
@@ -629,7 +647,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         var id = await AddTaskAsync(Sample1Id, "Replace corridor light bulbs", MeterTaskStatus.InProgress, StaffSampleId, assignment, target);
         var historyBefore = (await TaskRepository.HistoryAsync(id, 1, 20, default)).TotalCount;
 
-        var page = await TaskRepository.ListAsync(new TaskQuery { Page = 1, PageSize = 20 }, StaffSampleId,
+        var page = await TaskRepository.ListAsync(new TaskQuery { Page = 1, PageSize = 20, Status = MeterTaskStatus.InProgress }, StaffSampleId,
             new DateOnly(2026, 11, 10), new DateTimeOffset(2026, 11, 10, 9, 1, 0, Vn), default);
 
         var item = Assert.Single(page.Items);
@@ -730,7 +748,7 @@ public sealed class StaffOperationsUnitTests(PostgresContainerFixture postgres) 
         await AssignAsync(Sample1Id, StaffSampleId);
         SignInAsStaffSample();
 
-        await AssertForbidden(() => OperationsRepository.SaveTemplateAsync(StaffSampleId, null, WeeklyFireCheck(Sample1Id), world.Clock.GetUtcNow(), default));
+        await AssertForbidden(() => Operations.SaveTemplateAsync(null, WeeklyFireCheck(Sample1Id), default));
 
         Assert.Empty(await OperationsRepository.TemplatesAsync(Sample1Id, default));
     }

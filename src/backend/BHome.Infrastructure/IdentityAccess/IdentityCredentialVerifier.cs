@@ -11,6 +11,7 @@ internal sealed class IdentityCredentialVerifier(UserManager<ApplicationUser> us
     public async Task<VerifiedIdentity?> VerifyAsync(string identifier, string password, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(identifier) || string.IsNullOrEmpty(password)) return null;
         ApplicationUser[] matches;
         if (LoginIdentifier.IsEmail(identifier))
         {

@@ -38,6 +38,31 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
             _ => stored.GetRawText() == validated.GetRawText()
         };
     }
+    private async Task EnsureNoOverlappingFeePeriodAsync(string resource, Guid? exceptFamilyId, JsonElement data, CancellationToken t)
+    {
+        if (resource != "fee-templates") return;
+        var candidate = SharedDataValidator.Read<SharedFeeData>(data);
+        var candidateEnd = candidate.EffectiveTo ?? DateOnly.MaxValue;
+        for (var page = 1; ; page++)
+        {
+            var existingPage = await store.ListAsync(resource, "", "", page, 100, t);
+            foreach (var document in existingPage.Items)
+            {
+                // Drafts are not selectable and must not reserve an effective period.
+                // Older editions in the same family are revisions of this policy, not
+                // competing policies; only another Published family can overlap it.
+                if (document.Status != "Published" || document.FamilyId == exceptFamilyId) continue;
+                var existing = SharedDataValidator.Read<SharedFeeData>(document.Data);
+                var samePolicy = existing.Category == candidate.Category && existing.Method == candidate.Method &&
+                    string.Equals(existing.ChargeCode, candidate.ChargeCode, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(existing.Scope, candidate.Scope, StringComparison.Ordinal);
+                if (samePolicy && candidate.EffectiveFrom <= (existing.EffectiveTo ?? DateOnly.MaxValue) &&
+                    existing.EffectiveFrom <= candidateEnd)
+                    throw new PropertyException(409, "overlapping_shared_fee_period");
+            }
+            if ((long)page * existingPage.PageSize >= existingPage.Total) break;
+        }
+    }
     public async Task<SharedDocument> GetAsync(string resource, Guid id, CancellationToken t)
     { Resource(resource); return await store.GetAsync(id, resource, t) ?? throw new PropertyException(404, "shared_document_not_found"); }
     public Task<SharedPage> ListAsync(string resource, string search, string status, int page, int pageSize, CancellationToken t, bool latestOnly = false)
@@ -60,7 +85,10 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
             // to be repaired without making an already archived duplicate active again.
             var newName = before is null || !string.Equals(Name(before.Name), name, StringComparison.OrdinalIgnoreCase);
             if (await store.NameExistsAsync(resource, name, family, t, includeArchived: newName)) throw new PropertyException(409, "duplicate_shared_name");
-            var data = await validator.ValidateAsync(resource, input.Data, t); var now = clock.GetUtcNow();
+            var data = await validator.ValidateAsync(resource, input.Data, t);
+            if (input.PublishImmediately)
+                await EnsureNoOverlappingFeePeriodAsync(resource, family, data, t);
+            var now = clock.GetUtcNow();
             if (input.PublishImmediately)
             {
                 IReadOnlyList<SharedDocument> versions = before is null ? [] : await store.FamilyAsync(family, resource, t);
@@ -111,7 +139,8 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
             if (!archive)
             {
                 if (await store.NameExistsAsync(resource, before.Name, before.FamilyId, t, includeArchived: false)) throw new PropertyException(409, "duplicate_shared_name");
-                _ = await validator.ValidateAsync(resource, before.Data, t);
+                var validated = await validator.ValidateAsync(resource, before.Data, t);
+                await EnsureNoOverlappingFeePeriodAsync(resource, before.FamilyId, validated, t);
             }
             var document = before with { Status = archive ? "Archived" : "Published", Version = before.Version + 1, UpdatedBy = actor, UpdatedAt = clock.GetUtcNow() };
             await store.SaveAsync(document, before.Version, t); return document;
@@ -131,7 +160,8 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
                     throw new PropertyException(409, "stale_or_non_archived_shared_version");
                 if (await store.NameExistsAsync(resource, before.Name, before.FamilyId, t, includeArchived: false))
                     throw new PropertyException(409, "duplicate_shared_name");
-                _ = await validator.ValidateAsync(resource, before.Data, t);
+                var validated = await validator.ValidateAsync(resource, before.Data, t);
+                await EnsureNoOverlappingFeePeriodAsync(resource, before.FamilyId, validated, t);
                 var restored = before with { Status = "Published", Version = before.Version + 1, UpdatedBy = actor, UpdatedAt = clock.GetUtcNow() };
                 await store.SaveAsync(restored, before.Version, t); return restored;
             }
@@ -166,6 +196,8 @@ public sealed class SharedConfigurationService(ISharedConfigurationStore store, 
                 UpdatedBy = actor,
                 UpdatedAt = now
             };
+            if (document.Status == "Published")
+                await EnsureNoOverlappingFeePeriodAsync(resource, document.FamilyId, document.Data, t);
             await store.SaveAsync(document, 0, t); return document;
         }, t);
     }
