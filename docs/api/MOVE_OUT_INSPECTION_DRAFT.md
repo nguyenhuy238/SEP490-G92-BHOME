@@ -97,7 +97,7 @@ electricity/water selection. A response exposes `version`, `contractId`,
 The Backend validates an asset ID against the current Room inventory/baseline,
 physical observation IDs against its asset group, checklist code against the
 seven approved Room checks, and every attachment ID against a private
-ContractInspectionEvidence uploaded by the *same Staff* for the *same Contract*
+ContractInspectionEvidence uploaded by the _same Staff_ for the _same Contract_
 and still unlinked to a final report. It also checks the inventory token when
 asset groups are edited and verifies submitted final-reading IDs. Stale
 inventory, another Staff's evidence, foreign assets, duplicate evidence across

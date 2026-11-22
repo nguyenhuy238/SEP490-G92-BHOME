@@ -227,15 +227,15 @@ export function ContractLifecyclePanel({
         </Box>
         {moveOut.status === 'Completed' && (
           <Alert severity="info">
-            Đã hoàn tất kiểm tra và trả phòng. Nợ, cọc và giao dịch hoàn tiền vẫn được đối chiếu riêng;
-            trạng thái này không xác nhận đã thanh toán.
+            Đã hoàn tất kiểm tra và trả phòng. Nợ, cọc và giao dịch hoàn tiền vẫn được đối chiếu
+            riêng; trạng thái này không xác nhận đã thanh toán.
           </Alert>
         )}
         {moveOut.status === 'Approved' && (
           <Alert severity="info">
             Nhiệm vụ kiểm tra trả phòng đã mở cho Staff thuộc cơ sở. Có thể đặt lịch và phân công
-            một người phụ trách bên dưới nếu cần; Staff chỉ gửi kết quả kiểm tra khi đến ngày trả phòng và
-            có đủ chỉ số điện nước chốt.
+            một người phụ trách bên dưới nếu cần; Staff chỉ gửi kết quả kiểm tra khi đến ngày trả
+            phòng và có đủ chỉ số điện nước chốt.
           </Alert>
         )}
         {moveOut.pendingReason && (
@@ -326,7 +326,8 @@ export function ContractLifecyclePanel({
         </Typography>
         {!q.loading && !q.inspections.length && !q.sectionErrors.inspections && (
           <Typography color="text.secondary">
-            Chưa có kết quả kiểm tra trả phòng. Staff thực hiện và lưu từng mục trong nhiệm vụ được giao; không cần lập biên bản hay ký.
+            Chưa có kết quả kiểm tra trả phòng. Staff thực hiện và lưu từng mục trong nhiệm vụ được
+            giao; không cần lập biên bản hay ký.
           </Typography>
         )}
         {!q.inspections.length &&
@@ -341,8 +342,8 @@ export function ContractLifecyclePanel({
           ))}
         {q.preparation && !q.preparation.baseline && (
           <Alert severity="info">
-            Không có dữ liệu nhận phòng để đối chiếu. Staff vẫn kiểm tra và ghi nhận hiện trạng,
-            số lượng thực tế; không tự suy đoán số lượng/tình trạng ban đầu hoặc khoản bồi thường.
+            Không có dữ liệu nhận phòng để đối chiếu. Staff vẫn kiểm tra và ghi nhận hiện trạng, số
+            lượng thực tế; không tự suy đoán số lượng/tình trạng ban đầu hoặc khoản bồi thường.
           </Alert>
         )}
         {q.inspections.map((i) => (
@@ -440,13 +441,13 @@ export function ContractLifecyclePanel({
                   </TableRow>
                   <TableRow>
                     <TableCell>Chìa khóa / quyền truy cập</TableCell>
-                      <TableCell>
-                        {i.baseline?.accessItems?.length
-                          ? i.baseline.accessItems
-                              .map((item) => `${item.type}: ${item.quantity}`)
-                              .join(' · ')
-                          : (i.baseline?.keysAndAccess ?? 'Chưa có dữ liệu đối chiếu')}
-                      </TableCell>
+                    <TableCell>
+                      {i.baseline?.accessItems?.length
+                        ? i.baseline.accessItems
+                            .map((item) => `${item.type}: ${item.quantity}`)
+                            .join(' · ')
+                        : (i.baseline?.keysAndAccess ?? 'Chưa có dữ liệu đối chiếu')}
+                    </TableCell>
                     <TableCell>
                       {i.observed.accessItems?.length
                         ? i.observed.accessItems
@@ -479,10 +480,19 @@ export function ContractLifecyclePanel({
                                   (item) => item.id === physical.id,
                                 );
                                 return (
-                                  <Typography key={physical.id} variant="caption" color="text.secondary">
-                                    {'Món ' + (index + 1) + ': ' +
-                                      (original?.handedOverQuantity ?? original?.quantity ?? 'Chưa rõ') +
-                                      ' · ' + (original?.condition || 'Chưa rõ')}
+                                  <Typography
+                                    key={physical.id}
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    {'Món ' +
+                                      (index + 1) +
+                                      ': ' +
+                                      (original?.handedOverQuantity ??
+                                        original?.quantity ??
+                                        'Chưa rõ') +
+                                      ' · ' +
+                                      (original?.condition || 'Chưa rõ')}
                                   </Typography>
                                 );
                               })}
@@ -505,12 +515,18 @@ export function ContractLifecyclePanel({
                           </Typography>
                           {(a.physicalObservations ?? []).map((physical, index) => {
                             const proof = i.observed.physicalItemEvidence?.find(
-                              (item) => item.assetId === a.id && item.physicalAssetId === physical.id,
+                              (item) =>
+                                item.assetId === a.id && item.physicalAssetId === physical.id,
                             );
                             return (
                               <Stack key={physical.id} spacing={0.5} sx={{ pt: 0.5 }}>
                                 <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                  {'Món ' + (index + 1) + ': ' + physical.quantity + ' · ' + physical.condition}
+                                  {'Món ' +
+                                    (index + 1) +
+                                    ': ' +
+                                    physical.quantity +
+                                    ' · ' +
+                                    physical.condition}
                                 </Typography>
                                 {!!proof?.notes?.trim() && (
                                   <Typography variant="caption" sx={{ whiteSpace: 'pre-wrap' }}>
@@ -521,8 +537,12 @@ export function ContractLifecyclePanel({
                                   <PrivateEvidenceViewer
                                     key={fileId}
                                     label={a.name + ' · món ' + (index + 1) + ' · ảnh ' + (n + 1)}
-                                    filename={'tai-san-' + a.id + '-' + (index + 1) + '-' + (n + 1) + '.jpg'}
-                                    fetchBlob={(signal) => api.evidence(contract.id, fileId, signal)}
+                                    filename={
+                                      'tai-san-' + a.id + '-' + (index + 1) + '-' + (n + 1) + '.jpg'
+                                    }
+                                    fetchBlob={(signal) =>
+                                      api.evidence(contract.id, fileId, signal)
+                                    }
                                     errorMessage={contractError}
                                   />
                                 ))}
@@ -801,8 +821,8 @@ export function ContractLifecyclePanel({
             {inspection?.ownerDecision === 'Confirmed' && (
               <>
                 <Alert severity="info">
-                  Hoàn tất trả phòng độc lập với quyết toán. Phòng có Tenant khác sẽ tiếp tục
-                  Đang thuê.
+                  Hoàn tất trả phòng độc lập với quyết toán. Phòng có Tenant khác sẽ tiếp tục Đang
+                  thuê.
                 </Alert>
                 <TextField
                   select

@@ -36,7 +36,7 @@ Các lỗi có `code` theo conventions hiện có. Không có URL storage công 
 | GET `asset-changes/{eventId}/evidence/{evidenceId}`                      | —           | Bằng chứng event chia sẻ; không mở quyền sang hợp đồng nguồn của Tenant khác     |
 | GET `move-out/inspection-preparation`                                    | Owner/Staff | Baseline, nhóm đối chiếu, inventory token, final readings, cờ phòng chung/legacy |
 | POST `move-out/legacy-baseline-exception`                                | Owner       | Ghi căn cứ cho baseline thiếu hoặc không có số lượng                             |
-| POST `move-out/inspection`                                               | Staff       | Kết quả kiểm tra thực tế theo scope/lịch hiện có; không tạo PDF/chữ ký          |
+| POST `move-out/inspection`                                               | Staff       | Kết quả kiểm tra thực tế theo scope/lịch hiện có; không tạo PDF/chữ ký           |
 | GET `move-out/inspections`                                               | —           | Các phiên bản, snapshot và phản hồi/quyết định                                   |
 | POST `move-out/tenant-feedback`                                          | Tenant      | Xác nhận/tranh chấp phiên bản kiểm tra                                           |
 | POST `move-out/inspection-review`                                        | Owner       | Chấp nhận hoặc reinspection; chỉ bước chấp nhận mới cập nhật Asset               |

@@ -229,8 +229,15 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
     {
         var json = JsonSerializer.Serialize(new { schemaVersion = 1, recordType = kind, recordKey = id, state = record }, SettlementChargeRecords.Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET history=history||jsonb_build_array({json}::jsonb) WHERE id={contractId}", token);
-        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = actor, TargetId = id, TargetType = kind,
-            Event = auditEvent ?? kind + "Approved", Succeeded = true, OccurredAt = at });
+        db.SecurityAudit.Add(new SecurityAuditRecord
+        {
+            UserId = actor,
+            TargetId = id,
+            TargetType = kind,
+            Event = auditEvent ?? kind + "Approved",
+            Succeeded = true,
+            OccurredAt = at
+        });
     }
     public async Task SaveChargeAsync(SettlementReceivable charge, CancellationToken token)
     {

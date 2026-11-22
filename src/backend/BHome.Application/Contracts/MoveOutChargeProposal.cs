@@ -74,7 +74,10 @@ public sealed partial class SettlementReceivablesService
         else if (latest is not null && !user.IsInRole(Roles.Owner))
             latest = latest with
             {
-                OwnerUserId = Guid.Empty, RecipientUserIds = [], OperationKey = Guid.Empty, Fingerprint = "",
+                OwnerUserId = Guid.Empty,
+                RecipientUserIds = [],
+                OperationKey = Guid.Empty,
+                Fingerprint = "",
                 TenantFeedback = feedback is null ? null : feedback with
                 { TenantUserId = Guid.Empty, OperationKey = Guid.Empty, Fingerprint = "" }
             };

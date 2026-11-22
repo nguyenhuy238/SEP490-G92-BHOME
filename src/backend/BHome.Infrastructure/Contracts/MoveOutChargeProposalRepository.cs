@@ -93,10 +93,17 @@ internal sealed partial class SettlementReceivablesRepository
         var hash = SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
         {
             context.View.Reference,
-            inspection?.Id, inspection?.Version, inspection?.OwnerDecision, inspection?.NoAdditionalCharges,
-            move?.Status, move?.InspectedAt, move?.InspectedByUserId,
-            OpeningHandoverVersion = openingHandover?.Version, OpeningHandoverSnapshot = openingHandover?.Snapshot,
-            inspection?.BaselineSnapshot, inspection?.ObservedSnapshot
+            inspection?.Id,
+            inspection?.Version,
+            inspection?.OwnerDecision,
+            inspection?.NoAdditionalCharges,
+            move?.Status,
+            move?.InspectedAt,
+            move?.InspectedByUserId,
+            OpeningHandoverVersion = openingHandover?.Version,
+            OpeningHandoverSnapshot = openingHandover?.Snapshot,
+            inspection?.BaselineSnapshot,
+            inspection?.ObservedSnapshot
         }));
         return new(context, items.ToArray(), "PROPOSAL-" + Convert.ToHexString(hash),
             staffInspectionReady, openingPhotos is null ? null : openingHandover!.ContractId);

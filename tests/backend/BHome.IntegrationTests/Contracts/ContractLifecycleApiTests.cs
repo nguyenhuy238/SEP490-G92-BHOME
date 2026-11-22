@@ -1078,7 +1078,8 @@ public sealed partial class ContractLifecycleApiTests(ContractFixture fixture) :
         var revisedProposal = proposed with
         {
             Items = [new MoveOutProposedCharge("RoomCheck", null, "cleanliness", null, 90000,
-                "Synthetic revised cleaning cost")], Note = "Synthetic revised proposal"
+                "Synthetic revised cleaning cost")],
+            Note = "Synthetic revised proposal"
         };
         var revision = await Success<MoveOutChargeProposal>(await Post(w.Owner, proposalPath, revisedProposal));
         Assert.NotEqual(sent.Id, revision.Id);

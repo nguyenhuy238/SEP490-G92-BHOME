@@ -38,8 +38,13 @@ public sealed class HandoverBaselineTests
             HandedOverQuantity: 2, ObservedQuantity: 2, Checked: true);
         var observed = baseline with
         {
-            ObservedCondition = "Có vấn đề", HandedOverQuantity = null, ObservedQuantity = 2,
-            GoodQuantity = null, WornQuantity = null, DamagedQuantity = null, MissingQuantity = 0
+            ObservedCondition = "Có vấn đề",
+            HandedOverQuantity = null,
+            ObservedQuantity = 2,
+            GoodQuantity = null,
+            WornQuantity = null,
+            DamagedQuantity = null,
+            MissingQuantity = 0
         };
         Assert.True(HandoverChecklist.NewDamageAgainstBaseline(observed, baseline));
         Assert.False(HandoverChecklist.NewDamageAgainstBaseline(observed, null));
@@ -56,8 +61,13 @@ public sealed class HandoverBaselineTests
         var baseline = new HandoverAsset(Group, "Synthetic chairs", "Good", "Good",
             HandedOverQuantity: 2, ObservedQuantity: 2, Checked: true,
             PhysicalAssets: [new(physicalId, 1, 2, "Good", "Active")]);
-        var observed = baseline with { PhysicalObservations = [new(physicalId, 2, "Có vấn đề")],
-            HandedOverQuantity = null, DamagedQuantity = null, GoodQuantity = null };
+        var observed = baseline with
+        {
+            PhysicalObservations = [new(physicalId, 2, "Có vấn đề")],
+            HandedOverQuantity = null,
+            DamagedQuantity = null,
+            GoodQuantity = null
+        };
         Assert.True(HandoverChecklist.NewDamageAgainstBaseline(observed, baseline));
         Assert.False(HandoverChecklist.NewDamageAgainstBaseline(observed,
             baseline with { PhysicalAssets = [new(physicalId, 1, 2, "Damaged", "Active")] }));

@@ -85,13 +85,20 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         db.Add(task);
         db.Add(new OperationalTaskHistory
         {
-            TaskId = id, ActorId = actor, Action = "MoveOutCreated", OccurredAt = now,
-            TaskVersion = task.Version, Note = "Chờ nhân viên cơ sở bắt đầu kiểm tra."
+            TaskId = id,
+            ActorId = actor,
+            Action = "MoveOutCreated",
+            OccurredAt = now,
+            TaskVersion = task.Version,
+            Note = "Chờ nhân viên cơ sở bắt đầu kiểm tra."
         });
         foreach (var owner in await tasks.OwnersAsync(t))
             AddNotice(Key($"move-out-notice:{id:N}:{owner:N}"), new OperationalTaskNotification
             {
-                TaskId = id, RecipientUserId = owner, EventId = id, Event = "MoveOutAssigned"
+                TaskId = id,
+                RecipientUserId = owner,
+                EventId = id,
+                Event = "MoveOutAssigned"
             });
     }
     private async Task<OperationalTask> MoveOutTaskAsync(Guid contractId, CancellationToken t) =>
@@ -123,8 +130,11 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         task.Result = "Staff đã gửi kết quả kiểm tra trả phòng cho Owner xem xét.";
         db.Add(new OperationalTaskHistory
         {
-            TaskId = task.Id, ActorId = staffId, Action = "MoveOutSubmitted",
-            OccurredAt = now, TaskVersion = task.Version
+            TaskId = task.Id,
+            ActorId = staffId,
+            Action = "MoveOutSubmitted",
+            OccurredAt = now,
+            TaskVersion = task.Version
         });
     }
     public async Task ReviewMoveOutTaskAsync(Guid contractId, Guid ownerId, bool confirmed, DateTimeOffset now, CancellationToken t)
@@ -137,9 +147,11 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
         task.Result = confirmed ? "Owner đã xác nhận kết quả kiểm tra trả phòng." : "Owner yêu cầu Staff kiểm tra lại.";
         db.Add(new OperationalTaskHistory
         {
-            TaskId = task.Id, ActorId = ownerId,
+            TaskId = task.Id,
+            ActorId = ownerId,
             Action = confirmed ? "MoveOutVerified" : "MoveOutReinspection",
-            OccurredAt = now, TaskVersion = task.Version
+            OccurredAt = now,
+            TaskVersion = task.Version
         });
     }
     public async Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId,

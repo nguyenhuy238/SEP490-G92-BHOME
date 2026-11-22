@@ -52,8 +52,7 @@ function assetHasDamage(
   return (
     !!asset.checked &&
     prior?.handedOverQuantity != null &&
-    ((asset.missingQuantity != null &&
-      asset.missingQuantity > (prior.missingQuantity ?? 0)) ||
+    ((asset.missingQuantity != null && asset.missingQuantity > (prior.missingQuantity ?? 0)) ||
       (asset.damagedQuantity != null &&
         prior.damagedQuantity != null &&
         asset.damagedQuantity > prior.damagedQuantity) ||

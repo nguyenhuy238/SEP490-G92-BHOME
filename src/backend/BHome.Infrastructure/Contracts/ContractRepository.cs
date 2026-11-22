@@ -97,8 +97,12 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ILogger<Con
                     join contract in contracts on move.ContractId equals contract.Id
                     select new
                     {
-                        ContractId = contract.Id, contract.Room.RoomNumber, LocationId = contract.Room.LocationId,
-                        LocationName = contract.Room.Location.Name, move.Status, move.ProposedDate,
+                        ContractId = contract.Id,
+                        contract.Room.RoomNumber,
+                        LocationId = contract.Room.LocationId,
+                        LocationName = contract.Room.Location.Name,
+                        move.Status,
+                        move.ProposedDate,
                         InspectedAt = db.Set<ContractFinalInspection>().Where(i => i.ContractId == contract.Id)
                             .OrderByDescending(i => i.Version).Select(i => (DateTimeOffset?)i.InspectedAt).FirstOrDefault(),
                         OwnerDecision = db.Set<ContractFinalInspection>().Where(i => i.ContractId == contract.Id)
