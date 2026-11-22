@@ -96,11 +96,11 @@ internal sealed partial class CompactNotificationEvents(Compact24DbContext db, C
                             eligible.Contains(a.StaffUserId))
                         .Select(a => a.StaffUserId).Distinct().ToArrayAsync(t);
                     foreach (var owner in await Owners(t))
-                        count += await sql.Emit(owner, "Owner", locationId, $"contract-move-out-requested:{e.Target:N}",
+                        count += await sql.Emit(owner, "Owner", locationId, $"contract-move-out-requested:{e.Target:N}:{e.Id:N}",
                             "CONTRACT_MOVE_OUT_REQUESTED", "Contract", "Có yêu cầu kết thúc hợp đồng",
                             "Mở hợp đồng để xem xét yêu cầu kết thúc do khách thuê gửi.", "Contract", e.Target, t);
                     foreach (var assignee in staff)
-                        count += await sql.Emit(assignee, "Staff", locationId, $"contract-move-out-requested:{e.Target:N}",
+                        count += await sql.Emit(assignee, "Staff", locationId, $"contract-move-out-requested:{e.Target:N}:{e.Id:N}",
                             "CONTRACT_MOVE_OUT_REQUESTED", "Contract", "Có yêu cầu kết thúc hợp đồng",
                             "Khách thuê đã gửi yêu cầu kết thúc hợp đồng. Mở hợp đồng để theo dõi trạng thái.", "Contract", e.Target, t);
                 }

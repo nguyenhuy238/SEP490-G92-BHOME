@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using BHome.Application.IdentityAccess;
 using BHome.Application.Locations;
@@ -25,8 +26,23 @@ namespace BHome.IntegrationTests.Compact24;
 public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixture) : IClassFixture<Compact24Fixture>
 {
     private const string Password = "Synthetic!LocationAssets-493";
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static DateOnly Today => DateOnly.FromDateTime(
         TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, "Asia/Ho_Chi_Minh").DateTime);
+
+    private static Guid SetupKey(string value) =>
+        new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
+
+    private static async Task SaveRoomTemplateAsync(ISetupWorkspaceStore store, Guid locationId,
+        Guid roomId, Guid ownerId, Guid templateId, AssetTemplateItem[] items)
+    {
+        await store.SaveAsync(templateId, locationId, "AssetTemplate", "Published",
+            new AssetTemplateWrite(locationId, "Synthetic room asset template", items,
+                Scoped: true, ScopeRoomId: roomId), 0, ownerId, default);
+        await store.SaveAsync(SetupKey($"asset-template-assignment:{roomId}"), locationId,
+            "AssetTemplateAssignment", "Assigned", new AssetTemplateAssignment(templateId),
+            0, ownerId, default);
+    }
 
     private async Task<ApplicationUser> User(string role)
     {
@@ -233,6 +249,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
                 new AssetTemplateItem(Guid.NewGuid(), "Missing synthetic desk", "Furniture", "BulkQuantity", 1)
             };
             var templateId = Guid.NewGuid();
+            await SaveRoomTemplateAsync(store, location, roomId, owner.Id, templateId, roomExpected);
             var desiredDocument = await store.SaveAsync(Guid.NewGuid(), location, "DesiredAssets", "PendingVerification",
                 new DesiredAssets(templateId, 1, roomId, roomExpected, "PendingVerification"), 0, owner.Id, default);
             await store.SaveAsync(Guid.NewGuid(), location, "AssetVerification", "Verified",
@@ -451,6 +468,7 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             await db.SaveChangesAsync();
             var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
             var templateId = Guid.NewGuid();
+            await SaveRoomTemplateAsync(store, location, room.Id, owner.Id, templateId, expected);
             var desired = await store.SaveAsync(Guid.NewGuid(), location, "DesiredAssets", "PendingVerification",
                 new DesiredAssets(templateId, 1, room.Id, expected, "PendingVerification"), 0, owner.Id, default);
             for (var i = 0; i < expected.Length; i++)
@@ -517,31 +535,43 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
                     "Synthetic handover transfer A to B", default);
             Assert.Equal(ChangeAssignmentStatus.Changed, change.Status);
             successorAssignment = change.Assignment!.Id;
+            var transferred = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(task => task.Id == oldTaskId);
+            var transferredSnapshot = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(transferred.LocationAssetInventoryJson, Json)!;
+            Assert.Equal(successorAssignment, transferred.AssignmentId);
+            Assert.Equal(successorAssignment, transferredSnapshot.AssignmentId);
+            Assert.NotNull(transferredSnapshot.Items);
+            Assert.Equal(transferredSnapshot.Items.Length, transferredSnapshot.Items.Select(item => item.Id).Distinct().Count());
         }
         var successorTaskId = LocationAssetInventoryTaskFactory.TaskId(successorAssignment);
-        var successorRoute = $"/api/v1/operational-tasks/{successorTaskId}";
-        var oldInventory = (await ownerClient.GetFromJsonAsync<LocationAssetInventoryView>(
-            oldRoute + "/location-asset-inventory"))!;
-        Assert.Equal("Cancelled", oldInventory.Status);
+        // The task is Location-owned: a replacement Staff continues the same task ID.
+        var successorRoute = oldRoute;
+        var ownerInventoryResponse = await ownerClient.GetAsync(oldRoute + "/location-asset-inventory");
+        var ownerInventoryBody = await ownerInventoryResponse.Content.ReadAsStringAsync();
+        Assert.True(ownerInventoryResponse.IsSuccessStatusCode,
+            $"Owner inventory read failed: {(int)ownerInventoryResponse.StatusCode} {ownerInventoryBody}");
+        var oldInventory = JsonSerializer.Deserialize<LocationAssetInventoryView>(ownerInventoryBody, Json)!;
+        Assert.Equal("InProgress", oldInventory.Status);
         Assert.Equal(25, oldInventory.CheckedCount);
         Assert.All(oldInventory.Items.Take(25), item => Assert.True(item.Checked));
         Assert.Equal(HttpStatusCode.NotFound, (await firstClient.GetAsync(oldRoute)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await firstClient.GetAsync(oldRoute + "/history")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await successorClient.GetAsync(oldRoute + "/history")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await Action(successorClient, oldRoute + "/start",
-            new { version = oldInventory.Version })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await successorClient.GetAsync(successorRoute)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await successorClient.GetAsync(successorRoute + "/history")).StatusCode);
+        var successorTask = (await successorClient.GetFromJsonAsync<TaskView>(successorRoute))!;
+        Assert.Equal(successor.Id, successorTask.CurrentResponsibleStaffUserId);
+        Assert.Equal(successor.Id, successorTask.RecordedStaffUserId);
+        Assert.Equal(HttpStatusCode.NotFound, (await Action(firstClient, oldRoute + "/progress",
+            new { version = oldInventory.Version, note = "Staff cũ không còn quyền tiếp tục." })).StatusCode);
         using (var attempt = new HttpRequestMessage(HttpMethod.Put,
             oldRoute + "/location-asset-inventory/items/" + oldInventory.Items[0].Id)
         { Content = JsonContent.Create(new LocationAssetInventoryItemWrite(oldInventory.Version, false)) })
         {
             attempt.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
-            Assert.Equal(HttpStatusCode.NotFound, (await successorClient.SendAsync(attempt)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await firstClient.SendAsync(attempt)).StatusCode);
         }
-        var history = (await ownerClient.GetFromJsonAsync<TaskPage<TaskHistoryView>>(oldRoute + "/history"))!;
-        Assert.Single(history.Items, h => h.Action == "responsibility_superseded");
         var fresh = (await successorClient.GetFromJsonAsync<LocationAssetInventoryView>(
             successorRoute + "/location-asset-inventory"))!;
-        Assert.Equal("Assigned", fresh.Status);
+        Assert.Equal("InProgress", fresh.Status);
         Assert.Equal(42, fresh.TotalCount);
         Assert.Equal(25, fresh.CheckedCount);
         Assert.Equal(17, fresh.TotalCount - fresh.CheckedCount);
@@ -552,15 +582,21 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             Assert.True(i.Checked);
             Assert.Equal(first.Id, i.PriorStaffUserId);
         });
+        var continued = await Check(successorClient, successorRoute, fresh.Items.First(item => !item.Checked).Id,
+            fresh.Version);
+        Assert.Equal(26, continued.CheckedCount);
         await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
             Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(h =>
-                h.TaskId == oldTaskId && h.Action == "responsibility_superseded"));
-            Assert.Equal(1, await db.Set<OperationalTaskHistory>().CountAsync(h =>
-                h.TaskId == successorTaskId && h.Action == "location_asset_inventory_progress_inherited"));
-            Assert.Empty(await db.Set<OperationalTask>().Where(t => t.LocationId == location &&
-                t.Kind == OperationalTaskKind.LocationAssetHandover && t.Status == MeterTaskStatus.InProgress).ToArrayAsync());
+                h.TaskId == oldTaskId && h.Action == "responsibility_changed"));
+            Assert.Equal(25, await db.Set<OperationalTaskHistory>().CountAsync(h =>
+                h.TaskId == oldTaskId && h.Action == "location_asset_inventory_item_checked" && h.ActorId == first.Id));
+            Assert.Equal(1, await db.Set<OperationalTask>().CountAsync(t =>
+                t.LocationId == location && t.Kind == OperationalTaskKind.LocationAssetHandover &&
+                t.Status == MeterTaskStatus.InProgress && t.Id == oldTaskId &&
+                t.AssignedStaffUserId == successor.Id && t.AssignmentId == successorAssignment));
+            Assert.False(await db.Set<OperationalTask>().AnyAsync(t => t.Id == successorTaskId));
         }
         var responsibilities = (await ownerClient.GetFromJsonAsync<StaffResponsibilitiesView>(
             $"/api/v1/staff/{first.Id}/responsibilities"))!;
@@ -571,7 +607,134 @@ public sealed class LocationAssetInventoryAssignmentTests(Compact24Fixture fixtu
             var jobs = scope.ServiceProvider.GetRequiredService<AssignmentReconciliationJob>();
             await jobs.ExecuteAsync(new(Guid.NewGuid(), "synthetic-transfer-retry", "{}"), default);
         }
-        Assert.Equal(25, (await successorClient.GetFromJsonAsync<LocationAssetInventoryView>(
+        Assert.Equal(26, (await successorClient.GetFromJsonAsync<LocationAssetInventoryView>(
             successorRoute + "/location-asset-inventory"))!.CheckedCount);
+    }
+
+    [CompactPostgresFact]
+    public async Task ChecklistUsesOnlyCurrentPublishedTemplateAndRejectsMalformedQuantityMetadata()
+    {
+        var owner = await User("Owner");
+        var staff = await User("Staff");
+        var location = await Location();
+        var validRoom = new Room { LocationId = location, RoomNumber = "PROVENANCE-VALID" };
+        var changedRoom = new Room { LocationId = location, RoomNumber = "PROVENANCE-CHANGED" };
+        var removedRoom = new Room { LocationId = location, RoomNumber = "PROVENANCE-REMOVED" };
+        var archivedRoom = new Room { LocationId = location, RoomNumber = "PROVENANCE-ARCHIVED" };
+        var malformedRoom = new Room { LocationId = location, RoomNumber = "PROVENANCE-MALFORMED" };
+        var assets = new[]
+        {
+            new Asset { LocationId = location, RoomId = validRoom.Id, Name = "Quantity three", Category = "Furniture", Status = AssetStatus.Active },
+            new Asset { LocationId = location, RoomId = changedRoom.Id, Name = "Stale after assignment change", Category = "Furniture", Status = AssetStatus.Active },
+            new Asset { LocationId = location, RoomId = removedRoom.Id, Name = "Stale after unassignment", Category = "Furniture", Status = AssetStatus.Active },
+            new Asset { LocationId = location, RoomId = archivedRoom.Id, Name = "Stale after archive", Category = "Furniture", Status = AssetStatus.Active },
+            new Asset { LocationId = location, RoomId = malformedRoom.Id, Name = "Malformed quantity", Category = "Furniture", Status = AssetStatus.Active }
+        };
+        await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            db.AddRange(validRoom, changedRoom, removedRoom, archivedRoom, malformedRoom);
+            db.AddRange(assets);
+            db.Entry(assets[0]).Property<string>("PurchaseInfo").CurrentValue = JsonSerializer.Serialize(
+                new AssetMetadata("BulkQuantity", 3, null, null, null, "cái"), Json);
+            db.Entry(assets[4]).Property<string>("PurchaseInfo").CurrentValue =
+                "{\"trackingMode\":\"BulkQuantity\",\"quantity\":\"three\",\"unit\":\"cái\"}";
+            await db.SaveChangesAsync();
+
+            var store = scope.ServiceProvider.GetRequiredService<ISetupWorkspaceStore>();
+            async Task SeedOwnerConfirmedRoom(Room room, Asset asset, Guid templateId, AssetTemplateItem item)
+            {
+                await SaveRoomTemplateAsync(store, location, room.Id, owner.Id, templateId, [item]);
+                var desired = await store.SaveAsync(Guid.NewGuid(), location, "DesiredAssets", "PendingVerification",
+                    new DesiredAssets(templateId, 1, room.Id, [item], "PendingVerification"), 0, owner.Id, default);
+                await store.SaveAsync(Guid.NewGuid(), location, "AssetVerification", "Verified", new
+                {
+                    roomId = room.Id,
+                    templateId,
+                    itemId = item.Id,
+                    assetId = asset.Id,
+                    quantity = item.Quantity,
+                    source = "OwnerAttestation"
+                }, 0, owner.Id, default);
+                await store.SaveAsync(Guid.NewGuid(), location, "RoomInventoryChecklistReview", "Matched", new
+                {
+                    roomId = room.Id,
+                    desiredId = desired.Id,
+                    desiredVersion = desired.Version,
+                    baseline = "synthetic-current-template-review",
+                    state = "Matched",
+                    requestId = Guid.NewGuid(),
+                    items = new[] { new { itemId = item.Id, @checked = true, evidenceIds = Array.Empty<Guid>() } },
+                    unlinkedAssetIds = Array.Empty<Guid>()
+                }, 0, owner.Id, default);
+            }
+
+            var validTemplate = Guid.NewGuid();
+            var validItem = new AssetTemplateItem(Guid.NewGuid(), "Quantity three", "Furniture", "BulkQuantity", 3, "cái");
+            await SeedOwnerConfirmedRoom(validRoom, assets[0], validTemplate, validItem);
+
+            var changedTemplate = Guid.NewGuid();
+            var changedItem = new AssetTemplateItem(Guid.NewGuid(), "Stale after assignment change", "Furniture", "BulkQuantity", 1);
+            await SeedOwnerConfirmedRoom(changedRoom, assets[1], changedTemplate, changedItem);
+            var replacementTemplate = Guid.NewGuid();
+            await store.SaveAsync(replacementTemplate, location, "AssetTemplate", "Published",
+                new AssetTemplateWrite(location, "Replacement without synced DesiredAssets", [
+                    new AssetTemplateItem(Guid.NewGuid(), "Replacement asset", "Furniture", "BulkQuantity", 1)
+                ], Scoped: true, ScopeRoomId: changedRoom.Id), 0, owner.Id, default);
+            await store.SaveAsync(SetupKey($"asset-template-assignment:{changedRoom.Id}"), location,
+                "AssetTemplateAssignment", "Assigned", new AssetTemplateAssignment(replacementTemplate),
+                1, owner.Id, default);
+
+            var removedTemplate = Guid.NewGuid();
+            var removedItem = new AssetTemplateItem(Guid.NewGuid(), "Stale after unassignment", "Furniture", "BulkQuantity", 1);
+            await SeedOwnerConfirmedRoom(removedRoom, assets[2], removedTemplate, removedItem);
+            await store.SaveAsync(SetupKey($"asset-template-assignment:{removedRoom.Id}"), location,
+                "AssetTemplateAssignment", "None", new AssetTemplateAssignment(null), 1, owner.Id, default);
+
+            var archivedTemplate = Guid.NewGuid();
+            var archivedItem = new AssetTemplateItem(Guid.NewGuid(), "Stale after archive", "Furniture", "BulkQuantity", 1);
+            await SeedOwnerConfirmedRoom(archivedRoom, assets[3], archivedTemplate, archivedItem);
+            await store.SaveAsync(archivedTemplate, location, "AssetTemplate", "Archived",
+                new AssetTemplateWrite(location, "Archived template", [archivedItem], Scoped: true,
+                    ScopeRoomId: archivedRoom.Id), 1, owner.Id, default);
+
+            var malformedTemplate = Guid.NewGuid();
+            var malformedItem = new AssetTemplateItem(Guid.NewGuid(), "Malformed quantity", "Furniture", "BulkQuantity", 1);
+            await SeedOwnerConfirmedRoom(malformedRoom, assets[4], malformedTemplate, malformedItem);
+        }
+
+        Guid taskId;
+        await using (var scope = fixture.Factory!.Services.CreateAsyncScope())
+        {
+            var assignments = scope.ServiceProvider.GetRequiredService<ILocationAssignments>();
+            var created = await assignments.CreateAssignmentAsync(owner.Id, location, staff.Id,
+                Today, Today.AddDays(14), default);
+            Assert.Equal(CreateAssignmentStatus.Created, created.Status);
+            var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+            var task = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(item =>
+                item.LocationId == location && item.Kind == OperationalTaskKind.LocationAssetHandover);
+            taskId = task.Id;
+            var snapshot = JsonSerializer.Deserialize<LocationAssetInventorySnapshot>(task.LocationAssetInventoryJson, Json)!;
+            var only = Assert.Single(snapshot.Items);
+            Assert.Equal(assets[0].Id, only.AssetId);
+            Assert.Equal(3, only.Quantity);
+            Assert.DoesNotContain(snapshot.Items, item => item.AssetId == assets[1].Id ||
+                item.AssetId == assets[2].Id || item.AssetId == assets[3].Id || item.AssetId == assets[4].Id);
+            Assert.Contains(changedRoom.RoomNumber, snapshot.PendingOwnerRooms);
+            Assert.Contains(removedRoom.RoomNumber, snapshot.PendingOwnerRooms);
+            Assert.Contains(archivedRoom.RoomNumber, snapshot.PendingOwnerRooms);
+            Assert.Contains(malformedRoom.RoomNumber, snapshot.PendingOwnerRooms);
+            Assert.DoesNotContain(validRoom.RoomNumber, snapshot.PendingOwnerRooms);
+        }
+
+        using var staffClient = await Client(staff);
+        var view = (await staffClient.GetFromJsonAsync<LocationAssetInventoryView>(
+            $"/api/v1/operational-tasks/{taskId}/location-asset-inventory"))!;
+        Assert.Equal(1, view.TotalCount);
+        Assert.Equal(3, Assert.Single(view.Items).Quantity);
+        Assert.Contains(changedRoom.RoomNumber, view.PendingOwnerRooms!);
+        Assert.Contains(removedRoom.RoomNumber, view.PendingOwnerRooms!);
+        Assert.Contains(archivedRoom.RoomNumber, view.PendingOwnerRooms!);
+        Assert.Contains(malformedRoom.RoomNumber, view.PendingOwnerRooms!);
     }
 }

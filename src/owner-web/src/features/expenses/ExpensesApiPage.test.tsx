@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ExpensesApiPage } from './ExpensesApiPage';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import type { ExpenseReferences } from '../../../../../packages/client-core/src/finance';
 
 const mock = vi.hoisted(() => ({
   locations: vi.fn(),
@@ -202,16 +203,22 @@ it('loads detail and submits the server revision and correction reason', async (
 });
 
 it('selects real Room/Asset/Work Order references and submits the exact source IDs', async () => {
-  mock.expenseReferences.mockImplementation(async (_location, roomId) => ({
-    rooms: [{ id: 'room', label: 'R-01', roomId: 'room', assetId: null }],
-    assets: roomId
-      ? [{ id: 'asset', label: 'Bàn tổng hợp', roomId: 'room', assetId: 'asset' }]
-      : [],
-    workOrders: roomId
-      ? [{ id: 'work-order', label: 'Sửa bàn tổng hợp', roomId: 'room', assetId: 'asset' }]
-      : [],
-    truncated: false,
-  }));
+  let resolveInitialReferences!: (references: ExpenseReferences) => void;
+  const initialReferences = new Promise<ExpenseReferences>((resolve) => {
+    resolveInitialReferences = resolve;
+  });
+  mock.expenseReferences.mockImplementation((_location, roomId) =>
+    roomId
+      ? Promise.resolve({
+          rooms: [{ id: 'room', label: 'R-01', roomId: 'room', assetId: null }],
+          assets: [{ id: 'asset', label: 'Bàn tổng hợp', roomId: 'room', assetId: 'asset' }],
+          workOrders: [
+            { id: 'work-order', label: 'Sửa bàn tổng hợp', roomId: 'room', assetId: 'asset' },
+          ],
+          truncated: false,
+        })
+      : initialReferences,
+  );
   mock.createExpense.mockResolvedValue(expense);
   mount();
   await waitFor(() =>
@@ -219,6 +226,21 @@ it('selects real Room/Asset/Work Order references and submits the exact source I
   );
   fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
   fireEvent.click(screen.getByRole('button', { name: /Liên kết bổ sung/ }));
+  await waitFor(() =>
+    expect(mock.expenseReferences).toHaveBeenCalledWith('location', null, expect.any(AbortSignal)),
+  );
+  expect(screen.getByRole('combobox', { name: 'Phòng ghi nhận' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  await act(async () => {
+    resolveInitialReferences({
+      rooms: [{ id: 'room', label: 'R-01', roomId: 'room', assetId: null }],
+      assets: [],
+      workOrders: [],
+      truncated: false,
+    });
+  });
   await waitFor(() =>
     expect(screen.getByRole('combobox', { name: 'Phòng ghi nhận' })).not.toHaveAttribute(
       'aria-disabled',
@@ -228,11 +250,26 @@ it('selects real Room/Asset/Work Order references and submits the exact source I
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Phòng ghi nhận' }));
   fireEvent.click(await screen.findByRole('option', { name: 'R-01' }));
   await waitFor(() =>
+    expect(mock.expenseReferences).toHaveBeenCalledWith(
+      'location',
+      'room',
+      expect.any(AbortSignal),
+    ),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Tài sản liên quan' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    ),
+  );
+  await waitFor(() =>
     expect(screen.getByRole('combobox', { name: 'Work Order liên quan' })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     ),
   );
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Tài sản liên quan' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Bàn tổng hợp' }));
   fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Work Order liên quan' }));
   fireEvent.click(await screen.findByRole('option', { name: 'Sửa bàn tổng hợp' }));
   expect(screen.getByRole('combobox', { name: 'Tài sản liên quan' })).toHaveTextContent(

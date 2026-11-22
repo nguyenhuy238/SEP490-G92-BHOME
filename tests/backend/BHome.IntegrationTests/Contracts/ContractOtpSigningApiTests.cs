@@ -192,7 +192,9 @@ public sealed partial class ContractLifecycleApiTests
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var service = scope.ServiceProvider.GetRequiredService<ContractService>();
-            Assert.True(await service.AutomaticActivationReadyAsync(id, default));
+            var readiness = await owner.Client.GetFromJsonAsync<ActivationReadiness>(Path(id, "activation-readiness"));
+            Assert.True(await service.AutomaticActivationReadyAsync(id, default),
+                $"Automatic activation blockers: {string.Join(",", readiness?.Blockers ?? [])}");
             await service.AutoActivatePaidMainAsync(id, default);
             await service.AutoActivatePaidMainAsync(id, default);
         }

@@ -6,6 +6,7 @@ public sealed record StaffChangePreview(Guid LocationId, bool CanRemove, IReadOn
 public interface IPropertyLifecycleChecks
 {
     Task<LocationClosureCheck> ClosureAsync(Guid locationId, CancellationToken t);
-    Task<IReadOnlyList<string>> RoomBlockersAsync(Guid roomId, CancellationToken t);
+    Task<IReadOnlyList<string>> RoomBlockersAsync(Guid roomId, CancellationToken t,
+        Guid? exceptContractId = null, bool includeActiveContracts = true);
     Task<StaffChangePreview> StaffChangeAsync(Guid locationId, CancellationToken t);
 }

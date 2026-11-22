@@ -144,13 +144,17 @@ public sealed class AccountProvisioningUnitTests(PostgresContainerFixture postgr
         Assert.Equal(1, await world.UserCountAsync("dungpham@bhome.test"));
     }
 
-    [Fact(DisplayName = "UTC03 - CreateStaffAsync: mat khau 11 ky tu -> 400 invalid_operations_input, khong tao")]
-    public async Task UTC03_CreateStaffAsync_Password11Chars_Rejected()
+    [Fact(DisplayName = "UTC03 - CreateStaffAsync: bo qua mat khau cu 11 ky tu, tao tai khoan va khong dung mat khau do")]
+    public async Task UTC03_CreateStaffAsync_LegacyPasswordIsIgnored()
     {
-        await AssertRejected(() => Operations.CreateStaffAsync(NewStaff("haihoang@bhome.test", "Hoang Van Hai", null, "Pass123456@"), default),
-            400, "invalid_operations_input");
+        var result = await Operations.CreateStaffAsync(
+            NewStaff("haihoang@bhome.test", "Hoang Van Hai", null, "Pass123456@"), default);
 
-        Assert.Equal(0, await world.UserCountAsync("haihoang@bhome.test"));
+        Assert.True(result.IsActive);
+        Assert.Equal(1, await world.UserCountAsync("haihoang@bhome.test"));
+        var staff = (await world.Get<UserManager<ApplicationUser>>().FindByIdAsync(result.UserId.ToString()))!;
+        Assert.False(await world.Get<UserManager<ApplicationUser>>().CheckPasswordAsync(staff, "Pass123456@"));
+        Assert.Empty(world.Email.Queued);
     }
 
     [Fact(DisplayName = "UTC04 - CreateStaffAsync: email staff.sample da duoc dung -> 400 invalid_staff_account, khong tao")]

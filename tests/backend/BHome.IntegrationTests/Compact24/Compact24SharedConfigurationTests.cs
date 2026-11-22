@@ -247,4 +247,44 @@ public sealed partial class Compact24OwnerSetupTests
         Assert.Empty((await owner.GetFromJsonAsync<PagedResult<PolicyDto>>("/api/v1/billing-policies?locationId=" + w.Location))!.Items);
         Assert.Empty((await owner.GetFromJsonAsync<SetupDocument[]>("/api/v1/operating-policies?locationId=" + w.Location))!);
     }
+
+    [CompactPostgresFact]
+    public async Task FeeTemplateOverlapIsCheckedWhenPublishingAndOnlyAgainstOtherPublishedFamilies()
+    {
+        var w = await Seed(); using var owner = await Client(w.Owner);
+        const string route = "/api/v1/shared-configuration/fee-templates";
+        var start = Today.AddYears(10);
+        var end = start.AddDays(30);
+        JsonElement Data(DateOnly from, DateOnly to) => JsonSerializer.SerializeToElement(new
+        {
+            category = "Rent",
+            chargeCode = "RENT",
+            method = "FixedPerRoomPerMonth",
+            referenceRate = "1000",
+            unit = "VND/month",
+            scope = "Room",
+            effectiveFrom = from.ToString("yyyy-MM-dd"),
+            effectiveTo = to.ToString("yyyy-MM-dd")
+        });
+
+        // Drafts are not selectable and do not reserve an effective period.
+        var first = await Read<SharedDocument>(await owner.PostAsJsonAsync(route,
+            SharedInput("fee-templates") with { Data = Data(start, end) }));
+        var second = await Read<SharedDocument>(await owner.PostAsJsonAsync(route,
+            SharedInput("fee-templates") with { Data = Data(start, end) }));
+        var published = await Read<SharedDocument>(await owner.PostAsJsonAsync(
+            $"{route}/{first.Id}/publish", new SharedVersion(first.Version)));
+        Assert.Equal("Published", published.Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(
+            $"{route}/{second.Id}/publish", new SharedVersion(second.Version))).StatusCode);
+
+        // An adjacent, non-overlapping period for the same policy remains publishable.
+        var nextStart = end.AddDays(1);
+        var nextEnd = nextStart.AddDays(30);
+        var next = await Read<SharedDocument>(await owner.PostAsJsonAsync(route,
+            SharedInput("fee-templates") with { Data = Data(nextStart, nextEnd) }));
+        var nextPublished = await Read<SharedDocument>(await owner.PostAsJsonAsync(
+            $"{route}/{next.Id}/publish", new SharedVersion(next.Version)));
+        Assert.Equal("Published", nextPublished.Status);
+    }
 }

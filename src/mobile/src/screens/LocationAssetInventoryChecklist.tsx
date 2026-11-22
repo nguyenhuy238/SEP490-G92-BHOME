@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text, TextInput, TouchableRipple } from 'react-native-paper';
 import { Pill, Row, ui } from '../components/WorkspaceKit';
+import { ChoiceField } from '../components/WorkflowControls';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useWorkspaceQuery } from '../features/workspace/useWorkspaceQuery';
 import { errorMessage } from '../lib/api';
+import { queryPolicies } from '../lib/queryPolicies';
 import { randomUUID } from '../lib/randomUUID';
 import { useSession } from '../lib/SessionProvider';
 import { showSuccess } from '../lib/toast';
@@ -16,6 +18,18 @@ import {
   type LocationAssetInventoryItem,
 } from '../services/locationAssetInventory';
 import { colors as c } from '../theme/theme';
+
+const conditionOptions = [
+  { id: 'Unassessed', label: 'Chưa ghi nhận hiện trạng' },
+  { id: 'Intact', label: 'Đủ và nguyên vẹn' },
+  { id: 'Missing', label: 'Thiếu tài sản' },
+  { id: 'Damaged', label: 'Tài sản hư hỏng' },
+  { id: 'NotAccessible', label: 'Không thể kiểm tra' },
+];
+const conditionLabels = Object.fromEntries(
+  conditionOptions.map((option) => [option.id, option.label]),
+);
+type InventoryFilter = 'all' | 'pending' | 'checked';
 
 export function LocationAssetInventoryChecklist({
   taskId,
@@ -32,7 +46,7 @@ export function LocationAssetInventoryChecklist({
   const { go } = useWorkspace();
   const query = useWorkspaceQuery<LocationAssetInventory>(
     `/api/v1/operational-tasks/${taskId}/location-asset-inventory`,
-    { notifyError: false },
+    { cache: queryPolicies.tasks, notifyError: false },
   );
   const data = query.data;
   const loadedItems = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data]);
@@ -44,13 +58,38 @@ export function LocationAssetInventoryChecklist({
   const pendingOwnerCommonAssets = !!data?.pendingOwnerCommonAssets;
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<InventoryFilter>('all');
   // Render the first room immediately. Do not depend on nested horizontal
   // ScrollView measurement inside WorkspaceShell's vertical ScrollView.
+  const visibleGroups = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase('vi');
+    return groups
+      .map((group) => ({
+        ...group,
+        visibleItems: group.items.filter((item) => {
+          const condition = item.condition ?? 'Unassessed';
+          const pending =
+            !item.checked ||
+            ((condition === 'Missing' || condition === 'Damaged') && !item.incidentId) ||
+            (condition === 'NotAccessible' && !item.note?.trim());
+          const statusMatches =
+            filter === 'all' || (filter === 'pending' ? pending : item.checked && !pending);
+          const searchMatches =
+            !term ||
+            group.title.toLocaleLowerCase('vi').includes(term) ||
+            item.name.toLocaleLowerCase('vi').includes(term);
+          return statusMatches && searchMatches;
+        }),
+      }))
+      .filter((group) => group.visibleItems.length > 0);
+  }, [groups, filter, search]);
   const activeGroup =
     selectedGroup === ''
       ? null
-      : (groups.find((group) => group.title === selectedGroup) ?? groups[0]);
+      : (visibleGroups.find((group) => group.title === selectedGroup) ?? visibleGroups[0]);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [conditions, setConditions] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [error, setError] = useState('');
@@ -58,13 +97,27 @@ export function LocationAssetInventoryChecklist({
   useEffect(() => onReadinessChange(inventoryReady(data)), [data, onReadinessChange]);
 
   const save = useCallback(
-    async (item: LocationAssetInventoryItem, checked: boolean) => {
+    async (item: LocationAssetInventoryItem, checked: boolean, condition: string) => {
       if (!api || !data || data.status !== 'InProgress' || item.inherited || pending.current)
         return;
       pending.current = true;
       setBusy(true);
       setError('');
       const note = (notes[item.id] ?? item.note ?? '').trim();
+      if (checked && condition === 'Unassessed') {
+        setError('Chọn hiện trạng thực tế trước khi lưu kết quả kiểm tra.');
+        pending.current = false;
+        setBusy(false);
+        return;
+      }
+      if (checked && ['Missing', 'Damaged', 'NotAccessible'].includes(condition) && !note) {
+        setError(
+          'Ghi chú hiện trạng là bắt buộc đối với tài sản thiếu, hỏng hoặc không thể kiểm tra.',
+        );
+        pending.current = false;
+        setBusy(false);
+        return;
+      }
       try {
         const current = await locationAssetInventoryClient(api).get(taskId);
         if (current.version !== data.version)
@@ -75,12 +128,20 @@ export function LocationAssetInventoryChecklist({
           {
             version: data.version,
             checked,
+            condition: checked
+              ? (condition as NonNullable<LocationAssetInventoryItem['condition']>)
+              : 'Unassessed',
             note: note || null,
             incidentId: item.incidentId,
           },
           randomUUID(),
         );
         setNotes((previous) => {
+          const next = { ...previous };
+          delete next[item.id];
+          return next;
+        });
+        setConditions((previous) => {
           const next = { ...previous };
           delete next[item.id];
           return next;
@@ -168,6 +229,44 @@ export function LocationAssetInventoryChecklist({
               ]}
             />
           </View>
+          <View style={styles.tools}>
+            <TextInput
+              mode="outlined"
+              dense
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Tìm phòng hoặc tài sản"
+              accessibilityLabel="Tìm phòng hoặc tài sản"
+              style={styles.search}
+            />
+            <View style={styles.filters}>
+              {(
+                [
+                  ['all', 'Tất cả'],
+                  ['pending', 'Cần xử lý'],
+                  ['checked', 'Đã kiểm tra'],
+                ] as const
+              ).map(([value, label]) => (
+                <TouchableRipple
+                  key={value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: filter === value }}
+                  onPress={() => {
+                    setFilter(value);
+                    setSelectedGroup(null);
+                  }}
+                  style={[styles.filter, filter === value && styles.filterSelected]}
+                >
+                  <Text
+                    variant="labelMedium"
+                    style={{ color: filter === value ? c.white : c.primary }}
+                  >
+                    {label}
+                  </Text>
+                </TouchableRipple>
+              ))}
+            </View>
+          </View>
           {incompletePayload && (
             <View style={styles.notice}>
               <Text accessibilityRole="alert" variant="bodyMedium" style={ui.red}>
@@ -190,7 +289,7 @@ export function LocationAssetInventoryChecklist({
               </Text>
             </View>
           )}
-          {groups.map((group) => (
+          {visibleGroups.map((group) => (
             <View key={group.title} style={styles.group}>
               <TouchableRipple
                 accessibilityRole="button"
@@ -218,9 +317,16 @@ export function LocationAssetInventoryChecklist({
                 </View>
               </TouchableRipple>
               {activeGroup?.title === group.title &&
-                group.items.map((item) => {
+                group.visibleItems.map((item) => {
                   const expanded = expandedId === item.id;
                   const dirtyNote = notes[item.id] ?? item.note ?? '';
+                  const dirtyCondition = conditions[item.id] ?? item.condition ?? 'Unassessed';
+                  const conditionChanged = dirtyCondition !== (item.condition ?? 'Unassessed');
+                  const noteChanged = dirtyNote !== (item.note ?? '');
+                  const needsNote = ['Missing', 'Damaged', 'NotAccessible'].includes(
+                    dirtyCondition,
+                  );
+                  const label = conditionLabels[dirtyCondition] ?? 'Chưa ghi nhận hiện trạng';
                   return (
                     <View key={item.id} style={styles.item}>
                       <TouchableRipple
@@ -246,6 +352,11 @@ export function LocationAssetInventoryChecklist({
                                   ? 'Đã kiểm tra'
                                   : 'Chưa kiểm tra'}
                           </Pill>
+                          {item.checked && dirtyCondition !== 'Unassessed' && (
+                            <Pill tone={dirtyCondition === 'Intact' ? 'green' : 'amber'}>
+                              {label}
+                            </Pill>
+                          )}
                         </View>
                       </TouchableRipple>
                       {expanded && (
@@ -264,9 +375,20 @@ export function LocationAssetInventoryChecklist({
                             </Text>
                           ) : (
                             <>
+                              <ChoiceField
+                                label="Hiện trạng thực tế"
+                                value={dirtyCondition}
+                                options={conditionOptions}
+                                disabled={busy || data.status !== 'InProgress'}
+                                onChange={(value) =>
+                                  setConditions((previous) => ({ ...previous, [item.id]: value }))
+                                }
+                              />
                               <TextInput
                                 mode="outlined"
-                                label="Ghi chú kiểm kê (tùy chọn)"
+                                label={
+                                  needsNote ? 'Ghi chú hiện trạng *' : 'Ghi chú kiểm kê (tùy chọn)'
+                                }
                                 accessibilityLabel={`Ghi chú ${item.name}`}
                                 multiline
                                 maxLength={2000}
@@ -279,15 +401,37 @@ export function LocationAssetInventoryChecklist({
                               {data.status === 'InProgress' && (
                                 <Button
                                   mode="contained"
-                                  disabled={busy}
+                                  disabled={
+                                    busy ||
+                                    (!item.checked && dirtyCondition === 'Unassessed') ||
+                                    (needsNote && !dirtyNote.trim())
+                                  }
                                   loading={busy}
-                                  onPress={() => void save(item, !item.checked)}
+                                  onPress={() =>
+                                    void save(
+                                      item,
+                                      !item.checked || conditionChanged || noteChanged,
+                                      !item.checked || conditionChanged || noteChanged
+                                        ? dirtyCondition
+                                        : 'Unassessed',
+                                    )
+                                  }
                                 >
-                                  {item.checked
-                                    ? 'Đánh dấu cần kiểm tra lại'
-                                    : 'Xác nhận đã kiểm tra'}
+                                  {!item.checked
+                                    ? 'Lưu kết quả kiểm tra'
+                                    : conditionChanged || noteChanged
+                                      ? 'Lưu cập nhật hiện trạng'
+                                      : 'Đánh dấu cần kiểm tra lại'}
                                 </Button>
                               )}
+                              {item.checked &&
+                                (dirtyCondition === 'Missing' || dirtyCondition === 'Damaged') &&
+                                !item.incidentId && (
+                                  <Text variant="bodySmall" style={styles.issueNotice}>
+                                    Cần tạo báo cáo sự cố và liên kết với tài sản này trước khi gửi
+                                    kết quả cho Owner.
+                                  </Text>
+                                )}
                             </>
                           )}
                           {item.note && <Text style={ui.muted}>Ghi nhận: {item.note}</Text>}
@@ -304,6 +448,11 @@ export function LocationAssetInventoryChecklist({
                               <Button
                                 mode="outlined"
                                 icon="alert-circle-outline"
+                                disabled={
+                                  item.checked &&
+                                  ['Missing', 'Damaged'].includes(item.condition ?? '') &&
+                                  !item.note?.trim()
+                                }
                                 onPress={() =>
                                   go('report-incident', {
                                     inventoryTaskId: taskId,
@@ -313,7 +462,7 @@ export function LocationAssetInventoryChecklist({
                                     ...(item.commonArea ? { commonArea: item.commonArea } : {}),
                                     ...(item.assetId ? { assetId: item.assetId } : {}),
                                     description:
-                                      `Kiểm kê cơ sở: ${group.title}, ${item.name}. ${dirtyNote}`.trim(),
+                                      `Kiểm kê cơ sở: ${group.title}, ${item.name}. ${dirtyNote || label}`.trim(),
                                   })
                                 }
                               >
@@ -328,6 +477,11 @@ export function LocationAssetInventoryChecklist({
                 })}
             </View>
           ))}
+          {!visibleGroups.length && loadedItems.length > 0 && (
+            <Text variant="bodySmall" style={ui.muted}>
+              Không có tài sản phù hợp với bộ lọc. Hãy đổi bộ lọc hoặc từ khóa tìm kiếm.
+            </Text>
+          )}
           {!incompletePayload && loadedItems.length > 0 && (
             <Text variant="bodySmall" style={ui.muted}>
               {roomCount} phòng · {commonCount} khu vực chung · {loadedItems.length} mục tài sản
@@ -364,9 +518,22 @@ export function LocationAssetInventoryChecklist({
           )}
           {inventoryReady(data) && (
             <Text style={ui.green}>
-              Đã kiểm tra đủ danh sách. Chọn Cập nhật công việc → Gửi kết quả để Owner duyệt và lập
-              biên bản bàn giao.
+              Đã ghi nhận đầy đủ hiện trạng. Bạn có thể gửi kết quả cho Owner đối soát và lập biên
+              bản bàn giao.
             </Text>
+          )}
+          {loadedItems.some(
+            (item) =>
+              item.checked &&
+              ['Missing', 'Damaged'].includes(item.condition ?? '') &&
+              !item.incidentId,
+          ) && (
+            <View style={styles.notice}>
+              <Text style={styles.issueNotice}>
+                Còn tài sản thiếu/hư hỏng chưa có báo cáo sự cố liên kết. Hãy lọc “Cần xử lý” để
+                hoàn tất các mục này.
+              </Text>
+            </View>
           )}
         </>
       )}
@@ -392,6 +559,18 @@ const styles = StyleSheet.create({
   progressFill: { height: 6, borderRadius: 3, backgroundColor: c.blue },
   title: { color: c.primary },
   notice: { gap: 4, padding: 10, borderWidth: 1, borderColor: c.border, borderRadius: 8 },
+  tools: { gap: 8 },
+  search: { backgroundColor: c.white },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filter: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  filterSelected: { backgroundColor: c.primary, borderColor: c.primary },
+  issueNotice: { color: c.red },
   group: { gap: 8, borderWidth: 1, borderColor: c.border, borderRadius: 8, padding: 8 },
   groupHeader: { borderRadius: 6, backgroundColor: c.soft },
   groupHeaderInner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10 },

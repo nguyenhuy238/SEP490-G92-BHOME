@@ -88,6 +88,8 @@ public sealed class OperationsService(IOperationsRepository repository, IOperati
     {
         Require(Permissions.StaffAccounts.Manage); StaffInputValidation.Validate(input, input.Employment, input.Phone);
         if (string.IsNullOrWhiteSpace(input.Reason)) throw OperationsException.Invalid("reason_required");
+        Validate(input); Validate(input.Employment);
+        ValidateEmployment(input.Employment);
         return await repository.UpdateStaffAsync(Actor, id, input with
         {
             Email = input.Email.Trim(),

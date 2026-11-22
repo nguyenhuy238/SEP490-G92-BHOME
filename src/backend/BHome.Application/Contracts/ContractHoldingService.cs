@@ -211,7 +211,8 @@ public sealed partial class ContractService
     private async Task<ActivationReadiness> HoldingReadiness(Contract c, CancellationToken token)
     {
         List<string> blockers = [];
-        if (lifecycle is not null) blockers.AddRange(await lifecycle.RoomBlockersAsync(c.RoomId, token));
+        // HoldingConflictAsync owns contract-overlap checks for this workflow.
+        if (lifecycle is not null) blockers.AddRange(await lifecycle.RoomBlockersAsync(c.RoomId, token, c.Id, includeActiveContracts: false));
         if (c.Kind != ContractKind.Holding) blockers.Add("holding_contract_required");
         if (c.Status != ContractStatus.PendingActivation) blockers.Add("holding_not_pending_activation");
         if (c.HoldingExpiryAt is null || c.HoldingExpiryAt <= clock.GetUtcNow()) blockers.Add("holding_expired");

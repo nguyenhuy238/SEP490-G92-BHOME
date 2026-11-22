@@ -316,9 +316,30 @@ internal sealed class SetupWorkspaceStore(Compact24DbContext db, CompactNotifica
         db.Set<BHome.Domain.IncidentMaintenance.MaintenanceWorkOrder>().AnyAsync(w => w.AssetId == id &&
             w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Verified &&
             w.Status != BHome.Domain.IncidentMaintenance.WorkOrderStatus.Cancelled, t);
-    public async Task<IReadOnlyList<AssetHistoryEntry>> AssetHistoryAsync(Guid assetId, CancellationToken t) => await db.Set<PropertyChange>().AsNoTracking()
-        .Where(a => a.TargetId == assetId && a.TargetType == nameof(Asset)).OrderByDescending(a => a.OccurredAt).ThenBy(a => a.Id)
-        .Select(a => new AssetHistoryEntry(a.Id, a.Action, a.Reason, a.OccurredAt, a.ActorId, a.After)).Take(1000).ToArrayAsync(t);
+    public async Task<IReadOnlyList<AssetHistoryEntry>> AssetHistoryAsync(Guid assetId, CancellationToken t)
+    {
+        var changes = await db.Set<PropertyChange>().AsNoTracking()
+            .Where(a => a.TargetId == assetId && a.TargetType == nameof(Asset))
+            .Select(a => new AssetHistoryEntry(a.Id, a.Action, a.Reason, a.OccurredAt, a.ActorId, a.After))
+            .ToArrayAsync(t);
+        var repairs = new List<AssetHistoryEntry>();
+        await using (var command = await sql.Command("""
+            SELECT id,title,COALESCE(verified_at,due_at,now()),COALESCE(verified_by_user_id,assigned_user_id),
+                jsonb_build_object('workOrderId',id,'incidentId',incident_report_id,'status',status,
+                    'state',task_data->'state')::text
+            FROM operational_tasks
+            WHERE task_type='WORK_ORDER' AND asset_id=@asset AND status='Verified'
+            ORDER BY COALESCE(verified_at,due_at) DESC,id
+            """, t, ("asset", assetId)))
+        await using (var reader = await command.ExecuteReaderAsync(t))
+        {
+            while (await reader.ReadAsync(t))
+                repairs.Add(new AssetHistoryEntry(reader.GetGuid(0), "RepairVerified", reader.GetString(1),
+                    reader.GetFieldValue<DateTimeOffset>(2), reader.IsDBNull(3) ? Guid.Empty : reader.GetGuid(3), reader.GetString(4)));
+        }
+        return changes.Concat(repairs).OrderByDescending(entry => entry.OccurredAt).ThenBy(entry => entry.Id)
+            .Take(1000).ToArray();
+    }
     public async Task<IReadOnlyList<Asset>> AssetsAsync(Guid roomId, CancellationToken t) => await db.Set<Asset>().AsNoTracking().Where(a => a.RoomId == roomId).OrderBy(a => a.Id).Take(1000).ToArrayAsync(t);
     public async Task SaveAssetMetadataAsync(Guid assetId, AssetMetadata metadata, CancellationToken t)
     {

@@ -6,7 +6,8 @@ public static class LoginIdentifier
 {
     public const int MaxPhoneLength = 30;
 
-    public static bool IsEmail(string value) => !value.Any(char.IsWhiteSpace) && new EmailAddressAttribute().IsValid(value);
+    public static bool IsEmail(string? value) => !string.IsNullOrWhiteSpace(value) &&
+        !value.Any(char.IsWhiteSpace) && new EmailAddressAttribute().IsValid(value);
 
     public static string? NormalizePhone(string? value)
     {

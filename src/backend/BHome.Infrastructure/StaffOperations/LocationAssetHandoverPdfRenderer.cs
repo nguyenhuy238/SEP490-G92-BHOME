@@ -12,7 +12,11 @@ namespace BHome.Infrastructure.StaffOperations;
 
 internal sealed record LocationAssetReportItem(
     Guid Id, string Scope, string Name, int Quantity, bool Inherited,
-    Guid? SourceHandoverContractId, Guid? IncidentId, string? Note);
+    Guid? SourceHandoverContractId, Guid? IncidentId, string? Note,
+    Guid? PriorStaffTaskId = null, Guid? PriorStaffUserId = null)
+{
+    public string Condition { get; init; } = "Unassessed";
+}
 
 internal sealed record LocationAssetReportPdf(
     Guid TaskId, Guid AssignmentId, int Revision, string LocationName, string Address,
@@ -24,6 +28,14 @@ internal sealed record LocationAssetReportPdf(
 
 internal static class LocationAssetHandoverPdfRenderer
 {
+    private static string ConditionLabel(string? condition) => condition switch
+    {
+        "Intact" => "Đủ và nguyên vẹn",
+        "Missing" => "Thiếu tài sản",
+        "Damaged" => "Tài sản hư hỏng",
+        "NotAccessible" => "Không thể kiểm tra",
+        _ => "Chưa ghi nhận hiện trạng (dữ liệu cũ)"
+    };
     private static readonly Lazy<byte[]> Font = new(() =>
     {
         using var font = typeof(LocationAssetHandoverPdfRenderer).Assembly
@@ -80,8 +92,11 @@ internal static class LocationAssetHandoverPdfRenderer
                     token.ThrowIfCancellationRequested();
                     var method = item.Inherited
                         ? $"Theo hồ sơ Tenant: {item.SourceHandoverContractId?.ToString("D") ?? "chưa rõ nguồn"}"
-                        : "Staff kiểm kê trực tiếp";
+                        : item.PriorStaffUserId is { } priorStaff
+                            ? $"Kế thừa kết quả kiểm kê từ Staff trước (tài khoản {priorStaff:D})"
+                            : "Staff kiểm kê trực tiếp";
                     if (item.IncidentId is { } incident) method += $"\nSự cố: {incident:D}";
+                    method += "\nHiện trạng: " + ConditionLabel(item.Condition);
                     if (!string.IsNullOrWhiteSpace(item.Note)) method += "\n" + item.Note;
                     foreach (var cell in new[] { item.Scope, item.Name,
                                  item.Quantity.ToString(CultureInfo.InvariantCulture), method })

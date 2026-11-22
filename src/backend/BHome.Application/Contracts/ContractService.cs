@@ -335,7 +335,9 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (Today < c.StartDate || Today > c.EndDate) blockers.Add("amendment_not_effective");
             return new(blockers.Count == 0, 0, 0, blockers.ToArray());
         }
-        if (lifecycle is not null) blockers.AddRange(await lifecycle.RoomBlockersAsync(c.RoomId, t));
+        // ContractRepository.ConflictsAsync evaluates actual capacity/resident overlap;
+        // generic room blockers must not reject valid co-occupants or a Holding source.
+        if (lifecycle is not null) blockers.AddRange(await lifecycle.RoomBlockersAsync(c.RoomId, t, c.Id, includeActiveContracts: false));
         if (c.Kind == ContractKind.Holding) blockers.Add("main_contract_required");
         if (c.IsDevelopmentDemo && !DemoEnabled &&
             !(MainSandboxAcceptance.Read(c) is not null && holdingTestScope?.Allows(c.Room.LocationId) == true))
@@ -985,16 +987,17 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (x.ProposedDate < Today || x.ProposedDate < c.StartDate || (!expiry && x.ProposedDate >= c.EndDate) || (expiry && x.ProposedDate < c.EndDate))
                 throw ContractException.Invalid("invalid_move_out_date");
             var previous = await repository.MoveOutAsync(id, t);
-            if (previous is not null && (!expiry || previous.Status != MoveOutStatus.Rejected))
+            if (previous is not null && previous.Status != MoveOutStatus.Rejected)
                 throw ContractException.Conflict("move_out_already_requested");
-            // The existing slot can host the later expiry workflow. Its prior request and
-            // decision remain in the append-only history with their original versions.
+            // A rejected request can be resubmitted by the tenant or superseded by
+            // an expiry request; prior decisions remain in append-only history.
             var m = previous ?? new ContractMoveOut { ContractId = id };
             m.ProposedDate = x.ProposedDate;
             m.Reason = x.Reason.Trim();
             m.RequestedByUserId = Actor;
             m.IsExpiry = expiry;
             m.Status = MoveOutStatus.Requested;
+            m.PendingReason = "inspection_and_financial_dependencies";
             if (previous is null) repository.Add(m);
             else m.Version++;
             MoveOutEvent(m, "Requested"); Audit("ContractMoveOutRequested", id); Remember(key, expiry ? "expiry" : "terminate-request", new { id, x }, m.Id); return View(m);

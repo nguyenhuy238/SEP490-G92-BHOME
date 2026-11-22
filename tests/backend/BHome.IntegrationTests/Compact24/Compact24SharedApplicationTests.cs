@@ -10,6 +10,8 @@ namespace BHome.IntegrationTests.Compact24;
 
 public sealed partial class Compact24OwnerSetupTests
 {
+    private static int feeTemplateSequence;
+
     private static async Task<HttpResponseMessage> Keyed(HttpClient client, string route, object input, Guid key)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, route) { Content = JsonContent.Create(input) };
@@ -18,6 +20,28 @@ public sealed partial class Compact24OwnerSetupTests
     private async Task<SharedDocument> Published(HttpClient owner, string resource)
     {
         var input = SharedInput(resource == "asset-templates" ? "asset-catalog" : resource);
+        if (resource == "fee-templates")
+        {
+            // The shared library is global across the class fixture. Give each test
+            // a distinct one-day policy period so unrelated tests do not collide with
+            // the production overlap guard for Published fee families.
+            var effectiveDate = Today.AddDays(Interlocked.Increment(ref feeTemplateSequence));
+            var date = effectiveDate.ToString("yyyy-MM-dd");
+            input = input with
+            {
+                Data = JsonSerializer.SerializeToElement(new
+                {
+                    category = "Rent",
+                    chargeCode = "RENT",
+                    method = "FixedPerRoomPerMonth",
+                    referenceRate = "3500000.0001",
+                    unit = "VND/month",
+                    scope = "Location",
+                    effectiveFrom = date,
+                    effectiveTo = date
+                })
+            };
+        }
         if (resource == "asset-templates")
         {
             var catalog = await Published(owner, "asset-catalog");
