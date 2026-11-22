@@ -8,7 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 namespace BHome.Infrastructure.Contracts;
 
-internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimeProvider clock) : IBackgroundJobHandler, IContractExpiryRepository
+internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimeProvider clock,
+    IContractHandoverRepository? handoverTasks = null) : IBackgroundJobHandler, IContractExpiryRepository
 {
     public const string JobName = "contract-expiry";
     public string Name => JobName;
@@ -39,7 +40,7 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                 await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtextextended('bhome-payment-ledger-v1',0))", t);
                 await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({item.LocationId.ToString()},0))", t);
                 var room = await db.Locked<Room>(item.RoomId).SingleAsync(t);
-                var c = await db.Set<Contract>().SingleAsync(c => c.Id == item.Id, t);
+                var c = await db.Set<Contract>().Include(c => c.Room).SingleAsync(c => c.Id == item.Id, t);
                 if (c.Kind == ContractKind.Holding && c.Status is ContractStatus.Draft or ContractStatus.PendingSigning or ContractStatus.PendingActivation or ContractStatus.Active && c.HoldingExpiryAt <= now)
                 {
                     c.Status = ContractStatus.Expired; c.ActualEndDate = today; c.LifecycleActorId = null;
@@ -108,6 +109,7 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                     // Room + Location advisory locks above serialize concurrent
                     // job replays with normal Owner/Tenant contract operations.
                     // There is one ContractMoveOut per ContractId in both schemas.
+                    ContractMoveOut? openedMoveOut = null;
                     if (c.Kind is ContractKind.Main or ContractKind.Renewal &&
                         c.EndDate < today &&
                         !await db.Set<Contract>().AnyAsync(next => next.PreviousContractId == c.Id &&
@@ -127,9 +129,10 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                             Status = MoveOutStatus.Approved,
                             ApprovedAt = now,
                             ApprovedByUserId = null, // NOT a human Owner approval.
-                            PendingReason = "inspection_staff_assignment_required"
+                            PendingReason = "inspection_and_financial_dependencies"
                         };
                         db.Add(move);
+                        openedMoveOut = move;
                         db.Add(new ContractMoveOutHistory
                         {
                             ContractId = c.Id,
@@ -157,6 +160,12 @@ internal sealed class ContractExpiryProcessor(BHomePersistenceContext db, TimePr
                             Succeeded = true,
                             OccurredAt = now
                         });
+                    }
+                    if (handoverTasks is not null)
+                    {
+                        openedMoveOut ??= await db.Set<ContractMoveOut>().SingleOrDefaultAsync(m => m.ContractId == c.Id, t);
+                        if (openedMoveOut is { Status: not MoveOutStatus.Requested })
+                            await handoverTasks.EnsureMoveOutTaskAsync(c, openedMoveOut, c.OwnerSignerId, now, t);
                     }
                     await db.SaveChangesAsync(t);
                 }

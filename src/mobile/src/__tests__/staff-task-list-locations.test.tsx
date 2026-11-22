@@ -267,3 +267,42 @@ it('always renders a Location row for a standalone ordinary task card', () => {
   render(<TaskCard task={task('one', loc1)} onPress={vi.fn()} />);
   expect(screen.getByText('Cơ sở: Chưa xác định tên cơ sở')).toBeTruthy();
 });
+
+it('opens the same move-out contract wizard from Cần làm and Đang xử lý task filters', async () => {
+  const contractId = '44444444-4444-4444-8444-444444444444';
+  const taskId = '55555555-5555-4555-8555-555555555555';
+  const moveOut = {
+    ...task(taskId, loc1),
+    title: 'Kiểm tra trả phòng R.101',
+    target: {
+      roomId: '66666666-6666-4666-8666-666666666666',
+      assetId: null,
+      commonArea: null,
+      label: 'R.101',
+      contractId,
+    },
+  } satisfies OperationalTask;
+  state.request.mockImplementation(async (path: string) => {
+    if (path === '/api/v1/locations/assigned-to-me') return [{ id: loc1, name: 'Cơ sở Phú Thọ' }];
+    if (path.includes('status=InProgress')) return page([{ ...moveOut, status: 'InProgress' }]);
+    return page([moveOut]);
+  });
+  render(<StaffTaskListScreen />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Cần làm' }));
+  const item = await screen.findByRole('button', {
+    name: 'Xem chi tiết: Kiểm tra trả phòng R.101',
+  });
+  fireEvent.click(item);
+  expect(state.go).toHaveBeenCalledWith('move-out', { contractId, taskId });
+  fireEvent.click(screen.getByRole('tab', { name: 'Đang xử lý' }));
+  await waitFor(() =>
+    expect(state.request.mock.calls.some(([path]) => path.includes('status=InProgress'))).toBe(
+      true,
+    ),
+  );
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Xem chi tiết: Kiểm tra trả phòng R.101' }),
+  );
+  expect(state.go).toHaveBeenCalledTimes(2);
+  expect(state.go).toHaveBeenLastCalledWith('move-out', { contractId, taskId });
+});

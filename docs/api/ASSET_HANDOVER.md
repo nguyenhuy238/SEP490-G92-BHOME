@@ -36,7 +36,7 @@ Các lỗi có `code` theo conventions hiện có. Không có URL storage công 
 | GET `asset-changes/{eventId}/evidence/{evidenceId}`                      | —           | Bằng chứng event chia sẻ; không mở quyền sang hợp đồng nguồn của Tenant khác     |
 | GET `move-out/inspection-preparation`                                    | Owner/Staff | Baseline, nhóm đối chiếu, inventory token, final readings, cờ phòng chung/legacy |
 | POST `move-out/legacy-baseline-exception`                                | Owner       | Ghi căn cứ cho baseline thiếu hoặc không có số lượng                             |
-| POST `move-out/inspection`                                               | Staff       | Biên bản kiểm tra thực tế theo scope/lịch hiện có                                |
+| POST `move-out/inspection`                                               | Staff       | Kết quả kiểm tra thực tế theo scope/lịch hiện có; không tạo PDF/chữ ký          |
 | GET `move-out/inspections`                                               | —           | Các phiên bản, snapshot và phản hồi/quyết định                                   |
 | POST `move-out/tenant-feedback`                                          | Tenant      | Xác nhận/tranh chấp phiên bản kiểm tra                                           |
 | POST `move-out/inspection-review`                                        | Owner       | Chấp nhận hoặc reinspection; chỉ bước chấp nhận mới cập nhật Asset               |
@@ -91,20 +91,24 @@ Response GET, mutation và retry cho Tenant chỉ gồm party/acknowledgment c�
 `evidenceContractId` nội bộ được che bằng UUID rỗng; client tải ảnh qua endpoint event, không truy cập hợp đồng nguồn.
 Owner/Staff được xem thông tin vận hành trong quyền hiện có; không có dữ liệu công nợ riêng của Tenant khác trong event.
 
-## Move-out và PDF
+## Move-out — kết quả kiểm tra, không tạo PDF mới
 
 Inspection gửi các trường checklist/reading/evidence hiện có và `inventoryToken`; `proposedCompensation` chỉ là mô tả đề xuất.
-Tenant feedback: `{version, confirmed, reason}`. Owner review:
-`{version, confirmed, reason, noAdditionalCharges, tenantException, tenantExceptionReason}`.
-Nếu Tenant chưa đồng ý/chưa phản hồi, chấp nhận inspection cần ngoại lệ có căn cứ rõ ràng.
+Tenant feedback cũ `{version, confirmed, reason}` là tùy chọn, không phải
+chữ ký và không chặn Owner duyệt. Owner review:
+`{version, confirmed, reason, noAdditionalCharges}`; các trường
+`tenantException`, `tenantExceptionReason` của client cũ được bỏ qua.
 Reinspection tạo snapshot/version mới, giữ phiên bản cũ. Legacy exception không tạo dữ liệu lịch sử giả.
 
 Complete: `{actualEndDate, roomDisposition}`, với `Available` hoặc `Unavailable` do Owner chọn.
 Máy chủ kiểm tra lại hợp đồng Active khác trong transaction; phòng còn Tenant tiếp tục Occupied.
 Các nghĩa vụ tài chính, cọc, payment/refund tiếp tục theo dõi và không bị tự xóa hoặc coi là đã thanh toán.
 
-Report types: `MoveInReport`, `AssetChangeReport`, `MoveOutReport`.
+Chỉ tạo PDF mới cho `MoveInReport` và `AssetChangeReport`. **Không tạo
+`MoveOutReport` mới**: kết quả kiểm tra được lưu vào `ContractFinalInspection`
+với ảnh riêng tư, hash, người duyệt/thời điểm/lý do/phiên bản.
+Các PDF MoveOutReport lịch sử nếu có vẫn lưu/đọc đúng quyền để bảo toàn audit.
 Metadata có ID, kind, Contract ID, template/version, timestamp, hash/length; byte trong private object storage.
-Generation/storage failure rollback thao tác, không ghi nhận file thành công nếu thiếu byte; retry dùng cùng snapshot.
+Generation/storage failure và retry PDF chỉ áp dụng MoveIn/AssetChange.
 Download kiểm scope và integrity. Báo cáo đã lưu không đổi khi sửa cấu hình, Asset, ngày hoặc tài chính sau này.
-Các xác nhận trên PDF là xác nhận trong ứng dụng, không phải chữ ký số được chứng thực.
+MoveOut không có người ký hay chữ ký; MoveIn/AssetChange tuân theo cơ chế riêng.

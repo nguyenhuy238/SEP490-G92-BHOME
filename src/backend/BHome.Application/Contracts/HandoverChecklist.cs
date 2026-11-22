@@ -58,9 +58,11 @@ public static class HandoverChecklist
     // move-in baseline. A pre-existing damaged or missing unit is not a new
     // tenant charge, and missing baselines cannot be silently inferred.
     public static bool NewDamageAgainstBaseline(HandoverAsset observed, HandoverAsset? baseline) =>
-        observed.Checked && baseline is not null &&
-        (observed.MissingQuantity.GetValueOrDefault() > baseline.MissingQuantity.GetValueOrDefault() ||
-         observed.DamagedQuantity.GetValueOrDefault() > baseline.DamagedQuantity.GetValueOrDefault() ||
+        // Inspection without a confirmed opening quantity is still valid, but
+        // it cannot be proof of NEW tenant-caused loss/damage for settlement.
+        observed.Checked && baseline is { HandedOverQuantity: not null } &&
+        (observed.MissingQuantity is { } missing && missing > baseline.MissingQuantity.GetValueOrDefault() ||
+         observed.DamagedQuantity is { } damaged && baseline.DamagedQuantity is { } initiallyDamaged && damaged > initiallyDamaged ||
          observed.HandedOverQuantity is { } returned &&
          baseline.HandedOverQuantity is { } given && returned < given);
     public static bool RequiresOwner(HandoverSnapshot s) => !s.NoAssetsConfirmed && (s.Assets.Length == 0 ||

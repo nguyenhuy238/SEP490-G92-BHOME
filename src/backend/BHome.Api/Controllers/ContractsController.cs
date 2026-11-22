@@ -251,6 +251,14 @@ public sealed class ContractsController(ContractService service, ContractExpiryS
     public Task<MoveOutView> Approve(Guid id, CancellationToken t) => service.ApproveTerminationAsync(id, Key(), t);
     [HttpPost("{id:guid}/move-out/schedule"), Authorize(Roles = Roles.Owner + "," + Roles.Staff)]
     public Task<MoveOutView> Schedule(Guid id, InspectionScheduleInput x, CancellationToken t) => service.ScheduleInspectionAsync(id, x, Key(), t);
+    [HttpGet("{id:guid}/move-out/inspection-draft"), Authorize(Roles = Roles.Staff)]
+    public Task<MoveOutInspectionDraftView> GetMoveOutInspectionDraft(Guid id, CancellationToken t) =>
+        service.GetMoveOutInspectionDraftAsync(id, t);
+    [HttpPatch("{id:guid}/move-out/inspection-draft"), HttpPut("{id:guid}/move-out/inspection-draft"),
+     Authorize(Roles = Roles.Staff)]
+    public Task<MoveOutInspectionDraftView> SaveMoveOutInspectionDraft(Guid id,
+        MoveOutInspectionDraftWrite x, CancellationToken t) =>
+        service.SaveMoveOutInspectionDraftAsync(id, x, Key(), t);
     [HttpPost("{id:guid}/move-out/inspection"), Authorize(Roles = Roles.Staff)]
     public Task<MoveOutView> Inspect(Guid id, InspectionInput x, CancellationToken t) => service.InspectAsync(id, x, Key(), t);
     [HttpPost("{id:guid}/move-out/evidence"), Authorize(Roles = Roles.Staff), Consumes("image/png", "image/jpeg"), RequestSizeLimit(5 * 1024 * 1024)]

@@ -52,6 +52,15 @@ export function isMainMoveInWork(task: OperationalTask): boolean {
     task.title.startsWith('Bàn giao vào phòng')
   );
 }
+
+/** A contract's move-out inspection is entered through the shared Staff work queue. */
+export function isMainMoveOutWork(task: OperationalTask): boolean {
+  return (
+    task.kind === 'AdHoc' &&
+    !!task.target?.contractId &&
+    task.title.startsWith('Kiểm tra trả phòng')
+  );
+}
 export interface TaskHistory {
   id: string;
   action: string;

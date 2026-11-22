@@ -14,7 +14,7 @@ export function moveOutProgress(
   return [
     { label: 'Yêu cầu', done: true },
     { label: 'Phê duyệt', done: approved },
-    { label: 'Lịch kiểm tra', done: !!move.inspectionScheduledAt },
+    { label: 'Mở nhiệm vụ trả phòng', done: approved },
     { label: 'Biên bản', done: inspected },
     { label: 'Duyệt biên bản', done: inspectionConfirmed },
     {

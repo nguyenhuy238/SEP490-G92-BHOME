@@ -296,7 +296,13 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
             throw new CaptureConflictException("active_contract_initial_required");
         if (task.Purpose == ReadingPurpose.Initial && previous != null && !tenancyOpening)
             throw new CaptureConflictException("baseline_already_confirmed");
-        if (task.Purpose != ReadingPurpose.Initial && previous is null) throw new CaptureConflictException("confirmed_baseline_required");
+        // Move-out is a physical inspection independent of a signed move-in
+        // record. A missing earlier meter reading must not prevent photographing
+        // and confirming today's Final value; consumption remains unknown until
+        // billing has a separately verified opening point. Periodic readings
+        // still require an established meter baseline.
+        if (task.Purpose == ReadingPurpose.Periodic && previous is null)
+            throw new CaptureConflictException("confirmed_baseline_required");
         if (previous is not null)
         {
             var previousTask = await db.Set<OperationalTask>().AsNoTracking().SingleAsync(a => a.Id == previous.TaskId, t);

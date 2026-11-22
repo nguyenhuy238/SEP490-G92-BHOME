@@ -100,9 +100,7 @@ export function ContractLifecyclePanel({
   const [reason, setReason] = useState(''),
     [schedule, setSchedule] = useState(''),
     [assignee, setAssignee] = useState('');
-  const [exceptionInspection, setExceptionInspection] = useState<string | null>(null),
-    [exceptionReason, setExceptionReason] = useState(''),
-    [disposition, setDisposition] = useState('');
+  const [disposition, setDisposition] = useState('');
   const [reviewedReference, setReviewedReference] = useState<string | null>(null),
     [noChargesInspection, setNoChargesInspection] = useState<string | null>(null);
   const [busy, setBusy] = useState(false),
@@ -150,7 +148,6 @@ export function ContractLifecyclePanel({
   const inspection = q.inspections[0],
     summary = q.summary;
   const inspectionKey = inspection ? `${contract.id}:${inspection.id}:${inspection.version}` : null;
-  const tenantException = !!inspectionKey && exceptionInspection === inspectionKey;
   const noCharges = !!inspectionKey && noChargesInspection === inspectionKey;
   const checked = !!summary && reviewedReference === summary.reference;
   const money = (v: string | null) => (v === null ? 'Chờ xác minh' : formatContractMoney(v));
@@ -213,7 +210,7 @@ export function ContractLifecyclePanel({
             ))}
           </Stack>
           <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
-            {['Lịch kiểm tra', 'Biên bản', 'Quyết toán', 'Lịch sử'].map((label, index) => (
+            {['Lịch kiểm tra', 'Kết quả kiểm tra', 'Quyết toán', 'Lịch sử'].map((label, index) => (
               <Button
                 key={label}
                 size="small"
@@ -230,18 +227,17 @@ export function ContractLifecyclePanel({
         </Box>
         {moveOut.status === 'Completed' && (
           <Alert severity="info">
-            Đã hoàn tất bàn giao vật lý. Nợ, cọc và giao dịch hoàn tiền vẫn được đối chiếu riêng;
+            Đã hoàn tất kiểm tra và trả phòng. Nợ, cọc và giao dịch hoàn tiền vẫn được đối chiếu riêng;
             trạng thái này không xác nhận đã thanh toán.
           </Alert>
         )}
-        {moveOut.status === 'Approved' &&
-          (!moveOut.inspectionStaffId || !moveOut.inspectionScheduledAt) && (
-            <Alert severity="warning">
-              Hồ sơ trả phòng đã được mở. Owner cần chọn Staff phụ trách và lịch kiểm tra để nhiệm
-              vụ xuất hiện trên Mobile của nhân viên; chưa có việc bàn giao nào được tự xác nhận
-              hoàn thành.
-            </Alert>
-          )}
+        {moveOut.status === 'Approved' && (
+          <Alert severity="info">
+            Nhiệm vụ kiểm tra trả phòng đã mở cho Staff thuộc cơ sở. Có thể đặt lịch và phân công
+            một người phụ trách bên dưới nếu cần; Staff chỉ gửi kết quả kiểm tra khi đến ngày trả phòng và
+            có đủ chỉ số điện nước chốt.
+          </Alert>
+        )}
         {moveOut.pendingReason && (
           <Alert severity="warning">{settlementBlocker(moveOut.pendingReason)}</Alert>
         )}
@@ -253,12 +249,12 @@ export function ContractLifecyclePanel({
         {!!notice && <Alert severity="success">{notice}</Alert>}
         <Box id={`termination-${contract.id}-0`} sx={{ scrollMarginTop: 24 }}>
           <Typography variant="h6" component="h3">
-            Lịch kiểm tra
+            Lịch kiểm tra (tùy chọn)
           </Typography>
           <Typography variant="body2">
             {moveOut.inspectionScheduledAt
               ? formatInstant(moveOut.inspectionScheduledAt) + ' (giờ Việt Nam)'
-              : 'Chưa lập lịch kiểm tra.'}
+              : 'Chưa đặt lịch riêng; Staff tại cơ sở đã thấy nhiệm vụ.'}
           </Typography>
           {moveOut.inspectionStaffId && (
             <Typography variant="body2">
@@ -310,11 +306,12 @@ export function ContractLifecyclePanel({
                 }
               }}
             >
-              Lưu lịch & phân công
+              Lưu lịch & phân công tùy chọn
             </Button>
             {!assignee && (
               <Alert severity="info">
-                Lịch chưa có người phụ trách. Chọn Staff được phân công Location để giao việc.
+                Nhiệm vụ đã mở cho cơ sở. Nếu muốn giao cho một Staff cụ thể, hãy chọn người phụ
+                trách và lịch kiểm tra.
               </Alert>
             )}
           </>
@@ -325,11 +322,11 @@ export function ContractLifecyclePanel({
           component="h3"
           sx={{ scrollMarginTop: 24 }}
         >
-          Biên bản bàn giao
+          Kết quả kiểm tra trả phòng
         </Typography>
         {!q.loading && !q.inspections.length && !q.sectionErrors.inspections && (
           <Typography color="text.secondary">
-            Chưa có biên bản kiểm tra trả phòng. Staff thực hiện tại luồng kiểm tra được phân công.
+            Chưa có kết quả kiểm tra trả phòng. Staff thực hiện và lưu từng mục trong nhiệm vụ được giao; không cần lập biên bản hay ký.
           </Typography>
         )}
         {!q.inspections.length &&
@@ -343,18 +340,22 @@ export function ContractLifecyclePanel({
             />
           ))}
         {q.preparation && !q.preparation.baseline && (
-          <Alert severity="warning">
-            Chưa có biên bản nhận phòng đã xác nhận để đối chiếu. Hoàn thiện bàn giao gốc trước khi
-            duyệt trả phòng.
+          <Alert severity="info">
+            Không có dữ liệu nhận phòng để đối chiếu. Staff vẫn kiểm tra và ghi nhận hiện trạng,
+            số lượng thực tế; không tự suy đoán số lượng/tình trạng ban đầu hoặc khoản bồi thường.
           </Alert>
         )}
         {q.inspections.map((i) => (
           <Stack key={i.id} spacing={1}>
             <Typography variant="h6">
-              Biên bản phiên bản {i.version} · {formatInstant(i.inspectedAt)}
+              Kết quả kiểm tra lần {i.version} · {formatInstant(i.inspectedAt)}
             </Typography>
-            <Typography>Đối chiếu bàn giao nhận phòng phiên bản {i.baselineVersion}</Typography>
-            {i.baselineContractId !== contract.id && (
+            <Typography>
+              {i.baseline
+                ? `So sánh với hiện trạng lúc nhận phòng (lần ${i.baselineVersion})`
+                : 'Không có dữ liệu nhận phòng để đối chiếu; chỉ ghi nhận thực tế khi trả.'}
+            </Typography>
+            {i.baseline && i.baselineContractId !== contract.id && (
               <Button
                 size="small"
                 href={`/contracts?contractId=${encodeURIComponent(i.baselineContractId)}`}
@@ -386,10 +387,25 @@ export function ContractLifecyclePanel({
                     <TableRow key={`room-check-${check.code}`}>
                       <TableCell>{roomCheckNames[check.code] ?? check.code}</TableCell>
                       <TableCell>
-                        {i.baseline?.roomChecks?.find((previous) => previous.code === check.code)
-                          ?.status === 'Passed'
-                          ? 'Đạt khi nhận phòng'
-                          : 'Không có kết quả đối chiếu'}
+                        {(() => {
+                          const previous = i.baseline?.roomChecks?.find(
+                            (item) => item.code === check.code,
+                          );
+                          return previous ? (
+                            <Stack spacing={0.5}>
+                              <Typography variant="body2">
+                                {roomCheckResult[previous.status] ?? previous.status}
+                              </Typography>
+                              {!!previous.notes?.trim() && (
+                                <Typography variant="caption" sx={{ whiteSpace: 'pre-wrap' }}>
+                                  {previous.notes}
+                                </Typography>
+                              )}
+                            </Stack>
+                          ) : (
+                            'Chưa có dữ liệu đối chiếu'
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <Stack spacing={0.5}>
@@ -424,7 +440,13 @@ export function ContractLifecyclePanel({
                   </TableRow>
                   <TableRow>
                     <TableCell>Chìa khóa / quyền truy cập</TableCell>
-                    <TableCell>{i.baseline?.keysAndAccess ?? 'Chưa rõ'}</TableCell>
+                      <TableCell>
+                        {i.baseline?.accessItems?.length
+                          ? i.baseline.accessItems
+                              .map((item) => `${item.type}: ${item.quantity}`)
+                              .join(' · ')
+                          : (i.baseline?.keysAndAccess ?? 'Chưa có dữ liệu đối chiếu')}
+                      </TableCell>
                     <TableCell>
                       {i.observed.accessItems?.length
                         ? i.observed.accessItems
@@ -442,13 +464,73 @@ export function ContractLifecyclePanel({
                     <TableRow key={a.id}>
                       <TableCell>{a.name}</TableCell>
                       <TableCell>
-                        {i.baseline?.assets.find((b) => b.id === a.id)?.observedCondition ??
-                          'Chưa rõ'}{' '}
-                        · Số giao:{' '}
-                        {i.baseline?.assets.find((b) => b.id === a.id)?.handedOverQuantity ??
-                          'chưa rõ'}
+                        {(() => {
+                          const previous = i.baseline?.assets.find((item) => item.id === a.id);
+                          return previous ? (
+                            <Stack spacing={0.5}>
+                              <Typography variant="body2">
+                                Số lượng: {previous.handedOverQuantity ?? 'Chưa xác định'}
+                              </Typography>
+                              <Typography variant="body2">
+                                Tình trạng: {previous.observedCondition || 'Chưa xác định'}
+                              </Typography>
+                              {(a.physicalObservations ?? []).map((physical, index) => {
+                                const original = previous.physicalObservations?.find(
+                                  (item) => item.id === physical.id,
+                                );
+                                return (
+                                  <Typography key={physical.id} variant="caption" color="text.secondary">
+                                    {'Món ' + (index + 1) + ': ' +
+                                      (original?.handedOverQuantity ?? original?.quantity ?? 'Chưa rõ') +
+                                      ' · ' + (original?.condition || 'Chưa rõ')}
+                                  </Typography>
+                                );
+                              })}
+                            </Stack>
+                          ) : (
+                            'Chưa có dữ liệu đối chiếu'
+                          );
+                        })()}
                       </TableCell>
-                      <TableCell>{handoverAssetSummary(a)}</TableCell>
+                      <TableCell>
+                        <Stack spacing={0.5}>
+                          <Typography variant="body2">
+                            Số lượng thực tế: {a.observedQuantity ?? 'Chưa ghi'}
+                          </Typography>
+                          <Typography variant="body2">
+                            Tình trạng: {a.observedCondition || 'Chưa ghi'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {handoverAssetSummary(a)}
+                          </Typography>
+                          {(a.physicalObservations ?? []).map((physical, index) => {
+                            const proof = i.observed.physicalItemEvidence?.find(
+                              (item) => item.assetId === a.id && item.physicalAssetId === physical.id,
+                            );
+                            return (
+                              <Stack key={physical.id} spacing={0.5} sx={{ pt: 0.5 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                  {'Món ' + (index + 1) + ': ' + physical.quantity + ' · ' + physical.condition}
+                                </Typography>
+                                {!!proof?.notes?.trim() && (
+                                  <Typography variant="caption" sx={{ whiteSpace: 'pre-wrap' }}>
+                                    {proof.notes}
+                                  </Typography>
+                                )}
+                                {(proof?.evidenceIds ?? []).map((fileId, n) => (
+                                  <PrivateEvidenceViewer
+                                    key={fileId}
+                                    label={a.name + ' · món ' + (index + 1) + ' · ảnh ' + (n + 1)}
+                                    filename={'tai-san-' + a.id + '-' + (index + 1) + '-' + (n + 1) + '.jpg'}
+                                    fetchBlob={(signal) => api.evidence(contract.id, fileId, signal)}
+                                    errorMessage={contractError}
+                                  />
+                                ))}
+                              </Stack>
+                            );
+                          })}
+                        </Stack>
+                      </TableCell>
                     </TableRow>
                   ))}
                   <TableRow sx={{ bgcolor: 'action.hover' }}>
@@ -481,12 +563,6 @@ export function ContractLifecyclePanel({
                 đầu.
               </Alert>
             )}
-            <Typography>
-              Tenant:{' '}
-              {i.observed.tenantFeedback
-                ? `${i.observed.tenantFeedback.confirmed ? 'Đã xác nhận hiện trạng' : 'Không đồng ý'} · ${i.observed.tenantFeedback.reason}`
-                : 'Chưa phản hồi'}
-            </Typography>
             {i.observed.proposedCompensation && (
               <Alert severity="info">
                 Đề xuất của Staff, chưa phải khoản phải thu: {i.observed.proposedCompensation}
@@ -676,46 +752,8 @@ export function ContractLifecyclePanel({
               onChange={(e) => setReason(e.target.value)}
               slotProps={{ htmlInput: { maxLength: 2000 } }}
             />
-            {q.preparation?.legacyExceptionRequired &&
-              !q.preparation.legacyExceptionReason &&
-              !inspection && (
-                <>
-                  <Alert severity="warning">
-                    Hợp đồng cũ chưa có biên bản nhận phòng. Ngoại lệ chỉ cho phép kiểm tra hiện
-                    trạng; không tạo dữ liệu bàn giao trong quá khứ.
-                  </Alert>
-                  <Button
-                    disabled={busy || !reason.trim()}
-                    onClick={() => void save('move-out/legacy-baseline-exception', { reason })}
-                  >
-                    Duyệt ngoại lệ thiếu baseline với căn cứ trên
-                  </Button>
-                </>
-              )}
             {inspection && !inspection.ownerDecision && moveOut.status === 'Inspected' && (
               <>
-                {inspection.observed.tenantFeedback?.confirmed !== true && (
-                  <>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={tenantException}
-                          onChange={(_, value) =>
-                            setExceptionInspection(value ? inspectionKey : null)
-                          }
-                        />
-                      }
-                      label="Owner xử lý ngoại lệ Tenant chưa phản hồi hoặc không đồng ý"
-                    />
-                    <TextField
-                      label="Căn cứ xử lý ngoại lệ phản hồi Tenant"
-                      value={exceptionReason}
-                      onChange={(e) => setExceptionReason(e.target.value)}
-                      multiline
-                      disabled={busy}
-                    />
-                  </>
-                )}
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -728,27 +766,20 @@ export function ContractLifecyclePanel({
                   label="Đã đối chiếu: không phát sinh phí bổ sung hoặc thiệt hại cần thu"
                 />
                 <ConfirmActionButton
-                  title="Xác nhận biên bản kiểm tra"
-                  description="Xác nhận hiện trạng, chỉ số điện nước và bằng chứng đã đối chiếu. Thao tác này chưa xác nhận đã quyết toán tài chính."
-                  confirmationKey={`${inspection.id}:${inspection.version}:${reason}:${noCharges}:${tenantException}:${exceptionReason}`}
-                  disabled={
-                    busy ||
-                    !reason.trim() ||
-                    (inspection.observed.tenantFeedback?.confirmed !== true &&
-                      (!tenantException || !exceptionReason.trim()))
-                  }
+                  title="Xác nhận kết quả kiểm tra thực tế"
+                  description="Kiểm tra các số liệu, ảnh công tơ và hiện trạng Staff ghi nhận. Đây không phải thao tác lập biên bản, ký nhận hay quyết toán tài chính."
+                  confirmationKey={`${inspection.id}:${inspection.version}:${reason}:${noCharges}`}
+                  disabled={busy || !reason.trim()}
                   onConfirm={() =>
                     save('move-out/inspection-review', {
                       version: inspection.version,
                       confirmed: true,
                       reason,
                       noAdditionalCharges: noCharges,
-                      tenantException,
-                      tenantExceptionReason: exceptionReason,
                     })
                   }
                 >
-                  Xác nhận biên bản kiểm tra
+                  Xác nhận kết quả kiểm tra
                 </ConfirmActionButton>
                 <ConfirmActionButton
                   title="Yêu cầu kiểm tra lại"
@@ -770,7 +801,7 @@ export function ContractLifecyclePanel({
             {inspection?.ownerDecision === 'Confirmed' && (
               <>
                 <Alert severity="info">
-                  Hoàn tất bàn giao vật lý độc lập với quyết toán. Phòng có Tenant khác sẽ tiếp tục
+                  Hoàn tất trả phòng độc lập với quyết toán. Phòng có Tenant khác sẽ tiếp tục
                   Đang thuê.
                 </Alert>
                 <TextField
@@ -793,7 +824,7 @@ export function ContractLifecyclePanel({
                     })
                   }
                 >
-                  Hoàn tất bàn giao trả phòng và lưu PDF
+                  Hoàn tất trả phòng
                 </Button>
               </>
             )}

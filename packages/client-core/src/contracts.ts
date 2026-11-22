@@ -263,6 +263,13 @@ export interface HandoverSnapshot {
     | null;
   accessItems?: { type: string; quantity: number; notes: string }[] | null;
   keyEvidenceIds?: string[] | null;
+  /** Item-specific private evidence for Move-Out observations (not used in signed Move-In). */
+  physicalItemEvidence?: {
+    assetId: string;
+    physicalAssetId: string;
+    notes: string | null;
+    evidenceIds: string[];
+  }[] | null;
   inventoryToken?: string | null;
   inventoryState?: string | null;
   noAssetsConfirmed?: boolean;
@@ -827,10 +834,13 @@ export function contractClient(request: ContractRequest) {
       request<
         {
           contractId: string;
+          roomId: string;
           roomNumber: string;
           locationName: string;
-          scheduledAt: string;
+          proposedDate: string;
+          scheduledAt: string | null;
           status: string;
+          version: number;
         }[]
       >(`${root}/move-out-assignments`, { signal }),
     inspectionStaff: async (locationId: string, signal?: AbortSignal) => {
@@ -1128,9 +1138,10 @@ export const labels: Record<string, string> = {
   ContractSigningFailed: 'Nhà cung cấp báo ký thất bại',
   ContractSigningReferenceRecovered: 'Khôi phục tham chiếu yêu cầu ký',
   ContractMoveOutRequested: 'Gửi yêu cầu trả phòng',
+  ContractOwnerMoveOutOpened: 'Owner mở nhiệm vụ trả phòng',
   ContractMoveOutApproved: 'Owner duyệt yêu cầu trả phòng',
   ContractInspectionScheduled: 'Đặt lịch kiểm tra trả phòng',
-  ContractMoveOutInspected: 'Lưu biên bản kiểm tra trả phòng',
+  ContractMoveOutInspected: 'Lưu kết quả kiểm tra trả phòng',
   ContractSettlementReviewed: 'Owner ghi nhận xem xét quyết toán',
   ContractTerminationCompleted: 'Hoàn tất chấm dứt hợp đồng',
   ContractInspectionEvidenceAdded: 'Tải ảnh kiểm tra trả phòng',
@@ -1141,7 +1152,7 @@ export const labels: Record<string, string> = {
   ContractHandoverEvidenceAdded: 'Tải ảnh nhận phòng',
   MoveInReport: 'Biên bản nhận phòng',
   AssetChangeReport: 'Biên bản thay đổi tài sản',
-  MoveOutReport: 'Biên bản trả phòng',
+  MoveOutReport: 'Tài liệu trả phòng lưu trữ (cũ)',
   NotChecked: 'Chưa kiểm kê',
   PartiallyChecked: 'Kiểm kê chưa đủ',
   Matched: 'Đã kiểm kê đủ',
@@ -1273,7 +1284,7 @@ export const labels: Record<string, string> = {
   confirmed_final_readings_required:
     'Cần chỉ số điện và nước chốt đã xác nhận, đúng hợp đồng và ngày kiểm tra.',
   move_out_not_ready_for_inspection:
-    'Cần duyệt yêu cầu, đặt lịch và đến ngày trả phòng trước khi lập biên bản.',
+    'Cần có yêu cầu trả phòng đã duyệt, đến ngày trả dự kiến và nhiệm vụ Staff đang thực hiện để lưu kết quả kiểm tra.',
   settlement_unresolved: 'Nghĩa vụ quyết toán chưa hoàn tất hoặc đã thay đổi.',
   deposit_deduction_review_changed:
     'Số liệu hoặc phiên bản quyết định đã đổi. Tải lại và xem xét trước khi duyệt.',
@@ -1634,7 +1645,14 @@ export function contractActions(
       ),
     );
   if (active && !m && owner && c.kind !== 'Holding')
-    result.push(action('expiry-move-out', 'Lập yêu cầu trả phòng khi hết hạn', proposedFields));
+    result.push(
+      action(
+        'expiry-move-out',
+        'Lập yêu cầu trả phòng',
+        proposedFields,
+        'Owner mở hồ sơ và giao công việc kiểm tra trả phòng cho Staff của cơ sở ngay khi xác nhận. Có thể chọn ngày trước hoặc sau ngày hết hạn hợp đồng. Chỉ hoàn tất bàn giao khi đã đủ điều kiện kiểm tra thực tế.',
+      ),
+    );
   if (owner && m?.status === 'Requested')
     result.push(action('move-out/approve', 'Duyệt yêu cầu trả phòng'));
   if ((owner || staff) && m?.status === 'Approved')
@@ -1643,24 +1661,10 @@ export function contractActions(
         { name: 'scheduledAt', label: 'Lịch kiểm tra (giờ Việt Nam)', type: 'schedule' },
       ]),
     );
-  if (staff && m?.status === 'Approved' && m.inspectionScheduledAt)
-    result.push(
-      action(
-        'move-out/inspection',
-        'Lưu biên bản trả phòng',
-        [
-          { name: 'electricityReadingId', label: 'Mã chỉ số điện chốt đã xác nhận' },
-          { name: 'waterReadingId', label: 'Mã chỉ số nước chốt đã xác nhận' },
-          {
-            name: 'notes',
-            label: 'Hiện trạng phòng, tài sản, chìa khóa',
-            type: 'multiline',
-            max: 4000,
-          },
-        ],
-        'Cần đến ngày trả phòng, đủ ảnh hiện trạng và chỉ số chốt đúng hợp đồng/ngày kiểm tra.',
-      ),
-    );
+  // Staff records move-out observations through its started /work-orders task:
+  // four independently persisted sections, private images, confirmed Final
+  // meter readings and explicit submission. Do not offer the obsolete generic
+  // contract form that bypasses the optimized checklist.
   if (owner && m && ['Inspected', 'PendingSettlement', 'Settled', 'Completed'].includes(m.status))
     result.push(
       action(
@@ -1730,8 +1734,6 @@ export function actionPayload(
       throw new Error('Ngày trả phòng không được trong quá khứ.');
     if (a.operation === 'termination-requests' && String(body.proposedDate) >= c.endDate)
       throw new Error('Yêu cầu trước hạn cần ngày trả phòng trước ngày hết hạn.');
-    if (a.operation === 'expiry-move-out' && String(body.proposedDate) < c.endDate)
-      throw new Error('Trả phòng hết hạn cần ngày từ ngày hết hạn trở đi.');
   }
   if (a.operation === 'move-out/inspection') {
     if (!evidenceIds.length || evidenceIds.length > 5)

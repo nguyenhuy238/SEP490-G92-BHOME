@@ -166,6 +166,7 @@ export function moveOutActionLabel(action: string) {
     (
       {
         Requested: 'Gửi yêu cầu',
+        OwnerMoveOutOpened: 'Owner lập yêu cầu trả phòng',
         Approved: 'Đã duyệt',
         Scheduled: 'Đặt lịch',
         Inspected: 'Đã kiểm tra',

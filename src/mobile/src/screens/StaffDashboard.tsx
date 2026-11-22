@@ -7,12 +7,14 @@ import { StaffFeatureDirectory } from '../components/StaffFeatureDirectory';
 import { useWorkspace } from '../features/workspace/WorkspaceProvider';
 import { useStaffDashboard } from '../features/workspace/useStaffDashboard';
 import { type WorkspaceScreen } from '../features/workspace/navigation';
+import { businessToday, displayContractDate } from '../../../../packages/client-core/src/contracts';
 import { colors as c, staffColors as s } from '../theme/theme';
 import { typography } from '../theme/typography';
 import {
   isEmbeddedInitialMeterTask,
   isEmbeddedMoveInInventory,
   isMainMoveInWork,
+  isMainMoveOutWork,
 } from '../services/operationalTasks';
 
 export function StaffDashboard() {
@@ -67,9 +69,11 @@ export function StaffDashboard() {
             open: () =>
               isMainMoveInWork(task)
                 ? go('move-in', { contractId: task.target!.contractId!, section: 'handover' })
-                : go(task.kind === 'MoveInInventory' ? 'move-in-inventory' : 'task-detail', {
-                    taskId: task.id,
-                  }),
+                : isMainMoveOutWork(task)
+                  ? go('move-out', { contractId: task.target!.contractId!, taskId: task.id })
+                  : go(task.kind === 'MoveInInventory' ? 'move-in-inventory' : 'task-detail', {
+                      taskId: task.id,
+                    }),
           })),
         ...selectedInspections
           .filter((item) => item.status === 'Approved')
@@ -77,9 +81,12 @@ export function StaffDashboard() {
           .map((item) => ({
             id: item.contractId,
             title: 'Kiểm tra trả phòng',
-            detail: `Phòng ${item.roomNumber} · ${item.locationName}`,
-            status: 'Được phân công',
-            open: () => go('move-out', { contractId: item.contractId }),
+            detail: `Phòng ${item.roomNumber} · ${item.locationName}${item.proposedDate ? ` · Ngày trả ${displayContractDate(item.proposedDate)}` : ''}`,
+            status:
+              item.proposedDate && item.proposedDate > businessToday()
+                ? 'Chờ ngày trả'
+                : 'Cần kiểm tra',
+            open: () => go('work-orders'),
           })),
         ...(data.meters.data ?? [])
           .filter(
@@ -184,7 +191,7 @@ export function StaffDashboard() {
                 : pendingInspections
                   ? `${data.inspections.data!.length >= 100 ? '≥' : ''}${pendingInspections.length}`
                   : '—',
-              screen: 'move-out' as const,
+              screen: 'work-orders' as const,
             },
           ].map((metric, index) => (
             <TouchableRipple

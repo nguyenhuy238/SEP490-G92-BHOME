@@ -11,16 +11,16 @@
 
 ## Staff kiểm tra đầy đủ bốn phần
 
-GET move-out/inspection-preparation vẫn cho dữ liệu baseline bàn giao phòng có xác nhận, số meter Final và inventory. Staff gửi POST move-out/inspection với version/idempotency; dữ liệu mới đặt ở cuối InspectionInput, không sửa nội dung PDF/historical signatures đã tồn tại:
+GET move-out/inspection-preparation trả dữ liệu nhận phòng để **đối chiếu nếu có**, số meter Final và inventory hiện tại. MoveOut là phép kiểm tra thực tế độc lập, không bắt buộc biên bản MoveIn đầu vào, không lập PDF hay ký nhận. Staff lưu từng mục bằng GET/PATCH move-out/inspection-draft, rồi gửi POST move-out/inspection với version/idempotency:
 
 1. **Điện/nước:** electricityReadingId và waterReadingId bắt buộc là Final confirmed và ảnh/hash hợp lệ.
-2. **Hiện trạng phòng:** roomCondition và roomChecks với bảy mã chuẩn, mỗi phần tử gồm code/status/notes/evidenceIds. Issue có mô tả và ảnh riêng; NotApplicable vẫn là quan sát, không tự coi Passed.
-3. **Kiểm kê tài sản:** assets với từng số lượng, tình trạng, ghi chú/ảnh, so với baseline ký đầu vào và inventoryToken phiên bản hiện tại.
-4. **Chìa khóa/quyền ra vào:** keysAndAccess, accessItems có {type: RoomKey, quantity, notes}, keyEvidenceIds. Trả ít chìa hơn baseline cần nêu rõ và có ảnh riêng.
+2. **Hiện trạng phòng:** `roomChecks` luôn đủ bảy mã chuẩn, mỗi mục chỉ nhận `Passed` (Tốt) hoặc `Issue` (Có vấn đề). `Issue` phải có lý do; mỗi mục được đính kèm tối đa năm ảnh nhưng ảnh là tùy chọn ở cả hai trạng thái. `roomCondition` có thể bỏ trống để hệ thống tổng hợp từ bảy kết quả.
+3. **Kiểm kê tài sản:** nhập tình trạng và số lượng thực tế (`observedQuantity`) khi có quản lý số lượng. Ghi lý do nếu tình trạng có vấn đề hoặc phát hiện thiếu/chênh lệch với dữ liệu đầu vào đã xác thực. Ảnh nhóm và ảnh từng tài sản vật lý đều tùy chọn; ghi chú là bắt buộc với tài sản vật lý có vấn đề. Không buộc Staff tự phân tách `goodQuantity`/`wornQuantity`/`damagedQuantity` hoặc khai báo `handedOverQuantity` khi chưa kiểm đếm riêng; các giá trị không ghi nhận giữ nguyên `null`. `missingQuantity` chỉ được tính từ số lượng lúc nhận đã xác thực, nếu không có baseline thì vẫn là `null`. Không tự tạo khoản thu/bồi thường.
+4. **Chìa khóa:** `accessItems` gồm đúng một mục `{type: RoomKey, quantity, notes}` với số lượng 0–100; ghi chú và `keyEvidenceIds` đều tùy chọn, kể cả khi ít hơn số lượng ban đầu. `keysAndAccess` có thể được tổng hợp từ số chìa đã nhận.
 
-Hồ sơ mới có roomChecks/accessItems trong baseline bắt buộc nhập lại đầy đủ module tương ứng khi trả phòng; dữ liệu lịch sử chưa cấu trúc vẫn tương thích. Ảnh hạng mục không được trùng ảnh chung hoặc ảnh nhóm khác, Backend kiểm tra quyền, nội dung ảnh và hash. Snapshot ghi vào ContractFinalInspection.ObservedSnapshot, Owner/Tenant được xem qua GET move-out/inspections có kiểm quyền.
+Kể cả hợp đồng cũ không có dữ liệu bàn giao ban đầu, khi trả phòng Staff vẫn phải kiểm tra đủ bảy mục phòng, kiểm kê tài sản đang có và nhập số chìa khóa nhận lại. Ghi chú tổng quan `notes` và ảnh chung `evidenceIds` là tùy chọn. Ảnh hạng mục không được trùng ảnh chung hoặc ảnh nhóm khác; Backend kiểm tra quyền, nội dung ảnh và hash. Snapshot ghi vào ContractFinalInspection.ObservedSnapshot, Owner/Tenant được xem qua GET move-out/inspections có kiểm quyền.
 
-Staff có thể hoàn tất bốn phần **dù có Issue/Missing/Damaged** để Owner kiểm tra và yêu cầu sửa hoặc kiểm lại. Owner vẫn duyệt qua inspection-review; Tenant có quyền phản hồi; lịch sử immutable không bị cập nhật lại.
+Staff có thể hoàn tất bốn phần **dù có Issue/Missing/Damaged** để Owner kiểm tra và yêu cầu sửa hoặc kiểm lại. Owner duyệt kết quả qua inspection-review có phiên bản, lý do, thời điểm và audit; không yêu cầu Tenant phản hồi/ký hoặc Owner ký. Tenant feedback từ phiên bản cũ chỉ là dữ liệu tham khảo. Lịch sử kết quả đã chốt không bị sửa thành phiên bản khác.
 
 ## Giá, cọc, khoản còn nợ và hoàn tiền
 
@@ -29,7 +29,7 @@ Owner đặt giá theo từng tài sản hoặc mã lỗi roomCheckCode qua POST
 ### Owner chốt quyết toán sau khi duyệt đầy đủ
 
 - Owner Web có bước **Chốt quyết toán và xử lý tiền cọc**; Backend nhận `POST /api/v1/contracts/{id}/move-out/receivables/final-close` với `Idempotency-Key` và `SettlementFinancialCloseInput` gồm `expectedReference`, `expectedChargeReviewId`, `waivedIssueKeys`, `beneficiaryResidentId`, `beneficiaryVerified`, `reason`, `humanConfirmed`. Đây là **thao tác Owner xác nhận trực tiếp**, không phải tác vụ chạy nền.
-- Phải có biên bản kiểm tra trả phòng Owner đã xác nhận, nguồn điện/nước và các khoản cuối kỳ đã đối soát, bản duyệt khoản thu hiện hành khi có khoản phải thu. Mỗi mục tài sản/phòng/chìa khóa phát sinh lỗi phải **có khoản bồi thường riêng** hoặc được Owner **miễn thu rõ ràng** qua `waivedIssueKeys`; không tự xem lỗi chưa định giá là miễn thu.
+- Phải có **kết quả kiểm tra trả phòng lưu trong hệ thống và Owner đã xác nhận** (không phải PDF/biên bản ký), nguồn điện/nước và các khoản cuối kỳ đã đối soát, bản duyệt khoản thu hiện hành khi có khoản phải thu. Mỗi mục tài sản/phòng/chìa khóa phát sinh lỗi phải **có khoản bồi thường riêng** hoặc được Owner **miễn thu rõ ràng** qua `waivedIssueKeys`; không tự xem lỗi chưa định giá là miễn thu.
 - Backend kiểm tra lại tham chiếu sổ cái và các điều kiện nghiệp vụ, giữ khóa giao dịch theo thứ tự, tự dùng luồng `deposit-offsets` có sẵn để phân bổ **cọc đã xác minh** vào khoản `TenantDamage`. Thiệt hại vượt cọc giữ nguyên là **outstanding của khoản phải thu đó**, không tạo hóa đơn hoặc nghĩa vụ trùng.
 - Chỉ khi **không còn nghĩa vụ khác chưa trả**, còn cọc đủ điều kiện và Owner xác minh **người nhận hoàn** theo thỏa thuận, Backend mới tạo **một** yêu cầu hoàn cọc trạng thái `REQUESTED` qua luồng Refund hiện hữu. Không tự `APPROVED`, `COMPLETED` hay chuyển tiền. Nếu không còn cọc, không tạo hoàn tiền giả.
 - Backend từ chối tham chiếu cũ, nguồn hoàn bị chặn, giá/miễn thu chưa đủ, người nhận không xác minh, lịch sử khấu trừ cũ chưa xử lý và chốt lại lần thứ hai; idempotency key lặp hợp lệ trả kết quả cũ. Refund vẫn cần Owner duyệt/thực thi có chứng cứ trong luồng riêng.

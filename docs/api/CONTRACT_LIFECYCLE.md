@@ -132,10 +132,24 @@ Mutation JSON cần Idempotency-Key GUID. Auth ở service, object scope lấy t
 
 - GET `{id}/versions`: Owner/Tenant sở hữu, Staff assigned; cùng chain previous/next;
   Staff chỉ dates/status, không rent/terms. Renewal chỉ Active khi ngày hiệu lực và đủ ký/cọc.
+- POST `{id}/termination-requests`: Tenant đề nghị trả phòng sớm (`proposedDate` từ hôm nay đến trước ngày hết hạn), tạo `Requested`.
+  Chỉ sau POST `{id}/move-out/approve` bởi Owner, hồ sơ mới chuyển `Approved` và xuất hiện trong danh sách công việc Staff tại cơ sở.
+- POST `{id}/expiry-move-out`: Owner chủ động lập yêu cầu trả phòng cho hợp đồng Active, với
+  `proposedDate >= hôm nay`, có thể trước, đúng hoặc sau ngày hết hạn. API giữ tên cũ để tương thích,
+  tạo trực tiếp trạng thái `Approved` (ghi nhận Owner và lịch sử), mở việc ngay tại cơ sở.
+  Không đổi trạng thái hợp đồng hoặc phòng khi lập yêu cầu. Một hợp đồng chỉ có một hồ sơ trả phòng;
+  lặp cùng Idempotency-Key + payload trả về cùng hồ sơ, khóa khác khi đã mở trả 409.
 - POST `{id}/move-out/schedule`: Owner hoặc Staff assigned, `{scheduledAt UTC,staffUserId?,
 expectedVersion?}`. Staff không chỉ định người ngoài assignment Location. Owner để trống
-  assignee sẽ hiển thị chưa phân công; không tự chọn một người. Không đóng Contract.
-- GET `move-out-assignments`: Staff, tối đa 100 lịch được giao trong Locations hiện có quyền.
+  assignee sẽ giữ công việc chung cho cơ sở; nếu chỉ định Staff thì chỉ Staff đó thực hiện.
+  Lịch hẹn tùy chọn để điều phối, không bắt buộc trước khi Staff kiểm tra. Không đóng Contract.
+- GET `move-out-assignments`: Staff, tối đa 100 hồ sơ đã `Approved` và chưa `Completed`
+  của các Location hiện được phân công. Hồ sơ chưa gán người xuất hiện cho mọi Staff đủ điều kiện
+  tại cơ sở; hồ sơ gán đích danh chỉ xuất hiện cho người được gán. Có thể `scheduledAt=null`.
+  `Requested` chờ duyệt không hiển thị. Trạng thái và quyền được kiểm tra từ dữ liệu hiện tại.
+- POST `{id}/move-out/inspection`: Staff tại Location ghi kiểm tra khi `proposedDate <= hôm nay`,
+  kể cả không có lịch hẹn. Vẫn bắt buộc confirmed Final readings, snapshot/bằng chứng và
+  `expectedVersion` nếu gửi; không tự hoàn tất Contract hoặc quyết toán tài chính.
 - GET `{id}/move-out/history`: Owner/Tenant của Contract hoặc Staff assigned; append-only.
   MoveOut response bổ sung inspectionStaffId/version. Version 1 request, tăng khi approve/schedule.
   Không thêm reject/cancel termination. Không dùng tenancy của người khác để mở evidence.

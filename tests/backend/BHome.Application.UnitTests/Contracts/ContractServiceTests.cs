@@ -848,6 +848,28 @@ public sealed class ContractServiceTests
         await r.Service.ApproveTerminationAsync(c.Id, Guid.NewGuid(), default); Assert.Equal(MoveOutStatus.Approved, r.Moves.Single().Status);
     }
     [Theory]
+    [InlineData(0)]
+    [InlineData(30)]
+    [InlineData(45)]
+    public async Task OwnerCreatesApprovedMoveOutWithUnscheduledLocationWorkAtAnyLeaseDate(int daysFromToday)
+    {
+        var r = new Rig(); var c = await r.Ready(); c.Status = ContractStatus.Active;
+        var date = Today.AddDays(daysFromToday); var input = new TerminationInput(date, "Synthetic owner move-out");
+        var key = Guid.NewGuid();
+        var opened = await r.Service.RequestTerminationAsync(c.Id, input, key, true, default);
+        Assert.Equal("Approved", opened.Status);
+        Assert.Null(opened.InspectionScheduledAt);
+        Assert.Null(opened.InspectionStaffId);
+        Assert.Equal(MoveOutStatus.Approved, Assert.Single(r.Moves).Status);
+        Assert.Equal(c.OwnerSignerId, r.Moves.Single().ApprovedByUserId);
+        Assert.Equal(daysFromToday >= 30, r.Moves.Single().IsExpiry);
+        Assert.Equal(ContractStatus.Active, c.Status);
+        Assert.Equal(opened.Id, (await r.Service.RequestTerminationAsync(c.Id, input, key, true, default)).Id);
+        var duplicate = await Assert.ThrowsAsync<ContractException>(() => r.Service.RequestTerminationAsync(c.Id, input, Guid.NewGuid(), true, default));
+        Assert.Equal("move_out_already_requested", duplicate.Code);
+        Assert.Single(r.Moves);
+    }
+    [Theory]
     [InlineData(MoveOutStatus.Approved)]
     [InlineData(MoveOutStatus.Inspected)]
     [InlineData(MoveOutStatus.PendingSettlement)]

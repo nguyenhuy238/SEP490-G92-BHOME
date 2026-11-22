@@ -18,7 +18,9 @@ vi.mock('react-native-paper', () => ({
 }));
 vi.mock('../components/WorkspaceKit', () => ({
   Box: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
-  Heading: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  Heading: ({ children, title }: { children?: React.ReactNode; title?: string }) => (
+    <h2>{title ?? children}</h2>
+  ),
   Action: ({
     children,
     onPress,
@@ -52,7 +54,7 @@ vi.mock('../lib/SessionProvider', () => ({
   useSession: () => ({ session: { roles: ['Owner'] } }),
 }));
 afterEach(cleanup);
-it('Tenant confirms the observed inspection version through the UI without approving compensation', async () => {
+it('Tenant reads inspection results without any MoveOut report, signing or consent action', async () => {
   let version = 4;
   const observed = {
     date: '2026-11-16',
@@ -95,43 +97,15 @@ it('Tenant confirms the observed inspection version through the UI without appro
       onChanged={vi.fn()}
     />,
   );
-  const confirm = await screen.findByRole('button', { name: 'Xác nhận hiện trạng trả phòng' });
-  expect((confirm as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText('Nội dung phản hồi biên bản trả phòng'), {
-    target: { value: 'Tôi xác nhận hiện trạng thực tế' },
-  });
-  fireEvent.click(screen.getByLabelText('Tôi đã xem biên bản trả phòng phiên bản 4'));
+  expect(await screen.findByText('Kết quả kiểm tra lần 4')).toBeTruthy();
+  expect(screen.getByText(/Phòng:/)).toBeTruthy();
+  expect(screen.queryByText(/biên bản/i)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Xác nhận hiện trạng trả phòng' })).toBeNull();
+  expect(screen.queryByLabelText(/Tôi đã xem/)).toBeNull();
   version = 5;
-  fireEvent.click(screen.getByRole('button', { name: 'Tải lại biên bản & quyết toán' }));
-  const currentConsent = await screen.findByLabelText('Tôi đã xem biên bản trả phòng phiên bản 5');
-  expect((currentConsent as HTMLInputElement).checked).toBe(false);
-  expect(
-    (screen.getByRole('button', { name: 'Xác nhận hiện trạng trả phòng' }) as HTMLButtonElement)
-      .disabled,
-  ).toBe(true);
-  expect(
-    (screen.getByLabelText('Nội dung phản hồi biên bản trả phòng') as HTMLInputElement).value,
-  ).toBe('');
-  fireEvent.change(screen.getByLabelText('Nội dung phản hồi biên bản trả phòng'), {
-    target: { value: 'Tôi xác nhận hiện trạng thực tế' },
-  });
-  fireEvent.click(currentConsent);
-  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hiện trạng trả phòng' }));
-  await waitFor(() =>
-    expect(
-      request.mock.calls.some(
-        ([path, init]) => path.endsWith('/move-out/tenant-feedback') && init?.method === 'POST',
-      ),
-    ).toBe(true),
-  );
-  const call = request.mock.calls.find(
-    ([path, init]) => path.endsWith('/move-out/tenant-feedback') && init?.method === 'POST',
-  )!;
-  expect(JSON.parse(call[1]!.body as string)).toEqual({
-    version: 5,
-    confirmed: true,
-    reason: 'Tôi xác nhận hiện trạng thực tế',
-  });
+  fireEvent.click(screen.getByRole('button', { name: 'Tải lại kết quả và quyết toán' }));
+  expect(await screen.findByText('Kết quả kiểm tra lần 5')).toBeTruthy();
+  expect(request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
 });
 const id = '00000000-0000-0000-0000-000000000001';
 const data: SettlementSummary = {
@@ -241,7 +215,7 @@ it('Staff does not request or display financial settlement data', async () => {
   expect(request.mock.calls.some(([path]) => path.endsWith('/settlement-summary'))).toBe(false);
   expect(screen.queryByText(/Cọc giữ chỗ hoàn:/)).toBeNull();
 });
-it('Staff inspection consent remains separate from Owner settlement and resets when observed data changes', async () => {
+it('Staff cannot create a duplicate inspection report or bypass the started 4-step task', async () => {
   const reading = {
     id: 'reading',
     meterCode: 'Synthetic',
@@ -292,21 +266,10 @@ it('Staff inspection consent remains separate from Owner settlement and resets w
       onChanged={vi.fn()}
     />,
   );
-  const confirmation = await screen.findByLabelText(
-    'Tôi xác nhận hiện trạng và chỉ số đã đối chiếu thực tế',
-  );
-  fireEvent.click(screen.getByLabelText('Ảnh hiện trạng 1'));
-  fireEvent.click(confirmation);
-  expect(
-    (screen.getByRole('button', { name: 'Lưu biên bản đối chiếu' }) as HTMLButtonElement).disabled,
-  ).toBe(false);
-  fireEvent.change(screen.getByLabelText('Hiện trạng phòng khi trả'), {
-    target: { value: 'Changed condition' },
-  });
-  expect((confirmation as HTMLInputElement).checked).toBe(false);
-  expect(
-    (screen.getByRole('button', { name: 'Lưu biên bản đối chiếu' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
+  expect(await screen.findByText('Kết quả kiểm tra trả phòng')).toBeTruthy();
+  expect(screen.queryByText('Lập biên bản kiểm tra cuối kỳ')).toBeNull();
+  expect(screen.queryByRole('button', { name: /Lưu biên bản đối chiếu/ })).toBeNull();
+  expect(request.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
   expect(request.mock.calls.some(([path]) => path.endsWith('/settlement-summary'))).toBe(false);
 });
 it('denied lookups show an error without displaying a previous Tenant balance', async () => {

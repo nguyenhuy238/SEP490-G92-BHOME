@@ -66,11 +66,13 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
     public async Task<IReadOnlyList<MoveOutAssignment>> AssignmentsAsync(Guid staffId, DateOnly today, CancellationToken t) => await
         (from m in db.Set<ContractMoveOut>().AsNoTracking()
          join c in db.Set<Contract>() on m.ContractId equals c.Id
-         where m.InspectionStaffId == staffId && m.Status != MoveOutStatus.Completed && m.InspectionScheduledAt != null && c.Room.Location.IsActive &&
+         where (m.InspectionStaffId == null || m.InspectionStaffId == staffId) &&
+           m.Status != MoveOutStatus.Requested && m.Status != MoveOutStatus.Completed &&
+           c.Status == ContractStatus.Active && c.Room.Location.IsActive &&
            EligibleStaff(today).Contains(staffId) &&
            db.StaffLocationAssignments.Any(a => a.StaffUserId == staffId && a.LocationId == c.Room.LocationId && a.StartDate <= today && a.EndDate >= today)
-         orderby m.InspectionScheduledAt
-         select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt!.Value, m.Version)).Take(100).ToArrayAsync(t);
+         orderby m.ProposedDate, m.ContractId
+         select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt, m.Version)).Take(100).ToArrayAsync(t);
     public async Task<T> InTransactionAsync<T>(Guid roomId, Func<Task<T>> work, CancellationToken t)
     {
         // Order: payment ledger -> Location advisory -> Room row. Property and Invoice start at

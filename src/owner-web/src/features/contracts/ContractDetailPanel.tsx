@@ -540,8 +540,8 @@ export function ContractDetailPanel({
       {!m && c.kind !== 'Holding' && c.status === 'Active' && (
         <ChartCard title="Kết thúc hợp đồng">
           <Typography color="text.secondary">
-            Chưa có hồ sơ trả phòng. Chọn “Lập yêu cầu trả phòng khi hết hạn” trong các thao tác hợp
-            đồng để bắt đầu. Không tạo thêm nếu các bên đang xử lý gia hạn.
+            Chưa có hồ sơ trả phòng. Chọn “Lập yêu cầu trả phòng” trong các thao tác hợp đồng để mở
+            nhiệm vụ kiểm tra cho Staff tại cơ sở, dù trả phòng trước hay sau ngày hết hạn.
           </Typography>
         </ChartCard>
       )}

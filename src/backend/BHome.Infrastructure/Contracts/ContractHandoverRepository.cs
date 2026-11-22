@@ -19,6 +19,129 @@ internal sealed class ContractHandoverRepository(BHomePersistenceContext db, IOp
     CompactNotificationWriter? inbox = null, RoomInventoryReviewService? inventory = null) : IContractHandoverRepository
 {
     private static Guid Key(string value) => new(SHA256.HashData(Encoding.UTF8.GetBytes(value)).AsSpan(0, 16));
+    internal static Guid MoveOutTaskId(Guid contractId) => Key($"contract-move-out:{contractId:N}");
+    private static readonly JsonSerializerOptions MoveOutDraftJson = new(JsonSerializerDefaults.Web);
+    public async Task<MoveOutInspectionDraftState?> MoveOutInspectionDraftAsync(Guid contractId, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            throw new ContractException(503, "move_out_draft_storage_unavailable");
+        var json = await db.Database.SqlQuery<string>($"""
+            SELECT COALESCE((move_out->'inspectionDraft')::text, 'null') AS "Value"
+            FROM contracts WHERE id={contractId}
+            """).SingleOrDefaultAsync(t);
+        return json is null or "null" ? null :
+            JsonSerializer.Deserialize<MoveOutInspectionDraftState>(json, MoveOutDraftJson)
+            ?? throw ContractException.Conflict("move_out_draft_integrity_failed");
+    }
+    public async Task<bool> ReplaceMoveOutInspectionDraftAsync(Guid contractId, int version,
+        MoveOutInspectionDraftState next, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+            throw new ContractException(503, "move_out_draft_storage_unavailable");
+        var json = JsonSerializer.Serialize(next, MoveOutDraftJson);
+        var rows = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE contracts
+            SET move_out=jsonb_set(COALESCE(move_out,jsonb_build_object()),
+                ARRAY['inspectionDraft'],{json}::jsonb,true)
+            WHERE id={contractId}
+              AND move_out->'current' IS NOT NULL
+              AND COALESCE((move_out->'inspectionDraft'->>'version')::integer,0)={version}
+            """, t);
+        return rows == 1;
+    }
+    public async Task ResetMoveOutInspectionDraftAsync(Guid contractId, Guid staffId,
+        string snapshotHash, DateTimeOffset now, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
+        var prior = await MoveOutInspectionDraftAsync(contractId, t);
+        if (prior is null) return;
+        var reset = MoveOutInspectionDraftState.Empty(contractId, staffId, snapshotHash, now, prior.Version + 1);
+        if (!await ReplaceMoveOutInspectionDraftAsync(contractId, prior.Version, reset, t))
+            throw ContractException.Conflict("move_out_draft_version_changed");
+    }
+    public async Task EnsureMoveOutTaskAsync(Contract contract, ContractMoveOut moveOut, Guid actor, DateTimeOffset now, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
+        if (moveOut.ContractId != contract.Id || moveOut.Status == MoveOutStatus.Requested)
+            throw ContractException.Conflict("move_out_not_approved");
+        var id = MoveOutTaskId(contract.Id);
+        if (await db.Set<OperationalTask>().AnyAsync(task => task.Id == id, t)) return;
+        // A Location work item begins unclaimed. The first currently assigned Staff
+        // member to start it becomes its worker under the Location transaction lock.
+        var task = new OperationalTask(id)
+        {
+            Kind = OperationalTaskKind.AdHoc,
+            LocationId = contract.Room.LocationId,
+            ContractId = contract.Id,
+            TargetRoomId = contract.RoomId,
+            TargetLabel = contract.Room.RoomNumber,
+            Title = $"Kiểm tra trả phòng {contract.Room.RoomNumber}",
+            Requirements = "Kiểm tra hiện trạng phòng, tài sản, chìa khóa và quyền ra vào; chụp bằng chứng, xác nhận chỉ số điện nước cuối kỳ và gửi biên bản cho Owner kiểm tra.",
+            Priority = OperationalTaskPriority.Normal,
+            Status = MeterTaskStatus.Assigned,
+            ReadingDate = moveOut.ProposedDate,
+            EvidenceRequired = false
+        };
+        db.Add(task);
+        db.Add(new OperationalTaskHistory
+        {
+            TaskId = id, ActorId = actor, Action = "MoveOutCreated", OccurredAt = now,
+            TaskVersion = task.Version, Note = "Chờ nhân viên cơ sở bắt đầu kiểm tra."
+        });
+        foreach (var owner in await tasks.OwnersAsync(t))
+            AddNotice(Key($"move-out-notice:{id:N}:{owner:N}"), new OperationalTaskNotification
+            {
+                TaskId = id, RecipientUserId = owner, EventId = id, Event = "MoveOutAssigned"
+            });
+    }
+    private async Task<OperationalTask> MoveOutTaskAsync(Guid contractId, CancellationToken t) =>
+        await db.Set<OperationalTask>().SingleOrDefaultAsync(task =>
+            task.Id == MoveOutTaskId(contractId) && task.ContractId == contractId &&
+            task.Kind == OperationalTaskKind.AdHoc, t)
+        ?? throw ContractException.Conflict("move_out_task_required");
+    public async Task RequireMoveOutTaskStartedAsync(Guid contractId, Guid staffId, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
+        var task = await MoveOutTaskAsync(contractId, t);
+        if (task.Status != MeterTaskStatus.InProgress || task.AssignedStaffUserId != staffId)
+            throw ContractException.Conflict("move_out_task_not_started");
+    }
+    public async Task EnsureMoveOutTaskAssigneeAsync(Guid contractId, Guid? staffId, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
+        var task = await MoveOutTaskAsync(contractId, t);
+        if (task.Status != MeterTaskStatus.Assigned && staffId is { } assignee &&
+            assignee != task.AssignedStaffUserId)
+            throw ContractException.Conflict("move_out_task_already_claimed");
+    }
+    public async Task SubmitMoveOutTaskAsync(Guid contractId, Guid staffId, DateTimeOffset now, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
+        await RequireMoveOutTaskStartedAsync(contractId, staffId, t);
+        var task = await MoveOutTaskAsync(contractId, t);
+        task.ApplyAction("submit", now, staffId); task.Version++;
+        task.Result = "Staff đã gửi biên bản kiểm tra trả phòng cho Owner duyệt.";
+        db.Add(new OperationalTaskHistory
+        {
+            TaskId = task.Id, ActorId = staffId, Action = "MoveOutSubmitted",
+            OccurredAt = now, TaskVersion = task.Version
+        });
+    }
+    public async Task ReviewMoveOutTaskAsync(Guid contractId, Guid ownerId, bool confirmed, DateTimeOffset now, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext) return;
+        var task = await MoveOutTaskAsync(contractId, t);
+        if (task.Status != MeterTaskStatus.PendingVerification)
+            throw ContractException.Conflict("move_out_task_not_submitted");
+        task.ApplyAction(confirmed ? "verify" : "rework", now, ownerId); task.Version++;
+        task.Result = confirmed ? "Owner đã xác nhận biên bản kiểm tra trả phòng." : "Owner yêu cầu Staff kiểm tra lại.";
+        db.Add(new OperationalTaskHistory
+        {
+            TaskId = task.Id, ActorId = ownerId,
+            Action = confirmed ? "MoveOutVerified" : "MoveOutReinspection",
+            OccurredAt = now, TaskVersion = task.Version
+        });
+    }
     public async Task<HandoverMoveInTask?> MoveInTaskAsync(Guid contractId, Guid roomId,
         Guid? staffUserId, bool includeOwnerInventory, CancellationToken t)
     {

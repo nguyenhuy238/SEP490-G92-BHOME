@@ -53,7 +53,7 @@ import { ContractLoading } from './ContractLoading';
 
 export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
   const { api: transport, session } = useSession();
-  const { role } = useWorkspace();
+  const { role, go } = useWorkspace();
   const [staffListView, setStaffListView] = useState({ ...defaultStaffContractListView });
   const params = useLocalSearchParams<{
     contractId?: string;
@@ -317,7 +317,7 @@ export function ContractScreen({ prepare = false }: { prepare?: boolean }) {
         onViewStateChange={setStaffListView}
         onCreateHolding={() => setCreateHolding(true)}
         onOpen={(contract) => setSelected(contract.id)}
-        onInspection={setSelected}
+        onInspection={() => go('work-orders')}
       />
     );
   return (

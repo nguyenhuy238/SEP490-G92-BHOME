@@ -86,13 +86,20 @@ public sealed record DepositInput([Required, StringLength(150, MinimumLength = 1
 public sealed record TerminationInput(DateOnly ProposedDate,
     [Required, StringLength(2000, MinimumLength = 1)] string Reason);
 public sealed record InspectionScheduleInput(DateTimeOffset ScheduledAt, Guid? StaffUserId = null, int? ExpectedVersion = null);
+// Move-Out-only evidence for an individually tracked physical asset.
+// Separate from Move-In physical observations and its signed snapshot format.
+public sealed record MoveOutPhysicalItemEvidence(Guid AssetId, Guid PhysicalAssetId,
+    string? Notes, Guid[] EvidenceIds);
 public sealed record InspectionInput(Guid ElectricityReadingId, Guid WaterReadingId,
-    [Required, StringLength(4000, MinimumLength = 1)] string Notes,
-    [Required, MinLength(1), MaxLength(10)] Guid[] EvidenceIds,
+    [StringLength(4000)] string? Notes = null,
+    [MaxLength(10)] Guid[]? EvidenceIds = null,
     HandoverAssetInput[]? Assets = null, string? RoomCondition = null, string? KeysAndAccess = null, int? ExpectedVersion = null,
     string? InventoryToken = null, string? ProposedCompensation = null,
     HandoverRoomCheck[]? RoomChecks = null, HandoverAccessItem[]? AccessItems = null,
-    Guid[]? KeyEvidenceIds = null);
+    Guid[]? KeyEvidenceIds = null, MoveOutPhysicalItemEvidence[]? PhysicalItemEvidence = null);
+// Owner reviews observations with a versioned decision, never a signature.
+// Legacy TenantException fields are ignored for compatibility with older clients;
+// no Tenant/Owner signer or Move-Out report is required.
 public sealed record InspectionReviewInput(int Version, bool Confirmed, string Reason, bool NoAdditionalCharges = false,
     bool TenantException = false, string? TenantExceptionReason = null);
 public sealed record FinalInspectionView(Guid Id, int Version, Guid BaselineContractId, int BaselineVersion, HandoverSnapshot? Baseline,
@@ -130,7 +137,7 @@ public sealed record MoveOutView(Guid Id, string Status, DateOnly ProposedDate, 
     IReadOnlyList<Guid>? EvidenceIds = null, Guid? InspectionStaffId = null, int Version = 1,
     bool OwnerConfirmedInspection = false, string FinancialReviewStatus = "PendingReview");
 public sealed record MoveOutHistoryView(int Version, string Action, Guid ActorId, DateTimeOffset OccurredAt, string Snapshot);
-public sealed record MoveOutAssignment(Guid ContractId, Guid RoomId, string RoomNumber, string LocationName, string Status, DateOnly ProposedDate, DateTimeOffset ScheduledAt, int Version);
+public sealed record MoveOutAssignment(Guid ContractId, Guid RoomId, string RoomNumber, string LocationName, string Status, DateOnly ProposedDate, DateTimeOffset? ScheduledAt, int Version);
 public sealed record SettlementReviewView(Guid Id, string Decision, bool Settled, Guid ReviewedByUserId, DateTimeOffset ReviewedAt, string FinancialSnapshot = "{}");
 
 public sealed class ContractException(int status, string code) : Exception(code)

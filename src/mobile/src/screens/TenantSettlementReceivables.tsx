@@ -36,7 +36,7 @@ export function TenantSettlementReceivables() {
           {source.receivables.some((row) => row.charge.kind === 'TenantDamage') && (
             <Heading
               title="Thiệt hại đã được Owner duyệt"
-              detail="Các khoản bên dưới được ghi nhận theo biên bản trả phòng"
+              detail="Các khoản bên dưới được Owner xét duyệt từ kết quả kiểm tra và bằng chứng thực tế khi trả phòng"
             />
           )}
           {source.receivables.map((r) => (
