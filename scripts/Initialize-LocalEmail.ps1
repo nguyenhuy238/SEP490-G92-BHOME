@@ -1,4 +1,4 @@
-# Explicit migration for existing Development SMTP users. Never sends mail, changes credentials or writes .env.
+# Compatibility entry point. Development no longer needs a recipient migration; never writes settings or sends mail.
 param(
     [switch]$UseConfiguredTestRecipient,
     [string]$EnvironmentFile = '.env',
@@ -6,7 +6,6 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Use-LocalTools.ps1')
-if (!$UseConfiguredTestRecipient) { throw 'Select -UseConfiguredTestRecipient to explicitly allow the existing Email:TestRecipient for local SMTP.' }
 foreach ($name in @('ASPNETCORE_ENVIRONMENT', 'DOTNET_ENVIRONMENT')) {
     $value = [Environment]::GetEnvironmentVariable($name, 'Process')
     if ($value -and $value -ne 'Development') { throw 'This migration only configures Development user-secrets. Use the deployment secret store for Staging/Production.' }
@@ -38,21 +37,4 @@ if (Test-Path -LiteralPath $secretFile) {
     }
 }
 foreach ($entry in Get-ChildItem Env:Email__*) { $settings[$entry.Name.Replace('__', ':')] = $entry.Value }
-if ($settings['Email:DeliveryMode'] -and $settings['Email:DeliveryMode'] -ne 'Smtp') {
-    throw 'This migration is only for existing SMTP configuration. Local Mailpit Capture needs no SMTP recipient migration.'
-}
-if (@($settings.Keys | Where-Object { $_ -like 'Email:AllowedRecipients:*' -or $_ -eq 'Email:AllowedRecipients' }).Count -gt 0) {
-    Write-Output 'Existing Email:AllowedRecipients configuration preserved. No credentials or environment files changed.'
-    return
-}
-$recipient = [string]$settings['Email:TestRecipient']
-try { $mailbox = [Net.Mail.MailAddress]::new($recipient) }
-catch { throw 'Email:TestRecipient is missing or invalid. Configure an approved test mailbox first; no changes were made.' }
-if ($recipient.Length -gt 254 -or $recipient.Contains("`r") -or $recipient.Contains("`n") -or
-    $mailbox.Address -cne $recipient -or !$mailbox.Host.Contains('.')) {
-    throw 'Email:TestRecipient must contain one bare approved mailbox. No changes were made; value withheld.'
-}
-# Merge just this non-secret key through stdin. Never put mailbox/SMTP credentials in process arguments or logs.
-@{ 'Email:AllowedRecipients:0' = $recipient } | ConvertTo-Json -Compress | dotnet user-secrets set --id $UserSecretsId | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Could not update the Development SMTP allowlist. Existing SMTP credentials were not replaced.' }
-Write-Output 'Configured the existing test mailbox as the local SMTP allowlist. SMTP credentials and .env were preserved. No email was sent. Restart the API/Visual Studio debugging session.'
+Write-Output 'Development accepts every valid email address. No allowlist or TestRecipient migration is required. SMTP credentials, User Secrets and .env were preserved; no email was sent.'

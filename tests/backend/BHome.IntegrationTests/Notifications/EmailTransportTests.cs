@@ -9,29 +9,48 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Hosting.Internal;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BHome.IntegrationTests.Notifications;
 
 public sealed class EmailTransportTests
 {
-    [Fact]
-    public void ExistingSmtpWithoutAllowlistReportsTheExactMissingKeyAndMigrationCommand()
+    [Theory]
+    [InlineData("Development", false)]
+    [InlineData("Development", true)]
+    [InlineData("Testing", false)]
+    public void StartupRecipientPolicyUsesEnvironmentAndIgnoresLegacyDevelopmentSettings(string environment, bool staleList)
     {
         using var factory = new ApiFactory();
-        using var host = factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+        using var host = factory.WithWebHostBuilder(b =>
         {
-            ["Email:Enabled"] = "true",
-            ["Email:Username"] = "sender@example.invalid",
-            ["Email:FromEmail"] = "sender@example.invalid",
-            ["Email:AppPassword"] = "SYNTHETIC_PRIVATE_PASSWORD",
-            ["Email:TestRecipient"] = "existing-test@example.invalid"
-        })));
-        var error = Assert.Throws<OptionsValidationException>(() => host.CreateClient());
-        Assert.Single(error.Failures);
-        Assert.Contains("Email:AllowedRecipients:0", error.Message);
-        Assert.Contains("Initialize-LocalEmail.ps1", error.Message);
-        Assert.DoesNotContain("SYNTHETIC_PRIVATE_PASSWORD", error.Message);
-        Assert.DoesNotContain("existing-test@example.invalid", error.Message);
+            b.UseEnvironment(environment);
+            b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Email:Enabled"] = "true",
+                ["Email:DeliveryMode"] = "Smtp",
+                ["Email:Username"] = "sender@example.invalid",
+                ["Email:FromEmail"] = "sender@example.invalid",
+                ["Email:AppPassword"] = "SYNTHETIC_PRIVATE_PASSWORD",
+                ["Email:AllowAnyRecipientInDevelopment"] = "false",
+                ["Email:AllowedRecipients:0"] = staleList ? "stale-invalid-entry" : null,
+                ["Email:TestRecipient"] = "diagnostic@example.invalid"
+            }));
+        });
+        if (environment == "Development")
+        {
+            using var client = host.CreateClient();
+            var options = host.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
+            Assert.True(options.ValidForEnvironment(environment));
+            Assert.True(options.RecipientAllowed("outside@example.invalid", environment));
+        }
+        else
+        {
+            var error = Assert.Throws<OptionsValidationException>(() => host.CreateClient());
+            Assert.Contains("Email:AllowedRecipients:0", error.Message);
+            Assert.DoesNotContain("SYNTHETIC_PRIVATE_PASSWORD", error.Message);
+        }
     }
     [Theory]
     [InlineData("http://localhost:5173/accept-invitation", "#")]
