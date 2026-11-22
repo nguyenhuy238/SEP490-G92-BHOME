@@ -627,6 +627,12 @@ function ContractNavigation({ id }: { id: string }) {
       <Button component={RouterLink} to={`/handovers?contractId=${encodeURIComponent(id)}`}>
         Mở biên bản bàn giao
       </Button>
+      <Button
+        component={RouterLink}
+        to={`/handovers?tab=move-out&contractId=${encodeURIComponent(id)}`}
+      >
+        Kiểm tra trả phòng
+      </Button>
       <Button component={RouterLink} to="/temporary-residence">
         Theo dõi tạm trú
       </Button>

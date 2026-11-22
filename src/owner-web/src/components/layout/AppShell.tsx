@@ -133,7 +133,7 @@ const navLabels: Record<string, string> = {
   tenants: 'Khách thuê',
   contracts: 'Hợp đồng',
   'digital-signing': 'Ký số (MySign)',
-  handovers: 'Bàn giao phòng',
+  handovers: 'Bàn giao & trả phòng',
   'temporary-residence': 'Đăng ký tạm trú',
   meters: 'Chỉ số điện nước',
   finance: 'Tổng quan',

@@ -94,6 +94,8 @@ export interface PrivateEvidenceViewerProps {
   compactActions?: boolean;
   /** Optional precise preview CTA; does not change the private document title or download. */
   previewButtonLabel?: string;
+  /** Hide download controls on read-only inspection photo surfaces. Default preserves existing viewers. */
+  showDownload?: boolean;
 }
 
 function classify(blob: Blob, declaredType?: string): Promise<SafeFile> {
@@ -165,6 +167,7 @@ export function PrivateEvidenceViewer({
   disabled = false,
   compactActions = false,
   previewButtonLabel,
+  showDownload = true,
 }: PrivateEvidenceViewerProps) {
   const dialogTitleId = useId();
   const [open, setOpen] = useState(false);
@@ -306,15 +309,17 @@ export function PrivateEvidenceViewer({
         >
           {previewButtonLabel ?? (compactActions ? 'Xem PDF' : `Xem ${label}`)}
         </Button>
-        <Button
-          size="small"
-          type="button"
-          startIcon={compactActions ? <Download size={16} aria-hidden="true" /> : undefined}
-          disabled={disabled || !!busy}
-          onClick={() => void fetchFile('download')}
-        >
-          {compactActions ? 'Tải xuống' : `Tải xuống ${label}`}
-        </Button>
+        {showDownload !== false && (
+          <Button
+            size="small"
+            type="button"
+            startIcon={compactActions ? <Download size={16} aria-hidden="true" /> : undefined}
+            disabled={disabled || !!busy}
+            onClick={() => void fetchFile('download')}
+          >
+            {compactActions ? 'Tải xuống' : `Tải xuống ${label}`}
+          </Button>
+        )}
       </Stack>
       {error && !open && (
         <Alert
@@ -357,7 +362,9 @@ export function PrivateEvidenceViewer({
           )}
           {unsupported && (
             <Alert severity="info">
-              Tệp này không hỗ trợ xem trực tiếp. Hãy tải xuống để mở bằng ứng dụng phù hợp.
+              {showDownload === false
+                ? 'Tệp này không hỗ trợ xem trực tiếp.'
+                : 'Tệp này không hỗ trợ xem trực tiếp. Hãy tải xuống để mở bằng ứng dụng phù hợp.'}
             </Alert>
           )}
           {preview?.type.startsWith('image/') && (
@@ -389,7 +396,7 @@ export function PrivateEvidenceViewer({
           )}
         </DialogContent>
         <DialogActions sx={{ gap: 1, px: 2, py: 1.5 }}>
-          {(unsupported || preview?.type === 'application/pdf') && (
+          {showDownload !== false && (unsupported || preview?.type === 'application/pdf') && (
             <Button disabled={!!busy || disabled} onClick={() => void fetchFile('download')}>
               {unsupported ? 'Tải xuống' : 'Tải PDF nếu không xem được'}
             </Button>

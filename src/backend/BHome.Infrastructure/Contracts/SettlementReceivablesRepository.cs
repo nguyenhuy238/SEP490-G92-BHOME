@@ -14,7 +14,8 @@ namespace BHome.Infrastructure.Contracts;
 
 internal static class SettlementChargeRecords
 {
-    internal const string ChargeKind = "SettlementReceivableV1", OffsetKind = "DepositOffsetApprovalV1", BankKind = "SettlementBankAllocationV1", ReviewKind = "SettlementChargeReviewV1", FinancialCloseKind = "SettlementFinancialCloseV1";
+    internal const string ChargeKind = "SettlementReceivableV1", OffsetKind = "DepositOffsetApprovalV1", BankKind = "SettlementBankAllocationV1", ReviewKind = "SettlementChargeReviewV1", FinancialCloseKind = "SettlementFinancialCloseV1",
+        ProposalKind = "MoveOutChargeProposalV1", ProposalFeedbackKind = "MoveOutChargeProposalFeedbackV1";
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     internal static async Task<T[]> ReadAsync<T>(BHomePersistenceContext db, Guid contractId, string kind, CancellationToken token)
     {
@@ -159,7 +160,7 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
             contract.Kind is ContractKind.Main or ContractKind.Renewal && contract.Status is ContractStatus.Active or ContractStatus.Terminated && move?.ApprovedAt != null && inspection?.OwnerDecision == "Confirmed",
             inspection?.NoAdditionalCharges ?? true, issueAssets.Keys.ToArray(), verifiedEvidenceIds, recipients,
             legacy is not null, contract.IsDevelopmentDemo, issueAssets, issueRoomChecks,
-            observed?.RoomChecks is { Length: > 0 });
+            observed?.RoomChecks is { Length: > 0 }, position.Received);
     }
     private async Task<T?> OperationAsync<T>(Guid actor, Guid key, string kind, CancellationToken token)
     {
@@ -221,11 +222,13 @@ internal sealed partial class SettlementReceivablesRepository(BHomePersistenceCo
         if (!await db.Set<Invoice>().AnyAsync(i => i.Id == invoiceId && i.RoomId == chain[0].RoomId && i.Status == InvoiceStatus.Final && ids.Contains(i.RepresentativeContractId), token)) return null;
         return (await db.FinancialsAsync(invoiceId, token)).OutstandingAmount;
     }
-    private async Task AppendAsync<T>(Guid contractId, Guid id, string kind, T record, Guid actor, DateTimeOffset at, CancellationToken token)
+    private async Task AppendAsync<T>(Guid contractId, Guid id, string kind, T record, Guid actor, DateTimeOffset at,
+        CancellationToken token, string? auditEvent = null)
     {
         var json = JsonSerializer.Serialize(new { schemaVersion = 1, recordType = kind, recordKey = id, state = record }, SettlementChargeRecords.Json);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE contracts SET history=history||jsonb_build_array({json}::jsonb) WHERE id={contractId}", token);
-        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = actor, TargetId = id, TargetType = kind, Event = kind + "Approved", Succeeded = true, OccurredAt = at });
+        db.SecurityAudit.Add(new SecurityAuditRecord { UserId = actor, TargetId = id, TargetType = kind,
+            Event = auditEvent ?? kind + "Approved", Succeeded = true, OccurredAt = at });
     }
     public async Task SaveChargeAsync(SettlementReceivable charge, CancellationToken token)
     {

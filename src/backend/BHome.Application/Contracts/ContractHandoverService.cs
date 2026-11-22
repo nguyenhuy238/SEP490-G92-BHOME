@@ -219,7 +219,16 @@ public sealed partial class ContractService
     {
         await Load(id, [Roles.Owner, Roles.Staff, Roles.Tenant], t);
         var h = await Handovers.GetAsync(id, t); var f = await Workflow.FileAsync(id, fileId, t) ?? throw ContractException.Missing();
-        var recorded = h is not null && Snapshot(h).EvidenceIds.Contains(fileId) || await Handovers.HistoryContainsEvidenceAsync(id, fileId, t);
+        var snapshot = h is null ? null : Snapshot(h);
+        // A confirmed handover references photos by item category, not just
+        // the top-level evidence array. Resolve only exact files tied to this
+        // contract's verified snapshot; never allow arbitrary private IDs.
+        var recorded = snapshot is not null && (snapshot.EvidenceIds.Contains(fileId) ||
+            h!.Status == ContractHandoverStatus.Confirmed &&
+            (snapshot.Assets.Any(asset => (asset.EvidenceIds ?? []).Contains(fileId)) ||
+             (snapshot.RoomChecks ?? []).Any(check => check.EvidenceIds.Contains(fileId)) ||
+             (snapshot.KeyEvidenceIds ?? []).Contains(fileId))) ||
+            await Handovers.HistoryContainsEvidenceAsync(id, fileId, t);
         if (f.Kind != ContractFileKind.HandoverEvidence || !recorded && f.RecordedByUserId != Actor) throw ContractException.Missing();
         await CopyVerifiedFile(f, output, t);
     }

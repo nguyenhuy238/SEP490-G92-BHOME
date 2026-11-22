@@ -17,6 +17,7 @@ import { OwnerWebNotice } from '../../components/OwnerWebNotice';
 import { OwnerMoveOutDecisions } from '../owner/OwnerMoveOutDecisions';
 import { handoverAssetSummary } from '../../../../../packages/client-core/src/handoverForm';
 import { ContractEvidence } from './ContractEvidence';
+import { TenantMoveOutProposalPanel } from './TenantMoveOutProposalPanel';
 
 export function ContractLifecyclePanel({
   api,
@@ -112,15 +113,23 @@ export function ContractLifecyclePanel({
             )),
           )}
           <Text>
-            {i.ownerDecision === 'Confirmed'
-              ? 'Owner đã xác nhận'
-              : i.ownerDecision === 'Reinspection'
-                ? 'Yêu cầu kiểm tra lại'
-                : 'Chờ Owner xem xét'}{' '}
-            · {i.ownerReason}
+            {i.ownerDecision === 'Reinspection'
+              ? 'Staff đang kiểm tra lại'
+              : 'Staff đã gửi kết quả kiểm kê'}
+            {i.ownerReason ? ` · ${i.ownerReason}` : ''}
           </Text>
         </Box>
       ))}
+      {role === 'Tenant' && q.inspections.length > 0 && (
+        <TenantMoveOutProposalPanel
+          api={api}
+          contractId={id}
+          onChanged={() => {
+            q.reload();
+            onChanged();
+          }}
+        />
+      )}
       {summary && (
         <>
           <Heading title="Quyết toán từ máy chủ" />

@@ -73,6 +73,32 @@ internal sealed class ContractRepository(BHomePersistenceContext db, ISetupWorks
            db.StaffLocationAssignments.Any(a => a.StaffUserId == staffId && a.LocationId == c.Room.LocationId && a.StartDate <= today && a.EndDate >= today)
          orderby m.ProposedDate, m.ContractId
          select new MoveOutAssignment(c.Id, c.RoomId, c.Room.RoomNumber, c.Room.Location.Name, m.Status.ToString(), m.ProposedDate, m.InspectionScheduledAt, m.Version)).Take(100).ToArrayAsync(t);
+    public async Task<OwnerMoveOutInboxPage> OwnerMoveOutInboxAsync(int page, int pageSize,
+        Guid? locationId, MoveOutStatus? status, string? room, CancellationToken t)
+    {
+        var moves = db.Set<ContractMoveOut>().AsNoTracking().AsQueryable();
+        if (status is { } state) moves = moves.Where(move => move.Status == state);
+        var contracts = db.Set<Contract>().AsNoTracking().AsQueryable();
+        if (locationId is { } location) contracts = contracts.Where(c => c.Room.LocationId == location);
+        if (!string.IsNullOrWhiteSpace(room)) contracts = contracts.Where(c => EF.Functions.ILike(c.Room.RoomNumber, "%" + room + "%"));
+        var query = from move in moves
+                    join contract in contracts on move.ContractId equals contract.Id
+                    select new
+                    {
+                        ContractId = contract.Id, contract.Room.RoomNumber, LocationId = contract.Room.LocationId,
+                        LocationName = contract.Room.Location.Name, move.Status, move.ProposedDate,
+                        InspectedAt = db.Set<ContractFinalInspection>().Where(i => i.ContractId == contract.Id)
+                            .OrderByDescending(i => i.Version).Select(i => (DateTimeOffset?)i.InspectedAt).FirstOrDefault(),
+                        OwnerDecision = db.Set<ContractFinalInspection>().Where(i => i.ContractId == contract.Id)
+                            .OrderByDescending(i => i.Version).Select(i => i.OwnerDecision).FirstOrDefault()
+                    };
+        var total = await query.CountAsync(t);
+        var rows = await query.OrderByDescending(m => m.ProposedDate).ThenBy(m => m.ContractId)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(t);
+        return new(rows.Select(row => new OwnerMoveOutInboxItem(row.ContractId, row.RoomNumber,
+            row.LocationId, row.LocationName, row.Status.ToString(), row.ProposedDate, row.InspectedAt,
+            row.OwnerDecision == "Confirmed")).ToArray(), page, pageSize, total);
+    }
     public async Task<T> InTransactionAsync<T>(Guid roomId, Func<Task<T>> work, CancellationToken t)
     {
         // Order: payment ledger -> Location advisory -> Room row. Property and Invoice start at

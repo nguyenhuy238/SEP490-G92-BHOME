@@ -34,6 +34,9 @@ vi.mock('../contracts/OwnerHandoverDraftPanel', () => ({
     </button>
   ),
 }));
+vi.mock('./OwnerMoveOutInbox', () => ({
+  OwnerMoveOutInbox: () => <div>Danh sách kiểm tra trả phòng</div>,
+}));
 vi.mock('../../../../../packages/client-core/src/auth', () => ({
   useAuth: () => ({ session: { userId: 'owner', roles: ['Owner'] } }),
 }));
@@ -104,6 +107,16 @@ it('loads move-in handover list immediately, opens a compact right Drawer, and k
   );
   fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết' }));
   expect(screen.queryByText('Biên bản chi tiết contract-1 dạng gọn')).not.toBeInTheDocument();
+});
+
+it('separates Bàn giao and Trả phòng without navigating away from /handovers', async () => {
+  mount();
+  await screen.findByText('2 biên bản phù hợp');
+  fireEvent.click(screen.getByRole('tab', { name: 'Trả phòng' }));
+  expect(await screen.findByText('Danh sách kiểm tra trả phòng')).toBeInTheDocument();
+  expect(screen.queryByText('2 biên bản phù hợp')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Bàn giao' }));
+  expect(await screen.findByText('2 biên bản phù hợp')).toBeInTheDocument();
 });
 
 it('shows confirmed handovers as green success instead of neutral gray', async () => {

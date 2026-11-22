@@ -80,9 +80,17 @@ it('Tenant reads inspection results without any MoveOut report, signing or conse
               ownerDecision: null,
             },
           ]
-        : path.endsWith('/settlement-summary')
-          ? data
-          : []) as T,
+        : path.endsWith('/receivables/proposal')
+          ? {
+              contractId: 'tenant-contract',
+              reference: 'r1',
+              items: [],
+              latestProposal: null,
+              status: 'None',
+            }
+          : path.endsWith('/settlement-summary')
+            ? data
+            : []) as T,
   );
   const api = contractClient(
     <T,>(path: string, init?: RequestInit) => request(path, init) as Promise<T>,
@@ -102,6 +110,8 @@ it('Tenant reads inspection results without any MoveOut report, signing or conse
   expect(screen.queryByText(/biên bản/i)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Xác nhận hiện trạng trả phòng' })).toBeNull();
   expect(screen.queryByLabelText(/Tôi đã xem/)).toBeNull();
+  expect(await screen.findByText(/Owner chưa gửi đề xuất quyết toán/)).toBeTruthy();
+  expect(request.mock.calls.some(([path]) => path.endsWith('/receivables/proposal'))).toBe(true);
   version = 5;
   fireEvent.click(screen.getByRole('button', { name: 'Tải lại kết quả và quyết toán' }));
   expect(await screen.findByText('Kết quả kiểm tra lần 5')).toBeTruthy();
