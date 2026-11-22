@@ -177,7 +177,7 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
             await db.SaveChangesAsync(t);
             await sql.Execute("UPDATE residents SET user_id=@user WHERE id=@resident AND user_id IS NULL", t, ("user", id), ("resident", residentId));
         }
-        delivery.ValidateInvitationRecipient(request.Email);
+        delivery.ValidateInvitationRecipient(request.Email, automaticTenantSetup: dispatchJob is not null);
         var grant = await identity.ResetGrantAsync(user.Id, t);
         if (dispatchJob is { } queued && grant is { ConsumedAt: null } && grant.ExpiresAt > sql.Now)
         {
@@ -193,7 +193,8 @@ internal sealed class AccountInvitations(Compact24DbContext db, IIdentityPersist
         security.Audit("AccountInvitationCreated", true, user.Id);
         if (delivery.IsDurable)
         {
-            await delivery.QueueAsync(new(user.Id, request.Email, token, grant.ExpiresAt, "TenantInvitation"), t);
+            var kind = dispatchJob is null ? "TenantInvitation" : "PostActivationTenantInvitation";
+            await delivery.QueueAsync(new(user.Id, request.Email, token, grant.ExpiresAt, kind), t);
             if (dispatchJob is { } scheduled) await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE operational_tasks SET task_data=jsonb_set(task_data,ARRAY['invitationDispatchState'],'"Queued"'::jsonb) WHERE id={scheduled}
                 """, t);

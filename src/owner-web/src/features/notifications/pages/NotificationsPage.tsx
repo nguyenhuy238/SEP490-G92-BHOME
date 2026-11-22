@@ -209,7 +209,12 @@ export function LiveNotificationsPage() {
                             const route = ownerNotificationRoute(target);
                             if (!route) throw new Error('unsupported_notification_target');
                             await api.read(n.id);
-                            navigate(route);
+                            navigate(
+                              n.eventType === 'CONTRACT_MOVE_OUT_REQUESTED' &&
+                                target.objectType === 'Contract'
+                                ? `/contracts/${target.objectId}/termination-review`
+                                : route,
+                            );
                           })
                         }
                       >

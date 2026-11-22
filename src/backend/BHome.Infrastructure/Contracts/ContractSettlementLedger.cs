@@ -12,8 +12,39 @@ namespace BHome.Infrastructure.Contracts;
 
 internal sealed class ContractSettlementLedger(BHomePersistenceContext db, IContractDepositPosition? positions = null,
     IPaymentRepository? payments = null, IDepositDeductionEvidence? deductionEvidence = null,
-    ISettlementChargeEvidence? chargeEvidence = null) : IContractSettlementLedger, IContractSettlementDetails
+    ISettlementChargeEvidence? chargeEvidence = null, IMainInitialPaymentLedger? initialPayments = null) : IContractSettlementLedger, IContractSettlementDetails
 {
+    private async Task<(Contract DepositRoot, bool Deferred)> ResolveDepositAsync(Contract c, Contract root, CancellationToken t)
+    {
+        if (db is not BHome.Infrastructure.Persistence.Compact24.Compact24DbContext || initialPayments is null)
+            return (root, false);
+        var order = await initialPayments.ReadAsync(root.Id, t);
+        var anchor = order?.SharedDepositContractId ?? root.Id;
+        var members = await db.Database.SqlQuery<Guid>($"""
+            WITH RECURSIVE members(id) AS (
+              SELECT {anchor}
+              UNION
+              SELECT (task_data->'state'->>'contractId')::uuid
+              FROM operational_tasks
+              WHERE task_data->>'recordType'='MainInitialPaymentV1'
+                AND task_data->'state'->>'sharedDepositContractId'={anchor.ToString()}
+            ), versions(id) AS (
+              SELECT id FROM members
+              UNION
+              SELECT c.id FROM contracts c JOIN versions v ON c.previous_contract_id=v.id
+            )
+            SELECT id AS "Value" FROM versions
+            """).ToArrayAsync(t);
+        if (!members.Any(id => id != c.Id && id != root.Id) && anchor == root.Id) return (root, false);
+        var otherOpen = await db.Set<Contract>().AnyAsync(other => members.Contains(other.Id) && other.Id != c.Id &&
+            (other.Status == ContractStatus.Active || other.Status == ContractStatus.Expired || other.Status == ContractStatus.PendingActivation), t);
+        var lastCompleted = c.Status == ContractStatus.Terminated
+            ? await db.Set<ContractMoveOutHistory>().Where(h => members.Contains(h.ContractId) && h.Action == "Completed")
+                .OrderByDescending(h => h.OccurredAt).ThenByDescending(h => h.Id).Select(h => (Guid?)h.ContractId).FirstOrDefaultAsync(t)
+            : null;
+        var depositRoot = anchor == root.Id ? root : await db.Set<Contract>().AsNoTracking().SingleAsync(other => other.Id == anchor, t);
+        return (depositRoot, otherOpen || c.Status == ContractStatus.Terminated && lastCompleted != c.Id);
+    }
     public async Task<SettlementLedgerState?> ReadAsync(Guid id, Guid electricity, Guid water, CancellationToken t)
     {
         var m = await db.Set<ContractMoveOut>().AsNoTracking().SingleOrDefaultAsync(m => m.ContractId == id, t);
@@ -41,12 +72,14 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
             root = await db.Set<Contract>().AsNoTracking().SingleAsync(c => c.Id == parent, t); chain.Add(root);
             if (root.RoomId != c.RoomId || root.TenantUserId != c.TenantUserId) throw ContractException.Conflict("contract_version_integrity_failed");
         }
+        var (depositRoot, depositDeferred) = await ResolveDepositAsync(c, root, t);
+        var depositIds = depositDeferred ? [] : chain.Select(v => v.Id).Append(depositRoot.Id).Distinct().ToArray();
         var blockers = new List<string>(); var m = await db.Set<ContractMoveOut>().AsNoTracking().SingleOrDefaultAsync(m => m.ContractId == id, t);
         var compensations = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext
-            ? await db.Set<BHome.Domain.IncidentMaintenance.MaintenanceCompensation>().AsNoTracking().Where(c => c.DepositContractId == root.Id &&
+            ? await db.Set<BHome.Domain.IncidentMaintenance.MaintenanceCompensation>().AsNoTracking().Where(c => c.DepositContractId == depositRoot.Id &&
                 (c.Status == "DepositPending" || c.Status == "Deducted")).ToArrayAsync(t) : [];
         if (compensations.Any(c => c.Status == "DepositPending")) blockers.Add("maintenance_compensation_pending");
-        var maintenanceDeductions = compensations.Where(c => c.Status == "Deducted").Sum(c => c.Amount);
+        var maintenanceDeductions = depositDeferred ? 0 : compensations.Where(c => c.Status == "Deducted").Sum(c => c.Amount);
         var charges = await SettlementChargeRecords.ReadAsync<SettlementReceivable>(db, id, SettlementChargeRecords.ChargeKind, t);
         if (await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAsync(db, null, id, t, depositContractIds: chain.Select(v => v.Id).Append(root.HoldingContractId ?? root.Id).Distinct().ToArray()) ||
             await BHome.Infrastructure.PaymentsDebt.ReceiptExcessRecords.PendingAllocatedSettlementAsync(db, id, t) ||
@@ -72,25 +105,26 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         var end = observed?.Date ?? m?.ProposedDate ?? c.EndDate;
         var start = new DateOnly(root.StartDate.Year, root.StartDate.Month, 1); var through = new DateOnly(end.Year, end.Month, 1);
         if (through < start || through.Year - start.Year > 20) throw ContractException.Conflict("settlement_period_review_required");
-        var deposits = await db.Set<DepositVerification>().AsNoTracking().Where(d => d.ContractId == root.Id).OrderBy(d => d.Id).Select(d => new { d.Id, d.Amount, d.VerifiedAt }).ToArrayAsync(t);
-        if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
+        var deposits = await db.Set<DepositVerification>().AsNoTracking().Where(d => !depositDeferred && d.ContractId == depositRoot.Id).OrderBy(d => d.Id).Select(d => new { d.Id, d.Amount, d.VerifiedAt }).ToArrayAsync(t);
+        if (!depositDeferred && db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
         {
             var receipts = await db.Database.SqlQuery<SettlementDepositReceipt>($"""
                 SELECT a.id AS "Id",a.amount AS "Amount",p.verified_at AS "VerifiedAt" FROM payment_allocations a JOIN payments p ON p.id=a.source_payment_id
-                WHERE a.target_deposit_contract_id={root.Id} AND p.status='VERIFIED'
+                WHERE a.target_deposit_contract_id={depositRoot.Id} AND p.status='VERIFIED'
                   AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(p.history) h WHERE h->>'recordType'='DepositVerification')
                 """).ToArrayAsync(t);
             // Preserve the exact legacy reference shape/IDs; add only canonical receipt allocations absent from that history.
             deposits = deposits.Concat(receipts.Select(d => new { d.Id, d.Amount, d.VerifiedAt })).OrderBy(d => d.Id).ToArray();
         }
-        var deposit = decimal.Truncate(deposits.Sum(d => d.Amount) + root.AppliedHoldingDeposit);
-        if (deposit > 0 || chain.Any(c => c.RequiredDeposit > 0)) blockers.Add("deposit_deduction_refund_policy_required");
-        if (root.HoldingContractId is { } holding)
+        var holdingCredit = depositDeferred ? 0 : depositRoot.AppliedHoldingDeposit;
+        var deposit = decimal.Truncate(deposits.Sum(d => d.Amount) + holdingCredit);
+        if (!depositDeferred && (deposit > 0 || depositRoot.RequiredDeposit > 0)) blockers.Add("deposit_deduction_refund_policy_required");
+        if (!depositDeferred && depositRoot.HoldingContractId is { } holding)
         {
-            var applied = await db.Set<PaymentAllocation>().Where(a => a.SourceDepositContractId == holding && a.TargetDepositContractId == root.Id).SumAsync(a => (decimal?)a.Amount, t) ?? 0;
-            if (applied != root.AppliedHoldingDeposit) blockers.Add("holding_allocation_settlement_required");
+            var applied = await db.Set<PaymentAllocation>().Where(a => a.SourceDepositContractId == holding && a.TargetDepositContractId == depositRoot.Id).SumAsync(a => (decimal?)a.Amount, t) ?? 0;
+            if (applied != holdingCredit) blockers.Add("holding_allocation_settlement_required");
         }
-        else if (root.AppliedHoldingDeposit > 0) blockers.Add("holding_allocation_settlement_required");
+        else if (holdingCredit > 0) blockers.Add("holding_allocation_settlement_required");
         var invoiceQuery = db.Set<Invoice>().AsNoTracking().Include(i => i.Lines).Where(i => i.RoomId == c.RoomId && i.BillingPeriod >= start && i.BillingPeriod <= through);
         if (db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext)
             invoiceQuery = invoiceQuery.Where(i => i.Type == "PERIODIC" || chain.Select(v => v.Id).Contains(i.RepresentativeContractId));
@@ -136,9 +170,9 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
         var obligationReference = "DEPOSIT-" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
         {
             Contract = id,
-            Root = root.Id,
-            root.RequiredDeposit,
-            root.AppliedHoldingDeposit,
+            Root = depositRoot.Id,
+            depositRoot.RequiredDeposit,
+            AppliedHoldingDeposit = holdingCredit,
             deposits,
             Invoices = invoices,
             Charges = chargeBalances,
@@ -154,35 +188,35 @@ internal sealed class ContractSettlementLedger(BHomePersistenceContext db, ICont
                 obligationReference,
                 Maintenance = compensations.OrderBy(c => c.Id).Select(c => new { c.Id, c.Version, c.Status, c.Amount, c.DeductedAt })
             })));
-        var planValid = plan is not null && inspection is not null && plan.ObligationReference == obligationReference && plan.DepositContractId == root.Id &&
+        var planValid = plan is not null && inspection is not null && plan.ObligationReference == obligationReference && plan.DepositContractId == depositRoot.Id &&
             plan.InspectionId == inspection.Id && plan.InspectionVersion == inspection.Version && inspection.OwnerDecision == "Confirmed" &&
             !inspection.NoAdditionalCharges && plan.Total >= 0 && plan.Total == plan.Items.Sum(i => i.Amount);
         if (plan is not null && !planValid) blockers.Add("deposit_deduction_reapproval_required");
         if (planValid) blockers.Remove("final_charges_and_damage_policy_pending");
         var financialReference = plan is null ? obligationReference : "DEPOSIT-" + Convert.ToHexString(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(new { obligationReference, plan.Id, plan.Version, plan.Total })));
-        var position = positions is null ? null : await positions.ReadAsync(chain.Select(v => v.Id).ToArray(), t, financialReference);
+        var position = positions is null ? null : await positions.ReadAsync(depositIds, t, financialReference);
         var deductions = (plan?.Total ?? 0) + maintenanceDeductions;
         var calculation = SettlementCalculator.Calculate(invoices, deposit, position, deductions);
         if (position is not null && !calculation.DepositPositionConsistent) blockers.Add("deposit_ledger_reconciliation_required");
         if (position?.UnclassifiedRefunds > 0) blockers.Add("deposit_refund_manual_review_required");
         var approvedOffsets = new List<DepositOffsetApproval>();
         foreach (var version in chain) approvedOffsets.AddRange(await SettlementChargeRecords.ReadAsync<DepositOffsetApproval>(db, version.Id, SettlementChargeRecords.OffsetKind, t));
-        var offsetIds = approvedOffsets.Where(o => o.SourceDepositContractId == root.Id).Select(o => o.Id).ToArray();
-        var canonicalOffsets = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? await db.Set<PaymentAllocation>().Where(a => a.SourceDepositContractId == root.Id && a.DepositOffsetApprovalId != null && offsetIds.Contains(a.DepositOffsetApprovalId.Value))
+        var offsetIds = approvedOffsets.Where(o => o.SourceDepositContractId == depositRoot.Id).Select(o => o.Id).ToArray();
+        var canonicalOffsets = db is BHome.Infrastructure.Persistence.Compact24.Compact24DbContext ? await db.Set<PaymentAllocation>().Where(a => a.SourceDepositContractId == depositRoot.Id && a.DepositOffsetApprovalId != null && offsetIds.Contains(a.DepositOffsetApprovalId.Value))
             .SumAsync(a => (decimal?)a.Amount, t) ?? 0 : 0;
-        if (canonicalOffsets != approvedOffsets.Where(o => o.SourceDepositContractId == root.Id).Sum(o => o.Amount)) blockers.Add("deposit_offset_reconciliation_required");
+        if (canonicalOffsets != approvedOffsets.Where(o => o.SourceDepositContractId == depositRoot.Id).Sum(o => o.Amount)) blockers.Add("deposit_offset_reconciliation_required");
         if (position is not null && position.Allocated != canonicalOffsets) blockers.Add("deposit_offset_reconciliation_required");
         var returned = deposit > 0 && position is { Reserved: 0, UnclassifiedRefunds: 0 } && position.Allocated == canonicalOffsets &&
             position.Refunded + deductions + canonicalOffsets == deposit && calculation.DepositPositionConsistent && (reviewedCharges || inspection?.NoAdditionalCharges == true || planValid);
         if (returned) blockers.Remove("deposit_deduction_refund_policy_required");
         var resolved = blockers.Count == 0;
-        var value = new ContractSettlementSummary(id, root.Id, c.RoomId, c.Room.RoomNumber, c.TenantUserId ?? throw ContractException.Conflict("active_tenant_account_required"), deposit, root.AppliedHoldingDeposit,
+        var value = new ContractSettlementSummary(id, depositRoot.Id, c.RoomId, c.Room.RoomNumber, c.TenantUserId ?? throw ContractException.Conflict("active_tenant_account_required"), deposit, holdingCredit,
             calculation.ContractSpecificOutstanding, planValid || maintenanceDeductions > 0 ? deductions : inspection?.NoAdditionalCharges == true ? 0 : null,
             planValid || maintenanceDeductions > 0 ? deductions : deposit == 0 || returned ? 0 : null,
-            returned ? position!.Refunded : deposit == 0 && root.AppliedHoldingDeposit == 0 ? 0 : null,
+            returned ? position!.Refunded : deposit == 0 && holdingCredit == 0 ? 0 : null,
             invoices, blockers.Distinct().Order().ToArray(), other, resolved, "",
-            returned ? position!.Refunded > 0 ? "VerifiedManual" : "NotRequired" : deposit == 0 && root.AppliedHoldingDeposit == 0 ? "NotRequired" : "PendingReview",
+            returned ? position!.Refunded > 0 ? "VerifiedManual" : "NotRequired" : deposit == 0 && holdingCredit == 0 ? "NotRequired" : "PendingReview",
             calculation, financialReference, plan, obligationReference, chargeBalances, reviewedCharges ? review : null, canonicalOffsets, maintenanceDeductions);
         if (charges.Length > 0) value = value with { ApprovedFinalCharges = charges.Sum(charge => charge.Amount) };
         // Snapshot identity includes sources and their revisions, no user supplied financial totals.

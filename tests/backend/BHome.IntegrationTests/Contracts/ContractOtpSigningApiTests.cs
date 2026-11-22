@@ -134,7 +134,8 @@ public sealed partial class ContractLifecycleApiTests
                 Assert.Equal("PendingSigning", (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!.Status);
                 await using (var scope = host.Services.CreateAsyncScope())
                     Assert.False(await scope.ServiceProvider.GetRequiredService<ContractService>().AutomaticActivationReadyAsync(id, default));
-                await Deposit(w, id, holding ? 1000000 : 3000000);
+                var pendingContract = (await owner.Client.GetFromJsonAsync<ContractView>(Path(id)))!;
+                await Deposit(w, id, pendingContract.RequiredDeposit);
                 await using (var scope = host.Services.CreateAsyncScope())
                 {
                     var service = scope.ServiceProvider.GetRequiredService<ContractService>();
@@ -186,7 +187,7 @@ public sealed partial class ContractLifecycleApiTests
         {
             await using (var scope = host.Services.CreateAsyncScope())
                 Assert.False(await scope.ServiceProvider.GetRequiredService<ContractService>().AutomaticActivationReadyAsync(id, default));
-            await Deposit(w, id, holding ? 1000000 : 3000000);
+            await Deposit(w, id, contract.RequiredDeposit);
         }
         await using (var scope = host.Services.CreateAsyncScope())
         {

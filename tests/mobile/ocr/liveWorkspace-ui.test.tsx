@@ -3155,7 +3155,7 @@ it('does not display forbidden response contents or send ledger calls for Staff'
 it('keeps Home compact with four shortcuts and navigates to the catalog without replacing its data', () => {
   mocks.role = 'Tenant';
   render(<TenantDashboard contracts={[tenantContract]} />);
-  for (const label of ['Phòng của tôi', 'Hóa đơn', 'Báo sự cố', 'Yêu cầu của tôi'])
+  for (const label of ['Phòng của tôi', 'Hóa đơn', 'Báo sự cố', 'Bàn giao / Trả phòng'])
     expect(screen.getByRole('button', { name: label })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Hợp đồng' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Làm mới tổng quan' })).toBeNull();

@@ -511,13 +511,13 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
         Assert.Null((await owner.GetFromJsonAsync<ContractView>($"/api/v1/contracts/{a}"))!.PriceLockedAt);
         Assert.Equal(RoomStatus.Available, (await owner.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!.Status);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, $"/api/v1/contracts/{a}/holding-activation")).StatusCode);
-        await Read<ContractId>(await Post(owner, $"/api/v1/contracts/{a}/deposit-verifications", new DepositInput("SYN-REST-" + a, 1000000, "Synthetic bank confirmation")));
+        await Read<ContractId>(await Post(owner, $"/api/v1/contracts/{a}/deposit-verifications", new DepositInput("SYN-REST-" + a, 2000000, "Synthetic bank confirmation")));
         Assert.Equal("SigningAndDepositCompleted", (await owner.GetFromJsonAsync<ContractView>($"/api/v1/contracts/{a}"))!.PriceLockTrigger);
         await Read<ContractView>(await Post(owner, $"/api/v1/contracts/{a}/holding-activation"));
         Assert.Equal(RoomStatus.OnHold, (await owner.GetFromJsonAsync<RoomDto>($"/api/v1/rooms/{w.Room}"))!.Status);
         using var future = host.WithWebHostBuilder(builder => builder.ConfigureServices(s => s.AddSingleton<TimeProvider>(new Clock(DateTimeOffset.UtcNow.AddDays(2)))));
         await using (var scope = future.Services.CreateAsyncScope()) await scope.ServiceProvider.GetServices<IBackgroundJobHandler>().Single(j => j.Name == "contract-expiry").ExecuteAsync(new(Guid.NewGuid(), "synthetic-expiry", "{}"), default);
         Assert.Equal("Expired", (await Read<ContractView>(await Post(owner, $"/api/v1/contracts/{a}/signing/sync"))).Status);
-        Assert.Equal(2000000, (await owner.GetFromJsonAsync<HoldingDepositStatus>($"/api/v1/contracts/{a}/holding-deposit"))!.Verified);
+        Assert.Equal(3000000, (await owner.GetFromJsonAsync<HoldingDepositStatus>($"/api/v1/contracts/{a}/holding-deposit"))!.Verified);
     }
 }

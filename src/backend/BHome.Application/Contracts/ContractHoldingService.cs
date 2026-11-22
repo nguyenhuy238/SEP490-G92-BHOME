@@ -109,7 +109,7 @@ public sealed partial class ContractService
                 // Policy rates have decimal scale, while contract VND columns use numeric(18,0).
                 // Seal the representation that survives persistence so signing can verify it.
                 MonthlyRent = decimal.Truncate(rent.Rate),
-                RequiredDeposit = decimal.Truncate(input.HoldingDeposit),
+                RequiredDeposit = decimal.Truncate(rent.Rate),
                 Terms = input.Terms.Trim(),
                 IsDevelopmentDemo = DemoEnabled,
                 PaymentMode = ConfiguredPaymentMode(room.LocationId)
@@ -323,7 +323,7 @@ public sealed partial class ContractService
                 StartDate = holding.StartDate,
                 EndDate = holding.EndDate,
                 MonthlyRent = holding.MonthlyRent,
-                RequiredDeposit = holding.RequiredDeposit,
+                RequiredDeposit = Math.Max(holding.MonthlyRent, holding.RequiredDeposit),
                 Terms = holding.Terms,
                 IsDevelopmentDemo = holding.IsDevelopmentDemo,
                 PaymentMode = holding.PaymentMode

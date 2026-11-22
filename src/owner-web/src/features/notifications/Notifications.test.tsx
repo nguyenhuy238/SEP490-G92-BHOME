@@ -26,7 +26,13 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 function Location() {
-  return <span data-testid="route">{useLocation().search}</span>;
+  const { pathname, search } = useLocation();
+  return (
+    <span data-testid="route">
+      {pathname === '/' ? '' : pathname}
+      {search}
+    </span>
+  );
 }
 function mount() {
   render(
@@ -60,6 +66,30 @@ it('marks the recipient notification and resolves its authorized invoice before 
   fireEvent.click(await screen.findByRole('button', { name: 'Mở hồ sơ liên quan' }));
   await waitFor(() => expect(mocks.read).toHaveBeenCalledWith(id));
   await waitFor(() => expect(screen.getByTestId('route')).toHaveTextContent('invoiceId=' + id));
+});
+it('opens a termination notification directly in the dedicated Owner review', async () => {
+  mocks.list.mockResolvedValue({
+    items: [
+      {
+        id,
+        title: 'Có yêu cầu kết thúc hợp đồng',
+        summary: 'Mở yêu cầu để xem',
+        category: 'Contract',
+        eventType: 'CONTRACT_MOVE_OUT_REQUESTED',
+        relatedObjectType: 'Contract',
+        createdAt: '2026-11-21T00:00:00Z',
+        readAt: null,
+      },
+    ],
+    totalCount: 1,
+  });
+  mocks.target.mockResolvedValue({ objectType: 'Contract', objectId: id });
+  mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Mở hồ sơ liên quan' }));
+  await waitFor(() =>
+    expect(screen.getByTestId('route')).toHaveTextContent(`/contracts/${id}/termination-review`),
+  );
+  expect(mocks.target).toHaveBeenCalledWith(id);
 });
 it('keeps the inbox visible when opening a revoked target fails', async () => {
   mocks.list.mockResolvedValue({

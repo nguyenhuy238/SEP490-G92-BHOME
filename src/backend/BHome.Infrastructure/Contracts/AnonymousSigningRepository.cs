@@ -8,17 +8,26 @@ namespace BHome.Infrastructure.Contracts;
 
 internal sealed class AnonymousSigningRepository(BHomePersistenceContext db) : IAnonymousSigningRepository
 {
+    public Task<bool> MatchesAccountEmailAsync(Guid userId, string email, CancellationToken t)
+    {
+        var normalized = email.Trim().ToLowerInvariant();
+        return db.Users.AnyAsync(u => u.Id == userId && u.Email != null && u.Email.Trim().ToLower() == normalized, t);
+    }
+
     public Task<ContractSigningInvitation?> FindByTokenHashAsync(string hash, CancellationToken t) =>
         db.Set<ContractSigningInvitation>().SingleOrDefaultAsync(i => i.TokenHash == hash, t);
     public Task<ContractSigningInvitation?> FindAsync(Guid id, CancellationToken t) =>
         db.Set<ContractSigningInvitation>().SingleOrDefaultAsync(i => i.Id == id, t);
     public async Task<IReadOnlyList<ContractSigningInvitation>> ListAsync(Guid contractId, CancellationToken t) =>
-        await db.Set<ContractSigningInvitation>().Where(i => i.ContractId == contractId).OrderByDescending(i => i.CreatedAt).Take(100).ToArrayAsync(t);
+        await db.Set<ContractSigningInvitation>().Where(i => i.ContractId == contractId).OrderByDescending(i => i.CreatedAt).ToArrayAsync(t);
     public async Task<bool> IsEmailInUseAsync(Guid contractId, Guid residentId, string email, CancellationToken t)
     {
         email = email.Trim().ToLowerInvariant();
         if (db.Database.IsNpgsql() && db.Database.CurrentTransaction is not null)
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"bhome-signing-email:" + email},0))", t);
+        // The resident email index also covers profiles without a main contract.
+        if (await db.Set<Resident>().AnyAsync(r => r.Id != residentId &&
+            r.ContactEmail != null && r.ContactEmail.Trim().ToLower() == email, t)) return true;
         if (await (from u in db.Users
                    join ur in db.UserRoles on u.Id equals ur.UserId
                    join role in db.Roles on ur.RoleId equals role.Id

@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native-paper';
@@ -7,7 +8,7 @@ import {
   type ContractClient,
   type ContractExpiryNotice,
 } from '../../../../../packages/client-core/src/contracts';
-import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
+import { Action, Box, Heading } from '../../components/WorkspaceKit';
 export function ContractExpiryPanel({
   api,
   onOpen,
@@ -16,7 +17,7 @@ export function ContractExpiryPanel({
   onOpen: (id: string) => void;
 }) {
   const [items, setItems] = useState<ContractExpiryNotice[]>([]),
-    [error, setError] = useFeedbackState(),
+    [error, setError] = useFeedbackState('warning', false),
     [revision, setRevision] = useState(0);
   useEffect(() => {
     const c = new AbortController();
@@ -39,7 +40,7 @@ export function ContractExpiryPanel({
       <Action secondary onPress={() => setRevision((v) => v + 1)}>
         Tải lại nhắc hết hạn
       </Action>
-      {!!error && <Text style={ui.red}>{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       {!items.length && !error && <Text>Chưa có nhắc hết hạn đã được xử lý.</Text>}
       {items.map((n) => (
         <Box key={n.id}>

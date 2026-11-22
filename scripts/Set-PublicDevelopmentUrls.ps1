@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$ApiUrl,
     [Parameter(Mandatory=$true)][string]$WebUrl,
+    [string]$SePayWebhookUrl = 'https://api-sepay-test.103.146.23.157.sslip.io/api/v1/integrations/sepay/webhook',
     [string[]]$EnvironmentFiles = @('.env.neon.dev04', '.env')
 )
 $ErrorActionPreference = 'Stop'
@@ -14,6 +15,12 @@ foreach ($origin in @($ApiUrl, $WebUrl)) {
 }
 $ApiUrl = $ApiUrl.TrimEnd('/')
 $WebUrl = $WebUrl.TrimEnd('/')
+$webhookUri = $null
+if (-not [Uri]::TryCreate($SePayWebhookUrl, [UriKind]::Absolute, [ref]$webhookUri) -or
+    $webhookUri.Scheme -ne 'https' -or $webhookUri.UserInfo -or $webhookUri.Query -or $webhookUri.Fragment -or
+    $webhookUri.AbsolutePath -ne '/api/v1/integrations/sepay/webhook') {
+    throw 'The SePay webhook must be an HTTPS URL with the expected webhook path and no credentials, query or fragment.'
+}
 $updates = @{
     AuthenticationEmail__WebInvitationUrl = "$WebUrl/accept-invitation"
     AuthenticationEmail__WebResetUrl = "$WebUrl/reset-password"
@@ -48,5 +55,5 @@ $directory = Join-Path $repo '.tools/cloudflare'
 [IO.Directory]::CreateDirectory($directory) | Out-Null
 foreach ($name in @('api-url.txt', 'login-api-url.txt')) { [IO.File]::WriteAllText((Join-Path $directory $name), $ApiUrl) }
 [IO.File]::WriteAllText((Join-Path $directory 'email-web-url.txt'), $WebUrl)
-[IO.File]::WriteAllText((Join-Path $directory 'sepay-webhook-url.txt'), "$ApiUrl/api/v1/integrations/sepay/webhook")
+[IO.File]::WriteAllText((Join-Path $directory 'sepay-webhook-url.txt'), $webhookUri.AbsoluteUri)
 Write-Output 'Synchronized email, signing, origin allowlists and SePay webhook URL files.'

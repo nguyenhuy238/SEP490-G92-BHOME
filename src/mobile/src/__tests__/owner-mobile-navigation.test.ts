@@ -16,7 +16,7 @@ it('offers four Owner monitoring tabs and preserves Staff/Tenant tabs', () => {
   expect(tabs.Staff.map(({ screen }) => screen)).toEqual([
     'staff-home',
     'work-orders',
-    'notifications',
+    'rooms',
     'profile',
   ]);
   expect(tabs.Tenant.map(({ screen }) => screen)).toEqual([

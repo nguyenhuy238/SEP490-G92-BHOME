@@ -24,6 +24,19 @@ public sealed class EnvironmentConfigurationTests
         Assert.DoesNotContain(value, string.Join(" ", EnvironmentConfiguration.Errors(c, "Development")));
     }
     [Fact]
+    public void OnlyExplicitDevelopmentSigningTunnelIsAllowed()
+    {
+        var c = new ConfigurationManager();
+        c["ConnectionStrings:Database"] = "Host=localhost;Database=synthetic";
+        c["AnonymousSigning:PublicSigningUrl"] = "https://temporary.trycloudflare.com/contract-signing";
+        Assert.NotEmpty(EnvironmentConfiguration.Errors(c, "Development"));
+        c["AnonymousSigning:DevelopmentTunnelOrigin"] = "https://temporary.trycloudflare.com";
+        Assert.Empty(EnvironmentConfiguration.Errors(c, "Development"));
+        Assert.Contains(EnvironmentConfiguration.Errors(c, "Staging"), e => e.StartsWith("AnonymousSigning:PublicSigningUrl"));
+        c["AnonymousSigning:DevelopmentTunnelOrigin"] = "https://other.trycloudflare.com";
+        Assert.NotEmpty(EnvironmentConfiguration.Errors(c, "Development"));
+    }
+    [Fact]
     public void PublicWebsiteCannotBecomeACookieAuthenticationOrigin()
     {
         var c = Deployment("Production");

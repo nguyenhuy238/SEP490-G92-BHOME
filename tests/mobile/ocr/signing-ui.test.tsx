@@ -107,6 +107,9 @@ vi.mock('../../../src/mobile/src/components/WorkflowControls', () => ({
     </label>
   ),
 }));
+vi.mock('../../../src/mobile/src/components/IdentityDateField', () => ({
+  IdentityDateField: () => null,
+}));
 import {
   ContractActionForm,
   SigningCertificates,

@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Checkbox, Text } from 'react-native-paper';
 import {
@@ -12,7 +13,7 @@ import {
   paymentClient,
   paymentError,
 } from '../../../../../packages/client-core/src/payments';
-import { Action, Box, Heading, Row, ui } from '../../components/WorkspaceKit';
+import { Action, Box, Heading, Row } from '../../components/WorkspaceKit';
 import { ChoiceField } from '../../components/WorkflowControls';
 import { randomUUID } from '../../lib/randomUUID';
 
@@ -291,7 +292,7 @@ export function HoldingDepositAllocation({
           {loading && <Text>Đang đối chiếu giao dịch…</Text>}
         </>
       )}
-      {!!message && <Text style={ui.red}>{message}</Text>}
+      {!!message && <ContractNotice message={message} />}
       {!!notice && <Text>{notice}</Text>}
     </Box>
   );

@@ -1,3 +1,4 @@
+import { ContractNotice } from './ContractNotice';
 import { RentalContractStepper } from './RentalContractStepper';
 import { MainContractProgress } from './MainContractProgress';
 import { MainDraftSigningReview } from './MainDraftSigningReview';
@@ -23,6 +24,7 @@ import {
   type MainDraftView,
 } from '../../../../../packages/client-core/src/mainDrafts';
 import {
+  businessToday,
   contractError,
   displayContractDate,
   mutationKeys,
@@ -41,8 +43,13 @@ import { previewErrorCode, requiresNewDocument } from './pdfPreview';
 import { deliverWebDocument, openPdfWindow } from './webContractDocument';
 import { ownerContractSteps } from '../owner/ownerContractSteps';
 
-const iso = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+function endOfTerm(start: string, months: 6 | 12) {
+  const [year, month, day] = start.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month + months, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month + months - 1, Math.min(day, lastDay)))
+    .toISOString()
+    .slice(0, 10);
+}
 function message(error: unknown) {
   const code = previewErrorCode(error);
   if (code === 'pdf_popup_blocked')
@@ -83,6 +90,7 @@ export function MainDraftScreen({
 }) {
   const { api, session } = useSession();
   const owner = !!session?.roles.includes('Owner');
+  const staff = !owner && !!session?.roles.includes('Staff');
   const client = useMemo(
     () => (api ? mainDraftClient((path, init, type) => api.request(path, init, type)) : null),
     [api],
@@ -91,15 +99,23 @@ export function MainDraftScreen({
   const [saved, setSaved] = useState<MainDraftView | null>(null);
   const readOnly = !!saved && saved.status !== 'Draft';
   const [preparation, setPreparation] = useState<MainDraftPreparation | null>(null);
-  const [start, setStart] = useState(displayContractDate(iso(new Date())));
-  const [end, setEnd] = useState('');
+  const [start, setStart] = useState(() => displayContractDate(businessToday()));
+  const [end, setEnd] = useState(() =>
+    staff ? displayContractDate(endOfTerm(businessToday(), 6)) : '',
+  );
+  const [termOpen, setTermOpen] = useState(false);
   const [phone, setPhone] = useState(''),
     [place, setPlace] = useState(''),
     [email, setEmail] = useState(''),
     [notes, setNotes] = useState('');
   const [mode, setMode] = useState<'edit' | 'preview' | 'signing'>('edit');
   const [signingVisited, setSigningVisited] = useState(false);
-  const [documents, setDocuments] = useState<MainDraftFiles | null>(null);
+  const [documents, setDocuments] = useState<
+    | (Omit<MainDraftFiles, 'docx'> & {
+        docx: MainDraftFiles['docx'] | null;
+      })
+    | null
+  >(null);
   const [reviewRevision, setReviewRevision] = useState(0);
   const [readyFile, setReadyFile] = useState(''),
     [documentBlocker, setDocumentBlocker] = useState('');
@@ -201,11 +217,14 @@ export function MainDraftScreen({
           );
           dirty.current = false;
         } else {
+          const today = businessToday();
           const result = await client!.prepare(
-            { ...refs.current, startDate: iso(new Date()) },
+            { ...refs.current, startDate: today },
             controller.signal,
           );
           if (!controller.signal.aborted) {
+            setStart(displayContractDate(today));
+            setEnd(staff ? displayContractDate(endOfTerm(today, 6)) : '');
             setPreparation(result);
             setPhone(result.residents.find((r) => r.representative)?.phone ?? '');
             setEmail(result.residents.find((r) => r.representative)?.email ?? '');
@@ -220,7 +239,7 @@ export function MainDraftScreen({
     }
     void load();
     return () => controller.abort();
-  }, [client, initialId, revision, setError, owner, reviewOnly]);
+  }, [client, initialId, revision, setError, owner, staff, reviewOnly]);
   useEffect(() => {
     if (!client || !id || mode !== 'signing' || saved?.status !== 'Draft') return;
     const controller = new AbortController();
@@ -266,7 +285,7 @@ export function MainDraftScreen({
       errors.end = 'Nhập ngày kết thúc hợp lệ theo dd/MM/yyyy.';
     }
     if (from && to && to <= from) errors.end = 'Ngày kết thúc phải sau ngày bắt đầu.';
-    if (!phone.trim()) errors.phone = 'Bổ sung số điện thoại người thuê.';
+    if (!staff && !phone.trim()) errors.phone = 'Bổ sung số điện thoại người thuê.';
     setFieldErrors(errors);
     return Object.keys(errors).length
       ? null
@@ -281,6 +300,13 @@ export function MainDraftScreen({
           expectedVersion: saved?.version ?? 0,
         };
   }
+  async function generatePreview(draftId: string, signal: AbortSignal) {
+    if (staff) {
+      const pdf = await client!.signingReview(draftId, signal);
+      return { pdf, docx: null, previewError: null };
+    }
+    return client!.generate(draftId, signal);
+  }
   async function save(preview: boolean) {
     if (!client || lock.current || readOnly) return;
     // Reading an unchanged Owner draft must not increment its version and retire the
@@ -291,6 +317,7 @@ export function MainDraftScreen({
     }
     const body = input();
     if (!body) return;
+    setTermOpen(false);
     lock.current = true;
     setBusy(true);
     setError('');
@@ -326,11 +353,11 @@ export function MainDraftScreen({
       // Only reference IDs enter navigation state; never identity fields or document URLs.
       if (persistRoute) router.setParams({ mainDraftId: result.id });
       if (result.status !== 'Draft') throw { code: 'draft_version_or_status_changed' };
-      showSuccess('Đã lưu hợp đồng nháp.');
+      showSuccess(staff ? 'Đã lưu hợp đồng.' : 'Đã lưu hợp đồng nháp.');
       if (preview) {
         setDocuments(null);
         setMode('preview');
-        const resultFiles = await client.generate(result.id, controller.signal);
+        const resultFiles = await generatePreview(result.id, controller.signal);
         if (currentOperation(controller)) {
           setDocumentBlocker('');
           setDocuments(resultFiles);
@@ -438,7 +465,8 @@ export function MainDraftScreen({
   }
   async function reviewSaved(confirm: boolean) {
     if (!client || !saved || lock.current) return;
-    if (confirm && owner && (!documents?.pdf || readyFile !== documents.pdf.id)) return;
+    const reviewedPdf = documents?.pdf;
+    if (confirm && (!reviewedPdf || (owner && readyFile !== reviewedPdf.id))) return;
     if (!confirm && documentBlocker.includes('save_again')) {
       setMode('edit');
       return;
@@ -456,7 +484,7 @@ export function MainDraftScreen({
         setReadyFile('');
         setSaved(current);
         setReviewRevision((value) => value + 1);
-        if (owner) {
+        if (owner || staff) {
           if (releasedHandler.current) releasedHandler.current(current.id);
           else onList();
           return;
@@ -478,15 +506,30 @@ export function MainDraftScreen({
         dirty.current = false;
         if (confirm) throw { code: 'draft_version_or_status_changed' };
       }
-      if (confirm) {
-        if (alive.current) {
+      if (confirm && reviewedPdf) {
+        if (staff) {
+          const input = {
+            tenantUserId: null,
+            expectedVersion: current.version,
+            reviewedFileId: reviewedPdf.id,
+            humanReviewed: true,
+            emailSigning: true,
+          };
+          const key = keys.get('main-draft-release', input);
+          const released = await client.release(id, input, key);
+          keys.confirmed('main-draft-release', input);
+          if (currentOperation(controller)) {
+            if (releasedHandler.current) releasedHandler.current(released.id);
+            else onList();
+          }
+        } else if (alive.current) {
           setSigningVisited(true);
           setMode('signing');
         }
       } else {
         setDocuments(null);
         setReviewRevision((value) => value + 1);
-        const result = await client.generate(id, controller.signal);
+        const result = await generatePreview(id, controller.signal);
         if (currentOperation(controller)) {
           setDocumentBlocker('');
           setError('');
@@ -568,6 +611,417 @@ export function MainDraftScreen({
     setDocuments(null);
   };
   const representative = preparation?.residents.find((r) => r.representative);
+  const rent = preparation?.charges.find((charge) => charge.chargeCode === 'RENT');
+  const title =
+    mode === 'preview'
+      ? 'Xem trước hợp đồng'
+      : mode === 'signing'
+        ? 'Ký hợp đồng'
+        : 'Tạo hợp đồng thuê';
+  const termOptions =
+    staff && preparation
+      ? ([6, 12] as const).map((months) => ({
+          label: months === 6 ? '6 tháng' : '1 năm',
+          date: displayContractDate(endOfTerm(inputDate(start)!, months)),
+        }))
+      : [];
+  const content = (
+    <>
+      {owner ? (
+        <RentalContractStepper
+          current={mode === 'signing' ? 1 : 0}
+          steps={owner ? ownerContractSteps : undefined}
+        />
+      ) : (
+        <Box>
+          <MainContractProgress current={mode === 'edit' ? 3 : mode === 'preview' ? 4 : 5} />
+        </Box>
+      )}
+      {loading && <ActivityIndicator accessibilityLabel="Đang tải dữ liệu hợp đồng" />}
+      {!!error && !(owner && mode === 'preview' && documentBlocker) && (
+        <ContractNotice message={error} />
+      )}
+      {!loading && !preparation && (
+        <Button contentStyle={{ minHeight: 48 }} onPress={() => setRevision((v) => v + 1)}>
+          Tải lại dữ liệu
+        </Button>
+      )}
+      {preparation && (
+        <>
+          {staff ? (
+            mode !== 'signing' && (
+              <Box>
+                <Heading title={`${preparation.locationName} · Phòng ${preparation.roomNumber}`} />
+                {!!representative && <Text>Đại diện thuê: {representative.fullName}</Text>}
+                {rent && <Text>Giá thuê: {formatDraftMoney(rent.rate)}/tháng</Text>}
+                {mode === 'preview' && (
+                  <Text>
+                    Thời hạn: {start} – {end}
+                  </Text>
+                )}
+              </Box>
+            )
+          ) : mode === 'edit' ? (
+            <>
+              {id && (
+                <Box>
+                  <Pill>{labels[saved?.status ?? 'Draft'] ?? saved?.status}</Pill>
+                  <Text>Hồ sơ nháp đã lưu</Text>
+                </Box>
+              )}
+              <Box>
+                <Heading title="Thông tin phòng" />
+                <Text style={styles.roomName}>
+                  {preparation.locationName} · Phòng {preparation.roomNumber}
+                </Text>
+                <Text style={styles.support}>{preparation.address}</Text>
+                {preparation.charges.some((p) => p.chargeCode === 'RENT') && (
+                  <Text>
+                    Giá thuê:{' '}
+                    {formatDraftMoney(
+                      preparation.charges.find((p) => p.chargeCode === 'RENT')!.rate,
+                    )}
+                    /tháng
+                  </Text>
+                )}
+              </Box>
+              <Box>
+                <Heading title="Người thuê" />
+                <Row spread>
+                  <Text style={styles.personName}>{representative?.fullName}</Text>
+                  <Pill tone="green">Đã xác minh</Pill>
+                </Row>
+                <Text style={styles.support}>
+                  Đại diện · {preparation.residents.length} người ở
+                </Text>
+                {!!representative?.maskedCitizenNumber && (
+                  <Text>CCCD: {representative.maskedCitizenNumber}</Text>
+                )}
+                <Text style={styles.support}>Email sẽ được nhập khi gửi lời mời ký.</Text>
+                {!staff && (
+                  <TextInput
+                    label="Số điện thoại người thuê"
+                    accessibilityLabel="Số điện thoại người thuê"
+                    value={phone}
+                    keyboardType="phone-pad"
+                    maxLength={30}
+                    mode="outlined"
+                    disabled={busy || readOnly || !!representative?.phone}
+                    error={!!fieldErrors.phone}
+                    onChangeText={edit(setPhone)}
+                  />
+                )}
+                {!!fieldErrors.phone && <Text style={styles.error}>{fieldErrors.phone}</Text>}
+                {preparation.residents.some((person) => !person.representative) && (
+                  <>
+                    <Text style={styles.support}>Thành viên cùng ở · Đã lưu</Text>
+                    {preparation.residents
+                      .filter((person) => !person.representative)
+                      .map((person) => (
+                        <View key={person.id} style={{ gap: 4 }}>
+                          <Text>
+                            {person.fullName}
+                            {person.relationship ? ` · ${person.relationship}` : ''}
+                          </Text>
+                          {!!person.dateOfBirth && (
+                            <Text style={styles.support}>
+                              Ngày sinh: {displayContractDate(person.dateOfBirth)}
+                            </Text>
+                          )}
+                        </View>
+                      ))}
+                  </>
+                )}
+              </Box>
+            </>
+          ) : (
+            <ContractPreviewSummary
+              showSigner={!(owner && mode === 'signing')}
+              preparation={preparation}
+              status={saved?.status ?? 'Draft'}
+              start={start}
+              end={end}
+            />
+          )}
+          {!!preparation.blockers.length && (
+            <View style={styles.notice} accessibilityRole="alert">
+              <Text style={styles.noticeTitle}>Thiếu cấu hình hợp đồng</Text>
+              {preparation.blockers.map((code) => (
+                <Text key={code} style={styles.support}>
+                  {mainDraftMessages[code] ??
+                    'Cần Owner kiểm tra điều kiện hợp đồng trên hệ thống.'}
+                </Text>
+              ))}
+            </View>
+          )}
+          {!staff && signingVisited && client && saved && (
+            <View style={mode === 'signing' ? undefined : { display: 'none' }}>
+              <MainDraftSigningReview
+                key={`${id}:${saved.version}:${reviewRevision}`}
+                client={client}
+                draft={saved}
+                onBusyChange={setBusy}
+                onReleased={(next) => (onReleased ? onReleased(next) : onList())}
+                onOpenPdf={(file) => openFile(true, file, true)}
+                onDownloadPdf={(file) => openFile(true, file)}
+                onEditDraft={
+                  reviewOnly
+                    ? undefined
+                    : () => {
+                        setDocuments(null);
+                        setReadyFile('');
+                        setSigningVisited(false);
+                        setMode('edit');
+                      }
+                }
+                onDraftChanged={(latest) => {
+                  setDocuments(null);
+                  setReadyFile('');
+                  setSigningVisited(reviewOnly);
+                  setSaved(latest);
+                  setPreparation(latest.preparation);
+                  refs.current = latest.input;
+                  setStart(displayContractDate(latest.input.startDate));
+                  setEnd(displayContractDate(latest.input.endDate));
+                  setPhone(latest.input.tenantPhone);
+                  setEmail(latest.input.tenantEmail ?? '');
+                  setPlace(latest.input.tenantPlaceOfIssue);
+                  setNotes(latest.input.notes);
+                  dirty.current = false;
+                  setMode(reviewOnly ? 'signing' : 'preview');
+                }}
+              />
+            </View>
+          )}
+          {mode === 'edit' ? (
+            <Box>
+              <Heading title={staff ? 'Thời hạn thuê' : 'Điều khoản thuê'} />
+              {staff ? (
+                <>
+                  <Button
+                    mode="outlined"
+                    icon={termOpen ? 'chevron-up' : 'chevron-down'}
+                    accessibilityLabel="Kỳ thuê"
+                    accessibilityState={{ expanded: termOpen }}
+                    contentStyle={styles.termTrigger}
+                    disabled={busy || readOnly}
+                    onPress={() => setTermOpen((open) => !open)}
+                  >
+                    {termOptions.find((option) => option.date === end)?.label ?? 'Chọn kỳ thuê'}
+                  </Button>
+                  {termOpen && (
+                    <View style={styles.termOptions}>
+                      {termOptions.map((option) => (
+                        <Button
+                          key={option.label}
+                          accessibilityState={{ selected: end === option.date }}
+                          contentStyle={styles.termOption}
+                          onPress={() => {
+                            edit(setEnd)(option.date);
+                            setTermOpen(false);
+                          }}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </View>
+                  )}
+                  <Text>
+                    {start} – {end}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <ContractDateField
+                    onCalendarChange={(close) => {
+                      calendarClose.current = close;
+                    }}
+                    label="Ngày bắt đầu (dd/MM/yyyy)"
+                    value={start}
+                    onChange={edit(setStart)}
+                    disabled={busy || readOnly}
+                    error={fieldErrors.start}
+                  />
+                  <ContractDateField
+                    onCalendarChange={(close) => {
+                      calendarClose.current = close;
+                    }}
+                    label="Ngày kết thúc (dd/MM/yyyy)"
+                    value={end}
+                    onChange={edit(setEnd)}
+                    disabled={busy || readOnly}
+                    error={fieldErrors.end}
+                  />
+                  <Button
+                    contentStyle={{ minHeight: 48 }}
+                    disabled={busy || readOnly}
+                    onPress={() => void refreshPrices()}
+                  >
+                    Cập nhật giá theo ngày bắt đầu
+                  </Button>
+                </>
+              )}
+              {!staff &&
+                preparation.charges.map((p) => (
+                  <Row key={p.id} spread>
+                    <Text style={styles.chargeName}>
+                      {{
+                        RENT: 'Giá thuê',
+                        ELECTRICITY: 'Điện',
+                        WATER: 'Nước',
+                        WIFI: 'Wi-Fi',
+                      }[p.chargeCode] ?? p.name}
+                    </Text>
+                    <Text style={styles.chargeValue}>
+                      {formatDraftMoney(p.rate)}
+                      {p.chargeCode === 'ELECTRICITY'
+                        ? '/kWh'
+                        : p.chargeCode === 'WATER'
+                          ? '/m³'
+                          : '/tháng'}
+                    </Text>
+                  </Row>
+                ))}
+              {!staff && preparation.securityDeposit !== null && (
+                <Row spread>
+                  <Text>Tiền cọc</Text>
+                  <Text>{formatDraftMoney(preparation.securityDeposit)}</Text>
+                </Row>
+              )}
+              {!staff && !!preparation.paymentTerms && (
+                <Text>Thanh toán: {preparation.paymentTerms}</Text>
+              )}
+              {!staff && (
+                <>
+                  <Heading title="Ghi chú / điều khoản bổ sung" />
+                  <TextInput
+                    label="Điều khoản bổ sung / ghi chú"
+                    accessibilityLabel="Điều khoản bổ sung / ghi chú"
+                    placeholder="Nhập điều khoản bổ sung (nếu có)"
+                    value={notes}
+                    onChangeText={edit(setNotes)}
+                    mode="outlined"
+                    multiline
+                    numberOfLines={3}
+                    maxLength={4000}
+                    disabled={busy || readOnly}
+                  />
+                </>
+              )}
+            </Box>
+          ) : mode === 'preview' && client ? (
+            <ContractPdfPreview
+              client={client}
+              contractId={id}
+              document={documents?.pdf ?? null}
+              hideUnavailableActions={owner || staff}
+              busy={busy}
+              previewErrorCode={documentBlocker || documents?.previewError || null}
+              hasDocx={!!documents?.docx}
+              onRegenerate={() => void reviewSaved(false)}
+              onOpenPdf={() => openFile(true, undefined, true)}
+              onDownloadPdf={() => void openFile(true)}
+              onDocumentError={invalidateDocument}
+              onReady={setReadyFile}
+              onOpenDocx={() => void openFile(false)}
+            />
+          ) : null}
+        </>
+      )}
+    </>
+  );
+  const footer = !reviewOnly && (
+    <View style={[styles.footer, onPrevious && { flexWrap: 'wrap' }, owner && styles.ownerFooter]}>
+      {busy && <ActivityIndicator />}
+      {!staff && onPrevious && mode === 'edit' && (
+        <Button
+          style={{ width: '100%' }}
+          icon="arrow-left"
+          disabled={busy || readOnly}
+          onPress={back}
+        >
+          {'Quay l\u1ea1i: CCCD'}
+        </Button>
+      )}
+      {mode === 'edit' ? (
+        <>
+          {!staff && (
+            <Button
+              contentStyle={{ minHeight: 48 }}
+              mode="text"
+              style={owner ? styles.ownerAction : styles.secondaryAction}
+              disabled={
+                busy || readOnly || loading || !preparation || !!preparation.blockers.length
+              }
+              onPress={() => void save(false)}
+            >
+              Lưu nháp
+            </Button>
+          )}
+          <Button
+            contentStyle={{ minHeight: 48 }}
+            mode="contained"
+            buttonColor={s.blue}
+            style={owner ? styles.ownerAction : styles.primaryAction}
+            disabled={busy || readOnly || loading || !preparation || !!preparation.blockers.length}
+            onPress={() => void save(true)}
+          >
+            {staff ? 'Lưu hợp đồng' : 'Xem trước hợp đồng'}
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button
+            style={owner ? styles.ownerAction : styles.primaryAction}
+            labelStyle={{ fontSize: 12 }}
+            contentStyle={{ minHeight: 48 }}
+            disabled={busy || readOnly}
+            onPress={() => (mode === 'preview' ? setMode('edit') : setMode('preview'))}
+          >
+            {mode === 'preview' ? 'Chỉnh sửa thông tin' : 'Xem hợp đồng'}
+          </Button>
+          {mode === 'preview' ? (
+            <Button
+              style={owner ? styles.ownerAction : styles.primaryAction}
+              labelStyle={{ fontSize: 12 }}
+              contentStyle={{ minHeight: 48 }}
+              mode="contained"
+              disabled={
+                busy || readOnly || !documents?.pdf || (owner && readyFile !== documents.pdf.id)
+              }
+              onPress={() => void reviewSaved(true)}
+            >
+              {owner ? 'Tiếp tục duyệt hợp đồng' : 'Tiếp tục ký hợp đồng'}
+            </Button>
+          ) : !owner ? (
+            <Button
+              contentStyle={{ minHeight: 48 }}
+              mode="contained"
+              disabled={busy || readOnly}
+              onPress={onList}
+            >
+              Về danh sách hợp đồng
+            </Button>
+          ) : null}
+        </>
+      )}
+    </View>
+  );
+  if (staff)
+    return visible ? (
+      <View style={styles.inline}>
+        <Row>
+          <IconButton
+            icon="arrow-left"
+            accessibilityLabel={onPrevious && mode === 'edit' ? 'Quay lại: CCCD' : 'Quay lại'}
+            onPress={back}
+          />
+          <Heading title={title} />
+        </Row>
+        {content}
+        {footer}
+      </View>
+    ) : null;
   // The web modal inherits the app's safe-area context. A nested provider can measure
   // the opening animation as a full-height bottom inset and collapse the scroll area.
   const ModalSafeArea = Platform.OS === 'web' ? React.Fragment : SafeAreaProvider;
@@ -610,357 +1064,9 @@ export function MainDraftScreen({
                 contentContainerStyle={styles.content}
                 keyboardShouldPersistTaps="handled"
               >
-                {owner ? (
-                  <RentalContractStepper
-                    current={mode === 'signing' ? 1 : 0}
-                    steps={owner ? ownerContractSteps : undefined}
-                  />
-                ) : (
-                  <Box>
-                    <MainContractProgress
-                      current={mode === 'edit' ? 3 : mode === 'preview' ? 4 : 5}
-                    />
-                  </Box>
-                )}
-                {loading && <ActivityIndicator accessibilityLabel="Đang tải dữ liệu hợp đồng" />}
-                {!!error && !(owner && mode === 'preview' && documentBlocker) && (
-                  <Text accessibilityRole="alert" style={styles.error}>
-                    {error}
-                  </Text>
-                )}
-                {!loading && !preparation && (
-                  <Button
-                    contentStyle={{ minHeight: 48 }}
-                    onPress={() => setRevision((v) => v + 1)}
-                  >
-                    Tải lại dữ liệu
-                  </Button>
-                )}
-                {preparation && (
-                  <>
-                    {mode === 'edit' ? (
-                      <>
-                        {id && (
-                          <Box>
-                            <Pill>{labels[saved?.status ?? 'Draft'] ?? saved?.status}</Pill>
-                            {owner ? (
-                              <Text>Hồ sơ nháp đã lưu</Text>
-                            ) : (
-                              <Text selectable>Mã hợp đồng: {id}</Text>
-                            )}
-                          </Box>
-                        )}
-                        <Box>
-                          <Heading title="Thông tin phòng" />
-                          <Text style={styles.roomName}>
-                            {preparation.locationName} · Phòng {preparation.roomNumber}
-                          </Text>
-                          <Text style={styles.support}>{preparation.address}</Text>
-                          {preparation.charges.some((p) => p.chargeCode === 'RENT') && (
-                            <Text>
-                              Giá thuê:{' '}
-                              {formatDraftMoney(
-                                preparation.charges.find((p) => p.chargeCode === 'RENT')!.rate,
-                              )}
-                              /tháng
-                            </Text>
-                          )}
-                        </Box>
-                        <Box>
-                          <Heading title="Người thuê" />
-                          <Row spread>
-                            <Text style={styles.personName}>{representative?.fullName}</Text>
-                            <Pill tone="green">Đã xác minh</Pill>
-                          </Row>
-                          <Text style={styles.support}>
-                            Đại diện · {preparation.residents.length} người ở
-                          </Text>
-                          {!!representative?.maskedCitizenNumber && (
-                            <Text>CCCD: {representative.maskedCitizenNumber}</Text>
-                          )}
-                          <Text style={styles.support}>Email sẽ được nhập khi gửi lời mời ký.</Text>
-                          <TextInput
-                            label="Số điện thoại người thuê"
-                            accessibilityLabel="Số điện thoại người thuê"
-                            value={phone}
-                            keyboardType="phone-pad"
-                            maxLength={30}
-                            mode="outlined"
-                            disabled={busy || readOnly || !!representative?.phone}
-                            error={!!fieldErrors.phone}
-                            onChangeText={edit(setPhone)}
-                          />
-                          {!!fieldErrors.phone && (
-                            <Text style={styles.error}>{fieldErrors.phone}</Text>
-                          )}
-                          {preparation.residents.some((person) => !person.representative) && (
-                            <>
-                              <Text style={styles.support}>Thành viên cùng ở · Đã lưu</Text>
-                              {preparation.residents
-                                .filter((person) => !person.representative)
-                                .map((person) => (
-                                  <View key={person.id} style={{ gap: 4 }}>
-                                    <Text>
-                                      {person.fullName}
-                                      {person.relationship ? ` · ${person.relationship}` : ''}
-                                    </Text>
-                                    {!!person.dateOfBirth && (
-                                      <Text style={styles.support}>
-                                        Ngày sinh: {displayContractDate(person.dateOfBirth)}
-                                      </Text>
-                                    )}
-                                  </View>
-                                ))}
-                            </>
-                          )}
-                        </Box>
-                      </>
-                    ) : (
-                      <ContractPreviewSummary
-                        showSigner={!(owner && mode === 'signing')}
-                        preparation={preparation}
-                        status={saved?.status ?? 'Draft'}
-                        start={start}
-                        end={end}
-                      />
-                    )}
-                    {!!preparation.blockers.length && (
-                      <View style={styles.notice} accessibilityRole="alert">
-                        <Text style={styles.noticeTitle}>Thiếu cấu hình hợp đồng</Text>
-                        {preparation.blockers.map((code) => (
-                          <Text key={code} style={styles.support}>
-                            {mainDraftMessages[code] ??
-                              'Cần Owner kiểm tra điều kiện hợp đồng trên hệ thống.'}
-                          </Text>
-                        ))}
-                      </View>
-                    )}
-                    {signingVisited && client && saved && (
-                      <View style={mode === 'signing' ? undefined : { display: 'none' }}>
-                        <MainDraftSigningReview
-                          key={`${id}:${saved.version}:${reviewRevision}`}
-                          client={client}
-                          draft={saved}
-                          onBusyChange={setBusy}
-                          onReleased={(next) => (onReleased ? onReleased(next) : onList())}
-                          onOpenPdf={(file) => openFile(true, file, true)}
-                          onDownloadPdf={(file) => openFile(true, file)}
-                          onEditDraft={
-                            reviewOnly
-                              ? undefined
-                              : () => {
-                                  setDocuments(null);
-                                  setReadyFile('');
-                                  setSigningVisited(false);
-                                  setMode('edit');
-                                }
-                          }
-                          onDraftChanged={(latest) => {
-                            setDocuments(null);
-                            setReadyFile('');
-                            setSigningVisited(reviewOnly);
-                            setSaved(latest);
-                            setPreparation(latest.preparation);
-                            refs.current = latest.input;
-                            setStart(displayContractDate(latest.input.startDate));
-                            setEnd(displayContractDate(latest.input.endDate));
-                            setPhone(latest.input.tenantPhone);
-                            setEmail(latest.input.tenantEmail ?? '');
-                            setPlace(latest.input.tenantPlaceOfIssue);
-                            setNotes(latest.input.notes);
-                            dirty.current = false;
-                            setMode(reviewOnly ? 'signing' : 'preview');
-                          }}
-                        />
-                      </View>
-                    )}
-                    {mode === 'edit' ? (
-                      <Box>
-                        <Heading title="Điều khoản thuê" detail="Áp dụng theo ngày bắt đầu thuê." />
-                        <ContractDateField
-                          onCalendarChange={(close) => {
-                            calendarClose.current = close;
-                          }}
-                          label="Ngày bắt đầu (dd/MM/yyyy)"
-                          value={start}
-                          onChange={edit(setStart)}
-                          disabled={busy || readOnly}
-                          error={fieldErrors.start}
-                        />
-                        <ContractDateField
-                          onCalendarChange={(close) => {
-                            calendarClose.current = close;
-                          }}
-                          label="Ngày kết thúc (dd/MM/yyyy)"
-                          value={end}
-                          onChange={edit(setEnd)}
-                          disabled={busy || readOnly}
-                          error={fieldErrors.end}
-                        />
-                        <Button
-                          contentStyle={{ minHeight: 48 }}
-                          disabled={busy || readOnly}
-                          onPress={() => void refreshPrices()}
-                        >
-                          Cập nhật giá theo ngày bắt đầu
-                        </Button>
-                        {preparation.charges.map((p) => (
-                          <Row key={p.id} spread>
-                            <Text style={styles.chargeName}>
-                              {{
-                                RENT: 'Giá thuê',
-                                ELECTRICITY: 'Điện',
-                                WATER: 'Nước',
-                                WIFI: 'Wi-Fi',
-                              }[p.chargeCode] ?? p.name}
-                            </Text>
-                            <Text style={styles.chargeValue}>
-                              {formatDraftMoney(p.rate)}
-                              {p.chargeCode === 'ELECTRICITY'
-                                ? '/kWh'
-                                : p.chargeCode === 'WATER'
-                                  ? '/m³'
-                                  : '/tháng'}
-                            </Text>
-                          </Row>
-                        ))}
-                        {preparation.securityDeposit !== null && (
-                          <Row spread>
-                            <Text>Tiền cọc</Text>
-                            <Text>{formatDraftMoney(preparation.securityDeposit)}</Text>
-                          </Row>
-                        )}
-                        {!!preparation.paymentTerms && (
-                          <Text>Thanh toán: {preparation.paymentTerms}</Text>
-                        )}
-                        <Heading title="Ghi chú / điều khoản bổ sung" />
-                        <TextInput
-                          label="Điều khoản bổ sung / ghi chú"
-                          accessibilityLabel="Điều khoản bổ sung / ghi chú"
-                          placeholder="Nhập điều khoản bổ sung (nếu có)"
-                          value={notes}
-                          onChangeText={edit(setNotes)}
-                          mode="outlined"
-                          multiline
-                          numberOfLines={3}
-                          maxLength={4000}
-                          disabled={busy || readOnly}
-                        />
-                      </Box>
-                    ) : mode === 'preview' && client ? (
-                      <ContractPdfPreview
-                        client={client}
-                        contractId={id}
-                        document={documents?.pdf ?? null}
-                        hideUnavailableActions={owner}
-                        busy={busy}
-                        previewErrorCode={documentBlocker || documents?.previewError || null}
-                        hasDocx={!!documents?.docx}
-                        onRegenerate={() => void reviewSaved(false)}
-                        onOpenPdf={() => openFile(true, undefined, true)}
-                        onDownloadPdf={() => void openFile(true)}
-                        onDocumentError={invalidateDocument}
-                        onReady={setReadyFile}
-                        onOpenDocx={() => void openFile(false)}
-                      />
-                    ) : null}
-                  </>
-                )}
+                {content}
               </KeyboardFormScrollView>
-              {!reviewOnly && (
-                <View
-                  style={[
-                    styles.footer,
-                    onPrevious && { flexWrap: 'wrap' },
-                    owner && styles.ownerFooter,
-                  ]}
-                >
-                  {busy && <ActivityIndicator />}
-                  {onPrevious && mode === 'edit' && (
-                    <Button
-                      style={{ width: '100%' }}
-                      icon="arrow-left"
-                      disabled={busy || readOnly}
-                      onPress={back}
-                    >
-                      {'Quay l\u1ea1i: CCCD'}
-                    </Button>
-                  )}
-                  {mode === 'edit' ? (
-                    <>
-                      <Button
-                        contentStyle={{ minHeight: 48 }}
-                        mode="text"
-                        style={owner ? styles.ownerAction : styles.secondaryAction}
-                        disabled={
-                          busy ||
-                          readOnly ||
-                          loading ||
-                          !preparation ||
-                          !!preparation.blockers.length
-                        }
-                        onPress={() => void save(false)}
-                      >
-                        Lưu nháp
-                      </Button>
-                      <Button
-                        contentStyle={{ minHeight: 48 }}
-                        mode="contained"
-                        buttonColor={s.blue}
-                        style={owner ? styles.ownerAction : styles.primaryAction}
-                        disabled={
-                          busy ||
-                          readOnly ||
-                          loading ||
-                          !preparation ||
-                          !!preparation.blockers.length
-                        }
-                        onPress={() => void save(true)}
-                      >
-                        Xem trước hợp đồng
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        style={owner ? styles.ownerAction : styles.primaryAction}
-                        labelStyle={{ fontSize: 12 }}
-                        contentStyle={{ minHeight: 48 }}
-                        disabled={busy || readOnly}
-                        onPress={() => (mode === 'preview' ? setMode('edit') : setMode('preview'))}
-                      >
-                        {mode === 'preview' ? 'Chỉnh sửa thông tin' : 'Xem hợp đồng'}
-                      </Button>
-                      {mode === 'preview' ? (
-                        <Button
-                          style={owner ? styles.ownerAction : styles.primaryAction}
-                          labelStyle={{ fontSize: 12 }}
-                          contentStyle={{ minHeight: 48 }}
-                          mode="contained"
-                          disabled={
-                            busy ||
-                            readOnly ||
-                            !documents?.pdf ||
-                            (owner && readyFile !== documents.pdf.id)
-                          }
-                          onPress={() => void reviewSaved(true)}
-                        >
-                          {owner ? 'Tiếp tục duyệt hợp đồng' : 'Tiếp tục ký hợp đồng'}
-                        </Button>
-                      ) : !owner ? (
-                        <Button
-                          contentStyle={{ minHeight: 48 }}
-                          mode="contained"
-                          disabled={busy || readOnly}
-                          onPress={onList}
-                        >
-                          Về danh sách hợp đồng
-                        </Button>
-                      ) : null}
-                    </>
-                  )}
-                </View>
-              )}
+              {footer}
             </KeyboardAvoidingView>
           </SafeAreaView>
           <ToastHost modal />
@@ -971,6 +1077,10 @@ export function MainDraftScreen({
 }
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: c.background },
+  inline: { gap: 12 },
+  termTrigger: { flexDirection: 'row-reverse', justifyContent: 'space-between', minHeight: 48 },
+  termOptions: { borderWidth: 1, borderColor: c.border, borderRadius: 10 },
+  termOption: { justifyContent: 'flex-start', minHeight: 48 },
   grow: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', backgroundColor: s.navy, paddingRight: 16 },
   title: { flex: 1, color: '#FFFFFF', fontSize: 18, lineHeight: 24, fontWeight: '700' },

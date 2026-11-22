@@ -1,4 +1,5 @@
 import { useFeedbackState } from '../../lib/useFeedbackState';
+import { ContractNotice } from './ContractNotice';
 import React, { useEffect, useState } from 'react';
 import { Button, Checkbox, Text } from 'react-native-paper';
 import {
@@ -36,7 +37,7 @@ export function MainDraftStart({
   const [draftId, setDraftId] = useState('');
   const [mode, setMode] = useState<'individual' | 'family'>('individual');
   const [data, setData] = useState<Preparation | null>(null),
-    [error, setError] = useFeedbackState(),
+    [error, setError] = useFeedbackState('warning', false),
     [loading, setLoading] = useState(true);
   useEffect(() => {
     const controller = new AbortController();
@@ -108,7 +109,7 @@ export function MainDraftStart({
         title="Tạo hợp đồng thuê"
         detail="Chọn hồ sơ đã hoàn tất tiếp nhận. Không cần tài khoản Tenant để lưu nháp."
       />
-      {!!error && <Text accessibilityRole="alert">{error}</Text>}
+      {!!error && <ContractNotice message={error} />}
       <ChoiceField
         label="Cơ sở được phân công"
         value={location}
