@@ -1,3 +1,4 @@
+import { UserFeedbackError } from '../../../../packages/client-core/src/api';
 import React, { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Button, Checkbox, SegmentedButtons, Text, TextInput } from 'react-native-paper';
@@ -214,7 +215,7 @@ function InventoryDetail({
     setNotice('');
   };
   async function saveItem(view: MoveInInventory, item: MoveInInventoryItem, draft: ItemDraft) {
-    if (!api) throw new Error('Chưa kết nối máy chủ.');
+    if (!api) throw new UserFeedbackError('Chưa kết nối máy chủ.');
     const quantity = Number(draft.quantity);
     const hasIssue = draft.condition === 'Missing' || draft.condition === 'Damaged';
     const reinspectionSelected = !!view.reinspectionItemIds?.includes(item.id);
@@ -230,25 +231,25 @@ function InventoryDetail({
       notes: hasIssue ? draft.notes.trim() : '',
     };
     if (!/^\d+$/.test(draft.quantity.trim()))
-      throw new Error('Nhập số lượng thực tế nguyên không âm.');
+      throw new UserFeedbackError('Nhập số lượng thực tế nguyên không âm.');
     const failure = validateInventoryItem(input, item.expectedQuantity);
-    if (failure) throw new Error(failure);
+    if (failure) throw new UserFeedbackError(failure);
     if (hasIssue && savedEvidence.length + photosToUpload.length === 0)
-      throw new Error('Tài sản thiếu hoặc hư hỏng cần ít nhất một ảnh minh chứng.');
+      throw new UserFeedbackError('Tài sản thiếu hoặc hư hỏng cần ít nhất một ảnh minh chứng.');
     if (
       reinspectionSelected &&
       draft.condition === 'Good' &&
       item.condition !== 'Good' &&
       photosToUpload.length === 0
     )
-      throw new Error('Cần chụp ảnh mới sau khi Owner yêu cầu kiểm tra lại tài sản.');
+      throw new UserFeedbackError('Cần chụp ảnh mới sau khi Owner yêu cầu kiểm tra lại tài sản.');
     if (savedEvidence.length + photosToUpload.length > 5)
-      throw new Error('Mỗi tài sản chỉ được lưu tối đa 5 ảnh. Hãy bỏ bớt ảnh mới.');
+      throw new UserFeedbackError('Mỗi tài sản chỉ được lưu tối đa 5 ảnh. Hãy bỏ bớt ảnh mới.');
     const client = moveInInventoryClient(api);
     const task = operationalTasks(api);
     const before = await client.get(taskId);
     if (before.version !== view.version)
-      throw new Error(
+      throw new UserFeedbackError(
         'Công việc đã được cập nhật từ thiết bị khác. Hãy tải lại và kiểm tra trước khi lưu.',
       );
     const uploaded: { photo: IncidentPhoto; id: string }[] = [];
@@ -266,7 +267,8 @@ function InventoryDetail({
     // writing the item's condition and its newly uploaded evidence references.
     const latest = photosToUpload.length ? await client.get(taskId) : before;
     const currentItem = latest.items.find((entry) => entry.id === item.id);
-    if (!currentItem) throw new Error('Tài sản không còn trong danh sách kiểm kê. Hãy tải lại.');
+    if (!currentItem)
+      throw new UserFeedbackError('Tài sản không còn trong danh sách kiểm kê. Hãy tải lại.');
     const body = {
       version: latest.version,
       ...input,
@@ -292,7 +294,7 @@ function InventoryDetail({
     return updated;
   }
   async function finalizeInventory(view: MoveInInventory, confirmNoAssets = false) {
-    if (!api) throw new Error('Chưa kết nối máy chủ.');
+    if (!api) throw new UserFeedbackError('Chưa kết nối máy chủ.');
     const body = { version: view.version, note: '', confirmNoAssets };
     const scope = 'inventory-complete';
     const completedView = await moveInInventoryClient(api).complete(
@@ -402,13 +404,7 @@ function InventoryDetail({
       showSuccess(shouldComplete ? 'Đã lưu đầy đủ kiểm kê.' : 'Đã lưu kết quả kiểm kê.');
       openItem(null);
     } catch (failure) {
-      setError(
-        failure instanceof Error &&
-          !(failure instanceof TypeError) &&
-          failure.message !== 'Yêu cầu không thành công.'
-          ? failure.message
-          : errorMessage(failure),
-      );
+      setError(errorMessage(failure));
       reload();
     } finally {
       busyRef.current = false;
@@ -429,7 +425,7 @@ function InventoryDetail({
       )
         await finalizeInventory(fresh);
       else if (fresh.status !== 'Completed')
-        throw new Error(
+        throw new UserFeedbackError(
           fresh.reinspectionItemIds?.length
             ? 'Tài sản cần kiểm tra lại vẫn chưa đạt. Mở mục Owner yêu cầu và ghi nhận kết quả mới.'
             : 'Vẫn còn mục kiểm kê chưa được lưu đầy đủ.',
@@ -440,11 +436,7 @@ function InventoryDetail({
     } catch (failure) {
       if (failure instanceof MobileApiError && failure.status === 409)
         setCompletionSyncFailed(false);
-      setError(
-        failure instanceof Error && !(failure instanceof MobileApiError)
-          ? failure.message
-          : errorMessage(failure),
-      );
+      setError(errorMessage(failure));
       reload();
     } finally {
       busyRef.current = false;

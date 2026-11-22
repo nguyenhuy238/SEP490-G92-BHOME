@@ -1,4 +1,10 @@
-import { requestDiagnostic } from '../../../../packages/client-core/src/api';
+import {
+  requestDiagnostic,
+  normalizeApiProblem,
+  getUserFriendlyMessage,
+  type ApiProblem,
+  UserFeedbackError,
+} from '../../../../packages/client-core/src/api';
 import { invalidCredentialsMessage } from '../../../../packages/client-core/src/loginValidation';
 import { QueryCache } from './queryCache';
 import { mutationTags } from './queryPolicies';
@@ -43,8 +49,10 @@ export class MobileApiError extends Error {
     public requestPath?: string,
     public correlationId?: string,
     public method = 'GET',
+    public problem?: ApiProblem,
   ) {
-    super('Yêu cầu không thành công.');
+    super(getUserFriendlyMessage({ status, code, problem }));
+    this.name = 'MobileApiError';
   }
 }
 
@@ -74,10 +82,11 @@ export async function mobileResponse<T>(
       cache: 'no-store',
     });
     if (!response.ok) {
-      const problem = (await response.json().catch(() => ({}))) as {
-        code?: unknown;
-        correlationId?: unknown;
-      } | null;
+      const problem = normalizeApiProblem(
+        await response.json().catch(() => undefined),
+        response.status,
+        response.headers.get('X-Correlation-ID'),
+      );
       throw new MobileApiError(
         response.status,
         typeof problem?.code === 'string' ? problem.code : undefined,
@@ -85,6 +94,7 @@ export async function mobileResponse<T>(
         response.headers.get('X-Correlation-ID') ??
           (typeof problem?.correlationId === 'string' ? problem.correlationId : undefined),
         init.method ?? 'GET',
+        problem,
       );
     }
     try {
@@ -140,12 +150,17 @@ export function apiBaseUrl(input: string): string {
   return url.origin;
 }
 export function errorMessage(error: unknown): string {
+  if (error instanceof UserFeedbackError) return error.message;
   if (error instanceof Error && error.name === 'AbortError')
     return 'Đã dừng chờ phản hồi. Hãy tải lại để kiểm tra dữ liệu đã được lưu hay chưa.';
   if (error instanceof Error && error.message === 'Cần địa chỉ gốc HTTPS của BHOME API.')
     return error.message;
   if (!(error instanceof MobileApiError))
     return 'Không thể hoàn thành. Kiểm tra kết nối và địa chỉ HTTPS.';
+  if (error.code === 'invalid_credentials')
+    return invalidCredentialsMessage + requestDiagnostic(error);
+  if (error.problem && !['request_timeout', 'invalid_response'].includes(error.code ?? ''))
+    return getUserFriendlyMessage(error) + requestDiagnostic(error);
   if (error.code === 'request_timeout' && contractDocumentTimeout(error.requestPath ?? '') > 15000)
     return (
       'Tạo hoặc hiển thị PDF mất quá nhiều thời gian. Bản nháp đã lưu vẫn được giữ; hãy thử tải lại bản xem trước.' +

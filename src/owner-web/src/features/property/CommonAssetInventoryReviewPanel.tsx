@@ -1,3 +1,4 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -435,7 +436,7 @@ export function CommonAssetInventoryReviewPanel({ locationId }: { locationId: st
                                 : item.evidence.length
                                   ? 'Thêm ảnh'
                                   : 'Chụp / tải ảnh'}
-                              <input
+                              <ValidatedInput
                                 hidden
                                 type="file"
                                 accept="image/png,image/jpeg"

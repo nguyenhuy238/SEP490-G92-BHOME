@@ -1,3 +1,4 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import { useObjectUrl } from './useObjectUrl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -91,7 +92,7 @@ export function SignatureImagePanel({ signing }: { signing: SigningClient }) {
             Xóa ảnh
           </Button>
         )}
-        <input
+        <ValidatedInput
           ref={file}
           hidden
           type="file"

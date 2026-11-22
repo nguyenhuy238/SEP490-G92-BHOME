@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState, type FormEvent } from 'react';
 import {
   Alert,
@@ -15,7 +16,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -198,7 +198,7 @@ export default function LiveStaffPage() {
         fullWidth
         maxWidth="sm"
       >
-        <form
+        <ValidatedForm
           onSubmit={(e) =>
             submit(
               e,
@@ -248,7 +248,7 @@ export default function LiveStaffPage() {
               Tạo tài khoản
             </Button>
           </DialogActions>
-        </form>
+        </ValidatedForm>
       </Dialog>
       <Dialog
         open={assignmentOpen}
@@ -256,7 +256,7 @@ export default function LiveStaffPage() {
         fullWidth
         maxWidth="sm"
       >
-        <form
+        <ValidatedForm
           onSubmit={(e) =>
             submit(
               e,
@@ -317,7 +317,7 @@ export default function LiveStaffPage() {
               Phân công
             </Button>
           </DialogActions>
-        </form>
+        </ValidatedForm>
       </Dialog>
     </>
   );

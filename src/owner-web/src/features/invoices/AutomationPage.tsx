@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import {
@@ -18,7 +19,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
@@ -2148,7 +2148,7 @@ function AutomationForm({
   return (
     <Box>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={1.5}
         onSubmit={(e) => {
           e.preventDefault();

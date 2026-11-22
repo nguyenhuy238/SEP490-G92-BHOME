@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PersonalDataRequestsPanel } from '../components/PersonalDataRequestsPanel';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -12,13 +13,12 @@ import {
   Paper,
   Snackbar,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { KeyRound, LogOut, Save, ShieldCheck, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
-import { ApiError } from '../../../../../../packages/client-core/src/api';
+import { ApiError, getFieldErrors } from '../../../../../../packages/client-core/src/api';
 import { ErrorState, LoadingState, PageHeader } from '../../../components/common/PortalUI';
 import { ChangePasswordDialog } from '../components/ChangePasswordDialog';
 import { useAccountProfileApi, type AccountProfile } from '../hooks/useAccountProfileApi';
@@ -56,6 +56,12 @@ export default function AccountProfilePage() {
   const [reauthPassword, setReauthPassword] = useState('');
   const [logoutError, setLogoutError] = useState(false);
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (Object.keys(fieldErrors).length)
+      formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [fieldErrors]);
   const [verificationMessage, setVerificationMessage] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -101,6 +107,7 @@ export default function AccountProfilePage() {
       }
     },
     onError: async (failure) => {
+      setFieldErrors(getFieldErrors(failure));
       if (failure instanceof ApiError && failure.problem?.code === 'current_password_invalid') {
         setReauthPassword('');
         // Identity may update only its concurrency stamp after a failed attempt.
@@ -151,7 +158,16 @@ export default function AccountProfilePage() {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (update.isPending || !changed) return;
-    if (activeForm.fullName.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(activeForm.email.trim())) {
+    const email = activeForm.email.trim(),
+      at = email.indexOf('@');
+    if (
+      activeForm.fullName.trim().length < 2 ||
+      email.length > 256 ||
+      /[\r\n]/.test(email) ||
+      at <= 0 ||
+      at !== email.lastIndexOf('@') ||
+      at === email.length - 1
+    ) {
       setFormError('Họ tên phải có ít nhất 2 ký tự và Email phải đúng định dạng.');
       return;
     }
@@ -164,6 +180,7 @@ export default function AccountProfilePage() {
       return;
     }
     setFormError('');
+    setFieldErrors({});
     update.mutate();
   }
 
@@ -205,7 +222,8 @@ export default function AccountProfilePage() {
         }}
       >
         <Paper
-          component="form"
+          ref={formRef}
+          component={ValidatedForm}
           onSubmit={submit}
           sx={{ p: { xs: 2, md: 3 }, border: '1px solid', borderColor: 'divider' }}
         >
@@ -244,6 +262,8 @@ export default function AccountProfilePage() {
             <TextField
               required
               label="Họ và tên"
+              error={!!fieldErrors.fullName}
+              helperText={fieldErrors.fullName}
               value={activeForm.fullName}
               onChange={(event) => setForm({ ...activeForm, fullName: event.target.value })}
               slotProps={{ htmlInput: { maxLength: 150 } }}
@@ -252,9 +272,12 @@ export default function AccountProfilePage() {
               required
               type="email"
               label="Email"
+              error={!!fieldErrors.email}
               value={activeForm.email}
               onChange={(event) => setForm({ ...activeForm, email: event.target.value })}
-              helperText="Email mới cần được xác nhận; phiên đăng nhập được giữ."
+              helperText={
+                fieldErrors.email || 'Email mới cần được xác nhận; phiên đăng nhập được giữ.'
+              }
               slotProps={{ htmlInput: { maxLength: 256 } }}
             />
             <TextField
@@ -262,8 +285,9 @@ export default function AccountProfilePage() {
               type="tel"
               value={activeForm.phone}
               onChange={(event) => setForm({ ...activeForm, phone: event.target.value })}
-              error={!!contactPhoneError(activeForm.phone)}
+              error={!!fieldErrors.phone || !!contactPhoneError(activeForm.phone)}
               helperText={
+                fieldErrors.phone ||
                 contactPhoneError(activeForm.phone) ||
                 'Số điện thoại mới chưa được xác minh qua SMS.'
               }
@@ -275,9 +299,13 @@ export default function AccountProfilePage() {
                 type="password"
                 autoComplete="current-password"
                 label="Mật khẩu hiện tại để xác nhận"
+                error={!!fieldErrors.currentPassword}
                 value={reauthPassword}
                 onChange={(event) => setReauthPassword(event.target.value)}
-                helperText="Xác nhận thay đổi liên hệ; phiên đăng nhập được giữ. Số điện thoại mới chưa được xác minh qua SMS."
+                helperText={
+                  fieldErrors.currentPassword ||
+                  'Xác nhận thay đổi liên hệ; phiên đăng nhập được giữ. Số điện thoại mới chưa được xác minh qua SMS.'
+                }
                 slotProps={{ htmlInput: { maxLength: 1024 } }}
               />
             )}

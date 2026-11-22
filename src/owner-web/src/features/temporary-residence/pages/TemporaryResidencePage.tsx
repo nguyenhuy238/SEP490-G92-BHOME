@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { ResourcePage } from '../../../components/common/ResourcePage';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -8,7 +9,6 @@ import {
   Pagination,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';

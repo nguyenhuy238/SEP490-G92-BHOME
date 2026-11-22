@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useEffect, useRef, useState } from 'react';
 import {
   Accordion,
@@ -17,7 +18,6 @@ import {
   LinearProgress,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ChevronDown } from 'lucide-react';

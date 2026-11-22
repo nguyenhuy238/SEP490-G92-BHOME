@@ -1,10 +1,13 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
+import { TextField } from '../../components/common/ValidatedForm';
 import { MoneyField } from '../../components/common/MoneyField';
 import {
   contactPhoneError,
   normalizeContactPhone,
 } from '../../../../../packages/client-core/src/contactPhone';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Paper, Stack, Typography } from '@mui/material';
 import {
   PageHeader,
   ConfirmDialog,
@@ -139,7 +142,7 @@ function ContentEditor({ data, path, room }: { data: PublicContent; path: string
           file.size > 5 * 1024 * 1024 ||
           !['image/png', 'image/jpeg'].includes(file.type)
         )
-          throw new Error('Chọn ảnh PNG/JPEG không quá 5 MB.');
+          throw new UserFeedbackError('Chọn ảnh PNG/JPEG không quá 5 MB.');
         // This upload has no replay contract: after an uncertain response, inspect the photo list before another upload.
         await action.request(`${path}/photos`, {
           method: 'PUT',
@@ -270,7 +273,7 @@ function ContentEditor({ data, path, room }: { data: PublicContent; path: string
             </Button>
           </Stack>
         ))}
-        <input
+        <ValidatedInput
           ref={fileInput}
           aria-label="Ảnh công khai mới"
           type="file"

@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useId, useState, type ReactNode } from 'react';
 import {
   Alert,
@@ -23,7 +24,6 @@ import {
   TablePagination,
   TableRow,
   Tabs,
-  TextField,
   Typography,
   useMediaQuery,
   useTheme,
@@ -662,7 +662,7 @@ function SharedLibrary({
         }}
       >
         <DialogTitle>Nhân bản thành mẫu độc lập</DialogTitle>
-        <form
+        <ValidatedForm
           onSubmit={(event) => {
             event.preventDefault();
             if (duplicate)
@@ -691,7 +691,7 @@ function SharedLibrary({
               Nhân bản
             </Button>
           </DialogActions>
-        </form>
+        </ValidatedForm>
       </Dialog>
     </Stack>
   );

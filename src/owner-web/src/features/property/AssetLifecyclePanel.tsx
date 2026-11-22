@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { EquipmentInspectionsPanel } from './EquipmentInspectionsPanel';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,7 +20,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import {
@@ -238,7 +238,7 @@ function EquipmentForm({
   const details = record?.data.details;
   return (
     <Dialog open onClose={mutation.isPending ? undefined : onClose} fullWidth>
-      <form
+      <ValidatedForm
         onSubmit={(event) => {
           event.preventDefault();
           const values = new FormData(event.currentTarget);
@@ -327,7 +327,7 @@ function EquipmentForm({
             Lưu thiết bị
           </Button>
         </DialogActions>
-      </form>
+      </ValidatedForm>
     </Dialog>
   );
 }
@@ -350,7 +350,7 @@ function LifecyclePolicyForm({
   });
   return (
     <Dialog open onClose={mutation.isPending ? undefined : onClose} fullWidth>
-      <form
+      <ValidatedForm
         onSubmit={(event) => {
           event.preventDefault();
           const values = new FormData(event.currentTarget);
@@ -438,7 +438,7 @@ function LifecyclePolicyForm({
             Lưu bản nháp
           </Button>
         </DialogActions>
-      </form>
+      </ValidatedForm>
     </Dialog>
   );
 }

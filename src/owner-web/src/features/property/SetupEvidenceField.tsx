@@ -1,3 +1,4 @@
+import { ValidatedInput } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { Alert, Button, Stack, Typography } from '@mui/material';
 
@@ -13,7 +14,7 @@ export function SetupEvidenceField({
     <Stack spacing={1}>
       <Button component="label">
         Chọn ảnh bằng chứng
-        <input
+        <ValidatedInput
           aria-label="Ảnh bằng chứng"
           hidden
           type="file"

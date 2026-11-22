@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState, type FormEvent } from 'react';
 import {
   loginIdentifierError,
@@ -13,7 +14,6 @@ import {
   IconButton,
   InputAdornment,
   Stack,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';

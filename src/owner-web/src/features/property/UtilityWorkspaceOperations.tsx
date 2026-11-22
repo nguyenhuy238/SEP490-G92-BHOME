@@ -1,3 +1,5 @@
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import {
   Alert,
@@ -10,7 +12,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -298,7 +299,7 @@ function RoomMeterEditor({
   });
   return (
     <Stack
-      component="form"
+      component={ValidatedForm}
       spacing={2}
       sx={{ pt: 1 }}
       onSubmit={(event) => {
@@ -435,7 +436,7 @@ function SourceMeterEditor({
   return (
     <Paper sx={{ p: 2 }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
@@ -515,7 +516,7 @@ function MeterLinkEditor({
   return (
     <Paper sx={{ p: 2 }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
@@ -590,7 +591,7 @@ function SourceReadingEditor({
   return (
     <Paper sx={{ p: 2 }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
@@ -752,13 +753,13 @@ function SourceBillEditor({
   return (
     <Paper sx={{ p: 2 }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
           action.run(async () => {
             const meter = meters.find((row) => row.id === values.meterId);
-            if (!meter) throw new Error('A scoped source meter is required.');
+            if (!meter) throw new UserFeedbackError('Vui lòng chọn công tơ nguồn thuộc cơ sở này.');
             const input: UtilityBill = {
               locationId,
               meterId: values.meterId,
@@ -1070,7 +1071,7 @@ function BreakdownEditor({
   return (
     <Paper sx={{ p: 2 }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
@@ -1085,7 +1086,8 @@ function BreakdownEditor({
                   (await api.uploadEvidence(locationId, segment.file)).objectKey;
                 uploaded.current.set(segment.file, key);
               }
-              if (!key) throw new Error('Every segment requires verified evidence.');
+              if (!key)
+                throw new UserFeedbackError('Mỗi khoảng chỉ số cần bằng chứng đã xác minh.');
               inputs.push({
                 from: segment.from,
                 to: segment.to,

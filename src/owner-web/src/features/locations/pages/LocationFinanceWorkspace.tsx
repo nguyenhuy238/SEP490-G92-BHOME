@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Accordion,
@@ -24,7 +25,6 @@ import {
   TablePagination,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';

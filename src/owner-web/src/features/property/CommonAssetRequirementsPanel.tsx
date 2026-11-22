@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -16,7 +17,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -193,7 +193,7 @@ export function CommonAssetRequirementsPanel({ locationId }: { locationId: strin
               : 'Thêm tài sản chung'}
           </DialogTitle>
           <Box
-            component="form"
+            component={ValidatedForm}
             onSubmit={(event) => {
               event.preventDefault();
               if (!valid || action.busy) return;

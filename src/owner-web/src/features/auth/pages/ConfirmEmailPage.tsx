@@ -1,5 +1,6 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Paper, Stack, Typography } from '@mui/material';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
@@ -54,7 +55,7 @@ export default function ConfirmEmailPage() {
     <Box component="main" sx={{ p: 3, maxWidth: 520, mx: 'auto' }}>
       <Paper sx={{ p: 3 }}>
         <Stack
-          component="form"
+          component={ValidatedForm}
           spacing={2}
           onSubmit={(e) => {
             e.preventDefault();

@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { MoneyField } from '../../components/common/MoneyField';
 import { AssetLifecyclePanel } from './AssetLifecyclePanel';
 import { ASSET_UNITS } from '../../../../../packages/client-core/src/assetUnits';
@@ -15,7 +16,6 @@ import {
   Divider,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -357,7 +357,7 @@ function MetadataEditor({
   return (
     <Stack spacing={2}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
@@ -454,7 +454,7 @@ function MetadataEditor({
       </Stack>
       {asset.status !== 3 && asset.status !== 2 && (
         <Stack
-          component="form"
+          component={ValidatedForm}
           spacing={2}
           onSubmit={(event) => {
             event.preventDefault();

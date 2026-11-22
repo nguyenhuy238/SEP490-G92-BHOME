@@ -287,3 +287,35 @@ it('keeps edits on a stale response until the Owner explicitly reloads', async (
   fireEvent.click(reload);
   await waitFor(() => expect(screen.getByLabelText(/Số phòng/)).toHaveValue('A103'));
 });
+
+it('maps nested rent errors to the money/date fields and keeps the edited amount', async () => {
+  state.request.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/room-defaults')) return defaults;
+    if (init?.method === 'PUT')
+      throw new ApiError(400, {
+        code: 'validation_error',
+        fieldErrors: {
+          'rent.rate': [
+            { code: 'invalid_field', message: 'Giá thuê chưa hợp lệ. Vui lòng kiểm tra lại.' },
+          ],
+          'rent.effectiveFrom': [
+            { code: 'invalid_field', message: 'Ngày hiệu lực giá chưa hợp lệ.' },
+          ],
+        },
+      });
+    return view;
+  });
+  const saved = mount();
+  const money = await screen.findByLabelText('Giá thuê (VND/tháng)');
+  fireEvent.change(money, { target: { value: '3400000' } });
+  fireEvent.change(screen.getByLabelText(/Lý do thay đổi/), { target: { value: 'Sửa cấu hình' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu cấu hình' }));
+  expect(
+    await screen.findByText('Giá thuê chưa hợp lệ. Vui lòng kiểm tra lại.'),
+  ).toBeInTheDocument();
+  expect(screen.getByText('Ngày hiệu lực giá chưa hợp lệ.')).toBeInTheDocument();
+  expect(money).toHaveAttribute('aria-invalid', 'true');
+  await waitFor(() => expect(money).toHaveFocus());
+  expect(money).toHaveValue('3.400.000');
+  expect(saved).not.toHaveBeenCalled();
+});

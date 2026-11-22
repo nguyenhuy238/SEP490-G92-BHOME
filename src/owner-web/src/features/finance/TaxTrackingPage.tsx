@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -12,7 +13,6 @@ import {
   MenuItem,
   Pagination,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { Link } from 'react-router';
@@ -265,7 +265,7 @@ function BusinessProfileForm({
   });
   return (
     <Dialog open onClose={mutation.isPending ? undefined : onClose} fullWidth>
-      <form
+      <ValidatedForm
         onSubmit={(event) => {
           event.preventDefault();
           mutation.mutate(new FormData(event.currentTarget));
@@ -340,7 +340,7 @@ function BusinessProfileForm({
             Lưu chủ thể
           </Button>
         </DialogActions>
-      </form>
+      </ValidatedForm>
     </Dialog>
   );
 }
@@ -409,7 +409,7 @@ function TaxObligationForm({
   });
   return (
     <Dialog open onClose={mutation.isPending ? undefined : onClose} fullWidth>
-      <form
+      <ValidatedForm
         onSubmit={(event) => {
           event.preventDefault();
           mutation.mutate(new FormData(event.currentTarget));
@@ -589,7 +589,7 @@ function TaxObligationForm({
             Lưu ghi nhận
           </Button>
         </DialogActions>
-      </form>
+      </ValidatedForm>
     </Dialog>
   );
 }

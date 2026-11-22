@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -11,7 +12,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { LocationSection, LocationEmpty } from '../locations/components/LocationSection';
@@ -280,7 +280,7 @@ function PolicyEditor({
   return (
     <Paper sx={{ p: 2 }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();

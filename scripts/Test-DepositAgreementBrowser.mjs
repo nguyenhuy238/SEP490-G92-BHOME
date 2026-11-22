@@ -1,4 +1,4 @@
-// Opt-in browser acceptance. The .NET test creates the disposable PostgreSQL fixture and
+﻿// Opt-in browser acceptance. The .NET test creates the disposable PostgreSQL fixture and
 // forwards network requests to the real ASP.NET host. No fetch/route mocks or real transfers.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -65,13 +65,16 @@ try {
   await page
     .getByLabel('Tôi xác nhận hoàn cọc không khấu trừ, không còn phí hoặc nghĩa vụ chờ xử lý')
     .check();
+  await create.click();
+  await page.getByRole('dialog', { name: 'Tạo yêu cầu hoàn tiền', exact: true }).waitFor();
   const [created] = await Promise.all([
     page.waitForResponse(
       (response) =>
-        response.url() === `${config.api}/api/v1/contracts/${config.contractId}/deposit-refunds` &&
+        new URL(response.url()).pathname ===
+          `/api/v1/contracts/${config.contractId}/deposit-refunds` &&
         response.request().method() === 'POST',
     ),
-    create.click(),
+    page.getByRole('button', { name: 'Xác nhận thực hiện', exact: true }).click(),
   ]);
   assert.equal(created.status(), 200, 'Create refund through UI');
   const row = await created.json();
@@ -83,13 +86,15 @@ try {
   await page
     .getByLabel('Tôi đã kiểm tra nguồn, số tiền và người nhận trước khi quyết định')
     .check();
+  await page.getByRole('button', { name: 'Duyệt yêu cầu hoàn', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Duyệt yêu cầu hoàn tiền', exact: true }).waitFor();
   const [approved] = await Promise.all([
     page.waitForResponse(
       (response) =>
         response.url().endsWith(`/refund-requests/${row.id}/decision`) &&
         response.request().method() === 'POST',
     ),
-    page.getByRole('button', { name: 'Duyệt yêu cầu hoàn', exact: true }).click(),
+    page.getByRole('button', { name: 'Xác nhận thực hiện', exact: true }).click(),
   ]);
   assert.equal(approved.status(), 200, 'Approve refund through UI');
   const approval = await approved.json();
@@ -111,29 +116,33 @@ try {
   await page
     .getByLabel('Tôi đã đối chiếu sao kê, xác minh giao dịch hoàn thực sự hoàn tất đúng người nhận')
     .check();
+  await page
+    .getByRole('button', { name: 'Ghi nhận giao dịch hoàn đã thực hiện', exact: true })
+    .click();
+  await page.getByRole('dialog', { name: 'Ghi nhận đã chuyển tiền hoàn', exact: true }).waitFor();
   const [executedResponse] = await Promise.all([
     page.waitForResponse(
       (response) =>
         response.url().endsWith(`/refund-requests/${row.id}/execution`) &&
         response.request().method() === 'POST',
     ),
-    page.getByRole('button', { name: 'Ghi nhận giao dịch hoàn đã thực hiện', exact: true }).click(),
+    page.getByRole('button', { name: 'Xác nhận thực hiện', exact: true }).click(),
   ]);
   assert.equal(executedResponse.status(), 200, 'Record synthetic execution proof through UI');
-  await page.getByRole('button', { name: 'Tải chứng từ hoàn tiền', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Tải xuống Chứng từ hoàn tiền', exact: true }).waitFor();
   await page.reload();
-  await page.getByRole('button', { name: 'Tải chứng từ hoàn tiền', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Tải xuống Chứng từ hoàn tiền', exact: true }).waitFor();
   assert.equal(
     await page.getByRole('button', { name: 'Duyệt yêu cầu hoàn', exact: true }).count(),
     0,
   );
   await page
-    .getByRole('button', { name: 'Tải chứng từ hoàn tiền', exact: true })
+    .getByRole('button', { name: 'Tải xuống Chứng từ hoàn tiền', exact: true })
     .scrollIntoViewIfNeeded();
   await page.screenshot({ path: path.join(config.output, 'owner-completed.png'), fullPage: true });
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Tải chứng từ hoàn tiền', exact: true }).click(),
+    page.getByRole('button', { name: 'Tải xuống Chứng từ hoàn tiền', exact: true }).click(),
   ]);
   assert.equal(await download.failure(), null);
   assert.deepEqual(await fs.readFile(await download.path()), await fs.readFile(config.evidence));

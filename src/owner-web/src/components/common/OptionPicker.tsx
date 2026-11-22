@@ -1,4 +1,5 @@
-import { Autocomplete, TextField } from '@mui/material';
+import { TextField } from './ValidatedForm';
+import { Autocomplete } from '@mui/material';
 
 /** Search already-loaded authorized reference choices by their human-readable label. */
 export function OptionPicker({

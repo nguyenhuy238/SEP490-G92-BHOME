@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Alert,
@@ -11,7 +12,6 @@ import {
   MenuItem,
   Checkbox,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { OwnerFeedback, OwnerTable } from '../../../components/common/OwnerWorkspace';
@@ -292,7 +292,7 @@ function RecurringEditor({
       <DialogTitle>{template ? 'Chỉnh sửa lịch định kỳ' : 'Tạo lịch định kỳ'}</DialogTitle>
       <DialogContent>
         <Stack
-          component="form"
+          component={ValidatedForm}
           id="recurring-editor"
           spacing={2}
           sx={{ pt: 1 }}

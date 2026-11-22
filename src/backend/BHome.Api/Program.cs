@@ -6,6 +6,9 @@ using BHome.Infrastructure.Persistence.Compact24;
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
+// The handler below emits a safe classification and trace. Suppress the framework's
+// duplicate exception serialization, which may include SQL values or provider secrets.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware", LogLevel.None);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApiFoundation(builder.Configuration);
 
@@ -27,7 +30,9 @@ if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("Develop
 }
 app.UseMiddleware<CorrelationMiddleware>();
 app.UseExceptionHandler();
-app.UseStatusCodePages();
+app.UseStatusCodePages(context => ApiProblems.WriteAsync(context.HttpContext,
+    new Microsoft.AspNetCore.Mvc.ProblemDetails { Status = context.HttpContext.Response.StatusCode },
+    context.HttpContext.RequestAborted));
 if (!app.Environment.IsDevelopment()) app.UseHsts();
 if (app.Configuration.GetValue("Api:UseHttpsRedirection", true))
     app.UseWhen(context => !(app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("MobileDevelopment:Enabled") &&

@@ -1,4 +1,4 @@
-import { ApiError } from './api';
+import { ApiError, catalogError } from './api';
 import { groupVietnameseIntegerDigits } from './localization';
 
 // Keep decimal strings exact, including amounts beyond Number.MAX_SAFE_INTEGER.
@@ -272,6 +272,7 @@ export function invoiceError(error: unknown): string {
     error instanceof ApiError ? error.problem?.code : (value?.code ?? value?.problem?.code);
   return (
     (code && messages[code]) ||
+    catalogError(error) ||
     (value?.status === 409
       ? 'Cấu hình đã thay đổi hoặc bị xung đột. Tải lại và kiểm tra trước khi lưu.'
       : value?.status === 400

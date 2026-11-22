@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import {
   Accordion,
@@ -10,7 +11,6 @@ import {
   LinearProgress,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ChevronDown } from 'lucide-react';
@@ -123,7 +123,7 @@ export function FinancialReportsApiPage() {
             cho lựa chọn mới.
           </Typography>
         </Box>
-        <form
+        <ValidatedForm
           onSubmit={(e) => {
             e.preventDefault();
             loadReport(from, to);
@@ -244,7 +244,7 @@ export function FinancialReportsApiPage() {
                     ? ' · Đã tải'
                     : ' · Chưa có kết quả'}
           </Typography>
-        </form>
+        </ValidatedForm>
       </Paper>
       {filtersChanged && (
         <Alert severity="warning" sx={{ mb: 2 }}>

@@ -1,3 +1,5 @@
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
+import { TextField } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -7,7 +9,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import {
@@ -172,7 +173,7 @@ export function MoveOutFinancialClosePanel({
         keys.get('final-close', body),
       );
       if (!outcome || outcome.contractId !== id || !Array.isArray(outcome.offsetIds))
-        throw new Error('Máy chủ chưa xác nhận kết quả chốt quyết toán.');
+        throw new UserFeedbackError('Máy chủ chưa xác nhận kết quả chốt quyết toán.');
       keys.confirmed('final-close', body);
       setResult(outcome);
       await Promise.all([source.refetch(), chargeReview.refetch()]);

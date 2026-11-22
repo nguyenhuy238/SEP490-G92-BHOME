@@ -1,5 +1,6 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useMemo, useState } from 'react';
-import { Alert, Button, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, MenuItem, Paper, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import {
   mutationKeys,
@@ -65,7 +66,7 @@ export function ContractPolicyPanel({
         {action.notice && <Alert severity="success">{action.notice}</Alert>}
         {contract.status === 'Active' && contract.kind !== 'Addendum' && (
           <Stack
-            component="form"
+            component={ValidatedForm}
             spacing={2}
             onSubmit={(event) => {
               event.preventDefault();

@@ -1,3 +1,4 @@
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
 import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
@@ -109,7 +110,7 @@ export function ContractDraftForm({
       .then((data) => {
         if (!active) return;
         if (data.roomId !== values.roomId || data.locationId !== room?.locationId)
-          throw new Error('Cấu hình trả về không khớp phòng hoặc ngày giữ chỗ.');
+          throw new UserFeedbackError('Cấu hình trả về không khớp phòng hoặc ngày giữ chỗ.');
         setDefaults({ key: defaultsKey, data });
       })
       .catch((e) => {
@@ -132,12 +133,13 @@ export function ContractDraftForm({
     /* Missing configuration must not produce invented dates. */
   }
   function validateSelection() {
-    if (query.loading || query.error || !room) throw new Error('Chọn phòng giữ chỗ hợp lệ.');
+    if (query.loading || query.error || !room)
+      throw new UserFeedbackError('Chọn phòng giữ chỗ hợp lệ.');
     if (!representative)
-      throw new Error('Nhập và xác minh thông tin người giữ chỗ trước khi tiếp tục.');
-    if (!owner) throw new Error(ownerError);
+      throw new UserFeedbackError('Nhập và xác minh thông tin người giữ chỗ trước khi tiếp tục.');
+    if (!owner) throw new UserFeedbackError(ownerError);
     if (!query.data?.configuration.template.available)
-      throw new Error('Mẫu hợp đồng chưa sẵn sàng. Vui lòng thử lại sau.');
+      throw new UserFeedbackError('Mẫu hợp đồng chưa sẵn sàng. Vui lòng thử lại sau.');
   }
   async function save() {
     if (lock.current) return;
@@ -145,9 +147,11 @@ export function ContractDraftForm({
     try {
       validateSelection();
       if (!datesReady)
-        throw new Error('Chưa có thời hạn giữ chỗ từ hệ thống. Chưa thể tạo hợp đồng.');
+        throw new UserFeedbackError('Chưa có thời hạn giữ chỗ từ hệ thống. Chưa thể tạo hợp đồng.');
       if (!defaultsReady)
-        throw new Error('Chưa có đầy đủ cấu hình tiền cọc và điều khoản cho cơ sở này.');
+        throw new UserFeedbackError(
+          'Chưa có đầy đủ cấu hình tiền cọc và điều khoản cho cơ sở này.',
+        );
       body = {
         ...holdingDraftPayload(
           {
@@ -168,9 +172,9 @@ export function ContractDraftForm({
         expiresAt: configured!.expiresAt,
       };
       if (Date.parse(body.expiresAt) <= Date.now())
-        throw new Error('Hạn giữ chỗ phải ở tương lai.');
+        throw new UserFeedbackError('Hạn giữ chỗ phải ở tương lai.');
     } catch (e) {
-      setError((e as Error).message);
+      setError(contractError(e));
       return;
     }
     lock.current = true;
@@ -206,14 +210,14 @@ export function ContractDraftForm({
   }
   function next() {
     try {
-      if (!roomValid) throw new Error('Chọn phòng giữ chỗ hợp lệ.');
+      if (!roomValid) throw new UserFeedbackError('Chọn phòng giữ chỗ hợp lệ.');
       if (step === 2) {
         validateSelection();
       }
       setError('');
       setStep((value) => (value === 0 ? 2 : value + 1));
     } catch (e) {
-      setError((e as Error).message);
+      setError(contractError(e));
     }
   }
   const customHeader = useWorkspaceHeaderRefresh(query.reload, busy || query.loading, {

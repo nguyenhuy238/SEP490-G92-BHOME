@@ -1,5 +1,6 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
-import { Alert, MenuItem, Stack, TextField } from '@mui/material';
+import { Alert, MenuItem, Stack } from '@mui/material';
 import { ConfirmDialog } from '../../components/common/PortalUI';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useOwnerAction } from '../../hooks/useOwnerWorkspace';

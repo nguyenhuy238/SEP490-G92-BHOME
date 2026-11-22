@@ -1,6 +1,7 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useEffect, useRef, useState } from 'react';
 import { contactPhoneError } from '../../../../../packages/client-core/src/contactPhone';
-import { Alert, Button, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Stack, Typography } from '@mui/material';
 import { useMainDraftApi } from './useContractsApi';
 import { contractError, mutationKeys } from '../../../../../packages/client-core/src/contracts';
 import {

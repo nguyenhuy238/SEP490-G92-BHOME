@@ -1,3 +1,4 @@
+import { TextField } from '../../../../components/common/ValidatedForm';
 import { MoneyField } from '../../../../components/common/MoneyField';
 import { useState } from 'react';
 import {
@@ -17,7 +18,6 @@ import {
   Stack,
   Tab,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import { Copy, DoorOpen, Edit2, Filter, Layers3, Plus, Sparkles, Users } from 'lucide-react';

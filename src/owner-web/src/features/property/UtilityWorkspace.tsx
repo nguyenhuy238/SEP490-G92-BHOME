@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useState } from 'react';
 import {
@@ -11,7 +12,6 @@ import {
   Stack,
   Tab,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -241,7 +241,7 @@ function TariffEditor({
   return (
     <Paper sx={{ p: 2 }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
@@ -523,7 +523,7 @@ function ProfileEditor({
   return (
     <Paper sx={{ p: 2 }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();
@@ -629,7 +629,7 @@ function QuotaEditor({
   return (
     <Paper sx={{ p: 2 }}>
       <Stack
-        component="form"
+        component={ValidatedForm}
         spacing={2}
         onSubmit={(event) => {
           event.preventDefault();

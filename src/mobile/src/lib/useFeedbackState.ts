@@ -13,6 +13,7 @@ export function useFeedbackState(
     (next) => {
       const raw = typeof next === 'function' ? next(current.current) : next;
       const text = raw ? conciseMessage(raw) : '';
+      if (text === current.current) return;
       current.current = text;
       setMessage(text);
       if (text && announce) showToast(type, text);

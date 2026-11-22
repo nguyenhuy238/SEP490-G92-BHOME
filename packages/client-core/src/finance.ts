@@ -1,5 +1,5 @@
 import type { ContractRequest } from './contracts';
-import { infrastructureError } from './api';
+import { infrastructureError, catalogError } from './api';
 import { formatBillingDecimal } from './invoices';
 
 // Financial results can be negative; preserve the server's exact decimal string.
@@ -235,6 +235,8 @@ export function financeClient(request: ContractRequest) {
   };
 }
 export function financeError(error: unknown) {
+  const shared = catalogError(error);
+  if (shared) return shared;
   const infrastructure = infrastructureError(error);
   if (infrastructure) return infrastructure;
   if ((error as { code?: string })?.code === 'settlement_report_sources_require_review')

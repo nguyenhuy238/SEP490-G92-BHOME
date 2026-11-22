@@ -1,3 +1,5 @@
+import { ValidatedInput } from '../../../components/common/ValidatedForm';
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
@@ -11,7 +13,6 @@ import {
   LinearProgress,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ArrowRight, RefreshCw, WalletCards, X } from 'lucide-react';
@@ -623,7 +624,7 @@ function TenantRefundRequestDetails({
                     <Typography variant="caption" color="text.secondary">
                       PNG/JPEG tối đa 5 MB. Tránh tải giấy tờ tùy thân hoặc thông tin đăng nhập.
                     </Typography>
-                    <input
+                    <ValidatedInput
                       type="file"
                       accept="image/png,image/jpeg"
                       aria-label="Ảnh chứng từ chuyển khoản"

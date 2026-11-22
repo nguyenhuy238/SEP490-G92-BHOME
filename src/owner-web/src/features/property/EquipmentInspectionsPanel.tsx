@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -12,7 +13,6 @@ import {
   MenuItem,
   Pagination,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { Link } from 'react-router';
@@ -321,7 +321,7 @@ function InspectionScheduleForm({
   });
   return (
     <Dialog open onClose={mutation.isPending ? undefined : onClose} fullWidth>
-      <form
+      <ValidatedForm
         onSubmit={(event) => {
           event.preventDefault();
           mutation.mutate(new FormData(event.currentTarget));
@@ -394,7 +394,7 @@ function InspectionScheduleForm({
             Lưu lịch kiểm tra
           </Button>
         </DialogActions>
-      </form>
+      </ValidatedForm>
     </Dialog>
   );
 }

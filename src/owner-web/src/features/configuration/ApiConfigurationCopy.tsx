@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useId, useState } from 'react';
 import {
   Box,
@@ -10,7 +11,6 @@ import {
   FormControlLabel,
   MenuItem,
   Stack,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';

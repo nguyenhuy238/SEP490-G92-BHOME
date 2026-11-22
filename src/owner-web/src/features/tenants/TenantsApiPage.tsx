@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { IdentityRetentionPanel } from './IdentityRetentionPanel';
 import { TenantAccountStatus, type ResidentAccount } from './TenantAccountStatus';
@@ -10,7 +11,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
   Alert,
 } from '@mui/material';
@@ -378,7 +378,7 @@ function CreateResident({
     >
       <DialogTitle>Thêm người ở</DialogTitle>
       <DialogContent>
-        <form
+        <ValidatedForm
           id="resident-editor"
           onSubmit={(e) => {
             e.preventDefault();
@@ -433,7 +433,7 @@ function CreateResident({
               thay đổi trạng thái phòng.
             </Alert>
           </Stack>
-        </form>
+        </ValidatedForm>
       </DialogContent>
       <DialogActions>
         <Button disabled={action.busy} onClick={close}>

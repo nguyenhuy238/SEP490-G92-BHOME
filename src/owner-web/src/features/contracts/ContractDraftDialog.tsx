@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
@@ -14,7 +15,6 @@ import {
   Step,
   StepLabel,
   Stepper,
-  TextField,
   Typography,
 } from '@mui/material';
 import {
