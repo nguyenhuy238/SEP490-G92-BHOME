@@ -87,7 +87,13 @@ it('limits progress and issue reporting to the assigned Staff and respects task 
 it('sends an item update with the server version, linked incident and idempotency key', async () => {
   const request = vi.fn().mockResolvedValue(view);
   const api = { request } as unknown as MobileApi;
-  const input = { version: 9, checked: true, note: 'Thấy đủ tài sản', incidentId: taskId };
+  const input = {
+    version: 9,
+    checked: true,
+    condition: 'Intact' as const,
+    note: 'Thấy đủ tài sản',
+    incidentId: taskId,
+  };
   await locationAssetInventoryClient(api).updateItem(taskId, itemId, input, staff);
   expect(request).toHaveBeenCalledWith(
     `/api/v1/operational-tasks/${taskId}/location-asset-inventory/items/${itemId}`,

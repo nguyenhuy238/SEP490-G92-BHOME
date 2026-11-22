@@ -262,6 +262,8 @@ const id = '22222222-2222-4222-8222-222222222222',
 const lid = '44444444-4444-4444-8444-444444444444',
   rid = '55555555-5555-4555-8555-555555555555',
   eid = '66666666-6666-4666-8666-666666666666';
+const inventoryTaskId = '99999999-9999-4999-8999-999999999999';
+const inventoryItemId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 let report: Incident, work: WorkOrder;
 const page = <T,>(items: T[]) => ({ items, page: 1, pageSize: 20, totalCount: items.length });
 function respond(path: string, init?: RequestInit): unknown {
@@ -278,6 +280,34 @@ function respond(path: string, init?: RequestInit): unknown {
   if (path === '/api/v1/capture/locations') return [{ id: lid, label: 'Cơ sở thử nghiệm' }];
   if (path.includes('/capture/locations/') && path.endsWith('/rooms'))
     return [{ id: rid, label: 'A101' }];
+  if (path === `/api/v1/operational-tasks/${inventoryTaskId}/location-asset-inventory`)
+    return {
+      taskId: inventoryTaskId,
+      locationId: lid,
+      assignmentId: wid,
+      status: 'InProgress',
+      version: 5,
+      totalCount: 1,
+      checkedCount: 1,
+      pendingOwnerRooms: [],
+      pendingOwnerCommonAssets: false,
+      items: [
+        {
+          id: inventoryItemId,
+          roomId: rid,
+          roomNumber: 'A101',
+          assetId: eid,
+          name: 'Quạt trần',
+          quantity: 1,
+          commonArea: null,
+          checked: true,
+          inherited: false,
+          condition: 'Damaged',
+          note: 'Cánh quạt bị nứt.',
+          incidentId: null,
+        },
+      ],
+    };
   if (path.startsWith('/api/v1/assets?')) return { ...page([]), pageSize: 100 };
   if (path.startsWith('/api/v1/staff-location-assignments'))
     return [{ id, staffUserId: actor, startDate: '2020-01-01', endDate: '2099-01-01' }];
@@ -408,6 +438,45 @@ it('submits a Tenant multipart report with UTF-8 description and opens the real 
   expect(init.headers['Content-Type']).toContain('multipart/form-data');
   expect(new TextDecoder().decode(init.body)).toContain('Ống nước bị vỡ, cần sửa chữa');
   expect(new TextDecoder().decode(init.body)).not.toContain('name="category"');
+});
+it('links a newly created incident back to the exact damaged Location inventory item without losing its condition', async () => {
+  s.params = {
+    inventoryTaskId,
+    locationAssetInventoryItemId: inventoryItemId,
+    locationId: lid,
+    roomId: rid,
+    assetId: eid,
+    description: 'Kiểm kê: Quạt trần bị hỏng, cánh quạt bị nứt.',
+  };
+  render(<IncidentReportForm />);
+  await screen.findByText(/Cơ sở đang làm việc: Cơ sở thử nghiệm/);
+  await waitFor(() => {
+    expect((screen.getByLabelText('Phòng') as HTMLSelectElement).value).toBe(rid);
+    expect((screen.getByLabelText('Tài sản liên quan (tùy chọn)') as HTMLSelectElement).value).toBe(
+      eid,
+    );
+    expect((screen.getByText('Gửi báo cáo sự cố') as HTMLButtonElement).disabled).toBe(false);
+  });
+  fireEvent.click(screen.getByText('Gửi báo cáo sự cố'));
+
+  await waitFor(() =>
+    expect(s.go).toHaveBeenCalledWith('task-detail', { taskId: inventoryTaskId }),
+  );
+  const link = s.request.mock.calls.find(
+    ([path, init]) =>
+      path ===
+        `/api/v1/operational-tasks/${inventoryTaskId}/location-asset-inventory/items/${inventoryItemId}` &&
+      init?.method === 'PUT',
+  );
+  expect(link).toBeTruthy();
+  expect(JSON.parse(link![1].body)).toEqual({
+    version: 5,
+    checked: true,
+    condition: 'Damaged',
+    note: 'Cánh quạt bị nứt.',
+    incidentId: id,
+  });
+  expect(new Headers(link![1].headers).get('Idempotency-Key')).toMatch(/^[a-f\d-]{36}$/i);
 });
 it('locks double submit and reuses the same idempotency key after ambiguous failure, without false success', async () => {
   let reject!: (e: Error) => void;

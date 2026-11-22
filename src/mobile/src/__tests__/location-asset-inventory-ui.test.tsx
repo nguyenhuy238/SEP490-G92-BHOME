@@ -123,6 +123,38 @@ vi.mock('../components/WorkspaceKit', () => ({
   Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   ui: { muted: {}, red: {}, grow: {}, green: {} },
 }));
+vi.mock('../components/CameraCapture', () => ({ CameraCapture: () => null }));
+vi.mock('../components/WorkflowControls', () => ({
+  ChoiceField: ({
+    label,
+    value,
+    options,
+    onChange,
+    disabled,
+  }: {
+    label: string;
+    value: string;
+    options: { id: string; label: string }[];
+    onChange: (value: string) => void;
+    disabled?: boolean;
+  }) => (
+    <label>
+      {label}
+      <select
+        aria-label={label}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  ),
+}));
 vi.mock('../lib/toast', () => ({ showSuccess: vi.fn() }));
 vi.mock('../features/workspace/WorkspaceProvider', () => ({
   useWorkspace: () => ({ go: state.go }),
@@ -191,6 +223,9 @@ it('renders all 42 server items into named room and common-area sections, not ju
   // WorkspaceShell's web ScrollView and pushed every room below the screen.
   const progress = screen.getByRole('progressbar');
   expect(window.getComputedStyle(progress).height).toBe('6px');
+  // Search and filters must be siblings of the clipped 6px progress track.
+  expect(progress.querySelector('textarea')).toBeNull();
+  expect(progress.parentElement?.querySelector('textarea')).not.toBeNull();
   expect(screen.getByText('Cơ sở: Cơ Sở Phú Thọ')).toBeTruthy();
   expect(
     screen.getByText('12 phòng · 1 khu vực chung · 42 mục tài sản Owner đã xác nhận'),
@@ -211,7 +246,11 @@ it('renders all 42 server items into named room and common-area sections, not ju
   expect(screen.getAllByRole('button', { name: /^Chi tiết kiểm kê:/ })).toHaveLength(2);
   expect(screen.getByText('Camera hành lang')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Chi tiết kiểm kê: Camera hành lang' }));
-  expect(screen.getByText('Xác nhận đã kiểm tra')).toBeTruthy();
+  expect(screen.getByLabelText('Hiện trạng thực tế')).toBeTruthy();
+  const save = screen.getByRole('button', { name: 'Lưu kết quả kiểm tra' });
+  expect((save as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Hiện trạng thực tế'), { target: { value: 'Intact' } });
+  expect((save as HTMLButtonElement).disabled).toBe(false);
   expect(onReady).toHaveBeenLastCalledWith(false);
   expect(screen.queryByText(/Chưa tải đầy đủ checklist/)).toBeNull();
 });

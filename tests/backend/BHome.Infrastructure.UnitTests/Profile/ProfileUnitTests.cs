@@ -44,7 +44,7 @@ public sealed class ProfileUnitTests(PostgresContainerFixture postgres) : IAsync
     private async Task<ProfileView> StaffProfileAsync() => (await Repository.ProfileAsync(StaffSampleId, default))!;
 
     private async Task<ProfileUpdate> UpdateOf(string fullName, string? phone, string email) =>
-        new(fullName, phone, email, (await StaffProfileAsync()).Version);
+        new(fullName, phone, email, (await StaffProfileAsync()).Version, StaffPassword);
 
     #region ProfileAsync(Guid userId)
 
@@ -116,7 +116,7 @@ public sealed class ProfileUnitTests(PostgresContainerFixture postgres) : IAsync
         var result = await Operations.UpdateProfileAsync(await UpdateOf("Tran Van Tam", "0987654321", StaffEmail), default);
 
         Assert.Equal("Tran Van Tam", result.FullName);
-        Assert.Equal("0987654321", result.Phone);
+        Assert.Equal("+84987654321", result.Phone);
         Assert.Equal([Roles.Staff], result.Roles);
         Assert.True(result.IsActive);
     }

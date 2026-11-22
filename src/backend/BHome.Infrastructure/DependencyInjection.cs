@@ -177,6 +177,7 @@ public static class DependencyInjection
         services.AddScoped<CompactLocationAssignments>();
         services.AddScoped<ILocationAssignments>(provider => provider.GetRequiredService<CompactLocationAssignments>());
         services.AddScoped<IStaffLocationAccess>(provider => provider.GetRequiredService<CompactLocationAssignments>());
+        services.AddScoped<ITenantContractAccess, CompactTenantContractAccess>();
         services.AddScoped<AssignmentReconciliationJob>();
         services.AddScoped<IBackgroundJobHandler>(provider => provider.GetRequiredService<AssignmentReconciliationJob>());
         services.AddScoped<IJobScheduleContributor>(provider => provider.GetRequiredService<AssignmentReconciliationJob>());

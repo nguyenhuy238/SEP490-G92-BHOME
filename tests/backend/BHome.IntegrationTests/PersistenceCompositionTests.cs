@@ -51,6 +51,7 @@ public sealed class PersistenceCompositionTests
             if (compact) Assert.NotNull(services.GetRequiredService(service));
             else Assert.Null(services.GetService(service));
         }
+        Assert.NotNull(services.GetRequiredService<ITenantContractAccess>());
         if (!compact) Assert.Null(services.GetService<Compact24DbContext>());
         Assert.IsType(compact ? typeof(AuthenticationEmailDelivery) : typeof(UnconfiguredPasswordResetDelivery),
             services.GetRequiredService<IPasswordResetDelivery>());

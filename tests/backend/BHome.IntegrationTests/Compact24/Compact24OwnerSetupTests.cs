@@ -146,10 +146,16 @@ public sealed partial class Compact24OwnerSetupTests(Compact24Fixture fixture) :
     public async Task ClosureShowsOpenWorkAndEmergencyReadinessAndDoesNotLeakToTenant()
     {
         var w = await Seed(); using var owner = await Client(w.Owner); using var tenant = await Client(w.Tenant);
+        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
+        var vacant = await owner.GetFromJsonAsync<LocationClosureCheck>($"/api/v1/locations/{w.Location}/closure-check");
+        Assert.True(vacant!.CanClose);
+        Assert.DoesNotContain(vacant.Blockers, b => b.Code == "operational_rooms");
+        var room = await db.Set<Room>().SingleAsync(r => r.Id == w.Room);
+        room.Status = RoomStatus.Occupied;
+        await db.SaveChangesAsync();
         var check = await owner.GetFromJsonAsync<LocationClosureCheck>($"/api/v1/locations/{w.Location}/closure-check");
         Assert.Contains(check!.Blockers, b => b.Code == "operational_rooms");
         Assert.Equal(HttpStatusCode.Forbidden, (await tenant.GetAsync($"/api/v1/locations/{w.Location}/closure-check")).StatusCode);
-        await using var scope = fixture.Factory!.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<Compact24DbContext>();
         db.Add(new IncidentReport
         {
             LocationId = w.Location,

@@ -335,7 +335,9 @@ public sealed partial class ContractService(IContractRepository repository, ICur
             if (Today < c.StartDate || Today > c.EndDate) blockers.Add("amendment_not_effective");
             return new(blockers.Count == 0, 0, 0, blockers.ToArray());
         }
-        if (lifecycle is not null) blockers.AddRange(await lifecycle.RoomBlockersAsync(c.RoomId, t));
+        // ContractRepository.ConflictsAsync evaluates actual capacity/resident overlap;
+        // generic room blockers must not reject valid co-occupants or a Holding source.
+        if (lifecycle is not null) blockers.AddRange(await lifecycle.RoomBlockersAsync(c.RoomId, t, c.Id, includeActiveContracts: false));
         if (c.Kind == ContractKind.Holding) blockers.Add("main_contract_required");
         if (c.IsDevelopmentDemo && !DemoEnabled &&
             !(MainSandboxAcceptance.Read(c) is not null && holdingTestScope?.Allows(c.Room.LocationId) == true))

@@ -70,6 +70,9 @@ public sealed partial class OperationalTaskService
         left.CommonArea == right.CommonArea && left.Inherited == right.Inherited &&
         left.SourceHandoverContractId == right.SourceHandoverContractId;
 
+    private static bool ValidCondition(string? condition) => condition is
+        "Unassessed" or "Intact" or "Missing" or "Damaged" or "NotAccessible";
+
     // Owner-facing read-only diff; never changes an in-progress or signed document by itself.
     public async Task<LocationAssetInventoryReconcilePreview> PreviewLocationAssetInventoryReconciliationAsync(
         Guid taskId, CancellationToken t)
@@ -111,6 +114,7 @@ public sealed partial class OperationalTaskService
                         ? item with
                         {
                             Checked = item.Checked || previous.Checked,
+                            Condition = previous.Condition,
                             Note = previous.Note,
                             IncidentId = previous.IncidentId,
                             PriorStaffTaskId = previous.PriorStaffTaskId,
@@ -144,7 +148,10 @@ public sealed partial class OperationalTaskService
     {
         Permit(Permissions.OperationalTasks.Execute);
         Validate(input);
-        if (itemId == Guid.Empty || input.IncidentId == Guid.Empty || input.Note?.Length > 2000)
+        if (itemId == Guid.Empty || input.IncidentId == Guid.Empty || input.Note?.Length > 2000 ||
+            !ValidCondition(input.Condition) || input.Checked && input.Condition == "Unassessed" ||
+            input.Checked && input.Condition is "Missing" or "Damaged" or "NotAccessible" &&
+                string.IsNullOrWhiteSpace(input.Note))
             throw OperationalTaskException.Invalid("invalid_location_asset_inventory_item");
         var initial = await repository.FindAsync(taskId, t) ?? throw OperationalTaskException.Missing();
         await AccessAsync(initial, t, true);
@@ -178,6 +185,7 @@ public sealed partial class OperationalTaskService
                 snapshot.Items[index] = previous with
                 {
                     Checked = input.Checked,
+                    Condition = input.Checked ? input.Condition : "Unassessed",
                     Note = input.Note?.Trim(),
                     IncidentId = input.IncidentId,
                     // A direct successor check supersedes previously inherited progress.
@@ -186,7 +194,26 @@ public sealed partial class OperationalTaskService
                 };
                 task.LocationAssetInventoryJson = JsonSerializer.Serialize(snapshot);
                 await RecordAsync(task, "location_asset_inventory_item_checked", input.Note?.Trim() ?? "",
-                    new { ItemId = itemId, input.Checked, input.IncidentId }, [], t);
+                    new
+                    {
+                        ItemId = itemId,
+                        AssetId = previous.AssetId,
+                        Quantity = previous.Quantity,
+                        Before = new
+                        {
+                            previous.Checked,
+                            previous.Condition,
+                            previous.Note,
+                            previous.IncidentId
+                        },
+                        After = new
+                        {
+                            snapshot.Items[index].Checked,
+                            snapshot.Items[index].Condition,
+                            snapshot.Items[index].Note,
+                            snapshot.Items[index].IncidentId
+                        }
+                    }, [], t);
                 task.Version++;
                 return LocationInventoryView(task, snapshot);
             }, view => view.TaskId, t);
@@ -200,6 +227,12 @@ public sealed partial class OperationalTaskService
             throw OperationalTaskException.Conflict("location_asset_inventory_owner_confirmation_required");
         if (snapshot.Items.Any(item => !item.Checked))
             throw OperationalTaskException.Conflict("location_asset_inventory_incomplete");
+        if (snapshot.Items.Any(item => item.Condition is "Missing" or "Damaged" &&
+                (string.IsNullOrWhiteSpace(item.Note) || item.IncidentId is null)))
+            throw OperationalTaskException.Conflict("location_asset_inventory_issue_requires_incident");
+        if (snapshot.Items.Any(item => item.Condition == "NotAccessible" &&
+                string.IsNullOrWhiteSpace(item.Note)))
+            throw OperationalTaskException.Conflict("location_asset_inventory_exception_note_required");
         // A late Owner change (or a never-verified legacy task) must not reach signing.
         var verified = await repository.OwnerConfirmedInventoryAsync(task, t);
         if (snapshot.Items.Length != verified.Items.Length ||

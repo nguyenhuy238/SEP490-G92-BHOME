@@ -8,11 +8,37 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using OpenCvSharp;
 using BHome.Application.PropertyManagement;
+using BHome.Application.StaffOperations;
+using BHome.Domain.StaffOperations;
 
 namespace BHome.IntegrationTests.Compact24;
 
 public sealed partial class Compact24OwnerSetupTests
 {
+    [CompactPostgresFact]
+    public async Task OptionalEquipmentInspectionIsNoContentForAssignedStaffButHiddenFromUnassignedStaff()
+    {
+        var w = await Seed();
+        var outside = await Seed();
+        using var host = Host();
+        using var owner = await Client(w.Owner, host);
+        using var staff = await Client(w.Staff, host);
+        using var stranger = await Client(outside.Staff, host);
+
+        using var create = new HttpRequestMessage(HttpMethod.Post, "/api/v1/operational-tasks")
+        {
+            Content = JsonContent.Create(new TaskCreate(w.Location, new TaskWrite(
+                "Synthetic optional inspection", "No equipment inspection document exists yet.",
+                OperationalTaskPriority.Normal, DateTimeOffset.UtcNow.AddDays(2), false)))
+        };
+        create.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        var task = await Read<BHome.Application.StaffOperations.TaskView>(await owner.SendAsync(create));
+        var route = $"/api/v1/operational-tasks/{task.Id}/equipment-inspection";
+
+        Assert.Equal(HttpStatusCode.NoContent, (await staff.GetAsync(route)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(route)).StatusCode);
+    }
+
     [CompactPostgresFact]
     public async Task EquipmentInspectionBatchesAreScopedIdempotentAndCreateProactiveRemediation()
     {

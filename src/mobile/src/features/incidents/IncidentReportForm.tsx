@@ -209,6 +209,7 @@ function ReportForm() {
             {
               version: view.version,
               checked: item.checked,
+              condition: item.condition ?? (item.checked ? 'Intact' : 'Unassessed'),
               note: (item.note?.trim() || description.trim()).slice(0, 2000),
               incidentId,
             },

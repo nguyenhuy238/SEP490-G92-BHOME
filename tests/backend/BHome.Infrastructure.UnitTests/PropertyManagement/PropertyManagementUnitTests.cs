@@ -392,14 +392,11 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
     {
         await StartAsync();
         await AddLocationAsync(Sample1Id, "BHOME SAMPLE 1");
-        var standard = await AddRoomTypeAsync(Sample1Id, "Standard", 2);
-
         var result = await Capture.CreateRoomAsync(new RoomInput(Sample1Id, "103", 2), default);
 
         Assert.Equal(2, await world.ScalarAsync<short>("select capacity from rooms where id = @id and room_number = '103'", ("id", result.Id)));
         var provenance = await SetupStore.GetAsync(RoomProvenanceKey(result.Id), "RoomProvenance", default);
-        Assert.NotNull(provenance); // Room 103 must be linked to Room Type "Standard"
-        Assert.Equal(standard.Id, provenance!.Data.GetProperty("roomDefaultsId").GetGuid());
+        Assert.Null(provenance); // OCR quick-create has no RoomTypeId input; it must not guess a type.
     }
 
     [Fact(DisplayName = "UTC09 - CaptureController.Room: phong 101 da ton tai -> tu choi trung so phong, van mot phong 101")]
@@ -435,7 +432,7 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         var stored = await Shared.GetAsync(RoomTypeResource, saved.Id, default);
         Assert.Equal("Studio", stored.Name);
         Assert.Equal(2, stored.Data.GetProperty("capacity").GetInt32());
-        Assert.Equal("Published", stored.Status); // sheet: Active (usable)
+        Assert.Equal("Draft", stored.Status); // Shared library saves drafts; Owner explicitly publishes them.
     }
 
     [Fact(DisplayName = "UTC11 - SaveAsync: Electricity 3500 tu 2026-11-01 -> phien ban Current, ghi Owner va thoi diem")]
@@ -454,7 +451,7 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         Assert.Equal("2026-11-01", stored.Data.GetProperty("effectiveFrom").GetString());
         Assert.Equal(OwnerId, stored.UpdatedBy);
         Assert.Equal(Today, stored.UpdatedAt);
-        Assert.Equal("Published", stored.Status); // sheet: Status Current (in effect)
+        Assert.Equal("Draft", stored.Status); // Only Published policies are selectable.
     }
 
     [Fact(DisplayName = "UTC12 - SaveAsync: Electricity 3800 tu 2026-12-01 trung ky v1 -> tu choi, v1 khong doi")]
@@ -662,7 +659,8 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         var asset = (await SetupStore.AssetAsync(assetId, default))!;
         asset.Condition = "Leaking";
 
-        await Assert.ThrowsAnyAsync<Exception>(() => SetupStore.SaveAssetAsync(asset, StaffSampleId, "Water leaking under the tank", default));
+        await Assert.ThrowsAnyAsync<Exception>(() => Properties.UpdateAssetConditionAsync(assetId,
+            new AssetConditionUpdate("Leaking", asset.Version, "Water leaking under the tank"), default));
 
         Assert.Equal("Good", await AssetConditionAsync(assetId));
         Assert.Equal(historyBefore, (await SetupStore.AssetHistoryAsync(assetId, default)).Count);
@@ -689,7 +687,7 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         world.SignInAsOwner();
         var repairs = await RepairRecordIdsAsync(assetId);
 
-        var history = await SetupStore.AssetHistoryAsync(assetId, default);
+        var history = await AssetInventory.HistoryAsync(assetId, default);
 
         Assert.Contains(history, h => h.Snapshot.Contains("\"Good\""));
         Assert.Contains(history, h => h.ActorId == StaffSampleId && h.Snapshot.Contains("Fan is noisy") &&
@@ -710,7 +708,7 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         await StaffOfSample1SignedInAsync();
 
         IReadOnlyList<AssetHistoryEntry>? history = null;
-        try { history = await SetupStore.AssetHistoryAsync(assetId, default); } catch (Exception) { /* rejected */ }
+        try { history = await AssetInventory.HistoryAsync(assetId, default); } catch (Exception) { /* rejected */ }
 
         Assert.True(history is null || history.Count == 0, $"{history?.Count} history entries of a BHOME SAMPLE 2 asset returned to Staff");
     }
@@ -721,7 +719,7 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
 
     // AssetTemplateWrite has no RoomTypeId / Condition; the Room Type link is checked on the Room Type afterwards.
 
-    [Fact(DisplayName = "UTC25 - SaveTemplateAsync: Bed 1m6 cho Room Type Standard -> luu va gan voi Standard")]
+    [Fact(DisplayName = "UTC25 - SaveTemplateAsync: Bed 1m6 -> tao Draft doc lap, khong tu dong gan Room Type")]
     [Trait("Function", "AssetInventoryService.SaveTemplateAsync")]
     public async Task UTC25()
     {
@@ -729,31 +727,30 @@ public sealed class PropertyManagementUnitTests(PostgresContainerFixture postgre
         await AddLocationAsync(Sample1Id, "BHOME SAMPLE 1");
         var standard = await AddRoomTypeAsync(Sample1Id, "Standard", 2);
         foreach (var number in new[] { "101", "102", "103" }) await AddRoomAsync(Sample1Id, number);
+        var roomTypeBefore = (await SetupStore.GetAsync(standard.Id, "RoomDefaults", default))!;
 
         var saved = await AssetInventory.SaveTemplateAsync(null, new AssetTemplateWrite(Sample1Id, "Bed 1m6",
             [new AssetTemplateItem(Guid.NewGuid(), "Bed 1m6", "Bed", "Serialized", 1)], Scoped: true), default);
 
         Assert.Equal("Bed 1m6", DataName((await SetupStore.GetAsync(saved.Id, "AssetTemplate", default))!));
+        Assert.Equal("Draft", (await SetupStore.GetAsync(saved.Id, "AssetTemplate", default))!.Status);
         var roomType = (await SetupStore.GetAsync(standard.Id, "RoomDefaults", default))!;
-        Assert.True(roomType.Data.TryGetProperty("assetTemplateId", out var link) && link.ValueKind == JsonValueKind.String,
-            "Room Type Standard is not linked to any asset configuration");
-        Assert.Equal(saved.Id, link.GetGuid());
+        Assert.Equal(roomTypeBefore.Data.GetRawText(), roomType.Data.GetRawText());
     }
 
-    [Fact(DisplayName = "UTC26 - SaveTemplateAsync: Room Type Standard cua BHOME SAMPLE 2 cho BHOME SAMPLE 1 -> tu choi, khong luu")]
+    [Fact(DisplayName = "UTC26 - SaveTemplateAsync: AssetTemplate cua BHOME SAMPLE 1 khong bi ro ri sang BHOME SAMPLE 2")]
     [Trait("Function", "AssetInventoryService.SaveTemplateAsync")]
     public async Task UTC26()
     {
         await StartAsync();
         await AddLocationAsync(Sample1Id, "BHOME SAMPLE 1");
         await AddLocationAsync(Sample2Id, "BHOME SAMPLE 2");
-        await AddRoomTypeAsync(Sample1Id, "Standard", 2);
-        await AddRoomTypeAsync(Sample2Id, "Standard", 2); // RoomTypeId input = this one; the write has no field to carry it
+        var saved = await AssetInventory.SaveTemplateAsync(null, new AssetTemplateWrite(Sample1Id, "Bed 1m6",
+            [new AssetTemplateItem(Guid.NewGuid(), "Bed 1m6", "Bed", "Serialized", 1)], Scoped: true), default);
 
-        await Assert.ThrowsAnyAsync<Exception>(() => AssetInventory.SaveTemplateAsync(null, new AssetTemplateWrite(Sample1Id, "Bed 1m6",
-            [new AssetTemplateItem(Guid.NewGuid(), "Bed 1m6", "Bed", "Serialized", 1)], Scoped: true), default));
-
-        Assert.Empty(await SetupStore.ListAsync(Sample1Id, "AssetTemplate", default));
+        Assert.Single(await SetupStore.ListAsync(Sample1Id, "AssetTemplate", default));
+        Assert.Empty(await SetupStore.ListAsync(Sample2Id, "AssetTemplate", default));
+        Assert.Equal(saved.Id, Assert.Single(await SetupStore.ListAsync(Sample1Id, "AssetTemplate", default)).Id);
     }
 
     #endregion
