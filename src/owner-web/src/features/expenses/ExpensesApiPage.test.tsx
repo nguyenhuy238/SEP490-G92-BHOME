@@ -227,11 +227,7 @@ it('selects real Room/Asset/Work Order references and submits the exact source I
   fireEvent.click(screen.getByRole('button', { name: 'Ghi khoản chi' }));
   fireEvent.click(screen.getByRole('button', { name: /Liên kết bổ sung/ }));
   await waitFor(() =>
-    expect(mock.expenseReferences).toHaveBeenCalledWith(
-      'location',
-      null,
-      expect.any(AbortSignal),
-    ),
+    expect(mock.expenseReferences).toHaveBeenCalledWith('location', null, expect.any(AbortSignal)),
   );
   expect(screen.getByRole('combobox', { name: 'Phòng ghi nhận' })).toHaveAttribute(
     'aria-disabled',
