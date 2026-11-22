@@ -471,9 +471,7 @@ function scenario(
       inventoryChecked = inventorySaved.checked === true;
       inventoryCondition = inventorySaved.condition === 'Intact' ? 'Intact' : 'Unassessed';
       inventoryVersion++;
-      return json(
-        inventory('InProgress', inventoryVersion, inventoryChecked, inventoryCondition),
-      );
+      return json(inventory('InProgress', inventoryVersion, inventoryChecked, inventoryCondition));
     }
     if (path.endsWith(`/operational-tasks/${taskId}/location-asset-handover`))
       return json({ code: 'resource_not_found' }, 404);
@@ -555,16 +553,20 @@ it('keeps handover checklist in sync with task start, hides equipment inspection
   await screen.findByText('Đang thực hiện');
   await waitFor(() => expect(s.inventoryReads()).toBeGreaterThan(beforeStartReads));
   await screen.findByText('Đang kiểm kê');
-  const startEventIndex = s.requestEvents().findIndex(
-    (event) =>
-      event.path.endsWith(`/operational-tasks/${taskId}/start`) && event.method === 'POST',
-  );
-  const inventoryRefetchIndex = s.requestEvents().findIndex(
-    (event, index) =>
-      index > startEventIndex &&
-      event.path.endsWith(`/operational-tasks/${taskId}/location-asset-inventory`) &&
-      event.method === 'GET',
-  );
+  const startEventIndex = s
+    .requestEvents()
+    .findIndex(
+      (event) =>
+        event.path.endsWith(`/operational-tasks/${taskId}/start`) && event.method === 'POST',
+    );
+  const inventoryRefetchIndex = s
+    .requestEvents()
+    .findIndex(
+      (event, index) =>
+        index > startEventIndex &&
+        event.path.endsWith(`/operational-tasks/${taskId}/location-asset-inventory`) &&
+        event.method === 'GET',
+    );
   expect(startEventIndex).toBeGreaterThanOrEqual(0);
   expect(inventoryRefetchIndex).toBeGreaterThan(startEventIndex);
   expect(screen.getByRole('button', { name: 'Cập nhật công việc' })).toBeTruthy();
