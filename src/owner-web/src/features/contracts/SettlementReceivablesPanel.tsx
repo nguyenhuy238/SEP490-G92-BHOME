@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { ConfirmActionButton } from '../../components/common/ConfirmActionButton';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
@@ -12,7 +13,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import {

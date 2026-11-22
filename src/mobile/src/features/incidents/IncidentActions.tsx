@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
 import { Button, Checkbox, Dialog, Portal, Text } from 'react-native-paper';
 import { Action, Box, Heading, ui } from '../../components/WorkspaceKit';
 import { ChoiceField, Input } from '../../components/WorkflowControls';
@@ -72,12 +73,12 @@ export function incidentActions(report: Incident, role: string): string[] {
 function integer(value: string, label: string, required = true): number | null {
   if (!value.trim() && !required) return null;
   if (!/^\d+$/.test(value.trim()) || !Number.isSafeInteger(Number(value)))
-    throw new Error(`${label} phải là số nguyên không âm trong giới hạn nhập liệu.`);
+    throw new UserFeedbackError(`${label} phải là số nguyên không âm trong giới hạn nhập liệu.`);
   return Number(value);
 }
 export function targetDate(value: string) {
   const match = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/.exec(value.trim());
-  if (!match) throw new Error('Nhập hạn hoàn thành theo dd/MM/yyyy HH:mm.');
+  if (!match) throw new UserFeedbackError('Nhập hạn hoàn thành theo dd/MM/yyyy HH:mm.');
   const [, day, month, year, hour, minute] = match;
   const text = `${year}-${month}-${day}T${hour}:${minute}:00+07:00`;
   const parsed = new Date(text);
@@ -91,7 +92,7 @@ export function targetDate(value: string) {
     !Number.isFinite(parsed.getTime()) ||
     parsed.getTime() <= Date.now()
   )
-    throw new Error('Hạn hoàn thành phải là ngày giờ hợp lệ trong tương lai.');
+    throw new UserFeedbackError('Hạn hoàn thành phải là ngày giờ hợp lệ trong tương lai.');
   return text;
 }
 interface Assignment {
@@ -198,7 +199,7 @@ export function IncidentActionPanel({
       const required = (name: string, label: string, max = 8000) => {
         const value = values[name]?.trim() ?? '';
         if (!value || value.length > max)
-          throw new Error(`${label}: cần nhập nội dung, tối đa ${max} ký tự.`);
+          throw new UserFeedbackError(`${label}: cần nhập nội dung, tối đa ${max} ký tự.`);
         return value;
       };
       const evidenceIds: string[] = [];
@@ -255,7 +256,7 @@ export function IncidentActionPanel({
           break;
         case 'asset-decision':
           if (!['true', 'false'].includes(values.approve))
-            throw new Error('Chọn xác nhận hoặc từ chối.');
+            throw new UserFeedbackError('Chọn xác nhận hoặc từ chối.');
           input = {
             version,
             approve: values.approve === 'true',
@@ -287,7 +288,9 @@ export function IncidentActionPanel({
         case 'proposal': {
           const minutes = integer(required('minutes', 'Thời gian dự kiến'), 'Thời gian dự kiến')!;
           if (minutes < 1 || minutes > 2147483647)
-            throw new Error('Thời gian dự kiến phải từ 1 phút và trong giới hạn số nguyên.');
+            throw new UserFeedbackError(
+              'Thời gian dự kiến phải từ 1 phút và trong giới hạn số nguyên.',
+            );
           input = {
             version,
             inspectionResult: required('inspection', 'Kết quả kiểm tra'),
@@ -326,7 +329,7 @@ export function IncidentActionPanel({
           break;
         }
         case 'direct-completion':
-          if (!photos.length) throw new Error('Cần ít nhất một ảnh kết quả.');
+          if (!photos.length) throw new UserFeedbackError('Cần ít nhất một ảnh kết quả.');
           input = {
             version,
             actualCost: integer(required('cost', 'Chi phí thực tế'), 'Chi phí thực tế')!,
@@ -338,7 +341,7 @@ export function IncidentActionPanel({
         case 'emergency-actions': {
           const cost = integer(values.cost ?? '', 'Chi phí đề nghị', false);
           if (cost !== null && cost > 0 && !photos.length)
-            throw new Error('Chi phí khẩn cấp cần ảnh minh chứng.');
+            throw new UserFeedbackError('Chi phí khẩn cấp cần ảnh minh chứng.');
           input = {
             version,
             note: required('note', 'Hành động đã thực hiện'),
@@ -365,11 +368,11 @@ export function IncidentActionPanel({
         case 'submit':
         case 'rework':
           if (action === 'submit' && !photos.length)
-            throw new Error('Cần ít nhất một ảnh kết quả cho lần gửi nghiệm thu này.');
+            throw new UserFeedbackError('Cần ít nhất một ảnh kết quả cho lần gửi nghiệm thu này.');
           input = { version, note: required('note', 'Nội dung cập nhật'), evidenceIds };
           break;
         case 'report-photo':
-          if (!photos.length) throw new Error('Chọn ảnh báo cáo.');
+          if (!photos.length) throw new UserFeedbackError('Chọn ảnh báo cáo.');
           input = { version };
           break;
         default:
@@ -392,7 +395,8 @@ export function IncidentActionPanel({
           key(`upload:${report.id}:${work?.id ?? ''}:${kind}:${photo.id}`),
           signal,
         );
-        if (!result.resourceId) throw new Error('Máy chủ chưa trả mã ảnh. Tải lại để kiểm tra.');
+        if (!result.resourceId)
+          throw new UserFeedbackError('Máy chủ chưa trả mã ảnh. Tải lại để kiểm tra.');
         evidenceIds.push(result.resourceId);
       }
       if (action === 'report-photo')

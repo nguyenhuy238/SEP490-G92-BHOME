@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -11,7 +12,6 @@ import {
   DialogTitle,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import {

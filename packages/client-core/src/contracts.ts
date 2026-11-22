@@ -1,5 +1,11 @@
 // D011/D012 REST contract. Amounts remain decimal strings throughout the clients.
-import { ApiError, infrastructureError, requestDiagnostic } from './api';
+import {
+  ApiError,
+  UserFeedbackError,
+  infrastructureError,
+  requestDiagnostic,
+  catalogError,
+} from './api';
 import { groupVietnameseIntegerDigits } from './localization';
 import type { RoomConfiguration } from './propertySetup';
 import type { Page } from './invoices';
@@ -1399,6 +1405,7 @@ export const labels: Record<string, string> = {
 export const text = (value: string) =>
   labels[value] ?? 'Trạng thái hoặc điều kiện cần kiểm tra với Owner';
 export function contractError(error: unknown): string {
+  if (error instanceof UserFeedbackError) return error.message;
   if (error instanceof Error && error.name === 'AbortError')
     return 'Đã dừng chờ phản hồi. Hãy tải lại trước khi thử lại.';
   const e = error as {
@@ -1424,6 +1431,8 @@ export function contractError(error: unknown): string {
       diagnostic
     );
   if (code && labels[code]) return labels[code] + diagnostic;
+  const shared = catalogError(error);
+  if (shared) return shared + diagnostic;
   return (
     ((
       {
@@ -1454,7 +1463,7 @@ export function dateOnly(value: string): string {
     !Number.isFinite(Date.parse(iso)) ||
     new Date(iso + 'T00:00:00Z').toISOString().slice(0, 10) !== iso
   )
-    throw new Error('Ngày không hợp lệ. Nhập dd/MM/yyyy.');
+    throw new UserFeedbackError('Ngày không hợp lệ. Nhập dd/MM/yyyy.');
   return iso;
 }
 export const displayContractDate = (value: string) => value.split('-').reverse().join('/');
@@ -1471,17 +1480,18 @@ export function businessToday() {
 }
 export function localSchedule(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))
-    throw new Error('Nhập lịch theo yyyy-MM-ddTHH:mm, giờ Việt Nam.');
+    throw new UserFeedbackError('Nhập lịch theo yyyy-MM-ddTHH:mm, giờ Việt Nam.');
   dateOnly(value.slice(0, 10));
   if (Number(value.slice(11, 13)) > 23 || Number(value.slice(14)) > 59)
-    throw new Error('Giờ không hợp lệ.');
+    throw new UserFeedbackError('Giờ không hợp lệ.');
   const instant = new Date(value + ':00+07:00');
-  if (instant.getTime() < Date.now()) throw new Error('Lịch kiểm tra không được trong quá khứ.');
+  if (instant.getTime() < Date.now())
+    throw new UserFeedbackError('Lịch kiểm tra không được trong quá khứ.');
   return instant.toISOString();
 }
 export function vnd(value: string, positive = false) {
   if (!/^(0|[1-9]\d{0,17})$/.test(value) || (positive && value === '0'))
-    throw new Error('Nhập số nguyên VND hợp lệ, tối đa 18 chữ số.');
+    throw new UserFeedbackError('Nhập số nguyên VND hợp lệ, tối đa 18 chữ số.');
   return value;
 }
 export function guid(value: string) {
@@ -1489,12 +1499,12 @@ export function guid(value: string) {
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ||
     /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(value)
   )
-    throw new Error('Mã định danh phải là UUID hợp lệ.');
+    throw new UserFeedbackError('Mã định danh phải là UUID hợp lệ.');
   return value;
 }
 export function required(value: string, max: number) {
   if (!value.trim() || value.trim().length > max)
-    throw new Error(`Nội dung bắt buộc, tối đa ${max} ký tự.`);
+    throw new UserFeedbackError(`Nội dung bắt buộc, tối đa ${max} ký tự.`);
   return value.trim();
 }
 export interface ActionField {
@@ -1737,10 +1747,12 @@ export function earlyTerminationDate(
   contract: Pick<ContractView, 'startDate' | 'endDate'>,
 ): string {
   const date = dateOnly(/^\d{2}-\d{2}-\d{4}$/.test(value) ? value.replaceAll('-', '/') : value);
-  if (date < businessToday()) throw new Error('Ngày trả phòng không được trong quá khứ.');
-  if (date < contract.startDate) throw new Error('Ngày trả phòng phải từ ngày bắt đầu hợp đồng.');
+  if (date < businessToday())
+    throw new UserFeedbackError('Ngày trả phòng không được trong quá khứ.');
+  if (date < contract.startDate)
+    throw new UserFeedbackError('Ngày trả phòng phải từ ngày bắt đầu hợp đồng.');
   if (date >= contract.endDate)
-    throw new Error('Yêu cầu trước hạn cần ngày trả phòng trước ngày hết hạn.');
+    throw new UserFeedbackError('Yêu cầu trước hạn cần ngày trả phòng trước ngày hết hạn.');
   return date;
 }
 
@@ -1769,16 +1781,18 @@ export function actionPayload(
               : required(value, f.max ?? 200);
   }
   if (a.operation === 'renewals' && String(body.endDate) <= c.endDate)
-    throw new Error('Ngày hết hạn mới phải sau ngày hết hạn hiện tại.');
+    throw new UserFeedbackError('Ngày hết hạn mới phải sau ngày hết hạn hiện tại.');
   if (a.operation === 'holding-cancellation') {
     if (!['0', '1'].includes(values.cause) || values.humanConfirmed !== 'true')
-      throw new Error('Chọn nguyên nhân hủy và xác nhận đã đối chiếu trách nhiệm về cọc.');
+      throw new UserFeedbackError(
+        'Chọn nguyên nhân hủy và xác nhận đã đối chiếu trách nhiệm về cọc.',
+      );
     body.cause = Number(values.cause);
     body.humanConfirmed = true;
   }
   if (a.operation === 'expiry-move-out') {
     if (String(body.proposedDate) < businessToday())
-      throw new Error('Ngày trả phòng không được trong quá khứ.');
+      throw new UserFeedbackError('Ngày trả phòng không được trong quá khứ.');
   }
   return body;
 }
@@ -1789,13 +1803,13 @@ function draftCore(
 ) {
   const startDate = dateOnly(values.startDate ?? ''),
     endDate = dateOnly(values.endDate ?? '');
-  if (endDate <= startDate) throw new Error('Ngày hết hạn phải sau ngày bắt đầu.');
+  if (endDate <= startDate) throw new UserFeedbackError('Ngày hết hạn phải sau ngày bắt đầu.');
   if (
     !residentIds.length ||
     residentIds.length > 50 ||
     !residentIds.includes(values.representativeResidentId)
   )
-    throw new Error('Chọn người ở và một người đại diện trong danh sách.');
+    throw new UserFeedbackError('Chọn người ở và một người đại diện trong danh sách.');
   return {
     roomId: guid(values.roomId ?? ''),
     ownerSignerId: guid(values.ownerSignerId ?? ''),
@@ -1824,7 +1838,7 @@ export function holdingDraftPayload(values: Record<string, string>, residentIds:
     capacity > 32767 ||
     !Number.isFinite(expires.getTime())
   )
-    throw new Error('Kiểm tra số người giữ chỗ và thời điểm hết hạn.');
+    throw new UserFeedbackError('Kiểm tra số người giữ chỗ và thời điểm hết hạn.');
   return {
     ...draftCore(values, residentIds, values.tenantUserId ? guid(values.tenantUserId) : null),
     holdingDeposit: vnd(values.requiredDeposit ?? ''),

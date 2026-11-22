@@ -1,3 +1,4 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useId, useState, type ReactNode } from 'react';
 import { formatBillingDecimal } from '../../../../../../packages/client-core/src/invoices';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
@@ -21,7 +22,6 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';

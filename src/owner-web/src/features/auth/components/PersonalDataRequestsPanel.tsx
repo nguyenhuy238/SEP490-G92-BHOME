@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -10,7 +11,6 @@ import {
   MenuItem,
   Pagination,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
@@ -119,7 +119,7 @@ function RequestDecision({
   });
   return (
     <Dialog open onClose={mutation.isPending ? undefined : onClose} fullWidth>
-      <form
+      <ValidatedForm
         onSubmit={(event) => {
           event.preventDefault();
           mutation.mutate(new FormData(event.currentTarget));
@@ -161,7 +161,7 @@ function RequestDecision({
             Lưu phản hồi
           </Button>
         </DialogActions>
-      </form>
+      </ValidatedForm>
     </Dialog>
   );
 }

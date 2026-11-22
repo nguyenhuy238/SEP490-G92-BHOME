@@ -1,7 +1,7 @@
 import { KeyboardFormScrollView } from '../components/KeyboardFormScrollView';
 import { useFeedbackState } from '../lib/useFeedbackState';
 import { conciseMessage } from '../lib/toast';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, TextInput } from 'react-native-paper';
@@ -28,6 +28,8 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useFeedbackState();
   const [validation, setValidation] = useState({ identifier: '', password: '' });
+  const identifierInput = useRef<unknown>(null);
+  const passwordInput = useRef<unknown>(null);
   const [connection, setConnection] = useState('');
   const [checking, setChecking] = useState(false);
   const submit = async () => {
@@ -37,7 +39,13 @@ export function LoginScreen() {
       password: loginPasswordError(password),
     };
     setValidation(errors);
-    if (errors.identifier || errors.password) return;
+    if (errors.identifier || errors.password) {
+      const target = (errors.identifier ? identifierInput.current : passwordInput.current) as {
+        focus?: () => void;
+      } | null;
+      if (typeof target?.focus === 'function') target.focus();
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -77,6 +85,9 @@ export function LoginScreen() {
           <Box style={{ padding: 20, gap: 18 }}>
             <Text variant="titleMedium">Email hoặc số điện thoại</Text>
             <TextInput
+              ref={(target: unknown) => {
+                identifierInput.current = target;
+              }}
               accessibilityLabel="Email hoặc số điện thoại đăng nhập"
               mode="flat"
               placeholder="Nhập email hoặc số điện thoại"
@@ -104,6 +115,9 @@ export function LoginScreen() {
             )}
             <Text variant="titleMedium">Mật khẩu</Text>
             <TextInput
+              ref={(target: unknown) => {
+                passwordInput.current = target;
+              }}
               accessibilityLabel="Mật khẩu đăng nhập"
               mode="flat"
               placeholder="Nhập mật khẩu"

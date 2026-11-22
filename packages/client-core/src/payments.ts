@@ -1,4 +1,4 @@
-import { ApiError, infrastructureError } from './api';
+import { ApiError, infrastructureError, catalogError } from './api';
 import type { Page } from './invoices';
 
 export interface VerifiedPayment {
@@ -534,6 +534,7 @@ export function paymentError(error: unknown) {
   };
   return (
     (code && errors[code]) ||
+    catalogError(error) ||
     (value?.status === 413
       ? 'Ảnh đính kèm vượt giới hạn dung lượng. Chọn ảnh tối đa 5 MB.'
       : value?.status === 415

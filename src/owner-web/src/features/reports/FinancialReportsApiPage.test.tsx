@@ -231,7 +231,7 @@ it('rejects a reversed date range without sending another report request', () =>
   fireEvent.change(screen.getByLabelText(/Từ ngày/), { target: { value: '2026-11-30' } });
   fireEvent.change(screen.getByLabelText(/Đến ngày/), { target: { value: '2026-11-01' } });
   fireEvent.submit(screen.getByRole('button', { name: 'Xem báo cáo' }).closest('form')!);
-  expect(screen.getByText('Chọn khoảng ngày hợp lệ.')).toBeInTheDocument();
+  expect(screen.getByText('Giá trị phải từ 30/11/2026 trở lên.')).toBeInTheDocument();
   expect(mock.report).toHaveBeenCalledTimes(requestsBeforeSubmit);
 });
 it('offers a complete month shortcut and distinguishes unsent filter changes from loaded results', async () => {

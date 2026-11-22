@@ -291,8 +291,12 @@ it('creates with the existing DTO, retains input on validation errors, and close
   });
   fireEvent.submit(document.getElementById('staff-editor')!);
   fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Email thử nghiệm');
-  fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
+  expect(await screen.findByText('Email thử nghiệm không hợp lệ.')).toBeInTheDocument();
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'Xác nhận lưu hồ sơ' })).not.toBeInTheDocument(),
+  );
+  expect(screen.getByLabelText(/Email/)).toHaveAttribute('aria-invalid', 'true');
+  await waitFor(() => expect(screen.getByLabelText(/Email/)).toHaveFocus());
   expect(screen.getByLabelText(/Họ tên/)).toHaveValue('New synthetic');
   mocks.request.mockImplementation(async (_path: string, init?: RequestInit) =>
     init?.method === 'POST' ? staff : { items: [staff], totalCount: 1 },
@@ -320,6 +324,36 @@ it('rejects reversed dates before a write request', async () => {
   expect(screen.getByText('Ngày kết thúc không được trước ngày bắt đầu.')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Xác nhận' })).not.toBeInTheDocument();
   expect(mocks.request.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+});
+
+it('renders multiple structured field errors and focuses the first invalid field without discarding input', async () => {
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm nhân viên' }));
+  fireEvent.change(screen.getByLabelText(/Họ tên/), { target: { value: 'Người dùng tổng hợp' } });
+  fireEvent.change(screen.getByLabelText(/^Email/), {
+    target: { value: 'synthetic@example.invalid' },
+  });
+  fireEvent.change(screen.getByLabelText(/Loại công việc/), { target: { value: 'Task' } });
+  const original = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (path: string, init?: RequestInit) => {
+    if (path === '/api/v1/staff' && init?.method === 'POST')
+      throw new ApiError(400, {
+        code: 'validation_error',
+        fieldErrors: {
+          email: [{ code: 'invalid_email_format', message: 'Email không đúng định dạng.' }],
+          fullName: [{ code: 'invalid_length', message: 'Họ tên phải có từ 2 đến 150 ký tự.' }],
+        },
+      });
+    return original(path, init);
+  });
+  fireEvent.submit(document.getElementById('staff-editor')!);
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }));
+  expect(await screen.findByText('Email không đúng định dạng.')).toBeInTheDocument();
+  expect(screen.getByText('Họ tên phải có từ 2 đến 150 ký tự.')).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByLabelText(/Họ tên/)).toHaveFocus());
+  expect(screen.getByLabelText(/Họ tên/)).toHaveValue('Người dùng tổng hợp');
+  expect(screen.getByLabelText(/^Email/)).toHaveValue('synthetic@example.invalid');
+  expect(screen.getByLabelText(/^Email/)).toHaveAttribute('aria-invalid', 'true');
 });
 
 it('creates a separate employment period with the latest account version and no account changes', async () => {

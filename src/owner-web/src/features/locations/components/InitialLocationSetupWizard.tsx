@@ -1,3 +1,5 @@
+import { getUserFriendlyMessage } from '../../../../../../packages/client-core/src/api';
+import { TextField } from '../../../components/common/ValidatedForm';
 import { MoneyField } from '../../../components/common/MoneyField';
 import { useEffect, useState } from 'react';
 import {
@@ -30,7 +32,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import {
@@ -420,9 +421,7 @@ export function InitialLocationSetupWizard({
         }),
       );
     } catch (error) {
-      setLibraryError(
-        error instanceof Error ? error.message : 'Không thể tải thư viện cấu hình dùng chung.',
-      );
+      setLibraryError(getUserFriendlyMessage(error));
     } finally {
       setIsLoadingLibrary(false);
     }
@@ -457,9 +456,7 @@ export function InitialLocationSetupWizard({
         ),
       ]);
     } catch (error) {
-      setLibraryError(
-        error instanceof Error ? error.message : 'Không thể áp dụng nội quy dùng chung.',
-      );
+      setLibraryError(getUserFriendlyMessage(error));
     } finally {
       setIsLoadingLibrary(false);
     }
@@ -619,7 +616,7 @@ export function InitialLocationSetupWizard({
       }
       setCopyLoaded(true);
     } catch (error) {
-      setCopyError(error instanceof Error ? error.message : 'Không thể nạp cấu hình cơ sở nguồn.');
+      setCopyError(getUserFriendlyMessage(error));
     } finally {
       setIsLoadingCopy(false);
     }
@@ -771,7 +768,7 @@ export function InitialLocationSetupWizard({
         onClose();
       }
     } catch (error) {
-      setFinishError(error instanceof Error ? error.message : 'Không thể hoàn tất cấu hình cơ sở.');
+      setFinishError(getUserFriendlyMessage(error));
     } finally {
       setIsFinishing(false);
     }

@@ -1,3 +1,4 @@
+import { UserFeedbackError } from './api';
 import type { HandoverAsset } from './contracts';
 
 export const quantityFields = [
@@ -9,7 +10,7 @@ export const quantityFields = [
 ] as const;
 export function handoverQuantity(value: string, label: string): number {
   if (!/^\d+$/.test(value) || Number(value) > 10000)
-    throw new Error(`${label}: nhập số nguyên từ 0 đến 10.000.`);
+    throw new UserFeedbackError(`${label}: nhập số nguyên từ 0 đến 10.000.`);
   return Number(value);
 }
 export function assetInspectionInput(
@@ -20,7 +21,7 @@ export function assetInspectionInput(
   known = true,
 ) {
   const condition = values[`asset-${a.id}`]?.trim() ?? '';
-  if (!condition) throw new Error(`Nhập tình trạng ${a.name}.`);
+  if (!condition) throw new UserFeedbackError(`Nhập tình trạng ${a.name}.`);
   if (!quantities) return { id: a.id, condition };
   const quantitiesValue = Object.fromEntries(
     quantityFields.map(([key, label]) => [

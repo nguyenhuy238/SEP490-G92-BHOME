@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { LocationLegalRecords } from '../components/LocationLegalRecords';
 import {
@@ -5,17 +6,7 @@ import {
   normalizeContactPhone,
 } from '../../../../../../packages/client-core/src/contactPhone';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  Box,
-  Button,
-  Divider,
-  MenuItem,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Box, Button, Divider, MenuItem, Paper, Stack, Typography } from '@mui/material';
 import type { LocationConfiguration } from '../../../../../../packages/client-core/src/propertySetup';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { usePropertySetupApi } from '../../property/usePropertySetupApi';
@@ -175,7 +166,7 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
       }}
     >
       <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>
-        <form
+        <ValidatedForm
           onSubmit={(event) => {
             event.preventDefault();
             if (!canSave) return;
@@ -306,7 +297,7 @@ export function LocationWorkspaceSettings({ location }: { location: LocationConf
               </Button>
             </Stack>
           </Stack>
-        </form>
+        </ValidatedForm>
         <ConfirmDialog
           open={confirm && closureReady}
           title="Ngừng hoạt động cơ sở?"

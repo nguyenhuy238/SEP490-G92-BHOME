@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../packages/client-core/src/auth';
-import { ApiError } from '../../../../../packages/client-core/src/api';
+import { ApiError, getFieldErrors } from '../../../../../packages/client-core/src/api';
 import { useOwnerAction, type OwnerLocation } from '../../hooks/useOwnerWorkspace';
 import { useMeterApi } from '../meters/useMeterApi';
 import { readAllPages } from '../staff/useLocationAssignments';
@@ -41,9 +41,9 @@ export function useTaskAction() {
           setConflict(error.status === 409);
           setFields(
             Object.fromEntries(
-              Object.entries(error.problem?.errors ?? {}).map(([key, messages]) => [
+              Object.entries(getFieldErrors(error)).map(([key, message]) => [
                 key.split('.').pop()!.toLowerCase(),
-                messages.join(' '),
+                message,
               ]),
             ),
           );

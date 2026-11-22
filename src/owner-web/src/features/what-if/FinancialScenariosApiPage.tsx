@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Accordion,
@@ -9,7 +10,6 @@ import {
   LinearProgress,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ChevronDown } from 'lucide-react';
@@ -161,7 +161,7 @@ export function FinancialScenariosApiPage() {
       )}
       {success && <Alert severity="success">{success}</Alert>}
       <Paper variant="outlined" sx={{ p: 1.5, my: 1.5, minWidth: 0 }}>
-        <form
+        <ValidatedForm
           onSubmit={(e) => {
             e.preventDefault();
             void run('analyze');
@@ -361,7 +361,7 @@ export function FinancialScenariosApiPage() {
                   : 'Kết quả phân tích hiện chưa được lưu. Nhấn Lưu kịch bản để giữ lại giả định và ảnh chụp dữ liệu nền.'}
             </Typography>
           </Stack>
-        </form>
+        </ValidatedForm>
       </Paper>
       {view && (
         <Box ref={resultRef} tabIndex={-1} sx={{ mt: 3, scrollMarginTop: 90, outline: 'none' }}>

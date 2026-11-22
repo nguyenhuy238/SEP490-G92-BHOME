@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useEffect, useState } from 'react';
 import {
   Box,
@@ -7,7 +8,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { Plus, RefreshCw, Search, X } from 'lucide-react';

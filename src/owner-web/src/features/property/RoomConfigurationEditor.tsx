@@ -1,4 +1,6 @@
-import { useRef, useState } from 'react';
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
+import { useEffect, useRef, useState } from 'react';
+import { getFieldErrors } from '../../../../../packages/client-core/src/api';
 import {
   Alert,
   Box,
@@ -10,7 +12,6 @@ import {
   Divider,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -168,6 +169,12 @@ function RoomConfigurationForm({
   const locked = !initial.canEdit || !view.canEdit;
   const submitting = useRef(false);
   const mutation = useMutation({ mutationFn: save });
+  const fields = getFieldErrors(mutation.error);
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (mutation.error)
+      formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [mutation.error]);
   const busy = mutation.isPending;
   const disabled = locked || busy;
   const validRent = !rentChanged || (/^\d+(?:\.\d+)?$/.test(rate) && effectiveFrom >= effectiveMin);
@@ -192,7 +199,8 @@ function RoomConfigurationForm({
     (!area || Number(area) > 0);
   return (
     <Box
-      component="form"
+      ref={formRef}
+      component={ValidatedForm}
       sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}
       onSubmit={(event) => {
         event.preventDefault();
@@ -258,6 +266,8 @@ function RoomConfigurationForm({
           >
             <TextField
               label="Số phòng"
+              error={!!fields.roomNumber}
+              helperText={fields.roomNumber}
               required
               disabled={disabled}
               value={number}
@@ -265,12 +275,16 @@ function RoomConfigurationForm({
             />
             <TextField
               label="Tầng"
+              error={!!fields.floor}
+              helperText={fields.floor}
               disabled={disabled}
               value={floor}
               onChange={(e) => setFloor(e.target.value)}
             />
             <TextField
               label="Sức chứa (người)"
+              error={!!fields.capacity}
+              helperText={fields.capacity}
               type="number"
               required
               disabled={disabled}
@@ -281,6 +295,8 @@ function RoomConfigurationForm({
             <TextField
               select
               label="Trạng thái"
+              error={!!fields.status}
+              helperText={fields.status}
               disabled={disabled}
               value={status}
               onChange={(e) => setStatus(e.target.value)}
@@ -297,6 +313,8 @@ function RoomConfigurationForm({
             <TextField
               select
               label="Loại phòng"
+              error={!!fields.roomDefaultsId}
+              helperText={fields.roomDefaultsId}
               disabled={disabled || !!defaultsError || !defaults.length}
               value={type}
               onChange={(e) => {
@@ -327,11 +345,14 @@ function RoomConfigurationForm({
             </TextField>
             <TextField
               label="Diện tích (m²)"
+              error={!!fields.area}
               type="number"
               disabled={disabled}
               value={area}
               onChange={(e) => setArea(e.target.value)}
-              helperText={source?.area != null ? 'Để trống: giữ diện tích đã lưu' : undefined}
+              helperText={
+                fields.area || (source?.area != null ? 'Để trống: giữ diện tích đã lưu' : undefined)
+              }
               slotProps={{ htmlInput: { min: 0.01, step: 'any' } }}
             />
             <TextField
@@ -376,6 +397,8 @@ function RoomConfigurationForm({
             <MoneyField
               allowDecimal
               label="Giá thuê (VND/tháng)"
+              error={!!fields['rent.rate'] || !!fields.rate || !!fields.rent}
+              helperText={fields['rent.rate'] || fields.rate || fields.rent}
               disabled={disabled}
               value={rate}
               onValueChange={setRate}
@@ -383,6 +406,8 @@ function RoomConfigurationForm({
             <TextField
               type="date"
               label="Ngày hiệu lực giá mới"
+              error={!!fields['rent.effectiveFrom'] || !!fields.effectiveFrom}
+              helperText={fields['rent.effectiveFrom'] || fields.effectiveFrom}
               disabled={disabled}
               value={effectiveFrom}
               onChange={(e) => setEffectiveFrom(e.target.value)}
@@ -425,6 +450,8 @@ function RoomConfigurationForm({
           )}
           <TextField
             label="Lý do thay đổi"
+            error={!!fields.reason}
+            helperText={fields.reason}
             required
             disabled={disabled}
             multiline

@@ -1,3 +1,4 @@
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
 import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useRef, useState } from 'react';
@@ -84,9 +85,7 @@ export function ContractHandoverPanel({
       await work();
       query.reload();
     } catch (e) {
-      setError(
-        e instanceof Error && !(e as { status?: number }).status ? e.message : contractError(e),
-      );
+      setError(contractError(e));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -298,7 +297,8 @@ export function ContractHandoverPanel({
             disabled={busy || !safePhoto}
             onCapture={(bytes) =>
               run(async () => {
-                if (bytes.byteLength > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
+                if (bytes.byteLength > 5 * 1024 * 1024)
+                  throw new UserFeedbackError('Ảnh vượt quá 5 MB.');
                 const file = await api.uploadHandover(contract.id, bytes, 'image/jpeg');
                 setSelected((ids) => (ids.length < 10 ? [...ids, file.id] : ids));
                 setSafePhoto(false);

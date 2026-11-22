@@ -1,3 +1,5 @@
+import { ValidatedInput } from '../../../components/common/ValidatedForm';
+import { TextField, ValidatedForm } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -16,7 +18,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import {
@@ -186,7 +187,7 @@ function LegalRecordForm({
   const details = record?.data.details;
   return (
     <Dialog open onClose={mutation.isPending ? undefined : onClose} fullWidth>
-      <form
+      <ValidatedForm
         onSubmit={(event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);
@@ -243,7 +244,7 @@ function LegalRecordForm({
             <TextField multiline label="Ghi chú" name="note" defaultValue={details?.note ?? ''} />
             <Typography component="label">
               {record ? 'Tệp thay thế nếu có' : 'Tệp tài liệu'} (PDF, PNG, JPEG, tối đa 5 MB)
-              <input
+              <ValidatedInput
                 name="file"
                 type="file"
                 accept="application/pdf,image/png,image/jpeg"
@@ -260,7 +261,7 @@ function LegalRecordForm({
             {mutation.isPending ? 'Đang lưu…' : 'Lưu phiên bản'}
           </Button>
         </DialogActions>
-      </form>
+      </ValidatedForm>
     </Dialog>
   );
 }

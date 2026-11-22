@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using BHome.Application.IdentityAccess;
 
 namespace BHome.Application.Operations;
 
@@ -21,7 +22,7 @@ public sealed record ProfileView(Guid UserId, string FullName, string? Phone, st
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ProfileUpdate(
     [Required, StringLength(150, MinimumLength = 2)] string FullName,
-    [StringLength(30)] string? Phone,
+    [StringLength(30), ContactPhoneNumber] string? Phone,
     [Required, EmailAddress, StringLength(256)] string Email,
     [Required, StringLength(256)] string Version,
     [StringLength(1024)] string? CurrentPassword = null);
@@ -70,7 +71,7 @@ public sealed record EmploymentWrite(
 public sealed record StaffCreate(
     [Required, EmailAddress, StringLength(256)] string Email,
     [Required, StringLength(150, MinimumLength = 2)] string FullName,
-    [StringLength(30)] string? Phone,
+    [StringLength(30), ContactPhoneNumber] string? Phone,
     [StringLength(256)] string? InitialPassword,
     EmploymentWrite Employment);
 
@@ -79,7 +80,7 @@ public sealed record StaffUpdate(
     [Required, StringLength(256)] string AccountVersion,
     [Required, EmailAddress, StringLength(256)] string Email,
     [Required, StringLength(150, MinimumLength = 2)] string FullName,
-    [StringLength(30)] string? Phone,
+    [StringLength(30), ContactPhoneNumber] string? Phone,
     bool IsActive,
     EmploymentWrite Employment,
     [Required, StringLength(500)] string Reason);

@@ -102,12 +102,36 @@ internal sealed class CaptureRepository(BHomePersistenceContext db, CaptureScope
         db.PrepareUserRole(u, Roles.Staff);
         var identityResult = await users.CreateAsync(u, x.Password);
         if (!identityResult.Succeeded)
-        {
-            var errs = string.Join(", ", identityResult.Errors.Select(e => $"{e.Code}: {e.Description}"));
-            throw new CaptureValidationException(errs);
-        }
+            throw AccountValidationFailure(identityResult.Errors.Select(e => e.Code));
         if (!await users.IsInRoleAsync(u, Roles.Staff) && !(await users.AddToRoleAsync(u, Roles.Staff)).Succeeded) throw new CaptureConflictException("staff_role_unavailable");
         Audit("StaffCreated", "User", u.Id); await Save(t); await tx.CommitAsync(t); return new(u.Id);
+    }
+
+    // Identity descriptions can embed the submitted username/email or provider text.
+    // Only known categories determine a field; neither descriptions nor unknown codes
+    // are part of the public API error contract.
+    internal static Exception AccountValidationFailure(IEnumerable<string> codes)
+    {
+        var errors = new Dictionary<string, List<string>>();
+        foreach (var code in codes)
+        {
+            var (field, message) = code switch
+            {
+                "DuplicateUserName" => ("userName", "Tên đăng nhập đã được sử dụng. Vui lòng chọn tên khác."),
+                "InvalidUserName" => ("userName", "Tên đăng nhập không đúng định dạng. Vui lòng kiểm tra lại."),
+                "DuplicateEmail" => ("email", "Email đã được sử dụng. Kiểm tra lại hoặc chọn email khác."),
+                "InvalidEmail" => ("email", "Email không đúng định dạng. Ví dụ: ten@gmail.com"),
+                "PasswordTooShort" or "PasswordRequiresNonAlphanumeric" or "PasswordRequiresDigit" or
+                "PasswordRequiresLower" or "PasswordRequiresUpper" or "PasswordRequiresUniqueChars" =>
+                    ("password", "Mật khẩu chưa đáp ứng yêu cầu bảo mật. Vui lòng chọn mật khẩu khác."),
+                _ => (null, null)
+            };
+            if (field is null) return new CaptureValidationException("staff_account_invalid");
+            if (!errors.TryGetValue(field, out var values)) errors[field] = values = [];
+            if (!values.Contains(message!)) values.Add(message!);
+        }
+        return errors.Count == 0 ? new CaptureValidationException("staff_account_invalid") :
+            new BHome.Application.Common.InputValidationException(errors.ToDictionary(x => x.Key, x => x.Value.ToArray()));
     }
     public async Task<IdResult> AssignStaffAsync(AssignmentInput x, CancellationToken t)
     {

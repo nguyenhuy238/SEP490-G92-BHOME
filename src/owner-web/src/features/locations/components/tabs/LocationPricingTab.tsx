@@ -1,3 +1,4 @@
+import { TextField } from '../../../../components/common/ValidatedForm';
 import { MoneyField } from '../../../../components/common/MoneyField';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,7 +26,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
   Switch,
 } from '@mui/material';

@@ -1,5 +1,6 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
-import { IconButton, InputAdornment, TextField, type TextFieldProps } from '@mui/material';
+import { IconButton, InputAdornment, type TextFieldProps } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 
 export function PasswordField(props: Omit<TextFieldProps, 'type' | 'slotProps'>) {

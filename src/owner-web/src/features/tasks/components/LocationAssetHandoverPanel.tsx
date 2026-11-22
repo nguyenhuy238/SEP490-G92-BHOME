@@ -1,17 +1,9 @@
+import { TextField } from '../../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../../../packages/client-core/src/auth';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
-import {
-  Alert,
-  Box,
-  Button,
-  Checkbox,
-  FormControlLabel,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Alert, Box, Button, Checkbox, FormControlLabel, Stack, Typography } from '@mui/material';
 import { formatInstant } from '../../../../../../packages/client-core/src/localization';
 import { OwnerFeedback } from '../../../components/common/OwnerWorkspace';
 import { useOwnerAction } from '../../../hooks/useOwnerWorkspace';

@@ -1,3 +1,4 @@
+import { TextField, ValidatedForm } from '../../components/common/ValidatedForm';
 import { MoneyField } from '../../components/common/MoneyField';
 import { useRef, useState } from 'react';
 import {
@@ -24,7 +25,6 @@ import {
   TableRow,
   Tab,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import { ChevronDown } from 'lucide-react';
@@ -578,7 +578,7 @@ export function ExpensesApiPage() {
         <DialogTitle>{editor?.previous ? 'Chi tiết khoản chi' : 'Ghi khoản chi mới'}</DialogTitle>
         <DialogContent>
           {editor && (
-            <form
+            <ValidatedForm
               id="expense-editor"
               onSubmit={(e) => {
                 e.preventDefault();
@@ -873,7 +873,7 @@ export function ExpensesApiPage() {
                   />
                 )}
               </Stack>
-            </form>
+            </ValidatedForm>
           )}
         </DialogContent>
         <DialogActions>

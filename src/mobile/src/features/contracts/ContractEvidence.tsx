@@ -1,3 +1,4 @@
+import { UserFeedbackError } from '../../../../../packages/client-core/src/api';
 import { ContractNotice } from './ContractNotice';
 import { useFeedbackState } from '../../lib/useFeedbackState';
 import React, { useEffect, useRef, useState } from 'react';
@@ -92,11 +93,11 @@ export function ContractEvidence({
               ? await api.transport<Blob>(path, { signal: controller.signal }, 'blob')
               : await api.evidence(contractId, evidenceId!, controller.signal);
           if (controller.signal.aborted) return;
-          if (blob.size > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
+          if (blob.size > 5 * 1024 * 1024) throw new UserFeedbackError('Ảnh vượt quá 5 MB.');
           const signature = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
           const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => signature[i] === byte);
           const jpeg = signature[0] === 255 && signature[1] === 216 && signature[2] === 255;
-          if (!png && !jpeg) throw new Error('Ảnh không phải PNG/JPEG hợp lệ.');
+          if (!png && !jpeg) throw new UserFeedbackError('Ảnh không phải PNG/JPEG hợp lệ.');
           if (controller.signal.aborted) return;
           objectUrl = URL.createObjectURL(
             new Blob([blob], { type: png ? 'image/png' : 'image/jpeg' }),
@@ -111,10 +112,10 @@ export function ContractEvidence({
               ? await api.transport<Uint8Array>(path, { signal: controller.signal }, 'bytes')
               : await api.evidenceBytes(contractId, evidenceId!, controller.signal);
           if (controller.signal.aborted) return;
-          if (bytes.length > 5 * 1024 * 1024) throw new Error('Ảnh vượt quá 5 MB.');
+          if (bytes.length > 5 * 1024 * 1024) throw new UserFeedbackError('Ảnh vượt quá 5 MB.');
           const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => bytes[i] === byte);
           const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-          if (!png && !jpeg) throw new Error('Ảnh không phải PNG/JPEG hợp lệ.');
+          if (!png && !jpeg) throw new UserFeedbackError('Ảnh không phải PNG/JPEG hợp lệ.');
           const directory = new Directory(Paths.cache, 'bhome-handover-photo-thumbnails');
           directory.create({ idempotent: true, intermediates: true });
           cachedPhoto = new File(directory, `${randomUUID()}.${png ? 'png' : 'jpg'}`);
@@ -131,7 +132,12 @@ export function ContractEvidence({
           setThumbnailState({
             key: thumbnailKey,
             uri: '',
-            error: finalMeterReading ? finalReadingAccessError(cause) : contractError(cause),
+            error:
+              finalMeterReading && !(cause instanceof UserFeedbackError)
+                ? finalReadingAccessError(cause)
+                : cause instanceof UserFeedbackError
+                  ? cause.message
+                  : contractError(cause),
           });
       }
     })();
@@ -174,7 +180,8 @@ export function ContractEvidence({
       const magic = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
       const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => magic[i] === byte);
       const jpeg = magic[0] === 255 && magic[1] === 216 && magic[2] === 255;
-      if (!png && !jpeg) throw new Error('Tệp ảnh bằng chứng không phải PNG hoặc JPEG hợp lệ.');
+      if (!png && !jpeg)
+        throw new UserFeedbackError('Tệp ảnh bằng chứng không phải PNG hoặc JPEG hợp lệ.');
       const url = URL.createObjectURL(new Blob([blob], { type: png ? 'image/png' : 'image/jpeg' }));
       if (controller.signal.aborted) {
         URL.revokeObjectURL(url);
@@ -185,9 +192,7 @@ export function ContractEvidence({
       setPreviewUri(url);
     } catch (cause) {
       if (!controller.signal.aborted)
-        setError(
-          cause instanceof Error && !('status' in cause) ? cause.message : contractError(cause),
-        );
+        setError(cause instanceof UserFeedbackError ? cause.message : contractError(cause));
     } finally {
       lock.current = false;
       if (!controller.signal.aborted) setBusy(false);

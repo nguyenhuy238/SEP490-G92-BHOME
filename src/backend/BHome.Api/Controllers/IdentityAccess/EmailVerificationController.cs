@@ -28,7 +28,7 @@ public sealed class EmailVerificationController(IEmailVerification verification)
     {
         Response.Headers.CacheControl = "no-store";
         return await verification.ConfirmAsync(request.UserName!, request.Token!, t)
-            ? NoContent() : Problem(statusCode: 400, title: "Email confirmation failed.");
+            ? NoContent() : Problem(statusCode: 400, title: "Chưa thể xác nhận email. Kiểm tra liên kết xác nhận hoặc yêu cầu gửi lại.");
     }
 }
 

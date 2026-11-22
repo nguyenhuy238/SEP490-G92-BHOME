@@ -1,5 +1,6 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import type { Dispatch, SetStateAction } from 'react';
-import { Alert, Checkbox, FormControlLabel, MenuItem, TextField } from '@mui/material';
+import { Alert, Checkbox, FormControlLabel, MenuItem } from '@mui/material';
 import type { UtilityValues } from './utilityFormValues';
 import { MoneyField } from '../../components/common/MoneyField';
 

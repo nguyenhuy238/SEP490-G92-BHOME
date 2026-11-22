@@ -1,3 +1,4 @@
+import { TextField } from '../../components/common/ValidatedForm';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import {
@@ -7,7 +8,6 @@ import {
   FormControlLabel,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { MoneyField } from '../../components/common/MoneyField';

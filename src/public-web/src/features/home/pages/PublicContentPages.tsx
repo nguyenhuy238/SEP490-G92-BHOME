@@ -9,6 +9,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ApiError } from '../../../../../../packages/client-core/src/api';
 import { publicInformation, publicPhotoUrl } from '../../../services/publicInformation';
@@ -16,36 +17,72 @@ import type { PublicPhoto, PublicRoom } from '../../../services/publicInformatio
 
 function Status({
   loading,
+  fetching,
   error,
   retry,
 }: {
   loading: boolean;
+  fetching: boolean;
   error: Error | null;
-  retry: () => void;
+  retry: () => Promise<unknown>;
 }) {
-  if (loading)
+  const [retryError, setRetryError] = useState<Error | null>(null);
+  const activeError = error ?? retryError;
+  if (loading && !retryError)
     return (
       <Stack role="status" direction="row" spacing={2} sx={{ py: 4 }}>
         <CircularProgress size={24} />
         <Typography>Đang tải thông tin…</Typography>
       </Stack>
     );
-  if (error)
+  if (activeError)
     return (
       <Alert
-        severity={error instanceof ApiError && error.status === 404 ? 'info' : 'error'}
+        severity={activeError instanceof ApiError && activeError.status === 404 ? 'info' : 'error'}
         action={
-          <Button color="inherit" onClick={retry}>
-            Thử lại
+          <Button
+            color="inherit"
+            onClick={() => {
+              setRetryError(activeError);
+              void retry().finally(() => setRetryError(null));
+            }}
+            disabled={fetching}
+          >
+            {fetching ? 'Đang thử lại…' : 'Thử lại'}
           </Button>
         }
       >
-        {error instanceof ApiError && error.status === 404
+        {fetching && <span role="status">Đang tải lại thông tin… </span>}
+        {activeError instanceof ApiError && activeError.status === 404
           ? 'Thông tin không tồn tại hoặc chưa được công bố.'
           : 'Chưa thể tải thông tin. Vui lòng thử lại.'}
       </Alert>
     );
   return null;
+}
+function Photo({ photo, name }: { photo: PublicPhoto; name: string }) {
+  const [failed, setFailed] = useState(false);
+  const url = publicPhotoUrl(photo);
+  if (!url) return null;
+  if (failed)
+    return (
+      <Box sx={{ p: 3, bgcolor: 'action.hover', borderRadius: 2 }}>
+        <Typography role="status">
+          Chưa thể tải ảnh {photo.index + 1} của {name}.
+        </Typography>
+        <Button onClick={() => setFailed(false)}>Thử tải lại ảnh {photo.index + 1}</Button>
+      </Box>
+    );
+  return (
+    <Box
+      component="img"
+      src={url}
+      alt={`${name} — ảnh ${photo.index + 1}`}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      sx={{ width: '100%', maxHeight: 360, objectFit: 'cover', borderRadius: 2 }}
+    />
+  );
 }
 function Photos({ photos, name }: { photos: PublicPhoto[]; name: string }) {
   return (
@@ -57,22 +94,9 @@ function Photos({ photos, name }: { photos: PublicPhoto[]; name: string }) {
         my: 3,
       }}
     >
-      {photos.map((photo) => {
-        const url = publicPhotoUrl(photo);
-        return url ? (
-          <Box
-            key={photo.index}
-            component="img"
-            src={url}
-            alt={`${name} — ảnh ${photo.index + 1}`}
-            loading="lazy"
-            onError={(event) => {
-              event.currentTarget.hidden = true;
-            }}
-            sx={{ width: '100%', maxHeight: 360, objectFit: 'cover', borderRadius: 2 }}
-          />
-        ) : null;
-      })}
+      {photos.map((photo) => (
+        <Photo key={`${photo.index}-${photo.url}`} photo={photo} name={name} />
+      ))}
     </Box>
   );
 }
@@ -117,7 +141,7 @@ function RoomSummary({ room }: { room: PublicRoom }) {
 export function LocationsPage() {
   const query = useQuery({
     queryKey: ['public', 'locations'],
-    queryFn: publicInformation.locations,
+    queryFn: ({ signal }) => publicInformation.locations(signal),
   });
   return (
     <>
@@ -129,10 +153,9 @@ export function LocationsPage() {
       </Typography>
       <Status
         loading={query.isPending}
+        fetching={query.isFetching}
         error={query.error}
-        retry={() => {
-          void query.refetch();
-        }}
+        retry={() => query.refetch()}
       />
       {query.data?.length === 0 && (
         <Alert severity="info">Hiện chưa có cơ sở được công bố. Vui lòng quay lại sau.</Alert>
@@ -164,11 +187,11 @@ export function LocationPage() {
   const { id = '' } = useParams();
   const query = useQuery({
     queryKey: ['public', 'location', id],
-    queryFn: () => publicInformation.location(id),
+    queryFn: ({ signal }) => publicInformation.location(id, signal),
   });
   const rooms = useQuery({
     queryKey: ['public', 'rooms', id],
-    queryFn: () => publicInformation.rooms(id),
+    queryFn: ({ signal }) => publicInformation.rooms(id, signal),
     enabled: !!query.data,
   });
   const location = query.data;
@@ -179,10 +202,9 @@ export function LocationPage() {
       </Button>
       <Status
         loading={query.isPending}
+        fetching={query.isFetching}
         error={query.error}
-        retry={() => {
-          void query.refetch();
-        }}
+        retry={() => query.refetch()}
       />
       {location && (
         <>
@@ -214,10 +236,9 @@ export function LocationPage() {
           </Typography>
           <Status
             loading={rooms.isPending}
+            fetching={rooms.isFetching}
             error={rooms.error}
-            retry={() => {
-              void rooms.refetch();
-            }}
+            retry={() => rooms.refetch()}
           />
           {rooms.data?.length === 0 && <Alert severity="info">Cơ sở chưa công bố phòng.</Alert>}
           {rooms.data?.map((room) => (
@@ -232,17 +253,16 @@ export function RoomPage() {
   const { id = '' } = useParams();
   const query = useQuery({
     queryKey: ['public', 'room', id],
-    queryFn: () => publicInformation.room(id),
+    queryFn: ({ signal }) => publicInformation.room(id, signal),
   });
   const room = query.data;
   return (
     <>
       <Status
         loading={query.isPending}
+        fetching={query.isFetching}
         error={query.error}
-        retry={() => {
-          void query.refetch();
-        }}
+        retry={() => query.refetch()}
       />
       {room && (
         <>
