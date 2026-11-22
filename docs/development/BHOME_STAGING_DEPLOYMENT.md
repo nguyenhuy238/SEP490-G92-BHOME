@@ -1,5 +1,8 @@
 # Vận hành Staging BHOME
 
+Khôi phục schema gate ngày 22/11/2026: [migration thanh toán ban đầu](BHOME_STAGING_SCHEMA_FIX_2026-11-22.md).
+Checksum khác baseline cần migration được duyệt; không cập nhật checksum để bỏ qua DDL.
+
 Checkpoint hostname mới: [nghiệm thu migration](BHOME_STAGING_HOSTNAME_MIGRATION_2026-11-20.md).
 Canonical dùng `*-staging`; `*-sepay-test` chỉ còn là compatibility được khai báo.
 Hai GitHub SSH secrets Staging đã được thiết lập và repository flag CD bật; workflow
