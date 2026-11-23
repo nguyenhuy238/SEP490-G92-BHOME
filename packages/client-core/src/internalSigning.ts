@@ -122,8 +122,10 @@ export function internalSigningClient(request: ReturnType<typeof createApiClient
   };
 }
 const invitationPreDeliveryErrors: Readonly<Record<string, string>> = {
-  signing_otp_key_not_configured: 'Máy chủ chưa cấu hình khóa OTP để gửi lời mời ký.',
-  signing_email_not_configured: 'Máy chủ chưa cấu hình dịch vụ email ký hợp đồng.',
+  signing_otp_key_not_configured:
+    'Chưa cấu hình khóa xác minh OTP. Vui lòng liên hệ quản trị viên trước khi tạo lời mời ký.',
+  signing_email_not_configured:
+    'Chưa cấu hình dịch vụ gửi email ký hợp đồng. Vui lòng liên hệ quản trị viên.',
   contract_template_not_configured: 'Máy chủ chưa có mẫu PDF hợp đồng để gửi lời mời ký.',
   contract_template_not_approved: 'Mẫu PDF hợp đồng chưa được phê duyệt cho môi trường này.',
   contract_template_not_found: 'Máy chủ không tìm thấy mẫu hợp đồng để tạo PDF.',

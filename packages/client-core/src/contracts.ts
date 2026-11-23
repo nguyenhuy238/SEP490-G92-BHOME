@@ -1271,7 +1271,8 @@ export const labels: Record<string, string> = {
   contract_template_not_approved: 'Mẫu PDF hợp đồng chưa được phê duyệt cho môi trường này.',
   contract_pdf_converter_unavailable: 'Máy chủ chưa cấu hình bộ chuyển hợp đồng sang PDF.',
   holding_contract_document_source_unavailable: 'Máy chủ chưa có nguồn PDF hợp đồng giữ chỗ.',
-  owner_contract_settings_required: 'Cơ sở chưa có thông tin bên cho thuê có hiệu lực cho hợp đồng này.',
+  owner_contract_settings_required:
+    'Cơ sở chưa có thông tin bên cho thuê có hiệu lực cho hợp đồng này.',
   signing_certificate_not_valid:
     'Chứng thư đã bị khóa hoặc không còn hiệu lực. Tải lại chứng thư trước khi ký.',
   signing_certificate_no_longer_available:
